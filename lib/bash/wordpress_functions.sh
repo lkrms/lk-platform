@@ -5,6 +5,47 @@ function lk_safe_wp() {
     wp "$@" --skip-plugins --skip-themes
 }
 
+function lk_wp_replace() {
+    lk_console_message "Running WordPress search/replace command"
+    lk_console_detail "Searching for" "$1"
+    lk_console_detail "Replacing with" "$2"
+    lk_safe_wp search-replace "$1" "$2" --no-report --all-tables-with-prefix
+}
+
+# lk_wp_rename_site new_url
+function lk_wp_rename_site() {
+    local NEW_URL="${1:-}" OLD_URL="${OLD_URL:-}"
+    lk_is_uri "$NEW_URL" ||
+        lk_warn "not a valid URL: $NEW_URL" || return
+    [ -n "$OLD_URL" ] ||
+        OLD_URL="$(lk_safe_wp option get siteurl)" || return
+    [ "$NEW_URL" != "$OLD_URL" ] ||
+        lk_warn "site URL not changed (set OLD_URL to override)" || return
+    lk_console_item "Setting site URL to" "$NEW_URL"
+    lk_console_detail "Previous site URL:" "$OLD_URL"
+    lk_safe_wp option update siteurl "$NEW_URL"
+    lk_safe_wp option update home "$NEW_URL"
+    lk_wp_replace "$OLD_URL" "$NEW_URL"
+    lk_wp_replace "${OLD_URL#http*:}" "${NEW_URL#http*:}"
+    lk_wp_replace "$(echo "$OLD_URL" | php -r 'echo urlencode(trim(fgets(STDIN)));')" \
+        "$(echo "$NEW_URL" | php -r 'echo urlencode(trim(fgets(STDIN)));')"
+    lk_wp_replace "$(echo "${OLD_URL#http*:}" | php -r 'echo urlencode(trim(fgets(STDIN)));')" \
+        "$(echo "${NEW_URL#http*:}" | php -r 'echo urlencode(trim(fgets(STDIN)));')"
+    lk_wp_replace "$(echo "$OLD_URL" | php -r 'echo substr(json_encode(trim(fgets(STDIN))), 1, -1);')" \
+        "$(echo "$NEW_URL" | php -r 'echo substr(json_encode(trim(fgets(STDIN))), 1, -1);')"
+    lk_wp_replace "$(echo "${OLD_URL#http*://}" | php -r 'echo urlencode(trim(fgets(STDIN)));')" \
+        "$(echo "${NEW_URL#http*://}" | php -r 'echo urlencode(trim(fgets(STDIN)));')"
+    [ "${OLD_URL#http*://}" = "$(
+        echo "${OLD_URL#http*://}" |
+            php -r 'echo urlencode(trim(fgets(STDIN)));'
+    )" ] && [ "${NEW_URL#http*://}" = "$(
+        echo "${NEW_URL#http*://}" |
+            php -r 'echo urlencode(trim(fgets(STDIN)));'
+    )" ] ||
+        lk_wp_replace "${OLD_URL#http*://}" "${NEW_URL#http*://}"
+    wp rewrite flush
+}
+
 # lk_wp_db_config [wp_config_path]
 #   Output DB_NAME, DB_USER, DB_PASSWORD and DB_HOST values configured in
 #   wp-config.php as KEY="VALUE" pairs without calling `wp config`.
