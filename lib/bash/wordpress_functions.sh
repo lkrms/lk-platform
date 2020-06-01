@@ -77,7 +77,7 @@ function lk_wp_db_dump_remote() {
     lk_console_message "Deleting mysqldump configuration file"
     ssh "$1" "bash -c 'rm -f \".lk_mysqldump.cnf\"'" &&
         lk_console_detail "Deleted" "$1:.lk_mysqldump.cnf" ||
-        lk_console_error "Error deleting mysqldump configuration file"
+        lk_console_detail "Error deleting" "$1:.lk_mysqldump.cnf" "$LK_BOLD$LK_RED"
     return "$EXIT_STATUS"
 }
 
