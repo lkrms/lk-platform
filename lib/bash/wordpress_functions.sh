@@ -64,7 +64,7 @@ function lk_wp_db_config() {
             grep -Po "(?<=<\?php|;|^)\s*define\s*\(\s*(['\"])DB_(NAME|USER|PASSWORD|HOST)\1\s*,\s*('([^']+|\\\\')*'|\"([^\"\$]+|\\\\(\"|\\\$))*\")\s*\)\s*(;|\$)" |
             sed -E 's/[^;]$/&;/' || exit
         cat <<EOF
-\$vals = array_map(function (\$v) { return addslashes(\$v); }, [DB_NAME, DB_USER, DB_PASSWORD, DB_HOST]);
+\$vals = array_map(function (\$v) { return escapeshellarg(\$v); }, [DB_NAME, DB_USER, DB_PASSWORD, DB_HOST]);
 printf("DB_NAME=%s\nDB_USER=%s\nDB_PASSWORD=%s\nDB_HOST=%s\n", \$vals[0], \$vals[1], \$vals[2], \$vals[3]);
 EOF
     )" || return
@@ -154,7 +154,7 @@ function lk_wp_db_restore_local() {
         "CREATE DATABASE $LOCAL_DB_NAME"
         "GRANT ALL PRIVILEGES ON $LOCAL_DB_NAME.*
 TO '$(lk_escape "$LOCAL_DB_USER" "\\" "'")'@'$(lk_escape "$LOCAL_DB_HOST" "\\" "'")'
-IDENTIFIED BY @db_password"
+IDENTIFIED BY {{DB_PASSWORD}}"
     )
     [ "$DB_NAME" = "$LOCAL_DB_NAME" ] ||
         lk_console_detail "DB_NAME will be updated to" "$LOCAL_DB_NAME"
@@ -179,9 +179,8 @@ IDENTIFIED BY @db_password"
         [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] ||
             lk_safe_wp config set DB_PASSWORD "$LOCAL_DB_PASSWORD" --type=constant || return
         lk_console_detail "Preparing database" "$LOCAL_DB_NAME"
-        printf '%s;\n' \
-            "SET @db_password = '$(lk_escape "$LOCAL_DB_PASSWORD" "\\" "'")'" \
-            "${SQL[@]}" |
+        printf '%s;\n' "${SQL[@]}" |
+            lk_replace '{{DB_PASSWORD}}' "'$(lk_escape "$LOCAL_DB_PASSWORD" "\\" "'")'" |
             sudo mysql -uroot || return
         lk_console_detail "Restoring from" "$1"
         if [[ "$1" =~ \.gz(ip)?$ ]]; then

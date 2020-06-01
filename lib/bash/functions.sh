@@ -203,6 +203,7 @@ function lk_escape() {
         [ "$REPLACE" != "\\" ] || REPLACE="\\\\"
         [ "$REPLACE" != "\"" ] || REPLACE="\\\""
         [ "$REPLACE" != "}" ] || REPLACE="\\}"
+        [ "$REPLACE" != "'" ] || REPLACE="\\'"
         eval "STRING=\"\${STRING//$SEARCH/$ESCAPE$REPLACE}\""
         ((++i))
     done
@@ -221,10 +222,13 @@ function lk_escape_ere_replace() {
     lk_escape "$1" '&' '/' '\'
 }
 
-# lk_replace find replace_with string
-#   Replace all occurrences of FIND in STRING with REPLACE_WITH.
+# lk_replace find replace_with [string]
+#   Replace all occurrences of FIND in STRING with REPLACE_WITH. If STRING
+#   is not specified, replace FIND in input.
 function lk_replace() {
-    echo "${3//$(lk_escape "$1" '*' '?' '[' ']' '(')/$2}"
+    [ "$#" -gt "2" ] &&
+        echo "${3//$(lk_escape "$1" '*' '?' '[' ']' '(')/$2}" ||
+        lk_xargs lk_replace "$1" "$2"
 }
 
 # lk_in_string needle haystack
@@ -348,6 +352,15 @@ function lk_array_search() {
         }
     done
     false
+}
+
+# lk_xargs command [arg...]
+#   Analogous to xargs(1).
+function lk_xargs() {
+    local LINE
+    while IFS= read -r LINE || [ -n "$LINE" ]; do
+        "$@" "$LINE"
+    done
 }
 
 # lk_mapfile file_path array_name [ignore_pattern]
