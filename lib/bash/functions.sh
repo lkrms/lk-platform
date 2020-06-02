@@ -226,15 +226,20 @@ function lk_escape_ere_replace() {
 #   Replace all occurrences of FIND in STRING with REPLACE_WITH. If STRING
 #   is not specified, replace FIND in input.
 function lk_replace() {
+    local _LK_SEARCH="${_LK_SEARCH:-}"
+    [ -n "$_LK_SEARCH" ] || {
+        _LK_SEARCH="$(lk_escape "$1." '*' '?' '[' ']' '(')"
+        _LK_SEARCH="${_LK_SEARCH%.}"
+    }
     [ "$#" -gt "2" ] &&
-        echo "${3//$(lk_escape "$1" '*' '?' '[' ']' '(')/$2}" ||
+        printf '%s' "${3//$_LK_SEARCH/$2}${_LK_APPEND:-}" ||
         lk_xargs lk_replace "$1" "$2"
 }
 
 # lk_in_string needle haystack
 #   True if NEEDLE is a substring of HAYSTACK.
 function lk_in_string() {
-    [ "$(lk_replace "$1" "" "$2")" != "$2" ]
+    [ "$(_LK_APPEND="." lk_replace "$1" "" "$2")" != "$2." ]
 }
 
 function lk_lower() {
@@ -264,6 +269,10 @@ function lk_ellipsis() {
     [ "$#" -gt "1" ] &&
         echo "$2" | sed -E "s/^(.{$(("$1" - 3))}).{4,}/\1.../" ||
         sed -E "s/^(.{$(("$1" - 3))}).{4,}/\1.../"
+}
+
+function lk_repeat() {
+    eval "printf \"\$1%.s\" {1..$2}"
 }
 
 function lk_hostname() {
@@ -400,12 +409,16 @@ function lk_echoc() {
 
 # lk_console_message message [[secondary_message] colour_sequence]
 function lk_console_message() {
-    local MESSAGE MESSAGE2 COLOUR BOLD_COLOUR
-    MESSAGE="$1"
+    local PREFIX="${LK_CONSOLE_PREFIX-==> }" MESSAGE="$1" MESSAGE2 SPACES COLOUR BOLD_COLOUR
     shift
     [ "$#" -le "1" ] || {
         MESSAGE2="$1"
         shift
+        ! lk_in_string $'\n' "$MESSAGE2" &&
+            MESSAGE2=" $MESSAGE2" || {
+            SPACES=$'\n'"$(lk_repeat " " "$((${#PREFIX} + 2))")"
+            MESSAGE2="$SPACES${MESSAGE2//$'\n'/$SPACES}"
+        }
     }
     COLOUR="${1-$LK_DEFAULT_CONSOLE_COLOUR}"
     BOLD_COLOUR="$(lk_in_string "$LK_BOLD" "$COLOUR" || echo "$LK_BOLD")$COLOUR"
@@ -414,9 +427,9 @@ function lk_console_message() {
         # - there's no portable way to determine buffer size
         # - writing <=512 bytes with echo or printf should be atomic on all
         #   platforms, but this can't be guaranteed
-        lk_echoc -n "${LK_CONSOLE_PREFIX-==> }" "${LK_CONSOLE_PREFIX_COLOUR-$BOLD_COLOUR}"
+        lk_echoc -n "$PREFIX" "${LK_CONSOLE_PREFIX_COLOUR-$BOLD_COLOUR}"
         lk_echoc -n "$MESSAGE" "${LK_CONSOLE_MESSAGE_COLOUR-$LK_BOLD}"
-        [ -z "${MESSAGE2:-}" ] || lk_echoc -n " $MESSAGE2" "${LK_CONSOLE_SECONDARY_COLOUR-$COLOUR}"
+        [ -z "${MESSAGE2:-}" ] || lk_echoc -n "$MESSAGE2" "${LK_CONSOLE_SECONDARY_COLOUR-$COLOUR}"
     )" >&2
 }
 

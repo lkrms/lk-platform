@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC1091,SC2015,SC2029
+# shellcheck disable=SC1091,SC2015,SC2029,SC2207
 
 function lk_safe_wp() {
     wp "$@" --skip-plugins --skip-themes
@@ -23,6 +23,7 @@ function lk_wp_rename_site() {
         lk_warn "site URL not changed (set OLD_URL to override)" || return
     lk_console_item "Setting site URL to" "$NEW_URL"
     lk_console_detail "Previous site URL:" "$OLD_URL"
+    lk_confirm "Proceed?" Y || return
     lk_safe_wp option update siteurl "$NEW_URL"
     lk_safe_wp option update home "$NEW_URL"
     lk_wp_replace "$OLD_URL" "$NEW_URL"
@@ -82,6 +83,26 @@ host="$(lk_escape "${3:-${DB_HOST:-${LK_MYSQL_HOST:-localhost}}}" "\\" '"')"
 EOF
 }
 
+function _lk_write_my_cnf() {
+    LK_MY_CNF="${LK_MY_CNF:-$HOME/.lk_mysql.cnf}"
+    _lk_get_my_cnf "$@" >"$LK_MY_CNF"
+}
+
+function _lk_mysql() {
+    [ -n "${LK_MY_CNF:-}" ] || lk_warn "LK_MY_CNF not set" || return
+    [ -f "$LK_MY_CNF" ] || lk_warn "file not found: $LK_MY_CNF" || return
+    mysql --defaults-file="$LK_MY_CNF" "$@"
+}
+
+function _lk_mysql_privileged() {
+    local LK_MYSQL_USERNAME="${LK_MYSQL_USERNAME-root}"
+    sudo -H mysql ${LK_MYSQL_USERNAME+-u"$LK_MYSQL_USERNAME"} "$@"
+}
+
+function _lk_mysql_connects() {
+    _lk_mysql --execute="\\q" "${1:-$DB_NAME}"
+}
+
 # lk_wp_db_dump_remote ssh_host [remote_path]
 function lk_wp_db_dump_remote() {
     local REMOTE_PATH="${2:-public_html}" WP_CONFIG DB_CONFIG \
@@ -118,44 +139,49 @@ function lk_wp_db_dump_remote() {
     lk_console_message "Deleting mysqldump configuration file"
     ssh "$1" "bash -c 'rm -f \".lk_mysqldump.cnf\"'" &&
         lk_console_detail "Deleted" "$1:.lk_mysqldump.cnf" ||
-        lk_console_detail "Error deleting" "$1:.lk_mysqldump.cnf" "$LK_BOLD$LK_RED"
+        lk_console_detail "Error deleting" "$1:.lk_mysqldump.cnf" "$LK_RED"
+    [ "$EXIT_STATUS" -eq "0" ] && lk_console_message "Database dump completed successfully" "$LK_GREEN" ||
+        lk_console_message "Database dump failed (exit status $EXIT_STATUS)" "$LK_RED"
     return "$EXIT_STATUS"
 }
 
 # lk_wp_db_restore_local sql_path [db_name [db_user]]
 function lk_wp_db_restore_local() {
     local DB_CONFIG FILE_OWNER SQL EXIT_STATUS=0 \
-        LOCAL_DB_NAME LOCAL_DB_USER LOCAL_DB_PASSWORD LOCAL_DB_HOST="${LK_MYSQL_HOST:-localhost}" \
-        DB_NAME DB_USER DB_PASSWORD DB_HOST \
-        LK_MY_CNF="${LK_MY_CNF:-$HOME/.lk_mysql.cnf}"
+        LOCAL_DB_NAME LOCAL_DB_USER LOCAL_DB_PASSWORD \
+        LOCAL_DB_HOST="${LK_MYSQL_HOST:-localhost}" \
+        DB_NAME DB_USER DB_PASSWORD DB_HOST
     [ -f "$1" ] || lk_warn "file not found: $1" || return
-    lk_console_item "Preparing to restore WordPress database from" "$1"
-    DB_CONFIG="$(lk_wp_db_config)" || return
-    . /dev/stdin <<<"$DB_CONFIG" || return
-    FILE_OWNER="$(gnu_stat --printf '%U' "$1")" || return
-    LOCAL_DB_NAME="${2-$FILE_OWNER}"              # 1. use FILE_OWNER unless specified
-    LOCAL_DB_NAME="${LOCAL_DB_NAME:-$DB_NAME}"    # 2. if user value is "", replace with wp-config.php value
-    LOCAL_DB_NAME="${LOCAL_DB_NAME:-$FILE_OWNER}" # 3. if wp-config.php value is "", use FILE_OWNER
-    LOCAL_DB_USER="${3-$FILE_OWNER}"
-    LOCAL_DB_USER="${LOCAL_DB_USER:-$DB_USER}"
-    LOCAL_DB_USER="${LOCAL_DB_USER:-$FILE_OWNER}"
+    lk_console_item "Preparing to restore from" "$1"
+    DB_CONFIG="$(lk_wp_db_config)" &&
+        . /dev/stdin <<<"$DB_CONFIG" &&
+        DB_HOST="$LOCAL_DB_HOST" &&
+        _lk_write_my_cnf || return
+    LOCAL_DB_NAME="$DB_NAME"
+    LOCAL_DB_USER="$DB_USER"
     LOCAL_DB_PASSWORD="$DB_PASSWORD"
-    _lk_get_my_cnf \
-        "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD" "$LOCAL_DB_HOST" \
-        >"$LK_MY_CNF" || return
-    mysql --defaults-file="$LK_MY_CNF" --execute="\\q" "$LOCAL_DB_NAME" 2>/dev/null || {
-        LOCAL_DB_PASSWORD="$(openssl rand -base64 32)" &&
-            _lk_get_my_cnf \
-                "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD" "$LOCAL_DB_HOST" \
-                >"$LK_MY_CNF"
-    } || return
+    # keep existing credentials if they work
+    _lk_mysql_connects 2>/dev/null || {
+        FILE_OWNER="$(gnu_stat --printf '%U' "$1")" || return
+        LOCAL_DB_NAME="${2:-$FILE_OWNER}"
+        LOCAL_DB_USER="${3:-$FILE_OWNER}"
+        _lk_write_my_cnf "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD" "$LOCAL_DB_HOST" || return
+        # try existing password with new DB_NAME and DB_USER before changing DB_PASSWORD
+        _lk_mysql_connects "$LOCAL_DB_NAME" 2>/dev/null || {
+            LOCAL_DB_PASSWORD="$(openssl rand -base64 32)" &&
+                _lk_write_my_cnf "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD" "$LOCAL_DB_HOST"
+        } || return
+    }
     SQL=(
         "DROP DATABASE IF EXISTS $LOCAL_DB_NAME"
         "CREATE DATABASE $LOCAL_DB_NAME"
-        "GRANT ALL PRIVILEGES ON $LOCAL_DB_NAME.*
-TO '$(lk_escape "$LOCAL_DB_USER" "\\" "'")'@'$(lk_escape "$LOCAL_DB_HOST" "\\" "'")'
-IDENTIFIED BY {{DB_PASSWORD}}"
     )
+    [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] ||
+        SQL+=(
+            "GRANT ALL PRIVILEGES ON $LOCAL_DB_NAME.* \
+TO '$(lk_escape "$LOCAL_DB_USER" "\\" "'")'@'$(lk_escape "$LOCAL_DB_HOST" "\\" "'")' \
+IDENTIFIED BY {{DB_PASSWORD}}"
+        )
     [ "$DB_NAME" = "$LOCAL_DB_NAME" ] ||
         lk_console_detail "DB_NAME will be updated to" "$LOCAL_DB_NAME"
     [ "$DB_USER" = "$LOCAL_DB_USER" ] ||
@@ -164,34 +190,117 @@ IDENTIFIED BY {{DB_PASSWORD}}"
         lk_console_detail "DB_HOST will be updated to" "$LOCAL_DB_HOST"
     [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] ||
         lk_console_detail "DB_PASSWORD will be reset"
-    lk_console_detail "Local database will be reset with SQL commands" \
+    lk_console_detail "Local database will be reset with:" \
         "$(printf '%s;\n' "${SQL[@]}")"
-    echo >&2
-    if lk_confirm "All data in local database '$LOCAL_DB_NAME' will be permanently destroyed. Proceed?" N; then
-        lk_console_message "Restoring WordPress database to local system"
-        lk_console_detail "Checking wp-config.php"
-        [ "$DB_NAME" = "$LOCAL_DB_NAME" ] ||
-            lk_safe_wp config set DB_NAME "$LOCAL_DB_NAME" --type=constant || return
-        [ "$DB_USER" = "$LOCAL_DB_USER" ] ||
-            lk_safe_wp config set DB_USER "$LOCAL_DB_USER" --type=constant || return
-        [ "$DB_HOST" = "$LOCAL_DB_HOST" ] ||
-            lk_safe_wp config set DB_HOST "$LOCAL_DB_HOST" --type=constant || return
-        [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] ||
-            lk_safe_wp config set DB_PASSWORD "$LOCAL_DB_PASSWORD" --type=constant || return
-        lk_console_detail "Preparing database" "$LOCAL_DB_NAME"
-        printf '%s;\n' "${SQL[@]}" |
-            lk_replace '{{DB_PASSWORD}}' "'$(lk_escape "$LOCAL_DB_PASSWORD" "\\" "'")'" |
-            sudo mysql -uroot || return
-        lk_console_detail "Restoring from" "$1"
-        if [[ "$1" =~ \.gz(ip)?$ ]]; then
-            pv "$1" | gunzip
-        else
-            pv "$1"
-        fi | mysql --defaults-file="$LK_MY_CNF" "$LOCAL_DB_NAME" || EXIT_STATUS="$?"
-        [ "$EXIT_STATUS" -eq "0" ] && lk_console_message "Database restored successfully" ||
-            lk_console_message "Restore operation failed (exit status $EXIT_STATUS)" "$LK_BOLD$LK_RED"
-        return "$EXIT_STATUS"
+    lk_confirm "All data in local database '$LOCAL_DB_NAME' will be permanently destroyed. Proceed?" N || return
+    lk_console_message "Restoring WordPress database to local system"
+    lk_console_detail "Checking wp-config.php"
+    [ "$DB_NAME" = "$LOCAL_DB_NAME" ] ||
+        lk_safe_wp config set DB_NAME "$LOCAL_DB_NAME" --type=constant || return
+    [ "$DB_USER" = "$LOCAL_DB_USER" ] ||
+        lk_safe_wp config set DB_USER "$LOCAL_DB_USER" --type=constant || return
+    [ "$DB_HOST" = "$LOCAL_DB_HOST" ] ||
+        lk_safe_wp config set DB_HOST "$LOCAL_DB_HOST" --type=constant || return
+    [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] ||
+        lk_safe_wp config set DB_PASSWORD "$LOCAL_DB_PASSWORD" --type=constant || return
+    lk_console_detail "Preparing database" "$LOCAL_DB_NAME"
+    printf '%s;\n' "${SQL[@]}" |
+        lk_replace '{{DB_PASSWORD}}' "'$(lk_escape "$LOCAL_DB_PASSWORD" "\\" "'")'" |
+        _lk_mysql_privileged || return
+    lk_console_detail "Restoring from" "$1"
+    if [[ "$1" =~ \.gz(ip)?$ ]]; then
+        pv "$1" | gunzip
+    else
+        pv "$1"
+    fi | _lk_mysql "$LOCAL_DB_NAME" || EXIT_STATUS="$?"
+    [ "$EXIT_STATUS" -eq "0" ] && lk_console_message "Database restored successfully" "$LK_GREEN" ||
+        lk_console_message "Restore operation failed (exit status $EXIT_STATUS)" "$LK_RED"
+    return "$EXIT_STATUS"
+}
+
+function lk_wp_local_reset() {
+    local DB_CONFIG SITE_URL ADMIN_EMAIL="${ADMIN_EMAIL:-}" TO_DEACTIVATE \
+        DB_NAME DB_USER DB_PASSWORD DB_HOST TABLE_PREFIX \
+        ACTIVE_PLUGINS DEACTIVATE_PLUGINS=(
+            all-in-one-redirection
+            hide_my_wp
+            wordfence
+            wp-admin-no-show
+            wp-rocket
+            zopim-live-chat
+        )
+
+    DB_CONFIG="$(lk_wp_db_config)" &&
+        . /dev/stdin <<<"$DB_CONFIG" &&
+        _lk_write_my_cnf &&
+        _lk_mysql_connects &&
+        TABLE_PREFIX="$(lk_safe_wp config get table_prefix)" &&
+        SITE_URL="$(lk_safe_wp option get siteurl)" || return
+    SITE_URL="${SITE_URL#http*://}"
+    lk_confirm "Reset local instance of '$SITE_URL' for development?" N || return
+    lk_console_item "Configuring WordPress in" "$PWD"
+    ADMIN_EMAIL="${ADMIN_EMAIL:-$(git config user.email 2>/dev/null)}" ||
+        ADMIN_EMAIL="$USER@$(lk_hostname)"
+    lk_console_detail "Resetting admin email addresses to" "$ADMIN_EMAIL"
+    _lk_mysql "$DB_NAME" <<SQL || return
+UPDATE ${TABLE_PREFIX}options
+SET option_value = ''
+WHERE option_name IN ('admin_email', 'woocommerce_email_from_address', 'woocommerce_stock_email_recipient');
+
+DELETE
+FROM ${TABLE_PREFIX}options
+WHERE option_name = 'new_admin_email';
+SQL
+    lk_safe_wp user update 1 --user_email="$DEV_EMAIL" --skip-email &&
+        lk_safe_wp user meta update 1 billing_email "$DEV_EMAIL" || return
+    ACTIVE_PLUGINS=($(lk_safe_wp plugin list --status=active --field=name)) &&
+        TO_DEACTIVATE=($(comm -12 <(printf '%s\n' ${ACTIVE_PLUGINS[@]+"${ACTIVE_PLUGINS[@]}"} | sort | uniq) <(printf '%s\n' "${DEACTIVATE_PLUGINS[@]}" | sort | uniq))) || return
+    if [ "${#TO_DEACTIVATE[@]}" -gt "0" ]; then
+        lk_console_detail "Disabling ${#TO_DEACTIVATE[@]} $(lk_maybe_plural "${#TO_DEACTIVATE[@]}" plugin plugins) known to disrupt local development:" "$(lk_echo_array "${TO_DEACTIVATE[@]}")"$'\n'
+        lk_safe_wp plugin deactivate "${TO_DEACTIVATE[@]}" || return
     fi
+    if lk_safe_wp config has WP_CACHE --type=constant; then
+        lk_console_detail "Disabling caching"
+        lk_safe_wp config set WP_CACHE false --type=constant --raw
+    fi
+    lk_console_detail "Disabling all email sending"
+    if ! lk_safe_wp plugin is-installed wp-mail-smtp; then
+        lk_safe_wp plugin install wp-mail-smtp --activate
+    elif ! lk_safe_wp plugin is-active wp-mail-smtp; then
+        lk_safe_wp plugin activate wp-mail-smtp
+    fi
+    lk_safe_wp option patch insert wp_mail_smtp general '{
+  "do_not_send": true,
+  "am_notifications_hidden": false,
+  "uninstall": false
+}' --format=json
+    if lk_safe_wp plugin is-installed coming-soon; then
+        lk_console_detail "Disabling maintenance mode"
+        lk_safe_wp option patch update seed_csp4_settings_content status 0
+    fi
+    ACTIVE_PLUGINS=($(lk_safe_wp plugin list --status=active --field=name)) || return
+    [ "${#ACTIVE_PLUGINS[@]}" -eq "0" ] || {
+        lk_echo_array "${ACTIVE_PLUGINS[@]}" | lk_console_list "Plugin code will be allowed to run while final changes are applied" "active plugin" "active plugins"
+        lk_confirm "Proceed?" N || return
+    }
+    if lk_safe_wp plugin is-active woocommerce; then
+        lk_console_detail "WooCommerce: disabling live payments for known gateways"
+        lk_safe_wp option patch update woocommerce_paypal_settings testmode yes || return
+        if lk_safe_wp plugin is-active woocommerce-gateway-stripe; then
+            lk_safe_wp option patch update woocommerce_stripe_settings testmode yes || return
+        fi
+    fi
+    if wp cli has-command 'wc webhook list'; then
+        TO_DEACTIVATE=($(wp wc webhook list --user=1 --field=id --status=active)) || return
+        [ "${#TO_DEACTIVATE[@]}" -eq "0" ] || {
+            lk_console_detail "WooCommerce: deleting active webhooks"
+            for WEBHOOK_ID in "${TO_DEACTIVATE[@]}"; do
+                # TODO: deactivate instead?
+                wp wc webhook delete "$WEBHOOK_ID" --user=1 --force=true || return
+            done
+        }
+    fi
+    lk_console_message "Local instance of '$SITE_URL' successfully reset for development" "$LK_GREEN"
 }
 
 # lk_wp_file_sync_remote ssh_host [remote_path [local_path]]
@@ -213,7 +322,7 @@ function lk_wp_file_sync_remote() {
         rsync --dry-run "${ARGS[@]}" | "${PAGER:-less}" >&2 || true
     lk_confirm "All local changes in '$LOCAL_PATH' will be permanently lost. Proceed?" N || return
     rsync "${ARGS[@]}" || EXIT_STATUS="$?"
-    [ "$EXIT_STATUS" -eq "0" ] && lk_console_message "Sync completed successfully" ||
-        lk_console_message "Sync operation failed (exit status $EXIT_STATUS)" "$LK_BOLD$LK_RED"
+    [ "$EXIT_STATUS" -eq "0" ] && lk_console_message "Sync completed successfully" "$LK_GREEN" ||
+        lk_console_message "Sync operation failed (exit status $EXIT_STATUS)" "$LK_RED"
     return "$EXIT_STATUS"
 }
