@@ -1,15 +1,15 @@
 #!/bin/bash
-# shellcheck disable=SC1091,SC2015,SC2029,SC2207
+# shellcheck disable=SC1091,SC2015,SC2029,SC2207,SC2119,SC2120
 
-function lk_safe_wp() {
-    wp "$@" --skip-plugins --skip-themes
+function lk_wp() {
+    wp --skip-plugins --skip-themes "$@"
 }
 
 function lk_wp_replace() {
     lk_console_message "Running WordPress search/replace command"
     lk_console_detail "Searching for" "$1"
     lk_console_detail "Replacing with" "$2"
-    lk_safe_wp search-replace "$1" "$2" --no-report --all-tables-with-prefix
+    lk_wp search-replace "$1" "$2" --no-report --all-tables-with-prefix
 }
 
 # lk_wp_rename_site new_url
@@ -18,32 +18,35 @@ function lk_wp_rename_site() {
     lk_is_uri "$NEW_URL" ||
         lk_warn "not a valid URL: $NEW_URL" || return
     [ -n "$OLD_URL" ] ||
-        OLD_URL="$(lk_safe_wp option get siteurl)" || return
+        OLD_URL="$(lk_wp option get siteurl)" || return
     [ "$NEW_URL" != "$OLD_URL" ] ||
         lk_warn "site URL not changed (set OLD_URL to override)" || return
     lk_console_item "Setting site URL to" "$NEW_URL"
     lk_console_detail "Previous site URL:" "$OLD_URL"
     lk_confirm "Proceed?" Y || return
-    lk_safe_wp option update siteurl "$NEW_URL"
-    lk_safe_wp option update home "$NEW_URL"
-    lk_wp_replace "$OLD_URL" "$NEW_URL"
-    lk_wp_replace "${OLD_URL#http*:}" "${NEW_URL#http*:}"
-    lk_wp_replace "$(echo "$OLD_URL" | php -r 'echo urlencode(trim(fgets(STDIN)));')" \
-        "$(echo "$NEW_URL" | php -r 'echo urlencode(trim(fgets(STDIN)));')"
-    lk_wp_replace "$(echo "${OLD_URL#http*:}" | php -r 'echo urlencode(trim(fgets(STDIN)));')" \
-        "$(echo "${NEW_URL#http*:}" | php -r 'echo urlencode(trim(fgets(STDIN)));')"
-    lk_wp_replace "$(echo "$OLD_URL" | php -r 'echo substr(json_encode(trim(fgets(STDIN))), 1, -1);')" \
-        "$(echo "$NEW_URL" | php -r 'echo substr(json_encode(trim(fgets(STDIN))), 1, -1);')"
-    lk_wp_replace "$(echo "${OLD_URL#http*://}" | php -r 'echo urlencode(trim(fgets(STDIN)));')" \
-        "$(echo "${NEW_URL#http*://}" | php -r 'echo urlencode(trim(fgets(STDIN)));')"
-    [ "${OLD_URL#http*://}" = "$(
-        echo "${OLD_URL#http*://}" |
-            php -r 'echo urlencode(trim(fgets(STDIN)));'
-    )" ] && [ "${NEW_URL#http*://}" = "$(
-        echo "${NEW_URL#http*://}" |
-            php -r 'echo urlencode(trim(fgets(STDIN)));'
-    )" ] ||
-        lk_wp_replace "${OLD_URL#http*://}" "${NEW_URL#http*://}"
+    lk_wp option update siteurl "$NEW_URL"
+    lk_wp option update home "$NEW_URL"
+    if lk_confirm "Search and replace the previous URL in all tables?" N; then
+        lk_wp_replace "$OLD_URL" "$NEW_URL"
+        lk_wp_replace "${OLD_URL#http*:}" "${NEW_URL#http*:}"
+        lk_wp_replace "$(echo "$OLD_URL" | php -r 'echo urlencode(trim(fgets(STDIN)));')" \
+            "$(echo "$NEW_URL" | php -r 'echo urlencode(trim(fgets(STDIN)));')"
+        lk_wp_replace "$(echo "${OLD_URL#http*:}" | php -r 'echo urlencode(trim(fgets(STDIN)));')" \
+            "$(echo "${NEW_URL#http*:}" | php -r 'echo urlencode(trim(fgets(STDIN)));')"
+        lk_wp_replace "$(echo "$OLD_URL" | php -r 'echo substr(json_encode(trim(fgets(STDIN))), 1, -1);')" \
+            "$(echo "$NEW_URL" | php -r 'echo substr(json_encode(trim(fgets(STDIN))), 1, -1);')"
+        lk_wp_replace "$(echo "${OLD_URL#http*://}" | php -r 'echo urlencode(trim(fgets(STDIN)));')" \
+            "$(echo "${NEW_URL#http*://}" | php -r 'echo urlencode(trim(fgets(STDIN)));')"
+        [ "${OLD_URL#http*://}" = "$(
+            echo "${OLD_URL#http*://}" |
+                php -r 'echo urlencode(trim(fgets(STDIN)));'
+        )" ] && [ "${NEW_URL#http*://}" = "$(
+            echo "${NEW_URL#http*://}" |
+                php -r 'echo urlencode(trim(fgets(STDIN)));'
+        )" ] ||
+            lk_wp_replace "${OLD_URL#http*://}" "${NEW_URL#http*://}"
+    fi
+    lk_confirm "OK to flush rewrite rules? Plugin code will be allowed to run." N || return
     wp rewrite flush
 }
 
@@ -147,16 +150,17 @@ function lk_wp_db_dump_remote() {
 
 # lk_wp_db_restore_local sql_path [db_name [db_user]]
 function lk_wp_db_restore_local() {
-    local DB_CONFIG FILE_OWNER SQL EXIT_STATUS=0 \
+    local FILE_OWNER SQL EXIT_STATUS=0 \
         LOCAL_DB_NAME LOCAL_DB_USER LOCAL_DB_PASSWORD \
         LOCAL_DB_HOST="${LK_MYSQL_HOST:-localhost}" \
         DB_NAME DB_USER DB_PASSWORD DB_HOST
     [ -f "$1" ] || lk_warn "file not found: $1" || return
     lk_console_item "Preparing to restore from" "$1"
-    DB_CONFIG="$(lk_wp_db_config)" &&
-        . /dev/stdin <<<"$DB_CONFIG" &&
-        DB_HOST="$LOCAL_DB_HOST" &&
-        _lk_write_my_cnf || return
+    DB_NAME="$(lk_wp config get DB_NAME)" &&
+        DB_USER="$(lk_wp config get DB_USER)" &&
+        DB_PASSWORD="$(lk_wp config get DB_PASSWORD)" &&
+        DB_HOST="$(lk_wp config get DB_HOST)" &&
+        _lk_write_my_cnf "$DB_USER" "$DB_PASSWORD" "$LOCAL_DB_HOST" || return
     LOCAL_DB_NAME="$DB_NAME"
     LOCAL_DB_USER="$DB_USER"
     LOCAL_DB_PASSWORD="$DB_PASSWORD"
@@ -196,13 +200,13 @@ IDENTIFIED BY {{DB_PASSWORD}}"
     lk_console_message "Restoring WordPress database to local system"
     lk_console_detail "Checking wp-config.php"
     [ "$DB_NAME" = "$LOCAL_DB_NAME" ] ||
-        lk_safe_wp config set DB_NAME "$LOCAL_DB_NAME" --type=constant || return
+        lk_wp config set DB_NAME "$LOCAL_DB_NAME" --type=constant --quiet || return
     [ "$DB_USER" = "$LOCAL_DB_USER" ] ||
-        lk_safe_wp config set DB_USER "$LOCAL_DB_USER" --type=constant || return
+        lk_wp config set DB_USER "$LOCAL_DB_USER" --type=constant --quiet || return
     [ "$DB_HOST" = "$LOCAL_DB_HOST" ] ||
-        lk_safe_wp config set DB_HOST "$LOCAL_DB_HOST" --type=constant || return
+        lk_wp config set DB_HOST "$LOCAL_DB_HOST" --type=constant --quiet || return
     [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] ||
-        lk_safe_wp config set DB_PASSWORD "$LOCAL_DB_PASSWORD" --type=constant || return
+        lk_wp config set DB_PASSWORD "$LOCAL_DB_PASSWORD" --type=constant --quiet || return
     lk_console_detail "Preparing database" "$LOCAL_DB_NAME"
     printf '%s;\n' "${SQL[@]}" |
         lk_replace '{{DB_PASSWORD}}' "'$(lk_escape "$LOCAL_DB_PASSWORD" "\\" "'")'" |
@@ -219,23 +223,27 @@ IDENTIFIED BY {{DB_PASSWORD}}"
 }
 
 function lk_wp_local_reset() {
-    local DB_CONFIG SITE_URL ADMIN_EMAIL="${ADMIN_EMAIL:-}" TO_DEACTIVATE \
+    local SITE_URL ADMIN_EMAIL="${ADMIN_EMAIL:-}" TO_DEACTIVATE \
         DB_NAME DB_USER DB_PASSWORD DB_HOST TABLE_PREFIX \
         ACTIVE_PLUGINS DEACTIVATE_PLUGINS=(
             all-in-one-redirection
+            force-ssl
             hide_my_wp
+            w3-total-cache
             wordfence
             wp-admin-no-show
             wp-rocket
             zopim-live-chat
         )
 
-    DB_CONFIG="$(lk_wp_db_config)" &&
-        . /dev/stdin <<<"$DB_CONFIG" &&
+    DB_NAME="$(lk_wp config get DB_NAME)" &&
+        DB_USER="$(lk_wp config get DB_USER)" &&
+        DB_PASSWORD="$(lk_wp config get DB_PASSWORD)" &&
+        DB_HOST="$(lk_wp config get DB_HOST)" &&
+        TABLE_PREFIX="$(lk_wp config get table_prefix)" &&
         _lk_write_my_cnf &&
         _lk_mysql_connects &&
-        TABLE_PREFIX="$(lk_safe_wp config get table_prefix)" &&
-        SITE_URL="$(lk_safe_wp option get siteurl)" || return
+        SITE_URL="$(lk_wp option get siteurl)" || return
     SITE_URL="${SITE_URL#http*://}"
     lk_confirm "Reset local instance of '$SITE_URL' for development?" N || return
     lk_console_item "Configuring WordPress in" "$PWD"
@@ -251,43 +259,46 @@ DELETE
 FROM ${TABLE_PREFIX}options
 WHERE option_name = 'new_admin_email';
 SQL
-    lk_safe_wp user update 1 --user_email="$DEV_EMAIL" --skip-email &&
-        lk_safe_wp user meta update 1 billing_email "$DEV_EMAIL" || return
-    ACTIVE_PLUGINS=($(lk_safe_wp plugin list --status=active --field=name)) &&
+    lk_wp user update 1 --user_email="$DEV_EMAIL" --skip-email &&
+        lk_wp user meta update 1 billing_email "$DEV_EMAIL" || return
+    ACTIVE_PLUGINS=($(lk_wp plugin list --status=active --field=name)) &&
         TO_DEACTIVATE=($(comm -12 <(printf '%s\n' ${ACTIVE_PLUGINS[@]+"${ACTIVE_PLUGINS[@]}"} | sort | uniq) <(printf '%s\n' "${DEACTIVATE_PLUGINS[@]}" | sort | uniq))) || return
     if [ "${#TO_DEACTIVATE[@]}" -gt "0" ]; then
         lk_console_detail "Disabling ${#TO_DEACTIVATE[@]} $(lk_maybe_plural "${#TO_DEACTIVATE[@]}" plugin plugins) known to disrupt local development:" "$(lk_echo_array "${TO_DEACTIVATE[@]}")"$'\n'
-        lk_safe_wp plugin deactivate "${TO_DEACTIVATE[@]}" || return
+        lk_wp plugin deactivate "${TO_DEACTIVATE[@]}" || return
     fi
-    if lk_safe_wp config has WP_CACHE --type=constant; then
+    if lk_wp config has WP_CACHE --type=constant; then
         lk_console_detail "Disabling caching"
-        lk_safe_wp config set WP_CACHE false --type=constant --raw
+        lk_wp config set WP_CACHE false --type=constant --raw || return
     fi
     lk_console_detail "Disabling all email sending"
-    if ! lk_safe_wp plugin is-installed wp-mail-smtp; then
-        lk_safe_wp plugin install wp-mail-smtp --activate
-    elif ! lk_safe_wp plugin is-active wp-mail-smtp; then
-        lk_safe_wp plugin activate wp-mail-smtp
+    if ! lk_wp plugin is-installed wp-mail-smtp; then
+        lk_wp plugin install wp-mail-smtp --activate || return
+    else
+        lk_wp plugin update wp-mail-smtp && {
+            lk_wp plugin is-active wp-mail-smtp ||
+                lk_wp plugin activate wp-mail-smtp
+        } || return
     fi
-    lk_safe_wp option patch insert wp_mail_smtp general '{
+    lk_wp option patch insert wp_mail_smtp general '{
   "do_not_send": true,
   "am_notifications_hidden": false,
   "uninstall": false
 }' --format=json
-    if lk_safe_wp plugin is-installed coming-soon; then
+    if lk_wp plugin is-installed coming-soon; then
         lk_console_detail "Disabling maintenance mode"
-        lk_safe_wp option patch update seed_csp4_settings_content status 0
+        lk_wp option patch update seed_csp4_settings_content status 0
     fi
-    ACTIVE_PLUGINS=($(lk_safe_wp plugin list --status=active --field=name)) || return
+    ACTIVE_PLUGINS=($(lk_wp plugin list --status=active --field=name)) || return
     [ "${#ACTIVE_PLUGINS[@]}" -eq "0" ] || {
         lk_echo_array "${ACTIVE_PLUGINS[@]}" | lk_console_list "Plugin code will be allowed to run while final changes are applied" "active plugin" "active plugins"
         lk_confirm "Proceed?" N || return
     }
-    if lk_safe_wp plugin is-active woocommerce; then
+    if lk_wp plugin is-active woocommerce; then
         lk_console_detail "WooCommerce: disabling live payments for known gateways"
-        lk_safe_wp option patch update woocommerce_paypal_settings testmode yes || return
-        if lk_safe_wp plugin is-active woocommerce-gateway-stripe; then
-            lk_safe_wp option patch update woocommerce_stripe_settings testmode yes || return
+        lk_wp option patch update woocommerce_paypal_settings testmode yes || return
+        if lk_wp plugin is-active woocommerce-gateway-stripe; then
+            lk_wp option patch update woocommerce_stripe_settings testmode yes || return
         fi
     fi
     if wp cli has-command 'wc webhook list'; then

@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2030,SC2031
 
 [ -n "${LK_BASE:-}" ] ||
     eval "$(
@@ -8,14 +9,17 @@
             [ -d "$LK_BASE/lib/bash" ]; then
             export LK_BASE
             declare -p LK_BASE
-            shopt -s nullglob
-            for FILE in "$LK_BASE/lib/bash"/*.sh; do
-                echo ". \"\$LK_BASE/lib/bash\"/$(basename "$FILE")"
-            done
         else
             echo "$RC_PATH: symbolic links to lk-platform scripts are not supported" >&2
         fi
     )"
+
+eval "$(
+    shopt -s nullglob
+    for FILE in "$LK_BASE/lib/bash"/*.sh; do
+        echo ". \"\$LK_BASE/lib/bash\"/$(basename "$FILE")"
+    done
+)"
 
 function lk_find_latest() {
     local i TYPE="${1:-}" TYPE_ARGS=()
