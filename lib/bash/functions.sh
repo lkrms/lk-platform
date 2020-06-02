@@ -110,6 +110,15 @@ function lk_first_existing_command() {
     false
 }
 
+function lk_first_existing_parent() {
+    local FILE
+    FILE="$(realpath --canonicalize-missing "$1")" || return
+    while [ ! -e "$FILE" ]; do
+        FILE="$(dirname "$FILE")"
+    done
+    echo "$FILE"
+}
+
 # lk_bash_at_least major minor
 function lk_bash_at_least() {
     [ "${BASH_VERSINFO[0]}" -eq "$1" ] &&
@@ -774,8 +783,8 @@ function _lk_get_gnu_command() {
 }
 
 function _lk_register_gnu_commands() {
-    local COMMAND PREFIX=
-    ! lk_is_macos || PREFIX="g"
+    local PREFIX="g" COMMAND
+    lk_is_macos || PREFIX=
     for COMMAND in "$@"; do
         eval "function gnu_$COMMAND() { $(_lk_get_gnu_command "$COMMAND") \"\$@\"; }"
     done
@@ -783,15 +792,28 @@ function _lk_register_gnu_commands() {
 }
 
 function lk_install_gnu_commands() {
-    local COMMANDS=("$@") COMMAND GCOMMAND COMMAND_PATH EXIT_STATUS=0 PREFIX=
-    ! lk_is_macos || PREFIX="g"
+    local PREFIX="g" GNU_PATH="${GNU_PATH:-/usr/local/bin}" COMMAND GCOMMAND COMMAND_PATH \
+        COMMANDS=("$@") EXIT_STATUS=0
+    lk_is_macos || PREFIX=
+    [ ! -e "$GNU_PATH" ] ||                                     # GNU_PATH does not exist; or
+        [ -d "$GNU_PATH" ] ||                                   # is a directory
+        lk_warn "not a directory: $GNU_PATH" || return          # ...
+    [ -w "$GNU_PATH" ] ||                                       # it's also writable; or
+        lk_is_true "$SUDO_OR_NOT" ||                            # will be installed as superuser; or
+        { [ ! -e "$GNU_PATH" ] &&                               # does not exist but the
+            PARENT="$(lk_first_existing_parent "$GNU_PATH")" && # first existing parent dir
+            [ -w "$PARENT" ]; } ||                              # is writable; or
+        { [ "$GNU_PATH" = "/usr/local/bin" ] &&                 # has not been customised and
+            [ -n "${HOME:-}" ] &&                               # HOME is set, so
+            GNU_PATH="$HOME/.local/bin"; } ||                   # $HOME/.local/bin is suitable
+        lk_warn "cannot write to directory: $GNU_PATH" || return
     [ "$#" -gt "0" ] || COMMANDS=(${LK_GNU_COMMANDS[@]+"${LK_GNU_COMMANDS[@]}"})
     for COMMAND in ${COMMANDS[@]+"${COMMANDS[@]}"}; do
         GCOMMAND="$(_lk_get_gnu_command "$COMMAND")"
         { lk_command_exists "$GCOMMAND" ||
             lk_warn "$GCOMMAND not found"; } &&
             COMMAND_PATH="$(command -v "$GCOMMAND" 2>/dev/null)" &&
-            lk_safe_symlink "$COMMAND_PATH" "${GNU_PATH:-/usr/local/bin}/gnu_$COMMAND" ||
+            lk_safe_symlink "$COMMAND_PATH" "$GNU_PATH/gnu_$COMMAND" ||
             EXIT_STATUS="$?"
     done
     return "$EXIT_STATUS"

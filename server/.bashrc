@@ -17,7 +17,7 @@
 eval "$(
     shopt -s nullglob
     for FILE in "$LK_BASE/lib/bash"/*.sh; do
-        echo ". \"\$LK_BASE/lib/bash\"/$(basename "$FILE")"
+        echo ". \"\$LK_BASE/lib/bash/$(basename "$FILE")\""
     done
 )"
 
@@ -53,3 +53,5 @@ function find_all() {
     shift
     gnu_find -L . -xdev -iname "*$FIND*" "$@"
 }
+
+export WP_CLI_CONFIG_PATH="$LK_BASE/etc/wp-cli.yml"

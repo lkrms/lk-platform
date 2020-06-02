@@ -226,8 +226,6 @@ function lk_wp_local_reset() {
     local SITE_URL ADMIN_EMAIL="${ADMIN_EMAIL:-}" TO_DEACTIVATE \
         DB_NAME DB_USER DB_PASSWORD DB_HOST TABLE_PREFIX \
         ACTIVE_PLUGINS DEACTIVATE_PLUGINS=(
-            all-in-one-redirection
-            force-ssl
             hide_my_wp
             w3-total-cache
             wordfence

@@ -1,0 +1,10 @@
+# Known to throw CLI exceptions
+skip-plugins:
+  - addthis
+  - all-in-one-redirection
+  - event-calendar-exporter
+  - facebook
+  - find-replace
+  - force-ssl
+  - simplemap
+  - the-events-calendar
