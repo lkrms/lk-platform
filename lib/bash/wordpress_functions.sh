@@ -6,10 +6,34 @@ function lk_wp() {
 }
 
 function lk_wp_replace() {
+    local TABLE_PREFIX SKIP_TABLES
+    TABLE_PREFIX="$(lk_wp config get table_prefix)" || return
+    SKIP_TABLES=(
+        "*_log"
+        "*_logs"
+        redirection_404
+
+        # new Gravity Forms
+        gf_draft_submissions
+        gf_entry
+        gf_entry_meta
+        gf_form_view
+
+        # old Gravity Forms
+        rg_form_view
+        rg_incomplete_submissions
+        rg_lead
+        rg_lead_details
+        rg_lead_meta
+    )
+    SKIP_TABLES=("${SKIP_TABLES[@]/#/$TABLE_PREFIX}")
     lk_console_message "Running WordPress search/replace command"
     lk_console_detail "Searching for" "$1"
     lk_console_detail "Replacing with" "$2"
-    lk_wp search-replace "$1" "$2" --no-report --all-tables-with-prefix
+    lk_wp search-replace "$1" "$2" --no-report \
+        --all-tables-with-prefix \
+        --skip-tables="$(lk_implode "," "${SKIP_TABLES[@]}")" \
+        --skip-columns="guid"
 }
 
 # lk_wp_rename_site new_url
@@ -227,6 +251,7 @@ function lk_wp_local_reset() {
         DB_NAME DB_USER DB_PASSWORD DB_HOST TABLE_PREFIX \
         ACTIVE_PLUGINS DEACTIVATE_PLUGINS=(
             hide_my_wp
+            sendgrid-email-delivery-simplified
             w3-total-cache
             wordfence
             wp-admin-no-show
