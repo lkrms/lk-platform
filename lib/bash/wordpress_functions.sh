@@ -14,17 +14,14 @@ function lk_wp_replace() {
         redirection_404
 
         # new Gravity Forms
-        gf_draft_submissions
-        gf_entry
-        gf_entry_meta
         gf_form_view
+        gf_draft_submissions
+        gf_entry*
 
         # old Gravity Forms
         rg_form_view
         rg_incomplete_submissions
-        rg_lead
-        rg_lead_details
-        rg_lead_meta
+        rg_lead*
     )
     SKIP_TABLES=("${SKIP_TABLES[@]/#/$TABLE_PREFIX}")
     lk_console_message "Running WordPress search/replace command"
