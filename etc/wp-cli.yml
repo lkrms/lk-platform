@@ -6,5 +6,6 @@ skip-plugins:
   - facebook
   - find-replace
   - force-ssl
+  - responsive-accordion-and-collapse
   - simplemap
   - the-events-calendar
