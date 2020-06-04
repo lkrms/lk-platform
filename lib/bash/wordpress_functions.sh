@@ -67,7 +67,10 @@ function lk_wp_rename_site() {
         )" ] ||
             lk_wp_replace "${OLD_URL#http*://}" "${NEW_URL#http*://}"
     fi
-    lk_confirm "OK to flush rewrite rules? Plugin code will be allowed to run." N || return
+    lk_confirm "OK to flush rewrite rules? Plugin code will be allowed to run." N || {
+        lk_console_detail "To flush rewrite rules manually:" "wp rewrite flush"
+        return
+    }
     wp rewrite flush
 }
 
@@ -309,27 +312,26 @@ SQL
         lk_console_detail "Disabling maintenance mode"
         lk_wp option patch update seed_csp4_settings_content status 0
     fi
-    ACTIVE_PLUGINS=($(lk_wp plugin list --status=active --field=name)) || return
-    [ "${#ACTIVE_PLUGINS[@]}" -eq "0" ] || {
-        lk_echo_array "${ACTIVE_PLUGINS[@]}" | lk_console_list "Plugin code will be allowed to run while final changes are applied" "active plugin" "active plugins"
-        lk_confirm "Proceed?" N || return
-    }
     if lk_wp plugin is-active woocommerce; then
+        ACTIVE_PLUGINS=($(lk_wp plugin list --status=active --field=name)) || return
+        lk_echo_array "${ACTIVE_PLUGINS[@]}" |
+            lk_console_list "Plugin code will be allowed to run while final changes are applied" "active plugin" "active plugins"
+        lk_confirm "Proceed?" N || return
         lk_console_detail "WooCommerce: disabling live payments for known gateways"
         lk_wp option patch update woocommerce_paypal_settings testmode yes || return
         if lk_wp plugin is-active woocommerce-gateway-stripe; then
             lk_wp option patch update woocommerce_stripe_settings testmode yes || return
         fi
-    fi
-    if wp cli has-command 'wc webhook list'; then
-        TO_DEACTIVATE=($(wp wc webhook list --user=1 --field=id --status=active)) || return
-        [ "${#TO_DEACTIVATE[@]}" -eq "0" ] || {
-            lk_console_detail "WooCommerce: deleting active webhooks"
-            for WEBHOOK_ID in "${TO_DEACTIVATE[@]}"; do
-                # TODO: deactivate instead?
-                wp wc webhook delete "$WEBHOOK_ID" --user=1 --force=true || return
-            done
-        }
+        if wp cli has-command 'wc webhook list'; then
+            TO_DEACTIVATE=($(wp wc webhook list --user=1 --field=id --status=active)) || return
+            [ "${#TO_DEACTIVATE[@]}" -eq "0" ] || {
+                lk_console_detail "WooCommerce: deleting active webhooks"
+                for WEBHOOK_ID in "${TO_DEACTIVATE[@]}"; do
+                    # TODO: deactivate instead?
+                    wp wc webhook delete "$WEBHOOK_ID" --user=1 --force=true || return
+                done
+            }
+        fi
     fi
     lk_console_message "Local instance of '$SITE_URL' successfully reset for development" "$LK_GREEN"
 }
