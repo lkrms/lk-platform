@@ -279,8 +279,8 @@ DELETE
 FROM ${TABLE_PREFIX}options
 WHERE option_name = 'new_admin_email';
 SQL
-    lk_wp user update 1 --user_email="$DEV_EMAIL" --skip-email &&
-        lk_wp user meta update 1 billing_email "$DEV_EMAIL" || return
+    lk_wp user update 1 --user_email="$ADMIN_EMAIL" --skip-email &&
+        lk_wp user meta update 1 billing_email "$ADMIN_EMAIL" || return
     ACTIVE_PLUGINS=($(lk_wp plugin list --status=active --field=name)) &&
         TO_DEACTIVATE=($(comm -12 <(printf '%s\n' ${ACTIVE_PLUGINS[@]+"${ACTIVE_PLUGINS[@]}"} | sort | uniq) <(printf '%s\n' "${DEACTIVATE_PLUGINS[@]}" | sort | uniq))) || return
     if [ "${#TO_DEACTIVATE[@]}" -gt "0" ]; then
