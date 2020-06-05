@@ -27,7 +27,7 @@ function lk_wp_replace() {
     lk_console_message "Running WordPress search/replace command"
     lk_console_detail "Searching for" "$1"
     lk_console_detail "Replacing with" "$2"
-    lk_wp search-replace "$1" "$2" --no-report \
+    "${LK_WP_REPLACE_COMMAND:-lk_wp}" search-replace "$1" "$2" --no-report \
         --all-tables-with-prefix \
         --skip-tables="$(lk_implode "," "${SKIP_TABLES[@]}")" \
         --skip-columns="guid"
