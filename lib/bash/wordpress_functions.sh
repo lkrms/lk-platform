@@ -246,7 +246,7 @@ IDENTIFIED BY {{DB_PASSWORD}}"
     return "$EXIT_STATUS"
 }
 
-function lk_wp_local_reset() {
+function lk_wp_reset_local() {
     local SITE_URL ADMIN_EMAIL="${ADMIN_EMAIL:-}" TO_DEACTIVATE \
         DB_NAME DB_USER DB_PASSWORD DB_HOST TABLE_PREFIX \
         ACTIVE_PLUGINS DEACTIVATE_PLUGINS=(
@@ -358,4 +358,26 @@ function lk_wp_file_sync_remote() {
     [ "$EXIT_STATUS" -eq "0" ] && lk_console_message "Sync completed successfully" "$LK_GREEN" ||
         lk_console_message "Sync operation failed (exit status $EXIT_STATUS)" "$LK_RED"
     return "$EXIT_STATUS"
+}
+
+# lk_wp_use_cron [interval_minutes]
+function lk_wp_use_cron() {
+    local INTERVAL="${1:-15}" WP_CRON_PATH CRON_COMMAND CRONTAB
+    lk_command_exists crontab || lk_warn "crontab required" || return
+    WP_CRON_PATH="$(lk_wp eval "echo ABSPATH;")wp-cron.php" || return
+    [ -f "$WP_CRON_PATH" ] || lk_warn "file not found: $WP_CRON_PATH" || return
+    lk_console_item "Scheduling with crontab:" "$WP_CRON_PATH"
+    lk_console_detail "Setting DISABLE_WP_CRON in wp-config.php"
+    lk_wp config set DISABLE_WP_CRON true --type=constant --raw || return
+    CRON_COMMAND="$(command -v php) $WP_CRON_PATH"
+    [ "$INTERVAL" -lt "60" ] &&
+        CRON_COMMAND="*/$INTERVAL * * * * $CRON_COMMAND" ||
+        CRON_COMMAND="0 1 * * * $CRON_COMMAND"
+    lk_console_detail "Adding cron job:" "$CRON_COMMAND"
+    CRONTAB="$(crontab -l 2>/dev/null |
+        sed -E "/ $(lk_escape_ere "$WP_CRON_PATH")\$/d")" || CRONTAB=
+    {
+        [ -z "$CRONTAB" ] || echo "$CRONTAB"
+        echo "$CRON_COMMAND"
+    } | crontab -
 }
