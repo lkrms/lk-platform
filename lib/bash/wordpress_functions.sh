@@ -273,6 +273,7 @@ function lk_wp_reset_local() {
     ADMIN_EMAIL="${ADMIN_EMAIL:-$(git config user.email 2>/dev/null)}" ||
         ADMIN_EMAIL="$USER@$(lk_hostname)"
     lk_console_detail "Resetting admin email addresses to" "$ADMIN_EMAIL"
+    lk_console_detail "Anonymizing email addresses for other users"
     _lk_mysql "$DB_NAME" <<SQL || return
 UPDATE ${TABLE_PREFIX}options
 SET option_value = ''
@@ -281,6 +282,15 @@ WHERE option_name IN ('admin_email', 'woocommerce_email_from_address', 'woocomme
 DELETE
 FROM ${TABLE_PREFIX}options
 WHERE option_name = 'new_admin_email';
+
+UPDATE ${TABLE_PREFIX}users
+SET user_email = CONCAT (
+        SUBSTRING_INDEX(user_email, '@', 1)
+        ,'_'
+        ,ID
+        ,'@$(lk_hostname)'
+        )
+WHERE ID <> 1;
 SQL
     lk_wp user update 1 --user_email="$ADMIN_EMAIL" --skip-email &&
         lk_wp user meta update 1 billing_email "$ADMIN_EMAIL" || return
