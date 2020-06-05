@@ -288,7 +288,7 @@ SET user_email = CONCAT (
         SUBSTRING_INDEX(user_email, '@', 1)
         ,'_'
         ,ID
-        ,'@$(lk_hostname)'
+        ,'@${NODE_FQDN:-$(hostname -f)}'
         )
 WHERE ID <> 1;
 SQL

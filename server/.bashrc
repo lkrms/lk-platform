@@ -16,6 +16,8 @@
 
 eval "$(
     shopt -s nullglob
+    [ ! -f "$LK_BASE/etc/server.conf" ] ||
+        echo ". \"\$LK_BASE/etc/server.conf\""
     for FILE in "$LK_BASE/lib/bash"/*.sh; do
         echo ". \"\$LK_BASE/lib/bash/$(basename "$FILE")\""
     done
