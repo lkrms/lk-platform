@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC2001,SC2207
+# shellcheck disable=SC1091,SC2001,SC2207
 #
 # <UDF name="NODE_HOSTNAME" label="Short hostname" example="web01-dev-syd" />
 # <UDF name="NODE_FQDN" label="Host FQDN" example="web01-dev-syd.linode.linacreative.com" />
@@ -10,6 +10,8 @@
 # <UDF name="ADMIN_USERS" label="Admin users to create (comma-delimited)" default="linac" />
 # <UDF name="ADMIN_EMAIL" label="Forwarding address for system email" example="tech@linacreative.com" />
 # <UDF name="TRUSTED_IP_ADDRESSES" label="Trusted IP addresses (comma-delimited)" example="10.0.0.0/8,172.16.0.0/12,192.168.0.0/16" default="" />
+# <UDF name="REJECT_OUTPUT" label="Reject outgoing traffic by default" oneof="Y,N" default="N" />
+# <UDF name="ACCEPT_OUTPUT_HOSTS" label="Accept outgoing traffic to hosts (comma-delimited)" example="10.10.0.0/16,gravityapi.com" default="" />
 # <UDF name="MYSQL_USERNAME" label="MySQL admin username" example="dbadmin" default="" />
 # <UDF name="MYSQL_PASSWORD" label="MySQL password (admin user not created if blank)" default="" />
 # <UDF name="INNODB_BUFFER_SIZE" label="InnoDB buffer size (~80% of RAM for MySQL-only servers)" oneof="128M,256M,512M,768M,1024M,1536M,2048M,2560M,3072M,4096M,5120M,6144M,7168M,8192M" default="256M" />
@@ -108,6 +110,11 @@ function keep_trying() {
     fi
 }
 
+function iptables() {
+    command iptables "$@"
+    command ip6tables "$@"
+}
+
 function exit_trap() {
     local EXIT_STATUS="$?"
     # TODO: replace with an HTTP-based notification mechanism
@@ -188,6 +195,8 @@ HOST_DOMAIN="${HOST_DOMAIN#www.}"
 HOST_ACCOUNT="${HOST_ACCOUNT:-${HOST_DOMAIN%%.*}}"
 ADMIN_USERS="${ADMIN_USERS:-linac}"
 TRUSTED_IP_ADDRESSES="${TRUSTED_IP_ADDRESSES:-}"
+REJECT_OUTPUT="${REJECT_OUTPUT:-N}"
+ACCEPT_OUTPUT_HOSTS="${ACCEPT_OUTPUT_HOSTS:-}"
 MYSQL_USERNAME="${MYSQL_USERNAME:-}"
 MYSQL_PASSWORD="${MYSQL_PASSWORD:-}"
 INNODB_BUFFER_SIZE="${INNODB_BUFFER_SIZE:-256M}"
@@ -197,15 +206,6 @@ EMAIL_BLACKHOLE="${EMAIL_BLACKHOLE:-}"
 AUTO_REBOOT_TIME="${AUTO_REBOOT_TIME:-02:00}"
 SHUTDOWN_ACTION="${SHUTDOWN_ACTION:-reboot}"
 SHUTDOWN_DELAY="${SHUTDOWN_DELAY:-0}"
-
-# don't propagate field values to the environment of other commands
-export -n \
-    HOST_DOMAIN HOST_ACCOUNT \
-    ADMIN_USERS TRUSTED_IP_ADDRESSES MYSQL_USERNAME MYSQL_PASSWORD \
-    INNODB_BUFFER_SIZE OPCACHE_MEMORY_CONSUMPTION \
-    SMTP_RELAY EMAIL_BLACKHOLE \
-    AUTO_REBOOT AUTO_REBOOT_TIME \
-    SCRIPT_DEBUG SHUTDOWN_ACTION SHUTDOWN_DELAY
 
 S="[[:space:]]"
 
@@ -218,6 +218,15 @@ HOST_KEYS="$([ -z "$ADMIN_USERS" ] && cat "/root/.ssh/authorized_keys" || grep -
 log "==== $(basename "$0"): preparing system"
 log "Environment:" \
     "$(printenv | grep -v '^LS_COLORS=' | sort)"
+
+# don't propagate field values to the environment of other commands
+export -n \
+    HOST_DOMAIN HOST_ACCOUNT \
+    ADMIN_USERS TRUSTED_IP_ADDRESSES MYSQL_USERNAME MYSQL_PASSWORD \
+    INNODB_BUFFER_SIZE OPCACHE_MEMORY_CONSUMPTION \
+    SMTP_RELAY EMAIL_BLACKHOLE \
+    AUTO_REBOOT AUTO_REBOOT_TIME \
+    SCRIPT_DEBUG SHUTDOWN_ACTION SHUTDOWN_DELAY
 
 . /etc/lsb-release
 
@@ -241,7 +250,8 @@ case "$DISTRIB_RELEASE" in
     ;;
 esac
 
-export DEBIAN_FRONTEND=noninteractive \
+export LK_BASE="/opt/${PATH_PREFIX}platform" \
+    DEBIAN_FRONTEND=noninteractive \
     DEBCONF_NONINTERACTIVE_SEEN=true \
     PIP_NO_INPUT=1
 
@@ -370,11 +380,11 @@ EOF
 log_file "$FILE"
 sysctl --system
 
-log "Sourcing /opt/${PATH_PREFIX}platform/server/.bashrc in ~/.bashrc for all users"
+log "Sourcing $LK_BASE/server/.bashrc in ~/.bashrc for all users"
 BASH_SKEL="
 # Added by $(basename "$0") at $(now)
-if [ -f '/opt/${PATH_PREFIX}platform/server/.bashrc' ]; then
-    . '/opt/${PATH_PREFIX}platform/server/.bashrc'
+if [ -f '$LK_BASE/server/.bashrc' ]; then
+    . '$LK_BASE/server/.bashrc'
 fi"
 echo "$BASH_SKEL" >>"/etc/skel/.bashrc"
 if [ -f "/root/.bashrc" ]; then
@@ -465,6 +475,15 @@ log "Upgrading pre-installed packages"
 keep_trying apt-get -q update
 keep_trying apt-get -yq dist-upgrade
 
+debconf-set-selections <<EOF
+iptables-persistent	iptables-persistent/autosave_v4	boolean	false
+iptables-persistent	iptables-persistent/autosave_v6	boolean	false
+postfix	postfix/main_mailer_type	select	Internet Site
+postfix	postfix/mailname	string	$NODE_FQDN
+postfix	postfix/relayhost	string	$SMTP_RELAY
+postfix	postfix/root_address	string	$ADMIN_EMAIL
+EOF
+
 # bare necessities
 PACKAGES=(
     #
@@ -478,12 +497,15 @@ PACKAGES=(
     coreutils
     cron
     curl
+    dnsutils
     git
     htop
     info
     iptables
+    iptables-persistent
     iputils-ping
     iputils-tracepath
+    jq
     less
     logrotate
     lsof
@@ -515,15 +537,161 @@ PACKAGES=(
 [ -z "$NODE_SERVICES" ] ||
     PACKAGES+=(software-properties-common)
 
-debconf-set-selections <<EOF
-postfix	postfix/main_mailer_type	select	Internet Site
-postfix	postfix/mailname	string	$NODE_FQDN
-postfix	postfix/relayhost	string	$SMTP_RELAY
-postfix	postfix/root_address	string	$ADMIN_EMAIL
-EOF
-
 log "Installing APT packages:" "${PACKAGES[*]}"
 keep_trying apt-get -yq install "${PACKAGES[@]}"
+
+log "Configuring iptables"
+if [ "$REJECT_OUTPUT" != "N" ]; then
+    APT_SOURCE_HOSTS=($(grep -Eo "^[^#]+${S}https?://[^/[:space:]]+" "/etc/apt/sources.list" |
+        sed -E 's/^.*:\/\///' | sort | uniq)) || die "no active package sources in /etc/apt/sources.list"
+    if [[ ",$NODE_SERVICES," =~ .*,wp-cli,.* ]]; then
+        WORDPRESS_HOSTS="\
+    # used by wp-cli when installing WordPress plugins and updates
+    api.wordpress.org
+    downloads.wordpress.org
+    plugins.svn.wordpress.org
+    wordpress.org"
+    fi
+    ACCEPT_OUTPUT_HOSTS_SH="\
+# active package sources are automatically added from /etc/apt/sources.list
+ACCEPT_OUTPUT_HOSTS=(
+    # \"entropy-as-a-service\" endpoint used by pollinate
+    entropy.ubuntu.com
+
+    # used by add-apt-repository when adding a PPA (e.g. ppa:certbot/certbot)
+    keyserver.ubuntu.com
+    launchpad.net
+    ppa.launchpad.net
+
+    # used when installing pip and PyPI packages
+    pypi.org
+    bootstrap.pypa.io
+    files.pythonhosted.org
+
+    # if 'api.github.com' is allowed, so are all addresses in https://api.github.com/meta
+    api.github.com
+    raw.githubusercontent.com${WORDPRESS_HOSTS:+
+
+$WORDPRESS_HOSTS}
+
+    # ==== user-defined
+${ACCEPT_OUTPUT_HOSTS:+    ${ACCEPT_OUTPUT_HOSTS//,/$'\n'    }
+})"
+    . /dev/stdin <<<"$ACCEPT_OUTPUT_HOSTS_SH"
+    if [[ " ${ACCEPT_OUTPUT_HOSTS[*]} " =~ .*" api.github.com ".* ]]; then
+        keep_trying eval "GITHUB_META=\"\$(curl \"https://api.github.com/meta\")\""
+        GITHUB_IPS=($(jq -r ".web[]" <<<"$GITHUB_META"))
+    fi
+    OUTPUT_ALLOW=(
+        "${APT_SOURCE_HOSTS[@]}"
+        "${ACCEPT_OUTPUT_HOSTS[@]}"
+        ${GITHUB_IPS+"${GITHUB_IPS[@]}"}
+    )
+    OUTPUT_ALLOW_IPV4=()
+    OUTPUT_ALLOW_IPV6=()
+    for i in "${!OUTPUT_ALLOW[@]}"; do
+        ALLOW="${OUTPUT_ALLOW[$i]}"
+        # these patterns would be inadequate for validation but are sufficient for filtering
+        if [[ "$ALLOW" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]+)?$ ]]; then
+            OUTPUT_ALLOW_IPV4+=("$ALLOW")
+            unset "OUTPUT_ALLOW[$i]"
+        elif [[ "$ALLOW" =~ ^(([0-9a-fA-F]{1,4}:)*|:)+(:|(:[0-9a-fA-F]{1,4})*)+(/[0-9]+)?$ ]]; then
+            OUTPUT_ALLOW_IPV6+=("$ALLOW")
+            unset "OUTPUT_ALLOW[$i]"
+        fi
+    done
+    keep_trying eval "IPV4_IPS=\"\$(dig +short ${OUTPUT_ALLOW[*]/%/ A})\""
+    keep_trying eval "IPV6_IPS=\"\$(dig +short ${OUTPUT_ALLOW[*]/%/ AAAA})\""
+    OUTPUT_ALLOW_IPV4+=($(echo "$IPV4_IPS" | sed -E '/\.$/d' | sort | uniq))
+    OUTPUT_ALLOW_IPV6+=($(echo "$IPV6_IPS" | sed -E '/\.$/d' | sort | uniq))
+fi
+P="${PATH_PREFIX_ALPHA}_"
+iptables-restore <<EOF
+*filter
+:INPUT DROP [0:0]
+:FORWARD DROP [0:0]
+:OUTPUT DROP [0:0]
+:${P}check - [0:0]
+:${P}forward - [0:0]
+:${P}input - [0:0]
+:${P}output - [0:0]
+:${P}reject - [0:0]
+-A INPUT -i lo -j ACCEPT
+-A INPUT -j ${P}check
+-A INPUT -j ${P}input
+-A INPUT -j ${P}reject
+-A FORWARD -j ${P}check
+-A FORWARD -j ${P}forward
+-A FORWARD -j ${P}reject
+-A OUTPUT -o lo -j ACCEPT
+-A OUTPUT -j ${P}check
+-A OUTPUT -j ${P}output
+-A OUTPUT -j LOG --log-prefix "outgoing packet blocked: "
+-A OUTPUT -j ${P}reject
+-A ${P}check -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A ${P}check -m conntrack --ctstate INVALID -j DROP
+-A ${P}check -p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN -m conntrack --ctstate NEW -j REJECT --reject-with tcp-reset
+-A ${P}check -p icmp -m icmp --icmp-type 8 -m conntrack --ctstate NEW -j ACCEPT
+-A ${P}input -p tcp -m tcp --dport 22 -j ACCEPT
+-A ${P}reject -p udp -m udp -j REJECT --reject-with icmp-port-unreachable
+-A ${P}reject -p tcp -m tcp -j REJECT --reject-with tcp-reset
+-A ${P}reject -j REJECT --reject-with icmp-proto-unreachable
+COMMIT
+EOF
+ip6tables-restore <<EOF
+*filter
+:INPUT DROP [0:0]
+:FORWARD DROP [0:0]
+:OUTPUT DROP [0:0]
+:${P}check - [0:0]
+:${P}forward - [0:0]
+:${P}input - [0:0]
+:${P}output - [0:0]
+:${P}reject - [0:0]
+-A INPUT -i lo -j ACCEPT
+-A INPUT -j ${P}check
+-A INPUT -p ipv6-icmp -m hl --hl-eq 255 -m icmp6 --icmpv6-type 133 -j ACCEPT
+-A INPUT -p ipv6-icmp -m hl --hl-eq 255 -m icmp6 --icmpv6-type 134 -j ACCEPT
+-A INPUT -p ipv6-icmp -m hl --hl-eq 255 -m icmp6 --icmpv6-type 135 -j ACCEPT
+-A INPUT -p ipv6-icmp -m hl --hl-eq 255 -m icmp6 --icmpv6-type 136 -j ACCEPT
+-A INPUT -j ${P}input
+-A INPUT -j ${P}reject
+-A FORWARD -j ${P}check
+-A FORWARD -j ${P}forward
+-A FORWARD -j ${P}reject
+-A OUTPUT -o lo -j ACCEPT
+-A OUTPUT -j ${P}check
+-A OUTPUT -j ${P}output
+-A OUTPUT -j LOG --log-prefix "outgoing packet blocked: "
+-A OUTPUT -j ${P}reject
+-A ${P}check -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A ${P}check -m conntrack --ctstate INVALID -j DROP
+-A ${P}check -p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN -m conntrack --ctstate NEW -j REJECT --reject-with tcp-reset
+-A ${P}check -p ipv6-icmp -m icmp6 --icmpv6-type 1 -j ACCEPT
+-A ${P}check -p ipv6-icmp -m icmp6 --icmpv6-type 129 -j ACCEPT
+-A ${P}check -p ipv6-icmp -m icmp6 --icmpv6-type 128 -j ACCEPT
+-A ${P}check -p ipv6-icmp -m icmp6 --icmpv6-type 2 -j ACCEPT
+-A ${P}check -p ipv6-icmp -m icmp6 --icmpv6-type 4 -j ACCEPT
+-A ${P}check -p ipv6-icmp -m icmp6 --icmpv6-type 3 -j ACCEPT
+-A ${P}input -p tcp -m tcp --dport 22 -j ACCEPT
+-A ${P}reject -p udp -m udp -j REJECT --reject-with icmp6-port-unreachable
+-A ${P}reject -p tcp -m tcp -j REJECT --reject-with tcp-reset
+-A ${P}reject -j REJECT --reject-with icmp6-adm-prohibited
+COMMIT
+EOF
+if [ "$REJECT_OUTPUT" = "N" ]; then
+    iptables -A "${P}output" -j ACCEPT
+else
+    iptables -A "${P}output" -p udp -m udp --dport 67 -j ACCEPT  # DHCP client
+    iptables -A "${P}output" -p udp -m udp --dport 53 -j ACCEPT  # DNS
+    iptables -A "${P}output" -p udp -m udp --dport 123 -j ACCEPT # NTP
+    for IPV4 in "${OUTPUT_ALLOW_IPV4[@]}"; do
+        command iptables -A "${P}output" -d "$IPV4" -j ACCEPT
+    done
+    for IPV6 in "${OUTPUT_ALLOW_IPV6[@]}"; do
+        command ip6tables -A "${P}output" -d "$IPV6" -j ACCEPT
+    done
+fi
 
 log "Configuring logrotate"
 edit_file "/etc/logrotate.conf" "^#?su( .*)?\$" "su root adm" "su root adm"
@@ -552,17 +720,20 @@ if [ -f "$FILE" ] && ! grep -Fxq "CONFIG_BSD_PROCESS_ACCT=y" "$FILE"; then
     systemctl disable atopacct.service
 fi
 
-[ -e "/opt/${PATH_PREFIX}platform" ] || {
-    log "Cloning 'https://github.com/lkrms/lk-platform.git' to '/opt/${PATH_PREFIX}platform'"
-    install -v -d -m 2775 -o "$FIRST_ADMIN" -g "adm" "/opt/${PATH_PREFIX}platform"
+install -v -d -m 2775 -o "$FIRST_ADMIN" -g "adm" "$LK_BASE"
+[ -n "$(ls -A "$LK_BASE")" ] || {
+    log "Cloning 'https://github.com/lkrms/lk-platform.git' to '$LK_BASE'"
     keep_trying sudo -Hu "$FIRST_ADMIN" \
-        git clone "https://github.com/lkrms/lk-platform.git" \
-        "/opt/${PATH_PREFIX}platform"
-    export LK_BASE="/opt/${PATH_PREFIX}platform"
-    install -v -d -m 2775 -o "$FIRST_ADMIN" -g "adm" "/opt/${PATH_PREFIX}platform/etc"
-    set | grep -E '^(LK_BASE|NODE_(HOSTNAME|FQDN|TIMEZONE|SERVICES)|PATH_PREFIX|ADMIN_EMAIL)=' |
-        sudo -Hu "$FIRST_ADMIN" tee "/opt/${PATH_PREFIX}platform/etc/server.conf" >/dev/null
+        git clone "https://github.com/lkrms/lk-platform.git" "$LK_BASE"
+    sudo -Hu "$FIRST_ADMIN" \
+        git --git-dir="$LK_BASE/.git" --work-tree="$LK_BASE" config core.sharedRepository 0664
 }
+install -v -d -m 2775 -o "$FIRST_ADMIN" -g "adm" "$LK_BASE/etc"
+install -v -m 0660 -o "$FIRST_ADMIN" -g "adm" /dev/null "$LK_BASE/etc/firewall.conf"
+echo "$ACCEPT_OUTPUT_HOSTS_SH" >"$LK_BASE/etc/firewall.conf"
+set | grep -E '^(LK_BASE|NODE_(HOSTNAME|FQDN|TIMEZONE|SERVICES)|PATH_PREFIX|ADMIN_EMAIL)=' |
+    sudo -Hu "$FIRST_ADMIN" tee "$LK_BASE/etc/server.conf" >/dev/null
+grep -E '^LK_BASE=' "$LK_BASE/etc/server.conf" >"/etc/default/lk-platform"
 
 # TODO: verify downloads
 log "Installing pip, ps_mem, Glances, awscli"
@@ -604,7 +775,6 @@ case ",$NODE_SERVICES," in
 
         #
         git
-        jq
     )
     ;;&
 
@@ -985,6 +1155,10 @@ EOF
     endscript
 }
 EOF
+
+    log "Adding iptables rules for Apache HTTPD"
+    iptables -A "${P}input" -p tcp -m tcp --dport 80 -j ACCEPT
+    iptables -A "${P}input" -p tcp -m tcp --dport 443 -j ACCEPT
 fi
 
 if is_installed mariadb-server; then
@@ -1013,7 +1187,12 @@ WITH GRANT OPTION" | mysql -uroot
     # TODO: create $HOST_ACCOUNT database
 fi
 
-# TODO: add iptables rules
+log "Saving iptables rules"
+iptables-save >"/etc/iptables/rules.v4"
+ip6tables-save >"/etc/iptables/rules.v6"
+log_file "/etc/iptables/rules.v4"
+log_file "/etc/iptables/rules.v6"
+
 # TODO: collectd+nagios
 
 log "Running apt-get autoremove"
