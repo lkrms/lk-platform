@@ -268,10 +268,10 @@ function lk_wp_reset_local() {
         _lk_mysql_connects &&
         SITE_URL="$(lk_wp option get siteurl)" || return
     SITE_URL="${SITE_URL#http*://}"
+    SITE_URL="${SITE_URL#www.}"
     lk_confirm "Reset local instance of '$SITE_URL' for development?" N || return
     lk_console_item "Configuring WordPress in" "$PWD"
-    ADMIN_EMAIL="${ADMIN_EMAIL:-$(git config user.email 2>/dev/null)}" ||
-        ADMIN_EMAIL="$USER@$(lk_hostname)"
+    ADMIN_EMAIL="${ADMIN_EMAIL:-$USER@${SITE_URL%%.*}.localhost}"
     lk_console_detail "Resetting admin email addresses to" "$ADMIN_EMAIL"
     lk_console_detail "Anonymizing email addresses for other users"
     _lk_mysql "$DB_NAME" <<SQL || return
@@ -288,7 +288,7 @@ SET user_email = CONCAT (
         SUBSTRING_INDEX(user_email, '@', 1)
         ,'_'
         ,ID
-        ,'@${NODE_FQDN:-$(hostname -f)}'
+        ,'@${SITE_URL%%.*}.localhost'
         )
 WHERE ID <> 1;
 SQL
