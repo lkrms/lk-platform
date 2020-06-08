@@ -247,7 +247,7 @@ IDENTIFIED BY {{DB_PASSWORD}}"
 }
 
 function lk_wp_reset_local() {
-    local SITE_URL ADMIN_EMAIL="${ADMIN_EMAIL:-}" TO_DEACTIVATE \
+    local SITE_URL ADMIN_EMAIL TO_DEACTIVATE \
         DB_NAME DB_USER DB_PASSWORD DB_HOST TABLE_PREFIX \
         ACTIVE_PLUGINS DEACTIVATE_PLUGINS=(
             hide_my_wp
@@ -271,7 +271,7 @@ function lk_wp_reset_local() {
     SITE_URL="${SITE_URL#www.}"
     lk_confirm "Reset local instance of '$SITE_URL' for development?" N || return
     lk_console_item "Configuring WordPress in" "$PWD"
-    ADMIN_EMAIL="${ADMIN_EMAIL:-$USER@${SITE_URL%%.*}.localhost}"
+    ADMIN_EMAIL="$USER@${SITE_URL%%.*}.localhost"
     lk_console_detail "Resetting admin email addresses to" "$ADMIN_EMAIL"
     lk_console_detail "Anonymizing email addresses for other users"
     _lk_mysql "$DB_NAME" <<SQL || return

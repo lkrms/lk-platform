@@ -3,21 +3,19 @@
 
 [ -n "${LK_BASE:-}" ] ||
     eval "$(
-        RC_PATH="${BASH_SOURCE[0]}"
-        if [ ! -L "$RC_PATH" ] &&
-            LK_BASE="$(cd "$(dirname "$RC_PATH")/.." && pwd -P)" &&
+        BS="${BASH_SOURCE[0]}"
+        if [ ! -L "$BS" ] &&
+            LK_BASE="$(cd "$(dirname "$BS")/.." && pwd -P)" &&
             [ -d "$LK_BASE/lib/bash" ]; then
             export LK_BASE
             declare -p LK_BASE
         else
-            echo "$RC_PATH: symbolic links to lk-platform scripts are not supported" >&2
+            echo "$BS: LK_BASE not set" >&2
         fi
     )"
 
 eval "$(
     shopt -s nullglob
-    [ ! -f "$LK_BASE/etc/server.conf" ] ||
-        echo ". \"\$LK_BASE/etc/server.conf\""
     for FILE in "$LK_BASE/lib/bash"/*.sh; do
         echo ". \"\$LK_BASE/lib/bash/$(basename "$FILE")\""
     done

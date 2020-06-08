@@ -944,6 +944,38 @@ function lk_ssl_client() {
     openssl s_client -connect "$HOST":"$PORT" -servername "$SERVER_NAME"
 }
 
+# lk_grep_ipv4
+#   Print each input line that is a valid dotted-decimal IPv4 address or CIDR.
+function lk_grep_ipv4() {
+    local OCTET='(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])'
+    grep -E "^($OCTET\.){3}$OCTET(/(3[0-2]|[12][0-9]|[1-9]))?\$"
+}
+
+# lk_grep_ipv6
+#   Print each input line that is a valid 8-hextet IPv6 address or CIDR.
+function lk_grep_ipv6() {
+    local HEXTET='[0-9a-fA-F]{1,4}' \
+        PREFIX='/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9])'
+    grep -E \
+        "^(:|($HEXTET:)+)((:$HEXTET)+|$HEXTET|:)($PREFIX)?\$" |
+        grep -E "^(($HEXTET)?:){1,7}($HEXTET)?($PREFIX)?\$"
+}
+
+# lk_resolve host...
+function lk_resolve() {
+    local HOSTS IP_ADDRESSES
+    IP_ADDRESSES=($({
+        lk_echo_array "$@" | lk_grep_ipv4 || :
+        lk_echo_array "$@" | lk_grep_ipv6 || :
+    }))
+    HOSTS=($(comm -23 <(lk_echo_array "$@" | sort | uniq) \
+        <(lk_echo_array "${IP_ADDRESSES[@]}" | sort | uniq)))
+    IP_ADDRESSES+=($(eval \
+        "dig +short ${HOSTS[*]/%/ A} ${HOSTS[*]/%/ AAAA}" |
+        sed -E '/\.$/d')) || return
+    lk_echo_array "${IP_ADDRESSES[@]}" | sort | uniq
+}
+
 # lk_start_or_restart command [arg1...]
 #   Kill any running COMMAND processes, then run COMMAND in the
 #   background and disown it.

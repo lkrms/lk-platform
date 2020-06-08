@@ -11,7 +11,7 @@
 # <UDF name="ADMIN_EMAIL" label="Forwarding address for system email" example="tech@linacreative.com" />
 # <UDF name="TRUSTED_IP_ADDRESSES" label="Trusted IP addresses (comma-delimited)" example="10.0.0.0/8,172.16.0.0/12,192.168.0.0/16" default="" />
 # <UDF name="REJECT_OUTPUT" label="Reject outgoing traffic by default" oneof="Y,N" default="N" />
-# <UDF name="ACCEPT_OUTPUT_HOSTS" label="Accept outgoing traffic to hosts (comma-delimited)" example="10.10.0.0/16,gravityapi.com" default="" />
+# <UDF name="ACCEPT_OUTPUT_HOSTS" label="Accept outgoing traffic to hosts (comma-delimited)" example="192.168.128.0/17,ip-ranges.amazonaws.com" default="" />
 # <UDF name="MYSQL_USERNAME" label="MySQL admin username" example="dbadmin" default="" />
 # <UDF name="MYSQL_PASSWORD" label="MySQL password (admin user not created if blank)" default="" />
 # <UDF name="INNODB_BUFFER_SIZE" label="InnoDB buffer size (~80% of RAM for MySQL-only servers)" oneof="128M,256M,512M,768M,1024M,1536M,2048M,2560M,3072M,4096M,5120M,6144M,7168M,8192M" default="256M" />
@@ -625,8 +625,11 @@ iptables-restore <<EOF
 -A FORWARD -j ${P}reject
 -A OUTPUT -o lo -j ACCEPT
 -A OUTPUT -j ${P}check
+-A OUTPUT -p udp -m udp --dport 67 -j ACCEPT
+-A OUTPUT -p udp -m udp --dport 53 -j ACCEPT
+-A OUTPUT -p udp -m udp --dport 123 -j ACCEPT
 -A OUTPUT -j ${P}output
--A OUTPUT -j LOG --log-prefix "outgoing packet blocked: "
+-A OUTPUT -m limit --limit 12/min -j LOG --log-prefix "outgoing packet blocked: "
 -A OUTPUT -j ${P}reject
 -A ${P}check -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 -A ${P}check -m conntrack --ctstate INVALID -j DROP
@@ -644,35 +647,50 @@ ip6tables-restore <<EOF
 :FORWARD DROP [0:0]
 :OUTPUT DROP [0:0]
 :${P}check - [0:0]
+:${P}check_ll - [0:0]
 :${P}forward - [0:0]
 :${P}input - [0:0]
 :${P}output - [0:0]
 :${P}reject - [0:0]
 -A INPUT -i lo -j ACCEPT
+-A INPUT -j ${P}check_ll
 -A INPUT -j ${P}check
--A INPUT -p ipv6-icmp -m hl --hl-eq 255 -m icmp6 --icmpv6-type 133 -j ACCEPT
--A INPUT -p ipv6-icmp -m hl --hl-eq 255 -m icmp6 --icmpv6-type 134 -j ACCEPT
--A INPUT -p ipv6-icmp -m hl --hl-eq 255 -m icmp6 --icmpv6-type 135 -j ACCEPT
--A INPUT -p ipv6-icmp -m hl --hl-eq 255 -m icmp6 --icmpv6-type 136 -j ACCEPT
 -A INPUT -j ${P}input
 -A INPUT -j ${P}reject
 -A FORWARD -j ${P}check
 -A FORWARD -j ${P}forward
 -A FORWARD -j ${P}reject
 -A OUTPUT -o lo -j ACCEPT
+-A OUTPUT -j ${P}check_ll
 -A OUTPUT -j ${P}check
+-A OUTPUT -p udp -m udp --dport 67 -j ACCEPT
+-A OUTPUT -p udp -m udp --dport 53 -j ACCEPT
+-A OUTPUT -p udp -m udp --dport 123 -j ACCEPT
 -A OUTPUT -j ${P}output
--A OUTPUT -j LOG --log-prefix "outgoing packet blocked: "
+-A OUTPUT -m limit --limit 12/min -j LOG --log-prefix "outgoing packet blocked: "
 -A OUTPUT -j ${P}reject
 -A ${P}check -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 -A ${P}check -m conntrack --ctstate INVALID -j DROP
 -A ${P}check -p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN -m conntrack --ctstate NEW -j REJECT --reject-with tcp-reset
 -A ${P}check -p ipv6-icmp -m icmp6 --icmpv6-type 1 -j ACCEPT
--A ${P}check -p ipv6-icmp -m icmp6 --icmpv6-type 129 -j ACCEPT
--A ${P}check -p ipv6-icmp -m icmp6 --icmpv6-type 128 -j ACCEPT
 -A ${P}check -p ipv6-icmp -m icmp6 --icmpv6-type 2 -j ACCEPT
--A ${P}check -p ipv6-icmp -m icmp6 --icmpv6-type 4 -j ACCEPT
 -A ${P}check -p ipv6-icmp -m icmp6 --icmpv6-type 3 -j ACCEPT
+-A ${P}check -p ipv6-icmp -m icmp6 --icmpv6-type 4 -j ACCEPT
+-A ${P}check -p ipv6-icmp -m icmp6 --icmpv6-type 128 -j ACCEPT
+-A ${P}check -p ipv6-icmp -m icmp6 --icmpv6-type 129 -j ACCEPT
+-A ${P}check_ll -s fe80::/10 -p ipv6-icmp -m icmp6 --icmpv6-type 130 -j ACCEPT
+-A ${P}check_ll -s fe80::/10 -p ipv6-icmp -m icmp6 --icmpv6-type 131 -j ACCEPT
+-A ${P}check_ll -s fe80::/10 -p ipv6-icmp -m icmp6 --icmpv6-type 132 -j ACCEPT
+-A ${P}check_ll -p ipv6-icmp -m hl --hl-eq 255 -m icmp6 --icmpv6-type 133 -j ACCEPT
+-A ${P}check_ll -p ipv6-icmp -m hl --hl-eq 255 -m icmp6 --icmpv6-type 134 -j ACCEPT
+-A ${P}check_ll -p ipv6-icmp -m hl --hl-eq 255 -m icmp6 --icmpv6-type 135 -j ACCEPT
+-A ${P}check_ll -p ipv6-icmp -m hl --hl-eq 255 -m icmp6 --icmpv6-type 136 -j ACCEPT
+-A ${P}check_ll -s fe80::/10 -p ipv6-icmp -m hl --hl-eq 1 -m icmp6 --icmpv6-type 151 -j ACCEPT
+-A ${P}check_ll -s fe80::/10 -p ipv6-icmp -m hl --hl-eq 1 -m icmp6 --icmpv6-type 152 -j ACCEPT
+-A ${P}check_ll -s fe80::/10 -p ipv6-icmp -m hl --hl-eq 1 -m icmp6 --icmpv6-type 153 -j ACCEPT
+-A ${P}check_ll -p ipv6-icmp -m hl --hl-eq 255 -m icmp6 --icmpv6-type 141 -j ACCEPT
+-A ${P}check_ll -p ipv6-icmp -m hl --hl-eq 255 -m icmp6 --icmpv6-type 142 -j ACCEPT
+-A ${P}check_ll -s fe80::/10 -p ipv6-icmp -m icmp6 --icmpv6-type 143 -j ACCEPT
 -A ${P}input -p tcp -m tcp --dport 22 -j ACCEPT
 -A ${P}reject -p udp -m udp -j REJECT --reject-with icmp6-port-unreachable
 -A ${P}reject -p tcp -m tcp -j REJECT --reject-with tcp-reset
@@ -682,9 +700,6 @@ EOF
 if [ "$REJECT_OUTPUT" = "N" ]; then
     iptables -A "${P}output" -j ACCEPT
 else
-    iptables -A "${P}output" -p udp -m udp --dport 67 -j ACCEPT  # DHCP client
-    iptables -A "${P}output" -p udp -m udp --dport 53 -j ACCEPT  # DNS
-    iptables -A "${P}output" -p udp -m udp --dport 123 -j ACCEPT # NTP
     for IPV4 in "${OUTPUT_ALLOW_IPV4[@]}"; do
         command iptables -A "${P}output" -d "$IPV4" -j ACCEPT
     done
@@ -730,7 +745,11 @@ install -v -d -m 2775 -o "$FIRST_ADMIN" -g "adm" "$LK_BASE"
 }
 install -v -d -m 2775 -o "$FIRST_ADMIN" -g "adm" "$LK_BASE/etc"
 install -v -m 0660 -o "$FIRST_ADMIN" -g "adm" /dev/null "$LK_BASE/etc/firewall.conf"
-echo "$ACCEPT_OUTPUT_HOSTS_SH" >"$LK_BASE/etc/firewall.conf"
+[ "$REJECT_OUTPUT" = "N" ] ||
+    echo "\
+$ACCEPT_OUTPUT_HOSTS_SH
+ACCEPT_OUTPUT_CHAIN=\"${P}output\"\
+" >"$LK_BASE/etc/firewall.conf"
 set | grep -E '^(LK_BASE|NODE_(HOSTNAME|FQDN|TIMEZONE|SERVICES)|PATH_PREFIX|ADMIN_EMAIL)=' |
     sudo -Hu "$FIRST_ADMIN" tee "$LK_BASE/etc/server.conf" >/dev/null
 grep -E '^LK_BASE=' "$LK_BASE/etc/server.conf" >"/etc/default/lk-platform"
