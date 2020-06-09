@@ -276,7 +276,7 @@ function lk_wp_reset_local() {
     lk_console_detail "Anonymizing email addresses for other users"
     _lk_mysql "$DB_NAME" <<SQL || return
 UPDATE ${TABLE_PREFIX}options
-SET option_value = ''
+SET option_value = '$ADMIN_EMAIL'
 WHERE option_name IN ('admin_email', 'woocommerce_email_from_address', 'woocommerce_stock_email_recipient');
 
 DELETE
