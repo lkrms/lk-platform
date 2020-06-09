@@ -308,10 +308,8 @@ SQL
     if ! lk_wp plugin is-installed wp-mail-smtp; then
         lk_wp plugin install wp-mail-smtp --activate || return
     else
-        lk_wp plugin update wp-mail-smtp && {
-            lk_wp plugin is-active wp-mail-smtp ||
-                lk_wp plugin activate wp-mail-smtp
-        } || return
+        lk_wp plugin is-active wp-mail-smtp ||
+            lk_wp plugin activate wp-mail-smtp || return
     fi
     lk_wp option patch insert wp_mail_smtp general '{
   "do_not_send": true,
