@@ -876,10 +876,12 @@ case ",$NODE_SERVICES," in
 
     if [ -n "$HOST_DOMAIN" ]; then
         COPY_SKEL=0
+        PHP_FPM_POOL_USER="\$pool"
         id "$HOST_ACCOUNT" >/dev/null 2>&1 || {
             log "Creating user account '$HOST_ACCOUNT'"
             useradd --no-create-home --home-dir "/srv/www/$HOST_ACCOUNT" --shell "/bin/bash" "$HOST_ACCOUNT"
             COPY_SKEL=1
+            PHP_FPM_POOL_USER="www-data"
         }
         HOST_ACCOUNT_GROUP="$(id -gn "$HOST_ACCOUNT")"
         install -v -d -m 0750 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT"
@@ -989,6 +991,10 @@ if is_installed apache2; then
     Require local${TRUSTED_IP_ADDRESSES:+
     Require ip ${TRUSTED_IP_ADDRESSES//,/ }}
 </Macro>
+# Add 'Use Staging' to virtual hosts search engines should ignore
+<Macro Staging>
+    Header set X-Robots-Tag "noindex, nofollow"
+<Macro Staging>
 <Directory /srv/www/*/public_html>
     Options SymLinksIfOwnerMatch
     AllowOverride All Options=Indexes,MultiViews,SymLinksIfOwnerMatch,ExecCGI
@@ -1113,7 +1119,7 @@ EOF
 ; Values in /etc/apache2/sites-available/$HOST_ACCOUNT.conf should be updated
 ; if \`request_terminate_timeout\` or \`pm.max_children\` are changed here
 [$HOST_ACCOUNT]
-user = \$pool
+user = $PHP_FPM_POOL_USER
 listen = /run/php/php$PHPVER-fpm-\$pool.sock
 listen.owner = www-data
 listen.group = www-data
