@@ -241,7 +241,7 @@ function lk_replace() {
         _LK_SEARCH="${_LK_SEARCH%.}"
     }
     [ "$#" -gt "2" ] &&
-        printf '%s' "${3//$_LK_SEARCH/$2}${_LK_APPEND:-}" ||
+        echo "${3//$_LK_SEARCH/$2}${_LK_APPEND:-}" ||
         lk_xargs lk_replace "$1" "$2"
 }
 

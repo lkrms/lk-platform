@@ -280,7 +280,7 @@ function lk_wp_reset_local() {
         lk_confirm "Reset local instance of '$SITE_URL' for development?" Y || return
     lk_console_item "Configuring WordPress in" "$PWD"
     ADMIN_EMAIL="${SITE_URL#www.}"
-    ADMIN_EMAIL="$USER@${SITE_URL%%.*}.localhost"
+    ADMIN_EMAIL="$USER@${ADMIN_EMAIL%%.*}.localhost"
     lk_console_detail "Resetting admin email addresses to" "$ADMIN_EMAIL"
     lk_console_detail "Anonymizing email addresses for other users"
     _lk_mysql "$DB_NAME" <<SQL || return
