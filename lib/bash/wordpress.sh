@@ -44,10 +44,11 @@ function lk_wp_rename_site() {
         lk_warn "site URL not changed (set OLD_URL to override)" || return
     lk_console_item "Setting site URL to" "$NEW_URL"
     lk_console_detail "Previous site URL:" "$OLD_URL"
-    lk_confirm "Proceed?" Y || return
+    lk_no_input || lk_confirm "Proceed?" Y || return
     lk_wp option update siteurl "$NEW_URL"
     lk_wp option update home "$NEW_URL"
-    if lk_confirm "Search and replace the previous URL in all tables?" N; then
+    if lk_is_false "${LK_WP_NO_REPLACE:-0}" &&
+        { lk_no_input || lk_confirm "Search and replace the previous URL in all tables?" Y; }; then
         lk_wp_replace "$OLD_URL" "$NEW_URL"
         lk_wp_replace "${OLD_URL#http*:}" "${NEW_URL#http*:}"
         lk_wp_replace "$(echo "$OLD_URL" | php -r 'echo urlencode(trim(fgets(STDIN)));')" \
@@ -67,7 +68,8 @@ function lk_wp_rename_site() {
         )" ] ||
             lk_wp_replace "${OLD_URL#http*://}" "${NEW_URL#http*://}"
     fi
-    lk_confirm "OK to flush rewrite rules? Plugin code will be allowed to run." N || {
+    lk_no_input ||
+        lk_confirm "OK to flush rewrite rules? Plugin code will be allowed to run." Y || {
         lk_console_detail "To flush rewrite rules manually:" "wp rewrite flush"
         return
     }
@@ -219,8 +221,10 @@ IDENTIFIED BY {{DB_PASSWORD}}"
     [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] ||
         lk_console_detail "DB_PASSWORD will be reset"
     lk_console_detail "Local database will be reset with:" \
-        "$(printf '%s;\n' "${SQL[@]}")"
-    lk_confirm "All data in local database '$LOCAL_DB_NAME' will be permanently destroyed. Proceed?" N || return
+        "$(printf '%s;\n' "${SQL[@]}" |
+            lk_replace '{{DB_PASSWORD}}' "'<random>'")"
+    lk_no_input ||
+        lk_confirm "All data in local database '$LOCAL_DB_NAME' will be permanently destroyed. Proceed?" Y || return
     lk_console_message "Restoring WordPress database to local system"
     lk_console_detail "Checking wp-config.php"
     [ "$DB_NAME" = "$LOCAL_DB_NAME" ] ||
@@ -250,12 +254,16 @@ function lk_wp_reset_local() {
     local SITE_URL ADMIN_EMAIL TO_DEACTIVATE \
         DB_NAME DB_USER DB_PASSWORD DB_HOST TABLE_PREFIX \
         ACTIVE_PLUGINS DEACTIVATE_PLUGINS=(
+            # /wp-admin blockers
             hide_my_wp
-            sendgrid-email-delivery-simplified
-            w3-total-cache
             wordfence
             wp-admin-no-show
+
+            # caching
+            w3-total-cache
             wp-rocket
+
+            #
             zopim-live-chat
         )
 
@@ -268,9 +276,10 @@ function lk_wp_reset_local() {
         _lk_mysql_connects &&
         SITE_URL="$(lk_wp option get siteurl)" || return
     SITE_URL="${SITE_URL#http*://}"
-    SITE_URL="${SITE_URL#www.}"
-    lk_confirm "Reset local instance of '$SITE_URL' for development?" N || return
+    lk_no_input ||
+        lk_confirm "Reset local instance of '$SITE_URL' for development?" Y || return
     lk_console_item "Configuring WordPress in" "$PWD"
+    ADMIN_EMAIL="${SITE_URL#www.}"
     ADMIN_EMAIL="$USER@${SITE_URL%%.*}.localhost"
     lk_console_detail "Resetting admin email addresses to" "$ADMIN_EMAIL"
     lk_console_detail "Anonymizing email addresses for other users"
@@ -322,9 +331,8 @@ SQL
     fi
     if lk_wp plugin is-active woocommerce; then
         ACTIVE_PLUGINS=($(lk_wp plugin list --status=active --field=name)) || return
-        lk_echo_array "${ACTIVE_PLUGINS[@]}" |
-            lk_console_list "Plugin code will be allowed to run while final changes are applied" "active plugin" "active plugins"
-        lk_confirm "Proceed?" N || return
+        lk_console_message "Plugin code will be allowed to run while final changes are applied"
+        lk_no_input || lk_confirm "Proceed?" Y || return
         lk_console_detail "WooCommerce: disabling live payments for known gateways"
         lk_wp option patch update woocommerce_paypal_settings testmode yes || return
         if lk_wp plugin is-active woocommerce-gateway-stripe; then
@@ -359,9 +367,9 @@ function lk_wp_file_sync_remote() {
     ARGS+=("$1:$REMOTE_PATH/" "$LOCAL_PATH/")
     lk_console_detail "Local files will be overwritten with command" \
         "rsync ${ARGS[*]}"
-    ! lk_confirm "Perform a trial run first?" Y ||
+    lk_no_input || ! lk_confirm "Perform a trial run first?" N ||
         rsync --dry-run "${ARGS[@]}" | "${PAGER:-less}" >&2 || true
-    lk_confirm "All local changes in '$LOCAL_PATH' will be permanently lost. Proceed?" N || return
+    lk_no_input || lk_confirm "All local changes in '$LOCAL_PATH' will be permanently lost. Proceed?" N || return
     rsync "${ARGS[@]}" || EXIT_STATUS="$?"
     [ "$EXIT_STATUS" -eq "0" ] && lk_console_message "Sync completed successfully" "$LK_GREEN" ||
         lk_console_message "Sync operation failed (exit status $EXIT_STATUS)" "$LK_RED"

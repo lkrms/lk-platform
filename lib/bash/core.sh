@@ -523,6 +523,11 @@ function lk_confirm() {
     [[ "$VALUE" =~ ^(Y|YES)$ ]]
 }
 
+function lk_no_input() {
+    [ ! -t 0 ] ||
+        lk_is_true "${LK_NO_INPUT:-}"
+}
+
 # lk_add_file_suffix file_path suffix [ext]
 #   Add SUFFIX to FILE_PATH without changing FILE_PATH's extension.
 #   Use EXT for special extensions like ".tar.gz".
