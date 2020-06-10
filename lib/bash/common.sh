@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC1090
 
 [ -n "${LK_BASE:-}" ] || {
     echo "${BASH_SOURCE[0]}: LK_BASE not set" >&2
@@ -10,7 +11,15 @@
 
 . "$LK_BASE/lib/bash/core.sh"
 
-lk_trap_err
+function _lk_include() {
+    local INCLUDE INCLUDE_PATH
+    for INCLUDE in ${LK_INCLUDE:+${LK_INCLUDE//,/ }}; do
+        INCLUDE_PATH="$LK_BASE/lib/bash/$INCLUDE.sh"
+        [ -r "$INCLUDE_PATH" ] ||
+            lk_warn "file not found: $INCLUDE_PATH" || return
+        echo ". \"\$LK_BASE/lib/bash/$INCLUDE.sh\""
+    done
+}
 
 function lk_elevate() {
     [ "$EUID" -eq "0" ] || {
@@ -18,3 +27,8 @@ function lk_elevate() {
         exit
     }
 }
+
+lk_trap_err
+
+eval "$(LK_INCLUDE="${LK_INCLUDE:-${INCLUDE:-${include:-}}}" _lk_include)"
+unset LK_INCLUDE
