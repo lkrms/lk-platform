@@ -4,7 +4,7 @@
 # <UDF name="NODE_HOSTNAME" label="Short hostname" example="web01-dev-syd" />
 # <UDF name="NODE_FQDN" label="Host FQDN" example="web01-dev-syd.linode.linacreative.com" />
 # <UDF name="NODE_TIMEZONE" label="System timezone" default="Australia/Sydney" />
-# <UDF name="NODE_SERVICES" label="Services to install and configure" manyof="apache+php,mysql,fail2ban,wp-cli" default="" />
+# <UDF name="NODE_SERVICES" label="Services to install and configure" manyof="apache+php,mysql,memcached,fail2ban,wp-cli" default="" />
 # <UDF name="HOST_DOMAIN" label="Initial hosting domain" example="clientname.com.au" default="" />
 # <UDF name="HOST_ACCOUNT" label="Initial hosting account name (default: automatic)" example="clientname" default="" />
 # <UDF name="ADMIN_USERS" label="Admin users to create (comma-delimited)" default="linac" />
@@ -16,6 +16,7 @@
 # <UDF name="MYSQL_PASSWORD" label="MySQL password (admin user not created if blank)" default="" />
 # <UDF name="INNODB_BUFFER_SIZE" label="InnoDB buffer size (~80% of RAM for MySQL-only servers)" oneof="128M,256M,512M,768M,1024M,1536M,2048M,2560M,3072M,4096M,5120M,6144M,7168M,8192M" default="256M" />
 # <UDF name="OPCACHE_MEMORY_CONSUMPTION" label="PHP OPcache size" oneof="128,256,512,768,1024" default="256" />
+# <UDF name="MEMCACHED_MEMORY_LIMIT" label="Memcached size" oneof="64,128,256,512,768,1024" default="256" />
 # <UDF name="SMTP_RELAY" label="SMTP relay (system-wide)" example="[mail.clientname.com.au]:587" default="" />
 # <UDF name="EMAIL_BLACKHOLE" label="Email black hole (system-wide, STAGING ONLY)" example="/dev/null" default="" />
 # <UDF name="AUTO_REBOOT" label="Reboot automatically after unattended upgrades" oneof="Y,N" />
@@ -61,7 +62,7 @@ function edit_file() {
     local SED_SCRIPT="0,/$2/{s/$2/$3/}" BEFORE AFTER
     [ -f "$1" ] || [ -n "${4:-}" ] || die "file not found: $1"
     [ "${MATCH_MANY:-N}" = "N" ] || SED_SCRIPT="s/$2/$3/"
-    if grep -Eq "$2" "$1" 2>/dev/null; then
+    if grep -Eq -e "$2" "$1" 2>/dev/null; then
         BEFORE="$(cat "$1")"
         AFTER="$(sed -E "$SED_SCRIPT" "$1")"
         [ "$BEFORE" = "$AFTER" ] || {
@@ -201,6 +202,7 @@ MYSQL_USERNAME="${MYSQL_USERNAME:-}"
 MYSQL_PASSWORD="${MYSQL_PASSWORD:-}"
 INNODB_BUFFER_SIZE="${INNODB_BUFFER_SIZE:-256M}"
 OPCACHE_MEMORY_CONSUMPTION="${OPCACHE_MEMORY_CONSUMPTION:-256}"
+MEMCACHED_MEMORY_LIMIT="${MEMCACHED_MEMORY_LIMIT:-256}"
 SMTP_RELAY="${SMTP_RELAY:-}"
 EMAIL_BLACKHOLE="${EMAIL_BLACKHOLE:-}"
 AUTO_REBOOT_TIME="${AUTO_REBOOT_TIME:-02:00}"
@@ -826,6 +828,7 @@ case ",$NODE_SERVICES," in
         php-pear
         php-pspell
         php-readline
+        php-redis
         php-soap
         php-sqlite3
         php-xml
@@ -838,6 +841,12 @@ case ",$NODE_SERVICES," in
 *,mysql,*)
     PACKAGES+=(
         mariadb-server
+    )
+    ;;&
+
+*,memcached,*)
+    PACKAGES+=(
+        memcached
     )
     ;;&
 
@@ -876,12 +885,16 @@ case ",$NODE_SERVICES," in
 
     if [ -n "$HOST_DOMAIN" ]; then
         COPY_SKEL=0
-        PHP_FPM_POOL_USER="\$pool"
+        PHP_FPM_POOL_USER="www-data"
         id "$HOST_ACCOUNT" >/dev/null 2>&1 || {
             log "Creating user account '$HOST_ACCOUNT'"
             useradd --no-create-home --home-dir "/srv/www/$HOST_ACCOUNT" --shell "/bin/bash" "$HOST_ACCOUNT"
             COPY_SKEL=1
-            PHP_FPM_POOL_USER="www-data"
+            PHP_FPM_POOL_USER="$HOST_ACCOUNT"
+            APACHE_MODS=(
+                qos
+                unique_id # used by "qos"
+            )
         }
         HOST_ACCOUNT_GROUP="$(id -gn "$HOST_ACCOUNT")"
         install -v -d -m 0750 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT"
@@ -951,6 +964,7 @@ if is_installed apache2; then
         status
 
         # extras
+        expires # required by W3 Total Cache
         headers
         info
         macro
@@ -960,9 +974,8 @@ if is_installed apache2; then
         socache_shmcb # dependency of "ssl"
         ssl
 
-        # third-party
-        qos
-        unique_id # used by "qos"
+        #
+        ${APACHE_MODS[@]+"${APACHE_MODS[@]}"}
     )
     APACHE_MODS_ENABLED="$(a2query -m | grep -Eo '^[^ ]+' | sort | uniq || :)"
     APACHE_DISABLE_MODS=($(comm -13 <(printf '%s\n' "${APACHE_MODS[@]}" | sort | uniq) <(echo "$APACHE_MODS_ENABLED")))
@@ -987,6 +1000,10 @@ if is_installed apache2; then
 
     log "Configuring Apache HTTPD to serve PHP-FPM virtual hosts"
     cat <<EOF >"/etc/apache2/sites-available/${PATH_PREFIX}default.conf"
+<IfModule event.c>
+    MaxRequestWorkers 300
+    ThreadsPerChild 25
+</IfModule>
 <Macro RequireTrusted>
     Require local${TRUSTED_IP_ADDRESSES:+
     Require ip ${TRUSTED_IP_ADDRESSES//,/ }}
@@ -994,7 +1011,7 @@ if is_installed apache2; then
 # Add 'Use Staging' to virtual hosts search engines should ignore
 <Macro Staging>
     Header set X-Robots-Tag "noindex, nofollow"
-<Macro Staging>
+</Macro>
 <Directory /srv/www/*/public_html>
     Options SymLinksIfOwnerMatch
     AllowOverride All Options=Indexes,MultiViews,SymLinksIfOwnerMatch,ExecCGI
@@ -1116,7 +1133,8 @@ EOF
 
         log "Adding pool to PHP-FPM: $HOST_ACCOUNT"
         cat <<EOF >"/etc/php/$PHPVER/fpm/pool.d/$HOST_ACCOUNT.conf"
-; Values in /etc/apache2/sites-available/$HOST_ACCOUNT.conf should be updated
+; Values in /etc/apache2/sites-available/$HOST_ACCOUNT.conf and/or
+; /etc/mysql/mariadb.conf.d/90-${PATH_PREFIX}defaults.cnf should be updated
 ; if \`request_terminate_timeout\` or \`pm.max_children\` are changed here
 [$HOST_ACCOUNT]
 user = $PHP_FPM_POOL_USER
@@ -1155,8 +1173,8 @@ php_flag[display_startup_errors] = Off
 ;php_admin_value[xdebug.remote_log] = "/srv/www/\$pool/log/php$PHPVER-fpm.xdebug.log"
 EOF
         install -v -m 0640 -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/php$PHPVER-fpm.access.log"
-        install -v -m 0640 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/php$PHPVER-fpm.error.log"
-        install -v -m 0640 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/php$PHPVER-fpm.xdebug.log"
+        install -v -m 0640 -o "$PHP_FPM_POOL_USER" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/php$PHPVER-fpm.error.log"
+        install -v -m 0640 -o "$PHP_FPM_POOL_USER" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/php$PHPVER-fpm.xdebug.log"
         install -v -d -m 0700 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/.cache/opcache"
         log_file "/etc/php/$PHPVER/fpm/pool.d/$HOST_ACCOUNT.conf"
     fi
@@ -1190,6 +1208,9 @@ if is_installed mariadb-server; then
     FILE="/etc/mysql/mariadb.conf.d/90-${PATH_PREFIX}defaults.cnf"
     cat <<EOF >"$FILE"
 [mysqld]
+# must exceed the sum of pm.max_children across all PHP-FPM pools
+max_connections = 301
+
 innodb_buffer_pool_size = $INNODB_BUFFER_SIZE
 innodb_buffer_pool_instances = $(((${INNODB_BUFFER_SIZE%M} - 1) / 1024 + 1))
 innodb_buffer_pool_dump_at_shutdown = 1
@@ -1210,6 +1231,16 @@ IDENTIFIED BY '$MYSQL_PASSWORD' \
 WITH GRANT OPTION" | mysql -uroot
     fi
     # TODO: create $HOST_ACCOUNT database
+fi
+
+if is_installed memcached; then
+    log "Configuring Memcached"
+    FILE="/etc/memcached.conf"
+    edit_file "$FILE" \
+        "^#?(-m$S+|--memory-limit(=|$S+))[0-9]+$S*\$" \
+        "\1$MEMCACHED_MEMORY_LIMIT" \
+        "-m $MEMCACHED_MEMORY_LIMIT"
+    log_file "$FILE"
 fi
 
 log "Saving iptables rules"
