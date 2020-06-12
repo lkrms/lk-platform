@@ -4,7 +4,7 @@
 # <UDF name="NODE_HOSTNAME" label="Short hostname" example="web01-dev-syd" />
 # <UDF name="NODE_FQDN" label="Host FQDN" example="web01-dev-syd.linode.linacreative.com" />
 # <UDF name="NODE_TIMEZONE" label="System timezone" default="Australia/Sydney" />
-# <UDF name="NODE_SERVICES" label="Services to install and configure" manyof="apache+php,mysql,memcached,fail2ban,wp-cli" default="" />
+# <UDF name="NODE_SERVICES" label="Services to install and configure" manyof="apache+php,mysql,memcached,fail2ban,wp-cli,jre" default="" />
 # <UDF name="HOST_DOMAIN" label="Initial hosting domain" example="clientname.com.au" default="" />
 # <UDF name="HOST_ACCOUNT" label="Initial hosting account name (default: automatic)" example="clientname" default="" />
 # <UDF name="ADMIN_USERS" label="Admin users to create (comma-delimited)" default="linac" />
@@ -63,10 +63,10 @@ function edit_file() {
     [ -f "$1" ] || [ -n "${4:-}" ] || die "file not found: $1"
     [ "${MATCH_MANY:-N}" = "N" ] || SED_SCRIPT="s/$2/$3/"
     if grep -Eq -e "$2" "$1" 2>/dev/null; then
+        keep_original "$1"
         BEFORE="$(cat "$1")"
         AFTER="$(sed -E "$SED_SCRIPT" "$1")"
         [ "$BEFORE" = "$AFTER" ] || {
-            keep_original "$1"
             sed -Ei "$SED_SCRIPT" "$1"
         }
     elif [ -n "${4:-}" ]; then
@@ -74,12 +74,18 @@ function edit_file() {
     else
         die "no line matching $2 in $1"
     fi
-    log_file "$1"
+    [ "${LOG_FILE:-Y}" = "N" ] || log_file "$1"
 }
 
 function log_file() {
     log "<<<< $1" \
-        "$(cat "$1")" \
+        "$(
+            if [ -f "$1.orig" ]; then
+                ! diff "$1.orig" "$1" || echo "<unchanged>"
+            else
+                cat "$1"
+            fi
+        )" \
         ">>>>"
 }
 
@@ -856,6 +862,12 @@ case ",$NODE_SERVICES," in
     )
     ;;&
 
+*,jre,*)
+    PACKAGES+=(
+        default-jre
+    )
+    ;;&
+
 *,wp-cli,*)
     PACKAGES+=(
         php-cli
@@ -918,9 +930,15 @@ esac
 if is_installed fail2ban; then
     # TODO: configure jails other than sshd
     log "Configuring Fail2Ban"
-    edit_file "/etc/fail2ban/jail.conf" \
+    FILE="/etc/fail2ban/jail.conf"
+    LOG_FILE=N edit_file "$FILE" \
         "^#?backend$S*=($S*(pyinotify|gamin|polling|systemd|auto))?($S*; .*)?\$" \
         "backend = systemd\3"
+    [ -z "$TRUSTED_IP_ADDRESSES" ] ||
+        LOG_FILE=N edit_file "$FILE" \
+            "^#?ignoreip$S*=($S*[^#]+)?($S*; .*)?\$" \
+            "ignoreip = 127.0.0.1\\/8 ::1 ${TRUSTED_IP_ADDRESSES//\//\\\/}\2"
+    log_file "$FILE"
 fi
 
 if is_installed postfix; then
@@ -1131,6 +1149,16 @@ EOF
         ln -s "../sites-available/$HOST_ACCOUNT.conf" "/etc/apache2/sites-enabled/$HOST_ACCOUNT.conf"
         log_file "/etc/apache2/sites-available/$HOST_ACCOUNT.conf"
 
+        log "Configuring PHP-FPM umask for group-writable files"
+        FILE="/etc/systemd/system/php$PHPVER-fpm.service.d/override.conf"
+        install -v -d -m 0755 "$(dirname "$FILE")"
+        cat <<EOF >"$FILE"
+[Service]
+UMask=0002
+EOF
+        systemctl daemon-reload
+        log_file "$FILE"
+
         log "Adding pool to PHP-FPM: $HOST_ACCOUNT"
         cat <<EOF >"/etc/php/$PHPVER/fpm/pool.d/$HOST_ACCOUNT.conf"
 ; Values in /etc/apache2/sites-available/$HOST_ACCOUNT.conf and/or
@@ -1240,7 +1268,6 @@ if is_installed memcached; then
         "^#?(-m$S+|--memory-limit(=|$S+))[0-9]+$S*\$" \
         "\1$MEMCACHED_MEMORY_LIMIT" \
         "-m $MEMCACHED_MEMORY_LIMIT"
-    log_file "$FILE"
 fi
 
 log "Saving iptables rules"
