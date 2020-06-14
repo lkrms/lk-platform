@@ -3,8 +3,8 @@
 
 # To install Arch Linux using the script below:
 #   1. boot from an Arch Linux live CD
-#   2. wget https://lkr.ms/bootstrap
-#   3. bash bootstrap
+#   2. wget https://lkr.ms/bs
+#   3. bash bs
 
 set -euo pipefail
 shopt -s nullglob
@@ -179,15 +179,15 @@ elif [ "$#" -ge "4" ]; then
 fi
 
 TARGET_PASSWORD="${TARGET_PASSWORD:-}"
-[ -n "$TARGET_PASSWORD" ] || {
+if [ -z "$TARGET_PASSWORD" ]; then
     while :; do
-        TARGET_PASSWORD="$(lk_console_read_secret "Password for $TARGET_USERNAME:")" || lk_die
+        TARGET_PASSWORD="$(lk_console_read_secret "Password for $TARGET_USERNAME:")"
         [ -n "$TARGET_PASSWORD" ] || lk_warn "Password cannot be empty" || continue
-        CONFIRM_PASSWORD="$(lk_console_read_secret "Password for $TARGET_USERNAME (again):")" || lk_die
+        CONFIRM_PASSWORD="$(lk_console_read_secret "Password for $TARGET_USERNAME (again):")"
         [ "$TARGET_PASSWORD" = "$CONFIRM_PASSWORD" ] || lk_warn "Passwords do not match" || continue
         break
     done
-}
+fi
 
 ROOT_PARTITION_TYPE="$(_lsblk FSTYPE "$ROOT_PARTITION")" || lk_die "no block device at $ROOT_PARTITION"
 BOOT_PARTITION_TYPE="$(_lsblk FSTYPE "$BOOT_PARTITION")" || lk_die "no block device at $BOOT_PARTITION"
@@ -303,7 +303,7 @@ xset s 240 60
 export XSECURELOCK_DIM_TIME_MS=750
 export XSECURELOCK_WAIT_TIME_MS=60000
 
-XSECURELOCK_FONT="$(xfconf-query -c xsettings -p /Gtk/MonospaceFontName)" &&
+XSECURELOCK_FONT="\$(xfconf-query -c xsettings -p /Gtk/MonospaceFontName)" &&
     export XSECURELOCK_FONT ||
     unset XSECURELOCK_FONT
 
@@ -346,7 +346,7 @@ YAY_DIR="\$(mktemp -d)" &&
     yay -Sy --aur --needed --noconfirm ${AUR_PACKAGES[*]}
 EOF
     )"
-    in_target sudo -H -u "$TARGET_USERNAME" bash -c "$AUR_SCRIPT"
+    in_target sudo -H -u "$TARGET_USERNAME" bash -c "$AUR_SCRIPT" >&6 2>&7
 fi
 
 lk_console_message "Installing boot loader"
