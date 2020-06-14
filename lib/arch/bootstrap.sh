@@ -294,7 +294,7 @@ configure_ntp "/mnt/etc/ntp.conf"
 in_target systemctl enable ntpd.service
 
 LK_BASE="/opt/lk-platform"
-log "Installing lk-platform to '$LK_BASE'"
+lk_console_detail "Installing lk-platform to '$LK_BASE'"
 in_target install -v -d -m 2775 -o "$TARGET_USERNAME" -g "adm" \
     "$LK_BASE"
 in_target sudo -H -u "$TARGET_USERNAME" \
