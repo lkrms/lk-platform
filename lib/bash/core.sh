@@ -496,9 +496,14 @@ function lk_console_list() {
 function lk_console_read() {
     local PROMPT=("$1") DEFAULT="${2:-}" VALUE
     [ -z "$DEFAULT" ] || PROMPT+=("[$DEFAULT]")
-    read -rep "$LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_DEFAULT_CONSOLE_COLOUR}:: $LK_RESET$LK_BOLD${PROMPT[*]}$LK_RESET " "${@:3}" VALUE || VALUE="$DEFAULT"
+    read -rep "$LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_DEFAULT_CONSOLE_COLOUR}:: $LK_RESET$LK_BOLD${PROMPT[*]}$LK_RESET " "${@:3}" VALUE || return
     [ -n "$VALUE" ] || VALUE="$DEFAULT"
     echo "$VALUE"
+}
+
+# lk_console_read_secret prompt [read_arg...]
+function lk_console_read_secret() {
+    lk_console_read "$1" "" -s "${@:2}" && echo >&2
 }
 
 # lk_confirm prompt [default [read_arg...]]
@@ -999,6 +1004,11 @@ function lk_start_or_restart() {
     }
 }
 
+function lk_keep_original() {
+    [ ! -e "$1" ] ||
+        lk_maybe_sudo cp -nav "$1" "$1.orig"
+}
+
 # lk_apply_setting file_path setting_name setting_value [delimiter] [comment_chars] [space_chars]
 #   Set value of SETTING_NAME to SETTING_VALUE in FILE_PATH.
 #   DELIMITER defaults to "=".
@@ -1028,7 +1038,7 @@ function lk_apply_setting() {
             SEARCH_PATTERN="^($SPACE_PATTERN)$COMMENT_PATTERN($SPACE_PATTERN)$NAME_ESCAPED$SPACE_PATTERN$DELIMITER_ESCAPED.*\$"
             REPLACED="$(sed -E "0,/$SEARCH_PATTERN/{s/$SEARCH_PATTERN/\\1\\2$(lk_escape_ere_replace "$REPLACE")/}" "$FILE_PATH")" || return
         }
-        [ -f "$FILE_PATH.orig" ] || lk_maybe_sudo cp -pv "$FILE_PATH" "$FILE_PATH.orig" || return
+        lk_keep_original "$FILE_PATH" || return
         if grep -Eq "$CHECK_PATTERN" <<<"$REPLACED"; then
             lk_maybe_sudo tee "$FILE_PATH" <<<"$REPLACED" >/dev/null || return
         else
@@ -1070,7 +1080,7 @@ function lk_enable_entry() {
         # try to replace a commented entry
         SEARCH_PATTERN="^($SPACE_PATTERN)$OPTIONAL_COMMENT_PATTERN($SPACE_PATTERN$ENTRY_ESCAPED${TRAILING_PATTERN:+($TRAILING_PATTERN)?})\$"
         REPLACED="$(sed -E "0,/$SEARCH_PATTERN/{s/$SEARCH_PATTERN/\1\2/}" "$FILE_PATH")" || return
-        [ -f "$FILE_PATH.orig" ] || lk_maybe_sudo cp -pv "$FILE_PATH" "$FILE_PATH.orig" || return
+        lk_keep_original "$FILE_PATH" || return
         if grep -Eq "$CHECK_PATTERN" <<<"$REPLACED"; then
             lk_maybe_sudo tee "$FILE_PATH" <<<"$REPLACED" >/dev/null || return
         else
@@ -1080,26 +1090,6 @@ function lk_enable_entry() {
             } | lk_maybe_sudo tee "$FILE_PATH" >/dev/null || return
         fi
     }
-}
-
-function lk_apply_php_setting() {
-    [ -n "${PHP_INI_FILE:-}" ] || lk_warn "PHP_INI_FILE not set" || return
-    lk_apply_setting "$PHP_INI_FILE" "$1" "$2" "=" "; " " "
-}
-
-function lk_enable_php_entry() {
-    [ -n "${PHP_INI_FILE:-}" ] || lk_warn "PHP_INI_FILE not set" || return
-    lk_enable_entry "$PHP_INI_FILE" "$1" "; "
-}
-
-function lk_apply_httpd_setting() {
-    [ -n "${HTTPD_CONF_FILE:-}" ] || lk_warn "HTTPD_CONF_FILE not set" || return
-    lk_apply_setting "$HTTPD_CONF_FILE" "$1" "$2" " " "" $' \t'
-}
-
-function lk_enable_httpd_entry() {
-    [ -n "${HTTPD_CONF_FILE:-}" ] || lk_warn "HTTPD_CONF_FILE not set" || return
-    lk_enable_entry "$HTTPD_CONF_FILE" "$1" "# " ""
 }
 
 function lk_in_path() {

@@ -1,10 +1,11 @@
 #!/bin/bash
-# shellcheck disable=SC1091,SC2001,SC2207
+# shellcheck disable=SC1091,SC2001,SC2206,SC2207
 #
 # <UDF name="NODE_HOSTNAME" label="Short hostname" example="web01-dev-syd" />
 # <UDF name="NODE_FQDN" label="Host FQDN" example="web01-dev-syd.linode.linacreative.com" />
 # <UDF name="NODE_TIMEZONE" label="System timezone" default="Australia/Sydney" />
 # <UDF name="NODE_SERVICES" label="Services to install and configure" manyof="apache+php,mysql,memcached,fail2ban,wp-cli,jre" default="" />
+# <UDF name="NODE_PACKAGES" label="Additional packages to install (comma-delimited)" default="" />
 # <UDF name="HOST_DOMAIN" label="Initial hosting domain" example="clientname.com.au" default="" />
 # <UDF name="HOST_ACCOUNT" label="Initial hosting account name (default: automatic)" example="clientname" default="" />
 # <UDF name="ADMIN_USERS" label="Admin users to create (comma-delimited)" default="linac" />
@@ -197,6 +198,7 @@ PATH_PREFIX_ALPHA="$(sed 's/[^a-zA-Z0-9]//g' <<<"$PATH_PREFIX")"
 
 NODE_TIMEZONE="${NODE_TIMEZONE:-Australia/Sydney}"
 NODE_SERVICES="${NODE_SERVICES:-}"
+NODE_PACKAGES="${NODE_PACKAGES:-}"
 HOST_DOMAIN="${HOST_DOMAIN:-}"
 HOST_DOMAIN="${HOST_DOMAIN#www.}"
 HOST_ACCOUNT="${HOST_ACCOUNT:-${HOST_DOMAIN%%.*}}"
@@ -538,6 +540,9 @@ PACKAGES=(
     build-essential
     python3
     python3-dev
+
+    #
+    ${NODE_PACKAGES:-${NODE_PACKAGES//,/ }}
 )
 
 # if service installations have been requested, add-apt-repository

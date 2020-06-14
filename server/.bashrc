@@ -16,7 +16,7 @@
 
 eval "$(
     shopt -s nullglob
-    for FILE in "$LK_BASE/lib/bash"/{core,wordpress}.sh; do
+    for FILE in "$LK_BASE/lib/bash"/{core,httpd,iptables,php,wordpress}.sh; do
         echo ". \"\$LK_BASE/lib/bash/$(basename "$FILE")\""
     done
 )"
