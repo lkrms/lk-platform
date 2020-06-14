@@ -29,6 +29,7 @@ PACMAN_PACKAGES=(
     networkmanager
     openssh
     ntp
+    git
 
     # basics
     bash-completion
@@ -36,7 +37,6 @@ PACMAN_PACKAGES=(
     curl
     diffutils
     dmidecode
-    git
     lftp
     nano
     ndisc6 # for rdisc6
@@ -53,6 +53,7 @@ PACMAN_PACKAGES=(
     #
     man-db
     man-pages
+    texinfo
 
     # filesystems
     btrfs-progs

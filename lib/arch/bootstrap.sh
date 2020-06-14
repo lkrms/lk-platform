@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC1090,SC2015,SC2016,SC2034,SC2124,SC2206,SC2207
+# shellcheck disable=SC1090,SC2015,SC2034,SC2124,SC2207
 
 # To install Arch Linux using the script below:
 #   1. boot from an Arch Linux live CD
@@ -26,7 +26,7 @@ AUR_DESKTOP_PACKAGES=()
 lk_die() { echo "${BS:+$BS: }$1" >&2 && exit 1; }
 BS="${BASH_SOURCE[0]}" && [ ! -L "$BS" ] &&
     SCRIPT_DIR="$(cd "$(dirname "$BS")" && pwd -P)" ||
-    lk_die "unable to identify script directory"
+    lk_die "unable to resolve path to script"
 
 function usage() {
     echo "\
@@ -119,12 +119,12 @@ S="[[:space:]]"
 lk_console_message "Setting up live environment"
 configure_pacman "/etc/pacman.conf"
 [ -z "$MIRROR" ] ||
-    # pacstrap copies this to the new system
+    # pacstrap will copy this to the new system
     echo "Server=$MIRROR" >"/etc/pacman.d/mirrorlist"
 
 . "$SCRIPT_DIR/packages.sh" >&6 2>&7
 
-# in case we're starting over
+# in case we're starting over after a failed attempt
 if [ -d "/mnt/boot" ]; then
     OTHER_OS_MOUNTS=(/mnt/mnt/*)
     [ "${#OTHER_OS_MOUNTS[@]}" -eq "0" ] || {
@@ -237,26 +237,26 @@ pacstrap /mnt "${PACMAN_PACKAGES[@]}" >&6 2>&7
 
 lk_console_message "Setting up installed system"
 
+lk_console_detail "Generating fstab"
+lk_keep_original "/mnt/etc/fstab"
+genfstab -U /mnt >>"/mnt/etc/fstab"
+
+lk_console_detail "Setting the time zone"
+ln -sfv "/usr/share/zoneinfo/${TIMEZONE:-UTC}" "/mnt/etc/localtime"
+
+lk_console_detail "Configuring hardware clock"
+in_target hwclock --systohc
+
 LOCALES=(${LOCALES[@]+"${LOCALES[@]}"} "en_US")
 IFS=$'\n'
-lk_console_detail "Enabling locales:" "${LOCALES[*]}"
+lk_console_detail "Configuring locales"
 unset IFS
 lk_keep_original "/mnt/etc/locale.gen"
 for _LOCALE in $(printf '%s\n' "${LOCALES[@]}" | sed 's/\..*$//' | sort | uniq); do
     sed -Ei "s/^#($(lk_escape_ere "$_LOCALE")\\.UTF-8$S+UTF-8)\\b/\\1/" "/mnt/etc/locale.gen"
 done
+in_target locale-gen
 
-lk_console_detail "Generating" "/etc/fstab"
-lk_keep_original "/mnt/etc/fstab"
-genfstab -U /mnt >>"/mnt/etc/fstab"
-
-lk_console_detail "Configuring sudo"
-cat <<EOF >"/mnt/etc/sudoers.d/90-wheel"
-%wheel ALL=(ALL) ALL
-%wheel ALL=(ALL) NOPASSWD:/usr/bin/pacman
-EOF
-
-lk_console_detail "Configuring languages"
 lk_keep_original "/mnt/etc/locale.conf"
 cat <<EOF >"/mnt/etc/locale.conf"
 LANG=${LOCALES[0]}.UTF-8${LANGUAGE:+
@@ -267,7 +267,7 @@ lk_console_detail "Setting hostname"
 lk_keep_original "/mnt/etc/hostname"
 echo "$TARGET_HOSTNAME" >"/mnt/etc/hostname"
 
-lk_console_detail "Configuring" "/etc/hosts"
+lk_console_detail "Configuring hosts"
 lk_keep_original "/mnt/etc/hosts"
 cat <<EOF >"/mnt/etc/hosts"
 127.0.0.1 localhost
@@ -275,13 +275,35 @@ cat <<EOF >"/mnt/etc/hosts"
 127.0.1.1 $TARGET_HOSTNAME.localdomain $TARGET_HOSTNAME
 EOF
 
-lk_console_detail "Generating locales"
-in_target locale-gen
+lk_console_detail "Creating superuser '$TARGET_USERNAME'"
+in_target useradd -m "$TARGET_USERNAME" -G adm,wheel -s /bin/bash
+echo -e "$TARGET_PASSWORD\n$TARGET_PASSWORD" | in_target passwd "$TARGET_USERNAME"
+
+lk_console_detail "Configuring sudo"
+cat <<EOF >"/mnt/etc/sudoers.d/90-wheel"
+%wheel ALL=(ALL) ALL
+%wheel ALL=(ALL) NOPASSWD:/usr/bin/pacman
+EOF
+
+lk_console_detail "Disabling root password"
+in_target passwd -l root
+
+configure_pacman "/mnt/etc/pacman.conf"
+
+configure_ntp "/mnt/etc/ntp.conf"
+in_target systemctl enable ntpd.service
+
+LK_BASE="/opt/lk-platform"
+log "Installing lk-platform to '$LK_BASE'"
+in_target install -v -d -m 2775 -o "$TARGET_USERNAME" -g "adm" \
+    "$LK_BASE"
+in_target sudo -H -u "$TARGET_USERNAME" \
+    git clone "https://github.com/lkrms/lk-platform.git" "$LK_BASE"
+echo "LK_BASE=\"$LK_BASE\"" >"/mnt/etc/default/lk-platform"
 
 if lk_is_qemu; then
     lk_console_detail "Enabling QEMU guest agent"
-    in_target systemctl enable qemu-ga.service ||
-        lk_console_warning "Could not enable qemu-ga.service"
+    in_target systemctl enable qemu-ga.service
 fi
 
 lk_console_detail "Enabling NetworkManager"
@@ -296,45 +318,9 @@ else
     in_target systemctl enable lightdm.service
 
     mkdir -p "/mnt/etc/skel/.config/xfce4" &&
-        cat <<EOF >"/mnt/etc/skel/.config/xfce4/xinitrc"
-#!/bin/sh
-xset -b
-xset s 240 60
-export XSECURELOCK_DIM_TIME_MS=750
-export XSECURELOCK_WAIT_TIME_MS=60000
-
-XSECURELOCK_FONT="\$(xfconf-query -c xsettings -p /Gtk/MonospaceFontName)" &&
-    export XSECURELOCK_FONT ||
-    unset XSECURELOCK_FONT
-
-export XSECURELOCK_SAVER="saver_blank"
-export XSECURELOCK_SHOW_DATETIME=1
-export XSECURELOCK_AUTH_TIMEOUT=20
-xss-lock -n /usr/lib/xsecurelock/dimmer -l -- xsecurelock &
-
-xfconf-query -c xfce4-session -p /general/LockCommand -n -t string -s "xset s activate"
-
-. /etc/xdg/xfce4/xinitrc
-EOF
+        ln -s "/mnt$LK_BASE/etc/skel/.config/xfce4/xinitrc" \
+            "/mnt/etc/skel/.config/xfce4/xinitrc"
 fi
-
-lk_console_detail "Setting time zone to" "${TIMEZONE:-UTC}"
-ln -sfv "/usr/share/zoneinfo/${TIMEZONE:-UTC}" "/mnt/etc/localtime"
-
-lk_console_detail "Configuring hardware clock"
-in_target hwclock --systohc
-
-lk_console_detail "Adding superuser" "$TARGET_USERNAME"
-in_target useradd -m "$TARGET_USERNAME" -G adm,wheel -s /bin/bash
-echo -e "$TARGET_PASSWORD\n$TARGET_PASSWORD" | in_target passwd "$TARGET_USERNAME"
-
-lk_console_detail "Disabling root password"
-in_target passwd -l root
-
-configure_pacman "/mnt/etc/pacman.conf"
-
-configure_ntp "/mnt/etc/ntp.conf"
-in_target systemctl enable ntpd.service
 
 if [ "${#AUR_PACKAGES[@]}" -gt "0" ]; then
     lk_console_message "Installing AUR packages"
