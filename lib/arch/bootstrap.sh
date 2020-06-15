@@ -285,19 +285,27 @@ else
     in_target systemctl enable lightdm.service
 
     mkdir -p "/mnt/etc/skel/.config/xfce4" &&
-        ln -s "/mnt$LK_BASE/etc/skel/.config/xfce4/xinitrc" \
+        ln -s "$LK_BASE/etc/skel/.config/xfce4/xinitrc" \
             "/mnt/etc/skel/.config/xfce4/xinitrc"
 fi
+
+lk_console_detail "Setting default umask"
+lk_keep_original "/mnt/etc/profile"
+sed -Ei 's/^umask [0-9]+\b/umask 002/' "/mnt/etc/profile"
+umask 002
 
 lk_console_detail "Creating superuser '$TARGET_USERNAME'"
 in_target useradd -m "$TARGET_USERNAME" -G adm,wheel -s /bin/bash
 echo -e "$TARGET_PASSWORD\n$TARGET_PASSWORD" | in_target passwd "$TARGET_USERNAME"
 
 lk_console_detail "Configuring sudo"
-cat <<EOF >"/mnt/etc/sudoers.d/90-wheel"
+cat <<EOF >"/mnt/etc/sudoers.d/lk-defaults"
+Defaults umask = 0002
+Defaults umask_override
 %wheel ALL=(ALL) ALL
 %wheel ALL=(ALL) NOPASSWD:/usr/bin/pacman
 EOF
+chmod 600 "/mnt/etc/sudoers.d/lk-defaults"
 
 lk_console_detail "Disabling root password"
 in_target passwd -l root
@@ -332,7 +340,8 @@ YAY_DIR="\$(mktemp -d)" &&
     yay -Sy --aur --needed --noconfirm ${AUR_PACKAGES[*]}
 EOF
     )"
-    in_target sudo -H -u "$TARGET_USERNAME" bash -c "$AUR_SCRIPT" >&6 2>&7
+    in_target sudo -H -u "$TARGET_USERNAME" \
+        bash -c "$AUR_SCRIPT" >&6 2>&7
 fi
 
 lk_console_message "Installing boot loader"
