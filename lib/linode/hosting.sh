@@ -299,13 +299,16 @@ log "Setting system hostname to '$NODE_HOSTNAME'"
 hostnamectl set-hostname "$NODE_HOSTNAME"
 
 FILE="/etc/hosts"
+# Apache won't resolve a name-based <VirtualHost> correctly if ServerName
+# resolves to a loopback address
+[ "${NODE_FQDN#www.}" = "$HOST_DOMAIN" ] || HOSTS_NODE_FQDN="$NODE_FQDN"
 log "Adding entries to $FILE"
 cat <<EOF >>"$FILE"
 
 # Added by $(basename "$0") at $(now)
-127.0.1.1 $NODE_FQDN $NODE_HOSTNAME${IPV4_ADDRESS:+
+127.0.1.1 ${HOSTS_NODE_FQDN:+$HOSTS_NODE_FQDN }$NODE_HOSTNAME${HOSTS_NODE_FQDN:+${IPV4_ADDRESS:+
 $IPV4_ADDRESS $NODE_FQDN}${IPV6_ADDRESS:+
-$IPV6_ADDRESS $NODE_FQDN}${HOST_DOMAIN:+
+$IPV6_ADDRESS $NODE_FQDN}}${HOST_DOMAIN:+
 
 # Virtual hosts${IPV4_ADDRESS:+
 $IPV4_ADDRESS $HOST_DOMAIN www.$HOST_DOMAIN}${IPV6_ADDRESS:+
@@ -348,7 +351,7 @@ fi
 LOG+=("Deploy pending: \$DEPLOY_PENDING")
 LOG+=("Exit status: \$EXIT_STATUS")
 printf '%s %s\n%s\n' "\$(now)" "\${LOG[0]}" "\$(LOG=("\${LOG[@]:1}")
-printf '  %s\n' "\${LOG[@]//\$'\n'/\$'\n'  }")" >>"/var/log/${PATH_PREFIX}install.log"
+printf '  %s\n' "\${LOG[@]//\$'\n'/\$'\n'  }")" >>"/var/log/${PATH_PREFIX}policy-rc.log"
 exit "\$EXIT_STATUS"
 EOF
 chmod a+x "/usr/sbin/policy-rc.d"
