@@ -337,9 +337,10 @@ fi
 
 lk_console_message "Installing boot loader"
 lk_keep_original "/mnt/etc/default/grub"
+! lk_is_virtual || CMDLINE_EXTRA="console=tty0 console=ttyS0"
 sed -Ei -e 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=saved/' \
     -e 's/^#?GRUB_SAVEDEFAULT=.*/GRUB_SAVEDEFAULT=true/' \
-    -e 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet loglevel=3 audit=0"/' \
+    -e "s/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT=\"quiet loglevel=3 audit=0${CMDLINE_EXTRA:+ $CMDLINE_EXTRA}\"/" \
     /mnt/etc/default/grub
 while :; do
     in_target grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB &&
