@@ -15,6 +15,7 @@ MOUNT_OPTIONS="defaults"          # ",discard" is added automatically if support
 TIMEZONE="Australia/Sydney"       # see /usr/share/zoneinfo
 LOCALES=("en_AU" "en_GB")         # UTF-8 is enforced
 LANGUAGE="en_AU:en_GB:en"
+LK_BASE="/opt/lk-platform"
 MIRROR="http://archlinux.mirror.linacreative.com/archlinux/\$repo/os/\$arch"
 
 # these will be added to the defaults in packages.sh
@@ -275,6 +276,19 @@ cat <<EOF >"/mnt/etc/hosts"
 127.0.1.1 $TARGET_HOSTNAME.localdomain $TARGET_HOSTNAME
 EOF
 
+if [ "${#PACMAN_DESKTOP_PACKAGES[@]}" -eq "0" ]; then
+    in_target systemctl set-default multi-user.target
+else
+    in_target systemctl set-default graphical.target
+
+    lk_console_detail "Enabling LightDM"
+    in_target systemctl enable lightdm.service
+
+    mkdir -p "/mnt/etc/skel/.config/xfce4" &&
+        ln -s "/mnt$LK_BASE/etc/skel/.config/xfce4/xinitrc" \
+            "/mnt/etc/skel/.config/xfce4/xinitrc"
+fi
+
 lk_console_detail "Creating superuser '$TARGET_USERNAME'"
 in_target useradd -m "$TARGET_USERNAME" -G adm,wheel -s /bin/bash
 echo -e "$TARGET_PASSWORD\n$TARGET_PASSWORD" | in_target passwd "$TARGET_USERNAME"
@@ -293,7 +307,6 @@ configure_pacman "/mnt/etc/pacman.conf"
 configure_ntp "/mnt/etc/ntp.conf"
 in_target systemctl enable ntpd.service
 
-LK_BASE="/opt/lk-platform"
 lk_console_detail "Installing lk-platform to '$LK_BASE'"
 in_target install -v -d -m 2775 -o "$TARGET_USERNAME" -g "adm" \
     "$LK_BASE"
@@ -308,19 +321,6 @@ fi
 
 lk_console_detail "Enabling NetworkManager"
 in_target systemctl enable NetworkManager.service
-
-if [ "${#PACMAN_DESKTOP_PACKAGES[@]}" -eq "0" ]; then
-    in_target systemctl set-default multi-user.target
-else
-    in_target systemctl set-default graphical.target
-
-    lk_console_detail "Enabling LightDM"
-    in_target systemctl enable lightdm.service
-
-    mkdir -p "/mnt/etc/skel/.config/xfce4" &&
-        ln -s "/mnt$LK_BASE/etc/skel/.config/xfce4/xinitrc" \
-            "/mnt/etc/skel/.config/xfce4/xinitrc"
-fi
 
 if [ "${#AUR_PACKAGES[@]}" -gt "0" ]; then
     lk_console_message "Installing AUR packages"

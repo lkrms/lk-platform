@@ -78,7 +78,6 @@ PACMAN_DESKTOP_PACKAGES=(
 
     #
     cups
-    flameshot
     gnome-keyring
     gvfs
     gvfs-smb
@@ -191,17 +190,14 @@ lk_is_virtual && {
 [ "${PACMAN_DESKTOP_APPS:-1}" -ne "1" ] ||
     PACMAN_DESKTOP_PACKAGES+=(
         # basics
+        evince
         galculator
         geany
         gimp
-        keepassxc
         libreoffice-fresh
-        qpdfview
         samba
-        speedcrunch
 
         # browsers
-        chromium
         falkon
         firefox
         lynx
