@@ -242,6 +242,11 @@ lk_console_detail "Generating fstab"
 lk_keep_original "/mnt/etc/fstab"
 genfstab -U /mnt >>"/mnt/etc/fstab"
 
+configure_pacman "/mnt/etc/pacman.conf"
+
+configure_ntp "/mnt/etc/ntp.conf"
+in_target systemctl enable ntpd.service
+
 lk_console_detail "Setting the time zone"
 ln -sfv "/usr/share/zoneinfo/${TIMEZONE:-UTC}" "/mnt/etc/localtime"
 
@@ -309,11 +314,6 @@ chmod 600 "/mnt/etc/sudoers.d/lk-defaults"
 
 lk_console_detail "Disabling root password"
 in_target passwd -l root
-
-configure_pacman "/mnt/etc/pacman.conf"
-
-configure_ntp "/mnt/etc/ntp.conf"
-in_target systemctl enable ntpd.service
 
 lk_console_detail "Installing lk-platform to '$LK_BASE'"
 in_target install -v -d -m 2775 -o "$TARGET_USERNAME" -g "adm" \
