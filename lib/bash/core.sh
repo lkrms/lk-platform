@@ -744,6 +744,15 @@ function lk_download() {
         lk_echo_array "${FILENAMES[@]}"
 }
 
+function lk_can_sudo() {
+    local ERROR
+    lk_command_exists sudo && {
+        ERROR="$(sudo -nv 2>&1)" ||
+            # "sudo: a password is required" means the user can sudo
+            grep -i password <<<"$ERROR" >/dev/null
+    }
+}
+
 # SUDO_OR_NOT=<1|0|Y|N> lk_maybe_sudo command [arg1...]
 function lk_maybe_sudo() {
     if lk_is_true "${SUDO_OR_NOT:-0}"; then
@@ -992,13 +1001,13 @@ function lk_resolve() {
 function lk_start_or_restart() {
     local COMMAND
     COMMAND="$(basename "$1")"
-    is_root ||
+    lk_is_root ||
         ! pgrep -xu "$USER" "$COMMAND" >/dev/null || # limit to processes owned by $USER
         pkill -xu "$USER" "$COMMAND"                 #
-    ! is_root ||                                     #
+    ! lk_is_root ||                                  #
         ! pgrep -x "$COMMAND" >/dev/null ||          # ...unless we're running as root
         pkill -x "$COMMAND"
-    ! command_exists "$1" || {
+    ! lk_command_exists "$1" || {
         nohup "$@" </dev/null >/dev/null 2>&1 &
         disown
     }

@@ -125,7 +125,8 @@ function _lk_mysql() {
 
 function _lk_mysql_privileged() {
     local LK_MYSQL_USERNAME="${LK_MYSQL_USERNAME-root}"
-    sudo -H mysql ${LK_MYSQL_USERNAME+-u"$LK_MYSQL_USERNAME"} "$@"
+    lk_can_sudo &&
+        sudo -H mysql ${LK_MYSQL_USERNAME+-u"$LK_MYSQL_USERNAME"} "$@"
 }
 
 function _lk_mysql_connects() {
@@ -176,7 +177,7 @@ function lk_wp_db_dump_remote() {
 
 # lk_wp_db_restore_local sql_path [db_name [db_user]]
 function lk_wp_db_restore_local() {
-    local FILE_OWNER SQL EXIT_STATUS=0 \
+    local FILE_OWNER SQL _SQL EXIT_STATUS=0 \
         LOCAL_DB_NAME LOCAL_DB_USER LOCAL_DB_PASSWORD \
         LOCAL_DB_HOST="${LK_MYSQL_HOST:-localhost}" \
         DB_NAME DB_USER DB_PASSWORD DB_HOST
@@ -236,9 +237,10 @@ IDENTIFIED BY {{DB_PASSWORD}}"
     [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] ||
         lk_wp config set DB_PASSWORD "$LOCAL_DB_PASSWORD" --type=constant --quiet || return
     lk_console_detail "Preparing database" "$LOCAL_DB_NAME"
-    printf '%s;\n' "${SQL[@]}" |
-        lk_replace '{{DB_PASSWORD}}' "'$(lk_escape "$LOCAL_DB_PASSWORD" "\\" "'")'" |
-        _lk_mysql_privileged || return
+    _SQL="$(printf '%s;\n' "${SQL[@]}" |
+        lk_replace '{{DB_PASSWORD}}' "'$(lk_escape "$LOCAL_DB_PASSWORD" "\\" "'")'")" || return
+    echo "$_SQL" | _lk_mysql_privileged ||
+        echo "$_SQL" | _lk_mysql || return
     lk_console_detail "Restoring from" "$1"
     if [[ "$1" =~ \.gz(ip)?$ ]]; then
         pv "$1" | gunzip
