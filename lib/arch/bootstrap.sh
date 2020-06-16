@@ -219,8 +219,10 @@ lk_console_message "Formatting $ROOT_PARTITION"
 mkfs.ext4 -vL root "$ROOT_PARTITION"
 
 lk_console_message "Mounting partitions"
-! is_ssd "$ROOT_PARTITION" || ROOT_OPTION_EXTRA=",discard"
-! is_ssd "$BOOT_PARTITION" || BOOT_OPTION_EXTRA=",discard"
+if lk_is_virtual; then
+    ! is_ssd "$ROOT_PARTITION" || ROOT_OPTION_EXTRA=",discard"
+    ! is_ssd "$BOOT_PARTITION" || BOOT_OPTION_EXTRA=",discard"
+fi
 mount -o "${MOUNT_OPTIONS:-defaults}${ROOT_OPTION_EXTRA:-}" "$ROOT_PARTITION" /mnt &&
     mkdir /mnt/boot &&
     mount -o "${MOUNT_OPTIONS:-defaults}${BOOT_OPTION_EXTRA:-}" "$BOOT_PARTITION" /mnt/boot || exit
@@ -329,6 +331,25 @@ fi
 
 lk_console_detail "Enabling NetworkManager"
 in_target systemctl enable NetworkManager.service
+
+if ! lk_is_virtual &&
+    { is_ssd "$ROOT_PARTITION" || is_ssd "$BOOT_PARTITION"; }; then
+    lk_console_detail "Enabling fstrim (TRIM support detected)"
+    # replace the default timer
+    cat <<EOF >"/mnt/etc/systemd/system/fstrim.timer"
+[Unit]
+Description=Discard unused blocks 30 seconds after booting, then weekly
+
+[Timer]
+OnBootSec=30
+OnActiveSec=1w
+AccuracySec=1h
+
+[Install]
+WantedBy=timers.target
+EOF
+    in_target systemctl enable fstrim.timer
+fi
 
 if [ "${#AUR_PACKAGES[@]}" -gt "0" ]; then
     lk_console_message "Installing AUR packages"
