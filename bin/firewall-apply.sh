@@ -7,8 +7,7 @@ lk_die() { echo "$1" >&2 && exit 1; }
     LK_BASE="$(cd "$(dirname "$BS")/.." && pwd -P)" &&
     [ -d "$LK_BASE/lib/bash" ] || lk_die "${BS:+$BS: }LK_BASE not set"; }
 
-. "$LK_BASE/lib/bash/common.sh"
-. "$LK_BASE/lib/bash/iptables.sh"
+include=iptables . "$LK_BASE/lib/bash/common.sh"
 
 lk_elevate
 

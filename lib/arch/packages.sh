@@ -39,6 +39,7 @@ PACMAN_PACKAGES=(
     dmidecode
     lftp
     nano
+    ncdu
     ndisc6 # for rdisc6
     nmap
     openbsd-netcat
@@ -58,6 +59,7 @@ PACMAN_PACKAGES=(
     # filesystems
     btrfs-progs
     dosfstools
+    exfat-utils
     f2fs-tools
     jfsutils
     reiserfsprogs
