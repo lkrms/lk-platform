@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC1090,SC2015,SC2034,SC2124,SC2207
+# shellcheck disable=SC1090,SC2015,SC2034,SC2124,SC2206,SC2207
 
 # To install Arch Linux using the script below:
 #   1. boot from an Arch Linux live CD
@@ -11,12 +11,13 @@ shopt -s nullglob
 
 PING_HOSTNAME="one.one.one.one"   # see https://blog.cloudflare.com/dns-resolver-1-1-1-1/
 NTP_SERVER="ntp.linacreative.com" #
-MOUNT_OPTIONS="defaults"          # ",discard" is added automatically if supported
+MOUNT_OPTIONS="defaults"          # ",discard" is added automatically if TRIM support is detected (VMs only)
 TIMEZONE="Australia/Sydney"       # see /usr/share/zoneinfo
 LOCALES=("en_AU" "en_GB")         # UTF-8 is enforced
 LANGUAGE="en_AU:en_GB:en"
 LK_BASE="/opt/lk-platform"
 MIRROR="http://archlinux.mirror.linacreative.com/archlinux/\$repo/os/\$arch"
+CUSTOM_REPOS=("aur http://arch.repo.linacreative.com/aur")
 
 # these will be added to the defaults in packages.sh
 PACMAN_PACKAGES=()
@@ -91,9 +92,20 @@ function configure_ntp() {
 }
 
 function configure_pacman() {
+    local i REPO SIG_LEVEL
     lk_console_detail "Configuring pacman"
     lk_keep_original "$1"
     sed -Ei 's/^#(Color|TotalDownload)\b/\1/' "$1"
+    for i in "${!CUSTOM_REPOS[@]}"; do
+        REPO=(${CUSTOM_REPOS[$i]})
+        SIG_LEVEL=("${REPO[@]:2}")
+        cat <<EOF >>"$1"
+
+[${REPO[0]}]
+SigLevel = ${SIG_LEVEL[*]:-Optional TrustAll}
+Server = ${REPO[1]}
+EOF
+    done
 }
 
 [ -d "/sys/firmware/efi/efivars" ] || lk_die "not booted in UEFI mode"
@@ -197,7 +209,7 @@ if [ "$BOOT_PARTITION_TYPE" = "vfat" ] &&
     ! lk_confirm "$BOOT_PARTITION already has a vfat filesystem. Leave it as-is?" ||
     [ -z "$BOOT_PARTITION_TYPE" ]; then
 
-    [ "$REPARTITIONED" -eq "1" ] ||
+    lk_is_true "$REPARTITIONED" ||
         lk_confirm "OK to format $BOOT_PARTITION as FAT32?"
 
     lk_console_message "Formatting $BOOT_PARTITION"
@@ -212,7 +224,7 @@ fi
 [ -z "$ROOT_PARTITION_TYPE" ] ||
     lk_console_warning "Unexpected filesystem at $ROOT_PARTITION: $ROOT_PARTITION_TYPE"
 
-[ "$REPARTITIONED" -eq "1" ] ||
+lk_is_true "$REPARTITIONED" ||
     lk_confirm "OK to format $ROOT_PARTITION as ext4?" || exit
 
 lk_console_message "Formatting $ROOT_PARTITION"
@@ -301,7 +313,7 @@ lk_keep_original "/mnt/etc/profile"
 sed -Ei 's/^umask [0-9]+\b/umask 002/' "/mnt/etc/profile"
 umask 002
 
-lk_console_detail "Creating superuser '$TARGET_USERNAME'"
+lk_console_detail "Creating superuser:" "$TARGET_USERNAME"
 in_target useradd -m "$TARGET_USERNAME" -G adm,wheel -s /bin/bash
 echo -e "$TARGET_PASSWORD\n$TARGET_PASSWORD" | in_target passwd "$TARGET_USERNAME"
 
@@ -317,7 +329,7 @@ chmod 600 "/mnt/etc/sudoers.d/lk-defaults"
 lk_console_detail "Disabling root password"
 in_target passwd -l root
 
-lk_console_detail "Installing lk-platform to '$LK_BASE'"
+lk_console_detail "Installing lk-platform to:" "$LK_BASE"
 in_target install -v -d -m 2775 -o "$TARGET_USERNAME" -g "adm" \
     "$LK_BASE"
 in_target sudo -H -u "$TARGET_USERNAME" \
@@ -372,12 +384,28 @@ sed -Ei -e 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=saved/' \
     -e 's/^#?GRUB_SAVEDEFAULT=.*/GRUB_SAVEDEFAULT=true/' \
     -e "s/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT=\"quiet loglevel=3 audit=0${CMDLINE_EXTRA:+ $CMDLINE_EXTRA}\"/" \
     /mnt/etc/default/grub
+i=0
 while :; do
-    in_target grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB &&
+    ((++i))
+    { [ "$i" -eq "1" ] ||
+        ! lk_confirm "Run 'dosfsck $BOOT_PARTITION' first?" Y ||
+        dosfsck "$BOOT_PARTITION"; } &&
+        in_target grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB &&
         in_target grub-mkconfig -o /boot/grub/grub.cfg &&
+        GRUB_INSTALLED=1 &&
         break
-    lk_confirm "Boot loader installation failed. Try again?" Y || exit
+    lk_console_message "Boot loader installation failed (exit status $?)"
+    [ "$i" -gt "1" ] || lk_console_detail "\
+If installing to a boot partition created by Windows, filesystem damage
+may cause an 'Input/output error' where a second attempt succeeds"
+    lk_confirm "Try again?" Y || break
 done
 
 lk_console_message "Bootstrap complete" "$LK_GREEN"
-lk_console_detail "Reboot at your leisure"
+if lk_is_true "${GRUB_INSTALLED:-0}"; then
+    lk_console_detail "Reboot at your leisure"
+else
+    lk_console_detail "To install the boot loader manually:" \
+        'arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB &&
+        arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg'
+fi

@@ -363,7 +363,7 @@ function lk_in_array() {
 function lk_array_search() {
     local KEYS KEY
     eval "KEYS=(\"\${!$2[@]}\")"
-    for KEY in "${KEYS[@]}"; do
+    for KEY in ${KEYS[@]+"${KEYS[@]}"}; do
         eval "[[ \"\${$2[\$KEY]}\" != \$1 ]]" || {
             echo "$KEY"
             return
@@ -420,6 +420,10 @@ function lk_echoc() {
 function lk_console_message() {
     local PREFIX="${LK_CONSOLE_PREFIX-==> }" MESSAGE="$1" MESSAGE2 SPACES COLOUR BOLD_COLOUR
     shift
+    ! lk_in_string $'\n' "$MESSAGE" || {
+        SPACES=$'\n'"$(lk_repeat " " "$((${#PREFIX}))")"
+        MESSAGE="${MESSAGE//$'\n'/$SPACES}"
+    }
     [ "$#" -le "1" ] || {
         MESSAGE2="$1"
         shift
