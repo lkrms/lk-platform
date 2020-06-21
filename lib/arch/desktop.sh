@@ -327,7 +327,7 @@ PAC_INSTALL+=(
 
 {
 
-    ! offer_sudo_password_bypass ||
+    ! lk_sudo_offer_nopasswd ||
         {
             lk_console_message "Disabling password-based login as root"
             sudo passwd -l root
