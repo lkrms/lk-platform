@@ -10,6 +10,7 @@
     . "$LK_BASE/etc/server.conf"
 
 . "$LK_BASE/lib/bash/core.sh"
+. "$LK_BASE/lib/bash/assert.sh"
 
 function _lk_include() {
     local INCLUDE INCLUDE_PATH

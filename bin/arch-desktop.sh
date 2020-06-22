@@ -4,26 +4,31 @@
 set -euo pipefail
 lk_die() { echo "$1" >&2 && exit 1; }
 [ -n "${LK_BASE:-}" ] || { BS="${BASH_SOURCE[0]}" && [ ! -L "$BS" ] &&
-    LK_BASE="$(cd "$(dirname "$BS")/../.." && pwd -P)" &&
+    LK_BASE="$(cd "$(dirname "$BS")/.." && pwd -P)" &&
     [ -d "$LK_BASE/lib/bash" ] || lk_die "${BS:+$BS: }LK_BASE not set"; }
 
-include=hosting . "$LK_BASE/lib/bash/common.sh"
+include=deploy,php,httpd . "$LK_BASE/lib/bash/common.sh"
 
-# assert_is_desktop
-# assert_not_root
+lk_assert_not_root
 
-PAC_INSTALL=()
-AUR_INSTALL=()
+PACMAN_PACKAGES=()
+AUR_PACKAGES=()
 
+# if installed, won't be marked as a dependency
 PAC_KEEP=(
-    asciicast2gif
+    aurutils
+
+    #
+    azure-cli
+    sfdx-cli
 
     #
     mongodb-bin
 
     #
-    azure-cli
-    sfdx-cli
+    asciicast2gif
+    chromium
+    woeusb
 )
 
 PAC_REMOVE=(
@@ -37,7 +42,7 @@ PAC_REMOVE=(
 
 # hardware-related
 lk_is_virtual || {
-    PAC_INSTALL+=(
+    PACMAN_PACKAGES+=(
         guvcview # webcam utility
         linssid  # wireless scanner
 
@@ -53,18 +58,18 @@ lk_is_virtual || {
         )
         i2c-tools # provides i2c-dev module (required by ddcutil)
     )
-    AUR_INSTALL+=(
+    AUR_PACKAGES+=(
         ddcutil
         r8152-dkms # common USB / USB-C NIC
     )
 }
-AUR_INSTALL+=(
+AUR_PACKAGES+=(
     brother-hl5450dn
     brother-hll3230cdw
 )
 
 # terminal-based
-PAC_INSTALL+=(
+PACMAN_PACKAGES+=(
     # shells
     asciinema
     ksh
@@ -110,12 +115,12 @@ PAC_INSTALL+=(
     sysfsutils
 )
 
-AUR_INSTALL+=(
+AUR_PACKAGES+=(
     vpn-slice
 )
 
 # desktop
-PAC_INSTALL+=(
+PACMAN_PACKAGES+=(
     caprine
     copyq
     firefox-i18n-en-gb
@@ -165,6 +170,7 @@ PAC_INSTALL+=(
 
     # multimedia - playback
     clementine
+    gst-plugins-bad
 
     # multimedia - audio
     abcde
@@ -202,7 +208,7 @@ PAC_INSTALL+=(
     xorg-xev
 )
 
-AUR_INSTALL+=(
+AUR_PACKAGES+=(
     espanso
     ghostwriter
     google-chrome
@@ -227,7 +233,7 @@ AUR_INSTALL+=(
 )
 
 # development
-PAC_INSTALL+=(
+PACMAN_PACKAGES+=(
     autopep8
     bash-language-server
     dbeaver
@@ -291,7 +297,7 @@ PAC_INSTALL+=(
     aws-cli
 )
 
-AUR_INSTALL+=(
+AUR_PACKAGES+=(
     sublime-text-dev
     trickle
     vscodium-bin
@@ -305,14 +311,14 @@ AUR_INSTALL+=(
 )
 
 # development services
-PAC_INSTALL+=(
+PACMAN_PACKAGES+=(
     apache
     mariadb
     php-fpm
 )
 
 # VMs and containers
-PAC_INSTALL+=(
+PACMAN_PACKAGES+=(
     # KVM/QEMU
     dnsmasq
     ebtables
@@ -325,16 +331,20 @@ PAC_INSTALL+=(
     docker
 )
 
-{
+. "$LK_BASE/lib/arch/packages.sh"
 
+{
     ! lk_sudo_offer_nopasswd ||
         {
-            lk_console_message "Disabling password-based login as root"
-            sudo passwd -l root
+            PASSWORD_STATUS="$(sudo passwd -S root | cut -d' ' -f2)"
+            [ "$PASSWORD_STATUS" = "L" ] || {
+                lk_console_message "Disabling password-based login as root"
+                sudo passwd -l root
+            }
 
-            lk_console_message "Disabling polkit password prompts"
             ! sudo test -d "/etc/polkit-1/rules.d" ||
-                sudo test -e "/etc/polkit-1/rules.d/49-wheel.rules" ||
+                sudo test -e "/etc/polkit-1/rules.d/49-wheel.rules" || {
+                lk_console_message "Disabling polkit password prompts"
                 sudo tee "/etc/polkit-1/rules.d/49-wheel.rules" <<EOF >/dev/null
 // Allow any user in the 'wheel' group to take any action without
 // entering a password.
@@ -344,6 +354,7 @@ polkit.addRule(function (action, subject) {
     }
 });
 EOF
+            }
         }
 
     PAC_TO_REMOVE=($(comm -12 <(pacman -Qq | sort | uniq) <(lk_echo_array "${PAC_REMOVE[@]}" | sort | uniq)))
@@ -352,13 +363,16 @@ EOF
         sudo pacman -R "${PAC_TO_REMOVE[@]}"
     }
 
-    PAC_TO_MARK_EXPLICIT=($(comm -12 <(pacman -Qdq | sort | uniq) <(lk_echo_array "${PAC_INSTALL[@]}" "${AUR_INSTALL[@]}" ${PAC_KEEP[@]+"${PAC_KEEP[@]}"} | sort | uniq)))
-    [ "${#PAC_TO_MARK_EXPLICIT[@]}" -eq "0" ] || {
-        lk_console_message "Setting install reasons"
+    lk_console_message "Checking install reasons"
+    PAC_EXPLICIT=($(lk_echo_array "${PACMAN_PACKAGES[@]}" "${AUR_PACKAGES[@]}" ${PAC_KEEP[@]+"${PAC_KEEP[@]}"} | sort | uniq))
+    PAC_TO_MARK_ASDEPS=($(comm -23 <(pacman -Qeq | sort | uniq) <(lk_echo_array "${PAC_EXPLICIT[@]}")))
+    PAC_TO_MARK_EXPLICIT=($(comm -12 <(pacman -Qdq | sort | uniq) <(lk_echo_array "${PAC_EXPLICIT[@]}")))
+    [ "${#PAC_TO_MARK_ASDEPS[@]}" -eq "0" ] ||
+        sudo pacman -D --asdeps "${PAC_TO_MARK_ASDEPS[@]}"
+    [ "${#PAC_TO_MARK_EXPLICIT[@]}" -eq "0" ] ||
         sudo pacman -D --asexplicit "${PAC_TO_MARK_EXPLICIT[@]}"
-    }
 
-    PAC_TO_INSTALL=($(comm -13 <(pacman -Qeq | sort | uniq) <(lk_echo_array "${PAC_INSTALL[@]}" | sort | uniq)))
+    PAC_TO_INSTALL=($(comm -13 <(pacman -Qeq | sort | uniq) <(lk_echo_array "${PACMAN_PACKAGES[@]}" | sort | uniq)))
     [ "${#PAC_TO_INSTALL[@]}" -eq "0" ] || {
         lk_console_message "Installing new packages from repo"
         sudo pacman -Sy "${PAC_TO_INSTALL[@]}"
@@ -367,20 +381,26 @@ EOF
     lk_console_message "Upgrading installed packages"
     sudo pacman -Syu
 
-    AUR_TO_INSTALL=($(comm -13 <(pacman -Qeq | sort | uniq) <(lk_echo_array "${AUR_INSTALL[@]}" | sort | uniq)))
-    [ "${#AUR_TO_INSTALL[@]}" -eq "0" ] || {
-        lk_console_message "Installing new packages from AUR"
-        yay -Sy --aur "${AUR_TO_INSTALL[@]}"
-    }
-
-    lk_console_message "Upgrading installed AUR packages"
-    yay -Syu --aur
+    if [ "${#AUR_PACKAGES[@]}" -gt "0" ]; then
+        lk_command_exists yay || {
+            lk_console_message "Installing yay to manage AUR packages"
+            eval "$YAY_SCRIPT"
+        }
+        AUR_TO_INSTALL=($(comm -13 <(pacman -Qeq | sort | uniq) <(lk_echo_array "${AUR_PACKAGES[@]}" | sort | uniq)))
+        [ "${#AUR_TO_INSTALL[@]}" -eq "0" ] || {
+            lk_console_message "Installing new packages from AUR"
+            yay -Sy --aur "${AUR_TO_INSTALL[@]}"
+        }
+        lk_console_message "Upgrading installed AUR packages"
+        yay -Syu --aur
+    fi
 
     ! PAC_TO_PURGE=($(pacman -Qdttq)) ||
         [ "${#PAC_TO_PURGE[@]}" -eq "0" ] ||
         {
-            lk_echo_array "${PAC_TO_PURGE[@]}" | lk_console_list "Orphaned:" "package" "packages"
-            ! get_confirmation "Remove?" Y ||
+            lk_echo_array "${PAC_TO_PURGE[@]}" |
+                lk_console_list "Installed but no longer required:" package packages
+            ! lk_confirm "Remove the above?" Y ||
                 sudo pacman -Rns "${PAC_TO_PURGE[@]}"
         }
 
@@ -424,8 +444,7 @@ EOF
         lk_enable_php_entry "extension=$PHP_EXT"
     done
     lk_enable_php_entry "zend_extension=opcache"
-    sudo mkdir -pm700 "/var/cache/php/opcache" &&
-        sudo chown "http:" "/var/cache/php/opcache"
+    sudo install -d -m 0700 -o "http" -g "http" "/var/cache/php/opcache"
     lk_apply_php_setting "memory_limit" "128M"
     lk_apply_php_setting "error_reporting" "E_ALL"
     lk_apply_php_setting "display_errors" "On"
@@ -443,7 +462,8 @@ EOF
         PHP_INI_FILE="/etc/php/conf.d/memcached.ini" \
             lk_enable_php_entry "extension=memcached.so"
     [ ! -f "/etc/php/conf.d/xdebug.ini" ] || {
-        mkdir -pm777 "$HOME/.tmp/"{cachegrind,trace}
+        install -d -m 0777 "$HOME/.tmp/cachegrind"
+        install -d -m 0777 "$HOME/.tmp/trace"
         PHP_INI_FILE="/etc/php/conf.d/xdebug.ini"
         lk_enable_php_entry "zend_extension=xdebug.so"
         lk_apply_php_setting "xdebug.remote_enable" "On"
@@ -487,11 +507,10 @@ EOF
     sudo systemctl enable --now php-fpm || true
 
     HTTPD_CONF_FILE="/etc/httpd/conf/httpd.conf"
-    sudo mkdir -p "/srv/http" &&
-        sudo chown -c "$USER:" "/srv/http" &&
+    sudo install -d -m 0755 -o "$USER" -g "$(id -gn)" "/srv/http" &&
         mkdir -p "/srv/http/localhost/html" "/srv/http/127.0.0.1" &&
         { [ -e "/srv/http/127.0.0.1/html" ] || ln -s "../localhost/html" "/srv/http/127.0.0.1/html"; } &&
-        lk_safe_symlink "$CONFIG_DIR/httpd-vhost-alias.conf" "/etc/httpd/conf/extra/httpd-vhost-alias.conf" &&
+        lk_safe_symlink "$LK_ROOT/etc/httpd/dev-defaults.conf" "/etc/httpd/conf/extra/httpd-dev-defaults.conf" &&
         lk_enable_httpd_entry "Include conf/extra/httpd-vhost-alias.conf" &&
         lk_enable_httpd_entry "LoadModule alias_module modules/mod_alias.so" &&
         lk_enable_httpd_entry "LoadModule dir_module modules/mod_dir.so" &&
@@ -513,5 +532,4 @@ EOF
     unset SUDO_OR_NOT
 
     exit
-
 }

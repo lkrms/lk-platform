@@ -365,14 +365,8 @@ fi
 
 if [ "${#AUR_PACKAGES[@]}" -gt "0" ]; then
     lk_console_message "Installing AUR packages"
-    AUR_SCRIPT="$(
-        cat <<EOF
-YAY_DIR="\$(mktemp -d)" &&
-    git clone "https://aur.archlinux.org/yay.git" "\$YAY_DIR" &&
-    cd "\$YAY_DIR" && makepkg --install --noconfirm &&
-    yay -Sy --aur --needed --noconfirm ${AUR_PACKAGES[*]}
-EOF
-    )"
+    AUR_SCRIPT="{ $YAY_SCRIPT; } &&
+    yay -Sy --aur --needed --noconfirm ${AUR_PACKAGES[*]}"
     in_target sudo -H -u "$TARGET_USERNAME" \
         bash -c "$AUR_SCRIPT" >&6 2>&7
 fi
