@@ -108,6 +108,7 @@ PACMAN_PACKAGES+=(
     # system
     acme.sh
     at
+    $(pacman -Sgq base-devel) # TODO: add lk_pacman_group_packages function
     cloud-utils
     cronie
     hwinfo
