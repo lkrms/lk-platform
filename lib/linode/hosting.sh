@@ -11,6 +11,7 @@
 # <UDF name="ADMIN_USERS" label="Admin users to create (comma-delimited)" default="linac" />
 # <UDF name="ADMIN_EMAIL" label="Forwarding address for system email" example="tech@linacreative.com" />
 # <UDF name="TRUSTED_IP_ADDRESSES" label="Trusted IP addresses (comma-delimited)" example="10.0.0.0/8,172.16.0.0/12,192.168.0.0/16" default="" />
+# <UDF name="SSH_TRUSTED_ONLY" label="Block SSH access from untrusted IP addresses (ignored if no trusted IP addresses are specified)" oneof="Y,N" default="N" />
 # <UDF name="REJECT_OUTPUT" label="Reject outgoing traffic by default" oneof="Y,N" default="N" />
 # <UDF name="ACCEPT_OUTPUT_HOSTS" label="Accept outgoing traffic to hosts (comma-delimited)" example="192.168.128.0/17,ip-ranges.amazonaws.com" default="" />
 # <UDF name="MYSQL_USERNAME" label="MySQL admin username" example="dbadmin" default="" />
@@ -118,6 +119,15 @@ function keep_trying() {
     fi
 }
 
+# these are ONLY suitable for filtering trusted addresses (inadequate for validation)
+function is_ipv4() {
+    [[ "$1" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]+)?$ ]]
+}
+
+function is_ipv6() {
+    [[ "$1" =~ ^(([0-9a-fA-F]{1,4}:)*|:)+(:|(:[0-9a-fA-F]{1,4})*)+(/[0-9]+)?$ ]]
+}
+
 function iptables() {
     command iptables "$@"
     command ip6tables "$@"
@@ -204,6 +214,7 @@ HOST_DOMAIN="${HOST_DOMAIN#www.}"
 HOST_ACCOUNT="${HOST_ACCOUNT:-${HOST_DOMAIN%%.*}}"
 ADMIN_USERS="${ADMIN_USERS:-linac}"
 TRUSTED_IP_ADDRESSES="${TRUSTED_IP_ADDRESSES:-}"
+SSH_TRUSTED_ONLY="${SSH_TRUSTED_ONLY:-N}"
 REJECT_OUTPUT="${REJECT_OUTPUT:-N}"
 ACCEPT_OUTPUT_HOSTS="${ACCEPT_OUTPUT_HOSTS:-}"
 MYSQL_USERNAME="${MYSQL_USERNAME:-}"
@@ -232,7 +243,8 @@ log "Environment:" \
 # don't propagate field values to the environment of other commands
 export -n \
     HOST_DOMAIN HOST_ACCOUNT \
-    ADMIN_USERS TRUSTED_IP_ADDRESSES MYSQL_USERNAME MYSQL_PASSWORD \
+    ADMIN_USERS TRUSTED_IP_ADDRESSES SSH_TRUSTED_ONLY \
+    MYSQL_USERNAME MYSQL_PASSWORD \
     INNODB_BUFFER_SIZE OPCACHE_MEMORY_CONSUMPTION \
     SMTP_RELAY EMAIL_BLACKHOLE \
     AUTO_REBOOT AUTO_REBOOT_TIME \
@@ -607,11 +619,10 @@ ${ACCEPT_OUTPUT_HOSTS:+    ${ACCEPT_OUTPUT_HOSTS//,/$'\n'    }
     OUTPUT_ALLOW_IPV6=()
     for i in "${!OUTPUT_ALLOW[@]}"; do
         ALLOW="${OUTPUT_ALLOW[$i]}"
-        # these patterns would be inadequate for validation but are sufficient for filtering
-        if [[ "$ALLOW" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]+)?$ ]]; then
+        if is_ipv4 "$ALLOW"; then
             OUTPUT_ALLOW_IPV4+=("$ALLOW")
             unset "OUTPUT_ALLOW[$i]"
-        elif [[ "$ALLOW" =~ ^(([0-9a-fA-F]{1,4}:)*|:)+(:|(:[0-9a-fA-F]{1,4})*)+(/[0-9]+)?$ ]]; then
+        elif is_ipv6 "$ALLOW"; then
             OUTPUT_ALLOW_IPV6+=("$ALLOW")
             unset "OUTPUT_ALLOW[$i]"
         fi
@@ -632,6 +643,7 @@ iptables-restore <<EOF
 :${P}input - [0:0]
 :${P}output - [0:0]
 :${P}reject - [0:0]
+:${P}trusted - [0:0]
 -A INPUT -i lo -j ACCEPT
 -A INPUT -j ${P}check
 -A INPUT -j ${P}input
@@ -651,7 +663,7 @@ iptables-restore <<EOF
 -A ${P}check -m conntrack --ctstate INVALID -j DROP
 -A ${P}check -p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN -m conntrack --ctstate NEW -j REJECT --reject-with tcp-reset
 -A ${P}check -p icmp -m icmp --icmp-type 8 -m conntrack --ctstate NEW -j ACCEPT
--A ${P}input -p tcp -m tcp --dport 22 -j ACCEPT
+-A ${P}input -p tcp -m tcp --dport 22 -j ${P}trusted
 -A ${P}reject -p udp -m udp -j REJECT --reject-with icmp-port-unreachable
 -A ${P}reject -p tcp -m tcp -j REJECT --reject-with tcp-reset
 -A ${P}reject -j REJECT --reject-with icmp-proto-unreachable
@@ -668,6 +680,7 @@ ip6tables-restore <<EOF
 :${P}input - [0:0]
 :${P}output - [0:0]
 :${P}reject - [0:0]
+:${P}trusted - [0:0]
 -A INPUT -i lo -j ACCEPT
 -A INPUT -j ${P}check_ll
 -A INPUT -j ${P}check
@@ -707,7 +720,7 @@ ip6tables-restore <<EOF
 -A ${P}check_ll -p ipv6-icmp -m hl --hl-eq 255 -m icmp6 --icmpv6-type 141 -j ACCEPT
 -A ${P}check_ll -p ipv6-icmp -m hl --hl-eq 255 -m icmp6 --icmpv6-type 142 -j ACCEPT
 -A ${P}check_ll -s fe80::/10 -p ipv6-icmp -m icmp6 --icmpv6-type 143 -j ACCEPT
--A ${P}input -p tcp -m tcp --dport 22 -j ACCEPT
+-A ${P}input -p tcp -m tcp --dport 22 -j ${P}trusted
 -A ${P}reject -p udp -m udp -j REJECT --reject-with icmp6-port-unreachable
 -A ${P}reject -p tcp -m tcp -j REJECT --reject-with tcp-reset
 -A ${P}reject -j REJECT --reject-with icmp6-adm-prohibited
@@ -721,6 +734,17 @@ else
     done
     for IPV6 in "${OUTPUT_ALLOW_IPV6[@]}"; do
         command ip6tables -A "${P}output" -d "$IPV6" -j ACCEPT
+    done
+fi
+if [ "$SSH_TRUSTED_ONLY" = "N" ] || [ -z "$TRUSTED_IP_ADDRESSES" ]; then
+    iptables -A "${P}trusted" -j ACCEPT
+else
+    for IP in ${TRUSTED_IP_ADDRESSES[*]//,/ }; do
+        if is_ipv4 "$IP"; then
+            command iptables -A "${P}trusted" -s "$IP" -j ACCEPT
+        elif is_ipv6 "$IP"; then
+            command ip6tables -A "${P}trusted" -s "$IP" -j ACCEPT
+        fi
     done
 fi
 
@@ -1154,7 +1178,8 @@ EOF
             -out "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.cert"
         rm -f "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.csr"
 
-        ln -s "../sites-available/$HOST_ACCOUNT.conf" "/etc/apache2/sites-enabled/$HOST_ACCOUNT.conf"
+        [ "${HOST_SITE_ENABLE:-N}" -eq "N" ] ||
+            ln -s "../sites-available/$HOST_ACCOUNT.conf" "/etc/apache2/sites-enabled/$HOST_ACCOUNT.conf"
         log_file "/etc/apache2/sites-available/$HOST_ACCOUNT.conf"
 
         log "Configuring PHP-FPM umask for group-writable files"
