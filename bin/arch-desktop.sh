@@ -240,6 +240,7 @@ PACMAN_PACKAGES+=(
     dbeaver
     eslint
     geckodriver
+    nodejs-less
     python-pylint
     qcachegrind
     tidy

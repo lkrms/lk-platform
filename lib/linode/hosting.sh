@@ -1178,7 +1178,7 @@ EOF
             -out "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.cert"
         rm -f "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.csr"
 
-        [ "${HOST_SITE_ENABLE:-N}" -eq "N" ] ||
+        [ "${HOST_SITE_ENABLE:-N}" = "N" ] ||
             ln -s "../sites-available/$HOST_ACCOUNT.conf" "/etc/apache2/sites-enabled/$HOST_ACCOUNT.conf"
         log_file "/etc/apache2/sites-available/$HOST_ACCOUNT.conf"
 

@@ -205,21 +205,27 @@ fi
 ROOT_PARTITION_TYPE="$(_lsblk FSTYPE "$ROOT_PARTITION")" || lk_die "no block device at $ROOT_PARTITION"
 BOOT_PARTITION_TYPE="$(_lsblk FSTYPE "$BOOT_PARTITION")" || lk_die "no block device at $BOOT_PARTITION"
 
-if [ "$BOOT_PARTITION_TYPE" = "vfat" ] &&
-    ! lk_confirm "$BOOT_PARTITION already has a vfat filesystem. Leave it as-is?" ||
-    [ -z "$BOOT_PARTITION_TYPE" ]; then
+KEEP_BOOT_PARTITION=0
+case "$BOOT_PARTITION_TYPE" in
+vfat)
+    ! lk_confirm "$BOOT_PARTITION already has a vfat filesystem. Leave it as-is?" || KEEP_BOOT_PARTITION=1
+    ;;&
 
-    lk_is_true "$REPARTITIONED" ||
-        lk_confirm "OK to format $BOOT_PARTITION as FAT32?"
+vfat | "")
+    if lk_is_false "$KEEP_BOOT_PARTITION"; then
+        lk_is_true "$REPARTITIONED" ||
+            lk_confirm "OK to format $BOOT_PARTITION as FAT32?"
 
-    lk_console_message "Formatting $BOOT_PARTITION"
-    mkfs.fat -vn ESP -F 32 "$BOOT_PARTITION"
+        lk_console_message "Formatting $BOOT_PARTITION"
+        mkfs.fat -vn ESP -F 32 "$BOOT_PARTITION"
+    fi
+    ;;
 
-elif [ "$BOOT_PARTITION_TYPE" != "vfat" ]; then
-
+*)
     lk_die "unexpected filesystem at $BOOT_PARTITION: $BOOT_PARTITION_TYPE"
+    ;;
 
-fi
+esac
 
 [ -z "$ROOT_PARTITION_TYPE" ] ||
     lk_console_warning "Unexpected filesystem at $ROOT_PARTITION: $ROOT_PARTITION_TYPE"
@@ -371,6 +377,21 @@ if [ "${#AUR_PACKAGES[@]}" -gt "0" ]; then
         bash -c "$AUR_SCRIPT" >&6 2>&7
 fi
 
+! lk_is_true "$KEEP_BOOT_PARTITION" || {
+    lk_console_warning "\
+If installing to a boot partition created by Windows, filesystem damage
+may cause efibootmgr to fail with 'Input/output error'"
+    ! lk_confirm "Run 'dosfsck -a $BOOT_PARTITION' before installing boot loader?" Y || {
+        lk_console_message "Running filesystem check on partition:" "$BOOT_PARTITION"
+        umount "$BOOT_PARTITION" &&
+            {
+                EXIT_STATUS=0
+                dosfsck -a "$BOOT_PARTITION" || EXIT_STATUS="$?"
+                lk_console_detail "dosfsck exit status:" "$EXIT_STATUS"
+            } &&
+            mount -o "${MOUNT_OPTIONS:-defaults}${BOOT_OPTION_EXTRA:-}" "$BOOT_PARTITION" /mnt/boot || exit
+    }
+}
 lk_console_message "Installing boot loader"
 lk_keep_original "/mnt/etc/default/grub"
 ! lk_is_virtual || CMDLINE_EXTRA="console=tty0 console=ttyS0"
@@ -378,20 +399,12 @@ sed -Ei -e 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=saved/' \
     -e 's/^#?GRUB_SAVEDEFAULT=.*/GRUB_SAVEDEFAULT=true/' \
     -e "s/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT=\"quiet loglevel=3 audit=0${CMDLINE_EXTRA:+ $CMDLINE_EXTRA}\"/" \
     /mnt/etc/default/grub
-i=0
 while :; do
-    ((++i))
-    { [ "$i" -eq "1" ] ||
-        ! lk_confirm "Run 'dosfsck $BOOT_PARTITION' first?" Y ||
-        dosfsck "$BOOT_PARTITION"; } &&
-        in_target grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB &&
+    in_target grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB &&
         in_target grub-mkconfig -o /boot/grub/grub.cfg &&
         GRUB_INSTALLED=1 &&
         break
     lk_console_message "Boot loader installation failed (exit status $?)"
-    [ "$i" -gt "1" ] || lk_console_detail "\
-If installing to a boot partition created by Windows, filesystem damage
-may cause an 'Input/output error' where a second attempt succeeds"
     lk_confirm "Try again?" Y || break
 done
 
