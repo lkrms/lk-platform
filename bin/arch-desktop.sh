@@ -7,7 +7,7 @@ lk_die() { echo "$1" >&2 && exit 1; }
     LK_BASE="$(cd "$(dirname "$BS")/.." && pwd -P)" &&
     [ -d "$LK_BASE/lib/bash" ] || lk_die "${BS:+$BS: }LK_BASE not set"; }
 
-include=deploy,php,httpd . "$LK_BASE/lib/bash/common.sh"
+include=deploy,linux,httpd,php . "$LK_BASE/lib/bash/common.sh"
 
 lk_assert_not_root
 
@@ -27,7 +27,6 @@ PAC_KEEP=(
 
     #
     asciicast2gif
-    chromium
     woeusb
 )
 
@@ -60,7 +59,6 @@ lk_is_virtual || {
     )
     AUR_PACKAGES+=(
         ddcutil
-        r8152-dkms # common USB / USB-C NIC
     )
 }
 AUR_PACKAGES+=(
@@ -123,6 +121,7 @@ AUR_PACKAGES+=(
 # desktop
 PACMAN_PACKAGES+=(
     caprine
+    chromium
     copyq
     firefox-i18n-en-gb
     flameshot
@@ -212,7 +211,6 @@ PACMAN_PACKAGES+=(
 AUR_PACKAGES+=(
     espanso
     ghostwriter
-    google-chrome
     masterpdfeditor-free
     skypeforlinux-stable-bin
     spotify
@@ -406,22 +404,27 @@ EOF
                 sudo pacman -Rns "${PAC_TO_PURGE[@]}"
         }
 
+    PAC_KEPT=($(comm -12 <(pacman -Qeq | sort | uniq) <(lk_echo_array ${PAC_KEEP[@]+"${PAC_KEEP[@]}"} | sort | uniq)))
+    [ "${#PAC_KEPT[@]}" -eq "0" ] ||
+        lk_echo_array "${PAC_KEPT[@]}" |
+        lk_console_list "Marked 'explicitly installed' because of PAC_KEEP:" package packages
+
     SUDO_OR_NOT=1
 
     lk_apply_setting "/etc/ssh/sshd_config" "PasswordAuthentication" "no" " " "#" " " &&
         lk_apply_setting "/etc/ssh/sshd_config" "AcceptEnv" "LANG LC_*" " " "#" " " &&
-        sudo systemctl enable --now sshd || true
+        lk_systemctl_enable sshd
 
-    sudo systemctl enable --now atd || true
+    lk_systemctl_enable atd
 
-    sudo systemctl enable --now cronie || true
+    lk_systemctl_enable cronie
 
-    sudo systemctl enable --now ntpd || true
+    lk_systemctl_enable ntpd
 
-    sudo systemctl enable --now org.cups.cupsd || true
+    lk_systemctl_enable org.cups.cupsd
 
     lk_apply_setting "/etc/bluetooth/main.conf" "AutoEnable" "true" "=" "#" &&
-        sudo systemctl enable --now bluetooth
+        lk_systemctl_enable bluetooth
 
     lk_apply_setting "/etc/conf.d/libvirt-guests" "ON_SHUTDOWN" "shutdown" "=" "# " &&
         lk_apply_setting "/etc/conf.d/libvirt-guests" "SHUTDOWN_TIMEOUT" "300" "=" "# " &&
@@ -432,14 +435,14 @@ EOF
                     echo "allow all" | sudo tee "/etc/qemu/bridge.conf" >/dev/null
             }
         } &&
-        sudo systemctl enable --now libvirtd libvirt-guests || true
+        lk_systemctl_enable libvirtd libvirt-guests
 
     sudo usermod --append --groups docker "$USER" &&
-        sudo systemctl enable --now docker || true
+        lk_systemctl_enable docker
 
     { sudo test -d "/var/lib/mysql/mysql" ||
         sudo mariadb-install-db --user="mysql" --basedir="/usr" --datadir="/var/lib/mysql"; } &&
-        sudo systemctl enable --now mysqld || true
+        lk_systemctl_enable mysqld
 
     PHP_INI_FILE=/etc/php/php.ini
     for PHP_EXT in bcmath curl gd gettext imap intl mysqli pdo_sqlite soap sqlite3 xmlrpc zip; do
@@ -506,7 +509,7 @@ EOF
             lk_apply_php_setting "php_flag[display_errors]" "Off"
             lk_apply_php_setting "php_flag[display_startup_errors]" "Off"
         }
-    sudo systemctl enable --now php-fpm || true
+    lk_systemctl_enable php-fpm
 
     HTTPD_CONF_FILE="/etc/httpd/conf/httpd.conf"
     sudo install -d -m 0755 -o "$USER" -g "$(id -gn)" "/srv/http" &&
@@ -525,7 +528,7 @@ EOF
         lk_enable_httpd_entry "LoadModule vhost_alias_module modules/mod_vhost_alias.so" &&
         sudo usermod --append --groups "http" "$USER" &&
         sudo usermod --append --groups "$(id -gn)" "http" &&
-        sudo systemctl enable --now httpd || true
+        lk_systemctl_enable httpd
 
     ! lk_command_exists vim || lk_safe_symlink "$(command -v vim)" "/usr/local/bin/vi"
     ! lk_command_exists xfce4-terminal || lk_safe_symlink "$(command -v xfce4-terminal)" "/usr/local/bin/xterm"

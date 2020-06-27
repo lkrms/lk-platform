@@ -350,11 +350,28 @@ fi
 lk_console_detail "Enabling NetworkManager"
 in_target systemctl enable NetworkManager.service
 
-if ! lk_is_virtual &&
-    { is_ssd "$ROOT_PARTITION" || is_ssd "$BOOT_PARTITION"; }; then
-    lk_console_detail "Enabling fstrim (TRIM support detected)"
-    # replace the default timer
-    cat <<EOF >"/mnt/etc/systemd/system/fstrim.timer"
+if ! lk_is_virtual; then
+    lk_console_detail "Configuring TLP"
+    in_target systemctl enable tlp.service
+    in_target systemctl enable NetworkManager-dispatcher.service
+    in_target systemctl mask systemd-rfkill.service
+    in_target systemctl mask systemd-rfkill.socket
+    cat <<EOF >"/mnt/etc/tlp.d/90-lk-defaults.conf"
+# Increase performance (and energy consumption, of course)
+CPU_ENERGY_PERF_POLICY_ON_AC=performance
+CPU_ENERGY_PERF_POLICY_ON_BAT=balance_performance
+
+# Exclude RTL8153 (r8152) from autosuspend (common USB / USB-C NIC)
+USB_BLACKLIST="0bda:8153"
+
+# Allow phones to charge
+USB_BLACKLIST_PHONE=1
+EOF
+
+    if { is_ssd "$ROOT_PARTITION" || is_ssd "$BOOT_PARTITION"; }; then
+        lk_console_detail "Enabling fstrim (TRIM support detected)"
+        # replace the default timer
+        cat <<EOF >"/mnt/etc/systemd/system/fstrim.timer"
 [Unit]
 Description=Discard unused blocks 30 seconds after booting, then weekly
 
@@ -366,7 +383,8 @@ AccuracySec=1h
 [Install]
 WantedBy=timers.target
 EOF
-    in_target systemctl enable fstrim.timer
+        in_target systemctl enable fstrim.timer
+    fi
 fi
 
 if [ "${#AUR_PACKAGES[@]}" -gt "0" ]; then

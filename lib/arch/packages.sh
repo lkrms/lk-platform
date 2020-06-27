@@ -159,6 +159,9 @@ lk_is_virtual && {
         wpa_supplicant
 
         #
+        fwupd
+
+        #
         b43-fwcutter
         ipw2100-fw
         ipw2200-fw
@@ -167,6 +170,8 @@ lk_is_virtual && {
         PACMAN_PACKAGES+=(intel-ucode)
     ! grep -Eq '^vendor_id\s*:\s+AuthenticAMD$' /proc/cpuinfo ||
         PACMAN_PACKAGES+=(amd-ucode)
+    ! grep -iq 'thinkpad' /sys/devices/virtual/dmi/id/product_family ||
+        PACMAN_PACKAGES+=(acpi_call)
 
     PACMAN_DESKTOP_PACKAGES+=(
         mesa
