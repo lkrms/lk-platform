@@ -302,7 +302,7 @@ else
     in_target systemctl enable lightdm.service
 
     mkdir -p "/mnt/etc/skel/.config/xfce4" &&
-        ln -s "$LK_BASE/etc/skel/.config/xfce4/xinitrc" \
+        ln -s "$LK_BASE/etc/xfce4/xinitrc" \
             "/mnt/etc/skel/.config/xfce4/xinitrc"
 fi
 
