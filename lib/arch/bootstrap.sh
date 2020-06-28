@@ -418,7 +418,7 @@ sed -Ei -e 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=saved/' \
     -e "s/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT=\"quiet loglevel=3 audit=0${CMDLINE_EXTRA:+ $CMDLINE_EXTRA}\"/" \
     /mnt/etc/default/grub
 install -v -d -m 0755 "/mnt/usr/local/bin"
-install -v -m 0755 "/mnt/usr/local/bin/update-grub"
+install -v -m 0755 /dev/null "/mnt/usr/local/bin/update-grub"
 cat <<EOF >"/mnt/usr/local/bin/update-grub"
 #!/bin/bash
 
@@ -441,6 +441,5 @@ if lk_is_true "${GRUB_INSTALLED:-0}"; then
     lk_console_detail "Reboot at your leisure"
 else
     lk_console_detail "To install the boot loader manually:" \
-        'arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB &&
-        arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg'
+        'arch-chroot /mnt update-grub --install'
 fi
