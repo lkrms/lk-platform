@@ -409,6 +409,13 @@ EOF
         lk_echo_array "${PAC_KEPT[@]}" |
         lk_console_list "Marked 'explicitly installed' because of PAC_KEEP:" package packages
 
+    [ -e "/opt/opcache-gui" ] || {
+        lk_console_message "Installing opcache-gui"
+        sudo install -d -m 0755 -o "$USER" -g "$(id -gn)" "/opt/opcache-gui" &&
+            git clone "https://github.com/lkrms/opcache-gui.git" \
+                "/opt/opcache-gui"
+    }
+
     SUDO_OR_NOT=1
 
     lk_apply_setting "/etc/ssh/sshd_config" "PasswordAuthentication" "no" " " "#" " " &&
@@ -426,12 +433,12 @@ EOF
     lk_apply_setting "/etc/bluetooth/main.conf" "AutoEnable" "true" "=" "#" &&
         lk_systemctl_enable bluetooth
 
-    lk_apply_setting "/etc/conf.d/libvirt-guests" "ON_SHUTDOWN" "shutdown" "=" "# " &&
-        lk_apply_setting "/etc/conf.d/libvirt-guests" "SHUTDOWN_TIMEOUT" "300" "=" "# " &&
+    lk_apply_setting "/etc/conf.d/libvirt-guests" "ON_SHUTDOWN" "shutdown" "=" "#" &&
+        lk_apply_setting "/etc/conf.d/libvirt-guests" "SHUTDOWN_TIMEOUT" "300" "=" "#" &&
         sudo usermod --append --groups libvirt,kvm "$USER" &&
         {
             [ -e "/etc/qemu/bridge.conf" ] || {
-                sudo mkdir -p "/etc/qemu" &&
+                sudo install -d -m 0755 "/etc/qemu" &&
                     echo "allow all" | sudo tee "/etc/qemu/bridge.conf" >/dev/null
             }
         } &&
@@ -482,28 +489,21 @@ EOF
         lk_apply_php_setting "xdebug.trace_output_dir" "$HOME/.tmp/trace"
         lk_apply_php_setting "xdebug.trace_output_name" "trace.%H.%R.%u"
     }
-    [ ! -f "/etc/php/php-fpm.conf" ] ||
-        {
-            PHP_INI_FILE="/etc/php/php-fpm.conf"
-            lk_apply_php_setting "emergency_restart_threshold" "10" # restart FPM if 10 children are gone in 60 seconds
-            lk_apply_php_setting "emergency_restart_interval" "60"  #
-            lk_apply_php_setting "events.mechanism" "epoll"         # don't rely on auto detection
-        }
     [ ! -f "/etc/php/php-fpm.d/www.conf" ] ||
         {
-            sudo chgrp http "/var/log/httpd" &&
-                sudo chmod g+w "/var/log/httpd"
+            sudo install -d -m 0775 -o "root" -g "http" "/var/log/httpd"
             PHP_INI_FILE="/etc/php/php-fpm.d/www.conf"
-            lk_apply_php_setting "pm" "static"             # ondemand can't handle bursts: https://github.com/php/php-src/pull/1308
-            lk_apply_php_setting "pm.max_children" "50"    # MUST be >= MaxRequestWorkers in httpd.conf
-            lk_apply_php_setting "pm.max_requests" "0"     # don't respawn automatically
-            lk_apply_php_setting "rlimit_files" "524288"   # check `ulimit -Hn` and raise for user http in /etc/security/limits.d/ if required
-            lk_apply_php_setting "rlimit_core" "unlimited" # as above, but check `ulimit -Hc` instead
-            lk_apply_php_setting "pm.status_path" "/status"
-            lk_apply_php_setting "ping.path" "/ping"
+            # make it easier to spot memory leaks during development
+            lk_apply_php_setting "pm" "static"
+            lk_apply_php_setting "pm.max_children" "4"
+            lk_apply_php_setting "pm.max_requests" "0"
+            lk_apply_php_setting "request_terminate_timeout" "60"
+            lk_apply_php_setting "pm.status_path" "/php-fpm-status"
+            lk_apply_php_setting "ping.path" "/php-fpm-ping"
             lk_apply_php_setting "access.log" '/var/log/httpd/php-fpm-$pool.access.log'
-            lk_apply_php_setting "access.format" '"%R - %u %t \"%m %r%Q%q\" %s %f %{mili}d %{kilo}M %C%%"'
+            lk_apply_php_setting "access.format" '"%{REMOTE_ADDR}e - %u %t \"%m %r%Q%q\" %s %f %{mili}d %{kilo}M %C%%"'
             lk_apply_php_setting "catch_workers_output" "yes"
+            lk_apply_php_setting "php_admin_value[memory_limit]" "32M"
             lk_apply_php_setting "php_admin_value[error_log]" '/var/log/httpd/php-fpm-$pool.error.log'
             lk_apply_php_setting "php_admin_flag[log_errors]" "On"
             lk_apply_php_setting "php_flag[display_errors]" "Off"
@@ -514,9 +514,9 @@ EOF
     HTTPD_CONF_FILE="/etc/httpd/conf/httpd.conf"
     sudo install -d -m 0755 -o "$USER" -g "$(id -gn)" "/srv/http" &&
         mkdir -p "/srv/http/localhost/html" "/srv/http/127.0.0.1" &&
-        { [ -e "/srv/http/127.0.0.1/html" ] || ln -s "../localhost/html" "/srv/http/127.0.0.1/html"; } &&
-        lk_safe_symlink "$LK_ROOT/etc/httpd/dev-defaults.conf" "/etc/httpd/conf/extra/httpd-dev-defaults.conf" &&
-        lk_enable_httpd_entry "Include conf/extra/httpd-vhost-alias.conf" &&
+        { [ -e "/srv/http/127.0.0.1/html" ] || ln -sfT "../localhost/html" "/srv/http/127.0.0.1/html"; } &&
+        lk_safe_symlink "$LK_BASE/etc/httpd/dev-defaults.conf" "/etc/httpd/conf/extra/httpd-dev-defaults.conf" &&
+        lk_enable_httpd_entry "Include conf/extra/httpd-dev-defaults.conf" &&
         lk_enable_httpd_entry "LoadModule alias_module modules/mod_alias.so" &&
         lk_enable_httpd_entry "LoadModule dir_module modules/mod_dir.so" &&
         lk_enable_httpd_entry "LoadModule headers_module modules/mod_headers.so" &&
