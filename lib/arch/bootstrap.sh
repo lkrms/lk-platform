@@ -424,7 +424,7 @@ cat <<EOF >"/mnt/usr/local/bin/update-grub"
 
 set -euo pipefail
 
-[[ ! "${1:-}" =~ ^(-i|--install)$ ]] ||
+[[ ! "\${1:-}" =~ ^(-i|--install)\$ ]] ||
     grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
 grub-mkconfig -o /boot/grub/grub.cfg
 EOF
