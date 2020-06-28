@@ -245,14 +245,6 @@ mount -o "${MOUNT_OPTIONS:-defaults}${ROOT_OPTION_EXTRA:-}" "$ROOT_PARTITION" /m
     mkdir /mnt/boot &&
     mount -o "${MOUNT_OPTIONS:-defaults}${BOOT_OPTION_EXTRA:-}" "$BOOT_PARTITION" /mnt/boot || exit
 
-i=0
-for PARTITION in ${OTHER_OS_PARTITIONS[@]+"${OTHER_OS_PARTITIONS[@]}"}; do
-    MOUNT_DIR="/mnt/mnt/temp$i"
-    mkdir -p "$MOUNT_DIR" &&
-        mount "$PARTITION" "$MOUNT_DIR" || lk_die "unable to mount partition $PARTITION"
-    ((++i))
-done
-
 lk_console_message "Installing system"
 pacstrap /mnt "${PACMAN_PACKAGES[@]}" >&6 2>&7
 
@@ -295,7 +287,7 @@ echo "$TARGET_HOSTNAME" >"/mnt/etc/hostname"
 
 lk_console_detail "Configuring hosts"
 lk_keep_original "/mnt/etc/hosts"
-cat <<EOF >"/mnt/etc/hosts"
+cat <<EOF >>"/mnt/etc/hosts"
 127.0.0.1 localhost
 ::1 localhost
 127.0.1.1 $TARGET_HOSTNAME.localdomain $TARGET_HOSTNAME
@@ -395,6 +387,14 @@ if [ "${#AUR_PACKAGES[@]}" -gt "0" ]; then
         bash -c "$AUR_SCRIPT" >&6 2>&7
 fi
 
+i=0
+for PARTITION in ${OTHER_OS_PARTITIONS[@]+"${OTHER_OS_PARTITIONS[@]}"}; do
+    MOUNT_DIR="/mnt/mnt/temp$i"
+    mkdir -p "$MOUNT_DIR" &&
+        mount "$PARTITION" "$MOUNT_DIR" || lk_console_warning "unable to mount partition $PARTITION"
+    ((++i))
+done
+
 ! lk_is_true "$KEEP_BOOT_PARTITION" || {
     lk_console_warning "\
 If installing to a boot partition created by Windows, filesystem damage
@@ -417,9 +417,19 @@ sed -Ei -e 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=saved/' \
     -e 's/^#?GRUB_SAVEDEFAULT=.*/GRUB_SAVEDEFAULT=true/' \
     -e "s/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT=\"quiet loglevel=3 audit=0${CMDLINE_EXTRA:+ $CMDLINE_EXTRA}\"/" \
     /mnt/etc/default/grub
+install -v -d -m 0755 "/mnt/usr/local/bin"
+install -v -m 0755 "/mnt/usr/local/bin/update-grub"
+cat <<EOF >"/mnt/usr/local/bin/update-grub"
+#!/bin/bash
+
+set -euo pipefail
+
+[[ ! "${1:-}" =~ ^(-i|--install)$ ]] ||
+    grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
+grub-mkconfig -o /boot/grub/grub.cfg
+EOF
 while :; do
-    in_target grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB &&
-        in_target grub-mkconfig -o /boot/grub/grub.cfg &&
+    in_target update-grub --install &&
         GRUB_INSTALLED=1 &&
         break
     lk_console_message "Boot loader installation failed (exit status $?)"

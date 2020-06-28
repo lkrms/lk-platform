@@ -33,6 +33,7 @@ PACMAN_PACKAGES=(
 
     # basics
     bash-completion
+    bind-tools
     byobu
     curl
     diffutils
