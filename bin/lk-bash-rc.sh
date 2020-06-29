@@ -1,6 +1,10 @@
 #!/bin/bash
 # shellcheck disable=SC2030,SC2031
 
+unset LK_PROMPT_DISPLAYED
+
+[ ! -f "/etc/default/lk-platform" ] || . "/etc/default/lk-platform"
+
 [ -n "${LK_BASE:-}" ] ||
     eval "$(
         BS="${BASH_SOURCE[0]}"
@@ -16,7 +20,7 @@
 
 eval "$(
     shopt -s nullglob
-    for FILE in "$LK_BASE/lib/bash"/{core,httpd,iptables,php,wordpress}.sh; do
+    for FILE in "$LK_BASE/lib/bash"/{core,prompt,wordpress}.sh; do
         echo ". \"\$LK_BASE/lib/bash/$(basename "$FILE")\""
     done
 )"
@@ -54,4 +58,17 @@ function find_all() {
     gnu_find -L . -xdev -iname "*$FIND*" "$@"
 }
 
+shopt -s checkwinsize
+
+shopt -s histappend
+HISTCONTROL=ignorespace
+HISTIGNORE=
+HISTSIZE=
+HISTFILESIZE=
+HISTTIMEFORMAT="%b %_d %Y %H:%M:%S %z "
+
+[ ! -f "/usr/share/bash-completion/bash_completion" ] || . "/usr/share/bash-completion/bash_completion"
+
 export WP_CLI_CONFIG_PATH="$LK_BASE/etc/wp-cli.yml"
+
+[ "${LK_PROMPT:-1}" -ne "1" ] || lk_enable_prompt
