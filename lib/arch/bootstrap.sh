@@ -44,8 +44,9 @@ $(lsblk --output "NAME,RM,RO,SIZE,TYPE,FSTYPE,MOUNTPOINT" --paths)" >&2
 function exit_trap() {
     exec >&6 2>&7 6>&- 7>&-
     [ ! -d "/mnt/boot" ] || {
-        install -v -d -m 0755 "/mnt/var/log"
-        install -v -m 0750 -g "adm" "$LOG_FILE" "/mnt/var/log/lk-bootstrap.log"
+        install -v -d -m 0755 "/mnt/var/log" &&
+            install -v -m 0750 -g "adm" \
+                "$LOG_FILE" "/mnt/var/log/lk-bootstrap.log" || :
     }
 }
 
@@ -83,12 +84,12 @@ function in_target() {
 }
 
 function configure_ntp() {
-    [ -z "${NTP_SERVER:-}" ] || {
+    if [ -n "${NTP_SERVER:-}" ]; then
         lk_console_detail "Configuring NTP"
         lk_keep_original "$1"
         sed -Ei 's/^(server|pool)\b/#&/' "$1"
         echo "server $NTP_SERVER iburst" >>"$1"
-    }
+    fi
 }
 
 function configure_pacman() {
@@ -156,21 +157,21 @@ if [ "$#" -eq "3" ]; then
 
     before_install
 
-    lk_confirm "Repartition $1? ALL DATA WILL BE LOST." || exit
+    lk_confirm "Repartition $1? ALL DATA WILL BE LOST."
 
     lk_console_message "Partitioning $1"
     parted --script "$1" \
         mklabel gpt \
         mkpart fat32 2048s 260MiB \
         mkpart ext4 260MiB 100% \
-        set 1 boot on &&
-        partprobe "$1" &&
-        PARTITIONS=($(_lsblk "TYPE,NAME" --paths "$1" | grep -Po '(?<=^part ).*')) &&
-        [ "${#PARTITIONS[@]}" -eq "2" ] &&
+        set 1 boot on || lk_die "parted failed (exit status $?)"
+    partprobe "$1"
+    PARTITIONS=($(_lsblk "TYPE,NAME" --paths "$1" | grep -Po '(?<=^part ).*'))
+    [ "${#PARTITIONS[@]}" -eq "2" ] &&
         ROOT_PARTITION="${PARTITIONS[1]}" &&
-        BOOT_PARTITION="${PARTITIONS[0]}" &&
-        wipefs -a "$ROOT_PARTITION" &&
-        wipefs -a "$BOOT_PARTITION"
+        BOOT_PARTITION="${PARTITIONS[0]}" || exit
+    wipefs -a "$ROOT_PARTITION"
+    wipefs -a "$BOOT_PARTITION"
 
     REPARTITIONED=1
     TARGET_HOSTNAME="$2"
@@ -301,9 +302,9 @@ else
     lk_console_detail "Enabling LightDM"
     in_target systemctl enable lightdm.service
 
-    mkdir -p "/mnt/etc/skel/.config/xfce4" &&
-        ln -s "$LK_BASE/etc/xfce4/xinitrc" \
-            "/mnt/etc/skel/.config/xfce4/xinitrc"
+    mkdir -p "/mnt/etc/skel/.config/xfce4"
+    ln -s "$LK_BASE/etc/xfce4/xinitrc" \
+        "/mnt/etc/skel/.config/xfce4/xinitrc"
 fi
 
 lk_console_detail "Setting default umask"

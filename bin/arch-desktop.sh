@@ -334,18 +334,17 @@ PACMAN_PACKAGES+=(
 . "$LK_BASE/lib/arch/packages.sh"
 
 {
-    ! lk_sudo_offer_nopasswd ||
-        {
-            PASSWORD_STATUS="$(sudo passwd -S root | cut -d' ' -f2)"
-            [ "$PASSWORD_STATUS" = "L" ] || {
-                lk_console_message "Disabling password-based login as root"
-                sudo passwd -l root
-            }
+    if lk_sudo_offer_nopasswd; then
+        PASSWORD_STATUS="$(sudo passwd -S root | cut -d' ' -f2)"
+        [ "$PASSWORD_STATUS" = "L" ] || {
+            lk_console_message "Disabling password-based login as root"
+            sudo passwd -l root
+        }
 
-            ! sudo test -d "/etc/polkit-1/rules.d" ||
-                sudo test -e "/etc/polkit-1/rules.d/49-wheel.rules" || {
-                lk_console_message "Disabling polkit password prompts"
-                sudo tee "/etc/polkit-1/rules.d/49-wheel.rules" <<EOF >/dev/null
+        ! sudo test -d "/etc/polkit-1/rules.d" ||
+            sudo test -e "/etc/polkit-1/rules.d/49-wheel.rules" || {
+            lk_console_message "Disabling polkit password prompts"
+            sudo tee "/etc/polkit-1/rules.d/49-wheel.rules" <<EOF >/dev/null
 // Allow any user in the 'wheel' group to take any action without
 // entering a password.
 polkit.addRule(function (action, subject) {
@@ -354,8 +353,8 @@ polkit.addRule(function (action, subject) {
     }
 });
 EOF
-            }
         }
+    fi
 
     PAC_TO_REMOVE=($(comm -12 <(pacman -Qq | sort | uniq) <(lk_echo_array "${PAC_REMOVE[@]}" | sort | uniq)))
     [ "${#PAC_TO_REMOVE[@]}" -eq "0" ] || {
@@ -413,14 +412,14 @@ EOF
         lk_console_message "Installing opcache-gui"
         sudo install -d -m 0755 -o "$USER" -g "$(id -gn)" "/opt/opcache-gui" &&
             git clone "https://github.com/lkrms/opcache-gui.git" \
-                "/opt/opcache-gui"
+                "/opt/opcache-gui" || exit
     }
 
     SUDO_OR_NOT=1
 
-    lk_apply_setting "/etc/ssh/sshd_config" "PasswordAuthentication" "no" " " "#" " " &&
-        lk_apply_setting "/etc/ssh/sshd_config" "AcceptEnv" "LANG LC_*" " " "#" " " &&
-        lk_systemctl_enable sshd
+    lk_apply_setting "/etc/ssh/sshd_config" "PasswordAuthentication" "no" " " "#" " "
+    lk_apply_setting "/etc/ssh/sshd_config" "AcceptEnv" "LANG LC_*" " " "#" " "
+    lk_systemctl_enable sshd
 
     lk_systemctl_enable atd
 
@@ -430,26 +429,25 @@ EOF
 
     lk_systemctl_enable org.cups.cupsd
 
-    lk_apply_setting "/etc/bluetooth/main.conf" "AutoEnable" "true" "=" "#" &&
-        lk_systemctl_enable bluetooth
+    lk_apply_setting "/etc/bluetooth/main.conf" "AutoEnable" "true" "=" "#"
+    lk_systemctl_enable bluetooth
 
-    lk_apply_setting "/etc/conf.d/libvirt-guests" "ON_SHUTDOWN" "shutdown" "=" "#" &&
-        lk_apply_setting "/etc/conf.d/libvirt-guests" "SHUTDOWN_TIMEOUT" "300" "=" "#" &&
-        sudo usermod --append --groups libvirt,kvm "$USER" &&
-        {
-            [ -e "/etc/qemu/bridge.conf" ] || {
-                sudo install -d -m 0755 "/etc/qemu" &&
-                    echo "allow all" | sudo tee "/etc/qemu/bridge.conf" >/dev/null
-            }
-        } &&
-        lk_systemctl_enable libvirtd libvirt-guests
+    lk_apply_setting "/etc/conf.d/libvirt-guests" "ON_SHUTDOWN" "shutdown" "=" "#"
+    lk_apply_setting "/etc/conf.d/libvirt-guests" "SHUTDOWN_TIMEOUT" "300" "=" "#"
+    sudo usermod --append --groups libvirt,kvm "$USER"
+    [ -e "/etc/qemu/bridge.conf" ] || {
+        sudo install -d -m 0755 "/etc/qemu" &&
+            echo "allow all" |
+            sudo tee "/etc/qemu/bridge.conf" >/dev/null || exit
+    }
+    lk_systemctl_enable libvirtd libvirt-guests
 
-    sudo usermod --append --groups docker "$USER" &&
-        lk_systemctl_enable docker
+    sudo usermod --append --groups docker "$USER"
+    lk_systemctl_enable docker
 
-    { sudo test -d "/var/lib/mysql/mysql" ||
-        sudo mariadb-install-db --user="mysql" --basedir="/usr" --datadir="/var/lib/mysql"; } &&
-        lk_systemctl_enable mysqld
+    sudo test -d "/var/lib/mysql/mysql" ||
+        sudo mariadb-install-db --user="mysql" --basedir="/usr" --datadir="/var/lib/mysql"
+    lk_systemctl_enable mysqld
 
     PHP_INI_FILE=/etc/php/php.ini
     for PHP_EXT in bcmath curl gd gettext imap intl mysqli pdo_sqlite soap sqlite3 xmlrpc zip; do
@@ -512,23 +510,24 @@ EOF
     lk_systemctl_enable php-fpm
 
     HTTPD_CONF_FILE="/etc/httpd/conf/httpd.conf"
-    sudo install -d -m 0755 -o "$USER" -g "$(id -gn)" "/srv/http" &&
-        mkdir -p "/srv/http/localhost/html" "/srv/http/127.0.0.1" &&
-        { [ -e "/srv/http/127.0.0.1/html" ] || ln -sfT "../localhost/html" "/srv/http/127.0.0.1/html"; } &&
-        lk_safe_symlink "$LK_BASE/etc/httpd/dev-defaults.conf" "/etc/httpd/conf/extra/httpd-dev-defaults.conf" &&
-        lk_enable_httpd_entry "Include conf/extra/httpd-dev-defaults.conf" &&
-        lk_enable_httpd_entry "LoadModule alias_module modules/mod_alias.so" &&
-        lk_enable_httpd_entry "LoadModule dir_module modules/mod_dir.so" &&
-        lk_enable_httpd_entry "LoadModule headers_module modules/mod_headers.so" &&
-        lk_enable_httpd_entry "LoadModule info_module modules/mod_info.so" &&
-        lk_enable_httpd_entry "LoadModule proxy_fcgi_module modules/mod_proxy_fcgi.so" &&
-        lk_enable_httpd_entry "LoadModule proxy_module modules/mod_proxy.so" &&
-        lk_enable_httpd_entry "LoadModule rewrite_module modules/mod_rewrite.so" &&
-        lk_enable_httpd_entry "LoadModule status_module modules/mod_status.so" &&
-        lk_enable_httpd_entry "LoadModule vhost_alias_module modules/mod_vhost_alias.so" &&
-        sudo usermod --append --groups "http" "$USER" &&
-        sudo usermod --append --groups "$(id -gn)" "http" &&
-        lk_systemctl_enable httpd
+    sudo install -d -m 0755 -o "$USER" -g "$(id -gn)" "/srv/http"
+    mkdir -p "/srv/http/localhost/html" "/srv/http/127.0.0.1"
+    [ -e "/srv/http/127.0.0.1/html" ] ||
+        ln -sfT "../localhost/html" "/srv/http/127.0.0.1/html"
+    lk_safe_symlink "$LK_BASE/etc/httpd/dev-defaults.conf" "/etc/httpd/conf/extra/httpd-dev-defaults.conf"
+    lk_enable_httpd_entry "Include conf/extra/httpd-dev-defaults.conf"
+    lk_enable_httpd_entry "LoadModule alias_module modules/mod_alias.so"
+    lk_enable_httpd_entry "LoadModule dir_module modules/mod_dir.so"
+    lk_enable_httpd_entry "LoadModule headers_module modules/mod_headers.so"
+    lk_enable_httpd_entry "LoadModule info_module modules/mod_info.so"
+    lk_enable_httpd_entry "LoadModule proxy_fcgi_module modules/mod_proxy_fcgi.so"
+    lk_enable_httpd_entry "LoadModule proxy_module modules/mod_proxy.so"
+    lk_enable_httpd_entry "LoadModule rewrite_module modules/mod_rewrite.so"
+    lk_enable_httpd_entry "LoadModule status_module modules/mod_status.so"
+    lk_enable_httpd_entry "LoadModule vhost_alias_module modules/mod_vhost_alias.so"
+    sudo usermod --append --groups "http" "$USER"
+    sudo usermod --append --groups "$(id -gn)" "http"
+    lk_systemctl_enable httpd
 
     ! lk_command_exists vim || lk_safe_symlink "$(command -v vim)" "/usr/local/bin/vi"
     ! lk_command_exists xfce4-terminal || lk_safe_symlink "$(command -v xfce4-terminal)" "/usr/local/bin/xterm"

@@ -467,7 +467,7 @@ for USERNAME in ${ADMIN_USERS//,/ }; do
         [ ! -e "/root/.ssh" ] || {
             log "Moving /root/.ssh to /home/$USERNAME/.ssh"
             mv "/root/.ssh" "/home/$USERNAME/" &&
-                chown -R "$USERNAME": "/home/$USERNAME/.ssh"
+                chown -R "$USERNAME": "/home/$USERNAME/.ssh" || exit
         }
     else
         install -v -d -m 0700 -o "$USERNAME" -g "$USER_GROUP" "$USER_HOME/.ssh"
@@ -948,7 +948,7 @@ case ",$NODE_SERVICES," in
         install -v -d -m 2750 -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/log"
         [ "$COPY_SKEL" -eq "0" ] || {
             sudo -Hu "$HOST_ACCOUNT" cp -nRTv "/etc/skel.$PATH_PREFIX_ALPHA" "/srv/www/$HOST_ACCOUNT" &&
-                chmod -Rc -077 "/srv/www/$HOST_ACCOUNT/.ssh"
+                chmod -Rc -077 "/srv/www/$HOST_ACCOUNT/.ssh" || exit
         }
         ! is_installed apache2 || {
             log "Adding user 'www-data' to group '$HOST_ACCOUNT_GROUP'"
