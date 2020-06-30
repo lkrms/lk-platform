@@ -317,9 +317,11 @@ else
     lk_console_detail "Enabling LightDM"
     in_target systemctl enable lightdm.service
 
-    mkdir -p "/mnt/etc/skel/.config/xfce4"
-    ln -s "$LK_BASE/etc/xfce4/xinitrc" \
+    install -v -d -m 0755 "/mnt/etc/skel/.config/xfce4"
+    ln -sv "$LK_BASE/etc/xfce4/xinitrc" \
         "/mnt/etc/skel/.config/xfce4/xinitrc"
+    in_target bash -c \
+        '! XTERM_PATH="$(type -P xfce4-terminal)" || ln -sv "$XTERM_PATH" "/usr/local/bin/xterm"'
 fi
 
 lk_console_detail "Setting default umask"
@@ -436,6 +438,9 @@ if [ "${#AUR_PACKAGES[@]}" -gt "0" ]; then
     in_target sudo -H -u "$TARGET_USERNAME" \
         bash -c "$AUR_SCRIPT" >&6 2>&7
 fi
+
+in_target bash -c \
+    '! VI_PATH="$(type -P vim)" || ln -sv "$VI_PATH" "/usr/local/bin/vi"'
 
 i=0
 for PARTITION in ${OTHER_OS_PARTITIONS[@]+"${OTHER_OS_PARTITIONS[@]}"}; do
