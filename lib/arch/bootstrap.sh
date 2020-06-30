@@ -122,8 +122,10 @@ for FILE_PATH in /lib/bash/core.sh /lib/arch/packages.sh; do
     FILE="$SCRIPT_DIR/$(basename "$FILE_PATH")"
     URL="https://raw.githubusercontent.com/lkrms/lk-platform/master$FILE_PATH"
     [ -e "$FILE" ] ||
-        wget --output-document="$FILE" "$URL" ||
+        wget --output-document="$FILE" "$URL" || {
+        rm -f "$FILE"
         lk_die "unable to download from GitHub: $URL"
+    }
 done
 
 . "$SCRIPT_DIR/core.sh"
@@ -160,6 +162,7 @@ if [ "$#" -eq "3" ]; then
     lk_confirm "Repartition $1? ALL DATA WILL BE LOST."
 
     lk_console_message "Partitioning $1"
+    set -x
     parted --script "$1" \
         mklabel gpt \
         mkpart fat32 2048s 260MiB \
@@ -172,6 +175,7 @@ if [ "$#" -eq "3" ]; then
         BOOT_PARTITION="${PARTITIONS[0]}" || exit
     wipefs -a "$ROOT_PARTITION"
     wipefs -a "$BOOT_PARTITION"
+    set +x
 
     REPARTITIONED=1
     TARGET_HOSTNAME="$2"
@@ -202,6 +206,14 @@ if [ -z "$TARGET_PASSWORD" ]; then
         break
     done
 fi
+
+TARGET_SSH_KEY="${TARGET_SSH_KEY:-}"
+if [ -z "$TARGET_SSH_KEY" ]; then
+    TARGET_SSH_KEY="$(lk_console_read "Authorised SSH key for $TARGET_USERNAME:")"
+    [ -n "$TARGET_SSH_KEY" ] || lk_console_warning "SSH will not be configured (no key provided)"
+fi
+
+export -n TARGET_PASSWORD TARGET_SSH_KEY
 
 ROOT_PARTITION_TYPE="$(_lsblk FSTYPE "$ROOT_PARTITION")" || lk_die "no block device at $ROOT_PARTITION"
 BOOT_PARTITION_TYPE="$(_lsblk FSTYPE "$BOOT_PARTITION")" || lk_die "no block device at $BOOT_PARTITION"
@@ -315,6 +327,20 @@ umask 002
 lk_console_detail "Creating superuser:" "$TARGET_USERNAME"
 in_target useradd -m "$TARGET_USERNAME" -G adm,wheel -s /bin/bash
 echo -e "$TARGET_PASSWORD\n$TARGET_PASSWORD" | in_target passwd "$TARGET_USERNAME"
+[ -z "$TARGET_SSH_KEY" ] || {
+    in_target sudo -H -u "$TARGET_USERNAME" \
+        bash -c "$(
+            cat <<EOF
+$(declare -p TARGET_SSH_KEY)
+install -v -d -m 0700 "\$HOME/.ssh"
+install -v -m 0700 /dev/null "\$HOME/.ssh/authorized_keys"
+echo "\$TARGET_SSH_KEY" >"\$HOME/.ssh/authorized_keys"
+EOF
+        )"
+    sed -Ei -e "s/^#?(PasswordAuthentication|PermitRootLogin)\b.*\$/\1 no/" \
+        "/mnt/etc/ssh/sshd_config"
+    in_target systemctl enable sshd.service
+}
 
 lk_console_detail "Configuring sudo"
 cat <<EOF >"/mnt/etc/sudoers.d/lk-defaults"
