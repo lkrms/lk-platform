@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC1090,SC2015,SC2034,SC2124,SC2206,SC2207
+# shellcheck disable=SC1090,SC2015,SC2016,SC2034,SC2124,SC2206,SC2207
 
 # To install Arch Linux using the script below:
 #   1. boot from an Arch Linux live CD
@@ -337,18 +337,29 @@ fi
 EOF
 install -v -m 0600 "/mnt/etc/skel/.bashrc" "/mnt/root/.bashrc"
 
+lk_console_detail "Configuring SSH defaults for all users"
+install -v -d -m 0700 "/mnt/etc/skel/.ssh"
+install -v -m 0600 /dev/null "/mnt/etc/skel/.ssh/authorized_keys"
+install -v -m 0600 /dev/null "/mnt/etc/skel/.ssh/config"
+cat <<EOF >"/mnt/etc/skel/.ssh/config"
+Host                    *
+IdentityFile            ~/.ssh/authorized_keys
+IdentitiesOnly          yes
+ForwardAgent            yes
+StrictHostKeyChecking   accept-new
+ControlMaster           auto
+ControlPath             /tmp/ssh_%h-%p-%r-%l
+ControlPersist          120
+SendEnv                 LANG LC_*
+ServerAliveInterval     30
+EOF
+
 lk_console_detail "Creating superuser:" "$TARGET_USERNAME"
 in_target useradd -m "$TARGET_USERNAME" -G adm,wheel -s /bin/bash
 echo -e "$TARGET_PASSWORD\n$TARGET_PASSWORD" | in_target passwd "$TARGET_USERNAME"
 [ -z "$TARGET_SSH_KEY" ] || {
-    in_target sudo -H -u "$TARGET_USERNAME" \
-        bash -c "$(
-            cat <<EOF
-install -v -d -m 0700 "\$HOME/.ssh"
-install -v -m 0700 /dev/null "\$HOME/.ssh/authorized_keys"
-echo "$(lk_escape_double_quotes "$TARGET_SSH_KEY")" >"\$HOME/.ssh/authorized_keys"
-EOF
-        )"
+    echo "$TARGET_SSH_KEY" | in_target sudo -H -u "$TARGET_USERNAME" \
+        bash -c 'cat >"$HOME/.ssh/authorized_keys"'
     sed -Ei -e "s/^#?(PasswordAuthentication|PermitRootLogin)\b.*\$/\1 no/" \
         "/mnt/etc/ssh/sshd_config"
     in_target systemctl enable sshd.service
