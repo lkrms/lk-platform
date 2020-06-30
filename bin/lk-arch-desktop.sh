@@ -429,21 +429,25 @@ EOF
 
     lk_systemctl_enable org.cups.cupsd
 
-    lk_apply_setting "/etc/bluetooth/main.conf" "AutoEnable" "true" "=" "#"
-    lk_systemctl_enable bluetooth
+    if ! lk_is_virtual; then
+        [ ! -f "/etc/bluetooth/main.conf" ] || {
+            lk_apply_setting "/etc/bluetooth/main.conf" "AutoEnable" "true" "=" "#" &&
+                lk_systemctl_enable bluetooth || exit
+        }
 
-    lk_apply_setting "/etc/conf.d/libvirt-guests" "ON_SHUTDOWN" "shutdown" "=" "#"
-    lk_apply_setting "/etc/conf.d/libvirt-guests" "SHUTDOWN_TIMEOUT" "300" "=" "#"
-    sudo usermod --append --groups libvirt,kvm "$USER"
-    [ -e "/etc/qemu/bridge.conf" ] || {
-        sudo install -d -m 0755 "/etc/qemu" &&
-            echo "allow all" |
-            sudo tee "/etc/qemu/bridge.conf" >/dev/null || exit
-    }
-    lk_systemctl_enable libvirtd libvirt-guests
+        lk_apply_setting "/etc/conf.d/libvirt-guests" "ON_SHUTDOWN" "shutdown" "=" "#"
+        lk_apply_setting "/etc/conf.d/libvirt-guests" "SHUTDOWN_TIMEOUT" "300" "=" "#"
+        sudo usermod --append --groups libvirt,kvm "$USER"
+        [ -e "/etc/qemu/bridge.conf" ] || {
+            sudo install -d -m 0755 "/etc/qemu" &&
+                echo "allow all" |
+                sudo tee "/etc/qemu/bridge.conf" >/dev/null || exit
+        }
+        lk_systemctl_enable libvirtd libvirt-guests
 
-    sudo usermod --append --groups docker "$USER"
-    lk_systemctl_enable docker
+        sudo usermod --append --groups docker "$USER"
+        lk_systemctl_enable docker
+    fi
 
     sudo test -d "/var/lib/mysql/mysql" ||
         sudo mariadb-install-db --user="mysql" --basedir="/usr" --datadir="/var/lib/mysql"
