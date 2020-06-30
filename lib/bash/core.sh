@@ -1106,23 +1106,39 @@ function lk_enable_entry() {
 }
 
 function lk_in_path() {
-    [[ ":${LK_PATH:-$PATH}:" =~ :$(lk_escape_ere "${1%/}"): ]]
+    [[ ":$PATH:" =~ :$(lk_escape_ere "${1%/}"): ]]
 }
 
 function lk_path_add() {
     if ! lk_in_path "$1" && [ -d "$1" ]; then
-        echo "$(sed -Ee 's/:+/:/g' -e 's/(^:|:$)//' <<<"${LK_PATH:-$PATH}"):$1"
+        echo "$(sed -Ee 's/:+/:/g' -e 's/(^:|:$)//g' <<<"$PATH"):$1"
     else
-        echo "${LK_PATH:-$PATH}"
+        echo "$PATH"
     fi
 }
 
 function lk_path_add_to_front() {
     if [ -d "$1" ]; then
-        echo "$1:$(sed -Ee "s/(:|^)$(lk_escape_ere "$1")(:|$)/\\1\\2/g" -e 's/:+/:/g' -e 's/(^:|:$)//' <<<"${LK_PATH:-$PATH}")"
+        echo "$1:$(sed -Ee "s/(:|^)$(lk_escape_ere "$1")(:|$)/\\1\\2/g" -e 's/:+/:/g' -e 's/(^:|:$)//g' <<<"$PATH")"
     else
-        echo "${LK_PATH:-$PATH}"
+        echo "$PATH"
     fi
+}
+
+function _lk_get_env() {
+    local DIR PATH="$PATH" OLD_PATH="$PATH"
+    ADD_TO_PATH=(
+        ${ADD_TO_PATH[@]+"${ADD_TO_PATH[@]}"}
+        "$LK_BASE/bin"
+    )
+    for DIR in "${ADD_TO_PATH[@]}"; do
+        PATH="$(lk_path_add "$DIR")"
+    done
+    PATH="$(lk_path_add_to_front "${HOME:+$HOME/.local/bin}")"
+    [ "$PATH" = "$OLD_PATH" ] || {
+        echo "export PATH=\"$(lk_escape_double_quotes "$PATH")\""
+    }
+    unset ADD_TO_PATH
 }
 
 # lk_user_in_group username groupname...

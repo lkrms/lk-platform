@@ -69,6 +69,8 @@ HISTTIMEFORMAT="%b %_d %Y %H:%M:%S %z "
 
 [ ! -f "/usr/share/bash-completion/bash_completion" ] || . "/usr/share/bash-completion/bash_completion"
 
+eval "$(_lk_get_env)"
+
 export WP_CLI_CONFIG_PATH="$LK_BASE/etc/wp-cli.yml"
 
 [ "${LK_PROMPT:-1}" -ne "1" ] || lk_enable_prompt

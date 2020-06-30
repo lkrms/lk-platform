@@ -1,13 +1,12 @@
 #!/bin/bash
 # shellcheck disable=SC1090,SC2034
 
+[ ! -f "/etc/default/lk-platform" ] || . "/etc/default/lk-platform"
+
 [ -n "${LK_BASE:-}" ] || {
     echo "${BASH_SOURCE[0]}: LK_BASE not set" >&2
     exit 1
 }
-
-[ ! -f "$LK_BASE/etc/server.conf" ] ||
-    . "$LK_BASE/etc/server.conf"
 
 . "$LK_BASE/lib/bash/core.sh"
 . "$LK_BASE/lib/bash/assert.sh"

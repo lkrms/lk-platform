@@ -155,7 +155,7 @@ OTHER_OS_PARTITIONS=()
 
 if [ "$#" -eq "3" ]; then
 
-    check_devices disk "$1" || usage
+    check_devices disk "$1" || lk_die "not a disk: $1"
 
     before_install
 
@@ -183,7 +183,7 @@ if [ "$#" -eq "3" ]; then
 
 elif [ "$#" -ge "4" ]; then
 
-    check_devices part "${@:1:$#-2}" || usage
+    check_devices part "${@:1:$#-2}" || lk_die "not partitions: ${*:1:$#-2}"
 
     before_install
 
@@ -324,6 +324,16 @@ lk_keep_original "/mnt/etc/profile"
 sed -Ei 's/^umask [0-9]+\b/umask 002/' "/mnt/etc/profile"
 umask 002
 
+lk_console_detail "Sourcing $LK_BASE/bin/lk-bash-rc.sh in ~/.bashrc for all users"
+cat <<EOF >>"/mnt/etc/skel/.bashrc"
+
+# Added by bootstrap.sh at $(now)
+if [ -f '$LK_BASE/bin/lk-bash-rc.sh' ]; then
+    . '$LK_BASE/bin/lk-bash-rc.sh'
+fi
+EOF
+install -v -m 0600 "/mnt/etc/skel/.bashrc" "/mnt/root/.bashrc"
+
 lk_console_detail "Creating superuser:" "$TARGET_USERNAME"
 in_target useradd -m "$TARGET_USERNAME" -G adm,wheel -s /bin/bash
 echo -e "$TARGET_PASSWORD\n$TARGET_PASSWORD" | in_target passwd "$TARGET_USERNAME"
@@ -331,10 +341,9 @@ echo -e "$TARGET_PASSWORD\n$TARGET_PASSWORD" | in_target passwd "$TARGET_USERNAM
     in_target sudo -H -u "$TARGET_USERNAME" \
         bash -c "$(
             cat <<EOF
-$(declare -p TARGET_SSH_KEY)
 install -v -d -m 0700 "\$HOME/.ssh"
 install -v -m 0700 /dev/null "\$HOME/.ssh/authorized_keys"
-echo "\$TARGET_SSH_KEY" >"\$HOME/.ssh/authorized_keys"
+echo "$(lk_escape_double_quotes "$TARGET_SSH_KEY")" >"\$HOME/.ssh/authorized_keys"
 EOF
         )"
     sed -Ei -e "s/^#?(PasswordAuthentication|PermitRootLogin)\b.*\$/\1 no/" \

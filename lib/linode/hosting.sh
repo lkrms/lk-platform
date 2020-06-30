@@ -405,11 +405,11 @@ EOF
 log_file "$FILE"
 sysctl --system
 
-log "Sourcing $LK_BASE/server/.bashrc in ~/.bashrc for all users"
+log "Sourcing $LK_BASE/bin/lk-bash-rc.sh in ~/.bashrc for all users"
 BASH_SKEL="
 # Added by $(basename "$0") at $(now)
-if [ -f '$LK_BASE/server/.bashrc' ]; then
-    . '$LK_BASE/server/.bashrc'
+if [ -f '$LK_BASE/bin/lk-bash-rc.sh' ]; then
+    . '$LK_BASE/bin/lk-bash-rc.sh'
 fi"
 echo "$BASH_SKEL" >>"/etc/skel/.bashrc"
 if [ -f "/root/.bashrc" ]; then
@@ -776,13 +776,20 @@ if [ -f "$FILE" ] && ! grep -Fxq "CONFIG_BSD_PROCESS_ACCT=y" "$FILE"; then
 fi
 
 install -v -d -m 2775 -o "$FIRST_ADMIN" -g "adm" "$LK_BASE"
-[ -n "$(ls -A "$LK_BASE")" ] || {
+if [ -z "$(ls -A "$LK_BASE")" ]; then
     log "Cloning 'https://github.com/lkrms/lk-platform.git' to '$LK_BASE'"
     keep_trying sudo -Hu "$FIRST_ADMIN" \
         git clone "https://github.com/lkrms/lk-platform.git" "$LK_BASE"
-    sudo -Hu "$FIRST_ADMIN" \
-        git --git-dir="$LK_BASE/.git" --work-tree="$LK_BASE" config core.sharedRepository 0664
-}
+    sudo -Hu "$FIRST_ADMIN" bash -c "$(
+        # TODO: escape with lk_escape_double_quotes
+        cat <<EOF
+cd "$LK_BASE" &&
+    git config core.sharedRepository 0664 &&
+    git config merge.ff only &&
+    git config pull.ff only
+EOF
+    )"
+fi
 install -v -d -m 2775 -o "$FIRST_ADMIN" -g "adm" "$LK_BASE/etc"
 install -v -m 0660 -o "$FIRST_ADMIN" -g "adm" /dev/null "$LK_BASE/etc/firewall.conf"
 [ "$REJECT_OUTPUT" = "N" ] ||
@@ -790,9 +797,13 @@ install -v -m 0660 -o "$FIRST_ADMIN" -g "adm" /dev/null "$LK_BASE/etc/firewall.c
 $ACCEPT_OUTPUT_HOSTS_SH
 ACCEPT_OUTPUT_CHAIN=\"${P}output\"\
 " >"$LK_BASE/etc/firewall.conf"
-set | grep -E '^(LK_BASE|NODE_(HOSTNAME|FQDN|TIMEZONE|SERVICES)|PATH_PREFIX|ADMIN_EMAIL)=' |
-    sudo -Hu "$FIRST_ADMIN" tee "$LK_BASE/etc/server.conf" >/dev/null
-grep -E '^LK_BASE=' "$LK_BASE/etc/server.conf" >"/etc/default/lk-platform"
+# TODO: escape with lk_escape_double_quotes
+echo "\
+LK_BASE=\"$LK_BASE\"
+LK_PATH_PREFIX=\"$PATH_PREFIX\"
+LK_PATH_PREFIX_ALPHA=\"$PATH_PREFIX_ALPHA\"
+LK_ADMIN_EMAIL=\"$ADMIN_EMAIL\"\
+" >"/etc/default/lk-platform"
 
 # TODO: verify downloads
 log "Installing pip, ps_mem, Glances, awscli"
@@ -1308,8 +1319,6 @@ iptables-save >"/etc/iptables/rules.v4"
 ip6tables-save >"/etc/iptables/rules.v6"
 log_file "/etc/iptables/rules.v4"
 log_file "/etc/iptables/rules.v6"
-
-# TODO: collectd+nagios
 
 log "Running apt-get autoremove"
 apt-get -yq autoremove
