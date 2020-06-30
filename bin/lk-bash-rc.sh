@@ -11,12 +11,16 @@ unset LK_PROMPT_DISPLAYED
         if [ ! -L "$BS" ] &&
             LK_BASE="$(cd "$(dirname "$BS")/.." && pwd -P)" &&
             [ -d "$LK_BASE/lib/bash" ]; then
-            export LK_BASE
-            declare -p LK_BASE
+            LK_BASE="${LK_BASE//\\/\\\\}"
+            LK_BASE="${LK_BASE//\$/\\\$}"
+            LK_BASE="${LK_BASE//\`/\\\`}"
+            LK_BASE="${LK_BASE//\"/\\\"}"
+            echo "LK_BASE=\"$LK_BASE\""
         else
             echo "$BS: LK_BASE not set" >&2
         fi
     )"
+export LK_BASE
 
 eval "$(
     shopt -s nullglob
