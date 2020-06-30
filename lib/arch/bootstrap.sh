@@ -171,6 +171,7 @@ if [ "$#" -eq "3" ]; then
         mkpart ext4 260MiB 100% \
         set 1 boot on || lk_die "parted failed (exit status $?)"
     partprobe "$1"
+    sleep 1
     PARTITIONS=($(_lsblk "TYPE,NAME" --paths "$1" | grep -Po '(?<=^part ).*'))
     [ "${#PARTITIONS[@]}" -eq "2" ] &&
         ROOT_PARTITION="${PARTITIONS[1]}" &&
@@ -329,7 +330,7 @@ umask 002
 lk_console_detail "Sourcing $LK_BASE/bin/lk-bash-rc.sh in ~/.bashrc for all users"
 cat <<EOF >>"/mnt/etc/skel/.bashrc"
 
-# Added by bootstrap.sh at $(now)
+# Added by bootstrap.sh at $(lk_now)
 if [ -f '$LK_BASE/bin/lk-bash-rc.sh' ]; then
     . '$LK_BASE/bin/lk-bash-rc.sh'
 fi

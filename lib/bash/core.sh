@@ -137,6 +137,10 @@ else
     }
 fi
 
+function lk_now() {
+    lk_date "%Y-%m-%d %H:%M:%S %z"
+}
+
 function lk_date_log() {
     lk_date "%b %_d %H:%M:%S %z"
 }
