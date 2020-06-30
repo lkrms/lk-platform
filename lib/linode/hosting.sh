@@ -613,7 +613,7 @@ ${ACCEPT_OUTPUT_HOSTS:+    ${ACCEPT_OUTPUT_HOSTS//,/$'\n'    }
     OUTPUT_ALLOW=(
         "${APT_SOURCE_HOSTS[@]}"
         "${ACCEPT_OUTPUT_HOSTS[@]}"
-        ${GITHUB_IPS+"${GITHUB_IPS[@]}"}
+        ${GITHUB_IPS[@]+"${GITHUB_IPS[@]}"}
     )
     OUTPUT_ALLOW_IPV4=()
     OUTPUT_ALLOW_IPV6=()

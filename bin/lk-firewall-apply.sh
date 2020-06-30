@@ -20,7 +20,7 @@ S="[[:space:]]"
 if [ -n "${ACCEPT_OUTPUT_CHAIN:-}" ]; then
     lk_console_message "Applying outgoing traffic policy to firewall"
     OUTPUT_ALLOW=(
-        ${ACCEPT_OUTPUT_HOSTS+"${ACCEPT_OUTPUT_HOSTS[@]}"}
+        ${ACCEPT_OUTPUT_HOSTS[@]+"${ACCEPT_OUTPUT_HOSTS[@]}"}
     )
     [ "${#OUTPUT_ALLOW[@]}" -eq "0" ] ||
         lk_console_detail "Added to whitelist from firewall.conf:" \
@@ -58,12 +58,12 @@ if [ -n "${ACCEPT_OUTPUT_CHAIN:-}" ]; then
     lk_iptables_flush_chain "$ACCEPT_OUTPUT_CHAIN"
     [ "${#OUTPUT_ALLOW_IPV4[@]}" -eq "0" ] ||
         lk_console_detail "Adding" "${#OUTPUT_ALLOW_IPV4[@]} IP $(lk_maybe_plural "${#OUTPUT_ALLOW_IPV4[@]}" rule rules)"
-    for IPV4 in ${OUTPUT_ALLOW_IPV4+"${OUTPUT_ALLOW_IPV4[@]}"}; do
+    for IPV4 in ${OUTPUT_ALLOW_IPV4[@]+"${OUTPUT_ALLOW_IPV4[@]}"}; do
         iptables -A "$ACCEPT_OUTPUT_CHAIN" -d "$IPV4" -j ACCEPT
     done
     [ "${#OUTPUT_ALLOW_IPV6[@]}" -eq "0" ] ||
         lk_console_detail "Adding" "${#OUTPUT_ALLOW_IPV6[@]} IPv6 $(lk_maybe_plural "${#OUTPUT_ALLOW_IPV6[@]}" rule rules)"
-    for IPV6 in ${OUTPUT_ALLOW_IPV6+"${OUTPUT_ALLOW_IPV6[@]}"}; do
+    for IPV6 in ${OUTPUT_ALLOW_IPV6[@]+"${OUTPUT_ALLOW_IPV6[@]}"}; do
         ip6tables -A "$ACCEPT_OUTPUT_CHAIN" -d "$IPV6" -j ACCEPT
     done
 fi
