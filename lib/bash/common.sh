@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC1090
+# shellcheck disable=SC1090,SC2034
 
 [ -n "${LK_BASE:-}" ] || {
     echo "${BASH_SOURCE[0]}: LK_BASE not set" >&2
@@ -22,6 +22,10 @@ function _lk_include() {
     done
 }
 
+function lk_has_arg() {
+    lk_in_array "$1" LK_ARGV
+}
+
 function lk_elevate() {
     [ "$EUID" -eq "0" ] || {
         sudo "$0" "$@"
@@ -30,6 +34,8 @@ function lk_elevate() {
 }
 
 lk_trap_err
+
+LK_ARGV=("$@")
 
 eval "$(LK_INCLUDE="${LK_INCLUDE:-${INCLUDE:-${include:-}}}" _lk_include)"
 unset LK_INCLUDE
