@@ -87,6 +87,7 @@ function configure_ntp() {
     if [ -n "${NTP_SERVER:-}" ]; then
         lk_console_detail "Configuring NTP"
         lk_keep_original "$1"
+        ! grep -Fxq "server $NTP_SERVER iburst" "$1" || return 0
         sed -Ei 's/^(server|pool)\b/#&/' "$1"
         echo "server $NTP_SERVER iburst" >>"$1"
     fi
@@ -100,6 +101,7 @@ function configure_pacman() {
     for i in "${!CUSTOM_REPOS[@]}"; do
         REPO=(${CUSTOM_REPOS[$i]})
         SIG_LEVEL=("${REPO[@]:2}")
+        ! grep -Fxq "[${REPO[0]}]" "$1" || continue
         cat <<EOF >>"$1"
 
 [${REPO[0]}]
