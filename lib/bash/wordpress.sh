@@ -387,7 +387,7 @@ function lk_wp_use_cron() {
     lk_console_item "Scheduling with crontab:" "$WP_CRON_PATH"
     lk_console_detail "Setting DISABLE_WP_CRON in wp-config.php"
     lk_wp config set DISABLE_WP_CRON true --type=constant --raw || return
-    CRON_COMMAND="$(command -v php) $WP_CRON_PATH"
+    CRON_COMMAND="$(type -P php) $WP_CRON_PATH"
     [ "$INTERVAL" -lt "60" ] &&
         CRON_COMMAND="*/$INTERVAL * * * * $CRON_COMMAND" ||
         CRON_COMMAND="0 1 * * * $CRON_COMMAND"

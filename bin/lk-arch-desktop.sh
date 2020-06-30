@@ -529,8 +529,8 @@ EOF
     sudo usermod --append --groups "$(id -gn)" "http"
     lk_systemctl_enable httpd
 
-    ! lk_command_exists vim || lk_safe_symlink "$(command -v vim)" "/usr/local/bin/vi"
-    ! lk_command_exists xfce4-terminal || lk_safe_symlink "$(command -v xfce4-terminal)" "/usr/local/bin/xterm"
+    ! lk_command_exists vim || lk_safe_symlink "$(type -P vim)" "/usr/local/bin/vi"
+    ! lk_command_exists xfce4-terminal || lk_safe_symlink "$(type -P xfce4-terminal)" "/usr/local/bin/xterm"
     lk_install_gnu_commands
 
     unset SUDO_OR_NOT

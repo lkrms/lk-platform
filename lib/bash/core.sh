@@ -90,7 +90,7 @@ function lk_mktemp_fifo() {
 
 function lk_commands_exist() {
     while [ "$#" -gt "0" ]; do
-        command -v "$1" >/dev/null 2>&1 || return
+        type -P "$1" >/dev/null 2>&1 || return
         shift
     done
 }
@@ -102,7 +102,7 @@ function lk_command_exists() {
 function lk_first_existing_command() {
     local COMMAND
     for COMMAND in "$@"; do
-        if command -v "$COMMAND" >/dev/null 2>&1; then
+        if type -P "$COMMAND" >/dev/null 2>&1; then
             echo "$COMMAND"
             return
         fi
@@ -839,11 +839,22 @@ function lk_install_gnu_commands() {
         GCOMMAND="$(_lk_get_gnu_command "$COMMAND")"
         { lk_command_exists "$GCOMMAND" ||
             lk_warn "$GCOMMAND not found"; } &&
-            COMMAND_PATH="$(command -v "$GCOMMAND" 2>/dev/null)" &&
+            COMMAND_PATH="$(type -P "$GCOMMAND" 2>/dev/null)" &&
             lk_safe_symlink "$COMMAND_PATH" "$GNU_PATH/gnu_$COMMAND" ||
             EXIT_STATUS="$?"
     done
     return "$EXIT_STATUS"
+}
+
+function lk_check_gnu_commands() {
+    local COMMANDS=("$@") SUDO_OR_NOT
+    [ "$#" -gt "0" ] || COMMANDS=(${LK_GNU_COMMANDS[@]+"${LK_GNU_COMMANDS[@]}"})
+    if [ "${#COMMANDS[@]}" -gt "0" ]; then
+        lk_commands_exist "${COMMANDS[@]/#/gnu_}" || {
+            ! lk_can_sudo || SUDO_OR_NOT=1
+            lk_install_gnu_commands
+        }
+    fi
 }
 
 function lk_users_exist() {
@@ -888,7 +899,7 @@ function lk_variable_declared() {
 # lk_version_at_least installed_version minimum_version
 function lk_version_at_least() {
     local MIN
-    MIN="$(printf '%s\n' "$1" "$2" | gnu_sort --version-sort | head -n1 || lk_warn "error sorting versions")" &&
+    MIN="$(gnu_sort --version-sort <(printf '%s\n' "$1" "$2") | head -n1 || lk_warn "error sorting versions")" &&
         [ "$MIN" = "$2" ]
 }
 

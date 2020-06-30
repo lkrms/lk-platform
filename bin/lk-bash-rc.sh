@@ -36,7 +36,11 @@ function lk_find_latest() {
         TYPE_ARGS+=(${TYPE_ARGS[@]+-o} -type "${TYPE:$i-1:1}")
     done
     [ "${#TYPE_ARGS[@]}" -eq 2 ] || TYPE_ARGS=(\( "${TYPE_ARGS[@]}" \))
-    gnu_find -L . -xdev -regextype posix-egrep ${@+\( "$@" \)} "${TYPE_ARGS[@]}" -print0 | xargs -0 gnu_stat --format '%Y :%y %12s %N' | sort -nr | cut -d: -f2- | "${PAGER:-less}"
+    lk_check_gnu_commands stat
+    gnu_find -L . -xdev -regextype posix-egrep \
+        ${@+\( "$@" \)} "${TYPE_ARGS[@]}" -print0 |
+        xargs -0 gnu_stat --format '%Y :%y %12s %N' |
+        sort -nr | cut -d: -f2- | "${PAGER:-less}"
 }
 
 function latest() {
@@ -61,6 +65,14 @@ function find_all() {
     shift
     gnu_find -L . -xdev -iname "*$FIND*" "$@"
 }
+
+if lk_is_linux; then
+    alias cwd='pwd | xclip'
+    alias duh='du -h --max-depth 1 | sort -h'
+    alias open='xdg-open'
+elif lk_is_macos; then
+    alias duh='du -h -d 1 | sort -h'
+fi
 
 shopt -s checkwinsize
 
