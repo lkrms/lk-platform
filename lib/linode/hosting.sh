@@ -780,15 +780,12 @@ if [ -z "$(ls -A "$LK_BASE")" ]; then
     log "Cloning 'https://github.com/lkrms/lk-platform.git' to '$LK_BASE'"
     keep_trying sudo -Hu "$FIRST_ADMIN" \
         git clone "https://github.com/lkrms/lk-platform.git" "$LK_BASE"
-    sudo -Hu "$FIRST_ADMIN" bash -c "$(
-        # TODO: escape with lk_escape_double_quotes
-        cat <<EOF
-cd "$LK_BASE" &&
+    # TODO: escape with lk_escape_double_quotes
+    sudo -Hu "$FIRST_ADMIN" bash -c "\
+cd \"$LK_BASE\" &&
     git config core.sharedRepository 0664 &&
     git config merge.ff only &&
-    git config pull.ff only
-EOF
-    )"
+    git config pull.ff only"
 fi
 install -v -d -m 2775 -o "$FIRST_ADMIN" -g "adm" "$LK_BASE/etc"
 install -v -m 0660 -o "$FIRST_ADMIN" -g "adm" /dev/null "$LK_BASE/etc/firewall.conf"

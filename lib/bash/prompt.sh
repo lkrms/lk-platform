@@ -29,7 +29,7 @@ function lk_prompt_command() {
             if [ "$EXIT_STATUS" -eq "0" ]; then
                 PS+=("\[$LK_GREEN\]✔")
             else
-                STR=" exit status $EXIT_STATUS"
+                STR=" returned $EXIT_STATUS"
                 ((LEN += ${#STR}))
                 PS+=("\[$LK_RED\]✘$STR")
             fi
@@ -46,7 +46,7 @@ function lk_prompt_command() {
     else
         PS+=("\[$LK_BOLD$LK_RED\]\u@")
     fi
-    PS+=("\h\[$LK_RESET\]:\[$LK_BOLD$LK_BLUE\] \w \[$LK_RESET\]")
+    PS+=("\h\[$LK_RESET$LK_BOLD$LK_BLUE\] \w \[$LK_RESET\]")
     IFS=
     PS1="${PS[*]}\\\$ "
     unset IFS
