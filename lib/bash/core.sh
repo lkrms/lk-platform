@@ -223,6 +223,18 @@ function lk_escape() {
     echo "$STRING"
 }
 
+# lk_esc STRING
+#   POSIX-conformant implementation of `lk_escape_double_quotes`
+function lk_esc() {
+    echo "$1" | sed -Ee 's/\\/\\\\/g' -e 's/[$`"]/\\&/g'
+}
+
+# lk_esc_ere STRING
+#   POSIX-conformant implementation of `lk_escape_ere`
+function lk_esc_ere() {
+    echo "$1" | sed -Ee 's/\\/\\\\/g' -e 's/[]$()*+./?[^{|}]/\\&/g'
+}
+
 function lk_escape_double_quotes() {
     lk_escape "$1" '$' '`' '\' '"'
 }
@@ -1118,42 +1130,6 @@ function lk_enable_entry() {
             } | lk_maybe_sudo tee "$FILE_PATH" >/dev/null || return
         fi
     }
-}
-
-function lk_in_path() {
-    [[ ":$PATH:" =~ :$(lk_escape_ere "${1%/}"): ]]
-}
-
-function lk_path_add() {
-    if ! lk_in_path "$1" && [ -d "$1" ]; then
-        echo "$(sed -Ee 's/:+/:/g' -e 's/(^:|:$)//g' <<<"$PATH"):$1"
-    else
-        echo "$PATH"
-    fi
-}
-
-function lk_path_add_to_front() {
-    if [ -d "$1" ]; then
-        echo "$1:$(sed -Ee "s/(:|^)$(lk_escape_ere "$1")(:|$)/\\1\\2/g" -e 's/:+/:/g' -e 's/(^:|:$)//g' <<<"$PATH")"
-    else
-        echo "$PATH"
-    fi
-}
-
-function _lk_get_env() {
-    local DIR PATH="$PATH" OLD_PATH="$PATH"
-    ADD_TO_PATH=(
-        ${ADD_TO_PATH[@]+"${ADD_TO_PATH[@]}"}
-        "$LK_BASE/bin"
-    )
-    for DIR in "${ADD_TO_PATH[@]}"; do
-        PATH="$(lk_path_add "$DIR")"
-    done
-    PATH="$(lk_path_add_to_front "${HOME:+$HOME/.local/bin}")"
-    [ "$PATH" = "$OLD_PATH" ] || {
-        echo "export PATH=\"$(lk_escape_double_quotes "$PATH")\""
-    }
-    unset ADD_TO_PATH
 }
 
 # lk_user_in_group username groupname...

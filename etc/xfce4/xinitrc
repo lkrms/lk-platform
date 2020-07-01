@@ -1,4 +1,28 @@
 #!/bin/sh
+# shellcheck disable=SC1090,SC1091,SC2015,SC2030,SC2031
+
+[ ! -f "/etc/default/lk-platform" ] || . "/etc/default/lk-platform"
+LK_PATH_PREFIX="${LK_PATH_PREFIX:-lk-}"
+LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(echo "$LK_PATH_PREFIX" |
+    sed 's/[^a-zA-Z0-9]//g')}"
+[ ! -f "${HOME:+$HOME/.${LK_PATH_PREFIX}settings}" ] ||
+    . "$HOME/.${LK_PATH_PREFIX}settings"
+lk_esc() { echo "$1" | sed -Ee 's/\\/\\\\/g' -e 's/[$`"]/\\&/g'; }
+
+[ -n "${LK_BASE:-}" ] ||
+    eval "$(
+        if [ ! -L "$0" ] &&
+            LK_BASE="$(cd "$(dirname "$0")/../.." && pwd -P)" &&
+            [ -d "$LK_BASE/lib/bash" ]; then
+            echo "LK_BASE=\"$(lk_esc "$LK_BASE")\""
+        else
+            echo "$0: LK_BASE not set" >&2
+        fi
+    )"
+export LK_BASE
+
+eval "$(. "$LK_BASE/lib/bash/env.sh")"
+
 xset -b
 xset s 240 60
 export XSECURELOCK_DIM_TIME_MS=750

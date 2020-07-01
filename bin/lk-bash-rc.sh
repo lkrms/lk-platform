@@ -1,9 +1,15 @@
 #!/bin/bash
-# shellcheck disable=SC2030,SC2031
+# shellcheck disable=SC1090,SC1091,SC2001,SC2030,SC2031
 
 unset LK_PROMPT_DISPLAYED
 
 [ ! -f "/etc/default/lk-platform" ] || . "/etc/default/lk-platform"
+LK_PATH_PREFIX="${LK_PATH_PREFIX:-lk-}"
+LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(echo "$LK_PATH_PREFIX" |
+    sed 's/[^a-zA-Z0-9]//g')}"
+[ ! -f "${HOME:+$HOME/.${LK_PATH_PREFIX}settings}" ] ||
+    . "$HOME/.${LK_PATH_PREFIX}settings"
+lk_esc() { echo "$1" | sed -Ee 's/\\/\\\\/g' -e 's/[$`"]/\\&/g'; }
 
 [ -n "${LK_BASE:-}" ] ||
     eval "$(
@@ -11,23 +17,16 @@ unset LK_PROMPT_DISPLAYED
         if [ ! -L "$BS" ] &&
             LK_BASE="$(cd "$(dirname "$BS")/.." && pwd -P)" &&
             [ -d "$LK_BASE/lib/bash" ]; then
-            LK_BASE="${LK_BASE//\\/\\\\}"
-            LK_BASE="${LK_BASE//\$/\\\$}"
-            LK_BASE="${LK_BASE//\`/\\\`}"
-            LK_BASE="${LK_BASE//\"/\\\"}"
-            echo "LK_BASE=\"$LK_BASE\""
+            echo "LK_BASE=\"$(lk_esc "$LK_BASE")\""
         else
             echo "$BS: LK_BASE not set" >&2
         fi
     )"
 export LK_BASE
 
-eval "$(
-    shopt -s nullglob
-    for FILE in "$LK_BASE/lib/bash"/{core,prompt,wordpress}.sh; do
-        echo ". \"\$LK_BASE/lib/bash/$(basename "$FILE")\""
-    done
-)"
+. "$LK_BASE/lib/bash/core.sh"
+. "$LK_BASE/lib/bash/prompt.sh"
+. "$LK_BASE/lib/bash/wordpress.sh"
 
 function lk_find_latest() {
     local i TYPE="${1:-}" TYPE_ARGS=()
@@ -85,8 +84,6 @@ HISTTIMEFORMAT="%b %_d %Y %H:%M:%S %z "
 
 [ ! -f "/usr/share/bash-completion/bash_completion" ] || . "/usr/share/bash-completion/bash_completion"
 
-eval "$(_lk_get_env)"
-
-export WP_CLI_CONFIG_PATH="$LK_BASE/etc/wp-cli.yml"
+eval "$(. "$LK_BASE/lib/bash/env.sh")"
 
 [ "${LK_PROMPT:-1}" -ne "1" ] || lk_enable_prompt

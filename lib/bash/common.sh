@@ -1,12 +1,25 @@
 #!/bin/bash
-# shellcheck disable=SC1090,SC2034
+# shellcheck disable=SC1090,SC1091,SC2001,SC2030,SC2031,SC2034
 
 [ ! -f "/etc/default/lk-platform" ] || . "/etc/default/lk-platform"
+LK_PATH_PREFIX="${LK_PATH_PREFIX:-lk-}"
+LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(echo "$LK_PATH_PREFIX" |
+    sed 's/[^a-zA-Z0-9]//g')}"
+[ ! -f "${HOME:+$HOME/.${LK_PATH_PREFIX}settings}" ] ||
+    . "$HOME/.${LK_PATH_PREFIX}settings"
 
-[ -n "${LK_BASE:-}" ] || {
-    echo "${BASH_SOURCE[0]}: LK_BASE not set" >&2
-    exit 1
-}
+[ -n "${LK_BASE:-}" ] ||
+    eval "$(
+        BS="${BASH_SOURCE[0]}"
+        if [ ! -L "$BS" ] &&
+            LK_BASE="$(cd "$(dirname "$BS")/../.." && pwd -P)" &&
+            [ -d "$LK_BASE/lib/bash" ]; then
+            echo "LK_BASE=\"$(lk_esc "$LK_BASE")\""
+        else
+            echo "$BS: LK_BASE not set" >&2
+        fi
+    )"
+export LK_BASE
 
 . "$LK_BASE/lib/bash/core.sh"
 . "$LK_BASE/lib/bash/assert.sh"
@@ -33,6 +46,8 @@ function lk_elevate() {
 }
 
 lk_trap_err
+
+eval "$(. "$LK_BASE/lib/bash/env.sh")"
 
 LK_ARGV=("$@")
 
