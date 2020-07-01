@@ -329,12 +329,12 @@ lk_keep_original "/mnt/etc/profile"
 sed -Ei 's/^umask [0-9]+\b/umask 002/' "/mnt/etc/profile"
 umask 002
 
-lk_console_detail "Sourcing $LK_BASE/bin/lk-bash-rc.sh in ~/.bashrc for all users"
+lk_console_detail "Sourcing $LK_BASE/lib/bash/rc.sh in ~/.bashrc for all users"
 cat <<EOF >>"/mnt/etc/skel/.bashrc"
 
 # Added by bootstrap.sh at $(lk_now)
-if [ -f '$LK_BASE/bin/lk-bash-rc.sh' ]; then
-    . '$LK_BASE/bin/lk-bash-rc.sh'
+if [ -f '$LK_BASE/lib/bash/rc.sh' ]; then
+    . '$LK_BASE/lib/bash/rc.sh'
 fi
 EOF
 install -v -m 0600 "/mnt/etc/skel/.bashrc" "/mnt/root/.bashrc"

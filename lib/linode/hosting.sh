@@ -405,11 +405,11 @@ EOF
 log_file "$FILE"
 sysctl --system
 
-log "Sourcing $LK_BASE/bin/lk-bash-rc.sh in ~/.bashrc for all users"
+log "Sourcing $LK_BASE/lib/bash/rc.sh in ~/.bashrc for all users"
 BASH_SKEL="
 # Added by $(basename "$0") at $(now)
-if [ -f '$LK_BASE/bin/lk-bash-rc.sh' ]; then
-    . '$LK_BASE/bin/lk-bash-rc.sh'
+if [ -f '$LK_BASE/lib/bash/rc.sh' ]; then
+    . '$LK_BASE/lib/bash/rc.sh'
 fi"
 echo "$BASH_SKEL" >>"/etc/skel/.bashrc"
 if [ -f "/root/.bashrc" ]; then
