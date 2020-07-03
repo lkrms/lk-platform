@@ -784,16 +784,17 @@ function lk_maybe_sudo() {
 
 # lk_safe_symlink target_path link_path [use_sudo [try_default]]
 function lk_safe_symlink() {
-    local TARGET LINK SUDO_OR_NOT="${3:-${SUDO_OR_NOT:-0}}" TRY_DEFAULT="${4:-0}" CURRENT_TARGET
+    local TARGET LINK LINK_DIR CURRENT_TARGET \
+        SUDO_OR_NOT="${3:-${SUDO_OR_NOT:-0}}" TRY_DEFAULT="${4:-0}"
     TARGET="$1"
     LINK="$2"
     [ -n "$LINK" ] || return
     [ -e "$TARGET" ] || {
-        lk_is_true "$TRY_DEFAULT" || return
-        TARGET="$(lk_add_file_suffix "$TARGET" "-default")"
-        [ -e "$TARGET" ] || return
+        lk_is_true "$TRY_DEFAULT" &&
+            TARGET="$(lk_add_file_suffix "$TARGET" "-default")" &&
+            [ -e "$TARGET" ] || return
     }
-    ! lk_command_exists realpath || TARGET="$(lk_maybe_sudo realpath -s "$TARGET")"
+    LINK_DIR="$(dirname "$LINK")"
     LK_SAFE_SYMLINK_NO_CHANGE=
     if lk_maybe_sudo test -L "$LINK"; then
         CURRENT_TARGET="$(lk_maybe_sudo readlink "$LINK")" || return
@@ -802,12 +803,12 @@ function lk_safe_symlink() {
             return
         }
         lk_maybe_sudo rm -f "$LINK" || return
-    elif [ -e "$LINK" ]; then
-        lk_maybe_sudo mv -fv "$LINK" "$LINK.bak" || return
-    else
-        lk_maybe_sudo mkdir -pv "$(dirname "$LINK")" || return
+    elif lk_maybe_sudo test -e "$LINK"; then
+        lk_maybe_sudo mv -fv "$LINK" "$LINK.orig" || return
+    elif lk_maybe_sudo test ! -d "$LINK_DIR"; then
+        lk_maybe_sudo mkdir -pv "$LINK_DIR" || return
     fi
-    lk_maybe_sudo ln -sv "$TARGET" "$LINK"
+    lk_maybe_sudo ln -sTv "$TARGET" "$LINK"
 }
 
 function _lk_get_gnu_command() {
@@ -1165,7 +1166,7 @@ set -o pipefail
 _lk_register_gnu_commands date ln mktemp sort stat
 
 # gawk, findutils, grep, netcat, sed, tar
-_lk_register_gnu_commands awk find grep nc sed tar
+_lk_register_gnu_commands awk find grep nc sed tar xargs
 
 eval "$(lk_get_colours)"
 

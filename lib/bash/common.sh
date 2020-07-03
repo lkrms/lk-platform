@@ -40,7 +40,7 @@ function lk_has_arg() {
 
 function lk_elevate() {
     [ "$EUID" -eq "0" ] || {
-        sudo "$0" "$@"
+        sudo -H "$0" "$@"
         exit
     }
 }

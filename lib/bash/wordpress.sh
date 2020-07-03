@@ -280,7 +280,7 @@ function lk_wp_reset_local() {
     SITE_URL="${SITE_URL#http*://}"
     lk_no_input ||
         lk_confirm "Reset local instance of '$SITE_URL' for development?" Y || return
-    lk_console_item "Configuring WordPress in" "$PWD"
+    lk_console_item "Configuring WordPress at" "$PWD"
     ADMIN_EMAIL="${SITE_URL#www.}"
     ADMIN_EMAIL="$USER@${ADMIN_EMAIL%%.*}.localhost"
     lk_console_detail "Resetting admin email addresses to" "$ADMIN_EMAIL"
@@ -398,4 +398,70 @@ function lk_wp_use_cron() {
         [ -z "$CRONTAB" ] || echo "$CRONTAB"
         echo "$CRON_COMMAND"
     } | crontab -
+}
+
+# lk_wp_fix_permissions [local_path]
+function lk_wp_fix_permissions() {
+    local LOCAL_PATH LOG_DIR OWNER WRITABLE TYPE MODE ARGS \
+        SUDO_OR_NOT="${SUDO_OR_NOT:-0}" \
+        DIR_MODE="${DIR_MODE:-0750}" \
+        FILE_MODE="${FILE_MODE:-0640}" \
+        WRITABLE_DIR_MODE="${WRITABLE_DIR_MODE:-2770}" \
+        WRITABLE_FILE_MODE="${WRITABLE_FILE_MODE:-0660}" \
+        WRITABLE_REGEX="${WRITABLE_REGEX:-.*/wp-content/(cache|uploads|w3tc-config)}"
+    LOCAL_PATH="${1:-$HOME/public_html}"
+    [ -f "$LOCAL_PATH/wp-config.php" ] ||
+        lk_warn "not a WordPress installation: $LOCAL_PATH" || return
+    LOCAL_PATH="$(realpath "$LOCAL_PATH")" &&
+        LOG_DIR="$(lk_mktemp_dir)" &&
+        OWNER="$(gnu_stat --printf '%U' "$LOCAL_PATH/..")" || return
+    lk_console_item "Setting file permissions on WordPress at" \
+        "$LOCAL_PATH"
+    lk_console_detail "Log directory:" "$LOG_DIR"
+    lk_is_root || lk_is_true "$SUDO_OR_NOT" ||
+        ! lk_can_sudo || SUDO_OR_NOT=1
+    if lk_is_root || lk_is_true "$SUDO_OR_NOT"; then
+        lk_console_detail "Setting owner to" "$OWNER"
+        lk_maybe_sudo chown -Rhc "$OWNER:" "$LOCAL_PATH" >"$LOG_DIR/chown.log" || return
+        lk_console_detail "File ownership changes:" "$(wc -l <"$LOG_DIR/chown.log")"
+    else
+        lk_console_warning "Unable to set owner (not running as root)"
+    fi
+    lk_console_detail "Setting file mode"
+    for WRITABLE in "" w; do
+        for TYPE in d f; do
+            case "$WRITABLE$TYPE" in
+            d)
+                MODE="$DIR_MODE"
+                ;;&
+            f)
+                MODE="$FILE_MODE"
+                ;;&
+            wd)
+                MODE="$WRITABLE_DIR_MODE"
+                ;;&
+            wf)
+                MODE="$WRITABLE_FILE_MODE"
+                ;;&
+            *)
+                ARGS=(-type "$TYPE" ! -perm "$MODE")
+                ;;&
+            d | f)
+                # exclude writable directories and their descendants
+                ARGS=(! \( -type d -regex "$WRITABLE_REGEX" -prune \) "${ARGS[@]}")
+                ;;&
+            f)
+                # exclude writable files (i.e. not just files in writable directories)
+                ARGS+=(! -regex "$WRITABLE_REGEX")
+                ;;
+            w*)
+                ARGS+=(-regex "$WRITABLE_REGEX(/.*)?")
+                ;;
+            esac
+            find "$LOCAL_PATH" -regextype posix-egrep "${ARGS[@]}" -print0 |
+                lk_maybe_sudo gnu_xargs -0r chmod -c "0$MODE" >>"$LOG_DIR/chmod.log" || return
+        done
+    done
+    lk_console_detail "File mode changes:" "$(wc -l <"$LOG_DIR/chmod.log")"
+    lk_console_message "Setting file permissions completed successfully" "$LK_GREEN"
 }
