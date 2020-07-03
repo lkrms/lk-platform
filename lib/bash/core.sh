@@ -839,7 +839,7 @@ function lk_install_gnu_commands() {
         [ -d "$GNU_PATH" ] ||                                   # is a directory
         lk_warn "not a directory: $GNU_PATH" || return          # ...
     [ -w "$GNU_PATH" ] ||                                       # it's also writable; or
-        lk_is_true "$SUDO_OR_NOT" ||                            # will be installed as superuser; or
+        lk_is_true "${SUDO_OR_NOT:-0}" ||                       # will be installed as superuser; or
         { [ ! -e "$GNU_PATH" ] &&                               # does not exist but the
             PARENT="$(lk_first_existing_parent "$GNU_PATH")" && # first existing parent dir
             [ -w "$PARENT" ]; } ||                              # is writable; or
@@ -860,7 +860,7 @@ function lk_install_gnu_commands() {
 }
 
 function lk_check_gnu_commands() {
-    local COMMANDS=("$@") SUDO_OR_NOT
+    local COMMANDS=("$@") SUDO_OR_NOT="${SUDO_OR_NOT:-0}"
     [ "$#" -gt "0" ] || COMMANDS=(${LK_GNU_COMMANDS[@]+"${LK_GNU_COMMANDS[@]}"})
     if [ "${#COMMANDS[@]}" -gt "0" ]; then
         lk_commands_exist "${COMMANDS[@]/#/gnu_}" || {
