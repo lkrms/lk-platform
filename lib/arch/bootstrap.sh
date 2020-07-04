@@ -126,7 +126,7 @@ trap "exit_trap" EXIT
 
 for FILE_PATH in /lib/bash/core.sh /lib/arch/packages.sh; do
     FILE="$SCRIPT_DIR/$(basename "$FILE_PATH")"
-    URL="https://raw.githubusercontent.com/lkrms/lk-platform/master$FILE_PATH"
+    URL="https://raw.githubusercontent.com/lkrms/lk-platform/${LK_PLATFORM_BRANCH:-master}$FILE_PATH"
     [ -e "$FILE" ] ||
         wget --output-document="$FILE" "$URL" || {
         rm -f "$FILE"
@@ -387,7 +387,8 @@ lk_console_detail "Installing lk-platform to:" "$LK_BASE"
 in_target install -v -d -m 2775 -o "$TARGET_USERNAME" -g "adm" \
     "$LK_BASE"
 in_target sudo -H -u "$TARGET_USERNAME" \
-    git clone "https://github.com/lkrms/lk-platform.git" "$LK_BASE"
+    git clone -b "${LK_PLATFORM_BRANCH:-master}" \
+    "https://github.com/lkrms/lk-platform.git" "$LK_BASE"
 echo "LK_BASE=\"$LK_BASE\"" >"/mnt/etc/default/lk-platform"
 in_target "$LK_BASE/bin/lk-gnu-install-commands.sh"
 

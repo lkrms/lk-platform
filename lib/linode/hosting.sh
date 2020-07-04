@@ -779,7 +779,8 @@ install -v -d -m 2775 -o "$FIRST_ADMIN" -g "adm" "$LK_BASE"
 if [ -z "$(ls -A "$LK_BASE")" ]; then
     log "Cloning 'https://github.com/lkrms/lk-platform.git' to '$LK_BASE'"
     keep_trying sudo -Hu "$FIRST_ADMIN" \
-        git clone "https://github.com/lkrms/lk-platform.git" "$LK_BASE"
+        git clone -b "${LK_PLATFORM_BRANCH:-master}" \
+        "https://github.com/lkrms/lk-platform.git" "$LK_BASE"
     # TODO: escape with lk_escape_double_quotes
     sudo -Hu "$FIRST_ADMIN" bash -c "\
 cd \"$LK_BASE\" &&
