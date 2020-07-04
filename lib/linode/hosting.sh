@@ -27,6 +27,7 @@
 # <UDF name="SCRIPT_DEBUG" label="Enable debugging" oneof="Y,N" default="N" />
 # <UDF name="SHUTDOWN_ACTION" label="Reboot or power down after successful deployment" oneof="reboot,poweroff" default="reboot" />
 # <UDF name="SHUTDOWN_DELAY" label="Delay before shutdown/reboot after deployment (in minutes)" default="0" />
+# <UDF name="LK_PLATFORM_BRANCH" label="lk-platform tracking branch" oneof="master,develop" default="master" />
 
 function is_installed() {
     local STATUS
@@ -537,6 +538,7 @@ PACKAGES=(
     man-db
     manpages
     nano
+    netcat-openbsd
     psmisc
     pv
     rsync
