@@ -403,6 +403,9 @@ EOF
                 "/opt/opcache-gui" || exit
     }
 
+    MINIMAL=0
+    [ "$(free -g | grep -Eo "[0-9]+" | head -n1)" -ge "15" ] || MINIMAL=1
+
     SUDO_OR_NOT=1
 
     lk_apply_setting "/etc/ssh/sshd_config" "PasswordAuthentication" "no" " " "#" " "
@@ -431,15 +434,15 @@ EOF
                 echo "allow all" |
                 sudo tee "/etc/qemu/bridge.conf" >/dev/null || exit
         }
-        lk_systemctl_enable libvirtd libvirt-guests
+        lk_is_true "$MINIMAL" || lk_systemctl_enable libvirtd libvirt-guests
 
         sudo usermod --append --groups docker "$USER"
-        lk_systemctl_enable docker
+        lk_is_true "$MINIMAL" || lk_systemctl_enable docker
     fi
 
     sudo test -d "/var/lib/mysql/mysql" ||
         sudo mariadb-install-db --user="mysql" --basedir="/usr" --datadir="/var/lib/mysql"
-    lk_systemctl_enable mysqld
+    lk_is_true "$MINIMAL" || lk_systemctl_enable mysqld
 
     PHP_INI_FILE=/etc/php/php.ini
     for PHP_EXT in bcmath curl gd gettext imap intl mysqli pdo_sqlite soap sqlite3 xmlrpc zip; do
@@ -499,7 +502,7 @@ EOF
             lk_apply_php_setting "php_flag[display_errors]" "Off"
             lk_apply_php_setting "php_flag[display_startup_errors]" "Off"
         }
-    lk_systemctl_enable php-fpm
+    lk_is_true "$MINIMAL" || lk_systemctl_enable php-fpm
 
     HTTPD_CONF_FILE="/etc/httpd/conf/httpd.conf"
     sudo install -d -m 0755 -o "$USER" -g "$(id -gn)" "/srv/http"
@@ -519,11 +522,7 @@ EOF
     lk_enable_httpd_entry "LoadModule vhost_alias_module modules/mod_vhost_alias.so"
     sudo usermod --append --groups "http" "$USER"
     sudo usermod --append --groups "$(id -gn)" "http"
-    lk_systemctl_enable httpd
-
-    ! lk_command_exists vim || lk_safe_symlink "$(type -P vim)" "/usr/local/bin/vi"
-    ! lk_command_exists xfce4-terminal || lk_safe_symlink "$(type -P xfce4-terminal)" "/usr/local/bin/xterm"
-    lk_install_gnu_commands
+    lk_is_true "$MINIMAL" || lk_systemctl_enable httpd
 
     unset SUDO_OR_NOT
 
