@@ -33,23 +33,35 @@ PACMAN_PACKAGES=(
 
     # basics
     bash-completion
+    bc
     bind-tools
+    bridge-utils
     byobu
     curl
     diffutils
     dmidecode
+    glances
+    htop
+    jq
     lftp
+    lsof
+    mediainfo
     nano
     ncdu
     ndisc6 # for rdisc6
     nmap
     openbsd-netcat
+    p7zip
     ps_mem
+    pv
     rsync
+    stow
     tcpdump
     traceroute
+    unzip
     vim
     wget
+    whois
 
     # == UNNECESSARY ON DISPOSABLE SERVERS
     #
@@ -119,6 +131,7 @@ PACMAN_DESKTOP_PACKAGES=(
 )
 
 AUR_DESKTOP_PACKAGES=(
+    autorandr-git
     mugshot
     xfce4-panel-profiles
 
@@ -252,9 +265,7 @@ lk_is_virtual && {
 
         #
         noto-fonts
-        noto-fonts-cjk
         noto-fonts-emoji
-        noto-fonts-extra
         ttf-dejavu
         ttf-inconsolata
         ttf-jetbrains-mono

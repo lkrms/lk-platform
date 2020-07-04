@@ -1,0 +1,19 @@
+#!/bin/bash
+
+set -euo pipefail
+
+if [ -f "$AUTORANDR_PROFILE_FOLDER/dpi" ] &&
+    DPI="$(cat "$AUTORANDR_PROFILE_FOLDER/dpi")" &&
+    [[ "$DPI" =~ ^[0-9]+$ ]]; then
+
+    xrandr --dpi "$DPI"
+
+    case "${XDG_CURRENT_DESKTOP:-}" in
+    XFCE)
+        xfconf-query -c "xsettings" -p "/Xft/DPI" -n -t int -s "$DPI"
+        ;;
+    *)
+        echo "Xft.dpi: $DPI" | xrdb -merge
+        ;;
+    esac
+fi

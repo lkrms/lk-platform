@@ -26,7 +26,6 @@ PAC_KEEP=(
     mongodb-bin
 
     #
-    asciicast2gif
     woeusb
 )
 
@@ -74,29 +73,17 @@ PACMAN_PACKAGES+=(
     zsh
 
     # utilities
-    bc
     cdrtools
-    jq
-    mediainfo
-    p7zip
-    pv
-    stow
     unison
-    unzip
     wimlib
     yq
 
     # networking
-    bridge-utils
     openconnect
-    whois
 
     # monitoring
     atop
-    glances
-    htop # 'top' alternative
     iotop
-    lsof
 
     # network monitoring
     iftop   # shows network traffic by service and host
@@ -115,6 +102,7 @@ PACMAN_PACKAGES+=(
 )
 
 AUR_PACKAGES+=(
+    asciicast2gif
     vpn-slice
 )
 

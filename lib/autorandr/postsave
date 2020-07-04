@@ -1,0 +1,11 @@
+#!/bin/bash
+
+set -euo pipefail
+
+if DPI="$(xdpyinfo |
+    grep -Eo '^[[:space:]]+resolution:[[:space:]]*[0-9]+x[0-9]+' |
+    grep -Eo '[0-9]+' | head -n1)"; then
+
+    echo "$DPI" >"$AUTORANDR_PROFILE_FOLDER/dpi"
+
+fi

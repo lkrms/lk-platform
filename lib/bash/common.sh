@@ -34,12 +34,24 @@ function _lk_include() {
     done
 }
 
+function lk_usage() {
+    echo "${1:-${USAGE:-Please see $0 for usage}}" >&2
+    exit 1
+}
+
 function lk_has_arg() {
     lk_in_array "$1" LK_ARGV
 }
 
 function lk_elevate() {
     [ "$EUID" -eq "0" ] || {
+        sudo -H "$0" "$@"
+        exit
+    }
+}
+
+function lk_maybe_elevate() {
+    [ "$EUID" -eq "0" ] || ! lk_can_sudo || {
         sudo -H "$0" "$@"
         exit
     }

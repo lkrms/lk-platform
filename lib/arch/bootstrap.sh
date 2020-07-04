@@ -17,7 +17,10 @@ LOCALES=("en_AU" "en_GB")         # UTF-8 is enforced
 LANGUAGE="en_AU:en_GB:en"
 LK_BASE="/opt/lk-platform"
 MIRROR="http://archlinux.mirror.linacreative.com/archlinux/\$repo/os/\$arch"
-CUSTOM_REPOS=("aur http://arch.repo.linacreative.com/aur")
+CUSTOM_REPOS=(
+    "aur http://arch.repo.linacreative.com/aur"
+    "lk-aur http://arch.repo.linacreative.com/lk-aur"
+)
 
 # these will be added to the defaults in packages.sh
 PACMAN_PACKAGES=()
@@ -32,8 +35,9 @@ BS="${BASH_SOURCE[0]}" && [ ! -L "$BS" ] &&
 
 function usage() {
     echo "\
-usage: $(basename "$0") <root_partition> <boot_partition> [<other_os_partition>...] <hostname> <username>
-   or: $(basename "$0") <install_disk> <hostname> <username>
+Usage:
+  $(basename "$0") <root_partition> <boot_partition> [<other_os_partition>...] <hostname> <username>
+  $(basename "$0") <install_disk> <hostname> <username>
 
 Current block devices:
 
@@ -385,6 +389,7 @@ in_target install -v -d -m 2775 -o "$TARGET_USERNAME" -g "adm" \
 in_target sudo -H -u "$TARGET_USERNAME" \
     git clone "https://github.com/lkrms/lk-platform.git" "$LK_BASE"
 echo "LK_BASE=\"$LK_BASE\"" >"/mnt/etc/default/lk-platform"
+in_target "$LK_BASE/bin/lk-gnu-install-commands.sh"
 
 if lk_is_qemu; then
     lk_console_detail "Enabling QEMU guest agent"

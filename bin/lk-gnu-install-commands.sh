@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC1090,SC2015
+# shellcheck disable=SC1007,SC1090,SC2015
 
 set -euo pipefail
 lk_die() { echo "$1" >&2 && exit 1; }
@@ -7,6 +7,8 @@ lk_die() { echo "$1" >&2 && exit 1; }
     LK_BASE="$(cd "$(dirname "$BS")/.." && pwd -P)" &&
     [ -d "$LK_BASE/lib/bash" ] || lk_die "${BS:+$BS: }LK_BASE not set"; }
 
-. "$LK_BASE/lib/bash/common.sh"
+include= . "$LK_BASE/lib/bash/common.sh"
+
+lk_maybe_elevate
 
 lk_install_gnu_commands "$@"
