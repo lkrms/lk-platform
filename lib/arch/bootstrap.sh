@@ -82,7 +82,7 @@ function before_install() {
     if [ -n "${NTP_SERVER:-}" ]; then
         if ! type -P ntpd >/dev/null; then
             lk_console_detail "Installing ntpd in live environment"
-            pacman -Sy ntp || lk_die "unable to install ntpd"
+            pacman -Sy --noconfirm ntp >/dev/null || lk_die "unable to install ntpd"
         fi
         lk_console_detail "Synchronising system time with" "$NTP_SERVER"
         ntpd -qgx "$NTP_SERVER" || lk_die "unable to sync system time"
