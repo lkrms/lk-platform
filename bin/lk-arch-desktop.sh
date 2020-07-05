@@ -359,14 +359,23 @@ EOF
     [ "${#PAC_TO_MARK_EXPLICIT[@]}" -eq "0" ] ||
         sudo pacman -D --asexplicit "${PAC_TO_MARK_EXPLICIT[@]}"
 
-    PAC_TO_INSTALL=($(comm -13 <(pacman -Qeq | sort | uniq) <(lk_echo_array "${PACMAN_PACKAGES[@]}" | sort | uniq)))
-    [ "${#PAC_TO_INSTALL[@]}" -eq "0" ] || {
-        lk_console_message "Installing new packages from repo"
-        sudo pacman -Sy "${PAC_TO_INSTALL[@]}"
-    }
+    ! PAC_TO_PURGE=($(pacman -Qdttq)) ||
+        [ "${#PAC_TO_PURGE[@]}" -eq "0" ] ||
+        {
+            lk_echo_array "${PAC_TO_PURGE[@]}" |
+                lk_console_list "Installed but no longer required:" package packages
+            ! lk_confirm "Remove the above?" Y ||
+                sudo pacman -Rns "${PAC_TO_PURGE[@]}"
+        }
 
     lk_console_message "Upgrading installed packages"
     sudo pacman -Syu
+
+    PAC_TO_INSTALL=($(comm -13 <(pacman -Qeq | sort | uniq) <(lk_echo_array "${PACMAN_PACKAGES[@]}" | sort | uniq)))
+    [ "${#PAC_TO_INSTALL[@]}" -eq "0" ] || {
+        lk_console_message "Installing new packages from repo"
+        sudo pacman -S "${PAC_TO_INSTALL[@]}"
+    }
 
     if [ "${#AUR_PACKAGES[@]}" -gt "0" ]; then
         lk_command_exists yay || {
@@ -381,15 +390,6 @@ EOF
         lk_console_message "Upgrading installed AUR packages"
         yay -Syu --aur
     fi
-
-    ! PAC_TO_PURGE=($(pacman -Qdttq)) ||
-        [ "${#PAC_TO_PURGE[@]}" -eq "0" ] ||
-        {
-            lk_echo_array "${PAC_TO_PURGE[@]}" |
-                lk_console_list "Installed but no longer required:" package packages
-            ! lk_confirm "Remove the above?" Y ||
-                sudo pacman -Rns "${PAC_TO_PURGE[@]}"
-        }
 
     PAC_KEPT=($(comm -12 <(pacman -Qeq | sort | uniq) <(lk_echo_array ${PAC_KEEP[@]+"${PAC_KEEP[@]}"} | sort | uniq)))
     [ "${#PAC_KEPT[@]}" -eq "0" ] ||

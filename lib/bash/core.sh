@@ -90,7 +90,7 @@ function lk_mktemp_fifo() {
 
 function lk_commands_exist() {
     while [ "$#" -gt "0" ]; do
-        type -P "$1" >/dev/null 2>&1 || return
+        type -P "$1" >/dev/null || return
         shift
     done
 }
@@ -102,7 +102,7 @@ function lk_command_exists() {
 function lk_first_existing_command() {
     local COMMAND
     for COMMAND in "$@"; do
-        if type -P "$COMMAND" >/dev/null 2>&1; then
+        if type -P "$COMMAND" >/dev/null; then
             echo "$COMMAND"
             return
         fi
@@ -852,7 +852,7 @@ function lk_install_gnu_commands() {
         GCOMMAND="$(_lk_get_gnu_command "$COMMAND")"
         { lk_command_exists "$GCOMMAND" ||
             lk_warn "$GCOMMAND not found"; } &&
-            COMMAND_PATH="$(type -P "$GCOMMAND" 2>/dev/null)" &&
+            COMMAND_PATH="$(type -P "$GCOMMAND")" &&
             lk_safe_symlink "$COMMAND_PATH" "$GNU_PATH/gnu_$COMMAND" ||
             EXIT_STATUS="$?"
     done

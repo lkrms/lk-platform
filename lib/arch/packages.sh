@@ -29,6 +29,7 @@ PACMAN_PACKAGES=(
     networkmanager
     openssh
     ntp
+    networkmanager-dispatcher-ntpd
     git
 
     # basics

@@ -3,7 +3,7 @@
 
 # To install Arch Linux using the script below:
 #   1. boot from an Arch Linux live CD
-#   2. wget https://lkr.ms/bs
+#   2. curl https://lkr.ms/bs >bs
 #   3. bash bs
 
 set -euo pipefail
@@ -79,22 +79,18 @@ function before_install() {
     lk_console_detail "Checking network connection"
     ping -c 1 "${PING_HOSTNAME:-one.one.one.one}" || lk_die "no network"
 
-    configure_ntp "/etc/ntp.conf"
-    timedatectl set-ntp true
+    if [ -n "${NTP_SERVER:-}" ]; then
+        if ! type -P ntpd >/dev/null; then
+            lk_console_detail "Installing ntpd in live environment"
+            pacman -Sy ntp || lk_die "unable to install ntpd"
+        fi
+        lk_console_detail "Synchronising system time with" "$NTP_SERVER"
+        ntpd -qgx "$NTP_SERVER" || lk_die "unable to sync system time"
+    fi
 }
 
 function in_target() {
     arch-chroot /mnt "$@"
-}
-
-function configure_ntp() {
-    if [ -n "${NTP_SERVER:-}" ]; then
-        lk_console_detail "Configuring NTP"
-        lk_keep_original "$1"
-        ! grep -Fxq "server $NTP_SERVER iburst" "$1" || return 0
-        sed -Ei 's/^(server|pool)\b/#&/' "$1"
-        echo "server $NTP_SERVER iburst" >>"$1"
-    fi
 }
 
 function configure_pacman() {
@@ -128,7 +124,7 @@ for FILE_PATH in /lib/bash/core.sh /lib/arch/packages.sh; do
     FILE="$SCRIPT_DIR/$(basename "$FILE_PATH")"
     URL="https://raw.githubusercontent.com/lkrms/lk-platform/${LK_PLATFORM_BRANCH:-master}$FILE_PATH"
     [ -e "$FILE" ] ||
-        wget --output-document="$FILE" "$URL" || {
+        curl --output "$FILE" "$URL" || {
         rm -f "$FILE"
         lk_die "unable to download from GitHub: $URL"
     }
@@ -265,6 +261,11 @@ mount -o "${MOUNT_OPTIONS:-defaults}${ROOT_OPTION_EXTRA:-}" "$ROOT_PARTITION" /m
     mkdir /mnt/boot &&
     mount -o "${MOUNT_OPTIONS:-defaults}${BOOT_OPTION_EXTRA:-}" "$BOOT_PARTITION" /mnt/boot || exit
 
+lk_is_false "$KEEP_BOOT_PARTITION" || {
+    lk_console_message "Checking for files from previous installations in boot filesystem"
+    rm -Rfv /mnt/boot/syslinux /mnt/boot/intel-ucode.img
+}
+
 lk_console_message "Installing system"
 pacstrap /mnt "${PACMAN_PACKAGES[@]}" >&6 2>&7
 
@@ -276,8 +277,13 @@ genfstab -U /mnt >>"/mnt/etc/fstab"
 
 configure_pacman "/mnt/etc/pacman.conf"
 
-configure_ntp "/mnt/etc/ntp.conf"
-in_target systemctl enable ntpd.service
+if [ -n "${NTP_SERVER:-}" ]; then
+    lk_console_detail "Configuring NTP"
+    FILE="/mnt/etc/ntp.conf"
+    lk_keep_original "$FILE"
+    sed -Ei 's/^(server|pool)\b/#&/' "$FILE"
+    echo "server $NTP_SERVER iburst" >>"$FILE"
+fi
 
 lk_console_detail "Setting the time zone"
 ln -sfv "/usr/share/zoneinfo/${TIMEZONE:-UTC}" "/mnt/etc/localtime"
