@@ -10,8 +10,8 @@ if [ -f "$AUTORANDR_PROFILE_FOLDER/dpi" ] &&
 
     case "${XDG_CURRENT_DESKTOP:-}" in
     XFCE)
-        xfconf-query -c "xsettings" -p "/Xft/DPI" -n -t int -s "$DPI"
-        ;;
+        "$LK_BASE/bin/lk-xfce4-apply-dpi.sh" "$DPI"
+        ;;&
     *)
         echo "Xft.dpi: $DPI" | xrdb -merge
         ;;

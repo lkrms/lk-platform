@@ -23,18 +23,30 @@ export LK_BASE
 
 eval "$(. "$LK_BASE/lib/bash/env.sh")"
 
-xset -b
-xset s 240 60
-export XSECURELOCK_DIM_TIME_MS=750
-export XSECURELOCK_WAIT_TIME_MS=60000
+! type autorandr >/dev/null 2>&1 ||
+    autorandr -c --default default || true
 
-XSECURELOCK_FONT="$(xfconf-query -c xsettings -p /Gtk/MonospaceFontName)" &&
+export QT_AUTO_SCREEN_SCALE_FACTOR=0
+export QT_SCALE_FACTOR=1
+QT_FONT_DPI="$(xdpyinfo |
+    grep -Eo '^[[:space:]]+resolution:[[:space:]]*[0-9]+x[0-9]+' |
+    grep -Eo '[0-9]+' | head -n1)" &&
+    export QT_FONT_DPI ||
+    unset QT_FONT_DPI
+
+xset -b
+xset s "{LK_DIM_AFTER:=240}" "{LK_DIM_DURATION:=60}"
+export XSECURELOCK_DIM_TIME_MS="${XSECURELOCK_DIM_TIME_MS:-750}"
+export XSECURELOCK_WAIT_TIME_MS="${XSECURELOCK_WAIT_TIME_MS:-$((LK_DIM_DURATION * 1000))}"
+unset LK_DIM_AFTER LK_DIM_DURATION
+
+XSECURELOCK_FONT="${XSECURELOCK_FONT:-$(xfconf-query -c xsettings -p /Gtk/MonospaceFontName)}" &&
     export XSECURELOCK_FONT ||
     unset XSECURELOCK_FONT
 
-export XSECURELOCK_SAVER="saver_blank"
-export XSECURELOCK_SHOW_DATETIME=1
-export XSECURELOCK_AUTH_TIMEOUT=20
+export XSECURELOCK_SAVER="${XSECURELOCK_SAVER:-saver_blank}"
+export XSECURELOCK_SHOW_DATETIME="${XSECURELOCK_SHOW_DATETIME:-1}"
+export XSECURELOCK_AUTH_TIMEOUT="${XSECURELOCK_AUTH_TIMEOUT:-20}"
 xss-lock -n /usr/lib/xsecurelock/dimmer -l -- xsecurelock &
 
 xfconf-query -c xfce4-session -p /general/LockCommand -n -t string -s "xset s activate"

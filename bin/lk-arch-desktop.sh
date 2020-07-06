@@ -92,10 +92,12 @@ PACMAN_PACKAGES+=(
 
     # system
     acme.sh
+    arch-install-scripts
     at
     $(pacman -Sgq base-devel) # TODO: add lk_pacman_group_packages function
     cloud-utils
     cronie
+    expac
     hwinfo
     mlocate
     sysfsutils
