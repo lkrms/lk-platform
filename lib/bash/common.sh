@@ -43,18 +43,31 @@ function lk_has_arg() {
     lk_in_array "$1" LK_ARGV
 }
 
-function lk_elevate() {
-    [ "$EUID" -eq "0" ] || {
-        sudo -H "$0" "$@"
+function _lk_elevate() {
+    if [ "$#" -gt "0" ]; then
+        sudo -H "$@"
+    else
+        sudo -H -E "$0" "${LK_ARGV[@]}"
         exit
-    }
+    fi
+}
+
+function lk_elevate() {
+    if [ "$EUID" -eq "0" ]; then
+        if [ "$#" -gt "0" ]; then
+            "$@"
+        fi
+    else
+        _lk_elevate "$@"
+    fi
 }
 
 function lk_maybe_elevate() {
-    [ "$EUID" -eq "0" ] || ! lk_can_sudo || {
-        sudo -H "$0" "$@"
-        exit
-    }
+    if [ "$EUID" -ne "0" ] && lk_can_sudo; then
+        _lk_elevate "$@"
+    elif [ "$#" -gt "0" ]; then
+        "$@"
+    fi
 }
 
 lk_trap_err

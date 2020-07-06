@@ -776,6 +776,24 @@ function lk_can_sudo() {
 # SUDO_OR_NOT=<1|0|Y|N> lk_maybe_sudo command [arg1...]
 function lk_maybe_sudo() {
     if lk_is_true "${SUDO_OR_NOT:-0}"; then
+        lk_elevate "$@"
+    else
+        "$@"
+    fi
+}
+
+function lk_elevate() {
+    if [ "$EUID" -eq "0" ]; then
+        "$@"
+    else
+        sudo -H "$@"
+    fi
+}
+
+function lk_maybe_elevate() {
+    if [ "$EUID" -eq "0" ]; then
+        "$@"
+    elif lk_can_sudo; then
         sudo -H "$@"
     else
         "$@"
