@@ -1,0 +1,13 @@
+default partial modifier_keys
+xkb_symbols "all" {
+    include "lk_platform(rctrl_hyper)"
+};
+
+partial modifier_keys
+xkb_symbols "rctrl_hyper" {
+    key <RCTL> {
+        type[Group1]= "ONE_LEVEL",
+        symbols[Group1]= [         Hyper_R ]
+    };
+    modifier_map Mod3 { <RCTL> };
+};

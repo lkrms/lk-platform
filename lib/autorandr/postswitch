@@ -17,3 +17,16 @@ if [ -f "$AUTORANDR_PROFILE_FOLDER/dpi" ] &&
         ;;
     esac
 fi
+
+for XKB_FILE in \
+    "$AUTORANDR_PROFILE_FOLDER/xkb" \
+    "$HOME/.config/autorandr/xkb" \
+    "/etc/xdg/autorandr/xkb"; do
+    [ ! -f "$XKB_FILE" ] || break
+    XKB_FILE=
+done
+[ -z "$XKB_FILE" ] ||
+    "$LK_BASE/bin/lk-xkb-load.sh" "$XKB_FILE"
+
+! type -P displaycal-apply-profiles >/dev/null ||
+    displaycal-apply-profiles

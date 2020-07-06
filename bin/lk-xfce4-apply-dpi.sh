@@ -14,7 +14,7 @@ DPI="${1:-$(xdpyinfo |
     grep -Eo '[0-9]+' | head -n1)}" || lk_die
 [[ "$DPI" =~ [0-9]+ ]] || lk_usage "Usage: $(basename "$0") [DPI]"
 
-lk_console_item "Applying Xfce4 settings based on screen DPI of" "$DPI"
+lk_console_item "Applying Xfce4 settings based on screen DPI:" "$DPI"
 
 _MULTIPLIER="$(bc <<<"scale = 10; $DPI / 96")"
 _MULTIPLIERx10="$(bc <<<"scale = 10; v = $DPI * 10 / 96; scale = 0; v / 1")"

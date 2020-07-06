@@ -1,0 +1,59 @@
+default partial alphanumeric_keys keypad_keys
+xkb_symbols "all" {
+    include "tenkeyless(keypad_clear_operators)"
+    include "tenkeyless(move_prsc_cluster_to_keypad)"
+};
+
+partial alphanumeric_keys
+xkb_symbols "move_prsc_cluster_to_keypad" {
+    include "tenkeyless(ctrl_alt_prsc_to_kpdv)"
+    include "tenkeyless(ctrl_alt_sclk_to_kpmu)"
+    include "tenkeyless(ctrl_alt_paus_to_kpsu)"
+};
+
+partial keypad_keys
+xkb_symbols "keypad_clear_operators" {
+    key <KPDV> {
+        type= "CTRL+ALT",
+        symbols[Group1]= [ KP_Divide, KP_Divide, KP_Divide, KP_Divide, KP_Divide ]
+    };
+    key <KPMU> {
+        type= "CTRL+ALT",
+        symbols[Group1]= [ KP_Multiply, KP_Multiply, KP_Multiply, KP_Multiply, KP_Multiply ]
+    };
+    key <KPSU> {
+        type= "CTRL+ALT",
+        symbols[Group1]= [ KP_Subtract, KP_Subtract, KP_Subtract, KP_Subtract, KP_Subtract ]
+    };
+    key <KPAD> {
+        type= "CTRL+ALT",
+        symbols[Group1]= [ KP_Add, KP_Add, KP_Add, KP_Add, KP_Add ]
+    };
+};
+
+partial alphanumeric_keys
+xkb_symbols "ctrl_alt_prsc_to_kpdv" {
+    key <PRSC> {
+        type= "CTRL+ALT",
+        symbols[Group1]= [ Print, Print, Sys_Req, Sys_Req, NoSymbol ],
+        actions[Group1]= [ NoAction(), NoAction(), NoAction(), NoAction(), RedirectKey(key=<KPDV>) ]
+    };
+};
+
+partial alphanumeric_keys
+xkb_symbols "ctrl_alt_sclk_to_kpmu" {
+    key <SCLK> {
+        type= "CTRL+ALT",
+        symbols[Group1]= [ Scroll_Lock, Scroll_Lock, Scroll_Lock, Scroll_Lock, NoSymbol ],
+        actions[Group1]= [ NoAction(), NoAction(), NoAction(), NoAction(), RedirectKey(key=<KPMU>) ]
+    };
+};
+
+partial alphanumeric_keys
+xkb_symbols "ctrl_alt_paus_to_kpsu" {
+    key <PAUS> {
+        type= "CTRL+ALT",
+        symbols[Group1]= [ Pause, Pause, Pause, Pause, NoSymbol ],
+        actions[Group1]= [ NoAction(), NoAction(), NoAction(), NoAction(), RedirectKey(key=<KPSU>) ]
+    };
+};

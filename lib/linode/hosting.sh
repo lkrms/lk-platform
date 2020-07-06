@@ -804,7 +804,7 @@ LK_PATH_PREFIX=\"$PATH_PREFIX\"
 LK_PATH_PREFIX_ALPHA=\"$PATH_PREFIX_ALPHA\"
 LK_ADMIN_EMAIL=\"$ADMIN_EMAIL\"\
 " >"/etc/default/lk-platform"
-"$LK_BASE/bin/lk-gnu-install-commands.sh"
+"$LK_BASE/bin/lk-platform-install.sh"
 
 # TODO: verify downloads
 log "Installing pip, ps_mem, Glances, awscli"

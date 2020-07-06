@@ -396,7 +396,7 @@ in_target sudo -H -u "$TARGET_USERNAME" \
     git clone -b "${LK_PLATFORM_BRANCH:-master}" \
     "https://github.com/lkrms/lk-platform.git" "$LK_BASE"
 echo "LK_BASE=\"$LK_BASE\"" >"/mnt/etc/default/lk-platform"
-in_target "$LK_BASE/bin/lk-gnu-install-commands.sh"
+in_target "$LK_BASE/bin/lk-platform-install.sh"
 
 if lk_is_qemu; then
     lk_console_detail "Enabling QEMU guest agent"

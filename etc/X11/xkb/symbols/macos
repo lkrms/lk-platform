@@ -1,0 +1,55 @@
+default partial alphanumeric_keys modifier_keys
+xkb_symbols "all" {
+    include "macos(swap_alt_win_no_meta)"
+    include "macos(arrow_keys)"
+};
+
+partial modifier_keys
+xkb_symbols "swap_alt_win_no_meta" {
+    key <LALT> {
+        type[Group1]= "ONE_LEVEL",
+        symbols[Group1]= [         Super_L ]
+    };
+    key <RALT> {
+        type[Group1]= "ONE_LEVEL",
+        symbols[Group1]= [         Super_R ]
+    };
+    key <LWIN> {
+        type[Group1]= "ONE_LEVEL",
+        symbols[Group1]= [           Alt_L ]
+    };
+    key <RWIN> {
+        type[Group1]= "ONE_LEVEL",
+        symbols[Group1]= [           Alt_R ]
+    };
+};
+
+partial alphanumeric_keys
+xkb_symbols "arrow_keys" {
+    // Command-Up => Control-Home
+    key   <UP> {
+        type[Group1]= "PC_SUPER_LEVEL2",
+        symbols[Group1]= [              Up,        NoSymbol ],
+        actions[Group1]= [ NoAction(), RedirectKey(key=<HOME>,mods= Control,clearMods= Mod4) ]
+    };
+    // Command-Left => Home
+    // Option-Left => Control-Left
+    key <LEFT> {
+        type[Group1]= "COMMAND_OPTION",
+        symbols[Group1]= [            Left,        NoSymbol,        NoSymbol,            Left,            Left ],
+        actions[Group1]= [ NoAction(), RedirectKey(key=<HOME>,clearMods= Mod4), RedirectKey(key=<LEFT>,mods= Control,clearMods= Alt), NoAction(), NoAction() ]
+    };
+    // Command-Right => End
+    // Option-Right => Control-Right
+    key <RGHT> {
+        type[Group1]= "COMMAND_OPTION",
+        symbols[Group1]= [           Right,        NoSymbol,        NoSymbol,           Right,           Right ],
+        actions[Group1]= [ NoAction(), RedirectKey(key=<END>,clearMods= Mod4), RedirectKey(key=<RGHT>,mods= Control,clearMods= Alt), NoAction(), NoAction() ]
+    };
+    // Command-Down => Control-End
+    key <DOWN> {
+        type[Group1]= "PC_SUPER_LEVEL2",
+        symbols[Group1]= [            Down,        NoSymbol ],
+        actions[Group1]= [ NoAction(), RedirectKey(key=<END>,mods= Control,clearMods= Mod4) ]
+    };
+};
