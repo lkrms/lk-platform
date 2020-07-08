@@ -80,6 +80,10 @@ function edit_file() {
     [ "${LOG_FILE:-Y}" = "N" ] || log_file "$1"
 }
 
+function esc() {
+    echo "$1" | sed -Ee 's/\\/\\\\/g' -e 's/[$`"]/\\&/g'
+}
+
 function log_file() {
     log "<<<< $1" \
         "$(
@@ -783,9 +787,8 @@ if [ -z "$(ls -A "$LK_BASE")" ]; then
     keep_trying sudo -Hu "$FIRST_ADMIN" \
         git clone -b "${LK_PLATFORM_BRANCH:-master}" \
         "https://github.com/lkrms/lk-platform.git" "$LK_BASE"
-    # TODO: escape with lk_escape_double_quotes
     sudo -Hu "$FIRST_ADMIN" bash -c "\
-cd \"$LK_BASE\" &&
+cd \"$(esc "$LK_BASE")\" &&
     git config core.sharedRepository 0664 &&
     git config merge.ff only &&
     git config pull.ff only"
@@ -797,12 +800,13 @@ install -v -m 0660 -o "$FIRST_ADMIN" -g "adm" /dev/null "$LK_BASE/etc/firewall.c
 $ACCEPT_OUTPUT_HOSTS_SH
 ACCEPT_OUTPUT_CHAIN=\"${P}output\"\
 " >"$LK_BASE/etc/firewall.conf"
-# TODO: escape with lk_escape_double_quotes
 echo "\
-LK_BASE=\"$LK_BASE\"
-LK_PATH_PREFIX=\"$PATH_PREFIX\"
-LK_PATH_PREFIX_ALPHA=\"$PATH_PREFIX_ALPHA\"
-LK_ADMIN_EMAIL=\"$ADMIN_EMAIL\"\
+LK_BASE=\"$(esc "$LK_BASE")\"
+LK_PATH_PREFIX=\"$(esc "$PATH_PREFIX")\"
+LK_PATH_PREFIX_ALPHA=\"$(esc "$PATH_PREFIX_ALPHA")\"
+LK_NODE_SERVICES=\"$(esc "$NODE_SERVICES")\"
+LK_NODE_PACKAGES=\"$(esc "$NODE_PACKAGES")\"
+LK_ADMIN_EMAIL=\"$(esc "$ADMIN_EMAIL")\"\
 " >"/etc/default/lk-platform"
 "$LK_BASE/bin/lk-platform-install.sh"
 
