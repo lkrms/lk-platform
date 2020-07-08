@@ -116,6 +116,7 @@ PACMAN_PACKAGES+=(
     firefox-i18n-en-gb
     flameshot
     freerdp
+    ghostwriter
     gucharmap
     inkscape
     keepassxc
@@ -200,7 +201,6 @@ PACMAN_PACKAGES+=(
 
 AUR_PACKAGES+=(
     espanso
-    ghostwriter
     masterpdfeditor-free
     skypeforlinux-stable-bin
     spotify
@@ -447,17 +447,18 @@ EOF
     lk_is_true "$MINIMAL" || lk_systemctl_enable mysqld
 
     PHP_INI_FILE=/etc/php/php.ini
-    for PHP_EXT in bcmath curl gd gettext imap intl mysqli pdo_sqlite soap sqlite3 xmlrpc zip; do
+    for PHP_EXT in bcmath curl exif gd gettext iconv imap intl mysqli pdo_sqlite soap sqlite3 xmlrpc zip; do
         lk_enable_php_entry "extension=$PHP_EXT"
     done
     lk_enable_php_entry "zend_extension=opcache"
     sudo install -d -m 0700 -o "http" -g "http" "/var/cache/php/opcache"
+    lk_apply_php_setting "max_execution_time" "0"
     lk_apply_php_setting "memory_limit" "128M"
     lk_apply_php_setting "error_reporting" "E_ALL"
     lk_apply_php_setting "display_errors" "On"
     lk_apply_php_setting "display_startup_errors" "On"
     lk_apply_php_setting "log_errors" "Off"
-    lk_apply_php_setting "opcache.memory_consumption" "512"
+    lk_apply_php_setting "opcache.enable" "Off"
     lk_apply_php_setting "opcache.file_cache" "/var/cache/php/opcache"
     [ ! -f "/etc/php/conf.d/imagick.ini" ] ||
         PHP_INI_FILE="/etc/php/conf.d/imagick.ini" \
@@ -481,6 +482,7 @@ EOF
         lk_apply_php_setting "xdebug.trace_enable_trigger" "On"
         lk_apply_php_setting "xdebug.collect_params" "4"
         lk_apply_php_setting "xdebug.collect_return" "On"
+        lk_apply_php_setting "xdebug.collect_vars" "On"
         lk_apply_php_setting "xdebug.trace_output_dir" "$HOME/.tmp/trace"
         lk_apply_php_setting "xdebug.trace_output_name" "trace.%H.%R.%u"
     }
@@ -488,17 +490,16 @@ EOF
         {
             sudo install -d -m 0775 -o "root" -g "http" "/var/log/httpd"
             PHP_INI_FILE="/etc/php/php-fpm.d/www.conf"
-            # make it easier to spot memory leaks during development
             lk_apply_php_setting "pm" "static"
             lk_apply_php_setting "pm.max_children" "4"
             lk_apply_php_setting "pm.max_requests" "0"
-            lk_apply_php_setting "request_terminate_timeout" "60"
+            lk_apply_php_setting "request_terminate_timeout" "0"
             lk_apply_php_setting "pm.status_path" "/php-fpm-status"
             lk_apply_php_setting "ping.path" "/php-fpm-ping"
             lk_apply_php_setting "access.log" '/var/log/httpd/php-fpm-$pool.access.log'
             lk_apply_php_setting "access.format" '"%{REMOTE_ADDR}e - %u %t \"%m %r%Q%q\" %s %f %{mili}d %{kilo}M %C%%"'
             lk_apply_php_setting "catch_workers_output" "yes"
-            lk_apply_php_setting "php_admin_value[memory_limit]" "32M"
+            lk_apply_php_setting "php_admin_value[memory_limit]" "128M"
             lk_apply_php_setting "php_admin_value[error_log]" '/var/log/httpd/php-fpm-$pool.error.log'
             lk_apply_php_setting "php_admin_flag[log_errors]" "On"
             lk_apply_php_setting "php_flag[display_errors]" "Off"
