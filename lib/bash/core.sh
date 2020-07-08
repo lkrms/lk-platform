@@ -463,16 +463,29 @@ function lk_console_message() {
 }
 
 function lk_console_detail() {
-    local LK_CONSOLE_PREFIX LK_CONSOLE_MESSAGE_COLOUR
-    LK_CONSOLE_PREFIX="   -> "
+    local LK_CONSOLE_PREFIX="${LK_CONSOLE_PREFIX-   -> }" \
+        LK_CONSOLE_MESSAGE_COLOUR
     LK_CONSOLE_MESSAGE_COLOUR=""
     lk_console_message "$1" "${2:-}" "${3-$LK_YELLOW}"
 }
 
+function lk_console_detail_list() {
+    local LK_CONSOLE_PREFIX="${LK_CONSOLE_PREFIX-   -> }" \
+        LK_CONSOLE_MESSAGE_COLOUR
+    LK_CONSOLE_MESSAGE_COLOUR=""
+    if [ "$#" -le "2" ]; then
+        lk_console_list "$1" "${2-$LK_YELLOW}"
+    else
+        lk_console_list "${@:1:3}" "${4-$LK_YELLOW}"
+    fi
+}
+
 function _lk_console() {
-    local LK_CONSOLE_PREFIX LK_CONSOLE_MESSAGE_COLOUR LK_CONSOLE_PREFIX_COLOUR
-    LK_CONSOLE_PREFIX=":: "
-    LK_CONSOLE_MESSAGE_COLOUR="$(lk_in_string "$LK_BOLD" "$1" || echo "$LK_BOLD")$2"
+    local LK_CONSOLE_PREFIX="${LK_CONSOLE_PREFIX-:: }" \
+        LK_CONSOLE_MESSAGE_COLOUR LK_CONSOLE_PREFIX_COLOUR
+    LK_CONSOLE_MESSAGE_COLOUR="$(
+        lk_in_string "$LK_BOLD" "$1" || echo "$LK_BOLD"
+    )$2"
     LK_CONSOLE_PREFIX_COLOUR="$LK_BOLD$2"
     lk_console_message "$1"
 }
@@ -496,7 +509,8 @@ function lk_console_item() {
 
 # lk_console_list message [single_noun plural_noun] [colour_sequence]
 function lk_console_list() {
-    local MESSAGE SINGLE_NOUN PLURAL_NOUN COLOUR ITEMS LIST
+    local MESSAGE SINGLE_NOUN PLURAL_NOUN COLOUR ITEMS LIST SPACES \
+        LK_CONSOLE_PREFIX="${LK_CONSOLE_PREFIX-==> }"
     MESSAGE="$1"
     shift
     [ "$#" -le "1" ] || {
@@ -507,9 +521,15 @@ function lk_console_list() {
     COLOUR="${1-$LK_DEFAULT_CONSOLE_COLOUR}"
     lk_mapfile /dev/stdin ITEMS
     lk_console_message "$MESSAGE" "$COLOUR"
-    LIST="$(lk_echo_array "${ITEMS[@]}" | COLUMNS="${COLUMNS+$((COLUMNS - 4))}" column -s $'\n' | expand)"
-    lk_echoc "    ${LIST//$'\n'/$'\n'    }" "$COLOUR" >&2
-    [ -z "${SINGLE_NOUN:-}" ] || lk_console_detail "${#ITEMS[@]} $(lk_maybe_plural "${#ITEMS[@]}" "$SINGLE_NOUN" "$PLURAL_NOUN")"
+    LIST="$(lk_echo_array "${ITEMS[@]}" |
+        COLUMNS="${COLUMNS+$((COLUMNS - ${#LK_CONSOLE_PREFIX} - 2))}" \
+            column -s $'\n' | expand)"
+    SPACES="$(lk_repeat " " "$((${#LK_CONSOLE_PREFIX} + 2))")"
+    lk_echoc "$SPACES${LIST//$'\n'/$'\n'$SPACES}" "$COLOUR" >&2
+    [ -z "${SINGLE_NOUN:-}" ] ||
+        LK_CONSOLE_PREFIX="$SPACES" lk_console_detail "(${#ITEMS[@]} $(
+            lk_maybe_plural "${#ITEMS[@]}" "$SINGLE_NOUN" "$PLURAL_NOUN"
+        ))" "" ""
 }
 
 # lk_console_read prompt [default [read_arg...]]
