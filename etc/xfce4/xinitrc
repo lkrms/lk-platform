@@ -1,5 +1,5 @@
 #!/bin/sh
-# shellcheck disable=SC1090,SC1091,SC2015,SC2030,SC2031
+# shellcheck disable=SC1090,SC2015,SC2030,SC2031
 
 [ ! -f "/etc/default/lk-platform" ] || . "/etc/default/lk-platform"
 LK_PATH_PREFIX="${LK_PATH_PREFIX:-lk-}"
@@ -24,7 +24,9 @@ export LK_BASE
 eval "$(. "$LK_BASE/lib/bash/env.sh")"
 
 ! type autorandr >/dev/null 2>&1 ||
-    autorandr -c --default default || true
+    autorandr -c --default default --force ||
+    AUTORANDR_PROFILE_FOLDER="$HOME/.config/autorandr/default" \
+        "$LK_BASE/lib/autorandr/postswitch" || true
 
 export QT_AUTO_SCREEN_SCALE_FACTOR=0
 export QT_SCALE_FACTOR=1
@@ -35,20 +37,31 @@ QT_FONT_DPI="$(xdpyinfo |
     unset QT_FONT_DPI
 
 xset -b
-xset s "{LK_DIM_AFTER:=240}" "{LK_DIM_DURATION:=60}"
-export XSECURELOCK_DIM_TIME_MS="${XSECURELOCK_DIM_TIME_MS:-750}"
-export XSECURELOCK_WAIT_TIME_MS="${XSECURELOCK_WAIT_TIME_MS:-$((LK_DIM_DURATION * 1000))}"
-unset LK_DIM_AFTER LK_DIM_DURATION
+xset s "${LK_DIM_AFTER:=240}" "${LK_DIM_TIME:=60}"
+XSECURELOCK_DIM_TIME_MS="${XSECURELOCK_DIM_TIME_MS:-750}"
+XSECURELOCK_WAIT_TIME_MS="${XSECURELOCK_WAIT_TIME_MS:-$((LK_DIM_TIME * 1000))}"
+unset LK_DIM_AFTER LK_DIM_TIME
 
-XSECURELOCK_FONT="${XSECURELOCK_FONT:-$(xfconf-query -c xsettings -p /Gtk/MonospaceFontName)}" &&
-    export XSECURELOCK_FONT ||
+if XSECURELOCK_FONT="${XSECURELOCK_FONT:-$(
+    xfconf-query -c xsettings -p /Gtk/MonospaceFontName
+)}"; then
+    export XSECURELOCK_FONT
+else
     unset XSECURELOCK_FONT
+fi
 
-export XSECURELOCK_SAVER="${XSECURELOCK_SAVER:-saver_blank}"
-export XSECURELOCK_SHOW_DATETIME="${XSECURELOCK_SHOW_DATETIME:-1}"
-export XSECURELOCK_AUTH_TIMEOUT="${XSECURELOCK_AUTH_TIMEOUT:-20}"
+XSECURELOCK_SAVER="${XSECURELOCK_SAVER:-saver_blank}"
+XSECURELOCK_PASSWORD_PROMPT="${XSECURELOCK_PASSWORD_PROMPT:-time}"
+XSECURELOCK_AUTH_TIMEOUT="${XSECURELOCK_AUTH_TIMEOUT:-20}"
+XSECURELOCK_SHOW_DATETIME="${XSECURELOCK_SHOW_DATETIME:-1}"
+
+export XSECURELOCK_DIM_TIME_MS XSECURELOCK_WAIT_TIME_MS \
+    XSECURELOCK_SAVER XSECURELOCK_PASSWORD_PROMPT XSECURELOCK_AUTH_TIMEOUT \
+    XSECURELOCK_SHOW_DATETIME
+
 xss-lock -n /usr/lib/xsecurelock/dimmer -l -- xsecurelock &
 
-xfconf-query -c xfce4-session -p /general/LockCommand -n -t string -s "xset s activate"
+xfconf-query -c xfce4-session \
+    -p /general/LockCommand -n -t string -s "xset s activate"
 
 . /etc/xdg/xfce4/xinitrc
