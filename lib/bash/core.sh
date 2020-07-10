@@ -1105,8 +1105,23 @@ function lk_start_or_restart() {
 }
 
 function lk_keep_original() {
+    local BACKUP_SUFFIX="${BACKUP_SUFFIX:-.orig}"
     [ ! -e "$1" ] ||
-        lk_maybe_sudo cp -nav "$1" "$1.orig"
+        lk_maybe_sudo cp -nav "$1" "$1$BACKUP_SUFFIX"
+}
+
+# BACKUP_SUFFIX=suffix lk_maybe_sed sed_arg... input_file
+function lk_maybe_sed() {
+    local ARGS=("$@") FILE="${*: -1:1}"
+    [ -f "$FILE" ] && [ ! -L "$FILE" ] ||
+        lk_warn "file not found: $FILE" || return
+    lk_remove_false "[[ ! \"{}\" =~ ^(-i|--in-place(=|\$)) ]]" ARGS
+    diff -q \
+        <(lk_maybe_sudo cat "$FILE") \
+        <(lk_maybe_sudo sed "${ARGS[@]}") >/dev/null || {
+        lk_keep_original "$FILE" &&
+            sed -i "${ARGS[@]}"
+    }
 }
 
 # lk_apply_setting file_path setting_name setting_value [delimiter] [comment_chars] [space_chars]
