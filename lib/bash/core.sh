@@ -935,6 +935,21 @@ function lk_dirs_exist() {
     [ "$#" -gt "0" ] && lk_test_many "-d" "$@"
 }
 
+function lk_remove_false() {
+    local _LK_KEYS _LK_KEY _LK_TEST
+    eval "_LK_KEYS=(\"\${!$2[@]}\")" &&
+        _LK_TEST="$(lk_replace "{}" "\${$2[\$_LK_KEY]}" "$1")" || return
+    for _LK_KEY in ${_LK_KEYS[@]+"${_LK_KEYS[@]}"}; do
+        eval "$_LK_TEST" || unset "$2[$_LK_KEY]"
+    done
+}
+
+# lk_remove_missing ARRAY
+#   Reduce ARRAY to elements that are paths to existing files or directories.
+function lk_remove_missing() {
+    lk_remove_false "lk_maybe_sudo test -e \"{}\"" "$1"
+}
+
 function lk_sort_paths_by_date() {
     gnu_stat --printf '%Y :%n\0' "$@" | sort -zn | sed -zE 's/^[0-9]+ ://' | xargs -0 printf '%s\n'
 }
