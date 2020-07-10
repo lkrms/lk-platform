@@ -397,17 +397,23 @@ function lk_xargs() {
     done
 }
 
-# lk_mapfile file_path array_name [ignore_pattern]
+# lk_mapfile [-z] file_path array_name [ignore_pattern]
 function lk_mapfile() {
-    local LINE
+    local READ_ARGS GREP_ARGS LINE
+    if [ "${1:-}" = "-z" ]; then
+        READ_ARGS+=(-d $'\0')
+        GREP_ARGS+=(-z)
+        shift
+    fi
     [ -e "$1" ] || lk_warn "file not found: $1" || return
     lk_is_identifier "$2" || lk_warn "not a valid identifier: $2" || return
     eval "$2=()"
-    while IFS= read -r LINE || [ -n "$LINE" ]; do
+    while IFS= read -r ${READ_ARGS[@]+"${READ_ARGS[@]}"} LINE ||
+        [ -n "$LINE" ]; do
         eval "$2+=(\"\$LINE\")"
     done < <(
         if [ -n "${3:-}" ]; then
-            grep -Ev "$3" "$1" || true
+            grep -Ev ${GREP_ARGS[@]+"${GREP_ARGS[@]}"} "$3" "$1" || true
         else
             cat "$1"
         fi
