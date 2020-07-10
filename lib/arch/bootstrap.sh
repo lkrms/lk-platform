@@ -335,9 +335,15 @@ else
 fi
 
 lk_console_detail "Setting default umask"
-lk_keep_original "/mnt/etc/profile"
-sed -Ei 's/^umask [0-9]+\b/umask 002/' "/mnt/etc/profile"
-umask 002
+cat <<EOF >"/mnt/etc/profile.d/Z90-lk-umask.sh"
+#!/bin/sh
+
+if [ "$(id -u)" -ne "0" ]; then
+    umask 002
+else
+    umask 022
+fi
+EOF
 
 lk_console_detail "Sourcing $LK_BASE/lib/bash/rc.sh in ~/.bashrc for all users"
 cat <<EOF >>"/mnt/etc/skel/.bashrc"
@@ -379,7 +385,7 @@ echo -e "$TARGET_PASSWORD\n$TARGET_PASSWORD" | in_target passwd "$TARGET_USERNAM
 
 lk_console_detail "Configuring sudo"
 cat <<EOF >"/mnt/etc/sudoers.d/lk-defaults"
-Defaults umask = 0002
+Defaults umask = 0022
 Defaults umask_override
 %wheel ALL=(ALL) ALL
 %wheel ALL=(ALL) NOPASSWD:/usr/bin/pacman

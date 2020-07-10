@@ -39,7 +39,7 @@ function lk_find_latest() {
     lk_check_gnu_commands stat
     gnu_find -L . -xdev -regextype posix-egrep \
         ${@+\( "$@" \)} "${TYPE_ARGS[@]}" -print0 |
-        xargs -0 gnu_stat --format '%Y :%y %12s %N' |
+        xargs -0 gnu_stat --format '%Y :%y %12s %A %N' |
         sort -nr | cut -d: -f2- | "${PAGER:-less}"
 }
 
