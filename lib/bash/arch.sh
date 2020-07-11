@@ -29,7 +29,7 @@ KEY_FILE=\"\$(mktemp)\" &&
         [ -z "$KEY_ID" ] ||
             lk_elevate ${CHROOT_COMMAND[@]+"${CHROOT_COMMAND[@]}"} \
                 pacman-key --lsign-key "$KEY_ID" || return
-        lk_keep_original "$PACMAN_CONF"
+        SUDO_OR_NOT=1 lk_keep_original "$PACMAN_CONF"
         cat <<EOF | lk_elevate tee -a "$PACMAN_CONF" >/dev/null
 
 [$REPO]${SIG_LEVEL:+
