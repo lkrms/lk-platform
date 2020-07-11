@@ -1,14 +1,23 @@
 #!/bin/bash
-# shellcheck disable=SC2015,SC2034,SC2207
+# shellcheck disable=SC2015,SC2016,SC2034,SC2207
 
 function pacman_group_packages() {
     [ "$EUID" -ne "0" ] ||
         [ "${PACMAN_SYNC:-1}" -ne "1" ] || {
-        pacman -Sy >&2 || return
+        lk_pacman_add_repo ${CUSTOM_REPOS[@]+"${CUSTOM_REPOS[@]}"} >&2 &&
+            pacman -Sy >&2 || return
         PACMAN_SYNC=0
     }
     pacman -Sgq "$@"
 }
+
+CUSTOM_REPOS=(
+    'aur|http://arch.repo.linacreative.com/aur|||Optional TrustAll'
+    'lk-aur|http://arch.repo.linacreative.com/lk-aur|||Optional TrustAll'
+
+    #
+    ${CUSTOM_REPOS[@]+"${CUSTOM_REPOS[@]}"}
+)
 
 PACMAN_PACKAGES=(
     # bare minimum

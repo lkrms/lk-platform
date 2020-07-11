@@ -9,6 +9,7 @@
 set -euo pipefail
 shopt -s nullglob
 
+CUSTOM_REPOS=()                   # format: "repo|server|[key_url]|[key_id]|[siglevel]"
 PING_HOSTNAME="one.one.one.one"   # see https://blog.cloudflare.com/dns-resolver-1-1-1-1/
 NTP_SERVER="ntp.linacreative.com" #
 MOUNT_OPTIONS="defaults"          # ",discard" is added automatically if TRIM support is detected (VMs only)
@@ -17,10 +18,6 @@ LOCALES=("en_AU" "en_GB")         # UTF-8 is enforced
 LANGUAGE="en_AU:en_GB:en"
 LK_BASE="/opt/lk-platform"
 MIRROR="http://archlinux.mirror.linacreative.com/archlinux/\$repo/os/\$arch"
-CUSTOM_REPOS=(
-    "aur http://arch.repo.linacreative.com/aur"
-    "lk-aur http://arch.repo.linacreative.com/lk-aur"
-)
 
 # these will be added to the defaults in packages.sh
 PACMAN_PACKAGES=()
@@ -94,21 +91,10 @@ function in_target() {
 }
 
 function configure_pacman() {
-    local i REPO SIG_LEVEL
     lk_console_detail "Configuring pacman"
-    lk_keep_original "$1"
-    sed -Ei 's/^#(Color|TotalDownload)\b/\1/' "$1"
-    for i in "${!CUSTOM_REPOS[@]}"; do
-        REPO=(${CUSTOM_REPOS[$i]})
-        SIG_LEVEL=("${REPO[@]:2}")
-        ! grep -Fxq "[${REPO[0]}]" "$1" || continue
-        cat <<EOF >>"$1"
-
-[${REPO[0]}]
-SigLevel = ${SIG_LEVEL[*]:-Optional TrustAll}
-Server = ${REPO[1]}
-EOF
-    done
+    lk_maybe_sed -E 's/^#(Color|TotalDownload)\b/\1/' "$1"
+    [ "${#CUSTOM_REPOS[@]}" -eq "0" ] ||
+        PACMAN_CONF="$1" lk_pacman_add_repo "${CUSTOM_REPOS[@]}"
 }
 
 [ -d "/sys/firmware/efi/efivars" ] || lk_die "not booted in UEFI mode"
@@ -120,7 +106,7 @@ exec 6>&1 7>&2
 exec > >(tee "$LOG_FILE") 2>&1
 trap "exit_trap" EXIT
 
-for FILE_PATH in /lib/bash/core.sh /lib/arch/packages.sh; do
+for FILE_PATH in /lib/bash/core.sh /lib/bash/arch.sh /lib/arch/packages.sh; do
     FILE="$SCRIPT_DIR/$(basename "$FILE_PATH")"
     URL="https://raw.githubusercontent.com/lkrms/lk-platform/${LK_PLATFORM_BRANCH:-master}$FILE_PATH"
     [ -e "$FILE" ] ||
@@ -131,10 +117,13 @@ for FILE_PATH in /lib/bash/core.sh /lib/arch/packages.sh; do
 done
 
 . "$SCRIPT_DIR/core.sh"
+. "$SCRIPT_DIR/arch.sh"
 
 S="[[:space:]]"
 
 lk_console_message "Setting up live environment"
+# otherwise mirrorlist may be replaced by reflector
+systemctl stop reflector || :
 configure_pacman "/etc/pacman.conf"
 [ -z "$MIRROR" ] ||
     # pacstrap will copy this to the new system
@@ -164,7 +153,6 @@ if [ "$#" -eq "3" ]; then
     lk_confirm "Repartition $1? ALL DATA WILL BE LOST."
 
     lk_console_message "Partitioning $1"
-    set -x
     parted --script "$1" \
         mklabel gpt \
         mkpart fat32 2048s 260MiB \
@@ -178,7 +166,6 @@ if [ "$#" -eq "3" ]; then
         BOOT_PARTITION="${PARTITIONS[0]}" || exit
     wipefs -a "$ROOT_PARTITION"
     wipefs -a "$BOOT_PARTITION"
-    set +x
 
     REPARTITIONED=1
     TARGET_HOSTNAME="$2"
@@ -270,6 +257,8 @@ lk_console_message "Installing system"
 pacstrap /mnt "${PACMAN_PACKAGES[@]}" >&6 2>&7
 
 lk_console_message "Setting up installed system"
+
+CHROOT_COMMAND=(arch-chroot /mnt)
 
 lk_console_detail "Generating fstab"
 lk_keep_original "/mnt/etc/fstab"

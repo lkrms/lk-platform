@@ -7,9 +7,13 @@ lk_die() { echo "$1" >&2 && exit 1; }
     LK_BASE="$(cd "$(dirname "$BS")/.." && pwd -P)" &&
     [ -d "$LK_BASE/lib/bash" ] || lk_die "${BS:+$BS: }LK_BASE not set"; }
 
-include=deploy,linux,httpd,php . "$LK_BASE/lib/bash/common.sh"
+include=deploy,linux,arch,httpd,php . "$LK_BASE/lib/bash/common.sh"
 
 lk_assert_not_root
+
+CUSTOM_REPOS=(
+    'sublime-text|http://sublimetext.mirror.linacreative.com/arch/stable/$arch|http://sublimetext.mirror.linacreative.com/sublimehq-pub.gpg|8A8F901A|'
+)
 
 PACMAN_PACKAGES=()
 AUR_PACKAGES=()
@@ -231,6 +235,8 @@ PACMAN_PACKAGES+=(
     nodejs-less
     python-pylint
     qcachegrind
+    sublime-merge
+    sublime-text
     tidy
     ttf-font-awesome
     ttf-ionicons
@@ -288,13 +294,11 @@ PACMAN_PACKAGES+=(
 )
 
 AUR_PACKAGES+=(
-    sublime-text-dev
     trickle
     vscodium-bin
 
     #
     git-cola
-    sublime-merge
 
     # platforms
     wp-cli
@@ -371,6 +375,7 @@ EOF
         }
 
     lk_console_message "Upgrading installed packages"
+    lk_pacman_add_repo ${CUSTOM_REPOS[@]+"${CUSTOM_REPOS[@]}"}
     sudo pacman -Syu
 
     PAC_TO_INSTALL=($(comm -13 <(pacman -Qeq | sort | uniq) <(lk_echo_array "${PACMAN_PACKAGES[@]}" | sort | uniq)))
