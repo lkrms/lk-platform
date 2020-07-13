@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC1007,SC1090,SC2015
+# shellcheck disable=SC1007,SC1090,SC2015,SC2034
 
 set -euo pipefail
 lk_die() { echo "$1" >&2 && exit 1; }

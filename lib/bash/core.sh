@@ -22,7 +22,7 @@ function _lk_caller() {
 # lk_warn message
 function lk_warn() {
     local EXIT_STATUS="$?"
-    lk_console_warning "$LK_BOLD$(_lk_caller --short):$LK_RESET $1"
+    lk_console_warning "$(_lk_caller): $1"
     return "$EXIT_STATUS"
 }
 
@@ -31,31 +31,22 @@ function lk_warn() {
 function lk_die() {
     local EXIT_STATUS="$?"
     [ "$EXIT_STATUS" -ne "0" ] || EXIT_STATUS="1"
-    [ "$#" -eq "0" ] || lk_console_error "$LK_BOLD$(_lk_caller --short):$LK_RESET $1"
+    [ "$#" -eq "0" ] || lk_console_error "$(_lk_caller): $1"
     lk_is_true "${LK_DIE_HAPPY:-0}" || exit "$EXIT_STATUS"
     exit 0
 }
 
-function lk_trap_err() {
-    function lk_err_trap() {
-        lk_console_error "$(_lk_caller): unhandled error"
-        lk_die
-    }
-    trap 'lk_err_trap' ERR
-}
-
 function lk_trap_exit() {
     function lk_exit_trap() {
-        local i
+        local EXIT_STATUS="$?" i
+        [ "$EXIT_STATUS" -eq "0" ] ||
+            [ "${FUNCNAME[1]:-}" = "lk_die" ] ||
+            lk_console_error "$(_lk_caller): unhandled error"
         for i in ${LK_EXIT_DELETE[@]+"${LK_EXIT_DELETE[@]}"}; do
             rm -Rf -- "$i" || true
         done
-        for i in ${LK_EXIT_KILL[@]+"${LK_EXIT_KILL[@]}"}; do
-            kill "$i" || true
-        done
     }
     LK_EXIT_DELETE=()
-    LK_EXIT_KILL=()
     trap 'lk_exit_trap' EXIT
 }
 
@@ -64,13 +55,6 @@ function lk_delete_on_exit() {
         lk_trap_exit
     fi
     LK_EXIT_DELETE+=("$@")
-}
-
-function lk_kill_on_exit() {
-    if ! lk_variable_declared "LK_EXIT_KILL"; then
-        lk_trap_exit
-    fi
-    LK_EXIT_KILL+=("$@")
 }
 
 function lk_mktemp_file() {
@@ -119,10 +103,10 @@ function lk_first_existing_parent() {
     echo "$FILE"
 }
 
-# lk_bash_at_least major minor
+# lk_bash_at_least major [minor]
 function lk_bash_at_least() {
     [ "${BASH_VERSINFO[0]}" -eq "$1" ] &&
-        [ "${BASH_VERSINFO[1]}" -ge "$2" ] ||
+        [ "${BASH_VERSINFO[1]}" -ge "${2:-0}" ] ||
         [ "${BASH_VERSINFO[0]}" -gt "$1" ]
 }
 
@@ -848,11 +832,11 @@ function lk_safe_symlink() {
         }
         lk_maybe_sudo rm -f "$LINK" || return
     elif lk_maybe_sudo test -e "$LINK"; then
-        lk_maybe_sudo mv -fv "$LINK" "$LINK.orig" || return
+        lk_maybe_sudo mv -fv "$LINK" "$LINK${BACKUP_SUFFIX:-.orig}" || return
     elif lk_maybe_sudo test ! -d "$LINK_DIR"; then
         lk_maybe_sudo mkdir -pv "$LINK_DIR" || return
     fi
-    lk_maybe_sudo ln -sTv "$TARGET" "$LINK"
+    lk_maybe_sudo ln -sv "$TARGET" "$LINK"
 }
 
 function _lk_get_gnu_command() {
@@ -1105,9 +1089,8 @@ function lk_start_or_restart() {
 }
 
 function lk_keep_original() {
-    local BACKUP_SUFFIX="${BACKUP_SUFFIX:-.orig}"
     [ ! -e "$1" ] ||
-        lk_maybe_sudo cp -nav "$1" "$1$BACKUP_SUFFIX"
+        lk_maybe_sudo cp -nav "$1" "$1${BACKUP_SUFFIX:-.orig}"
 }
 
 # BACKUP_SUFFIX=suffix lk_maybe_sed sed_arg... input_file

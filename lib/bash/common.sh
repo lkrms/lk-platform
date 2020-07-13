@@ -8,8 +8,8 @@
 # 3. Copy remaining LK_* variables to the global scope (other variables are
 #    discarded)
 eval "$(
-    # eval'd just before sourcing to allow expansion of values set by earlier
-    # files
+    # passed to eval just before sourcing to allow expansion of values set by
+    # earlier files
     SETTINGS=(
         "/etc/default/lk-platform"
         ${HOME:+"\$HOME/.\${LK_PATH_PREFIX:-lk-}settings"}
@@ -93,7 +93,7 @@ function lk_maybe_elevate() {
     fi
 }
 
-lk_trap_err
+lk_trap_exit
 
 eval "$(. "$LK_BASE/lib/bash/env.sh")"
 
