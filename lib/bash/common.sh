@@ -14,8 +14,7 @@ eval "$(
         "/etc/default/lk-platform"
         ${HOME:+"\$HOME/.\${LK_PATH_PREFIX:-lk-}settings"}
     )
-    ENV="$(printenv -0 | grep -zPio '^LK_[a-z0-9_]*(?==)' |
-        xargs -0 printf '%s\n' | sort)" || true
+    ENV="$(printenv | grep -Eio '^LK_[a-z0-9_]*' | sort)" || true
     lk_var() { comm -23 <(printf '%s\n' "${!LK_@}" | sort) <(cat <<<"$ENV"); }
     (
         VAR=($(lk_var))
