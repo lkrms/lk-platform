@@ -12,7 +12,7 @@ lk_esc() { echo "$1" | sed -Ee 's/\\/\\\\/g' -e 's/[$`"]/\\&/g'; }
 [ -n "${LK_BASE:-}" ] ||
     eval "$(
         if [ ! -L "$0" ] &&
-            LK_BASE="$(cd "$(dirname "$0")/../.." && pwd -P)" &&
+            LK_BASE="$(cd "${0%/*}/../.." && pwd -P)" &&
             [ -d "$LK_BASE/lib/bash" ]; then
             echo "LK_BASE=\"$(lk_esc "$LK_BASE")\""
         else

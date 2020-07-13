@@ -1,27 +1,50 @@
 #!/bin/bash
-# shellcheck disable=SC1090,SC1091,SC2001,SC2030,SC2031
+# shellcheck disable=SC1090,SC2001,SC2030,SC2031,SC2046,SC2207
 
 unset LK_PROMPT_DISPLAYED
 
-[ ! -f "/etc/default/lk-platform" ] || . "/etc/default/lk-platform"
+# 1. Source each SETTINGS file in order, allowing later files to override values
+#    set earlier
+# 2. Discard settings with the same name as any LK_* variables found in the
+#    environment
+# 3. Copy remaining LK_* variables to the global scope (other variables are
+#    discarded)
+eval "$(
+    # eval'd just before sourcing to allow expansion of values set by earlier
+    # files
+    SETTINGS=(
+        "/etc/default/lk-platform"
+        ${HOME:+"\$HOME/.\${LK_PATH_PREFIX:-lk-}settings"}
+    )
+    ENV="$(printenv -0 | grep -zPio '^LK_[a-z0-9_]*(?==)' |
+        xargs -0 printf '%s\n' | sort)" || true
+    lk_var() { comm -23 <(printf '%s\n' "${!LK_@}" | sort) <(cat <<<"$ENV"); }
+    (
+        VAR=($(lk_var))
+        [ "${#VAR[@]}" -eq 0 ] || unset "${VAR[@]}"
+        for FILE in "${SETTINGS[@]}"; do
+            eval "FILE=\"$FILE\""
+            [ ! -f "$FILE" ] || . "$FILE"
+        done
+        VAR=($(lk_var))
+        [ "${#VAR[@]}" -eq 0 ] || declare -p $(lk_var)
+    )
+)"
+
 LK_PATH_PREFIX="${LK_PATH_PREFIX:-lk-}"
 LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(echo "$LK_PATH_PREFIX" |
     sed 's/[^a-zA-Z0-9]//g')}"
-[ ! -f "${HOME:+$HOME/.${LK_PATH_PREFIX}settings}" ] ||
-    . "$HOME/.${LK_PATH_PREFIX}settings"
-lk_esc() { echo "$1" | sed -Ee 's/\\/\\\\/g' -e 's/[$`"]/\\&/g'; }
 
-[ -n "${LK_BASE:-}" ] ||
-    eval "$(
-        BS="${BASH_SOURCE[0]}"
-        if [ ! -L "$BS" ] &&
-            LK_BASE="$(cd "$(dirname "$BS")/../.." && pwd -P)" &&
-            [ -d "$LK_BASE/lib/bash" ]; then
-            echo "LK_BASE=\"$(lk_esc "$LK_BASE")\""
-        else
-            echo "$BS: LK_BASE not set" >&2
-        fi
-    )"
+[ -n "${LK_BASE:-}" ] || eval "$(
+    BS="${BASH_SOURCE[0]}"
+    if [ ! -L "$BS" ] &&
+        LK_BASE="$(cd "${BS%/*}/../.." && pwd -P)" &&
+        [ -d "$LK_BASE/lib/bash" ]; then
+        printf 'LK_BASE=%q' "$LK_BASE"
+    else
+        echo "$BS: LK_BASE not set" >&2
+    fi
+)"
 export LK_BASE
 
 . "$LK_BASE/lib/bash/core.sh"
@@ -83,7 +106,8 @@ HISTSIZE=
 HISTFILESIZE=
 HISTTIMEFORMAT="%b %_d %Y %H:%M:%S %z "
 
-[ ! -f "/usr/share/bash-completion/bash_completion" ] || . "/usr/share/bash-completion/bash_completion"
+[ ! -f "/usr/share/bash-completion/bash_completion" ] ||
+    . "/usr/share/bash-completion/bash_completion"
 
 eval "$(. "$LK_BASE/lib/bash/env.sh")"
 

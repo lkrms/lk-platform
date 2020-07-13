@@ -27,7 +27,7 @@ AUR_DESKTOP_PACKAGES=()
 
 lk_die() { echo "${BS:+$BS: }$1" >&2 && exit 1; }
 BS="${BASH_SOURCE[0]}" && [ ! -L "$BS" ] &&
-    SCRIPT_DIR="$(cd "$(dirname "$BS")" && pwd -P)" ||
+    SCRIPT_DIR="$(cd "${BS%/*}" && pwd -P)" ||
     lk_die "unable to resolve path to script"
 
 function usage() {

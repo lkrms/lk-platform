@@ -39,7 +39,7 @@ lk_path_add_to_front() {
 }
 
 OLD_PATH="$PATH"
-ADD_TO_PATH="${ADD_TO_PATH:+$ADD_TO_PATH:}$LK_BASE/bin"
+ADD_TO_PATH="${LK_ADD_TO_PATH:+$LK_ADD_TO_PATH:}$LK_BASE/bin"
 IFS=:
 for DIR in $ADD_TO_PATH; do
     PATH="$(lk_path_add "$DIR")"
@@ -50,6 +50,6 @@ PATH="$(lk_path_add_to_front "${HOME:+$HOME/.local/bin}")"
     echo "export PATH=\"$(lk_esc "$PATH")\""
 }
 cat <<EOF
-unset ADD_TO_PATH
+unset LK_ADD_TO_PATH
 export WP_CLI_CONFIG_PATH="\$LK_BASE/etc/wp-cli.yml"
 EOF
