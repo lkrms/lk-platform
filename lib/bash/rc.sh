@@ -10,8 +10,8 @@ unset LK_PROMPT_DISPLAYED
 # 3. Copy remaining LK_* variables to the global scope (other variables are
 #    discarded)
 eval "$(
-    # eval'd just before sourcing to allow expansion of values set by earlier
-    # files
+    # passed to eval just before sourcing to allow expansion of values set by
+    # earlier files
     SETTINGS=(
         "/etc/default/lk-platform"
         ${HOME:+"\$HOME/.\${LK_PATH_PREFIX:-lk-}settings"}
