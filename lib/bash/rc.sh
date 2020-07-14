@@ -3,15 +3,8 @@
 
 unset LK_PROMPT_DISPLAYED
 
-# 1. Source each SETTINGS file in order, allowing later files to override values
-#    set earlier
-# 2. Discard settings with the same name as any LK_* variables found in the
-#    environment
-# 3. Copy remaining LK_* variables to the global scope (other variables are
-#    discarded)
+# see lib/bash/common.sh
 eval "$(
-    # passed to eval just before sourcing to allow expansion of values set by
-    # earlier files
     SETTINGS=(
         "/etc/default/lk-platform"
         ${HOME:+"\$HOME/.\${LK_PATH_PREFIX:-lk-}settings"}

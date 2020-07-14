@@ -21,3 +21,24 @@ function lk_icon_install() {
         lk_maybe_sudo gtk-update-icon-cache --force --quiet \
             --ignore-theme-index "$TARGET_DIR" || true
 }
+
+function lk_is_portable() {
+    # 8  = Portable
+    # 9  = Laptop
+    # 10 = Notebook
+    # 11 = Hand Held
+    # 12 = Docking Station
+    # 14 = Sub Notebook
+    # 30 = Tablet
+    # 31 = Convertible
+    # 32 = Detachable
+    grep -Eq "^(8|9|10|11|12|14|30|31|32)\$" /sys/class/dmi/id/chassis_type
+}
+
+function lk_is_lid_closed() {
+    local LID_FILE
+    shopt -s nullglob
+    LID_FILE=(/proc/acpi/button/lid/*/state)
+    shopt -u nullglob
+    [ "${#LID_FILE[@]}" -gt "0" ] && grep -q 'closed$' "${LID_FILE[0]}"
+}

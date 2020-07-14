@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC1003,SC2015,SC2016,SC2034,SC2120,SC2162,SC2207
+# shellcheck disable=SC1003,SC2015,SC2016,SC2034,SC2088,SC2120,SC2162,SC2207
 
 function basename() {
     command basename -- "$@"
@@ -60,9 +60,8 @@ function lk_trap_exit() {
 }
 
 function lk_delete_on_exit() {
-    if ! lk_variable_declared "LK_EXIT_DELETE"; then
+    lk_variable_declared "LK_EXIT_DELETE" ||
         lk_trap_exit
-    fi
     LK_EXIT_DELETE+=("$@")
 }
 
@@ -89,7 +88,7 @@ function lk_commands_exist() {
 }
 
 function lk_command_exists() {
-    lk_commands_exist "$1"
+    type -P "$1" >/dev/null
 }
 
 function lk_first_existing_command() {
@@ -805,17 +804,15 @@ function lk_elevate() {
     if [ "$EUID" -eq "0" ]; then
         "$@"
     else
-        sudo -H "$@"
+        sudo -H -E "$@"
     fi
 }
 
 function lk_maybe_elevate() {
-    if [ "$EUID" -eq "0" ]; then
+    if [ "$EUID" -eq "0" ] || ! lk_can_sudo; then
         "$@"
-    elif lk_can_sudo; then
-        sudo -H "$@"
     else
-        "$@"
+        sudo -H -E "$@"
     fi
 }
 
@@ -1019,27 +1016,6 @@ function lk_is_qemu() {
     lk_return_cached LK_IS_QEMU 'lk_is_virtual && grep -Eiq qemu /sys/devices/virtual/dmi/id/*_vendor'
 }
 
-function lk_is_portable() {
-    # 8  = Portable
-    # 9  = Laptop
-    # 10 = Notebook
-    # 11 = Hand Held
-    # 12 = Docking Station
-    # 14 = Sub Notebook
-    # 30 = Tablet
-    # 31 = Convertible
-    # 32 = Detachable
-    lk_return_cached LK_IS_PORTABLE 'lk_is_linux && grep -Eq "^(8|9|10|11|12|14|30|31|32)\$" /sys/class/dmi/id/chassis_type'
-}
-
-function lk_is_lid_closed() {
-    local LID_FILE
-    shopt -s nullglob
-    LID_FILE=(/proc/acpi/button/lid/*/state)
-    shopt -u nullglob
-    [ "${#LID_FILE[@]}" -gt "0" ] && grep -q 'closed$' "${LID_FILE[0]}"
-}
-
 function lk_ssl_client() {
     local HOST="${1:-}" PORT="${2:-}" SERVER_NAME="${3:-${1:-}}"
     [ -n "$HOST" ] || lk_warn "no hostname" || return
@@ -1102,7 +1078,7 @@ function lk_keep_original() {
         lk_maybe_sudo cp -nav "$1" "$1${BACKUP_SUFFIX:-.orig}"
 }
 
-# BACKUP_SUFFIX=suffix lk_maybe_sed sed_arg... input_file
+# lk_maybe_sed sed_arg... input_file
 function lk_maybe_sed() {
     local ARGS=("$@") FILE="${*: -1:1}"
     [ -f "$FILE" ] && [ ! -L "$FILE" ] ||

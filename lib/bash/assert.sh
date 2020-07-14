@@ -9,7 +9,7 @@ function lk_assert_not_root() {
 }
 
 function lk_assert_command_exists() {
-    lk_commands_exist "$1" || lk_die "command not found: $1"
+    lk_command_exists "$1" || lk_die "command not found: $1"
 }
 
 function lk_assert_commands_exist() {
