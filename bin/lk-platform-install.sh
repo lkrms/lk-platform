@@ -30,7 +30,7 @@ lk_echo_array "${RC_FILES[@]}" |
     lk_console_list "Checking ~/.bashrc for all users:" "file" "files"
 RC_PATH_QUOTED="$(lk_esc "$LK_BASE/lib/bash/rc.sh")"
 BASH_SKEL="
-# Added by $(basename "$0") at $(now)
+# Added by $(basename "$0") at $(lk_now)
 if [ -f \"$RC_PATH_QUOTED\" ]; then
     . \"$RC_PATH_QUOTED\"
 fi"

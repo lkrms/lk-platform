@@ -1218,7 +1218,7 @@ set -o pipefail
 #   sort split stat stdbuf stty sum sync tac tail tee test timeout touch
 #   tr true truncate tsort tty uname unexpand uniq unlink users vdir wc
 #   who whoami yes
-_lk_register_gnu_commands chmod chown date ln mktemp sort stat
+_lk_register_gnu_commands chgrp chmod chown date ln mktemp sort stat
 
 # gawk, findutils, grep, netcat, sed, tar
 _lk_register_gnu_commands awk find grep nc sed tar xargs
