@@ -943,7 +943,20 @@ function lk_remove_false() {
 # lk_remove_missing ARRAY
 #   Reduce ARRAY to elements that are paths to existing files or directories.
 function lk_remove_missing() {
-    lk_remove_false "lk_maybe_sudo test -e \"{}\"" "$1"
+    lk_remove_false "[ -e \"{}\" ]" "$1"
+}
+
+# lk_resolve_files ARRAY
+#   Remove paths to missing files from ARRAY, then resolve remaining paths to
+#   absolute file names and remove any duplicates.
+function lk_resolve_files() {
+    local _LK_TEMP_FILE
+    lk_is_identifier "$1" || lk_warn "not a valid identifier: $1" || return
+    lk_remove_missing "$1" &&
+        _LK_TEMP_FILE="$(lk_mktemp_file)" &&
+        lk_delete_on_exit "$_LK_TEMP_FILE" &&
+        eval "realpath -ez \"\${$1[@]}\"" | sort -zu >"$_LK_TEMP_FILE" &&
+        lk_mapfile -z /dev/stdin "$1" <"$_LK_TEMP_FILE"
 }
 
 function lk_sort_paths_by_date() {
@@ -1040,8 +1053,8 @@ function lk_grep_ipv6() {
         grep -E "^(($HEXTET)?:){1,7}($HEXTET)?($PREFIX)?\$"
 }
 
-# lk_resolve host...
-function lk_resolve() {
+# lk_resolve_hosts host...
+function lk_resolve_hosts() {
     local HOSTS IP_ADDRESSES
     IP_ADDRESSES=($({
         lk_echo_array "$@" | lk_grep_ipv4 || :

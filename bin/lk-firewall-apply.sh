@@ -49,7 +49,7 @@ if [ -n "${ACCEPT_OUTPUT_CHAIN:-}" ]; then
     OUTPUT_ALLOW_IPV4=()
     OUTPUT_ALLOW_IPV6=()
     if [ "${#OUTPUT_ALLOW[@]}" -gt "0" ]; then
-        OUTPUT_ALLOW_RESOLVED="$(lk_resolve "${OUTPUT_ALLOW[@]}")" ||
+        OUTPUT_ALLOW_RESOLVED="$(lk_resolve_hosts "${OUTPUT_ALLOW[@]}")" ||
             lk_die "unable to resolve domain names"
         OUTPUT_ALLOW_IPV4=($(echo "$OUTPUT_ALLOW_RESOLVED" | lk_grep_ipv4 || :))
         OUTPUT_ALLOW_IPV6=($(echo "$OUTPUT_ALLOW_RESOLVED" | lk_grep_ipv6 || :))

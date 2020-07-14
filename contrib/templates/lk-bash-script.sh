@@ -1,11 +1,13 @@
 #!/bin/bash
 # shellcheck disable=SC1007,SC1090,SC2015,SC2034
 
+# Use the following as a template for LK_BASE/bin scripts.
+
 set -euo pipefail
-lk_die() { echo "$1" >&2 && exit 1; }
-[ -n "${LK_BASE:-}" ] || { BS="${BASH_SOURCE[0]}" && [ ! -L "$BS" ] &&
-    LK_BASE="$(cd "${BS%/*}/.." && pwd -P)" &&
-    [ -d "$LK_BASE/lib/bash" ] || lk_die "${BS:+$BS: }LK_BASE not set"; }
+_FILE="${BASH_SOURCE[0]}" && [ ! -L "$_FILE" ] &&
+    LK_BASE="$(cd "${_FILE%/*}/../.." && pwd -P)" &&
+    [ -d "$LK_BASE/lib/bash" ] ||
+    { echo "${_FILE:+$_FILE: }unable to find LK_BASE" >&2 && exit 1; }
 
 include= . "$LK_BASE/lib/bash/common.sh"
 

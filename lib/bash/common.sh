@@ -59,7 +59,7 @@ function _lk_include() {
 
 function lk_usage() {
     echo "${1:-${USAGE:-Please see $0 for usage}}" >&2
-    exit 1
+    lk_die
 }
 
 function lk_has_arg() {
