@@ -8,15 +8,24 @@ function basename() {
 function _lk_caller() {
     local DIM CALLER=() SOURCE="${BASH_SOURCE[2]:-}" FUNC="${FUNCNAME[2]:-}"
     DIM="${LK_DIM:-$LK_GREY}"
-    [ "$SOURCE" = "$0" ] && [ "$SOURCE" != "main" ] || CALLER=("$(basename "$0")")
-    [ "$SOURCE" = "main" ] || CALLER+=(${SOURCE:+"$SOURCE$DIM:${BASH_LINENO[1]}$LK_RESET"})
-    if [[ "${1:-}" =~ ^(-s|--short)$ ]]; then
-        echo "${CALLER[0]}"
-    else
-        [ "$FUNC" = "main" ] || CALLER+=(${FUNC:+"$FUNC$DIM()$LK_RESET"})
-        CALLER[0]="$LK_BOLD${CALLER[0]}$LK_RESET"
-        lk_implode "$DIM->$LK_RESET" "${CALLER[@]}"
+    # include shell/script name if caller not in running shell script (or no
+    # shell script running)
+    if [ "$SOURCE" != "$0" ] || [ "$SOURCE" = "main" ]; then
+        CALLER=("$LK_BOLD$(basename "${0#-}")$LK_RESET")
     fi
+    # always include source filename and line number
+    if [ -n "$SOURCE" ] && [ "$SOURCE" != "main" ]; then
+        CALLER+=("$(
+            if [ "$SOURCE" = "$0" ]; then
+                echo "$LK_BOLD$(basename "$0")$LK_RESET"
+            else
+                lk_replace "$HOME/" "~/" "$SOURCE"
+            fi
+        )$DIM:${BASH_LINENO[1]}$LK_RESET")
+    fi
+    lk_is_false "${LK_DEBUG:-0}" ||
+        [ "$FUNC" = "main" ] || CALLER+=(${FUNC:+"$FUNC$DIM()$LK_RESET"})
+    lk_implode "$DIM->$LK_RESET" "${CALLER[@]}"
 }
 
 # lk_warn message
