@@ -14,7 +14,10 @@ eval "$(
         "/etc/default/lk-platform"
         ${HOME:+"\$HOME/.\${LK_PATH_PREFIX:-lk-}settings"}
     )
-    ENV="$(printenv | grep -Eio '^LK_[a-z0-9_]*' | sort)" || true
+    [ "${LK_SETTINGS_FILES+1}" != "1" ] ||
+        SETTINGS=(${LK_SETTINGS_FILES[@]+"${LK_SETTINGS_FILES[@]}"})
+    ENV="$(printenv |
+        grep -Eio '^LK_[a-z0-9_]*=' | sed -E 's/(.*)=/\1/' | sort)" || true
     lk_var() { comm -23 <(printf '%s\n' "${!LK_@}" | sort) <(cat <<<"$ENV"); }
     (
         VAR=($(lk_var))
@@ -27,10 +30,6 @@ eval "$(
         [ "${#VAR[@]}" -eq 0 ] || declare -p $(lk_var)
     )
 )"
-
-LK_PATH_PREFIX="${LK_PATH_PREFIX:-lk-}"
-LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(echo "$LK_PATH_PREFIX" |
-    sed 's/[^a-zA-Z0-9]//g')}"
 
 [ -n "${LK_BASE:-}" ] || eval "$(
     BS="${BASH_SOURCE[0]}"
@@ -93,11 +92,17 @@ function lk_maybe_elevate() {
     fi
 }
 
-lk_trap_exit
+eval "$(LK_INCLUDE="${LK_INCLUDE:-${include:-}}" _lk_include)"
+unset LK_INCLUDE
 
-eval "$(. "$LK_BASE/lib/bash/env.sh")"
+if [[ ! "${skip:-}" =~ (,|^)env(,|$) ]]; then
+    LK_PATH_PREFIX="${LK_PATH_PREFIX:-lk-}"
+    LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(
+        echo "$LK_PATH_PREFIX" | sed 's/[^a-zA-Z0-9]//g'
+    )}"
+    eval "$(. "$LK_BASE/lib/bash/env.sh")"
+fi
 
 LK_ARGV=("$@")
 
-eval "$(LK_INCLUDE="${LK_INCLUDE:-${INCLUDE:-${include:-}}}" _lk_include)"
-unset LK_INCLUDE
+lk_trap_exit

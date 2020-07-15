@@ -6,7 +6,7 @@
 set -euo pipefail
 _FILE="${BASH_SOURCE[0]}" && [ ! -L "$_FILE" ] &&
     LK_BASE="$(cd "${_FILE%/*}/../.." && pwd -P)" &&
-    [ -d "$LK_BASE/lib/bash" ] ||
+    [ -d "$LK_BASE/lib/bash" ] && export LK_BASE ||
     { echo "${_FILE:+$_FILE: }unable to find LK_BASE" >&2 && exit 1; }
 
 include= . "$LK_BASE/lib/bash/common.sh"

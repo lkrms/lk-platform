@@ -391,7 +391,7 @@ function lk_xargs() {
 
 # lk_mapfile [-z] file_path array_name [ignore_pattern]
 function lk_mapfile() {
-    local READ_ARGS GREP_ARGS LINE
+    local READ_ARGS=() GREP_ARGS=() LINE
     if [ "${1:-}" = "-z" ]; then
         READ_ARGS+=(-d $'\0')
         GREP_ARGS+=(-z)
@@ -838,7 +838,7 @@ function lk_safe_symlink() {
         }
         lk_maybe_sudo rm -f "$LINK" || return
     elif lk_maybe_sudo test -e "$LINK"; then
-        lk_maybe_sudo mv -fv "$LINK" "$LINK${BACKUP_SUFFIX:-.orig}" || return
+        lk_maybe_sudo mv -fv "$LINK" "$LINK${LK_BACKUP_SUFFIX:-.orig}" || return
     elif lk_maybe_sudo test ! -d "$LINK_DIR"; then
         lk_maybe_sudo mkdir -pv "$LINK_DIR" || return
     fi
@@ -849,6 +849,9 @@ function _lk_get_gnu_command() {
     case "$1" in
     awk)
         echo "gawk"
+        ;;
+    nc)
+        echo "${PREFIX}netcat"
         ;;
     *)
         echo "$PREFIX$1"
@@ -952,11 +955,15 @@ function lk_remove_missing() {
 function lk_resolve_files() {
     local _LK_TEMP_FILE
     lk_is_identifier "$1" || lk_warn "not a valid identifier: $1" || return
-    lk_remove_missing "$1" &&
+    lk_remove_missing "$1" || return
+    if eval "[ \"\${#$1[@]}\" -gt \"0\" ]"; then
         _LK_TEMP_FILE="$(lk_mktemp_file)" &&
-        lk_delete_on_exit "$_LK_TEMP_FILE" &&
-        eval "realpath -ez \"\${$1[@]}\"" | sort -zu >"$_LK_TEMP_FILE" &&
-        lk_mapfile -z /dev/stdin "$1" <"$_LK_TEMP_FILE"
+            lk_delete_on_exit "$_LK_TEMP_FILE" &&
+            eval "realpath -ez \"\${$1[@]}\"" | sort -zu >"$_LK_TEMP_FILE" &&
+            lk_mapfile -z /dev/stdin "$1" <"$_LK_TEMP_FILE"
+    else
+        eval "$1=()"
+    fi
 }
 
 function lk_sort_paths_by_date() {
@@ -1088,7 +1095,7 @@ function lk_start_or_restart() {
 
 function lk_keep_original() {
     [ ! -e "$1" ] ||
-        lk_maybe_sudo cp -nav "$1" "$1${BACKUP_SUFFIX:-.orig}"
+        lk_maybe_sudo cp -nav "$1" "$1${LK_BACKUP_SUFFIX:-.orig}"
 }
 
 # lk_maybe_sed sed_arg... input_file
