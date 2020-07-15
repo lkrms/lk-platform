@@ -98,7 +98,7 @@ function lk_log_output() {
     LOG_FILE="$(basename "$0")-$UID.log"
     for LOG_DIR in ${LOG_DIR:+"$LOG_DIR"} "/tmp"; do
         [ -d "$LOG_DIR" ] && [ -w "$LOG_DIR" ] ||
-            lk_maybe_elevate install -v -d -m 0777 "$LOG_DIR" 2>/dev/null ||
+            lk_maybe_elevate install -d -m 0777 "$LOG_DIR" 2>/dev/null ||
             continue
         LOG_PATH="$LOG_DIR/$LOG_FILE"
         if [ -f "$LOG_PATH" ]; then
@@ -108,19 +108,19 @@ function lk_log_output() {
                     continue
             } 2>/dev/null
         else
-            install -v -m 0600 /dev/null "$LOG_PATH" 2>/dev/null ||
+            install -m 0600 /dev/null "$LOG_PATH" 2>/dev/null ||
                 continue
         fi
-        exec 6>&1 7>&2 &&
-            lk_log "==== $(basename "$0") invoked$(
-                [ "${#LK_ARGV[@]}" -eq "0" ] || {
-                    printf ' with %s %s:' \
-                        "${#LK_ARGV[@]}" \
-                        "$(lk_maybe_plural \
-                            "${#LK_ARGV[@]}" "argument" "arguments")"
-                    printf '\n- %q' "${LK_ARGV[@]}"
-                }
-            )" >>"$LOG_PATH" &&
+        lk_log "$LK_BOLD====> $(basename "$0") invoked$(
+            [ "${#LK_ARGV[@]}" -eq "0" ] || {
+                printf ' with %s %s:' \
+                    "${#LK_ARGV[@]}" \
+                    "$(lk_maybe_plural \
+                        "${#LK_ARGV[@]}" "argument" "arguments")"
+                printf '\n- %q' "${LK_ARGV[@]}"
+            }
+        )$LK_RESET" >>"$LOG_PATH" &&
+            exec 6>&1 7>&2 &&
             exec > >(tee >(lk_log >>"$LOG_PATH")) 2>&1 ||
             exit
         lk_echoc "Output is being logged to $LK_BOLD$LOG_PATH$LK_RESET" \
