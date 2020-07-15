@@ -133,11 +133,18 @@ function lk_now() {
     lk_date "%Y-%m-%d %H:%M:%S %z"
 }
 
+# lk_date_log
+#   Output the current time in a format suitable for log files. Redefine
+#   `lk_date_log` to change the line prefix added by `lk_log`.
 function lk_date_log() {
+    lk_date "%Y-%m-%d %H:%M:%S %z"
+}
+
+function lk_today() {
     lk_date "%b %_d %H:%M:%S %z"
 }
 
-function lk_date_log_nano() {
+function lk_today_nano() {
     gnu_date +"%b %_d %H:%M:%S.%N %z"
 }
 
@@ -195,7 +202,8 @@ function lk_full_name() {
 
 # [ESCAPE=escape_with] lk_escape string [escape_char1...]
 function lk_escape() {
-    local i=0 STRING="$1" ESCAPE="${ESCAPE:-\\}" SPECIAL SEARCH REPLACE
+    local i=0 STRING="$1" ESCAPE="${ESCAPE:-\\}" REGEX='^[$`\"}'"'"']$' \
+        SPECIAL SEARCH REPLACE
     shift
     SPECIAL=("$ESCAPE" "$@")
     [ "$ESCAPE" != "\\" ] || ESCAPE="\\\\"
@@ -203,12 +211,9 @@ function lk_escape() {
         # ensure ESCAPE itself is only escaped once
         [ "$i" -eq "0" ] || [ "$REPLACE" != "${SPECIAL[0]}" ] || continue
         SEARCH="\\$REPLACE"
-        [ "$REPLACE" != "\$" ] || REPLACE="\\\$"
-        [ "$REPLACE" != "\`" ] || REPLACE="\\\`"
-        [ "$REPLACE" != "\\" ] || REPLACE="\\\\"
-        [ "$REPLACE" != "\"" ] || REPLACE="\\\""
-        [ "$REPLACE" != "}" ] || REPLACE="\\}"
-        [ "$REPLACE" != "'" ] || REPLACE="\\'"
+        # escape characters that would otherwise interfere with Bash parameter
+        # expansion
+        [[ ! "$REPLACE" =~ $REGEX ]] || REPLACE="\\$REPLACE"
         eval "STRING=\"\${STRING//$SEARCH/$ESCAPE$REPLACE}\""
         ((++i))
     done
