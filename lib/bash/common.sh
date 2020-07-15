@@ -92,44 +92,6 @@ function lk_maybe_elevate() {
     fi
 }
 
-# lk_log_output [log_dir]
-function lk_log_output() {
-    local LOG_DIR="${1-${LK_INST:-$LK_BASE}/var/log}" LOG_FILE LOG_PATH
-    LOG_FILE="$(basename "$0")-$UID.log"
-    for LOG_DIR in ${LOG_DIR:+"$LOG_DIR"} "/tmp"; do
-        [ -d "$LOG_DIR" ] && [ -w "$LOG_DIR" ] ||
-            lk_maybe_elevate install -d -m 0777 "$LOG_DIR" 2>/dev/null ||
-            continue
-        LOG_PATH="$LOG_DIR/$LOG_FILE"
-        if [ -f "$LOG_PATH" ]; then
-            [ -w "$LOG_PATH" ] || {
-                lk_maybe_elevate chown "$UID:" "$LOG_PATH" &&
-                    lk_maybe_elevate chmod 00600 "$LOG_PATH" ||
-                    continue
-            } 2>/dev/null
-        else
-            install -m 0600 /dev/null "$LOG_PATH" 2>/dev/null ||
-                continue
-        fi
-        lk_log "$LK_BOLD====> $(basename "$0") invoked$(
-            [ "${#LK_ARGV[@]}" -eq "0" ] || {
-                printf ' with %s %s:' \
-                    "${#LK_ARGV[@]}" \
-                    "$(lk_maybe_plural \
-                        "${#LK_ARGV[@]}" "argument" "arguments")"
-                printf '\n- %q' "${LK_ARGV[@]}"
-            }
-        )$LK_RESET" >>"$LOG_PATH" &&
-            exec 6>&1 7>&2 &&
-            exec > >(tee >(lk_log >>"$LOG_PATH")) 2>&1 ||
-            exit
-        lk_echoc "Output is being logged to $LK_BOLD$LOG_PATH$LK_RESET" \
-            "$LK_GREY" >&7
-        return
-    done
-    lk_die "unable to open log file"
-}
-
 eval "$(LK_INCLUDE="${LK_INCLUDE:-${include:-}}" _lk_include)"
 unset LK_INCLUDE
 
