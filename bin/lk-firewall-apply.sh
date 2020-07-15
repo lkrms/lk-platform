@@ -11,6 +11,8 @@ include=iptables . "$LK_BASE/lib/bash/common.sh"
 
 lk_elevate
 
+lk_log_output
+
 [ -r "$LK_BASE/etc/firewall.conf" ] ||
     lk_die "cannot read file: $LK_BASE/etc/firewall.conf"
 . "$LK_BASE/etc/firewall.conf"

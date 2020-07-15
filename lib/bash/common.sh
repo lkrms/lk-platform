@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC1090,SC2001,SC2030,SC2031,SC2046,SC2207
+# shellcheck disable=SC1090,SC2001,SC2015,SC2030,SC2031,SC2046,SC2207
 
 # 1. Source each SETTINGS file in order, allowing later files to override values
 #    set earlier
@@ -43,13 +43,13 @@ eval "$(
 )"
 export LK_BASE
 
-. "$LK_BASE/lib/bash/core.sh"
-. "$LK_BASE/lib/bash/assert.sh"
+. "${LK_INST:-$LK_BASE}/lib/bash/core.sh"
+. "${LK_INST:-$LK_BASE}/lib/bash/assert.sh"
 
 function _lk_include() {
     local INCLUDE INCLUDE_PATH
     for INCLUDE in ${LK_INCLUDE:+${LK_INCLUDE//,/ }}; do
-        INCLUDE_PATH="$LK_BASE/lib/bash/$INCLUDE.sh"
+        INCLUDE_PATH="${LK_INST:-$LK_BASE}/lib/bash/$INCLUDE.sh"
         [ -r "$INCLUDE_PATH" ] ||
             lk_warn "file not found: $INCLUDE_PATH" || return
         echo ". \"\$LK_BASE/lib/bash/$INCLUDE.sh\""
@@ -90,6 +90,44 @@ function lk_maybe_elevate() {
     elif [ "$#" -gt "0" ]; then
         "$@"
     fi
+}
+
+# lk_log_output [log_dir]
+function lk_log_output() {
+    local LOG_DIR="${1-${LK_INST:-$LK_BASE}/var/log}" LOG_FILE LOG_PATH
+    LOG_FILE="$(basename "$0")-$UID.log"
+    for LOG_DIR in ${LOG_DIR:+"$LOG_DIR"} "/tmp"; do
+        [ -d "$LOG_DIR" ] && [ -w "$LOG_DIR" ] ||
+            lk_maybe_elevate install -v -d -m 0777 "$LOG_DIR" 2>/dev/null ||
+            continue
+        LOG_PATH="$LOG_DIR/$LOG_FILE"
+        if [ -f "$LOG_PATH" ]; then
+            [ -w "$LOG_PATH" ] || {
+                lk_maybe_elevate chown "$UID:" "$LOG_PATH" &&
+                    lk_maybe_elevate chmod 00600 "$LOG_PATH" ||
+                    continue
+            } 2>/dev/null
+        else
+            install -v -m 0600 /dev/null "$LOG_PATH" 2>/dev/null ||
+                continue
+        fi
+        exec 6>&1 7>&2 &&
+            lk_log "==== $(basename "$0") invoked$(
+                [ "${#LK_ARGV[@]}" -eq "0" ] || {
+                    printf ' with %s %s:' \
+                        "${#LK_ARGV[@]}" \
+                        "$(lk_maybe_plural \
+                            "${#LK_ARGV[@]}" "argument" "arguments")"
+                    printf '\n- %q' "${LK_ARGV[@]}"
+                }
+            )" >>"$LOG_PATH" &&
+            exec > >(tee >(lk_log >>"$LOG_PATH")) 2>&1 ||
+            exit
+        lk_echoc "Output is being logged to $LK_BOLD$LOG_PATH$LK_RESET" \
+            "$LK_GREY" >&7
+        return
+    done
+    lk_die "unable to open log file"
 }
 
 eval "$(LK_INCLUDE="${LK_INCLUDE:-${include:-}}" _lk_include)"

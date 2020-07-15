@@ -412,6 +412,19 @@ function lk_mapfile() {
     )
 }
 
+function lk_log() {
+    local IFS LINE
+    [ "$#" -eq "0" ] || {
+        IFS=$'\n'
+        LINE="$*"
+        printf '%s %s\n' "$(lk_date_log)" "${LINE//$'\n'/$'\n  '}"
+        return
+    }
+    while IFS= read -r LINE || [ -n "$LINE" ]; do
+        printf '%s %s\n' "$(lk_date_log)" "$LINE"
+    done
+}
+
 # lk_echoc [-neE] message [colour_sequence...]
 function lk_echoc() {
     local ECHO_ARGS=() MESSAGE IFS COLOUR
@@ -432,7 +445,8 @@ function lk_echoc() {
 
 # lk_console_message message [[secondary_message] colour_sequence]
 function lk_console_message() {
-    local PREFIX="${LK_CONSOLE_PREFIX-==> }" MESSAGE="$1" MESSAGE2 SPACES COLOUR BOLD_COLOUR
+    local PREFIX="${LK_CONSOLE_PREFIX-==> }" MESSAGE="$1" MESSAGE2 \
+        INDENT="${LK_CONSOLE_INDENT:-2}" SPACES COLOUR BOLD_COLOUR
     shift
     ! lk_in_string $'\n' "$MESSAGE" || {
         SPACES=$'\n'"$(lk_repeat " " "$((${#PREFIX}))")"
@@ -443,7 +457,7 @@ function lk_console_message() {
         shift
         ! lk_in_string $'\n' "$MESSAGE2" &&
             MESSAGE2=" $MESSAGE2" || {
-            SPACES=$'\n'"$(lk_repeat " " "$((${#PREFIX} + 2))")"
+            SPACES=$'\n'"$(lk_repeat " " "$((${#PREFIX} + INDENT))")"
             MESSAGE2="$SPACES${MESSAGE2//$'\n'/$SPACES}"
         }
     }
@@ -1100,16 +1114,47 @@ function lk_keep_original() {
 
 # lk_maybe_sed sed_arg... input_file
 function lk_maybe_sed() {
-    local ARGS=("$@") FILE="${*: -1:1}"
+    local ARGS=("$@") FILE="${*: -1:1}" NEW
     [ -f "$FILE" ] && [ ! -L "$FILE" ] ||
         lk_warn "file not found: $FILE" || return
     lk_remove_false "[[ ! \"{}\" =~ ^(-i|--in-place(=|\$)) ]]" ARGS
+    NEW="$(lk_maybe_sudo sed "${ARGS[@]}")" || return
+    lk_maybe_replace "$FILE" "$NEW"
+}
+
+# lk_maybe_replace file_path new_content
+function lk_maybe_replace() {
+    [ -f "$1" ] && [ ! -L "$1" ] || lk_warn "file not found: $1" || return
     diff -q \
-        <(lk_maybe_sudo cat "$FILE") \
-        <(lk_maybe_sudo sed "${ARGS[@]}") >/dev/null || {
-        lk_keep_original "$FILE" &&
-            sed -i "${ARGS[@]}"
+        <(lk_maybe_sudo cat "$1") \
+        <(cat <<<"$2") >/dev/null || {
+        lk_keep_original "$1" &&
+            cat <<<"$2" | lk_maybe_sudo tee "$1" >/dev/null || return
+        [ "${LK_VERBOSE:-0}" -eq "0" ] || lk_console_file "$1"
     }
+}
+
+# lk_console_file file_path [colour_sequence]
+#   Print FILE_PATH to the standard output. If a backup of FILE_PATH exists,
+#   print `diff` output, otherwise print all lines. The default backup suffix is
+#   ".orig". Set LK_BACKUP_SUFFIX to override. `diff` output is disabled if
+#   LK_BACKUP_SUFFIX is null.
+function lk_console_file() {
+    local FILE_PATH="$1" ORIG_FILE \
+        LK_CONSOLE_INDENT="${LK_CONSOLE_INDENT:-0}"
+    shift
+    [ -f "$FILE_PATH" ] || lk_warn "file not found: $FILE_PATH" || return
+    ORIG_FILE="$FILE_PATH${LK_BACKUP_SUFFIX-.orig}"
+    [ "$FILE_PATH" != "$ORIG_FILE" ] && [ -f "$ORIG_FILE" ] || ORIG_FILE=
+    lk_console_item "${ORIG_FILE:+Changes applied to }$FILE_PATH:" $'<<<<\n'"$(
+        if [ -n "$ORIG_FILE" ]; then
+            ! diff "$ORIG_FILE" "$FILE_PATH" || echo "<unchanged>"
+        else
+            cat "$FILE_PATH"
+        fi
+    )"$'\n>>>>' "$@"
+    [ -z "$ORIG_FILE" ] ||
+        lk_console_detail "Backup path:" "$ORIG_FILE"
 }
 
 # lk_apply_setting file_path setting_name setting_value [delimiter] [comment_chars] [space_chars]

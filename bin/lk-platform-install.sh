@@ -24,7 +24,8 @@ RC_FILES=(
     /srv/www/*/.bashrc
 )
 
-HOSTING_SETTINGS=(
+INSTALL_SETTINGS=(
+    # lib/linode/hosting.sh
     NODE_HOSTNAME
     NODE_FQDN
     NODE_TIMEZONE
@@ -87,6 +88,8 @@ export -n LK_PATH_PREFIX
 include= skip=env . "$LK_INST/lib/bash/common.sh"
 
 LK_BACKUP_SUFFIX="-$(lk_timestamp).bak"
+LK_VERBOSE=1
+lk_log_output
 
 lk_console_message "Installing gnu_* symlinks"
 lk_install_gnu_commands awk date find mktemp sort stat xargs
@@ -122,7 +125,7 @@ function install_env() {
     )}" && awk -F= "/^$1=/ { print \$2 }" <<<"$INSTALL_ENV"
 }
 
-for i in "${HOSTING_SETTINGS[@]}"; do
+for i in "${INSTALL_SETTINGS[@]}"; do
     case "$i" in
     OPCACHE_MEMORY_CONSUMPTION)
         eval "LK_DEFAULT_$i=\"\${LK_DEFAULT_$i-\
@@ -138,24 +141,21 @@ LK_PLATFORM_BRANCH="${LK_PLATFORM_BRANCH:-master}"
 lk_console_item "Configuring system for lk-platform installed at" "$LK_BASE"
 
 # generate /etc/default/lk-platform
+[ -e "$DEFAULT_FILE" ] || {
+    install -d -m 0755 "${DEFAULT_FILE%/*}" &&
+        install -m 0644 /dev/null "$DEFAULT_FILE"
+}
 DEFAULT_LINES=()
 for i in "${DEFAULT_SETTINGS[@]}"; do
     # don't include null variables unless they already appear in
     # /etc/default/lk-platform
     [ -n "${!i}" ] ||
-        { [ -f "$DEFAULT_FILE" ] &&
-            grep -Eq "^$i=" "$DEFAULT_FILE"; } ||
+        grep -Eq "^$i=" "$DEFAULT_FILE" ||
         continue
     lk_console_detail "$i:" "${!i:-<none>}"
     DEFAULT_LINES+=("$i=${!i:+$(printf '%q' "${!i}")}")
 done
-DEFAULT="$(lk_echo_array "${DEFAULT_LINES[@]}")"
-diff -Nq <(cat "$DEFAULT_FILE") <(cat <<<"$DEFAULT") >/dev/null || {
-    lk_keep_original "$DEFAULT_FILE" &&
-        install -d -m 0755 "${DEFAULT_FILE%/*}" &&
-        install -m 0644 /dev/null "$DEFAULT_FILE" &&
-        echo "$DEFAULT" >"$DEFAULT_FILE" || exit
-}
+lk_maybe_replace "$DEFAULT_FILE" "$(lk_echo_array "${DEFAULT_LINES[@]}")"
 
 # check .bashrc files
 lk_resolve_files RC_FILES
@@ -163,9 +163,7 @@ if [ "${#RC_FILES[@]}" -eq "0" ]; then
     lk_console_warning "No ~/.bashrc files found"
 else
     lk_echo_array "${RC_FILES[@]}" |
-        lk_console_list \
-            "Sourcing $LK_BASE/lib/bash/rc.sh in ~/.bashrc files:" \
-            "file" "files"
+        lk_console_list "Checking startup scripts:" "file" "files"
     RC_ESCAPED="$(printf '%q' "$LK_BASE/lib/bash/rc.sh")"
     BASH_SKEL="
 # Added by $(basename "$0") at $(lk_now)
@@ -183,7 +181,8 @@ fi"
         # source $LK_BASE/lib/bash/rc.sh unless a reference is already present
         grep -Fq "$RC_ESCAPED" "$RC_FILE" || {
             lk_keep_original "$RC_FILE" &&
-                echo "$BASH_SKEL" >>"$RC_FILE"
+                echo "$BASH_SKEL" >>"$RC_FILE" || exit
+            lk_console_file "$RC_FILE"
         }
     done
 fi
