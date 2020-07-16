@@ -152,8 +152,10 @@
         if [ "$BEHIND" -gt "0" ]; then
             git merge-base --is-ancestor HEAD "@{upstream}" ||
                 lk_die "local branch has diverged from upstream: $LK_BASE"
-            lk_console_message \
-                "Updating lk-platform ($BEHIND commits behind) in" "$LK_BASE"
+            lk_console_item \
+                "Updating lk-platform ($BEHIND $(
+                    lk_maybe_plural "$BEHIND" "commit" "commits"
+                ) behind) in" "$LK_BASE"
             sudo -Hu "$REPO_OWNER" \
                 git merge --ff-only "@{upstream}"
             lk_console_message "Restarting $(basename "$0")"
