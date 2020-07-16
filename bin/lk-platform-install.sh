@@ -172,9 +172,10 @@
         INSTALL_ENV="${INSTALL_ENV-$(
             [ ! -f "/var/log/${LK_PATH_PREFIX}install.log" ] || {
                 PROG="\
-/^[0-9]{4}(-[0-9]{2}){2} [0-9]{2}(:[0-9]{2}){2}( [-+][0-9]{4})? Environment:\$/ { env_started = 1; next }
-/^[0-9]{4}(-[0-9]{2}){2} [0-9]{2}(:[0-9]{2}){2}( [-+][0-9]{4})? / { if (env_started) exit }
-/^  [a-zA-Z_][a-zA-Z0-9_]*=/ { if (env_started) print substr(\$0, 3, length - 2) }"
+/^[0-9]{4}(-[0-9]{2}){2} [0-9]{2}(:[0-9]{2}){2}( [-+][0-9]{4})? Environment:\$/         { env_started = 1; next }
+/^  [a-zA-Z_][a-zA-Z0-9_]*=/                                                            { if (env_started) { print substr(\$0, 3, length - 2); next } }
+/^[0-9]{4}(-[0-9]{2}){2} [0-9]{2}(:[0-9]{2}){2} [-+][0-9]{4}   [a-zA-Z_][a-zA-Z0-9_]*=/ { if (env_started) { print substr(\$0, 29, length - 28); next } }
+/^[0-9]{4}(-[0-9]{2}){2} [0-9]{2}(:[0-9]{2}){2}( [-+][0-9]{4})? /                       { if (env_started) exit }"
                 awk "$PROG" <"/var/log/${LK_PATH_PREFIX}install.log"
             }
         )}" && awk -F= "/^$1=/ { print \$2 }" <<<"$INSTALL_ENV"

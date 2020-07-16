@@ -49,7 +49,7 @@ function write_log() {
 function log() {
     local IFS=$'\n' LINE
     LINE="$*"
-    echo "${LINE//$'\n'/$'\n  '}"
+    echo "${LINE//$'\n'/$'\n  '}" >&3
 }
 
 function die() {
@@ -196,15 +196,13 @@ OUT_FILE="/var/log/${PATH_PREFIX}install.out"
 install -v -m 0640 -g "adm" "/dev/null" "$LOG_FILE"
 install -v -m 0640 -g "adm" "/dev/null" "$OUT_FILE"
 
-exec 6>&1 7>&2
-exec > >(tee >(write_log >>"$LOG_FILE")) 2>&1
-
 trap 'exit_trap' EXIT
 
 exec 9>"$LOCK_FILE"
 flock -n 9 || die "unable to acquire a lock on $LOCK_FILE"
 
-exec > >(tee -a "$OUT_FILE") 2>&1
+exec > >(tee >(write_log >>"$OUT_FILE")) 2>&1
+exec 3> >(tee >(write_log >>"$LOG_FILE") >&1)
 
 # TODO: more validation here
 FIELD_ERRORS=()
