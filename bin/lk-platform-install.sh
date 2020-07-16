@@ -74,8 +74,8 @@
     )
     unset GLOBIGNORE
 
-    # otherwise the LK_BASE environment variable (if set) will mask the value set in
-    # config files
+    # otherwise the LK_BASE environment variable (if set) will mask the value
+    # set in config files
     unset LK_BASE
     export -n LK_PATH_PREFIX
 
@@ -136,10 +136,12 @@
             "LK_PLATFORM_BRANCH" \
             "$LK_BOLD$LK_PLATFORM_BRANCH$LK_RESET" \
             "$LK_BOLD$BRANCH$LK_RESET")"
-        if lk_no_input || lk_confirm "Switch to $LK_PLATFORM_BRANCH?" Y; then
+        if ! lk_no_input && lk_confirm "Switch to $LK_PLATFORM_BRANCH?" N; then
             lk_console_item "Switching to" "$LK_PLATFORM_BRANCH"
             sudo -Hu "$REPO_OWNER" git checkout "$LK_PLATFORM_BRANCH"
             BRANCH="$LK_PLATFORM_BRANCH"
+        else
+            LK_PLATFORM_BRANCH="$BRANCH"
         fi
     fi
     REMOTE_NAME="$(git for-each-ref --format="%(upstream:remotename)" \
@@ -220,7 +222,6 @@
         /srv/www/*/.bashrc
         ~root/.bashrc
     )
-
     lk_resolve_files RC_FILES
     if [ "${#RC_FILES[@]}" -eq "0" ]; then
         lk_console_warning "No ~/.bashrc files found"
@@ -241,7 +242,8 @@ fi"
                 lk_escape_ere_replace "$RC_ESCAPED"
             )/g" "$RC_FILE"
 
-            # source $LK_BASE/lib/bash/rc.sh unless a reference is already present
+            # source $LK_BASE/lib/bash/rc.sh unless a reference is already
+            # present
             grep -Fq "$RC_ESCAPED" "$RC_FILE" || {
                 lk_keep_original "$RC_FILE" &&
                     echo "$BASH_SKEL" >>"$RC_FILE" || exit
@@ -250,16 +252,8 @@ fi"
         done
     fi
 
-    if lk_is_linux && lk_is_desktop; then
-
-        if lk_command_exists autorandr; then
-            lk_console_message "Configuring autorandr hooks"
-            lk_safe_symlink "$LK_BASE/lib/autorandr/postsave" \
-                "/etc/xdg/autorandr/postsave"
-            lk_safe_symlink "$LK_BASE/lib/autorandr/postswitch" \
-                "/etc/xdg/autorandr/postswitch"
-        fi
-
+    if lk_is_desktop; then
+        . "$LK_BASE/lib/desktop/install.sh"
     fi
 
     lk_console_message "lk-platform successfully installed" "$LK_GREEN"
