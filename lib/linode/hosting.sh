@@ -50,13 +50,17 @@ function write_log() {
 function log() {
     local IFS=$'\n' LINE
     LINE="$*"
-    echo "${LINE//$'\n'/$'\n  '}" >&3
+    echo "${LOG_PREFIX-==> }${LINE//$'\n'/$'\n  '}" >&3
+}
+
+function log_header() {
+    LOG_PREFIX="====> " log "$@"
 }
 
 function die() {
     local EXIT_STATUS="$?"
     [ "$EXIT_STATUS" -ne "0" ] || EXIT_STATUS="1"
-    log "==== $(basename "$0"): $1" "${@:2}"
+    log_header "$(basename "$0"): $1" "${@:2}"
     exit "$EXIT_STATUS"
 }
 
@@ -90,7 +94,8 @@ function esc() {
 }
 
 function log_file() {
-    log "<<<< $1" \
+    log "$1:" \
+        "<<<<" \
         "$(
             if [ -f "$1.orig" ]; then
                 ! diff "$1.orig" "$1" || echo "<unchanged>"
@@ -248,7 +253,7 @@ S="[[:space:]]"
 ADMIN_USER_KEYS="$([ -z "$ADMIN_USERS" ] || grep -E "$S(${ADMIN_USERS//,/|})\$" "/root/.ssh/authorized_keys" || :)"
 HOST_KEYS="$([ -z "$ADMIN_USERS" ] && cat "/root/.ssh/authorized_keys" || grep -Ev "$S(${ADMIN_USERS//,/|})\$" "/root/.ssh/authorized_keys" || :)"
 
-log "==== $(basename "$0"): preparing system"
+log_header "$(basename "$0"): preparing system"
 log "Environment:" \
     "$(printenv | grep -v '^LS_COLORS=' | sort)"
 
@@ -359,7 +364,7 @@ cat <<EOF >"/usr/sbin/policy-rc.d"
 # Created by $(basename "$0") at $(now)
 $(declare -f now)
 LOG=(
-    "==== \$(basename "\$0"): init script policy helper invoked"
+    "====> \$(basename "\$0"): init script policy helper invoked"
     "Arguments:
 \$([ "\$#" -eq 0 ] || printf '  - %q\n' "\$@")")
 DEPLOY_PENDING=N
@@ -1350,6 +1355,6 @@ log_file "/etc/iptables/rules.v6"
 log "Running apt-get autoremove"
 apt-get -yq autoremove
 
-log "==== $(basename "$0"): deployment complete"
+log_header "$(basename "$0"): deployment complete"
 log "Running shutdown with '--$SHUTDOWN_ACTION +${SHUTDOWN_DELAY:-0}'"
 shutdown "--$SHUTDOWN_ACTION" +"${SHUTDOWN_DELAY:-0}"

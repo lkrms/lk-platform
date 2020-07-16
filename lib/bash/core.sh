@@ -489,18 +489,21 @@ function lk_echoc() {
 # lk_console_message message [[secondary_message] colour_sequence]
 function lk_console_message() {
     local PREFIX="${LK_CONSOLE_PREFIX-==> }" MESSAGE="$1" MESSAGE2 \
-        INDENT="${LK_CONSOLE_INDENT:-2}" SPACES COLOUR BOLD_COLOUR
+        INDENT=0 SPACES COLOUR BOLD_COLOUR
     shift
     ! lk_in_string $'\n' "$MESSAGE" || {
         SPACES=$'\n'"$(lk_repeat " " "$((${#PREFIX}))")"
         MESSAGE="${MESSAGE//$'\n'/$SPACES}"
+        INDENT=2
     }
     [ "$#" -le "1" ] || {
         MESSAGE2="$1"
         shift
         ! lk_in_string $'\n' "$MESSAGE2" &&
+            [ "$INDENT" -eq "0" ] &&
             MESSAGE2=" $MESSAGE2" || {
-            SPACES=$'\n'"$(lk_repeat " " "$((${#PREFIX} + INDENT))")"
+            INDENT="${LK_CONSOLE_INDENT:-$((${#PREFIX} + INDENT))}"
+            SPACES=$'\n'"$(lk_repeat " " "$INDENT")"
             MESSAGE2="$SPACES${MESSAGE2//$'\n'/$SPACES}"
         }
     }
@@ -1184,7 +1187,7 @@ function lk_maybe_replace() {
 #   LK_BACKUP_SUFFIX is null.
 function lk_console_file() {
     local FILE_PATH="$1" ORIG_FILE \
-        LK_CONSOLE_INDENT="${LK_CONSOLE_INDENT:-0}"
+        LK_CONSOLE_INDENT="${LK_CONSOLE_INDENT:-2}"
     shift
     [ -f "$FILE_PATH" ] || lk_warn "file not found: $FILE_PATH" || return
     ORIG_FILE="$FILE_PATH${LK_BACKUP_SUFFIX-.orig}"
