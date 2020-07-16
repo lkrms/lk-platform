@@ -207,7 +207,7 @@
             grep -Eq "^$i=" "$DEFAULT_FILE" ||
             continue
         lk_console_detail "$i:" "${!i:-<none>}"
-        DEFAULT_LINES+=("$i=${!i:+$(printf '%q' "${!i}")}")
+        DEFAULT_LINES+=("$(printf '%s=%q' "$i" "${!i}")")
     done
     lk_maybe_replace "$DEFAULT_FILE" "$(lk_echo_array "${DEFAULT_LINES[@]}")"
 

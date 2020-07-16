@@ -418,11 +418,11 @@ log_file "$FILE"
 sysctl --system
 
 log "Sourcing $LK_BASE/lib/bash/rc.sh in ~/.bashrc for all users"
-RC_PATH_QUOTED="$(esc "$LK_BASE/lib/bash/rc.sh")"
+RC_ESCAPED="$(printf '%q' "$LK_BASE/lib/bash/rc.sh")"
 BASH_SKEL="
 # Added by $(basename "$0") at $(now)
-if [ -f \"$RC_PATH_QUOTED\" ]; then
-    . \"$RC_PATH_QUOTED\"
+if [ -f $RC_ESCAPED ]; then
+    . $RC_ESCAPED
 fi"
 echo "$BASH_SKEL" >>"/etc/skel/.bashrc"
 if [ -f "/root/.bashrc" ]; then
