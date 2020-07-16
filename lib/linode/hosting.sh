@@ -8,6 +8,7 @@
 # <UDF name="NODE_PACKAGES" label="Additional packages to install (comma-delimited)" default="" />
 # <UDF name="HOST_DOMAIN" label="Initial hosting domain" example="clientname.com.au" default="" />
 # <UDF name="HOST_ACCOUNT" label="Initial hosting account name (default: automatic)" example="clientname" default="" />
+# <UDF name="HOST_SITE_ENABLE" label="Enable initial hosting site at launch" oneof="Y,N" default="N" />
 # <UDF name="ADMIN_USERS" label="Admin users to create (comma-delimited)" default="linac" />
 # <UDF name="ADMIN_EMAIL" label="Forwarding address for system email" example="tech@linacreative.com" />
 # <UDF name="TRUSTED_IP_ADDRESSES" label="Trusted IP addresses (comma-delimited)" example="10.0.0.0/8,172.16.0.0/12,192.168.0.0/16" default="" />
@@ -222,6 +223,7 @@ NODE_PACKAGES="${NODE_PACKAGES:-}"
 HOST_DOMAIN="${HOST_DOMAIN:-}"
 HOST_DOMAIN="${HOST_DOMAIN#www.}"
 HOST_ACCOUNT="${HOST_ACCOUNT:-${HOST_DOMAIN%%.*}}"
+HOST_SITE_ENABLE="${HOST_SITE_ENABLE:-N}"
 ADMIN_USERS="${ADMIN_USERS:-linac}"
 TRUSTED_IP_ADDRESSES="${TRUSTED_IP_ADDRESSES:-}"
 SSH_TRUSTED_ONLY="${SSH_TRUSTED_ONLY:-N}"
@@ -252,7 +254,7 @@ log "Environment:" \
 
 # don't propagate field values to the environment of other commands
 export -n \
-    HOST_DOMAIN HOST_ACCOUNT \
+    HOST_DOMAIN HOST_ACCOUNT HOST_SITE_ENABLE \
     ADMIN_USERS TRUSTED_IP_ADDRESSES SSH_TRUSTED_ONLY \
     MYSQL_USERNAME MYSQL_PASSWORD \
     INNODB_BUFFER_SIZE OPCACHE_MEMORY_CONSUMPTION \
@@ -322,7 +324,8 @@ hostnamectl set-hostname "$NODE_HOSTNAME"
 
 FILE="/etc/hosts"
 # Apache won't resolve a name-based <VirtualHost> correctly if ServerName
-# resolves to a loopback address
+# resolves to a loopback address, so if the host's FQDN is also the initial
+# hosting domain, don't associate it with 127.0.1.1
 [ "${NODE_FQDN#www.}" = "$HOST_DOMAIN" ] || HOSTS_NODE_FQDN="$NODE_FQDN"
 log "Adding entries to $FILE"
 cat <<EOF >>"$FILE"
@@ -330,11 +333,7 @@ cat <<EOF >>"$FILE"
 # Added by $(basename "$0") at $(now)
 127.0.1.1 ${HOSTS_NODE_FQDN:+$HOSTS_NODE_FQDN }$NODE_HOSTNAME${HOSTS_NODE_FQDN:+${IPV4_ADDRESS:+
 $IPV4_ADDRESS $NODE_FQDN}${IPV6_ADDRESS:+
-$IPV6_ADDRESS $NODE_FQDN}}${HOST_DOMAIN:+
-
-# Virtual hosts${IPV4_ADDRESS:+
-$IPV4_ADDRESS $HOST_DOMAIN www.$HOST_DOMAIN}${IPV6_ADDRESS:+
-$IPV6_ADDRESS $HOST_DOMAIN www.$HOST_DOMAIN}}
+$IPV6_ADDRESS $NODE_FQDN}}
 EOF
 log_file "$FILE"
 
@@ -360,20 +359,22 @@ cat <<EOF >"/usr/sbin/policy-rc.d"
 # Created by $(basename "$0") at $(now)
 $(declare -f now)
 LOG=(
-"==== \$(basename "\$0"): init script policy helper invoked"
-"Arguments:
-\$([ "\$#" -eq 0 ]||printf '  - %s\n' "\$@")")
+    "==== \$(basename "\$0"): init script policy helper invoked"
+    "Arguments:
+\$([ "\$#" -eq 0 ] || printf '  - %q\n' "\$@")")
 DEPLOY_PENDING=N
 EXIT_STATUS=0
 exec 9>"/tmp/${PATH_PREFIX}install.lock"
-if ! flock -n 9;then
-DEPLOY_PENDING=Y
-[ "\${DPKG_MAINTSCRIPT_NAME:-}" != postinst ]||EXIT_STATUS=101
+if ! flock -n 9; then
+    DEPLOY_PENDING=Y
+    [ "\${DPKG_MAINTSCRIPT_NAME:-}" != postinst ] || EXIT_STATUS=101
 fi
 LOG+=("Deploy pending: \$DEPLOY_PENDING")
 LOG+=("Exit status: \$EXIT_STATUS")
-printf '%s %s\n%s\n' "\$(now)" "\${LOG[0]}" "\$(LOG=("\${LOG[@]:1}")
-printf '  %s\n' "\${LOG[@]//\$'\n'/\$'\n'  }")" >>"/var/log/${PATH_PREFIX}policy-rc.log"
+printf '%s %s\n%s\n' "\$(now)" "\${LOG[0]}" "\$(
+    LOG=("\${LOG[@]:1}")
+    printf '  %s\n' "\${LOG[@]//\$'\n'/\$'\n' }"
+)" >>"/var/log/${PATH_PREFIX}policy-rc.log"
 exit "\$EXIT_STATUS"
 EOF
 chmod a+x "/usr/sbin/policy-rc.d"
@@ -804,10 +805,8 @@ install -v -m 0660 -o "$FIRST_ADMIN" -g "adm" /dev/null "$LK_BASE/etc/firewall.c
 [ "$REJECT_OUTPUT" = "N" ] ||
     echo "\
 $ACCEPT_OUTPUT_HOSTS_SH
-$(
-        printf '%s=%q\n' \
-            "ACCEPT_OUTPUT_CHAIN" "${P}output"
-    )" >"$LK_BASE/etc/firewall.conf"
+$(printf '%s=%q\n' \
+        "ACCEPT_OUTPUT_CHAIN" "${P}output")" >"$LK_BASE/etc/firewall.conf"
 printf '%s=%q\n' \
     "LK_BASE" "$LK_BASE" \
     "LK_PATH_PREFIX" "$PATH_PREFIX" \
@@ -1217,7 +1216,7 @@ EOF
             -out "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.cert"
         rm -f "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.csr"
 
-        [ "${HOST_SITE_ENABLE:-N}" = "N" ] ||
+        [ "$HOST_SITE_ENABLE" = "N" ] ||
             ln -s "../sites-available/$HOST_ACCOUNT.conf" "/etc/apache2/sites-enabled/$HOST_ACCOUNT.conf"
         log_file "/etc/apache2/sites-available/$HOST_ACCOUNT.conf"
 
