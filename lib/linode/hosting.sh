@@ -156,14 +156,14 @@ HELO $NODE_FQDN
 MAIL FROM:<root@$NODE_FQDN>
 RCPT TO:<$ADMIN_EMAIL>
 DATA
-From: ${PATH_PREFIX}hosting@Linode <root@$NODE_FQDN>
+From: $(basename "$0") <root@$NODE_FQDN>
 To: $NODE_HOSTNAME admin <$ADMIN_EMAIL>
 Date: $(date -R)
 Subject: $SUBJECT
 
 Hi
 
-The Linode at $NODE_HOSTNAME ($NODE_FQDN) is now live.
+The host at $NODE_HOSTNAME ($NODE_FQDN) is now live.
 ${EMAIL_INFO:+
 $EMAIL_INFO
 }
@@ -243,7 +243,7 @@ SHUTDOWN_DELAY="${SHUTDOWN_DELAY:-0}"
 S="[[:space:]]"
 
 [ -s "/root/.ssh/authorized_keys" ] ||
-    die "at least one SSH key must be added to Linodes deployed with this StackScript"
+    die "at least one SSH key must be added to hosts deployed with this script"
 
 ADMIN_USER_KEYS="$([ -z "$ADMIN_USERS" ] || grep -E "$S(${ADMIN_USERS//,/|})\$" "/root/.ssh/authorized_keys" || :)"
 HOST_KEYS="$([ -z "$ADMIN_USERS" ] && cat "/root/.ssh/authorized_keys" || grep -Ev "$S(${ADMIN_USERS//,/|})\$" "/root/.ssh/authorized_keys" || :)"
@@ -806,16 +806,33 @@ install -v -m 0660 -o "$FIRST_ADMIN" -g "adm" /dev/null "$LK_BASE/etc/firewall.c
 [ "$REJECT_OUTPUT" = "N" ] ||
     echo "\
 $ACCEPT_OUTPUT_HOSTS_SH
-ACCEPT_OUTPUT_CHAIN=\"${P}output\"\
-" >"$LK_BASE/etc/firewall.conf"
-echo "\
-LK_BASE=\"$(esc "$LK_BASE")\"
-LK_PATH_PREFIX=\"$(esc "$PATH_PREFIX")\"
-LK_PATH_PREFIX_ALPHA=\"$(esc "$PATH_PREFIX_ALPHA")\"
-LK_NODE_SERVICES=\"$(esc "$NODE_SERVICES")\"
-LK_NODE_PACKAGES=\"$(esc "$NODE_PACKAGES")\"
-LK_ADMIN_EMAIL=\"$(esc "$ADMIN_EMAIL")\"\
-" >"/etc/default/lk-platform"
+$(
+        printf '%s=%q\n' \
+            "ACCEPT_OUTPUT_CHAIN" "${P}output"
+    )" >"$LK_BASE/etc/firewall.conf"
+printf '%s=%q\n' \
+    "LK_BASE" "$LK_BASE" \
+    "LK_PATH_PREFIX" "$PATH_PREFIX" \
+    "LK_PATH_PREFIX_ALPHA" "$PATH_PREFIX_ALPHA" \
+    "LK_NODE_HOSTNAME" "$NODE_HOSTNAME" \
+    "LK_NODE_FQDN" "$NODE_FQDN" \
+    "LK_NODE_TIMEZONE" "$NODE_TIMEZONE" \
+    "LK_NODE_SERVICES" "$NODE_SERVICES" \
+    "LK_NODE_PACKAGES" "$NODE_PACKAGES" \
+    "LK_ADMIN_EMAIL" "$ADMIN_EMAIL" \
+    "LK_TRUSTED_IP_ADDRESSES" "$TRUSTED_IP_ADDRESSES" \
+    "LK_SSH_TRUSTED_ONLY" "$SSH_TRUSTED_ONLY" \
+    "LK_REJECT_OUTPUT" "$REJECT_OUTPUT" \
+    "LK_ACCEPT_OUTPUT_HOSTS" "$ACCEPT_OUTPUT_HOSTS" \
+    "LK_INNODB_BUFFER_SIZE" "$INNODB_BUFFER_SIZE" \
+    "LK_DEFAULT_OPCACHE_MEMORY_CONSUMPTION" "$OPCACHE_MEMORY_CONSUMPTION" \
+    "LK_MEMCACHED_MEMORY_LIMIT" "$MEMCACHED_MEMORY_LIMIT" \
+    "LK_SMTP_RELAY" "$SMTP_RELAY" \
+    "LK_EMAIL_BLACKHOLE" "$EMAIL_BLACKHOLE" \
+    "LK_AUTO_REBOOT" "$AUTO_REBOOT" \
+    "LK_AUTO_REBOOT_TIME" "$AUTO_REBOOT_TIME" \
+    "LK_PLATFORM_BRANCH" "$LK_PLATFORM_BRANCH" \
+    >"/etc/default/lk-platform"
 "$LK_BASE/bin/lk-platform-install.sh"
 
 # TODO: verify downloads
