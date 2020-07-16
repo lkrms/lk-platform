@@ -39,13 +39,17 @@ function now() {
     date +'%Y-%m-%d %H:%M:%S %z'
 }
 
+function write_log() {
+    local LINE
+    while IFS= read -r LINE || [ -n "$LINE" ]; do
+        printf '%s %s\n' "$(now)" "$LINE"
+    done
+}
+
 function log() {
-    {
-        printf '%s %s\n' "$(now)" "$1"
-        shift
-        [ "$#" -eq "0" ] ||
-            printf '  %s\n' "${@//$'\n'/$'\n  '}" ""
-    } | tee -a "$LOG_FILE"
+    local IFS=$'\n' LINE
+    LINE="$*"
+    echo "${LINE//$'\n'/$'\n  '}"
 }
 
 function die() {
@@ -77,7 +81,7 @@ function edit_file() {
     else
         die "no line matching $2 in $1"
     fi
-    [ "${LOG_FILE:-Y}" = "N" ] || log_file "$1"
+    [ "${EDIT_FILE_LOG:-Y}" = "N" ] || log_file "$1"
 }
 
 function esc() {
@@ -191,6 +195,9 @@ OUT_FILE="/var/log/${PATH_PREFIX}install.out"
 
 install -v -m 0640 -g "adm" "/dev/null" "$LOG_FILE"
 install -v -m 0640 -g "adm" "/dev/null" "$OUT_FILE"
+
+exec 6>&1 7>&2
+exec > >(tee >(write_log >>"$LOG_FILE")) 2>&1
 
 trap 'exit_trap' EXIT
 
@@ -980,11 +987,11 @@ if is_installed fail2ban; then
     # TODO: configure jails other than sshd
     log "Configuring Fail2Ban"
     FILE="/etc/fail2ban/jail.conf"
-    LOG_FILE=N edit_file "$FILE" \
+    EDIT_FILE_LOG=N edit_file "$FILE" \
         "^#?backend$S*=($S*(pyinotify|gamin|polling|systemd|auto))?($S*; .*)?\$" \
         "backend = systemd\3"
     [ -z "$TRUSTED_IP_ADDRESSES" ] ||
-        LOG_FILE=N edit_file "$FILE" \
+        EDIT_FILE_LOG=N edit_file "$FILE" \
             "^#?ignoreip$S*=($S*[^#]+)?($S*; .*)?\$" \
             "ignoreip = 127.0.0.1\\/8 ::1 ${TRUSTED_IP_ADDRESSES//\//\\\/}\2"
     log_file "$FILE"
