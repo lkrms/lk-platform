@@ -17,13 +17,6 @@ _FILE="${BASH_SOURCE[0]}" && [ ! -L "$_FILE" ] &&
 
 shopt -s nullglob
 
-RC_FILES=(
-    /etc/skel/.bashrc
-    ~root/.bashrc
-    /{home,Users}/*/.bashrc
-    /srv/www/*/.bashrc
-)
-
 INSTALL_SETTINGS=(
     # lib/linode/hosting.sh
     NODE_HOSTNAME
@@ -161,6 +154,14 @@ done
 lk_maybe_replace "$DEFAULT_FILE" "$(lk_echo_array "${DEFAULT_LINES[@]}")"
 
 # check .bashrc files
+RC_FILES=(
+    /etc/skel/.bashrc
+    /etc/skel."${LK_PATH_PREFIX_ALPHA}"/.bashrc
+    /{home,Users}/*/.bashrc
+    /srv/www/*/.bashrc
+    ~root/.bashrc
+)
+
 lk_resolve_files RC_FILES
 if [ "${#RC_FILES[@]}" -eq "0" ]; then
     lk_console_warning "No ~/.bashrc files found"
