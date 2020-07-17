@@ -15,3 +15,15 @@ function lk_assert_command_exists() {
 function lk_assert_commands_exist() {
     lk_commands_exist "$@" || lk_die "$(lk_maybe_plural "$#" "command" "one or more commands") not found: $*"
 }
+
+function lk_assert_is_linux() {
+    lk_is_linux || lk_die "not running on Linux"
+}
+
+function lk_assert_is_arch() {
+    lk_is_arch || lk_die "not running on Arch Linux"
+}
+
+function lk_assert_is_macos() {
+    lk_is_macos || lk_die "not running on macOS"
+}

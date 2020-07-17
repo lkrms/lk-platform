@@ -10,6 +10,7 @@ lk_die() { echo "$1" >&2 && exit 1; }
 include=deploy,linux,arch,httpd,php . "$LK_BASE/lib/bash/common.sh"
 
 lk_assert_not_root
+lk_assert_is_arch
 
 lk_log_output
 
@@ -296,6 +297,7 @@ PACMAN_PACKAGES+=(
 )
 
 AUR_PACKAGES+=(
+    demjson
     trickle
     vscodium-bin
 
