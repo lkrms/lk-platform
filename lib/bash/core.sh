@@ -567,7 +567,7 @@ function lk_console_item() {
 
 # lk_console_list message [single_noun plural_noun] [colour_sequence]
 function lk_console_list() {
-    local MESSAGE SINGLE_NOUN PLURAL_NOUN COLOUR ITEMS LIST SPACES \
+    local MESSAGE SINGLE_NOUN PLURAL_NOUN COLOUR ITEMS LIST INDENT=0 SPACES \
         LK_CONSOLE_PREFIX="${LK_CONSOLE_PREFIX-==> }"
     MESSAGE="$1"
     shift
@@ -579,10 +579,11 @@ function lk_console_list() {
     COLOUR="${1-$LK_DEFAULT_CONSOLE_COLOUR}"
     lk_mapfile /dev/stdin ITEMS
     lk_console_message "$MESSAGE" "$COLOUR"
+    ! lk_in_string $'\n' "$MESSAGE" || INDENT=2
     LIST="$(lk_echo_array "${ITEMS[@]}" |
-        COLUMNS="${COLUMNS+$((COLUMNS - ${#LK_CONSOLE_PREFIX} - 2))}" \
+        COLUMNS="${COLUMNS+$((COLUMNS - ${#LK_CONSOLE_PREFIX} - INDENT))}" \
             column -s $'\n' | expand)"
-    SPACES="$(lk_repeat " " "$((${#LK_CONSOLE_PREFIX} + 2))")"
+    SPACES="$(lk_repeat " " "$((${#LK_CONSOLE_PREFIX} + INDENT))")"
     lk_echoc "$SPACES${LIST//$'\n'/$'\n'$SPACES}" "$COLOUR" >&2
     [ -z "${SINGLE_NOUN:-}" ] ||
         LK_CONSOLE_PREFIX="$SPACES" lk_console_detail "(${#ITEMS[@]} $(
