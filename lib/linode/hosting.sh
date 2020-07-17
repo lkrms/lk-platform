@@ -813,7 +813,7 @@ install -v -d -m 2775 -o "$FIRST_ADMIN" -g "adm" "$LK_BASE/etc"
 install -v -m 0664 -o "$FIRST_ADMIN" -g "adm" /dev/null "$LK_BASE/etc/packages.conf"
 printf '%s=(\n%s)\n' \
     "IMAGE_BASE_PACKAGES" "$(
-        printf '    %q\n' "${IMAGE_BASE_PACKAGES[*]}"
+        printf '    %q\n' "${IMAGE_BASE_PACKAGES[@]}"
     )" >"$LK_BASE/etc/packages.conf"
 install -v -m 0660 -o "$FIRST_ADMIN" -g "adm" /dev/null "$LK_BASE/etc/firewall.conf"
 [ "$REJECT_OUTPUT" = "N" ] ||
