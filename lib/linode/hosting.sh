@@ -267,6 +267,10 @@ export -n \
     AUTO_REBOOT AUTO_REBOOT_TIME \
     SCRIPT_DEBUG SHUTDOWN_ACTION SHUTDOWN_DELAY
 
+IMAGE_BASE_PACKAGES=($(apt-mark showmanual))
+log "Pre-installed packages:" \
+    "${IMAGE_BASE_PACKAGES[@]}"
+
 . /etc/lsb-release
 
 EXCLUDE_PACKAGES=()
@@ -806,6 +810,11 @@ cd \"$(esc "$LK_BASE")\" &&
     git config pull.ff only"
 fi
 install -v -d -m 2775 -o "$FIRST_ADMIN" -g "adm" "$LK_BASE/etc"
+install -v -m 0664 -o "$FIRST_ADMIN" -g "adm" /dev/null "$LK_BASE/etc/packages.conf"
+printf '%s=(\n%s)\n' \
+    "IMAGE_BASE_PACKAGES" "$(
+        printf '    %q\n' "${IMAGE_BASE_PACKAGES[*]}"
+    )" >"$LK_BASE/etc/packages.conf"
 install -v -m 0660 -o "$FIRST_ADMIN" -g "adm" /dev/null "$LK_BASE/etc/firewall.conf"
 [ "$REJECT_OUTPUT" = "N" ] ||
     echo "\
