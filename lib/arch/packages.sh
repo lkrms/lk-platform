@@ -275,6 +275,7 @@ lk_is_virtual && {
 
         #
         noto-fonts
+        noto-fonts-cjk
         noto-fonts-emoji
         ttf-dejavu
         ttf-inconsolata
