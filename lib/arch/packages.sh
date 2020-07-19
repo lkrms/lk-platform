@@ -277,6 +277,7 @@ lk_is_virtual && {
         noto-fonts
         noto-fonts-cjk
         noto-fonts-emoji
+        terminus-font
         ttf-dejavu
         ttf-inconsolata
         ttf-jetbrains-mono
