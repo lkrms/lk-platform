@@ -42,3 +42,9 @@ function lk_is_lid_closed() {
     shopt -u nullglob
     [ "${#LID_FILE[@]}" -gt "0" ] && grep -q 'closed$' "${LID_FILE[0]}"
 }
+
+function lk_x_dpi() {
+    xdpyinfo |
+        grep -Eo '^[[:space:]]+resolution:[[:space:]]*[0-9]+x[0-9]+' |
+        grep -Eo '[0-9]+' | head -n1
+}
