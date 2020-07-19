@@ -44,7 +44,7 @@ PACMAN_PACKAGES=(
     # basics
     bash-completion
     bc
-    bind-tools
+    bind
     bridge-utils
     byobu
     curl
