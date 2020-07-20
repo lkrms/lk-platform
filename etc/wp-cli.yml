@@ -5,6 +5,7 @@ skip-plugins:
   - event-calendar-exporter
   - facebook
   - find-replace
+  - force-https-littlebizzy
   - force-ssl
   - simplemap
   - the-events-calendar
