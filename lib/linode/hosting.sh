@@ -1114,7 +1114,7 @@ if is_installed apache2; then
 <Macro Staging>
     Header set X-Robots-Tag "noindex, nofollow"
 </Macro>
-<DirectoryMatch ^/srv/www/([^/]+/){1,2}public_html/?\$>
+<DirectoryMatch ^/srv/www/([^/]+/){1,2}public_html(/?\$|/)>
     Options SymLinksIfOwnerMatch
     AllowOverride All Options=Indexes,MultiViews,SymLinksIfOwnerMatch,ExecCGI
     Require all granted
