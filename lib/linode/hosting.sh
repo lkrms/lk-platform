@@ -1114,11 +1114,11 @@ if is_installed apache2; then
 <Macro Staging>
     Header set X-Robots-Tag "noindex, nofollow"
 </Macro>
-<Directory /srv/www/*/public_html>
+<DirectoryMatch ^/srv/www/([^/]+/){1,2}public_html/?\$>
     Options SymLinksIfOwnerMatch
     AllowOverride All Options=Indexes,MultiViews,SymLinksIfOwnerMatch,ExecCGI
     Require all granted
-</Directory>
+</DirectoryMatch>
 <Directory /opt/opcache-gui>
     Options None
     AllowOverride None
@@ -1151,15 +1151,15 @@ if is_installed apache2; then
         </Location>
     </IfModule>
 </VirtualHost>
-<Macro PhpFpmVirtualHost${PHPVER//./} %sitename%>
+<Macro PhpFpmVirtualHostCustom${PHPVER//./} %sitename% %customroot%>
     ServerAdmin $ADMIN_EMAIL
-    DocumentRoot /srv/www/%sitename%/public_html
+    DocumentRoot /srv/www/%sitename%%customroot%/public_html
     Alias /php-opcache /opt/opcache-gui
-    ErrorLog /srv/www/%sitename%/log/error.log
-    CustomLog /srv/www/%sitename%/log/access.log combined
+    ErrorLog /srv/www/%sitename%%customroot%/log/error.log
+    CustomLog /srv/www/%sitename%%customroot%/log/access.log combined
     DirectoryIndex index.php index.html index.htm
     ProxyPassMatch ^/php-opcache/(.*\.php(/.*)?)\$ fcgi://%sitename%/opt/opcache-gui/\$1
-    ProxyPassMatch ^/(.*\.php(/.*)?)\$ fcgi://%sitename%/srv/www/$HOST_ACCOUNT/public_html/\$1
+    ProxyPassMatch ^/(.*\.php(/.*)?)\$ fcgi://%sitename%/srv/www/%sitename%%customroot%/public_html/\$1
     <LocationMatch ^/(php-fpm-(status|ping))\$>
         ProxyPassMatch fcgi://%sitename%/\$1
         Use RequireTrusted
@@ -1169,11 +1169,20 @@ if is_installed apache2; then
         RewriteRule ^/php-fpm-(status|ping)\$ - [END]
     </IfModule>
     <IfModule mod_alias.c>
-        RedirectMatch 404 .*/\.git
+        RedirectMatch 404 .*/\.(git|svn|${PATH_PREFIX}settings)
     </IfModule>
 </Macro>
+<Macro PhpFpmVirtualHost${PHPVER//./} %sitename%>
+    Use PhpFpmVirtualHostCustom${PHPVER//./} %sitename% ""
+</Macro>
 <Macro PhpFpmVirtualHostSsl${PHPVER//./} %sitename%>
-    Use PhpFpmVirtualHost${PHPVER//./} %sitename%
+    Use PhpFpmVirtualHostCustom${PHPVER//./} %sitename% ""
+</Macro>
+<Macro PhpFpmVirtualHostChild${PHPVER//./} %sitename% %childname%>
+    Use PhpFpmVirtualHostCustom${PHPVER//./} %sitename% /%childname%
+</Macro>
+<Macro PhpFpmVirtualHostSslChild${PHPVER//./} %sitename% %childname%>
+    Use PhpFpmVirtualHostCustom${PHPVER//./} %sitename% /%childname%
 </Macro>
 <Macro PhpFpmProxy${PHPVER//./} %sitename% %timeout%>
     <Proxy unix:/run/php/php$PHPVER-fpm-%sitename%.sock|fcgi://%sitename%>
