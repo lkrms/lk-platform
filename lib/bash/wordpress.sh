@@ -42,6 +42,12 @@ function lk_wp_flush() {
     lk_wp cache flush
     lk_console_detail "Deleting transients"
     lk_wp transient delete --all
+    lk_console_detail "Flushing rewrite rules"
+    wp rewrite flush
+    if wp cli has-command 'w3-total-cache flush'; then
+        lk_console_detail "Flushing W3 Total Cache"
+        wp w3-total-cache flush all
+    fi
 }
 
 # lk_wp_rename_site new_url
@@ -81,17 +87,12 @@ function lk_wp_rename_site() {
     fi
     if lk_no_input ||
         lk_confirm "\
-OK to flush rewrite rules? \
+OK to flush rewrite rules, caches and transients? \
 Plugin code will be allowed to run." Y; then
-        wp rewrite flush
-    else
-        lk_console_detail "To flush rewrite rules manually:" "wp rewrite flush"
-    fi
-    if lk_no_input ||
-        lk_confirm "\
-OK to flush caches and delete transients? \
-Plugin code may be allowed to run." Y; then
         lk_wp_flush
+    else
+        lk_console_detail "To flush rewrite rules:" "wp rewrite flush"
+        lk_console_detail "To flush everything:" "lk_wp_flush"
     fi
     lk_console_message "Site renamed successfully" "$LK_GREEN"
 }
@@ -443,7 +444,8 @@ function lk_wp_file_sync_remote() {
     for FILE in "wp-config.php" ".git" ".vscode"; do
         [ ! -e "$LOCAL_PATH/$FILE" ] || ARGS+=(--exclude="$FILE")
     done
-    ARGS+=(--exclude="/*.code-workspace")
+    # TODO: move standard exclusions to a file
+    ARGS+=(--exclude="/.maintenance" --exclude="/*.code-workspace")
     ARGS+=("$1:$REMOTE_PATH/" "$LOCAL_PATH/")
     lk_console_detail "Local files will be overwritten with command" \
         "rsync ${ARGS[*]}"
@@ -542,4 +544,53 @@ function lk_wp_fix_permissions() {
     done
     lk_console_detail "File mode changes:" "$(wc -l <"$LOG_DIR/chmod.log")"
     lk_console_message "Setting file permissions completed successfully" "$LK_GREEN"
+}
+
+# [LOCAL_DB_NAME=db_name] [LOCAL_DB_USER=db_user] \
+#   lk_wp_migrate_remote ssh_host [remote_path local_path [exclude_pattern...]]
+function lk_wp_migrate_remote() {
+    local REMOTE_PATH="${2:-public_html}" LOCAL_PATH="${3:-$HOME/public_html}" \
+        EXCLUDE=("${@:4}") LOCAL_DB_NAME="${LOCAL_DB_NAME:-$USER}" \
+        RSYNC_ARGS DB_FILE MAINTENANCE='<?php $upgrading = time(); ?>'
+    [ -n "${1:-}" ] || lk_warn "no ssh host" || return
+    REMOTE_PATH="${REMOTE_PATH%/}"
+    LOCAL_PATH="${LOCAL_PATH%/}"
+    [ -d "$LOCAL_PATH" ] || lk_warn "not a local directory: $LOCAL_PATH"
+
+    lk_console_message "Enabling maintenance mode"
+    lk_console_detail "Creating" "$LOCAL_PATH/.maintenance"
+    echo -n "$MAINTENANCE" >"$LOCAL_PATH/.maintenance" || return
+    lk_console_detail \
+        "If this is the final sync before DNS cutover, maintenance mode should be
+enabled on the remote site"
+    lk_console_detail \
+        "To minimise downtime, complete an initial sync without enabling
+maintenance mode, then sync again"
+    if lk_confirm "Enable maintenance mode on remote site?"; then
+        lk_console_detail "Creating" "$1:$REMOTE_PATH/.maintenance"
+        ssh "$1" \
+            "bash -c 'echo -n \"\$1\" >\"\$2/.maintenance\"'" "bash" \
+            "$MAINTENANCE" "$REMOTE_PATH" || return
+    fi
+
+    # migrate files
+    RSYNC_ARGS=(${EXCLUDE[@]+"${EXCLUDE[@]/#/--exclude=}"})
+    lk_wp_file_sync_remote "$1" "$REMOTE_PATH" "$LOCAL_PATH" || return
+
+    # migrate database
+    DB_FILE=~/"$1-${REMOTE_PATH//\//_}-$(lk_date_ymdhms).sql.gz"
+    lk_wp_db_dump_remote "$1" "$REMOTE_PATH" >"$DB_FILE" &&
+        cd "$LOCAL_PATH" &&
+        lk_wp_db_restore_local "$DB_FILE" \
+            "$LOCAL_DB_NAME" "${LOCAL_DB_USER:-$LOCAL_DB_NAME}" &&
+        lk_wp_flush || return
+
+    lk_console_message "Disabling maintenance mode (local only)"
+    rm "$LOCAL_PATH/.maintenance" || {
+        lk_console_error "Error deleting $LOCAL_PATH/.maintenance
+Maintenance mode may have been disabled early by another process"
+        return 1
+    }
+
+    lk_console_message "Migration completed successfully" "$LK_GREEN"
 }
