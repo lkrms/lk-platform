@@ -1,0 +1,5 @@
+// If a conffile has been modified and the version in the package has changed,
+// always keep the old version without prompting, otherwise always install the
+// new version without prompting
+DPkg::options:: "--force-confdef";
+DPkg::options:: "--force-confold";

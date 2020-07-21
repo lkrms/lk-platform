@@ -44,6 +44,30 @@ export LK_BASE
 . "$LK_BASE/lib/bash/git.sh"
 . "$LK_BASE/lib/bash/wordpress.sh"
 
+function lk_diff_bak() {
+    local BACKUP FILE
+    [ "$EUID" -eq "0" ] || ! lk_can_sudo || {
+        sudo -H env \
+            _LK_DIFF_ROOT="${_LK_DIFF_ROOT:-}" \
+            _LK_DIFF_REGEX="${_LK_DIFF_REGEX:-}" \
+            _LK_DIFF_SUFFIX="${_LK_DIFF_SUFFIX:-}" \
+            bash -c "$(declare -f lk_diff_bak); lk_diff_bak \"\$@\"" "bash" "$@"
+        return
+    }
+    while IFS= read -rd $'\0' BACKUP; do
+        FILE="${BACKUP%${_LK_DIFF_SUFFIX:--*.bak}}"
+        diff --unified --color --report-identical-files "$BACKUP" "$FILE" ||
+            true
+    done < <(gnu_find "${1:-${_LK_DIFF_ROOT:-/}}" -xdev -regextype posix-egrep \
+        -regex "${_LK_DIFF_REGEX:-.*-[0-9]+\\.bak}" -print0 | sort -z)
+}
+
+function lk_diff_orig() {
+    _LK_DIFF_REGEX=".*\\.orig" \
+        _LK_DIFF_SUFFIX=".orig" \
+        lk_diff_bak "$@"
+}
+
 function lk_find_latest() {
     local i TYPE="${1:-}" TYPE_ARGS=()
     [[ "$TYPE" =~ ^[bcdflps]+$ ]] && shift || TYPE="f"
