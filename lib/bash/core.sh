@@ -60,7 +60,7 @@ function lk_trap_exit() {
 }
 
 function lk_delete_on_exit() {
-    lk_variable_declared "LK_EXIT_DELETE" ||
+    lk_is_declared "LK_EXIT_DELETE" ||
         lk_trap_exit
     LK_EXIT_DELETE+=("$@")
 }
@@ -1035,8 +1035,12 @@ function lk_is_identifier() {
     [[ "$1" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]
 }
 
-function lk_variable_declared() {
+function lk_is_declared() {
     declare -p "$1" >/dev/null 2>&1
+}
+
+function lk_get_var_names() {
+    eval "printf '%s\n'$(printf ' ${!%s@}' _ {a..z} {A..Z})"
 }
 
 # lk_version_at_least installed_version minimum_version
@@ -1047,7 +1051,7 @@ function lk_version_at_least() {
 }
 
 function lk_return_cached() {
-    lk_variable_declared "$1" || {
+    lk_is_declared "$1" || {
         eval "$1=0;{ $2;}||$1=\"\$?\""
     }
     return "${!1}"
