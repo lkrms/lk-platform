@@ -577,9 +577,6 @@ PACKAGES=(
     build-essential
     python3
     python3-dev
-
-    #
-    ${NODE_PACKAGES:-${NODE_PACKAGES//,/ }}
 )
 
 # if service installations have been requested, add-apt-repository
@@ -1010,6 +1007,11 @@ case ",$NODE_SERVICES," in
     ;;
 
 esac
+
+if [ -n "$NODE_PACKAGES" ]; then
+    log "Installing additional packages"
+    keep_trying apt-get -yq install ${NODE_PACKAGES//,/ }
+fi
 
 if is_installed fail2ban; then
     # TODO: configure jails other than sshd
