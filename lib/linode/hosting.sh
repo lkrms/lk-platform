@@ -808,7 +808,7 @@ cd \"$(esc "$LK_BASE")\" &&
 fi
 install -v -d -m 2775 -o "$FIRST_ADMIN" -g "adm" "$LK_BASE/etc"
 install -v -m 0664 -o "$FIRST_ADMIN" -g "adm" /dev/null "$LK_BASE/etc/packages.conf"
-printf '%s=(\n%s)\n' \
+printf '%s=(\n%s\n)\n' \
     "IMAGE_BASE_PACKAGES" "$(
         printf '    %q\n' "${IMAGE_BASE_PACKAGES[@]}"
     )" >"$LK_BASE/etc/packages.conf"
@@ -1116,11 +1116,17 @@ if is_installed apache2; then
 <Macro Staging>
     Header set X-Robots-Tag "noindex, nofollow"
 </Macro>
-<DirectoryMatch ^/srv/www/([^/]+/){1,2}public_html(/?\$|/)>
-    Options SymLinksIfOwnerMatch
-    AllowOverride All Options=Indexes,MultiViews,SymLinksIfOwnerMatch,ExecCGI
-    Require all granted
-</DirectoryMatch>
+# 'AllowOverride' is only valid in 'Directory', so use a macro in lieu of
+# 'DirectoryMatch'
+<Macro PublicDirectory %dirpath%>
+    <Directory %dirpath%>
+        Options SymLinksIfOwnerMatch
+        AllowOverride All Options=Indexes,MultiViews,SymLinksIfOwnerMatch,ExecCGI
+        Require all granted
+    </Directory>
+</Macro>
+Use PublicDirectory /srv/www/*/public_html
+Use PublicDirectory /srv/www/*/*/public_html
 <Directory /opt/opcache-gui>
     Options None
     AllowOverride None
@@ -1155,13 +1161,13 @@ if is_installed apache2; then
 </VirtualHost>
 <Macro PhpFpmVirtualHostCustom${PHPVER//./} %sitename% %customroot%>
     ServerAdmin $ADMIN_EMAIL
-    DocumentRoot /srv/www/%sitename%%customroot%/public_html
+    DocumentRoot /srv/www/%sitename%%customroot%public_html
     Alias /php-opcache /opt/opcache-gui
-    ErrorLog /srv/www/%sitename%%customroot%/log/error.log
-    CustomLog /srv/www/%sitename%%customroot%/log/access.log combined
+    ErrorLog /srv/www/%sitename%%customroot%log/error.log
+    CustomLog /srv/www/%sitename%%customroot%log/access.log combined
     DirectoryIndex index.php index.html index.htm
     ProxyPassMatch ^/php-opcache/(.*\.php(/.*)?)\$ fcgi://%sitename%/opt/opcache-gui/\$1
-    ProxyPassMatch ^/(.*\.php(/.*)?)\$ fcgi://%sitename%/srv/www/%sitename%%customroot%/public_html/\$1
+    ProxyPassMatch ^/(.*\.php(/.*)?)\$ fcgi://%sitename%/srv/www/%sitename%%customroot%public_html/\$1
     <LocationMatch ^/(php-fpm-(status|ping))\$>
         ProxyPassMatch fcgi://%sitename%/\$1
         Use RequireTrusted
@@ -1175,16 +1181,16 @@ if is_installed apache2; then
     </IfModule>
 </Macro>
 <Macro PhpFpmVirtualHost${PHPVER//./} %sitename%>
-    Use PhpFpmVirtualHostCustom${PHPVER//./} %sitename% ""
+    Use PhpFpmVirtualHostCustom${PHPVER//./} %sitename% /
 </Macro>
 <Macro PhpFpmVirtualHostSsl${PHPVER//./} %sitename%>
-    Use PhpFpmVirtualHostCustom${PHPVER//./} %sitename% ""
+    Use PhpFpmVirtualHostCustom${PHPVER//./} %sitename% /
 </Macro>
 <Macro PhpFpmVirtualHostChild${PHPVER//./} %sitename% %childname%>
-    Use PhpFpmVirtualHostCustom${PHPVER//./} %sitename% /%childname%
+    Use PhpFpmVirtualHostCustom${PHPVER//./} %sitename% /%childname%/
 </Macro>
 <Macro PhpFpmVirtualHostSslChild${PHPVER//./} %sitename% %childname%>
-    Use PhpFpmVirtualHostCustom${PHPVER//./} %sitename% /%childname%
+    Use PhpFpmVirtualHostCustom${PHPVER//./} %sitename% /%childname%/
 </Macro>
 <Macro PhpFpmProxy${PHPVER//./} %sitename% %timeout%>
     <Proxy unix:/run/php/php$PHPVER-fpm-%sitename%.sock|fcgi://%sitename%>
