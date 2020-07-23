@@ -305,6 +305,7 @@ AUR_PACKAGES+=(
     git-cola
 
     # platforms
+    linode-cli
     wp-cli
 )
 
