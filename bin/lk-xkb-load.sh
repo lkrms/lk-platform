@@ -2,10 +2,14 @@
 # shellcheck disable=SC1007,SC1090,SC2015
 
 set -euo pipefail
-lk_die() { echo "$1" >&2 && exit 1; }
-[ -n "${LK_BASE:-}" ] || { BS="${BASH_SOURCE[0]}" && [ ! -L "$BS" ] &&
-    LK_BASE="$(cd "${BS%/*}/.." && pwd -P)" &&
-    [ -d "$LK_BASE/lib/bash" ] || lk_die "${BS:+$BS: }LK_BASE not set"; }
+_FILE=${BASH_SOURCE[0]}
+lk_die() { s=$? && echo "$_FILE: $1" >&2 && false || exit $s; }
+{ type -P realpath || { type -P python && realpath() { python -c \
+    "import os,sys;print(os.path.realpath(sys.argv[1]))" "$1"; }; }; } \
+    >/dev/null || lk_die "realpath: command not found"
+_FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
+    LK_BASE=$(realpath "$_DIR/.." 2>/dev/null) &&
+    [ -d "$LK_BASE/lib/bash" ] && export LK_BASE || lk_die "LK_BASE: not found"
 
 include= . "$LK_BASE/lib/bash/common.sh"
 

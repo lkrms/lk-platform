@@ -3,11 +3,30 @@
 
 # Use the following as a template for LK_BASE/bin scripts.
 
+# Option 1:
+#   - Only uses builtins, but is easily broken by symlinks
+#   - Recommended for scripts invoked using pathnames that don't contain any
+#     symlinks, where coreutils may not be installed (e.g. bootstrap scripts)
 set -euo pipefail
 _FILE="${BASH_SOURCE[0]}" && [ ! -L "$_FILE" ] &&
     LK_BASE="$(cd "${_FILE%/*}/../.." && pwd -P)" &&
     [ -d "$LK_BASE/lib/bash" ] && export LK_BASE ||
     { echo "${_FILE:+$_FILE: }unable to find LK_BASE" >&2 && exit 1; }
+
+# Option 2:
+#   - Fails unless `realpath` or `python` are available, but has robust support
+#     for symlinks
+#   - Recommended unless there's a reason not to rely on GNU coreutils
+set -euo pipefail
+_FILE=${BASH_SOURCE[0]}
+lk_die() { s=$? && echo "$_FILE: $1" >&2 && false || exit $s; }
+{ type -P realpath || { type -P python && realpath() { python -c \
+    "import os,sys;print(os.path.realpath(sys.argv[1]))" "$1"; }; }; } \
+    >/dev/null || lk_die "realpath: command not found"
+_FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
+    LK_BASE=$(realpath "$_DIR/../.." 2>/dev/null) &&
+    [ -d "$LK_BASE/lib/bash" ] && export LK_BASE || lk_die "LK_BASE: not found"
+# >>>>
 
 include= . "$LK_BASE/lib/bash/common.sh"
 
