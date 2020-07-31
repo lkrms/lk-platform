@@ -680,6 +680,14 @@ function lk_is_pdf() {
         [ "$MIME_TYPE" = "application/pdf" ]
 }
 
+# lk_is_email STRING
+#   True if STRING is a valid email address. Quoted local parts are not
+#   supported.
+function lk_is_email() {
+    local EMAIL_REGEX="^[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@([a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.|\$)){2,}\$"
+    [[ "$1" =~ $EMAIL_REGEX ]]
+}
+
 # lk_is_uri uri
 #   True if URI is a valid Uniform Resource Identifier with explicit scheme
 #   and authority components ("scheme://host" at minimum).
