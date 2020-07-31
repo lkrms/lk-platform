@@ -1360,6 +1360,13 @@ TO '$MYSQL_USERNAME'@'localhost' \
 IDENTIFIED BY '$MYSQL_PASSWORD' \
 WITH GRANT OPTION" | mysql -uroot
     fi
+
+    log "Allowing users to manage their own MySQL credentials"
+    cat <<EOF >"/etc/sudoers.d/${PATH_PREFIX}mysql-self-service"
+ALL ALL=(ALL) NOPASSWD:$LK_BASE/bin/lk-mysql-grant-access.sh
+EOF
+    log_file "/etc/sudoers.d/${PATH_PREFIX}mysql-self-service"
+
     # TODO: create $HOST_ACCOUNT database
 fi
 
