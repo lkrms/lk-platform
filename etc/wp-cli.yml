@@ -1,5 +1,6 @@
 apache_modules:
   - mod_rewrite
+
 # Known to throw CLI exceptions
 skip-plugins:
   - addthis
@@ -9,5 +10,6 @@ skip-plugins:
   - find-replace
   - force-https-littlebizzy
   - force-ssl
+  - hide_my_wp
   - simplemap
   - the-events-calendar
