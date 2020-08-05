@@ -67,9 +67,9 @@ function lk_has_arg() {
 
 function _lk_elevate() {
     if [ "$#" -gt "0" ]; then
-        sudo -H -E "$@"
+        sudo -H "$@"
     else
-        sudo -H -E "$0" "${LK_ARGV[@]}"
+        sudo -H "$0" "${LK_ARGV[@]}"
         exit
     fi
 }

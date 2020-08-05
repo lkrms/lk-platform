@@ -102,6 +102,11 @@ function lk_first_existing_command() {
     false
 }
 
+lk_command_exists realpath || ! lk_command_exists python ||
+    function realpath() {
+        python -c "import os,sys;print(os.path.realpath(sys.argv[1]))" "$1"
+    }
+
 function lk_first_existing_parent() {
     local FILE
     FILE="$(realpath --canonicalize-missing "$1")" || return
@@ -608,7 +613,8 @@ function lk_console_list() {
 function lk_console_read() {
     local PROMPT=("$1") DEFAULT="${2:-}" VALUE
     [ -z "$DEFAULT" ] || PROMPT+=("[$DEFAULT]")
-    read -rep "$LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_DEFAULT_CONSOLE_COLOUR}:: $LK_RESET$LK_BOLD${PROMPT[*]}$LK_RESET " "${@:3}" VALUE || return
+    printf '%s ' "$LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_DEFAULT_CONSOLE_COLOUR}:: $LK_RESET$LK_BOLD${PROMPT[*]}$LK_RESET"
+    read -re "${@:3}" VALUE || return
     [ -n "$VALUE" ] || VALUE="$DEFAULT"
     echo "$VALUE"
 }
@@ -632,7 +638,8 @@ function lk_confirm() {
         DEFAULT=
     fi
     while ! [[ "${VALUE:-}" =~ ^(Y|YES|N|NO)$ ]]; do
-        read -rep "$LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_DEFAULT_CONSOLE_COLOUR}:: $LK_RESET$LK_BOLD${PROMPT[*]}$LK_RESET " "${@:3}" VALUE || VALUE="$DEFAULT"
+        printf '%s ' "$LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_DEFAULT_CONSOLE_COLOUR}:: $LK_RESET$LK_BOLD${PROMPT[*]}$LK_RESET"
+        read -re "${@:3}" VALUE || VALUE="$DEFAULT"
         [ -n "$VALUE" ] &&
             VALUE="$(lk_upper "$VALUE")" ||
             VALUE="$DEFAULT"
@@ -886,7 +893,7 @@ function lk_elevate() {
     if [ "$EUID" -eq "0" ]; then
         "$@"
     else
-        sudo -H -E "$@"
+        sudo -H "$@"
     fi
 }
 
@@ -894,7 +901,7 @@ function lk_maybe_elevate() {
     if [ "$EUID" -eq "0" ] || ! lk_can_sudo; then
         "$@"
     else
-        sudo -H -E "$@"
+        sudo -H "$@"
     fi
 }
 

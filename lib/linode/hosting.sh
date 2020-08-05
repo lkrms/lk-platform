@@ -514,6 +514,7 @@ log "Disabling email notifications related to failed sudo attempts"
 cat <<EOF >"/etc/sudoers.d/${PATH_PREFIX}defaults"
 Defaults !mail_no_user
 Defaults !mail_badpass
+Defaults env_keep += "LK_*"
 EOF
 log_file "/etc/sudoers.d/${PATH_PREFIX}defaults"
 

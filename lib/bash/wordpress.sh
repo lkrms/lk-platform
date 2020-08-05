@@ -10,7 +10,11 @@ function lk_wp() {
 }
 
 function lk_wp_get_site_root() {
-    lk_wp eval "echo ABSPATH;" --skip-wordpress
+    local SITE_ROOT
+    SITE_ROOT="$(lk_wp eval "echo ABSPATH;" --skip-wordpress)" &&
+        { [ "$SITE_ROOT" != "/" ] ||
+            lk_warn "WordPress installation not found"; } &&
+        echo "${SITE_ROOT%/}"
 }
 
 function lk_wp_get_table_prefix() {
