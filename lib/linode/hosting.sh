@@ -510,11 +510,12 @@ MATCH_MANY=Y edit_file "/etc/ssh/sshd_config" \
 systemctl restart sshd.service
 FIRST_ADMIN="${FIRST_ADMIN:-root}"
 
-log "Disabling email notifications related to failed sudo attempts"
+log "Configuring sudoers"
 cat <<EOF >"/etc/sudoers.d/${PATH_PREFIX}defaults"
 Defaults !mail_no_user
 Defaults !mail_badpass
 Defaults env_keep += "LK_*"
+Defaults secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$LK_BASE/bin"
 EOF
 log_file "/etc/sudoers.d/${PATH_PREFIX}defaults"
 
