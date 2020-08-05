@@ -10,7 +10,7 @@ function lk_wp() {
 }
 
 function lk_wp_get_site_root() {
-    lk_wp eval "echo ABSPATH;"
+    lk_wp eval "echo ABSPATH;" --skip-wordpress
 }
 
 function lk_wp_get_table_prefix() {
@@ -208,7 +208,7 @@ function lk_wp_db_dump_remote() {
 
 # lk_wp_db_restore_local sql_path [db_name [db_user]]
 function lk_wp_db_restore_local() {
-    local SITE_ROOT DEFAULT_IDENTIFIER SQL _SQL EXIT_STATUS=0 \
+    local SITE_ROOT DEFAULT_IDENTIFIER SQL _SQL COMMAND EXIT_STATUS=0 \
         LOCAL_DB_NAME LOCAL_DB_USER LOCAL_DB_PASSWORD \
         LOCAL_DB_HOST="${LK_MYSQL_HOST:-localhost}" \
         DB_NAME DB_USER DB_PASSWORD DB_HOST
@@ -233,6 +233,8 @@ function lk_wp_db_restore_local() {
             DEFAULT_IDENTIFIER="${BASH_REMATCH[1]}_${BASH_REMATCH[2]}"
         elif [[ "$SITE_ROOT" =~ ^/srv/http/([^./]+)\.localhost/(public_)?html$ ]]; then
             DEFAULT_IDENTIFIER="${BASH_REMATCH[1]}"
+        elif [[ ! "$SITE_ROOT" =~ ^/srv/(www|http)(/.*)?$ ]] && [ "${SITE_ROOT:0:${#HOME}}" = "$HOME" ]; then
+            DEFAULT_IDENTIFIER="$(basename "$SITE_ROOT")"
         else
             DEFAULT_IDENTIFIER="$(gnu_stat --printf '%U' "$SITE_ROOT")" || return
         fi
@@ -261,12 +263,14 @@ function lk_wp_db_restore_local() {
     lk_console_detail "Local database will be reset with:" "$_SQL"
     lk_no_input ||
         lk_confirm "All data in local database '$LOCAL_DB_NAME' will be permanently destroyed. Proceed?" Y || return
-    lk_console_message "Restoring WordPress database to local system"
     [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] || {
-        lk_console_detail "Checking database access"
-        lk_elevate "$LK_BASE/bin/lk-mysql-grant.sh" \
-            "$LOCAL_DB_NAME" "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD" || return
+        COMMAND=(lk_elevate "$LK_BASE/bin/lk-mysql-grant.sh"
+            "$LOCAL_DB_NAME" "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD")
+        [[ "$USER" =~ ^[a-zA-Z0-9_]+$ ]] && [[ "$LOCAL_DB_NAME" =~ ^$USER(_[a-zA-Z0-9_]*)?$ ]] ||
+            unset "COMMAND[0]"
+        "${COMMAND[@]}" || return
     }
+    lk_console_message "Restoring WordPress database to local system"
     lk_console_detail "Checking wp-config.php"
     [ "$DB_NAME" = "$LOCAL_DB_NAME" ] ||
         lk_wp config set DB_NAME "$LOCAL_DB_NAME" --type=constant --quiet || return
