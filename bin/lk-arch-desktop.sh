@@ -117,6 +117,7 @@ PACMAN_PACKAGES+=(
 
 AUR_PACKAGES+=(
     asciicast2gif
+    powershell-bin
     vpn-slice
 )
 

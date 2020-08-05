@@ -49,7 +49,7 @@ function lk_trap_exit() {
     function lk_exit_trap() {
         local EXIT_STATUS="$?" i
         [ "$EXIT_STATUS" -eq "0" ] ||
-            [ "${FUNCNAME[1]:-}" = "lk_die" ] ||
+            [[ "${FUNCNAME[1]:-}" =~ lk_(die|elevate) ]] ||
             lk_console_error "$(_lk_caller): unhandled error"
         for i in ${LK_EXIT_DELETE[@]+"${LK_EXIT_DELETE[@]}"}; do
             rm -Rf -- "$i" || true
@@ -383,6 +383,19 @@ function lk_array_search() {
         }
     done
     false
+}
+
+# lk_remove_repeated ARRAY_NAME
+function lk_remove_repeated() {
+    local KEYS KEY UNIQUE=()
+    eval "KEYS=(\"\${!$1[@]}\")"
+    for KEY in ${KEYS[@]+"${KEYS[@]}"}; do
+        if eval "lk_in_array \"\${$1[\$KEY]}\" UNIQUE"; then
+            unset "$1[$KEY]"
+        else
+            eval "UNIQUE+=(\"\${$1[\$KEY]}\")"
+        fi
+    done
 }
 
 # lk_xargs command [arg...]

@@ -1361,9 +1361,9 @@ IDENTIFIED BY '$MYSQL_PASSWORD' \
 WITH GRANT OPTION" | mysql -uroot
     fi
 
-    log "Allowing users to manage their own MySQL credentials"
+    log "Configuring MySQL account self-service"
     cat <<EOF >"/etc/sudoers.d/${PATH_PREFIX}mysql-self-service"
-ALL ALL=(ALL) NOPASSWD:$LK_BASE/bin/lk-mysql-grant-access.sh
+ALL ALL=(root) NOPASSWD:$LK_BASE/bin/lk-mysql-grant.sh
 EOF
     log_file "/etc/sudoers.d/${PATH_PREFIX}mysql-self-service"
 
