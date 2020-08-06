@@ -613,15 +613,16 @@ function lk_console_list() {
 function lk_console_read() {
     local PROMPT=("$1") DEFAULT="${2:-}" VALUE
     [ -z "$DEFAULT" ] || PROMPT+=("[$DEFAULT]")
-    printf '%s ' "$LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_DEFAULT_CONSOLE_COLOUR}:: $LK_RESET$LK_BOLD${PROMPT[*]}$LK_RESET"
+    printf '%s ' "$LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_DEFAULT_CONSOLE_COLOUR}:: $LK_RESET$LK_BOLD${PROMPT[*]}$LK_RESET" >&2
     read -re "${@:3}" VALUE || return
-    [ -n "$VALUE" ] || VALUE="$DEFAULT"
+    [ -n "$VALUE" ] ||
+        { VALUE="$DEFAULT" && echo >&2; }
     echo "$VALUE"
 }
 
 # lk_console_read_secret prompt [read_arg...]
 function lk_console_read_secret() {
-    lk_console_read "$1" "" -s "${@:2}" && echo >&2
+    lk_console_read "$1" "" -s "${@:2}"
 }
 
 # lk_confirm prompt [default [read_arg...]]
@@ -638,11 +639,11 @@ function lk_confirm() {
         DEFAULT=
     fi
     while ! [[ "${VALUE:-}" =~ ^(Y|YES|N|NO)$ ]]; do
-        printf '%s ' "$LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_DEFAULT_CONSOLE_COLOUR}:: $LK_RESET$LK_BOLD${PROMPT[*]}$LK_RESET"
+        printf '%s ' "$LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_DEFAULT_CONSOLE_COLOUR}:: $LK_RESET$LK_BOLD${PROMPT[*]}$LK_RESET" >&2
         read -re "${@:3}" VALUE || VALUE="$DEFAULT"
         [ -n "$VALUE" ] &&
             VALUE="$(lk_upper "$VALUE")" ||
-            VALUE="$DEFAULT"
+            { VALUE="$DEFAULT" && echo >&2; }
     done
     [[ "$VALUE" =~ ^(Y|YES)$ ]]
 }

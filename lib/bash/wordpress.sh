@@ -44,9 +44,7 @@ function _lk_wp_replace() {
         rg_lead*
     )
     SKIP_TABLES=("${SKIP_TABLES[@]/#/$TABLE_PREFIX}")
-    lk_console_message "Running WordPress search/replace command"
-    lk_console_detail "Searching for" "$1"
-    lk_console_detail "Replacing with" "$2"
+    lk_console_detail "Replacing:" "$1 -> $2"
     "${LK_WP_REPLACE_COMMAND:-lk_wp}" search-replace "$1" "$2" --no-report \
         --all-tables-with-prefix \
         --skip-tables="$(lk_implode "," "${SKIP_TABLES[@]}")" \
@@ -89,24 +87,25 @@ function lk_wp_json_encode() {
 #     "https://new.domain.com", replace "domain.com" with "new.domain.com"
 function lk_wp_rename_site() {
     local NEW_URL="${1:-}" OLD_URL="${LK_WP_OLD_URL:-}" \
-        OLD_SITE_URL NEW_SITE_URL REPLACE DELIM=$'\t' IFS r s
+        SITE_ROOT OLD_SITE_URL NEW_SITE_URL REPLACE DELIM=$'\t' IFS r s
     lk_is_uri "$NEW_URL" ||
         lk_warn "not a valid URL: $NEW_URL" || return
     [ -n "$OLD_URL" ] ||
         OLD_URL="$(lk_wp_get_site_address)" || return
     [ "$NEW_URL" != "$OLD_URL" ] ||
         lk_warn "site address not changed (set LK_WP_OLD_URL to override)" || return
+    SITE_ROOT="$(lk_wp_get_site_root)" || return
     OLD_SITE_URL="$(lk_wp option get siteurl)" || return
     NEW_SITE_URL="$(lk_replace "$OLD_URL" "$NEW_URL" "$OLD_SITE_URL")"
-    lk_console_item "Setting site address to" "$NEW_URL"
-    lk_console_detail "Previous site address:" "$OLD_URL"
-    lk_console_item "Setting WordPress address to" "$NEW_SITE_URL"
-    lk_console_detail "Previous WordPress address:" "$OLD_SITE_URL"
+    lk_console_item "Renaming WordPress installation at" "$SITE_ROOT"
+    lk_console_detail "Site address:     " "$OLD_URL -> $LK_BOLD$NEW_URL$LK_RESET"
+    lk_console_detail "WordPress address:" "$OLD_SITE_URL -> $NEW_SITE_URL"
     lk_no_input || lk_confirm "Proceed?" Y || return
     lk_wp option update home "$NEW_URL"
     lk_wp option update siteurl "$NEW_SITE_URL"
     if lk_is_true "${LK_WP_REPLACE:-1}" &&
         { lk_no_input || lk_confirm "Replace the previous URL in all tables?" Y; }; then
+        lk_console_message "Performing WordPress search/replace"
         REPLACE=(
             "$OLD_URL$DELIM$NEW_URL"
             "${OLD_URL#http*:}$DELIM${NEW_URL#http*:}"
@@ -241,7 +240,7 @@ function lk_wp_db_restore_local() {
         DB_NAME DB_USER DB_PASSWORD DB_HOST
     [ -f "$1" ] || lk_warn "file not found: $1" || return
     SITE_ROOT="$(lk_wp_get_site_root)" || return
-    lk_console_item "Preparing to restore WordPress database"
+    lk_console_message "Preparing to restore WordPress database"
     lk_console_detail "Backup file:" "$1"
     lk_console_detail "WordPress installation:" "$SITE_ROOT"
     DB_NAME="$(lk_wp config get DB_NAME)" &&
@@ -320,167 +319,6 @@ function lk_wp_db_restore_local() {
     return "$EXIT_STATUS"
 }
 
-function lk_wp_reset_local() {
-    local DB_NAME DB_USER DB_PASSWORD DB_HOST TABLE_PREFIX SITE_URI _HOST \
-        DOMAIN SITE_ROOT ACTIVE_PLUGINS TO_DEACTIVATE ADMIN_EMAIL \
-        PLUGIN_CODE DEACTIVATE_PLUGINS=(
-            #
-            hide_my_wp
-            wordfence
-            wp-admin-no-show
-
-            #
-            all-in-one-redirection
-
-            #
-            w3-total-cache
-            wp-rocket
-
-            #
-            zopim-live-chat
-        )
-
-    lk_console_message "Checking WordPress"
-    DB_NAME="$(lk_wp config get DB_NAME)" &&
-        DB_USER="$(lk_wp config get DB_USER)" &&
-        DB_PASSWORD="$(lk_wp config get DB_PASSWORD)" &&
-        DB_HOST="$(lk_wp config get DB_HOST)" &&
-        TABLE_PREFIX="$(lk_wp_get_table_prefix)" &&
-        _lk_write_my_cnf &&
-        _lk_mysql_connects "$DB_NAME" &&
-        SITE_URI="$(lk_wp_get_site_address)" &&
-        _HOST="$(lk_uri_parts "$SITE_URI" "_HOST")" &&
-        eval "$_HOST" &&
-        DOMAIN="$(
-            sed -E 's/^(www[^.]*|local|staging)\.(.+)$/\2/' <<<"$_HOST"
-        )" &&
-        SITE_ROOT="$(lk_wp eval "echo ABSPATH;")" &&
-        ACTIVE_PLUGINS=($(lk_wp plugin list --status=active --field=name)) &&
-        TO_DEACTIVATE=($(
-            [ "${#ACTIVE_PLUGINS[@]}" -eq "0" ] ||
-                [ "${#DEACTIVATE_PLUGINS[@]}" -eq "0" ] ||
-                comm -12 \
-                    <(printf '%s\n' "${ACTIVE_PLUGINS[@]}" | sort | uniq) \
-                    <(printf '%s\n' "${DEACTIVATE_PLUGINS[@]}" | sort | uniq)
-        )) || return
-    [ -n "$DOMAIN" ] || DOMAIN="$_HOST"
-    ADMIN_EMAIL="admin@$DOMAIN"
-    lk_console_detail "Site address:" "$SITE_URI"
-    lk_console_detail "Domain:" "$DOMAIN"
-    lk_console_detail "Installed at:" "$SITE_ROOT"
-    [ "${#ACTIVE_PLUGINS[@]}" -eq "0" ] &&
-        lk_console_detail "Active plugins:" "<none>" ||
-        lk_echo_array "${ACTIVE_PLUGINS[@]}" |
-        lk_console_detail_list "Active $(
-            lk_maybe_plural "${#ACTIVE_PLUGINS[@]}" \
-                "plugin" "plugins (${#ACTIVE_PLUGINS[@]})"
-        ):"
-    lk_console_message \
-        "Preparing to reset for local development"
-    lk_console_detail "Salts in wp-config.php will be refreshed"
-    lk_console_detail "Admin email address will be updated to:" "$ADMIN_EMAIL"
-    lk_console_detail "User addresses will be updated to:" "user_<ID>@$DOMAIN"
-    [ "${#TO_DEACTIVATE[@]}" -eq "0" ] ||
-        lk_echo_array "${TO_DEACTIVATE[@]}" |
-        lk_console_detail_list "Production-only $(
-            lk_maybe_plural "${#TO_DEACTIVATE[@]}" \
-                "plugin" "plugins"
-        ) will be deactivated:"
-    ! lk_wp config has WP_CACHE --type=constant ||
-        lk_console_detail \
-            "WP_CACHE in wp-config.php will be set to:" "false"
-    lk_console_detail \
-        "wp-mail-smtp will be configured to disable outgoing email"
-    if lk_wp plugin is-active woocommerce; then
-        PLUGIN_CODE=1
-        printf '%s\n' \
-            "PayPal" \
-            "Stripe" |
-            lk_console_detail_list \
-                "Test mode will be enabled for known WooCommerce gateways:"
-        lk_console_detail "Active WooCommerce webhooks will be deleted"
-    fi
-    [ "${PLUGIN_CODE:-0}" -eq "0" ] || lk_console_warning \
-        "Plugin code will be allowed to run where necessary"
-
-    lk_no_input ||
-        lk_confirm "Proceed?" Y || return
-
-    lk_console_message "Resetting WordPress for local development"
-    lk_console_detail "Refreshing salts defined in wp-config.php"
-    lk_wp config shuffle-salts || return
-    lk_console_detail "Updating email addresses"
-    _lk_mysql "$DB_NAME" <<SQL || return
-UPDATE ${TABLE_PREFIX}options
-SET option_value = '$ADMIN_EMAIL'
-WHERE option_name IN ('admin_email', 'woocommerce_email_from_address', 'woocommerce_stock_email_recipient');
-
-DELETE
-FROM ${TABLE_PREFIX}options
-WHERE option_name = 'new_admin_email';
-
-UPDATE ${TABLE_PREFIX}users
-SET user_email = CONCAT (
-        'user_'
-        ,ID
-        ,'@$DOMAIN'
-        )
-WHERE ID <> 1;
-SQL
-    lk_wp user update 1 --user_email="$ADMIN_EMAIL" --skip-email &&
-        lk_wp user meta update 1 billing_email "$ADMIN_EMAIL" || return
-    if [ "${#TO_DEACTIVATE[@]}" -gt "0" ]; then
-        lk_echo_array "${TO_DEACTIVATE[@]}" |
-            lk_console_detail_list \
-                "Deactivating ${#TO_DEACTIVATE[@]} $(
-                    lk_maybe_plural "${#TO_DEACTIVATE[@]}" plugin plugins
-                ):"
-        lk_wp plugin deactivate "${TO_DEACTIVATE[@]}" || return
-    fi
-    if lk_wp config has WP_CACHE --type=constant; then
-        lk_console_detail "Setting value of WP_CACHE in wp-config.php"
-        lk_wp config set WP_CACHE false --type=constant --raw || return
-    fi
-    lk_console_detail "Checking that wp-mail-smtp is installed and enabled"
-    if ! lk_wp plugin is-installed wp-mail-smtp; then
-        lk_wp plugin install wp-mail-smtp --activate || return
-    else
-        lk_wp plugin is-active wp-mail-smtp ||
-            lk_wp plugin activate wp-mail-smtp || return
-    fi
-    lk_console_detail "Disabling outgoing email"
-    lk_wp option patch insert wp_mail_smtp general '{
-  "do_not_send": true,
-  "am_notifications_hidden": false,
-  "uninstall": false
-}' --format=json || return
-    if lk_wp plugin is-active woocommerce; then
-        lk_console_detail \
-            "WooCommerce: disabling live payments for known gateways"
-        lk_wp option patch update \
-            woocommerce_paypal_settings testmode yes || return
-        if lk_wp plugin is-active woocommerce-gateway-stripe; then
-            lk_wp option patch update \
-                woocommerce_stripe_settings testmode yes || return
-        fi
-        if wp cli has-command 'wc webhook list'; then
-            TO_DEACTIVATE=($(
-                wp wc webhook list --user=1 --field=id --status=active
-            )) || return
-            [ "${#TO_DEACTIVATE[@]}" -eq "0" ] || {
-                lk_console_detail "WooCommerce: deleting active webhooks"
-                for WEBHOOK_ID in "${TO_DEACTIVATE[@]}"; do
-                    # TODO: deactivate instead?
-                    wp wc webhook delete "$WEBHOOK_ID" --user=1 --force=true ||
-                        return
-                done
-            }
-        fi
-    fi
-    lk_wp_flush
-    lk_console_message "WordPress successfully reset for local development" "$LK_GREEN"
-}
-
 # lk_wp_file_sync_remote ssh_host [remote_path [local_path]]
 function lk_wp_file_sync_remote() {
     local REMOTE_PATH="${2:-public_html}" LOCAL_PATH="${3:-$HOME/public_html}" \
@@ -512,7 +350,7 @@ function lk_wp_file_sync_remote() {
 function lk_wp_use_cron() {
     local INTERVAL="${1:-15}" WP_CRON_PATH CRON_COMMAND CRONTAB
     lk_command_exists crontab || lk_warn "crontab required" || return
-    WP_CRON_PATH="$(lk_wp eval "echo ABSPATH;")wp-cron.php" || return
+    WP_CRON_PATH="$(lk_wp_get_site_root)/wp-cron.php" || return
     [ -f "$WP_CRON_PATH" ] || lk_warn "file not found: $WP_CRON_PATH" || return
     lk_console_item "Scheduling with crontab:" "$WP_CRON_PATH"
     lk_console_detail "Setting DISABLE_WP_CRON in wp-config.php"
