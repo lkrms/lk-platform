@@ -17,6 +17,10 @@ function lk_wp_get_site_root() {
         echo "${SITE_ROOT%/}"
 }
 
+function lk_wp_get_site_address() {
+    lk_wp option get home
+}
+
 function lk_wp_get_table_prefix() {
     lk_wp config get table_prefix
 }
@@ -70,22 +74,38 @@ function lk_wp_json_encode() {
     php --run 'echo substr(json_encode(trim(stream_get_contents(STDIN))), 1, -1);' <<<"$1"
 }
 
-# [LK_WP_OLD_URL=old_url] lk_wp_rename_site new_url
+# lk_wp_rename_site NEW_URL
+#   Change the WordPress site address to NEW_URL.
+#
+# Environment variables:
+#   LK_WP_OLD_URL=OLD_URL
+#     Override `wp option get home`, e.g. to replace instances of OLD_URL in
+#     database tables after changing the site address
+#   LK_WP_REPLACE=<1|0|Y|N> (default: 1)
+#     Perform URL replacement in database tables
+#   LK_WP_REPLACE_WITHOUT_SCHEME=<1|0|Y|N> (default: 0)
+#     Replace instances of the previous URL without a scheme component
+#     ("http*://" or "//"), e.g. if renaming "http://domain.com" to
+#     "https://new.domain.com", replace "domain.com" with "new.domain.com"
 function lk_wp_rename_site() {
     local NEW_URL="${1:-}" OLD_URL="${LK_WP_OLD_URL:-}" \
-        REPLACE DELIM=$'\t' IFS r s
+        OLD_SITE_URL NEW_SITE_URL REPLACE DELIM=$'\t' IFS r s
     lk_is_uri "$NEW_URL" ||
         lk_warn "not a valid URL: $NEW_URL" || return
     [ -n "$OLD_URL" ] ||
-        OLD_URL="$(lk_wp option get siteurl)" || return
+        OLD_URL="$(lk_wp_get_site_address)" || return
     [ "$NEW_URL" != "$OLD_URL" ] ||
-        lk_warn "site URL not changed (set LK_WP_OLD_URL to override)" || return
-    lk_console_item "Setting site URL to" "$NEW_URL"
-    lk_console_detail "Previous site URL:" "$OLD_URL"
+        lk_warn "site address not changed (set LK_WP_OLD_URL to override)" || return
+    OLD_SITE_URL="$(lk_wp option get siteurl)" || return
+    NEW_SITE_URL="$(lk_replace "$OLD_URL" "$NEW_URL" "$OLD_SITE_URL")"
+    lk_console_item "Setting site address to" "$NEW_URL"
+    lk_console_detail "Previous site address:" "$OLD_URL"
+    lk_console_item "Setting WordPress address to" "$NEW_SITE_URL"
+    lk_console_detail "Previous WordPress address:" "$OLD_SITE_URL"
     lk_no_input || lk_confirm "Proceed?" Y || return
-    lk_wp option update siteurl "$NEW_URL"
     lk_wp option update home "$NEW_URL"
-    if lk_is_false "${LK_WP_NO_REPLACE:-0}" &&
+    lk_wp option update siteurl "$NEW_SITE_URL"
+    if lk_is_true "${LK_WP_REPLACE:-1}" &&
         { lk_no_input || lk_confirm "Replace the previous URL in all tables?" Y; }; then
         REPLACE=(
             "$OLD_URL$DELIM$NEW_URL"
@@ -94,9 +114,12 @@ function lk_wp_rename_site() {
             "$(lk_wp_url_encode "${OLD_URL#http*:}")$DELIM$(lk_wp_url_encode "${NEW_URL#http*:}")"
             "$(lk_wp_json_encode "$OLD_URL")$DELIM$(lk_wp_json_encode "$NEW_URL")"
             "$(lk_wp_json_encode "${OLD_URL#http*:}")$DELIM$(lk_wp_json_encode "${NEW_URL#http*:}")"
-            "${OLD_URL#http*://}$DELIM${NEW_URL#http*://}"
-            "$(lk_wp_url_encode "${OLD_URL#http*://}")$DELIM$(lk_wp_url_encode "${NEW_URL#http*://}")"
         )
+        ! lk_is_true "${LK_WP_REPLACE_WITHOUT_SCHEME:-0}" ||
+            REPLACE+=(
+                "${OLD_URL#http*://}$DELIM${NEW_URL#http*://}"
+                "$(lk_wp_url_encode "${OLD_URL#http*://}")$DELIM$(lk_wp_url_encode "${NEW_URL#http*://}")"
+            )
         lk_remove_repeated REPLACE
         for r in "${REPLACE[@]}"; do
             IFS="$DELIM"
@@ -165,7 +188,7 @@ function _lk_mysql() {
 }
 
 function _lk_mysql_connects() {
-    _lk_mysql --execute="\\q" "${1:-$DB_NAME}"
+    _lk_mysql --execute="\\q" ${1+"$1"}
 }
 
 # lk_wp_db_dump_remote ssh_host [remote_path]
@@ -230,7 +253,7 @@ function lk_wp_db_restore_local() {
     LOCAL_DB_USER="$DB_USER"
     LOCAL_DB_PASSWORD="$DB_PASSWORD"
     # keep existing credentials if they work
-    _lk_mysql_connects 2>/dev/null || {
+    _lk_mysql_connects "" 2>/dev/null || {
         if [[ "$SITE_ROOT" =~ ^/srv/www/([^./]+)/public_html$ ]]; then
             DEFAULT_IDENTIFIER="${BASH_REMATCH[1]}"
         elif [[ "$SITE_ROOT" =~ ^/srv/www/([^./]+)/([^./]+)/public_html$ ]]; then
@@ -245,8 +268,8 @@ function lk_wp_db_restore_local() {
         LOCAL_DB_NAME="${2:-$DEFAULT_IDENTIFIER}"
         LOCAL_DB_USER="${3:-$DEFAULT_IDENTIFIER}"
         _lk_write_my_cnf "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD" "$LOCAL_DB_HOST" || return
-        # try existing password with new DB_NAME and DB_USER before changing DB_PASSWORD
-        _lk_mysql_connects "$LOCAL_DB_NAME" 2>/dev/null || {
+        # try existing password with new DB_USER before changing DB_PASSWORD
+        _lk_mysql_connects "" 2>/dev/null || {
             LOCAL_DB_PASSWORD="$(openssl rand -base64 32)" &&
                 _lk_write_my_cnf "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD" "$LOCAL_DB_HOST"
         } || return
@@ -298,7 +321,7 @@ function lk_wp_db_restore_local() {
 }
 
 function lk_wp_reset_local() {
-    local DB_NAME DB_USER DB_PASSWORD DB_HOST TABLE_PREFIX SITE_URL _HOST \
+    local DB_NAME DB_USER DB_PASSWORD DB_HOST TABLE_PREFIX SITE_URI _HOST \
         DOMAIN SITE_ROOT ACTIVE_PLUGINS TO_DEACTIVATE ADMIN_EMAIL \
         PLUGIN_CODE DEACTIVATE_PLUGINS=(
             #
@@ -324,9 +347,9 @@ function lk_wp_reset_local() {
         DB_HOST="$(lk_wp config get DB_HOST)" &&
         TABLE_PREFIX="$(lk_wp_get_table_prefix)" &&
         _lk_write_my_cnf &&
-        _lk_mysql_connects &&
-        SITE_URL="$(lk_wp option get siteurl)" &&
-        _HOST="$(lk_uri_parts "$SITE_URL" "_HOST")" &&
+        _lk_mysql_connects "$DB_NAME" &&
+        SITE_URI="$(lk_wp_get_site_address)" &&
+        _HOST="$(lk_uri_parts "$SITE_URI" "_HOST")" &&
         eval "$_HOST" &&
         DOMAIN="$(
             sed -E 's/^(www[^.]*|local|staging)\.(.+)$/\2/' <<<"$_HOST"
@@ -342,7 +365,7 @@ function lk_wp_reset_local() {
         )) || return
     [ -n "$DOMAIN" ] || DOMAIN="$_HOST"
     ADMIN_EMAIL="admin@$DOMAIN"
-    lk_console_detail "Site URL:" "$SITE_URL"
+    lk_console_detail "Site address:" "$SITE_URI"
     lk_console_detail "Domain:" "$DOMAIN"
     lk_console_detail "Installed at:" "$SITE_ROOT"
     [ "${#ACTIVE_PLUGINS[@]}" -eq "0" ] &&
