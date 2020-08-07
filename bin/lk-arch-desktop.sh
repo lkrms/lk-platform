@@ -11,7 +11,7 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
     LK_BASE=$(realpath "$_DIR/.." 2>/dev/null) &&
     [ -d "$LK_BASE/lib/bash" ] && export LK_BASE || lk_die "LK_BASE: not found"
 
-include=deploy,linux,arch,httpd,php . "$LK_BASE/lib/bash/common.sh"
+include=provision,linux,arch,httpd,php . "$LK_BASE/lib/bash/common.sh"
 
 lk_assert_not_root
 lk_assert_is_arch

@@ -41,6 +41,7 @@ export LK_BASE
 
 . "$LK_BASE/lib/bash/core.sh"
 . "$LK_BASE/lib/bash/prompt.sh"
+. "$LK_BASE/lib/bash/provision.sh"
 . "$LK_BASE/lib/bash/git.sh"
 . "$LK_BASE/lib/bash/wordpress.sh"
 

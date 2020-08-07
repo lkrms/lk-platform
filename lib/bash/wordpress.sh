@@ -98,8 +98,8 @@ function lk_wp_rename_site() {
     OLD_SITE_URL="$(lk_wp option get siteurl)" || return
     NEW_SITE_URL="$(lk_replace "$OLD_URL" "$NEW_URL" "$OLD_SITE_URL")"
     lk_console_item "Renaming WordPress installation at" "$SITE_ROOT"
-    lk_console_detail "Site address:     " "$OLD_URL -> $LK_BOLD$NEW_URL$LK_RESET"
-    lk_console_detail "WordPress address:" "$OLD_SITE_URL -> $NEW_SITE_URL"
+    lk_console_detail "Site address:" "$OLD_URL -> $LK_BOLD$NEW_URL$LK_RESET"
+    lk_console_detail "WordPress address:" "$OLD_SITE_URL -> $LK_BOLD$NEW_SITE_URL$LK_RESET"
     lk_no_input || lk_confirm "Proceed?" Y || return
     lk_wp option update home "$NEW_URL"
     lk_wp option update siteurl "$NEW_SITE_URL"
@@ -321,7 +321,7 @@ function lk_wp_db_restore_local() {
 
 # lk_wp_sync_files_from_remote ssh_host [remote_path [local_path]]
 function lk_wp_sync_files_from_remote() {
-    local REMOTE_PATH="${2:-public_html}" LOCAL_PATH="${3:-}" \
+    local REMOTE_PATH="${2:-public_html}" LOCAL_PATH \
         ARGS=(-vrlptH -x --delete ${RSYNC_ARGS[@]+"${RSYNC_ARGS[@]}"}) \
         KEEP_LOCAL EXCLUDE EXIT_STATUS=0
     # files that already exist on the local system will be added to --exclude
@@ -337,9 +337,8 @@ function lk_wp_sync_files_from_remote() {
         ${LK_WP_SYNC_EXCLUDE[@]+"${LK_WP_SYNC_EXCLUDE[@]}"}
     )
     [ -n "${1:-}" ] || lk_warn "no ssh host" || return
-    if [ -z "$LOCAL_PATH" ] && ! LOCAL_PATH="$(lk_wp_get_site_root 2>/dev/null)"; then
+    LOCAL_PATH="${3:-$(lk_wp_get_site_root 2>/dev/null)}" ||
         LOCAL_PATH="$HOME/public_html"
-    fi
     lk_console_message "Preparing to sync WordPress files"
     REMOTE_PATH="${REMOTE_PATH%/}"
     LOCAL_PATH="${LOCAL_PATH%/}"
@@ -354,11 +353,16 @@ function lk_wp_sync_files_from_remote() {
         "rsync ${ARGS[*]}"
     lk_no_input || ! lk_confirm "Perform a trial run first?" N ||
         rsync --dry-run "${ARGS[@]}" | "${PAGER:-less}" >&2 || true
-    lk_no_input || lk_confirm "ALL LOCAL CHANGES IN '$LOCAL_PATH' WILL BE PERMANENTLY LOST. Proceed?" Y || return
+    lk_no_input ||
+        lk_confirm "LOCAL CHANGES WILL BE PERMANENTLY LOST. Proceed?" Y ||
+        return
     [ -d "$LOCAL_PATH" ] || mkdir -p "$LOCAL_PATH" || return
     rsync "${ARGS[@]}" || EXIT_STATUS="$?"
-    [ "$EXIT_STATUS" -eq "0" ] && lk_console_message "Sync completed successfully" "$LK_GREEN" ||
-        lk_console_message "Sync operation failed (exit status $EXIT_STATUS)" "$LK_RED"
+    [ "$EXIT_STATUS" -eq "0" ] &&
+        lk_console_message "Sync completed successfully" \
+            "$LK_GREEN" ||
+        lk_console_message "Sync operation failed (exit status $EXIT_STATUS)" \
+            "$LK_RED"
     return "$EXIT_STATUS"
 }
 
@@ -370,13 +374,13 @@ function _lk_wp_get_cron_path() {
     echo "$WP_CRON_PATH"
 }
 
-# lk_wp_use_cron [interval_minutes]
-function lk_wp_use_cron() {
+# lk_wp_enable_system_cron [interval_minutes]
+function lk_wp_enable_system_cron() {
     local INTERVAL="${1:-5}" WP_CRON_PATH CRON_COMMAND CRONTAB
     WP_CRON_PATH="$(_lk_wp_get_cron_path)" || return
     lk_console_item "Scheduling with crontab:" "$WP_CRON_PATH"
     lk_console_detail "Setting DISABLE_WP_CRON in wp-config.php"
-    lk_wp config set DISABLE_WP_CRON true --type=constant --raw || return
+    lk_wp config set DISABLE_WP_CRON true --type=constant --raw --quiet || return
     CRON_COMMAND="$(type -P php) $WP_CRON_PATH"
     [ "$INTERVAL" -lt "60" ] &&
         CRON_COMMAND="*/$INTERVAL * * * * $CRON_COMMAND" ||
@@ -396,8 +400,8 @@ function lk_wp_disable_cron() {
     WP_CRON_PATH="$(_lk_wp_get_cron_path)" || return
     lk_console_item "Disabling:" "$WP_CRON_PATH"
     lk_console_detail "Setting DISABLE_WP_CRON in wp-config.php"
-    lk_wp config set DISABLE_WP_CRON true --type=constant --raw || return
-    if CRON_COMMAND="$(crontab -l 2>/dev/null || true |
+    lk_wp config set DISABLE_WP_CRON true --type=constant --raw --quiet || return
+    if CRON_COMMAND="$({ crontab -l 2>/dev/null || true; } |
         grep -E " $(lk_escape_ere "$WP_CRON_PATH")\$")"; then
         lk_console_detail "Removing from crontab:" "$CRON_COMMAND"
         CRONTAB="$(crontab -l 2>/dev/null |
@@ -410,70 +414,20 @@ function lk_wp_disable_cron() {
     fi
 }
 
-# lk_wp_fix_permissions [local_path]
-function lk_wp_fix_permissions() {
-    local LOCAL_PATH LOG_DIR OWNER WRITABLE TYPE MODE ARGS \
-        SUDO_OR_NOT="${SUDO_OR_NOT:-0}" \
-        DIR_MODE="${DIR_MODE:-0750}" \
-        FILE_MODE="${FILE_MODE:-0640}" \
-        WRITABLE_DIR_MODE="${WRITABLE_DIR_MODE:-2770}" \
-        WRITABLE_FILE_MODE="${WRITABLE_FILE_MODE:-0660}" \
-        WRITABLE_REGEX="${WRITABLE_REGEX:-.*/wp-content/(cache|uploads|w3tc-config)}"
-    LOCAL_PATH="${1:-$HOME/public_html}"
-    [ -f "$LOCAL_PATH/wp-config.php" ] ||
-        lk_warn "not a WordPress installation: $LOCAL_PATH" || return
-    LOCAL_PATH="$(realpath "$LOCAL_PATH")" &&
-        LOG_DIR="$(lk_mktemp_dir)" &&
-        OWNER="$(gnu_stat --printf '%U' "$LOCAL_PATH/..")" || return
-    lk_console_item "Setting file permissions on WordPress at" \
-        "$LOCAL_PATH"
-    lk_console_detail "Log directory:" "$LOG_DIR"
-    lk_is_root || lk_is_true "$SUDO_OR_NOT" ||
-        ! lk_can_sudo || SUDO_OR_NOT=1
-    if lk_is_root || lk_is_true "$SUDO_OR_NOT"; then
-        lk_console_detail "Setting owner to" "$OWNER"
-        lk_maybe_sudo chown -Rhc "$OWNER:" "$LOCAL_PATH" >"$LOG_DIR/chown.log" || return
-        lk_console_detail "File ownership changes:" "$(wc -l <"$LOG_DIR/chown.log")"
-    else
-        lk_console_warning "Unable to set owner (not running as root)"
-    fi
-    lk_console_detail "Setting file mode"
-    for WRITABLE in "" w; do
-        for TYPE in d f; do
-            case "$WRITABLE$TYPE" in
-            d)
-                MODE="$DIR_MODE"
-                ;;&
-            f)
-                MODE="$FILE_MODE"
-                ;;&
-            wd)
-                MODE="$WRITABLE_DIR_MODE"
-                ;;&
-            wf)
-                MODE="$WRITABLE_FILE_MODE"
-                ;;&
-            *)
-                ARGS=(-type "$TYPE" ! -perm "$MODE")
-                ;;&
-            d | f)
-                # exclude writable directories and their descendants
-                ARGS=(! \( -type d -regex "$WRITABLE_REGEX" -prune \) "${ARGS[@]}")
-                ;;&
-            f)
-                # exclude writable files (i.e. not just files in writable directories)
-                ARGS+=(! -regex "$WRITABLE_REGEX")
-                ;;
-            w*)
-                ARGS+=(-regex "$WRITABLE_REGEX(/.*)?")
-                ;;
-            esac
-            find "$LOCAL_PATH" -regextype posix-egrep "${ARGS[@]}" -print0 |
-                lk_maybe_sudo gnu_xargs -0r chmod -c "0$MODE" >>"$LOG_DIR/chmod.log" || return
-        done
-    done
-    lk_console_detail "File mode changes:" "$(wc -l <"$LOG_DIR/chmod.log")"
-    lk_console_message "Setting file permissions completed successfully" "$LK_GREEN"
+# lk_wp_set_permissions [SITE_ROOT]
+function lk_wp_set_permissions() {
+    local SITE_ROOT OWNER \
+        LK_DIR_MODE="${LK_DIR_MODE:-0750}" \
+        LK_FILE_MODE="${LK_FILE_MODE:-0640}" \
+        LK_WRITABLE_DIR_MODE="${LK_WRITABLE_DIR_MODE:-2770}" \
+        LK_WRITABLE_FILE_MODE="${LK_WRITABLE_FILE_MODE:-0660}"
+    SITE_ROOT="${1:-$(lk_wp_get_site_root)}" &&
+        SITE_ROOT="$(realpath "$SITE_ROOT")" &&
+        OWNER="$(gnu_stat --printf '%U' "$SITE_ROOT/..")" || return
+    lk_dir_set_permissions \
+        "$SITE_ROOT" \
+        ".*/wp-content/(cache|uploads|w3tc-config)" \
+        "$OWNER:"
 }
 
 # [LOCAL_DB_NAME=db_name] [LOCAL_DB_USER=db_user] \
