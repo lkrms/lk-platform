@@ -319,39 +319,61 @@ function lk_wp_db_restore_local() {
     return "$EXIT_STATUS"
 }
 
-# lk_wp_file_sync_remote ssh_host [remote_path [local_path]]
-function lk_wp_file_sync_remote() {
-    local REMOTE_PATH="${2:-public_html}" LOCAL_PATH="${3:-$HOME/public_html}" \
-        ARGS=(-vrlptH -x --delete ${RSYNC_ARGS[@]+"${RSYNC_ARGS[@]}"}) EXIT_STATUS=0
+# lk_wp_sync_files_from_remote ssh_host [remote_path [local_path]]
+function lk_wp_sync_files_from_remote() {
+    local REMOTE_PATH="${2:-public_html}" LOCAL_PATH="${3:-}" \
+        ARGS=(-vrlptH -x --delete ${RSYNC_ARGS[@]+"${RSYNC_ARGS[@]}"}) \
+        KEEP_LOCAL EXCLUDE EXIT_STATUS=0
+    # files that already exist on the local system will be added to --exclude
+    KEEP_LOCAL=(
+        "wp-config.php"
+        ".git"
+        ${LK_WP_SYNC_KEEP_LOCAL[@]+"${LK_WP_SYNC_KEEP_LOCAL[@]}"}
+    )
+    EXCLUDE=(
+        "/.maintenance"
+        "/*.code-workspace"
+        "/.vscode"
+        ${LK_WP_SYNC_EXCLUDE[@]+"${LK_WP_SYNC_EXCLUDE[@]}"}
+    )
     [ -n "${1:-}" ] || lk_warn "no ssh host" || return
+    if [ -z "$LOCAL_PATH" ] && ! LOCAL_PATH="$(lk_wp_get_site_root 2>/dev/null)"; then
+        LOCAL_PATH="$HOME/public_html"
+    fi
     lk_console_message "Preparing to sync WordPress files"
     REMOTE_PATH="${REMOTE_PATH%/}"
     LOCAL_PATH="${LOCAL_PATH%/}"
     lk_console_detail "Source:" "$1:$REMOTE_PATH"
     lk_console_detail "Destination:" "$LOCAL_PATH"
-    for FILE in "wp-config.php" ".git" ".vscode"; do
-        [ ! -e "$LOCAL_PATH/$FILE" ] || ARGS+=(--exclude="$FILE")
+    for FILE in "${KEEP_LOCAL[@]}"; do
+        [ ! -e "$LOCAL_PATH/$FILE" ] || EXCLUDE+=("/$FILE")
     done
-    # TODO: move standard exclusions to a file
-    ARGS+=(--exclude="/.maintenance" --exclude="/*.code-workspace")
+    ARGS+=("${EXCLUDE[@]/#/--exclude=}")
     ARGS+=("$1:$REMOTE_PATH/" "$LOCAL_PATH/")
     lk_console_detail "Local files will be overwritten with command" \
         "rsync ${ARGS[*]}"
     lk_no_input || ! lk_confirm "Perform a trial run first?" N ||
         rsync --dry-run "${ARGS[@]}" | "${PAGER:-less}" >&2 || true
     lk_no_input || lk_confirm "ALL LOCAL CHANGES IN '$LOCAL_PATH' WILL BE PERMANENTLY LOST. Proceed?" Y || return
+    [ -d "$LOCAL_PATH" ] || mkdir -p "$LOCAL_PATH" || return
     rsync "${ARGS[@]}" || EXIT_STATUS="$?"
     [ "$EXIT_STATUS" -eq "0" ] && lk_console_message "Sync completed successfully" "$LK_GREEN" ||
         lk_console_message "Sync operation failed (exit status $EXIT_STATUS)" "$LK_RED"
     return "$EXIT_STATUS"
 }
 
-# lk_wp_use_cron [interval_minutes]
-function lk_wp_use_cron() {
-    local INTERVAL="${1:-15}" WP_CRON_PATH CRON_COMMAND CRONTAB
+function _lk_wp_get_cron_path() {
+    local WP_CRON_PATH
     lk_command_exists crontab || lk_warn "crontab required" || return
     WP_CRON_PATH="$(lk_wp_get_site_root)/wp-cron.php" || return
     [ -f "$WP_CRON_PATH" ] || lk_warn "file not found: $WP_CRON_PATH" || return
+    echo "$WP_CRON_PATH"
+}
+
+# lk_wp_use_cron [interval_minutes]
+function lk_wp_use_cron() {
+    local INTERVAL="${1:-5}" WP_CRON_PATH CRON_COMMAND CRONTAB
+    WP_CRON_PATH="$(_lk_wp_get_cron_path)" || return
     lk_console_item "Scheduling with crontab:" "$WP_CRON_PATH"
     lk_console_detail "Setting DISABLE_WP_CRON in wp-config.php"
     lk_wp config set DISABLE_WP_CRON true --type=constant --raw || return
@@ -366,6 +388,26 @@ function lk_wp_use_cron() {
         [ -z "$CRONTAB" ] || echo "$CRONTAB"
         echo "$CRON_COMMAND"
     } | crontab -
+}
+
+# lk_wp_disable_cron
+function lk_wp_disable_cron() {
+    local WP_CRON_PATH CRON_COMMAND CRONTAB
+    WP_CRON_PATH="$(_lk_wp_get_cron_path)" || return
+    lk_console_item "Disabling:" "$WP_CRON_PATH"
+    lk_console_detail "Setting DISABLE_WP_CRON in wp-config.php"
+    lk_wp config set DISABLE_WP_CRON true --type=constant --raw || return
+    if CRON_COMMAND="$(crontab -l 2>/dev/null || true |
+        grep -E " $(lk_escape_ere "$WP_CRON_PATH")\$")"; then
+        lk_console_detail "Removing from crontab:" "$CRON_COMMAND"
+        CRONTAB="$(crontab -l 2>/dev/null |
+            grep -Ev " $(lk_escape_ere "$WP_CRON_PATH")\$")" || CRONTAB=
+        if [ -n "$CRONTAB" ]; then
+            crontab - <<<"$CRONTAB"
+        else
+            crontab -r 2>/dev/null || true
+        fi
+    fi
 }
 
 # lk_wp_fix_permissions [local_path]
@@ -454,7 +496,7 @@ enabled on the remote site"
     lk_console_detail \
         "To minimise downtime, complete an initial sync without enabling
 maintenance mode, then sync again"
-    if lk_confirm "Enable maintenance mode on remote site?"; then
+    if lk_confirm "Enable maintenance mode on remote site?" N; then
         lk_console_detail "Creating" "$1:$REMOTE_PATH/.maintenance"
         ssh "$1" \
             "bash -c 'echo -n \"\$1\" >\"\$2/.maintenance\"'" "bash" \
@@ -463,7 +505,7 @@ maintenance mode, then sync again"
 
     # migrate files
     RSYNC_ARGS=(${EXCLUDE[@]+"${EXCLUDE[@]/#/--exclude=}"})
-    lk_wp_file_sync_remote "$1" "$REMOTE_PATH" "$LOCAL_PATH" || return
+    lk_wp_sync_files_from_remote "$1" "$REMOTE_PATH" "$LOCAL_PATH" || return
 
     # migrate database
     DB_FILE=~/"$1-${REMOTE_PATH//\//_}-$(lk_date_ymdhms).sql.gz"
