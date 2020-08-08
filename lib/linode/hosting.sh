@@ -60,7 +60,7 @@ function log_header() {
 function die() {
     local EXIT_STATUS="$?"
     [ "$EXIT_STATUS" -ne "0" ] || EXIT_STATUS="1"
-    log_header "$(basename "$0"): $1" "${@:2}"
+    log_header "${0##*/}: $1" "${@:2}"
     exit "$EXIT_STATUS"
 }
 
@@ -162,7 +162,7 @@ HELO $NODE_FQDN
 MAIL FROM:<root@$NODE_FQDN>
 RCPT TO:<$ADMIN_EMAIL>
 DATA
-From: $(basename "$0") <root@$NODE_FQDN>
+From: ${0##*/} <root@$NODE_FQDN>
 To: $NODE_HOSTNAME admin <$ADMIN_EMAIL>
 Date: $(date -R)
 Subject: $SUBJECT
@@ -253,7 +253,7 @@ S="[[:space:]]"
 ADMIN_USER_KEYS="$([ -z "$ADMIN_USERS" ] || grep -E "$S(${ADMIN_USERS//,/|})\$" "/root/.ssh/authorized_keys" || :)"
 HOST_KEYS="$([ -z "$ADMIN_USERS" ] && cat "/root/.ssh/authorized_keys" || grep -Ev "$S(${ADMIN_USERS//,/|})\$" "/root/.ssh/authorized_keys" || :)"
 
-log_header "$(basename "$0"): preparing system"
+log_header "${0##*/}: preparing system"
 log "Environment:" \
     "$(printenv | grep -v '^LS_COLORS=' | sort)"
 
@@ -339,7 +339,7 @@ FILE="/etc/hosts"
 log "Adding entries to $FILE"
 cat <<EOF >>"$FILE"
 
-# Added by $(basename "$0") at $(now)
+# Added by ${0##*/} at $(now)
 127.0.1.1 ${HOSTS_NODE_FQDN:+$HOSTS_NODE_FQDN }$NODE_HOSTNAME${HOSTS_NODE_FQDN:+${IPV4_ADDRESS:+
 $IPV4_ADDRESS $NODE_FQDN}${IPV6_ADDRESS:+
 $IPV6_ADDRESS $NODE_FQDN}}
@@ -365,10 +365,10 @@ log_file "$APT_CONF_FILE"
 log "Disabling automatic \"systemctl start\" when new services are installed"
 cat <<EOF >"/usr/sbin/policy-rc.d"
 #!/bin/bash
-# Created by $(basename "$0") at $(now)
+# Created by ${0##*/} at $(now)
 $(declare -f now)
 LOG=(
-    "====> \$(basename "\$0"): init script policy helper invoked"
+    "====> \${0##*/}: init script policy helper invoked"
     "Arguments:
 \$([ "\$#" -eq 0 ] || printf '  - %q\n' "\$@")")
 DEPLOY_PENDING=N
@@ -428,7 +428,7 @@ sysctl --system
 log "Sourcing $LK_BASE/lib/bash/rc.sh in ~/.bashrc for all users"
 RC_ESCAPED="$(printf '%q' "$LK_BASE/lib/bash/rc.sh")"
 BASH_SKEL="
-# Added by $(basename "$0") at $(now)
+# Added by ${0##*/} at $(now)
 if [ -f $RC_ESCAPED ]; then
     . $RC_ESCAPED
 fi"
@@ -854,7 +854,7 @@ keep_trying pip install ps_mem glances awscli
 log "Configuring Glances"
 install -v -d -m 0755 "/etc/glances"
 cat <<EOF >"/etc/glances/glances.conf"
-# Created by $(basename "$0") at $(now)
+# Created by ${0##*/} at $(now)
 
 [global]
 check_update=false
@@ -1037,7 +1037,7 @@ if is_installed postfix; then
         postconf -e "recipient_canonical_maps = static:blackhole"
         cat <<EOF >>"/etc/aliases"
 
-# Added by $(basename "$0") at $(now)
+# Added by ${0##*/} at $(now)
 blackhole:	$EMAIL_BLACKHOLE
 EOF
         newaliases
@@ -1390,6 +1390,6 @@ log_file "/etc/iptables/rules.v6"
 log "Running apt-get autoremove"
 apt-get -yq autoremove
 
-log_header "$(basename "$0"): deployment complete"
+log_header "${0##*/}: deployment complete"
 log "Running shutdown with '--$SHUTDOWN_ACTION +${SHUTDOWN_DELAY:-0}'"
 shutdown "--$SHUTDOWN_ACTION" +"${SHUTDOWN_DELAY:-0}"

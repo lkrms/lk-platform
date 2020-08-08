@@ -3,38 +3,46 @@
 
 [ ! -f "/etc/default/lk-platform" ] || . "/etc/default/lk-platform"
 LK_PATH_PREFIX="${LK_PATH_PREFIX:-lk-}"
-LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(echo "$LK_PATH_PREFIX" |
-    sed 's/[^a-zA-Z0-9]//g')}"
+LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(
+    echo "$LK_PATH_PREFIX" | sed 's/[^a-zA-Z0-9]//g'
+)}"
 [ ! -f "${HOME:+$HOME/.${LK_PATH_PREFIX}settings}" ] ||
     . "$HOME/.${LK_PATH_PREFIX}settings"
 lk_esc() { echo "$1" | sed -Ee 's/\\/\\\\/g' -e 's/[$`"]/\\&/g'; }
 
 [ -n "${LK_BASE:-}" ] ||
     eval "$(
-        if [ ! -L "$0" ] &&
-            LK_BASE="$(cd "${0%/*}/../.." && pwd -P)" &&
+        _FILE=$0
+        [ "${_FILE%/*}" != "$_FILE" ] || _FILE=./$_FILE
+        if [ ! -L "$_FILE" ] &&
+            LK_BASE="$(cd "${_FILE%/*}/../.." && pwd -P)" &&
             [ -d "$LK_BASE/lib/bash" ]; then
             echo "LK_BASE=\"$(lk_esc "$LK_BASE")\""
         else
-            echo "$0: LK_BASE not set" >&2
+            echo "$_FILE: LK_BASE not set" >&2
         fi
     )"
-export LK_BASE
 
-eval "$(. "$LK_BASE/lib/bash/env.sh")"
+if [ -n "${LK_BASE:-}" ]; then
 
-! type autorandr >/dev/null 2>&1 ||
-    autorandr -c --default default --force ||
-    AUTORANDR_PROFILE_FOLDER="$HOME/.config/autorandr/default" \
-        "$LK_BASE/lib/autorandr/postswitch" || true
+    export LK_BASE
 
-export QT_AUTO_SCREEN_SCALE_FACTOR=0
-export QT_SCALE_FACTOR=1
-QT_FONT_DPI="$(xdpyinfo |
-    grep -Eo '^[[:space:]]+resolution:[[:space:]]*[0-9]+x[0-9]+' |
-    grep -Eo '[0-9]+' | head -n1)" &&
-    export QT_FONT_DPI ||
-    unset QT_FONT_DPI
+    eval "$(. "$LK_BASE/lib/bash/env.sh")"
+
+    ! type autorandr >/dev/null 2>&1 ||
+        autorandr -c --default default --force ||
+        AUTORANDR_PROFILE_FOLDER="$HOME/.config/autorandr/default" \
+            "$LK_BASE/lib/autorandr/postswitch" || true
+
+    export QT_AUTO_SCREEN_SCALE_FACTOR=0
+    export QT_SCALE_FACTOR=1
+    QT_FONT_DPI="$(xdpyinfo |
+        grep -Eo '^[[:space:]]+resolution:[[:space:]]*[0-9]+x[0-9]+' |
+        grep -Eo '[0-9]+' | head -n1)" &&
+        export QT_FONT_DPI ||
+        unset QT_FONT_DPI
+
+fi
 
 xset -b
 xset s "${LK_DIM_AFTER:=240}" "${LK_DIM_TIME:=60}"

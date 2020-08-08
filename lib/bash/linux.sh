@@ -15,7 +15,7 @@ function lk_icon_install() {
     for SIZE in "${SIZES[@]}"; do
         lk_maybe_sudo mkdir -pv "$TARGET_DIR/$SIZE/apps" &&
             lk_maybe_sudo convert "$1" -resize "$SIZE" \
-                "$TARGET_DIR/$SIZE/apps/$(basename "$1")" || return
+                "$TARGET_DIR/$SIZE/apps/${1##*/}" || return
     done
     ! lk_command_exists gtk-update-icon-cache ||
         lk_maybe_sudo gtk-update-icon-cache --force --quiet \

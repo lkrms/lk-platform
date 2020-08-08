@@ -1,7 +1,21 @@
 #!/bin/bash
 # shellcheck disable=SC1090,SC2001,SC2030,SC2031,SC2046,SC2207
 
-unset LK_PROMPT_DISPLAYED
+unset LK_PROMPT_DISPLAYED LK_BASE
+
+eval "$(
+    BS=${BASH_SOURCE[0]}
+    [ "${BS%/*}" != "$BS" ] || BS=./$BS
+    if [ ! -L "$BS" ] &&
+        LK_BASE="$(cd "${BS%/*}/../.." && pwd -P)" &&
+        [ -d "$LK_BASE/lib/bash" ]; then
+        printf 'LK_BASE=%q' "$LK_BASE"
+    else
+        echo "$BS: LK_BASE not set" >&2
+    fi
+)"
+[ -n "${LK_BASE:-}" ] || return
+export LK_BASE
 
 # see lib/bash/common.sh
 eval "$(
@@ -23,27 +37,7 @@ eval "$(
     )
 )"
 
-LK_PATH_PREFIX="${LK_PATH_PREFIX:-lk-}"
-LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(echo "$LK_PATH_PREFIX" |
-    sed 's/[^a-zA-Z0-9]//g')}"
-
-[ -n "${LK_BASE:-}" ] || eval "$(
-    BS="${BASH_SOURCE[0]}"
-    if [ ! -L "$BS" ] &&
-        LK_BASE="$(cd "${BS%/*}/../.." && pwd -P)" &&
-        [ -d "$LK_BASE/lib/bash" ]; then
-        printf 'LK_BASE=%q' "$LK_BASE"
-    else
-        echo "$BS: LK_BASE not set" >&2
-    fi
-)"
-export LK_BASE
-
 . "$LK_BASE/lib/bash/core.sh"
-. "$LK_BASE/lib/bash/prompt.sh"
-. "$LK_BASE/lib/bash/provision.sh"
-. "$LK_BASE/lib/bash/git.sh"
-. "$LK_BASE/lib/bash/wordpress.sh"
 
 function lk_diff_bak() {
     local BACKUP FILE
@@ -106,6 +100,8 @@ function find_all() {
     gnu_find -L . -xdev -iname "*$FIND*" "$@"
 }
 
+lk_include prompt provision git wordpress
+
 if lk_is_linux; then
     alias cwd='pwd | xclip'
     alias duh='du -h --max-depth 1 | sort -h'
@@ -126,6 +122,10 @@ HISTTIMEFORMAT="%b %_d %Y %H:%M:%S %z "
 [ ! -f "/usr/share/bash-completion/bash_completion" ] ||
     . "/usr/share/bash-completion/bash_completion"
 
+LK_PATH_PREFIX="${LK_PATH_PREFIX:-lk-}"
+LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(
+    echo "$LK_PATH_PREFIX" | sed 's/[^a-zA-Z0-9]//g'
+)}"
 eval "$(. "$LK_BASE/lib/bash/env.sh")"
 
 [ "${LK_PROMPT:-1}" -ne "1" ] || lk_enable_prompt

@@ -1,23 +1,32 @@
 #!/bin/bash
 # shellcheck disable=SC1003,SC2015,SC2016,SC2034,SC2088,SC2120,SC2162,SC2207
 
-function basename() {
-    command basename -- "$@"
+# shellcheck disable=SC1090,SC2068
+function lk_include() {
+    local i FILE
+    [ "${_LK_INCLUDES+1}" = 1 ] || _LK_INCLUDES=()
+    for i in ${@//,/ }; do
+        ! lk_in_array "$i" _LK_INCLUDES || continue
+        FILE="${LK_INST:-$LK_BASE}/lib/bash/$i.sh"
+        [ -r "$FILE" ] || lk_warn "$FILE: file not found" || return
+        . "$FILE" || return
+        _LK_INCLUDES+=("$i")
+    done
 }
 
 function _lk_caller() {
     local DIM CALLER=() SOURCE="${BASH_SOURCE[2]:-}" FUNC="${FUNCNAME[2]:-}"
     DIM="${LK_DIM:-$LK_GREY}"
-    # include shell/script name if caller not in running shell script (or no
-    # shell script running)
+    # if the caller isn't in the running script (or no script is running), start
+    # with the shell/script name
     if [ "$SOURCE" != "$0" ] || [ "$SOURCE" = "main" ]; then
-        CALLER=("$LK_BOLD$(basename "${0#-}")$LK_RESET")
+        CALLER=("$LK_BOLD${0##*/}$LK_RESET")
     fi
     # always include source filename and line number
     if [ -n "$SOURCE" ] && [ "$SOURCE" != "main" ]; then
         CALLER+=("$(
             if [ "$SOURCE" = "$0" ]; then
-                echo "$LK_BOLD$(basename "$0")$LK_RESET"
+                echo "$LK_BOLD${0##*/}$LK_RESET"
             else
                 lk_replace "$HOME/" "~/" "$SOURCE"
             fi
@@ -66,11 +75,11 @@ function lk_delete_on_exit() {
 }
 
 function lk_mktemp_file() {
-    gnu_mktemp -t "$(basename "$0").$(lk_timestamp).XXX"
+    gnu_mktemp -t "${0##*/}.$(lk_timestamp).XXX"
 }
 
 function lk_mktemp_dir() {
-    gnu_mktemp -dt "$(basename "$0").$(lk_timestamp).XXX"
+    gnu_mktemp -dt "${0##*/}.$(lk_timestamp).XXX"
 }
 
 function lk_mktemp_fifo() {
@@ -451,7 +460,7 @@ function lk_log() {
 # lk_log_output [log_dir]
 function lk_log_output() {
     local LOG_DIR="${1-${LK_INST:-$LK_BASE}/var/log}" LOG_FILE LOG_PATH
-    LOG_FILE="$(basename "$0")-$UID.log"
+    LOG_FILE="${0##*/}-$UID.log"
     for LOG_DIR in ${LOG_DIR:+"$LOG_DIR"} "/tmp"; do
         [ -d "$LOG_DIR" ] && [ -w "$LOG_DIR" ] ||
             lk_maybe_elevate install -d -m 0777 "$LOG_DIR" 2>/dev/null ||
@@ -467,7 +476,7 @@ function lk_log_output() {
             install -m 0600 /dev/null "$LOG_PATH" 2>/dev/null ||
                 continue
         fi
-        lk_log "$LK_BOLD====> $(basename "$0") invoked$(
+        lk_log "$LK_BOLD====> ${0##*/} invoked$(
             [ "${#LK_ARGV[@]}" -eq "0" ] || {
                 printf ' with %s %s:' \
                     "${#LK_ARGV[@]}" \
@@ -658,7 +667,7 @@ function lk_no_input() {
 #   Use EXT for special extensions like ".tar.gz".
 function lk_add_file_suffix() {
     local BASENAME
-    BASENAME="$(basename "$1")"
+    BASENAME="${1##*/}"
     if [ -z "${3:-}" ] && [[ "$BASENAME" =~ .+\..+ ]]; then
         echo "${1%.*}${2}.${1##*.}"
     elif [ -n "${3:-}" ] && eval "[[ \"$BASENAME\" =~ .+${3//./\\.}\$ ]]"; then
@@ -1174,7 +1183,7 @@ function lk_resolve_hosts() {
 #   background and disown it.
 function lk_start_or_restart() {
     local COMMAND
-    COMMAND="$(basename "$1")"
+    COMMAND="${1##*/}"
     lk_is_root ||
         ! pgrep -xu "$USER" "$COMMAND" >/dev/null || # limit to processes owned by $USER
         pkill -xu "$USER" "$COMMAND"                 #
@@ -1332,9 +1341,9 @@ function lk_user_in_group() {
 function lk_make_iso() {
     local ISOFILE
     lk_paths_exist "$@" || lk_warn "all paths must exist" || return
-    ISOFILE="$(basename "$1").iso"
+    ISOFILE="${1##*/}.iso"
     [ ! -e "$ISOFILE" ] || lk_warn "$ISOFILE already exists" || return
-    mkisofs -V "$(lk_date "%y%m%d")$(basename "$1")" -J -r -hfs -o "$ISOFILE" "$@"
+    mkisofs -V "$(lk_date "%y%m%d")${1##*/}" -J -r -hfs -o "$ISOFILE" "$@"
 }
 
 set -o pipefail

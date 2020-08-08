@@ -1,5 +1,9 @@
 #!/bin/bash
-# shellcheck disable=SC1090,SC2001,SC2015,SC2030,SC2031,SC2046,SC2207
+# shellcheck disable=SC1090,SC2001,SC2046,SC2086,SC2207
+
+lk_die() { s=$? && echo "${BASH_SOURCE[0]}: $1" >&2 && false || exit $s; }
+[ -n "${LK_INST:-${LK_BASE:-}}" ] || lk_die "LK_BASE not set"
+[ -z "${LK_BASE:-}" ] || export LK_BASE
 
 # 1. Source each SETTINGS file in order, allowing later files to override values
 #    set earlier
@@ -8,16 +12,17 @@
 # 3. Copy remaining LK_* variables to the global scope (other variables are
 #    discarded)
 eval "$(
-    # passed to eval just before sourcing to allow expansion of values set by
-    # earlier files
-    SETTINGS=(
-        "/etc/default/lk-platform"
-        ${HOME:+"\$HOME/.\${LK_PATH_PREFIX:-lk-}settings"}
-    )
-    [ "${LK_SETTINGS_FILES+1}" != "1" ] ||
+    if [ "${LK_SETTINGS_FILES+1}" = 1 ]; then
         SETTINGS=(${LK_SETTINGS_FILES[@]+"${LK_SETTINGS_FILES[@]}"})
-    ENV="$(printenv |
-        grep -Eio '^LK_[a-z0-9_]*=' | sed -E 's/(.*)=/\1/' | sort)" || true
+    else
+        # passed to eval just before sourcing, to allow expansion of values set
+        # by earlier files
+        SETTINGS=(
+            "/etc/default/lk-platform"
+            ${HOME:+"\$HOME/.\${LK_PATH_PREFIX:-lk-}settings"}
+        )
+    fi
+    ENV="$(printenv | grep -Eio '^LK_[a-z0-9_]*' | sort)" || true
     lk_var() { comm -23 <(printf '%s\n' "${!LK_@}" | sort) <(cat <<<"$ENV"); }
     (
         VAR=($(lk_var))
@@ -31,30 +36,7 @@ eval "$(
     )
 )"
 
-[ -n "${LK_BASE:-}" ] || eval "$(
-    BS="${BASH_SOURCE[0]}"
-    if [ ! -L "$BS" ] &&
-        LK_BASE="$(cd "${BS%/*}/../.." && pwd -P)" &&
-        [ -d "$LK_BASE/lib/bash" ]; then
-        printf 'LK_BASE=%q' "$LK_BASE"
-    else
-        echo "$BS: LK_BASE not set" >&2
-    fi
-)"
-export LK_BASE
-
 . "${LK_INST:-$LK_BASE}/lib/bash/core.sh"
-. "${LK_INST:-$LK_BASE}/lib/bash/assert.sh"
-
-function _lk_include() {
-    local INCLUDE INCLUDE_PATH
-    for INCLUDE in ${LK_INCLUDE:+${LK_INCLUDE//,/ }}; do
-        INCLUDE_PATH="${LK_INST:-$LK_BASE}/lib/bash/$INCLUDE.sh"
-        [ -r "$INCLUDE_PATH" ] ||
-            lk_warn "file not found: $INCLUDE_PATH" || return
-        echo ". \"\$LK_BASE/lib/bash/$INCLUDE.sh\""
-    done
-}
 
 function lk_usage() {
     echo "${1:-${USAGE:-Please see $0 for usage}}" >&2
@@ -92,7 +74,7 @@ function lk_maybe_elevate() {
     fi
 }
 
-eval "$(LK_INCLUDE="${LK_INCLUDE:-${include:-}}" _lk_include)"
+lk_include assert ${LK_INCLUDE:-${include:-}}
 unset LK_INCLUDE
 
 if [[ ! "${skip:-}" =~ (,|^)env(,|$) ]]; then

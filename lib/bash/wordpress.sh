@@ -5,6 +5,8 @@ lk_bash_at_least 4 ||
     lk_warn "Bash version 4 or higher required" ||
     return
 
+lk_include provision
+
 function lk_wp() {
     wp --skip-plugins --skip-themes "$@"
 }
@@ -260,7 +262,7 @@ function lk_wp_db_restore_local() {
         elif [[ "$SITE_ROOT" =~ ^/srv/http/([^./]+)\.localhost/(public_)?html$ ]]; then
             DEFAULT_IDENTIFIER="${BASH_REMATCH[1]}"
         elif [[ ! "$SITE_ROOT" =~ ^/srv/(www|http)(/.*)?$ ]] && [ "${SITE_ROOT:0:${#HOME}}" = "$HOME" ]; then
-            DEFAULT_IDENTIFIER="$(basename "$SITE_ROOT")"
+            DEFAULT_IDENTIFIER="${SITE_ROOT##*/}"
         else
             DEFAULT_IDENTIFIER="$(gnu_stat --printf '%U' "$SITE_ROOT")" || return
         fi
@@ -422,12 +424,14 @@ function lk_wp_set_permissions() {
         LK_WRITABLE_DIR_MODE="${LK_WRITABLE_DIR_MODE:-2770}" \
         LK_WRITABLE_FILE_MODE="${LK_WRITABLE_FILE_MODE:-0660}"
     SITE_ROOT="${1:-$(lk_wp_get_site_root)}" &&
-        SITE_ROOT="$(realpath "$SITE_ROOT")" &&
+        SITE_ROOT="$(realpath "$SITE_ROOT")" || return
+    if lk_is_root || lk_is_true "${SUDO_OR_NOT:-0}"; then
         OWNER="$(gnu_stat --printf '%U' "$SITE_ROOT/..")" || return
+    fi
     lk_dir_set_permissions \
         "$SITE_ROOT" \
         ".*/wp-content/(cache|uploads|w3tc-config)" \
-        "$OWNER:"
+        ${OWNER+"$OWNER:"}
 }
 
 # [LOCAL_DB_NAME=db_name] [LOCAL_DB_USER=db_user] \

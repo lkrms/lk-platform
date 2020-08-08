@@ -6,9 +6,6 @@
 #   2. curl https://lkr.ms/bs >bs
 #   3. bash bs
 
-set -euo pipefail
-shopt -s nullglob
-
 CUSTOM_REPOS=()                   # format: "repo|server|[key_url]|[key_id]|[siglevel]"
 PING_HOSTNAME="one.one.one.one"   # see https://blog.cloudflare.com/dns-resolver-1-1-1-1/
 NTP_SERVER="ntp.linacreative.com" #
@@ -25,16 +22,21 @@ PACMAN_DESKTOP_PACKAGES=()
 AUR_PACKAGES=()
 AUR_DESKTOP_PACKAGES=()
 
-lk_die() { echo "${BS:+$BS: }$1" >&2 && exit 1; }
-BS="${BASH_SOURCE[0]}" && [ ! -L "$BS" ] &&
+set -euo pipefail
+BS=${BASH_SOURCE[0]}
+lk_die() { s=$? && echo "$BS: $1" >&2 && false || exit $s; }
+[ "${BS%/*}" != "$BS" ] || BS=./$BS
+[ ! -L "$BS" ] &&
     SCRIPT_DIR="$(cd "${BS%/*}" && pwd -P)" ||
     lk_die "unable to resolve path to script"
+
+shopt -s nullglob
 
 function usage() {
     echo "\
 Usage:
-  $(basename "$0") <root_partition> <boot_partition> [<other_os_partition>...] <hostname> <username>
-  $(basename "$0") <install_disk> <hostname> <username>
+  ${0##*/} <root_partition> <boot_partition> [<other_os_partition>...] <hostname> <username>
+  ${0##*/} <install_disk> <hostname> <username>
 
 Current block devices:
 
@@ -107,7 +109,7 @@ exec > >(tee "$LOG_FILE") 2>&1
 trap "exit_trap" EXIT
 
 for FILE_PATH in /lib/bash/core.sh /lib/bash/arch.sh /lib/arch/packages.sh; do
-    FILE="$SCRIPT_DIR/$(basename "$FILE_PATH")"
+    FILE="$SCRIPT_DIR/${FILE_PATH##*/}"
     URL="https://raw.githubusercontent.com/lkrms/lk-platform/${LK_PLATFORM_BRANCH:-master}$FILE_PATH"
     [ -e "$FILE" ] ||
         curl --output "$FILE" "$URL" || {

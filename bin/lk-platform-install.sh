@@ -11,10 +11,16 @@
 
 {
     set -euo pipefail
-    _FILE="${BASH_SOURCE[0]}" && [ ! -L "$_FILE" ] &&
-        LK_INST="$(cd "${_FILE%/*}/.." && pwd -P)" &&
-        [ -d "$LK_INST/lib/bash" ] && export LK_INST ||
-        { echo "${_FILE:+$_FILE: }unable to find LK_BASE" >&2 && exit 1; }
+    _DEPTH=1
+    _FILE=${BASH_SOURCE[0]}
+    lk_die() { s=$? && echo "$_FILE: $1" >&2 && false || exit $s; }
+    [ "${_FILE%/*}" != "$_FILE" ] || _FILE=./$_FILE
+    LK_INST=$(i=0 && F=$_FILE && while [ $((i++)) -le "$_DEPTH" ]; do
+        [ "$F" != / ] && [ ! -L "$F" ] &&
+            cd "${F%/*}" && F=$PWD || exit
+    done && pwd -P) || lk_die "symlinks in path are not supported"
+    [ -d "$LK_INST/lib/bash" ] || lk_die "unable to locate LK_BASE"
+    export LK_INST
 
     shopt -s nullglob
 
@@ -160,7 +166,7 @@
                 ) behind) in" "$LK_BASE"
             sudo -Hu "$REPO_OWNER" \
                 git merge --ff-only "@{upstream}"
-            lk_console_message "Restarting $(basename "$0")"
+            lk_console_message "Restarting ${0##*/}"
             "$0" "$@"
             exit
         fi
@@ -230,7 +236,7 @@
             lk_console_list "Checking startup scripts:" "file" "files"
         RC_ESCAPED="$(printf '%q' "$LK_BASE/lib/bash/rc.sh")"
         BASH_SKEL="
-# Added by $(basename "$0") at $(lk_now)
+# Added by ${0##*/} at $(lk_now)
 if [ -f $RC_ESCAPED ]; then
     . $RC_ESCAPED
 fi"
