@@ -417,6 +417,16 @@ EOF
 
     SUDO_OR_NOT=1
 
+    FILE="/etc/sysctl.d/90-sysrq.conf"
+    [ -e "$FILE" ] || {
+        cat <<EOF | sudo tee "$FILE" >/dev/null
+# Enable Alt+SysRq shortcuts (e.g. for REISUB)
+# See https://www.kernel.org/doc/html/latest/admin-guide/sysrq.html
+kernel.sysrq = 1
+EOF
+        sudo sysctl --system
+    }
+
     # TODO: add the following above the relevant pam_nologin.so lines in /etc/pam.d/system-login:
     #
     # auth [success=1 default=ignore] pam_succeed_if.so quiet user ingroup wheel
