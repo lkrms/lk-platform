@@ -1,20 +1,7 @@
 #!/bin/bash
-# shellcheck disable=SC1090,SC2015,SC2016,SC2034,SC2046,SC2174,SC2207
+# shellcheck disable=SC1090,SC2016,SC2031,SC2034,SC2207
 
-set -euo pipefail
-_DEPTH=1
-_FILE=${BASH_SOURCE[0]}
-lk_die() { s=$? && echo "$_FILE: $1" >&2 && false || exit $s; }
-{ type -P realpath || { type -P python && realpath() { python -c \
-    "import os,sys;print(os.path.realpath(sys.argv[1]))" "$1"; }; }; } \
-    >/dev/null || lk_die "realpath: command not found"
-_FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
-    LK_BASE=$(realpath "$_DIR$(eval "printf '/..%.s' {1..$_DEPTH}")") &&
-    [ "$LK_BASE" != / ] && [ -d "$LK_BASE/lib/bash" ] ||
-    lk_die "unable to locate LK_BASE"
-export LK_BASE
-
-include=provision,linux,arch,httpd,php . "$LK_BASE/lib/bash/common.sh"
+depth=1 include=provision,linux,arch,httpd,php . lk-bash-load.sh || exit
 
 lk_assert_not_root
 lk_assert_is_arch
