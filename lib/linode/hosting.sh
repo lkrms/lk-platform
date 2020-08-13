@@ -408,7 +408,7 @@ if [ "${#REMOVE_PACKAGES[@]}" -gt "0" ]; then
 fi
 
 log "Disabling unnecessary motd scripts"
-for FILE in 10-help-text 50-motd-news 91-release-upgrade; do
+for FILE in 10-help-text 50-motd-news 91-release-upgrade 98-fsck-at-reboot; do
     [ ! -x "/etc/update-motd.d/$FILE" ] || chmod -c a-x "/etc/update-motd.d/$FILE"
 done
 

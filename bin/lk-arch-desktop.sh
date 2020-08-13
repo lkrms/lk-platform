@@ -75,7 +75,8 @@ PACMAN_PACKAGES+=(
     zsh
 
     # utilities
-    cdrtools
+    cdrtools #
+    cpio     # libguestfs doesn't work without it
     unison
     wimlib
     yq
@@ -319,6 +320,7 @@ PACMAN_PACKAGES+=(
     dnsmasq
     ebtables
     edk2-ovmf # UEFI firmware
+    libguestfs
     libvirt
     qemu
     virt-manager
