@@ -116,6 +116,7 @@ PACMAN_PACKAGES+=(
     caprine
     chromium
     copyq
+    filezilla
     firefox-i18n-en-gb
     flameshot
     freerdp
@@ -416,6 +417,10 @@ EOF
 
     SUDO_OR_NOT=1
 
+    # TODO: add the following above the relevant pam_nologin.so lines in /etc/pam.d/system-login:
+    #
+    # auth [success=1 default=ignore] pam_succeed_if.so quiet user ingroup wheel
+    # account [success=1 default=ignore] pam_succeed_if.so quiet user ingroup wheel
     lk_apply_setting "/etc/ssh/sshd_config" "PasswordAuthentication" "no" " " "#" " "
     lk_apply_setting "/etc/ssh/sshd_config" "AcceptEnv" "LANG LC_*" " " "#" " "
     lk_systemctl_enable sshd
@@ -434,6 +439,9 @@ EOF
                 lk_systemctl_enable bluetooth || exit
         }
 
+        lk_apply_setting "/etc/conf.d/libvirt-guests" "URIS" \
+            '"default$(for i in /run/user/*/libvirt/libvirt-sock; do [ ! -e "$i" ] || printf " qemu:///session?socket=%s" "$i"; done)"' "=" "#"
+        lk_apply_setting "/etc/conf.d/libvirt-guests" "ON_BOOT" "ignore" "=" "#"
         lk_apply_setting "/etc/conf.d/libvirt-guests" "ON_SHUTDOWN" "shutdown" "=" "#"
         lk_apply_setting "/etc/conf.d/libvirt-guests" "SHUTDOWN_TIMEOUT" "300" "=" "#"
         sudo usermod --append --groups libvirt,kvm "$USER"
