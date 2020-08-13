@@ -1,10 +1,6 @@
 #!/bin/bash
 # shellcheck disable=SC1091,SC2015,SC2029,SC2207,SC2119,SC2120,SC2206
 
-lk_bash_at_least 4 ||
-    lk_warn "Bash version 4 or higher required" ||
-    return
-
 lk_include provision
 
 function lk_wp() {

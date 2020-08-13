@@ -378,9 +378,13 @@ function lk_implode() {
 #   True if VALUE exists in ARRAY_NAME.
 #   Pattern matching is not applied.
 function lk_in_array() {
-    [ -n "$1" ] || return
-    eval "[ \"\${#$2[@]}\" -gt \"0\" ]" || return
-    eval "printf '%s\0' \"\${$2[@]}\"" | grep -zFx -- "$1" >/dev/null
+    local KEYS KEY
+    eval "KEYS=(\"\${!$2[@]}\")"
+    for KEY in ${KEYS[@]+"${KEYS[@]}"}; do
+        eval "[ \"\${$2[\$KEY]}\" = \"\$1\" ]" || continue
+        return
+    done
+    false
 }
 
 # lk_array_search value array_name
@@ -391,10 +395,9 @@ function lk_array_search() {
     local KEYS KEY
     eval "KEYS=(\"\${!$2[@]}\")"
     for KEY in ${KEYS[@]+"${KEYS[@]}"}; do
-        eval "[[ \"\${$2[\$KEY]}\" != \$1 ]]" || {
-            echo "$KEY"
-            return
-        }
+        eval "[[ \"\${$2[\$KEY]}\" = \$1 ]]" || continue
+        echo "$KEY"
+        return
     done
     false
 }

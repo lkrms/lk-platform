@@ -32,26 +32,25 @@ function lk_dir_set_permissions() {
             case "$WRITABLE$TYPE" in
             d)
                 MODE="$DIR_MODE"
-                ;;&
+                ;;
             f)
                 MODE="$FILE_MODE"
-                ;;&
+                ;;
             wd)
                 MODE="$WRITABLE_DIR_MODE"
-                ;;&
+                ;;
             wf)
                 MODE="$WRITABLE_FILE_MODE"
-                ;;&
-            *)
-                ARGS=(-type "$TYPE" ! -perm "$MODE")
-                ;;&
+                ;;
+            esac
+            ARGS=(-type "$TYPE" ! -perm "$MODE")
+            case "$WRITABLE$TYPE" in
             d | f)
                 # exclude writable directories and their descendants
                 ARGS=(! \( -type d -regex "$WRITABLE_REGEX" -prune \) "${ARGS[@]}")
-                ;;&
-            f)
-                # exclude writable files (i.e. not just files in writable directories)
-                ARGS+=(! -regex "$WRITABLE_REGEX")
+                [ "$WRITABLE$TYPE" != f ] ||
+                    # exclude writable files (i.e. not just files in writable directories)
+                    ARGS+=(! -regex "$WRITABLE_REGEX")
                 ;;
             w*)
                 ARGS+=(-regex "$WRITABLE_REGEX(/.*)?")
