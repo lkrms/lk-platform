@@ -53,3 +53,9 @@ cat <<EOF
 unset LK_ADD_TO_PATH
 export WP_CLI_CONFIG_PATH="\$LK_BASE/etc/wp-cli.yml"
 EOF
+
+! type brew >/dev/null 2>&1 || cat <<EOF
+export HOMEBREW_NO_ANALYTICS=1
+export HOMEBREW_NO_AUTO_UPDATE=1
+export HOMEBREW_CASK_OPTS="--appdir=\"\${HOMEBREW_CASK_APPDIR:-\$HOME/Applications}\" --force --no-quarantine"
+EOF
