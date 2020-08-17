@@ -67,7 +67,7 @@ function lk_elevate() {
 }
 
 function lk_maybe_elevate() {
-    if [ "$EUID" -ne "0" ] && lk_can_sudo; then
+    if [ "$EUID" -ne "0" ] && lk_can_sudo "${1-$0}"; then
         _lk_elevate "$@"
     elif [ "$#" -gt "0" ]; then
         "$@"

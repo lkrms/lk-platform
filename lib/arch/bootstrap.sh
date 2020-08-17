@@ -13,7 +13,9 @@ MOUNT_OPTIONS="defaults"          # ",discard" is added automatically if TRIM su
 TIMEZONE="Australia/Sydney"       # see /usr/share/zoneinfo
 LOCALES=("en_AU" "en_GB")         # UTF-8 is enforced
 LANGUAGE="en_AU:en_GB:en"
-LK_BASE="/opt/lk-platform"
+LK_BASE="${LK_BASE:-/opt/lk-platform}"
+LK_PATH_PREFIX="${LK_PATH_PREFIX:-lk-}"
+LK_PLATFORM_BRANCH="${LK_PLATFORM_BRANCH:-master}"
 MIRROR="http://archlinux.mirror.linacreative.com/archlinux/\$repo/os/\$arch"
 
 # these will be added to the defaults in packages.sh
@@ -48,8 +50,8 @@ function exit_trap() {
     exec >&6 2>&7 6>&- 7>&-
     [ ! -d "/mnt/boot" ] || {
         install -v -d -m 0755 "/mnt/var/log" &&
-            install -v -m 0750 -g "adm" \
-                "$LOG_FILE" "/mnt/var/log/lk-bootstrap.log" || :
+            install -v -m 0640 -g "adm" \
+                "$LOG_FILE" "/mnt/var/log/${LK_PATH_PREFIX}bootstrap.log" || :
     }
 }
 
@@ -103,14 +105,14 @@ function configure_pacman() {
 [ "$EUID" -eq "0" ] || lk_die "not running as root"
 [ "$#" -ge "3" ] || usage
 
-LOG_FILE="/tmp/lk-bootstrap.$(date +'%s').log"
+LOG_FILE="/tmp/${LK_PATH_PREFIX}bootstrap.$(date +'%s').log"
 exec 6>&1 7>&2
 exec > >(tee "$LOG_FILE") 2>&1
 trap "exit_trap" EXIT
 
 for FILE_PATH in /lib/bash/core.sh /lib/bash/arch.sh /lib/arch/packages.sh; do
     FILE="$SCRIPT_DIR/${FILE_PATH##*/}"
-    URL="https://raw.githubusercontent.com/lkrms/lk-platform/${LK_PLATFORM_BRANCH:-master}$FILE_PATH"
+    URL="https://raw.githubusercontent.com/lkrms/lk-platform/$LK_PLATFORM_BRANCH$FILE_PATH"
     [ -e "$FILE" ] ||
         curl --output "$FILE" "$URL" || {
         rm -f "$FILE"
@@ -326,7 +328,7 @@ else
 fi
 
 lk_console_detail "Setting default umask"
-cat <<EOF >"/mnt/etc/profile.d/Z90-lk-umask.sh"
+cat <<EOF >"/mnt/etc/profile.d/Z90-${LK_PATH_PREFIX}umask.sh"
 #!/bin/sh
 
 if [ "$(id -u)" -ne "0" ]; then
@@ -375,13 +377,13 @@ echo -e "$TARGET_PASSWORD\n$TARGET_PASSWORD" | in_target passwd "$TARGET_USERNAM
 }
 
 lk_console_detail "Configuring sudo"
-cat <<EOF >"/mnt/etc/sudoers.d/lk-defaults"
+cat <<EOF >"/mnt/etc/sudoers.d/${LK_PATH_PREFIX}defaults"
 Defaults umask = 0022
 Defaults umask_override
 %wheel ALL=(ALL) ALL
 %wheel ALL=(ALL) NOPASSWD:/usr/bin/pacman
 EOF
-chmod 600 "/mnt/etc/sudoers.d/lk-defaults"
+chmod 440 "/mnt/etc/sudoers.d/${LK_PATH_PREFIX}defaults"
 
 lk_console_detail "Disabling root password"
 in_target passwd -l root
@@ -390,11 +392,11 @@ lk_console_detail "Installing lk-platform to:" "$LK_BASE"
 in_target install -v -d -m 2775 -o "$TARGET_USERNAME" -g "adm" \
     "$LK_BASE"
 in_target sudo -H -u "$TARGET_USERNAME" \
-    git clone -b "${LK_PLATFORM_BRANCH:-master}" \
+    git clone -b "$LK_PLATFORM_BRANCH" \
     "https://github.com/lkrms/lk-platform.git" "$LK_BASE"
 printf '%s=%q\n' \
     LK_BASE "$LK_BASE" \
-    LK_PATH_PREFIX "lk-" \
+    LK_PATH_PREFIX "$LK_PATH_PREFIX" \
     LK_NODE_HOSTNAME "$TARGET_HOSTNAME" \
     LK_NODE_TIMEZONE "$TIMEZONE" \
     LK_PLATFORM_BRANCH "$LK_PLATFORM_BRANCH" >"/mnt/etc/default/lk-platform"
@@ -414,7 +416,7 @@ if ! lk_is_virtual; then
     in_target systemctl enable NetworkManager-dispatcher.service
     in_target systemctl mask systemd-rfkill.service
     in_target systemctl mask systemd-rfkill.socket
-    cat <<EOF >"/mnt/etc/tlp.d/90-lk-defaults.conf"
+    cat <<EOF >"/mnt/etc/tlp.d/90-${LK_PATH_PREFIX}defaults.conf"
 # Increase performance (and energy consumption, of course)
 CPU_ENERGY_PERF_POLICY_ON_AC=performance
 CPU_ENERGY_PERF_POLICY_ON_BAT=balance_performance

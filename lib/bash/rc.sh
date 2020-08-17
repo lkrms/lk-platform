@@ -41,7 +41,7 @@ eval "$(
 
 function lk_diff_bak() {
     local BACKUP FILE
-    [ "$EUID" -eq "0" ] || ! lk_can_sudo || {
+    [ "$EUID" -eq "0" ] || ! lk_can_sudo bash || {
         sudo -H env \
             _LK_DIFF_ROOT="${_LK_DIFF_ROOT:-}" \
             _LK_DIFF_REGEX="${_LK_DIFF_REGEX:-}" \

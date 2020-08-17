@@ -395,7 +395,7 @@ function lk_array_search() {
     local KEYS KEY
     eval "KEYS=(\"\${!$2[@]}\")"
     for KEY in ${KEYS[@]+"${KEYS[@]}"}; do
-        eval "[[ \"\${$2[\$KEY]}\" = \$1 ]]" || continue
+        eval "[[ \"\${$2[\$KEY]}\" == \$1 ]]" || continue
         echo "$KEY"
         return
     done
@@ -884,12 +884,35 @@ function lk_download() {
         lk_echo_array "${FILENAMES[@]}"
 }
 
+# lk_can_sudo COMMAND [USERNAME]
+#   Return true if the current user is allowed to execute COMMAND via sudo.
+#
+#   Specify USERNAME to override the default target user (usually root). Set
+#   LK_NO_INPUT to return false if sudo requires a password.
+#
+#   If the current user has no sudo privileges at all, they will never be
+#   prompted for a password.
 function lk_can_sudo() {
-    local ERROR
+    local COMMAND="${1:-}" USERNAME="${2:-}" ERROR
+    [ -n "$COMMAND" ] || lk_warn "no command" || return
+    [ -z "$USERNAME" ] || lk_users_exist "$USERNAME" ||
+        lk_warn "user not found: $USERNAME" || return
+    # 1. sudo exists
     lk_command_exists sudo && {
+        # 2. the current user (or one of their groups) appears in sudo's
+        #    security policy
         ERROR="$(sudo -nv 2>&1)" ||
             # "sudo: a password is required" means the user can sudo
             grep -i password <<<"$ERROR" >/dev/null
+    } && {
+        # 3. the current user is allowed to execute COMMAND as USERNAME (attempt
+        #    with prompting disabled first)
+        sudo -n ${USERNAME:+-u "$USERNAME"} -l "$COMMAND" >/dev/null 2>&1 || {
+            ! lk_no_input &&
+                sudo -p "\
+[sudo] To test access to $COMMAND, please enter the password for %u: " \
+                    ${USERNAME:+-u "$USERNAME"} -l "$COMMAND" >/dev/null
+        }
     }
 }
 
@@ -911,7 +934,7 @@ function lk_elevate() {
 }
 
 function lk_maybe_elevate() {
-    if [ "$EUID" -eq "0" ] || ! lk_can_sudo; then
+    if [ "$EUID" -eq "0" ] || ! lk_can_sudo "$1"; then
         "$@"
     else
         sudo -H "$@"
@@ -1002,10 +1025,8 @@ function lk_check_gnu_commands() {
     local COMMANDS=("$@") SUDO_OR_NOT="${SUDO_OR_NOT:-0}"
     [ "$#" -gt "0" ] || COMMANDS=(${LK_GNU_COMMANDS[@]+"${LK_GNU_COMMANDS[@]}"})
     if [ "${#COMMANDS[@]}" -gt "0" ]; then
-        lk_commands_exist "${COMMANDS[@]/#/gnu_}" || {
-            ! lk_can_sudo || SUDO_OR_NOT=1
-            lk_install_gnu_commands
-        }
+        lk_commands_exist "${COMMANDS[@]/#/gnu_}" ||
+            lk_install_gnu_commands "${COMMANDS[@]}"
     fi
 }
 

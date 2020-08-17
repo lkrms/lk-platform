@@ -495,6 +495,7 @@ for USERNAME in ${ADMIN_USERS//,/ }; do
         install -v -m 0600 -o "$USERNAME" -g "$USER_GROUP" /dev/null "$USER_HOME/.ssh/authorized_keys"
         grep -E "$S$USERNAME\$" <<<"$ADMIN_USER_KEYS" >>"$USER_HOME/.ssh/authorized_keys" || :
     fi
+    install -v -m 0440 /dev/null "/etc/sudoers.d/nopasswd-$USERNAME"
     echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >"/etc/sudoers.d/nopasswd-$USERNAME"
 done
 
@@ -511,6 +512,7 @@ systemctl restart sshd.service
 FIRST_ADMIN="${FIRST_ADMIN:-root}"
 
 log "Configuring sudoers"
+install -v -m 0440 /dev/null "/etc/sudoers.d/${PATH_PREFIX}defaults"
 cat <<EOF >"/etc/sudoers.d/${PATH_PREFIX}defaults"
 Defaults !mail_no_user
 Defaults !mail_badpass
@@ -1364,6 +1366,7 @@ WITH GRANT OPTION" | mysql -uroot
     fi
 
     log "Configuring MySQL account self-service"
+    install -v -m 0440 /dev/null "/etc/sudoers.d/${PATH_PREFIX}mysql-self-service"
     cat <<EOF >"/etc/sudoers.d/${PATH_PREFIX}mysql-self-service"
 ALL ALL=(root) NOPASSWD:$LK_BASE/bin/lk-mysql-grant.sh
 EOF
