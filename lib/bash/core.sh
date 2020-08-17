@@ -831,7 +831,7 @@ function lk_decode_uri() {
 function lk_download() {
     local IGNORE_FILENAMES="${IGNORE_FILENAMES:-0}" CURL_VERSION URI FILENAME \
         DOWNLOAD_ONE DOWNLOAD_ARGS _PATH FILENAMES=() ONE_DOWNLOAD_ARGS=() MANY_DOWNLOAD_ARGS=() \
-        CURL_ARGS=(--location --remote-time) ARGS
+        CURL_ARGS=(--fail --location --remote-time) ARGS
     CURL_VERSION="$(curl --version | grep -Eo '\b[0-9]+(\.[0-9]+){1,2}\b' | head -n1)" ||
         lk_warn "curl version unknown" || return
     lk_is_false "$IGNORE_FILENAMES" || {
@@ -916,9 +916,13 @@ function lk_can_sudo() {
     }
 }
 
-# SUDO_OR_NOT=<1|0|Y|N> lk_maybe_sudo command [arg1...]
+function lk_get_maybe_sudo() {
+    echo "${LK_SUDO:-${SUDO_OR_NOT:-0}}"
+}
+
+# LK_SUDO=<1|0|Y|N> lk_maybe_sudo command [arg1...]
 function lk_maybe_sudo() {
-    if lk_is_true "${SUDO_OR_NOT:-0}"; then
+    if lk_is_true "${LK_SUDO:-${SUDO_OR_NOT:-0}}"; then
         lk_elevate "$@"
     else
         "$@"
@@ -944,7 +948,7 @@ function lk_maybe_elevate() {
 # lk_safe_symlink target_path link_path [use_sudo [try_default]]
 function lk_safe_symlink() {
     local TARGET LINK LINK_DIR CURRENT_TARGET \
-        SUDO_OR_NOT="${3:-${SUDO_OR_NOT:-0}}" TRY_DEFAULT="${4:-0}"
+        LK_SUDO="${3:-$(lk_get_maybe_sudo)}" TRY_DEFAULT="${4:-0}"
     TARGET="$1"
     LINK="$2"
     [ -n "$LINK" ] || return
@@ -1001,7 +1005,7 @@ function lk_install_gnu_commands() {
         [ -d "$GNU_PATH" ] ||                                   # is a directory
         lk_warn "not a directory: $GNU_PATH" || return          # ...
     [ -w "$GNU_PATH" ] ||                                       # it's also writable; or
-        lk_is_true "${SUDO_OR_NOT:-0}" ||                       # will be installed as superuser; or
+        lk_is_true "$(lk_get_maybe_sudo)" ||                    # will be installed as superuser; or
         { [ ! -e "$GNU_PATH" ] &&                               # does not exist but the
             PARENT="$(lk_first_existing_parent "$GNU_PATH")" && # first existing parent dir
             [ -w "$PARENT" ]; } ||                              # is writable; or
@@ -1022,7 +1026,7 @@ function lk_install_gnu_commands() {
 }
 
 function lk_check_gnu_commands() {
-    local COMMANDS=("$@") SUDO_OR_NOT="${SUDO_OR_NOT:-0}"
+    local COMMANDS=("$@")
     [ "$#" -gt "0" ] || COMMANDS=(${LK_GNU_COMMANDS[@]+"${LK_GNU_COMMANDS[@]}"})
     if [ "${#COMMANDS[@]}" -gt "0" ]; then
         lk_commands_exist "${COMMANDS[@]/#/gnu_}" ||
@@ -1256,14 +1260,16 @@ function lk_console_file() {
     local FILE_PATH="$1" ORIG_FILE \
         LK_CONSOLE_INDENT="${LK_CONSOLE_INDENT:-2}"
     shift
-    [ -f "$FILE_PATH" ] || lk_warn "file not found: $FILE_PATH" || return
+    lk_maybe_sudo test -r "$FILE_PATH" ||
+        lk_warn "cannot read file: $FILE_PATH" || return
     ORIG_FILE="$FILE_PATH${LK_BACKUP_SUFFIX-.orig}"
-    [ "$FILE_PATH" != "$ORIG_FILE" ] && [ -f "$ORIG_FILE" ] || ORIG_FILE=
+    [ "$FILE_PATH" != "$ORIG_FILE" ] &&
+        lk_maybe_sudo test -r "$ORIG_FILE" || ORIG_FILE=
     lk_console_item "${ORIG_FILE:+Changes applied to }$FILE_PATH:" $'<<<<\n'"$(
         if [ -n "$ORIG_FILE" ]; then
-            ! diff "$ORIG_FILE" "$FILE_PATH" || echo "<unchanged>"
+            ! lk_maybe_sudo diff "$ORIG_FILE" "$FILE_PATH" || echo "<unchanged>"
         else
-            cat "$FILE_PATH"
+            lk_maybe_sudo cat "$FILE_PATH"
         fi
     )"$'\n>>>>' "$@"
     [ -z "$ORIG_FILE" ] ||

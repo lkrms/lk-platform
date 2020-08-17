@@ -630,7 +630,7 @@ ${ACCEPT_OUTPUT_HOSTS:+    ${ACCEPT_OUTPUT_HOSTS//,/$'\n'    }
 })"
     . /dev/stdin <<<"$ACCEPT_OUTPUT_HOSTS_SH"
     if [[ " ${ACCEPT_OUTPUT_HOSTS[*]} " =~ .*" api.github.com ".* ]]; then
-        keep_trying eval "GITHUB_META=\"\$(curl \"https://api.github.com/meta\")\""
+        keep_trying eval "GITHUB_META=\"\$(curl --fail \"https://api.github.com/meta\")\""
         GITHUB_IPS=($(jq -r ".web[]" <<<"$GITHUB_META"))
     fi
     OUTPUT_ALLOW=(
@@ -849,7 +849,7 @@ printf '%s=%q\n' \
 
 # TODO: verify downloads
 log "Installing pip, ps_mem, Glances, awscli"
-keep_trying curl --output /root/get-pip.py "https://bootstrap.pypa.io/get-pip.py"
+keep_trying curl --fail --output /root/get-pip.py "https://bootstrap.pypa.io/get-pip.py"
 python3 /root/get-pip.py
 keep_trying pip install ps_mem glances awscli
 
@@ -958,7 +958,7 @@ case ",$NODE_SERVICES," in
         php-cli
     )
     log "Downloading wp-cli to /usr/local/bin"
-    keep_trying curl --output "/usr/local/bin/wp" "https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar"
+    keep_trying curl --fail --output "/usr/local/bin/wp" "https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar"
     chmod a+x "/usr/local/bin/wp"
     ;;&
 

@@ -421,7 +421,7 @@ function lk_wp_set_permissions() {
         LK_WRITABLE_FILE_MODE="${LK_WRITABLE_FILE_MODE:-0660}"
     SITE_ROOT="${1:-$(lk_wp_get_site_root)}" &&
         SITE_ROOT="$(realpath "$SITE_ROOT")" || return
-    if lk_is_root || lk_is_true "${SUDO_OR_NOT:-0}"; then
+    if lk_is_root || lk_is_true "$(lk_get_maybe_sudo)"; then
         OWNER="$(gnu_stat --printf '%U' "$SITE_ROOT/..")" || return
     fi
     lk_dir_set_permissions \

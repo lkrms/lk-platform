@@ -20,7 +20,7 @@ function lk_pacman_add_repo() {
             lk_elevate ${CHROOT_COMMAND[@]+"${CHROOT_COMMAND[@]}"} \
                 bash -c "\
 KEY_FILE=\"\$(mktemp)\" &&
-    curl --output \"\$KEY_FILE\" \"$(lk_esc "$KEY_URL")\" &&
+    curl --fail --output \"\$KEY_FILE\" \"$(lk_esc "$KEY_URL")\" &&
     pacman-key --add \"\$KEY_FILE\"" || return
         elif [ -n "$KEY_ID" ]; then
             lk_elevate ${CHROOT_COMMAND[@]+"${CHROOT_COMMAND[@]}"} \
@@ -29,7 +29,7 @@ KEY_FILE=\"\$(mktemp)\" &&
         [ -z "$KEY_ID" ] ||
             lk_elevate ${CHROOT_COMMAND[@]+"${CHROOT_COMMAND[@]}"} \
                 pacman-key --lsign-key "$KEY_ID" || return
-        SUDO_OR_NOT=1 lk_keep_original "$PACMAN_CONF"
+        LK_SUDO=1 lk_keep_original "$PACMAN_CONF"
         cat <<EOF | lk_elevate tee -a "$PACMAN_CONF" >/dev/null
 
 [$REPO]${SIG_LEVEL:+

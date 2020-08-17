@@ -19,7 +19,7 @@ function lk_dir_set_permissions() {
         lk_console_detail "Writable paths:" "$WRITABLE_REGEX"
     }
     [ -z "$OWNER" ] ||
-        if lk_is_root || lk_is_true "${SUDO_OR_NOT:-0}"; then
+        if lk_is_root || lk_is_true "$(lk_get_maybe_sudo)"; then
             lk_console_detail "Owner:" "$OWNER"
             lk_maybe_sudo chown -Rhc "$OWNER" "$DIR" >"$LOG_DIR/chown.log" || return
             lk_console_detail "File ownership changes:" "$(wc -l <"$LOG_DIR/chown.log")" "$LK_GREEN"

@@ -417,7 +417,7 @@ EOF
     MINIMAL=0
     [ "$(free -g | grep -Eo "[0-9]+" | head -n1)" -ge "15" ] || MINIMAL=1
 
-    SUDO_OR_NOT=1
+    LK_SUDO=1
 
     FILE="/etc/sysctl.d/90-sysrq.conf"
     [ -e "$FILE" ] || {
@@ -553,7 +553,7 @@ EOF
     sudo usermod --append --groups "$(id -gn)" "http"
     lk_is_true "$MINIMAL" || lk_systemctl_enable httpd
 
-    unset SUDO_OR_NOT
+    unset LK_SUDO
 
     exit
 }

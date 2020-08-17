@@ -3,20 +3,20 @@
 
 # To install Arch Linux using the script below:
 #   1. boot from an Arch Linux live CD
-#   2. curl https://lkr.ms/bs >bs
+#   2. curl -L https://lkr.ms/bs >bs
 #   3. bash bs
 
-CUSTOM_REPOS=()                   # format: "repo|server|[key_url]|[key_id]|[siglevel]"
-PING_HOSTNAME="one.one.one.one"   # see https://blog.cloudflare.com/dns-resolver-1-1-1-1/
-NTP_SERVER="ntp.linacreative.com" #
-MOUNT_OPTIONS="defaults"          # ",discard" is added automatically if TRIM support is detected (VMs only)
-TIMEZONE="Australia/Sydney"       # see /usr/share/zoneinfo
-LOCALES=("en_AU" "en_GB")         # UTF-8 is enforced
-LANGUAGE="en_AU:en_GB:en"
-LK_BASE="${LK_BASE:-/opt/lk-platform}"
-LK_PATH_PREFIX="${LK_PATH_PREFIX:-lk-}"
-LK_PLATFORM_BRANCH="${LK_PLATFORM_BRANCH:-master}"
-MIRROR="http://archlinux.mirror.linacreative.com/archlinux/\$repo/os/\$arch"
+CUSTOM_REPOS=()                 # format: "repo|server|[key_url]|[key_id]|[siglevel]"
+PING_HOSTNAME=one.one.one.one   # see https://blog.cloudflare.com/dns-resolver-1-1-1-1/
+NTP_SERVER=ntp.linacreative.com #
+MOUNT_OPTIONS=defaults          # ",discard" is added automatically if TRIM support is detected (VMs only)
+TIMEZONE=Australia/Sydney       # see /usr/share/zoneinfo
+LOCALES=(en_AU en_GB)           # UTF-8 is enforced
+LANGUAGE=en_AU:en_GB:en
+LK_BASE=${LK_BASE:-/opt/lk-platform}
+LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
+LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
+MIRROR=http://archlinux.mirror.linacreative.com/archlinux/\$repo/os/\$arch
 
 # these will be added to the defaults in packages.sh
 PACMAN_PACKAGES=()
@@ -114,7 +114,7 @@ for FILE_PATH in /lib/bash/core.sh /lib/bash/arch.sh /lib/arch/packages.sh; do
     FILE="$SCRIPT_DIR/${FILE_PATH##*/}"
     URL="https://raw.githubusercontent.com/lkrms/lk-platform/$LK_PLATFORM_BRANCH$FILE_PATH"
     [ -e "$FILE" ] ||
-        curl --output "$FILE" "$URL" || {
+        curl --fail --output "$FILE" "$URL" || {
         rm -f "$FILE"
         lk_die "unable to download from GitHub: $URL"
     }

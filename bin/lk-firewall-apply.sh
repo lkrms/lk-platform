@@ -47,7 +47,7 @@ if [ -n "${ACCEPT_OUTPUT_CHAIN:-}" ]; then
     # chain with static hosts first (otherwise api.github.com may be
     # unreachable)
     if lk_in_array "api.github.com" ACCEPT_OUTPUT_HOSTS; then
-        GITHUB_META="$(curl --silent --show-error "https://api.github.com/meta")" &&
+        GITHUB_META="$(curl --fail --silent --show-error "https://api.github.com/meta")" &&
             GITHUB_IPS=($(jq -r ".web[],.api[]" <<<"$GITHUB_META" | sort | uniq)) &&
             OUTPUT_ALLOW+=("${GITHUB_IPS[@]}") &&
             lk_console_detail "Added to whitelist from GitHub API:" "${#GITHUB_IPS[@]} IP $(lk_maybe_plural "${#GITHUB_IPS[@]}" range ranges)" || {
