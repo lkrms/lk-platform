@@ -34,6 +34,6 @@ function lk_macos_install_command_line_tools() {
         return
     lk_console_detail "Installing Command Line Tools with:" \
         "softwareupdate --install \"$ITEM_NAME\""
-    lk_elevate softwareupdate --install "$ITEM_NAME" || return
+    lk_elevate softwareupdate --install "$ITEM_NAME" >/dev/null || return
     rm -f "$TRIGGER" || true
 }

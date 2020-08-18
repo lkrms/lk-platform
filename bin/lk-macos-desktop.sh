@@ -1,7 +1,7 @@
 #!/bin/bash
 # shellcheck disable=SC1090,SC2034
 
-LK_BASE=${LK_BASE:-/opt/lk-platform}
+export LK_BASE=${LK_BASE:-/opt/lk-platform}
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
 
@@ -57,7 +57,7 @@ if ! USER_UMASK=$(defaults read \
     [ "$USER_UMASK" -ne 2 ]; then
     lk_console_message "Setting default umask"
     lk_console_detail "Running:" "launchctl config user umask 002"
-    sudo launchctl config user umask 002
+    sudo launchctl config user umask 002 >/dev/null
 fi
 umask 002
 
@@ -101,9 +101,12 @@ DIR=$HOME/.homebrew
 if [ ! -e "$DIR" ]; then
     lk_console_item "Installing Homebrew to:" "$DIR"
     git clone https://github.com/Homebrew/brew.git "$DIR"
-    BREW_SH=$("$DIR/bin/brew" shellenv)
-    eval "$BREW_SH"
 fi
+
+eval "$(. "$LK_BASE/lib/bash/env.sh")"
+
+lk_console_message "Updating Homebrew"
+brew update
 
 # TODO:
 # - install GNU essentials
