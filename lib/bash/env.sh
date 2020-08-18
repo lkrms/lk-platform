@@ -45,12 +45,13 @@ for DIR in $ADD_TO_PATH; do
     PATH="$(lk_path_add "$DIR")"
 done
 unset IFS
-PATH="$(lk_path_add_to_front "${HOME:+$HOME/.local/bin}")"
+PATH="$(lk_path_add_to_front "${HOME:+$HOME/.homebrew/bin:$HOME/.local/bin}")"
 [ "$PATH" = "$OLD_PATH" ] || {
     echo "export PATH=\"$(lk_esc "$PATH")\""
 }
 cat <<EOF
 unset LK_ADD_TO_PATH
+export SUDO_PROMPT="[sudo] password for %u: "
 export WP_CLI_CONFIG_PATH="\$LK_BASE/etc/wp-cli.yml"
 EOF
 
