@@ -40,17 +40,20 @@ lk_path_add_to_front() {
 
 OLD_PATH="$PATH"
 ADD_TO_PATH="${LK_ADD_TO_PATH:+$LK_ADD_TO_PATH:}$LK_BASE/bin"
+ADD_TO_PATH_FIRST="${HOME:+$HOME/.homebrew/bin:$HOME/.local/bin}${LK_ADD_TO_PATH_FIRST:+:$LK_ADD_TO_PATH_FIRST}"
 IFS=:
 for DIR in $ADD_TO_PATH; do
     PATH="$(lk_path_add "$DIR")"
 done
+for DIR in $ADD_TO_PATH_FIRST; do
+    PATH="$(lk_path_add_to_front "$DIR")"
+done
 unset IFS
-PATH="$(lk_path_add_to_front "${HOME:+$HOME/.homebrew/bin:$HOME/.local/bin}")"
 [ "$PATH" = "$OLD_PATH" ] || {
     echo "export PATH=\"$(lk_esc "$PATH")\""
 }
 cat <<EOF
-unset LK_ADD_TO_PATH
+unset LK_ADD_TO_PATH LK_ADD_TO_PATH_FIRST
 export SUDO_PROMPT="[sudo] password for %u: "
 export WP_CLI_CONFIG_PATH="\$LK_BASE/etc/wp-cli.yml"
 EOF
@@ -60,3 +63,7 @@ export HOMEBREW_NO_ANALYTICS=1
 export HOMEBREW_NO_AUTO_UPDATE=1
 export HOMEBREW_CASK_OPTS="--appdir=\"\${HOMEBREW_CASK_APPDIR:-\$HOME/Applications}\" --no-quarantine"
 EOF
+
+[ ! -d "${HOME:+$HOME/.homebrew/bin}" ] ||
+    ! BREW_SH=$("$HOME/.homebrew/bin/brew" shellenv 2>/dev/null) ||
+    echo "$BREW_SH"
