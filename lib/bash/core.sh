@@ -467,27 +467,33 @@ function lk_log() {
 
 # lk_log_output [LOG_PATH]
 function lk_log_output() {
-    local LOG_PATH="${1:-${LK_INST:-$LK_BASE}/var/log/${0##*/}-$UID.log}" \
+    local LOG_PATH="${1-${LK_INST:-$LK_BASE}/var/log/${0##*/}-$UID.log}" \
+        OWNER="${LK_LOG_FILE_OWNER:-$USER}" GROUP="${LK_LOG_FILE_GROUP:-}" \
         LOG_DIRS LOG_FILE LOG_DIR
-    [[ $LOG_PATH =~ ^((.*)/)?([^/]+)\.log$ ]] ||
+    [[ $LOG_PATH =~ ^((.*)/)?([^/]+\.log)$ ]] ||
         lk_warn "invalid log path: $1" || return
     LOG_DIRS=("${BASH_REMATCH[2]:-.}")
     LOG_FILE="${BASH_REMATCH[3]}"
     [ -n "${1:-}" ] || LOG_DIRS+=("/tmp")
     for LOG_DIR in "${LOG_DIRS[@]}"; do
-        [ -d "$LOG_DIR" ] || lk_maybe_elevate install -d \
+        [ -d "$LOG_DIR" ] || lk_elevate_if_error install -d \
             -m "$(lk_pad_zero 4 "${LK_LOG_DIR_MODE:-0777}")" \
             "$LOG_DIR" 2>/dev/null || continue
         LOG_PATH="$LOG_DIR/$LOG_FILE"
         if [ -f "$LOG_PATH" ]; then
             [ -w "$LOG_PATH" ] || {
-                lk_maybe_elevate chown "$UID" "$LOG_PATH" &&
-                    chmod "$(lk_pad_zero 5 "${LK_LOG_FILE_MODE:-0600}")" \
+                lk_elevate_if_error chmod \
+                    "$(lk_pad_zero 5 "${LK_LOG_FILE_MODE:-0600}")" \
+                    "$LOG_PATH" || continue
+                [ -w "$LOG_PATH" ] ||
+                    lk_elevate chown \
+                        "$OWNER${GROUP:+:$GROUP}" \
                         "$LOG_PATH" || continue
             } 2>/dev/null
         else
-            lk_maybe_elevate install \
+            lk_elevate_if_error install \
                 -m "$(lk_pad_zero 4 "${LK_LOG_FILE_MODE:-0600}")" \
+                -o "$OWNER" ${GROUP:+-g "$GROUP"} \
                 /dev/null "$LOG_PATH" 2>/dev/null || continue
         fi
         lk_log "$LK_BOLD====> ${0##*/} invoked$(
@@ -946,6 +952,19 @@ function lk_elevate() {
     else
         sudo -H "$@"
     fi
+}
+
+function lk_elevate_if_error() {
+    local EXIT_STATUS=0
+    "$@" || {
+        EXIT_STATUS=$?
+        [ "$EUID" -eq "0" ] || ! lk_can_sudo "$1" ||
+            {
+                EXIT_STATUS=0
+                lk_elevate "$@" || EXIT_STATUS=$?
+            }
+    }
+    return "$EXIT_STATUS"
 }
 
 function lk_maybe_elevate() {
