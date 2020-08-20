@@ -300,6 +300,11 @@ function lk_trim() {
         sed -Ee 's/^\s+//' -e 's/\s+$//'
 }
 
+function lk_pad_zero() {
+    [[ $2 =~ ^0*([0-9]+)$ ]] || lk_warn "not a number: $2" || return
+    printf "%0$1d" "${BASH_REMATCH[1]}"
+}
+
 # lk_ellipsis length [string]
 function lk_ellipsis() {
     [ "$#" -gt "1" ] &&
@@ -460,24 +465,30 @@ function lk_log() {
     done
 }
 
-# lk_log_output [log_dir]
+# lk_log_output [LOG_PATH]
 function lk_log_output() {
-    local LOG_DIR="${1-${LK_INST:-$LK_BASE}/var/log}" LOG_FILE LOG_PATH
-    LOG_FILE="${0##*/}-$UID.log"
-    for LOG_DIR in ${LOG_DIR:+"$LOG_DIR"} "/tmp"; do
-        [ -d "$LOG_DIR" ] && [ -w "$LOG_DIR" ] ||
-            lk_maybe_elevate install -d -m 0777 "$LOG_DIR" 2>/dev/null ||
-            continue
+    local LOG_PATH="${1:-${LK_INST:-$LK_BASE}/var/log/${0##*/}-$UID.log}" \
+        LOG_DIRS LOG_FILE LOG_DIR
+    [[ $LOG_PATH =~ ^((.*)/)?([^/]+)\.log$ ]] ||
+        lk_warn "invalid log path: $1" || return
+    LOG_DIRS=("${BASH_REMATCH[2]:-.}")
+    LOG_FILE="${BASH_REMATCH[3]}"
+    [ -n "${1:-}" ] || LOG_DIRS+=("/tmp")
+    for LOG_DIR in "${LOG_DIRS[@]}"; do
+        [ -d "$LOG_DIR" ] || lk_maybe_elevate install -d \
+            -m "$(lk_pad_zero 4 "${LK_LOG_DIR_MODE:-0777}")" \
+            "$LOG_DIR" 2>/dev/null || continue
         LOG_PATH="$LOG_DIR/$LOG_FILE"
         if [ -f "$LOG_PATH" ]; then
             [ -w "$LOG_PATH" ] || {
-                lk_maybe_elevate chown "$UID:" "$LOG_PATH" &&
-                    lk_maybe_elevate chmod 00600 "$LOG_PATH" ||
-                    continue
+                lk_maybe_elevate chown "$UID" "$LOG_PATH" &&
+                    chmod "$(lk_pad_zero 5 "${LK_LOG_FILE_MODE:-0600}")" \
+                        "$LOG_PATH" || continue
             } 2>/dev/null
         else
-            install -m 0600 /dev/null "$LOG_PATH" 2>/dev/null ||
-                continue
+            lk_maybe_elevate install \
+                -m "$(lk_pad_zero 4 "${LK_LOG_FILE_MODE:-0600}")" \
+                /dev/null "$LOG_PATH" 2>/dev/null || continue
         fi
         lk_log "$LK_BOLD====> ${0##*/} invoked$(
             [ "${#LK_ARGV[@]}" -eq "0" ] || {
@@ -1399,3 +1410,4 @@ eval "$(lk_get_colours)"
 LK_DEFAULT_CONSOLE_COLOUR="$LK_CYAN"
 LK_WARNING_COLOUR="$LK_YELLOW"
 LK_ERROR_COLOUR="$LK_RED"
+LK_ARGV=("$@")

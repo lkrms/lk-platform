@@ -85,6 +85,4 @@ if [[ ! "${skip:-}" =~ (,|^)env(,|$) ]]; then
     eval "$(. "$LK_BASE/lib/bash/env.sh")"
 fi
 
-LK_ARGV=("$@")
-
 lk_trap_exit

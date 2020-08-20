@@ -11,13 +11,13 @@ lk_die() { s=$? && echo "${BASH_SOURCE[0]:+${BASH_SOURCE[0]}: }$1" >&2 && false 
 [ "$EUID" -ne 0 ] || lk_die "cannot run as root"
 [ "$(uname -s)" = Darwin ] || lk_die "not running on macOS"
 
-export SUDO_PROMPT="[sudo] password for %u: "
+export SUDO_PROMPT="[sudo] password for %p: "
 
 LOG_FILE=/var/log/${LK_PATH_PREFIX}install.log
-[ -e "$LOG_FILE" ] ||
+[ -e "$LOG_FILE" ] || {
+    echo "Creating log file: $FILE" >&2
     sudo install -m 0640 -o "$USER" -g admin /dev/null "$LOG_FILE"
-exec 6>&1 7>&2
-exec > >(tee -a "$LOG_FILE") 2>&1
+}
 
 if [ -f "$LK_BASE/lib/bash/core.sh" ]; then
     . "$LK_BASE/lib/bash/core.sh"
@@ -26,6 +26,7 @@ if [ -f "$LK_BASE/lib/bash/core.sh" ]; then
 else
     SCRIPT_DIR=/tmp/${LK_PATH_PREFIX}install
     mkdir -p "$SCRIPT_DIR"
+    echo "Downloading dependencies to: $SCRIPT_DIR" >&2
     for FILE_PATH in /lib/bash/core.sh /lib/bash/macos.sh /lib/macos/packages.sh; do
         FILE=$SCRIPT_DIR/${FILE_PATH##*/}
         URL=https://raw.githubusercontent.com/lkrms/lk-platform/$LK_PLATFORM_BRANCH$FILE_PATH
@@ -40,6 +41,10 @@ else
 fi
 
 LK_BACKUP_SUFFIX=-$(lk_timestamp).bak
+
+lk_log_output "$LOG_FILE"
+
+lk_console_message "====> Provisioning macOS"
 
 FILE=/etc/sudoers.d/${LK_PATH_PREFIX}defaults
 if ! sudo test -e "$FILE"; then
@@ -67,9 +72,9 @@ lk_macos_install_command_line_tools ||
 # If Xcode and the standalone Command Line Tools package are both installed,
 # switch to Xcode or commands like opendiff won't work
 if [ -e /Applications/Xcode.app ]; then
-    lk_console_message "Checking Xcode configuration"
     TOOLS_PATH=$(lk_macos_command_line_tools_path)
     if [[ "$TOOLS_PATH" != /Applications/Xcode.app* ]]; then
+        lk_console_message "Configuring Xcode"
         lk_console_detail "Switching from command line tools to Xcode with:" \
             "xcode-select --switch /Applications/Xcode.app"
         sudo xcode-select --switch /Applications/Xcode.app

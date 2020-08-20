@@ -54,7 +54,7 @@ unset IFS
 }
 cat <<EOF
 unset LK_ADD_TO_PATH LK_ADD_TO_PATH_FIRST
-export SUDO_PROMPT="[sudo] password for %u: "
+export SUDO_PROMPT="[sudo] password for %p: "
 export WP_CLI_CONFIG_PATH="\$LK_BASE/etc/wp-cli.yml"
 EOF
 
