@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC1003,SC2015,SC2016,SC2034,SC2088,SC2120,SC2162,SC2207
+# shellcheck disable=SC1003,SC2015,SC2016,SC2034,SC2046,SC2088,SC2120,SC2162,SC2207
 
 # shellcheck disable=SC1090,SC2068
 function lk_include() {
@@ -926,8 +926,7 @@ function lk_can_sudo() {
         #    with prompting disabled first)
         sudo -n ${USERNAME:+-u "$USERNAME"} -l "$COMMAND" >/dev/null 2>&1 || {
             ! lk_no_input &&
-                sudo -p "\
-[sudo] To test access to $COMMAND, please enter the password for %u: " \
+                sudo -p "[sudo $COMMAND] password for %p: " \
                     ${USERNAME:+-u "$USERNAME"} -l "$COMMAND" >/dev/null
         }
     }
@@ -1408,21 +1407,29 @@ function lk_make_iso() {
 
 set -o pipefail
 
-# coreutils
-#   [ arch b2sum base32 base64 basename cat chcon chgrp chmod chown
-#   chroot cksum comm cp csplit cut date dd df dir dircolors dirname du
-#   echo env expand expr factor false fmt fold groups head hostid id
-#   install join link ln logname ls md5sum md5sum.textutils mkdir mkfifo
-#   mknod mktemp mv nice nl nohup nproc numfmt od paste pathchk pinky pr
-#   printenv printf ptx pwd readlink realpath rm rmdir runcon seq
-#   sha1sum sha224sum sha256sum sha384sum sha512sum shred shuf sleep
-#   sort split stat stdbuf stty sum sync tac tail tee test timeout touch
-#   tr true truncate tsort tty uname unexpand uniq unlink users vdir wc
-#   who whoami yes
-_lk_register_gnu_commands chgrp chmod chown date ln mktemp sort stat
-
-# gawk, findutils, grep, netcat, sed, tar
-_lk_register_gnu_commands awk find grep nc sed tar xargs
+# register wrapper functions (e.g. `gnu_find`) to invoke the GNU version of
+# certain commands (e.g. `gfind`) on systems where standard utilities are not
+# compatible with their GNU counterparts (notably BSD/macOS)
+_lk_register_gnu_commands $(
+    COMMANDS=(
+        chgrp  # coreutils
+        chmod  #
+        chown  #
+        date   #
+        ln     #
+        mktemp #
+        sort   #
+        stat   #
+        find   # findutils
+        xargs  #
+        awk    # gawk
+        grep   # grep
+        nc     # netcat
+        sed    # sed
+        tar    # tar
+    )
+    printf '%s ' "${COMMANDS[@]}"
+)
 
 eval "$(lk_get_colours)"
 

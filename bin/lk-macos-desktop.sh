@@ -13,12 +13,6 @@ lk_die() { s=$? && echo "${BASH_SOURCE[0]:+${BASH_SOURCE[0]}: }$1" >&2 && false 
 
 export SUDO_PROMPT="[sudo] password for %p: "
 
-LOG_FILE=/var/log/${LK_PATH_PREFIX}install.log
-[ -e "$LOG_FILE" ] || {
-    echo "Creating log file: $FILE" >&2
-    sudo install -m 0640 -o "$USER" -g admin /dev/null "$LOG_FILE"
-}
-
 if [ -f "$LK_BASE/lib/bash/core.sh" ]; then
     . "$LK_BASE/lib/bash/core.sh"
     . "$LK_BASE/lib/bash/macos.sh"
@@ -42,7 +36,10 @@ fi
 
 LK_BACKUP_SUFFIX=-$(lk_timestamp).bak
 
-lk_log_output "$LOG_FILE"
+LK_LOG_FILE_MODE=0640 \
+    LK_LOG_FILE_OWNER="$USER" \
+    LK_LOG_FILE_GROUP=admin \
+    lk_log_output "/var/log/${LK_PATH_PREFIX}install.log"
 
 lk_console_message "====> Provisioning macOS"
 
