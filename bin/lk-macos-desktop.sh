@@ -1,9 +1,95 @@
 #!/bin/bash
-# shellcheck disable=SC1090,SC2034
+# shellcheck disable=SC1090,SC2034,SC2207
 
 export LK_BASE=${LK_BASE:-/opt/lk-platform}
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
+
+HOMEBREW_TAPS=()
+HOMEBREW_FORMULAE=()
+HOMEBREW_CASKS=()
+
+# terminal-based
+HOMEBREW_FORMULAE+=(
+    # utilities
+    exiftool
+    imagemagick
+    python-yq
+    unison
+
+    # networking
+    openconnect
+    vpn-slice
+
+    # network monitoring
+    iftop # shows network traffic by service and host
+    nload # shows bandwidth by interface
+
+    # system
+    #acme.sh
+)
+
+# desktop
+HOMEBREW_TAPS+=(
+    federico-terzi/espanso
+)
+
+HOMEBREW_FORMULAE+=(
+    federico-terzi/espanso/espanso
+
+    # PDF
+    ghostscript
+    mupdf-tools
+    pandoc
+    poppler
+    pstoedit
+
+    # multimedia - video
+    youtube-dl
+)
+
+# development
+HOMEBREW_TAPS+=(
+    adoptopenjdk/openjdk
+    mongodb/brew
+)
+
+HOMEBREW_FORMULAE+=(
+    # email
+    msmtp  # smtp client
+    s-nail # mail and mailx commands
+
+    #
+    git-filter-repo
+
+    #
+    node
+    yarn
+
+    #
+    composer #
+    gcc@7    # Db2 module build dependency
+    php
+
+    #
+    python
+
+    #
+    mariadb
+    #mongodb/brew/mongodb-community
+
+    #
+    shellcheck
+    shfmt
+
+    # platforms
+    awscli
+)
+
+HOMEBREW_CASKS+=(
+    adoptopenjdk11
+    meld
+)
 
 set -euo pipefail
 lk_die() { s=$? && echo "${BASH_SOURCE[0]:+${BASH_SOURCE[0]}: }$1" >&2 && false || exit $s; }
@@ -15,13 +101,17 @@ export SUDO_PROMPT="[sudo] password for %p: "
 
 if [ -f "$LK_BASE/lib/bash/core.sh" ]; then
     . "$LK_BASE/lib/bash/core.sh"
-    . "$LK_BASE/lib/bash/macos.sh"
+    lk_include provision macos
     . "$LK_BASE/lib/macos/packages.sh"
 else
     SCRIPT_DIR=/tmp/${LK_PATH_PREFIX}install
     mkdir -p "$SCRIPT_DIR"
     echo "Downloading dependencies to: $SCRIPT_DIR" >&2
-    for FILE_PATH in /lib/bash/core.sh /lib/bash/macos.sh /lib/macos/packages.sh; do
+    for FILE_PATH in \
+        /lib/bash/core.sh \
+        /lib/bash/provision.sh \
+        /lib/bash/macos.sh \
+        /lib/macos/packages.sh; do
         FILE=$SCRIPT_DIR/${FILE_PATH##*/}
         URL=https://raw.githubusercontent.com/lkrms/lk-platform/$LK_PLATFORM_BRANCH$FILE_PATH
         if [ ! -e "$FILE" ]; then
@@ -41,7 +131,9 @@ LK_LOG_FILE_MODE=0640 \
     LK_LOG_FILE_GROUP=admin \
     lk_log_output "/var/log/${LK_PATH_PREFIX}install.log"
 
-lk_console_message "====> Provisioning macOS"
+lk_console_message "Provisioning macOS"
+
+lk_sudo_offer_nopasswd || true
 
 FILE=/etc/sudoers.d/${LK_PATH_PREFIX}defaults
 if ! sudo test -e "$FILE"; then
@@ -107,12 +199,35 @@ fi
 
 eval "$(. "$LK_BASE/lib/bash/env.sh")"
 
+TAP=($(comm -13 \
+    <(brew tap | sort | uniq) \
+    <(lk_echo_array ${HOMEBREW_TAPS[@]+"${HOMEBREW_TAPS[@]}"} | sort | uniq)))
+[ "${#TAP[@]}" -eq "0" ] || {
+    lk_console_message "Checking Homebrew taps"
+    for TAP in "${TAP[@]}"; do
+        lk_console_detail "Tapping" "$TAP"
+        brew tap "$TAP"
+    done
+}
+
 lk_console_message "Updating Homebrew"
 brew update
 
+INSTALL_FORMULAE=($(comm -13 \
+    <(brew list --formulae --full-name | sort | uniq) \
+    <(lk_echo_array ${HOMEBREW_FORMULAE[@]+"${HOMEBREW_FORMULAE[@]}"} |
+        sort | uniq)))
+[ "${#INSTALL_FORMULAE[@]}" -eq "0" ] || {
+    lk_echo_array "${INSTALL_FORMULAE[@]}" |
+        lk_console_list "Not installed:" "formula" "formulae"
+    lk_confirm "OK to install the above?" Y || lk_die
+}
+
+[ "${#INSTALL_FORMULAE[@]}" -eq "0" ] ||
+    brew install "${#INSTALL_FORMULAE[@]}"
+
 # TODO:
-# - install GNU essentials
 # - create ~/.bashrc, ~/.profile
 # - "$LK_BASE/bin/lk-platform-install.sh"
 
-lk_console_message "Provisioning complete" "$LK_GREEN"
+lk_console_message "Provisioning complete"

@@ -496,7 +496,13 @@ function lk_log_output() {
                 -o "$OWNER" ${GROUP:+-g "$GROUP"} \
                 /dev/null "$LOG_PATH" 2>/dev/null || continue
         fi
-        lk_log "$LK_BOLD====> ${0##*/} invoked$(
+        lk_log "$LK_BOLD====> $(
+            # include directory if running from a source file
+            { [ ${#BASH_SOURCE[@]} -eq 0 ] ||
+                [[ ! $0 =~ ^((.*)/)?([^/]+)$ ]] ||
+                ! DIR=$(cd "${BASH_REMATCH[2]:-.}" && pwd -P) ||
+                echo "${DIR%/}/"; } 2>/dev/null
+        )${0##*/} invoked$(
             [ "${#LK_ARGV[@]}" -eq "0" ] || {
                 printf ' with %s %s:' \
                     "${#LK_ARGV[@]}" \
