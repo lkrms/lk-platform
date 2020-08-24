@@ -126,10 +126,8 @@ fi
 
 LK_BACKUP_SUFFIX=-$(lk_timestamp).bak
 
-LK_LOG_FILE_MODE=0640 \
-    LK_LOG_FILE_OWNER="$USER" \
-    LK_LOG_FILE_GROUP=admin \
-    lk_log_output "/var/log/${LK_PATH_PREFIX}install.log"
+LK_LOG_FILE_MODE=0600 \
+    lk_log_output ~/"${LK_PATH_PREFIX}install.log"
 
 lk_console_message "Provisioning macOS"
 
@@ -195,9 +193,11 @@ DIR=$HOME/.homebrew
 if [ ! -e "$DIR" ]; then
     lk_console_item "Installing Homebrew to:" "$DIR"
     git clone https://github.com/Homebrew/brew.git "$DIR"
+    NEW_BREW=1
 fi
 
 eval "$(. "$LK_BASE/lib/bash/env.sh")"
+! lk_is_true "${NEW_BREW:=0}" || brew update
 
 TAP=($(comm -13 \
     <(brew tap | sort | uniq) \
@@ -206,12 +206,14 @@ TAP=($(comm -13 \
     lk_console_message "Checking Homebrew taps"
     for TAP in "${TAP[@]}"; do
         lk_console_detail "Tapping" "$TAP"
-        brew tap "$TAP"
+        brew tap --quiet "$TAP"
     done
 }
 
-lk_console_message "Updating Homebrew"
-brew update
+lk_is_true "$NEW_BREW" || {
+    lk_console_message "Updating Homebrew"
+    brew update
+}
 
 INSTALL_FORMULAE=($(comm -13 \
     <(brew list --formulae --full-name | sort | uniq) \
@@ -219,12 +221,25 @@ INSTALL_FORMULAE=($(comm -13 \
         sort | uniq)))
 [ "${#INSTALL_FORMULAE[@]}" -eq "0" ] || {
     lk_echo_array "${INSTALL_FORMULAE[@]}" |
-        lk_console_list "Not installed:" "formula" "formulae"
+        lk_console_list "Not installed:" formula formulae
     lk_confirm "OK to install the above?" Y || lk_die
 }
 
+INSTALL_CASKS=($(comm -13 \
+    <(brew list --casks --full-name | sort | uniq) \
+    <(lk_echo_array ${HOMEBREW_CASKS[@]+"${HOMEBREW_CASKS[@]}"} |
+        sort | uniq)))
+[ "${#INSTALL_CASKS[@]}" -eq "0" ] || {
+    lk_echo_array "${INSTALL_CASKS[@]}" |
+        lk_console_list "Not installed:" cask casks
+    lk_confirm "Install the above?" Y || INSTALL_CASKS=()
+}
+
 [ "${#INSTALL_FORMULAE[@]}" -eq "0" ] ||
-    brew install "${#INSTALL_FORMULAE[@]}"
+    brew install "${INSTALL_FORMULAE[@]}"
+
+[ "${#INSTALL_CASKS[@]}" -eq "0" ] ||
+    brew install "${INSTALL_CASKS[@]}"
 
 # TODO:
 # - create ~/.bashrc, ~/.profile
