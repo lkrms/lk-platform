@@ -35,7 +35,7 @@ HOMEBREW_TAPS+=(
 )
 
 HOMEBREW_FORMULAE+=(
-    #federico-terzi/espanso/espanso
+    federico-terzi/espanso/espanso
 
     # PDF
     ghostscript
@@ -111,7 +111,7 @@ HOMEBREW_FORMULAE+=(
 
     #
     composer #
-    gcc@7    # Db2 module build dependency
+    # gcc@7  # Db2 module build dependency
     php
 
     #
@@ -274,6 +274,7 @@ if [ ! -e "$DIR" ]; then
     brew update --quiet >&6 2>&7
     lk_brew_check_taps
     INSTALL=(
+        # for lk_install_gnu_commands
         coreutils
         findutils
         gawk
@@ -283,6 +284,9 @@ if [ ! -e "$DIR" ]; then
         gnu-sed
         gnu-tar
         wget
+
+        # for `brew info` parsing
+        jq
     )
     lk_echo_array "${INSTALL[@]}" |
         lk_console_detail_list "Installing lk-platform dependencies:"
