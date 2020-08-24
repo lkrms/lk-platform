@@ -35,7 +35,7 @@ HOMEBREW_TAPS+=(
 )
 
 HOMEBREW_FORMULAE+=(
-    federico-terzi/espanso/espanso
+    #federico-terzi/espanso/espanso
 
     # PDF
     ghostscript
@@ -48,10 +48,53 @@ HOMEBREW_FORMULAE+=(
     youtube-dl
 )
 
+HOMEBREW_CASKS+=(
+    caprine
+    chromium
+    firefox
+    imageoptim
+    keepassxc
+    keepingyouawake
+    libreoffice
+    microsoft-teams
+    nextcloud
+    pencil
+    scribus
+    skype
+    spotify
+    stretchly
+    the-unarchiver
+    transmission
+    typora
+
+    # PDF
+    basictex
+
+    # photography
+    adobe-dng-converter
+
+    # multimedia - video
+    handbrake
+    #makemkv
+    #mkvtoolnix
+    subler
+    vlc
+
+    # system
+    displaycal
+    geekbench
+    hex-fiend
+    lingon-x
+
+    # non-free
+    acorn
+    microsoft-office
+)
+
 # development
 HOMEBREW_TAPS+=(
     adoptopenjdk/openjdk
-    mongodb/brew
+    #mongodb/brew
 )
 
 HOMEBREW_FORMULAE+=(
@@ -87,8 +130,28 @@ HOMEBREW_FORMULAE+=(
 )
 
 HOMEBREW_CASKS+=(
+    android-studio
+    dbeaver-community
+    sequel-pro
+    sourcetree
+    sublime-merge
+    sublime-text
+    vscodium
+
+    #
     adoptopenjdk11
     meld
+)
+
+# VMs and containers
+HOMEBREW_CASKS+=(
+    #virtualbox
+    #virtualbox-extension-pack
+)
+
+# hardware-related
+HOMEBREW_CASKS+=(
+    sonos
 )
 
 set -euo pipefail
@@ -141,7 +204,7 @@ if ! sudo test -e "$FILE"; then
 Defaults umask = 0022
 Defaults umask_override
 EOF
-    LK_SUDO=1 lk_console_file "$FILE"
+    LK_SUDO=1 lk_console_detail_file "$FILE"
 fi
 
 if ! USER_UMASK=$(defaults read \
@@ -186,7 +249,7 @@ if [ ! -e "$LK_BASE" ]; then
         LK_PATH_PREFIX "$LK_PATH_PREFIX" \
         LK_PLATFORM_BRANCH "$LK_PLATFORM_BRANCH" |
         sudo tee /etc/default/lk-platform >/dev/null
-    lk_console_file /etc/default/lk-platform
+    lk_console_detail_file /etc/default/lk-platform
 fi
 
 DIR=$HOME/.homebrew

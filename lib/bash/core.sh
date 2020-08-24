@@ -591,6 +591,13 @@ function lk_console_detail_list() {
     fi
 }
 
+function lk_console_detail_file() {
+    local LK_CONSOLE_PREFIX="${LK_CONSOLE_PREFIX-   -> }" \
+        LK_CONSOLE_MESSAGE_COLOUR LK_CONSOLE_INDENT=4 \
+        LK_CONSOLE_MESSAGE_COLOUR=""
+    lk_console_file "$1" "${2-$LK_YELLOW}" "${3-$LK_DEFAULT_CONSOLE_COLOUR}"
+}
+
 function _lk_console() {
     local LK_CONSOLE_PREFIX="${LK_CONSOLE_PREFIX-:: }" \
         LK_CONSOLE_MESSAGE_COLOUR LK_CONSOLE_PREFIX_COLOUR
@@ -932,8 +939,7 @@ function lk_can_sudo() {
         #    with prompting disabled first)
         sudo -n ${USERNAME:+-u "$USERNAME"} -l "$COMMAND" >/dev/null 2>&1 || {
             ! lk_no_input &&
-                sudo -p "[sudo $COMMAND] password for %p: " \
-                    ${USERNAME:+-u "$USERNAME"} -l "$COMMAND" >/dev/null
+                sudo ${USERNAME:+-u "$USERNAME"} -l "$COMMAND" >/dev/null
         }
     }
 }
@@ -1286,17 +1292,18 @@ function lk_maybe_replace() {
     }
 }
 
-# lk_console_file file_path [colour_sequence]
+# lk_console_file file_path [colour_sequence] [file_colour_sequence]
 #   Print FILE_PATH to the standard output. If a backup of FILE_PATH exists,
 #   print `diff` output, otherwise print all lines. The default backup suffix is
 #   ".orig". Set LK_BACKUP_SUFFIX to override. `diff` output is disabled if
 #   LK_BACKUP_SUFFIX is null.
 function lk_console_file() {
-    local FILE_PATH="$1" ORIG_FILE \
+    local FILE_PATH="$1" LK_CONSOLE_SECONDARY_COLOUR ORIG_FILE \
         LK_CONSOLE_INDENT="${LK_CONSOLE_INDENT:-2}"
     shift
     lk_maybe_sudo test -r "$FILE_PATH" ||
         lk_warn "cannot read file: $FILE_PATH" || return
+    LK_CONSOLE_SECONDARY_COLOUR="${2-${1-$LK_DEFAULT_CONSOLE_COLOUR}}"
     ORIG_FILE="$FILE_PATH${LK_BACKUP_SUFFIX-.orig}"
     [ "$FILE_PATH" != "$ORIG_FILE" ] &&
         lk_maybe_sudo test -r "$ORIG_FILE" || ORIG_FILE=
@@ -1306,7 +1313,8 @@ function lk_console_file() {
         else
             lk_maybe_sudo cat "$FILE_PATH"
         fi
-    )"$'\n>>>>' "$@"
+    )"$'\n>>>>' ${1+"$1"}
+    unset LK_CONSOLE_SECONDARY_COLOUR
     [ -z "$ORIG_FILE" ] ||
         lk_console_detail "Backup path:" "$ORIG_FILE"
 }
