@@ -1270,6 +1270,16 @@ function lk_keep_original() {
         lk_maybe_sudo cp -nav "$1" "$1${LK_BACKUP_SUFFIX:-.orig}"
 }
 
+function lk_maybe_add_newline() {
+    local WC
+    [ -f "$1" ] || lk_warn "file not found: $1" || return
+    # if the last byte is a newline, `wc -l` will return 1
+    WC="$(tail -c 1 "$1" | wc -l)" || return
+    if [ -s "$1" ] && [ "$WC" -eq 0 ]; then
+        echo >>"$1"
+    fi
+}
+
 # lk_maybe_sed sed_arg... input_file
 function lk_maybe_sed() {
     local ARGS=("$@") FILE="${*: -1:1}" NEW

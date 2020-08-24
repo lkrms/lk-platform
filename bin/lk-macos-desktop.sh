@@ -252,31 +252,60 @@ if [ ! -e "$LK_BASE" ]; then
     lk_console_detail_file /etc/default/lk-platform
 fi
 
+function lk_brew_check_taps() {
+    local TAP
+    TAP=($(comm -13 \
+        <(brew tap | sort | uniq) \
+        <(lk_echo_array ${HOMEBREW_TAPS[@]+"${HOMEBREW_TAPS[@]}"} | sort | uniq)))
+    [ "${#TAP[@]}" -eq "0" ] || {
+        for TAP in "${TAP[@]}"; do
+            lk_console_detail "Tapping" "$TAP"
+            brew tap --quiet "$TAP" >&6 2>&7 || return
+        done
+    }
+}
+
 DIR=$HOME/.homebrew
 if [ ! -e "$DIR" ]; then
     lk_console_item "Installing Homebrew to:" "$DIR"
     git clone https://github.com/Homebrew/brew.git "$DIR"
-    NEW_BREW=1
+    eval "$(. "$LK_BASE/lib/bash/env.sh")"
+    lk_console_detail "Updating formulae"
+    brew update --quiet >&6 2>&7
+    lk_brew_check_taps
+    INSTALL=(
+        coreutils
+        findutils
+        gawk
+        grep
+        inetutils
+        netcat
+        gnu-sed
+        gnu-tar
+        wget
+    )
+    lk_echo_array "${INSTALL[@]}" |
+        lk_console_detail_list "Installing lk-platform dependencies:"
+    brew install "${INSTALL[@]}" >&6 2>&7
+else
+    lk_console_item "Checking Homebrew installation at:" "$DIR"
+    eval "$(. "$LK_BASE/lib/bash/env.sh")"
+    lk_brew_check_taps
+    lk_console_detail "Updating formulae"
+    brew update --quiet >&6 2>&7
 fi
 
-eval "$(. "$LK_BASE/lib/bash/env.sh")"
-! lk_is_true "${NEW_BREW:=0}" || brew update
+# source ~/.bashrc in ~/.bash_profile, creating both files if necessary
+[ -f ~/.bashrc ] ||
+    echo "# ~/.bashrc for interactive bash shells" >~/.bashrc
+[ -f ~/.bash_profile ] ||
+    echo "# ~/.bash_profile for bash login shells" >~/.bash_profile
+if ! grep -q "\.bashrc" ~/.bash_profile; then
+    lk_maybe_add_newline ~/.bash_profile
+    echo "[ ! -f ~/.bashrc ] || . ~/.bashrc" >>~/.bash_profile
+fi
 
-TAP=($(comm -13 \
-    <(brew tap | sort | uniq) \
-    <(lk_echo_array ${HOMEBREW_TAPS[@]+"${HOMEBREW_TAPS[@]}"} | sort | uniq)))
-[ "${#TAP[@]}" -eq "0" ] || {
-    lk_console_message "Checking Homebrew taps"
-    for TAP in "${TAP[@]}"; do
-        lk_console_detail "Tapping" "$TAP"
-        brew tap --quiet "$TAP"
-    done
-}
-
-lk_is_true "$NEW_BREW" || {
-    lk_console_message "Updating Homebrew"
-    brew update
-}
+"$LK_BASE/bin/lk-platform-install.sh"
 
 INSTALL_FORMULAE=($(comm -13 \
     <(brew list --formulae --full-name | sort | uniq) \
@@ -284,8 +313,8 @@ INSTALL_FORMULAE=($(comm -13 \
         sort | uniq)))
 [ "${#INSTALL_FORMULAE[@]}" -eq "0" ] || {
     lk_echo_array "${INSTALL_FORMULAE[@]}" |
-        lk_console_list "Not installed:" formula formulae
-    lk_confirm "OK to install the above?" Y || lk_die
+        lk_console_list "Installing new formulae:"
+    brew install "${INSTALL_FORMULAE[@]}" >&6 2>&7
 }
 
 INSTALL_CASKS=($(comm -13 \
@@ -294,18 +323,8 @@ INSTALL_CASKS=($(comm -13 \
         sort | uniq)))
 [ "${#INSTALL_CASKS[@]}" -eq "0" ] || {
     lk_echo_array "${INSTALL_CASKS[@]}" |
-        lk_console_list "Not installed:" cask casks
-    lk_confirm "Install the above?" Y || INSTALL_CASKS=()
+        lk_console_list "Installing new casks:"
+    brew cask install "${INSTALL_CASKS[@]}" >&6 2>&7
 }
-
-[ "${#INSTALL_FORMULAE[@]}" -eq "0" ] ||
-    brew install "${INSTALL_FORMULAE[@]}"
-
-[ "${#INSTALL_CASKS[@]}" -eq "0" ] ||
-    brew install "${INSTALL_CASKS[@]}"
-
-# TODO:
-# - create ~/.bashrc, ~/.profile
-# - "$LK_BASE/bin/lk-platform-install.sh"
 
 lk_console_message "Provisioning complete"
