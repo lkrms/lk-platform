@@ -1021,7 +1021,7 @@ function _lk_get_gnu_command() {
         echo "gawk"
         ;;
     nc)
-        echo "${PREFIX}netcat"
+        echo "netcat"
         ;;
     *)
         echo "$PREFIX$1"

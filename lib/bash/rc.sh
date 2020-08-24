@@ -39,6 +39,17 @@ eval "$(
 
 . "$LK_BASE/lib/bash/core.sh"
 
+function _lk_bash_completion() {
+    local FILE
+    for FILE in \
+        /usr/share/bash-completion/bash_completion \
+        ${HOME:+"$HOME/.homebrew/etc/profile.d/bash_completion.sh"}; do
+        [ -r "$FILE" ] || continue
+        printf '. %q' "$FILE"
+        return
+    done
+}
+
 function lk_diff_bak() {
     local BACKUP FILE
     [ "$EUID" -eq "0" ] || ! lk_can_sudo bash || {
@@ -119,13 +130,12 @@ HISTSIZE=
 HISTFILESIZE=
 HISTTIMEFORMAT="%b %_d %Y %H:%M:%S %z "
 
-[ ! -f "/usr/share/bash-completion/bash_completion" ] ||
-    . "/usr/share/bash-completion/bash_completion"
-
 LK_PATH_PREFIX="${LK_PATH_PREFIX:-lk-}"
 LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(
     echo "$LK_PATH_PREFIX" | sed 's/[^a-zA-Z0-9]//g'
 )}"
 eval "$(. "$LK_BASE/lib/bash/env.sh")"
+
+eval "$(_lk_bash_completion)"
 
 [ "${LK_PROMPT:-1}" -ne "1" ] || lk_enable_prompt
