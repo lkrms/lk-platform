@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC1090,SC2015,SC2016,SC2034,SC2124,SC2206,SC2207
+# shellcheck disable=SC1090,SC2001,SC2015,SC2016,SC2034,SC2124,SC2206,SC2207
 
 # To install Arch Linux using the script below:
 #   1. boot from an Arch Linux live CD
@@ -15,6 +15,9 @@ LOCALES=(en_AU en_GB)           # UTF-8 is enforced
 LANGUAGE=en_AU:en_GB:en
 LK_BASE=${LK_BASE:-/opt/lk-platform}
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
+LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(
+    sed 's/[^a-zA-Z0-9]//g' <<<"$LK_PATH_PREFIX"
+)}"
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
 MIRROR=http://archlinux.mirror.linacreative.com/archlinux/\$repo/os/\$arch
 
@@ -397,6 +400,7 @@ in_target sudo -H -u "$TARGET_USERNAME" \
 printf '%s=%q\n' \
     LK_BASE "$LK_BASE" \
     LK_PATH_PREFIX "$LK_PATH_PREFIX" \
+    LK_PATH_PREFIX_ALPHA "$LK_PATH_PREFIX_ALPHA" \
     LK_NODE_HOSTNAME "$TARGET_HOSTNAME" \
     LK_NODE_TIMEZONE "$TIMEZONE" \
     LK_PLATFORM_BRANCH "$LK_PLATFORM_BRANCH" >"/mnt/etc/default/lk-platform"

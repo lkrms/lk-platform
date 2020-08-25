@@ -1,8 +1,11 @@
 #!/bin/bash
-# shellcheck disable=SC1090,SC2034,SC2207
+# shellcheck disable=SC1090,SC2001,SC2034,SC2207
 
 export LK_BASE=${LK_BASE:-/opt/lk-platform}
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
+LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(
+    sed 's/[^a-zA-Z0-9]//g' <<<"$LK_PATH_PREFIX"
+)}"
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
 
 HOMEBREW_TAPS=()
@@ -248,6 +251,7 @@ if [ ! -e "$LK_BASE" ] || [ -z "$(ls -A "$LK_BASE")" ]; then
     printf '%s=%q\n' \
         LK_BASE "$LK_BASE" \
         LK_PATH_PREFIX "$LK_PATH_PREFIX" \
+        LK_PATH_PREFIX_ALPHA "$LK_PATH_PREFIX_ALPHA" \
         LK_PLATFORM_BRANCH "$LK_PLATFORM_BRANCH" |
         sudo tee /etc/default/lk-platform >/dev/null
     lk_console_detail_file /etc/default/lk-platform

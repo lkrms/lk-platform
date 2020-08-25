@@ -132,7 +132,7 @@ HISTTIMEFORMAT="%b %_d %Y %H:%M:%S %z "
 
 LK_PATH_PREFIX="${LK_PATH_PREFIX:-lk-}"
 LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(
-    echo "$LK_PATH_PREFIX" | sed 's/[^a-zA-Z0-9]//g'
+    sed 's/[^a-zA-Z0-9]//g' <<<"$LK_PATH_PREFIX"
 )}"
 eval "$(. "$LK_BASE/lib/bash/env.sh")"
 
