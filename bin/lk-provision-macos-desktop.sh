@@ -242,7 +242,7 @@ fi
 if [ ! -e "$LK_BASE" ] || [ -z "$(ls -A "$LK_BASE")" ]; then
     lk_console_item "Installing lk-platform to:" "$LK_BASE"
     sudo install -d -m 2775 -o "$USER" -g admin "$LK_BASE"
-    git clone -b "$LK_PLATFORM_BRANCH" \
+    lk_tty git clone -b "$LK_PLATFORM_BRANCH" \
         https://github.com/lkrms/lk-platform.git "$LK_BASE"
     lk_keep_original /etc/default/lk-platform
     [ -e /etc/default ] ||
@@ -265,7 +265,7 @@ function lk_brew_check_taps() {
     [ "${#TAP[@]}" -eq "0" ] || {
         for TAP in "${TAP[@]}"; do
             lk_console_detail "Tapping" "$TAP"
-            brew tap --quiet "$TAP" || return
+            lk_tty brew tap --quiet "$TAP" || return
         done
     }
 }
@@ -280,7 +280,7 @@ if ! lk_command_exists brew; then
             lk_die "unable to download: $URL"
         }
     fi
-    CI=1 bash "$FILE" || lk_die "Homebrew installer failed"
+    CI=1 lk_tty bash "$FILE" || lk_die "Homebrew installer failed"
     eval "$(. "$LK_BASE/lib/bash/env.sh")"
     lk_brew_check_taps
     INSTALL=(
@@ -300,13 +300,13 @@ if ! lk_command_exists brew; then
     )
     lk_console_detail "Installing lk-platform dependencies:" \
         "$(lk_echo_array "${INSTALL[@]}")"
-    brew install "${INSTALL[@]}"
+    lk_tty brew install "${INSTALL[@]}"
 else
     lk_console_item "Found Homebrew at:" "$(brew --prefix)"
     eval "$(. "$LK_BASE/lib/bash/env.sh")"
     lk_brew_check_taps
     lk_console_detail "Updating formulae"
-    brew update --quiet
+    lk_tty brew update --quiet
 fi
 
 # source ~/.bashrc in ~/.bash_profile, creating both files if necessary
@@ -331,7 +331,7 @@ INSTALL_FORMULAE=($(comm -13 \
 [ "${#INSTALL_FORMULAE[@]}" -eq "0" ] || {
     lk_echo_array "${INSTALL_FORMULAE[@]}" |
         lk_console_list "Installing new formulae:"
-    brew install "${INSTALL_FORMULAE[@]}"
+    lk_tty brew install "${INSTALL_FORMULAE[@]}"
 }
 
 # TODO: uninstall build dependencies instead
@@ -345,7 +345,7 @@ INSTALL_CASKS=($(comm -13 \
 [ "${#INSTALL_CASKS[@]}" -eq "0" ] || {
     lk_echo_array "${INSTALL_CASKS[@]}" |
         lk_console_list "Installing new casks:"
-    brew cask install "${INSTALL_CASKS[@]}"
+    lk_tty brew cask install "${INSTALL_CASKS[@]}"
 }
 
 lk_console_message "Provisioning complete"

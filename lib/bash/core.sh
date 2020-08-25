@@ -75,11 +75,11 @@ function lk_delete_on_exit() {
 }
 
 function lk_mktemp_file() {
-    gnu_mktemp -t "${0##*/}.$(lk_timestamp).XXX"
+    gnu_mktemp -t -- "${0##*/}.$(lk_timestamp).XXX"
 }
 
 function lk_mktemp_dir() {
-    gnu_mktemp -dt "${0##*/}.$(lk_timestamp).XXX"
+    gnu_mktemp -dt -- "${0##*/}.$(lk_timestamp).XXX"
 }
 
 function lk_mktemp_fifo() {
@@ -1212,6 +1212,20 @@ function lk_is_virtual() {
 function lk_is_qemu() {
     lk_return_cached LK_IS_QEMU 'lk_is_virtual && grep -Eiq qemu /sys/devices/virtual/dmi/id/*_vendor'
 }
+
+if lk_is_macos; then
+    function lk_tty() {
+        # "-t 0" is equivalent to "-f" on Linux (immediately flush output after
+        # each write)
+        script -q -t 0 /dev/null "$@"
+    }
+else
+    function lk_tty() {
+        local COMMAND=$1
+        shift
+        script -qfc "$COMMAND$([ $# -eq 0 ] || printf ' %q' "$@")" /dev/null
+    }
+fi
 
 function lk_ssl_client() {
     local HOST="${1:-}" PORT="${2:-}" SERVER_NAME="${3:-${1:-}}"

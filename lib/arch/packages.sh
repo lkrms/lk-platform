@@ -316,6 +316,6 @@ YAY_SCRIPT="$(
     cat <<EOF
 YAY_DIR="\$(mktemp -d)" &&
     git clone "https://aur.archlinux.org/yay.git" "\$YAY_DIR" &&
-    cd "\$YAY_DIR" && makepkg --syncdeps --install --noconfirm
+    cd "\$YAY_DIR" && script -qfc "makepkg --syncdeps --install --noconfirm" /dev/null
 EOF
 )"

@@ -357,7 +357,7 @@ EOF
     PAC_TO_REMOVE=($(comm -12 <(pacman -Qq | sort | uniq) <(lk_echo_array "${PAC_REMOVE[@]}" | sort | uniq)))
     [ "${#PAC_TO_REMOVE[@]}" -eq "0" ] || {
         lk_console_message "Removing packages"
-        sudo pacman -R "${PAC_TO_REMOVE[@]}"
+        lk_tty sudo pacman -R "${PAC_TO_REMOVE[@]}"
     }
 
     lk_console_message "Checking install reasons"
@@ -365,9 +365,9 @@ EOF
     PAC_TO_MARK_ASDEPS=($(comm -23 <(pacman -Qeq | sort | uniq) <(lk_echo_array "${PAC_EXPLICIT[@]}")))
     PAC_TO_MARK_EXPLICIT=($(comm -12 <(pacman -Qdq | sort | uniq) <(lk_echo_array "${PAC_EXPLICIT[@]}")))
     [ "${#PAC_TO_MARK_ASDEPS[@]}" -eq "0" ] ||
-        sudo pacman -D --asdeps "${PAC_TO_MARK_ASDEPS[@]}"
+        lk_tty sudo pacman -D --asdeps "${PAC_TO_MARK_ASDEPS[@]}"
     [ "${#PAC_TO_MARK_EXPLICIT[@]}" -eq "0" ] ||
-        sudo pacman -D --asexplicit "${PAC_TO_MARK_EXPLICIT[@]}"
+        lk_tty sudo pacman -D --asexplicit "${PAC_TO_MARK_EXPLICIT[@]}"
 
     ! PAC_TO_PURGE=($(pacman -Qdttq)) ||
         [ "${#PAC_TO_PURGE[@]}" -eq "0" ] ||
@@ -375,17 +375,17 @@ EOF
             lk_echo_array "${PAC_TO_PURGE[@]}" |
                 lk_console_list "Installed but no longer required:" package packages
             ! lk_confirm "Remove the above?" Y ||
-                sudo pacman -Rns "${PAC_TO_PURGE[@]}"
+                lk_tty sudo pacman -Rns "${PAC_TO_PURGE[@]}"
         }
 
     lk_console_message "Upgrading installed packages"
     lk_pacman_add_repo ${CUSTOM_REPOS[@]+"${CUSTOM_REPOS[@]}"}
-    sudo pacman -Syu
+    lk_tty sudo pacman -Syu
 
     PAC_TO_INSTALL=($(comm -13 <(pacman -Qeq | sort | uniq) <(lk_echo_array "${PACMAN_PACKAGES[@]}" | sort | uniq)))
     [ "${#PAC_TO_INSTALL[@]}" -eq "0" ] || {
         lk_console_message "Installing new packages from repo"
-        sudo pacman -S "${PAC_TO_INSTALL[@]}"
+        lk_tty sudo pacman -S "${PAC_TO_INSTALL[@]}"
     }
 
     if [ "${#AUR_PACKAGES[@]}" -gt "0" ]; then
@@ -396,10 +396,10 @@ EOF
         AUR_TO_INSTALL=($(comm -13 <(pacman -Qeq | sort | uniq) <(lk_echo_array "${AUR_PACKAGES[@]}" | sort | uniq)))
         [ "${#AUR_TO_INSTALL[@]}" -eq "0" ] || {
             lk_console_message "Installing new packages from AUR"
-            yay -Sy --aur "${AUR_TO_INSTALL[@]}"
+            lk_tty yay -Sy --aur "${AUR_TO_INSTALL[@]}"
         }
         lk_console_message "Upgrading installed AUR packages"
-        yay -Syu --aur
+        lk_tty yay -Syu --aur
     fi
 
     PAC_KEPT=($(comm -12 <(pacman -Qeq | sort | uniq) <(lk_echo_array ${PAC_KEEP[@]+"${PAC_KEEP[@]}"} | sort | uniq)))
