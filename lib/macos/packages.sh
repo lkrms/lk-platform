@@ -30,7 +30,7 @@ HOMEBREW_FORMULAE=(
     htop
     jq
     lftp
-    mediainfo
+    media-info
     ncdu
     nmap
     p7zip

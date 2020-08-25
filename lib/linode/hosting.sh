@@ -845,7 +845,7 @@ printf '%s=%q\n' \
     "LK_AUTO_REBOOT_TIME" "$AUTO_REBOOT_TIME" \
     "LK_PLATFORM_BRANCH" "$LK_PLATFORM_BRANCH" \
     >"/etc/default/lk-platform"
-"$LK_BASE/bin/lk-platform-install.sh"
+"$LK_BASE/bin/lk-platform-install.sh" --no-log
 
 # TODO: verify downloads
 log "Installing pip, ps_mem, Glances, awscli"

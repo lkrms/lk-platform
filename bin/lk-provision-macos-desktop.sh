@@ -139,7 +139,7 @@ HOMEBREW_CASKS+=(
     vscodium
 
     #
-    adoptopenjdk11
+    adoptopenjdk/openjdk/adoptopenjdk11
     meld
 )
 
@@ -161,14 +161,16 @@ lk_die() { s=$? && echo "${BASH_SOURCE[0]:+${BASH_SOURCE[0]}: }$1" >&2 && false 
 [ "$(uname -s)" = Darwin ] || lk_die "not running on macOS"
 
 export SUDO_PROMPT="[sudo] password for %p: "
+export HOMEBREW_COLOR=1
+
+SCRIPT_DIR=/tmp/${LK_PATH_PREFIX}install
+mkdir -p "$SCRIPT_DIR"
 
 if [ -f "$LK_BASE/lib/bash/core.sh" ]; then
     . "$LK_BASE/lib/bash/core.sh"
     lk_include provision macos
     . "$LK_BASE/lib/macos/packages.sh"
 else
-    SCRIPT_DIR=/tmp/${LK_PATH_PREFIX}install
-    mkdir -p "$SCRIPT_DIR"
     echo "Downloading dependencies to: $SCRIPT_DIR" >&2
     for FILE_PATH in \
         /lib/bash/core.sh \
@@ -216,8 +218,7 @@ if ! USER_UMASK=$(defaults read \
 fi
 umask 002
 
-lk_macos_install_command_line_tools ||
-    lk_die "unable to install command line tools"
+lk_macos_install_command_line_tools
 
 # If Xcode and the standalone Command Line Tools package are both installed,
 # switch to Xcode or commands like opendiff won't work
@@ -235,7 +236,7 @@ if [ -e /Applications/Xcode.app ]; then
     fi
 fi
 
-if [ ! -e "$LK_BASE" ]; then
+if [ ! -e "$LK_BASE" ] || [ -z "$(ls -A "$LK_BASE")" ]; then
     lk_console_item "Installing lk-platform to:" "$LK_BASE"
     sudo install -d -m 2775 -o "$USER" -g admin "$LK_BASE"
     git clone -b "$LK_PLATFORM_BRANCH" \
@@ -260,18 +261,23 @@ function lk_brew_check_taps() {
     [ "${#TAP[@]}" -eq "0" ] || {
         for TAP in "${TAP[@]}"; do
             lk_console_detail "Tapping" "$TAP"
-            brew tap --quiet "$TAP" >&6 2>&7 || return
+            brew tap --quiet "$TAP" || return
         done
     }
 }
 
-DIR=$HOME/.homebrew
-if [ ! -e "$DIR" ]; then
-    lk_console_item "Installing Homebrew to:" "$DIR"
-    git clone https://github.com/Homebrew/brew.git "$DIR"
+if ! lk_command_exists brew; then
+    lk_console_message "Installing Homebrew"
+    FILE=$SCRIPT_DIR/homebrew-install.sh
+    URL=https://raw.githubusercontent.com/Homebrew/install/master/install.sh
+    if [ ! -e "$FILE" ]; then
+        curl --fail --output "$FILE" "$URL" || {
+            rm -f "$FILE"
+            lk_die "unable to download: $URL"
+        }
+    fi
+    CI=1 bash "$FILE" || lk_die "Homebrew installer failed"
     eval "$(. "$LK_BASE/lib/bash/env.sh")"
-    lk_console_detail "Updating formulae"
-    brew update --quiet >&6 2>&7
     lk_brew_check_taps
     INSTALL=(
         # for lk_install_gnu_commands
@@ -288,15 +294,15 @@ if [ ! -e "$DIR" ]; then
         # for `brew info` parsing
         jq
     )
-    lk_echo_array "${INSTALL[@]}" |
-        lk_console_detail_list "Installing lk-platform dependencies:"
-    brew install "${INSTALL[@]}" >&6 2>&7
+    lk_console_detail "Installing lk-platform dependencies:" \
+        "$(lk_echo_array "${INSTALL[@]}")"
+    brew install "${INSTALL[@]}"
 else
-    lk_console_item "Checking Homebrew installation at:" "$DIR"
+    lk_console_item "Found Homebrew at:" "$(brew --prefix)"
     eval "$(. "$LK_BASE/lib/bash/env.sh")"
     lk_brew_check_taps
     lk_console_detail "Updating formulae"
-    brew update --quiet >&6 2>&7
+    brew update --quiet
 fi
 
 # source ~/.bashrc in ~/.bash_profile, creating both files if necessary
@@ -309,7 +315,10 @@ if ! grep -q "\.bashrc" ~/.bash_profile; then
     echo "[ ! -f ~/.bashrc ] || . ~/.bashrc" >>~/.bash_profile
 fi
 
-"$LK_BASE/bin/lk-platform-install.sh"
+"$LK_BASE/bin/lk-platform-install.sh" --no-log
+
+# s-nail depends on awk, which conflicts with gawk
+brew unlink gawk >/dev/null 2>&1
 
 INSTALL_FORMULAE=($(comm -13 \
     <(brew list --formulae --full-name | sort | uniq) \
@@ -318,8 +327,12 @@ INSTALL_FORMULAE=($(comm -13 \
 [ "${#INSTALL_FORMULAE[@]}" -eq "0" ] || {
     lk_echo_array "${INSTALL_FORMULAE[@]}" |
         lk_console_list "Installing new formulae:"
-    brew install "${INSTALL_FORMULAE[@]}" >&6 2>&7
+    brew install "${INSTALL_FORMULAE[@]}"
 }
+
+# TODO: uninstall build dependencies instead
+brew unlink awk >/dev/null 2>&1
+brew link gawk >/dev/null 2>&1
 
 INSTALL_CASKS=($(comm -13 \
     <(brew list --casks --full-name | sort | uniq) \
@@ -328,7 +341,7 @@ INSTALL_CASKS=($(comm -13 \
 [ "${#INSTALL_CASKS[@]}" -eq "0" ] || {
     lk_echo_array "${INSTALL_CASKS[@]}" |
         lk_console_list "Installing new casks:"
-    brew cask install "${INSTALL_CASKS[@]}" >&6 2>&7
+    brew cask install "${INSTALL_CASKS[@]}"
 }
 
 lk_console_message "Provisioning complete"

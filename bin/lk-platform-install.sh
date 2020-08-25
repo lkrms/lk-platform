@@ -167,7 +167,9 @@
             sudo -Hu "$REPO_OWNER" \
                 git merge --ff-only "@{upstream}"
             lk_console_message "Restarting ${0##*/}"
-            "$0" "$@"
+            NO_LOG=1
+            ! lk_has_arg --no-log || unset NO_LOG
+            "$0" "$@" ${NO_LOG+--no-log}
             exit
         fi
     else

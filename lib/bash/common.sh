@@ -43,10 +43,6 @@ function lk_usage() {
     lk_die
 }
 
-function lk_has_arg() {
-    lk_in_array "$1" LK_ARGV
-}
-
 function _lk_elevate() {
     if [ "$#" -gt "0" ]; then
         sudo -H "$@"

@@ -452,6 +452,10 @@ function lk_mapfile() {
     )
 }
 
+function lk_has_arg() {
+    lk_in_array "$1" LK_ARGV
+}
+
 function lk_log() {
     local IFS LINE
     [ "$#" -eq "0" ] || {
@@ -470,6 +474,7 @@ function lk_log_output() {
     local LOG_PATH="${1-${LK_INST:-$LK_BASE}/var/log/${0##*/}-$UID.log}" \
         OWNER="${LK_LOG_FILE_OWNER:-$USER}" GROUP="${LK_LOG_FILE_GROUP:-}" \
         LOG_DIRS LOG_FILE LOG_DIR
+    ! lk_has_arg --no-log || return 0
     [[ $LOG_PATH =~ ^((.*)/)?([^/]+\.log)$ ]] ||
         lk_warn "invalid log path: $1" || return
     LOG_DIRS=("${BASH_REMATCH[2]:-.}")
