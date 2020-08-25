@@ -169,7 +169,8 @@ function _lk_get_my_cnf() {
 [client]
 user="$(lk_escape "${1:-$DB_USER}" "\\" '"')"
 password="$(lk_escape "${2:-$DB_PASSWORD}" "\\" '"')"
-host="$(lk_escape "${3:-${DB_HOST:-${LK_MYSQL_HOST:-localhost}}}" "\\" '"')"
+host="$(lk_escape "${3:-${DB_HOST:-${LK_MYSQL_HOST:-localhost}}}" "\\" '"')"${LK_MY_CNF_OPTIONS:+
+$LK_MY_CNF_OPTIONS}
 EOF
 }
 
@@ -204,7 +205,7 @@ function lk_wp_db_dump_remote() {
         lk_console_detail "Retrieving" "$1:$REMOTE_PATH/wp-config.php"
         WP_CONFIG="$(ssh "$1" cat "$REMOTE_PATH/wp-config.php")" || return
         lk_console_detail "Parsing WordPress configuration"
-        DB_CONFIG="$(lk_wp_db_config <<<"$WP_CONFIG")" || return
+        DB_CONFIG="$(lk_wp_db_config <(cat <<<"$WP_CONFIG"))" || return
         . /dev/stdin <<<"$DB_CONFIG" || return
     }
     lk_console_message "Creating temporary mysqldump configuration file"
