@@ -322,7 +322,7 @@ fi
 "$LK_BASE/bin/lk-platform-install.sh" --no-log
 
 # s-nail depends on awk, which conflicts with gawk
-brew unlink gawk >/dev/null 2>&1
+brew unlink gawk >/dev/null 2>&1 || true
 
 INSTALL_FORMULAE=($(comm -13 \
     <(brew list --formulae --full-name | sort | uniq) \
@@ -335,8 +335,8 @@ INSTALL_FORMULAE=($(comm -13 \
 }
 
 # TODO: uninstall build dependencies instead
-brew unlink awk >/dev/null 2>&1
-brew link gawk >/dev/null 2>&1
+brew unlink awk >/dev/null 2>&1 || true
+brew link gawk >/dev/null 2>&1 || true
 
 INSTALL_CASKS=($(comm -13 \
     <(brew list --casks --full-name | sort | uniq) \
