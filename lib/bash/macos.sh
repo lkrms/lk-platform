@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2207
 
 function lk_macos_version() {
     local VERSION
@@ -36,4 +37,57 @@ function lk_macos_install_command_line_tools() {
     lk_elevate softwareupdate --install "$ITEM_NAME" >/dev/null || return
     lk_macos_command_line_tools_installed || return
     rm -f "$TRIGGER" || true
+}
+
+function lk_macos_unmount() {
+    local EXIT_STATUS=0 MOUNT_POINT
+    for MOUNT_POINT in "$@"; do
+        hdiutil unmount "$MOUNT_POINT" || EXIT_STATUS=$?
+    done
+    return "$EXIT_STATUS"
+}
+
+function lk_macos_install_pkg() {
+    [ -f "$1" ] || lk_warn "file not found: $1" || return
+    lk_console_item "Installing package:" "${1##*/}"
+    lk_elevate installer -allowUntrusted -pkg "$1" -target / || return
+    lk_console_message "Package installed successfully" "$LK_GREEN"
+}
+
+function lk_macos_install_dmg() {
+    local IFS MOUNT_ROOT MOUNT_POINTS EXIT_STATUS=0
+    [ -f "$1" ] || lk_warn "file not found: $1" || return
+    MOUNT_ROOT=$(lk_mktemp_dir) &&
+        IFS=$'\n' &&
+        MOUNT_POINTS=($(hdiutil attach -mountroot "$MOUNT_ROOT" "$1" |
+            cut -sf3 | sed '/^[[:space:]]*$/d')) &&
+        [ "${#MOUNT_POINTS[@]}" -gt 0 ] || return
+    INSTALL=($(
+        unset IFS
+        find "${MOUNT_POINTS[@]}" -iname "*.pkg"
+    )) || EXIT_STATUS=$?
+    unset IFS
+    [ "$EXIT_STATUS" -ne 0 ] ||
+        [ "${#INSTALL[@]}" -eq 1 ] ||
+        lk_warn "nothing to install" || EXIT_STATUS=$?
+    [ "$EXIT_STATUS" -ne 0 ] ||
+        lk_macos_install_pkg "${INSTALL[0]}" || EXIT_STATUS=$?
+    lk_macos_unmount "${MOUNT_POINTS[@]}" || true
+    return "$EXIT_STATUS"
+}
+
+function lk_macos_install() {
+    [ -f "$1" ] || lk_warn "file not found: $1" || return
+    case "$1" in
+    *.pkg)
+        lk_macos_install_pkg "$1"
+        ;;
+    *.dmg)
+        lk_macos_install_dmg "$1"
+        ;;
+    *)
+        lk_warn "unknown file type: $1"
+        false
+        ;;
+    esac
 }
