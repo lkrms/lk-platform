@@ -49,14 +49,14 @@ function lk_macos_unmount() {
 
 function lk_macos_install_pkg() {
     [ -f "$1" ] || lk_warn "file not found: $1" || return
-    lk_console_item "Installing package:" "${1##*/}"
+    lk_console_detail "Installing:" "${1##*/}"
     lk_elevate installer -allowUntrusted -pkg "$1" -target / || return
-    lk_console_message "Package installed successfully" "$LK_GREEN"
 }
 
 function lk_macos_install_dmg() {
     local IFS MOUNT_ROOT MOUNT_POINTS EXIT_STATUS=0
     [ -f "$1" ] || lk_warn "file not found: $1" || return
+    lk_console_detail "Attaching:" "${1##*/}"
     MOUNT_ROOT=$(lk_mktemp_dir) &&
         IFS=$'\n' &&
         MOUNT_POINTS=($(hdiutil attach -mountroot "$MOUNT_ROOT" "$1" |
@@ -72,7 +72,7 @@ function lk_macos_install_dmg() {
         lk_warn "nothing to install" || EXIT_STATUS=$?
     [ "$EXIT_STATUS" -ne 0 ] ||
         lk_macos_install_pkg "${INSTALL[0]}" || EXIT_STATUS=$?
-    lk_macos_unmount "${MOUNT_POINTS[@]}" || true
+    lk_macos_unmount "${MOUNT_POINTS[@]}" >/dev/null || EXIT_STATUS=$?
     return "$EXIT_STATUS"
 }
 
@@ -90,4 +90,18 @@ function lk_macos_install() {
         false
         ;;
     esac
+}
+
+# lk_macos_maybe_install_pkg_url PKGID PKG_URL [PKG_NAME]
+function lk_macos_maybe_install_pkg_url() {
+    local PKGID=$1 PKG_URL=$2 PKG_NAME=${3:-$1}
+    pkgutil --pkgs | grep -Fx "$PKGID" >/dev/null || (
+        lk_console_item "Installing package:" "$PKG_NAME"
+        lk_console_detail "Downloading:" "$PKG_URL"
+        DIR=$(lk_mktemp_dir) &&
+            cd "$DIR" &&
+            FILE=$(lk_download "$PKG_URL") &&
+            lk_macos_install "$FILE" &&
+            lk_console_message "Package installed successfully" "$LK_GREEN" || exit
+    )
 }
