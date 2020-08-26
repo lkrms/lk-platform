@@ -1,7 +1,6 @@
 #!/bin/bash
-# shellcheck disable=SC1003,SC2015,SC2016,SC2034,SC2046,SC2088,SC2120,SC2162,SC2207
+# shellcheck disable=SC1003,SC1090,SC2015,SC2016,SC2034,SC2046,SC2068,SC2088,SC2120,SC2162,SC2207
 
-# shellcheck disable=SC1090,SC2068
 function lk_include() {
     local i FILE
     [ "${_LK_INCLUDES+1}" = 1 ] || _LK_INCLUDES=()

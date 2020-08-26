@@ -58,12 +58,16 @@ export SUDO_PROMPT="[sudo] password for %p: "
 export WP_CLI_CONFIG_PATH="\$LK_BASE/etc/wp-cli.yml"
 EOF
 
-! lk_command_exists brew ||
-    ! BREW_SH=$(brew shellenv 2>/dev/null) || {
+! type brew >/dev/null 2>&1 ||
+    ! BREW_SH=$(brew shellenv 2>/dev/null) ||
     cat <<EOF
 export HOMEBREW_NO_ANALYTICS=1
 export HOMEBREW_NO_AUTO_UPDATE=1
 export HOMEBREW_CASK_OPTS=--no-quarantine
+$BREW_SH
 EOF
-    echo "$BREW_SH"
-}
+
+[ "$(uname -s)" != Darwin ] ||
+    cat <<EOF
+export BASH_SILENCE_DEPRECATION_WARNING=1
+EOF

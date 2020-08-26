@@ -164,7 +164,8 @@ lk_die() { s=$? && echo "${BASH_SOURCE[0]:+${BASH_SOURCE[0]}: }$1" >&2 && false 
 [ "$(uname -s)" = Darwin ] || lk_die "not running on macOS"
 
 export SUDO_PROMPT="[sudo] password for %p: "
-export HOMEBREW_COLOR=1
+
+S="[[:space:]]"
 
 SCRIPT_DIR=/tmp/${LK_PATH_PREFIX}install
 mkdir -p "$SCRIPT_DIR"
@@ -220,6 +221,24 @@ if ! USER_UMASK=$(defaults read \
     sudo launchctl config user umask 002 >/dev/null
 fi
 umask 002
+
+STATUS=$(sudo systemsetup -getremotelogin)
+if ! grep "${S}On\$" <<<"$STATUS" >/dev/null; then
+    lk_console_message "Enabling Remote Login (SSH)"
+    sudo systemsetup -setremotelogin on
+fi
+
+STATUS=$(sudo systemsetup -getcomputersleep)
+if ! grep "${S}Never\$" <<<"$STATUS" >/dev/null; then
+    lk_console_message "Disabling computer sleep"
+    sudo systemsetup -setcomputersleep off
+fi
+
+# disable sleep when charging
+sudo pmset -c sleep 0
+
+# always restart on power loss
+sudo pmset -a autorestart 1
 
 lk_macos_install_command_line_tools
 
