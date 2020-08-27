@@ -72,7 +72,7 @@ function lk_sudo_offer_nopasswd() {
     ! lk_is_root || lk_warn "cannot run as root" || return
     sudo -n test -e "$FILE" 2>/dev/null || {
         lk_can_sudo install || return
-        lk_confirm "Allow user '$USER' to run sudo without entering a password?" N || return
+        lk_confirm "Allow user '$USER' to run sudo without entering a password?" Y || return
         sudo install -m 440 /dev/null "$FILE" &&
             sudo tee "$FILE" >/dev/null <<<"$USER ALL=(ALL) NOPASSWD:ALL" &&
             lk_console_message "User '$USER' may now run any command as any user" || return

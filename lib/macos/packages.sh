@@ -43,6 +43,7 @@ HOMEBREW_FORMULAE=(
 
 HOMEBREW_CASKS=(
     iterm2
+    mas
 
     #
     ${HOMEBREW_CASKS[@]+"${HOMEBREW_CASKS[@]}"}

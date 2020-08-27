@@ -9,6 +9,15 @@ function lk_macos_version() {
     echo "$VERSION"
 }
 
+function lk_macos_set_hostname() {
+    sudo scutil --set ComputerName "$1" &&
+        sudo scutil --set HostName "$1" &&
+        sudo scutil --set LocalHostName "$1" &&
+        sudo defaults write \
+            /Library/Preferences/SystemConfiguration/com.apple.smb.server \
+            NetBIOSName "$1"
+}
+
 function lk_macos_command_line_tools_path() {
     xcode-select --print-path 2>/dev/null
 }

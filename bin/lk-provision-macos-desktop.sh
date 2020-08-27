@@ -202,6 +202,10 @@ lk_console_message "Provisioning macOS"
 
 lk_sudo_offer_nopasswd || true
 
+scutil --get HostName >/dev/null 2>/dev/null ||
+    [ -z "${LK_NODE_HOSTNAME:=$(lk_console_read "Hostname for this system? ")}" ] ||
+    lk_macos_set_hostname "$LK_NODE_HOSTNAME"
+
 CURRENT_SHELL=$(dscl . -read ~/ UserShell | sed 's/^UserShell: //')
 if [ "$CURRENT_SHELL" != /bin/bash ]; then
     lk_console_item "Setting default shell for user '$USER' to:" /bin/bash
@@ -231,13 +235,13 @@ umask 002
 STATUS=$(sudo systemsetup -getremotelogin)
 if [[ ! "$STATUS" =~ ${S}On$ ]]; then
     lk_console_message "Enabling Remote Login (SSH)"
-    sudo systemsetup -setremotelogin on
+    sudo systemsetup -setremotelogin on >/dev/null
 fi
 
 STATUS=$(sudo systemsetup -getcomputersleep)
 if [[ ! "$STATUS" =~ ${S}Never$ ]]; then
     lk_console_message "Disabling computer sleep"
-    sudo systemsetup -setcomputersleep off
+    sudo systemsetup -setcomputersleep off >/dev/null
 fi
 
 # disable sleep when charging
@@ -307,6 +311,8 @@ if ! lk_command_exists brew; then
     fi
     CI=1 lk_tty bash "$FILE" || lk_die "Homebrew installer failed"
     eval "$(. "$LK_BASE/lib/bash/env.sh")"
+    lk_command_exists brew || lk_die "brew: command not found"
+    lk_console_item "Found Homebrew at:" "$(brew --prefix)"
     lk_brew_check_taps
     INSTALL=(
         # for lk_install_gnu_commands
@@ -323,8 +329,7 @@ if ! lk_command_exists brew; then
         # for `brew info` parsing
         jq
     )
-    lk_console_detail "Installing lk-platform dependencies:" \
-        "$(lk_echo_array "${INSTALL[@]}")"
+    lk_console_detail "Installing lk-platform dependencies"
     lk_tty brew install "${INSTALL[@]}"
 else
     lk_console_item "Found Homebrew at:" "$(brew --prefix)"
@@ -358,6 +363,12 @@ INSTALL_FORMULAE=($(comm -13 \
         lk_console_list "Installing new formulae:"
     lk_tty brew install "${INSTALL_FORMULAE[@]}"
 }
+
+if ! brew list --formulae --full-name | grep -Fx bash >/dev/null; then
+    lk_console_message "Installing Bash keg-only"
+    brew install bash &&
+        brew unlink bash
+fi
 
 # TODO: uninstall build dependencies instead
 brew unlink awk >/dev/null 2>&1 || true
