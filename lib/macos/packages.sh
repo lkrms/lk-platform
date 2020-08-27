@@ -30,6 +30,7 @@ HOMEBREW_FORMULAE=(
     htop
     jq
     lftp
+    mas
     media-info
     ncdu
     nmap
@@ -43,7 +44,6 @@ HOMEBREW_FORMULAE=(
 
 HOMEBREW_CASKS=(
     iterm2
-    mas
 
     #
     ${HOMEBREW_CASKS[@]+"${HOMEBREW_CASKS[@]}"}
