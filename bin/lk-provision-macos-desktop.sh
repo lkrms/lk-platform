@@ -202,6 +202,12 @@ lk_console_message "Provisioning macOS"
 
 lk_sudo_offer_nopasswd || true
 
+CURRENT_SHELL=$(dscl . -read ~/ UserShell | sed 's/^UserShell: //')
+if [ "$CURRENT_SHELL" != /bin/bash ]; then
+    lk_console_item "Setting default shell for user '$USER' to:" /bin/bash
+    chsh -s /bin/bash
+fi
+
 FILE=/etc/sudoers.d/${LK_PATH_PREFIX}defaults
 if ! sudo test -e "$FILE"; then
     lk_console_message "Configuring sudo"
@@ -223,13 +229,13 @@ fi
 umask 002
 
 STATUS=$(sudo systemsetup -getremotelogin)
-if ! grep "${S}On\$" <<<"$STATUS" >/dev/null; then
+if [[ ! "$STATUS" =~ ${S}On$ ]]; then
     lk_console_message "Enabling Remote Login (SSH)"
     sudo systemsetup -setremotelogin on
 fi
 
 STATUS=$(sudo systemsetup -getcomputersleep)
-if ! grep "${S}Never\$" <<<"$STATUS" >/dev/null; then
+if [[ ! "$STATUS" =~ ${S}Never$ ]]; then
     lk_console_message "Disabling computer sleep"
     sudo systemsetup -setcomputersleep off
 fi

@@ -66,8 +66,3 @@ export HOMEBREW_NO_AUTO_UPDATE=1
 export HOMEBREW_CASK_OPTS=--no-quarantine
 $BREW_SH
 EOF
-
-[ "$(uname -s)" != Darwin ] ||
-    cat <<EOF
-export BASH_SILENCE_DEPRECATION_WARNING=1
-EOF

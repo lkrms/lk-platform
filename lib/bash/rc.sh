@@ -43,7 +43,7 @@ function _lk_bash_completion() {
     local FILE
     for FILE in \
         /usr/share/bash-completion/bash_completion \
-        ${HOME:+"$HOME/.homebrew/etc/profile.d/bash_completion.sh"}; do
+        ${HOMEBREW_PREFIX:+"$HOMEBREW_PREFIX/etc/profile.d/bash_completion.sh"}; do
         [ -r "$FILE" ] || continue
         printf '. %q' "$FILE"
         return
@@ -119,6 +119,7 @@ if lk_is_linux; then
     alias open='xdg-open'
 elif lk_is_macos; then
     alias duh='du -h -d 1 | sort -h'
+    export BASH_SILENCE_DEPRECATION_WARNING=1
 fi
 
 shopt -s checkwinsize
