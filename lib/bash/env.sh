@@ -38,9 +38,28 @@ lk_path_add_to_front() {
     fi
 }
 
+! type brew >/dev/null 2>&1 ||
+    ! BREW_SH=$(brew shellenv 2>/dev/null |
+        grep -E 'HOMEBREW_(PREFIX|CELLAR|REPOSITORY)=') || {
+    eval "$BREW_SH"
+    cat <<EOF
+$BREW_SH
+export HOMEBREW_NO_ANALYTICS=1
+export HOMEBREW_NO_AUTO_UPDATE=1
+export HOMEBREW_CASK_OPTS=--no-quarantine
+EOF
+    PATH=${MANPATH:-} lk_in_path "$HOMEBREW_PREFIX/share/man" ||
+        echo 'export MANPATH="$HOMEBREW_PREFIX/share/man${MANPATH+:$MANPATH}:"'
+    PATH=${INFOPATH:-} lk_in_path "$HOMEBREW_PREFIX/share/info" ||
+        echo 'export INFOPATH="$HOMEBREW_PREFIX/share/info:${INFOPATH:-}"'
+}
+
 OLD_PATH="$PATH"
 ADD_TO_PATH="${LK_ADD_TO_PATH:+$LK_ADD_TO_PATH:}$LK_BASE/bin"
-ADD_TO_PATH_FIRST="${HOME:+$HOME/.homebrew/bin:$HOME/.local/bin}${LK_ADD_TO_PATH_FIRST:+:$LK_ADD_TO_PATH_FIRST}"
+ADD_TO_PATH_FIRST="\
+${HOME:+$HOME/.homebrew/bin:$HOME/.local/bin:}\
+${HOMEBREW_PREFIX:+$HOMEBREW_PREFIX/bin:$HOMEBREW_PREFIX/sbin:}\
+${LK_ADD_TO_PATH_FIRST:+$LK_ADD_TO_PATH_FIRST:}"
 IFS=:
 for DIR in $ADD_TO_PATH; do
     PATH="$(lk_path_add "$DIR")"
@@ -56,13 +75,4 @@ cat <<EOF
 unset LK_ADD_TO_PATH LK_ADD_TO_PATH_FIRST
 export SUDO_PROMPT="[sudo] password for %p: "
 export WP_CLI_CONFIG_PATH="\$LK_BASE/etc/wp-cli.yml"
-EOF
-
-! type brew >/dev/null 2>&1 ||
-    ! BREW_SH=$(brew shellenv 2>/dev/null) ||
-    cat <<EOF
-export HOMEBREW_NO_ANALYTICS=1
-export HOMEBREW_NO_AUTO_UPDATE=1
-export HOMEBREW_CASK_OPTS=--no-quarantine
-$BREW_SH
 EOF
