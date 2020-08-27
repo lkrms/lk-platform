@@ -111,7 +111,7 @@ function find_all() {
     gnu_find -L . -xdev -iname "*$FIND*" "$@"
 }
 
-lk_include prompt provision git wordpress
+lk_include prompt provision git wordpress nextcloud
 
 if lk_is_linux; then
     alias cwd='pwd | xclip'
