@@ -8,155 +8,6 @@ LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(
 )}"
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
 
-HOMEBREW_TAPS=()
-HOMEBREW_FORMULAE=()
-HOMEBREW_CASKS=()
-
-# terminal-based
-HOMEBREW_FORMULAE+=(
-    # utilities
-    exiftool
-    imagemagick
-    python-yq
-    unison
-
-    # networking
-    openconnect
-    vpn-slice
-
-    # network monitoring
-    iftop # shows network traffic by service and host
-    nload # shows bandwidth by interface
-
-    # system
-    #acme.sh
-)
-
-# desktop
-HOMEBREW_TAPS+=(
-    federico-terzi/espanso
-)
-
-HOMEBREW_FORMULAE+=(
-    federico-terzi/espanso/espanso
-
-    # PDF
-    ghostscript
-    mupdf-tools
-    pandoc
-    poppler
-    pstoedit
-
-    # multimedia - video
-    youtube-dl
-)
-
-HOMEBREW_CASKS+=(
-    caprine
-    chromium
-    firefox
-    imageoptim
-    keepassxc
-    keepingyouawake
-    libreoffice
-    microsoft-teams
-    nextcloud
-    pencil
-    scribus
-    skype
-    spotify
-    stretchly
-    the-unarchiver
-    transmission
-    typora
-
-    # PDF
-    basictex
-
-    # photography
-    adobe-dng-converter
-
-    # multimedia - video
-    handbrake
-    #makemkv
-    #mkvtoolnix
-    subler
-    vlc
-
-    # system
-    displaycal
-    geekbench
-    hex-fiend
-    lingon-x
-
-    # non-free
-    acorn
-    microsoft-office
-)
-
-# development
-HOMEBREW_TAPS+=(
-    adoptopenjdk/openjdk
-    #mongodb/brew
-)
-
-HOMEBREW_FORMULAE+=(
-    # email
-    msmtp  # smtp client
-    s-nail # mail and mailx commands
-
-    #
-    git-filter-repo
-
-    #
-    node
-    yarn
-
-    #
-    composer #
-    # gcc@7  # Db2 module build dependency
-    php
-
-    #
-    python
-
-    #
-    mariadb
-    #mongodb/brew/mongodb-community
-
-    #
-    shellcheck
-    shfmt
-
-    # platforms
-    awscli
-)
-
-HOMEBREW_CASKS+=(
-    android-studio
-    dbeaver-community
-    sequel-pro
-    sourcetree
-    sublime-merge
-    sublime-text
-    vscodium
-
-    #
-    adoptopenjdk/openjdk/adoptopenjdk11
-    meld
-)
-
-# VMs and containers
-HOMEBREW_CASKS+=(
-    #virtualbox
-    #virtualbox-extension-pack
-)
-
-# hardware-related
-HOMEBREW_CASKS+=(
-    sonos
-)
-
 set -euo pipefail
 lk_die() { s=$? && echo "${BASH_SOURCE[0]:+${BASH_SOURCE[0]}: }$1" >&2 && false || exit $s; }
 
@@ -170,25 +21,46 @@ S="[[:space:]]"
 SCRIPT_DIR=/tmp/${LK_PATH_PREFIX}install
 mkdir -p "$SCRIPT_DIR"
 
+export LK_PACKAGES_FILE=${1:-}
+if [ -n "$LK_PACKAGES_FILE" ]; then
+    if [ -f "$LK_PACKAGES_FILE" ]; then
+        . "$LK_PACKAGES_FILE"
+    else
+        case "$LK_PACKAGES_FILE" in
+        $LK_BASE/*/*)
+            CONTRIB_PACKAGES_FILE=${LK_PACKAGES_FILE:${#LK_BASE}}
+            ;;
+        /*/*)
+            CONTRIB_PACKAGES_FILE=${LK_PACKAGES_FILE:1}
+            ;;
+        */*)
+            CONTRIB_PACKAGES_FILE=$LK_PACKAGES_FILE
+            ;;
+        *)
+            lk_die "$1: file not found"
+            ;;
+        esac
+        LK_PACKAGES_FILE=$LK_BASE/$CONTRIB_PACKAGES_FILE
+    fi
+fi
+
 if [ -f "$LK_BASE/lib/bash/core.sh" ]; then
     . "$LK_BASE/lib/bash/core.sh"
     lk_include provision macos
-    . "$LK_BASE/lib/macos/packages.sh"
+    ${CONTRIB_PACKAGES_FILE:+. "$LK_BASE/$CONTRIB_PACKAGES_FILE"}
 else
     echo "Downloading dependencies to: $SCRIPT_DIR" >&2
     for FILE_PATH in \
+        ${CONTRIB_PACKAGES_FILE:+"/$CONTRIB_PACKAGES_FILE"} \
         /lib/bash/core.sh \
         /lib/bash/provision.sh \
-        /lib/bash/macos.sh \
-        /lib/macos/packages.sh; do
+        /lib/bash/macos.sh; do
         FILE=$SCRIPT_DIR/${FILE_PATH##*/}
         URL=https://raw.githubusercontent.com/lkrms/lk-platform/$LK_PLATFORM_BRANCH$FILE_PATH
-        if [ ! -e "$FILE" ]; then
-            curl --fail --output "$FILE" "$URL" || {
-                rm -f "$FILE"
-                lk_die "unable to download from GitHub: $URL"
-            }
-        fi
+        curl --fail --output "$FILE" "$URL" || {
+            rm -f "$FILE"
+            lk_die "unable to download from GitHub: $URL"
+        }
         . "$FILE"
     done
 fi
@@ -281,10 +153,16 @@ if [ ! -e "$LK_BASE" ] || [ -z "$(ls -A "$LK_BASE")" ]; then
         LK_BASE "$LK_BASE" \
         LK_PATH_PREFIX "$LK_PATH_PREFIX" \
         LK_PATH_PREFIX_ALPHA "$LK_PATH_PREFIX_ALPHA" \
-        LK_PLATFORM_BRANCH "$LK_PLATFORM_BRANCH" |
+        LK_PLATFORM_BRANCH "$LK_PLATFORM_BRANCH" \
+        LK_PACKAGES_FILE "$LK_PACKAGES_FILE" |
         sudo tee /etc/default/lk-platform >/dev/null
     lk_console_detail_file /etc/default/lk-platform
 fi
+
+[ -n "$LK_PACKAGES_FILE" ] ||
+    [ ! -f /etc/default/lk-platform ] || . /etc/default/lk-platform
+[ -z "$LK_PACKAGES_FILE" ] || . "$LK_PACKAGES_FILE"
+. "$LK_BASE/lib/macos/packages.sh"
 
 function lk_brew_check_taps() {
     local TAP
@@ -351,9 +229,6 @@ fi
 
 "$LK_BASE/bin/lk-platform-install.sh" --no-log
 
-# s-nail depends on awk, which conflicts with gawk
-brew unlink gawk >/dev/null 2>&1 || true
-
 INSTALL_FORMULAE=($(comm -13 \
     <(brew list --formulae --full-name | sort | uniq) \
     <(lk_echo_array ${HOMEBREW_FORMULAE[@]+"${HOMEBREW_FORMULAE[@]}"} |
@@ -369,10 +244,6 @@ if ! brew list --formulae --full-name | grep -Fx bash >/dev/null; then
     brew install bash &&
         brew unlink bash
 fi
-
-# TODO: uninstall build dependencies instead
-brew unlink awk >/dev/null 2>&1 || true
-brew link gawk >/dev/null 2>&1 || true
 
 INSTALL_CASKS=($(comm -13 \
     <(brew list --casks --full-name | sort | uniq) \

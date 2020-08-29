@@ -68,6 +68,7 @@
         LK_AUTO_REBOOT
         LK_AUTO_REBOOT_TIME
         LK_PLATFORM_BRANCH
+        LK_PACKAGES_FILE
     )
 
     DEFAULT_FILE="/etc/default/lk-platform"

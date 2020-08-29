@@ -48,6 +48,27 @@ function lk_macos_install_command_line_tools() {
     rm -f "$TRIGGER" || true
 }
 
+# lk_macos_kb_add_shortcut DOMAIN MENU_TITLE SHORTCUT
+#   Add a keyboard shortcut to the NSUserKeyEquivalents dictionary for DOMAIN.
+#
+# Modifier keys:
+#   ^ = Ctrl
+#   ~ = Alt
+#   $ = Shift
+#   @ = Command
+function lk_macos_kb_add_shortcut() {
+    # results are inconsistent if only one of the following is used, even though
+    # they both theoretically do the same thing
+    defaults write \
+        "$1" NSUserKeyEquivalents -dict-add "$2" "$3"
+    defaults write \
+        "$HOME/Library/Preferences/$1.plist" NSUserKeyEquivalents -dict-add "$2" "$3"
+}
+
+function lk_macos_kb_reset_shortcuts() {
+    defaults delete "$1" NSUserKeyEquivalents
+}
+
 function lk_macos_unmount() {
     local EXIT_STATUS=0 MOUNT_POINT
     for MOUNT_POINT in "$@"; do
