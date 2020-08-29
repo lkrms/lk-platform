@@ -107,13 +107,13 @@ umask 002
 STATUS=$(sudo systemsetup -getremotelogin)
 if [[ ! "$STATUS" =~ ${S}On$ ]]; then
     lk_console_message "Enabling Remote Login (SSH)"
-    sudo systemsetup -setremotelogin on >/dev/null
+    sudo systemsetup -setremotelogin on
 fi
 
 STATUS=$(sudo systemsetup -getcomputersleep)
 if [[ ! "$STATUS" =~ ${S}Never$ ]]; then
     lk_console_message "Disabling computer sleep"
-    sudo systemsetup -setcomputersleep off >/dev/null
+    sudo systemsetup -setcomputersleep off
 fi
 
 # disable sleep when charging
