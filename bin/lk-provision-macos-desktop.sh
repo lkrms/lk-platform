@@ -81,7 +81,7 @@ scutil --get HostName >/dev/null 2>/dev/null ||
 CURRENT_SHELL=$(dscl . -read ~/ UserShell | sed 's/^UserShell: //')
 if [ "$CURRENT_SHELL" != /bin/bash ]; then
     lk_console_item "Setting default shell for user '$USER' to:" /bin/bash
-    chsh -s /bin/bash
+    sudo chsh -s /bin/bash "$USER"
 fi
 
 FILE=/etc/sudoers.d/${LK_PATH_PREFIX}defaults
@@ -227,6 +227,7 @@ if ! grep -q "\.bashrc" ~/.bash_profile; then
     echo "[ ! -f ~/.bashrc ] || . ~/.bashrc" >>~/.bash_profile
 fi
 
+[ -z "$LK_PACKAGES_FILE" ] || LK_PACKAGES_FILE=$(realpath "$LK_PACKAGES_FILE")
 "$LK_BASE/bin/lk-platform-install.sh" --no-log
 
 INSTALL_FORMULAE=($(comm -13 \
