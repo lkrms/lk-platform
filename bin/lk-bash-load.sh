@@ -45,7 +45,7 @@ function lk_bash_load() {
         printf 'export LK_BASE=%q' "$LK_BASE"
     ) || return
     eval "$SH"
-    . "$LK_BASE/lib/bash/common.sh"
 }
 
-lk_bash_load
+lk_bash_load &&
+    . "$LK_BASE/lib/bash/common.sh"
