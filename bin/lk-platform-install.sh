@@ -96,7 +96,7 @@
     # to list gnu_* commands required by lk-platform:
     #   find "$LK_BASE" ! \( -type d -name .git -prune \) -type f -print0 |
     #       xargs -0 grep -Eho '\bgnu_[a-zA-Z0-9.]+' | sort -u
-    lk_install_gnu_commands awk date find mktemp sort stat xargs
+    lk_install_gnu_commands awk date find getopt mktemp sort stat xargs
     lk_install_gnu_commands || true
 
     lk_console_message "Checking configuration files"

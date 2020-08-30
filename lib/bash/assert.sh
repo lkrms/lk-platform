@@ -27,3 +27,7 @@ function lk_assert_is_arch() {
 function lk_assert_is_macos() {
     lk_is_macos || lk_die "not running on macOS"
 }
+
+function lk_assert_not_wsl() {
+    ! lk_is_wsl || lk_die "cannot run on Windows"
+}

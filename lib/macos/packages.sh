@@ -16,6 +16,7 @@ HOMEBREW_FORMULAE=(
     coreutils
     findutils
     gawk
+    gnu-getopt
     grep
     inetutils
     netcat

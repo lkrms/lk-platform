@@ -1027,6 +1027,12 @@ function _lk_get_gnu_command() {
     nc)
         echo "netcat"
         ;;
+    getopt)
+        lk_is_macos && echo "$(
+            ! lk_command_exists brew && echo "/usr/local" || brew --prefix
+        )/opt/gnu-getopt/bin/getopt" ||
+            echo "getopt"
+        ;;
     *)
         echo "$PREFIX$1"
         ;;
@@ -1233,27 +1239,31 @@ if lk_is_macos; then
     function lk_secret_forget() {
         security delete-generic-password -a "$USER" -s "${2:-${0##*/}}" -G "$1"
     }
-else
+fi
+
+if lk_is_linux; then
     function lk_tty() {
         local COMMAND=$1
         shift
         script -qfc "$COMMAND$([ $# -eq 0 ] || printf ' %q' "$@")" /dev/null
     }
 
-    # lk_secret_set VALUE LABEL [SERVICE]
-    function lk_secret_set() {
-        secret-tool store --label="$2" -- service "${3:-${0##*/}}" value "$1"
-    }
+    if ! lk_is_wsl; then
+        # lk_secret_set VALUE LABEL [SERVICE]
+        function lk_secret_set() {
+            secret-tool store --label="$2" -- service "${3:-${0##*/}}" value "$1"
+        }
 
-    # lk_secret_get VALUE [SERVICE]
-    function lk_secret_get() {
-        secret-tool lookup -- service "${2:-${0##*/}}" value "$1"
-    }
+        # lk_secret_get VALUE [SERVICE]
+        function lk_secret_get() {
+            secret-tool lookup -- service "${2:-${0##*/}}" value "$1"
+        }
 
-    # lk_secret_forget VALUE [SERVICE]
-    function lk_secret_forget() {
-        secret-tool clear -- service "${2:-${0##*/}}" value "$1"
-    }
+        # lk_secret_forget VALUE [SERVICE]
+        function lk_secret_forget() {
+            secret-tool clear -- service "${2:-${0##*/}}" value "$1"
+        }
+    fi
 fi
 
 # lk_secret VALUE LABEL [SERVICE]
@@ -1527,6 +1537,7 @@ _lk_register_gnu_commands $(
         nc     # netcat
         sed    # sed
         tar    # tar
+        getopt # util-linux
     )
     printf '%s ' "${COMMANDS[@]}"
 )

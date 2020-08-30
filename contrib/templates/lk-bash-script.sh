@@ -75,8 +75,8 @@ SETTING="auto"
 
 USAGE="\
 Usage:
-  ${0##*/} [OPTION]... PARAM
-  ${0##*/} [OPTION]... PARAM1 PARAM2
+  ${0##*/} [OPTION...] PARAM
+  ${0##*/} [OPTION...] PARAM1 PARAM2
 
 Provide a boilerplate for Bash scripts that parse options with getopt.
 
@@ -88,7 +88,7 @@ Options:
                         (default: $SETTING)"
 
 OPTS="$(
-    getopt --options "fv:s::" \
+    gnu_getopt --options "fv:s::" \
         --longoptions "flag,value:,setting::" \
         --name "${0##*/}" \
         -- "$@"
