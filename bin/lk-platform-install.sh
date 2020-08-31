@@ -61,7 +61,7 @@
         LK_REJECT_OUTPUT
         LK_ACCEPT_OUTPUT_HOSTS
         LK_INNODB_BUFFER_SIZE
-        LK_DEFAULT_OPCACHE_MEMORY_CONSUMPTION
+        LK_OPCACHE_MEMORY_CONSUMPTION
         LK_MEMCACHED_MEMORY_LIMIT
         LK_SMTP_RELAY
         LK_EMAIL_BLACKHOLE
@@ -193,15 +193,7 @@
     }
 
     for i in "${INSTALL_SETTINGS[@]}"; do
-        case "$i" in
-        OPCACHE_MEMORY_CONSUMPTION)
-            eval "LK_DEFAULT_$i=\"\${LK_DEFAULT_$i-\
-\${LK_$i-\${$i-\$(install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
-            ;;
-        *)
-            eval "LK_$i=\"\${LK_$i-\${$i-\$(install_env \"(LK_)?$i\")}}\"" || exit
-            ;;
-        esac
+        eval "LK_$i=\"\${LK_$i-\${LK_DEFAULT_$i-\${$i-\$(install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
     done
 
     lk_console_item "Configuring system for lk-platform installed at" "$LK_BASE"
@@ -215,7 +207,7 @@
     for i in "${DEFAULT_SETTINGS[@]}"; do
         # don't include null variables unless they already appear in
         # /etc/default/lk-platform
-        [ -n "${!i}" ] ||
+        [ -n "${!i:=}" ] ||
             grep -Eq "^$i=" "$DEFAULT_FILE" ||
             continue
         lk_console_detail "$i:" "${!i:-<none>}"

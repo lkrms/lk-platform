@@ -202,6 +202,7 @@ PACMAN_PACKAGES+=(
 AUR_PACKAGES+=(
     espanso
     masterpdfeditor-free
+    pencil
     skypeforlinux-stable-bin
     spotify
     teams
@@ -236,6 +237,7 @@ PACMAN_PACKAGES+=(
     tidy
     ttf-font-awesome
     ttf-ionicons
+    uglify-js
 
     # email
     msmtp     # smtp client
