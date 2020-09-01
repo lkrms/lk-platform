@@ -99,9 +99,9 @@ function in_target() {
 
 function configure_pacman() {
     lk_console_detail "Configuring pacman"
-    lk_maybe_sed -E 's/^#(Color|TotalDownload)\b/\1/' "$1"
+    lk_pacman_configure
     [ "${#CUSTOM_REPOS[@]}" -eq "0" ] ||
-        PACMAN_CONF="$1" lk_pacman_add_repo "${CUSTOM_REPOS[@]}"
+        lk_pacman_add_repo "${CUSTOM_REPOS[@]}"
 }
 
 [ -d "/sys/firmware/efi/efivars" ] || lk_die "not booted in UEFI mode"
@@ -131,7 +131,7 @@ S="[[:space:]]"
 lk_console_message "Setting up live environment"
 # otherwise mirrorlist may be replaced by reflector
 systemctl stop reflector || :
-configure_pacman "/etc/pacman.conf"
+configure_pacman
 [ -z "$MIRROR" ] ||
     # pacstrap will copy this to the new system
     echo "Server=$MIRROR" >"/etc/pacman.d/mirrorlist"
@@ -265,13 +265,13 @@ pacstrap /mnt "${PACMAN_PACKAGES[@]}" >&6 2>&7
 
 lk_console_message "Setting up installed system"
 
-CHROOT_COMMAND=(arch-chroot /mnt)
+LK_ARCH_CHROOT_DIR=/mnt
 
 lk_console_detail "Generating fstab"
 lk_keep_original "/mnt/etc/fstab"
 genfstab -U /mnt >>"/mnt/etc/fstab"
 
-configure_pacman "/mnt/etc/pacman.conf"
+configure_pacman
 
 if [ -n "${NTP_SERVER:-}" ]; then
     lk_console_detail "Configuring NTP"

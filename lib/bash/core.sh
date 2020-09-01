@@ -1352,7 +1352,7 @@ function lk_start_or_restart() {
 }
 
 function lk_keep_original() {
-    [ ! -e "$1" ] ||
+    lk_maybe_sudo test ! -e "$1" ||
         lk_maybe_sudo cp -nav "$1" "$1${LK_BACKUP_SUFFIX:-.orig}"
 }
 

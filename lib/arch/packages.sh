@@ -1,23 +1,15 @@
 #!/bin/bash
 # shellcheck disable=SC2015,SC2016,SC2034,SC2207
 
-function pacman_group_packages() {
-    [ "$EUID" -ne "0" ] ||
-        [ "${PACMAN_SYNC:-1}" -ne "1" ] || {
-        lk_pacman_add_repo ${CUSTOM_REPOS[@]+"${CUSTOM_REPOS[@]}"} >&2 &&
-            pacman -Sy >&2 || return
-        PACMAN_SYNC=0
-    }
-    pacman -Sgq "$@"
-}
-
 CUSTOM_REPOS=(
-    'aur|http://arch.repo.linacreative.com/aur|||Optional TrustAll'
-    'lk-aur|http://arch.repo.linacreative.com/lk-aur|||Optional TrustAll'
+    "aur|http://arch.repo.linacreative.com/aur|||Optional TrustAll"
+    "lk-aur|http://arch.repo.linacreative.com/lk-aur|||Optional TrustAll"
 
     #
     ${CUSTOM_REPOS[@]+"${CUSTOM_REPOS[@]}"}
 )
+
+lk_pacman_add_repo "${CUSTOM_REPOS[@]}"
 
 PACMAN_PACKAGES=(
     # bare minimum
@@ -119,7 +111,7 @@ PACMAN_DESKTOP_PACKAGES=(
     $(
         # xfce4-screensaver is buggy and insecure, and it autostarts
         # by default, so exclude it from xfce4-goodies
-        pacman_group_packages xfce4 xfce4-goodies |
+        lk_pacman_group_packages xfce4 xfce4-goodies |
             grep -Fxv xfce4-screensaver
     )
     catfish
@@ -306,7 +298,7 @@ AUR_PACKAGES+=(${AUR_DESKTOP_PACKAGES[@]+"${AUR_DESKTOP_PACKAGES[@]}"})
     [ "${#AUR_PACKAGES[@]}" -eq "0" ] || {
         lk_echo_array "${AUR_PACKAGES[@]}" | lk_console_list "Unable to install from configured repositories:" package packages
         ! lk_confirm "Manage the above using yay?" Y && AUR_PACKAGES=() || {
-            PACMAN_PACKAGES+=($(pacman_group_packages base-devel))
+            PACMAN_PACKAGES+=($(lk_pacman_group_packages base-devel))
             AUR_PACKAGES+=($(pacman -Qq yay 2>/dev/null || true))
         }
     }
