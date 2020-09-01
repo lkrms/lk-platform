@@ -28,11 +28,11 @@ AUR_PACKAGES=()
 AUR_DESKTOP_PACKAGES=()
 
 set -euo pipefail
-BS=${BASH_SOURCE[0]}
-lk_die() { s=$? && echo "$BS: $1" >&2 && false || exit $s; }
-[ "${BS%/*}" != "$BS" ] || BS=./$BS
-[ ! -L "$BS" ] &&
-    SCRIPT_DIR="$(cd "${BS%/*}" && pwd -P)" ||
+_FILE=${BASH_SOURCE[0]}
+lk_die() { s=$? && echo "$_FILE: $1" >&2 && false || exit $s; }
+[ "${_FILE%/*}" != "$_FILE" ] || _FILE=./$_FILE
+[ ! -L "$_FILE" ] &&
+    _DIR="$(cd "${_FILE%/*}" && pwd -P)" ||
     lk_die "unable to resolve path to script"
 
 shopt -s nullglob
@@ -114,7 +114,7 @@ exec > >(tee "$LOG_FILE") 2>&1
 trap "exit_trap" EXIT
 
 for FILE_PATH in /lib/bash/core.sh /lib/bash/arch.sh /lib/arch/packages.sh; do
-    FILE="$SCRIPT_DIR/${FILE_PATH##*/}"
+    FILE="$_DIR/${FILE_PATH##*/}"
     URL="https://raw.githubusercontent.com/lkrms/lk-platform/$LK_PLATFORM_BRANCH$FILE_PATH"
     [ -e "$FILE" ] ||
         curl --fail --output "$FILE" "$URL" || {
@@ -123,8 +123,8 @@ for FILE_PATH in /lib/bash/core.sh /lib/bash/arch.sh /lib/arch/packages.sh; do
     }
 done
 
-. "$SCRIPT_DIR/core.sh"
-. "$SCRIPT_DIR/arch.sh"
+. "$_DIR/core.sh"
+. "$_DIR/arch.sh"
 
 S="[[:space:]]"
 
@@ -136,7 +136,7 @@ configure_pacman
     # pacstrap will copy this to the new system
     echo "Server=$MIRROR" >"/etc/pacman.d/mirrorlist"
 
-. "$SCRIPT_DIR/packages.sh" >&6 2>&7
+. "$_DIR/packages.sh" >&6 2>&7
 
 # in case we're starting over after a failed attempt
 if [ -d "/mnt/boot" ]; then
