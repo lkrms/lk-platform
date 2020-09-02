@@ -2,7 +2,10 @@
 # shellcheck disable=SC2034,SC2207
 
 CUSTOM_REPOS=(
-    "sublime-text|http://sublimetext.mirror.linacreative.com/arch/stable/\$arch|http://sublimetext.mirror.linacreative.com/sublimehq-pub.gpg|8A8F901A|"
+    "sublime-text|\
+http://sublimetext.mirror.linacreative.com/arch/stable/\$arch|\
+http://sublimetext.mirror.linacreative.com/sublimehq-pub.gpg|\
+8A8F901A"
 )
 
 PACMAN_PACKAGES=()
