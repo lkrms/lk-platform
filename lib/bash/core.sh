@@ -26,8 +26,10 @@ function _lk_caller() {
         CALLER+=("$(
             if [ "$SOURCE" = "$0" ]; then
                 echo "$LK_BOLD${0##*/}$LK_RESET"
-            else
+            elif [ -n "${HOME:-}" ]; then
                 lk_replace "$HOME/" "~/" "$SOURCE"
+            else
+                echo "$SOURCE"
             fi
         )$DIM:${BASH_LINENO[1]}$LK_RESET")
     fi
@@ -312,7 +314,7 @@ function lk_ellipsis() {
 }
 
 function lk_repeat() {
-    eval "printf \"\$1%.s\" {1..$2}"
+    eval "printf -- \"\$1%.s\" {1..$2}"
 }
 
 function lk_hostname() {
@@ -375,7 +377,7 @@ function lk_implode() {
         shift
     }
     [ "$#" -eq "0" ] ||
-        printf "$DELIM%s" "$@"
+        printf -- "$DELIM%s" "$@"
 }
 
 # lk_in_array value array_name
@@ -471,7 +473,7 @@ function lk_log() {
 # lk_log_output [LOG_PATH]
 function lk_log_output() {
     local LOG_PATH="${1-${LK_INST:-$LK_BASE}/var/log/${0##*/}-$UID.log}" \
-        OWNER="${LK_LOG_FILE_OWNER:-$USER}" GROUP="${LK_LOG_FILE_GROUP:-}" \
+        OWNER="${LK_LOG_FILE_OWNER:-$UID}" GROUP="${LK_LOG_FILE_GROUP:-}" \
         LOG_DIRS LOG_FILE LOG_DIR HEADER=() IFS
     ! lk_has_arg --no-log || return 0
     [[ $LOG_PATH =~ ^((.*)/)?([^/]+\.log)$ ]] ||
