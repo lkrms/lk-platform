@@ -4,7 +4,7 @@
 set -euo pipefail
 _DEPTH=1
 _FILE=${BASH_SOURCE[0]}
-lk_die() { s=$? && echo "$_FILE: $1" >&2 && false || exit $s; }
+lk_die() { s=$? && echo "$_FILE: $1" >&2 && (return $s) && false || exit; }
 { type -P realpath || { type -P python && realpath() { python -c \
     "import os,sys;print(os.path.realpath(sys.argv[1]))" "$1"; }; }; } \
     >/dev/null || lk_die "realpath: command not found"

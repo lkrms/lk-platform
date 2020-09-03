@@ -13,7 +13,7 @@
     set -euo pipefail
     _DEPTH=1
     _FILE=${BASH_SOURCE[0]}
-    lk_die() { s=$? && echo "$_FILE: $1" >&2 && false || exit $s; }
+    lk_die() { s=$? && echo "$_FILE: $1" >&2 && (return $s) && false || exit; }
     [ "${_FILE%/*}" != "$_FILE" ] || _FILE=./$_FILE
     LK_INST=$(i=0 && F=$_FILE && while [ $((i++)) -le "$_DEPTH" ]; do
         [ "$F" != / ] && [ ! -L "$F" ] &&

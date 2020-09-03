@@ -29,7 +29,7 @@ AUR_DESKTOP_PACKAGES=()
 
 set -euo pipefail
 _FILE=${BASH_SOURCE[0]}
-lk_die() { s=$? && echo "$_FILE: $1" >&2 && false || exit $s; }
+lk_die() { s=$? && echo "$_FILE: $1" >&2 && (return $s) && false || exit; }
 [ "${_FILE%/*}" != "$_FILE" ] || _FILE=./$_FILE
 [ ! -L "$_FILE" ] &&
     _DIR="$(cd "${_FILE%/*}" && pwd -P)" ||

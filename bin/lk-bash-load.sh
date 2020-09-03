@@ -16,7 +16,7 @@ set -euo pipefail
 function lk_bash_load() {
     local SH
     SH=$(
-        lk_die() { s=$? && echo "lk-bash-load.sh: $1" >&2 && false || exit $s; }
+        lk_die() { s=$? && echo "lk-bash-load.sh: $1" >&2 && (return $s) && false || exit; }
         [ -n "${BASH_SOURCE[2]:-}" ] ||
             lk_die "not sourced from a shell script"
         FILE=${BASH_SOURCE[2]}

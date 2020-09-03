@@ -9,7 +9,7 @@ LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
 
 set -euo pipefail
-lk_die() { s=$? && echo "${BASH_SOURCE[0]:+${BASH_SOURCE[0]}: }$1" >&2 && false || exit $s; }
+lk_die() { s=$? && echo "${BASH_SOURCE[0]:+${BASH_SOURCE[0]}: }$1" >&2 && (return $s) && false || exit; }
 
 [ "$EUID" -ne 0 ] || lk_die "cannot run as root"
 [ "$(uname -s)" = Darwin ] || lk_die "not running on macOS"

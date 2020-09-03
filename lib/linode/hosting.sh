@@ -65,7 +65,7 @@ SHUTDOWN_DELAY=${SHUTDOWN_DELAY:-0}
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
 
 set -euo pipefail
-lk_die() { s=$? && echo "${0##*/}: $1" >&2 && false || exit $s; }
+lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (return $s) && false || exit; }
 
 FIELD_ERRORS=$(
     STATUS=0
