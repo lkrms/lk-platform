@@ -38,11 +38,14 @@
         ACCEPT_OUTPUT_HOSTS
         INNODB_BUFFER_SIZE
         OPCACHE_MEMORY_CONSUMPTION
+        PHP_SETTINGS
+        PHP_ADMIN_SETTINGS
         MEMCACHED_MEMORY_LIMIT
         SMTP_RELAY
         EMAIL_BLACKHOLE
         AUTO_REBOOT
         AUTO_REBOOT_TIME
+        SCRIPT_DEBUG
         PLATFORM_BRANCH
     )
 
@@ -62,11 +65,14 @@
         LK_ACCEPT_OUTPUT_HOSTS
         LK_INNODB_BUFFER_SIZE
         LK_OPCACHE_MEMORY_CONSUMPTION
+        LK_PHP_SETTINGS
+        LK_PHP_ADMIN_SETTINGS
         LK_MEMCACHED_MEMORY_LIMIT
         LK_SMTP_RELAY
         LK_EMAIL_BLACKHOLE
         LK_AUTO_REBOOT
         LK_AUTO_REBOOT_TIME
+        LK_SCRIPT_DEBUG
         LK_PLATFORM_BRANCH
         LK_PACKAGES_FILE
     )
@@ -183,10 +189,11 @@
         INSTALL_ENV="${INSTALL_ENV-$(
             [ ! -f "/var/log/${LK_PATH_PREFIX}install.log" ] || {
                 PROG="\
-/^[0-9]{4}(-[0-9]{2}){2} [0-9]{2}(:[0-9]{2}){2}( [-+][0-9]{4})? (==> )?Environment:\$/  { env_started = 1; next }
-/^  [a-zA-Z_][a-zA-Z0-9_]*=/                                                            { if (env_started) { print substr(\$0, 3, length - 2); next } }
-/^[0-9]{4}(-[0-9]{2}){2} [0-9]{2}(:[0-9]{2}){2} [-+][0-9]{4}   [a-zA-Z_][a-zA-Z0-9_]*=/ { if (env_started) { print substr(\$0, 29, length - 28); next } }
-/^[0-9]{4}(-[0-9]{2}){2} [0-9]{2}(:[0-9]{2}){2}( [-+][0-9]{4})? /                       { if (env_started) exit }"
+/^[0-9]{4}(-[0-9]{2}){2} [0-9]{2}(:[0-9]{2}){2}( [-+][0-9]{4})? (==> |   -> )?Environment:\$/   { env_started = 1; next }
+/^  [a-zA-Z_][a-zA-Z0-9_]*=/                                                                    { if (env_started) { print substr(\$0, 3, length - 2); next } }
+/^[0-9]{4}(-[0-9]{2}){2} [0-9]{2}(:[0-9]{2}){2} [-+][0-9]{4}   [a-zA-Z_][a-zA-Z0-9_]*=/         { if (env_started) { print substr(\$0, 29, length - 28); next } }
+/^[0-9]{4}(-[0-9]{2}){2} [0-9]{2}(:[0-9]{2}){2} [-+][0-9]{4}       [a-zA-Z_][a-zA-Z0-9_]*=/     { if (env_started) { print substr(\$0, 33, length - 32); next } }
+/^[0-9]{4}(-[0-9]{2}){2} [0-9]{2}(:[0-9]{2}){2}( [-+][0-9]{4})? /                               { if (env_started) exit }"
                 awk "$PROG" <"/var/log/${LK_PATH_PREFIX}install.log"
             }
         )}" && awk -F= "/^$1=/ { print \$2 }" <<<"$INSTALL_ENV"

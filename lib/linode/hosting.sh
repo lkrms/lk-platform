@@ -27,10 +27,22 @@
 # <UDF name="AUTO_REBOOT" label="Reboot automatically after unattended upgrades" oneof="Y,N" />
 # <UDF name="AUTO_REBOOT_TIME" label="Preferred automatic reboot time" oneof="02:00,03:00,04:00,05:00,06:00,07:00,08:00,09:00,10:00,11:00,12:00,13:00,14:00,15:00,16:00,17:00,18:00,19:00,20:00,21:00,22:00,23:00,00:00,01:00,now" default="02:00" />
 # <UDF name="PATH_PREFIX" label="Prefix for files installed by this script" default="lk-" />
-# <UDF name="SCRIPT_DEBUG" label="Enable debugging" oneof="Y,N" default="N" />
+# <UDF name="SCRIPT_DEBUG" label="Create trace output from provisioning script" oneof="Y,N" default="Y" />
 # <UDF name="SHUTDOWN_ACTION" label="Reboot or power down after provisioning" oneof="reboot,poweroff" default="reboot" />
 # <UDF name="SHUTDOWN_DELAY" label="Delay before shutdown/reboot after provisioning (in minutes)" default="0" />
 # <UDF name="LK_PLATFORM_BRANCH" label="lk-platform tracking branch" oneof="master,develop" default="master" />
+
+[ ! "${SCRIPT_DEBUG:-Y}" = Y ] || {
+    SCRIPT_DEBUG_VARS="$(
+        unset BASH_EXECUTION_STRING
+        declare -p
+    )"
+    TRACE_FILE=/var/log/${PATH_PREFIX:-lk-}install.trace
+    install -v -m 0640 -g "adm" /dev/null "$TRACE_FILE"
+    exec 4>>"$TRACE_FILE"
+    BASH_XTRACEFD=4
+    set -x
+}
 
 # Use lk_bash_udf_defaults to regenerate the following after changes above
 NODE_HOSTNAME=${NODE_HOSTNAME:-}
@@ -59,12 +71,13 @@ EMAIL_BLACKHOLE=${EMAIL_BLACKHOLE:-}
 AUTO_REBOOT=${AUTO_REBOOT:-}
 AUTO_REBOOT_TIME=${AUTO_REBOOT_TIME:-02:00}
 PATH_PREFIX=${PATH_PREFIX:-lk-}
-SCRIPT_DEBUG=${SCRIPT_DEBUG:-N}
+SCRIPT_DEBUG=${SCRIPT_DEBUG:-Y}
 SHUTDOWN_ACTION=${SHUTDOWN_ACTION:-reboot}
 SHUTDOWN_DELAY=${SHUTDOWN_DELAY:-0}
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
 
 set -euo pipefail
+shopt -s nullglob
 lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (return $s) && false || exit; }
 
 FIELD_ERRORS=$(
@@ -183,8 +196,8 @@ FIELD_ERRORS=$(
 [ "$(uname -s)" = Linux ] || lk_die "not running on Linux"
 [ "$(lsb_release -si)" = Ubuntu ] || lk_die "not running on Ubuntu"
 
-[ -s /root/.ssh/authorized_keys ] ||
-    lk_die "at least one SSH key must be added to hosts deployed with this script"
+KEYS_FILE=/root/.ssh/authorized_keys
+[ -s "$KEYS_FILE" ] || lk_die "no public keys at $KEYS_FILE"
 
 PATH_PREFIX_ALPHA=$(sed 's/[^a-zA-Z0-9]//g' <<<"$PATH_PREFIX")
 HOST_DOMAIN=${HOST_DOMAIN#www.}
@@ -304,9 +317,6 @@ function iptables() {
     command ip6tables "$@"
 }
 
-shopt -s nullglob
-[ "$SCRIPT_DEBUG" = N ] || set -x
-
 LOCK_FILE=/tmp/${PATH_PREFIX}install.lock
 exec 9>"$LOCK_FILE"
 flock -n 9 || lk_die "unable to acquire a lock on $LOCK_FILE"
@@ -322,14 +332,16 @@ _LK_FD=3
 S="[[:space:]]"
 
 ADMIN_USER_KEYS="$([ -z "$ADMIN_USERS" ] ||
-    grep -E "$S(${ADMIN_USERS//,/|})\$" /root/.ssh/authorized_keys)" || true
+    grep -E "$S(${ADMIN_USERS//,/|})\$" "$KEYS_FILE")" || true
 HOST_KEYS="$([ -z "$ADMIN_USERS" ] &&
-    cat /root/.ssh/authorized_keys ||
-    grep -Ev "$S(${ADMIN_USERS//,/|})\$" /root/.ssh/authorized_keys)" || true
+    cat "$KEYS_FILE" ||
+    grep -Ev "$S(${ADMIN_USERS//,/|})\$" "$KEYS_FILE")" || true
 
 lk_console_message "Provisioning Ubuntu"
 lk_console_detail "Environment:" \
     "$(printenv | grep -v '^LS_COLORS=' | sort)"
+[ ! "$SCRIPT_DEBUG" = Y ] ||
+    lk_console_detail "Variables:" "$SCRIPT_DEBUG_VARS"
 
 # Don't propagate field values to the environment of other commands
 export -n \
@@ -947,11 +959,14 @@ printf '%s=%q\n' \
     "LK_ACCEPT_OUTPUT_HOSTS" "$ACCEPT_OUTPUT_HOSTS" \
     "LK_INNODB_BUFFER_SIZE" "$INNODB_BUFFER_SIZE" \
     "LK_OPCACHE_MEMORY_CONSUMPTION" "$OPCACHE_MEMORY_CONSUMPTION" \
+    "LK_PHP_SETTINGS" "$PHP_SETTINGS" \
+    "LK_PHP_ADMIN_SETTINGS" "$PHP_ADMIN_SETTINGS" \
     "LK_MEMCACHED_MEMORY_LIMIT" "$MEMCACHED_MEMORY_LIMIT" \
     "LK_SMTP_RELAY" "$SMTP_RELAY" \
     "LK_EMAIL_BLACKHOLE" "$EMAIL_BLACKHOLE" \
     "LK_AUTO_REBOOT" "$AUTO_REBOOT" \
     "LK_AUTO_REBOOT_TIME" "$AUTO_REBOOT_TIME" \
+    "LK_SCRIPT_DEBUG" "$SCRIPT_DEBUG" \
     "LK_PLATFORM_BRANCH" "$LK_PLATFORM_BRANCH" \
     >"/etc/default/lk-platform"
 "$LK_BASE/bin/lk-platform-install.sh" --no-log
