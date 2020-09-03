@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC1091,SC2001,SC2206,SC2207
+# shellcheck disable=SC1091,SC2001,SC2086,SC2206,SC2207
 #
 # <UDF name="NODE_HOSTNAME" label="Short hostname" example="web01-dev-syd" />
 # <UDF name="NODE_FQDN" label="Host FQDN" example="web01-dev-syd.linode.linacreative.com" />
@@ -12,13 +12,15 @@
 # <UDF name="ADMIN_USERS" label="Admin users to create (comma-delimited)" default="linac" />
 # <UDF name="ADMIN_EMAIL" label="Forwarding address for system email" example="tech@linacreative.com" />
 # <UDF name="TRUSTED_IP_ADDRESSES" label="Trusted IP addresses (comma-delimited)" example="10.0.0.0/8,172.16.0.0/12,192.168.0.0/16" default="" />
-# <UDF name="SSH_TRUSTED_ONLY" label="Block SSH access from untrusted IP addresses (ignored if no trusted IP addresses are specified)" oneof="Y,N" default="N" />
+# <UDF name="SSH_TRUSTED_ONLY" label="Block SSH access from untrusted IP addresses (trusted IP addresses required)" oneof="Y,N" default="N" />
 # <UDF name="REJECT_OUTPUT" label="Reject outgoing traffic by default" oneof="Y,N" default="N" />
 # <UDF name="ACCEPT_OUTPUT_HOSTS" label="Accept outgoing traffic to hosts (comma-delimited)" example="192.168.128.0/17,ip-ranges.amazonaws.com" default="" />
-# <UDF name="MYSQL_USERNAME" label="MySQL admin username" example="dbadmin" default="" />
-# <UDF name="MYSQL_PASSWORD" label="MySQL password (admin user not created if blank)" default="" />
+# <UDF name="MYSQL_USERNAME" label="MySQL admin username (password required)" example="dbadmin" default="" />
+# <UDF name="MYSQL_PASSWORD" label="MySQL admin password (ignored if username not set)" default="" />
 # <UDF name="INNODB_BUFFER_SIZE" label="InnoDB buffer size (~80% of RAM for MySQL-only servers)" oneof="128M,256M,512M,768M,1024M,1536M,2048M,2560M,3072M,4096M,5120M,6144M,7168M,8192M" default="256M" />
 # <UDF name="OPCACHE_MEMORY_CONSUMPTION" label="PHP OPcache size" oneof="128,256,512,768,1024" default="256" />
+# <UDF name="PHP_SETTINGS" label="php.ini settings (user can overwrite, comma-delimited, flag assumed if value is On/True/Yes or Off/False/No)" example="upload_max_filesize=24M,display_errors=On" default="" />
+# <UDF name="PHP_ADMIN_SETTINGS" label="Enforced php.ini settings (comma-delimited)" example="post_max_size=50M,log_errors=Off" default="" />
 # <UDF name="MEMCACHED_MEMORY_LIMIT" label="Memcached size" oneof="64,128,256,512,768,1024" default="256" />
 # <UDF name="SMTP_RELAY" label="SMTP relay (system-wide)" example="[mail.clientname.com.au]:587" default="" />
 # <UDF name="EMAIL_BLACKHOLE" label="Email black hole (system-wide, STAGING ONLY)" example="/dev/null" default="" />
@@ -30,41 +32,207 @@
 # <UDF name="SHUTDOWN_DELAY" label="Delay before shutdown/reboot after provisioning (in minutes)" default="0" />
 # <UDF name="LK_PLATFORM_BRANCH" label="lk-platform tracking branch" oneof="master,develop" default="master" />
 
-function is_installed() {
+# Use lk_bash_udf_defaults to regenerate the following after changes above
+NODE_HOSTNAME=${NODE_HOSTNAME:-}
+NODE_FQDN=${NODE_FQDN:-}
+NODE_TIMEZONE=${NODE_TIMEZONE:-Australia/Sydney}
+NODE_SERVICES=${NODE_SERVICES:-}
+NODE_PACKAGES=${NODE_PACKAGES:-}
+HOST_DOMAIN=${HOST_DOMAIN:-}
+HOST_ACCOUNT=${HOST_ACCOUNT:-}
+HOST_SITE_ENABLE=${HOST_SITE_ENABLE:-N}
+ADMIN_USERS=${ADMIN_USERS:-linac}
+ADMIN_EMAIL=${ADMIN_EMAIL:-}
+TRUSTED_IP_ADDRESSES=${TRUSTED_IP_ADDRESSES:-}
+SSH_TRUSTED_ONLY=${SSH_TRUSTED_ONLY:-N}
+REJECT_OUTPUT=${REJECT_OUTPUT:-N}
+ACCEPT_OUTPUT_HOSTS=${ACCEPT_OUTPUT_HOSTS:-}
+MYSQL_USERNAME=${MYSQL_USERNAME:-}
+MYSQL_PASSWORD=${MYSQL_PASSWORD:-}
+INNODB_BUFFER_SIZE=${INNODB_BUFFER_SIZE:-256M}
+OPCACHE_MEMORY_CONSUMPTION=${OPCACHE_MEMORY_CONSUMPTION:-256}
+PHP_SETTINGS=${PHP_SETTINGS:-}
+PHP_ADMIN_SETTINGS=${PHP_ADMIN_SETTINGS:-}
+MEMCACHED_MEMORY_LIMIT=${MEMCACHED_MEMORY_LIMIT:-256}
+SMTP_RELAY=${SMTP_RELAY:-}
+EMAIL_BLACKHOLE=${EMAIL_BLACKHOLE:-}
+AUTO_REBOOT=${AUTO_REBOOT:-}
+AUTO_REBOOT_TIME=${AUTO_REBOOT_TIME:-02:00}
+PATH_PREFIX=${PATH_PREFIX:-lk-}
+SCRIPT_DEBUG=${SCRIPT_DEBUG:-N}
+SHUTDOWN_ACTION=${SHUTDOWN_ACTION:-reboot}
+SHUTDOWN_DELAY=${SHUTDOWN_DELAY:-0}
+LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
+
+set -euo pipefail
+lk_die() { s=$? && echo "${0##*/}: $1" >&2 && false || exit $s; }
+
+FIELD_ERRORS=$(
+    STATUS=0
+    function _list() {
+        eval "local FN=\$1 $2=\$$2 IFS=, NULL=1 VALID=1 SELECTED i"
+        shift
+        SELECTED=(${!1})
+        unset IFS
+        for i in "${SELECTED[@]}"; do
+            eval "$1=\$i"
+            [ -z "${!1}" ] || { NULL=0 && "$FN" "$@" || VALID=0; }
+        done
+        [ "$VALID" -eq 1 ] &&
+            { [ "${REQUIRED:-0}" -eq 0 ] || [ "$NULL" -eq 0 ] ||
+                { printf "Required: %s\n" "$1" && STATUS=1 && false; }; }
+    }
+    function not_null() {
+        [ -n "${!1}" ] ||
+            { printf "Required: %s\n" "$1" && STATUS=1 && false; }
+    }
+    function valid() {
+        ! { [ "${REQUIRED:-0}" -eq 0 ] || not_null "$1"; } ||
+            [ -z "${!1}" ] || {
+            [[ "${!1}" =~ $2 ]] ||
+                { printf "Invalid %s: %q\n" "$1" "${!1}" && STATUS=1 && false; }
+        }
+    }
+    function valid_list() {
+        _list valid "$@"
+    }
+    function one_of() {
+        ! { [ "${REQUIRED:-0}" -eq 0 ] || not_null "$1"; } ||
+            [ -z "${!1}" ] || {
+            { [ $# -gt 1 ] && printf '%s\n' "${@:2}" || cat; } |
+                grep -Fx "${!1}" >/dev/null ||
+                { printf "Unknown %s: %q\n" "$1" "${!1}" && STATUS=1 && false; }
+        }
+    }
+    function many_of() {
+        _list one_of "$@"
+    }
+
+    DOMAIN_PART_REGEX="[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
+    FQDN_REGEX="($DOMAIN_PART_REGEX(\\.|\$)){2,}"
+    EMAIL_ADDRESS_REGEX="[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@$FQDN_REGEX"
+    USERNAME_REGEX="[a-z_]([-a-z0-9_]{0,31}|[-a-z0-9_]{0,30}\\\$)"
+    # https://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-source
+    DEB_PKG_REGEX="[a-z0-9][-a-z0-9+.]+"
+
+    OCTET="(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])"
+    IPV4_REGEX="($OCTET\\.){3}$OCTET(/(3[0-2]|[12][0-9]|[1-9]))?"
+
+    HEXTET="[0-9a-fA-F]{1,4}"
+    PREFIX="/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9])"
+    IPV6_REGEX="(($HEXTET:){7}(:|$HEXTET)|($HEXTET:){6}(:|:$HEXTET)|($HEXTET:){5}(:|(:$HEXTET){1,2})|($HEXTET:){4}(:|(:$HEXTET){1,3})|($HEXTET:){3}(:|(:$HEXTET){1,4})|($HEXTET:){2}(:|(:$HEXTET){1,5})|$HEXTET:(:|(:$HEXTET){1,6})|:(:|(:$HEXTET){1,7}))($PREFIX)?"
+
+    IP_REGEX="($IPV4_REGEX|$IPV6_REGEX)"
+    HOST_REGEX="($IPV4_REGEX|$IPV6_REGEX|$DOMAIN_PART_REGEX|$FQDN_REGEX)"
+
+    PHP_SETTING_NAME_REGEX="[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*"
+    PHP_SETTING_REGEX="$PHP_SETTING_NAME_REGEX=.+"
+
+    # required fields
+    REQUIRED=1
+    valid NODE_HOSTNAME "^$DOMAIN_PART_REGEX\$"
+    valid NODE_FQDN "^$FQDN_REGEX\$"
+    one_of NODE_TIMEZONE < <(timedatectl list-timezones)
+    valid ADMIN_EMAIL "^$EMAIL_ADDRESS_REGEX\$"
+    one_of AUTO_REBOOT Y N
+
+    # optional fields
+    REQUIRED=0
+    many_of NODE_SERVICES \
+        "apache+php" \
+        "mysql" \
+        "memcached" \
+        "fail2ban" \
+        "wp-cli" \
+        "jre"
+    valid_list NODE_PACKAGES "^$DEB_PKG_REGEX\$"
+    valid HOST_DOMAIN "^$FQDN_REGEX\$"
+    valid HOST_ACCOUNT "^$USERNAME_REGEX\$"
+    [ -z "$HOST_DOMAIN" ] || REQUIRED=1
+    one_of HOST_SITE_ENABLE Y N
+    REQUIRED=0
+    valid_list ADMIN_USERS "^$USERNAME_REGEX\$"
+    [ ! "$SSH_TRUSTED_ONLY" = Y ] || REQUIRED=1
+    valid_list TRUSTED_IP_ADDRESSES "^$IP_REGEX\$"
+    REQUIRED=0
+    one_of SSH_TRUSTED_ONLY Y N
+    one_of REJECT_OUTPUT Y N
+    valid_list ACCEPT_OUTPUT_HOSTS "^$HOST_REGEX\$"
+    valid MYSQL_USERNAME "^$USERNAME_REGEX\$"
+    [ -z "$MYSQL_USERNAME" ] || not_null MYSQL_PASSWORD
+    valid INNODB_BUFFER_SIZE "^[0-9]+[kmgtpeKMGTPE]?\$"
+    valid OPCACHE_MEMORY_CONSUMPTION "^[0-9]+\$"
+    valid_list PHP_SETTINGS "^$PHP_SETTING_REGEX\$"
+    valid_list PHP_ADMIN_SETTINGS "^$PHP_SETTING_REGEX\$"
+    valid MEMCACHED_MEMORY_LIMIT "^[0-9]+\$"
+    valid SMTP_RELAY "^($HOST_REGEX|\\[$HOST_REGEX\\])(:[0-9]+)?\$"
+    # TODO: validate EMAIL_BLACKHOLE
+    [ ! "$AUTO_REBOOT" = Y ] || REQUIRED=1
+    valid AUTO_REBOOT_TIME "^(([01][0-9]|2[0-3]):[0-5][0-9]|now)\$"
+    REQUIRED=0
+    valid PATH_PREFIX "^$DOMAIN_PART_REGEX-\$"
+    one_of SCRIPT_DEBUG Y N
+    one_of SHUTDOWN_ACTION reboot poweroff
+    valid SHUTDOWN_DELAY "^[0-9]+\$"
+    # TODO: validate LK_PLATFORM_BRANCH
+    exit $STATUS
+) || lk_die "$(printf '%s\n' "invalid fields" \
+    "  - ${FIELD_ERRORS//$'\n'/$'\n'  - }")"
+
+[ "$EUID" -eq 0 ] || lk_die "not running as root"
+[ "$(uname -s)" = Linux ] || lk_die "not running on Linux"
+[ "$(lsb_release -si)" = Ubuntu ] || lk_die "not running on Ubuntu"
+
+[ -s /root/.ssh/authorized_keys ] ||
+    lk_die "at least one SSH key must be added to hosts deployed with this script"
+
+PATH_PREFIX_ALPHA=$(sed 's/[^a-zA-Z0-9]//g' <<<"$PATH_PREFIX")
+HOST_DOMAIN=${HOST_DOMAIN#www.}
+HOST_ACCOUNT=${HOST_ACCOUNT:-${HOST_DOMAIN%%.*}}
+
+# The following functions are the minimum required to install lk-platform before
+# sourcing core.sh and everything else required to provision the system
+
+function lk_dpkg_installed() {
     local STATUS
-    STATUS="$(dpkg-query --show --showformat '${db:Status-Status}' "$1" 2>/dev/null)" &&
-        [ "$STATUS" = "installed" ]
+    STATUS=$(dpkg-query \
+        --show --showformat '${db:Status-Status}' "$1" 2>/dev/null) &&
+        [ "$STATUS" = installed ]
 }
 
-function now() {
-    date +'%Y-%m-%d %H:%M:%S %z'
+function lk_date_log() {
+    date +"%Y-%m-%d %H:%M:%S %z"
 }
 
-function write_log() {
+function lk_log() {
     local LINE
     while IFS= read -r LINE || [ -n "$LINE" ]; do
-        printf '%s %s\n' "$(now)" "$LINE"
+        printf '%s %s\n' "$(lk_date_log)" "$LINE"
     done
 }
 
-function log() {
-    local IFS=$'\n' LINE
-    LINE="$*"
-    echo "${LOG_PREFIX-==> }${LINE//$'\n'/$'\n  '}" >&3
+function lk_console_message() {
+    echo "\
+${LK_CONSOLE_PREFIX-==> }\
+${1//$'\n'/$'\n'"${LK_CONSOLE_SPACES-    }"}" >&${_LK_FD:-2}
 }
 
-function log_header() {
-    LOG_PREFIX="====> " log "$@"
+function lk_console_item() {
+    lk_console_message "$1$(
+        [ "${2//$'\n'/}" = "$2" ] &&
+            echo " $2" ||
+            echo $'\n'"$2"
+    )"
 }
 
-function die() {
-    local EXIT_STATUS="$?"
-    [ "$EXIT_STATUS" -ne "0" ] || EXIT_STATUS="1"
-    log_header "${0##*/}: $1" "${@:2}"
-    exit "$EXIT_STATUS"
+function lk_console_detail() {
+    local LK_CONSOLE_PREFIX="   -> " LK_CONSOLE_SPACES="      "
+    [ "$#" -le 1 ] &&
+        lk_console_message "$1" ||
+        lk_console_item "$1" "$2"
 }
 
-function keep_original() {
+function lk_keep_original() {
     [ ! -e "$1" ] ||
         cp -nav "$1" "$1.orig"
 }
@@ -72,10 +240,10 @@ function keep_original() {
 # edit_file FILE SEARCH_PATTERN REPLACE_PATTERN [ADD_TEXT]
 function edit_file() {
     local SED_SCRIPT="0,/$2/{s/$2/$3/}" BEFORE AFTER
-    [ -f "$1" ] || [ -n "${4:-}" ] || die "file not found: $1"
+    [ -f "$1" ] || [ -n "${4:-}" ] || lk_die "file not found: $1"
     [ "${MATCH_MANY:-N}" = "N" ] || SED_SCRIPT="s/$2/$3/"
     if grep -Eq -e "$2" "$1" 2>/dev/null; then
-        keep_original "$1"
+        lk_keep_original "$1"
         BEFORE="$(cat "$1")"
         AFTER="$(sed -E "$SED_SCRIPT" "$1")"
         [ "$BEFORE" = "$AFTER" ] || {
@@ -84,50 +252,38 @@ function edit_file() {
     elif [ -n "${4:-}" ]; then
         echo "$4" >>"$1"
     else
-        die "no line matching $2 in $1"
+        lk_die "no line matching $2 in $1"
     fi
-    [ "${EDIT_FILE_LOG:-Y}" = "N" ] || log_file "$1"
+    [ "${EDIT_FILE_LOG:-Y}" = "N" ] || lk_console_file "$1"
 }
 
-function esc() {
-    echo "$1" | sed -Ee 's/\\/\\\\/g' -e 's/[$`"]/\\&/g'
+function lk_console_file() {
+    lk_console_item "$1:" "\
+<<<<
+$(if [ -f "$1.orig" ]; then
+        ! diff "$1.orig" "$1" || echo "<unchanged>"
+    else
+        cat "$1"
+    fi)
+>>>>"
 }
 
-function log_file() {
-    log "$1:" \
-        "<<<<" \
-        "$(
-            if [ -f "$1.orig" ]; then
-                ! diff "$1.orig" "$1" || echo "<unchanged>"
-            else
-                cat "$1"
-            fi
-        )" \
-        ">>>>"
-}
-
-function nc() (
-    exec 3<>"/dev/tcp/$1/$2"
-    cat >&3
-    cat <&3
-    exec 3>&-
-)
-
-function keep_trying() {
-    local ATTEMPT=1 MAX_ATTEMPTS="${MAX_ATTEMPTS:-10}" WAIT=5 LAST_WAIT=3 NEW_WAIT EXIT_STATUS
+function lk_keep_trying() {
+    local MAX_ATTEMPTS=${LK_KEEP_TRYING_MAX:-10} \
+        ATTEMPT=1 WAIT=5 LAST_WAIT=3 NEW_WAIT EXIT_STATUS
     if ! "$@"; then
         while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
-            log "Command failed:" "$*"
-            log "Waiting $WAIT seconds"
+            lk_console_message "Command failed:" "$*" ${LK_RED+"$LK_RED"}
+            lk_console_detail "Waiting $WAIT seconds"
             sleep "$WAIT"
             ((NEW_WAIT = WAIT + LAST_WAIT))
-            LAST_WAIT="$WAIT"
-            WAIT="$NEW_WAIT"
-            log "Retrying (attempt $((++ATTEMPT))/$MAX_ATTEMPTS)"
+            LAST_WAIT=$WAIT
+            WAIT=$NEW_WAIT
+            lk_console_detail "Retrying (attempt $((++ATTEMPT))/$MAX_ATTEMPTS)"
             if "$@"; then
                 return
             else
-                EXIT_STATUS="$?"
+                EXIT_STATUS=$?
             fi
         done
         return "$EXIT_STATUS"
@@ -148,157 +304,93 @@ function iptables() {
     command ip6tables "$@"
 }
 
-function exit_trap() {
-    local EXIT_STATUS="$?"
-    # TODO: replace with an HTTP-based notification mechanism
-    if [ -n "${CALL_HOME_MX:-}" ]; then
-        if [ "$EXIT_STATUS" -eq "0" ]; then
-            SUBJECT="$NODE_FQDN deployed successfully"
-        else
-            SUBJECT="$NODE_FQDN failed to deploy"
-        fi
-        nc "$CALL_HOME_MX" 25 <<EOF || true
-HELO $NODE_FQDN
-MAIL FROM:<root@$NODE_FQDN>
-RCPT TO:<$ADMIN_EMAIL>
-DATA
-From: ${0##*/} <root@$NODE_FQDN>
-To: $NODE_HOSTNAME admin <$ADMIN_EMAIL>
-Date: $(date -R)
-Subject: $SUBJECT
-
-Hi
-
-The host at $NODE_HOSTNAME ($NODE_FQDN) is now live.
-${EMAIL_INFO:+
-$EMAIL_INFO
-}
-Install log:
-
-<<<$LOG_FILE
-$(cat "$LOG_FILE" 2>&1 || :)
->>>
-
-Full output: $NODE_HOSTNAME:$OUT_FILE
-
-.
-QUIT
-EOF
-    fi
-}
-
-set -euo pipefail
 shopt -s nullglob
+[ "$SCRIPT_DEBUG" = N ] || set -x
 
-if [ "${SCRIPT_DEBUG:-N}" = "Y" ]; then
-    set -x
-fi
-
-PATH_PREFIX="${PATH_PREFIX:-lk-}"
-LOCK_FILE="/tmp/${PATH_PREFIX}install.lock"
-LOG_FILE="/var/log/${PATH_PREFIX}install.log"
-OUT_FILE="/var/log/${PATH_PREFIX}install.out"
-
-install -v -m 0640 -g "adm" "/dev/null" "$LOG_FILE"
-install -v -m 0640 -g "adm" "/dev/null" "$OUT_FILE"
-
-trap 'exit_trap' EXIT
-
+LOCK_FILE=/tmp/${PATH_PREFIX}install.lock
 exec 9>"$LOCK_FILE"
-flock -n 9 || die "unable to acquire a lock on $LOCK_FILE"
+flock -n 9 || lk_die "unable to acquire a lock on $LOCK_FILE"
 
-exec > >(tee >(write_log >>"$OUT_FILE")) 2>&1
-exec 3> >(tee >(write_log >>"$LOG_FILE") >&1)
-
-# TODO: more validation here
-FIELD_ERRORS=()
-PATH_PREFIX_ALPHA="$(sed 's/[^a-zA-Z0-9]//g' <<<"$PATH_PREFIX")"
-[ -n "$PATH_PREFIX_ALPHA" ] || FIELD_ERRORS+=("PATH_PREFIX must contain at least one letter or number")
-[ -n "${NODE_HOSTNAME:-}" ] || FIELD_ERRORS+=("NODE_HOSTNAME not set")
-[ -n "${NODE_FQDN:-}" ] || FIELD_ERRORS+=("NODE_FQDN not set")
-[ -n "${ADMIN_EMAIL:-}" ] || FIELD_ERRORS+=("ADMIN_EMAIL not set")
-[ -n "${AUTO_REBOOT:-}" ] || FIELD_ERRORS+=("AUTO_REBOOT not set")
-[ "${#FIELD_ERRORS[@]}" -eq "0" ] ||
-    die "invalid field values" \
-        "${FIELD_ERRORS[@]}"
-
-NODE_TIMEZONE="${NODE_TIMEZONE:-Australia/Sydney}"
-NODE_SERVICES="${NODE_SERVICES:-}"
-NODE_PACKAGES="${NODE_PACKAGES:-}"
-HOST_DOMAIN="${HOST_DOMAIN:-}"
-HOST_DOMAIN="${HOST_DOMAIN#www.}"
-HOST_ACCOUNT="${HOST_ACCOUNT:-${HOST_DOMAIN%%.*}}"
-HOST_SITE_ENABLE="${HOST_SITE_ENABLE:-N}"
-ADMIN_USERS="${ADMIN_USERS:-linac}"
-TRUSTED_IP_ADDRESSES="${TRUSTED_IP_ADDRESSES:-}"
-SSH_TRUSTED_ONLY="${SSH_TRUSTED_ONLY:-N}"
-REJECT_OUTPUT="${REJECT_OUTPUT:-N}"
-ACCEPT_OUTPUT_HOSTS="${ACCEPT_OUTPUT_HOSTS:-}"
-MYSQL_USERNAME="${MYSQL_USERNAME:-}"
-MYSQL_PASSWORD="${MYSQL_PASSWORD:-}"
-INNODB_BUFFER_SIZE="${INNODB_BUFFER_SIZE:-256M}"
-OPCACHE_MEMORY_CONSUMPTION="${OPCACHE_MEMORY_CONSUMPTION:-256}"
-MEMCACHED_MEMORY_LIMIT="${MEMCACHED_MEMORY_LIMIT:-256}"
-SMTP_RELAY="${SMTP_RELAY:-}"
-EMAIL_BLACKHOLE="${EMAIL_BLACKHOLE:-}"
-AUTO_REBOOT_TIME="${AUTO_REBOOT_TIME:-02:00}"
-SHUTDOWN_ACTION="${SHUTDOWN_ACTION:-reboot}"
-SHUTDOWN_DELAY="${SHUTDOWN_DELAY:-0}"
+LOG_FILE=/var/log/${PATH_PREFIX}install.log
+OUT_FILE=/var/log/${PATH_PREFIX}install.out
+install -v -m 0640 -g "adm" /dev/null "$LOG_FILE"
+install -v -m 0640 -g "adm" /dev/null "$OUT_FILE"
+exec > >(tee >(lk_log >>"$OUT_FILE")) 2>&1
+exec 3> >(tee >(lk_log >>"$LOG_FILE") >&1)
+_LK_FD=3
 
 S="[[:space:]]"
 
-[ -s "/root/.ssh/authorized_keys" ] ||
-    die "at least one SSH key must be added to hosts deployed with this script"
+ADMIN_USER_KEYS="$([ -z "$ADMIN_USERS" ] ||
+    grep -E "$S(${ADMIN_USERS//,/|})\$" /root/.ssh/authorized_keys)" || true
+HOST_KEYS="$([ -z "$ADMIN_USERS" ] &&
+    cat /root/.ssh/authorized_keys ||
+    grep -Ev "$S(${ADMIN_USERS//,/|})\$" /root/.ssh/authorized_keys)" || true
 
-ADMIN_USER_KEYS="$([ -z "$ADMIN_USERS" ] || grep -E "$S(${ADMIN_USERS//,/|})\$" "/root/.ssh/authorized_keys" || :)"
-HOST_KEYS="$([ -z "$ADMIN_USERS" ] && cat "/root/.ssh/authorized_keys" || grep -Ev "$S(${ADMIN_USERS//,/|})\$" "/root/.ssh/authorized_keys" || :)"
-
-log_header "${0##*/}: preparing system"
-log "Environment:" \
+lk_console_message "Provisioning Ubuntu"
+lk_console_detail "Environment:" \
     "$(printenv | grep -v '^LS_COLORS=' | sort)"
 
-# don't propagate field values to the environment of other commands
+# Don't propagate field values to the environment of other commands
 export -n \
     HOST_DOMAIN HOST_ACCOUNT HOST_SITE_ENABLE \
     ADMIN_USERS TRUSTED_IP_ADDRESSES SSH_TRUSTED_ONLY \
+    REJECT_OUTPUT ACCEPT_OUTPUT_HOSTS \
     MYSQL_USERNAME MYSQL_PASSWORD \
-    INNODB_BUFFER_SIZE OPCACHE_MEMORY_CONSUMPTION \
+    INNODB_BUFFER_SIZE \
+    OPCACHE_MEMORY_CONSUMPTION PHP_SETTINGS PHP_ADMIN_SETTINGS \
+    MEMCACHED_MEMORY_LIMIT \
     SMTP_RELAY EMAIL_BLACKHOLE \
     AUTO_REBOOT AUTO_REBOOT_TIME \
     SCRIPT_DEBUG SHUTDOWN_ACTION SHUTDOWN_DELAY
 
-IMAGE_BASE_PACKAGES=($(apt-mark showmanual))
-log "Pre-installed packages:" \
-    "${IMAGE_BASE_PACKAGES[@]}"
-
-. /etc/lsb-release
-
-EXCLUDE_PACKAGES=()
-case "$DISTRIB_RELEASE" in
-*)
-    # "-n" disables add-apt-repository's automatic package cache update
-    ADD_APT_REPOSITORY_ARGS=(-yn)
-    CERTBOT_REPO="ppa:certbot/certbot"
-    PHPVER=7.2
-    ;;&
-16.04)
-    # in 16.04, the package cache isn't automatically updated by default
-    ADD_APT_REPOSITORY_ARGS=(-y)
-    PHPVER=7.0
-    ;;
-20.04)
-    unset CERTBOT_REPO
-    PHPVER=7.4
-    EXCLUDE_PACKAGES+=(php-gettext)
-    ;;
-esac
-
-export LK_BASE="/opt/${PATH_PREFIX}platform" \
+export LK_BASE=/opt/${PATH_PREFIX}platform \
     DEBIAN_FRONTEND=noninteractive \
     DEBCONF_NONINTERACTIVE_SEEN=true \
     PIP_NO_INPUT=1
 
-IPV4_ADDRESS="$(
+IMAGE_BASE_PACKAGES=($(apt-mark showmanual))
+lk_console_detail "Pre-installed packages:" \
+    "$(printf '%s\n' "${IMAGE_BASE_PACKAGES[@]}")"
+
+### move to lk-provision-hosting.sh
+. /etc/lsb-release
+
+APT_GET_ARGS=(
+    --no-install-recommends
+    --no-install-suggests
+)
+REPOS=()
+ADD_APT_REPOSITORY_ARGS=(-yn)
+EXCLUDE_PACKAGES=()
+CERTBOT_REPO=ppa:certbot/certbot
+case "$DISTRIB_RELEASE" in
+16.04)
+    REPOS+=("$CERTBOT_REPO")
+    ADD_APT_REPOSITORY_ARGS=(-y)
+    PHPVER=7.0
+    ;;
+18.04)
+    REPOS+=("$CERTBOT_REPO")
+    PHPVER=7.2
+    ;;
+20.04)
+    EXCLUDE_PACKAGES+=(php-gettext)
+    PHPVER=7.4
+    ;;
+*)
+    lk_die "Ubuntu release not supported: $DISTRIB_RELEASE"
+    ;;
+esac
+
+grep -Eq "\
+^deb$S+http://\w+(\.\w+)*(:[0-9]+)?(/ubuntu)?/?$S+(\w+$S+)*\
+$DISTRIB_CODENAME$S+(\w+$S+)*universe($S|\$)" \
+    /etc/apt/sources.list ||
+    REPOS+=(universe)
+### //
+
+IPV4_ADDRESS=$(
     for REGEX in \
         '^(127|10|172\.(1[6-9]|2[0-9]|3[01])|192\.168)\.' \
         '^127\.'; do
@@ -308,10 +400,10 @@ IPV4_ADDRESS="$(
             head -n1 |
             sed -E 's/\/[0-9]+$//' && break
     done
-)" || IPV4_ADDRESS=
-log "IPv4 address: ${IPV4_ADDRESS:-<none>}"
+) || IPV4_ADDRESS=
+lk_console_detail "IPv4 address:" "${IPV4_ADDRESS:-<none>}"
 
-IPV6_ADDRESS="$(
+IPV6_ADDRESS=$(
     for REGEX in \
         '^(::1/128|fe80::|f[cd])' \
         '^::1/128'; do
@@ -321,52 +413,70 @@ IPV6_ADDRESS="$(
             head -n1 |
             sed -E 's/\/[0-9]+$//' && break
     done
-)" || IPV6_ADDRESS=
-log "IPv6 address: ${IPV6_ADDRESS:-<none>}"
+) || IPV6_ADDRESS=
+lk_console_detail "IPv6 address:" "${IPV6_ADDRESS:-<none>}"
 
-log "Enabling persistent journald storage"
+### move to lk-provision-hosting.sh
+lk_console_message "Enabling persistent journald storage"
 edit_file "/etc/systemd/journald.conf" "^#?Storage=.*\$" "Storage=persistent"
 systemctl restart systemd-journald.service
+### //
 
-log "Setting system hostname to '$NODE_HOSTNAME'"
+lk_console_message "Setting system hostname"
+lk_console_detail "Running:" "hostnamectl set-hostname $NODE_HOSTNAME"
 hostnamectl set-hostname "$NODE_HOSTNAME"
 
-FILE="/etc/hosts"
 # Apache won't resolve a name-based <VirtualHost> correctly if ServerName
 # resolves to a loopback address, so if the host's FQDN is also the initial
 # hosting domain, don't associate it with 127.0.1.1
 [ "${NODE_FQDN#www.}" = "$HOST_DOMAIN" ] || HOSTS_NODE_FQDN="$NODE_FQDN"
-log "Adding entries to $FILE"
+FILE=/etc/hosts
+lk_console_detail "Adding entries to" "$FILE"
 cat <<EOF >>"$FILE"
 
-# Added by ${0##*/} at $(now)
+# Added by ${0##*/} at $(lk_date_log)
 127.0.1.1 ${HOSTS_NODE_FQDN:+$HOSTS_NODE_FQDN }$NODE_HOSTNAME${HOSTS_NODE_FQDN:+${IPV4_ADDRESS:+
 $IPV4_ADDRESS $NODE_FQDN}${IPV6_ADDRESS:+
 $IPV6_ADDRESS $NODE_FQDN}}
 EOF
-log_file "$FILE"
+lk_console_file "$FILE"
 
-log "Configuring unattended APT upgrades and disabling optional dependencies"
-APT_CONF_FILE="/etc/apt/apt.conf.d/90${PATH_PREFIX}defaults"
-[ "$AUTO_REBOOT" = "Y" ] || REBOOT_COMMENT="//"
-cat <<EOF >"$APT_CONF_FILE"
-APT::Install-Recommends "false";
-APT::Install-Suggests "false";
-APT::Periodic::Update-Package-Lists "1";
-APT::Periodic::Unattended-Upgrade "1";
-Unattended-Upgrade::Mail "root";
-Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
-${REBOOT_COMMENT:-}Unattended-Upgrade::Automatic-Reboot "true";
-${REBOOT_COMMENT:-}Unattended-Upgrade::Automatic-Reboot-Time "$AUTO_REBOOT_TIME";
-EOF
-log_file "$APT_CONF_FILE"
+### move to lk-provision-hosting.sh
+lk_console_message "Configuring APT"
+FILE=/etc/apt/apt.conf.d/90${PATH_PREFIX}defaults
+APT_OPTIONS=()
+lk_console_detail "Disabling installation of recommended and suggested packages"
+APT_OPTIONS+=(
+    "APT::Install-Recommends" "false"
+    "APT::Install-Suggests" "false"
+)
+lk_console_detail "Enabling unattended upgrades (security packages only)"
+APT_OPTIONS+=(
+    "APT::Periodic::Update-Package-Lists" "1"
+    "APT::Periodic::Unattended-Upgrade" "1"
+    "Unattended-Upgrade::Mail" "root"
+    "Unattended-Upgrade::Remove-Unused-Kernel-Packages" "true"
+)
+if [ "$AUTO_REBOOT" = Y ]; then
+    lk_console_detail "Enabling automatic reboot"
+    APT_OPTIONS+=(
+        "Unattended-Upgrade::Automatic-Reboot" "true"
+        "Unattended-Upgrade::Automatic-Reboot-Time" "$AUTO_REBOOT_TIME"
+    )
+fi
+{
+    printf '# Created by %s at %s\n' "${0##*/}" "$(lk_date_log)"
+    printf '%s "%s";\n' "${APT_OPTIONS[@]}"
+} >"$FILE"
+lk_console_file "$FILE"
+### //
 
 # see `man invoke-rc.d` for more information
-log "Disabling automatic \"systemctl start\" when new services are installed"
+lk_console_message "Disabling automatic \"systemctl start\" when new services are installed"
 cat <<EOF >"/usr/sbin/policy-rc.d"
 #!/bin/bash
-# Created by ${0##*/} at $(now)
-$(declare -f now)
+# Created by ${0##*/} at $(lk_date_log)
+$(declare -f lk_date_log)
 LOG=(
     "====> \${0##*/}: init script policy helper invoked"
     "Arguments:
@@ -380,14 +490,14 @@ if ! flock -n 9; then
 fi
 LOG+=("Deploy pending: \$DEPLOY_PENDING")
 LOG+=("Exit status: \$EXIT_STATUS")
-printf '%s %s\n%s\n' "\$(now)" "\${LOG[0]}" "\$(
+printf '%s %s\n%s\n' "\$(lk_date_log)" "\${LOG[0]}" "\$(
     LOG=("\${LOG[@]:1}")
     printf '  %s\n' "\${LOG[@]//\$'\n'/\$'\n' }"
 )" >>"/var/log/${PATH_PREFIX}policy-rc.log"
 exit "\$EXIT_STATUS"
 EOF
 chmod a+x "/usr/sbin/policy-rc.d"
-log_file "/usr/sbin/policy-rc.d"
+lk_console_file "/usr/sbin/policy-rc.d"
 
 REMOVE_PACKAGES=(
     mlocate # waste of CPU
@@ -399,20 +509,20 @@ REMOVE_PACKAGES=(
     ubuntu-advantage-tools
 )
 for i in "${!REMOVE_PACKAGES[@]}"; do
-    is_installed "${REMOVE_PACKAGES[$i]}" ||
+    lk_dpkg_installed "${REMOVE_PACKAGES[$i]}" ||
         unset "REMOVE_PACKAGES[$i]"
 done
 if [ "${#REMOVE_PACKAGES[@]}" -gt "0" ]; then
-    log "Removing APT packages:" "${REMOVE_PACKAGES[*]}"
-    apt-get -yq purge "${REMOVE_PACKAGES[@]}"
+    lk_console_item "Removing APT packages:" "${REMOVE_PACKAGES[*]}"
+    apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -yq purge "${REMOVE_PACKAGES[@]}"
 fi
 
-log "Disabling unnecessary motd scripts"
+lk_console_message "Disabling unnecessary motd scripts"
 for FILE in 10-help-text 50-motd-news 91-release-upgrade 98-fsck-at-reboot; do
     [ ! -x "/etc/update-motd.d/$FILE" ] || chmod -c a-x "/etc/update-motd.d/$FILE"
 done
 
-log "Configuring kernel parameters"
+lk_console_message "Configuring kernel parameters"
 FILE="/etc/sysctl.d/90-${PATH_PREFIX}defaults.conf"
 cat <<EOF >"$FILE"
 # Avoid paging and swapping if at all possible
@@ -422,13 +532,13 @@ vm.swappiness = 1
 # default value of SOMAXCONN is only 128
 net.core.somaxconn = 1024
 EOF
-log_file "$FILE"
+lk_console_file "$FILE"
 sysctl --system
 
-log "Sourcing $LK_BASE/lib/bash/rc.sh in ~/.bashrc for all users"
+lk_console_message "Sourcing $LK_BASE/lib/bash/rc.sh in ~/.bashrc for all users"
 RC_ESCAPED="$(printf '%q' "$LK_BASE/lib/bash/rc.sh")"
 BASH_SKEL="
-# Added by ${0##*/} at $(now)
+# Added by ${0##*/} at $(lk_date_log)
 if [ -f $RC_ESCAPED ]; then
     . $RC_ESCAPED
 fi"
@@ -439,7 +549,7 @@ else
     cp "/etc/skel/.bashrc" "/root/.bashrc"
 fi
 
-log "Sourcing Byobu in ~/.profile by default"
+lk_console_message "Sourcing Byobu in ~/.profile by default"
 cat <<EOF >>"/etc/skel/.profile"
 _byobu_sourced=1 . /usr/bin/byobu-launch 2>/dev/null || true
 EOF
@@ -468,8 +578,8 @@ BYOBU_CHARMAP=x
 EOF
 
 DIR="/etc/skel.$PATH_PREFIX_ALPHA"
-[ ! -e "$DIR" ] || die "already exists: $DIR"
-log "Creating $DIR (for hosting accounts)"
+[ ! -e "$DIR" ] || lk_die "already exists: $DIR"
+lk_console_message "Creating $DIR (for hosting accounts)"
 cp -av "/etc/skel" "$DIR"
 install -v -d -m 0755 "$DIR/.ssh"
 install -v -m 0644 /dev/null "$DIR/.ssh/authorized_keys"
@@ -477,7 +587,7 @@ install -v -m 0644 /dev/null "$DIR/.ssh/authorized_keys"
 
 for USERNAME in ${ADMIN_USERS//,/ }; do
     FIRST_ADMIN="${FIRST_ADMIN:-$USERNAME}"
-    log "Creating superuser '$USERNAME'"
+    lk_console_message "Creating superuser '$USERNAME'"
     # HOME_DIR may already exist, e.g. if filesystems have been mounted in it
     useradd --no-create-home --groups "adm,sudo" --shell "/bin/bash" "$USERNAME"
     USER_GROUP="$(id -gn "$USERNAME")"
@@ -486,7 +596,7 @@ for USERNAME in ${ADMIN_USERS//,/ }; do
     sudo -Hu "$USERNAME" cp -nRTv "/etc/skel" "$USER_HOME"
     if [ -z "$ADMIN_USER_KEYS" ]; then
         [ ! -e "/root/.ssh" ] || {
-            log "Moving /root/.ssh to /home/$USERNAME/.ssh"
+            lk_console_message "Moving /root/.ssh to /home/$USERNAME/.ssh"
             mv "/root/.ssh" "/home/$USERNAME/" &&
                 chown -R "$USERNAME": "/home/$USERNAME/.ssh" || exit
         }
@@ -499,11 +609,11 @@ for USERNAME in ${ADMIN_USERS//,/ }; do
     echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >"/etc/sudoers.d/nopasswd-$USERNAME"
 done
 
-log "Disabling root password"
+lk_console_message "Disabling root password"
 passwd -l root
 
 # TODO: configure chroot jail
-log "Disabling clear text passwords when authenticating with SSH"
+lk_console_message "Disabling clear text passwords when authenticating with SSH"
 MATCH_MANY=Y edit_file "/etc/ssh/sshd_config" \
     "^#?(PasswordAuthentication${FIRST_ADMIN+|PermitRootLogin})\b.*\$" \
     "\1 no"
@@ -511,7 +621,7 @@ MATCH_MANY=Y edit_file "/etc/ssh/sshd_config" \
 systemctl restart sshd.service
 FIRST_ADMIN="${FIRST_ADMIN:-root}"
 
-log "Configuring sudoers"
+lk_console_message "Configuring sudoers"
 install -v -m 0440 /dev/null "/etc/sudoers.d/${PATH_PREFIX}defaults"
 cat <<EOF >"/etc/sudoers.d/${PATH_PREFIX}defaults"
 Defaults !mail_no_user
@@ -519,11 +629,11 @@ Defaults !mail_badpass
 Defaults env_keep += "LK_*"
 Defaults secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$LK_BASE/bin"
 EOF
-log_file "/etc/sudoers.d/${PATH_PREFIX}defaults"
+lk_console_file "/etc/sudoers.d/${PATH_PREFIX}defaults"
 
-log "Upgrading pre-installed packages"
-keep_trying apt-get -q update
-keep_trying apt-get -yq dist-upgrade
+lk_console_message "Upgrading pre-installed packages"
+lk_keep_trying apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -q update
+lk_keep_trying apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -yq dist-upgrade
 
 debconf-set-selections <<EOF
 iptables-persistent	iptables-persistent/autosave_v4	boolean	false
@@ -536,6 +646,9 @@ EOF
 
 # bare necessities
 PACKAGES=(
+    #
+    git
+
     #
     atop
     ntp
@@ -575,6 +688,7 @@ PACKAGES=(
 
     #
     apt-listchanges
+    software-properties-common # provides add-apt-repository
     unattended-upgrades
 
     #
@@ -583,18 +697,13 @@ PACKAGES=(
     python3-dev
 )
 
-# if service installations have been requested, add-apt-repository
-# will need to be available
-[ -z "$NODE_SERVICES" ] ||
-    PACKAGES+=(software-properties-common)
+lk_console_item "Installing APT packages:" "${PACKAGES[*]}"
+lk_keep_trying apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -yq install "${PACKAGES[@]}"
 
-log "Installing APT packages:" "${PACKAGES[*]}"
-keep_trying apt-get -yq install "${PACKAGES[@]}"
-
-log "Configuring iptables"
+lk_console_message "Configuring iptables"
 if [ "$REJECT_OUTPUT" != "N" ]; then
     APT_SOURCE_HOSTS=($(grep -Eo "^[^#]+${S}https?://[^/[:space:]]+" "/etc/apt/sources.list" |
-        sed -E 's/^.*:\/\///' | sort | uniq)) || die "no active package sources in /etc/apt/sources.list"
+        sed -E 's/^.*:\/\///' | sort | uniq)) || lk_die "no active package sources in /etc/apt/sources.list"
     if [[ ",$NODE_SERVICES," =~ .*,wp-cli,.* ]]; then
         WORDPRESS_HOSTS="\
     # used by wp-cli when installing WordPress plugins and updates
@@ -630,7 +739,7 @@ ${ACCEPT_OUTPUT_HOSTS:+    ${ACCEPT_OUTPUT_HOSTS//,/$'\n'    }
 })"
     . /dev/stdin <<<"$ACCEPT_OUTPUT_HOSTS_SH"
     if [[ " ${ACCEPT_OUTPUT_HOSTS[*]} " =~ .*" api.github.com ".* ]]; then
-        keep_trying eval "GITHUB_META=\"\$(curl --fail \"https://api.github.com/meta\")\""
+        lk_keep_trying eval "GITHUB_META=\"\$(curl --fail \"https://api.github.com/meta\")\""
         GITHUB_IPS=($(jq -r ".web[]" <<<"$GITHUB_META"))
     fi
     OUTPUT_ALLOW=(
@@ -650,8 +759,8 @@ ${ACCEPT_OUTPUT_HOSTS:+    ${ACCEPT_OUTPUT_HOSTS//,/$'\n'    }
             unset "OUTPUT_ALLOW[$i]"
         fi
     done
-    keep_trying eval "IPV4_IPS=\"\$(dig +short ${OUTPUT_ALLOW[*]/%/ A})\""
-    keep_trying eval "IPV6_IPS=\"\$(dig +short ${OUTPUT_ALLOW[*]/%/ AAAA})\""
+    lk_keep_trying eval "IPV4_IPS=\"\$(dig +short ${OUTPUT_ALLOW[*]/%/ A})\""
+    lk_keep_trying eval "IPV6_IPS=\"\$(dig +short ${OUTPUT_ALLOW[*]/%/ AAAA})\""
     OUTPUT_ALLOW_IPV4+=($(echo "$IPV4_IPS" | sed -E '/\.$/d' | sort | uniq))
     OUTPUT_ALLOW_IPV6+=($(echo "$IPV6_IPS" | sed -E '/\.$/d' | sort | uniq))
 fi
@@ -771,14 +880,14 @@ else
     done
 fi
 
-log "Configuring logrotate"
+lk_console_message "Configuring logrotate"
 edit_file "/etc/logrotate.conf" "^#?su( .*)?\$" "su root adm" "su root adm"
 
-log "Setting system timezone to '$NODE_TIMEZONE'"
+lk_console_message "Setting system timezone to '$NODE_TIMEZONE'"
 timedatectl set-timezone "$NODE_TIMEZONE"
 
-log "Configuring apt-listchanges"
-keep_original "/etc/apt/listchanges.conf"
+lk_console_message "Configuring apt-listchanges"
+lk_keep_original "/etc/apt/listchanges.conf"
 cat <<EOF >"/etc/apt/listchanges.conf"
 [apt]
 frontend=pager
@@ -790,25 +899,25 @@ headers=true
 reverse=false
 save_seen=/var/lib/apt/listchanges.db
 EOF
-log_file "/etc/apt/listchanges.conf"
+lk_console_file "/etc/apt/listchanges.conf"
 
 FILE="/boot/config-$(uname -r)"
 if [ -f "$FILE" ] && ! grep -Fxq "CONFIG_BSD_PROCESS_ACCT=y" "$FILE"; then
-    log "Disabling atopacct.service (process accounting not available)"
+    lk_console_message "Disabling atopacct.service (process accounting not available)"
     systemctl disable atopacct.service
 fi
 
 install -v -d -m 2775 -o "$FIRST_ADMIN" -g "adm" "$LK_BASE"
 if [ -z "$(ls -A "$LK_BASE")" ]; then
-    log "Cloning 'https://github.com/lkrms/lk-platform.git' to '$LK_BASE'"
-    keep_trying sudo -Hu "$FIRST_ADMIN" \
+    lk_console_message "Cloning 'https://github.com/lkrms/lk-platform.git' to '$LK_BASE'"
+    lk_keep_trying sudo -Hu "$FIRST_ADMIN" \
         git clone -b "${LK_PLATFORM_BRANCH:-master}" \
         "https://github.com/lkrms/lk-platform.git" "$LK_BASE"
     sudo -Hu "$FIRST_ADMIN" bash -c "\
-cd \"$(esc "$LK_BASE")\" &&
+cd \"\$1\" &&
     git config core.sharedRepository 0664 &&
     git config merge.ff only &&
-    git config pull.ff only"
+    git config pull.ff only" bash "$LK_BASE"
 fi
 install -v -d -m 2775 -o "$FIRST_ADMIN" -g "adm" "$LK_BASE/etc"
 install -v -m 0664 -o "$FIRST_ADMIN" -g "adm" /dev/null "$LK_BASE/etc/packages.conf"
@@ -848,15 +957,15 @@ printf '%s=%q\n' \
 "$LK_BASE/bin/lk-platform-install.sh" --no-log
 
 # TODO: verify downloads
-log "Installing pip, ps_mem, Glances, awscli"
-keep_trying curl --fail --output /root/get-pip.py "https://bootstrap.pypa.io/get-pip.py"
+lk_console_message "Installing pip, ps_mem, Glances, awscli"
+lk_keep_trying curl --fail --output /root/get-pip.py "https://bootstrap.pypa.io/get-pip.py"
 python3 /root/get-pip.py
-keep_trying pip install ps_mem glances awscli
+lk_keep_trying pip install ps_mem glances awscli
 
-log "Configuring Glances"
+lk_console_message "Configuring Glances"
 install -v -d -m 0755 "/etc/glances"
 cat <<EOF >"/etc/glances/glances.conf"
-# Created by ${0##*/} at $(now)
+# Created by ${0##*/} at $(lk_date_log)
 
 [global]
 check_update=false
@@ -865,31 +974,14 @@ check_update=false
 disable=true
 EOF
 
-log "Creating virtual host base directory at /srv/www"
+lk_console_message "Creating virtual host base directory at /srv/www"
 install -v -d -m 0751 -g "adm" "/srv/www"
 
+PACKAGES=(
+    postfix
+    certbot
+)
 case ",$NODE_SERVICES," in
-,,) ;;
-
-*)
-    REPOS=(
-        ${CERTBOT_REPO+"$CERTBOT_REPO"}
-    )
-    grep -Eq \
-        "^deb$S+http://\w+(\.\w+)*(:[0-9]+)?(/ubuntu)?/?$S+(\w+$S+)*$DISTRIB_CODENAME$S+(\w+$S+)*universe($S|\$)" \
-        /etc/apt/sources.list ||
-        REPOS+=(universe)
-
-    PACKAGES=(
-        #
-        postfix
-        certbot
-
-        #
-        git
-    )
-    ;;&
-
 *,apache+php,*)
     PACKAGES+=(
         #
@@ -957,69 +1049,67 @@ case ",$NODE_SERVICES," in
     PACKAGES+=(
         php-cli
     )
-    log "Downloading wp-cli to /usr/local/bin"
-    keep_trying curl --fail --output "/usr/local/bin/wp" "https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar"
+    lk_console_message "Downloading wp-cli to /usr/local/bin"
+    lk_keep_trying curl --fail --output "/usr/local/bin/wp" "https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar"
     chmod a+x "/usr/local/bin/wp"
-    ;;&
-
-*)
-    PACKAGES=($(printf '%s\n' "${PACKAGES[@]}" | sort | uniq))
-    [ "${#EXCLUDE_PACKAGES[@]}" -eq "0" ] ||
-        PACKAGES=($(printf '%s\n' "${PACKAGES[@]}" | grep -Fxv "$(printf '%s\n' "${EXCLUDE_PACKAGES[@]}")"))
-
-    if [ "${#REPOS[@]}" -gt "0" ]; then
-        log "Adding APT repositories:" "${REPOS[@]}"
-        for REPO in "${REPOS[@]}"; do
-            keep_trying add-apt-repository "${ADD_APT_REPOSITORY_ARGS[@]}" "$REPO"
-        done
-    fi
-
-    log "Installing APT packages:" "${PACKAGES[*]}"
-    keep_trying apt-get -q update
-    # new repos may include updates for pre-installed packages
-    [ "${#REPOS[@]}" -eq "0" ] || keep_trying apt-get -yq upgrade
-    keep_trying apt-get -yq install "${PACKAGES[@]}"
-
-    if [ -n "$HOST_DOMAIN" ]; then
-        COPY_SKEL=0
-        PHP_FPM_POOL_USER="www-data"
-        id "$HOST_ACCOUNT" >/dev/null 2>&1 || {
-            log "Creating user account '$HOST_ACCOUNT'"
-            useradd --no-create-home --home-dir "/srv/www/$HOST_ACCOUNT" --shell "/bin/bash" "$HOST_ACCOUNT"
-            COPY_SKEL=1
-            PHP_FPM_POOL_USER="$HOST_ACCOUNT"
-            APACHE_MODS=(
-                qos
-                unique_id # used by "qos"
-            )
-        }
-        HOST_ACCOUNT_GROUP="$(id -gn "$HOST_ACCOUNT")"
-        install -v -d -m 0750 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT"
-        install -v -d -m 0750 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/public_html"
-        install -v -d -m 0750 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/ssl"
-        install -v -d -m 0750 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/.cache"
-        install -v -d -m 2750 -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/log"
-        [ "$COPY_SKEL" -eq "0" ] || {
-            sudo -Hu "$HOST_ACCOUNT" cp -nRTv "/etc/skel.$PATH_PREFIX_ALPHA" "/srv/www/$HOST_ACCOUNT" &&
-                chmod -Rc -077 "/srv/www/$HOST_ACCOUNT/.ssh" || exit
-        }
-        ! is_installed apache2 || {
-            log "Adding user 'www-data' to group '$HOST_ACCOUNT_GROUP'"
-            usermod --append --groups "$HOST_ACCOUNT_GROUP" "www-data"
-        }
-    fi
     ;;
 
 esac
 
-if [ -n "$NODE_PACKAGES" ]; then
-    log "Installing additional packages"
-    keep_trying apt-get -yq install ${NODE_PACKAGES//,/ }
+PACKAGES=($(printf '%s\n' "${PACKAGES[@]}" | sort | uniq))
+[ "${#EXCLUDE_PACKAGES[@]}" -eq "0" ] ||
+    PACKAGES=($(printf '%s\n' "${PACKAGES[@]}" | grep -Fxv "$(printf '%s\n' "${EXCLUDE_PACKAGES[@]}")"))
+
+if [ "${#REPOS[@]}" -gt "0" ]; then
+    lk_console_item "Adding APT repositories:" "$(printf '%s\n' "${REPOS[@]}")"
+    for REPO in "${REPOS[@]}"; do
+        lk_keep_trying add-apt-repository "${ADD_APT_REPOSITORY_ARGS[@]}" "$REPO"
+    done
 fi
 
-if is_installed fail2ban; then
+lk_console_item "Installing APT packages:" "${PACKAGES[*]}"
+lk_keep_trying apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -q update
+# new repos may include updates for pre-installed packages
+[ "${#REPOS[@]}" -eq "0" ] || lk_keep_trying apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -yq upgrade
+lk_keep_trying apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -yq install "${PACKAGES[@]}"
+
+if [ -n "$HOST_DOMAIN" ]; then
+    COPY_SKEL=0
+    PHP_FPM_POOL_USER="www-data"
+    id "$HOST_ACCOUNT" >/dev/null 2>&1 || {
+        lk_console_message "Creating user account '$HOST_ACCOUNT'"
+        useradd --no-create-home --home-dir "/srv/www/$HOST_ACCOUNT" --shell "/bin/bash" "$HOST_ACCOUNT"
+        COPY_SKEL=1
+        PHP_FPM_POOL_USER="$HOST_ACCOUNT"
+        APACHE_MODS=(
+            qos
+            unique_id # used by "qos"
+        )
+    }
+    HOST_ACCOUNT_GROUP="$(id -gn "$HOST_ACCOUNT")"
+    install -v -d -m 0750 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT"
+    install -v -d -m 0750 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/public_html"
+    install -v -d -m 0750 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/ssl"
+    install -v -d -m 0750 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/.cache"
+    install -v -d -m 2750 -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/log"
+    [ "$COPY_SKEL" -eq "0" ] || {
+        sudo -Hu "$HOST_ACCOUNT" cp -nRTv "/etc/skel.$PATH_PREFIX_ALPHA" "/srv/www/$HOST_ACCOUNT" &&
+            chmod -Rc -077 "/srv/www/$HOST_ACCOUNT/.ssh" || exit
+    }
+    ! lk_dpkg_installed apache2 || {
+        lk_console_message "Adding user 'www-data' to group '$HOST_ACCOUNT_GROUP'"
+        usermod --append --groups "$HOST_ACCOUNT_GROUP" "www-data"
+    }
+fi
+
+if [ -n "$NODE_PACKAGES" ]; then
+    lk_console_message "Installing additional packages"
+    lk_keep_trying apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -yq install ${NODE_PACKAGES//,/ }
+fi
+
+if lk_dpkg_installed fail2ban; then
     # TODO: configure jails other than sshd
-    log "Configuring Fail2Ban"
+    lk_console_message "Configuring Fail2Ban"
     FILE="/etc/fail2ban/jail.conf"
     EDIT_FILE_LOG=N edit_file "$FILE" \
         "^#?backend$S*=($S*(pyinotify|gamin|polling|systemd|auto))?($S*; .*)?\$" \
@@ -1028,27 +1118,27 @@ if is_installed fail2ban; then
         EDIT_FILE_LOG=N edit_file "$FILE" \
             "^#?ignoreip$S*=($S*[^#]+)?($S*; .*)?\$" \
             "ignoreip = 127.0.0.1\\/8 ::1 ${TRUSTED_IP_ADDRESSES//\//\\\/}\2"
-    log_file "$FILE"
+    lk_console_file "$FILE"
 fi
 
-if is_installed postfix; then
-    log "Binding Postfix to the loopback interface"
+if lk_dpkg_installed postfix; then
+    lk_console_message "Binding Postfix to the loopback interface"
     postconf -e "inet_interfaces = loopback-only"
     if [ -n "$EMAIL_BLACKHOLE" ]; then
-        log "Configuring Postfix to map all recipient addresses to '$EMAIL_BLACKHOLE'"
+        lk_console_message "Configuring Postfix to map all recipient addresses to '$EMAIL_BLACKHOLE'"
         postconf -e "recipient_canonical_maps = static:blackhole"
         cat <<EOF >>"/etc/aliases"
 
-# Added by ${0##*/} at $(now)
+# Added by ${0##*/} at $(lk_date_log)
 blackhole:	$EMAIL_BLACKHOLE
 EOF
         newaliases
     fi
-    log_file "/etc/postfix/main.cf"
-    log_file "/etc/aliases"
+    lk_console_file "/etc/postfix/main.cf"
+    lk_console_file "/etc/aliases"
 fi
 
-if is_installed apache2; then
+if lk_dpkg_installed apache2; then
     APACHE_MODS=(
         # Ubuntu 18.04 defaults
         access_compat
@@ -1089,24 +1179,24 @@ if is_installed apache2; then
     APACHE_DISABLE_MODS=($(comm -13 <(printf '%s\n' "${APACHE_MODS[@]}" | sort | uniq) <(echo "$APACHE_MODS_ENABLED")))
     APACHE_ENABLE_MODS=($(comm -23 <(printf '%s\n' "${APACHE_MODS[@]}" | sort | uniq) <(echo "$APACHE_MODS_ENABLED")))
     [ "${#APACHE_DISABLE_MODS[@]}" -eq "0" ] || {
-        log "Disabling Apache HTTPD modules:" "${APACHE_DISABLE_MODS[*]}"
+        lk_console_item "Disabling Apache HTTPD modules:" "${APACHE_DISABLE_MODS[*]}"
         a2dismod --force "${APACHE_DISABLE_MODS[@]}"
     }
     [ "${#APACHE_ENABLE_MODS[@]}" -eq "0" ] || {
-        log "Enabling Apache HTTPD modules:" "${APACHE_ENABLE_MODS[*]}"
+        lk_console_item "Enabling Apache HTTPD modules:" "${APACHE_ENABLE_MODS[*]}"
         a2enmod --force "${APACHE_ENABLE_MODS[@]}"
     }
 
     # TODO: make PHP-FPM setup conditional
     [ -e "/opt/opcache-gui" ] || {
-        log "Cloning 'https://github.com/lkrms/opcache-gui.git' to '/opt/opcache-gui'"
+        lk_console_message "Cloning 'https://github.com/lkrms/opcache-gui.git' to '/opt/opcache-gui'"
         install -v -d -m 2775 -o "$FIRST_ADMIN" -g "adm" "/opt/opcache-gui"
-        keep_trying sudo -Hu "$FIRST_ADMIN" \
+        lk_keep_trying sudo -Hu "$FIRST_ADMIN" \
             git clone "https://github.com/lkrms/opcache-gui.git" \
             "/opt/opcache-gui"
     }
 
-    log "Configuring Apache HTTPD to serve PHP-FPM virtual hosts"
+    lk_console_message "Configuring Apache HTTPD to serve PHP-FPM virtual hosts"
     cat <<EOF >"/etc/apache2/sites-available/${PATH_PREFIX}default.conf"
 <IfModule event.c>
     MaxRequestWorkers 300
@@ -1204,14 +1294,14 @@ Use PublicDirectory /srv/www/*/*/public_html
 EOF
     rm -f "/etc/apache2/sites-enabled"/*
     ln -s "../sites-available/${PATH_PREFIX}default.conf" "/etc/apache2/sites-enabled/000-${PATH_PREFIX}default.conf"
-    log_file "/etc/apache2/sites-available/${PATH_PREFIX}default.conf"
+    lk_console_file "/etc/apache2/sites-available/${PATH_PREFIX}default.conf"
 
-    log "Disabling pre-installed PHP-FPM pools"
-    keep_original "/etc/php/$PHPVER/fpm/pool.d"
+    lk_console_message "Disabling pre-installed PHP-FPM pools"
+    lk_keep_original "/etc/php/$PHPVER/fpm/pool.d"
     rm -f "/etc/php/$PHPVER/fpm/pool.d"/*.conf
 
     if [ -n "$HOST_DOMAIN" ]; then
-        log "Adding site to Apache HTTPD: $HOST_DOMAIN"
+        lk_console_message "Adding site to Apache HTTPD: $HOST_DOMAIN"
         cat <<EOF >"/etc/apache2/sites-available/$HOST_ACCOUNT.conf"
 <VirtualHost *:80>
     ServerName $HOST_DOMAIN
@@ -1236,7 +1326,7 @@ EOF
         install -v -m 0640 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.cert"
         install -v -m 0640 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.key"
 
-        log "Creating a self-signed SSL certificate for '$HOST_DOMAIN'"
+        lk_console_message "Creating a self-signed SSL certificate for '$HOST_DOMAIN'"
         openssl genrsa \
             -out "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.key" \
             2048
@@ -1253,9 +1343,9 @@ EOF
 
         [ "$HOST_SITE_ENABLE" = "N" ] ||
             ln -s "../sites-available/$HOST_ACCOUNT.conf" "/etc/apache2/sites-enabled/$HOST_ACCOUNT.conf"
-        log_file "/etc/apache2/sites-available/$HOST_ACCOUNT.conf"
+        lk_console_file "/etc/apache2/sites-available/$HOST_ACCOUNT.conf"
 
-        log "Configuring PHP-FPM umask for group-writable files"
+        lk_console_message "Configuring PHP-FPM umask for group-writable files"
         FILE="/etc/systemd/system/php$PHPVER-fpm.service.d/override.conf"
         install -v -d -m 0755 "$(dirname "$FILE")"
         cat <<EOF >"$FILE"
@@ -1263,9 +1353,9 @@ EOF
 UMask=0002
 EOF
         systemctl daemon-reload
-        log_file "$FILE"
+        lk_console_file "$FILE"
 
-        log "Adding pool to PHP-FPM: $HOST_ACCOUNT"
+        lk_console_message "Adding pool to PHP-FPM: $HOST_ACCOUNT"
         cat <<EOF >"/etc/php/$PHPVER/fpm/pool.d/$HOST_ACCOUNT.conf"
 ; Values in /etc/apache2/sites-available/$HOST_ACCOUNT.conf and/or
 ; /etc/mysql/mariadb.conf.d/90-${PATH_PREFIX}defaults.cnf should be updated
@@ -1289,15 +1379,17 @@ pm.status_path = /php-fpm-status
 ping.path = /php-fpm-ping
 access.log = "/srv/www/\$pool/log/php$PHPVER-fpm.access.log"
 access.format = "%{REMOTE_ADDR}e - %u %t \"%m %r%Q%q\" %s %f %{mili}d %{kilo}M %C%%"
-catch_workers_output = yes
+catch_workers_output = yes${OPCACHE_MEMORY_CONSUMPTION:+
 ; tune based on system resources
-php_admin_value[opcache.memory_consumption] = $OPCACHE_MEMORY_CONSUMPTION
+php_admin_value[opcache.memory_consumption] = $OPCACHE_MEMORY_CONSUMPTION}
 php_admin_value[opcache.file_cache] = "/srv/www/\$pool/.cache/opcache"
 php_admin_flag[opcache.validate_permission] = On
 php_admin_value[error_log] = "/srv/www/\$pool/log/php$PHPVER-fpm.error.log"
 php_admin_flag[log_errors] = On
 php_flag[display_errors] = Off
 php_flag[display_startup_errors] = Off
+php_value[upload_max_filesize] = 24M
+php_value[post_max_size] = 50M
 
 ; do not uncomment the following in production (also, install php-xdebug first)
 ;php_admin_flag[opcache.enable] = Off
@@ -1310,10 +1402,10 @@ EOF
         install -v -m 0640 -o "$PHP_FPM_POOL_USER" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/php$PHPVER-fpm.error.log"
         install -v -m 0640 -o "$PHP_FPM_POOL_USER" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/php$PHPVER-fpm.xdebug.log"
         install -v -d -m 0700 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/.cache/opcache"
-        log_file "/etc/php/$PHPVER/fpm/pool.d/$HOST_ACCOUNT.conf"
+        lk_console_file "/etc/php/$PHPVER/fpm/pool.d/$HOST_ACCOUNT.conf"
     fi
 
-    log "Adding virtual host log files to logrotate.d"
+    lk_console_message "Adding virtual host log files to logrotate.d"
     mv -v "/etc/logrotate.d/apache2" "/etc/logrotate.d/apache2.disabled"
     mv -v "/etc/logrotate.d/php$PHPVER-fpm" "/etc/logrotate.d/php$PHPVER-fpm.disabled"
     cat <<EOF >"/etc/logrotate.d/${PATH_PREFIX}log"
@@ -1333,31 +1425,30 @@ EOF
 }
 EOF
 
-    log "Adding iptables rules for Apache HTTPD"
+    lk_console_message "Adding iptables rules for Apache HTTPD"
     iptables -A "${P}input" -p tcp -m tcp --dport 80 -j ACCEPT
     iptables -A "${P}input" -p tcp -m tcp --dport 443 -j ACCEPT
 fi
 
-if is_installed mariadb-server; then
+if lk_dpkg_installed mariadb-server; then
     FILE="/etc/mysql/mariadb.conf.d/90-${PATH_PREFIX}defaults.cnf"
     cat <<EOF >"$FILE"
 [mysqld]
 # must exceed the sum of pm.max_children across all PHP-FPM pools
-max_connections = 301
+max_connections = 301${INNODB_BUFFER_SIZE:+
 
 innodb_buffer_pool_size = $INNODB_BUFFER_SIZE
 innodb_buffer_pool_instances = $(((${INNODB_BUFFER_SIZE%M} - 1) / 1024 + 1))
 innodb_buffer_pool_dump_at_shutdown = 1
-innodb_buffer_pool_load_at_startup = 1
+innodb_buffer_pool_load_at_startup = 1}
 EOF
-    log_file "$FILE"
-    log "Starting mysql.service (MariaDB)"
+    lk_console_file "$FILE"
+    lk_console_message "Starting mysql.service (MariaDB)"
     systemctl start mysql.service
-    if [ -n "$MYSQL_PASSWORD" ]; then
-        MYSQL_USERNAME="${MYSQL_USERNAME:-dbadmin}"
+    if [ -n "$MYSQL_USERNAME" ]; then
         MYSQL_PASSWORD="${MYSQL_PASSWORD//\\/\\\\}"
         MYSQL_PASSWORD="${MYSQL_PASSWORD//\'/\\\'}"
-        log "Creating MySQL administrator '$MYSQL_USERNAME'"
+        lk_console_message "Creating MySQL administrator '$MYSQL_USERNAME'"
         echo "\
 GRANT ALL PRIVILEGES ON *.* \
 TO '$MYSQL_USERNAME'@'localhost' \
@@ -1365,18 +1456,18 @@ IDENTIFIED BY '$MYSQL_PASSWORD' \
 WITH GRANT OPTION" | mysql -uroot
     fi
 
-    log "Configuring MySQL account self-service"
+    lk_console_message "Configuring MySQL account self-service"
     install -v -m 0440 /dev/null "/etc/sudoers.d/${PATH_PREFIX}mysql-self-service"
     cat <<EOF >"/etc/sudoers.d/${PATH_PREFIX}mysql-self-service"
 ALL ALL=(root) NOPASSWD:$LK_BASE/bin/lk-mysql-grant.sh
 EOF
-    log_file "/etc/sudoers.d/${PATH_PREFIX}mysql-self-service"
+    lk_console_file "/etc/sudoers.d/${PATH_PREFIX}mysql-self-service"
 
     # TODO: create $HOST_ACCOUNT database
 fi
 
-if is_installed memcached; then
-    log "Configuring Memcached"
+if lk_dpkg_installed memcached; then
+    lk_console_message "Configuring Memcached"
     FILE="/etc/memcached.conf"
     edit_file "$FILE" \
         "^#?(-m$S+|--memory-limit(=|$S+))[0-9]+$S*\$" \
@@ -1384,15 +1475,15 @@ if is_installed memcached; then
         "-m $MEMCACHED_MEMORY_LIMIT"
 fi
 
-log "Saving iptables rules"
+lk_console_message "Saving iptables rules"
 iptables-save >"/etc/iptables/rules.v4"
 ip6tables-save >"/etc/iptables/rules.v6"
-log_file "/etc/iptables/rules.v4"
-log_file "/etc/iptables/rules.v6"
+lk_console_file "/etc/iptables/rules.v4"
+lk_console_file "/etc/iptables/rules.v6"
 
-log "Running apt-get autoremove"
-apt-get -yq autoremove
+lk_console_message "Running apt-get autoremove"
+apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -yq autoremove
 
-log_header "${0##*/}: deployment complete"
-log "Running shutdown with '--$SHUTDOWN_ACTION +${SHUTDOWN_DELAY:-0}'"
-shutdown "--$SHUTDOWN_ACTION" +"${SHUTDOWN_DELAY:-0}"
+lk_console_message "Provisioning complete"
+lk_console_detail "Running:" "shutdown --$SHUTDOWN_ACTION +$SHUTDOWN_DELAY"
+shutdown --"$SHUTDOWN_ACTION" +"$SHUTDOWN_DELAY"

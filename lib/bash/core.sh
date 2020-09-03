@@ -472,7 +472,7 @@ function lk_log() {
 function lk_log_output() {
     local LOG_PATH="${1-${LK_INST:-$LK_BASE}/var/log/${0##*/}-$UID.log}" \
         OWNER="${LK_LOG_FILE_OWNER:-$USER}" GROUP="${LK_LOG_FILE_GROUP:-}" \
-        LOG_DIRS LOG_FILE LOG_DIR
+        LOG_DIRS LOG_FILE LOG_DIR HEADER=() IFS
     ! lk_has_arg --no-log || return 0
     [[ $LOG_PATH =~ ^((.*)/)?([^/]+\.log)$ ]] ||
         lk_warn "invalid log path: $1" || return
@@ -480,6 +480,9 @@ function lk_log_output() {
     LOG_FILE="${BASH_REMATCH[3]}"
     [ -n "${1:-}" ] || LOG_DIRS+=("/tmp")
     for LOG_DIR in "${LOG_DIRS[@]}"; do
+        # Find the first LOG_DIR where the user can write to LOG_DIR/LOG_FILE,
+        # installing LOG_DIR (world-writable) and LOG_FILE (owner-only) if
+        # needed, running commands via sudo only if they fail without it
         [ -d "$LOG_DIR" ] || lk_elevate_if_error install -d \
             -m "$(lk_pad_zero 4 "${LK_LOG_DIR_MODE:-0777}")" \
             "$LOG_DIR" 2>/dev/null || continue
@@ -500,21 +503,22 @@ function lk_log_output() {
                 -o "$OWNER" ${GROUP:+-g "$GROUP"} \
                 /dev/null "$LOG_PATH" 2>/dev/null || continue
         fi
-        lk_log "$LK_BOLD====> $(
-            # include directory if running from a source file
-            { [ ${#BASH_SOURCE[@]} -eq 0 ] ||
-                [[ ! $0 =~ ^((.*)/)?([^/]+)$ ]] ||
-                ! DIR=$(cd "${BASH_REMATCH[2]:-.}" && pwd -P) ||
-                echo "${DIR%/}/"; } 2>/dev/null
-        )${0##*/} invoked$(
-            [ "${#LK_ARGV[@]}" -eq "0" ] || {
-                printf ' with %s %s:' \
-                    "${#LK_ARGV[@]}" \
-                    "$(lk_maybe_plural \
-                        "${#LK_ARGV[@]}" "argument" "arguments")"
-                printf '\n- %q' "${LK_ARGV[@]}"
-            }
-        )$LK_RESET" >>"$LOG_PATH" &&
+        # Log invocation details, including script path if running from a source
+        # file, to separate this from any previous runs
+        { [ ${#BASH_SOURCE[@]} -eq 0 ] ||
+            [[ ! $0 =~ ^((.*)/)?([^/]+)$ ]] ||
+            ! DIR=$(cd "${BASH_REMATCH[2]:-.}" && pwd -P) ||
+            HEADER+=("${DIR%/}/"); } 2>/dev/null
+        HEADER+=("${0##*/} invoked")
+        [ "${#LK_ARGV[@]}" -eq "0" ] || HEADER+=($(
+            printf ' with %s %s:' \
+                "${#LK_ARGV[@]}" \
+                "$(lk_maybe_plural \
+                    "${#LK_ARGV[@]}" "argument" "arguments")"
+            printf '\n- %q' "${LK_ARGV[@]}"
+        ))
+        IFS=
+        lk_log "$LK_BOLD====> ${HEADER[*]}$LK_RESET" >>"$LOG_PATH" &&
             exec 6>&1 7>&2 &&
             exec > >(tee >(lk_log >>"$LOG_PATH")) 2>&1 ||
             exit
@@ -574,7 +578,7 @@ function lk_console_message() {
         lk_echoc -n "$PREFIX" "${LK_CONSOLE_PREFIX_COLOUR-$BOLD_COLOUR}"
         lk_echoc -n "$MESSAGE" "${LK_CONSOLE_MESSAGE_COLOUR-$LK_BOLD}"
         [ -z "${MESSAGE2:-}" ] || lk_echoc -n "$MESSAGE2" "${LK_CONSOLE_SECONDARY_COLOUR-$COLOUR}"
-    )" >&2
+    )" >&${_LK_FD:-2}
 }
 
 function lk_console_detail() {
@@ -648,7 +652,7 @@ function lk_console_list() {
         COLUMNS="${COLUMNS+$((COLUMNS - ${#LK_CONSOLE_PREFIX} - INDENT))}" \
             column -s $'\n' | expand)"
     SPACES="$(lk_repeat " " "$((${#LK_CONSOLE_PREFIX} + INDENT))")"
-    lk_echoc "$SPACES${LIST//$'\n'/$'\n'$SPACES}" "$COLOUR" >&2
+    lk_echoc "$SPACES${LIST//$'\n'/$'\n'$SPACES}" "$COLOUR" >&${_LK_FD:-2}
     [ -z "${SINGLE_NOUN:-}" ] ||
         LK_CONSOLE_PREFIX="$SPACES" lk_console_detail "(${#ITEMS[@]} $(
             lk_maybe_plural "${#ITEMS[@]}" "$SINGLE_NOUN" "$PLURAL_NOUN"
@@ -659,10 +663,10 @@ function lk_console_list() {
 function lk_console_read() {
     local PROMPT=("$1") DEFAULT="${2:-}" VALUE
     [ -z "$DEFAULT" ] || PROMPT+=("[$DEFAULT]")
-    printf '%s ' "$LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_DEFAULT_CONSOLE_COLOUR}:: $LK_RESET$LK_BOLD${PROMPT[*]}$LK_RESET" >&2
+    printf '%s ' "$LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_DEFAULT_CONSOLE_COLOUR}:: $LK_RESET$LK_BOLD${PROMPT[*]}$LK_RESET" >&${_LK_FD:-2}
     read -re "${@:3}" VALUE || return
     [ -n "$VALUE" ] ||
-        { VALUE="$DEFAULT" && echo >&2; }
+        { VALUE="$DEFAULT" && echo >&${_LK_FD:-2}; }
     echo "$VALUE"
 }
 
@@ -685,11 +689,11 @@ function lk_confirm() {
         DEFAULT=
     fi
     while ! [[ "${VALUE:-}" =~ ^(Y|YES|N|NO)$ ]]; do
-        printf '%s ' "$LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_DEFAULT_CONSOLE_COLOUR}:: $LK_RESET$LK_BOLD${PROMPT[*]}$LK_RESET" >&2
+        printf '%s ' "$LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_DEFAULT_CONSOLE_COLOUR}:: $LK_RESET$LK_BOLD${PROMPT[*]}$LK_RESET" >&${_LK_FD:-2}
         read -re "${@:3}" VALUE || VALUE="$DEFAULT"
         [ -n "$VALUE" ] &&
             VALUE="$(lk_upper "$VALUE")" ||
-            { VALUE="$DEFAULT" && echo >&2; }
+            { VALUE="$DEFAULT" && echo >&${_LK_FD:-2}; }
     done
     [[ "$VALUE" =~ ^(Y|YES)$ ]]
 }
@@ -1019,6 +1023,33 @@ function lk_safe_symlink() {
     lk_maybe_sudo ln -sv "$TARGET" "$LINK"
 }
 
+# lk_keep_trying <COMMAND> [<ARG>...]
+#
+# Execute COMMAND, with an increasing delay between each attempt, until its exit
+# status is zero or 10 attempts have been made. The delay starts at 5 seconds
+# and follows the Fibonnaci sequence (5, 8, 13, 21, 34, etc.).
+function lk_keep_trying() {
+    local MAX_ATTEMPTS=${LK_KEEP_TRYING_MAX:-10} \
+        ATTEMPT=1 WAIT=5 LAST_WAIT=3 NEW_WAIT EXIT_STATUS
+    if ! "$@"; then
+        while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
+            lk_console_message "Command failed:" "$*" ${LK_RED+"$LK_RED"}
+            lk_console_detail "Waiting $WAIT seconds"
+            sleep "$WAIT"
+            ((NEW_WAIT = WAIT + LAST_WAIT))
+            LAST_WAIT=$WAIT
+            WAIT=$NEW_WAIT
+            lk_console_detail "Retrying (attempt $((++ATTEMPT))/$MAX_ATTEMPTS)"
+            if "$@"; then
+                return
+            else
+                EXIT_STATUS=$?
+            fi
+        done
+        return "$EXIT_STATUS"
+    fi
+}
+
 function _lk_get_gnu_command() {
     case "$1" in
     awk)
@@ -1305,7 +1336,7 @@ function lk_ssl_client() {
 #   Print each input line that is a valid dotted-decimal IPv4 address or CIDR.
 function lk_grep_ipv4() {
     local OCTET='(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])'
-    grep -E "^($OCTET\.){3}$OCTET(/(3[0-2]|[12][0-9]|[1-9]))?\$"
+    grep -E "^($OCTET\\.){3}$OCTET(/(3[0-2]|[12][0-9]|[1-9]))?\$"
 }
 
 # lk_grep_ipv6

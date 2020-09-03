@@ -24,6 +24,10 @@ function lk_assert_is_arch() {
     lk_is_arch || lk_die "not running on Arch Linux"
 }
 
+function lk_assert_is_ubuntu() {
+    lk_is_ubuntu || lk_die "not running on Ubuntu"
+}
+
 function lk_assert_is_macos() {
     lk_is_macos || lk_die "not running on macOS"
 }
