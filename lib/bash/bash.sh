@@ -14,8 +14,8 @@ function lk_bash_array_literals() {
 #
 function lk_bash_udf_defaults() {
     cat ${1+"$1"} |
-        grep -E '^.*<UDF name="([^"]+)"' "$1" |
+        grep -E '^.*<(NO)?UDF name="([^"]+)"' "$1" |
         sed -E \
-            -e 's/^.*<UDF name="([^"]+)".* default="([^"]*)".*/\1=${\1:-\2}/' \
-            -e 's/^.*<UDF name="([^"]+)".*/\1=${\1:-}/'
+            -e 's/^.*<(NO)?UDF name="([^"]+)".* default="([^"]*)".*/\2=${\2:-\3}/' \
+            -e 's/^.*<(NO)?UDF name="([^"]+)".*/\2=${\2:-}/'
 }
