@@ -1,7 +1,7 @@
 #!/bin/bash
 # shellcheck disable=SC1090,SC2015,SC2034,SC2207
 
-depth=1 include=wordpress . lk-bash-load.sh || exit
+lk_bin_depth=1 include=wordpress . lk-bash-load.sh || exit
 
 DEACTIVATE_PLUGINS=(
     #

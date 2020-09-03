@@ -7,7 +7,7 @@
 #   2. Set _DEPTH to the number of directories between LK_BASE and the script
 #
 # Alternatively, use:
-#   depth=DEPTH [include=LIBRARY...] . lk-bash-load.sh || exit
+#   lk_bin_depth=DEPTH [include=LIBRARY...] . lk-bash-load.sh || exit
 
 ##
 # Option 1:

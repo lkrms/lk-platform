@@ -1,7 +1,7 @@
 #!/bin/bash
 # shellcheck disable=SC1090,SC2016,SC2031,SC2034,SC2207
 
-depth=1 include=provision,linux,arch,httpd,php . lk-bash-load.sh || exit
+lk_bin_depth=1 include=provision,linux,arch,httpd,php . lk-bash-load.sh || exit
 
 lk_assert_not_root
 lk_assert_is_arch

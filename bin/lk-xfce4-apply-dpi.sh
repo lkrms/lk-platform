@@ -1,7 +1,7 @@
 #!/bin/bash
 # shellcheck disable=SC2034
 
-depth=1 . lk-bash-load.sh || exit
+lk_bin_depth=1 . lk-bash-load.sh || exit
 
 DPI="${1:-$(xdpyinfo |
     grep -Eo '^[[:space:]]+resolution:[[:space:]]*[0-9]+x[0-9]+' |
