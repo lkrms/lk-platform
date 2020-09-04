@@ -1,4 +1,5 @@
 #!/bin/bash
+
 # shellcheck disable=SC1090,SC2015,SC2034
 
 # To use this as a template for lk-platform scripts:
@@ -7,7 +8,9 @@
 #   2. Set _DEPTH to the number of directories between LK_BASE and the script
 #
 # Alternatively, use:
-#   lk_bin_depth=DEPTH [include=LIBRARY...] . lk-bash-load.sh || exit
+#
+#   lk_bin_depth=<DEPTH> [include=<LIBRARY>...] . lk-bash-load.sh || exit
+#
 
 ##
 # Option 1:
@@ -34,6 +37,8 @@ LK_BASE=$(i=0 && F=$_FILE && while [ $((i++)) -le "$_DEPTH" ]; do
 done && pwd -P) || lk_die "symlinks in path are not supported"
 [ -d "$LK_BASE/lib/bash" ] || lk_die "unable to locate LK_BASE"
 export LK_BASE
+
+include='' . "$LK_BASE/lib/bash/common.sh"
 #
 ##
 
@@ -61,10 +66,10 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
     [ "$LK_BASE" != / ] && [ -d "$LK_BASE/lib/bash" ] ||
     lk_die "unable to locate LK_BASE"
 export LK_BASE
-#
-##
 
 include='' . "$LK_BASE/lib/bash/common.sh"
+#
+##
 
 PARAM=
 PARAM1=
