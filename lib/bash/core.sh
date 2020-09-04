@@ -562,12 +562,14 @@ function lk_console_message() {
     [ "$#" -le "1" ] || {
         MESSAGE2="$1"
         shift
-        ! lk_in_string $'\n' "$MESSAGE2" &&
-            [ "$INDENT" -eq "0" ] &&
-            MESSAGE2=" $MESSAGE2" || {
-            INDENT="${LK_CONSOLE_INDENT:-$((${#PREFIX} + INDENT))}"
-            SPACES=$'\n'"$(lk_repeat " " "$INDENT")"
-            MESSAGE2="$SPACES${MESSAGE2//$'\n'/$SPACES}"
+        [ -z "$MESSAGE2" ] || {
+            ! lk_in_string $'\n' "$MESSAGE2" &&
+                [ "$INDENT" -eq "0" ] &&
+                MESSAGE2=" $MESSAGE2" || {
+                INDENT="${LK_CONSOLE_INDENT:-$((${#PREFIX} + INDENT))}"
+                SPACES=$'\n'"$(lk_repeat " " "$INDENT")"
+                MESSAGE2="$SPACES${MESSAGE2//$'\n'/$SPACES}"
+            }
         }
     }
     COLOUR="${1-$LK_DEFAULT_CONSOLE_COLOUR}"
