@@ -552,9 +552,9 @@ function lk_echoc() {
 # lk_console_message message [[secondary_message] colour_sequence]
 function lk_console_message() {
     local PREFIX="${LK_CONSOLE_PREFIX-==> }" MESSAGE="$1" MESSAGE2 \
-        INDENT=0 SPACES COLOUR BOLD_COLOUR
+        INDENT=0 SPACES COLOUR
     shift
-    ! lk_in_string $'\n' "$MESSAGE" || {
+    [ "${MESSAGE//$'\n'/}" = "$MESSAGE" ] || {
         SPACES=$'\n'"$(lk_repeat " " "$((${#PREFIX}))")"
         MESSAGE="${MESSAGE//$'\n'/$SPACES}"
         INDENT=2
@@ -563,7 +563,7 @@ function lk_console_message() {
         MESSAGE2="$1"
         shift
         [ -z "$MESSAGE2" ] || {
-            ! lk_in_string $'\n' "$MESSAGE2" &&
+            [ "${MESSAGE2//$'\n'/}" = "$MESSAGE2" ] &&
                 [ "$INDENT" -eq "0" ] &&
                 MESSAGE2=" $MESSAGE2" || {
                 INDENT="${LK_CONSOLE_INDENT:-$((${#PREFIX} + INDENT))}"
@@ -573,16 +573,19 @@ function lk_console_message() {
         }
     }
     COLOUR="${1-$LK_DEFAULT_CONSOLE_COLOUR}"
-    BOLD_COLOUR="$(lk_in_string "$LK_BOLD" "$COLOUR" || echo "$LK_BOLD")$COLOUR"
     echo "$(
         # - atomic unless larger than buffer (smaller of PIPE_BUF, BUFSIZ)
         # - there's no portable way to determine buffer size
         # - writing <=512 bytes with echo or printf should be atomic on all
         #   platforms, but this can't be guaranteed
-        lk_echoc -n "$PREFIX" "${LK_CONSOLE_PREFIX_COLOUR-$BOLD_COLOUR}"
+        lk_echoc -n "$PREFIX" "${LK_CONSOLE_PREFIX_COLOUR-$(
+            [ "${COLOUR//$LK_BOLD/}" != "$COLOUR" ] ||
+                echo "$LK_BOLD"
+        )$COLOUR}"
         lk_echoc -n "$MESSAGE" "${LK_CONSOLE_MESSAGE_COLOUR-$LK_BOLD}"
-        [ -z "${MESSAGE2:-}" ] || lk_echoc -n "$MESSAGE2" "${LK_CONSOLE_SECONDARY_COLOUR-$COLOUR}"
-    )" >&${_LK_FD:-2}
+        [ -z "${MESSAGE2:-}" ] ||
+            lk_echoc -n "$MESSAGE2" "${LK_CONSOLE_SECONDARY_COLOUR-$COLOUR}"
+    )" >&"${_LK_FD:-2}"
 }
 
 function lk_console_detail() {
@@ -611,25 +614,28 @@ function lk_console_detail_file() {
 }
 
 function _lk_console() {
-    local LK_CONSOLE_PREFIX="${LK_CONSOLE_PREFIX-:: }" \
-        LK_CONSOLE_MESSAGE_COLOUR LK_CONSOLE_PREFIX_COLOUR
-    LK_CONSOLE_MESSAGE_COLOUR="$(
-        lk_in_string "$LK_BOLD" "$1" || echo "$LK_BOLD"
-    )$2"
-    LK_CONSOLE_PREFIX_COLOUR="$LK_BOLD$2"
-    lk_console_message "$1"
+    local COLOUR \
+        LK_CONSOLE_PREFIX="${LK_CONSOLE_PREFIX- :: }" \
+        LK_CONSOLE_SECONDARY_COLOUR="${LK_CONSOLE_SECONDARY_COLOUR-$LK_BOLD}" \
+        LK_CONSOLE_MESSAGE_COLOUR
+    COLOUR=$1
+    shift
+    LK_CONSOLE_MESSAGE_COLOUR=$(
+        [ "${1//$LK_BOLD/}" != "$1" ] || echo "$LK_BOLD"
+    )$COLOUR
+    lk_console_message "$1" "${2:-}" "$COLOUR"
 }
 
 function lk_console_log() {
-    _lk_console "$1" "$LK_DEFAULT_CONSOLE_COLOUR"
+    _lk_console "$LK_DEFAULT_CONSOLE_COLOUR" "$@"
 }
 
 function lk_console_warning() {
-    _lk_console "$1" "$LK_WARNING_COLOUR"
+    _lk_console "$LK_WARNING_COLOUR" "$@"
 }
 
 function lk_console_error() {
-    _lk_console "$1" "$LK_ERROR_COLOUR"
+    _lk_console "$LK_ERROR_COLOUR" "$@"
 }
 
 # lk_console_item message item [colour_sequence]
@@ -656,7 +662,7 @@ function lk_console_list() {
         COLUMNS="${COLUMNS+$((COLUMNS - ${#LK_CONSOLE_PREFIX} - INDENT))}" \
             column -s $'\n' | expand)"
     SPACES="$(lk_repeat " " "$((${#LK_CONSOLE_PREFIX} + INDENT))")"
-    lk_echoc "$SPACES${LIST//$'\n'/$'\n'$SPACES}" "$COLOUR" >&${_LK_FD:-2}
+    lk_echoc "$SPACES${LIST//$'\n'/$'\n'$SPACES}" "$COLOUR" >&"${_LK_FD:-2}"
     [ -z "${SINGLE_NOUN:-}" ] ||
         LK_CONSOLE_PREFIX="$SPACES" lk_console_detail "(${#ITEMS[@]} $(
             lk_maybe_plural "${#ITEMS[@]}" "$SINGLE_NOUN" "$PLURAL_NOUN"
@@ -667,10 +673,10 @@ function lk_console_list() {
 function lk_console_read() {
     local PROMPT=("$1") DEFAULT="${2:-}" VALUE
     [ -z "$DEFAULT" ] || PROMPT+=("[$DEFAULT]")
-    printf '%s ' "$LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_DEFAULT_CONSOLE_COLOUR}:: $LK_RESET$LK_BOLD${PROMPT[*]}$LK_RESET" >&${_LK_FD:-2}
+    printf '%s ' "$LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_DEFAULT_CONSOLE_COLOUR} :: $LK_RESET$LK_BOLD${PROMPT[*]}$LK_RESET" >&"${_LK_FD:-2}"
     read -re "${@:3}" VALUE || return
     [ -n "$VALUE" ] ||
-        { VALUE="$DEFAULT" && echo >&${_LK_FD:-2}; }
+        { VALUE="$DEFAULT" && echo >&"${_LK_FD:-2}"; }
     echo "$VALUE"
 }
 
@@ -693,11 +699,11 @@ function lk_confirm() {
         DEFAULT=
     fi
     while ! [[ "${VALUE:-}" =~ ^(Y|YES|N|NO)$ ]]; do
-        printf '%s ' "$LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_DEFAULT_CONSOLE_COLOUR}:: $LK_RESET$LK_BOLD${PROMPT[*]}$LK_RESET" >&${_LK_FD:-2}
+        printf '%s ' "$LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_DEFAULT_CONSOLE_COLOUR} :: $LK_RESET$LK_BOLD${PROMPT[*]}$LK_RESET" >&"${_LK_FD:-2}"
         read -re "${@:3}" VALUE || VALUE="$DEFAULT"
         [ -n "$VALUE" ] &&
             VALUE="$(lk_upper "$VALUE")" ||
-            { VALUE="$DEFAULT" && echo >&${_LK_FD:-2}; }
+            { VALUE="$DEFAULT" && echo >&"${_LK_FD:-2}"; }
     done
     [[ "$VALUE" =~ ^(Y|YES)$ ]]
 }

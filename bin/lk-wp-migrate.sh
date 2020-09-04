@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC2016,SC2029,SC2034
+# shellcheck disable=SC2015,SC2016,SC2029,SC2034
 
 lk_bin_depth=1 include=wordpress . lk-bash-load.sh || exit
 
@@ -98,10 +98,10 @@ esac
 function maybe_disable_remote_maintenance() {
     if [ "$MAINTENANCE" = on ]; then
         MAINTENANCE=
-        lk_console_message "Disabling maintenance mode on remote site"
+        lk_console_message "[remote] Disabling maintenance mode"
         lk_console_detail "Deleting" "$SSH_HOST:$REMOTE_PATH/.maintenance"
         ssh "$SSH_HOST" \
-            "bash -c 'rm \"\$2/.maintenance\"'" bash "$REMOTE_PATH" ||
+            "bash -c 'rm \"\$1/.maintenance\"'" bash "$REMOTE_PATH" ||
             lk_warn "\
 Error deleting $SSH_HOST:$REMOTE_PATH/.maintenance
 Maintenance mode may have been disabled early by another process"
@@ -112,25 +112,38 @@ MAINTENANCE_PHP='<?php $upgrading = time(); ?>'
 REMOTE_PATH=${REMOTE_PATH%/}
 LOCAL_PATH=${LOCAL_PATH%/}
 
-[ -d "$LOCAL_PATH" ] || lk_warn "not a local directory: $LOCAL_PATH" || true
+LK_WP_QUIET=1
 
-lk_console_message "Enabling maintenance mode"
-lk_console_detail "Creating" "$LOCAL_PATH/.maintenance"
-echo -n "$MAINTENANCE_PHP" >"$LOCAL_PATH/.maintenance"
+lk_log_output
+
+lk_console_message "Preparing WordPress migration"
+lk_console_detail "[remote] Source:" "$SSH_HOST:$REMOTE_PATH"
+lk_console_detail "[local] Destination:" "$LOCAL_PATH"
+[ -z "$MAINTENANCE" ] ||
+    lk_console_detail "Remote maintenance mode:" "$MAINTENANCE"
+lk_console_detail "Excluded files:" "$([ "${#EXCLUDE[@]}" -eq 0 ] &&
+    echo "<none>" ||
+    lk_echo_array "${EXCLUDE[@]}")"
+
+lk_no_input || lk_confirm "Proceed?" Y
+
+lk_console_message "Enabling WordPress maintenance mode"
 [ -n "$MAINTENANCE" ] || {
     lk_console_detail "\
-If this is the final sync before DNS cutover, maintenance mode should be
-enabled on the remote site"
+To minimise downtime, successfully complete at least one migration without
+enabling maintenance mode on the remote site, then enable it for the final
+migration (immediately before updating DNS)"
     lk_console_detail "\
-To minimise downtime, complete an initial sync without enabling
-maintenance mode, then sync again"
+Once enabled, WordPress will remain in maintenance mode indefinitely"
+    ! lk_confirm "Enable maintenance mode on remote system? " N ||
+        MAINTENANCE=indefinite
 }
-if [[ $MAINTENANCE =~ ^(on|indefinite)$ ]] ||
-    lk_confirm "Enable maintenance mode on remote site?" N; then
-    lk_console_detail "Creating" "$SSH_HOST:$REMOTE_PATH/.maintenance"
-    ssh "$SSH_HOST" \
-        "bash -c 'echo -n \"\$1\" >\"\$2/.maintenance\"'" bash \
-        "$MAINTENANCE_PHP" "$REMOTE_PATH"
+lk_console_detail "[local] Creating" "$LOCAL_PATH/.maintenance"
+echo -n "$MAINTENANCE_PHP" >"$LOCAL_PATH/.maintenance"
+if [[ $MAINTENANCE =~ ^(on|indefinite)$ ]]; then
+    lk_console_detail "[remote] Creating" "$SSH_HOST:$REMOTE_PATH/.maintenance"
+    ssh "$SSH_HOST" "bash -c 'cat >\"\$1/.maintenance\"'" bash \
+        "$REMOTE_PATH" <<<"$MAINTENANCE_PHP"
 fi
 
 # Migrate files
@@ -142,14 +155,15 @@ DB_FILE=~/$SSH_HOST-${REMOTE_PATH//\//_}-$(lk_date_ymdhms).sql.gz
 lk_wp_db_dump_remote "$SSH_HOST" "$REMOTE_PATH" >"$DB_FILE"
 maybe_disable_remote_maintenance
 cd "$LOCAL_PATH"
-lk_wp_db_restore_local "$DB_FILE" "$DEFAULT_DB_NAME" "$DEFAULT_DB_USER"
+LK_NO_INPUT=1 \
+    lk_wp_db_restore_local "$DB_FILE" "$DEFAULT_DB_NAME" "$DEFAULT_DB_USER"
 lk_wp_flush
 
-lk_console_message "Disabling maintenance mode"
+lk_console_message "[local] Disabling maintenance mode"
 lk_console_detail "Deleting" "$LOCAL_PATH/.maintenance"
 rm "$LOCAL_PATH/.maintenance" ||
     lk_warn "\
 Error deleting $LOCAL_PATH/.maintenance
 Maintenance mode may have been disabled early by another process"
 
-lk_console_message "Migration completed successfully" "$LK_GREEN"
+lk_console_log "Migration completed successfully"

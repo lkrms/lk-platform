@@ -7,6 +7,10 @@ function lk_wp() {
     wp --skip-plugins --skip-themes "$@"
 }
 
+function lk_wp_quiet() {
+    [ "${LK_WP_QUIET:-0}" -ne 0 ]
+}
+
 function lk_wp_get_site_root() {
     local SITE_ROOT
     SITE_ROOT="$(lk_wp eval "echo ABSPATH;" --skip-wordpress)" &&
@@ -50,7 +54,8 @@ function _lk_wp_replace() {
 }
 
 function lk_wp_flush() {
-    lk_console_detail "Flushing WordPress object cache"
+    lk_console_message "Flushing WordPress rewrite rules and caches"
+    lk_console_detail "Flushing object cache"
     lk_wp cache flush
     lk_console_detail "Deleting transients"
     lk_wp transient delete --all
@@ -134,7 +139,7 @@ Plugin code will be allowed to run." Y; then
         lk_console_detail "To flush rewrite rules:" "wp rewrite flush"
         lk_console_detail "To flush everything:" "lk_wp_flush"
     fi
-    lk_console_message "Site renamed successfully" "$LK_GREEN"
+    lk_console_log "Site renamed successfully"
 }
 
 # lk_wp_db_config [wp_config_path]
@@ -196,6 +201,7 @@ function lk_wp_db_dump_remote() {
         OUTPUT_FILE EXIT_STATUS=0
     [ -n "${1:-}" ] || lk_warn "no ssh host" || return
     [ ! -t 1 ] || [ -w "$PWD" ] || lk_warn "cannot write to current directory" || return
+    lk_console_message "Preparing to dump remote WordPress database"
     [ -n "$DB_NAME" ] &&
         [ -n "$DB_USER" ] &&
         [ -n "$DB_PASSWORD" ] &&
@@ -225,9 +231,9 @@ function lk_wp_db_dump_remote() {
     lk_console_message "Deleting mysqldump configuration file"
     ssh "$1" "bash -c 'rm -f \".lk_mysqldump.cnf\"'" &&
         lk_console_detail "Deleted" "$1:.lk_mysqldump.cnf" ||
-        lk_console_detail "Error deleting" "$1:.lk_mysqldump.cnf" "$LK_RED"
-    [ "$EXIT_STATUS" -eq "0" ] && lk_console_message "Database dump completed successfully" "$LK_GREEN" ||
-        lk_console_message "Database dump failed (exit status $EXIT_STATUS)" "$LK_RED"
+        lk_console_warning "Error deleting" "$1:.lk_mysqldump.cnf"
+    [ "$EXIT_STATUS" -eq "0" ] && lk_console_log "Database dump completed successfully" ||
+        lk_console_error "Database dump failed"
     return "$EXIT_STATUS"
 }
 
@@ -281,8 +287,10 @@ function lk_wp_db_restore_local() {
     [ -f "$1" ] || lk_warn "file not found: $1" || return
     SITE_ROOT="$(lk_wp_get_site_root)" || return
     lk_console_message "Preparing to restore WordPress database"
-    lk_console_detail "Backup file:" "$1"
-    lk_console_detail "WordPress installation:" "$SITE_ROOT"
+    lk_wp_quiet || {
+        lk_console_detail "Backup file:" "$1"
+        lk_console_detail "WordPress installation:" "$SITE_ROOT"
+    }
     DB_NAME="$(lk_wp config get DB_NAME)" &&
         DB_USER="$(lk_wp config get DB_USER)" &&
         DB_PASSWORD="$(lk_wp config get DB_PASSWORD)" &&
@@ -330,8 +338,8 @@ function lk_wp_db_restore_local() {
     else
         pv "$1"
     fi | _lk_mysql "$LOCAL_DB_NAME" || EXIT_STATUS="$?"
-    [ "$EXIT_STATUS" -eq "0" ] && lk_console_message "Database restored successfully" "$LK_GREEN" ||
-        lk_console_message "Restore operation failed (exit status $EXIT_STATUS)" "$LK_RED"
+    [ "$EXIT_STATUS" -eq "0" ] && lk_console_log "Database restored successfully" ||
+        lk_console_error "Restore operation failed"
     return "$EXIT_STATUS"
 }
 
@@ -358,16 +366,18 @@ function lk_wp_sync_files_from_remote() {
     lk_console_message "Preparing to sync WordPress files"
     REMOTE_PATH="${REMOTE_PATH%/}"
     LOCAL_PATH="${LOCAL_PATH%/}"
-    lk_console_detail "Source:" "$1:$REMOTE_PATH"
-    lk_console_detail "Destination:" "$LOCAL_PATH"
+    lk_wp_quiet || {
+        lk_console_detail "Source:" "$1:$REMOTE_PATH"
+        lk_console_detail "Destination:" "$LOCAL_PATH"
+    }
     for FILE in "${KEEP_LOCAL[@]}"; do
         [ ! -e "$LOCAL_PATH/$FILE" ] || EXCLUDE+=("/$FILE")
     done
     ARGS+=("${EXCLUDE[@]/#/--exclude=}")
     ARGS+=("$1:$REMOTE_PATH/" "$LOCAL_PATH/")
-    lk_console_detail "Local files will be overwritten with command" \
+    lk_console_detail "Local files will be overwritten with command:" \
         "rsync ${ARGS[*]}"
-    lk_no_input || ! lk_confirm "Perform a trial run first?" N ||
+    lk_wp_quiet || lk_no_input || ! lk_confirm "Perform a trial run first?" N ||
         rsync --dry-run "${ARGS[@]}" | "${PAGER:-less}" >&2 || true
     lk_no_input ||
         lk_confirm "LOCAL CHANGES WILL BE PERMANENTLY LOST. Proceed?" Y ||
@@ -375,10 +385,8 @@ function lk_wp_sync_files_from_remote() {
     [ -d "$LOCAL_PATH" ] || mkdir -p "$LOCAL_PATH" || return
     rsync "${ARGS[@]}" || EXIT_STATUS="$?"
     [ "$EXIT_STATUS" -eq "0" ] &&
-        lk_console_message "Sync completed successfully" \
-            "$LK_GREEN" ||
-        lk_console_message "Sync operation failed (exit status $EXIT_STATUS)" \
-            "$LK_RED"
+        lk_console_log "File sync completed successfully" ||
+        lk_console_error "File sync failed"
     return "$EXIT_STATUS"
 }
 

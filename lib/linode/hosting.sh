@@ -227,7 +227,7 @@ function lk_log() {
 function lk_console_message() {
     echo "\
 ${LK_CONSOLE_PREFIX-==> }\
-${1//$'\n'/$'\n'"${LK_CONSOLE_SPACES-    }"}" >&${_LK_FD:-2}
+${1//$'\n'/$'\n'"${LK_CONSOLE_SPACES-    }"}" >&"${_LK_FD:-2}"
 }
 
 function lk_console_item() {
