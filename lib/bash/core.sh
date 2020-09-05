@@ -217,7 +217,7 @@ function lk_full_name() {
 
 # [ESCAPE=escape_with] lk_escape string [escape_char1...]
 function lk_escape() {
-    local i=0 STRING="$1" ESCAPE="${ESCAPE:-\\}" REGEX='^[$`\"}'"'"']$' \
+    local i=0 STRING="$1" ESCAPE="${ESCAPE:-\\}" REGEX="^[\$\`\\\"}']\$" \
         SPECIAL SEARCH REPLACE
     shift
     SPECIAL=("$ESCAPE" "$@")
@@ -259,24 +259,49 @@ function lk_escape_ere_replace() {
     lk_escape "$1" '&' '/' '\'
 }
 
-# lk_replace find replace_with [string]
-#   Replace all occurrences of FIND in STRING with REPLACE_WITH. If STRING
-#   is not specified, replace FIND in input.
+# lk_replace <FIND> <REPLACE_WITH> [<STRING>]
+#
+# Replace all occurrences of FIND in STRING or input with REPLACE_WITH.
 function lk_replace() {
-    local _LK_SEARCH="${_LK_SEARCH:-}"
-    [ -n "$_LK_SEARCH" ] || {
-        _LK_SEARCH="$(lk_escape "$1." '*' '?' '[' ']' '(')"
-        _LK_SEARCH="${_LK_SEARCH%.}"
+    local _LK_FIND="${_LK_FIND:-}"
+    [ -n "$_LK_FIND" ] || {
+        _LK_FIND=$(printf '%q.' "$1")
+        _LK_FIND=${_LK_FIND//\//\\\/}
+        _LK_FIND=${_LK_FIND%.}
     }
     [ "$#" -gt "2" ] &&
-        echo "${3//$_LK_SEARCH/$2}${_LK_APPEND:-}" ||
+        echo "${3//$_LK_FIND/$2}${_LK_APPEND:-}" ||
         lk_xargs lk_replace "$1" "$2"
 }
 
-# lk_in_string needle haystack
-#   True if NEEDLE is a substring of HAYSTACK.
+# lk_in_string <NEEDLE> <HAYSTACK>
+#
+# True if NEEDLE is a substring of HAYSTACK.
 function lk_in_string() {
     [ "$(_LK_APPEND="." lk_replace "$1" "" "$2")" != "$2." ]
+}
+
+# lk_expand_template [<FILE>]
+#
+# Output FILE or input with each ${KEY} and {{KEY}} tag replaced with the value
+# of variable KEY. Set LK_EXPAND_NO_BASH to ignore ${KEY} tags.
+function lk_expand_template() {
+    local i TEMPLATE VARS EXPAND_BASH
+    TEMPLATE=$(cat ${1+"$1"} && echo -n ".") || return
+    lk_is_true "${LK_EXPAND_NO_BASH:-0}" || EXPAND_BASH=1
+    VARS=($(
+        echo "$TEMPLATE" |
+            grep -Eo \
+                -e '\{\{[a-zA-Z_][a-zA-Z0-9_]*\}\}' \
+                ${EXPAND_BASH+-e '\$\{[a-zA-Z_][a-zA-Z0-9_]*\}'} |
+            sed -E 's/^[${]+([a-zA-Z0-9_]+)[}]+$/\1/' | sort | uniq
+    )) || true
+    for i in ${VARS[@]+"${VARS[@]}"}; do
+        TEMPLATE=${TEMPLATE//\{\{$i\}\}/${!i:-}}
+        lk_is_true "${LK_EXPAND_NO_BASH:-0}" ||
+            TEMPLATE=${TEMPLATE//\$\{$i\}/${!i:-}}
+    done
+    echo "${TEMPLATE%.}"
 }
 
 function lk_lower() {
