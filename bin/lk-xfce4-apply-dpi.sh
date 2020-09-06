@@ -20,7 +20,7 @@ _48="$(bc <<<"v = 48 * $_MULTIPLIER / 1; v - v % 2")"
 _128="$(bc <<<"v = 128 * $_MULTIPLIER / 1; v - v % 2")"
 _GAP="$(bc <<<"v = 4 * $_MULTIPLIER / 1 - 2; if (v < 2) v = 2; v - v % 2")"
 
-if [ "$_MULTIPLIERx10" -le "10" ]; then
+if [ "$_MULTIPLIERx10" -le 10 ]; then
 
     # scaling <= 1
     THUNAR_ICON_SIZE_16="THUNAR_ICON_SIZE_16"
@@ -34,7 +34,7 @@ if [ "$_MULTIPLIERx10" -le "10" ]; then
     THUNAR_ZOOM_LEVEL_75_PERCENT="THUNAR_ZOOM_LEVEL_75_PERCENT"
     THUNAR_ZOOM_LEVEL_100_PERCENT="THUNAR_ZOOM_LEVEL_100_PERCENT"
 
-elif [ "$_MULTIPLIERx10" -le "15" ]; then
+elif [ "$_MULTIPLIERx10" -le 15 ]; then
 
     # 1 < scaling <= 1.5
     THUNAR_ICON_SIZE_16="THUNAR_ICON_SIZE_24"

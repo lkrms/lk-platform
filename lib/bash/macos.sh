@@ -57,8 +57,6 @@ function lk_macos_install_command_line_tools() {
 #   $ = Shift
 #   @ = Command
 function lk_macos_kb_add_shortcut() {
-    # results are inconsistent if only one of the following is used, even though
-    # they both theoretically do the same thing
     defaults write \
         "$1" NSUserKeyEquivalents -dict-add "$2" "$3"
     defaults write \

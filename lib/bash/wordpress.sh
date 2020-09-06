@@ -232,7 +232,7 @@ function lk_wp_db_dump_remote() {
     ssh "$1" "bash -c 'rm -f \".lk_mysqldump.cnf\"'" &&
         lk_console_detail "Deleted" "$1:.lk_mysqldump.cnf" ||
         lk_console_warning "Error deleting" "$1:.lk_mysqldump.cnf"
-    [ "$EXIT_STATUS" -eq "0" ] && lk_console_log "Database dump completed successfully" ||
+    [ "$EXIT_STATUS" -eq 0 ] && lk_console_log "Database dump completed successfully" ||
         lk_console_error "Database dump failed"
     return "$EXIT_STATUS"
 }
@@ -338,7 +338,7 @@ function lk_wp_db_restore_local() {
     else
         pv "$1"
     fi | _lk_mysql "$LOCAL_DB_NAME" || EXIT_STATUS="$?"
-    [ "$EXIT_STATUS" -eq "0" ] && lk_console_log "Database restored successfully" ||
+    [ "$EXIT_STATUS" -eq 0 ] && lk_console_log "Database restored successfully" ||
         lk_console_error "Restore operation failed"
     return "$EXIT_STATUS"
 }
@@ -384,7 +384,7 @@ function lk_wp_sync_files_from_remote() {
         return
     [ -d "$LOCAL_PATH" ] || mkdir -p "$LOCAL_PATH" || return
     rsync "${ARGS[@]}" || EXIT_STATUS="$?"
-    [ "$EXIT_STATUS" -eq "0" ] &&
+    [ "$EXIT_STATUS" -eq 0 ] &&
         lk_console_log "File sync completed successfully" ||
         lk_console_error "File sync failed"
     return "$EXIT_STATUS"
@@ -406,7 +406,7 @@ function lk_wp_enable_system_cron() {
     lk_console_detail "Setting DISABLE_WP_CRON in wp-config.php"
     lk_wp config set DISABLE_WP_CRON true --type=constant --raw --quiet || return
     CRON_COMMAND="$(type -P php) $WP_CRON_PATH"
-    [ "$INTERVAL" -lt "60" ] &&
+    [ "$INTERVAL" -lt 60 ] &&
         CRON_COMMAND="*/$INTERVAL * * * * $CRON_COMMAND" ||
         CRON_COMMAND="0 1 * * * $CRON_COMMAND"
     lk_console_detail "Adding cron job:" "$CRON_COMMAND"

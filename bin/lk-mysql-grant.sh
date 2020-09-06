@@ -33,7 +33,7 @@ underscore. Examples of DB_NAME and DB_USER values allowed for the current user:
   - ${USERNAME}_blog
   - ${USERNAME}_backup"
 
-[ "$#" -eq 3 ] || lk_usage
+[ $# -eq 3 ] || lk_usage
 
 # Validate DB_NAME and DB_USER against SUDO_USER if:
 # 1. Running as root;

@@ -13,6 +13,6 @@ function lk_nextcloud_get_excluded() {
         FILE="${LIST[0]}"
         eval "LIST=($(sed -Ee '/^([[:space:]]*$|#)/d' -e 's/^[]\]//' -e 's/[[:space:]]/\\&/g' -e 's/^/**\//' "$FILE"))"
         lk_console_item "${#LIST[@]} $(lk_maybe_plural "${#LIST[@]}" file files) excluded by $FILE:"
-        lk_echo_array ${LIST[@]+"${LIST[@]}"}
+        lk_echo_array LIST
     )
 }

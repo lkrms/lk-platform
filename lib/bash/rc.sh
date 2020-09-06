@@ -52,7 +52,7 @@ function _lk_bash_completion() {
 
 function lk_diff_bak() {
     local BACKUP FILE
-    [ "$EUID" -eq "0" ] || ! lk_can_sudo bash || {
+    [ "$EUID" -eq 0 ] || ! lk_can_sudo bash || {
         sudo -H env \
             _LK_DIFF_ROOT="${_LK_DIFF_ROOT:-}" \
             _LK_DIFF_REGEX="${_LK_DIFF_REGEX:-}" \
@@ -139,4 +139,4 @@ eval "$(. "$LK_BASE/lib/bash/env.sh")"
 
 eval "$(_lk_bash_completion)"
 
-[ "${LK_PROMPT:-1}" -ne "1" ] || lk_enable_prompt
+[ "${LK_PROMPT:-1}" -ne 1 ] || lk_enable_prompt

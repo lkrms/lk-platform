@@ -44,8 +44,8 @@ SITE_ROOT="$(lk_wp_get_site_root)"
 # Check plugins
 ACTIVE_PLUGINS=($(lk_wp plugin list --status=active --field=name))
 TO_DEACTIVATE=($(
-    [ "${#ACTIVE_PLUGINS[@]}" -eq "0" ] ||
-        [ "${#DEACTIVATE_PLUGINS[@]}" -eq "0" ] ||
+    [ "${#ACTIVE_PLUGINS[@]}" -eq 0 ] ||
+        [ "${#DEACTIVATE_PLUGINS[@]}" -eq 0 ] ||
         comm -12 \
             <(printf '%s\n' "${ACTIVE_PLUGINS[@]}" | sort | uniq) \
             <(printf '%s\n' "${DEACTIVATE_PLUGINS[@]}" | sort | uniq)
@@ -57,9 +57,9 @@ ADMIN_EMAIL="admin@$SITE_DOMAIN"
 lk_console_detail "Site address:" "$SITE_ADDR"
 lk_console_detail "Domain:" "$SITE_DOMAIN"
 lk_console_detail "Installed at:" "$SITE_ROOT"
-[ "${#ACTIVE_PLUGINS[@]}" -eq "0" ] &&
+[ "${#ACTIVE_PLUGINS[@]}" -eq 0 ] &&
     lk_console_detail "Active plugins:" "<none>" ||
-    lk_echo_array "${ACTIVE_PLUGINS[@]}" |
+    lk_echo_array ACTIVE_PLUGINS |
     lk_console_detail_list "Active $(
         lk_maybe_plural "${#ACTIVE_PLUGINS[@]}" \
             "plugin" "plugins (${#ACTIVE_PLUGINS[@]})"
@@ -69,8 +69,8 @@ lk_console_message "Preparing to reset for local development"
 lk_console_detail "Salts in wp-config.php will be refreshed"
 lk_console_detail "Admin email address will be updated to:" "$ADMIN_EMAIL"
 lk_console_detail "User addresses will be updated to:" "user_<ID>@$SITE_DOMAIN"
-[ "${#TO_DEACTIVATE[@]}" -eq "0" ] ||
-    lk_echo_array "${TO_DEACTIVATE[@]}" |
+[ "${#TO_DEACTIVATE[@]}" -eq 0 ] ||
+    lk_echo_array TO_DEACTIVATE |
     lk_console_detail_list "Production-only $(
         lk_maybe_plural "${#TO_DEACTIVATE[@]}" \
             "plugin" "plugins"
@@ -87,7 +87,7 @@ if lk_wp plugin is-active woocommerce; then
             "Test mode will be enabled for known WooCommerce gateways:"
     lk_console_detail "Active WooCommerce webhooks will be deleted"
 fi
-[ "${PLUGIN_CODE:-0}" -eq "0" ] || lk_console_warning \
+[ "${PLUGIN_CODE:-0}" -eq 0 ] || lk_console_warning \
     "Plugin code will be allowed to run where necessary"
 
 lk_no_input || lk_confirm "Proceed?" Y || lk_die
@@ -118,8 +118,8 @@ SQL
 lk_wp user update 1 --user_email="$ADMIN_EMAIL" --skip-email
 lk_wp user meta update 1 billing_email "$ADMIN_EMAIL"
 
-if [ "${#TO_DEACTIVATE[@]}" -gt "0" ]; then
-    lk_echo_array "${TO_DEACTIVATE[@]}" |
+if [ "${#TO_DEACTIVATE[@]}" -gt 0 ]; then
+    lk_echo_array TO_DEACTIVATE |
         lk_console_detail_list \
             "Deactivating ${#TO_DEACTIVATE[@]} $(
                 lk_maybe_plural "${#TO_DEACTIVATE[@]}" plugin plugins
@@ -160,7 +160,7 @@ if lk_wp plugin is-active woocommerce; then
         TO_DEACTIVATE=($(
             wp wc webhook list --user=1 --field=id --status=active
         ))
-        [ "${#TO_DEACTIVATE[@]}" -eq "0" ] || {
+        [ "${#TO_DEACTIVATE[@]}" -eq 0 ] || {
             lk_console_detail "WooCommerce: deleting active webhooks"
             for WEBHOOK_ID in "${TO_DEACTIVATE[@]}"; do
                 # TODO: deactivate instead?

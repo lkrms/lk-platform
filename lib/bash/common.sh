@@ -44,7 +44,7 @@ function lk_usage() {
 }
 
 function _lk_elevate() {
-    if [ "$#" -gt "0" ]; then
+    if [ $# -gt 0 ]; then
         sudo -H "$@"
     else
         sudo -H "$0" "${LK_ARGV[@]}"
@@ -53,8 +53,8 @@ function _lk_elevate() {
 }
 
 function lk_elevate() {
-    if [ "$EUID" -eq "0" ]; then
-        if [ "$#" -gt "0" ]; then
+    if [ "$EUID" -eq 0 ]; then
+        if [ $# -gt 0 ]; then
             "$@"
         fi
     else
@@ -63,9 +63,9 @@ function lk_elevate() {
 }
 
 function lk_maybe_elevate() {
-    if [ "$EUID" -ne "0" ] && lk_can_sudo "${1-$0}"; then
+    if [ "$EUID" -ne 0 ] && lk_can_sudo "${1-$0}"; then
         _lk_elevate "$@"
-    elif [ "$#" -gt "0" ]; then
+    elif [ $# -gt 0 ]; then
         "$@"
     fi
 }

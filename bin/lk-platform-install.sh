@@ -4,7 +4,7 @@
 # root privileges are required for access to settings files and startup scripts
 # in ~root, /home/*, etc., so elevate immediately rather than waiting for
 # lk_elevate to be available
-[ "$EUID" -eq "0" ] || {
+[ "$EUID" -eq 0 ] || {
     sudo -H -E "$0" "$@"
     exit
 }
@@ -134,7 +134,7 @@
     check_git_config "core.sharedRepository" "0664"
     check_git_config "merge.ff" "only"
     check_git_config "pull.ff" "only"
-    if [ "${#CONFIG_COMMANDS[@]}" -gt "0" ]; then
+    if [ "${#CONFIG_COMMANDS[@]}" -gt 0 ]; then
         IFS=$'\n'
         lk_console_item "Running in $LK_BASE:" "${CONFIG_COMMANDS[*]}"
         unset IFS
@@ -164,7 +164,7 @@
     if sudo -Hu "$REPO_OWNER" \
         git fetch --quiet --prune --prune-tags "$REMOTE_NAME" "$BRANCH"; then
         BEHIND="$(git rev-list --count "HEAD..@{upstream}")"
-        if [ "$BEHIND" -gt "0" ]; then
+        if [ "$BEHIND" -gt 0 ]; then
             git merge-base --is-ancestor HEAD "@{upstream}" ||
                 lk_die "local branch has diverged from upstream: $LK_BASE"
             lk_console_item \
@@ -220,7 +220,7 @@
         lk_console_detail "$i:" "${!i:-<none>}"
         DEFAULT_LINES+=("$(printf '%s=%q' "$i" "${!i}")")
     done
-    lk_maybe_replace "$DEFAULT_FILE" "$(lk_echo_array "${DEFAULT_LINES[@]}")"
+    lk_maybe_replace "$DEFAULT_FILE" "$(lk_echo_array DEFAULT_LINES)"
 
     # check .bashrc files
     RC_FILES=(
@@ -231,10 +231,10 @@
         ~root/.bashrc
     )
     lk_resolve_files RC_FILES
-    if [ "${#RC_FILES[@]}" -eq "0" ]; then
+    if [ "${#RC_FILES[@]}" -eq 0 ]; then
         lk_console_warning "No ~/.bashrc files found"
     else
-        lk_echo_array "${RC_FILES[@]}" |
+        lk_echo_array RC_FILES |
             lk_console_list "Checking startup scripts:" "file" "files"
         RC_ESCAPED="$(printf '%q' "$LK_BASE/lib/bash/rc.sh")"
         BASH_SKEL="

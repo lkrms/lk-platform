@@ -168,8 +168,8 @@ function lk_brew_check_taps() {
     local TAP
     TAP=($(comm -13 \
         <(brew tap | sort | uniq) \
-        <(lk_echo_array ${HOMEBREW_TAPS[@]+"${HOMEBREW_TAPS[@]}"} | sort | uniq)))
-    [ "${#TAP[@]}" -eq "0" ] || {
+        <(lk_echo_array HOMEBREW_TAPS | sort | uniq)))
+    [ "${#TAP[@]}" -eq 0 ] || {
         for TAP in "${TAP[@]}"; do
             lk_console_detail "Tapping" "$TAP"
             lk_tty brew tap --quiet "$TAP" || return
@@ -232,10 +232,10 @@ fi
 
 INSTALL_FORMULAE=($(comm -13 \
     <(brew list --formulae --full-name | sort | uniq) \
-    <(lk_echo_array ${HOMEBREW_FORMULAE[@]+"${HOMEBREW_FORMULAE[@]}"} |
+    <(lk_echo_array HOMEBREW_FORMULAE |
         sort | uniq)))
-[ "${#INSTALL_FORMULAE[@]}" -eq "0" ] || {
-    lk_echo_array "${INSTALL_FORMULAE[@]}" |
+[ "${#INSTALL_FORMULAE[@]}" -eq 0 ] || {
+    lk_echo_array INSTALL_FORMULAE |
         lk_console_list "Installing new formulae:"
     lk_tty brew install "${INSTALL_FORMULAE[@]}"
 }
@@ -248,10 +248,10 @@ fi
 
 INSTALL_CASKS=($(comm -13 \
     <(brew list --casks --full-name | sort | uniq) \
-    <(lk_echo_array ${HOMEBREW_CASKS[@]+"${HOMEBREW_CASKS[@]}"} |
+    <(lk_echo_array HOMEBREW_CASKS |
         sort | uniq)))
-[ "${#INSTALL_CASKS[@]}" -eq "0" ] || {
-    lk_echo_array "${INSTALL_CASKS[@]}" |
+[ "${#INSTALL_CASKS[@]}" -eq 0 ] || {
+    lk_echo_array INSTALL_CASKS |
         lk_console_list "Installing new casks:"
     lk_tty brew cask install "${INSTALL_CASKS[@]}"
 }

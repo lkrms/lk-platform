@@ -31,7 +31,7 @@ if [ -n "${ACCEPT_OUTPUT_CHAIN:-}" ]; then
     OUTPUT_ALLOW=(
         ${ACCEPT_OUTPUT_HOSTS[@]+"${ACCEPT_OUTPUT_HOSTS[@]}"}
     )
-    [ "${#OUTPUT_ALLOW[@]}" -eq "0" ] ||
+    [ "${#OUTPUT_ALLOW[@]}" -eq 0 ] ||
         lk_console_detail "Added to whitelist from firewall.conf:" \
             "$(lk_implode $'\n' "${OUTPUT_ALLOW[@]}")"
     if lk_is_ubuntu; then
@@ -57,7 +57,7 @@ if [ -n "${ACCEPT_OUTPUT_CHAIN:-}" ]; then
     fi
     OUTPUT_ALLOW_IPV4=()
     OUTPUT_ALLOW_IPV6=()
-    if [ "${#OUTPUT_ALLOW[@]}" -gt "0" ]; then
+    if [ "${#OUTPUT_ALLOW[@]}" -gt 0 ]; then
         OUTPUT_ALLOW_RESOLVED="$(lk_resolve_hosts "${OUTPUT_ALLOW[@]}")" ||
             lk_die "unable to resolve domain names"
         OUTPUT_ALLOW_IPV4=($(echo "$OUTPUT_ALLOW_RESOLVED" | lk_grep_ipv4 || :))
@@ -65,12 +65,12 @@ if [ -n "${ACCEPT_OUTPUT_CHAIN:-}" ]; then
     fi
     lk_console_detail "Flushing iptables chain:" "$ACCEPT_OUTPUT_CHAIN"
     lk_iptables_both lk_iptables_flush_chain "$ACCEPT_OUTPUT_CHAIN"
-    [ "${#OUTPUT_ALLOW_IPV4[@]}" -eq "0" ] ||
+    [ "${#OUTPUT_ALLOW_IPV4[@]}" -eq 0 ] ||
         lk_console_detail "Adding" "${#OUTPUT_ALLOW_IPV4[@]} IP $(lk_maybe_plural "${#OUTPUT_ALLOW_IPV4[@]}" rule rules)"
     for IPV4 in ${OUTPUT_ALLOW_IPV4[@]+"${OUTPUT_ALLOW_IPV4[@]}"}; do
         iptables -A "$ACCEPT_OUTPUT_CHAIN" -d "$IPV4" -j ACCEPT
     done
-    [ "${#OUTPUT_ALLOW_IPV6[@]}" -eq "0" ] ||
+    [ "${#OUTPUT_ALLOW_IPV6[@]}" -eq 0 ] ||
         lk_console_detail "Adding" "${#OUTPUT_ALLOW_IPV6[@]} IPv6 $(lk_maybe_plural "${#OUTPUT_ALLOW_IPV6[@]}" rule rules)"
     for IPV6 in ${OUTPUT_ALLOW_IPV6[@]+"${OUTPUT_ALLOW_IPV6[@]}"}; do
         ip6tables -A "$ACCEPT_OUTPUT_CHAIN" -d "$IPV6" -j ACCEPT

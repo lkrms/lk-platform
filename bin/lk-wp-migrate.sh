@@ -123,7 +123,7 @@ lk_console_detail "[local] Destination:" "$LOCAL_PATH"
     lk_console_detail "Remote maintenance mode:" "$MAINTENANCE"
 lk_console_detail "Excluded files:" "$([ "${#EXCLUDE[@]}" -eq 0 ] &&
     echo "<none>" ||
-    lk_echo_array "${EXCLUDE[@]}")"
+    lk_echo_array EXCLUDE)"
 
 lk_no_input || lk_confirm "Proceed?" Y
 

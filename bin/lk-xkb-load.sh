@@ -2,7 +2,7 @@
 
 lk_bin_depth=1 . lk-bash-load.sh || exit
 
-[ "$#" -eq "1" ] || lk_usage "Usage: ${0##*/} KEYMAP_FILE"
+[ $# -eq 1 ] || lk_usage "Usage: ${0##*/} KEYMAP_FILE"
 [ -f "$1" ] || lk_die "file not found: $1"
 
 ARGS=(-I"$LK_BASE/etc/X11/xkb")

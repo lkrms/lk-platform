@@ -54,25 +54,25 @@ EOF
 
     "$LK_BASE/bin/lk-platform-install.sh" --no-log
 
-    PAC_TO_REMOVE=($(comm -12 <(pacman -Qq | sort | uniq) <(lk_echo_array "${PAC_REMOVE[@]}" | sort | uniq)))
-    [ "${#PAC_TO_REMOVE[@]}" -eq "0" ] || {
+    PAC_TO_REMOVE=($(comm -12 <(pacman -Qq | sort | uniq) <(lk_echo_array PAC_REMOVE | sort | uniq)))
+    [ "${#PAC_TO_REMOVE[@]}" -eq 0 ] || {
         lk_console_message "Removing packages"
         lk_tty sudo pacman -R "${PAC_TO_REMOVE[@]}"
     }
 
     lk_console_message "Checking install reasons"
-    PAC_EXPLICIT=($(lk_echo_array "${PACMAN_PACKAGES[@]}" "${AUR_PACKAGES[@]}" ${PAC_KEEP[@]+"${PAC_KEEP[@]}"} | sort | uniq))
-    PAC_TO_MARK_ASDEPS=($(comm -23 <(pacman -Qeq | sort | uniq) <(lk_echo_array "${PAC_EXPLICIT[@]}")))
-    PAC_TO_MARK_EXPLICIT=($(comm -12 <(pacman -Qdq | sort | uniq) <(lk_echo_array "${PAC_EXPLICIT[@]}")))
-    [ "${#PAC_TO_MARK_ASDEPS[@]}" -eq "0" ] ||
+    PAC_EXPLICIT=($(lk_echo_args "${PACMAN_PACKAGES[@]}" "${AUR_PACKAGES[@]}" ${PAC_KEEP[@]+"${PAC_KEEP[@]}"} | sort | uniq))
+    PAC_TO_MARK_ASDEPS=($(comm -23 <(pacman -Qeq | sort | uniq) <(lk_echo_array PAC_EXPLICIT)))
+    PAC_TO_MARK_EXPLICIT=($(comm -12 <(pacman -Qdq | sort | uniq) <(lk_echo_array PAC_EXPLICIT)))
+    [ "${#PAC_TO_MARK_ASDEPS[@]}" -eq 0 ] ||
         lk_tty sudo pacman -D --asdeps "${PAC_TO_MARK_ASDEPS[@]}"
-    [ "${#PAC_TO_MARK_EXPLICIT[@]}" -eq "0" ] ||
+    [ "${#PAC_TO_MARK_EXPLICIT[@]}" -eq 0 ] ||
         lk_tty sudo pacman -D --asexplicit "${PAC_TO_MARK_EXPLICIT[@]}"
 
     ! PAC_TO_PURGE=($(pacman -Qdttq)) ||
-        [ "${#PAC_TO_PURGE[@]}" -eq "0" ] ||
+        [ "${#PAC_TO_PURGE[@]}" -eq 0 ] ||
         {
-            lk_echo_array "${PAC_TO_PURGE[@]}" |
+            lk_echo_array PAC_TO_PURGE |
                 lk_console_list "Installed but no longer required:" package packages
             ! lk_confirm "Remove the above?" Y ||
                 lk_tty sudo pacman -Rns "${PAC_TO_PURGE[@]}"
@@ -82,19 +82,19 @@ EOF
     lk_pacman_add_repo ${CUSTOM_REPOS[@]+"${CUSTOM_REPOS[@]}"}
     lk_tty sudo pacman -Syu
 
-    PAC_TO_INSTALL=($(comm -13 <(pacman -Qeq | sort | uniq) <(lk_echo_array "${PACMAN_PACKAGES[@]}" | sort | uniq)))
-    [ "${#PAC_TO_INSTALL[@]}" -eq "0" ] || {
+    PAC_TO_INSTALL=($(comm -13 <(pacman -Qeq | sort | uniq) <(lk_echo_array PACMAN_PACKAGES | sort | uniq)))
+    [ "${#PAC_TO_INSTALL[@]}" -eq 0 ] || {
         lk_console_message "Installing new packages from repo"
         lk_tty sudo pacman -S "${PAC_TO_INSTALL[@]}"
     }
 
-    if [ "${#AUR_PACKAGES[@]}" -gt "0" ]; then
+    if [ "${#AUR_PACKAGES[@]}" -gt 0 ]; then
         lk_command_exists yay || {
             lk_console_message "Installing yay to manage AUR packages"
             eval "$YAY_SCRIPT"
         }
-        AUR_TO_INSTALL=($(comm -13 <(pacman -Qeq | sort | uniq) <(lk_echo_array "${AUR_PACKAGES[@]}" | sort | uniq)))
-        [ "${#AUR_TO_INSTALL[@]}" -eq "0" ] || {
+        AUR_TO_INSTALL=($(comm -13 <(pacman -Qeq | sort | uniq) <(lk_echo_array AUR_PACKAGES | sort | uniq)))
+        [ "${#AUR_TO_INSTALL[@]}" -eq 0 ] || {
             lk_console_message "Installing new packages from AUR"
             lk_tty yay -Sy --aur "${AUR_TO_INSTALL[@]}"
         }
@@ -102,9 +102,9 @@ EOF
         lk_tty yay -Syu --aur
     fi
 
-    PAC_KEPT=($(comm -12 <(pacman -Qeq | sort | uniq) <(lk_echo_array ${PAC_KEEP[@]+"${PAC_KEEP[@]}"} | sort | uniq)))
-    [ "${#PAC_KEPT[@]}" -eq "0" ] ||
-        lk_echo_array "${PAC_KEPT[@]}" |
+    PAC_KEPT=($(comm -12 <(pacman -Qeq | sort | uniq) <(lk_echo_array PAC_KEEP | sort | uniq)))
+    [ "${#PAC_KEPT[@]}" -eq 0 ] ||
+        lk_echo_array PAC_KEPT |
         lk_console_list "Marked 'explicitly installed' because of PAC_KEEP:" package packages
 
     [ -e "/opt/opcache-gui" ] || {
@@ -115,7 +115,7 @@ EOF
     }
 
     MINIMAL=0
-    [ "$(free -g | grep -Eo "[0-9]+" | head -n1)" -ge "15" ] || MINIMAL=1
+    [ "$(free -g | grep -Eo "[0-9]+" | head -n1)" -ge 15 ] || MINIMAL=1
 
     LK_SUDO=1
 

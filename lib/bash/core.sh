@@ -1,12 +1,12 @@
 #!/bin/bash
+
 # shellcheck disable=SC1003,SC1090,SC2015,SC2016,SC2034,SC2046,SC2068,SC2088,SC2120,SC2162,SC2207
 
 function lk_include() {
     local i FILE
-    [ "${_LK_INCLUDES+1}" = 1 ] || _LK_INCLUDES=()
     for i in ${@//,/ }; do
         ! lk_in_array "$i" _LK_INCLUDES || continue
-        FILE="${LK_INST:-$LK_BASE}/lib/bash/$i.sh"
+        FILE=${LK_INST:-$LK_BASE}/lib/bash/$i.sh
         [ -r "$FILE" ] || lk_warn "$FILE: file not found" || return
         . "$FILE" || return
         _LK_INCLUDES+=("$i")
@@ -14,15 +14,15 @@ function lk_include() {
 }
 
 function _lk_caller() {
-    local DIM CALLER=() SOURCE="${BASH_SOURCE[2]:-}" FUNC="${FUNCNAME[2]:-}"
-    DIM="${LK_DIM:-$LK_GREY}"
-    # if the caller isn't in the running script (or no script is running), start
+    local SOURCE=${BASH_SOURCE[2]:-} FUNC=${FUNCNAME[2]:-} \
+        DIM=${LK_DIM:-$LK_GREY} CALLER=()
+    # If the caller isn't in the running script (or no script is running), start
     # with the shell/script name
-    if [ "$SOURCE" != "$0" ] || [ "$SOURCE" = "main" ]; then
+    if [ "$SOURCE" != "$0" ] || [ "$SOURCE" = main ]; then
         CALLER=("$LK_BOLD${0##*/}$LK_RESET")
     fi
-    # always include source filename and line number
-    if [ -n "$SOURCE" ] && [ "$SOURCE" != "main" ]; then
+    # Always include source filename and line number
+    if [ -n "$SOURCE" ] && [ "$SOURCE" != main ]; then
         CALLER+=("$(
             if [ "$SOURCE" = "$0" ]; then
                 echo "$LK_BOLD${0##*/}$LK_RESET"
@@ -34,13 +34,13 @@ function _lk_caller() {
         )$DIM:${BASH_LINENO[1]}$LK_RESET")
     fi
     lk_is_false "${LK_DEBUG:-0}" ||
-        [ "$FUNC" = "main" ] || CALLER+=(${FUNC:+"$FUNC$DIM()$LK_RESET"})
+        [ "$FUNC" = main ] || CALLER+=(${FUNC:+"$FUNC$DIM()$LK_RESET"})
     lk_implode "$DIM->$LK_RESET" "${CALLER[@]}"
 }
 
 # lk_warn message
 function lk_warn() {
-    local EXIT_STATUS="$?"
+    local EXIT_STATUS=$?
     lk_console_warning "$(_lk_caller): $1"
     return "$EXIT_STATUS"
 }
@@ -48,18 +48,18 @@ function lk_warn() {
 # lk_die [message]
 #   Output optional MESSAGE to stderr and exit with a non-zero status.
 function lk_die() {
-    local EXIT_STATUS="$?"
-    [ "$EXIT_STATUS" -ne "0" ] || EXIT_STATUS="1"
-    [ "$#" -eq "0" ] || lk_console_error "$(_lk_caller): $1"
+    local EXIT_STATUS=$?
+    [ "$EXIT_STATUS" -ne 0 ] || EXIT_STATUS=1
+    [ $# -eq 0 ] || lk_console_error "$(_lk_caller): $1"
     lk_is_true "${LK_DIE_HAPPY:-0}" || exit "$EXIT_STATUS"
     exit 0
 }
 
 function lk_trap_exit() {
     function lk_exit_trap() {
-        local EXIT_STATUS="$?" i
-        [ "$EXIT_STATUS" -eq "0" ] ||
-            [[ "${FUNCNAME[1]:-}" =~ lk_(die|elevate) ]] ||
+        local EXIT_STATUS=$? i
+        [ "$EXIT_STATUS" -eq 0 ] ||
+            [[ ${FUNCNAME[1]:-} =~ lk_(die|elevate) ]] ||
             lk_console_error "$(_lk_caller): unhandled error"
         for i in ${LK_EXIT_DELETE[@]+"${LK_EXIT_DELETE[@]}"}; do
             rm -Rf -- "$i" || true
@@ -75,23 +75,28 @@ function lk_delete_on_exit() {
     LK_EXIT_DELETE+=("$@")
 }
 
+function _lk_mktemp() {
+    local TMPDIR=${TMPDIR:-/tmp}
+    mktemp "$@" -- "${TMPDIR%/}/${0##*/}.XXXXXXXXXX"
+}
+
 function lk_mktemp_file() {
-    gnu_mktemp -t -- "${0##*/}.$(lk_timestamp).XXX"
+    _lk_mktemp
 }
 
 function lk_mktemp_dir() {
-    gnu_mktemp -dt -- "${0##*/}.$(lk_timestamp).XXX"
+    _lk_mktemp -d
 }
 
 function lk_mktemp_fifo() {
     local FIFO_PATH
-    FIFO_PATH="$(lk_mktemp_dir)/fifo" &&
+    FIFO_PATH=$(lk_mktemp_dir)/fifo &&
         mkfifo "$FIFO_PATH" &&
         echo "$FIFO_PATH"
 }
 
 function lk_commands_exist() {
-    while [ "$#" -gt "0" ]; do
+    while [ $# -gt 0 ]; do
         type -P "$1" >/dev/null || return
         shift
     done
@@ -119,9 +124,9 @@ lk_command_exists realpath || ! lk_command_exists python ||
 
 function lk_first_existing_parent() {
     local FILE
-    FILE="$(realpath --canonicalize-missing "$1")" || return
+    FILE=$(realpath --canonicalize-missing "$1") || return
     while [ ! -e "$FILE" ]; do
-        FILE="$(dirname "$FILE")"
+        FILE=$(dirname "$FILE")
     done
     echo "$FILE"
 }
@@ -135,7 +140,7 @@ function lk_bash_at_least() {
 
 if lk_bash_at_least 4 2; then
     function lk_date() {
-        # take advantage of printf support for strftime in Bash 4.2+
+        # Take advantage of printf support for strftime in Bash 4.2+
         printf "%($1)T\n" -1
     }
 else
@@ -192,45 +197,42 @@ else
 fi
 
 function lk_is_root() {
-    [ "$EUID" -eq "0" ]
+    [ "$EUID" -eq 0 ]
 }
 
 function lk_is_yes() {
-    [[ "$1" =~ ^[yY]$ ]]
+    [[ $1 =~ ^[yY]$ ]]
 }
 
 function lk_is_no() {
-    [[ "$1" =~ ^[nN]$ ]]
+    [[ $1 =~ ^[nN]$ ]]
 }
 
 function lk_is_true() {
-    [[ "$1" =~ ^([yY1])$ ]]
+    [[ $1 =~ ^([yY1])$ ]]
 }
 
 function lk_is_false() {
-    [[ "$1" =~ ^([nN0])$ ]]
+    [[ $1 =~ ^([nN0])$ ]]
 }
 
 function lk_full_name() {
     getent passwd "${1:-$UID}" | cut -d: -f5 | cut -d, -f1
 }
 
-# [ESCAPE=escape_with] lk_escape string [escape_char1...]
+# [LK_ESCAPE=<ESCAPE_WITH>] lk_escape <STRING> [<ESCAPE_CHAR>...]
+#
+# Escape STRING by inserting ESCAPE_WITH (backslash by default) before each
+# occurrence of ESCAPE_CHAR.
 function lk_escape() {
-    local i=0 STRING="$1" ESCAPE="${ESCAPE:-\\}" REGEX="^[\$\`\\\"}']\$" \
-        SPECIAL SEARCH REPLACE
+    local i=0 STRING=$1 ESCAPE=${LK_ESCAPE:-\\} SPECIAL SEARCH REPLACE
     shift
     SPECIAL=("$ESCAPE" "$@")
-    [ "$ESCAPE" != "\\" ] || ESCAPE="\\\\"
     for REPLACE in "${SPECIAL[@]}"; do
-        # ensure ESCAPE itself is only escaped once
-        [ "$i" -eq "0" ] || [ "$REPLACE" != "${SPECIAL[0]}" ] || continue
+        # Ensure ESCAPE itself is only escaped once
+        [ "$((i++))" -eq 0 ] || [ "$REPLACE" != "$ESCAPE" ] || continue
         SEARCH="\\$REPLACE"
-        # escape characters that would otherwise interfere with Bash parameter
-        # expansion
-        [[ ! "$REPLACE" =~ $REGEX ]] || REPLACE="\\$REPLACE"
-        eval "STRING=\"\${STRING//$SEARCH/$ESCAPE$REPLACE}\""
-        ((++i))
+        STRING=${STRING//$SEARCH/$ESCAPE$REPLACE}
     done
     echo "$STRING"
 }
@@ -269,7 +271,7 @@ function lk_replace() {
         _LK_FIND=${_LK_FIND//\//\\\/}
         _LK_FIND=${_LK_FIND%.}
     }
-    [ "$#" -gt "2" ] &&
+    [ $# -gt 2 ] &&
         echo "${3//$_LK_FIND/$2}${_LK_APPEND:-}" ||
         lk_xargs lk_replace "$1" "$2"
 }
@@ -278,7 +280,7 @@ function lk_replace() {
 #
 # True if NEEDLE is a substring of HAYSTACK.
 function lk_in_string() {
-    [ "$(_LK_APPEND="." lk_replace "$1" "" "$2")" != "$2." ]
+    [ "$(_LK_APPEND=. lk_replace "$1" "" "$2")" != "$2." ]
 }
 
 # lk_expand_template [<FILE>]
@@ -305,14 +307,12 @@ function lk_expand_template() {
 }
 
 function lk_lower() {
-    [ "$#" -gt "0" ] &&
-        echo "$*" | tr '[:upper:]' '[:lower:]' ||
+    { [ $# -gt 0 ] && echo "$@" || cat; } |
         tr '[:upper:]' '[:lower:]'
 }
 
 function lk_upper() {
-    [ "$#" -gt "0" ] &&
-        echo "$*" | tr '[:lower:]' '[:upper:]' ||
+    { [ $# -gt 0 ] && echo "$@" || cat; } |
         tr '[:lower:]' '[:upper:]'
 }
 
@@ -321,8 +321,7 @@ function lk_upper_first() {
 }
 
 function lk_trim() {
-    [ "$#" -gt "0" ] &&
-        echo "$1" | sed -Ee 's/^\s+//' -e 's/\s+$//' ||
+    { [ $# -gt 0 ] && echo "$1" || cat; } |
         sed -Ee 's/^\s+//' -e 's/\s+$//'
 }
 
@@ -333,8 +332,7 @@ function lk_pad_zero() {
 
 # lk_ellipsis length [string]
 function lk_ellipsis() {
-    [ "$#" -gt "1" ] &&
-        echo "$2" | sed -E "s/^(.{$(("$1" - 3))}).{4,}/\1.../" ||
+    { [ $# -gt 1 ] && echo "$2" || cat; } |
         sed -E "s/^(.{$(("$1" - 3))}).{4,}/\1.../"
 }
 
@@ -347,13 +345,12 @@ function lk_hostname() {
 }
 
 function lk_safe_tput() {
-    if lk_is_true "${LK_ON_TERMINAL:-1}" && tput "$@" >/dev/null 2>&1; then
+    ! tput "$@" >/dev/null 2>&1 ||
         tput "$@"
-    fi
 }
 
 function lk_get_colours() {
-    local PREFIX="${1-LK_}"
+    local PREFIX=${1-LK_}
     # foreground
     echo "${PREFIX}BLACK=\"\$(lk_safe_tput setaf 0)\""
     echo "${PREFIX}RED=\"\$(lk_safe_tput setaf 1)\""
@@ -385,11 +382,18 @@ function lk_get_colours() {
 }
 
 function lk_maybe_plural() {
-    [ "$1" -eq "1" ] && echo "$2" || echo "$3"
+    [ "$1" -eq 1 ] && echo "$2" || echo "$3"
+}
+
+function lk_echo_args() {
+    [ $# -eq 0 ] ||
+        printf '%s\n' "$@"
 }
 
 function lk_echo_array() {
-    printf '%s\n' "$@"
+    eval "[ \"\${$1+1}\" != 1 ] ||
+        [ \${#$1[@]} -eq 0 ] ||
+        printf '%s\n' \"\${$1[@]}\""
 }
 
 function lk_implode() {
@@ -397,11 +401,11 @@ function lk_implode() {
     DELIM="${DELIM//\\/\\\\}"
     DELIM="${DELIM//%/%%}"
     shift
-    [ "$#" -eq "0" ] || {
+    [ $# -eq 0 ] || {
         printf '%s' "$1"
         shift
     }
-    [ "$#" -eq "0" ] ||
+    [ $# -eq 0 ] ||
         printf -- "$DELIM%s" "$@"
 }
 
@@ -409,12 +413,11 @@ function lk_implode() {
 #   True if VALUE exists in ARRAY_NAME.
 #   Pattern matching is not applied.
 function lk_in_array() {
-    local KEYS KEY
-    eval "KEYS=(\"\${!$2[@]}\")"
-    for KEY in ${KEYS[@]+"${KEYS[@]}"}; do
-        eval "[ \"\${$2[\$KEY]}\" = \"\$1\" ]" || continue
+    local VALUE
+    eval "for VALUE in \${$2[@]+\"\${$2[@]}\"}; do
+        [ \"\$VALUE\" = \"\$1\" ] || continue
         return
-    done
+    done"
     false
 }
 
@@ -484,7 +487,7 @@ function lk_has_arg() {
 
 function lk_log() {
     local IFS LINE
-    [ "$#" -eq "0" ] || {
+    [ $# -eq 0 ] || {
         IFS=$'\n'
         LINE="$*"
         printf '%s %s\n' "$(lk_date_log)" "${LINE//$'\n'/$'\n  '}"
@@ -537,7 +540,7 @@ function lk_log_output() {
             ! DIR=$(cd "${BASH_REMATCH[2]:-.}" && pwd -P) ||
             HEADER+=("${DIR%/}/"); } 2>/dev/null
         HEADER+=("${0##*/} invoked")
-        [ "${#LK_ARGV[@]}" -eq "0" ] || HEADER+=($(
+        [ "${#LK_ARGV[@]}" -eq 0 ] || HEADER+=($(
             printf ' with %s %s:' \
                 "${#LK_ARGV[@]}" \
                 "$(lk_maybe_plural \
@@ -559,13 +562,13 @@ function lk_log_output() {
 # lk_echoc [-neE] message [colour_sequence...]
 function lk_echoc() {
     local ECHO_ARGS=() MESSAGE IFS COLOUR
-    while [[ "${1:-}" =~ ^-[neE]+$ ]]; do
+    while [[ ${1:-} =~ ^-[neE]+$ ]]; do
         ECHO_ARGS+=("$1")
         shift
     done
     MESSAGE="${1:-}"
     shift || true
-    if [ "$#" -gt "0" ] && [ -n "$LK_RESET" ]; then
+    if [ $# -gt 0 ] && [ -n "$LK_RESET" ]; then
         IFS=
         COLOUR="$*"
         unset IFS
@@ -584,12 +587,12 @@ function lk_console_message() {
         MESSAGE="${MESSAGE//$'\n'/$SPACES}"
         INDENT=2
     }
-    [ "$#" -le "1" ] || {
+    [ $# -le 1 ] || {
         MESSAGE2="$1"
         shift
         [ -z "$MESSAGE2" ] || {
             [ "${MESSAGE2//$'\n'/}" = "$MESSAGE2" ] &&
-                [ "$INDENT" -eq "0" ] &&
+                [ "$INDENT" -eq 0 ] &&
                 MESSAGE2=" $MESSAGE2" || {
                 INDENT="${LK_CONSOLE_INDENT:-$((${#PREFIX} + INDENT))}"
                 SPACES=$'\n'"$(lk_repeat " " "$INDENT")"
@@ -624,7 +627,7 @@ function lk_console_detail_list() {
     local LK_CONSOLE_PREFIX="${LK_CONSOLE_PREFIX-   -> }" \
         LK_CONSOLE_MESSAGE_COLOUR
     LK_CONSOLE_MESSAGE_COLOUR=""
-    if [ "$#" -le "2" ]; then
+    if [ $# -le 2 ]; then
         lk_console_list "$1" "${2-$LK_YELLOW}"
     else
         lk_console_list "${@:1:3}" "${4-$LK_YELLOW}"
@@ -674,7 +677,7 @@ function lk_console_list() {
         LK_CONSOLE_PREFIX="${LK_CONSOLE_PREFIX-==> }"
     MESSAGE="$1"
     shift
-    [ "$#" -le "1" ] || {
+    [ $# -le 1 ] || {
         SINGLE_NOUN="$1"
         PLURAL_NOUN="$2"
         shift 2
@@ -683,7 +686,7 @@ function lk_console_list() {
     lk_mapfile /dev/stdin ITEMS
     lk_console_message "$MESSAGE" "$COLOUR"
     ! lk_in_string $'\n' "$MESSAGE" || INDENT=2
-    LIST="$(lk_echo_array "${ITEMS[@]}" |
+    LIST="$(lk_echo_array ITEMS |
         COLUMNS="${COLUMNS+$((COLUMNS - ${#LK_CONSOLE_PREFIX} - INDENT))}" \
             column -s $'\n' | expand)"
     SPACES="$(lk_repeat " " "$((${#LK_CONSOLE_PREFIX} + INDENT))")"
@@ -723,14 +726,16 @@ function lk_confirm() {
         PROMPT+=("[y/n]")
         DEFAULT=
     fi
-    while ! [[ "${VALUE:-}" =~ ^(Y|YES|N|NO)$ ]]; do
-        printf '%s ' "$LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_DEFAULT_CONSOLE_COLOUR} :: $LK_RESET$LK_BOLD${PROMPT[*]}$LK_RESET" >&"${_LK_FD:-2}"
+    while ! [[ ${VALUE:-} =~ ^(Y|YES|N|NO)$ ]]; do
+        printf '%s ' "\
+$LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_DEFAULT_CONSOLE_COLOUR} :: \
+$LK_RESET$LK_BOLD${PROMPT[*]}$LK_RESET" >&"${_LK_FD:-2}"
         read -re "${@:3}" VALUE || VALUE="$DEFAULT"
         [ -n "$VALUE" ] &&
             VALUE="$(lk_upper "$VALUE")" ||
             { VALUE="$DEFAULT" && echo >&"${_LK_FD:-2}"; }
     done
-    [[ "$VALUE" =~ ^(Y|YES)$ ]]
+    [[ $VALUE =~ ^(Y|YES)$ ]]
 }
 
 function lk_no_input() {
@@ -744,7 +749,7 @@ function lk_no_input() {
 function lk_add_file_suffix() {
     local BASENAME
     BASENAME="${1##*/}"
-    if [ -z "${3:-}" ] && [[ "$BASENAME" =~ .+\..+ ]]; then
+    if [ -z "${3:-}" ] && [[ $BASENAME =~ .+\..+ ]]; then
         echo "${1%.*}${2}.${1##*.}"
     elif [ -n "${3:-}" ] && eval "[[ \"$BASENAME\" =~ .+${3//./\\.}\$ ]]"; then
         echo "${1%$3}${2}${3}"
@@ -770,7 +775,7 @@ function lk_next_backup_file() {
 #   Output ${FILE_PATH}${EXT} unless FILE_PATH already ends with EXT.
 function lk_maybe_add_extension() {
     [ -n "$1" ] || lk_warn "no filename" || return
-    [[ "$(lk_lower "$1")" =~ $(lk_escape_ere "$(lk_lower "$2")")$ ]] &&
+    [ "$(lk_lower "${1: -${#2}}")" = "$(lk_lower "$2")" ] &&
         echo "$1" ||
         echo "$1$2"
 }
@@ -791,7 +796,7 @@ function lk_is_pdf() {
 #   supported.
 function lk_is_email() {
     local EMAIL_REGEX="^[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@([a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.|\$)){2,}\$"
-    [[ "$1" =~ $EMAIL_REGEX ]]
+    [[ $1 =~ $EMAIL_REGEX ]]
 }
 
 # lk_is_uri uri
@@ -800,7 +805,7 @@ function lk_is_email() {
 #   See https://en.wikipedia.org/wiki/Uniform_Resource_Identifier
 function lk_is_uri() {
     local URI_REGEX='^(([a-zA-Z][-a-zA-Z0-9+.]*):)(//(([-a-zA-Z0-9._~%!$&'"'"'()*+,;=]+)(:([-a-zA-Z0-9._~%!$&'"'"'()*+,;=]*))?@)?([-a-zA-Z0-9._~%!$&'"'"'()*+,;=]+|\[([0-9a-fA-F:]+)\])(:([0-9]+))?)([-a-zA-Z0-9._~%!$&'"'"'()*+,;=:@/]+)?(\?([-a-zA-Z0-9._~%!$&'"'"'()*+,;=:@?/]+))?(#([-a-zA-Z0-9._~%!$&'"'"'()*+,;=:@?/]*))?$'
-    [[ "$1" =~ $URI_REGEX ]]
+    [[ $1 =~ $URI_REGEX ]]
 }
 
 # lk_uri_parts uri uri_component...
@@ -817,53 +822,46 @@ function lk_is_uri() {
 #     query
 #     fragment
 function lk_uri_parts() {
-    local FORMAT EXPRESSION KEY PART VALUE \
+    local PART KEY VALUE \
         URI_REGEX='^(([a-zA-Z][-a-zA-Z0-9+.]*):)?(\/\/(([-a-zA-Z0-9._~%!$&'"'"'()*+,;=]+)(:([-a-zA-Z0-9._~%!$&'"'"'()*+,;=]*))?@)?([-a-zA-Z0-9._~%!$&'"'"'()*+,;=]+|\[([0-9a-fA-F:]+)\])(:([0-9]+))?)?([-a-zA-Z0-9._~%!$&'"'"'()*+,;=:@/]+)?(\?([-a-zA-Z0-9._~%!$&'"'"'()*+,;=:@?/]+))?(#([-a-zA-Z0-9._~%!$&'"'"'()*+,;=:@?/]*))?$'
-    FORMAT=()
-    EXPRESSION=()
-    KEY=()
+    [[ "$1" =~ $URI_REGEX ]] || return
     for PART in "${@:2}"; do
-        FORMAT+=('%s')
-        KEY+=("$(lk_upper "_${PART#_}")")
-        PART="$(lk_lower "${PART#_}")"
-        case "$PART" in
-        scheme)
-            EXPRESSION+=("a[2]")
+        KEY=$(lk_upper "_${PART#_}")
+        case "$KEY" in
+        _SCHEME)
+            VALUE=${BASH_REMATCH[2]}
             ;;
-        username)
-            EXPRESSION+=("a[5]")
+        _USERNAME)
+            VALUE=${BASH_REMATCH[5]}
             ;;
-        password)
-            EXPRESSION+=("a[7]")
+        _PASSWORD)
+            VALUE=${BASH_REMATCH[7]}
             ;;
-        host)
-            EXPRESSION+=("a[8]")
+        _HOST)
+            VALUE=${BASH_REMATCH[8]}
             ;;
-        ipv6_address)
-            EXPRESSION+=("a[9]")
+        _IPV6_ADDRESS)
+            VALUE=${BASH_REMATCH[9]}
             ;;
-        port)
-            EXPRESSION+=("a[11]")
+        _PORT)
+            VALUE=${BASH_REMATCH[11]}
             ;;
-        path)
-            EXPRESSION+=("a[12]")
+        _PATH)
+            VALUE=${BASH_REMATCH[12]}
             ;;
-        query)
-            EXPRESSION+=("a[14]")
+        _QUERY)
+            VALUE=${BASH_REMATCH[14]}
             ;;
-        fragment)
-            EXPRESSION+=("a[16]")
+        _FRAGMENT)
+            VALUE=${BASH_REMATCH[16]}
             ;;
         *)
             lk_warn "unknown URI component '$PART'"
             return 1
             ;;
         esac
+        printf "%s=%q\n" "$KEY" "$VALUE"
     done
-    for PART in "${KEY[@]}"; do
-        IFS= read -r VALUE || VALUE=
-        echo "$PART=\"$(lk_escape_double_quotes "$VALUE")\""
-    done < <(gnu_awk "{match(\$0,/$URI_REGEX/,a);printf \"$(lk_implode '\n' "${FORMAT[@]}")\n\",$(lk_implode ',' "${EXPRESSION[@]}")}" <<<"$1")
 }
 
 # lk_get_uris [file_path...]
@@ -930,7 +928,11 @@ function lk_download() {
             [ -n "$FILENAME" ] || lk_warn "no filename in '$URI'" || return
             [ ! -f "$FILENAME" ] || {
                 DOWNLOAD_ONE=1
-                DOWNLOAD_ARGS+=(--time-cond "$(date -Rd "$(gnu_stat --printf '%y' "$FILENAME")")")
+                DOWNLOAD_ARGS+=(--time-cond "$(
+                    lk_timestamp_readable "$(
+                        lk_modified_timestamp "$FILENAME"
+                    )"
+                )")
             }
             DOWNLOAD_ARGS+=(--output "$FILENAME")
             FILENAMES+=("$FILENAME")
@@ -942,19 +944,19 @@ function lk_download() {
             MANY_DOWNLOAD_ARGS+=("${DOWNLOAD_ARGS[@]}")
         fi
     done < <(
-        [ "$#" -gt "0" ] &&
+        [ $# -gt 0 ] &&
             printf '%s\n' "$@" ||
             cat
     )
-    [ "${#MANY_DOWNLOAD_ARGS[@]}" -eq "0" ] ||
+    [ "${#MANY_DOWNLOAD_ARGS[@]}" -eq 0 ] ||
         curl "${CURL_ARGS[@]}" "${MANY_DOWNLOAD_ARGS[@]}" || return
-    [ "${#ONE_DOWNLOAD_ARGS[@]}" -eq "0" ] ||
+    [ "${#ONE_DOWNLOAD_ARGS[@]}" -eq 0 ] ||
         for ARGS in "${ONE_DOWNLOAD_ARGS[@]}"; do
             eval "$ARGS"
             curl "${CURL_ARGS[@]}" "${DOWNLOAD_ARGS[@]}" || return
         done
     lk_is_true "$IGNORE_FILENAMES" ||
-        lk_echo_array "${FILENAMES[@]}"
+        lk_echo_array FILENAMES
 }
 
 # lk_can_sudo COMMAND [USERNAME]
@@ -1001,7 +1003,7 @@ function lk_maybe_sudo() {
 }
 
 function lk_elevate() {
-    if [ "$EUID" -eq "0" ]; then
+    if [ "$EUID" -eq 0 ]; then
         "$@"
     else
         sudo -H "$@"
@@ -1012,7 +1014,7 @@ function lk_elevate_if_error() {
     local EXIT_STATUS=0
     "$@" || {
         EXIT_STATUS=$?
-        [ "$EUID" -eq "0" ] || ! lk_can_sudo "$1" ||
+        [ "$EUID" -eq 0 ] || ! lk_can_sudo "$1" ||
             {
                 EXIT_STATUS=0
                 lk_elevate "$@" || EXIT_STATUS=$?
@@ -1022,7 +1024,7 @@ function lk_elevate_if_error() {
 }
 
 function lk_maybe_elevate() {
-    if [ "$EUID" -eq "0" ] || ! lk_can_sudo "$1"; then
+    if [ "$EUID" -eq 0 ] || ! lk_can_sudo "$1"; then
         "$@"
     else
         sudo -H "$@"
@@ -1106,12 +1108,16 @@ function _lk_get_gnu_command() {
 }
 
 function _lk_register_gnu_commands() {
-    local PREFIX="g" COMMAND
+    local PREFIX=g COMMAND GCOMMAND
+    LK_GNU_COMMANDS=(${LK_GNU_COMMANDS[@]+"${LK_GNU_COMMANDS[@]}"})
     lk_is_macos || PREFIX=
     for COMMAND in "$@"; do
-        eval "function gnu_$COMMAND() { $(_lk_get_gnu_command "$COMMAND") \"\$@\"; }"
+        GCOMMAND=$(_lk_get_gnu_command "$COMMAND")
+        lk_command_exists "$GCOMMAND" || continue
+        eval "function gnu_$COMMAND() { $GCOMMAND \"\$@\"; }"
+        LK_GNU_COMMANDS+=("$COMMAND")
     done
-    LK_GNU_COMMANDS=($(printf '%s\n' ${LK_GNU_COMMANDS[@]+"${LK_GNU_COMMANDS[@]}"} "$@" | sort | uniq))
+    LK_GNU_COMMANDS=($(lk_echo_array LK_GNU_COMMANDS | sort | uniq))
 }
 
 function lk_install_gnu_commands() {
@@ -1130,7 +1136,7 @@ function lk_install_gnu_commands() {
             [ -n "${HOME:-}" ] &&                               # HOME is set, so
             GNU_PATH="$HOME/.local/bin"; } ||                   # $HOME/.local/bin is suitable
         lk_warn "cannot write to directory: $GNU_PATH" || return
-    [ "$#" -gt "0" ] || COMMANDS=(${LK_GNU_COMMANDS[@]+"${LK_GNU_COMMANDS[@]}"})
+    [ $# -gt 0 ] || COMMANDS=(${LK_GNU_COMMANDS[@]+"${LK_GNU_COMMANDS[@]}"})
     for COMMAND in ${COMMANDS[@]+"${COMMANDS[@]}"}; do
         GCOMMAND="$(_lk_get_gnu_command "$COMMAND")"
         { lk_command_exists "$GCOMMAND" ||
@@ -1144,15 +1150,15 @@ function lk_install_gnu_commands() {
 
 function lk_check_gnu_commands() {
     local COMMANDS=("$@")
-    [ "$#" -gt "0" ] || COMMANDS=(${LK_GNU_COMMANDS[@]+"${LK_GNU_COMMANDS[@]}"})
-    if [ "${#COMMANDS[@]}" -gt "0" ]; then
+    [ $# -gt 0 ] || COMMANDS=(${LK_GNU_COMMANDS[@]+"${LK_GNU_COMMANDS[@]}"})
+    if [ "${#COMMANDS[@]}" -gt 0 ]; then
         lk_commands_exist "${COMMANDS[@]/#/gnu_}" ||
             lk_install_gnu_commands "${COMMANDS[@]}"
     fi
 }
 
 function lk_users_exist() {
-    while [ "$#" -gt "0" ]; do
+    while [ $# -gt 0 ]; do
         id "$1" >/dev/null 2>&1 || return
         shift
     done
@@ -1167,15 +1173,15 @@ function lk_test_many() {
 }
 
 function lk_paths_exist() {
-    [ "$#" -gt "0" ] && lk_test_many "-e" "$@"
+    [ $# -gt 0 ] && lk_test_many "-e" "$@"
 }
 
 function lk_files_exist() {
-    [ "$#" -gt "0" ] && lk_test_many "-f" "$@"
+    [ $# -gt 0 ] && lk_test_many "-f" "$@"
 }
 
 function lk_dirs_exist() {
-    [ "$#" -gt "0" ] && lk_test_many "-d" "$@"
+    [ $# -gt 0 ] && lk_test_many "-d" "$@"
 }
 
 function lk_remove_false() {
@@ -1215,7 +1221,7 @@ function lk_sort_paths_by_date() {
 }
 
 function lk_is_identifier() {
-    [[ "$1" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]
+    [[ $1 =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]
 }
 
 function lk_is_declared() {
@@ -1229,7 +1235,7 @@ function lk_get_var_names() {
 # lk_version_at_least installed_version minimum_version
 function lk_version_at_least() {
     local MIN
-    MIN="$(gnu_sort --version-sort <(printf '%s\n' "$1" "$2") | head -n1 || lk_warn "error sorting versions")" &&
+    MIN="$(sort -V <(printf '%s\n' "$1" "$2") | head -n1 || lk_warn "error sorting versions")" &&
         [ "$MIN" = "$2" ]
 }
 
@@ -1360,6 +1366,22 @@ function lk_remove_secret() {
     lk_console_message "Password removed successfully"
 }
 
+function lk_modified_timestamp() {
+    if ! lk_is_macos || type -p gnu_stat >/dev/null; then
+        gnu_stat --printf '%Y' "$1"
+    else
+        stat -t '%s' -f '%Sm' "$1"
+    fi
+}
+
+function lk_timestamp_readable() {
+    if ! lk_is_macos || type -p gnu_date >/dev/null; then
+        gnu_date -Rd "@$1"
+    else
+        date -Rjf '%s' "$1"
+    fi
+}
+
 function lk_ssl_client() {
     local HOST="${1:-}" PORT="${2:-}" SERVER_NAME="${3:-${1:-}}"
     [ -n "$HOST" ] || lk_warn "no hostname" || return
@@ -1379,42 +1401,30 @@ function lk_grep_ipv4() {
 function lk_grep_ipv6() {
     local HEXTET='[0-9a-fA-F]{1,4}' \
         PREFIX='/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9])'
-    grep -E \
-        "^(:|($HEXTET:)+)((:$HEXTET)+|$HEXTET|:)($PREFIX)?\$" |
-        grep -E "^(($HEXTET)?:){1,7}($HEXTET)?($PREFIX)?\$"
+    grep -E "\
+^(($HEXTET:){7}(:|$HEXTET)|\
+($HEXTET:){6}(:|:$HEXTET)|\
+($HEXTET:){5}(:|(:$HEXTET){1,2})|\
+($HEXTET:){4}(:|(:$HEXTET){1,3})|\
+($HEXTET:){3}(:|(:$HEXTET){1,4})|\
+($HEXTET:){2}(:|(:$HEXTET){1,5})|\
+$HEXTET:(:|(:$HEXTET){1,6})|\
+:(:|(:$HEXTET){1,7}))($PREFIX)?\$"
 }
 
 # lk_resolve_hosts host...
 function lk_resolve_hosts() {
     local HOSTS IP_ADDRESSES
     IP_ADDRESSES=($({
-        lk_echo_array "$@" | lk_grep_ipv4 || :
-        lk_echo_array "$@" | lk_grep_ipv6 || :
+        lk_echo_args "$@" | lk_grep_ipv4 || true
+        lk_echo_args "$@" | lk_grep_ipv6 || true
     }))
-    HOSTS=($(comm -23 <(lk_echo_array "$@" | sort | uniq) \
-        <(lk_echo_array "${IP_ADDRESSES[@]}" | sort | uniq)))
+    HOSTS=($(comm -23 <(lk_echo_args "$@" | sort | uniq) \
+        <(lk_echo_array IP_ADDRESSES | sort | uniq)))
     IP_ADDRESSES+=($(eval \
         "dig +short ${HOSTS[*]/%/ A} ${HOSTS[*]/%/ AAAA}" |
         sed -E '/\.$/d')) || return
-    lk_echo_array "${IP_ADDRESSES[@]}" | sort | uniq
-}
-
-# lk_start_or_restart command [arg1...]
-#   Kill any running COMMAND processes, then run COMMAND in the
-#   background and disown it.
-function lk_start_or_restart() {
-    local COMMAND
-    COMMAND="${1##*/}"
-    lk_is_root ||
-        ! pgrep -xu "$USER" "$COMMAND" >/dev/null || # limit to processes owned by $USER
-        pkill -xu "$USER" "$COMMAND"                 #
-    ! lk_is_root ||                                  #
-        ! pgrep -x "$COMMAND" >/dev/null ||          # ...unless we're running as root
-        pkill -x "$COMMAND"
-    ! lk_command_exists "$1" || {
-        nohup "$@" </dev/null >/dev/null 2>&1 &
-        disown
-    }
+    lk_echo_array IP_ADDRESSES | sort | uniq
 }
 
 function lk_keep_original() {
@@ -1450,7 +1460,7 @@ function lk_maybe_replace() {
         <(cat <<<"$2") >/dev/null || {
         lk_keep_original "$1" &&
             cat <<<"$2" | lk_maybe_sudo tee "$1" >/dev/null || return
-        [ "${LK_VERBOSE:-0}" -eq "0" ] || lk_console_file "$1"
+        [ "${LK_VERBOSE:-0}" -eq 0 ] || lk_console_file "$1"
     }
 }
 
@@ -1481,93 +1491,12 @@ function lk_console_file() {
         lk_console_detail "Backup path:" "$ORIG_FILE"
 }
 
-# lk_apply_setting file_path setting_name setting_value [delimiter] [comment_chars] [space_chars]
-#   Set value of SETTING_NAME to SETTING_VALUE in FILE_PATH.
-#   DELIMITER defaults to "=".
-#   To uncomment an existing SETTING_NAME assignment first, use COMMENT_CHARS
-#   to specify which characters can be removed from the beginning of lines.
-#   Use SPACE_CHARS to specify whitespace characters considered legal before
-#   and after SETTING_NAME, SETTING_VALUE and DELIMITER.
-function lk_apply_setting() {
-    local FILE_PATH="$1" SETTING_NAME="$2" SETTING_VALUE="$3" DELIMITER="${4:-=}" \
-        COMMENT_PATTERN SPACE_PATTERN NAME_ESCAPED VALUE_ESCAPED DELIMITER_ESCAPED CHECK_PATTERN SEARCH_PATTERN REPLACE REPLACED
-    lk_maybe_sudo test -f "$FILE_PATH" || lk_warn "$FILE_PATH must exist" || return
-    COMMENT_PATTERN="${5:+[$(lk_escape_ere "$5")]*}"
-    SPACE_PATTERN="${6:+[$(lk_escape_ere "$6")]*}"
-    NAME_ESCAPED="$(lk_escape_ere "$SETTING_NAME")"
-    VALUE_ESCAPED="$(lk_escape_ere "$SETTING_VALUE")"
-    DELIMITER_ESCAPED="$(sed -Ee "s/^$SPACE_PATTERN//" -e "s/$SPACE_PATTERN\$//" <<<"$DELIMITER")"
-    [ -n "$DELIMITER_ESCAPED" ] || DELIMITER_ESCAPED="$DELIMITER"
-    DELIMITER_ESCAPED="$(lk_escape_ere "$DELIMITER_ESCAPED")"
-    CHECK_PATTERN="^$SPACE_PATTERN$NAME_ESCAPED$SPACE_PATTERN$DELIMITER_ESCAPED$SPACE_PATTERN$VALUE_ESCAPED$SPACE_PATTERN\$"
-    grep -Eq "$CHECK_PATTERN" "$FILE_PATH" || {
-        REPLACE="$SETTING_NAME$DELIMITER$SETTING_VALUE"
-        # try to replace an uncommented value first
-        SEARCH_PATTERN="^($SPACE_PATTERN)$NAME_ESCAPED$SPACE_PATTERN$DELIMITER_ESCAPED.*\$"
-        REPLACED="$(sed -E "0,/$SEARCH_PATTERN/{s/$SEARCH_PATTERN/\\1$(lk_escape_ere_replace "$REPLACE")/}" "$FILE_PATH")" || return
-        # failing that, try for a commented one
-        grep -Eq "$CHECK_PATTERN" <<<"$REPLACED" || {
-            SEARCH_PATTERN="^($SPACE_PATTERN)$COMMENT_PATTERN($SPACE_PATTERN)$NAME_ESCAPED$SPACE_PATTERN$DELIMITER_ESCAPED.*\$"
-            REPLACED="$(sed -E "0,/$SEARCH_PATTERN/{s/$SEARCH_PATTERN/\\1\\2$(lk_escape_ere_replace "$REPLACE")/}" "$FILE_PATH")" || return
-        }
-        lk_keep_original "$FILE_PATH" || return
-        if grep -Eq "$CHECK_PATTERN" <<<"$REPLACED"; then
-            lk_maybe_sudo tee "$FILE_PATH" <<<"$REPLACED" >/dev/null || return
-        else
-            {
-                echo "$REPLACED"
-                echo "$REPLACE"
-            } | lk_maybe_sudo tee "$FILE_PATH" >/dev/null || return
-        fi
-    }
-}
-
-# EXPAND_WHITESPACE=<1|0|Y|N> lk_enable_entry file_path entry [comment_chars] [trailing_pattern]
-#   Add ENTRY to FILE_PATH if not already present.
-#   To uncomment an existing ENTRY line first, use COMMENT_CHARS to specify
-#   which characters can be removed from the beginning of lines.
-#   Use TRAILING_PATTERN to provide a regular expression matching existing text
-#   to retain if it appears after ENTRY. The default is to keep whitespace and
-#   comments.
-#   EXPAND_WHITESPACE is enabled by default. It allows one or more whitespace
-#   characters in ENTRY to match one or more whitespace characters in
-#   FILE_PATH. If EXPAND_WHITESPACE is enabled, escaped whitespace characters
-#   in ENTRY are unescaped without expansion.
-function lk_enable_entry() {
-    local FILE_PATH="$1" ENTRY="$2" OPTIONAL_COMMENT_PATTERN COMMENT_PATTERN TRAILING_PATTERN \
-        ENTRY_ESCAPED SPACE_PATTERN CHECK_PATTERN SEARCH_PATTERN REPLACED
-    lk_maybe_sudo test -f "$FILE_PATH" || lk_warn "$FILE_PATH must exist" || return
-    OPTIONAL_COMMENT_PATTERN="${3:+[$(lk_escape_ere "$3")]*}"
-    COMMENT_PATTERN="${3:+$(lk_trim "$3")}"
-    COMMENT_PATTERN="${COMMENT_PATTERN:+[$(lk_escape_ere "$COMMENT_PATTERN")]+}"
-    TRAILING_PATTERN="${4-\\s+${COMMENT_PATTERN:+(${COMMENT_PATTERN}.*)?}}"
-    ENTRY_ESCAPED="$(lk_escape_ere "$ENTRY")"
-    SPACE_PATTERN=
-    lk_is_false "${EXPAND_WHITESPACE:-1}" || {
-        ENTRY_ESCAPED="$(sed -Ee 's/(^|[^\])\s+/\1\\s+/g' -e 's/\\\\(\s)/\1/g' <<<"$ENTRY_ESCAPED")"
-        SPACE_PATTERN='\s*'
-    }
-    CHECK_PATTERN="^$SPACE_PATTERN$ENTRY_ESCAPED${TRAILING_PATTERN:+($TRAILING_PATTERN)?}\$"
-    grep -Eq "$CHECK_PATTERN" "$FILE_PATH" || {
-        # try to replace a commented entry
-        SEARCH_PATTERN="^($SPACE_PATTERN)$OPTIONAL_COMMENT_PATTERN($SPACE_PATTERN$ENTRY_ESCAPED${TRAILING_PATTERN:+($TRAILING_PATTERN)?})\$"
-        REPLACED="$(sed -E "0,/$SEARCH_PATTERN/{s/$SEARCH_PATTERN/\1\2/}" "$FILE_PATH")" || return
-        lk_keep_original "$FILE_PATH" || return
-        if grep -Eq "$CHECK_PATTERN" <<<"$REPLACED"; then
-            lk_maybe_sudo tee "$FILE_PATH" <<<"$REPLACED" >/dev/null || return
-        else
-            {
-                echo "$REPLACED"
-                echo "$ENTRY"
-            } | lk_maybe_sudo tee "$FILE_PATH" >/dev/null || return
-        fi
-    }
-}
-
 # lk_user_in_group username groupname...
 #   True if USERNAME belongs to at least one of GROUPNAME.
 function lk_user_in_group() {
-    [ "$(comm -12 <(groups "$1" | sed -E 's/^.*://' | grep -Eo '[^[:space:]]+' | sort) <(lk_echo_array "${@:2}" | sort | uniq) | wc -l)" -gt "0" ]
+    [ "$(comm -12 \
+        <(groups "$1" | sed -E 's/^.*://' | grep -Eo '[^[:space:]]+' | sort) \
+        <(lk_echo_args "${@:2}" | sort | uniq) | wc -l)" -gt 0 ]
 }
 
 # lk_make_iso path...
@@ -1583,7 +1512,12 @@ function lk_make_iso() {
 
 set -o pipefail
 
-# register wrapper functions (e.g. `gnu_find`) to invoke the GNU version of
+_LK_INCLUDES=(
+    core
+    ${_LK_INCLUDES[@]+"${_LK_INCLUDES[@]}"}
+)
+
+# Register wrapper functions (e.g. `gnu_find`) to invoke the GNU version of
 # certain commands (e.g. `gfind`) on systems where standard utilities are not
 # compatible with their GNU counterparts (notably BSD/macOS)
 _lk_register_gnu_commands $(
