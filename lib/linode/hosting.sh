@@ -32,17 +32,11 @@
 # <UDF name="SHUTDOWN_DELAY" label="Delay before shutdown/reboot after provisioning (in minutes)" default="0" />
 # <UDF name="LK_PLATFORM_BRANCH" label="lk-platform tracking branch" oneof="master,develop" default="master" />
 
-[ ! "${SCRIPT_DEBUG:-Y}" = Y ] || {
+[ ! "${SCRIPT_DEBUG:-Y}" = Y ] ||
     SCRIPT_DEBUG_VARS="$(
         unset BASH_EXECUTION_STRING
         declare -p
     )"
-    TRACE_FILE=/var/log/${PATH_PREFIX:-lk-}install.trace
-    install -v -m 0640 -g "adm" /dev/null "$TRACE_FILE"
-    exec 4>>"$TRACE_FILE"
-    BASH_XTRACEFD=4
-    set -x
-}
 
 # Use lk_bash_udf_defaults to regenerate the following after changes above
 NODE_HOSTNAME=${NODE_HOSTNAME:-}
@@ -75,6 +69,14 @@ SCRIPT_DEBUG=${SCRIPT_DEBUG:-Y}
 SHUTDOWN_ACTION=${SHUTDOWN_ACTION:-reboot}
 SHUTDOWN_DELAY=${SHUTDOWN_DELAY:-0}
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
+
+[ ! "$SCRIPT_DEBUG" = Y ] || {
+    TRACE_FILE=/var/log/${PATH_PREFIX}install.trace
+    install -v -m 0640 -g "adm" /dev/null "$TRACE_FILE"
+    exec 4>>"$TRACE_FILE"
+    BASH_XTRACEFD=4
+    set -x
+}
 
 set -euo pipefail
 shopt -s nullglob
