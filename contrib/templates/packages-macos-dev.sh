@@ -87,6 +87,26 @@ HOMEBREW_CASKS+=(
     microsoft-office
 )
 
+MAS_APPS+=(
+    409183694 # Keynote
+    409203825 # Numbers
+    409201541 # Pages
+
+    #
+    526298438 # Lightshot Screenshot
+    441258766 # Magnet
+
+    #
+    420212497  # Byword
+    404705039  # Graphic
+    1295203466 # Microsoft Remote Desktop
+    1055273043 # PDF Expert
+
+    #
+    506189836 # Harvest
+    585829637 # Todoist
+)
+
 # development
 HOMEBREW_TAPS+=(
     adoptopenjdk/openjdk
@@ -137,6 +157,10 @@ HOMEBREW_CASKS+=(
     #
     adoptopenjdk/openjdk/adoptopenjdk11
     meld
+)
+
+MAS_APPS+=(
+    497799835 # Xcode
 )
 
 # VMs and containers
