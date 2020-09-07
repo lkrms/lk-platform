@@ -177,6 +177,7 @@ function lk_brew_check_taps() {
     }
 }
 
+NEW_HOMEBREW=0
 if ! lk_command_exists brew; then
     lk_console_message "Installing Homebrew"
     FILE=$SCRIPT_DIR/homebrew-install.sh
@@ -209,6 +210,7 @@ if ! lk_command_exists brew; then
     )
     lk_console_detail "Installing lk-platform dependencies"
     lk_tty brew install "${INSTALL[@]}"
+    NEW_HOMEBREW=1
 else
     lk_console_item "Found Homebrew at:" "$(brew --prefix)"
     eval "$(. "$LK_BASE/lib/bash/env.sh")"
@@ -229,6 +231,36 @@ fi
 
 [ -z "$LK_PACKAGES_FILE" ] || LK_PACKAGES_FILE=$(realpath "$LK_PACKAGES_FILE")
 "$LK_BASE/bin/lk-platform-install.sh" --no-log
+
+UPGRADE_FORMULAE=()
+UPGRADE_CASKS=()
+lk_is_true "$NEW_HOMEBREW" || {
+    UPGRADE_FORMULAE=($(brew outdated --formula))
+    [ "${#UPGRADE_FORMULAE[@]}" -eq 0 ] || {
+        lk_echo_array UPGRADE_FORMULAE |
+            lk_console_list "Update available:" formula formulae
+        lk_no_input || lk_confirm "OK to upgrade?" ||
+            UPGRADE_FORMULAE=()
+    }
+
+    UPGRADE_CASKS=($(brew outdated --cask))
+    [ "${#UPGRADE_CASKS[@]}" -eq 0 ] || {
+        lk_echo_array UPGRADE_CASKS |
+            lk_console_list "Update available:" cask casks
+        lk_no_input || lk_confirm "OK to upgrade?" ||
+            UPGRADE_CASKS=()
+    }
+}
+
+[ "${#UPGRADE_FORMULAE[@]}" -eq 0 ] || {
+    lk_console_message "Upgrading formulae"
+    lk_tty brew upgrade "${UPGRADE_FORMULAE[@]}" --formula
+}
+
+[ "${#UPGRADE_CASKS[@]}" -eq 0 ] || {
+    lk_console_message "Upgrading casks"
+    lk_tty brew upgrade "${UPGRADE_CASKS[@]}" --cask
+}
 
 INSTALL_FORMULAE=($(comm -13 \
     <(brew list --formulae --full-name | sort | uniq) \
