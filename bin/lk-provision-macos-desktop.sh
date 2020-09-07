@@ -233,22 +233,33 @@ EOF
     [ -z "$LK_PACKAGES_FILE" ] || LK_PACKAGES_FILE=$(realpath "$LK_PACKAGES_FILE")
     "$LK_BASE/bin/lk-platform-install.sh" --no-log
 
+    lk_console_message "Checking Homebrew packages"
     UPGRADE_FORMULAE=()
     UPGRADE_CASKS=()
     lk_is_true "$NEW_HOMEBREW" || {
-        UPGRADE_FORMULAE=($(brew outdated --formula))
+        OUTDATED=$(brew outdated --json=v2)
+        UPGRADE_FORMULAE=($(jq -r ".formulae[].name" <<<"$OUTDATED"))
         [ "${#UPGRADE_FORMULAE[@]}" -eq 0 ] || {
-            lk_echo_array UPGRADE_FORMULAE |
-                lk_console_list "Update available:" formula formulae
-            lk_no_input || lk_confirm "OK to upgrade?" ||
+            jq <<<"$OUTDATED" -r "\
+.formulae[] | \
+.name + \" (\" + (.installed_versions | join(\" \")) + \" -> \" \
++ .current_version + \")\"" |
+                lk_console_detail_list "$(
+                    lk_maybe_plural "${#UPGRADE_FORMULAE[@]}" Update Updates
+                ) available:" formula formulae
+            lk_no_input || lk_confirm "OK to upgrade outdated formulae?" Y ||
                 UPGRADE_FORMULAE=()
         }
 
-        UPGRADE_CASKS=($(brew outdated --cask))
+        UPGRADE_CASKS=($(jq -r ".casks[].name" <<<"$OUTDATED"))
         [ "${#UPGRADE_CASKS[@]}" -eq 0 ] || {
-            lk_echo_array UPGRADE_CASKS |
-                lk_console_list "Update available:" cask casks
-            lk_no_input || lk_confirm "OK to upgrade?" ||
+            jq <<<"$OUTDATED" -r "\
+.casks[] | \
+.name + \" (\" + .installed_versions + \" -> \" + .current_version + \")\"" |
+                lk_console_detail_list "$(
+                    lk_maybe_plural "${#UPGRADE_CASKS[@]}" Update Updates
+                ) available:" cask casks
+            lk_no_input || lk_confirm "OK to upgrade outdated casks?" Y ||
                 UPGRADE_CASKS=()
         }
     }
@@ -262,6 +273,12 @@ EOF
         lk_console_message "Upgrading casks"
         lk_tty brew upgrade "${UPGRADE_CASKS[@]}" --cask
     }
+
+    [ "${#HOMEBREW_FORMULAE[@]}" -eq 0 ] ||
+        HOMEBREW_FORMULAE=($(
+            brew info --json=v1 "${HOMEBREW_FORMULAE[@]}" |
+                jq -r .[].full_name
+        ))
 
     INSTALL_FORMULAE=($(comm -13 \
         <(brew list --formulae --full-name | sort | uniq) \
