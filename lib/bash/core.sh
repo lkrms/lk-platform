@@ -2,6 +2,97 @@
 
 # shellcheck disable=SC1003,SC1090,SC2015,SC2016,SC2034,SC2046,SC2068,SC2088,SC2120,SC2162,SC2207
 
+function lk_command_exists() {
+    type -P "$1" >/dev/null
+}
+
+function lk_is_executable() {
+    type -p "$1" >/dev/null
+}
+
+function _lk_return_cached() {
+    if [ "${!1+1}" != 1 ]; then
+        eval "$1=0; { $2; } || $1=\$?"
+    fi
+    return "${!1}"
+}
+
+function lk_is_macos() {
+    _lk_return_cached _LK_IS_MACOS '[ "$(uname -s)" = "Darwin" ]'
+}
+
+function lk_is_linux() {
+    _lk_return_cached _LK_IS_LINUX '[ "$(uname -s)" = "Linux" ]'
+}
+
+function lk_is_wsl() {
+    _lk_return_cached _LK_IS_WSL 'lk_is_linux && grep -qi microsoft /proc/version >/dev/null 2>&1'
+}
+
+_LK_GNU_COMMANDS=(
+    chgrp  # coreutils
+    chmod  #
+    chown  #
+    date   #
+    ln     #
+    mktemp #
+    sort   #
+    stat   #
+    find   # findutils
+    xargs  #
+    awk    # gawk
+    grep   # grep
+    nc     # netcat
+    sed    # sed
+    tar    # tar
+    getopt # util-linux
+)
+
+function _lk_gnu_command() {
+    local COMMAND
+    case "$1" in
+    awk)
+        echo "gawk"
+        ;;
+    nc)
+        echo "netcat"
+        ;;
+    getopt)
+        if ! lk_is_macos; then
+            echo "getopt"
+        else
+            if ! lk_command_exists brew ||
+                ! COMMAND=$(brew --prefix); then
+                COMMAND=/usr/local
+            fi
+            echo "$COMMAND/opt/gnu-getopt/bin/getopt"
+        fi
+        ;;
+    *)
+        echo "$PREFIX$1"
+        ;;
+    esac
+}
+
+function _lk_gnu_define() {
+    local PREFIX=g i COMMAND GCOMMAND
+    lk_is_macos || PREFIX=
+    for i in "${!_LK_GNU_COMMANDS[@]}"; do
+        COMMAND=${_LK_GNU_COMMANDS[$i]}
+        GCOMMAND=$(_lk_gnu_command "$COMMAND")
+        lk_command_exists "$GCOMMAND" || {
+            unset "_LK_GNU_COMMANDS[$i]"
+            continue
+        }
+        eval "function gnu_$COMMAND() { $GCOMMAND \"\$@\"; }"
+    done
+}
+
+# Define wrapper functions (e.g. `gnu_find`) to invoke the GNU version of
+# certain commands (e.g. `gfind`) on systems where standard utilities are not
+# compatible with their GNU counterparts (notably BSD/macOS)
+_lk_gnu_define
+
 function lk_include() {
     local i FILE
     for i in ${@//,/ }; do
@@ -100,10 +191,6 @@ function lk_commands_exist() {
         type -P "$1" >/dev/null || return
         shift
     done
-}
-
-function lk_command_exists() {
-    type -P "$1" >/dev/null
 }
 
 function lk_first_existing_command() {
@@ -1087,76 +1174,6 @@ function lk_keep_trying() {
     fi
 }
 
-function _lk_get_gnu_command() {
-    case "$1" in
-    awk)
-        echo "gawk"
-        ;;
-    nc)
-        echo "netcat"
-        ;;
-    getopt)
-        lk_is_macos && echo "$(
-            ! lk_command_exists brew && echo "/usr/local" || brew --prefix
-        )/opt/gnu-getopt/bin/getopt" ||
-            echo "getopt"
-        ;;
-    *)
-        echo "$PREFIX$1"
-        ;;
-    esac
-}
-
-function _lk_register_gnu_commands() {
-    local PREFIX=g COMMAND GCOMMAND
-    LK_GNU_COMMANDS=(${LK_GNU_COMMANDS[@]+"${LK_GNU_COMMANDS[@]}"})
-    lk_is_macos || PREFIX=
-    for COMMAND in "$@"; do
-        GCOMMAND=$(_lk_get_gnu_command "$COMMAND")
-        lk_command_exists "$GCOMMAND" || continue
-        eval "function gnu_$COMMAND() { $GCOMMAND \"\$@\"; }"
-        LK_GNU_COMMANDS+=("$COMMAND")
-    done
-    LK_GNU_COMMANDS=($(lk_echo_array LK_GNU_COMMANDS | sort | uniq))
-}
-
-function lk_install_gnu_commands() {
-    local PREFIX="g" GNU_PATH="${GNU_PATH:-/usr/local/bin}" COMMAND GCOMMAND COMMAND_PATH \
-        COMMANDS=("$@") EXIT_STATUS=0
-    lk_is_macos || PREFIX=
-    [ ! -e "$GNU_PATH" ] ||                                     # GNU_PATH does not exist; or
-        [ -d "$GNU_PATH" ] ||                                   # is a directory
-        lk_warn "not a directory: $GNU_PATH" || return          # ...
-    [ -w "$GNU_PATH" ] ||                                       # it's also writable; or
-        lk_is_true "$(lk_get_maybe_sudo)" ||                    # will be installed as superuser; or
-        { [ ! -e "$GNU_PATH" ] &&                               # does not exist but the
-            PARENT="$(lk_first_existing_parent "$GNU_PATH")" && # first existing parent dir
-            [ -w "$PARENT" ]; } ||                              # is writable; or
-        { [ "$GNU_PATH" = "/usr/local/bin" ] &&                 # has not been customised and
-            [ -n "${HOME:-}" ] &&                               # HOME is set, so
-            GNU_PATH="$HOME/.local/bin"; } ||                   # $HOME/.local/bin is suitable
-        lk_warn "cannot write to directory: $GNU_PATH" || return
-    [ $# -gt 0 ] || COMMANDS=(${LK_GNU_COMMANDS[@]+"${LK_GNU_COMMANDS[@]}"})
-    for COMMAND in ${COMMANDS[@]+"${COMMANDS[@]}"}; do
-        GCOMMAND="$(_lk_get_gnu_command "$COMMAND")"
-        { lk_command_exists "$GCOMMAND" ||
-            lk_warn "$GCOMMAND not found"; } &&
-            COMMAND_PATH="$(type -P "$GCOMMAND")" &&
-            lk_safe_symlink "$COMMAND_PATH" "$GNU_PATH/gnu_$COMMAND" ||
-            EXIT_STATUS="$?"
-    done
-    return "$EXIT_STATUS"
-}
-
-function lk_check_gnu_commands() {
-    local COMMANDS=("$@")
-    [ $# -gt 0 ] || COMMANDS=(${LK_GNU_COMMANDS[@]+"${LK_GNU_COMMANDS[@]}"})
-    if [ "${#COMMANDS[@]}" -gt 0 ]; then
-        lk_commands_exist "${COMMANDS[@]/#/gnu_}" ||
-            lk_install_gnu_commands "${COMMANDS[@]}"
-    fi
-}
-
 function lk_users_exist() {
     while [ $# -gt 0 ]; do
         id "$1" >/dev/null 2>&1 || return
@@ -1239,35 +1256,16 @@ function lk_version_at_least() {
         [ "$MIN" = "$2" ]
 }
 
-function lk_return_cached() {
-    lk_is_declared "$1" || {
-        eval "$1=0;{ $2;}||$1=\"\$?\""
-    }
-    return "${!1}"
-}
-
-function lk_is_macos() {
-    lk_return_cached LK_IS_MACOS '[ "$(uname -s)" = "Darwin" ]'
-}
-
-function lk_is_linux() {
-    lk_return_cached LK_IS_LINUX '[ "$(uname -s)" = "Linux" ]'
-}
-
-function lk_is_wsl() {
-    lk_return_cached LK_IS_WSL 'lk_is_linux && grep -qi microsoft /proc/version >/dev/null 2>&1'
-}
-
 function lk_is_arch() {
-    lk_return_cached LK_IS_ARCH 'lk_is_linux && [ -f "/etc/arch-release" ]'
+    _lk_return_cached _LK_IS_ARCH 'lk_is_linux && [ -f "/etc/arch-release" ]'
 }
 
 function lk_is_ubuntu() {
-    lk_return_cached LK_IS_UBUNTU 'lk_is_linux && lk_command_exists lsb_release && [ "$(lsb_release -si)" = "Ubuntu" ]'
+    _lk_return_cached _LK_IS_UBUNTU 'lk_is_linux && lk_command_exists lsb_release && [ "$(lsb_release -si)" = "Ubuntu" ]'
 }
 
 function lk_is_ubuntu_lts() {
-    lk_return_cached LK_IS_UBUNTU_LTS 'lk_is_ubuntu && lk_command_exists ubuntu-distro-info && ubuntu-distro-info --supported-esm | grep -Fx "$(lsb_release -sc)" >/dev/null 2>&1'
+    _lk_return_cached _LK_IS_UBUNTU_LTS 'lk_is_ubuntu && lk_command_exists ubuntu-distro-info && ubuntu-distro-info --supported-esm | grep -Fx "$(lsb_release -sc)" >/dev/null 2>&1'
 }
 
 function lk_ubuntu_at_least() {
@@ -1275,7 +1273,7 @@ function lk_ubuntu_at_least() {
 }
 
 function lk_is_desktop() {
-    lk_return_cached LK_IS_DESKTOP 'lk_is_macos || lk_command_exists X'
+    _lk_return_cached _LK_IS_DESKTOP 'lk_is_macos || lk_command_exists X'
 }
 
 function lk_is_server() {
@@ -1283,11 +1281,11 @@ function lk_is_server() {
 }
 
 function lk_is_virtual() {
-    lk_return_cached LK_IS_VIRTUAL 'lk_is_linux && grep -Eq "^flags\\s*:.*\\shypervisor(\\s|\$)" /proc/cpuinfo'
+    _lk_return_cached _LK_IS_VIRTUAL 'lk_is_linux && grep -Eq "^flags\\s*:.*\\shypervisor(\\s|\$)" /proc/cpuinfo'
 }
 
 function lk_is_qemu() {
-    lk_return_cached LK_IS_QEMU 'lk_is_virtual && grep -Eiq qemu /sys/devices/virtual/dmi/id/*_vendor'
+    _lk_return_cached _LK_IS_QEMU 'lk_is_virtual && grep -Eiq qemu /sys/devices/virtual/dmi/id/*_vendor'
 }
 
 if lk_is_macos; then
@@ -1366,21 +1364,25 @@ function lk_remove_secret() {
     lk_console_message "Password removed successfully"
 }
 
-function lk_modified_timestamp() {
-    if ! lk_is_macos || type -p gnu_stat >/dev/null; then
+if lk_is_executable gnu_stat; then
+    function lk_modified_timestamp() {
         gnu_stat --printf '%Y' "$1"
-    else
+    }
+elif lk_is_macos; then
+    function lk_modified_timestamp() {
         stat -t '%s' -f '%Sm' "$1"
-    fi
-}
+    }
+fi
 
-function lk_timestamp_readable() {
-    if ! lk_is_macos || type -p gnu_date >/dev/null; then
+if lk_is_executable gnu_date; then
+    function lk_timestamp_readable() {
         gnu_date -Rd "@$1"
-    else
+    }
+elif lk_is_macos; then
+    function lk_timestamp_readable() {
         date -Rjf '%s' "$1"
-    fi
-}
+    }
+fi
 
 function lk_ssl_client() {
     local HOST="${1:-}" PORT="${2:-}" SERVER_NAME="${3:-${1:-}}"
@@ -1515,31 +1517,6 @@ set -o pipefail
 _LK_INCLUDES=(
     core
     ${_LK_INCLUDES[@]+"${_LK_INCLUDES[@]}"}
-)
-
-# Register wrapper functions (e.g. `gnu_find`) to invoke the GNU version of
-# certain commands (e.g. `gfind`) on systems where standard utilities are not
-# compatible with their GNU counterparts (notably BSD/macOS)
-_lk_register_gnu_commands $(
-    COMMANDS=(
-        chgrp  # coreutils
-        chmod  #
-        chown  #
-        date   #
-        ln     #
-        mktemp #
-        sort   #
-        stat   #
-        find   # findutils
-        xargs  #
-        awk    # gawk
-        grep   # grep
-        nc     # netcat
-        sed    # sed
-        tar    # tar
-        getopt # util-linux
-    )
-    printf '%s ' "${COMMANDS[@]}"
 )
 
 eval "$(lk_get_colours)"

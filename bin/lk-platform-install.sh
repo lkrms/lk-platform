@@ -98,12 +98,31 @@
     LK_VERBOSE=1
     lk_log_output
 
-    lk_console_message "Installing gnu_* symlinks"
-    # to list gnu_* commands required by lk-platform:
+    # To list gnu_* commands required by lk-platform:
+    #
     #   find "$LK_BASE" ! \( -type d -name .git -prune \) -type f -print0 |
     #       xargs -0 grep -Eho '\bgnu_[a-zA-Z0-9.]+' | sort -u
-    lk_install_gnu_commands awk date find getopt mktemp sort stat xargs
-    lk_install_gnu_commands || true
+    lk_console_message "Checking gnu_* symlinks"
+    function lk_gnu_install() {
+        local COMMAND GCOMMAND COMMAND_PATH COMMANDS=("$@") EXIT_STATUS=0
+        [ $# -gt 0 ] ||
+            COMMANDS=(${_LK_GNU_COMMANDS[@]+"${_LK_GNU_COMMANDS[@]}"})
+        for COMMAND in ${COMMANDS[@]+"${COMMANDS[@]}"}; do
+            GCOMMAND=$(_lk_gnu_command "$COMMAND")
+            COMMAND_PATH=$(type -P "$GCOMMAND") &&
+                lk_safe_symlink "$COMMAND_PATH" "$GNU_PATH/gnu_$COMMAND" ||
+                EXIT_STATUS=$?
+        done
+        return "$EXIT_STATUS"
+    }
+    PREFIX=g
+    lk_is_macos || PREFIX=
+    GNU_PATH=${GNU_PATH:-/usr/local/bin}
+    # Install symlinks for required commands
+    lk_gnu_install date find getopt stat xargs
+    # Install symlinks for commands in _LK_GNU_COMMANDS found on the system by
+    # _lk_gnu_define
+    lk_gnu_install
 
     lk_console_message "Checking configuration files"
     LK_PATH_PREFIX="${LK_PATH_PREFIX:-${PATH_PREFIX:-${1:-}}}"

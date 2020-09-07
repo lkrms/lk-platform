@@ -81,7 +81,6 @@ function lk_find_latest() {
         TYPE_ARGS+=(${TYPE_ARGS[@]+-o} -type "${TYPE:$i-1:1}")
     done
     [ "${#TYPE_ARGS[@]}" -eq 2 ] || TYPE_ARGS=(\( "${TYPE_ARGS[@]}" \))
-    lk_check_gnu_commands stat
     gnu_find -L . -xdev -regextype posix-egrep \
         ${@+\( "$@" \)} "${TYPE_ARGS[@]}" -print0 |
         xargs -0 gnu_stat --format '%Y :%y %12s %A %N' |
