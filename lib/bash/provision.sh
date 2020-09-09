@@ -83,13 +83,24 @@ function lk_sudo_offer_nopasswd() {
 
 # lk_ssh_add_host <NAME> <HOST[:PORT]> <USER> [<KEY_FILE> [<JUMP_HOST_NAME>]]
 function lk_ssh_add_host() {
-    local NAME=$1 HOST=$2 USER=$3 KEY_FILE=${4:-} JUMP_HOST_NAME=${5:-} \
-        h=${LK_SSH_HOME:-~} SSH_PREFIX=${LK_SSH_PREFIX:-$LK_PATH_PREFIX} KEY
+    local NAME=$1 HOST=$2 JUMP_USER=$3 KEY_FILE=${4:-} JUMP_HOST_NAME=${5:-} \
+        h=${LK_SSH_HOME:-~} SSH_PREFIX=${LK_SSH_PREFIX:-$LK_PATH_PREFIX} KEY \
+        S="[[:space:]]"
     [ "${KEY_FILE:--}" = - ] ||
         [ -f "$KEY_FILE" ] ||
+        [ -f "$h/.ssh/$KEY_FILE" ] ||
+        { [ -f "$h/.ssh/${SSH_PREFIX}keys/$KEY_FILE" ] &&
+            KEY_FILE="~/.ssh/${SSH_PREFIX}keys/$KEY_FILE"; } ||
+        # If <KEY_FILE> doesn't exist but matches the regex below, check
+        # ~/.ssh/authorized_keys for exactly one public key with the comment
+        # field set to <KEY_FILE>
+        { [[ "$KEY_FILE" =~ ^[-a-zA-Z0-9_]+$ ]] && { KEY=$(grep -E \
+            "$S$KEY_FILE\$" "$h/.ssh/authorized_keys") &&
+            [ "$(wc -l <<<"$KEY")" -eq 1 ] &&
+            KEY_FILE=- || KEY_FILE=; }; } ||
         lk_warn "$KEY_FILE: file not found" || return
     [ ! "$KEY_FILE" = - ] || {
-        KEY=$(cat)
+        KEY=${KEY:-$(cat)}
         KEY_FILE=$h/.ssh/${SSH_PREFIX}keys/$NAME
         LK_BACKUP_SUFFIX='' LK_VERBOSE=0 \
             lk_maybe_replace "$KEY_FILE" "$KEY" &&
@@ -113,8 +124,8 @@ function lk_ssh_add_host() {
         cat <<EOF
 Host                    ${SSH_PREFIX}$NAME
 HostName                $HOST${PORT:+
-Port                    $PORT}
-User                    $USER${KEY_FILE:+
+Port                    $PORT}${JUMP_USER:+
+User                    $JUMP_USER}${KEY_FILE:+
 IdentityFile            "$KEY_FILE"}${JUMP_HOST_NAME:+
 ProxyJump               $JUMP_HOST_NAME}
 EOF
@@ -128,9 +139,12 @@ EOF
 function lk_ssh_configure() {
     local JUMP_HOST=${1:-} JUMP_USER=${2:-} JUMP_KEY_FILE=${3:-} \
         S="[[:space:]]" SSH_PREFIX=${LK_SSH_PREFIX:-$LK_PATH_PREFIX} \
-        HOMES=(${LK_SSH_HOMES[@]+"${LK_SSH_HOMES[@]}"}) h OWNER GROUP CONF
+        HOMES=(${LK_SSH_HOMES[@]+"${LK_SSH_HOMES[@]}"}) h OWNER GROUP CONF KEY
     [ $# -eq 0 ] || [ $# -ge 2 ] || lk_warn "invalid arguments" || return
     [ "${#HOMES[@]}" -gt 0 ] || HOMES=(~)
+    [ "${#HOMES[@]}" -le 1 ] ||
+        [ ! "$JUMP_KEY_FILE" = - ] ||
+        KEY=$(cat)
     for h in "${HOMES[@]}"; do
         OWNER=$(lk_file_owner "$h") &&
             GROUP=$(id -gn "$OWNER") || return
@@ -173,13 +187,10 @@ EOF
         [ $# -lt 2 ] ||
             LK_SSH_HOME=$h LK_SSH_PRIORITY=40 \
                 lk_ssh_add_host \
-                "jump$(
-                    [ "$JUMP_USER" = "$OWNER" ] ||
-                        printf '%s' "-$JUMP_USER"
-                )" \
+                "jump" \
                 "$JUMP_HOST" \
                 "$JUMP_USER" \
-                "$JUMP_KEY_FILE"
+                "$JUMP_KEY_FILE" ${KEY+<<<"$KEY"}
         (
             shopt -s nullglob
             chmod 00600 \

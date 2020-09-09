@@ -13,6 +13,9 @@
 # <UDF name="ADMIN_EMAIL" label="Forwarding address for system email" example="tech@linacreative.com" />
 # <UDF name="TRUSTED_IP_ADDRESSES" label="Trusted IP addresses (comma-delimited)" example="10.0.0.0/8,172.16.0.0/12,192.168.0.0/16" default="" />
 # <UDF name="SSH_TRUSTED_ONLY" label="Block SSH access from untrusted IP addresses (trusted IP addresses required)" oneof="Y,N" default="N" />
+# <UDF name="SSH_JUMP_HOST" label="SSH jump proxy: hostname and optional port" example="jump.linacreative.com:9922" default="" />
+# <UDF name="SSH_JUMP_USER" label="SSH jump proxy: default user" default="" />
+# <UDF name="SSH_JUMP_KEY" label="SSH jump proxy: default key (must match the comment field of one installed key)" default="" />
 # <UDF name="REJECT_OUTPUT" label="Reject outgoing traffic by default" oneof="Y,N" default="N" />
 # <UDF name="ACCEPT_OUTPUT_HOSTS" label="Accept outgoing traffic to hosts (comma-delimited)" example="192.168.128.0/17,ip-ranges.amazonaws.com" default="" />
 # <UDF name="MYSQL_USERNAME" label="MySQL admin username (password required)" example="dbadmin" default="" />
@@ -51,6 +54,9 @@ ADMIN_USERS=${ADMIN_USERS:-linac}
 ADMIN_EMAIL=${ADMIN_EMAIL:-}
 TRUSTED_IP_ADDRESSES=${TRUSTED_IP_ADDRESSES:-}
 SSH_TRUSTED_ONLY=${SSH_TRUSTED_ONLY:-N}
+SSH_JUMP_HOST=${SSH_JUMP_HOST:-}
+SSH_JUMP_USER=${SSH_JUMP_USER:-}
+SSH_JUMP_KEY=${SSH_JUMP_KEY:-}
 REJECT_OUTPUT=${REJECT_OUTPUT:-N}
 ACCEPT_OUTPUT_HOSTS=${ACCEPT_OUTPUT_HOSTS:-}
 MYSQL_USERNAME=${MYSQL_USERNAME:-}
@@ -171,6 +177,9 @@ FIELD_ERRORS=$(
     valid_list TRUSTED_IP_ADDRESSES "^$IP_REGEX\$"
     REQUIRED=0
     one_of SSH_TRUSTED_ONLY Y N
+    valid SSH_JUMP_HOST "^$HOST_REGEX\$"
+    valid SSH_JUMP_USER "^$USERNAME_REGEX\$"
+    valid SSH_JUMP_KEY "^[-a-zA-Z0-9_]+\$"
     one_of REJECT_OUTPUT Y N
     valid_list ACCEPT_OUTPUT_HOSTS "^$HOST_REGEX\$"
     valid MYSQL_USERNAME "^$USERNAME_REGEX\$"
@@ -333,12 +342,6 @@ _LK_FD=3
 
 S="[[:space:]]"
 
-ADMIN_USER_KEYS="$([ -z "$ADMIN_USERS" ] ||
-    grep -E "$S(${ADMIN_USERS//,/|})\$" "$KEYS_FILE")" || true
-HOST_KEYS="$([ -z "$ADMIN_USERS" ] &&
-    cat "$KEYS_FILE" ||
-    grep -Ev "$S(${ADMIN_USERS//,/|})\$" "$KEYS_FILE")" || true
-
 lk_console_message "Provisioning Ubuntu"
 lk_console_detail "Environment:" \
     "$(printenv | grep -v '^LS_COLORS=' | sort)"
@@ -349,6 +352,7 @@ lk_console_detail "Environment:" \
 export -n \
     HOST_DOMAIN HOST_ACCOUNT HOST_SITE_ENABLE \
     ADMIN_USERS TRUSTED_IP_ADDRESSES SSH_TRUSTED_ONLY \
+    SSH_JUMP_HOST SSH_JUMP_USER SSH_JUMP_KEY \
     REJECT_OUTPUT ACCEPT_OUTPUT_HOSTS \
     MYSQL_USERNAME MYSQL_PASSWORD \
     INNODB_BUFFER_SIZE \
@@ -591,13 +595,38 @@ cat <<EOF >"$DIR/statusrc"
 BYOBU_CHARMAP=x
 EOF
 
+ADMIN_USER_KEYS=$([ -z "$ADMIN_USERS" ] ||
+    grep -E "$S(${ADMIN_USERS//,/|})\$" "$KEYS_FILE") || true
+HOST_KEYS=$([ -z "$ADMIN_USERS" ] &&
+    cat "$KEYS_FILE" ||
+    grep -Ev "$S(${ADMIN_USERS//,/|})\$" "$KEYS_FILE") || true
+JUMP_KEY=$([ -z "$SSH_JUMP_KEY" ] ||
+    grep -E "$S$SSH_JUMP_KEY\$" "$KEYS_FILE") || true
+[ -z "$SSH_JUMP_KEY" ] ||
+    case "$([ -z "$JUMP_KEY" ] && echo 0 || wc -l <<<"$JUMP_KEY")" in
+    0)
+        lk_console_item "SSH jump proxy key not found:" "$SSH_JUMP_KEY"
+        ;;
+    1)
+        lk_console_item "SSH jump proxy key found:" "$SSH_JUMP_KEY"
+        ;;
+    *)
+        lk_console_item "Too many keys for SSH jump proxy key:" "$SSH_JUMP_KEY"
+        JUMP_KEY=
+        ;;
+    esac
+
 DIR="/etc/skel.$PATH_PREFIX_ALPHA"
 [ ! -e "$DIR" ] || lk_die "already exists: $DIR"
 lk_console_message "Creating $DIR (for hosting accounts)"
 cp -av "/etc/skel" "$DIR"
-install -v -d -m 0755 "$DIR/.ssh"
+install -v -d -m 0755 "$DIR/.ssh"{,"/$LK_PATH_PREFIX"{config.d,keys}}
 install -v -m 0644 /dev/null "$DIR/.ssh/authorized_keys"
 [ -z "$HOST_KEYS" ] || echo "$HOST_KEYS" >>"$DIR/.ssh/authorized_keys"
+[ -z "$JUMP_KEY" ] || {
+    install -v -m 0644 /dev/null "$DIR/.ssh/${LK_PATH_PREFIX}keys/jump"
+    echo "$JUMP_KEY" >"$DIR/.ssh/${LK_PATH_PREFIX}keys/jump"
+}
 
 for USERNAME in ${ADMIN_USERS//,/ }; do
     FIRST_ADMIN="${FIRST_ADMIN:-$USERNAME}"
@@ -619,6 +648,11 @@ for USERNAME in ${ADMIN_USERS//,/ }; do
         install -v -m 0600 -o "$USERNAME" -g "$USER_GROUP" /dev/null "$USER_HOME/.ssh/authorized_keys"
         grep -E "$S$USERNAME\$" <<<"$ADMIN_USER_KEYS" >>"$USER_HOME/.ssh/authorized_keys" || :
     fi
+    install -v -d -m 0700 -o "$USERNAME" -g "$USER_GROUP" "$USER_HOME/.ssh/$LK_PATH_PREFIX"{config.d,keys}
+    [ -z "$JUMP_KEY" ] || {
+        install -v -m 0600 -o "$USERNAME" -g "$USER_GROUP" /dev/null "$USER_HOME/.ssh/${LK_PATH_PREFIX}keys/jump"
+        echo "$JUMP_KEY" >"$USER_HOME/.ssh/${LK_PATH_PREFIX}keys/jump"
+    }
     install -v -m 0440 /dev/null "/etc/sudoers.d/nopasswd-$USERNAME"
     echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >"/etc/sudoers.d/nopasswd-$USERNAME"
 done
@@ -957,6 +991,9 @@ printf '%s=%q\n' \
     "LK_ADMIN_EMAIL" "$ADMIN_EMAIL" \
     "LK_TRUSTED_IP_ADDRESSES" "$TRUSTED_IP_ADDRESSES" \
     "LK_SSH_TRUSTED_ONLY" "$SSH_TRUSTED_ONLY" \
+    "LK_SSH_JUMP_HOST" "$SSH_JUMP_HOST" \
+    "LK_SSH_JUMP_USER" "$SSH_JUMP_USER" \
+    "LK_SSH_JUMP_KEY" "$SSH_JUMP_KEY" \
     "LK_REJECT_OUTPUT" "$REJECT_OUTPUT" \
     "LK_ACCEPT_OUTPUT_HOSTS" "$ACCEPT_OUTPUT_HOSTS" \
     "LK_INNODB_BUFFER_SIZE" "$INNODB_BUFFER_SIZE" \
@@ -971,7 +1008,7 @@ printf '%s=%q\n' \
     "LK_SCRIPT_DEBUG" "$SCRIPT_DEBUG" \
     "LK_PLATFORM_BRANCH" "$LK_PLATFORM_BRANCH" \
     >"/etc/default/lk-platform"
-"$LK_BASE/bin/lk-platform-install.sh" --no-log
+"$LK_BASE/bin/lk-platform-install.sh"
 
 # TODO: verify downloads
 lk_console_message "Installing pip, ps_mem, Glances, awscli"

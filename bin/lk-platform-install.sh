@@ -34,6 +34,9 @@
         ADMIN_EMAIL
         TRUSTED_IP_ADDRESSES
         SSH_TRUSTED_ONLY
+        SSH_JUMP_HOST
+        SSH_JUMP_USER
+        SSH_JUMP_KEY
         REJECT_OUTPUT
         ACCEPT_OUTPUT_HOSTS
         INNODB_BUFFER_SIZE
@@ -61,6 +64,9 @@
         LK_ADMIN_EMAIL
         LK_TRUSTED_IP_ADDRESSES
         LK_SSH_TRUSTED_ONLY
+        LK_SSH_JUMP_HOST
+        LK_SSH_JUMP_USER
+        LK_SSH_JUMP_KEY
         LK_REJECT_OUTPUT
         LK_ACCEPT_OUTPUT_HOSTS
         LK_INNODB_BUFFER_SIZE
@@ -92,7 +98,7 @@
     unset LK_BASE
     export -n LK_PATH_PREFIX
 
-    include= skip=env . "$LK_INST/lib/bash/common.sh"
+    include=provision skip=env . "$LK_INST/lib/bash/common.sh"
 
     LK_BACKUP_SUFFIX="-$(lk_timestamp).bak"
     LK_VERBOSE=1
@@ -231,20 +237,23 @@
     }
     DEFAULT_LINES=()
     for i in "${DEFAULT_SETTINGS[@]}"; do
-        # don't include null variables unless they already appear in
-        # /etc/default/lk-platform
-        [ -n "${!i:=}" ] ||
+        if [ -z "${!i:=}" ]; then
+            # don't include null variables unless they already appear in
+            # /etc/default/lk-platform
             grep -Eq "^$i=" "$DEFAULT_FILE" ||
-            continue
+                continue
+            DEFAULT_LINES+=("$(printf '%s=' "$i")")
+        else
+            DEFAULT_LINES+=("$(printf '%s=%q' "$i" "${!i}")")
+        fi
         lk_console_detail "$i:" "${!i:-<none>}"
-        DEFAULT_LINES+=("$(printf '%s=%q' "$i" "${!i}")")
     done
     lk_maybe_replace "$DEFAULT_FILE" "$(lk_echo_array DEFAULT_LINES)"
 
     # check .bashrc files
     RC_FILES=(
         /etc/skel/.bashrc
-        /etc/skel."${LK_PATH_PREFIX_ALPHA}"/.bashrc
+        "/etc/skel.${LK_PATH_PREFIX_ALPHA}/.bashrc"
         /{home,Users}/*/.bashrc
         /srv/www/*/.bashrc
         ~root/.bashrc
@@ -277,6 +286,27 @@ fi"
                 lk_console_file "$RC_FILE"
             }
         done
+    fi
+
+    SSH_DIRS=(
+        "/etc/skel.${LK_PATH_PREFIX_ALPHA}/.ssh"
+        /{home,Users}/*/.ssh
+        /srv/www/*/.ssh
+    )
+    LK_SSH_HOMES=("${SSH_DIRS[@]%/*}")
+    lk_resolve_files LK_SSH_HOMES
+    if [ "${#LK_SSH_HOMES[@]}" -eq 0 ]; then
+        lk_console_warning "No ~/.ssh directories found"
+    else
+        lk_echo_args "${LK_SSH_HOMES[@]/%/\/.ssh}" |
+            lk_console_list "Checking SSH configuration:" directory directories
+        if [ -n "${LK_SSH_JUMP_HOST:-}" ]; then
+            lk_ssh_configure "$LK_SSH_JUMP_HOST" \
+                "${LK_SSH_JUMP_USER:-}" \
+                "${LK_SSH_JUMP_KEY:-}"
+        else
+            lk_ssh_configure
+        fi
     fi
 
     if lk_is_desktop; then
