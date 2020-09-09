@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# shellcheck disable=SC2088
+
 # lk_dir_set_permissions DIR [WRITABLE_REGEX [OWNER][:[GROUP]]]
 function lk_dir_set_permissions() {
     local DIR="${1:-}" WRITABLE_REGEX="${2:-}" OWNER="${3:-}" \
@@ -77,6 +79,116 @@ function lk_sudo_offer_nopasswd() {
             sudo tee "$FILE" >/dev/null <<<"$USER ALL=(ALL) NOPASSWD:ALL" &&
             lk_console_message "User '$USER' may now run any command as any user" || return
     }
+}
+
+# lk_ssh_add_host <NAME> <HOST[:PORT]> <USER> [<KEY_FILE> [<JUMP_HOST_NAME>]]
+function lk_ssh_add_host() {
+    local NAME=$1 HOST=$2 USER=$3 KEY_FILE=${4:-} JUMP_HOST_NAME=${5:-} \
+        h=${LK_SSH_HOME:-~} SSH_PREFIX=${LK_SSH_PREFIX:-$LK_PATH_PREFIX} KEY
+    [ "${KEY_FILE:--}" = - ] ||
+        [ -f "$KEY_FILE" ] ||
+        lk_warn "$KEY_FILE: file not found" || return
+    [ ! "$KEY_FILE" = - ] || {
+        KEY=$(cat)
+        KEY_FILE=$h/.ssh/${SSH_PREFIX}keys/$NAME
+        LK_BACKUP_SUFFIX='' LK_VERBOSE=0 \
+            lk_maybe_replace "$KEY_FILE" "$KEY" &&
+            chmod 00600 "$KEY_FILE" || return
+        ssh-keygen -l -f "$KEY_FILE" >/dev/null 2>&1 || {
+            # `ssh-keygen -l -f FILE` exits without error if FILE contains an
+            # OpenSSH public key
+            lk_console_log "Reading $KEY_FILE to create public key file"
+            KEY=$(unset DISPLAY && ssh-keygen -y -f "$KEY_FILE") &&
+                LK_BACKUP_SUFFIX='' LK_VERBOSE=0 \
+                    lk_maybe_replace "$KEY_FILE.pub" "$KEY" &&
+                chmod 00600 "$KEY_FILE.pub" || return
+        }
+    }
+    CONF=$(
+        [[ ! $HOST =~ (.*):([0-9]+)$ ]] || {
+            HOST=${BASH_REMATCH[1]}
+            PORT=${BASH_REMATCH[2]}
+        }
+        KEY_FILE=${KEY_FILE//${h//\//\\\/}/"~"}
+        cat <<EOF
+Host                    ${SSH_PREFIX}$NAME
+HostName                $HOST${PORT:+
+Port                    $PORT}
+User                    $USER${KEY_FILE:+
+IdentityFile            "$KEY_FILE"}${JUMP_HOST_NAME:+
+ProxyJump               $JUMP_HOST_NAME}
+EOF
+    )
+    LK_BACKUP_SUFFIX='' lk_maybe_replace \
+        "$h/.ssh/${SSH_PREFIX}config.d/${LK_SSH_PRIORITY:-60}-$NAME" \
+        "$CONF"
+}
+
+# lk_ssh_configure [<JUMP_HOST[:JUMP_PORT]> <JUMP_USER> [<JUMP_KEY_FILE>]]
+function lk_ssh_configure() {
+    local JUMP_HOST=${1:-} JUMP_USER=${2:-} JUMP_KEY_FILE=${3:-} \
+        S="[[:space:]]" SSH_PREFIX=${LK_SSH_PREFIX:-$LK_PATH_PREFIX} \
+        HOMES=(${LK_SSH_HOMES[@]+"${LK_SSH_HOMES[@]}"}) h OWNER GROUP CONF
+    [ $# -eq 0 ] || [ $# -ge 2 ] || lk_warn "invalid arguments" || return
+    [ "${#HOMES[@]}" -gt 0 ] || HOMES=(~)
+    for h in "${HOMES[@]}"; do
+        OWNER=$(lk_file_owner "$h") &&
+            GROUP=$(id -gn "$OWNER") || return
+        # Create directories in ~/.ssh, or reset modes and ownership of existing
+        # directories
+        install -d -m 0700 -o "$OWNER" -g "$GROUP" \
+            "$h/.ssh"{,"/$SSH_PREFIX"{config.d,keys}} ||
+            return
+        # Add "Include ~/.ssh/lk-config.d/*" to ~/.ssh/config if not already
+        # present
+        if ! grep -Eq "^\
+$S*[iI][nN][cC][lL][uU][dD][eE]$S*(\"?)(~/\\.ssh/)?\
+${SSH_PREFIX}config\\.d/\\*\\1$S*\$" "$h/.ssh/config" 2>/dev/null; then
+            CONF=$(printf "%s\n%s %s\n\n." \
+                "# Added by $(lk_myself) at $(lk_now)" \
+                "Include" "~/.ssh/${SSH_PREFIX}config.d/*")
+            [ ! -e "$h/.ssh/config" ] || {
+                CONF=${CONF%.}$(cat "$h/.ssh/config" && echo .) &&
+                    lk_keep_original "$h/.ssh/config"
+            } || return
+            echo -n "${CONF%.}" >"$h/.ssh/config" || return
+            ! lk_is_true "${LK_VERBOSE:-0}" || lk_console_file "$h/.ssh/config"
+        fi
+        # Add defaults for all lk-* hosts to ~/.ssh/lk-config.d/90-defaults
+        CONF=$(
+            cat <<EOF
+Host                    ${SSH_PREFIX}*
+IdentitiesOnly          yes
+ForwardAgent            yes
+StrictHostKeyChecking   accept-new
+ControlMaster           auto
+ControlPath             /tmp/ssh_%h-%p-%r-%l
+ControlPersist          120
+SendEnv                 LANG LC_*
+ServerAliveInterval     30
+EOF
+        )
+        lk_maybe_replace "$h/.ssh/${SSH_PREFIX}config.d/90-defaults" "$CONF"
+        # Add jump proxy configuration
+        [ $# -lt 2 ] ||
+            LK_SSH_HOME=$h LK_SSH_PRIORITY=40 \
+                lk_ssh_add_host \
+                "jump$(
+                    [ "$JUMP_USER" = "$OWNER" ] ||
+                        printf '%s' "-$JUMP_USER"
+                )" \
+                "$JUMP_HOST" \
+                "$JUMP_USER" \
+                "$JUMP_KEY_FILE"
+        (
+            shopt -s nullglob
+            chmod 00600 \
+                "$h/.ssh/"{config,"$SSH_PREFIX"{config.d,keys}/*}
+            ! lk_is_root ||
+                chown "$OWNER:$GROUP" \
+                    "$h/.ssh/"{config,"$SSH_PREFIX"{config.d,keys}/*}
+        )
+    done
 }
 
 # lk_apply_setting <FILE> <SETTING> <VAL> [<DELIM>] [<COMMENT_CHARS>] [<SPACES>]

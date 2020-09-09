@@ -104,6 +104,12 @@ function lk_include() {
     done
 }
 
+function lk_myself() {
+    [ "${BASH_SOURCE+${BASH_SOURCE[$((${#BASH_SOURCE[@]} - 1))]}}" = "$0" ] &&
+        echo "${0##*/}" ||
+        echo "${FUNCNAME[1]:-${0##*/}}"
+}
+
 function _lk_caller() {
     local SOURCE=${BASH_SOURCE[2]:-} FUNC=${FUNCNAME[2]:-} \
         DIM=${LK_DIM:-$LK_GREY} CALLER=()
@@ -373,22 +379,36 @@ function lk_in_string() {
 # lk_expand_template [<FILE>]
 #
 # Output FILE or input with each ${KEY} and {{KEY}} tag replaced with the value
-# of variable KEY. Set LK_EXPAND_NO_BASH to ignore ${KEY} tags.
+# of variable KEY.
+#
+# Notes:
+# - To specify tags to replace, populate array LK_EXPAND_VARS with the names of
+#   variables to expand
+# - Set LK_EXPAND_QUOTE=1 to use `printf %q` when expanding tags
+# - Set LK_EXPAND_BASH_OFF=1 to ignore ${KEY} tags
 function lk_expand_template() {
-    local i TEMPLATE VARS EXPAND_BASH
+    local i TEMPLATE GREP_ARGS REPLACE \
+        VARS=(${LK_EXPAND_VARS[@]+"${LK_EXPAND_VARS[@]}"})
     TEMPLATE=$(cat ${1+"$1"} && echo -n ".") || return
-    lk_is_true "${LK_EXPAND_NO_BASH:-0}" || EXPAND_BASH=1
-    VARS=($(
-        echo "$TEMPLATE" |
-            grep -Eo \
-                -e '\{\{[a-zA-Z_][a-zA-Z0-9_]*\}\}' \
-                ${EXPAND_BASH+-e '\$\{[a-zA-Z_][a-zA-Z0-9_]*\}'} |
-            sed -E 's/^[${]+([a-zA-Z0-9_]+)[}]+$/\1/' | sort | uniq
-    )) || true
+    lk_is_true "${LK_EXPAND_BASH_OFF:-0}" || {
+        GREP_ARGS=(-e '\$\{[a-zA-Z_][a-zA-Z0-9_]*\}')
+    }
+    [ "${#VARS[@]}" -gt 0 ] ||
+        VARS=($(
+            echo "$TEMPLATE" |
+                grep -Eo \
+                    -e '\{\{[a-zA-Z_][a-zA-Z0-9_]*\}\}' \
+                    ${GREP_ARGS[@]+"${GREP_ARGS[@]}"} |
+                sed -E 's/^[${]+([a-zA-Z0-9_]+)[}]+$/\1/' | sort | uniq
+        )) || true
     for i in ${VARS[@]+"${VARS[@]}"}; do
-        TEMPLATE=${TEMPLATE//\{\{$i\}\}/${!i:-}}
-        lk_is_true "${LK_EXPAND_NO_BASH:-0}" ||
-            TEMPLATE=${TEMPLATE//\$\{$i\}/${!i:-}}
+        REPLACE=${!i:-}
+        ! lk_is_true "${LK_EXPAND_QUOTE:-0}" ||
+            REPLACE=$(printf '%q' "$REPLACE")
+        TEMPLATE=${TEMPLATE//\{\{$i\}\}/$REPLACE}
+        lk_is_true "${LK_EXPAND_BASH_OFF:-0}" || {
+            TEMPLATE=${TEMPLATE//\$\{$i\}/$REPLACE}
+        }
     done
     echo "${TEMPLATE%.}"
 }
@@ -1120,31 +1140,34 @@ function lk_maybe_elevate() {
 
 # lk_safe_symlink target_path link_path [use_sudo [try_default]]
 function lk_safe_symlink() {
-    local TARGET LINK LINK_DIR CURRENT_TARGET \
-        LK_SUDO="${3:-$(lk_get_maybe_sudo)}" TRY_DEFAULT="${4:-0}"
-    TARGET="$1"
-    LINK="$2"
+    local TARGET=$1 LINK=$2 LINK_DIR=${2%/*} \
+        LK_SUDO=${3:-$(lk_get_maybe_sudo)} TRY_DEFAULT=${4:-0} \
+        LK_BACKUP_SUFFIX=${LK_BACKUP_SUFFIX-.orig} CURRENT_TARGET
     [ -n "$LINK" ] || return
     [ -e "$TARGET" ] || {
         lk_is_true "$TRY_DEFAULT" &&
-            TARGET="$(lk_add_file_suffix "$TARGET" "-default")" &&
+            TARGET=$(lk_add_file_suffix "$TARGET" "-default") &&
             [ -e "$TARGET" ] || return
     }
-    LINK_DIR="$(dirname "$LINK")"
     LK_SAFE_SYMLINK_NO_CHANGE=
     if lk_maybe_sudo test -L "$LINK"; then
-        CURRENT_TARGET="$(lk_maybe_sudo readlink "$LINK")" || return
+        CURRENT_TARGET=$(lk_maybe_sudo readlink -- "$LINK") || return
         [ "$CURRENT_TARGET" != "$TARGET" ] || {
             LK_SAFE_SYMLINK_NO_CHANGE=1
             return
         }
-        lk_maybe_sudo rm -f "$LINK" || return
+        lk_maybe_sudo rm -f -- "$LINK" || return
     elif lk_maybe_sudo test -e "$LINK"; then
-        lk_maybe_sudo mv -fv "$LINK" "$LINK${LK_BACKUP_SUFFIX:-.orig}" || return
+        if [ -n "$LK_BACKUP_SUFFIX" ]; then
+            lk_maybe_sudo \
+                mv -fv -- "$LINK" "$LINK${LK_BACKUP_SUFFIX:-.orig}" || return
+        else
+            lk_maybe_sudo rm -fv -- "$LINK" || return
+        fi
     elif lk_maybe_sudo test ! -d "$LINK_DIR"; then
-        lk_maybe_sudo mkdir -pv "$LINK_DIR" || return
+        lk_maybe_sudo mkdir -pv -- "$LINK_DIR" || return
     fi
-    lk_maybe_sudo ln -sv "$TARGET" "$LINK"
+    lk_maybe_sudo ln -sv -- "$TARGET" "$LINK"
 }
 
 # lk_keep_trying <COMMAND> [<ARG>...]
@@ -1231,10 +1254,6 @@ function lk_resolve_files() {
     else
         eval "$1=()"
     fi
-}
-
-function lk_sort_paths_by_date() {
-    gnu_stat --printf '%Y :%n\0' "$@" | sort -zn | sed -zE 's/^[0-9]+ ://' | xargs -0 printf '%s\n'
 }
 
 function lk_is_identifier() {
@@ -1364,13 +1383,40 @@ function lk_remove_secret() {
     lk_console_message "Password removed successfully"
 }
 
+if lk_is_executable gnu_stat && lk_is_executable gnu_sed; then
+    function lk_sort_paths_by_date() {
+        gnu_stat --printf '%Y :%n\0' "$@" |
+            sort -zn |
+            gnu_sed -zE 's/^[0-9]+ ://' |
+            xargs -0 printf '%s\n'
+    }
+elif lk_is_macos; then
+    function lk_sort_paths_by_date() {
+        stat -t '%s' -f '%Sm :%N' "$@" |
+            sort -n |
+            sed -E 's/^[0-9]+ ://'
+    }
+fi
+
 if lk_is_executable gnu_stat; then
     function lk_modified_timestamp() {
         gnu_stat --printf '%Y' "$1"
     }
+    function lk_file_owner() {
+        gnu_stat --printf '%U' "$1"
+    }
+    function lk_file_group() {
+        gnu_stat --printf '%G' "$1"
+    }
 elif lk_is_macos; then
     function lk_modified_timestamp() {
         stat -t '%s' -f '%Sm' "$1"
+    }
+    function lk_file_owner() {
+        stat -f '%Su' "$1"
+    }
+    function lk_file_group() {
+        stat -f '%Sg' "$1"
     }
 fi
 
@@ -1430,8 +1476,10 @@ function lk_resolve_hosts() {
 }
 
 function lk_keep_original() {
-    lk_maybe_sudo test ! -e "$1" ||
-        lk_maybe_sudo cp -nav "$1" "$1${LK_BACKUP_SUFFIX:-.orig}"
+    local LK_BACKUP_SUFFIX=${LK_BACKUP_SUFFIX-.orig}
+    [ -z "$LK_BACKUP_SUFFIX" ] ||
+        lk_maybe_sudo test ! -e "$1" ||
+        lk_maybe_sudo cp -navL "$1" "$1$LK_BACKUP_SUFFIX"
 }
 
 function lk_maybe_add_newline() {
@@ -1456,14 +1504,15 @@ function lk_maybe_sed() {
 
 # lk_maybe_replace file_path new_content
 function lk_maybe_replace() {
-    [ -f "$1" ] && [ ! -L "$1" ] || lk_warn "file not found: $1" || return
-    diff -q \
-        <(lk_maybe_sudo cat "$1") \
-        <(cat <<<"$2") >/dev/null || {
-        lk_keep_original "$1" &&
-            cat <<<"$2" | lk_maybe_sudo tee "$1" >/dev/null || return
-        [ "${LK_VERBOSE:-0}" -eq 0 ] || lk_console_file "$1"
-    }
+    if lk_maybe_sudo test -e "$1"; then
+        lk_maybe_sudo test -f "$1" || lk_warn "file not found: $1" || return
+        ! diff -q \
+            <(lk_maybe_sudo cat "$1") \
+            <(cat <<<"$2") >/dev/null || return 0
+        lk_keep_original "$1" || return
+    fi
+    cat <<<"$2" | lk_maybe_sudo tee "$1" >/dev/null || return
+    [ "${LK_VERBOSE:-0}" -eq 0 ] || lk_console_file "$1"
 }
 
 # lk_console_file file_path [colour_sequence] [file_colour_sequence]

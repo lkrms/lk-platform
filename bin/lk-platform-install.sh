@@ -142,7 +142,7 @@
 
     # check repo state
     cd "$LK_BASE"
-    REPO_OWNER="$(gnu_stat --printf '%U' "$LK_BASE")"
+    REPO_OWNER="$(lk_file_owner "$LK_BASE")"
     CONFIG_COMMANDS=()
     function check_git_config() {
         local VALUE

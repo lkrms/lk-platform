@@ -263,7 +263,7 @@ function lk_wp_db_set_local() {
         [ "${SITE_ROOT:0:${#HOME}}" = "$HOME" ]; then
         DEFAULT_IDENTIFIER=${SITE_ROOT##*/}
     elif [ -e "$SITE_ROOT" ]; then
-        DEFAULT_IDENTIFIER=$(gnu_stat --printf '%U' "$SITE_ROOT") || return
+        DEFAULT_IDENTIFIER=$(lk_file_owner "$SITE_ROOT") || return
     else
         DEFAULT_IDENTIFIER=$USER || return
     fi
@@ -448,7 +448,7 @@ function lk_wp_set_permissions() {
     SITE_ROOT="${1:-$(lk_wp_get_site_root)}" &&
         SITE_ROOT="$(realpath "$SITE_ROOT")" || return
     if lk_is_root || lk_is_true "$(lk_get_maybe_sudo)"; then
-        OWNER="$(gnu_stat --printf '%U' "$SITE_ROOT/..")" || return
+        OWNER="$(lk_file_owner "$SITE_ROOT/..")" || return
     fi
     lk_dir_set_permissions \
         "$SITE_ROOT" \

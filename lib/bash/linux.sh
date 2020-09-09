@@ -35,12 +35,19 @@ function lk_is_portable() {
     grep -Eq "^(8|9|10|11|12|14|30|31|32)\$" /sys/class/dmi/id/chassis_type
 }
 
+function _lk_lid_files() {
+    (
+        shopt -s nullglob
+        LID_FILES=(/proc/acpi/button/lid/*/state)
+        [ ${#LID_FILES[@]} -gt 0 ] || exit
+        lk_echo_array LID_FILES
+    )
+}
+
 function lk_is_lid_closed() {
     local LID_FILE
-    shopt -s nullglob
-    LID_FILE=(/proc/acpi/button/lid/*/state)
-    shopt -u nullglob
-    [ "${#LID_FILE[@]}" -gt 0 ] && grep -q 'closed$' "${LID_FILE[0]}"
+    LID_FILE=$(_lk_lid_files | head -n1) &&
+        grep -q 'closed$' "$LID_FILE"
 }
 
 function lk_x_dpi() {
