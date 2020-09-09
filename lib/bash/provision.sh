@@ -104,7 +104,7 @@ function lk_ssh_add_host() {
         KEY_FILE=$h/.ssh/${SSH_PREFIX}keys/$NAME
         LK_BACKUP_SUFFIX='' LK_VERBOSE=0 \
             lk_maybe_replace "$KEY_FILE" "$KEY" &&
-            chmod 00600 "$KEY_FILE" || return
+            chmod "0${LK_SSH_FILE_MODE:-0600}" "$KEY_FILE" || return
         ssh-keygen -l -f "$KEY_FILE" >/dev/null 2>&1 || {
             # `ssh-keygen -l -f FILE` exits without error if FILE contains an
             # OpenSSH public key
@@ -112,7 +112,7 @@ function lk_ssh_add_host() {
             KEY=$(unset DISPLAY && ssh-keygen -y -f "$KEY_FILE") &&
                 LK_BACKUP_SUFFIX='' LK_VERBOSE=0 \
                     lk_maybe_replace "$KEY_FILE.pub" "$KEY" &&
-                chmod 00600 "$KEY_FILE.pub" || return
+                chmod "0${LK_SSH_FILE_MODE:-0600}" "$KEY_FILE.pub" || return
         }
     }
     CONF=$(
@@ -139,7 +139,8 @@ EOF
 function lk_ssh_configure() {
     local JUMP_HOST=${1:-} JUMP_USER=${2:-} JUMP_KEY_FILE=${3:-} \
         S="[[:space:]]" SSH_PREFIX=${LK_SSH_PREFIX:-$LK_PATH_PREFIX} \
-        HOMES=(${LK_SSH_HOMES[@]+"${LK_SSH_HOMES[@]}"}) h OWNER GROUP CONF KEY
+        HOMES=(${LK_SSH_HOMES[@]+"${LK_SSH_HOMES[@]}"}) h OWNER GROUP CONF KEY \
+        LK_SSH_DIR_MODE LK_SSH_FILE_MODE
     [ $# -eq 0 ] || [ $# -ge 2 ] || lk_warn "invalid arguments" || return
     [ "${#HOMES[@]}" -gt 0 ] || HOMES=(~)
     [ "${#HOMES[@]}" -le 1 ] ||
@@ -148,9 +149,15 @@ function lk_ssh_configure() {
     for h in "${HOMES[@]}"; do
         OWNER=$(lk_file_owner "$h") &&
             GROUP=$(id -gn "$OWNER") || return
+        unset LK_SSH_DIR_MODE
+        unset LK_SSH_FILE_MODE
+        [[ ! $h =~ ^/etc/skel(\.$LK_PATH_PREFIX_ALPHA)?$ ]] || {
+            LK_SSH_DIR_MODE=0755
+            LK_SSH_FILE_MODE=0644
+        }
         # Create directories in ~/.ssh, or reset modes and ownership of existing
         # directories
-        install -d -m 0700 -o "$OWNER" -g "$GROUP" \
+        install -d -m "${LK_SSH_DIR_MODE:-0700}" -o "$OWNER" -g "$GROUP" \
             "$h/.ssh"{,"/$SSH_PREFIX"{config.d,keys}} ||
             return
         # Add "Include ~/.ssh/lk-config.d/*" to ~/.ssh/config if not already
@@ -193,7 +200,7 @@ EOF
                 "$JUMP_KEY_FILE" ${KEY+<<<"$KEY"}
         (
             shopt -s nullglob
-            chmod 00600 \
+            chmod "0${LK_SSH_FILE_MODE:-0600}" \
                 "$h/.ssh/"{config,"$SSH_PREFIX"{config.d,keys}/*}
             ! lk_is_root ||
                 chown "$OWNER:$GROUP" \

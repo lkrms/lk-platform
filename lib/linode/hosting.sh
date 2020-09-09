@@ -620,12 +620,12 @@ DIR="/etc/skel.$PATH_PREFIX_ALPHA"
 [ ! -e "$DIR" ] || lk_die "already exists: $DIR"
 lk_console_message "Creating $DIR (for hosting accounts)"
 cp -av "/etc/skel" "$DIR"
-install -v -d -m 0755 "$DIR/.ssh"{,"/$LK_PATH_PREFIX"{config.d,keys}}
+install -v -d -m 0755 "$DIR/.ssh"{,"/$PATH_PREFIX"{config.d,keys}}
 install -v -m 0644 /dev/null "$DIR/.ssh/authorized_keys"
 [ -z "$HOST_KEYS" ] || echo "$HOST_KEYS" >>"$DIR/.ssh/authorized_keys"
 [ -z "$JUMP_KEY" ] || {
-    install -v -m 0644 /dev/null "$DIR/.ssh/${LK_PATH_PREFIX}keys/jump"
-    echo "$JUMP_KEY" >"$DIR/.ssh/${LK_PATH_PREFIX}keys/jump"
+    install -v -m 0644 /dev/null "$DIR/.ssh/${PATH_PREFIX}keys/jump"
+    echo "$JUMP_KEY" >"$DIR/.ssh/${PATH_PREFIX}keys/jump"
 }
 
 for USERNAME in ${ADMIN_USERS//,/ }; do
@@ -648,10 +648,10 @@ for USERNAME in ${ADMIN_USERS//,/ }; do
         install -v -m 0600 -o "$USERNAME" -g "$USER_GROUP" /dev/null "$USER_HOME/.ssh/authorized_keys"
         grep -E "$S$USERNAME\$" <<<"$ADMIN_USER_KEYS" >>"$USER_HOME/.ssh/authorized_keys" || :
     fi
-    install -v -d -m 0700 -o "$USERNAME" -g "$USER_GROUP" "$USER_HOME/.ssh/$LK_PATH_PREFIX"{config.d,keys}
+    install -v -d -m 0700 -o "$USERNAME" -g "$USER_GROUP" "$USER_HOME/.ssh/$PATH_PREFIX"{config.d,keys}
     [ -z "$JUMP_KEY" ] || {
-        install -v -m 0600 -o "$USERNAME" -g "$USER_GROUP" /dev/null "$USER_HOME/.ssh/${LK_PATH_PREFIX}keys/jump"
-        echo "$JUMP_KEY" >"$USER_HOME/.ssh/${LK_PATH_PREFIX}keys/jump"
+        install -v -m 0600 -o "$USERNAME" -g "$USER_GROUP" /dev/null "$USER_HOME/.ssh/${PATH_PREFIX}keys/jump"
+        echo "$JUMP_KEY" >"$USER_HOME/.ssh/${PATH_PREFIX}keys/jump"
     }
     install -v -m 0440 /dev/null "/etc/sudoers.d/nopasswd-$USERNAME"
     echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >"/etc/sudoers.d/nopasswd-$USERNAME"
