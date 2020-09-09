@@ -40,6 +40,7 @@
         unset BASH_EXECUTION_STRING
         declare -p
     )"
+SCRIPT_ENV=$(printenv | grep -v '^LS_COLORS=' | sort)
 
 # Use lk_bash_udf_defaults to regenerate the following after changes above
 export -n \
@@ -344,8 +345,7 @@ _LK_FD=3
 S="[[:space:]]"
 
 lk_console_message "Provisioning Ubuntu"
-lk_console_detail "Environment:" \
-    "$(printenv | grep -v '^LS_COLORS=' | sort)"
+lk_console_detail "Environment:" "$SCRIPT_ENV"
 [ ! "$SCRIPT_DEBUG" = Y ] ||
     lk_console_detail "Variables:" "$SCRIPT_DEBUG_VARS"
 
@@ -658,7 +658,6 @@ for USERNAME in ${ADMIN_USERS//,/ }; do
     USER_GROUP="$(id -gn "$USERNAME")"
     USER_HOME="$(getent passwd "$USERNAME" | cut -d: -f6)"
     install -v -d -m 0750 -o "$USERNAME" -g "$USER_GROUP" "$USER_HOME"
-    sudo -Hu "$USERNAME" cp -nRTv "/etc/skel" "$USER_HOME"
     if [ -z "$ADMIN_USER_KEYS" ]; then
         [ ! -e "/root/.ssh" ] || {
             lk_console_message "Moving /root/.ssh to /home/$USERNAME/.ssh"
@@ -670,11 +669,8 @@ for USERNAME in ${ADMIN_USERS//,/ }; do
         install -v -m 0600 -o "$USERNAME" -g "$USER_GROUP" /dev/null "$USER_HOME/.ssh/authorized_keys"
         grep -E "$S$USERNAME\$" <<<"$ADMIN_USER_KEYS" >>"$USER_HOME/.ssh/authorized_keys" || :
     fi
-    install -v -d -m 0700 -o "$USERNAME" -g "$USER_GROUP" "$USER_HOME/.ssh/$PATH_PREFIX"{config.d,keys}
-    [ -z "$JUMP_KEY" ] || {
-        install -v -m 0600 -o "$USERNAME" -g "$USER_GROUP" /dev/null "$USER_HOME/.ssh/${PATH_PREFIX}keys/jump"
-        echo "$JUMP_KEY" >"$USER_HOME/.ssh/${PATH_PREFIX}keys/jump"
-    }
+    sudo -Hu "$USERNAME" cp -nRTv "/etc/skel" "$USER_HOME" &&
+        chmod -Rc -077 "$USER_HOME/.ssh"
     install -v -m 0440 /dev/null "/etc/sudoers.d/nopasswd-$USERNAME"
     echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >"/etc/sudoers.d/nopasswd-$USERNAME"
 done

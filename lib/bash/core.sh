@@ -791,7 +791,7 @@ function lk_console_item() {
 
 # lk_console_list message [single_noun plural_noun] [colour_sequence]
 function lk_console_list() {
-    local MESSAGE SINGLE_NOUN PLURAL_NOUN COLOUR ITEMS LIST INDENT=0 SPACES \
+    local MESSAGE SINGLE_NOUN PLURAL_NOUN COLOUR ITEMS LIST INDENT=-2 SPACES \
         LK_CONSOLE_PREFIX="${LK_CONSOLE_PREFIX-==> }"
     MESSAGE="$1"
     shift
