@@ -444,7 +444,8 @@ function lk_ellipsis() {
 }
 
 function lk_repeat() {
-    eval "printf -- \"\$1%.s\" {1..$2}"
+    [ "$2" -le 0 ] ||
+        eval "printf -- \"\$1%.s\" {1..$2}"
 }
 
 function lk_hostname() {
@@ -698,9 +699,19 @@ function lk_console_message() {
         MESSAGE2="$1"
         shift
         [ -z "$MESSAGE2" ] || {
+            # If MESSAGE and MESSAGE2 are both one-liners, print them on one
+            # line with a space between
             [ "${MESSAGE2//$'\n'/}" = "$MESSAGE2" ] &&
                 [ "$INDENT" -eq 0 ] &&
                 MESSAGE2=" $MESSAGE2" || {
+                # Otherwise:
+                # - If they both span multiple lines, or MESSAGE2 is a
+                #   one-liner, keep INDENT=2 (increase MESSAGE2's left padding)
+                # - If only MESSAGE2 spans multiple lines, set INDENT=-2
+                #   (decrease the left padding of MESSAGE2)
+                [ "${MESSAGE2//$'\n'/}" = "$MESSAGE2" ] ||
+                    [ "$INDENT" -eq 2 ] ||
+                    INDENT=-2
                 INDENT="${LK_CONSOLE_INDENT:-$((${#PREFIX} + INDENT))}"
                 SPACES=$'\n'"$(lk_repeat " " "$INDENT")"
                 MESSAGE2="$SPACES${MESSAGE2//$'\n'/$SPACES}"

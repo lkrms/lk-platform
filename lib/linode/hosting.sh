@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC1091,SC2001,SC2086,SC2206,SC2207
+# shellcheck disable=SC1091,SC2001,SC2086,SC2206,SC2207,SC2088
 #
 # <UDF name="NODE_HOSTNAME" label="Short hostname" example="web01-dev-syd" />
 # <UDF name="NODE_FQDN" label="Host FQDN" example="web01-dev-syd.linode.linacreative.com" />
@@ -42,39 +42,40 @@
     )"
 
 # Use lk_bash_udf_defaults to regenerate the following after changes above
-NODE_HOSTNAME=${NODE_HOSTNAME:-}
-NODE_FQDN=${NODE_FQDN:-}
-NODE_TIMEZONE=${NODE_TIMEZONE:-Australia/Sydney}
-NODE_SERVICES=${NODE_SERVICES:-}
-NODE_PACKAGES=${NODE_PACKAGES:-}
-HOST_DOMAIN=${HOST_DOMAIN:-}
-HOST_ACCOUNT=${HOST_ACCOUNT:-}
-HOST_SITE_ENABLE=${HOST_SITE_ENABLE:-N}
-ADMIN_USERS=${ADMIN_USERS:-linac}
-ADMIN_EMAIL=${ADMIN_EMAIL:-}
-TRUSTED_IP_ADDRESSES=${TRUSTED_IP_ADDRESSES:-}
-SSH_TRUSTED_ONLY=${SSH_TRUSTED_ONLY:-N}
-SSH_JUMP_HOST=${SSH_JUMP_HOST:-}
-SSH_JUMP_USER=${SSH_JUMP_USER:-}
-SSH_JUMP_KEY=${SSH_JUMP_KEY:-}
-REJECT_OUTPUT=${REJECT_OUTPUT:-N}
-ACCEPT_OUTPUT_HOSTS=${ACCEPT_OUTPUT_HOSTS:-}
-MYSQL_USERNAME=${MYSQL_USERNAME:-}
-MYSQL_PASSWORD=${MYSQL_PASSWORD:-}
-INNODB_BUFFER_SIZE=${INNODB_BUFFER_SIZE:-256M}
-OPCACHE_MEMORY_CONSUMPTION=${OPCACHE_MEMORY_CONSUMPTION:-256}
-PHP_SETTINGS=${PHP_SETTINGS:-}
-PHP_ADMIN_SETTINGS=${PHP_ADMIN_SETTINGS:-}
-MEMCACHED_MEMORY_LIMIT=${MEMCACHED_MEMORY_LIMIT:-256}
-SMTP_RELAY=${SMTP_RELAY:-}
-EMAIL_BLACKHOLE=${EMAIL_BLACKHOLE:-}
-AUTO_REBOOT=${AUTO_REBOOT:-}
-AUTO_REBOOT_TIME=${AUTO_REBOOT_TIME:-02:00}
-PATH_PREFIX=${PATH_PREFIX:-lk-}
-SCRIPT_DEBUG=${SCRIPT_DEBUG:-Y}
-SHUTDOWN_ACTION=${SHUTDOWN_ACTION:-reboot}
-SHUTDOWN_DELAY=${SHUTDOWN_DELAY:-0}
-LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
+export -n \
+    NODE_HOSTNAME=${NODE_HOSTNAME:-} \
+    NODE_FQDN=${NODE_FQDN:-} \
+    NODE_TIMEZONE=${NODE_TIMEZONE:-Australia/Sydney} \
+    NODE_SERVICES=${NODE_SERVICES:-} \
+    NODE_PACKAGES=${NODE_PACKAGES:-} \
+    HOST_DOMAIN=${HOST_DOMAIN:-} \
+    HOST_ACCOUNT=${HOST_ACCOUNT:-} \
+    HOST_SITE_ENABLE=${HOST_SITE_ENABLE:-N} \
+    ADMIN_USERS=${ADMIN_USERS:-linac} \
+    ADMIN_EMAIL=${ADMIN_EMAIL:-} \
+    TRUSTED_IP_ADDRESSES=${TRUSTED_IP_ADDRESSES:-} \
+    SSH_TRUSTED_ONLY=${SSH_TRUSTED_ONLY:-N} \
+    SSH_JUMP_HOST=${SSH_JUMP_HOST:-} \
+    SSH_JUMP_USER=${SSH_JUMP_USER:-} \
+    SSH_JUMP_KEY=${SSH_JUMP_KEY:-} \
+    REJECT_OUTPUT=${REJECT_OUTPUT:-N} \
+    ACCEPT_OUTPUT_HOSTS=${ACCEPT_OUTPUT_HOSTS:-} \
+    MYSQL_USERNAME=${MYSQL_USERNAME:-} \
+    MYSQL_PASSWORD=${MYSQL_PASSWORD:-} \
+    INNODB_BUFFER_SIZE=${INNODB_BUFFER_SIZE:-256M} \
+    OPCACHE_MEMORY_CONSUMPTION=${OPCACHE_MEMORY_CONSUMPTION:-256} \
+    PHP_SETTINGS=${PHP_SETTINGS:-} \
+    PHP_ADMIN_SETTINGS=${PHP_ADMIN_SETTINGS:-} \
+    MEMCACHED_MEMORY_LIMIT=${MEMCACHED_MEMORY_LIMIT:-256} \
+    SMTP_RELAY=${SMTP_RELAY:-} \
+    EMAIL_BLACKHOLE=${EMAIL_BLACKHOLE:-} \
+    AUTO_REBOOT=${AUTO_REBOOT:-} \
+    AUTO_REBOOT_TIME=${AUTO_REBOOT_TIME:-02:00} \
+    PATH_PREFIX=${PATH_PREFIX:-lk-} \
+    SCRIPT_DEBUG=${SCRIPT_DEBUG:-Y} \
+    SHUTDOWN_ACTION=${SHUTDOWN_ACTION:-reboot} \
+    SHUTDOWN_DELAY=${SHUTDOWN_DELAY:-0} \
+    LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
 
 [ ! "$SCRIPT_DEBUG" = Y ] || {
     TRACE_FILE=/var/log/${PATH_PREFIX}install.trace
@@ -238,7 +239,7 @@ function lk_log() {
 function lk_console_message() {
     echo "\
 ${LK_CONSOLE_PREFIX-==> }\
-${1//$'\n'/$'\n'"${LK_CONSOLE_SPACES-    }"}" >&"${_LK_FD:-2}"
+${1//$'\n'/$'\n'"${LK_CONSOLE_SPACES-  }"}" >&"${_LK_FD:-2}"
 }
 
 function lk_console_item() {
@@ -250,7 +251,7 @@ function lk_console_item() {
 }
 
 function lk_console_detail() {
-    local LK_CONSOLE_PREFIX="   -> " LK_CONSOLE_SPACES="      "
+    local LK_CONSOLE_PREFIX="   -> " LK_CONSOLE_SPACES="    "
     [ $# -le 1 ] &&
         lk_console_message "$1" ||
         lk_console_item "$1" "$2"
@@ -347,20 +348,6 @@ lk_console_detail "Environment:" \
     "$(printenv | grep -v '^LS_COLORS=' | sort)"
 [ ! "$SCRIPT_DEBUG" = Y ] ||
     lk_console_detail "Variables:" "$SCRIPT_DEBUG_VARS"
-
-# Don't propagate field values to the environment of other commands
-export -n \
-    HOST_DOMAIN HOST_ACCOUNT HOST_SITE_ENABLE \
-    ADMIN_USERS TRUSTED_IP_ADDRESSES SSH_TRUSTED_ONLY \
-    SSH_JUMP_HOST SSH_JUMP_USER SSH_JUMP_KEY \
-    REJECT_OUTPUT ACCEPT_OUTPUT_HOSTS \
-    MYSQL_USERNAME MYSQL_PASSWORD \
-    INNODB_BUFFER_SIZE \
-    OPCACHE_MEMORY_CONSUMPTION PHP_SETTINGS PHP_ADMIN_SETTINGS \
-    MEMCACHED_MEMORY_LIMIT \
-    SMTP_RELAY EMAIL_BLACKHOLE \
-    AUTO_REBOOT AUTO_REBOOT_TIME \
-    SCRIPT_DEBUG SHUTDOWN_ACTION SHUTDOWN_DELAY
 
 export LK_BASE=/opt/${PATH_PREFIX}platform \
     DEBIAN_FRONTEND=noninteractive \
@@ -616,17 +603,52 @@ JUMP_KEY=$([ -z "$SSH_JUMP_KEY" ] ||
         ;;
     esac
 
-DIR="/etc/skel.$PATH_PREFIX_ALPHA"
-[ ! -e "$DIR" ] || lk_die "already exists: $DIR"
-lk_console_message "Creating $DIR (for hosting accounts)"
-cp -av "/etc/skel" "$DIR"
+lk_console_message "Configuring SSH client defaults"
+DIR=/etc/skel
 install -v -d -m 0755 "$DIR/.ssh"{,"/$PATH_PREFIX"{config.d,keys}}
-install -v -m 0644 /dev/null "$DIR/.ssh/authorized_keys"
-[ -z "$HOST_KEYS" ] || echo "$HOST_KEYS" >>"$DIR/.ssh/authorized_keys"
+lk_keep_original "$DIR/.ssh/config"
+cat <<EOF >"$DIR/.ssh/config"
+# Added by ${0##*/} at $(lk_date_log)
+Include ~/.ssh/${PATH_PREFIX}config.d/*
+EOF
+lk_console_file "$DIR/.ssh/config"
+cat <<EOF >"$DIR/.ssh/${PATH_PREFIX}config.d/90-defaults"
+Host                    ${PATH_PREFIX}*
+IdentitiesOnly          yes
+ForwardAgent            yes
+StrictHostKeyChecking   accept-new
+ControlMaster           auto
+ControlPath             /tmp/ssh_%h-%p-%r-%l
+ControlPersist          120
+SendEnv                 LANG LC_*
+ServerAliveInterval     30
+EOF
+lk_console_file "$DIR/.ssh/${PATH_PREFIX}config.d/90-defaults"
+[ -z "$SSH_JUMP_HOST" ] || {
+    HOST=$SSH_JUMP_HOST
+    [[ ! $HOST =~ (.*):([0-9]+)$ ]] || {
+        HOST=${BASH_REMATCH[1]}
+        PORT=${BASH_REMATCH[2]}
+    }
+    cat <<EOF >"$DIR/.ssh/${PATH_PREFIX}config.d/40-jump"
+Host                    ${PATH_PREFIX}jump
+HostName                $HOST${PORT:+
+Port                    $PORT}${SSH_JUMP_USER:+
+User                    $SSH_JUMP_USER}${JUMP_KEY:+
+IdentityFile            "~/.ssh/${PATH_PREFIX}keys/jump"}
+EOF
+}
 [ -z "$JUMP_KEY" ] || {
     install -v -m 0644 /dev/null "$DIR/.ssh/${PATH_PREFIX}keys/jump"
     echo "$JUMP_KEY" >"$DIR/.ssh/${PATH_PREFIX}keys/jump"
 }
+
+DIR=/etc/skel.$PATH_PREFIX_ALPHA
+[ ! -e "$DIR" ] || lk_die "already exists: $DIR"
+lk_console_message "Creating $DIR (for hosting accounts)"
+cp -av "/etc/skel" "$DIR"
+install -v -m 0644 /dev/null "$DIR/.ssh/authorized_keys"
+[ -z "$HOST_KEYS" ] || echo "$HOST_KEYS" >>"$DIR/.ssh/authorized_keys"
 
 for USERNAME in ${ADMIN_USERS//,/ }; do
     FIRST_ADMIN="${FIRST_ADMIN:-$USERNAME}"
@@ -980,34 +1002,34 @@ $ACCEPT_OUTPUT_HOSTS_SH
 $(printf '%s=%q\n' \
         "ACCEPT_OUTPUT_CHAIN" "${P}output")" >"$LK_BASE/etc/firewall.conf"
 printf '%s=%q\n' \
-    "LK_BASE" "$LK_BASE" \
-    "LK_PATH_PREFIX" "$PATH_PREFIX" \
-    "LK_PATH_PREFIX_ALPHA" "$PATH_PREFIX_ALPHA" \
-    "LK_NODE_HOSTNAME" "$NODE_HOSTNAME" \
-    "LK_NODE_FQDN" "$NODE_FQDN" \
-    "LK_NODE_TIMEZONE" "$NODE_TIMEZONE" \
-    "LK_NODE_SERVICES" "$NODE_SERVICES" \
-    "LK_NODE_PACKAGES" "$NODE_PACKAGES" \
-    "LK_ADMIN_EMAIL" "$ADMIN_EMAIL" \
-    "LK_TRUSTED_IP_ADDRESSES" "$TRUSTED_IP_ADDRESSES" \
-    "LK_SSH_TRUSTED_ONLY" "$SSH_TRUSTED_ONLY" \
-    "LK_SSH_JUMP_HOST" "$SSH_JUMP_HOST" \
-    "LK_SSH_JUMP_USER" "$SSH_JUMP_USER" \
-    "LK_SSH_JUMP_KEY" "$SSH_JUMP_KEY" \
-    "LK_REJECT_OUTPUT" "$REJECT_OUTPUT" \
-    "LK_ACCEPT_OUTPUT_HOSTS" "$ACCEPT_OUTPUT_HOSTS" \
-    "LK_INNODB_BUFFER_SIZE" "$INNODB_BUFFER_SIZE" \
-    "LK_OPCACHE_MEMORY_CONSUMPTION" "$OPCACHE_MEMORY_CONSUMPTION" \
-    "LK_PHP_SETTINGS" "$PHP_SETTINGS" \
-    "LK_PHP_ADMIN_SETTINGS" "$PHP_ADMIN_SETTINGS" \
-    "LK_MEMCACHED_MEMORY_LIMIT" "$MEMCACHED_MEMORY_LIMIT" \
-    "LK_SMTP_RELAY" "$SMTP_RELAY" \
-    "LK_EMAIL_BLACKHOLE" "$EMAIL_BLACKHOLE" \
-    "LK_AUTO_REBOOT" "$AUTO_REBOOT" \
-    "LK_AUTO_REBOOT_TIME" "$AUTO_REBOOT_TIME" \
-    "LK_SCRIPT_DEBUG" "$SCRIPT_DEBUG" \
-    "LK_PLATFORM_BRANCH" "$LK_PLATFORM_BRANCH" \
-    >"/etc/default/lk-platform"
+    LK_BASE "$LK_BASE" \
+    LK_PATH_PREFIX "$PATH_PREFIX" \
+    LK_PATH_PREFIX_ALPHA "$PATH_PREFIX_ALPHA" \
+    LK_NODE_HOSTNAME "$NODE_HOSTNAME" \
+    LK_NODE_FQDN "$NODE_FQDN" \
+    LK_NODE_TIMEZONE "$NODE_TIMEZONE" \
+    LK_NODE_SERVICES "$NODE_SERVICES" \
+    LK_NODE_PACKAGES "$NODE_PACKAGES" \
+    LK_ADMIN_EMAIL "$ADMIN_EMAIL" \
+    LK_TRUSTED_IP_ADDRESSES "$TRUSTED_IP_ADDRESSES" \
+    LK_SSH_TRUSTED_ONLY "$SSH_TRUSTED_ONLY" \
+    LK_SSH_JUMP_HOST "$SSH_JUMP_HOST" \
+    LK_SSH_JUMP_USER "$SSH_JUMP_USER" \
+    LK_SSH_JUMP_KEY "$SSH_JUMP_KEY" \
+    LK_REJECT_OUTPUT "$REJECT_OUTPUT" \
+    LK_ACCEPT_OUTPUT_HOSTS "$ACCEPT_OUTPUT_HOSTS" \
+    LK_INNODB_BUFFER_SIZE "$INNODB_BUFFER_SIZE" \
+    LK_OPCACHE_MEMORY_CONSUMPTION "$OPCACHE_MEMORY_CONSUMPTION" \
+    LK_PHP_SETTINGS "$PHP_SETTINGS" \
+    LK_PHP_ADMIN_SETTINGS "$PHP_ADMIN_SETTINGS" \
+    LK_MEMCACHED_MEMORY_LIMIT "$MEMCACHED_MEMORY_LIMIT" \
+    LK_SMTP_RELAY "$SMTP_RELAY" \
+    LK_EMAIL_BLACKHOLE "$EMAIL_BLACKHOLE" \
+    LK_AUTO_REBOOT "$AUTO_REBOOT" \
+    LK_AUTO_REBOOT_TIME "$AUTO_REBOOT_TIME" \
+    LK_SCRIPT_DEBUG "$SCRIPT_DEBUG" \
+    LK_PLATFORM_BRANCH "$LK_PLATFORM_BRANCH" |
+    sed -E "s/^([a-zA-Z_][a-zA-Z0-9_]*=)''\$/\1/" >/etc/default/lk-platform
 "$LK_BASE/bin/lk-platform-install.sh"
 
 # TODO: verify downloads

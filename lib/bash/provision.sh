@@ -95,7 +95,7 @@ function lk_ssh_add_host() {
         # ~/.ssh/authorized_keys for exactly one public key with the comment
         # field set to <KEY_FILE>
         { [[ "$KEY_FILE" =~ ^[-a-zA-Z0-9_]+$ ]] && { KEY=$(grep -E \
-            "$S$KEY_FILE\$" "$h/.ssh/authorized_keys") &&
+            "$S$KEY_FILE\$" "$h/.ssh/authorized_keys" 2>/dev/null) &&
             [ "$(wc -l <<<"$KEY")" -eq 1 ] &&
             KEY_FILE=- || KEY_FILE=; }; } ||
         lk_warn "$KEY_FILE: file not found" || return
