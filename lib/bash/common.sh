@@ -38,37 +38,39 @@ eval "$(
 
 . "${LK_INST:-$LK_BASE}/lib/bash/core.sh"
 
-function lk_usage() {
-    echo "${1:-${USAGE:-Please see $0 for usage}}" >&2
-    lk_die
-}
+if ! lk_is_true "${LK_NO_SOURCE_FILE:-0}"; then
+    function lk_usage() {
+        echo "${1:-${USAGE:-Please see $0 for usage}}" >&2
+        lk_die
+    }
 
-function _lk_elevate() {
-    if [ $# -gt 0 ]; then
-        sudo -H "$@"
-    else
-        sudo -H "$0" "${LK_ARGV[@]}"
-        exit
-    fi
-}
-
-function lk_elevate() {
-    if [ "$EUID" -eq 0 ]; then
+    function _lk_elevate() {
         if [ $# -gt 0 ]; then
+            sudo -H "$@"
+        else
+            sudo -H "$0" "${LK_ARGV[@]}"
+            exit
+        fi
+    }
+
+    function lk_elevate() {
+        if [ "$EUID" -eq 0 ]; then
+            if [ $# -gt 0 ]; then
+                "$@"
+            fi
+        else
+            _lk_elevate "$@"
+        fi
+    }
+
+    function lk_maybe_elevate() {
+        if [ "$EUID" -ne 0 ] && lk_can_sudo "${1-$0}"; then
+            _lk_elevate "$@"
+        elif [ $# -gt 0 ]; then
             "$@"
         fi
-    else
-        _lk_elevate "$@"
-    fi
-}
-
-function lk_maybe_elevate() {
-    if [ "$EUID" -ne 0 ] && lk_can_sudo "${1-$0}"; then
-        _lk_elevate "$@"
-    elif [ $# -gt 0 ]; then
-        "$@"
-    fi
-}
+    }
+fi
 
 lk_include assert ${LK_INCLUDE:-${include:-}}
 unset LK_INCLUDE

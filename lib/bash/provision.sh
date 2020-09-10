@@ -122,12 +122,12 @@ function lk_ssh_add_host() {
         }
         KEY_FILE=${KEY_FILE//${h//\//\\\/}/"~"}
         cat <<EOF
-Host                    ${SSH_PREFIX}$NAME
+Host                    $SSH_PREFIX${NAME#$SSH_PREFIX}
 HostName                $HOST${PORT:+
 Port                    $PORT}${JUMP_USER:+
 User                    $JUMP_USER}${KEY_FILE:+
 IdentityFile            "$KEY_FILE"}${JUMP_HOST_NAME:+
-ProxyJump               $JUMP_HOST_NAME}
+ProxyJump               $SSH_PREFIX${JUMP_HOST_NAME#$SSH_PREFIX}}
 EOF
     )
     LK_BACKUP_SUFFIX='' lk_maybe_replace \

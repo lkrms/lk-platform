@@ -100,6 +100,7 @@
 
     include=provision skip=env . "$LK_INST/lib/bash/common.sh"
 
+    LK_BIN_PATH=${LK_BIN_PATH:-/usr/local/bin}
     LK_BACKUP_SUFFIX="-$(lk_timestamp).bak"
     LK_VERBOSE=1
     lk_log_output
@@ -116,14 +117,13 @@
         for COMMAND in ${COMMANDS[@]+"${COMMANDS[@]}"}; do
             GCOMMAND=$(_lk_gnu_command "$COMMAND")
             COMMAND_PATH=$(type -P "$GCOMMAND") &&
-                lk_safe_symlink "$COMMAND_PATH" "$GNU_PATH/gnu_$COMMAND" ||
+                lk_safe_symlink "$COMMAND_PATH" "$LK_BIN_PATH/gnu_$COMMAND" ||
                 EXIT_STATUS=$?
         done
         return "$EXIT_STATUS"
     }
     PREFIX=g
     lk_is_macos || PREFIX=
-    GNU_PATH=${GNU_PATH:-/usr/local/bin}
     # Install symlinks for required commands
     lk_gnu_install date find getopt stat xargs
     # Install symlinks for commands in _LK_GNU_COMMANDS found on the system by
@@ -252,6 +252,10 @@
     done
     lk_console_item "Settings:" "$(printf '%s: %s\n' "${OUTPUT[@]}")"
     lk_maybe_replace "$DEFAULT_FILE" "$(lk_echo_array DEFAULT_LINES)"
+
+    lk_console_message "Checking lk-* symlinks"
+    lk_safe_symlink "$LK_BASE/bin/lk-bash-load.sh" \
+        "$LK_BIN_PATH/lk-bash-load.sh"
 
     # check .bashrc files
     RC_FILES=(

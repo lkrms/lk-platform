@@ -136,6 +136,6 @@ LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(
 )}"
 eval "$(. "$LK_BASE/lib/bash/env.sh")"
 
-eval "$(_lk_bash_completion)"
+[ "${LK_COMPLETION:-1}" -ne 1 ] || eval "$(_lk_bash_completion)"
 
 [ "${LK_PROMPT:-1}" -ne 1 ] || lk_enable_prompt

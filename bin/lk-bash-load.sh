@@ -29,11 +29,14 @@ function lk_bash_load() {
     SH=$(
         lk_die() { s=$? && echo "lk-bash-load.sh: $1" >&2 &&
             (return $s) && false || exit; }
-        [ -n "${BASH_SOURCE[2]:-}" ] ||
-            lk_die "not sourced from a shell script"
+        VARS=()
         if [ -n "${lk_bin_depth:-}" ]; then
+            [ -n "${BASH_SOURCE[2]:-}" ] ||
+                lk_die "not sourced from a shell script"
             FILE=${BASH_SOURCE[2]}
         else
+            [ -n "${BASH_SOURCE[2]:-}" ] ||
+                VARS+=(LK_NO_SOURCE_FILE 1)
             lk_bin_depth=1
             FILE=${BASH_SOURCE[0]}
         fi
@@ -57,7 +60,9 @@ function lk_bash_load() {
             [ "$LK_BASE" != / ] &&
             [ -f "$LK_BASE/bin/lk-bash-load.sh" ] ||
             lk_die "unable to locate LK_BASE"
-        printf 'export LK_BASE=%q' "$LK_BASE"
+        VARS+=(LK_BASE "$LK_BASE")
+        printf '%s=%q\n' "${VARS[@]}"
+        echo "export LK_BASE"
     ) || return
     eval "$SH"
 }
