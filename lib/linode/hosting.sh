@@ -365,6 +365,7 @@ _LK_FD=3
 
 S="[[:space:]]"
 P="${PATH_PREFIX_ALPHA}_"
+DECLARE_LK_DATE_LOG=$(declare -f lk_date_log)
 export LK_BASE=/opt/${PATH_PREFIX}platform \
     DEBIAN_FRONTEND=noninteractive \
     DEBCONF_NONINTERACTIVE_SEEN=true \
@@ -553,7 +554,7 @@ lk_console_message "Disabling automatic \"systemctl start\" when new services ar
 cat <<EOF >"/usr/sbin/policy-rc.d"
 #!/bin/bash
 # Created by ${0##*/} at $(lk_date_log)
-$(declare -f lk_date_log)
+$DECLARE_LK_DATE_LOG
 LOG=(
     "====> \${0##*/}: init script policy helper invoked"
     "Arguments:
