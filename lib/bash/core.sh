@@ -1218,10 +1218,11 @@ function lk_users_exist() {
 }
 
 function lk_test_many() {
-    local TEST="$1" VALUE
+    local TEST="$1"
     shift
-    for VALUE in "$@"; do
-        test "$TEST" "$VALUE" || return
+    while [ $# -gt 0 ]; do
+        test "$TEST" "$1" || return
+        shift
     done
 }
 
@@ -1266,6 +1267,36 @@ function lk_resolve_files() {
             lk_mapfile -z /dev/stdin "$1" <"$_LK_TEMP_FILE"
     else
         eval "$1=()"
+    fi
+}
+
+function lk_expand_paths() {
+    if [ $# -gt 0 ]; then
+        while [ $# -gt 0 ]; do
+            if [[ $1 =~ ^(~[-a-z0-9\$_]*)(/.*)?$ ]]; then
+                eval "printf '%s\n' $(
+                    printf '%s%q' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+                )"
+            else
+                printf '%s\n' "$1"
+            fi
+            shift
+        done
+    else
+        lk_xargs lk_expand_paths
+    fi
+}
+
+function lk_filter() {
+    local TEST="$1"
+    shift
+    if [ $# -gt 0 ]; then
+        while [ $# -gt 0 ]; do
+            ! test "$TEST" "$1" || printf '%s\n' "$1"
+            shift
+        done
+    else
+        lk_xargs lk_filter "$TEST"
     fi
 }
 
