@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC1091,SC2001,SC2086,SC2206,SC2207,SC2088
+# shellcheck disable=SC1090,SC1091,SC2001,SC2086,SC2206,SC2207,SC2088
 #
 # <UDF name="NODE_HOSTNAME" label="Short hostname" example="web01-dev-syd" />
 # <UDF name="NODE_FQDN" label="Host FQDN" example="web01-dev-syd.linode.linacreative.com" />
@@ -272,17 +272,17 @@ function lk_console_item() {
     )"
 }
 
-function lk_console_detail() {
-    local LK_CONSOLE_PREFIX="   -> " LK_CONSOLE_SPACES="    "
-    [ $# -le 1 ] &&
-        lk_console_message "$1" ||
-        lk_console_item "$1" "$2"
-}
+#function lk_console_detail() {
+#    local LK_CONSOLE_PREFIX="   -> " LK_CONSOLE_SPACES="    "
+#    [ $# -le 1 ] &&
+#        lk_console_message "$1" ||
+#        lk_console_item "$1" "$2"
+#}
 
-function lk_keep_original() {
-    [ ! -e "$1" ] ||
-        cp -nav "$1" "$1.orig"
-}
+#function lk_keep_original() {
+#    [ ! -e "$1" ] ||
+#        cp -nav "$1" "$1.orig"
+#}
 
 # edit_file FILE SEARCH_PATTERN REPLACE_PATTERN [ADD_TEXT]
 function edit_file() {
@@ -304,16 +304,16 @@ function edit_file() {
     [ "${EDIT_FILE_LOG:-Y}" = "N" ] || lk_console_file "$1"
 }
 
-function lk_console_file() {
-    lk_console_item "$1:" "\
-<<<<
-$(if [ -f "$1.orig" ]; then
-        ! diff "$1.orig" "$1" || echo "<unchanged>"
-    else
-        cat "$1"
-    fi)
->>>>"
-}
+#function lk_console_file() {
+#    lk_console_item "$1:" "\
+#<<<<
+#$(if [ -f "$1.orig" ]; then
+#        ! diff "$1.orig" "$1" || echo "<unchanged>"
+#    else
+#        cat "$1"
+#    fi)
+#>>>>"
+#}
 
 function lk_keep_trying() {
     local MAX_ATTEMPTS=${LK_KEEP_TRYING_MAX:-10} \
@@ -370,7 +370,7 @@ export LK_BASE=/opt/${PATH_PREFIX}platform \
     DEBCONF_NONINTERACTIVE_SEEN=true \
     PIP_NO_INPUT=1
 
-lk_console_message "Provisioning Ubuntu"
+lk_console_message "Bootstrapping Ubuntu for hosting"
 lk_console_item "Environment:" "$SCRIPT_ENV"
 [ ! "$SCRIPT_DEBUG" = Y ] ||
     lk_console_item "Variables:" "$SCRIPT_DEBUG_VARS"
@@ -410,9 +410,9 @@ lk_dpkg_installed git || {
     lk_apt_install git
 }
 
+lk_console_item "Downloading lk-platform to" "$LK_BASE"
 install -v -d -m 2775 -g adm "$LK_BASE"
 if [ -z "$(ls -A "$LK_BASE")" ]; then
-    lk_console_item "Downloading lk-platform to" "$LK_BASE"
     lk_keep_trying \
         git clone -b "$LK_PLATFORM_BRANCH" \
         "https://github.com/lkrms/lk-platform.git" "$LK_BASE"
@@ -456,6 +456,8 @@ printf '%s=(\n%s\n)\n' \
         printf '    %q\n' "${IMAGE_BASE_PACKAGES[@]}"
     )" >"$LK_BASE/etc/packages.conf"
 
+include='' . "$LK_BASE/lib/bash/common.sh"
+
 ### move to lk-provision-hosting.sh
 . /etc/lsb-release
 
@@ -491,9 +493,7 @@ grep -Eq "\
 $DISTRIB_CODENAME$S+(\w+$S+)*universe($S|\$)" \
     /etc/apt/sources.list ||
     REPOS+=(universe)
-### //
 
-### move to lk-provision-hosting.sh
 lk_console_message "Enabling persistent journald storage"
 edit_file "/etc/systemd/journald.conf" "^#?Storage=.*\$" "Storage=persistent"
 systemctl restart systemd-journald.service
