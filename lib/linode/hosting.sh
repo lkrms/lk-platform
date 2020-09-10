@@ -80,7 +80,7 @@ export -n \
 
 [ ! "$SCRIPT_DEBUG" = Y ] || {
     TRACE_FILE=/var/log/${PATH_PREFIX}install.trace
-    install -v -m 0640 -g adm /dev/null "$TRACE_FILE"
+    install -m 0640 -g adm /dev/null "$TRACE_FILE"
     exec 4>>"$TRACE_FILE"
     BASH_XTRACEFD=4
     set -x
@@ -351,8 +351,8 @@ flock -n 9 || lk_die "unable to acquire a lock on $LOCK_FILE"
 
 LOG_FILE=/var/log/${PATH_PREFIX}install.log
 OUT_FILE=/var/log/${PATH_PREFIX}install.out
-install -v -m 0640 -g adm /dev/null "$LOG_FILE"
-install -v -m 0640 -g adm /dev/null "$OUT_FILE"
+install -m 0640 -g adm /dev/null "$LOG_FILE"
+install -m 0640 -g adm /dev/null "$OUT_FILE"
 exec > >(tee >(lk_log >>"$OUT_FILE")) 2>&1
 exec 3> >(tee >(lk_log >>"$LOG_FILE") >&1)
 _LK_FD=3
@@ -364,7 +364,7 @@ export LK_BASE=/opt/${PATH_PREFIX}platform \
     DEBCONF_NONINTERACTIVE_SEEN=true \
     PIP_NO_INPUT=1
 
-LK_CONSOLE_PREFIX="====> " lk_console_message "Provisioning Ubuntu"
+lk_console_message "Provisioning Ubuntu"
 lk_console_item "Environment:" "$SCRIPT_ENV"
 [ ! "$SCRIPT_DEBUG" = Y ] ||
     lk_console_item "Variables:" "$SCRIPT_DEBUG_VARS"
@@ -372,6 +372,32 @@ lk_console_item "Environment:" "$SCRIPT_ENV"
 IMAGE_BASE_PACKAGES=($(apt-mark showmanual))
 lk_console_item "Pre-installed packages:" \
     "$(printf '%s\n' "${IMAGE_BASE_PACKAGES[@]}")"
+
+IPV4_ADDRESS=$(
+    for REGEX in \
+        '^(127|10|172\.(1[6-9]|2[0-9]|3[01])|192\.168)\.' \
+        '^127\.'; do
+        ip a |
+            awk '/inet / { print $2 }' |
+            grep -Ev "$REGEX" |
+            head -n1 |
+            sed -E 's/\/[0-9]+$//' && break
+    done
+) || IPV4_ADDRESS=
+lk_console_item "IPv4 address:" "${IPV4_ADDRESS:-<none>}"
+
+IPV6_ADDRESS=$(
+    for REGEX in \
+        '^(::1/128|fe80::|f[cd])' \
+        '^::1/128'; do
+        ip a |
+            awk '/inet6 / { print $2 }' |
+            grep -Eiv "$REGEX" |
+            head -n1 |
+            sed -E 's/\/[0-9]+$//' && break
+    done
+) || IPV6_ADDRESS=
+lk_console_item "IPv6 address:" "${IPV6_ADDRESS:-<none>}"
 
 lk_dpkg_installed git || {
     lk_apt_update
@@ -386,7 +412,7 @@ if [ -z "$(ls -A "$LK_BASE")" ]; then
         "https://github.com/lkrms/lk-platform.git" "$LK_BASE"
 fi
 
-install -v -m 0644 /dev/null /etc/default/lk-platform
+install -m 0644 /dev/null /etc/default/lk-platform
 printf '%s=%q\n' \
     LK_BASE "$LK_BASE" \
     LK_PATH_PREFIX "$PATH_PREFIX" \
@@ -418,7 +444,7 @@ printf '%s=%q\n' \
     sed -E "s/^([a-zA-Z_][a-zA-Z0-9_]*=)''\$/\1/" >/etc/default/lk-platform
 
 install -v -d -m 2775 -g adm "$LK_BASE/etc"
-install -v -m 0664 -g adm /dev/null "$LK_BASE/etc/packages.conf"
+install -m 0664 -g adm /dev/null "$LK_BASE/etc/packages.conf"
 printf '%s=(\n%s\n)\n' \
     "IMAGE_BASE_PACKAGES" "$(
         printf '    %q\n' "${IMAGE_BASE_PACKAGES[@]}"
@@ -460,32 +486,6 @@ $DISTRIB_CODENAME$S+(\w+$S+)*universe($S|\$)" \
     /etc/apt/sources.list ||
     REPOS+=(universe)
 ### //
-
-IPV4_ADDRESS=$(
-    for REGEX in \
-        '^(127|10|172\.(1[6-9]|2[0-9]|3[01])|192\.168)\.' \
-        '^127\.'; do
-        ip a |
-            awk '/inet / { print $2 }' |
-            grep -Ev "$REGEX" |
-            head -n1 |
-            sed -E 's/\/[0-9]+$//' && break
-    done
-) || IPV4_ADDRESS=
-lk_console_detail "IPv4 address:" "${IPV4_ADDRESS:-<none>}"
-
-IPV6_ADDRESS=$(
-    for REGEX in \
-        '^(::1/128|fe80::|f[cd])' \
-        '^::1/128'; do
-        ip a |
-            awk '/inet6 / { print $2 }' |
-            grep -Eiv "$REGEX" |
-            head -n1 |
-            sed -E 's/\/[0-9]+$//' && break
-    done
-) || IPV6_ADDRESS=
-lk_console_detail "IPv6 address:" "${IPV6_ADDRESS:-<none>}"
 
 ### move to lk-provision-hosting.sh
 lk_console_message "Enabling persistent journald storage"
@@ -705,7 +705,7 @@ IdentityFile            "~/.ssh/${PATH_PREFIX}keys/jump"}
 EOF
 }
 [ -z "$JUMP_KEY" ] || {
-    install -v -m 0644 /dev/null "$DIR/.ssh/${PATH_PREFIX}keys/jump"
+    install -m 0644 /dev/null "$DIR/.ssh/${PATH_PREFIX}keys/jump"
     echo "$JUMP_KEY" >"$DIR/.ssh/${PATH_PREFIX}keys/jump"
 }
 
@@ -713,7 +713,7 @@ DIR=/etc/skel.$PATH_PREFIX_ALPHA
 [ ! -e "$DIR" ] || lk_die "already exists: $DIR"
 lk_console_message "Creating $DIR (for hosting accounts)"
 cp -av "/etc/skel" "$DIR"
-install -v -m 0644 /dev/null "$DIR/.ssh/authorized_keys"
+install -m 0644 /dev/null "$DIR/.ssh/authorized_keys"
 [ -z "$HOST_KEYS" ] || echo "$HOST_KEYS" >>"$DIR/.ssh/authorized_keys"
 
 unset FIRST_ADMIN
@@ -733,12 +733,12 @@ for USERNAME in ${ADMIN_USERS//,/ }; do
         }
     else
         install -v -d -m 0700 -o "$USERNAME" -g "$USER_GROUP" "$USER_HOME/.ssh"
-        install -v -m 0600 -o "$USERNAME" -g "$USER_GROUP" /dev/null "$USER_HOME/.ssh/authorized_keys"
+        install -m 0600 -o "$USERNAME" -g "$USER_GROUP" /dev/null "$USER_HOME/.ssh/authorized_keys"
         grep -E "$S$USERNAME\$" <<<"$ADMIN_USER_KEYS" >>"$USER_HOME/.ssh/authorized_keys" || :
     fi
     sudo -Hu "$USERNAME" cp -nRTv "/etc/skel" "$USER_HOME" &&
         chmod -Rc -077 "$USER_HOME/.ssh"
-    install -v -m 0440 /dev/null "/etc/sudoers.d/nopasswd-$USERNAME"
+    install -m 0440 /dev/null "/etc/sudoers.d/nopasswd-$USERNAME"
     echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >"/etc/sudoers.d/nopasswd-$USERNAME"
 done
 
@@ -760,7 +760,7 @@ systemctl restart sshd.service
 FIRST_ADMIN="${FIRST_ADMIN:-root}"
 
 lk_console_message "Configuring sudoers"
-install -v -m 0440 /dev/null "/etc/sudoers.d/${PATH_PREFIX}defaults"
+install -m 0440 /dev/null "/etc/sudoers.d/${PATH_PREFIX}defaults"
 cat <<EOF >"/etc/sudoers.d/${PATH_PREFIX}defaults"
 Defaults !mail_no_user
 Defaults !mail_badpass
@@ -836,7 +836,7 @@ lk_console_item "Installing APT packages:" "${PACKAGES[*]}"
 lk_keep_trying apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -yq install "${PACKAGES[@]}"
 
 lk_console_message "Configuring iptables"
-install -v -m 0660 -g adm /dev/null "$LK_BASE/etc/firewall.conf"
+install -m 0660 -g adm /dev/null "$LK_BASE/etc/firewall.conf"
 if [ "$REJECT_OUTPUT" != "N" ]; then
     APT_SOURCE_HOSTS=($(grep -Eo "^[^#]+${S}https?://[^/[:space:]]+" "/etc/apt/sources.list" |
         sed -E 's/^.*:\/\///' | sort | uniq)) || lk_die "no active package sources in /etc/apt/sources.list"
@@ -1413,10 +1413,10 @@ EOF
 #   in /etc/php/$PHPVER/fpm/pool.d/$HOST_ACCOUNT.conf
 Use PhpFpmProxy${PHPVER//./} $HOST_ACCOUNT 300
 EOF
-        install -v -m 0640 -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/error.log"
-        install -v -m 0640 -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/access.log"
-        install -v -m 0640 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.cert"
-        install -v -m 0640 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.key"
+        install -m 0640 -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/error.log"
+        install -m 0640 -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/access.log"
+        install -m 0640 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.cert"
+        install -m 0640 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.key"
 
         lk_console_message "Creating a self-signed SSL certificate for '$HOST_DOMAIN'"
         openssl genrsa \
@@ -1490,9 +1490,9 @@ php_value[post_max_size] = 50M
 ;php_admin_flag[xdebug.remote_connect_back] = On
 ;php_admin_value[xdebug.remote_log] = "/srv/www/\$pool/log/php$PHPVER-fpm.xdebug.log"
 EOF
-        install -v -m 0640 -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/php$PHPVER-fpm.access.log"
-        install -v -m 0640 -o "$PHP_FPM_POOL_USER" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/php$PHPVER-fpm.error.log"
-        install -v -m 0640 -o "$PHP_FPM_POOL_USER" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/php$PHPVER-fpm.xdebug.log"
+        install -m 0640 -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/php$PHPVER-fpm.access.log"
+        install -m 0640 -o "$PHP_FPM_POOL_USER" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/php$PHPVER-fpm.error.log"
+        install -m 0640 -o "$PHP_FPM_POOL_USER" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/php$PHPVER-fpm.xdebug.log"
         install -v -d -m 0700 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/.cache/opcache"
         lk_console_file "/etc/php/$PHPVER/fpm/pool.d/$HOST_ACCOUNT.conf"
     fi
@@ -1549,7 +1549,7 @@ WITH GRANT OPTION" | mysql -uroot
     fi
 
     lk_console_message "Configuring MySQL account self-service"
-    install -v -m 0440 /dev/null "/etc/sudoers.d/${PATH_PREFIX}mysql-self-service"
+    install -m 0440 /dev/null "/etc/sudoers.d/${PATH_PREFIX}mysql-self-service"
     cat <<EOF >"/etc/sudoers.d/${PATH_PREFIX}mysql-self-service"
 ALL ALL=(root) NOPASSWD:$LK_BASE/bin/lk-mysql-grant.sh
 EOF
