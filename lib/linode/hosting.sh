@@ -159,7 +159,13 @@ FIELD_ERRORS=$(
     REQUIRED=1
     valid NODE_HOSTNAME "^$DOMAIN_PART_REGEX\$"
     valid NODE_FQDN "^$DOMAIN_NAME_REGEX\$"
-    one_of NODE_TIMEZONE < <(timedatectl list-timezones)
+    # if tzdata isn't part of the image, `timedatectl list-timezones` will only
+    # list UTC
+    if [ -e /usr/share/zoneinfo/Australia/Sydney ]; then
+        one_of NODE_TIMEZONE < <(timedatectl list-timezones)
+    else
+        not_null NODE_TIMEZONE
+    fi
     valid ADMIN_EMAIL "^$EMAIL_ADDRESS_REGEX\$"
     one_of AUTO_REBOOT Y N
 
