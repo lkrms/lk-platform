@@ -401,7 +401,7 @@ printf '%s=%q\n' \
     LK_SSH_TRUSTED_ONLY "$SSH_TRUSTED_ONLY" \
     LK_SSH_JUMP_HOST "$SSH_JUMP_HOST" \
     LK_SSH_JUMP_USER "$SSH_JUMP_USER" \
-    LK_SSH_JUMP_KEY "$SSH_JUMP_KEY" \
+    LK_SSH_JUMP_KEY "${SSH_JUMP_KEY:+jump}" \
     LK_REJECT_OUTPUT "$REJECT_OUTPUT" \
     LK_ACCEPT_OUTPUT_HOSTS "$ACCEPT_OUTPUT_HOSTS" \
     LK_INNODB_BUFFER_SIZE "$INNODB_BUFFER_SIZE" \
@@ -716,6 +716,7 @@ cp -av "/etc/skel" "$DIR"
 install -v -m 0644 /dev/null "$DIR/.ssh/authorized_keys"
 [ -z "$HOST_KEYS" ] || echo "$HOST_KEYS" >>"$DIR/.ssh/authorized_keys"
 
+unset FIRST_ADMIN
 for USERNAME in ${ADMIN_USERS//,/ }; do
     FIRST_ADMIN="${FIRST_ADMIN:-$USERNAME}"
     lk_console_message "Creating superuser '$USERNAME'"
@@ -740,6 +741,11 @@ for USERNAME in ${ADMIN_USERS//,/ }; do
     install -v -m 0440 /dev/null "/etc/sudoers.d/nopasswd-$USERNAME"
     echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >"/etc/sudoers.d/nopasswd-$USERNAME"
 done
+
+if [ -n "${FIRST_ADMIN:-}" ] && [ -e "$KEYS_FILE" ]; then
+    lk_console_item "Deleting" "$KEYS_FILE"
+    rm -v "$KEYS_FILE"
+fi
 
 lk_console_message "Disabling root password"
 passwd -l root
