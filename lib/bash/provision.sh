@@ -84,8 +84,8 @@ function lk_sudo_offer_nopasswd() {
 # lk_ssh_add_host <NAME> <HOST[:PORT]> <USER> [<KEY_FILE> [<JUMP_HOST_NAME>]]
 function lk_ssh_add_host() {
     local NAME=$1 HOST=$2 JUMP_USER=$3 KEY_FILE=${4:-} JUMP_HOST_NAME=${5:-} \
-        h=${LK_SSH_HOME:-~} SSH_PREFIX=${LK_SSH_PREFIX:-$LK_PATH_PREFIX} KEY \
-        S="[[:space:]]"
+        h=${LK_SSH_HOME:-~} SSH_PREFIX=${LK_SSH_PREFIX:-$LK_PATH_PREFIX} \
+        S="[[:space:]]" KEY CONF CONF_FILE
     [ "${KEY_FILE:--}" = - ] ||
         [ -f "$KEY_FILE" ] ||
         [ -f "$h/.ssh/$KEY_FILE" ] ||
@@ -130,9 +130,10 @@ IdentityFile            "$KEY_FILE"}${JUMP_HOST_NAME:+
 ProxyJump               $SSH_PREFIX${JUMP_HOST_NAME#$SSH_PREFIX}}
 EOF
     )
-    LK_BACKUP_SUFFIX='' lk_maybe_replace \
-        "$h/.ssh/${SSH_PREFIX}config.d/${LK_SSH_PRIORITY:-60}-$NAME" \
-        "$CONF"
+    CONF_FILE=$h/.ssh/${SSH_PREFIX}config.d/${LK_SSH_PRIORITY:-60}-$NAME
+    LK_BACKUP_SUFFIX='' \
+        lk_maybe_replace "$CONF_FILE" "$CONF" &&
+        chmod "0${LK_SSH_FILE_MODE:-0600}" "$CONF_FILE" || return
 }
 
 # lk_ssh_configure [<JUMP_HOST[:JUMP_PORT]> <JUMP_USER> [<JUMP_KEY_FILE>]]

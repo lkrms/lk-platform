@@ -437,10 +437,12 @@ function lk_pad_zero() {
     printf "%0$1d" "${BASH_REMATCH[1]}"
 }
 
-# lk_ellipsis length [string]
+# lk_ellipsis <LENGTH> <STRING>
 function lk_ellipsis() {
-    { [ $# -gt 1 ] && echo "$2" || cat; } |
-        sed -E "s/^(.{$(("$1" - 3))}).{4,}/\1.../"
+    [ "$1" -gt 3 ] &&
+        [[ $2 =~ ^(.{$(($1 - 3))}).{4,} ]] &&
+        echo "${BASH_REMATCH[1]}..." ||
+        echo "$2"
 }
 
 function lk_repeat() {
