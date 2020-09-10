@@ -168,10 +168,9 @@ ${SSH_PREFIX}config\\.d/\\*\\1$S*\$" "$h/.ssh/config" 2>/dev/null; then
             CONF=$(printf "%s\n%s %s\n\n." \
                 "# Added by $(lk_myself) at $(lk_now)" \
                 "Include" "~/.ssh/${SSH_PREFIX}config.d/*")
-            [ ! -e "$h/.ssh/config" ] || {
-                CONF=${CONF%.}$(cat "$h/.ssh/config" && echo .) &&
-                    lk_keep_original "$h/.ssh/config"
-            } || return
+            [ ! -e "$h/.ssh/config" ] ||
+                CONF=${CONF%.}$(cat "$h/.ssh/config" && echo .) ||
+                return
             echo -n "${CONF%.}" >"$h/.ssh/config" || return
             ! lk_is_true "${LK_VERBOSE:-0}" || lk_console_file "$h/.ssh/config"
         fi
@@ -189,7 +188,8 @@ SendEnv                 LANG LC_*
 ServerAliveInterval     30
 EOF
         )
-        lk_maybe_replace "$h/.ssh/${SSH_PREFIX}config.d/90-defaults" "$CONF"
+        LK_BACKUP_SUFFIX='' \
+            lk_maybe_replace "$h/.ssh/${SSH_PREFIX}config.d/90-defaults" "$CONF"
         # Add jump proxy configuration
         [ $# -lt 2 ] ||
             LK_SSH_HOME=$h LK_SSH_PRIORITY=40 \

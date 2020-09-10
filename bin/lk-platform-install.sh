@@ -237,6 +237,7 @@
             install -m 0644 /dev/null "$DEFAULT_FILE"
     }
     DEFAULT_LINES=()
+    OUTPUT=()
     for i in "${DEFAULT_SETTINGS[@]}"; do
         if [ -z "${!i:=}" ]; then
             # don't include null variables unless they already appear in
@@ -247,8 +248,9 @@
         else
             DEFAULT_LINES+=("$(printf '%s=%q' "$i" "${!i}")")
         fi
-        lk_console_detail "$i:" "${!i:-<none>}"
+        OUTPUT+=("$i" "${!i:-<none>}")
     done
+    lk_console_item "Settings:" "$(printf '%s: %s\n' "${OUTPUT[@]}")"
     lk_maybe_replace "$DEFAULT_FILE" "$(lk_echo_array DEFAULT_LINES)"
 
     # check .bashrc files
