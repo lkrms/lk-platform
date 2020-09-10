@@ -80,7 +80,7 @@ export -n \
 
 [ ! "$SCRIPT_DEBUG" = Y ] || {
     TRACE_FILE=/var/log/${PATH_PREFIX}install.trace
-    install -v -m 0640 -g "adm" /dev/null "$TRACE_FILE"
+    install -v -m 0640 -g adm /dev/null "$TRACE_FILE"
     exec 4>>"$TRACE_FILE"
     BASH_XTRACEFD=4
     set -x
@@ -132,21 +132,25 @@ FIELD_ERRORS=$(
     }
 
     DOMAIN_PART_REGEX="[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
-    FQDN_REGEX="($DOMAIN_PART_REGEX(\\.|\$)){2,}"
-    EMAIL_ADDRESS_REGEX="[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@$FQDN_REGEX"
-    USERNAME_REGEX="[a-z_]([-a-z0-9_]{0,31}|[-a-z0-9_]{0,30}\\\$)"
+    DOMAIN_NAME_REGEX="($DOMAIN_PART_REGEX(\\.|\$)){2,}"
+    EMAIL_ADDRESS_REGEX="[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@$DOMAIN_NAME_REGEX"
+    LINUX_USERNAME_REGEX="[a-z_]([-a-z0-9_]{0,31}|[-a-z0-9_]{0,30}\\\$)"
+    MYSQL_USERNAME_REGEX="[a-zA-Z0-9_]+"
     # https://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-source
-    DEB_PKG_REGEX="[a-z0-9][-a-z0-9+.]+"
+    DPKG_SOURCE_REGEX="[a-z0-9][-a-z0-9+.]+"
 
-    OCTET="(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])"
-    IPV4_REGEX="($OCTET\\.){3}$OCTET(/(3[0-2]|[12][0-9]|[1-9]))?"
+    _O="(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])"
+    IPV4_REGEX="($_O\\.){3}$_O"
+    IPV4_OPT_PREFIX_REGEX="$IPV4_REGEX(/(3[0-2]|[12][0-9]|[1-9]))?"
 
-    HEXTET="[0-9a-fA-F]{1,4}"
-    PREFIX="/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9])"
-    IPV6_REGEX="(($HEXTET:){7}(:|$HEXTET)|($HEXTET:){6}(:|:$HEXTET)|($HEXTET:){5}(:|(:$HEXTET){1,2})|($HEXTET:){4}(:|(:$HEXTET){1,3})|($HEXTET:){3}(:|(:$HEXTET){1,4})|($HEXTET:){2}(:|(:$HEXTET){1,5})|$HEXTET:(:|(:$HEXTET){1,6})|:(:|(:$HEXTET){1,7}))($PREFIX)?"
+    _H="[0-9a-fA-F]{1,4}"
+    _P="/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9])"
+    IPV6_REGEX="(($_H:){7}(:|$_H)|($_H:){6}(:|:$_H)|($_H:){5}(:|(:$_H){1,2})|($_H:){4}(:|(:$_H){1,3})|($_H:){3}(:|(:$_H){1,4})|($_H:){2}(:|(:$_H){1,5})|$_H:(:|(:$_H){1,6})|:(:|(:$_H){1,7}))"
+    IPV6_OPT_PREFIX_REGEX="$IPV6_REGEX($_P)?"
 
-    IP_REGEX="($IPV4_REGEX|$IPV6_REGEX)"
-    HOST_REGEX="($IPV4_REGEX|$IPV6_REGEX|$DOMAIN_PART_REGEX|$FQDN_REGEX)"
+    IP_OPT_PREFIX_REGEX="($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX)"
+    HOST_REGEX="($IPV4_REGEX|$IPV6_REGEX|$DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)"
+    HOST_OPT_PREFIX_REGEX="($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX|$DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)"
 
     PHP_SETTING_NAME_REGEX="[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*"
     PHP_SETTING_REGEX="$PHP_SETTING_NAME_REGEX=.+"
@@ -154,7 +158,7 @@ FIELD_ERRORS=$(
     # required fields
     REQUIRED=1
     valid NODE_HOSTNAME "^$DOMAIN_PART_REGEX\$"
-    valid NODE_FQDN "^$FQDN_REGEX\$"
+    valid NODE_FQDN "^$DOMAIN_NAME_REGEX\$"
     one_of NODE_TIMEZONE < <(timedatectl list-timezones)
     valid ADMIN_EMAIL "^$EMAIL_ADDRESS_REGEX\$"
     one_of AUTO_REBOOT Y N
@@ -168,23 +172,23 @@ FIELD_ERRORS=$(
         "fail2ban" \
         "wp-cli" \
         "jre"
-    valid_list NODE_PACKAGES "^$DEB_PKG_REGEX\$"
-    valid HOST_DOMAIN "^$FQDN_REGEX\$"
-    valid HOST_ACCOUNT "^$USERNAME_REGEX\$"
+    valid_list NODE_PACKAGES "^$DPKG_SOURCE_REGEX\$"
+    valid HOST_DOMAIN "^$DOMAIN_NAME_REGEX\$"
+    valid HOST_ACCOUNT "^$LINUX_USERNAME_REGEX\$"
     [ -z "$HOST_DOMAIN" ] || REQUIRED=1
     one_of HOST_SITE_ENABLE Y N
     REQUIRED=0
-    valid_list ADMIN_USERS "^$USERNAME_REGEX\$"
+    valid_list ADMIN_USERS "^$LINUX_USERNAME_REGEX\$"
     [ ! "$SSH_TRUSTED_ONLY" = Y ] || REQUIRED=1
-    valid_list TRUSTED_IP_ADDRESSES "^$IP_REGEX\$"
+    valid_list TRUSTED_IP_ADDRESSES "^$IP_OPT_PREFIX_REGEX\$"
     REQUIRED=0
     one_of SSH_TRUSTED_ONLY Y N
     valid SSH_JUMP_HOST "^$HOST_REGEX\$"
-    valid SSH_JUMP_USER "^$USERNAME_REGEX\$"
+    valid SSH_JUMP_USER "^$LINUX_USERNAME_REGEX\$"
     valid SSH_JUMP_KEY "^[-a-zA-Z0-9_]+\$"
     one_of REJECT_OUTPUT Y N
-    valid_list ACCEPT_OUTPUT_HOSTS "^$HOST_REGEX\$"
-    valid MYSQL_USERNAME "^$USERNAME_REGEX\$"
+    valid_list ACCEPT_OUTPUT_HOSTS "^$HOST_OPT_PREFIX_REGEX\$"
+    valid MYSQL_USERNAME "^$MYSQL_USERNAME_REGEX\$"
     [ -z "$MYSQL_USERNAME" ] || not_null MYSQL_PASSWORD
     valid INNODB_BUFFER_SIZE "^[0-9]+[kmgtpeKMGTPE]?\$"
     valid OPCACHE_MEMORY_CONSUMPTION "^[0-9]+\$"
@@ -196,7 +200,7 @@ FIELD_ERRORS=$(
     [ ! "$AUTO_REBOOT" = Y ] || REQUIRED=1
     valid AUTO_REBOOT_TIME "^(([01][0-9]|2[0-3]):[0-5][0-9]|now)\$"
     REQUIRED=0
-    valid PATH_PREFIX "^$DOMAIN_PART_REGEX-\$"
+    valid PATH_PREFIX "^[a-zA-Z0-9]{2,3}-\$"
     one_of SCRIPT_DEBUG Y N
     one_of SHUTDOWN_ACTION reboot poweroff
     valid SHUTDOWN_DELAY "^[0-9]+\$"
@@ -224,6 +228,17 @@ function lk_dpkg_installed() {
     STATUS=$(dpkg-query \
         --show --showformat '${db:Status-Status}' "$1" 2>/dev/null) &&
         [ "$STATUS" = installed ]
+}
+
+function lk_apt_update() {
+    lk_console_message "Updating APT package indexes"
+    lk_keep_trying apt-get -q update
+}
+
+function lk_apt_install() {
+    lk_console_item "Installing APT package(s):" "$(printf '%s\n' "$@")"
+    lk_keep_trying \
+        apt-get --no-install-recommends --no-install-suggests -yq install "$@"
 }
 
 function lk_date_log() {
@@ -336,27 +351,78 @@ flock -n 9 || lk_die "unable to acquire a lock on $LOCK_FILE"
 
 LOG_FILE=/var/log/${PATH_PREFIX}install.log
 OUT_FILE=/var/log/${PATH_PREFIX}install.out
-install -v -m 0640 -g "adm" /dev/null "$LOG_FILE"
-install -v -m 0640 -g "adm" /dev/null "$OUT_FILE"
+install -v -m 0640 -g adm /dev/null "$LOG_FILE"
+install -v -m 0640 -g adm /dev/null "$OUT_FILE"
 exec > >(tee >(lk_log >>"$OUT_FILE")) 2>&1
 exec 3> >(tee >(lk_log >>"$LOG_FILE") >&1)
 _LK_FD=3
 
 S="[[:space:]]"
-
-lk_console_message "Provisioning Ubuntu"
-lk_console_detail "Environment:" "$SCRIPT_ENV"
-[ ! "$SCRIPT_DEBUG" = Y ] ||
-    lk_console_detail "Variables:" "$SCRIPT_DEBUG_VARS"
-
+P="${PATH_PREFIX_ALPHA}_"
 export LK_BASE=/opt/${PATH_PREFIX}platform \
     DEBIAN_FRONTEND=noninteractive \
     DEBCONF_NONINTERACTIVE_SEEN=true \
     PIP_NO_INPUT=1
 
+LK_CONSOLE_PREFIX="====> " lk_console_message "Provisioning Ubuntu"
+lk_console_item "Environment:" "$SCRIPT_ENV"
+[ ! "$SCRIPT_DEBUG" = Y ] ||
+    lk_console_item "Variables:" "$SCRIPT_DEBUG_VARS"
+
 IMAGE_BASE_PACKAGES=($(apt-mark showmanual))
-lk_console_detail "Pre-installed packages:" \
+lk_console_item "Pre-installed packages:" \
     "$(printf '%s\n' "${IMAGE_BASE_PACKAGES[@]}")"
+
+lk_dpkg_installed git || {
+    lk_apt_update
+    lk_apt_install git
+}
+
+install -v -d -m 2775 -g adm "$LK_BASE"
+if [ -z "$(ls -A "$LK_BASE")" ]; then
+    lk_console_item "Downloading lk-platform to" "$LK_BASE"
+    lk_keep_trying \
+        git clone -b "$LK_PLATFORM_BRANCH" \
+        "https://github.com/lkrms/lk-platform.git" "$LK_BASE"
+fi
+
+install -v -m 0644 /dev/null /etc/default/lk-platform
+printf '%s=%q\n' \
+    LK_BASE "$LK_BASE" \
+    LK_PATH_PREFIX "$PATH_PREFIX" \
+    LK_PATH_PREFIX_ALPHA "$PATH_PREFIX_ALPHA" \
+    LK_NODE_HOSTNAME "$NODE_HOSTNAME" \
+    LK_NODE_FQDN "$NODE_FQDN" \
+    LK_NODE_TIMEZONE "$NODE_TIMEZONE" \
+    LK_NODE_SERVICES "$NODE_SERVICES" \
+    LK_NODE_PACKAGES "$NODE_PACKAGES" \
+    LK_ADMIN_EMAIL "$ADMIN_EMAIL" \
+    LK_TRUSTED_IP_ADDRESSES "$TRUSTED_IP_ADDRESSES" \
+    LK_SSH_TRUSTED_ONLY "$SSH_TRUSTED_ONLY" \
+    LK_SSH_JUMP_HOST "$SSH_JUMP_HOST" \
+    LK_SSH_JUMP_USER "$SSH_JUMP_USER" \
+    LK_SSH_JUMP_KEY "$SSH_JUMP_KEY" \
+    LK_REJECT_OUTPUT "$REJECT_OUTPUT" \
+    LK_ACCEPT_OUTPUT_HOSTS "$ACCEPT_OUTPUT_HOSTS" \
+    LK_INNODB_BUFFER_SIZE "$INNODB_BUFFER_SIZE" \
+    LK_OPCACHE_MEMORY_CONSUMPTION "$OPCACHE_MEMORY_CONSUMPTION" \
+    LK_PHP_SETTINGS "$PHP_SETTINGS" \
+    LK_PHP_ADMIN_SETTINGS "$PHP_ADMIN_SETTINGS" \
+    LK_MEMCACHED_MEMORY_LIMIT "$MEMCACHED_MEMORY_LIMIT" \
+    LK_SMTP_RELAY "$SMTP_RELAY" \
+    LK_EMAIL_BLACKHOLE "$EMAIL_BLACKHOLE" \
+    LK_AUTO_REBOOT "$AUTO_REBOOT" \
+    LK_AUTO_REBOOT_TIME "$AUTO_REBOOT_TIME" \
+    LK_SCRIPT_DEBUG "$SCRIPT_DEBUG" \
+    LK_PLATFORM_BRANCH "$LK_PLATFORM_BRANCH" |
+    sed -E "s/^([a-zA-Z_][a-zA-Z0-9_]*=)''\$/\1/" >/etc/default/lk-platform
+
+install -v -d -m 2775 -g adm "$LK_BASE/etc"
+install -v -m 0664 -g adm /dev/null "$LK_BASE/etc/packages.conf"
+printf '%s=(\n%s\n)\n' \
+    "IMAGE_BASE_PACKAGES" "$(
+        printf '    %q\n' "${IMAGE_BASE_PACKAGES[@]}"
+    )" >"$LK_BASE/etc/packages.conf"
 
 ### move to lk-provision-hosting.sh
 . /etc/lsb-release
@@ -713,9 +779,6 @@ EOF
 # bare necessities
 PACKAGES=(
     #
-    git
-
-    #
     atop
     ntp
 
@@ -767,6 +830,7 @@ lk_console_item "Installing APT packages:" "${PACKAGES[*]}"
 lk_keep_trying apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -yq install "${PACKAGES[@]}"
 
 lk_console_message "Configuring iptables"
+install -v -m 0660 -g adm /dev/null "$LK_BASE/etc/firewall.conf"
 if [ "$REJECT_OUTPUT" != "N" ]; then
     APT_SOURCE_HOSTS=($(grep -Eo "^[^#]+${S}https?://[^/[:space:]]+" "/etc/apt/sources.list" |
         sed -E 's/^.*:\/\///' | sort | uniq)) || lk_die "no active package sources in /etc/apt/sources.list"
@@ -829,8 +893,11 @@ ${ACCEPT_OUTPUT_HOSTS:+    ${ACCEPT_OUTPUT_HOSTS//,/$'\n'    }
     lk_keep_trying eval "IPV6_IPS=\"\$(dig +short ${OUTPUT_ALLOW[*]/%/ AAAA})\""
     OUTPUT_ALLOW_IPV4+=($(echo "$IPV4_IPS" | sed -E '/\.$/d' | sort | uniq))
     OUTPUT_ALLOW_IPV6+=($(echo "$IPV6_IPS" | sed -E '/\.$/d' | sort | uniq))
+    echo "\
+$ACCEPT_OUTPUT_HOSTS_SH
+$(printf '%s=%q\n' \
+        "ACCEPT_OUTPUT_CHAIN" "${P}output")" >"$LK_BASE/etc/firewall.conf"
 fi
-P="${PATH_PREFIX_ALPHA}_"
 iptables-restore <<EOF
 *filter
 :INPUT DROP [0:0]
@@ -973,59 +1040,6 @@ if [ -f "$FILE" ] && ! grep -Fxq "CONFIG_BSD_PROCESS_ACCT=y" "$FILE"; then
     systemctl disable atopacct.service
 fi
 
-install -v -d -m 2775 -o "$FIRST_ADMIN" -g "adm" "$LK_BASE"
-if [ -z "$(ls -A "$LK_BASE")" ]; then
-    lk_console_message "Cloning 'https://github.com/lkrms/lk-platform.git' to '$LK_BASE'"
-    lk_keep_trying sudo -Hu "$FIRST_ADMIN" \
-        git clone -b "${LK_PLATFORM_BRANCH:-master}" \
-        "https://github.com/lkrms/lk-platform.git" "$LK_BASE"
-    sudo -Hu "$FIRST_ADMIN" bash -c "\
-cd \"\$1\" &&
-    git config core.sharedRepository 0664 &&
-    git config merge.ff only &&
-    git config pull.ff only" bash "$LK_BASE"
-fi
-install -v -d -m 2775 -o "$FIRST_ADMIN" -g "adm" "$LK_BASE/etc"
-install -v -m 0664 -o "$FIRST_ADMIN" -g "adm" /dev/null "$LK_BASE/etc/packages.conf"
-printf '%s=(\n%s\n)\n' \
-    "IMAGE_BASE_PACKAGES" "$(
-        printf '    %q\n' "${IMAGE_BASE_PACKAGES[@]}"
-    )" >"$LK_BASE/etc/packages.conf"
-install -v -m 0660 -o "$FIRST_ADMIN" -g "adm" /dev/null "$LK_BASE/etc/firewall.conf"
-[ "$REJECT_OUTPUT" = "N" ] ||
-    echo "\
-$ACCEPT_OUTPUT_HOSTS_SH
-$(printf '%s=%q\n' \
-        "ACCEPT_OUTPUT_CHAIN" "${P}output")" >"$LK_BASE/etc/firewall.conf"
-printf '%s=%q\n' \
-    LK_BASE "$LK_BASE" \
-    LK_PATH_PREFIX "$PATH_PREFIX" \
-    LK_PATH_PREFIX_ALPHA "$PATH_PREFIX_ALPHA" \
-    LK_NODE_HOSTNAME "$NODE_HOSTNAME" \
-    LK_NODE_FQDN "$NODE_FQDN" \
-    LK_NODE_TIMEZONE "$NODE_TIMEZONE" \
-    LK_NODE_SERVICES "$NODE_SERVICES" \
-    LK_NODE_PACKAGES "$NODE_PACKAGES" \
-    LK_ADMIN_EMAIL "$ADMIN_EMAIL" \
-    LK_TRUSTED_IP_ADDRESSES "$TRUSTED_IP_ADDRESSES" \
-    LK_SSH_TRUSTED_ONLY "$SSH_TRUSTED_ONLY" \
-    LK_SSH_JUMP_HOST "$SSH_JUMP_HOST" \
-    LK_SSH_JUMP_USER "$SSH_JUMP_USER" \
-    LK_SSH_JUMP_KEY "$SSH_JUMP_KEY" \
-    LK_REJECT_OUTPUT "$REJECT_OUTPUT" \
-    LK_ACCEPT_OUTPUT_HOSTS "$ACCEPT_OUTPUT_HOSTS" \
-    LK_INNODB_BUFFER_SIZE "$INNODB_BUFFER_SIZE" \
-    LK_OPCACHE_MEMORY_CONSUMPTION "$OPCACHE_MEMORY_CONSUMPTION" \
-    LK_PHP_SETTINGS "$PHP_SETTINGS" \
-    LK_PHP_ADMIN_SETTINGS "$PHP_ADMIN_SETTINGS" \
-    LK_MEMCACHED_MEMORY_LIMIT "$MEMCACHED_MEMORY_LIMIT" \
-    LK_SMTP_RELAY "$SMTP_RELAY" \
-    LK_EMAIL_BLACKHOLE "$EMAIL_BLACKHOLE" \
-    LK_AUTO_REBOOT "$AUTO_REBOOT" \
-    LK_AUTO_REBOOT_TIME "$AUTO_REBOOT_TIME" \
-    LK_SCRIPT_DEBUG "$SCRIPT_DEBUG" \
-    LK_PLATFORM_BRANCH "$LK_PLATFORM_BRANCH" |
-    sed -E "s/^([a-zA-Z_][a-zA-Z0-9_]*=)''\$/\1/" >/etc/default/lk-platform
 "$LK_BASE/bin/lk-platform-install.sh"
 
 # TODO: verify downloads
@@ -1047,7 +1061,7 @@ disable=true
 EOF
 
 lk_console_message "Creating virtual host base directory at /srv/www"
-install -v -d -m 0751 -g "adm" "/srv/www"
+install -v -d -m 0751 -g adm "/srv/www"
 
 PACKAGES=(
     postfix
@@ -1262,7 +1276,7 @@ if lk_dpkg_installed apache2; then
     # TODO: make PHP-FPM setup conditional
     [ -e "/opt/opcache-gui" ] || {
         lk_console_message "Cloning 'https://github.com/lkrms/opcache-gui.git' to '/opt/opcache-gui'"
-        install -v -d -m 2775 -o "$FIRST_ADMIN" -g "adm" "/opt/opcache-gui"
+        install -v -d -m 2775 -o "$FIRST_ADMIN" -g adm "/opt/opcache-gui"
         lk_keep_trying sudo -Hu "$FIRST_ADMIN" \
             git clone "https://github.com/lkrms/opcache-gui.git" \
             "/opt/opcache-gui"
