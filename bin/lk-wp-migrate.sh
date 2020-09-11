@@ -121,6 +121,12 @@ lk_console_detail "[remote] Source:" "$SSH_HOST:$REMOTE_PATH"
 lk_console_detail "[local] Destination:" "$LOCAL_PATH"
 [ -z "$MAINTENANCE" ] ||
     lk_console_detail "Remote maintenance mode:" "$MAINTENANCE"
+lk_console_detail "Local WP-Cron:" "$(
+    [ "$MAINTENANCE" = indefinite ] &&
+        echo "enable" ||
+        echo "disable"
+)"
+
 lk_console_detail "Excluded files:" "$([ "${#EXCLUDE[@]}" -eq 0 ] &&
     echo "<none>" ||
     lk_echo_array EXCLUDE)"
@@ -158,6 +164,14 @@ cd "$LOCAL_PATH"
 LK_NO_INPUT=1 \
     lk_wp_db_restore_local "$DB_FILE" "$DEFAULT_DB_NAME" "$DEFAULT_DB_USER"
 lk_wp_flush
+
+if [ "$MAINTENANCE" = indefinite ]; then
+    lk_console_warning "Enabling WP-Cron (remote site offline)"
+    lk_wp_enable_system_cron
+else
+    lk_console_warning "Disabling WP-Cron (remote site online)"
+    lk_wp_disable_cron
+fi
 
 lk_console_message "[local] Disabling maintenance mode"
 lk_console_detail "Deleting" "$LOCAL_PATH/.maintenance"
