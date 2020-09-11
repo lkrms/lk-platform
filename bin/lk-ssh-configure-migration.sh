@@ -1,40 +1,99 @@
 #!/bin/bash
 
-# shellcheck disable=SC1083,SC1087,SC2015
+# shellcheck disable=SC1083,SC1087,SC2015,SC2034
 
-NEW_USER=
-NEW_KEY=
-NEW_HOST=
+if [[ ! ${1:-} =~ ^(--new|--old)$ ]]; then
 
-OLD_USER=
-OLD_PASSWORD=
-OLD_HOST=
-OLD_HOST_PORT=
+    lk_bin_depth=1 include=provision . lk-bash-load.sh || exit
+
+    # TODO: implement TARGET_PASSWORD
+    NEW_USER=
+    NEW_HOST=
+    NEW_KEY=${TARGET_KEY:-}
+
+    # TODO: implement SOURCE_KEY
+    OLD_USER=
+    OLD_HOST=
+    OLD_PASSWORD=${SOURCE_PASSWORD:-}
+
+    USAGE="\
+Usage:
+  ${0##*/} [OPTION...] <USER>@<SOURCE>[:<PORT>] <USER>@<TARGET>[:<PORT>]
+
+Configure SSH hosts and keys on SOURCE, TARGET, and the local system to allow
+key-based access to SOURCE from TARGET using private keys held only in an
+authentication agent on the local system. Requires ${LK_PATH_PREFIX}platform to be installed
+on TARGET.
+
+Options:
+  -i, --target-key <FILE>   use key in FILE when logging into TARGET
+                            (default: environment variable TARGET_KEY)
+  -p, --source-password <PASSWORD>
+                            use PASSWORD when logging into SOURCE
+                            (default: environment variable SOURCE_PASSWORD)"
+
+    OPTS=$(
+        gnu_getopt --options "i:p:" \
+            --longoptions "--target-key:,--source-password:" \
+            --name "${0##*/}" \
+            -- "$@"
+    ) || lk_usage
+    eval "set -- $OPTS"
+
+    while :; do
+        OPT=$1
+        shift
+        case "$OPT" in
+        -i | --target-key)
+            [ -f "$1" ] || lk_warn "file not found: $1" || lk_usage
+            NEW_KEY=$1
+            ;;
+        -p | --source-password)
+            OLD_PASSWORD=$1
+            ;;
+        --)
+            break
+            ;;
+        esac
+        shift
+    done
+
+    case "$#" in
+    2)
+        NEW_USER=${1%@*}
+        NEW_HOST=${1##*@}
+        OLD_USER=${2%@*}
+        OLD_HOST=${2##*@}
+        shift 2
+        ;;
+    *)
+        lk_usage
+        ;;
+    esac
+
+fi
 
 STAGE=${1:-local}
+STAGE=${STAGE#--}
 if [ "$STAGE" = "local" ]; then
-    lk_bin_depth=1 include=provision . lk-bash-load.sh || exit
     SSH_PREFIX=${LK_SSH_PREFIX:-$LK_PATH_PREFIX}
     NEW_HOST_NAME=$SSH_PREFIX$NEW_USER
 elif [ "$STAGE" = "new" ]; then
     include=provision . lk-bash-load.sh || exit
     SSH_PREFIX=${LK_SSH_PREFIX:-$LK_PATH_PREFIX}
-    OLD_USER={{OLD_USER}}
-    OLD_PASSWORD={{OLD_PASSWORD}}
-    OLD_HOST={{OLD_HOST}}
-    OLD_HOST_PORT={{OLD_HOST_PORT}}
-    OLD_HOST=$OLD_HOST${OLD_HOST_PORT:+:$OLD_HOST_PORT}
-    OLD_HOST_NAME=${SSH_PREFIX}old-$OLD_USER
     NEW_HOST_NAME={{NEW_HOST_NAME}}
+    OLD_USER={{OLD_USER}}
+    OLD_HOST={{OLD_HOST}}
+    OLD_PASSWORD={{OLD_PASSWORD}}
+    OLD_HOST_NAME=${SSH_PREFIX}old-$OLD_USER
 else
     set -euo pipefail
+    LK_BOLD={{LK_BOLD}}
+    LK_CYAN={{LK_CYAN}}
+    LK_YELLOW={{LK_YELLOW}}
+    LK_GREY={{LK_GREY}}
+    LK_RESET={{LK_RESET}}
 fi
-
-LK_BOLD=$(tput bold 2>/dev/null) || LK_BOLD=
-LK_CYAN=$(tput setaf 6 2>/dev/null) || LK_CYAN=
-LK_YELLOW=$(tput setaf 3 2>/dev/null) || LK_YELLOW=
-LK_GREY=$(tput setaf 8 2>/dev/null) || LK_GREY=
-LK_RESET=$(tput sgr0 2>/dev/null) || LK_RESET=
 
 function lk_console_message() {
     echo "\
@@ -96,7 +155,7 @@ local)
     ssh -o LogLevel=QUIET -t "$NEW_HOST_NAME" "bash -c$(
         printf ' %q' "$(
             LK_EXPAND_BASH_OFF=1 LK_EXPAND_QUOTE=1 lk_expand_template "$0"
-        )" bash new
+        )" bash --new
     )"
     ;;
 
@@ -146,7 +205,7 @@ EOF
             "Password will be requested if public key not already installed"
     fi
     ${OLD_PASSWORD:+setsid -w} ssh -o LogLevel=QUIET -t "$OLD_HOST_NAME" \
-        "bash -c$(printf ' %q' "$BASH_EXECUTION_STRING" bash old "$KEY")"
+        "bash -c$(printf ' %q' "$BASH_EXECUTION_STRING" bash --old "$KEY")"
     if [ -n "${SSH_ASKPASS:-}" ]; then
         lk_console_detail "Deleting:" "$SSH_ASKPASS"
         rm "$SSH_ASKPASS"
