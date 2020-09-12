@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1003,SC1090,SC2015,SC2016,SC2034,SC2046,SC2068,SC2088,SC2120,SC2162,SC2207
+# shellcheck disable=SC2015,SC2016,SC2207
 
 function lk_command_exists() {
     type -P "$1" >/dev/null
@@ -30,26 +30,27 @@ function lk_is_wsl() {
 }
 
 _LK_GNU_COMMANDS=(
-    chgrp  # coreutils
-    chmod  #
-    chown  #
-    date   #
-    ln     #
-    mktemp #
-    sort   #
-    stat   #
-    find   # findutils
-    xargs  #
-    awk    # gawk
-    grep   # grep
-    nc     # netcat
-    sed    # sed
-    tar    # tar
-    getopt # util-linux
+    chgrp    # coreutils
+    chmod    #
+    chown    #
+    date     #
+    ln       #
+    mktemp   #
+    realpath #
+    sort     #
+    stat     #
+    find     # findutils
+    xargs    #
+    awk      # gawk
+    grep     # grep
+    nc       # netcat
+    sed      # sed
+    tar      # tar
+    getopt   # util-linux
 )
 
 function _lk_gnu_command() {
-    local COMMAND
+    local SH
     case "$1" in
     awk)
         echo "gawk"
@@ -58,33 +59,46 @@ function _lk_gnu_command() {
         echo "netcat"
         ;;
     getopt)
-        if ! lk_is_macos; then
-            echo "getopt"
-        else
-            if ! lk_command_exists brew ||
-                ! COMMAND=$(brew --prefix); then
-                COMMAND=/usr/local
-            fi
-            echo "$COMMAND/opt/gnu-getopt/bin/getopt"
-        fi
+        SH="\
+if ! lk_is_macos; then
+    echo \"getopt\"
+else
+    if ! lk_command_exists brew ||
+        ! COMMAND=\$(brew --prefix); then
+        COMMAND=/usr/local
+    fi
+    echo \"\$COMMAND/opt/gnu-getopt/bin/getopt\"
+fi"
         ;;
     *)
-        echo "$PREFIX$1"
+        SH="\
+PREFIX=g
+lk_is_macos || PREFIX=
+echo \"\${PREFIX}$1\""
         ;;
     esac
+    [ -z "${SH:-}" ] ||
+        if [ "${2:-}" = defer ]; then
+            echo "$SH"
+            return 1
+        else
+            eval "($SH)"
+        fi
 }
 
 function _lk_gnu_define() {
-    local PREFIX=g i COMMAND GCOMMAND
-    lk_is_macos || PREFIX=
-    for i in "${!_LK_GNU_COMMANDS[@]}"; do
-        COMMAND=${_LK_GNU_COMMANDS[$i]}
-        GCOMMAND=$(_lk_gnu_command "$COMMAND")
-        lk_command_exists "$GCOMMAND" || {
-            unset "_LK_GNU_COMMANDS[$i]"
-            continue
-        }
-        eval "function gnu_$COMMAND() { $GCOMMAND \"\$@\"; }"
+    local COMMAND GCOMMAND
+    for COMMAND in "${_LK_GNU_COMMANDS[@]}"; do
+        if GCOMMAND=$(_lk_gnu_command "$COMMAND" defer); then
+            eval "function gnu_$COMMAND() { $GCOMMAND \"\$@\"; }"
+        else
+            eval "function gnu_$COMMAND() {
+                local GCOMMAND
+                GCOMMAND=\$($GCOMMAND) || return
+                eval \"function gnu_$COMMAND() { \$GCOMMAND \\\"\\\$@\\\"; }\"
+                gnu_$COMMAND \"\$@\"
+            }"
+        fi
     done
 }
 
@@ -95,10 +109,11 @@ _lk_gnu_define
 
 function lk_include() {
     local i FILE
-    for i in ${@//,/ }; do
+    for i in "$@"; do
         ! lk_in_array "$i" _LK_INCLUDES || continue
         FILE=${LK_INST:-$LK_BASE}/lib/bash/$i.sh
         [ -r "$FILE" ] || lk_warn "$FILE: file not found" || return
+        # shellcheck disable=SC1090
         . "$FILE" || return
         _LK_INCLUDES+=("$i")
     done
@@ -124,6 +139,7 @@ function _lk_caller() {
             if [ "$SOURCE" = "$0" ]; then
                 echo "$LK_BOLD${0##*/}$LK_RESET"
             elif [ -n "${HOME:-}" ]; then
+                # shellcheck disable=SC2088
                 lk_replace "$HOME/" "~/" "$SOURCE"
             else
                 echo "$SOURCE"
@@ -137,7 +153,7 @@ function _lk_caller() {
 
 # lk_warn message
 function lk_warn() {
-    local EXIT_STATUS=$?
+    local -r EXIT_STATUS=$?
     lk_console_warning "$(_lk_caller): $1"
     return "$EXIT_STATUS"
 }
@@ -147,7 +163,7 @@ function lk_warn() {
 function lk_die() {
     local EXIT_STATUS=$?
     [ "$EXIT_STATUS" -ne 0 ] || EXIT_STATUS=1
-    [ $# -eq 0 ] || lk_console_error "$(_lk_caller): $1"
+    [ $# -eq 0 ] || lk_console_error0 "$(_lk_caller): $1"
     lk_is_true "${LK_DIE_HAPPY:-0}" || exit "$EXIT_STATUS"
     exit 0
 }
@@ -210,14 +226,23 @@ function lk_first_existing_command() {
     false
 }
 
-lk_command_exists realpath || ! lk_command_exists python ||
-    function realpath() {
-        python -c "import os,sys;print(os.path.realpath(sys.argv[1]))" "$1"
-    }
+function realpath() {
+    if lk_command_exists realpath; then
+        unset -f realpath
+    elif lk_command_exists python; then
+        function realpath() {
+            python -c "import os,sys;print(os.path.realpath(sys.argv[1]))" "$1"
+        }
+    else
+        lk_warn "command not found: realpath"
+        return 1
+    fi
+    realpath "$@"
+}
 
 function lk_first_existing_parent() {
     local FILE
-    FILE=$(realpath --canonicalize-missing "$1") || return
+    FILE=$(gnu_realpath --canonicalize-missing "$1") || return
     while [ ! -e "$FILE" ]; do
         FILE=$(dirname "$FILE")
     done
@@ -277,6 +302,7 @@ function lk_timestamp() {
     lk_date "%s"
 }
 
+# shellcheck disable=SC2162
 if lk_bash_at_least 4 1; then
     function lk_pause() {
         read -sN 1 -p "${1:-Press any key to continue . . . }"
@@ -343,15 +369,15 @@ function lk_esc_ere() {
 }
 
 function lk_escape_double_quotes() {
-    lk_escape "$1" '$' '`' '\' '"'
+    lk_escape "$1" '$' '`' "\\" '"'
 }
 
 function lk_escape_ere() {
-    lk_escape "$1" '$' '(' ')' '*' '+' '.' '/' '?' '[' '\' ']' '^' '{' '|' '}'
+    lk_escape "$1" '$' '(' ')' '*' '+' '.' '/' '?' '[' "\\" ']' '^' '{' '|' '}'
 }
 
 function lk_escape_ere_replace() {
-    lk_escape "$1" '&' '/' '\'
+    lk_escape "$1" '&' '/' "\\"
 }
 
 # lk_replace <FIND> <REPLACE_WITH> [<STRING>]
@@ -460,35 +486,33 @@ function lk_safe_tput() {
 }
 
 function lk_get_colours() {
-    local PREFIX=${1-LK_}
-    # foreground
-    echo "${PREFIX}BLACK=\"\$(lk_safe_tput setaf 0)\""
-    echo "${PREFIX}RED=\"\$(lk_safe_tput setaf 1)\""
-    echo "${PREFIX}GREEN=\"\$(lk_safe_tput setaf 2)\""
-    echo "${PREFIX}YELLOW=\"\$(lk_safe_tput setaf 3)\""
-    echo "${PREFIX}BLUE=\"\$(lk_safe_tput setaf 4)\""
-    echo "${PREFIX}MAGENTA=\"\$(lk_safe_tput setaf 5)\""
-    echo "${PREFIX}CYAN=\"\$(lk_safe_tput setaf 6)\""
-    echo "${PREFIX}WHITE=\"\$(lk_safe_tput setaf 7)\""
-    echo "${PREFIX}GREY=\"\$(lk_safe_tput setaf 8)\""
-    # background
-    echo "${PREFIX}BLACK_BG=\"\$(lk_safe_tput setab 0)\""
-    echo "${PREFIX}RED_BG=\"\$(lk_safe_tput setab 1)\""
-    echo "${PREFIX}GREEN_BG=\"\$(lk_safe_tput setab 2)\""
-    echo "${PREFIX}YELLOW_BG=\"\$(lk_safe_tput setab 3)\""
-    echo "${PREFIX}BLUE_BG=\"\$(lk_safe_tput setab 4)\""
-    echo "${PREFIX}MAGENTA_BG=\"\$(lk_safe_tput setab 5)\""
-    echo "${PREFIX}CYAN_BG=\"\$(lk_safe_tput setab 6)\""
-    echo "${PREFIX}WHITE_BG=\"\$(lk_safe_tput setab 7)\""
-    echo "${PREFIX}GREY_BG=\"\$(lk_safe_tput setab 8)\""
-    # other
-    echo "${PREFIX}BOLD=\"\$(lk_safe_tput bold)\""
-    echo "${PREFIX}DIM=\"\$(lk_safe_tput dim)\""
-    echo "${PREFIX}STANDOUT=\"\$(lk_safe_tput smso)\""
-    echo "${PREFIX}STANDOUT_OFF=\"\$(lk_safe_tput rmso)\""
-    echo "${PREFIX}WRAP=\"\$(lk_safe_tput smam)\""
-    echo "${PREFIX}WRAP_OFF=\"\$(lk_safe_tput rmam)\""
-    echo "${PREFIX}RESET=\"\$(lk_safe_tput sgr0)\""
+    local PREFIX=${LK_COLOUR_PREFIX-LK_}
+    printf '%s%s=%q\n' \
+        "$PREFIX" BLACK "$(lk_safe_tput setaf 0)" \
+        "$PREFIX" RED "$(lk_safe_tput setaf 1)" \
+        "$PREFIX" GREEN "$(lk_safe_tput setaf 2)" \
+        "$PREFIX" YELLOW "$(lk_safe_tput setaf 3)" \
+        "$PREFIX" BLUE "$(lk_safe_tput setaf 4)" \
+        "$PREFIX" MAGENTA "$(lk_safe_tput setaf 5)" \
+        "$PREFIX" CYAN "$(lk_safe_tput setaf 6)" \
+        "$PREFIX" WHITE "$(lk_safe_tput setaf 7)" \
+        "$PREFIX" GREY "$(lk_safe_tput setaf 8)" \
+        "$PREFIX" BLACK_BG "$(lk_safe_tput setab 0)" \
+        "$PREFIX" RED_BG "$(lk_safe_tput setab 1)" \
+        "$PREFIX" GREEN_BG "$(lk_safe_tput setab 2)" \
+        "$PREFIX" YELLOW_BG "$(lk_safe_tput setab 3)" \
+        "$PREFIX" BLUE_BG "$(lk_safe_tput setab 4)" \
+        "$PREFIX" MAGENTA_BG "$(lk_safe_tput setab 5)" \
+        "$PREFIX" CYAN_BG "$(lk_safe_tput setab 6)" \
+        "$PREFIX" WHITE_BG "$(lk_safe_tput setab 7)" \
+        "$PREFIX" GREY_BG "$(lk_safe_tput setab 8)" \
+        "$PREFIX" BOLD "$(lk_safe_tput bold)" \
+        "$PREFIX" DIM "$(lk_safe_tput dim)" \
+        "$PREFIX" STANDOUT "$(lk_safe_tput smso)" \
+        "$PREFIX" STANDOUT_OFF "$(lk_safe_tput rmso)" \
+        "$PREFIX" WRAP "$(lk_safe_tput smam)" \
+        "$PREFIX" WRAP_OFF "$(lk_safe_tput rmam)" \
+        "$PREFIX" RESET "$(lk_safe_tput sgr0)"
 }
 
 function lk_maybe_plural() {
@@ -548,6 +572,7 @@ function lk_array_search() {
 
 # lk_remove_repeated ARRAY_NAME
 function lk_remove_repeated() {
+    # shellcheck disable=SC2034
     local KEYS KEY UNIQUE=()
     eval "KEYS=(\"\${!$1[@]}\")"
     for KEY in ${KEYS[@]+"${KEYS[@]}"}; do
@@ -720,7 +745,7 @@ function lk_console_message() {
             }
         }
     }
-    COLOUR="${1-$LK_DEFAULT_CONSOLE_COLOUR}"
+    COLOUR="${1-$LK_CONSOLE_COLOUR}"
     echo "$(
         # - atomic unless larger than buffer (smaller of PIPE_BUF, BUFSIZ)
         # - there's no portable way to determine buffer size
@@ -758,7 +783,7 @@ function lk_console_detail_file() {
     local LK_CONSOLE_PREFIX="${LK_CONSOLE_PREFIX-   -> }" \
         LK_CONSOLE_MESSAGE_COLOUR LK_CONSOLE_INDENT=4 \
         LK_CONSOLE_MESSAGE_COLOUR=""
-    lk_console_file "$1" "${2-$LK_YELLOW}" "${3-$LK_DEFAULT_CONSOLE_COLOUR}"
+    lk_console_file "$1" "${2-$LK_YELLOW}" "${3-$LK_CONSOLE_COLOUR}"
 }
 
 function _lk_console() {
@@ -775,20 +800,36 @@ function _lk_console() {
 }
 
 function lk_console_log() {
-    _lk_console "$LK_DEFAULT_CONSOLE_COLOUR" "$@"
+    _lk_console "$LK_CONSOLE_COLOUR" "$@"
+}
+
+function lk_console_success() {
+    _lk_console "$LK_SUCCESS_COLOUR" "$@"
 }
 
 function lk_console_warning() {
+    local -r EXIT_STATUS=$?
     _lk_console "$LK_WARNING_COLOUR" "$@"
+    return "$EXIT_STATUS"
 }
 
 function lk_console_error() {
+    local -r EXIT_STATUS=$?
+    _lk_console "$LK_ERROR_COLOUR" "$@"
+    return "$EXIT_STATUS"
+}
+
+function lk_console_warning0() {
+    _lk_console "$LK_WARNING_COLOUR" "$@"
+}
+
+function lk_console_error0() {
     _lk_console "$LK_ERROR_COLOUR" "$@"
 }
 
 # lk_console_item message item [colour_sequence]
 function lk_console_item() {
-    lk_console_message "$1" "$2" "${3-$LK_DEFAULT_CONSOLE_COLOUR}"
+    lk_console_message "$1" "$2" "${3-$LK_CONSOLE_COLOUR}"
 }
 
 # lk_console_list message [single_noun plural_noun] [colour_sequence]
@@ -802,7 +843,7 @@ function lk_console_list() {
         PLURAL_NOUN="$2"
         shift 2
     }
-    COLOUR="${1-$LK_DEFAULT_CONSOLE_COLOUR}"
+    COLOUR="${1-$LK_CONSOLE_COLOUR}"
     lk_mapfile /dev/stdin ITEMS
     lk_console_message "$MESSAGE" "$COLOUR"
     ! lk_in_string $'\n' "$MESSAGE" || INDENT=2
@@ -821,7 +862,7 @@ function lk_console_list() {
 function lk_console_read() {
     local PROMPT=("$1") DEFAULT="${2:-}" VALUE
     [ -z "$DEFAULT" ] || PROMPT+=("[$DEFAULT]")
-    printf '%s ' "$LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_DEFAULT_CONSOLE_COLOUR} :: $LK_RESET$LK_BOLD${PROMPT[*]}$LK_RESET" >&"${_LK_FD:-2}"
+    printf '%s ' "$LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_CONSOLE_COLOUR} :: $LK_RESET$LK_BOLD${PROMPT[*]}$LK_RESET" >&"${_LK_FD:-2}"
     read -re "${@:3}" VALUE || return
     [ -n "$VALUE" ] ||
         { VALUE="$DEFAULT" && echo >&"${_LK_FD:-2}"; }
@@ -848,7 +889,7 @@ function lk_confirm() {
     fi
     while ! [[ ${VALUE:-} =~ ^(Y|YES|N|NO)$ ]]; do
         printf '%s ' "\
-$LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_DEFAULT_CONSOLE_COLOUR} :: \
+$LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_CONSOLE_COLOUR} :: \
 $LK_RESET$LK_BOLD${PROMPT[*]}$LK_RESET" >&"${_LK_FD:-2}"
         read -re "${@:3}" VALUE || VALUE="$DEFAULT"
         [ -n "$VALUE" ] &&
@@ -1166,6 +1207,7 @@ function lk_safe_symlink() {
     if lk_maybe_sudo test -L "$LINK"; then
         CURRENT_TARGET=$(lk_maybe_sudo readlink -- "$LINK") || return
         [ "$CURRENT_TARGET" != "$TARGET" ] || {
+            # shellcheck disable=SC2034
             LK_SAFE_SYMLINK_NO_CHANGE=1
             return
         }
@@ -1263,7 +1305,7 @@ function lk_resolve_files() {
     if eval "[ \"\${#$1[@]}\" -gt \"0\" ]"; then
         _LK_TEMP_FILE="$(lk_mktemp_file)" &&
             lk_delete_on_exit "$_LK_TEMP_FILE" &&
-            eval "realpath -ez \"\${$1[@]}\"" | sort -zu >"$_LK_TEMP_FILE" &&
+            eval "gnu_realpath -ez \"\${$1[@]}\"" | sort -zu >"$_LK_TEMP_FILE" &&
             lk_mapfile -z /dev/stdin "$1" <"$_LK_TEMP_FILE"
     else
         eval "$1=()"
@@ -1351,53 +1393,64 @@ function lk_is_qemu() {
     _lk_return_cached _LK_IS_QEMU 'lk_is_virtual && grep -Eiq qemu /sys/devices/virtual/dmi/id/*_vendor'
 }
 
-if lk_is_macos; then
-    function lk_tty() {
-        # "-t 0" is equivalent to "-f" on Linux (immediately flush output after
-        # each write)
-        script -q -t 0 /dev/null "$@"
-    }
+function lk_tty() {
+    if lk_is_macos; then
+        function lk_tty() {
+            # "-t 0" is equivalent to "-f" on Linux (immediately flush output
+            # after each write)
+            script -q -t 0 /dev/null "$@"
+        }
+    else
+        function lk_tty() {
+            local COMMAND=$1
+            shift
+            script -qfc "$COMMAND$([ $# -eq 0 ] || printf ' %q' "$@")" /dev/null
+        }
+    fi
+    lk_tty "$@"
+}
 
-    # lk_secret_set VALUE LABEL [SERVICE]
-    function lk_secret_set() {
-        security add-generic-password -a "$USER" -l "$2" -s "${3:-${0##*/}}" -G "$1" -U -w
-    }
-
-    # lk_secret_get VALUE [SERVICE]
-    function lk_secret_get() {
-        security find-generic-password -a "$USER" -s "${2:-${0##*/}}" -G "$1" -w
-    }
-
-    # lk_secret_forget VALUE [SERVICE]
-    function lk_secret_forget() {
-        security delete-generic-password -a "$USER" -s "${2:-${0##*/}}" -G "$1"
-    }
-fi
-
-if lk_is_linux; then
-    function lk_tty() {
-        local COMMAND=$1
-        shift
-        script -qfc "$COMMAND$([ $# -eq 0 ] || printf ' %q' "$@")" /dev/null
-    }
-
-    if ! lk_is_wsl; then
-        # lk_secret_set VALUE LABEL [SERVICE]
+# lk_secret_set VALUE LABEL [SERVICE]
+function lk_secret_set() {
+    if lk_is_macos; then
+        function lk_secret_set() {
+            security add-generic-password -a "$USER" -l "$2" -s "${3:-${0##*/}}" -G "$1" -U -w
+        }
+    else
         function lk_secret_set() {
             secret-tool store --label="$2" -- service "${3:-${0##*/}}" value "$1"
         }
+    fi
+    lk_secret_set "$@"
+}
 
-        # lk_secret_get VALUE [SERVICE]
+# lk_secret_get VALUE [SERVICE]
+function lk_secret_get() {
+    if lk_is_macos; then
+        function lk_secret_get() {
+            security find-generic-password -a "$USER" -s "${2:-${0##*/}}" -G "$1" -w
+        }
+    else
         function lk_secret_get() {
             secret-tool lookup -- service "${2:-${0##*/}}" value "$1"
         }
+    fi
+    lk_secret_get "$@"
+}
 
-        # lk_secret_forget VALUE [SERVICE]
+# lk_secret_forget VALUE [SERVICE]
+function lk_secret_forget() {
+    if lk_is_macos; then
+        function lk_secret_forget() {
+            security delete-generic-password -a "$USER" -s "${2:-${0##*/}}" -G "$1"
+        }
+    else
         function lk_secret_forget() {
             secret-tool clear -- service "${2:-${0##*/}}" value "$1"
         }
     fi
-fi
+    lk_secret_forget "$@"
+}
 
 # lk_secret VALUE LABEL [SERVICE]
 function lk_secret() {
@@ -1427,52 +1480,76 @@ function lk_remove_secret() {
     lk_console_message "Password removed successfully"
 }
 
-if lk_is_executable gnu_stat && lk_is_executable gnu_sed; then
-    function lk_sort_paths_by_date() {
-        gnu_stat --printf '%Y :%n\0' "$@" |
-            sort -zn |
-            gnu_sed -zE 's/^[0-9]+ ://' |
-            xargs -0 printf '%s\n'
-    }
-elif lk_is_macos; then
-    function lk_sort_paths_by_date() {
-        stat -t '%s' -f '%Sm :%N' "$@" |
-            sort -n |
-            sed -E 's/^[0-9]+ ://'
-    }
-fi
+function lk_sort_paths_by_date() {
+    if lk_command_exists "$(_lk_gnu_command stat)" &&
+        lk_command_exists "$(_lk_gnu_command sed)"; then
+        function lk_sort_paths_by_date() {
+            gnu_stat --printf '%Y :%n\0' "$@" |
+                sort -zn |
+                gnu_sed -zE 's/^[0-9]+ ://' |
+                xargs -0 printf '%s\n'
+        }
+    else
+        function lk_sort_paths_by_date() {
+            stat -t '%s' -f '%Sm :%N' "$@" |
+                sort -n |
+                sed -E 's/^[0-9]+ ://'
+        }
+    fi
+    lk_sort_paths_by_date "$@"
+}
 
-if lk_is_executable gnu_stat; then
-    function lk_modified_timestamp() {
-        gnu_stat --printf '%Y' "$1"
-    }
-    function lk_file_owner() {
-        gnu_stat --printf '%U' "$1"
-    }
-    function lk_file_group() {
-        gnu_stat --printf '%G' "$1"
-    }
-elif lk_is_macos; then
-    function lk_modified_timestamp() {
-        stat -t '%s' -f '%Sm' "$1"
-    }
-    function lk_file_owner() {
-        stat -f '%Su' "$1"
-    }
-    function lk_file_group() {
-        stat -f '%Sg' "$1"
-    }
-fi
+function lk_modified_timestamp() {
+    if lk_command_exists "$(_lk_gnu_command stat)" || ! lk_macos; then
+        function lk_modified_timestamp() {
+            gnu_stat --printf '%Y' "$1"
+        }
+    else
+        function lk_modified_timestamp() {
+            stat -t '%s' -f '%Sm' "$1"
+        }
+    fi
+    lk_modified_timestamp "$@"
+}
 
-if lk_is_executable gnu_date; then
-    function lk_timestamp_readable() {
-        gnu_date -Rd "@$1"
-    }
-elif lk_is_macos; then
-    function lk_timestamp_readable() {
-        date -Rjf '%s' "$1"
-    }
-fi
+function lk_file_owner() {
+    if lk_command_exists "$(_lk_gnu_command stat)" || ! lk_macos; then
+        function lk_file_owner() {
+            gnu_stat --printf '%U' "$1"
+        }
+    else
+        function lk_file_owner() {
+            stat -f '%Su' "$1"
+        }
+    fi
+    lk_file_owner "$@"
+}
+
+function lk_file_group() {
+    if lk_command_exists "$(_lk_gnu_command stat)" || ! lk_macos; then
+        function lk_file_group() {
+            gnu_stat --printf '%G' "$1"
+        }
+    else
+        function lk_file_group() {
+            stat -f '%Sg' "$1"
+        }
+    fi
+    lk_file_group "$@"
+}
+
+function lk_timestamp_readable() {
+    if lk_command_exists "$(_lk_gnu_command date)" || ! lk_is_macos; then
+        function lk_timestamp_readable() {
+            gnu_date -Rd "@$1"
+        }
+    else
+        function lk_timestamp_readable() {
+            date -Rjf '%s' "$1"
+        }
+    fi
+    lk_timestamp_readable "$@"
+}
 
 function lk_ssl_client() {
     local HOST="${1:-}" PORT="${2:-}" SERVER_NAME="${3:-${1:-}}"
@@ -1570,7 +1647,7 @@ function lk_console_file() {
     shift
     lk_maybe_sudo test -r "$FILE_PATH" ||
         lk_warn "cannot read file: $FILE_PATH" || return
-    LK_CONSOLE_SECONDARY_COLOUR="${2-${1-$LK_DEFAULT_CONSOLE_COLOUR}}"
+    LK_CONSOLE_SECONDARY_COLOUR="${2-${1-$LK_CONSOLE_COLOUR}}"
     ORIG_FILE="$FILE_PATH${LK_BACKUP_SUFFIX-.orig}"
     [ "$FILE_PATH" != "$ORIG_FILE" ] &&
         lk_maybe_sudo test -r "$ORIG_FILE" || ORIG_FILE=
@@ -1612,9 +1689,73 @@ _LK_INCLUDES=(
     ${_LK_INCLUDES[@]+"${_LK_INCLUDES[@]}"}
 )
 
-eval "$(lk_get_colours)"
+[ -n "${LK_COLOUR:-${colour:-}}" ] ||
+    [ -t 1 ] ||
+    LK_COLOUR=off
 
-LK_DEFAULT_CONSOLE_COLOUR="$LK_CYAN"
-LK_WARNING_COLOUR="$LK_YELLOW"
-LK_ERROR_COLOUR="$LK_RED"
+# shellcheck disable=SC2034
+case "${LK_COLOUR:-${colour:-}}" in
+generate)
+    eval "$(lk_get_colours)"
+    ;;
+off)
+    LK_BLACK=
+    LK_RED=
+    LK_GREEN=
+    LK_YELLOW=
+    LK_BLUE=
+    LK_MAGENTA=
+    LK_CYAN=
+    LK_WHITE=
+    LK_GREY=
+    LK_BLACK_BG=
+    LK_RED_BG=
+    LK_GREEN_BG=
+    LK_YELLOW_BG=
+    LK_BLUE_BG=
+    LK_MAGENTA_BG=
+    LK_CYAN_BG=
+    LK_WHITE_BG=
+    LK_GREY_BG=
+    LK_BOLD=
+    LK_DIM=
+    LK_STANDOUT=
+    LK_STANDOUT_OFF=
+    LK_WRAP=
+    LK_WRAP_OFF=
+    LK_RESET=
+    ;;
+*)
+    LK_BLACK=$'\E[30m'
+    LK_RED=$'\E[31m'
+    LK_GREEN=$'\E[32m'
+    LK_YELLOW=$'\E[33m'
+    LK_BLUE=$'\E[34m'
+    LK_MAGENTA=$'\E[35m'
+    LK_CYAN=$'\E[36m'
+    LK_WHITE=$'\E[37m'
+    LK_GREY=$'\E[90m'
+    LK_BLACK_BG=$'\E[40m'
+    LK_RED_BG=$'\E[41m'
+    LK_GREEN_BG=$'\E[42m'
+    LK_YELLOW_BG=$'\E[43m'
+    LK_BLUE_BG=$'\E[44m'
+    LK_MAGENTA_BG=$'\E[45m'
+    LK_CYAN_BG=$'\E[46m'
+    LK_WHITE_BG=$'\E[47m'
+    LK_GREY_BG=$'\E[100m'
+    LK_BOLD=$'\E[1m'
+    LK_DIM=$'\E[2m'
+    LK_STANDOUT=$'\E[7m'
+    LK_STANDOUT_OFF=$'\E[27m'
+    LK_WRAP=$'\E[?7h'
+    LK_WRAP_OFF=$'\E[?7l'
+    LK_RESET=$'\E(B\E[m'
+    ;;
+esac
+
+LK_CONSOLE_COLOUR=$LK_CYAN
+LK_SUCCESS_COLOUR=$LK_GREEN
+LK_WARNING_COLOUR=$LK_YELLOW
+LK_ERROR_COLOUR=$LK_RED
 LK_ARGV=("$@")

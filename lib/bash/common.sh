@@ -36,7 +36,12 @@ eval "$(
     )
 )"
 
-. "${LK_INST:-$LK_BASE}/lib/bash/core.sh"
+colour=generate . "${LK_INST:-$LK_BASE}/lib/bash/core.sh"
+
+lk_include assert $(
+    include=${include:-}
+    echo "${include//,/ }"
+)
 
 if ! lk_is_true "${LK_NO_SOURCE_FILE:-0}"; then
     function lk_usage() {
@@ -72,17 +77,24 @@ if ! lk_is_true "${LK_NO_SOURCE_FILE:-0}"; then
     }
 fi
 
-lk_include assert ${LK_INCLUDE:-${include:-}}
-unset LK_INCLUDE
+# shellcheck disable=SC2034,SC2206
+eval "$(
+    IFS=$' \t\n,'
+    SKIP=(
+        ${LK_SKIP:-}
+        ${skip:-}
+    )
+    unset IFS
 
-if [[ ! "${skip:-}" =~ (,|^)env(,|$) ]]; then
-    LK_PATH_PREFIX="${LK_PATH_PREFIX:-lk-}"
-    LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(
-        sed 's/[^a-zA-Z0-9]//g' <<<"$LK_PATH_PREFIX"
-    )}"
-    eval "$(. "$LK_BASE/lib/bash/env.sh")"
-fi
+    lk_in_array "env" SKIP || {
+        printf '%s=%q\n' \
+            LK_PATH_PREFIX "${LK_PATH_PREFIX:-lk-}" \
+            LK_PATH_PREFIX_ALPHA "${LK_PATH_PREFIX_ALPHA:-$(
+                sed 's/[^a-zA-Z0-9]//g' <<<"$LK_PATH_PREFIX"
+            )}"
+        . "$LK_BASE/lib/bash/env.sh"
+    }
 
-if [[ ! "${skip:-}" =~ (,|^)trap(,|$) ]]; then
-    lk_trap_exit
-fi
+    lk_in_array "trap" SKIP ||
+        echo "lk_trap_exit"
+)"

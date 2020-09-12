@@ -171,9 +171,11 @@ new)
         "${LK_SSH_JUMP_HOST:+jump}"
 
     KEY_FILE=$(ssh -G "$OLD_HOST_NAME" |
-        awk '/^identityfile / { print $2 }') &&
-        eval "KEY_FILE=$KEY_FILE" &&
-        [ -f "$KEY_FILE" ] ||
+        awk '/^identityfile / { print $2 }' |
+        lk_expand_paths |
+        lk_filter -f |
+        head -n1) &&
+        [ -n "$KEY_FILE" ] ||
         lk_die "no IdentityFile for host $OLD_HOST_NAME"
     KEY=$(
         # Use the key's .pub file if it's valid

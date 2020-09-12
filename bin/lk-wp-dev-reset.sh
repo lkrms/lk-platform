@@ -87,8 +87,8 @@ if lk_wp plugin is-active woocommerce; then
             "Test mode will be enabled for known WooCommerce gateways:"
     lk_console_detail "Active WooCommerce webhooks will be deleted"
 fi
-[ "${PLUGIN_CODE:-0}" -eq 0 ] || lk_console_warning \
-    "Plugin code will be allowed to run where necessary"
+[ "${PLUGIN_CODE:-0}" -eq 0 ] ||
+    lk_console_warning0 "Plugin code will be allowed to run where necessary"
 
 lk_no_input || lk_confirm "Proceed?" Y || lk_die
 

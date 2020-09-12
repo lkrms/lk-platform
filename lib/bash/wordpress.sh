@@ -231,9 +231,9 @@ function lk_wp_db_dump_remote() {
     lk_console_message "Deleting mysqldump configuration file"
     ssh "$1" "bash -c 'rm -f \".lk_mysqldump.cnf\"'" &&
         lk_console_detail "Deleted" "$1:.lk_mysqldump.cnf" ||
-        lk_console_warning "Error deleting" "$1:.lk_mysqldump.cnf"
+        lk_console_warning0 "Error deleting" "$1:.lk_mysqldump.cnf"
     [ "$EXIT_STATUS" -eq 0 ] && lk_console_log "Database dump completed successfully" ||
-        lk_console_error "Database dump failed"
+        lk_console_error0 "Database dump failed"
     return "$EXIT_STATUS"
 }
 
@@ -339,7 +339,7 @@ function lk_wp_db_restore_local() {
         pv "$1"
     fi | _lk_mysql "$LOCAL_DB_NAME" || EXIT_STATUS="$?"
     [ "$EXIT_STATUS" -eq 0 ] && lk_console_log "Database restored successfully" ||
-        lk_console_error "Restore operation failed"
+        lk_console_error0 "Restore operation failed"
     return "$EXIT_STATUS"
 }
 
@@ -386,7 +386,7 @@ function lk_wp_sync_files_from_remote() {
     rsync "${ARGS[@]}" || EXIT_STATUS="$?"
     [ "$EXIT_STATUS" -eq 0 ] &&
         lk_console_log "File sync completed successfully" ||
-        lk_console_error "File sync failed"
+        lk_console_error0 "File sync failed"
     return "$EXIT_STATUS"
 }
 

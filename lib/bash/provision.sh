@@ -59,7 +59,7 @@ function lk_dir_set_permissions() {
                 ;;
             esac
             find "$DIR" -regextype posix-egrep "${ARGS[@]}" -print0 |
-                lk_maybe_sudo gnu_xargs -0r chmod -c "0$MODE" >>"$LOG_DIR/chmod.log" || return
+                lk_maybe_sudo gnu_xargs -0r gnu_chmod -c "0$MODE" >>"$LOG_DIR/chmod.log" || return
         done
     done
     lk_console_detail "File mode changes:" "$(wc -l <"$LOG_DIR/chmod.log")" "$LK_GREEN"

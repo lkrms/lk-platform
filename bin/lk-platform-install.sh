@@ -124,11 +124,10 @@
     }
     PREFIX=g
     lk_is_macos || PREFIX=
-    # Install symlinks for required commands
-    lk_gnu_install date find getopt stat xargs
-    # Install symlinks for commands in _LK_GNU_COMMANDS found on the system by
-    # _lk_gnu_define
-    lk_gnu_install
+    # Exit if required commands fail to install
+    lk_gnu_install chmod date find getopt realpath sed stat xargs
+    # For other commands, warn and continue
+    lk_gnu_install || true
 
     lk_console_message "Checking configuration files"
     LK_PATH_PREFIX="${LK_PATH_PREFIX:-${PATH_PREFIX:-${1:-}}}"
