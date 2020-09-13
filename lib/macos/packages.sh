@@ -34,6 +34,7 @@ HOMEBREW_FORMULAE=(
     mas
     media-info
     ncdu
+    newt
     nmap
     p7zip
     pv

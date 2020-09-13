@@ -827,6 +827,7 @@ PACKAGES=(
     tzdata
     vim
     wget
+    whiptail
 
     #
     apt-listchanges

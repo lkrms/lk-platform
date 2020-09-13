@@ -225,6 +225,9 @@ EOF
 
         # for `brew info` parsing
         jq
+
+        # for whiptail
+        newt
     )
     INSTALL=($(comm -13 \
         <(brew list --formulae --full-name | sort | uniq) \

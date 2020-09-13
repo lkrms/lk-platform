@@ -32,6 +32,7 @@ PACMAN_PACKAGES=(
     ntp
     networkmanager-dispatcher-ntpd
     git
+    libnewt # for whiptail
 
     # basics
     bash-completion
