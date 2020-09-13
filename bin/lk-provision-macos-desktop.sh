@@ -58,7 +58,7 @@ lk_die() { s=$? && echo "${BASH_SOURCE[0]:+${BASH_SOURCE[0]}: }$1" >&2 && (retur
             /lib/bash/macos.sh; do
             FILE=$SCRIPT_DIR/${FILE_PATH##*/}
             URL=https://raw.githubusercontent.com/lkrms/lk-platform/$LK_PLATFORM_BRANCH$FILE_PATH
-            curl --fail --output "$FILE" "$URL" || {
+            curl --retry 8 --fail --output "$FILE" "$URL" || {
                 rm -f "$FILE"
                 lk_die "unable to download from GitHub: $URL"
             }
@@ -73,10 +73,27 @@ lk_die() { s=$? && echo "${BASH_SOURCE[0]:+${BASH_SOURCE[0]}: }$1" >&2 && (retur
 
     lk_console_message "Provisioning macOS"
 
+    # This doubles as an early Full Disk Access check/reminder
+    STATUS=$(sudo systemsetup -getremotelogin)
+    if [[ ! "$STATUS" =~ ${S}On$ ]]; then
+        lk_console_message "Enabling Remote Login (SSH)"
+        lk_console_detail "Running:" "systemsetup -setremotelogin on"
+        sudo systemsetup -setremotelogin on
+    fi
+
+    STATUS=$(sudo systemsetup -getcomputersleep)
+    if [[ ! "$STATUS" =~ ${S}Never$ ]]; then
+        lk_console_message "Disabling computer sleep"
+        lk_console_detail "Running:" "systemsetup -setcomputersleep off"
+        sudo systemsetup -setcomputersleep off
+    fi
+
     lk_sudo_offer_nopasswd || true
 
     scutil --get HostName >/dev/null 2>/dev/null ||
-        [ -z "${LK_NODE_HOSTNAME:=$(lk_console_read "Hostname for this system? ")}" ] ||
+        [ -z "${LK_NODE_HOSTNAME:=$(
+            lk_console_read "Hostname for this system? "
+        )}" ] ||
         lk_macos_set_hostname "$LK_NODE_HOSTNAME"
 
     CURRENT_SHELL=$(dscl . -read ~/ UserShell | sed 's/^UserShell: //')
@@ -105,18 +122,6 @@ EOF
     fi
     umask 002
 
-    STATUS=$(sudo systemsetup -getremotelogin)
-    if [[ ! "$STATUS" =~ ${S}On$ ]]; then
-        lk_console_message "Enabling Remote Login (SSH)"
-        sudo systemsetup -setremotelogin on
-    fi
-
-    STATUS=$(sudo systemsetup -getcomputersleep)
-    if [[ ! "$STATUS" =~ ${S}Never$ ]]; then
-        lk_console_message "Disabling computer sleep"
-        sudo systemsetup -setcomputersleep off
-    fi
-
     # disable sleep when charging
     sudo pmset -c sleep 0
 
@@ -144,7 +149,8 @@ EOF
     if [ ! -e "$LK_BASE" ] || [ -z "$(ls -A "$LK_BASE")" ]; then
         lk_console_item "Installing lk-platform to:" "$LK_BASE"
         sudo install -d -m 2775 -o "$USER" -g admin "$LK_BASE"
-        lk_tty git clone -b "$LK_PLATFORM_BRANCH" \
+        lk_keep_trying lk_tty caffeinate -i \
+            git clone -b "$LK_PLATFORM_BRANCH" \
             https://github.com/lkrms/lk-platform.git "$LK_BASE"
         lk_keep_original /etc/default/lk-platform
         [ -e /etc/default ] ||
@@ -173,7 +179,7 @@ EOF
         [ "${#TAP[@]}" -eq 0 ] || {
             for TAP in "${TAP[@]}"; do
                 lk_console_detail "Tapping" "$TAP"
-                lk_tty brew tap --quiet "$TAP" || return
+                lk_keep_trying lk_tty caffeinate -i brew tap --quiet "$TAP" || return
             done
         }
     }
@@ -184,41 +190,49 @@ EOF
         FILE=$SCRIPT_DIR/homebrew-install.sh
         URL=https://raw.githubusercontent.com/Homebrew/install/master/install.sh
         if [ ! -e "$FILE" ]; then
-            curl --fail --output "$FILE" "$URL" || {
+            curl --retry 8 --fail --output "$FILE" "$URL" || {
                 rm -f "$FILE"
                 lk_die "unable to download: $URL"
             }
         fi
-        CI=1 lk_tty bash "$FILE" || lk_die "Homebrew installer failed"
+        CI=1 lk_keep_trying lk_tty caffeinate -i bash "$FILE" ||
+            lk_die "Homebrew installer failed"
         eval "$(. "$LK_BASE/lib/bash/env.sh")"
         lk_command_exists brew || lk_die "brew: command not found"
         lk_console_item "Found Homebrew at:" "$(brew --prefix)"
         lk_brew_check_taps
-        INSTALL=(
-            # for lk_install_gnu_commands
-            coreutils
-            findutils
-            gawk
-            grep
-            inetutils
-            netcat
-            gnu-sed
-            gnu-tar
-            wget
-
-            # for `brew info` parsing
-            jq
-        )
-        lk_console_detail "Installing lk-platform dependencies"
-        lk_tty brew install "${INSTALL[@]}"
         NEW_HOMEBREW=1
     else
         lk_console_item "Found Homebrew at:" "$(brew --prefix)"
         eval "$(. "$LK_BASE/lib/bash/env.sh")"
         lk_brew_check_taps
         lk_console_detail "Updating formulae"
-        lk_tty brew update --quiet
+        lk_keep_trying lk_tty caffeinate -i brew update --quiet
     fi
+
+    INSTALL=(
+        # for lk_install_gnu_commands
+        coreutils
+        findutils
+        gawk
+        gnu-getopt
+        grep
+        inetutils
+        netcat
+        gnu-sed
+        gnu-tar
+        wget
+
+        # for `brew info` parsing
+        jq
+    )
+    INSTALL=($(comm -13 \
+        <(brew list --formulae --full-name | sort | uniq) \
+        <(lk_echo_array INSTALL | sort | uniq)))
+    [ ${#INSTALL[@]} -eq 0 ] || {
+        lk_console_detail "Installing lk-platform dependencies"
+        lk_keep_trying lk_tty caffeinate -i brew install "${INSTALL[@]}"
+    }
 
     # source ~/.bashrc in ~/.bash_profile, creating both files if necessary
     [ -f ~/.bashrc ] ||
@@ -230,7 +244,8 @@ EOF
         echo "[ ! -f ~/.bashrc ] || . ~/.bashrc" >>~/.bash_profile
     fi
 
-    [ -z "$LK_PACKAGES_FILE" ] || LK_PACKAGES_FILE=$(realpath "$LK_PACKAGES_FILE")
+    [ -z "$LK_PACKAGES_FILE" ] ||
+        LK_PACKAGES_FILE=$(realpath "$LK_PACKAGES_FILE")
     "$LK_BASE/bin/lk-platform-install.sh" --no-log
 
     lk_console_message "Checking Homebrew packages"
@@ -266,17 +281,20 @@ EOF
 
     [ "${#UPGRADE_FORMULAE[@]}" -eq 0 ] || {
         lk_console_message "Upgrading formulae"
-        lk_tty brew upgrade "${UPGRADE_FORMULAE[@]}" --formula
+        lk_keep_trying lk_tty caffeinate -i \
+            brew upgrade "${UPGRADE_FORMULAE[@]}" --formula
     }
 
     [ "${#UPGRADE_CASKS[@]}" -eq 0 ] || {
         lk_console_message "Upgrading casks"
-        lk_tty brew upgrade "${UPGRADE_CASKS[@]}" --cask
+        lk_keep_trying lk_tty caffeinate -i \
+            brew upgrade "${UPGRADE_CASKS[@]}" --cask
     }
 
     [ "${#HOMEBREW_FORMULAE[@]}" -eq 0 ] ||
         HOMEBREW_FORMULAE=($(
-            brew info --json=v1 "${HOMEBREW_FORMULAE[@]}" |
+            lk_keep_trying caffeinate -i \
+                brew info --json=v1 "${HOMEBREW_FORMULAE[@]}" |
                 jq -r .[].full_name
         ))
 
@@ -287,12 +305,14 @@ EOF
     [ "${#INSTALL_FORMULAE[@]}" -eq 0 ] || {
         lk_echo_array INSTALL_FORMULAE |
             lk_console_list "Installing new formulae:"
-        lk_tty brew install "${INSTALL_FORMULAE[@]}"
+        lk_keep_trying lk_tty caffeinate -i \
+            brew install "${INSTALL_FORMULAE[@]}"
     }
 
     if ! brew list --formulae --full-name | grep -Fx bash >/dev/null; then
         lk_console_message "Installing Bash keg-only"
-        brew install bash &&
+        lk_keep_trying lk_tty caffeinate -i \
+            brew install bash &&
             brew unlink bash
     fi
 
@@ -303,7 +323,8 @@ EOF
     [ "${#INSTALL_CASKS[@]}" -eq 0 ] || {
         lk_echo_array INSTALL_CASKS |
             lk_console_list "Installing new casks:"
-        lk_tty brew cask install "${INSTALL_CASKS[@]}"
+        lk_keep_trying lk_tty caffeinate -i \
+            brew cask install "${INSTALL_CASKS[@]}"
     }
 
     # TODO:
@@ -320,7 +341,7 @@ EOF
         lk_tty mas install "${INSTALL_APPS[@]}"
     }
 
-    lk_console_message "Provisioning complete"
+    lk_console_success "Provisioning complete"
 
     exit
 }

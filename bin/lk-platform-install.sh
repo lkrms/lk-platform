@@ -116,8 +116,12 @@
             COMMANDS=(${_LK_GNU_COMMANDS[@]+"${_LK_GNU_COMMANDS[@]}"})
         for COMMAND in ${COMMANDS[@]+"${COMMANDS[@]}"}; do
             GCOMMAND=$(_lk_gnu_command "$COMMAND")
-            COMMAND_PATH=$(type -P "$GCOMMAND") &&
-                lk_safe_symlink "$COMMAND_PATH" "$LK_BIN_PATH/gnu_$COMMAND" ||
+            COMMAND_PATH=$(type -P "$GCOMMAND") || {
+                EXIT_STATUS=$?
+                lk_console_warning "GNU $COMMAND not found:" "$GCOMMAND"
+                continue
+            }
+            lk_safe_symlink "$COMMAND_PATH" "$LK_BIN_PATH/gnu_$COMMAND" ||
                 EXIT_STATUS=$?
         done
         return "$EXIT_STATUS"
