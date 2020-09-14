@@ -74,6 +74,7 @@ MAS_APPS+=(
 
     #
     1295203466 # Microsoft Remote Desktop
+    1303222628 # Paprika
     1055273043 # PDF Expert
 
     #

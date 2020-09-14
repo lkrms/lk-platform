@@ -71,7 +71,7 @@ lk_die() { s=$? && echo "${BASH_SOURCE[0]:+${BASH_SOURCE[0]}: }$1" >&2 && (retur
     LK_LOG_FILE_MODE=0600 \
         lk_log_output ~/"${LK_PATH_PREFIX}install.log"
 
-    lk_console_message "Provisioning macOS"
+    lk_console_log "Provisioning macOS"
 
     # This doubles as an early Full Disk Access check/reminder
     STATUS=$(sudo systemsetup -getremotelogin)
@@ -211,23 +211,19 @@ EOF
     fi
 
     INSTALL=(
-        # for lk_install_gnu_commands
-        coreutils
-        findutils
-        gawk
-        gnu-getopt
-        grep
-        inetutils
-        netcat
-        gnu-sed
-        gnu-tar
-        wget
-
-        # for `brew info` parsing
-        jq
-
-        # for whiptail
-        newt
+        coreutils  # gnu_* functions
+        findutils  #
+        gawk       #
+        gnu-getopt #
+        grep       #
+        inetutils  #
+        netcat     #
+        gnu-sed    #
+        gnu-tar    #
+        wget       #
+        jq         # `brew info` parsing
+        mas        #
+        newt       # whiptail
     )
     INSTALL=($(comm -13 \
         <(brew list --formulae --full-name | sort | uniq) \
@@ -331,18 +327,69 @@ EOF
     }
 
     # TODO:
-    # - mas account
     # - mas upgrade
 
-    INSTALL_APPS=($(comm -13 \
-        <(mas list | grep -Eo '^([0-9])+' | sort | uniq) \
-        <(lk_echo_array MAS_APPS | sort | uniq)))
-    [ "${#INSTALL_APPS[@]}" -eq 0 ] || {
-        # TODO: output names rather than IDs
-        lk_echo_array INSTALL_APPS |
-            lk_console_list "Installing new apps:"
-        lk_tty mas install "${INSTALL_APPS[@]}"
-    }
+    if [ "${#MAS_APPS[@]}" -gt "0" ]; then
+        lk_console_message "Checking Mac App Store apps"
+        while ! APPLE_ID=$(mas account 2>/dev/null); do
+            APPLE_ID=
+            lk_console_detail "\
+Unable to retrieve Apple ID
+Please open the Mac App Store and sign in"
+            lk_confirm "Try again?" Y || break
+        done
+
+        if [ -n "$APPLE_ID" ]; then
+            lk_console_detail "Apple ID:" "$APPLE_ID"
+            INSTALL_APPS=($(comm -13 \
+                <(mas list | grep -Eo '^([0-9])+' | sort | uniq) \
+                <(lk_echo_array MAS_APPS | sort | uniq)))
+            PROG='
+NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[[0-9]+\.[0-9]+\])?$/, "\\1", "g")
+                printf "%s=%s\n", "APP_VER" , gensub(/.* ([0-9]+(\.[0-9]+)*)( \[[0-9]+\.[0-9]+\])?$/, "\\1", "g") }
+/^Size: /     { printf "%s=%s\n", "APP_SIZE", gensub(/^Size: /, "", "g")     }
+/^Released: / { printf "%s=%s\n", "APP_DATE", gensub(/^Released: /, "", "g") }'
+            APPS=()
+            APP_NAMES=()
+            for i in "${!INSTALL_APPS[@]}"; do
+                APP_ID=${INSTALL_APPS[$i]}
+                if APP_SH=$(
+                    mas info "$APP_ID" 2>/dev/null |
+                        gnu_awk "$PROG"
+                ); then
+                    APP_SH=$(while IFS="=" read -r KEY VALUE; do
+                        printf '%s=%q\n' "$KEY" "$VALUE"
+                    done <<<"$APP_SH")
+                    eval "$APP_SH"
+                    APPS+=(
+                        "$APP_ID"
+                        "$APP_NAME ($APP_SIZE, Version $APP_VER, $APP_DATE)"
+                    )
+                    APP_NAMES+=("$APP_NAME")
+                    continue
+                fi
+                lk_console_warning "Unknown App ID:" "$APP_ID"
+                unset "INSTALL_APPS[$i]"
+            done
+            if [ ${#INSTALL_APPS[@]} -gt 0 ]; then
+                APP_IDS=("${INSTALL_APPS[@]}")
+                if INSTALL_APPS=($(lk_log_bypass lk_console_checklist \
+                    "Installing new apps" \
+                    "Selected apps will be installed from the Mac App Store:" \
+                    "${APPS[@]}")) && [ ${#INSTALL_APPS[@]} -gt 0 ]; then
+                    for i in "${!APP_IDS[@]}"; do
+                        lk_in_array "${APP_IDS[$i]}" INSTALL_APPS ||
+                            unset "APP_NAMES[$i]"
+                    done
+                    lk_echo_array APP_NAMES |
+                        lk_console_list "Installing:" app apps
+                    lk_tty mas install "${INSTALL_APPS[@]}" || lk_die
+                else
+                    lk_console_detail "Installation of apps from Mac App Store cancelled by user"
+                fi
+            fi
+        fi
+    fi
 
     lk_console_success "Provisioning complete"
 

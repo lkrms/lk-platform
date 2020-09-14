@@ -695,6 +695,14 @@ function lk_log_output() {
     lk_die "unable to open log file"
 }
 
+function lk_log_bypass() {
+    if { true >&7; } 2>/dev/null; then
+        "$@" 2>&7
+    else
+        "$@"
+    fi
+}
+
 # lk_echoc [-neE] message [colour_sequence...]
 function lk_echoc() {
     local ECHO_ARGS=() MESSAGE IFS COLOUR
@@ -909,11 +917,11 @@ $LK_RESET$LK_BOLD${PROMPT[*]}$LK_RESET" >&"${_LK_FD:-2}"
 # Use INITIAL_STATUS to specify that entries should initially be "on" (the
 # default), or "off".
 function lk_console_checklist() {
-    # minimum dialog width: 54 (i.e. 43+11)
-    # maximum dialog width: 76 (i.e. 65+11)
+    # minimum dialog width: 54 (i.e. 39+15)
+    # maximum dialog width: 76 (i.e. 61+15)
     # maximum list height: 10
     # maximum dialog height: 16 + lines of text after wrapping
-    local TITLE=$1 TEXT=$2 LIST_HEIGHT=10 WIDTH=43 LINE ITEMS=() INITIAL_STATUS
+    local TITLE=$1 TEXT=$2 LIST_HEIGHT=10 WIDTH=39 LINE ITEMS=() INITIAL_STATUS
     shift 2 || return
     if [ $# -lt 2 ]; then
         while IFS= read -r LINE || [ -n "$LINE" ]; do
@@ -928,8 +936,9 @@ function lk_console_checklist() {
     fi
     INITIAL_STATUS=${1:-${LK_CHECKLIST_DEFAULT:-on}}
     [ ${#ITEMS[@]} -ge "$LIST_HEIGHT" ] || LIST_HEIGHT=${#ITEMS[@]}
-    ((WIDTH = (WIDTH > 65 ? 65 : WIDTH) + 11, WIDTH += WIDTH % 2))
-    TEXT=$(fold --spaces --width=$((WIDTH - 4)) <<<"$TEXT")
+    ((WIDTH = (WIDTH > 61 ? 61 : WIDTH) + 15, WIDTH += WIDTH % 2))
+    TEXT=$(fold -s -w $((WIDTH - 4)) <<<"$TEXT")
+    eval "ITEMS=(${ITEMS[*]/%/ $INITIAL_STATUS})"
     # shellcheck disable=SC2086
     whiptail \
         --backtitle "$(lk_myself 1)" \
@@ -940,7 +949,7 @@ function lk_console_checklist() {
         "$((LIST_HEIGHT + 6 + $(wc -l <<<"$TEXT")))" \
         "$WIDTH" \
         "$LIST_HEIGHT" \
-        ${ITEMS[*]/%/ $INITIAL_STATUS} \
+        "${ITEMS[@]}" \
         3>&1 1>&2 2>&3
 }
 
