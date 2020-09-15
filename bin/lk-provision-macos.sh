@@ -247,11 +247,11 @@ EOF
     lk_console_message "Applying user defaults"
     XQ="\
 .plist.dict.key |
-[ .[] |
-    select(test(\"^seed-numNotifications-.*\")) |
-    sub(\"-numNotifications-\"; \"-viewed-\") ] -
-[ .[] |
-    select(test(\"^seed-viewed-.*\")) ] | .[]"
+    [ .[] |
+        select(test(\"^seed-numNotifications-.*\")) |
+        sub(\"-numNotifications-\"; \"-viewed-\") ] -
+    [ .[] |
+        select(test(\"^seed-viewed-.*\")) ] | .[]"
     for DOMAIN in com.apple.touristd com.apple.tourist; do
         [ -e ~/Library/Preferences/"$DOMAIN.plist" ] || continue
         KEYS=$(plutil -convert xml1 -o - \
@@ -290,9 +290,9 @@ EOF
         UPGRADE_FORMULAE=($(jq -r ".formulae[].name" <<<"$OUTDATED"))
         [ ${#UPGRADE_FORMULAE[@]} -eq 0 ] || {
             jq <<<"$OUTDATED" -r "\
-.formulae[] | \
-.name + \" (\" + (.installed_versions | join(\" \")) + \" -> \" \
-+ .current_version + \")\"" |
+.formulae[] |
+    .name + \" (\" + (.installed_versions | join(\" \")) + \" -> \" +
+        .current_version + \")\"" |
                 lk_console_detail_list "$(
                     lk_maybe_plural ${#UPGRADE_FORMULAE[@]} Update Updates
                 ) available:" formula formulae
@@ -303,8 +303,9 @@ EOF
         UPGRADE_CASKS=($(jq -r ".casks[].name" <<<"$OUTDATED"))
         [ ${#UPGRADE_CASKS[@]} -eq 0 ] || {
             jq <<<"$OUTDATED" -r "\
-.casks[] | \
-.name + \" (\" + .installed_versions + \" -> \" + .current_version + \")\"" |
+.casks[] |
+    .name + \" (\" + .installed_versions + \" -> \" +
+        .current_version + \")\"" |
                 lk_console_detail_list "$(
                     lk_maybe_plural ${#UPGRADE_CASKS[@]} Update Updates
                 ) available:" cask casks
@@ -314,38 +315,65 @@ EOF
     }
 
     # Resolve formulae to their full names, e.g. python -> python@3.8
-    [ ${#HOMEBREW_FORMULAE[@]} -eq 0 ] ||
-        HOMEBREW_FORMULAE=($(
-            lk_keep_trying caffeinate -i \
-                brew info --json=v1 "${HOMEBREW_FORMULAE[@]}" |
-                jq -r .[].full_name
-        ))
+    [ ${#HOMEBREW_FORMULAE[@]} -eq 0 ] || {
+        HOMEBREW_FORMULAE_JSON=$(lk_keep_trying caffeinate -i \
+            brew info --json=v1 "${HOMEBREW_FORMULAE[@]}") &&
+            HOMEBREW_FORMULAE=(
+                $(jq -r .[].full_name <<<"$HOMEBREW_FORMULAE_JSON")
+            )
+    }
 
     INSTALL_FORMULAE=($(comm -13 \
         <(brew list --formulae --full-name | sort | uniq) \
         <(lk_echo_array HOMEBREW_FORMULAE |
             sort | uniq)))
-    [ ${#INSTALL_FORMULAE[@]} -eq 0 ] || {
-        lk_echo_array INSTALL_FORMULAE |
-            lk_console_detail_list "New $(
-                lk_maybe_plural ${#INSTALL_FORMULAE[@]} package packages
-            ) to install:" formula formulae
-        lk_no_input || lk_confirm "OK to install new formulae?" Y ||
+    if [ ${#INSTALL_FORMULAE[@]} -gt 0 ]; then
+        FORMULAE=()
+        for FORMULA in "${INSTALL_FORMULAE[@]}"; do
+            FORMULA_DESC="$(jq <<<"$HOMEBREW_FORMULAE_JSON" -r \
+                --arg formula "$FORMULA" "\
+.[] | select(.full_name == \$formula) |
+    \"\\(.full_name)@\\(.versions.stable): \\(
+        if .desc != null then \": \" + .desc else \"\" end
+    )\"")"
+            FORMULAE+=(
+                "$FORMULA"
+                "$FORMULA_DESC"
+            )
+        done
+        INSTALL_FORMULAE=($(lk_log_bypass lk_console_checklist \
+            "Installing new formulae" \
+            "Selected Homebrew formulae will be installed:" \
+            "${FORMULAE[@]}")) && [ ${#INSTALL_FORMULAE[@]} -gt 0 ] ||
             INSTALL_FORMULAE=()
-    }
+    fi
 
     INSTALL_CASKS=($(comm -13 \
         <(brew list --casks --full-name | sort | uniq) \
         <(lk_echo_array HOMEBREW_CASKS |
             sort | uniq)))
-    [ ${#INSTALL_CASKS[@]} -eq 0 ] || {
-        lk_echo_array INSTALL_CASKS |
-            lk_console_detail_list "New $(
-                lk_maybe_plural ${#INSTALL_CASKS[@]} package packages
-            ) to install:" cask casks
-        lk_no_input || lk_confirm "OK to install new casks?" Y ||
+    if [ ${#INSTALL_CASKS[@]} -gt 0 ]; then
+        HOMEBREW_CASKS_JSON=$(lk_keep_trying caffeinate -i \
+            brew cask info --json=v1 "${INSTALL_CASKS[@]}")
+        CASKS=()
+        for CASK in "${INSTALL_CASKS[@]}"; do
+            CASK_DESC="$(jq <<<"$HOMEBREW_CASKS_JSON" -r \
+                --arg cask "$CASK" "\
+.[] | select(.token == \$cask) |
+    \"\\(.name[0]//.token) \\(.version)\\(
+        if .desc != null then \": \" + .desc else \"\" end
+    )\"")"
+            CASKS+=(
+                "$CASK"
+                "$CASK_DESC"
+            )
+        done
+        INSTALL_CASKS=($(lk_log_bypass lk_console_checklist \
+            "Installing new casks" \
+            "Selected Homebrew casks will be installed:" \
+            "${CASKS[@]}")) && [ ${#INSTALL_CASKS[@]} -gt 0 ] ||
             INSTALL_CASKS=()
-    }
+    fi
 
     # TODO:
     # - mas upgrade
