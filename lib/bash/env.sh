@@ -46,6 +46,7 @@ lk_path_add_to_front() {
 $BREW_SH
 export HOMEBREW_NO_ANALYTICS=1
 export HOMEBREW_NO_AUTO_UPDATE=1
+export HOMEBREW_NO_INSTALL_CLEANUP=1
 export HOMEBREW_CASK_OPTS=--no-quarantine
 EOF
     PATH=${MANPATH:-} lk_in_path "$HOMEBREW_PREFIX/share/man" ||

@@ -194,6 +194,14 @@ EOF
         }
     }
 
+    function lk_brew_formulae() {
+        brew list --formulae --full-name
+    }
+
+    function lk_brew_casks() {
+        brew list --casks --full-name
+    }
+
     NEW_HOMEBREW=0
     if ! lk_command_exists brew; then
         lk_console_message "Installing Homebrew"
@@ -237,7 +245,7 @@ EOF
         python-yq  # for plist parsing with `xq`
     )
     INSTALL=($(comm -13 \
-        <(brew list --formulae --full-name | sort | uniq) \
+        <(lk_brew_formulae | sort | uniq) \
         <(lk_echo_array INSTALL | sort | uniq)))
     [ ${#INSTALL[@]} -eq 0 ] || {
         lk_console_message "Installing lk-platform dependencies"
@@ -324,9 +332,8 @@ EOF
     }
 
     INSTALL_FORMULAE=($(comm -13 \
-        <(brew list --formulae --full-name | sort | uniq) \
-        <(lk_echo_array HOMEBREW_FORMULAE |
-            sort | uniq)))
+        <(lk_brew_formulae | sort | uniq) \
+        <(lk_echo_array HOMEBREW_FORMULAE | sort | uniq)))
     if [ ${#INSTALL_FORMULAE[@]} -gt 0 ]; then
         FORMULAE=()
         for FORMULA in "${INSTALL_FORMULAE[@]}"; do
@@ -349,7 +356,7 @@ EOF
     fi
 
     INSTALL_CASKS=($(comm -13 \
-        <(brew list --casks --full-name | sort | uniq) \
+        <(lk_brew_casks | sort | uniq) \
         <(lk_echo_array HOMEBREW_CASKS |
             sort | uniq)))
     if [ ${#INSTALL_CASKS[@]} -gt 0 ]; then
@@ -358,7 +365,7 @@ EOF
         CASKS=()
         for CASK in "${INSTALL_CASKS[@]}"; do
             CASK_DESC="$(jq <<<"$HOMEBREW_CASKS_JSON" -r \
-                --arg cask "$CASK" "\
+                --arg cask "${CASK##*/}" "\
 .[] | select(.token == \$cask) |
     \"\\(.name[0]//.token) \\(.version)\\(
         if .desc != null then \": \" + .desc else \"\" end
@@ -465,13 +472,6 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
             brew install "${INSTALL_FORMULAE[@]}"
     }
 
-    if ! brew list --formulae --full-name | grep -Fx bash >/dev/null; then
-        lk_console_message "Installing Bash keg-only"
-        lk_keep_trying lk_tty caffeinate -i \
-            brew install bash &&
-            brew unlink bash
-    fi
-
     [ ${#INSTALL_CASKS[@]} -eq 0 ] || {
         lk_echo_array INSTALL_CASKS |
             lk_console_list "Installing new casks:"
@@ -490,6 +490,49 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
             lk_console_list "Installing new apps:"
         lk_tty caffeinate -i \
             mas install "${INSTALL_APPS[@]}"
+    }
+
+    INSTALLED_FORMULAE=($(comm -12 \
+        <(lk_brew_formulae | sort | uniq) \
+        <(lk_echo_array HOMEBREW_FORMULAE | sort | uniq)))
+    INSTALLED_CASKS=($(comm -12 \
+        <(lk_brew_casks | sort | uniq) \
+        <(lk_echo_array HOMEBREW_CASKS | sort | uniq)))
+    INSTALLED_CASKS_JSON=$(
+        [ ${#INSTALLED_CASKS[@]} -eq 0 ] ||
+            lk_keep_trying caffeinate -i \
+                brew cask info --json=v1 "${INSTALLED_CASKS[@]}"
+    )
+
+    ALL_FORMULAE=($({
+        lk_echo_array INSTALLED_FORMULAE &&
+            jq -r '.[].depends_on.formula[]?' <<<"$INSTALLED_CASKS_JSON" &&
+            brew deps --union --full-name "${INSTALLED_FORMULAE[@]}" 2>/dev/null
+    } | sort | uniq))
+    ALL_CASKS=($({
+        lk_echo_array INSTALLED_CASKS &&
+            # TODO: recurse?
+            jq -r '.[].depends_on.cask[]?' <<<"$INSTALLED_CASKS_JSON"
+    } | sort | uniq))
+
+    PURGE_FORMULAE=($(comm -23 \
+        <(lk_brew_formulae | sort | uniq) \
+        <(lk_echo_array ALL_FORMULAE)))
+    [ ${#PURGE_FORMULAE[@]} -eq 0 ] || {
+        lk_echo_array PURGE_FORMULAE |
+            lk_console_list "Installed but no longer required:" formula formulae
+        ! lk_confirm "Remove the above?" Y ||
+            brew uninstall "${PURGE_FORMULAE[@]}"
+    }
+
+    PURGE_CASKS=($(comm -23 \
+        <(lk_brew_casks | sort | uniq) \
+        <(lk_echo_array ALL_CASKS)))
+    [ ${#PURGE_CASKS[@]} -eq 0 ] || {
+        lk_echo_array PURGE_CASKS |
+            lk_console_list "Installed but no longer required:" cask casks
+        ! lk_confirm "Remove the above?" Y ||
+            brew cask uninstall "${PURGE_CASKS[@]}"
     }
 
     lk_console_success "Provisioning complete"
