@@ -38,6 +38,7 @@ HOMEBREW_FORMULAE=(
     nmap
     p7zip
     pv
+    python-yq
     rsync
 
     #
@@ -49,4 +50,13 @@ HOMEBREW_CASKS=(
 
     #
     ${HOMEBREW_CASKS[@]+"${HOMEBREW_CASKS[@]}"}
+)
+
+MAS_APPS=(
+    #409183694 # Keynote
+    #409203825 # Numbers
+    #409201541 # Pages
+
+    #
+    ${MAS_APPS[@]+"${MAS_APPS[@]}"}
 )

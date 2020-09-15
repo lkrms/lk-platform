@@ -139,10 +139,8 @@ function _lk_caller() {
         CALLER+=("$(
             if [ "$SOURCE" = "$0" ]; then
                 echo "$LK_BOLD${0##*/}$LK_RESET"
-            elif [ -n "${HOME:-}" ]; then
-                # shellcheck disable=SC2088
-                lk_replace "$HOME/" "~/" "$SOURCE"
             else
+                SOURCE=${SOURCE//~/"~"}
                 echo "$SOURCE"
             fi
         )$DIM:${BASH_LINENO[1]}$LK_RESET")
@@ -917,11 +915,12 @@ $LK_RESET$LK_BOLD${PROMPT[*]}$LK_RESET" >&"${_LK_FD:-2}"
 # Use INITIAL_STATUS to specify that entries should initially be "on" (the
 # default), or "off".
 function lk_console_checklist() {
-    # minimum dialog width: 54 (i.e. 39+15)
-    # maximum dialog width: 76 (i.e. 61+15)
+    # minimum dialog width: 54 (i.e. 38+16)
+    # maximum dialog width: 76 (i.e. 60+16)
     # maximum list height: 10
     # maximum dialog height: 16 + lines of text after wrapping
-    local TITLE=$1 TEXT=$2 LIST_HEIGHT=10 WIDTH=39 LINE ITEMS=() INITIAL_STATUS
+    local TITLE=$1 TEXT=$2 LIST_HEIGHT=10 WIDTH=38 MAX_WIDTH=60 \
+        LINE ITEMS=() INITIAL_STATUS
     shift 2 || return
     if [ $# -lt 2 ]; then
         while IFS= read -r LINE || [ -n "$LINE" ]; do
@@ -929,14 +928,15 @@ function lk_console_checklist() {
         done
     else
         while [ $# -ge 2 ]; do
-            ITEMS+=("$(printf '%q %q' "$1" "$2")")
-            [ ${#2} -le "$WIDTH" ] || WIDTH=${#2}
+            ITEM=$(lk_ellipsis "$MAX_WIDTH" "$2")
+            ITEMS+=("$(printf '%q %q' "$1" "$ITEM")")
+            [ ${#ITEM} -le "$WIDTH" ] || WIDTH=${#ITEM}
             shift 2
         done
     fi
     INITIAL_STATUS=${1:-${LK_CHECKLIST_DEFAULT:-on}}
     [ ${#ITEMS[@]} -ge "$LIST_HEIGHT" ] || LIST_HEIGHT=${#ITEMS[@]}
-    ((WIDTH = (WIDTH > 61 ? 61 : WIDTH) + 15, WIDTH += WIDTH % 2))
+    ((WIDTH += 16, WIDTH += WIDTH % 2))
     TEXT=$(fold -s -w $((WIDTH - 4)) <<<"$TEXT")
     eval "ITEMS=(${ITEMS[*]/%/ $INITIAL_STATUS})"
     # shellcheck disable=SC2086

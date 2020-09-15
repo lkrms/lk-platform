@@ -10,7 +10,6 @@ HOMEBREW_FORMULAE+=(
     # utilities
     exiftool
     imagemagick
-    python-yq
     unison
 
     # networking

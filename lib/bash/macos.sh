@@ -9,6 +9,35 @@ function lk_macos_version() {
     echo "$VERSION"
 }
 
+function lk_macos_version_name() {
+    local VERSION
+    VERSION=${1:-$(lk_macos_version)} || return
+    case "$VERSION" in
+    10.15)
+        echo "catalina"
+        ;;
+    10.14)
+        echo "mojave"
+        ;;
+    10.13)
+        echo "high_sierra"
+        ;;
+    10.12)
+        echo "sierra"
+        ;;
+    10.11)
+        echo "el_capitan"
+        ;;
+    10.10)
+        echo "yosemite"
+        ;;
+    *)
+        lk_warn "unknown macOS version: $VERSION"
+        return 1
+        ;;
+    esac
+}
+
 function lk_macos_set_hostname() {
     sudo scutil --set ComputerName "$1" &&
         sudo scutil --set HostName "$1" &&
@@ -49,23 +78,30 @@ function lk_macos_install_command_line_tools() {
     rm -f "$TRIGGER" || true
 }
 
-# lk_macos_kb_add_shortcut DOMAIN MENU_TITLE SHORTCUT
-#   Add a keyboard shortcut to the NSUserKeyEquivalents dictionary for DOMAIN.
+# lk_macos_kb_add_shortcut <DOMAIN> <MENU_TITLE> <SHORTCUT>
+#
+# Add a keyboard shortcut to the NSUserKeyEquivalents dictionary for DOMAIN.
 #
 # Modifier keys:
-#   ^ = Ctrl
-#   ~ = Alt
-#   $ = Shift
-#   @ = Command
+# - ^ = Ctrl
+# - ~ = Alt
+# - $ = Shift
+# - @ = Command
 function lk_macos_kb_add_shortcut() {
-    defaults write \
-        "$1" NSUserKeyEquivalents -dict-add "$2" "$3"
-    defaults write \
-        "$HOME/Library/Preferences/$1.plist" NSUserKeyEquivalents -dict-add "$2" "$3"
+    [ $# -eq 3 ] &&
+        defaults write "$HOME/Library/Preferences/$1.plist" \
+            NSUserKeyEquivalents -dict-add "$2" "$3" &&
+        defaults write "$1" \
+            NSUserKeyEquivalents -dict-add "$2" "$3"
 }
 
+# lk_macos_kb_reset_shortcuts <DOMAIN>
 function lk_macos_kb_reset_shortcuts() {
-    defaults delete "$1" NSUserKeyEquivalents
+    [ $# -eq 1 ] || return
+    defaults delete "$HOME/Library/Preferences/$1.plist" \
+        NSUserKeyEquivalents || true
+    defaults delete "$1" \
+        NSUserKeyEquivalents || true
 }
 
 function lk_macos_unmount() {
@@ -121,7 +157,9 @@ function lk_macos_install() {
     esac
 }
 
-# lk_macos_maybe_install_pkg_url PKGID PKG_URL [PKG_NAME]
+# lk_macos_maybe_install_pkg_url <PKGID> <PKG_URL> [<PKG_NAME>]
+#
+# Install PKGID from PKG_URL unless it's already installed.
 function lk_macos_maybe_install_pkg_url() {
     local PKGID=$1 PKG_URL=$2 PKG_NAME=${3:-$1}
     pkgutil --pkgs | grep -Fx "$PKGID" >/dev/null || (
@@ -133,4 +171,29 @@ function lk_macos_maybe_install_pkg_url() {
             lk_macos_install "$FILE" &&
             lk_console_message "Package installed successfully" "$LK_GREEN" || exit
     )
+}
+
+# lk_macos_defaults_dump [<DEFAULTS_ARG>...]
+function lk_macos_defaults_dump() {
+    local IFS=", " DOMAINS DIR DOMAIN FILE
+    DOMAINS=(
+        NSGlobalDomain
+        $(defaults "$@" domains)
+    ) || return
+    IFS=-
+    if [ -n "${LK_DEFAULTS_DIR:-}" ]; then
+        DIR=${LK_DEFAULTS_DIR%/}${*:+/${*#-}}
+    else
+        DIR=~/.${LK_PATH_PREFIX:-lk-}defaults/$(lk_date_ymdhms)${*:+-${*#-}}
+    fi
+    unset IFS
+    mkdir -p "$DIR" || return
+    for DOMAIN in "${DOMAINS[@]}"; do
+        FILE=$DIR/$DOMAIN
+        defaults "$@" read "$DOMAIN" >"$FILE" ||
+            rm -f "$FILE"
+    done
+    DIR=${DIR//~/"~"}
+    lk_console_log "Output of \"defaults${*:+ $*} read <DOMAIN>\" dumped to:" \
+        "$DIR"
 }

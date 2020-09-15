@@ -1,12 +1,12 @@
 #!/bin/bash
 # shellcheck disable=SC1090,SC2001,SC2034,SC2207
 
-export LK_BASE=${LK_BASE:-/opt/lk-platform}
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
 LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(
     sed 's/[^a-zA-Z0-9]//g' <<<"$LK_PATH_PREFIX"
 )}"
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
+export LK_BASE=${LK_BASE:-/opt/${LK_PATH_PREFIX}platform}
 
 set -euo pipefail
 lk_die() { s=$? && echo "${BASH_SOURCE[0]:+${BASH_SOURCE[0]}: }$1" >&2 && (return $s) && false || exit; }
@@ -72,6 +72,14 @@ lk_die() { s=$? && echo "${BASH_SOURCE[0]:+${BASH_SOURCE[0]}: }$1" >&2 && (retur
         lk_log_output ~/"${LK_PATH_PREFIX}install.log"
 
     lk_console_log "Provisioning macOS"
+
+    LK_DEFAULTS_DIR=~/.${LK_PATH_PREFIX}defaults/00000000000000
+    if [ ! -e "$LK_DEFAULTS_DIR" ]; then
+        lk_console_message "Dumping user defaults to domain files in" \
+            ~/".${LK_PATH_PREFIX}defaults"
+        lk_macos_defaults_dump
+        lk_macos_defaults_dump -currentHost
+    fi
 
     # This doubles as an early Full Disk Access check/reminder
     STATUS=$(sudo systemsetup -getremotelogin)
@@ -211,7 +219,7 @@ EOF
     fi
 
     INSTALL=(
-        coreutils  # gnu_* functions
+        coreutils  # GNU utilities
         findutils  #
         gawk       #
         gnu-getopt #
@@ -221,9 +229,10 @@ EOF
         gnu-sed    #
         gnu-tar    #
         wget       #
-        jq         # `brew info` parsing
-        mas        #
-        newt       # whiptail
+        jq         # for parsing `brew info` output
+        mas        # for managing Mac App Store apps
+        newt       # for `whiptail`
+        python-yq  # for plist parsing with `xq`
     )
     INSTALL=($(comm -13 \
         <(brew list --formulae --full-name | sort | uniq) \
@@ -232,6 +241,30 @@ EOF
         lk_console_detail "Installing lk-platform dependencies"
         lk_keep_trying lk_tty caffeinate -i brew install "${INSTALL[@]}"
     }
+
+    lk_console_message "Applying user defaults"
+    XQ="\
+.plist.dict.key |
+[ .[] |
+    select(test(\"^seed-numNotifications-.*\")) |
+    sub(\"-numNotifications-\"; \"-viewed-\") ] -
+[ .[] |
+    select(test(\"^seed-viewed-.*\")) ] | .[]"
+    for DOMAIN in com.apple.touristd com.apple.tourist; do
+        [ -e ~/Library/Preferences/"$DOMAIN.plist" ] || continue
+        KEYS=$(plutil -convert xml1 -o - \
+            ~/Library/Preferences/"$DOMAIN.plist" |
+            xq -r "$XQ")
+        if [ -n "$KEYS" ]; then
+            lk_console_detail "Disabling tour notifications in" "$DOMAIN"
+            xargs -J % -n 1 \
+                defaults write "$DOMAIN" % -date "$(date -uR)" <<<"$KEYS"
+        fi
+    done
+    DOMAIN=com.apple.Spotlight
+    lk_console_detail "Disabling Spotlight instructions in" "$DOMAIN"
+    defaults write "$DOMAIN" showedFTE -bool true
+    defaults write "$DOMAIN" useCount -int 3
 
     # source ~/.bashrc in ~/.bash_profile, creating both files if necessary
     [ -f ~/.bashrc ] ||
