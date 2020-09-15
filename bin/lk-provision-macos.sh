@@ -75,7 +75,7 @@ lk_die() { s=$? && echo "${BASH_SOURCE[0]:+${BASH_SOURCE[0]}: }$1" >&2 && (retur
 
     LK_DEFAULTS_DIR=~/.${LK_PATH_PREFIX}defaults/00000000000000
     if [ ! -e "$LK_DEFAULTS_DIR" ]; then
-        lk_console_message "Dumping user defaults to domain files in" \
+        lk_console_item "Dumping user defaults to domain files in" \
             ~/".${LK_PATH_PREFIX}defaults"
         lk_macos_defaults_dump
         lk_macos_defaults_dump -currentHost
@@ -144,7 +144,8 @@ EOF
         TOOLS_PATH=$(lk_macos_command_line_tools_path)
         if [[ "$TOOLS_PATH" != /Applications/Xcode.app* ]]; then
             lk_console_message "Configuring Xcode"
-            lk_console_detail "Switching from command line tools to Xcode with:" \
+            lk_console_detail \
+                "Switching from command line tools to Xcode with:" \
                 "xcode-select --switch /Applications/Xcode.app"
             sudo xcode-select --switch /Applications/Xcode.app
             OLD_TOOLS_PATH=$TOOLS_PATH
@@ -184,10 +185,11 @@ EOF
         TAP=($(comm -13 \
             <(brew tap | sort | uniq) \
             <(lk_echo_array HOMEBREW_TAPS | sort | uniq)))
-        [ "${#TAP[@]}" -eq 0 ] || {
+        [ ${#TAP[@]} -eq 0 ] || {
             for TAP in "${TAP[@]}"; do
                 lk_console_detail "Tapping" "$TAP"
-                lk_keep_trying lk_tty caffeinate -i brew tap --quiet "$TAP" || return
+                lk_keep_trying lk_tty caffeinate -i brew tap --quiet "$TAP" ||
+                    return
             done
         }
     }
@@ -286,44 +288,33 @@ EOF
     lk_is_true "$NEW_HOMEBREW" || {
         OUTDATED=$(brew outdated --json=v2)
         UPGRADE_FORMULAE=($(jq -r ".formulae[].name" <<<"$OUTDATED"))
-        [ "${#UPGRADE_FORMULAE[@]}" -eq 0 ] || {
+        [ ${#UPGRADE_FORMULAE[@]} -eq 0 ] || {
             jq <<<"$OUTDATED" -r "\
 .formulae[] | \
 .name + \" (\" + (.installed_versions | join(\" \")) + \" -> \" \
 + .current_version + \")\"" |
                 lk_console_detail_list "$(
-                    lk_maybe_plural "${#UPGRADE_FORMULAE[@]}" Update Updates
+                    lk_maybe_plural ${#UPGRADE_FORMULAE[@]} Update Updates
                 ) available:" formula formulae
             lk_no_input || lk_confirm "OK to upgrade outdated formulae?" Y ||
                 UPGRADE_FORMULAE=()
         }
 
         UPGRADE_CASKS=($(jq -r ".casks[].name" <<<"$OUTDATED"))
-        [ "${#UPGRADE_CASKS[@]}" -eq 0 ] || {
+        [ ${#UPGRADE_CASKS[@]} -eq 0 ] || {
             jq <<<"$OUTDATED" -r "\
 .casks[] | \
 .name + \" (\" + .installed_versions + \" -> \" + .current_version + \")\"" |
                 lk_console_detail_list "$(
-                    lk_maybe_plural "${#UPGRADE_CASKS[@]}" Update Updates
+                    lk_maybe_plural ${#UPGRADE_CASKS[@]} Update Updates
                 ) available:" cask casks
             lk_no_input || lk_confirm "OK to upgrade outdated casks?" Y ||
                 UPGRADE_CASKS=()
         }
     }
 
-    [ "${#UPGRADE_FORMULAE[@]}" -eq 0 ] || {
-        lk_console_message "Upgrading formulae"
-        lk_keep_trying lk_tty caffeinate -i \
-            brew upgrade "${UPGRADE_FORMULAE[@]}" --formula
-    }
-
-    [ "${#UPGRADE_CASKS[@]}" -eq 0 ] || {
-        lk_console_message "Upgrading casks"
-        lk_keep_trying lk_tty caffeinate -i \
-            brew upgrade "${UPGRADE_CASKS[@]}" --cask
-    }
-
-    [ "${#HOMEBREW_FORMULAE[@]}" -eq 0 ] ||
+    # Resolve formulae to their full names, e.g. python -> python@3.8
+    [ ${#HOMEBREW_FORMULAE[@]} -eq 0 ] ||
         HOMEBREW_FORMULAE=($(
             lk_keep_trying caffeinate -i \
                 brew info --json=v1 "${HOMEBREW_FORMULAE[@]}" |
@@ -334,35 +325,33 @@ EOF
         <(brew list --formulae --full-name | sort | uniq) \
         <(lk_echo_array HOMEBREW_FORMULAE |
             sort | uniq)))
-    [ "${#INSTALL_FORMULAE[@]}" -eq 0 ] || {
+    [ ${#INSTALL_FORMULAE[@]} -eq 0 ] || {
         lk_echo_array INSTALL_FORMULAE |
-            lk_console_list "Installing new formulae:"
-        lk_keep_trying lk_tty caffeinate -i \
-            brew install "${INSTALL_FORMULAE[@]}"
+            lk_console_detail_list "New $(
+                lk_maybe_plural ${#INSTALL_FORMULAE[@]} package packages
+            ) to install:" formula formulae
+        lk_no_input || lk_confirm "OK to install new formulae?" Y ||
+            INSTALL_FORMULAE=()
     }
-
-    if ! brew list --formulae --full-name | grep -Fx bash >/dev/null; then
-        lk_console_message "Installing Bash keg-only"
-        lk_keep_trying lk_tty caffeinate -i \
-            brew install bash &&
-            brew unlink bash
-    fi
 
     INSTALL_CASKS=($(comm -13 \
         <(brew list --casks --full-name | sort | uniq) \
         <(lk_echo_array HOMEBREW_CASKS |
             sort | uniq)))
-    [ "${#INSTALL_CASKS[@]}" -eq 0 ] || {
+    [ ${#INSTALL_CASKS[@]} -eq 0 ] || {
         lk_echo_array INSTALL_CASKS |
-            lk_console_list "Installing new casks:"
-        lk_keep_trying lk_tty caffeinate -i \
-            brew cask install "${INSTALL_CASKS[@]}"
+            lk_console_detail_list "New $(
+                lk_maybe_plural ${#INSTALL_CASKS[@]} package packages
+            ) to install:" cask casks
+        lk_no_input || lk_confirm "OK to install new casks?" Y ||
+            INSTALL_CASKS=()
     }
 
     # TODO:
     # - mas upgrade
 
-    if [ "${#MAS_APPS[@]}" -gt "0" ]; then
+    INSTALL_APPS=()
+    if [ ${#MAS_APPS[@]} -gt "0" ]; then
         lk_console_message "Checking Mac App Store apps"
         while ! APPLE_ID=$(mas account 2>/dev/null); do
             APPLE_ID=
@@ -414,15 +403,51 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
                         lk_in_array "${APP_IDS[$i]}" INSTALL_APPS ||
                             unset "APP_NAMES[$i]"
                     done
-                    lk_echo_array APP_NAMES |
-                        lk_console_list "Installing:" app apps
-                    lk_tty mas install "${INSTALL_APPS[@]}" || lk_die
                 else
-                    lk_console_detail "Installation of apps from Mac App Store cancelled by user"
+                    INSTALL_APPS=()
                 fi
             fi
         fi
     fi
+
+    [ ${#UPGRADE_FORMULAE[@]} -eq 0 ] || {
+        lk_console_message "Upgrading formulae"
+        lk_keep_trying lk_tty caffeinate -i \
+            brew upgrade "${UPGRADE_FORMULAE[@]}" --formula
+    }
+
+    [ ${#UPGRADE_CASKS[@]} -eq 0 ] || {
+        lk_console_message "Upgrading casks"
+        lk_keep_trying lk_tty caffeinate -i \
+            brew upgrade "${UPGRADE_CASKS[@]}" --cask
+    }
+
+    [ ${#INSTALL_FORMULAE[@]} -eq 0 ] || {
+        lk_echo_array INSTALL_FORMULAE |
+            lk_console_list "Installing new formulae:"
+        lk_keep_trying lk_tty caffeinate -i \
+            brew install "${INSTALL_FORMULAE[@]}"
+    }
+
+    if ! brew list --formulae --full-name | grep -Fx bash >/dev/null; then
+        lk_console_message "Installing Bash keg-only"
+        lk_keep_trying lk_tty caffeinate -i \
+            brew install bash &&
+            brew unlink bash
+    fi
+
+    [ ${#INSTALL_CASKS[@]} -eq 0 ] || {
+        lk_echo_array INSTALL_CASKS |
+            lk_console_list "Installing new casks:"
+        lk_keep_trying lk_tty caffeinate -i \
+            brew cask install "${INSTALL_CASKS[@]}"
+    }
+
+    [ ${#INSTALL_APPS[@]} -eq 0 ] || {
+        lk_echo_array APP_NAMES |
+            lk_console_list "Installing new apps:"
+        lk_tty mas install "${INSTALL_APPS[@]}"
+    }
 
     lk_console_success "Provisioning complete"
 
