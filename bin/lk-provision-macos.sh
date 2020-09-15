@@ -240,7 +240,7 @@ EOF
         <(brew list --formulae --full-name | sort | uniq) \
         <(lk_echo_array INSTALL | sort | uniq)))
     [ ${#INSTALL[@]} -eq 0 ] || {
-        lk_console_detail "Installing lk-platform dependencies"
+        lk_console_message "Installing lk-platform dependencies"
         lk_keep_trying lk_tty caffeinate -i brew install "${INSTALL[@]}"
     }
 
@@ -375,9 +375,6 @@ EOF
             INSTALL_CASKS=()
     fi
 
-    # TODO:
-    # - mas upgrade
-
     INSTALL_APPS=()
     if [ ${#MAS_APPS[@]} -gt "0" ]; then
         lk_console_message "Checking Mac App Store apps"
@@ -391,8 +388,19 @@ Please open the Mac App Store and sign in"
 
         if [ -n "$APPLE_ID" ]; then
             lk_console_detail "Apple ID:" "$APPLE_ID"
+
+            OUTDATED=$(mas outdated)
+            if UPGRADE_APPS=($(grep -Eo '^[0-9]+' <<<"$OUTDATED")); then
+                sed -E "s/^[0-9]+$S*//" <<<"$OUTDATED" |
+                    lk_console_detail_list "$(
+                        lk_maybe_plural ${#UPGRADE_APPS[@]} Update Updates
+                    ) available:" app apps
+                lk_no_input || lk_confirm "OK to upgrade outdated apps?" Y ||
+                    UPGRADE_APPS=()
+            fi
+
             INSTALL_APPS=($(comm -13 \
-                <(mas list | grep -Eo '^([0-9])+' | sort | uniq) \
+                <(mas list | grep -Eo '^[0-9]+' | sort | uniq) \
                 <(lk_echo_array MAS_APPS | sort | uniq)))
             PROG='
 NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[[0-9]+\.[0-9]+\])?$/, "\\1", "g")
@@ -471,10 +479,17 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
             brew cask install "${INSTALL_CASKS[@]}"
     }
 
+    [ ${#UPGRADE_APPS[@]} -eq 0 ] || {
+        lk_console_message "Upgrading apps"
+        lk_tty caffeinate -i \
+            mas upgrade "${UPGRADE_APPS[@]}"
+    }
+
     [ ${#INSTALL_APPS[@]} -eq 0 ] || {
         lk_echo_array APP_NAMES |
             lk_console_list "Installing new apps:"
-        lk_tty mas install "${INSTALL_APPS[@]}"
+        lk_tty caffeinate -i \
+            mas install "${INSTALL_APPS[@]}"
     }
 
     lk_console_success "Provisioning complete"
