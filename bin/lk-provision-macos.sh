@@ -506,6 +506,13 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
             mas install "${INSTALL_APPS[@]}"
     }
 
+    if [ -e /Applications/Xcode.app ] &&
+        ! xcodebuild -license check >/dev/null 2>/dev/null; then
+        lk_console_message "Accepting Xcode license"
+        lk_console_detail "Running:" "xcodebuild -license accept"
+        sudo xcodebuild -license accept
+    fi
+
     INSTALLED_FORMULAE=($(comm -12 \
         <(lk_brew_formulae | sort | uniq) \
         <(lk_echo_array HOMEBREW_FORMULAE | sort | uniq)))
@@ -520,13 +527,18 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
 
     ALL_FORMULAE=($({
         lk_echo_array INSTALLED_FORMULAE &&
-            jq -r '.[].depends_on.formula[]?' <<<"$INSTALLED_CASKS_JSON" &&
-            brew deps --union --full-name "${INSTALLED_FORMULAE[@]}" 2>/dev/null
+            { [ -z "$INSTALLED_CASKS_JSON" ] ||
+                jq -r '.[].depends_on.formula[]?' \
+                    <<<"$INSTALLED_CASKS_JSON"; } &&
+            { [ ${#INSTALLED_FORMULAE[@]} -eq 0 ] ||
+                brew deps --union --full-name \
+                    "${INSTALLED_FORMULAE[@]}" 2>/dev/null; }
     } | sort | uniq))
     ALL_CASKS=($({
         lk_echo_array INSTALLED_CASKS &&
-            # TODO: recurse?
-            jq -r '.[].depends_on.cask[]?' <<<"$INSTALLED_CASKS_JSON"
+            { [ -z "$INSTALLED_CASKS_JSON" ] ||
+                # TODO: recurse?
+                jq -r '.[].depends_on.cask[]?' <<<"$INSTALLED_CASKS_JSON"; }
     } | sort | uniq))
 
     PURGE_FORMULAE=($(comm -23 \
