@@ -13,7 +13,7 @@ function lk_wp_quiet() {
 
 function lk_wp_get_site_root() {
     local SITE_ROOT
-    SITE_ROOT="$(lk_wp eval "echo ABSPATH;" --skip-wordpress)" &&
+    SITE_ROOT=$(lk_wp eval "echo ABSPATH;" --skip-wordpress) &&
         { [ "$SITE_ROOT" != "/" ] ||
             lk_warn "WordPress installation not found"; } &&
         echo "${SITE_ROOT%/}"
@@ -29,7 +29,7 @@ function lk_wp_get_table_prefix() {
 
 function _lk_wp_replace() {
     local TABLE_PREFIX SKIP_TABLES
-    TABLE_PREFIX="$(lk_wp_get_table_prefix)" || return
+    TABLE_PREFIX=$(lk_wp_get_table_prefix) || return
     SKIP_TABLES=(
         "*_log"
         "*_logs"
@@ -75,112 +75,146 @@ function lk_wp_json_encode() {
     php --run 'echo substr(json_encode(trim(stream_get_contents(STDIN))), 1, -1);' <<<"$1"
 }
 
-# lk_wp_rename_site NEW_URL
-#   Change the WordPress site address to NEW_URL.
+# lk_wp_rename_site <NEW_URL>
+#
+# Change the WordPress site address to NEW_URL.
 #
 # Environment variables:
-#   LK_WP_OLD_URL=OLD_URL
-#     Override `wp option get home`, e.g. to replace instances of OLD_URL in
-#     database tables after changing the site address
-#   LK_WP_REPLACE=<1|0|Y|N> (default: 1)
-#     Perform URL replacement in database tables
-#   LK_WP_REPLACE_WITHOUT_SCHEME=<1|0|Y|N> (default: 0)
-#     Replace instances of the previous URL without a scheme component
-#     ("http*://" or "//"), e.g. if renaming "http://domain.com" to
-#     "https://new.domain.com", replace "domain.com" with "new.domain.com"
+#
+# - LK_WP_OLD_URL=<OLD_URL>: override `wp option get home`, e.g. to replace
+#   instances of OLD_URL in database tables after changing the site address
+# - LK_WP_REPLACE=<1|0|Y|N>: perform URL replacement in database tables
+#   (default: 1)
+# - LK_WP_REPLACE_WITHOUT_SCHEME=<1|0|Y|N> (DANGEROUS): replace instances of the
+#   previous URL without a scheme component ("http*://" or "//"), e.g. if
+#   renaming "http://domain.com" to "https://new.domain.com", replace
+#   "domain.com" with "new.domain.com" (default: 0)
+# - LK_WP_FLUSH=<1|0|Y|N>: flush WordPress rewrite rules, caches and transients
+#   after renaming (default: 1)
 function lk_wp_rename_site() {
-    local NEW_URL="${1:-}" OLD_URL="${LK_WP_OLD_URL:-}" \
+    local NEW_URL=${1:-} OLD_URL=${LK_WP_OLD_URL:-} \
         SITE_ROOT OLD_SITE_URL NEW_SITE_URL REPLACE DELIM=$'\t' IFS r s
     lk_is_uri "$NEW_URL" ||
         lk_warn "not a valid URL: $NEW_URL" || return
     [ -n "$OLD_URL" ] ||
-        OLD_URL="$(lk_wp_get_site_address)" || return
+        OLD_URL=$(lk_wp_get_site_address) || return
     [ "$NEW_URL" != "$OLD_URL" ] ||
-        lk_warn "site address not changed (set LK_WP_OLD_URL to override)" || return
-    SITE_ROOT="$(lk_wp_get_site_root)" || return
-    OLD_SITE_URL="$(lk_wp option get siteurl)" || return
-    NEW_SITE_URL="$(lk_replace "$OLD_URL" "$NEW_URL" "$OLD_SITE_URL")"
+        lk_warn "site address not changed (set LK_WP_OLD_URL to override)" ||
+        return
+    SITE_ROOT=$(lk_wp_get_site_root) &&
+        OLD_SITE_URL=$(lk_wp option get siteurl) || return
+    NEW_SITE_URL=$(lk_replace "$OLD_URL" "$NEW_URL" "$OLD_SITE_URL")
     lk_console_item "Renaming WordPress installation at" "$SITE_ROOT"
-    lk_console_detail "Site address:" "$OLD_URL -> $LK_BOLD$NEW_URL$LK_RESET"
-    lk_console_detail "WordPress address:" "$OLD_SITE_URL -> $LK_BOLD$NEW_SITE_URL$LK_RESET"
-    lk_no_input || lk_confirm "Proceed?" Y || return
-    lk_wp option update home "$NEW_URL"
-    lk_wp option update siteurl "$NEW_SITE_URL"
-    if lk_is_true "${LK_WP_REPLACE:-1}" &&
-        { lk_no_input || lk_confirm "Replace the previous URL in all tables?" Y; }; then
+    lk_console_detail \
+        "Site address:" "$OLD_URL -> $LK_BOLD$NEW_URL$LK_RESET"
+    lk_console_detail \
+        "WordPress address:" "$OLD_SITE_URL -> $LK_BOLD$NEW_SITE_URL$LK_RESET"
+    lk_wp_quiet || lk_confirm "Proceed?" Y || return
+    lk_wp option update home "$NEW_URL" &&
+        lk_wp option update siteurl "$NEW_SITE_URL" || return
+    if lk_is_true "${LK_WP_REPLACE:-}" || { [ -z "${LK_WP_REPLACE:-}" ] &&
+        lk_confirm "Replace the previous URL in all tables?" Y; }; then
         lk_console_message "Performing WordPress search/replace"
         REPLACE=(
             "$OLD_URL$DELIM$NEW_URL"
             "${OLD_URL#http*:}$DELIM${NEW_URL#http*:}"
-            "$(lk_wp_url_encode "$OLD_URL")$DELIM$(lk_wp_url_encode "$NEW_URL")"
-            "$(lk_wp_url_encode "${OLD_URL#http*:}")$DELIM$(lk_wp_url_encode "${NEW_URL#http*:}")"
-            "$(lk_wp_json_encode "$OLD_URL")$DELIM$(lk_wp_json_encode "$NEW_URL")"
-            "$(lk_wp_json_encode "${OLD_URL#http*:}")$DELIM$(lk_wp_json_encode "${NEW_URL#http*:}")"
+            "$(
+                lk_wp_url_encode "$OLD_URL"
+            )$DELIM$(
+                lk_wp_url_encode "$NEW_URL"
+            )"
+            "$(
+                lk_wp_url_encode "${OLD_URL#http*:}"
+            )$DELIM$(
+                lk_wp_url_encode "${NEW_URL#http*:}"
+            )"
+            "$(
+                lk_wp_json_encode "$OLD_URL"
+            )$DELIM$(
+                lk_wp_json_encode "$NEW_URL"
+            )"
+            "$(
+                lk_wp_json_encode "${OLD_URL#http*:}"
+            )$DELIM$(
+                lk_wp_json_encode "${NEW_URL#http*:}"
+            )"
         )
         ! lk_is_true "${LK_WP_REPLACE_WITHOUT_SCHEME:-0}" ||
             REPLACE+=(
                 "${OLD_URL#http*://}$DELIM${NEW_URL#http*://}"
-                "$(lk_wp_url_encode "${OLD_URL#http*://}")$DELIM$(lk_wp_url_encode "${NEW_URL#http*://}")"
+                "$(
+                    lk_wp_url_encode "${OLD_URL#http*://}"
+                )$DELIM$(
+                    lk_wp_url_encode "${NEW_URL#http*://}"
+                )"
             )
         lk_remove_repeated REPLACE
         for r in "${REPLACE[@]}"; do
-            IFS="$DELIM"
+            IFS=$DELIM
             s=($r)
             unset IFS
-            _lk_wp_replace "${s[@]}"
+            _lk_wp_replace "${s[@]}" || return
         done
     fi
-    if lk_no_input ||
-        lk_confirm "\
+    if lk_is_true "${LK_WP_FLUSH:-}" ||
+        { [ -z "${LK_WP_FLUSH:-}" ] && lk_confirm "\
 OK to flush rewrite rules, caches and transients? \
-Plugin code will be allowed to run." Y; then
+Plugin code will be allowed to run." Y; }; then
         lk_wp_flush
     else
         lk_console_detail "To flush rewrite rules:" "wp rewrite flush"
         lk_console_detail "To flush everything:" "lk_wp_flush"
     fi
-    lk_console_log "Site renamed successfully"
+    lk_console_success "Site renamed successfully"
 }
 
-# lk_wp_db_config [wp_config_path]
-#   Output DB_NAME, DB_USER, DB_PASSWORD and DB_HOST values configured in
-#   wp-config.php as KEY="VALUE" pairs without calling `wp config`.
-#   If not specified, WP_CONFIG_PATH is assumed to be "./wp-config.php".
+# lk_wp_db_config [<WP_CONFIG_PATH>]
+#
+# Output DB_NAME, DB_USER, DB_PASSWORD and DB_HOST values configured in
+# WP_CONFIG_PATH (./wp-config.php by default) as KEY="VALUE" pairs without
+# calling `wp config`.
 function lk_wp_db_config() {
-    local WP_CONFIG="${1:-wp-config.php}" PHP
+    local WP_CONFIG=${1:-wp-config.php} PHP
     [ -e "$WP_CONFIG" ] || lk_warn "file not found: $WP_CONFIG" || return
-    # 1. remove comments and whitespace from wp-config.php (php --strip)
-    # 2. extract the relevant "define(...);" calls, one per line (grep -Po)
-    # 3. add any missing semicolons (sed -E)
-    # 4. add code to output each value as a shell expression (cat)
-    # 5. run the code (php <<<"$PHP")
-    PHP="$(
+    PHP=$(
         echo '<?php'
+        # 1. remove comments and whitespace from wp-config.php
         php --strip "$WP_CONFIG" |
-            grep -Po "(?<=<\?php|;|^)\s*define\s*\(\s*(['\"])DB_(NAME|USER|PASSWORD|HOST)\1\s*,\s*('([^']+|\\\\')*'|\"([^\"\$]+|\\\\(\"|\\\$))*\")\s*\)\s*(;|\$)" |
+            # 2. extract the relevant "define(...);" calls, one per line
+            grep -Po "\
+(?<=<\?php|;|^)\s*define\s*\(\s*(['\"])DB_(NAME|USER|PASSWORD|HOST)\1\s*,\
+\s*('([^']+|\\\\')*'|\"([^\"\$]+|\\\\(\"|\\\$))*\")\s*\)\s*(;|\$)" |
+            # 3. add any missing semicolons
             sed -E 's/[^;]$/&;/' || exit
-        cat <<EOF
-\$vals = array_map(function (\$v) { return escapeshellarg(\$v); }, [DB_NAME, DB_USER, DB_PASSWORD, DB_HOST]);
-printf("DB_NAME=%s\nDB_USER=%s\nDB_PASSWORD=%s\nDB_HOST=%s\n", \$vals[0], \$vals[1], \$vals[2], \$vals[3]);
+        # 4. add code to output each value as a shell expression
+        cat <<"EOF"
+$vals = array_map(function ($v) {
+        return escapeshellarg($v);
+    }, [DB_NAME, DB_USER, DB_PASSWORD, DB_HOST]);
+printf("DB_NAME=%s\nDB_USER=%s\nDB_PASSWORD=%s\nDB_HOST=%s\n",
+    $vals[0], $vals[1], $vals[2], $vals[3]);
 EOF
-    )" || return
+    ) || return
+    # 5. run the code
     php <<<"$PHP"
 }
 
-# _lk_get_my_cnf [user [password [host]]]
+# _lk_get_my_cnf [<USER> [<PASSWORD> [<HOST>]]]
 function _lk_get_my_cnf() {
     cat <<EOF
 # Generated by ${FUNCNAME[1]:-${FUNCNAME[0]}}
 [client]
 user="$(lk_escape "${1-$DB_USER}" "\\" '"')"
 password="$(lk_escape "${2-$DB_PASSWORD}" "\\" '"')"
-host="$(lk_escape "${3-${DB_HOST-${LK_MYSQL_HOST:-localhost}}}" "\\" '"')"${LK_MY_CNF_OPTIONS:+
+host="$(
+        lk_escape "${3-${DB_HOST-${LK_MYSQL_HOST:-localhost}}}" "\\" '"'
+    )"${LK_MY_CNF_OPTIONS:+
 $LK_MY_CNF_OPTIONS}
 EOF
 }
 
 function _lk_write_my_cnf() {
-    LK_MY_CNF="${LK_MY_CNF:-$HOME/.lk_mysql.cnf}"
+    LK_MY_CNF=${LK_MY_CNF:-$HOME/.lk_mysql.cnf}
     _lk_get_my_cnf "$@" >"$LK_MY_CNF"
 }
 
@@ -194,24 +228,26 @@ function _lk_mysql_connects() {
     _lk_mysql --execute="\\q" ${1+"$1"}
 }
 
-# lk_wp_db_dump_remote ssh_host [remote_path]
+# lk_wp_db_dump_remote <SSH_HOST> [<REMOTE_PATH>]
 function lk_wp_db_dump_remote() {
-    local REMOTE_PATH="${2:-public_html}" WP_CONFIG DB_CONFIG \
-        DB_NAME="${DB_NAME:-}" DB_USER="${DB_USER:-}" DB_PASSWORD="${DB_PASSWORD:-}" DB_HOST="${DB_HOST:-}" \
+    local REMOTE_PATH=${2:-public_html} WP_CONFIG DB_CONFIG \
+        DB_NAME=${DB_NAME:-} DB_USER=${DB_USER:-} \
+        DB_PASSWORD=${DB_PASSWORD:-} DB_HOST=${DB_HOST:-} \
         OUTPUT_FILE EXIT_STATUS=0
     [ -n "${1:-}" ] || lk_warn "no ssh host" || return
-    [ ! -t 1 ] || [ -w "$PWD" ] || lk_warn "cannot write to current directory" || return
+    [ ! -t 1 ] || [ -w "$PWD" ] ||
+        lk_warn "cannot write to current directory" || return
     lk_console_message "Preparing to dump remote WordPress database"
     [ -n "$DB_NAME" ] &&
         [ -n "$DB_USER" ] &&
         [ -n "$DB_PASSWORD" ] &&
         [ -n "$DB_HOST" ] || {
-        REMOTE_PATH="${REMOTE_PATH%/}"
+        REMOTE_PATH=${REMOTE_PATH%/}
         lk_console_message "Getting credentials"
         lk_console_detail "Retrieving" "$1:$REMOTE_PATH/wp-config.php"
-        WP_CONFIG="$(ssh "$1" cat "$REMOTE_PATH/wp-config.php")" || return
+        WP_CONFIG=$(ssh "$1" cat "$REMOTE_PATH/wp-config.php") || return
         lk_console_detail "Parsing WordPress configuration"
-        DB_CONFIG="$(lk_wp_db_config <(cat <<<"$WP_CONFIG"))" || return
+        DB_CONFIG=$(lk_wp_db_config <(cat <<<"$WP_CONFIG")) || return
         . /dev/stdin <<<"$DB_CONFIG" || return
     }
     lk_console_message "Creating temporary mysqldump configuration file"
@@ -219,25 +255,43 @@ function lk_wp_db_dump_remote() {
     lk_console_detail "Writing" "$1:.lk_mysqldump.cnf"
     _lk_get_my_cnf | ssh "$1" "bash -c 'cat >\".lk_mysqldump.cnf\"'" || return
     [ ! -t 1 ] || {
-        OUTPUT_FILE="./$DB_NAME-$1-$(lk_date_ymdhms).sql.gz"
+        OUTPUT_FILE=./$DB_NAME-$1-$(lk_date_ymdhms).sql.gz
         exec 6>&1 >"$OUTPUT_FILE"
     }
     lk_console_message "Dumping remote database"
     lk_console_detail "Database:" "$DB_NAME"
     lk_console_detail "Host:" "$DB_HOST"
-    [ -z "${OUTPUT_FILE:-}" ] || lk_console_detail "Writing compressed SQL to" "$OUTPUT_FILE"
-    ssh "$1" "bash -c 'mysqldump --defaults-file=\".lk_mysqldump.cnf\" --single-transaction --skip-lock-tables \"$DB_NAME\" | gzip; exit \"\${PIPESTATUS[0]}\"'" | pv || EXIT_STATUS="$?"
+    [ -z "${OUTPUT_FILE:-}" ] ||
+        lk_console_detail "Writing compressed SQL to" "$OUTPUT_FILE"
+    ssh "$1" "bash -c '\
+mysqldump --defaults-file=.lk_mysqldump.cnf \
+--single-transaction --skip-lock-tables \"\$1\" | gzip; \
+exit \${PIPESTATUS[0]}' bash $(printf '%q' "$DB_NAME")" | pv || EXIT_STATUS=$?
     [ -z "${OUTPUT_FILE:-}" ] || exec 1>&6 6>&-
     lk_console_message "Deleting mysqldump configuration file"
-    ssh "$1" "bash -c 'rm -f \".lk_mysqldump.cnf\"'" &&
+    ssh "$1" "bash -c 'rm -f .lk_mysqldump.cnf'" &&
         lk_console_detail "Deleted" "$1:.lk_mysqldump.cnf" ||
         lk_console_warning0 "Error deleting" "$1:.lk_mysqldump.cnf"
-    [ "$EXIT_STATUS" -eq 0 ] && lk_console_log "Database dump completed successfully" ||
+    [ "$EXIT_STATUS" -eq 0 ] &&
+        lk_console_success "Database dump completed successfully" ||
         lk_console_error0 "Database dump failed"
     return "$EXIT_STATUS"
 }
 
-# lk_wp_db_set_local [<SITE_ROOT> [<WP_DB_NAME> <WP_DB_USER> <WP_DB_PASSWORD> [<DB_NAME> [<DB_USER>]]]]
+# lk_wp_db_set_local [<SITE_ROOT> \
+#   [<WP_DB_NAME> <WP_DB_USER> <WP_DB_PASSWORD> \
+#   [<DB_NAME> [<DB_USER>]]]]
+#
+# Set each of LOCAL_DB_NAME, LOCAL_DB_USER, LOCAL_DB_PASSWORD and LOCAL_DB_HOST
+# to an appropriate value, taking into account:
+# - WP_DB_NAME, WP_DB_USER, WP_DB_PASSWORD (used as-is if validated by the local
+#   MySQL server)
+# - DB_NAME, DB_USER (used instead of defaults if WP_DB_* values aren't valid)
+# - the location of SITE_ROOT relative to well-known home directories
+# - the owner of SITE_ROOT
+# - the invoking user
+#
+# New credentials are generated if necessary but they are not applied.
 function lk_wp_db_set_local() {
     local SITE_ROOT DEFAULT_IDENTIFIER
     SITE_ROOT=${1:-$(lk_wp_get_site_root)} || return
@@ -257,7 +311,8 @@ function lk_wp_db_set_local() {
         DEFAULT_IDENTIFIER=${BASH_REMATCH[1]}
     elif [[ $SITE_ROOT =~ ^/srv/www/([^./]+)/([^./]+)/public_html$ ]]; then
         DEFAULT_IDENTIFIER=${BASH_REMATCH[1]}_${BASH_REMATCH[2]}
-    elif [[ $SITE_ROOT =~ ^/srv/http/([^./]+)\.localhost/(public_)?html$ ]]; then
+    elif [[ $SITE_ROOT =~ \
+        ^/srv/http/([^./]+)\.localhost/(public_)?html$ ]]; then
         DEFAULT_IDENTIFIER=${BASH_REMATCH[1]}
     elif [[ ! $SITE_ROOT =~ ^/srv/(www|http)(/.*)?$ ]] &&
         [ "${SITE_ROOT:0:${#HOME}}" = "$HOME" ]; then
@@ -279,29 +334,29 @@ function lk_wp_db_set_local() {
     }
 }
 
-# lk_wp_db_restore_local sql_path [db_name [db_user]]
+# lk_wp_db_restore_local <SQL_PATH> [<DB_NAME> [<DB_USER>]]
 function lk_wp_db_restore_local() {
     local SITE_ROOT DEFAULT_IDENTIFIER SQL _SQL COMMAND EXIT_STATUS=0 \
         LOCAL_DB_NAME LOCAL_DB_USER LOCAL_DB_PASSWORD LOCAL_DB_HOST \
         DB_NAME DB_USER DB_PASSWORD DB_HOST
     [ -f "$1" ] || lk_warn "file not found: $1" || return
-    SITE_ROOT="$(lk_wp_get_site_root)" || return
+    SITE_ROOT=$(lk_wp_get_site_root) || return
     lk_console_message "Preparing to restore WordPress database"
     lk_wp_quiet || {
         lk_console_detail "Backup file:" "$1"
         lk_console_detail "WordPress installation:" "$SITE_ROOT"
     }
-    DB_NAME="$(lk_wp config get DB_NAME)" &&
-        DB_USER="$(lk_wp config get DB_USER)" &&
-        DB_PASSWORD="$(lk_wp config get DB_PASSWORD)" &&
-        DB_HOST="$(lk_wp config get DB_HOST)" || return
+    DB_NAME=$(lk_wp config get DB_NAME) &&
+        DB_USER=$(lk_wp config get DB_USER) &&
+        DB_PASSWORD=$(lk_wp config get DB_PASSWORD) &&
+        DB_HOST=$(lk_wp config get DB_HOST) || return
     lk_wp_db_set_local \
         "$SITE_ROOT" "$DB_NAME" "$DB_USER" "$DB_PASSWORD" "${@:2}" || return
     SQL=(
         "DROP DATABASE IF EXISTS \`$LOCAL_DB_NAME\`"
         "CREATE DATABASE \`$LOCAL_DB_NAME\`"
     )
-    _SQL="$(printf '%s;\n' "${SQL[@]}")"
+    _SQL=$(printf '%s;\n' "${SQL[@]}")
     [ "$DB_NAME" = "$LOCAL_DB_NAME" ] ||
         lk_console_detail "DB_NAME will be updated to" "$LOCAL_DB_NAME"
     [ "$DB_USER" = "$LOCAL_DB_USER" ] ||
@@ -311,25 +366,31 @@ function lk_wp_db_restore_local() {
     [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] ||
         lk_console_detail "DB_PASSWORD will be reset"
     lk_console_detail "Local database will be reset with:" "$_SQL"
-    lk_no_input ||
-        lk_confirm "All data in local database '$LOCAL_DB_NAME' will be permanently destroyed. Proceed?" Y || return
+    lk_confirm "\
+All data in local database '$LOCAL_DB_NAME' will be permanently destroyed.
+Proceed?" Y || return
     [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] || {
         COMMAND=(lk_elevate "$LK_BASE/bin/lk-mysql-grant.sh"
             "$LOCAL_DB_NAME" "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD")
-        [[ "$USER" =~ ^[a-zA-Z0-9_]+$ ]] && [[ "$LOCAL_DB_NAME" =~ ^$USER(_[a-zA-Z0-9_]*)?$ ]] ||
+        [[ "$USER" =~ ^[a-zA-Z0-9_]+$ ]] &&
+            [[ "$LOCAL_DB_NAME" =~ ^$USER(_[a-zA-Z0-9_]*)?$ ]] ||
             unset "COMMAND[0]"
         "${COMMAND[@]}" || return
     }
     lk_console_message "Restoring WordPress database to local system"
     lk_console_detail "Checking wp-config.php"
     [ "$DB_NAME" = "$LOCAL_DB_NAME" ] ||
-        lk_wp config set DB_NAME "$LOCAL_DB_NAME" --type=constant --quiet || return
+        lk_wp config set \
+            DB_NAME "$LOCAL_DB_NAME" --type=constant --quiet || return
     [ "$DB_USER" = "$LOCAL_DB_USER" ] ||
-        lk_wp config set DB_USER "$LOCAL_DB_USER" --type=constant --quiet || return
+        lk_wp config set \
+            DB_USER "$LOCAL_DB_USER" --type=constant --quiet || return
     [ "$DB_HOST" = "$LOCAL_DB_HOST" ] ||
-        lk_wp config set DB_HOST "$LOCAL_DB_HOST" --type=constant --quiet || return
+        lk_wp config set \
+            DB_HOST "$LOCAL_DB_HOST" --type=constant --quiet || return
     [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] ||
-        lk_wp config set DB_PASSWORD "$LOCAL_DB_PASSWORD" --type=constant --quiet || return
+        lk_wp config set \
+            DB_PASSWORD "$LOCAL_DB_PASSWORD" --type=constant --quiet || return
     lk_console_detail "Preparing database" "$LOCAL_DB_NAME"
     echo "$_SQL" | _lk_mysql || return
     lk_console_detail "Restoring from" "$1"
@@ -337,8 +398,9 @@ function lk_wp_db_restore_local() {
         pv "$1" | gunzip
     else
         pv "$1"
-    fi | _lk_mysql "$LOCAL_DB_NAME" || EXIT_STATUS="$?"
-    [ "$EXIT_STATUS" -eq 0 ] && lk_console_log "Database restored successfully" ||
+    fi | _lk_mysql "$LOCAL_DB_NAME" || EXIT_STATUS=$?
+    [ "$EXIT_STATUS" -eq 0 ] &&
+        lk_console_success "Database restored successfully" ||
         lk_console_error0 "Restore operation failed"
     return "$EXIT_STATUS"
 }
@@ -385,7 +447,7 @@ function lk_wp_sync_files_from_remote() {
     [ -d "$LOCAL_PATH" ] || mkdir -p "$LOCAL_PATH" || return
     rsync "${ARGS[@]}" || EXIT_STATUS="$?"
     [ "$EXIT_STATUS" -eq 0 ] &&
-        lk_console_log "File sync completed successfully" ||
+        lk_console_success "File sync completed successfully" ||
         lk_console_error0 "File sync failed"
     return "$EXIT_STATUS"
 }
