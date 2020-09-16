@@ -308,7 +308,7 @@ fi"
     if [ "${#LK_SSH_HOMES[@]}" -eq 0 ]; then
         lk_console_warning "No ~/.ssh directories found"
     else
-        lk_echo_args "${LK_SSH_HOMES[@]/%/\/.ssh}" |
+        lk_echo_args "${LK_SSH_HOMES[@]/%//.ssh}" |
             lk_console_list "Checking SSH configuration:" directory directories
         if [ -n "${LK_SSH_JUMP_HOST:-}" ]; then
             lk_ssh_configure "$LK_SSH_JUMP_HOST" \
@@ -323,7 +323,7 @@ fi"
         . "$LK_BASE/lib/desktop/install.sh"
     fi
 
-    lk_console_message "lk-platform successfully installed" "$LK_GREEN"
+    lk_console_success "lk-platform successfully installed"
 
     exit
 }

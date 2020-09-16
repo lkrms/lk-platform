@@ -10,5 +10,5 @@ function lk_git_recheckout() {
     lk_confirm "Uncommitted changes will be permanently deleted. Proceed?" N || return
     rm -fv "$REPO_ROOT/.git/index" &&
         git checkout --force --no-overlay HEAD -- "$REPO_ROOT" &&
-        lk_console_message "Checkout completed successfully" "$LK_GREEN"
+        lk_console_success "Checkout completed successfully"
 }

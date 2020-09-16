@@ -173,4 +173,4 @@ fi
 
 lk_wp_flush
 
-lk_console_message "WordPress successfully reset for local development" "$LK_GREEN"
+lk_console_success "WordPress successfully reset for local development"

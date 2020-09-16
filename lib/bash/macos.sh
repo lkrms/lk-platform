@@ -169,7 +169,7 @@ function lk_macos_maybe_install_pkg_url() {
             cd "$DIR" &&
             FILE=$(lk_download "$PKG_URL") &&
             lk_macos_install "$FILE" &&
-            lk_console_message "Package installed successfully" "$LK_GREEN" || exit
+            lk_console_message "Package installed successfully" || exit
     )
 }
 

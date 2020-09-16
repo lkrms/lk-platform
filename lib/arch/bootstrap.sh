@@ -13,13 +13,13 @@ MOUNT_OPTIONS=defaults          # ",discard" is added automatically if TRIM supp
 TIMEZONE=Australia/Sydney       # see /usr/share/zoneinfo
 LOCALES=(en_AU en_GB)           # UTF-8 is enforced
 LANGUAGE=en_AU:en_GB:en
-LK_BASE=${LK_BASE:-/opt/lk-platform}
+MIRROR=http://archlinux.mirror.linacreative.com/archlinux/\$repo/os/\$arch
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
 LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(
     sed 's/[^a-zA-Z0-9]//g' <<<"$LK_PATH_PREFIX"
 )}"
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
-MIRROR=http://archlinux.mirror.linacreative.com/archlinux/\$repo/os/\$arch
+export LK_BASE=${LK_BASE:-/opt/${LK_PATH_PREFIX}platform}
 
 # these will be added to the defaults in packages.sh
 PACMAN_PACKAGES=()
@@ -111,7 +111,7 @@ function configure_pacman() {
 LOG_FILE="/tmp/${LK_PATH_PREFIX}bootstrap.$(date +'%s').log"
 exec 6>&1 7>&2
 exec > >(tee "$LOG_FILE") 2>&1
-trap "exit_trap" EXIT
+trap exit_trap EXIT
 
 for FILE_PATH in /lib/bash/core.sh /lib/bash/arch.sh /lib/arch/packages.sh; do
     FILE="$_DIR/${FILE_PATH##*/}"
@@ -511,10 +511,8 @@ while :; do
     lk_confirm "Try again?" Y || break
 done
 
-lk_console_message "Bootstrap complete" "$LK_GREEN"
-if lk_is_true "${GRUB_INSTALLED:-0}"; then
-    lk_console_detail "Reboot at your leisure"
-else
-    lk_console_detail "To install the boot loader manually:" \
+if ! lk_is_true "${GRUB_INSTALLED:-0}"; then
+    lk_console_message "To install the boot loader manually:" \
         'arch-chroot /mnt update-grub --install'
 fi
+lk_console_success "Bootstrap complete"
