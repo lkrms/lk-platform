@@ -723,7 +723,11 @@ function lk_log_close() {
 
 function lk_log_bypass() {
     if [ -n "${LK_LOG_FILE:-}" ]; then
-        "$@" >&6 2>&7
+        if [ -t 1 ]; then
+            "$@" >&6 2>&7
+        else
+            "$@" 2>&7
+        fi
     else
         "$@"
     fi
