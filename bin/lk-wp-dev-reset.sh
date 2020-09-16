@@ -90,7 +90,7 @@ fi
 [ "${PLUGIN_CODE:-0}" -eq 0 ] ||
     lk_console_warning0 "Plugin code will be allowed to run where necessary"
 
-lk_no_input || lk_confirm "Proceed?" Y || lk_die
+lk_confirm "Proceed?" Y || lk_die
 
 lk_console_message "Resetting WordPress for local development"
 

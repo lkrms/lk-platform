@@ -131,7 +131,7 @@ lk_console_detail "Excluded files:" "$([ "${#EXCLUDE[@]}" -eq 0 ] &&
     echo "<none>" ||
     lk_echo_array EXCLUDE)"
 
-lk_no_input || lk_confirm "Proceed?" Y
+lk_confirm "Proceed?" Y
 
 lk_console_message "Enabling WordPress maintenance mode"
 [ -n "$MAINTENANCE" ] || {

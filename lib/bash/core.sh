@@ -893,26 +893,30 @@ function lk_console_list() {
         ))" "" ""
 }
 
-# lk_console_read prompt [default [read_arg...]]
+# lk_console_read <PROMPT> [<DEFAULT> [<READ_ARG>...]]
 function lk_console_read() {
-    local PROMPT=("$1") DEFAULT="${2:-}" VALUE
+    local PROMPT=("$1") DEFAULT=${2:-} VALUE
+    if lk_no_input && [ $# -ge 2 ]; then
+        echo "$DEFAULT"
+        return
+    fi
     [ -z "$DEFAULT" ] || PROMPT+=("[$DEFAULT]")
     printf '%s ' "\
 $LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_CONSOLE_COLOUR} :: \
 $LK_RESET$LK_BOLD${PROMPT[*]//$'\n'/$'\n    '}$LK_RESET" >&"${_LK_FD:-2}"
     read -re "${@:3}" VALUE || return
-    [ -n "$VALUE" ] || VALUE="$DEFAULT"
+    [ -n "$VALUE" ] || VALUE=$DEFAULT
     echo "$VALUE"
 }
 
-# lk_console_read_secret prompt [read_arg...]
+# lk_console_read_secret <PROMPT> [<READ_ARG>...]
 function lk_console_read_secret() {
     lk_console_read "$1" "" -s "${@:2}"
 }
 
-# lk_confirm prompt [default [read_arg...]]
+# lk_confirm <PROMPT> [<DEFAULT> [<READ_ARG>...]]
 function lk_confirm() {
-    local PROMPT=("$1") DEFAULT="${2:-}" VALUE
+    local PROMPT=("$1") DEFAULT=${2:-} VALUE
     if lk_is_true "$DEFAULT"; then
         PROMPT+=("[Y/n]")
         DEFAULT=Y
@@ -923,11 +927,14 @@ function lk_confirm() {
         PROMPT+=("[y/n]")
         DEFAULT=
     fi
+    if lk_no_input; then
+        VALUE=$DEFAULT
+    fi
     while [[ ! ${VALUE:-} =~ ^([yY]([eE][sS])?|[nN][oO]?)$ ]]; do
         printf '%s ' "\
 $LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_CONSOLE_COLOUR} :: \
 $LK_RESET$LK_BOLD${PROMPT[*]//$'\n'/$'\n    '}$LK_RESET" >&"${_LK_FD:-2}"
-        read -re "${@:3}" VALUE && [ -n "$VALUE" ] || VALUE="$DEFAULT"
+        read -re "${@:3}" VALUE && [ -n "$VALUE" ] || VALUE=$DEFAULT
     done
     [[ $VALUE =~ ^[yY]([eE][sS])?$ ]]
 }
@@ -946,21 +953,35 @@ function lk_console_checklist() {
     # maximum list height: 10
     # maximum dialog height: 16 + lines of text after wrapping
     local TITLE=$1 TEXT=$2 LIST_HEIGHT=10 WIDTH=38 MAX_WIDTH=60 \
-        LINE ITEMS=() INITIAL_STATUS
+        INITIAL_STATUS LINE ITEM ITEMS=()
     shift 2 || return
+    # If an odd number of arguments remain, the last one is INITIAL_STATUS
+    ! (($# % 2)) || INITIAL_STATUS="${*: -1:1}"
+    INITIAL_STATUS=${INITIAL_STATUS:-${LK_CHECKLIST_DEFAULT:-on}}
     if [ $# -lt 2 ]; then
         while IFS= read -r LINE || [ -n "$LINE" ]; do
-            ITEMS+=("$(printf '%q %q' "$LINE" "$LINE")")
+            ! lk_no_input || {
+                [ "$INITIAL_STATUS" = off ] || echo "$LINE"
+                continue
+            }
+            ITEM=$(lk_ellipsis "$MAX_WIDTH" "$LINE")
+            ITEMS+=("$(printf '%q %q' "$LINE" "$ITEM")")
+            [ ${#ITEM} -le "$WIDTH" ] || WIDTH=${#ITEM}
         done
     else
         while [ $# -ge 2 ]; do
+            ! lk_no_input || {
+                [ "$INITIAL_STATUS" = off ] || echo "$1"
+                shift 2
+                continue
+            }
             ITEM=$(lk_ellipsis "$MAX_WIDTH" "$2")
             ITEMS+=("$(printf '%q %q' "$1" "$ITEM")")
             [ ${#ITEM} -le "$WIDTH" ] || WIDTH=${#ITEM}
             shift 2
         done
     fi
-    INITIAL_STATUS=${1:-${LK_CHECKLIST_DEFAULT:-on}}
+    ! lk_no_input || return 0
     [ ${#ITEMS[@]} -ge "$LIST_HEIGHT" ] || LIST_HEIGHT=${#ITEMS[@]}
     ((WIDTH += 16, WIDTH += WIDTH % 2))
     TEXT=$(fold -s -w $((WIDTH - 4)) <<<"$TEXT")

@@ -439,10 +439,9 @@ function lk_wp_sync_files_from_remote() {
     ARGS+=("$1:$REMOTE_PATH/" "$LOCAL_PATH/")
     lk_console_detail "Local files will be overwritten with command:" \
         "rsync ${ARGS[*]}"
-    lk_wp_quiet || lk_no_input || ! lk_confirm "Perform a trial run first?" N ||
+    lk_wp_quiet || ! lk_confirm "Perform a trial run first?" N ||
         rsync --dry-run "${ARGS[@]}" | "${PAGER:-less}" >&2 || true
-    lk_no_input ||
-        lk_confirm "LOCAL CHANGES WILL BE PERMANENTLY LOST. Proceed?" Y ||
+    lk_confirm "LOCAL CHANGES WILL BE PERMANENTLY LOST. Proceed?" Y ||
         return
     [ -d "$LOCAL_PATH" ] || mkdir -p "$LOCAL_PATH" || return
     rsync "${ARGS[@]}" || EXIT_STATUS="$?"

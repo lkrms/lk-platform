@@ -318,7 +318,7 @@ EOF
                 lk_console_detail_list "$(
                     lk_maybe_plural ${#UPGRADE_FORMULAE[@]} Update Updates
                 ) available:" formula formulae
-            lk_no_input || lk_confirm "OK to upgrade outdated formulae?" Y ||
+            lk_confirm "OK to upgrade outdated formulae?" Y ||
                 UPGRADE_FORMULAE=()
         }
 
@@ -331,7 +331,7 @@ EOF
                 lk_console_detail_list "$(
                     lk_maybe_plural ${#UPGRADE_CASKS[@]} Update Updates
                 ) available:" cask casks
-            lk_no_input || lk_confirm "OK to upgrade outdated casks?" Y ||
+            lk_confirm "OK to upgrade outdated casks?" Y ||
                 UPGRADE_CASKS=()
         }
     }
@@ -416,7 +416,7 @@ Please open the Mac App Store and sign in"
                     lk_console_detail_list "$(
                         lk_maybe_plural ${#UPGRADE_APPS[@]} Update Updates
                     ) available:" app apps
-                lk_no_input || lk_confirm "OK to upgrade outdated apps?" Y ||
+                lk_confirm "OK to upgrade outdated apps?" Y ||
                     UPGRADE_APPS=()
             fi
 

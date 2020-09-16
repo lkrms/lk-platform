@@ -142,7 +142,7 @@
         [ ! -d "$LK_BASE" ] ||
         {
             lk_console_detail "Existing installation found at" "$LK_BASE"
-            lk_no_input || lk_confirm "Reconfigure system?" Y || lk_die
+            lk_confirm "Reconfigure system?" Y || lk_die
         }
     export LK_BASE="$LK_INST"
     LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(
@@ -177,7 +177,7 @@
             "LK_PLATFORM_BRANCH" \
             "$LK_BOLD$LK_PLATFORM_BRANCH$LK_RESET" \
             "$LK_BOLD$BRANCH$LK_RESET")"
-        if ! lk_no_input && lk_confirm "Switch to $LK_PLATFORM_BRANCH?" N; then
+        if lk_confirm "Switch to $LK_PLATFORM_BRANCH?" N; then
             lk_console_item "Switching to" "$LK_PLATFORM_BRANCH"
             sudo -Hu "$REPO_OWNER" git checkout "$LK_PLATFORM_BRANCH"
             BRANCH="$LK_PLATFORM_BRANCH"
