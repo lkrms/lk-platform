@@ -26,7 +26,7 @@ function lk_dir_set_permissions() {
             lk_maybe_sudo chown -Rhc "$OWNER" "$DIR" >"$LOG_DIR/chown.log" || return
             lk_console_detail "File ownership changes:" "$(wc -l <"$LOG_DIR/chown.log")" "$LK_GREEN"
         else
-            lk_console_warning "Unable to set owner (not running as root)"
+            lk_console_warning0 "Unable to set owner (not running as root)"
         fi
     for WRITABLE in "" w; do
         [ -z "$WRITABLE" ] || [ -n "$WRITABLE_REGEX" ] || continue

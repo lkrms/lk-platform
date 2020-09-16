@@ -172,7 +172,7 @@ function lk_trap_exit() {
         local EXIT_STATUS=$? i
         [ "$EXIT_STATUS" -eq 0 ] ||
             [[ ${FUNCNAME[1]:-} =~ lk_(die|elevate) ]] ||
-            lk_console_error "$(_lk_caller): unhandled error"
+            lk_console_error0 "$(_lk_caller): unhandled error"
         for i in ${LK_EXIT_DELETE[@]+"${LK_EXIT_DELETE[@]}"}; do
             rm -Rf -- "$i" || true
         done

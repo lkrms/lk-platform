@@ -208,7 +208,7 @@
             exit
         fi
     else
-        lk_console_warning "Unable to check for lk-platform updates"
+        lk_console_warning0 "Unable to check for lk-platform updates"
     fi
 
     # use the opening "Environment:" log entry created by hosting.sh as a last

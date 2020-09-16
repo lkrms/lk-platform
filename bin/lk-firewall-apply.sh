@@ -52,7 +52,7 @@ if [ -n "${ACCEPT_OUTPUT_CHAIN:-}" ]; then
             OUTPUT_ALLOW+=("${GITHUB_IPS[@]}")
             lk_console_detail "Added to whitelist from GitHub API:" "${#GITHUB_IPS[@]} IP $(lk_maybe_plural "${#GITHUB_IPS[@]}" range ranges)"
         else
-            lk_console_warning "Unable to retrieve IP ranges from GitHub API"
+            lk_console_warning0 "Unable to retrieve IP ranges from GitHub API"
             unset GITHUB_IPS
         fi
     fi
