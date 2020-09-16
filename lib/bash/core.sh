@@ -632,35 +632,24 @@ function lk_log() {
     done
 }
 
-# lk_log_output [<TEMP_LOG_PATH>]
-function lk_log_output() {
+# shellcheck disable=SC2120
+function lk_log_create_file() {
     local OWNER="${LK_LOG_FILE_OWNER:-$UID}" GROUP="${LK_LOG_FILE_GROUP:-}" \
-        LOG_PATH LOG_DIRS LOG_FILE LOG_DIR INSERT_LOG_FILE HEADER=() IFS
-    ! lk_has_arg --no-log || return 0
-    LOG_PATH=${LK_INST:-$LK_BASE}/var/log/${0##*/}-$UID.log
-    if [ -n "${1:-}" ]; then
-        if [ -d "${LK_INST:-$LK_BASE}" ] &&
-            [ -n "$(ls -A "${LK_INST:-$LK_BASE}")" ]; then
-            [ ! -e "$1" ] ||
-                INSERT_LOG_FILE=$1
-        else
-            LOG_PATH=$1
-        fi
-    fi
-    [[ $LOG_PATH =~ ^((.*)/)?([^/]+\.log)$ ]] ||
-        lk_warn "invalid log path: $1" || return
-    LOG_DIRS=("${BASH_REMATCH[2]:-.}")
-    LOG_FILE=${BASH_REMATCH[3]}
-    lk_in_array ~ LOG_DIRS || LOG_DIRS+=(~)
-    LOG_DIRS+=(/tmp)
-    for LOG_DIR in "${LOG_DIRS[@]}"; do
+        LOG_DIRS=() LOG_DIR LOG_PATH
+    [ ! -d "${LK_INST:-$LK_BASE}" ] ||
+        [ -z "$(ls -A "${LK_INST:-$LK_BASE}")" ] ||
+        LOG_DIRS=("${LK_INST:-$LK_BASE}/var/log")
+    LOG_DIRS+=("$@")
+    for LOG_DIR in ${LOG_DIRS[@]+"${LOG_DIRS[@]}"}; do
         # Find the first LOG_DIR where the user can write to LOG_DIR/LOG_FILE,
         # installing LOG_DIR (world-writable) and LOG_FILE (owner-only) if
         # needed, running commands via sudo only if they fail without it
-        [ -d "$LOG_DIR" ] || lk_elevate_if_error install -d \
-            -m "$(lk_pad_zero 4 "${LK_LOG_DIR_MODE:-0777}")" \
-            "$LOG_DIR" 2>/dev/null || continue
-        LOG_PATH="$LOG_DIR/$LOG_FILE"
+        [ -d "$LOG_DIR" ] ||
+            lk_elevate_if_error install -d \
+                -m "$(lk_pad_zero 4 "${LK_LOG_DIR_MODE:-0777}")" \
+                "$LOG_DIR" 2>/dev/null ||
+            continue
+        LOG_PATH=$LOG_DIR/${0##*/}-$UID.log
         if [ -f "$LOG_PATH" ]; then
             [ -w "$LOG_PATH" ] || {
                 lk_elevate_if_error chmod \
@@ -677,42 +666,64 @@ function lk_log_output() {
                 -o "$OWNER" ${GROUP:+-g "$GROUP"} \
                 /dev/null "$LOG_PATH" 2>/dev/null || continue
         fi
-        [ -z "${INSERT_LOG_FILE:-}" ] || {
-            cat "$INSERT_LOG_FILE" >>"$LOG_PATH" &&
-                rm "$INSERT_LOG_FILE" || return
-        }
-        # Log invocation details, including script path if running from a source
-        # file, to separate this from any previous runs
-        { [ ${#BASH_SOURCE[@]} -eq 0 ] ||
-            [[ ! $0 =~ ^((.*)/)?([^/]+)$ ]] ||
-            ! DIR=$(cd "${BASH_REMATCH[2]:-.}" && pwd -P) ||
-            HEADER+=("${DIR%/}/"); } 2>/dev/null
-        HEADER+=("${0##*/} invoked")
-        [ "${#LK_ARGV[@]}" -eq 0 ] || HEADER+=($(
-            printf ' with %s %s:' \
-                "${#LK_ARGV[@]}" \
-                "$(lk_maybe_plural \
-                    "${#LK_ARGV[@]}" "argument" "arguments")"
-            printf '\n- %q' "${LK_ARGV[@]}"
-        ))
-        IFS=
-        lk_log "$LK_BOLD====> ${HEADER[*]}$LK_RESET" >>"$LOG_PATH" &&
-            exec 6>&1 7>&2 &&
-            exec > >(tee >(lk_log >>"$LOG_PATH")) 2>&1 ||
-            return
-        lk_echoc "Output is being logged to $LK_BOLD$LOG_PATH$LK_RESET" \
-            "$LK_GREY" >&7
-        # shellcheck disable=SC2034
-        LK_LOG_FILE=$LOG_PATH
+        echo "$LOG_PATH"
         return
     done
-    lk_warn "unable to open log file"
     return 1
 }
 
+# lk_log_output [<TEMP_LOG_FILE>]
+function lk_log_output() {
+    local LOG_PATH DIR HEADER=() IFS
+    ! lk_has_arg --no-log || return 0
+    if [ $# -ge 1 ]; then
+        if LOG_PATH=$(lk_log_create_file); then
+            # If TEMP_LOG_FILE exists, move its contents to the end of LOG_PATH
+            [ ! -e "$1" ] || {
+                cat "$1" >>"$LOG_PATH" &&
+                    rm "$1" || return
+            }
+        else
+            LOG_PATH=$1
+        fi
+    else
+        LOG_PATH=$(lk_log_create_file ~ /tmp) ||
+            lk_warn "unable to open log file" || return
+    fi
+    # Log invocation details, including script path if running from a source
+    # file, to separate this from any previous runs
+    { [ ${#BASH_SOURCE[@]} -eq 0 ] ||
+        [[ ! $0 =~ ^((.*)/)?([^/]+)$ ]] ||
+        ! DIR=$(cd "${BASH_REMATCH[2]:-.}" && pwd -P) ||
+        HEADER+=("${DIR%/}/"); } 2>/dev/null
+    HEADER+=("${0##*/} invoked")
+    [ "${#LK_ARGV[@]}" -eq 0 ] || HEADER+=($(
+        printf ' with %s %s:' \
+            "${#LK_ARGV[@]}" \
+            "$(lk_maybe_plural \
+                "${#LK_ARGV[@]}" "argument" "arguments")"
+        printf '\n- %q' "${LK_ARGV[@]}"
+    ))
+    IFS=
+    lk_log "$LK_BOLD====> ${HEADER[*]}$LK_RESET" >>"$LOG_PATH" &&
+        exec 6>&1 7>&2 &&
+        exec > >(tee >(lk_log >>"$LOG_PATH")) 2>&1 ||
+        return
+    lk_echoc "Output is being logged to $LK_BOLD$LOG_PATH$LK_RESET" \
+        "$LK_GREY" >&7
+    # shellcheck disable=SC2034
+    LK_LOG_FILE=$LOG_PATH
+}
+
+function lk_log_close() {
+    if [ -n "${LK_LOG_FILE:-}" ]; then
+        exec >&6 2>&7 6>&- 7>&-
+    fi
+}
+
 function lk_log_bypass() {
-    if { true >&7; } 2>/dev/null; then
-        "$@" 2>&7
+    if [ -n "${LK_LOG_FILE:-}" ]; then
+        "$@" >&6 2>&7
     else
         "$@"
     fi

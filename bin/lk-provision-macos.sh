@@ -14,6 +14,19 @@ lk_die() { s=$? && echo "${BASH_SOURCE[0]:+${BASH_SOURCE[0]}: }$1" >&2 && (retur
 [ "$EUID" -ne 0 ] || lk_die "cannot run as root"
 [ "$(uname -s)" = Darwin ] || lk_die "not running on macOS"
 
+function exit_trap() {
+    local LOG_PATH
+    if lk_log_close &&
+        LOG_PATH=$(lk_log_create_file) &&
+        [ "$LOG_PATH" != "$LK_LOG_FILE" ]; then
+        lk_console_log "Moving:" "$LK_LOG_FILE -> $LOG_PATH"
+        cat "$LK_LOG_FILE" >>"$LOG_PATH" &&
+            rm "$LK_LOG_FILE" ||
+            lk_console_warning0 \
+                "Error moving provisioning log entries to" "$LOG_PATH"
+    fi
+}
+
 {
     export SUDO_PROMPT="[sudo] password for %p: "
 
@@ -70,6 +83,7 @@ lk_die() { s=$? && echo "${BASH_SOURCE[0]:+${BASH_SOURCE[0]}: }$1" >&2 && (retur
 
     LK_LOG_FILE_MODE=0600 \
         lk_log_output ~/"${LK_PATH_PREFIX}install.log"
+    trap exit_trap EXIT
 
     lk_console_log "Provisioning macOS"
 
