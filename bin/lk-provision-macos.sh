@@ -285,10 +285,8 @@ EOF
                 defaults write "$DOMAIN" % -date "$(date -uR)" <<<"$KEYS"
         fi
     done
-    DOMAIN=com.apple.Spotlight
-    lk_console_detail "Disabling Spotlight instructions in" "$DOMAIN"
-    defaults write "$DOMAIN" showedFTE -bool true
-    defaults write "$DOMAIN" useCount -int 3
+    lk_macos_defaults_maybe_write 1 com.apple.Spotlight showedFTE -bool true
+    lk_macos_defaults_maybe_write 3 com.apple.Spotlight useCount -int 3
 
     # source ~/.bashrc in ~/.bash_profile, creating both files if necessary
     [ -f ~/.bashrc ] ||

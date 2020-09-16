@@ -173,6 +173,20 @@ function lk_macos_maybe_install_pkg_url() {
     )
 }
 
+# lk_macos_defaults_maybe_write <EXPECTED> <DOMAIN> <KEY> [<TYPE>] <VALUE>
+#
+# Run `defaults write DOMAIN KEY VALUE` if `defaults read DOMAIN KEY` doesn't
+# output EXPECTED.
+function lk_macos_defaults_maybe_write() {
+    local EXPECTED=$1 CURRENT
+    shift
+    if ! CURRENT=$(defaults read "$1" "$2" 2>/dev/null) ||
+        [ "$CURRENT" != "$EXPECTED" ]; then
+        lk_console_detail "Configuring '$2' in" "$1"
+        defaults write "$@"
+    fi
+}
+
 # lk_macos_defaults_dump [<DEFAULTS_ARG>...]
 function lk_macos_defaults_dump() {
     local IFS=", " DOMAINS DIR DOMAIN FILE
