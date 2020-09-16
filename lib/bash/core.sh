@@ -899,8 +899,7 @@ function lk_console_read() {
     [ -z "$DEFAULT" ] || PROMPT+=("[$DEFAULT]")
     printf '%s ' "$LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_CONSOLE_COLOUR} :: $LK_RESET$LK_BOLD${PROMPT[*]}$LK_RESET" >&"${_LK_FD:-2}"
     read -re "${@:3}" VALUE || return
-    [ -n "$VALUE" ] ||
-        { VALUE="$DEFAULT" && echo >&"${_LK_FD:-2}"; }
+    [ -n "$VALUE" ] || VALUE="$DEFAULT"
     echo "$VALUE"
 }
 
@@ -922,16 +921,13 @@ function lk_confirm() {
         PROMPT+=("[y/n]")
         DEFAULT=
     fi
-    while ! [[ ${VALUE:-} =~ ^(Y|YES|N|NO)$ ]]; do
+    while [[ ! ${VALUE:-} =~ ^([yY]([eE][sS])?|[nN][oO]?)$ ]]; do
         printf '%s ' "\
 $LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_CONSOLE_COLOUR} :: \
 $LK_RESET$LK_BOLD${PROMPT[*]}$LK_RESET" >&"${_LK_FD:-2}"
-        read -re "${@:3}" VALUE || VALUE="$DEFAULT"
-        [ -n "$VALUE" ] &&
-            VALUE="$(lk_upper "$VALUE")" ||
-            { VALUE="$DEFAULT" && echo >&"${_LK_FD:-2}"; }
+        read -re "${@:3}" VALUE && [ -n "$VALUE" ] || VALUE="$DEFAULT"
     done
-    [[ $VALUE =~ ^(Y|YES)$ ]]
+    [[ $VALUE =~ ^[yY]([eE][sS])?$ ]]
 }
 
 # lk_console_checklist <TITLE> <TEXT> [<TAG> <ITEM>...] [<INITIAL_STATUS>]
