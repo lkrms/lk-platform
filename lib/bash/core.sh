@@ -127,11 +127,17 @@ function lk_myself() {
 }
 
 function _lk_caller() {
-    local SOURCE=${BASH_SOURCE[2]:-} FUNC=${FUNCNAME[2]:-} \
+    local CONTEXT REGEX='^([0-9]+) ([^ ]+) (.*)$' SOURCE FUNC LINE \
         DIM=${LK_DIM:-$LK_GREY} CALLER=()
+    if CONTEXT=$(caller 1) &&
+        [[ $CONTEXT =~ $REGEX ]]; then
+        SOURCE=${BASH_REMATCH[3]}
+        FUNC=${BASH_REMATCH[2]}
+        LINE=${BASH_REMATCH[1]}
+    fi
     # If the caller isn't in the running script (or no script is running), start
     # with the shell/script name
-    if [ "$SOURCE" != "$0" ] || [ "$SOURCE" = main ]; then
+    if [ "${SOURCE:=}" != "$0" ] || [ "$SOURCE" = main ]; then
         CALLER=("$LK_BOLD${0##*/}$LK_RESET")
     fi
     # Always include source filename and line number
@@ -143,10 +149,12 @@ function _lk_caller() {
                 SOURCE=${SOURCE//~/"~"}
                 echo "$SOURCE"
             fi
-        )$DIM:${BASH_LINENO[1]}$LK_RESET")
+        )$DIM:$LINE$LK_RESET")
     fi
     lk_is_false "${LK_DEBUG:-0}" ||
-        [ "$FUNC" = main ] || CALLER+=(${FUNC:+"$FUNC$DIM()$LK_RESET"})
+        [ -z "${FUNC:-}" ] ||
+        [ "$FUNC" = main ] ||
+        CALLER+=("$FUNC$DIM()$LK_RESET")
     lk_implode "$DIM->$LK_RESET" "${CALLER[@]}"
 }
 
@@ -390,7 +398,7 @@ function lk_replace() {
         _LK_FIND=${_LK_FIND%.}
     }
     [ $# -gt 2 ] &&
-        echo "${3//$_LK_FIND/$2}${_LK_APPEND:-}" ||
+        eval "echo \"\${3//$_LK_FIND/\$2}\${_LK_APPEND:-}\"" ||
         lk_xargs lk_replace "$1" "$2"
 }
 
@@ -1009,6 +1017,10 @@ function lk_no_input() {
         lk_is_true "${LK_NO_INPUT:-}"
 }
 
+function lk_verbose() {
+    lk_is_true "${LK_VERBOSE:-}"
+}
+
 # lk_add_file_suffix file_path suffix [ext]
 #   Add SUFFIX to FILE_PATH without changing FILE_PATH's extension.
 #   Use EXT for special extensions like ".tar.gz".
@@ -1057,12 +1069,35 @@ function lk_is_pdf() {
         [ "$MIME_TYPE" = "application/pdf" ]
 }
 
+function lk_is_host() {
+    local DOMAIN_PART_REGEX DOMAIN_NAME_REGEX \
+        _O IPV4_REGEX _H IPV6_REGEX HOST_REGEX
+    DOMAIN_PART_REGEX="[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
+    DOMAIN_NAME_REGEX="($DOMAIN_PART_REGEX(\\.|\$)){2,}"
+    _O="(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])"
+    IPV4_REGEX="($_O\\.){3}$_O"
+    _H="[0-9a-fA-F]{1,4}"
+    IPV6_REGEX="(($_H:){7}(:|$_H)|($_H:){6}(:|:$_H)|($_H:){5}(:|(:$_H){1,2})|($_H:){4}(:|(:$_H){1,3})|($_H:){3}(:|(:$_H){1,4})|($_H:){2}(:|(:$_H){1,5})|$_H:(:|(:$_H){1,6})|:(:|(:$_H){1,7}))"
+    HOST_REGEX="($IPV4_REGEX|$IPV6_REGEX|$DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)"
+    [[ $1 =~ ^${HOST_REGEX}$ ]]
+}
+
+function lk_is_fqdn() {
+    local DOMAIN_PART_REGEX DOMAIN_NAME_REGEX
+    DOMAIN_PART_REGEX="[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
+    DOMAIN_NAME_REGEX="($DOMAIN_PART_REGEX(\\.|\$)){2,}"
+    [[ $1 =~ ^${DOMAIN_NAME_REGEX}$ ]]
+}
+
 # lk_is_email STRING
 #   True if STRING is a valid email address. Quoted local parts are not
 #   supported.
 function lk_is_email() {
-    local EMAIL_REGEX="^[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@([a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.|\$)){2,}\$"
-    [[ $1 =~ $EMAIL_REGEX ]]
+    local DOMAIN_PART_REGEX DOMAIN_NAME_REGEX EMAIL_ADDRESS_REGEX
+    DOMAIN_PART_REGEX="[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
+    DOMAIN_NAME_REGEX="($DOMAIN_PART_REGEX(\\.|\$)){2,}"
+    EMAIL_ADDRESS_REGEX="[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@$DOMAIN_NAME_REGEX"
+    [[ $1 =~ ^${EMAIL_ADDRESS_REGEX}$ ]]
 }
 
 # lk_is_uri uri
@@ -1070,8 +1105,9 @@ function lk_is_email() {
 #   and authority components ("scheme://host" at minimum).
 #   See https://en.wikipedia.org/wiki/Uniform_Resource_Identifier
 function lk_is_uri() {
-    local URI_REGEX='^(([a-zA-Z][-a-zA-Z0-9+.]*):)(//(([-a-zA-Z0-9._~%!$&'"'"'()*+,;=]+)(:([-a-zA-Z0-9._~%!$&'"'"'()*+,;=]*))?@)?([-a-zA-Z0-9._~%!$&'"'"'()*+,;=]+|\[([0-9a-fA-F:]+)\])(:([0-9]+))?)([-a-zA-Z0-9._~%!$&'"'"'()*+,;=:@/]+)?(\?([-a-zA-Z0-9._~%!$&'"'"'()*+,;=:@?/]+))?(#([-a-zA-Z0-9._~%!$&'"'"'()*+,;=:@?/]*))?$'
-    [[ $1 =~ $URI_REGEX ]]
+    local URI_REGEX _Q=
+    URI_REGEX="(([a-zA-Z][-a-zA-Z0-9+.]*):)$_Q(//(([-a-zA-Z0-9._~%!\$&'()*+,;=]+)(:([-a-zA-Z0-9._~%!\$&'()*+,;=]*))?@)?([-a-zA-Z0-9._~%!\$&'()*+,;=]+|\\[([0-9a-fA-F:]+)\\])(:([0-9]+))?)$_Q([-a-zA-Z0-9._~%!\$&'()*+,;=:@/]+)?(\\?([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]+))?(#([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]*))?"
+    [[ $1 =~ ^${URI_REGEX}$ ]]
 }
 
 # lk_uri_parts uri uri_component...
@@ -1088,9 +1124,9 @@ function lk_is_uri() {
 #     query
 #     fragment
 function lk_uri_parts() {
-    local PART KEY VALUE \
-        URI_REGEX='^(([a-zA-Z][-a-zA-Z0-9+.]*):)?(\/\/(([-a-zA-Z0-9._~%!$&'"'"'()*+,;=]+)(:([-a-zA-Z0-9._~%!$&'"'"'()*+,;=]*))?@)?([-a-zA-Z0-9._~%!$&'"'"'()*+,;=]+|\[([0-9a-fA-F:]+)\])(:([0-9]+))?)?([-a-zA-Z0-9._~%!$&'"'"'()*+,;=:@/]+)?(\?([-a-zA-Z0-9._~%!$&'"'"'()*+,;=:@?/]+))?(#([-a-zA-Z0-9._~%!$&'"'"'()*+,;=:@?/]*))?$'
-    [[ "$1" =~ $URI_REGEX ]] || return
+    local PART KEY VALUE URI_REGEX _Q="?"
+    URI_REGEX="(([a-zA-Z][-a-zA-Z0-9+.]*):)$_Q(//(([-a-zA-Z0-9._~%!\$&'()*+,;=]+)(:([-a-zA-Z0-9._~%!\$&'()*+,;=]*))?@)?([-a-zA-Z0-9._~%!\$&'()*+,;=]+|\\[([0-9a-fA-F:]+)\\])(:([0-9]+))?)$_Q([-a-zA-Z0-9._~%!\$&'()*+,;=:@/]+)?(\\?([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]+))?(#([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]*))?"
+    [[ "$1" =~ ^${URI_REGEX}$ ]] || return
     for PART in "${@:2}"; do
         KEY=$(lk_upper "_${PART#_}")
         case "$KEY" in
@@ -1134,9 +1170,9 @@ function lk_uri_parts() {
 #   Match and output URIs ("scheme://host" at minimum) in standard input or
 #   each FILE_PATH.
 function lk_get_uris() {
-    local EXIT_STATUS=0 \
-        URI_REGEX='\b(([a-zA-Z][-a-zA-Z0-9+.]*):)(//(([-a-zA-Z0-9._~%!$&'"'"'()*+,;=]+)(:([-a-zA-Z0-9._~%!$&'"'"'()*+,;=]*))?@)?([-a-zA-Z0-9._~%!$&'"'"'()*+,;=]+|\[([0-9a-fA-F:]+)\])(:([0-9]+))?)([-a-zA-Z0-9._~%!$&'"'"'()*+,;=:@/]+)?(\?([-a-zA-Z0-9._~%!$&'"'"'()*+,;=:@?/]+))?(#([-a-zA-Z0-9._~%!$&'"'"'()*+,;=:@?/]*))?\b'
-    grep -Eo "$URI_REGEX" "$@" || EXIT_STATUS="$?"
+    local EXIT_STATUS=0 URI_REGEX _Q=
+    URI_REGEX="(([a-zA-Z][-a-zA-Z0-9+.]*):)$_Q(//(([-a-zA-Z0-9._~%!\$&'()*+,;=]+)(:([-a-zA-Z0-9._~%!\$&'()*+,;=]*))?@)?([-a-zA-Z0-9._~%!\$&'()*+,;=]+|\\[([0-9a-fA-F:]+)\\])(:([0-9]+))?)$_Q([-a-zA-Z0-9._~%!\$&'()*+,;=:@/]+)?(\\?([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]+))?(#([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]*))?"
+    grep -Eo "\\b$URI_REGEX\\b" "$@" || EXIT_STATUS="$?"
     # exit 0 unless there's an actual error
     [ "$EXIT_STATUS" -eq 0 ] || [ "$EXIT_STATUS" -eq 1 ]
 }
@@ -1367,22 +1403,23 @@ function lk_users_exist() {
 function lk_test_many() {
     local TEST="$1"
     shift
+    [ $# -gt 0 ] || return
     while [ $# -gt 0 ]; do
-        test "$TEST" "$1" || return
+        eval "$TEST \"\$1\"" || return
         shift
     done
 }
 
 function lk_paths_exist() {
-    [ $# -gt 0 ] && lk_test_many "-e" "$@"
+    lk_test_many "test -e" "$@"
 }
 
 function lk_files_exist() {
-    [ $# -gt 0 ] && lk_test_many "-f" "$@"
+    lk_test_many "test -f" "$@"
 }
 
 function lk_dirs_exist() {
-    [ $# -gt 0 ] && lk_test_many "-d" "$@"
+    lk_test_many "test -d" "$@"
 }
 
 function lk_remove_false() {
@@ -1686,8 +1723,99 @@ $HEXTET:(:|(:$HEXTET){1,6})|\
 :(:|(:$HEXTET){1,7}))($PREFIX)?\$"
 }
 
-# lk_resolve_hosts host...
-function lk_resolve_hosts() {
+function _lk_node_ip() {
+    local i PRIVATE=("${@:2}") IP IFS
+    IP=$(if lk_command_exists ip; then
+        ip address show
+    else
+        # For reference, macOS output examples:
+        # - inet 10.10.10.4 netmask 0xffff0000 broadcast 10.10.255.255
+        # - inet6 fe80::1c43:b79d:5dfe:c0a4%en0 prefixlen 64 secured scopeid 0x8
+        ifconfig | sed -E 's/ (prefixlen |netmask (0xf*[8ce]?0*( |$)))/\/\2/'
+    fi | awk "\
+BEGIN                                       { b[\"f\"] = 4
+                                              b[\"e\"] = 3
+                                              b[\"c\"] = 2
+                                              b[\"8\"] = 1
+                                              b[\"0\"] = 0 }
+\$1 == \"$1\" && \$2 ~ /\\/[0-9]+\$/        { print \$2 }
+\$1 == \"$1\" && \$2 ~ /\\/0x[0-9a-f]{8}\$/ { split(\$2, a, \"/0x\")
+                                              p=0
+                                              for (i = 1; i <= length(a[2]); i++)
+                                                  p += b[substr(a[2], i, 1)]
+                                              printf \"%s/%s\\n\", a[1], p }" |
+        sed -E 's/%[^/]+\//\//') || return
+    {
+        IFS='|'
+        grep -Ev "^(${PRIVATE[*]})" <<<"$IP" || true
+        lk_is_true "${LK_IP_PUBLIC_ONLY:-}" ||
+            for i in "${PRIVATE[@]}"; do
+                grep -E "^$i" <<<"$IP" || true
+            done
+    } | {
+        if lk_is_true "${LK_IP_KEEP_PREFIX:-}"; then
+            cat
+        else
+            sed -E 's/\/[0-9]+$//'
+        fi
+    }
+}
+
+function lk_node_ipv4() {
+    _lk_node_ip inet \
+        '10\.' '172\.(1[6-9]|2[0-9]|3[01])\.' '192\.168\.' '127\.' |
+        sed -E '/^169\.254\./d'
+}
+
+function lk_node_ipv6() {
+    _lk_node_ip inet6 "f[cd]" "fe80::" "::1/128"
+}
+
+function lk_node_public_ipv4() {
+    local IP
+    {
+        ! IP=$(dig +noall +answer +short @1.1.1.1 \
+            whoami.cloudflare TXT CH | sed -E 's/^"(.*)"$/\1/') || echo "$IP"
+        LK_IP_PUBLIC_ONLY=1 lk_node_ipv4
+    } | sort -u
+}
+
+function lk_node_public_ipv6() {
+    local IP
+    {
+        ! IP=$(dig +noall +answer +short @2606:4700:4700::1111 \
+            whoami.cloudflare TXT CH | sed -E 's/^"(.*)"$/\1/') || echo "$IP"
+        LK_IP_PUBLIC_ONLY=1 lk_node_ipv6
+    } | sort -u
+}
+
+function lk_hosts_get_records() {
+    local TYPE=$1 IFS TYPES HOST COMMAND=(
+        dig +noall +answer
+        ${LK_DIG_OPTIONS[@]:+"${LK_DIG_OPTIONS[@]}"}
+        ${LK_DIG_SERVER:+@"$LK_DIG_SERVER"}
+    )
+    shift
+    [[ $TYPE =~ ^[a-zA-Z]+(,[a-zA-Z]+)*$ ]] || lk_warn "invalid type(s): $TYPE" || return
+    lk_test_many "lk_is_host" "$@" || lk_warn "invalid host(s): $*" || return
+    IFS=,
+    # shellcheck disable=SC2206
+    TYPES=($TYPE)
+    for TYPE in "${TYPES[@]}"; do
+        for HOST in "$@"; do
+            COMMAND+=(
+                "$HOST" "$TYPE"
+            )
+        done
+    done
+    IFS='|'
+    "${COMMAND[@]}" |
+        sed -E 's/[[:blank:]]+/ /g' |
+        awk "\$4 ~ /^(${TYPES[*]})$/"
+}
+
+# lk_hosts_resolve <HOST>...
+function lk_hosts_resolve() {
     local HOSTS IP_ADDRESSES
     IP_ADDRESSES=($({
         lk_echo_args "$@" | lk_grep_ipv4 || true
@@ -1699,6 +1827,64 @@ function lk_resolve_hosts() {
         "dig +short ${HOSTS[*]/%/ A} ${HOSTS[*]/%/ AAAA}" |
         sed -E '/\.$/d')) || return
     lk_echo_array IP_ADDRESSES | sort | uniq
+}
+
+function lk_host_first_answer() {
+    local DOMAIN=$2 ANSWER
+    lk_is_fqdn "$2" || lk_warn "invalid domain: $2" || return
+    ANSWER=$(lk_hosts_get_records A,AAAA "$2") && [ -n "$ANSWER" ] ||
+        lk_warn "lookup failed: $2" || return
+    while :; do
+        ANSWER=$(lk_hosts_get_records "$1" "$DOMAIN") || return
+        [ -n "$ANSWER" ] || {
+            DOMAIN=${DOMAIN#*.}
+            lk_is_fqdn "$DOMAIN" || lk_warn "$1 lookup failed: $2" || return
+            continue
+        }
+        echo "$ANSWER"
+        return
+    done
+}
+
+function lk_host_soa() {
+    local ANSWER DOMAIN NAMESERVERS NS SOA
+    ANSWER=$(lk_host_first_answer NS "$1") || return
+    ! lk_verbose || lk_console_detail "Looking up SOA for domain:" "$1"
+    DOMAIN=$(awk '{ print substr($1, 1, length($1) - 1) }' <<<"$ANSWER" |
+        sort -u)
+    [ "$(wc -l <<<"$DOMAIN")" -eq 1 ] ||
+        lk_warn "invalid response to NS lookup" || return
+    NAMESERVERS=($(awk '{ print substr($5, 1, length($5) - 1) }' <<<"$ANSWER"))
+    ! lk_verbose || {
+        lk_console_detail "Domain apex:" "$DOMAIN"
+        lk_console_detail "Name servers:" "${NAMESERVERS[*]}"
+    }
+    for NS in "${NAMESERVERS[@]}"; do
+        SOA=$(
+            LK_DIG_SERVER=$NS
+            LK_DIG_OPTIONS=(+norecurse)
+            lk_hosts_get_records SOA "$DOMAIN"
+        ) && [ -n "$SOA" ] || continue
+        ! lk_verbose ||
+            lk_console_detail "SOA from $NS for $DOMAIN:" \
+                "$(cut -d' ' -f5- <<<"$SOA")"
+        echo "$SOA"
+        return
+    done
+    lk_warn "SOA lookup failed: $1"
+    return 1
+}
+
+function lk_host_ns_resolve() {
+    local NS IP LK_DIG_SERVER LK_DIG_OPTIONS
+    NS=$(lk_host_soa "$1" |
+        awk '{ print substr($5, 1, length($5) - 1) }') ||
+        return
+    LK_DIG_SERVER=$NS
+    LK_DIG_OPTIONS=(+norecurse)
+    IP=($(lk_hosts_get_records A,AAAA "$1" | awk '{ print $5 }')) || return
+    [ "${#IP[@]}" -gt 0 ] || lk_warn "could not resolve $1: $NS" || return
+    lk_echo_array IP
 }
 
 function lk_keep_original() {
@@ -1738,7 +1924,7 @@ function lk_maybe_replace() {
         lk_keep_original "$1" || return
     fi
     cat <<<"$2" | lk_maybe_sudo tee "$1" >/dev/null || return
-    [ "${LK_VERBOSE:-0}" -eq 0 ] || lk_console_file "$1"
+    ! lk_verbose || lk_console_file "$1"
 }
 
 # lk_console_file file_path [colour_sequence] [file_colour_sequence]

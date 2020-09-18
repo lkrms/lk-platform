@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2088
+# shellcheck disable=SC2088,SC2207
 
 # lk_dir_set_permissions DIR [WRITABLE_REGEX [OWNER][:[GROUP]]]
 function lk_dir_set_permissions() {
@@ -173,7 +173,7 @@ ${SSH_PREFIX}config\\.d/\\*\\1$S*\$" "$h/.ssh/config" 2>/dev/null; then
                 CONF=${CONF%.}$(cat "$h/.ssh/config" && echo .) ||
                 return
             echo -n "${CONF%.}" >"$h/.ssh/config" || return
-            ! lk_is_true "${LK_VERBOSE:-0}" || lk_console_file "$h/.ssh/config"
+            ! lk_verbose || lk_console_file "$h/.ssh/config"
         fi
         # Add defaults for all lk-* hosts to ~/.ssh/lk-config.d/90-defaults
         CONF=$(
@@ -208,6 +208,45 @@ EOF
                     "$h/.ssh/"{config,"$SSH_PREFIX"{config.d,keys}/*}
         )
     done
+}
+
+function lk_node_is_host() {
+    local NODE_IP HOST_IP
+    NODE_IP=($(lk_node_public_ipv4)) &&
+        NODE_IP+=($(lk_node_public_ipv6)) &&
+        [ ${#NODE_IP} -gt 0 ] ||
+        lk_warn "public IP address not found" || return
+    # shellcheck disable=SC2034
+    HOST_IP=($(lk_host_ns_resolve "$1")) ||
+        lk_warn "unable to retrieve authoritative DNS records for $1" || return
+    # True if at least one node IP matches a host IP
+    [ "$(comm -12 \
+        <(lk_echo_array HOST_IP) \
+        <(lk_echo_array NODE_IP) | wc -l)" -gt 0 ]
+}
+
+function lk_certbot_install() {
+    local EMAIL=${LK_LETSENCRYPT_EMAIL-${LK_ADMIN_EMAIL:-}} DOMAIN DOMAINS_OK=1
+    lk_test_many "lk_is_fqdn" "$@" || lk_warn "invalid domain(s): $*" || return
+    [ -n "$EMAIL" ] || lk_warn "email address not set" || return
+    lk_is_email "$EMAIL" || lk_warn "invalid email address: $EMAIL" || return
+    for DOMAIN in "$@"; do
+        lk_node_is_host "$DOMAIN" ||
+            lk_warn "domain does not resolve to this system: $DOMAIN" ||
+            DOMAINS_OK=0
+    done
+    lk_is_true "$DOMAINS_OK" ||
+        lk_confirm "Proceed anyway?" N || return
+    lk_elevate certbot run \
+        --non-interactive \
+        --keep-until-expiring \
+        --expand \
+        --agree-tos \
+        --email "$EMAIL" \
+        --no-eff-email \
+        --"${LK_LETSENCRYPT_PLUGIN:-apache}" \
+        ${LK_LETSENCRYPT_OPTIONS[@]:+"${LK_LETSENCRYPT_OPTIONS[@]}"} \
+        --domains "$(lk_implode "," "$@")"
 }
 
 # lk_apply_setting <FILE> <SETTING> <VAL> [<DELIM>] [<COMMENT_CHARS>] [<SPACES>]

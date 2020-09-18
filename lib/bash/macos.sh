@@ -189,7 +189,7 @@ function lk_macos_defaults_maybe_write() {
 
 # lk_macos_defaults_dump [<DEFAULTS_ARG>...]
 function lk_macos_defaults_dump() {
-    local IFS=", " DOMAINS DIR DOMAIN FILE
+    local IFS=', ' DOMAINS DIR DOMAIN FILE
     DOMAINS=(
         NSGlobalDomain
         $(defaults "$@" domains)

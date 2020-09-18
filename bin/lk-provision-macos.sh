@@ -434,7 +434,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
                     mas info "$APP_ID" 2>/dev/null |
                         gnu_awk "$PROG"
                 ); then
-                    APP_SH=$(while IFS="=" read -r KEY VALUE; do
+                    APP_SH=$(while IFS='=' read -r KEY VALUE; do
                         printf '%s=%q\n' "$KEY" "$VALUE"
                     done <<<"$APP_SH")
                     eval "$APP_SH"
