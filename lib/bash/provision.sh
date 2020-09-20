@@ -210,6 +210,241 @@ EOF
     done
 }
 
+# lk_grep_ipv4
+#   Print each input line that is a valid dotted-decimal IPv4 address or CIDR.
+function lk_grep_ipv4() {
+    local OCTET='(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])'
+    grep -E "^($OCTET\\.){3}$OCTET(/(3[0-2]|[12][0-9]|[1-9]))?\$"
+}
+
+# lk_grep_ipv6
+#   Print each input line that is a valid 8-hextet IPv6 address or CIDR.
+function lk_grep_ipv6() {
+    local HEXTET='[0-9a-fA-F]{1,4}' \
+        PREFIX='/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9])'
+    grep -E "\
+^(($HEXTET:){7}(:|$HEXTET)|\
+($HEXTET:){6}(:|:$HEXTET)|\
+($HEXTET:){5}(:|(:$HEXTET){1,2})|\
+($HEXTET:){4}(:|(:$HEXTET){1,3})|\
+($HEXTET:){3}(:|(:$HEXTET){1,4})|\
+($HEXTET:){2}(:|(:$HEXTET){1,5})|\
+$HEXTET:(:|(:$HEXTET){1,6})|\
+:(:|(:$HEXTET){1,7}))($PREFIX)?\$"
+}
+
+function _lk_node_ip() {
+    local i PRIVATE=("${@:2}") IP IFS
+    IP=$(if lk_command_exists ip; then
+        ip address show
+    else
+        # For reference, macOS output examples:
+        # - inet 10.10.10.4 netmask 0xffff0000 broadcast 10.10.255.255
+        # - inet6 fe80::1c43:b79d:5dfe:c0a4%en0 prefixlen 64 secured scopeid 0x8
+        ifconfig | sed -E 's/ (prefixlen |netmask (0xf*[8ce]?0*( |$)))/\/\2/'
+    fi | awk "\
+BEGIN                                       { b[\"f\"] = 4
+                                              b[\"e\"] = 3
+                                              b[\"c\"] = 2
+                                              b[\"8\"] = 1
+                                              b[\"0\"] = 0 }
+\$1 == \"$1\" && \$2 ~ /\\/[0-9]+\$/        { print \$2 }
+\$1 == \"$1\" && \$2 ~ /\\/0x[0-9a-f]{8}\$/ { split(\$2, a, \"/0x\")
+                                              p=0
+                                              for (i = 1; i <= length(a[2]); i++)
+                                                  p += b[substr(a[2], i, 1)]
+                                              printf \"%s/%s\\n\", a[1], p }" |
+        sed -E 's/%[^/]+\//\//') || return
+    {
+        IFS='|'
+        grep -Ev "^(${PRIVATE[*]})" <<<"$IP" || true
+        lk_is_true "${LK_IP_PUBLIC_ONLY:-}" ||
+            for i in "${PRIVATE[@]}"; do
+                grep -E "^$i" <<<"$IP" || true
+            done
+    } | {
+        if lk_is_true "${LK_IP_KEEP_PREFIX:-}"; then
+            cat
+        else
+            sed -E 's/\/[0-9]+$//'
+        fi
+    }
+}
+
+function lk_node_ipv4() {
+    _lk_node_ip inet \
+        '10\.' '172\.(1[6-9]|2[0-9]|3[01])\.' '192\.168\.' '127\.' |
+        sed -E '/^169\.254\./d'
+}
+
+function lk_node_ipv6() {
+    _lk_node_ip inet6 "f[cd]" "fe80::" "::1/128"
+}
+
+function lk_node_public_ipv4() {
+    local IP
+    {
+        ! IP=$(dig +noall +answer +short @1.1.1.1 \
+            whoami.cloudflare TXT CH | sed -E 's/^"(.*)"$/\1/') || echo "$IP"
+        LK_IP_PUBLIC_ONLY=1 lk_node_ipv4
+    } | sort -u
+}
+
+function lk_node_public_ipv6() {
+    local IP
+    {
+        ! IP=$(dig +noall +answer +short @2606:4700:4700::1111 \
+            whoami.cloudflare TXT CH | sed -E 's/^"(.*)"$/\1/') || echo "$IP"
+        LK_IP_PUBLIC_ONLY=1 lk_node_ipv6
+    } | sort -u
+}
+
+# lk_hosts_get_records [+<FIELD>[,<FIELD>...]>] <TYPE>[,<TYPE>...] <HOST>...
+#
+# Print space-separated resource records of each TYPE for each HOST, optionally
+# limiting output to each FIELD.
+#
+# Fields and output order:
+# - NAME
+# - TTL
+# - CLASS
+# - TYPE
+# - RDATA
+# - VALUE (synonym for RDATA)
+function lk_hosts_get_records() {
+    local FIELDS FIELD CUT TYPE IFS TYPES HOST \
+        B='[[:blank:]]' NB='[^[:blank:]]' COMMAND=(
+            dig +noall +answer
+            ${LK_DIG_OPTIONS[@]:+"${LK_DIG_OPTIONS[@]}"}
+            ${LK_DIG_SERVER:+@"$LK_DIG_SERVER"}
+        )
+    if [ "${1:0:1}" = + ]; then
+        IFS=,
+        # shellcheck disable=SC2206
+        FIELDS=(${1:1})
+        shift
+        unset IFS
+        [ "${#FIELDS[@]}" -gt 0 ] || lk_warn "no output field" || return
+        FIELDS=($(lk_echo_array FIELDS | sort | uniq))
+        CUT=-f
+        for FIELD in "${FIELDS[@]}"; do
+            case "$FIELD" in
+            NAME)
+                CUT=${CUT}1,
+                ;;
+            TTL)
+                CUT=${CUT}2,
+                ;;
+            CLASS)
+                CUT=${CUT}3,
+                ;;
+            TYPE)
+                CUT=${CUT}4,
+                ;;
+            RDATA | VALUE)
+                CUT=${CUT}5,
+                ;;
+            *)
+                lk_warn "invalid field: $FIELD"
+                return 1
+                ;;
+            esac
+        done
+        CUT=${CUT%,}
+    fi
+    TYPE=$1
+    shift
+    [[ $TYPE =~ ^[a-zA-Z]+(,[a-zA-Z]+)*$ ]] ||
+        lk_warn "invalid type(s): $TYPE" || return
+    lk_test_many "lk_is_host" "$@" || lk_warn "invalid host(s): $*" || return
+    IFS=,
+    # shellcheck disable=SC2206
+    TYPES=($TYPE)
+    for TYPE in "${TYPES[@]}"; do
+        for HOST in "$@"; do
+            COMMAND+=(
+                "$HOST" "$TYPE"
+            )
+        done
+    done
+    IFS='|'
+    REGEX="s/^($NB+)$B+($NB+)$B+($NB+)$B+($NB+)$B+($NB+)/\\1 \\2 \\3 \\4 \\5/"
+    "${COMMAND[@]}" | sed -E "$REGEX" | awk "\$4 ~ /^(${TYPES[*]})$/" |
+        { [ -z "${CUT:-}" ] && cat || cut -d' ' "$CUT"; }
+}
+
+# lk_hosts_resolve <HOST>...
+function lk_hosts_resolve() {
+    local HOSTS IP_ADDRESSES
+    IP_ADDRESSES=($({
+        lk_echo_args "$@" | lk_grep_ipv4 || true
+        lk_echo_args "$@" | lk_grep_ipv6 || true
+    }))
+    HOSTS=($(comm -23 <(lk_echo_args "$@" | sort | uniq) \
+        <(lk_echo_array IP_ADDRESSES | sort | uniq)))
+    IP_ADDRESSES+=($(lk_hosts_get_records +VALUE A,AAAA "${HOSTS[@]}")) ||
+        return
+    lk_echo_array IP_ADDRESSES | sort | uniq
+}
+
+function lk_host_first_answer() {
+    local DOMAIN=$2 ANSWER
+    lk_is_fqdn "$2" || lk_warn "invalid domain: $2" || return
+    ANSWER=$(lk_hosts_get_records A,AAAA "$2") && [ -n "$ANSWER" ] ||
+        lk_warn "lookup failed: $2" || return
+    while :; do
+        ANSWER=$(lk_hosts_get_records "$1" "$DOMAIN") || return
+        [ -n "$ANSWER" ] || {
+            DOMAIN=${DOMAIN#*.}
+            lk_is_fqdn "$DOMAIN" || lk_warn "$1 lookup failed: $2" || return
+            continue
+        }
+        echo "$ANSWER"
+        return
+    done
+}
+
+function lk_host_soa() {
+    local ANSWER DOMAIN NAMESERVERS NS SOA
+    ANSWER=$(lk_host_first_answer NS "$1") || return
+    ! lk_verbose || lk_console_detail "Looking up SOA for domain:" "$1"
+    DOMAIN=$(awk '{ print substr($1, 1, length($1) - 1) }' <<<"$ANSWER" |
+        sort -u)
+    [ "$(wc -l <<<"$DOMAIN")" -eq 1 ] ||
+        lk_warn "invalid response to NS lookup" || return
+    NAMESERVERS=($(awk '{ print substr($5, 1, length($5) - 1) }' <<<"$ANSWER"))
+    ! lk_verbose || {
+        lk_console_detail "Domain apex:" "$DOMAIN"
+        lk_console_detail "Name servers:" "${NAMESERVERS[*]}"
+    }
+    for NS in "${NAMESERVERS[@]}"; do
+        SOA=$(
+            LK_DIG_SERVER=$NS
+            LK_DIG_OPTIONS=(+norecurse)
+            lk_hosts_get_records SOA "$DOMAIN"
+        ) && [ -n "$SOA" ] || continue
+        ! lk_verbose ||
+            lk_console_detail "SOA from $NS for $DOMAIN:" \
+                "$(cut -d' ' -f5- <<<"$SOA")"
+        echo "$SOA"
+        return
+    done
+    lk_warn "SOA lookup failed: $1"
+    return 1
+}
+
+function lk_host_ns_resolve() {
+    local NS IP LK_DIG_SERVER LK_DIG_OPTIONS
+    NS=$(lk_host_soa "$1" |
+        awk '{ print substr($5, 1, length($5) - 1) }') ||
+        return
+    LK_DIG_SERVER=$NS
+    LK_DIG_OPTIONS=(+norecurse)
+    IP=($(lk_hosts_get_records +VALUE A,AAAA "$1")) || return
+    [ "${#IP[@]}" -gt 0 ] || lk_warn "could not resolve $1: $NS" || return
+    lk_echo_array IP
+}
+
 function lk_node_is_host() {
     local NODE_IP HOST_IP
     NODE_IP=($(lk_node_public_ipv4)) &&
