@@ -457,7 +457,7 @@ printf '%s=(\n%s\n)\n' \
         printf '    %q\n' "${IMAGE_BASE_PACKAGES[@]}"
     )" >"$LK_BASE/etc/packages.conf"
 
-include='' . "$LK_BASE/lib/bash/common.sh"
+include=provision . "$LK_BASE/lib/bash/common.sh"
 
 ### move to lk-provision-hosting.sh
 . /etc/lsb-release
@@ -903,10 +903,10 @@ ${ACCEPT_OUTPUT_HOSTS:+    ${ACCEPT_OUTPUT_HOSTS//,/$'\n'    }
             unset "OUTPUT_ALLOW[$i]"
         fi
     done
-    lk_keep_trying eval "IPV4_IPS=\"\$(dig +short ${OUTPUT_ALLOW[*]/%/ A})\""
-    lk_keep_trying eval "IPV6_IPS=\"\$(dig +short ${OUTPUT_ALLOW[*]/%/ AAAA})\""
-    OUTPUT_ALLOW_IPV4+=($(echo "$IPV4_IPS" | sed -E '/\.$/d' | sort | uniq))
-    OUTPUT_ALLOW_IPV6+=($(echo "$IPV6_IPS" | sed -E '/\.$/d' | sort | uniq))
+    OUTPUT_ALLOW_IPV4=($(lk_keep_trying \
+        lk_hosts_get_records +VALUE A "${OUTPUT_ALLOW[@]}"))
+    OUTPUT_ALLOW_IPV6=($(lk_keep_trying \
+        lk_hosts_get_records +VALUE AAAA "${OUTPUT_ALLOW[@]}"))
     echo "\
 $ACCEPT_OUTPUT_HOSTS_SH
 $(printf '%s=%q\n' \

@@ -14,7 +14,7 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
     lk_die "unable to locate LK_BASE"
 export LK_BASE
 
-include=iptables . "$LK_BASE/lib/bash/common.sh"
+include=iptables,provision . "$LK_BASE/lib/bash/common.sh"
 
 lk_elevate
 

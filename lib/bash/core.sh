@@ -1789,14 +1789,63 @@ function lk_node_public_ipv6() {
     } | sort -u
 }
 
+# lk_hosts_get_records [+<FIELD>[,<FIELD>...]>] <TYPE>[,<TYPE>...] <HOST>...
+#
+# Print space-separated resource records of each TYPE for each HOST, optionally
+# limiting output to each FIELD.
+#
+# Fields and output order:
+# - NAME
+# - TTL
+# - CLASS
+# - TYPE
+# - RDATA
+# - VALUE (synonym for RDATA)
 function lk_hosts_get_records() {
-    local TYPE=$1 IFS TYPES HOST COMMAND=(
-        dig +noall +answer
-        ${LK_DIG_OPTIONS[@]:+"${LK_DIG_OPTIONS[@]}"}
-        ${LK_DIG_SERVER:+@"$LK_DIG_SERVER"}
-    )
+    local FIELDS FIELD CUT TYPE IFS TYPES HOST \
+        B='[[:blank:]]' NB='[^[:blank:]]' COMMAND=(
+            dig +noall +answer
+            ${LK_DIG_OPTIONS[@]:+"${LK_DIG_OPTIONS[@]}"}
+            ${LK_DIG_SERVER:+@"$LK_DIG_SERVER"}
+        )
+    if [ "${1:0:1}" = + ]; then
+        IFS=,
+        # shellcheck disable=SC2206
+        FIELDS=(${1:1})
+        shift
+        unset IFS
+        [ "${#FIELDS[@]}" -gt 0 ] || lk_warn "no output field" || return
+        FIELDS=($(lk_echo_array FIELDS | sort | uniq))
+        CUT=-f
+        for FIELD in "${FIELDS[@]}"; do
+            case "$FIELD" in
+            NAME)
+                CUT=${CUT}1,
+                ;;
+            TTL)
+                CUT=${CUT}2,
+                ;;
+            CLASS)
+                CUT=${CUT}3,
+                ;;
+            TYPE)
+                CUT=${CUT}4,
+                ;;
+            RDATA | VALUE)
+                CUT=${CUT}5,
+                ;;
+            *)
+                lk_warn "invalid field: $FIELD"
+                return 1
+                ;;
+            esac
+        done
+        CUT=${CUT%,}
+    fi
+    TYPE=$1
     shift
-    [[ $TYPE =~ ^[a-zA-Z]+(,[a-zA-Z]+)*$ ]] || lk_warn "invalid type(s): $TYPE" || return
+    [[ $TYPE =~ ^[a-zA-Z]+(,[a-zA-Z]+)*$ ]] ||
+        lk_warn "invalid type(s): $TYPE" || return
     lk_test_many "lk_is_host" "$@" || lk_warn "invalid host(s): $*" || return
     IFS=,
     # shellcheck disable=SC2206
@@ -1809,9 +1858,9 @@ function lk_hosts_get_records() {
         done
     done
     IFS='|'
-    "${COMMAND[@]}" |
-        sed -E 's/[[:blank:]]+/ /g' |
-        awk "\$4 ~ /^(${TYPES[*]})$/"
+    REGEX="s/^($NB+)$B+($NB+)$B+($NB+)$B+($NB+)$B+($NB+)/\\1 \\2 \\3 \\4 \\5/"
+    "${COMMAND[@]}" | sed -E "$REGEX" | awk "\$4 ~ /^(${TYPES[*]})$/" |
+        { [ -z "${CUT:-}" ] && cat || cut -d' ' "$CUT"; }
 }
 
 # lk_hosts_resolve <HOST>...
@@ -1823,9 +1872,8 @@ function lk_hosts_resolve() {
     }))
     HOSTS=($(comm -23 <(lk_echo_args "$@" | sort | uniq) \
         <(lk_echo_array IP_ADDRESSES | sort | uniq)))
-    IP_ADDRESSES+=($(eval \
-        "dig +short ${HOSTS[*]/%/ A} ${HOSTS[*]/%/ AAAA}" |
-        sed -E '/\.$/d')) || return
+    IP_ADDRESSES+=($(lk_hosts_get_records +VALUE A,AAAA "${HOSTS[@]}")) ||
+        return
     lk_echo_array IP_ADDRESSES | sort | uniq
 }
 
@@ -1882,7 +1930,7 @@ function lk_host_ns_resolve() {
         return
     LK_DIG_SERVER=$NS
     LK_DIG_OPTIONS=(+norecurse)
-    IP=($(lk_hosts_get_records A,AAAA "$1" | awk '{ print $5 }')) || return
+    IP=($(lk_hosts_get_records +VALUE A,AAAA "$1")) || return
     [ "${#IP[@]}" -gt 0 ] || lk_warn "could not resolve $1: $NS" || return
     lk_echo_array IP
 }

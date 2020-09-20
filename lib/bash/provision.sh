@@ -226,17 +226,20 @@ function lk_node_is_host() {
 }
 
 function lk_certbot_install() {
-    local EMAIL=${LK_LETSENCRYPT_EMAIL-${LK_ADMIN_EMAIL:-}} DOMAIN DOMAINS_OK=1
+    local EMAIL=${LK_LETSENCRYPT_EMAIL-${LK_ADMIN_EMAIL:-}} DOMAIN DOMAINS_OK
     lk_test_many "lk_is_fqdn" "$@" || lk_warn "invalid domain(s): $*" || return
     [ -n "$EMAIL" ] || lk_warn "email address not set" || return
     lk_is_email "$EMAIL" || lk_warn "invalid email address: $EMAIL" || return
     for DOMAIN in "$@"; do
-        lk_node_is_host "$DOMAIN" ||
-            lk_warn "domain does not resolve to this system: $DOMAIN" ||
+        lk_node_is_host "$DOMAIN" &&
+            lk_console_log "Domain resolves to this system:" "$DOMAIN" ||
+            lk_console_warning \
+                "Domain does not resolve to this system:" "$DOMAIN" ||
             DOMAINS_OK=0
     done
-    lk_is_true "$DOMAINS_OK" ||
-        lk_confirm "Proceed anyway?" N || return
+    lk_is_true "${DOMAINS_OK:-1}" ||
+        lk_is_true "${LK_LETSENCRYPT_IGNORE_DNS:-}" ||
+        lk_confirm "Ignore domain resolution errors?" N || return
     lk_elevate certbot run \
         --non-interactive \
         --keep-until-expiring \
@@ -244,8 +247,8 @@ function lk_certbot_install() {
         --agree-tos \
         --email "$EMAIL" \
         --no-eff-email \
-        --"${LK_LETSENCRYPT_PLUGIN:-apache}" \
-        ${LK_LETSENCRYPT_OPTIONS[@]:+"${LK_LETSENCRYPT_OPTIONS[@]}"} \
+        --"${LK_CERTBOT_PLUGIN:-apache}" \
+        ${LK_CERTBOT_OPTIONS[@]:+"${LK_CERTBOT_OPTIONS[@]}"} \
         --domains "$(lk_implode "," "$@")"
 }
 
