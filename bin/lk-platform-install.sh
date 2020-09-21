@@ -86,14 +86,14 @@
     DEFAULT_FILE="/etc/default/lk-platform"
     GLOBIGNORE="$LK_INST/etc/*example.*:$LK_INST/etc/*default.*"
     LK_SETTINGS_FILES=(
-        "$LK_INST/etc"/*.conf
         "$DEFAULT_FILE"
+        "$LK_INST/etc"/*.conf
         "~root/.\${LK_PATH_PREFIX:-lk-}settings"
         "$DEFAULT_FILE"
     )
     unset GLOBIGNORE
 
-    # otherwise the LK_BASE environment variable (if set) will mask the value
+    # Otherwise the LK_BASE environment variable (if set) will mask the value
     # set in config files
     unset LK_BASE
     export -n LK_PATH_PREFIX
@@ -110,7 +110,7 @@
     #   find "$LK_BASE" ! \( -type d -name .git -prune \) -type f -print0 |
     #       xargs -0 grep -Eho '\bgnu_[a-zA-Z0-9.]+' | sort -u
     lk_console_message "Checking gnu_* symlinks"
-    function lk_gnu_install() {
+    function install_gnu_commands() {
         local COMMAND GCOMMAND COMMAND_PATH COMMANDS=("$@") EXIT_STATUS=0
         [ $# -gt 0 ] ||
             COMMANDS=(${_LK_GNU_COMMANDS[@]+"${_LK_GNU_COMMANDS[@]}"})
@@ -126,12 +126,10 @@
         done
         return "$EXIT_STATUS"
     }
-    PREFIX=g
-    lk_is_macos || PREFIX=
     # Exit if required commands fail to install
-    lk_gnu_install chmod date find getopt realpath sed stat xargs
+    install_gnu_commands chmod date find getopt realpath sed stat xargs
     # For other commands, warn and continue
-    lk_gnu_install || true
+    install_gnu_commands || true
 
     lk_console_message "Checking configuration files"
     LK_PATH_PREFIX="${LK_PATH_PREFIX:-${PATH_PREFIX:-${1:-}}}"
@@ -149,23 +147,22 @@
         sed 's/[^a-zA-Z0-9]//g' <<<"$LK_PATH_PREFIX"
     )}"
 
-    # check repo state
+    # Check repo state
     cd "$LK_BASE"
     REPO_OWNER="$(lk_file_owner "$LK_BASE")"
     CONFIG_COMMANDS=()
-    function check_git_config() {
+    function check_repo_config() {
         local VALUE
         VALUE="$(git config --local "$1")" &&
             [ "$VALUE" = "$2" ] ||
             CONFIG_COMMANDS+=("$(printf 'git config %q %q' "$1" "$2")")
     }
-    check_git_config "core.sharedRepository" "0664"
-    check_git_config "merge.ff" "only"
-    check_git_config "pull.ff" "only"
+    check_repo_config "core.sharedRepository" "0664"
+    check_repo_config "merge.ff" "only"
+    check_repo_config "pull.ff" "only"
     if [ "${#CONFIG_COMMANDS[@]}" -gt 0 ]; then
-        IFS=$'\n'
-        lk_console_item "Running in $LK_BASE:" "${CONFIG_COMMANDS[*]}"
-        unset IFS
+        lk_console_item "Running in $LK_BASE:" \
+            "$(lk_echo_array CONFIG_COMMANDS)"
         sudo -Hu "$REPO_OWNER" \
             bash -c "$(lk_implode ' && ' "${CONFIG_COMMANDS[@]}")"
     fi
@@ -211,7 +208,7 @@
         lk_console_warning0 "Unable to check for lk-platform updates"
     fi
 
-    # use the opening "Environment:" log entry created by hosting.sh as a last
+    # Use the opening "Environment:" log entry created by hosting.sh as a last
     # resort when looking for settings
     function install_env() {
         INSTALL_ENV="${INSTALL_ENV-$(
@@ -229,21 +226,24 @@
     }
 
     for i in "${INSTALL_SETTINGS[@]}"; do
-        eval "LK_$i=\"\${LK_$i-\${LK_DEFAULT_$i-\${$i-\$(install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
+        eval "\
+LK_$i=\"\${LK_$i-\${LK_DEFAULT_$i-\${$i-\$(\
+install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
     done
 
     lk_console_item "Configuring system for lk-platform installed at" "$LK_BASE"
 
-    # generate /etc/default/lk-platform
+    # Generate /etc/default/lk-platform
     [ -e "$DEFAULT_FILE" ] || {
         install -d -m 0755 "${DEFAULT_FILE%/*}" &&
             install -m 0644 /dev/null "$DEFAULT_FILE"
     }
+    # TODO: add or replace lines rather than overwriting entire file
     DEFAULT_LINES=()
     OUTPUT=()
     for i in "${DEFAULT_SETTINGS[@]}"; do
         if [ -z "${!i:=}" ]; then
-            # don't include null variables unless they already appear in
+            # Don't include null variables unless they already appear in
             # /etc/default/lk-platform
             grep -Eq "^$i=" "$DEFAULT_FILE" ||
                 continue
@@ -260,7 +260,7 @@
     lk_safe_symlink "$LK_BASE/bin/lk-bash-load.sh" \
         "$LK_BIN_PATH/lk-bash-load.sh"
 
-    # check .bashrc files
+    # Check .bashrc files
     RC_FILES=(
         /etc/skel/.bashrc
         "/etc/skel.${LK_PATH_PREFIX_ALPHA}/.bashrc"
@@ -281,14 +281,14 @@ if [ -f $RC_ESCAPED ]; then
     . $RC_ESCAPED
 fi"
         for RC_FILE in "${RC_FILES[@]}"; do
-            # fix legacy references to $LK_BASE/**/.bashrc
+            # Fix legacy references to $LK_BASE/**/.bashrc
             lk_maybe_sed -E "s/'($(
                 lk_escape_ere "$LK_BASE"
             ))(\/.*)?\/.bashrc'/$(
                 lk_escape_ere_replace "$RC_ESCAPED"
             )/g" "$RC_FILE"
 
-            # source $LK_BASE/lib/bash/rc.sh unless a reference is already
+            # Source $LK_BASE/lib/bash/rc.sh unless a reference is already
             # present
             grep -Fq "$RC_ESCAPED" "$RC_FILE" || {
                 lk_keep_original "$RC_FILE" &&
