@@ -1,0 +1,7 @@
+[mysqld]
+max_connections = ({:printf '%d' "${LK_MAX_CONNECTIONS:-151}":})
+
+innodb_buffer_pool_size = ({:printf '%s' "${LK_INNODB_BUFFER_SIZE:-128M}":})
+innodb_buffer_pool_instances = ({:printf '%d' $((($(lk_mysql_bytes "${LK_INNODB_BUFFER_SIZE:-128M}") / 1024 ** 2 - 1) / 1024 + 1)):})
+innodb_buffer_pool_dump_at_shutdown = 1
+innodb_buffer_pool_load_at_startup = 1

@@ -871,7 +871,7 @@ EOF
             FILE=/etc/httpd/conf/extra/${LK_PATH_PREFIX}default-dev-arch.conf
             lk_install -m 00644 "$FILE"
             lk_file_replace \
-                -f "$LK_BASE/share/apache2/default-dev-arch.conf" \
+                -f "$LK_BASE/share/httpd/default-dev-arch.conf" \
                 "$FILE"
             lk_httpd_enable_option Include "${FILE#/etc/httpd/}"
             lk_httpd_enable_option LoadModule "proxy_module modules/mod_proxy.so"
