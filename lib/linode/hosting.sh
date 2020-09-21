@@ -35,12 +35,11 @@
 # <UDF name="SHUTDOWN_DELAY" label="Delay before shutdown/reboot after provisioning (in minutes)" default="0" />
 # <UDF name="LK_PLATFORM_BRANCH" label="lk-platform tracking branch" oneof="master,develop" default="master" />
 
-[ ! "${SCRIPT_DEBUG:-Y}" = Y ] ||
-    SCRIPT_DEBUG_VARS="$(
-        unset BASH_EXECUTION_STRING
-        declare -p
-    )"
-SCRIPT_ENV=$(printenv | grep -v '^LS_COLORS=' | sort)
+SCRIPT_VARS=$(
+    unset BASH_EXECUTION_STRING
+    declare -p
+)
+SCRIPT_ENV=$(printenv | sed '/^LS_COLORS=/d' | sort)
 
 # Use lk_bash_udf_defaults to regenerate the following after changes above
 export -n \
@@ -374,7 +373,7 @@ export LK_BASE=/opt/${PATH_PREFIX}platform \
 lk_console_message "Bootstrapping Ubuntu for hosting"
 lk_console_item "Environment:" "$SCRIPT_ENV"
 [ ! "$SCRIPT_DEBUG" = Y ] ||
-    lk_console_item "Variables:" "$SCRIPT_DEBUG_VARS"
+    lk_console_item "Variables:" "$SCRIPT_VARS"
 
 IMAGE_BASE_PACKAGES=($(apt-mark showmanual))
 lk_console_item "Pre-installed packages:" \

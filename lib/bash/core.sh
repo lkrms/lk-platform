@@ -6,10 +6,6 @@ function lk_command_exists() {
     type -P "$1" >/dev/null
 }
 
-function lk_is_executable() {
-    type -p "$1" >/dev/null
-}
-
 function _lk_return_cached() {
     if [ "${!1+1}" != 1 ]; then
         eval "$1=0; { $2; } || $1=\$?"
@@ -120,8 +116,13 @@ function lk_include() {
 }
 
 # lk_myself [<STACK_DEPTH>]
+#
+# If running from a source file, output the basename of the running script,
+# otherwise print the name of the function at STACK_DEPTH in the call stack,
+# where stack depth 0 (the default) represents the invoking function, stack
+# depth 1 represents the invoking function's caller, and so on.
 function lk_myself() {
-    [ "${BASH_SOURCE+${BASH_SOURCE[$((${#BASH_SOURCE[@]} - 1))]}}" = "$0" ] &&
+    [ "${BASH_SOURCE+${BASH_SOURCE[*]: -1:1}}" = "$0" ] &&
         echo "${0##*/}" ||
         echo "${FUNCNAME[$((1 + ${1:-0}))]:-${0##*/}}"
 }
@@ -158,41 +159,30 @@ function _lk_caller() {
     lk_implode "$DIM->$LK_RESET" "${CALLER[@]}"
 }
 
-# lk_warn message
+# lk_warn [<MESSAGE>]
+#
+# Output "<context>: MESSAGE" as a warning and return with the previous
+# command's exit status.
 function lk_warn() {
     local -r EXIT_STATUS=$?
-    lk_console_warning "$(_lk_caller): $1"
+    lk_console_warning "$(_lk_caller): ${1:-execution failed}"
     return "$EXIT_STATUS"
 }
 
-# lk_die [message]
-#   Output optional MESSAGE to stderr and exit with a non-zero status.
+# lk_die [<MESSAGE>]
+#
+# Output "<context>: MESSAGE" as an error and exit non-zero with the previous
+# command's exit status (if available).
+#
+# To suppress output, set MESSAGE to the empty string.
 function lk_die() {
     local EXIT_STATUS=$?
     [ "$EXIT_STATUS" -ne 0 ] || EXIT_STATUS=1
-    [ $# -eq 0 ] || lk_console_error0 "$(_lk_caller): $1"
-    lk_is_true "${LK_DIE_HAPPY:-0}" || exit "$EXIT_STATUS"
+    if [ $# -eq 0 ] || [ -n "$1" ]; then
+        lk_console_error "$(_lk_caller): ${1:-execution failed}"
+    fi
+    lk_is_true "${LK_DIE_HAPPY:-}" || exit "$EXIT_STATUS"
     exit 0
-}
-
-function lk_trap_exit() {
-    function lk_exit_trap() {
-        local EXIT_STATUS=$? i
-        [ "$EXIT_STATUS" -eq 0 ] ||
-            [[ ${FUNCNAME[1]:-} =~ lk_(die|elevate) ]] ||
-            lk_console_error0 "$(_lk_caller): unhandled error"
-        for i in ${LK_EXIT_DELETE[@]+"${LK_EXIT_DELETE[@]}"}; do
-            rm -Rf -- "$i" || true
-        done
-    }
-    LK_EXIT_DELETE=()
-    trap 'lk_exit_trap' EXIT
-}
-
-function lk_delete_on_exit() {
-    lk_is_declared "LK_EXIT_DELETE" ||
-        lk_trap_exit
-    LK_EXIT_DELETE+=("$@")
 }
 
 function _lk_mktemp() {
@@ -231,6 +221,66 @@ function lk_first_existing_command() {
         fi
     done
     false
+}
+
+function _lk_process_regex() {
+    eval "$1=\$2"
+    if [ ${#ARGS[@]} -eq 0 ] || lk_in_array "$1" ARGS; then
+        printf '%s=%q\n' "$1" "$2"
+    fi
+}
+
+# shellcheck disable=SC2034
+function lk_get_regex() {
+    local DOMAIN_PART_REGEX DOMAIN_NAME_REGEX EMAIL_ADDRESS_REGEX \
+        IPV4_REGEX IPV4_OPT_PREFIX_REGEX \
+        IPV6_REGEX IPV6_OPT_PREFIX_REGEX \
+        IP_OPT_PREFIX_REGEX HOST_REGEX HOST_OPT_PREFIX_REGEX \
+        LINUX_USERNAME_REGEX MYSQL_USERNAME_REGEX \
+        DPKG_SOURCE_REGEX \
+        PHP_SETTING_NAME_REGEX PHP_SETTING_REGEX \
+        _O _H _P ARGS=("$@")
+
+    _lk_process_regex DOMAIN_PART_REGEX \
+        "[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
+    _lk_process_regex DOMAIN_NAME_REGEX \
+        "($DOMAIN_PART_REGEX(\\.|\$)){2,}"
+    _lk_process_regex EMAIL_ADDRESS_REGEX \
+        "[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@$DOMAIN_NAME_REGEX"
+
+    _O="(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])"
+    _lk_process_regex IPV4_REGEX \
+        "($_O\\.){3}$_O"
+    _lk_process_regex IPV4_OPT_PREFIX_REGEX \
+        "$IPV4_REGEX(/(3[0-2]|[12][0-9]|[1-9]))?"
+
+    _H="[0-9a-fA-F]{1,4}"
+    _P="/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9])"
+    _lk_process_regex IPV6_REGEX \
+        "(($_H:){7}(:|$_H)|($_H:){6}(:|:$_H)|($_H:){5}(:|(:$_H){1,2})|($_H:){4}(:|(:$_H){1,3})|($_H:){3}(:|(:$_H){1,4})|($_H:){2}(:|(:$_H){1,5})|$_H:(:|(:$_H){1,6})|:(:|(:$_H){1,7}))"
+    _lk_process_regex IPV6_OPT_PREFIX_REGEX \
+        "$IPV6_REGEX($_P)?"
+
+    _lk_process_regex IP_OPT_PREFIX_REGEX \
+        "($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX)"
+    _lk_process_regex HOST_REGEX \
+        "($IPV4_REGEX|$IPV6_REGEX|$DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)"
+    _lk_process_regex HOST_OPT_PREFIX_REGEX \
+        "($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX|$DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)"
+
+    _lk_process_regex LINUX_USERNAME_REGEX \
+        "[a-z_]([-a-z0-9_]{0,31}|[-a-z0-9_]{0,30}\\\$)"
+    _lk_process_regex MYSQL_USERNAME_REGEX \
+        "[a-zA-Z0-9_]+"
+
+    # https://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-source
+    _lk_process_regex DPKG_SOURCE_REGEX \
+        "[a-z0-9][-a-z0-9+.]+"
+
+    _lk_process_regex PHP_SETTING_NAME_REGEX \
+        "[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*"
+    _lk_process_regex PHP_SETTING_REGEX \
+        "$PHP_SETTING_NAME_REGEX=.+"
 }
 
 function realpath() {
@@ -898,7 +948,8 @@ function lk_console_list() {
         COLUMNS="${COLUMNS+$((COLUMNS - ${#LK_CONSOLE_PREFIX} - INDENT))}" \
             column -s $'\n' | expand)"
     SPACES="$(lk_repeat " " "$((${#LK_CONSOLE_PREFIX} + INDENT))")"
-    lk_echoc "$SPACES${LIST//$'\n'/$'\n'$SPACES}" "$COLOUR" >&"${_LK_FD:-2}"
+    lk_echoc "$SPACES${LIST//$'\n'/$'\n'$SPACES}" \
+        "${LK_CONSOLE_SECONDARY_COLOUR-$COLOUR}" >&"${_LK_FD:-2}"
     [ -z "${SINGLE_NOUN:-}" ] ||
         LK_CONSOLE_PREFIX="$SPACES" lk_console_detail "(${#ITEMS[@]} $(
             lk_maybe_plural "${#ITEMS[@]}" "$SINGLE_NOUN" "$PLURAL_NOUN"
@@ -1070,22 +1121,14 @@ function lk_is_pdf() {
 }
 
 function lk_is_host() {
-    local DOMAIN_PART_REGEX DOMAIN_NAME_REGEX \
-        _O IPV4_REGEX _H IPV6_REGEX HOST_REGEX
-    DOMAIN_PART_REGEX="[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
-    DOMAIN_NAME_REGEX="($DOMAIN_PART_REGEX(\\.|\$)){2,}"
-    _O="(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])"
-    IPV4_REGEX="($_O\\.){3}$_O"
-    _H="[0-9a-fA-F]{1,4}"
-    IPV6_REGEX="(($_H:){7}(:|$_H)|($_H:){6}(:|:$_H)|($_H:){5}(:|(:$_H){1,2})|($_H:){4}(:|(:$_H){1,3})|($_H:){3}(:|(:$_H){1,4})|($_H:){2}(:|(:$_H){1,5})|$_H:(:|(:$_H){1,6})|:(:|(:$_H){1,7}))"
-    HOST_REGEX="($IPV4_REGEX|$IPV6_REGEX|$DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)"
+    local HOST_REGEX
+    eval "$(lk_get_regex HOST_REGEX)"
     [[ $1 =~ ^${HOST_REGEX}$ ]]
 }
 
 function lk_is_fqdn() {
-    local DOMAIN_PART_REGEX DOMAIN_NAME_REGEX
-    DOMAIN_PART_REGEX="[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
-    DOMAIN_NAME_REGEX="($DOMAIN_PART_REGEX(\\.|\$)){2,}"
+    local DOMAIN_NAME_REGEX
+    eval "$(lk_get_regex DOMAIN_NAME_REGEX)"
     [[ $1 =~ ^${DOMAIN_NAME_REGEX}$ ]]
 }
 
@@ -1093,10 +1136,8 @@ function lk_is_fqdn() {
 #   True if STRING is a valid email address. Quoted local parts are not
 #   supported.
 function lk_is_email() {
-    local DOMAIN_PART_REGEX DOMAIN_NAME_REGEX EMAIL_ADDRESS_REGEX
-    DOMAIN_PART_REGEX="[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
-    DOMAIN_NAME_REGEX="($DOMAIN_PART_REGEX(\\.|\$)){2,}"
-    EMAIL_ADDRESS_REGEX="[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@$DOMAIN_NAME_REGEX"
+    local EMAIL_ADDRESS_REGEX
+    eval "$(lk_get_regex EMAIL_ADDRESS_REGEX)"
     [[ $1 =~ ^${EMAIL_ADDRESS_REGEX}$ ]]
 }
 

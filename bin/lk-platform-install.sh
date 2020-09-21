@@ -98,7 +98,7 @@
     unset LK_BASE
     export -n LK_PATH_PREFIX
 
-    include=provision skip=env . "$LK_INST/lib/bash/common.sh"
+    LK_SKIP=env include=provision . "$LK_INST/lib/bash/common.sh"
 
     LK_BIN_PATH=${LK_BIN_PATH:-/usr/local/bin}
     LK_BACKUP_SUFFIX="-$(lk_timestamp).bak"

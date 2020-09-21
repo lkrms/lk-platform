@@ -43,10 +43,29 @@ lk_include assert $(
     echo "${include//,/ }"
 )
 
+function lk_trap_exit() {
+    function lk_exit_trap() {
+        local EXIT_STATUS=$? i
+        [ "$EXIT_STATUS" -eq 0 ] ||
+            [[ ${FUNCNAME[1]:-} =~ ^_?lk_(die|usage|elevate)$ ]] ||
+            lk_console_error0 "$(_lk_caller): unhandled error"
+        for i in ${LK_EXIT_DELETE[@]+"${LK_EXIT_DELETE[@]}"}; do
+            rm -Rf -- "$i" || true
+        done
+    }
+    LK_EXIT_DELETE=()
+    trap 'lk_exit_trap' EXIT
+}
+
+function lk_delete_on_exit() {
+    lk_is_declared "LK_EXIT_DELETE" || lk_warn "no exit trap" || return
+    LK_EXIT_DELETE+=("$@")
+}
+
 if ! lk_is_true "${LK_NO_SOURCE_FILE:-0}"; then
     function lk_usage() {
         echo "${1:-${USAGE:-Please see $0 for usage}}" >&2
-        lk_die
+        exit 1
     }
 
     function _lk_elevate() {
@@ -82,7 +101,6 @@ eval "$(
     IFS=$' \t\n,'
     SKIP=(
         ${LK_SKIP:-}
-        ${skip:-}
     )
     unset IFS
 
