@@ -229,6 +229,7 @@ AUR_PACKAGES+=(
 PACMAN_PACKAGES+=(
     autopep8
     bash-language-server
+    cloc
     dbeaver
     eslint
     geckodriver
