@@ -1,0 +1,16 @@
+/var/log/apache2/*.log /srv/www/*/log/*.log {
+	daily
+	missingok
+	rotate 14
+	compress
+	delaycompress
+	notifempty
+	sharedscripts
+	postrotate
+		! invoke-rc.d apache2 status >/dev/null 2>&1 ||
+			invoke-rc.d apache2 reload
+		for c in /usr/lib/php/php*-fpm-reopenlogs; do
+			[ ! -x "$c" ] || "$c"
+		done
+	endscript
+}

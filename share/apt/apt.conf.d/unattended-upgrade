@@ -1,0 +1,12 @@
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::AutocleanInterval "7";
+APT::Periodic::Unattended-Upgrade "1";
+Unattended-Upgrade::Allowed-Origins "";
+Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}-security";
+Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}";
+Unattended-Upgrade::Package-Blacklist:: "^mariadb";
+Unattended-Upgrade::Package-Blacklist:: "^mysql";
+Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+Unattended-Upgrade::MinimalSteps "true";
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+Unattended-Upgrade::SyslogEnable "true";
