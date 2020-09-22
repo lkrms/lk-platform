@@ -2,6 +2,26 @@
 
 # shellcheck disable=SC2088,SC2207
 
+# lk_maybe_install [-v] [-m <MODE>] [-o <OWNER>] [-g <GROUP>] <SOURCE> <DEST>
+# lk_maybe_install -d [-v] [-m <MODE>] [-o <OWNER>] [-g <GROUP>] <DEST>
+function lk_maybe_install() {
+    local DEST=${*: -1:1} VERBOSE MODE OWNER GROUP i \
+        ARGS=("$@") LK_ARG_ARRAY=ARGS
+    if lk_has_arg "-d" || [ ! -e "$DEST" ]; then
+        lk_maybe_sudo install "$@"
+    else
+        ! lk_has_arg "-v" || VERBOSE=1
+        ! i=$(lk_array_search "-m" ARGS) || MODE=${ARGS[*]:$((i + 1)):1}
+        ! i=$(lk_array_search "-o" ARGS) || OWNER=${ARGS[*]:$((i + 1)):1}
+        ! i=$(lk_array_search "-g" ARGS) || GROUP=${ARGS[*]:$((i + 1)):1}
+        [ -z "${MODE:-}" ] ||
+            lk_maybe_sudo chmod ${VERBOSE+-v} "0$MODE" "$DEST" || return
+        [ -z "${OWNER:-}${GROUP:-}" ] ||
+            lk_elevate chown ${VERBOSE+-v} \
+                "${OWNER:-}${GROUP:+:$GROUP}" "$DEST" || return
+    fi
+}
+
 # lk_dir_set_permissions DIR [WRITABLE_REGEX [OWNER][:[GROUP]]]
 function lk_dir_set_permissions() {
     local DIR="${1:-}" WRITABLE_REGEX="${2:-}" OWNER="${3:-}" \
