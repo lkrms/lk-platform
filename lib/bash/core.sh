@@ -1820,7 +1820,7 @@ function lk_console_file() {
 #   True if USERNAME belongs to at least one of GROUPNAME.
 function lk_user_in_group() {
     [ "$(comm -12 \
-        <(groups "$1" | sed -E 's/^.*://' | grep -Eo '[^[:space:]]+' | sort) \
+        <(groups "$1" | sed -E 's/^.*://' | grep -Eo '[^[:blank:]]+' | sort) \
         <(lk_echo_args "${@:2}" | sort | uniq) | wc -l)" -gt 0 ]
 }
 

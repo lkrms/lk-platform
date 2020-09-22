@@ -105,7 +105,7 @@ function lk_sudo_offer_nopasswd() {
 function lk_ssh_add_host() {
     local NAME=$1 HOST=$2 JUMP_USER=$3 KEY_FILE=${4:-} JUMP_HOST_NAME=${5:-} \
         h=${LK_SSH_HOME:-~} SSH_PREFIX=${LK_SSH_PREFIX:-$LK_PATH_PREFIX} \
-        S="[[:space:]]" KEY CONF CONF_FILE
+        S="[[:blank:]]" KEY CONF CONF_FILE
     [ "${KEY_FILE:--}" = - ] ||
         [ -f "$KEY_FILE" ] ||
         [ -f "$h/.ssh/$KEY_FILE" ] ||
@@ -159,7 +159,7 @@ EOF
 # lk_ssh_configure [<JUMP_HOST[:JUMP_PORT]> <JUMP_USER> [<JUMP_KEY_FILE>]]
 function lk_ssh_configure() {
     local JUMP_HOST=${1:-} JUMP_USER=${2:-} JUMP_KEY_FILE=${3:-} \
-        S="[[:space:]]" SSH_PREFIX=${LK_SSH_PREFIX:-$LK_PATH_PREFIX} \
+        S="[[:blank:]]" SSH_PREFIX=${LK_SSH_PREFIX:-$LK_PATH_PREFIX} \
         HOMES=(${LK_SSH_HOMES[@]+"${LK_SSH_HOMES[@]}"}) h OWNER GROUP CONF KEY \
         LK_SSH_DIR_MODE LK_SSH_FILE_MODE
     [ $# -eq 0 ] || [ $# -ge 2 ] || lk_warn "invalid arguments" || return
@@ -333,7 +333,7 @@ function lk_node_public_ipv6() {
 # - VALUE (synonym for RDATA)
 function lk_hosts_get_records() {
     local FIELDS FIELD CUT TYPE IFS TYPES HOST \
-        B='[[:blank:]]' NB='[^[:blank:]]' COMMAND=(
+        S="[[:blank:]]" NS="[^[:blank:]]" COMMAND=(
             dig +noall +answer
             ${LK_DIG_OPTIONS[@]:+"${LK_DIG_OPTIONS[@]}"}
             ${LK_DIG_SERVER:+@"$LK_DIG_SERVER"}
@@ -388,7 +388,7 @@ function lk_hosts_get_records() {
         done
     done
     IFS='|'
-    REGEX="s/^($NB+)$B+($NB+)$B+($NB+)$B+($NB+)$B+($NB+)/\\1 \\2 \\3 \\4 \\5/"
+    REGEX="s/^($NS+)$S+($NS+)$S+($NS+)$S+($NS+)$S+($NS+)/\\1 \\2 \\3 \\4 \\5/"
     "${COMMAND[@]}" | sed -E "$REGEX" | awk "\$4 ~ /^(${TYPES[*]})$/" |
         { [ -z "${CUT:-}" ] && cat || cut -d' ' "$CUT"; }
 }

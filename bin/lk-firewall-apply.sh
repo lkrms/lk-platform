@@ -24,7 +24,7 @@ lk_log_output
     lk_die "cannot read file: $LK_BASE/etc/firewall.conf"
 . "$LK_BASE/etc/firewall.conf"
 
-S="[[:space:]]"
+S="[[:blank:]]"
 
 if [ -n "${ACCEPT_OUTPUT_CHAIN:-}" ]; then
     lk_console_message "Applying outgoing traffic policy to firewall"
@@ -36,7 +36,7 @@ if [ -n "${ACCEPT_OUTPUT_CHAIN:-}" ]; then
             "$(lk_implode $'\n' "${OUTPUT_ALLOW[@]}")"
     if lk_is_ubuntu; then
         APT_SOURCE_HOSTS=($(
-            grep -Eo "^[^#]+${S}https?://[^/[:space:]]+" "/etc/apt/sources.list" |
+            grep -Eo "^[^#]+${S}https?://[^/[:blank:]]+" "/etc/apt/sources.list" |
                 sed -E 's/^.*:\/\///' | sort | uniq
         )) || lk_die "no active package sources in /etc/apt/sources.list"
         OUTPUT_ALLOW+=("${APT_SOURCE_HOSTS[@]}")

@@ -1,7 +1,8 @@
 #!/bin/bash
 # shellcheck disable=SC1090,SC2001,SC2046,SC2086,SC2207
 
-lk_die() { s=$? && echo "${BASH_SOURCE[0]}: $1" >&2 && (return $s) && false || exit; }
+lk_die() { s=$? && echo "${BASH_SOURCE[0]}: $1" >&2 &&
+    (return $s) && false || exit; }
 [ -n "${LK_INST:-${LK_BASE:-}}" ] || lk_die "LK_BASE not set"
 [ -z "${LK_BASE:-}" ] || export LK_BASE
 

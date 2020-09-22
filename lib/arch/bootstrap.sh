@@ -126,7 +126,7 @@ done
 . "$_DIR/core.sh"
 . "$_DIR/arch.sh"
 
-S="[[:space:]]"
+S="[[:blank:]]"
 
 lk_console_message "Setting up live environment"
 # otherwise mirrorlist may be replaced by reflector

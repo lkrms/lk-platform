@@ -52,6 +52,6 @@ function lk_is_lid_closed() {
 
 function lk_x_dpi() {
     xdpyinfo |
-        grep -Eo '^[[:space:]]+resolution:[[:space:]]*[0-9]+x[0-9]+' |
+        grep -Eo '^[[:blank:]]+resolution:[[:blank:]]*[0-9]+x[0-9]+' |
         grep -Eo '[0-9]+' | head -n1
 }

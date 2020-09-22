@@ -9,7 +9,7 @@ LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
 export LK_BASE=${LK_BASE:-/opt/${LK_PATH_PREFIX}platform}
 
 set -euo pipefail
-lk_die() { s=$? && echo "${BASH_SOURCE[0]:+${BASH_SOURCE[0]}: }$1" >&2 && (return $s) && false || exit; }
+lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (return $s) && false || exit; }
 
 [ "$EUID" -ne 0 ] || lk_die "cannot run as root"
 [ "$(uname -s)" = Darwin ] || lk_die "not running on macOS"
@@ -30,7 +30,7 @@ function exit_trap() {
 {
     export SUDO_PROMPT="[sudo] password for %p: "
 
-    S="[[:space:]]"
+    S="[[:blank:]]"
 
     SCRIPT_DIR=/tmp/${LK_PATH_PREFIX}install
     mkdir -p "$SCRIPT_DIR"

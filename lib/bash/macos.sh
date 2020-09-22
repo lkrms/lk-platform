@@ -56,7 +56,7 @@ function lk_macos_command_line_tools_installed() {
 }
 
 function lk_macos_install_command_line_tools() {
-    local ITEM_NAME S="[[:space:]]" \
+    local ITEM_NAME S="[[:blank:]]" \
         TRIGGER=/tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress
     ! lk_macos_command_line_tools_installed || return 0
     lk_console_message "Installing command line tools"
@@ -125,7 +125,7 @@ function lk_macos_install_dmg() {
     MOUNT_ROOT=$(lk_mktemp_dir) &&
         IFS=$'\n' &&
         MOUNT_POINTS=($(hdiutil attach -mountroot "$MOUNT_ROOT" "$1" |
-            cut -sf3 | sed '/^[[:space:]]*$/d')) &&
+            cut -sf3 | sed '/^[[:blank:]]*$/d')) &&
         [ "${#MOUNT_POINTS[@]}" -gt 0 ] || return
     INSTALL=($(
         unset IFS
