@@ -612,15 +612,15 @@ function lk_in_array() {
     false
 }
 
-# lk_array_search value array_name
-#   Search ARRAY_NAME for VALUE and output the key at which it first appears.
-#   False if VALUE is not matched.
-#   Array values are compared with VALUE using Bash pattern matching.
+# lk_array_search <VALUE> <ARRAY_NAME>
+#
+# Search ARRAY_NAME for VALUE using Bash pattern (glob) matching and output the
+# key of the first match or return false if not matched.
 function lk_array_search() {
     local KEYS KEY
     eval "KEYS=(\"\${!$2[@]}\")"
     for KEY in ${KEYS[@]+"${KEYS[@]}"}; do
-        eval "[[ \"\${$2[\$KEY]}\" == \$1 ]]" || continue
+        eval "[[ \${$2[\$KEY]} == \$1 ]]" || continue
         echo "$KEY"
         return
     done
@@ -674,7 +674,7 @@ function lk_mapfile() {
 }
 
 function lk_has_arg() {
-    lk_in_array "$1" LK_ARGV
+    lk_in_array "$1" "${LK_ARG_ARRAY:-LK_ARGV}"
 }
 
 function lk_log() {
@@ -1744,7 +1744,7 @@ function lk_ssl_client() {
 function lk_keep_original() {
     local LK_BACKUP_SUFFIX=${LK_BACKUP_SUFFIX-.orig}
     [ -z "$LK_BACKUP_SUFFIX" ] ||
-        lk_maybe_sudo test ! -e "$1" ||
+        lk_maybe_sudo test ! -s "$1" ||
         lk_maybe_sudo cp -navL "$1" "$1$LK_BACKUP_SUFFIX"
 }
 
@@ -1768,17 +1768,25 @@ function lk_maybe_sed() {
     lk_maybe_replace "$FILE" "$NEW"
 }
 
-# lk_maybe_replace file_path new_content
+# lk_maybe_replace <FILE_PATH> <NEW_CONTENT> [<IGNORE_PATTERN>]
 function lk_maybe_replace() {
     if lk_maybe_sudo test -e "$1"; then
         lk_maybe_sudo test -f "$1" || lk_warn "file not found: $1" || return
         ! diff -q \
-            <(lk_maybe_sudo cat "$1") \
-            <(cat <<<"$2") >/dev/null || return 0
+            <(lk_maybe_sudo cat "$1" | _lk_maybe_filter "${@:3}") \
+            <(cat <<<"$2" | _lk_maybe_filter "${@:3}") >/dev/null || return 0
         lk_keep_original "$1" || return
     fi
     cat <<<"$2" | lk_maybe_sudo tee "$1" >/dev/null || return
     ! lk_verbose || lk_console_file "$1"
+}
+
+function _lk_maybe_filter() {
+    if [ -n "${1:-}" ]; then
+        grep -Ev "$1" || true
+    else
+        cat
+    fi
 }
 
 # lk_console_file file_path [colour_sequence] [file_colour_sequence]
