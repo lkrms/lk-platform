@@ -114,7 +114,7 @@ function exit_trap() {
 
     scutil --get HostName >/dev/null 2>/dev/null ||
         [ -z "${LK_NODE_HOSTNAME:=$(
-            lk_console_read "Hostname for this system? "
+            lk_console_read "Hostname for this system:"
         )}" ] ||
         lk_macos_set_hostname "$LK_NODE_HOSTNAME"
 
@@ -445,7 +445,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
                     APP_NAMES+=("$APP_NAME")
                     continue
                 fi
-                lk_console_warning "Unknown App ID:" "$APP_ID"
+                lk_console_warning0 "Unknown App ID:" "$APP_ID"
                 unset "INSTALL_APPS[$i]"
             done
             if [ ${#INSTALL_APPS[@]} -gt 0 ]; then

@@ -1,7 +1,7 @@
 #!/bin/bash
 # shellcheck disable=SC1090,SC2015,SC2034,SC2207
 
-lk_bin_depth=1 include=wordpress . lk-bash-load.sh || exit
+lk_bin_depth=1 include=wordpress,provision . lk-bash-load.sh || exit
 
 DEACTIVATE_PLUGINS=(
     #
@@ -32,26 +32,56 @@ _lk_write_my_cnf
 _lk_mysql_connects "$DB_NAME"
 
 # Retrieve particulars
-SITE_ADDR="$(lk_wp_get_site_address)"
-_HOST="$(lk_uri_parts "$SITE_ADDR" "_HOST")" &&
-    eval "$_HOST" || lk_die "unable to parse site address: $SITE_ADDR"
-SITE_DOMAIN="$(
-    sed -E 's/^(www[^.]*|local|staging)\.(.+)$/\2/' <<<"$_HOST"
-)"
-[ -n "$SITE_DOMAIN" ] || SITE_DOMAIN="$_HOST"
-SITE_ROOT="$(lk_wp_get_site_root)"
+function get_state() {
+    local _HOST
+    SITE_ADDR=$(lk_wp_get_site_address)
+    _HOST=$(lk_uri_parts "$SITE_ADDR" "_HOST") &&
+        eval "$_HOST" || lk_die "unable to parse site address: $SITE_ADDR"
+    SITE_HOST=$_HOST
+    SITE_DOMAIN=$(
+        sed -E 's/^(www[^.]*|local|dev|staging)\.(.+)$/\2/' <<<"$_HOST"
+    )
+    [ -n "$SITE_DOMAIN" ] || SITE_DOMAIN=$_HOST
+    SITE_ROOT=$(lk_wp_get_site_root)
+    ACTIVE_PLUGINS=($(
+        lk_wp plugin list --status=active --field=name | sort | uniq
+    ))
+    STALE=0
+}
+get_state
 
 # Check plugins
-ACTIVE_PLUGINS=($(lk_wp plugin list --status=active --field=name))
 TO_DEACTIVATE=($(
     [ "${#ACTIVE_PLUGINS[@]}" -eq 0 ] ||
         [ "${#DEACTIVATE_PLUGINS[@]}" -eq 0 ] ||
         comm -12 \
-            <(printf '%s\n' "${ACTIVE_PLUGINS[@]}" | sort | uniq) \
+            <(printf '%s\n' "${ACTIVE_PLUGINS[@]}") \
             <(printf '%s\n' "${DEACTIVATE_PLUGINS[@]}" | sort | uniq)
 ))
 
-# TODO: deactivate plugins here, then suggest rename
+if [ "${#TO_DEACTIVATE[@]}" -gt 0 ]; then
+    lk_echo_array TO_DEACTIVATE |
+        lk_console_detail_list "Production-only $(
+            lk_maybe_plural "${#TO_DEACTIVATE[@]}" \
+                "plugin" "plugins"
+        ) must be deactivated to continue:"
+    lk_confirm "Proceed?" Y || lk_die
+    lk_wp plugin deactivate "${TO_DEACTIVATE[@]}"
+    STALE=1
+fi
+
+IP="$(LK_DIG_SERVER=1.1.1.1 lk_hosts_get_records A,AAAA "$SITE_DOMAIN")"
+if [ -n "$IP" ] && ! lk_node_is_host "$SITE_HOST"; then
+    NEW_SITE_ADDR=$(lk_console_read "New site address:" "" \
+        -i "http://${SITE_DOMAIN%%.*}.localhost")
+    [ -z "$NEW_SITE_ADDR" ] || [ "$NEW_SITE_ADDR" = "$SITE_ADDR" ] || {
+        LK_WP_QUIET=1 LK_WP_REPLACE=1 LK_WP_FLUSH=0 \
+            lk_wp_rename_site "$NEW_SITE_ADDR" && STALE=1
+    }
+fi
+
+lk_is_false "$STALE" ||
+    get_state
 
 ADMIN_EMAIL="admin@$SITE_DOMAIN"
 lk_console_detail "Site address:" "$SITE_ADDR"
@@ -69,12 +99,6 @@ lk_console_message "Preparing to reset for local development"
 lk_console_detail "Salts in wp-config.php will be refreshed"
 lk_console_detail "Admin email address will be updated to:" "$ADMIN_EMAIL"
 lk_console_detail "User addresses will be updated to:" "user_<ID>@$SITE_DOMAIN"
-[ "${#TO_DEACTIVATE[@]}" -eq 0 ] ||
-    lk_echo_array TO_DEACTIVATE |
-    lk_console_detail_list "Production-only $(
-        lk_maybe_plural "${#TO_DEACTIVATE[@]}" \
-            "plugin" "plugins"
-    ) will be deactivated:"
 ! lk_wp config has WP_CACHE --type=constant ||
     lk_console_detail "WP_CACHE in wp-config.php will be set to:" "false"
 lk_console_detail "wp-mail-smtp will be configured to disable outgoing email"
@@ -82,7 +106,8 @@ if lk_wp plugin is-active woocommerce; then
     PLUGIN_CODE=1
     printf '%s\n' \
         "PayPal" \
-        "Stripe" |
+        "Stripe" \
+        "eWAY" |
         lk_console_detail_list \
             "Test mode will be enabled for known WooCommerce gateways:"
     lk_console_detail "Active WooCommerce webhooks will be deleted"
@@ -118,15 +143,6 @@ SQL
 lk_wp user update 1 --user_email="$ADMIN_EMAIL" --skip-email
 lk_wp user meta update 1 billing_email "$ADMIN_EMAIL"
 
-if [ "${#TO_DEACTIVATE[@]}" -gt 0 ]; then
-    lk_echo_array TO_DEACTIVATE |
-        lk_console_detail_list \
-            "Deactivating ${#TO_DEACTIVATE[@]} $(
-                lk_maybe_plural "${#TO_DEACTIVATE[@]}" plugin plugins
-            ):"
-    lk_wp plugin deactivate "${TO_DEACTIVATE[@]}"
-fi
-
 if lk_wp config has WP_CACHE --type=constant; then
     lk_console_detail "Setting value of WP_CACHE in wp-config.php"
     lk_wp config set WP_CACHE false --type=constant --raw
@@ -155,17 +171,25 @@ if lk_wp plugin is-active woocommerce; then
         lk_wp option patch update \
             woocommerce_stripe_settings testmode yes
     fi
+    if lk_wp plugin is-active woocommerce-gateway-eway; then
+        lk_wp option patch update \
+            woocommerce_eway_settings testmode yes
+    fi
 
     if wp cli has-command 'wc webhook list'; then
         TO_DEACTIVATE=($(
             wp wc webhook list --user=1 --field=id --status=active
-        ))
+        )) || {
+            lk_console_error0 "Command failed with exit status $?:" \
+                "wp wc webhook list --user=1 --field=id --status=active"
+            TO_DEACTIVATE=()
+        }
         [ "${#TO_DEACTIVATE[@]}" -eq 0 ] || {
             lk_console_detail "WooCommerce: deleting active webhooks"
             for WEBHOOK_ID in "${TO_DEACTIVATE[@]}"; do
                 # TODO: deactivate instead?
                 wp wc webhook delete "$WEBHOOK_ID" --user=1 --force=true ||
-                    return
+                    lk_die
             done
         }
     fi
