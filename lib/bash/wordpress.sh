@@ -266,7 +266,8 @@ function lk_wp_db_dump_remote() {
     ssh "$1" "bash -c '\
 mysqldump --defaults-file=.lk_mysqldump.cnf \
 --single-transaction --skip-lock-tables \"\$1\" | gzip; \
-exit \${PIPESTATUS[0]}' bash $(printf '%q' "$DB_NAME")" | pv || EXIT_STATUS=$?
+exit \${PIPESTATUS[0]}' bash $(printf '%q' "$DB_NAME")" | pv --force ||
+        EXIT_STATUS=$?
     [ -z "${OUTPUT_FILE:-}" ] || exec 1>&6 6>&-
     lk_console_message "Deleting mysqldump configuration file"
     ssh "$1" "bash -c 'rm -f .lk_mysqldump.cnf'" &&
@@ -395,9 +396,9 @@ Proceed?" Y || return
     echo "$_SQL" | _lk_mysql || return
     lk_console_detail "Restoring from" "$1"
     if [[ "$1" =~ \.gz(ip)?$ ]]; then
-        pv "$1" | gunzip
+        pv --force "$1" | gunzip
     else
-        pv "$1"
+        pv --force "$1"
     fi | _lk_mysql "$LOCAL_DB_NAME" || EXIT_STATUS=$?
     [ "$EXIT_STATUS" -eq 0 ] &&
         lk_console_success "Database restored successfully" ||
@@ -417,9 +418,10 @@ function lk_wp_sync_files_from_remote() {
         ${LK_WP_SYNC_KEEP_LOCAL[@]+"${LK_WP_SYNC_KEEP_LOCAL[@]}"}
     )
     EXCLUDE=(
-        "/.maintenance"
-        "/*.code-workspace"
-        "/.vscode"
+        /.maintenance
+        "php_error*.log"
+        {"error*",debug}"?log"
+        /wp-content/{backup,cache,upgrade,updraft}/
         ${LK_WP_SYNC_EXCLUDE[@]+"${LK_WP_SYNC_EXCLUDE[@]}"}
     )
     [ -n "${1:-}" ] || lk_warn "no ssh host" || return

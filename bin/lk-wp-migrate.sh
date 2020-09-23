@@ -15,7 +15,7 @@ lk_wp_db_set_local "$LOCAL_PATH"
 
 USAGE="\
 Usage:
-  ${0##*/} [OPTION...] <SSH_HOST>
+  ${0##*/} [OPTION...] <SSH_HOST> [-- <RSYNC_ARG>...]
 
 Migrate a WordPress site from SSH_HOST to the local system, overwriting local
 changes if previously migrated.
@@ -86,14 +86,9 @@ while :; do
     esac
 done
 
-case "$#" in
-1)
-    SSH_HOST=$1
-    ;;
-*)
-    lk_usage
-    ;;
-esac
+[ $# -ge 1 ] || lk_usage
+SSH_HOST=$1
+shift
 
 function maybe_disable_remote_maintenance() {
     if [ "$MAINTENANCE" = on ]; then
@@ -153,7 +148,7 @@ if [[ $MAINTENANCE =~ ^(on|indefinite)$ ]]; then
 fi
 
 # Migrate files
-RSYNC_ARGS=(${EXCLUDE[@]+"${EXCLUDE[@]/#/--exclude=}"})
+RSYNC_ARGS=("$@" ${EXCLUDE[@]+"${EXCLUDE[@]/#/--exclude=}"})
 lk_wp_sync_files_from_remote "$SSH_HOST" "$REMOTE_PATH" "$LOCAL_PATH"
 
 # Migrate database
@@ -180,4 +175,4 @@ rm "$LOCAL_PATH/.maintenance" ||
 Error deleting $LOCAL_PATH/.maintenance
 Maintenance mode may have been disabled early by another process"
 
-lk_console_log "Migration completed successfully"
+lk_console_success "Migration completed successfully"
