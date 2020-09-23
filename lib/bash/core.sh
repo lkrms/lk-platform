@@ -1772,9 +1772,15 @@ function lk_maybe_sed() {
 function lk_maybe_replace() {
     if lk_maybe_sudo test -e "$1"; then
         lk_maybe_sudo test -f "$1" || lk_warn "file not found: $1" || return
+        LK_MAYBE_REPLACE_NO_CHANGE=
         ! diff -q \
             <(lk_maybe_sudo cat "$1" | _lk_maybe_filter "${@:3}") \
-            <(cat <<<"$2" | _lk_maybe_filter "${@:3}") >/dev/null || return 0
+            <(cat <<<"$2" | _lk_maybe_filter "${@:3}") >/dev/null || {
+            # shellcheck disable=SC2034
+            LK_MAYBE_REPLACE_NO_CHANGE=1
+            ! lk_verbose || lk_console_detail "Not changed:" "$1"
+            return
+        }
         lk_keep_original "$1" || return
     fi
     cat <<<"$2" | lk_maybe_sudo tee "$1" >/dev/null || return
@@ -1804,7 +1810,7 @@ function lk_console_file() {
     ORIG_FILE="$FILE_PATH${LK_BACKUP_SUFFIX-.orig}"
     [ "$FILE_PATH" != "$ORIG_FILE" ] &&
         lk_maybe_sudo test -r "$ORIG_FILE" || ORIG_FILE=
-    lk_console_item "${ORIG_FILE:+Changes applied to }$FILE_PATH:" $'<<<<\n'"$(
+    lk_console_item "$FILE_PATH${ORIG_FILE:+ changed}:" $'<<<<\n'"$(
         if [ -n "$ORIG_FILE" ]; then
             ! lk_maybe_sudo diff "$ORIG_FILE" "$FILE_PATH" || echo "<unchanged>"
         else
