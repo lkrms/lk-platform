@@ -262,8 +262,7 @@ install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
 
     # Check .bashrc files
     RC_FILES=(
-        /etc/skel/.bashrc
-        "/etc/skel.${LK_PATH_PREFIX_ALPHA}/.bashrc"
+        /etc/skel{,".$LK_PATH_PREFIX_ALPHA"}/.bashrc
         /{home,Users}/*/.bashrc
         /srv/www/*/.bashrc
         ~root/.bashrc
@@ -274,34 +273,65 @@ install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
     else
         lk_echo_array RC_FILES |
             lk_console_list "Checking startup scripts:" "file" "files"
-        RC_ESCAPED="$(printf '%q' "$LK_BASE/lib/bash/rc.sh")"
-        BASH_SKEL="
-# Added by ${0##*/} at $(lk_now)
-if [ -f $RC_ESCAPED ]; then
-    . $RC_ESCAPED
+        LK_BASE_QUOTED=$(printf '%q' "$LK_BASE")
+        RC_PATH=$LK_BASE_QUOTED/lib/bash/rc.sh
+        RC_PATTERN=$(lk_escape_ere "$LK_BASE")
+        [ "$LK_BASE_QUOTED" = "$LK_BASE" ] ||
+            RC_PATTERN="($RC_PATTERN|$(lk_escape_ere "$LK_BASE_QUOTED"))"
+        RC_PATTERN="$RC_PATTERN(\\/.*)?\\/(\\.bashrc|rc\\.sh)"
+        RC_PATTERN=${RC_PATTERN//\\/\\\\}
+        RC_SH="\
+if [ -f $RC_PATH ]; then
+    . $RC_PATH
 fi"
+        # shellcheck disable=SC2016
+        PROG='
+function print_previous() {
+    if (previous) {
+        print previous
+        previous = ""
+    }
+}
+function print_RC_SH(add_newline) {
+    if (RC_SH) {
+        print (add_newline ? "\n" : "") RC_SH
+        RC_SH = ""
+    }
+}
+$0 ~ RC_PATTERN {
+    remove = 1
+    previous = ""
+    next
+}
+remove {
+    remove = 0
+    print_RC_SH()
+    next
+}
+/^# Added by / {
+    print_previous()
+    previous = $0
+    next
+}
+{
+    print_previous()
+    print
+}
+END {
+    print_previous()
+    print_RC_SH(1)
+}'
+        AWK=(awk -v "RC_PATTERN=$RC_PATTERN" -v "RC_SH=$RC_SH" "$PROG")
         for RC_FILE in "${RC_FILES[@]}"; do
-            # Fix legacy references to $LK_BASE/**/.bashrc
-            lk_maybe_sed -E "s/'($(
-                lk_escape_ere "$LK_BASE"
-            ))(\/.*)?\/.bashrc'/$(
-                lk_escape_ere_replace "$RC_ESCAPED"
-            )/g" "$RC_FILE"
-
-            # Source $LK_BASE/lib/bash/rc.sh unless a reference is already
-            # present
-            grep -Fq "$RC_ESCAPED" "$RC_FILE" || {
-                lk_keep_original "$RC_FILE" &&
-                    echo "$BASH_SKEL" >>"$RC_FILE" || exit
-                lk_console_file "$RC_FILE"
-            }
+            lk_maybe_replace "$RC_FILE" "$("${AWK[@]}" "$RC_FILE")"
         done
     fi
 
     SSH_DIRS=(
-        "/etc/skel.${LK_PATH_PREFIX_ALPHA}/.ssh"
+        /etc/skel{,".$LK_PATH_PREFIX_ALPHA"}/.ssh
         /{home,Users}/*/.ssh
         /srv/www/*/.ssh
+        ~root/.ssh
     )
     LK_SSH_HOMES=("${SSH_DIRS[@]%/*}")
     lk_resolve_files LK_SSH_HOMES

@@ -124,7 +124,7 @@ function lk_ssh_add_host() {
         KEY_FILE=$h/.ssh/${SSH_PREFIX}keys/$NAME
         LK_BACKUP_SUFFIX='' LK_VERBOSE=0 \
             lk_maybe_replace "$KEY_FILE" "$KEY" &&
-            chmod "0${LK_SSH_FILE_MODE:-0600}" "$KEY_FILE" || return
+            chmod 00600 "$KEY_FILE" || return
         ssh-keygen -l -f "$KEY_FILE" >/dev/null 2>&1 || {
             # `ssh-keygen -l -f FILE` exits without error if FILE contains an
             # OpenSSH public key
@@ -132,7 +132,7 @@ function lk_ssh_add_host() {
             KEY=$(unset DISPLAY && ssh-keygen -y -f "$KEY_FILE") &&
                 LK_BACKUP_SUFFIX='' LK_VERBOSE=0 \
                     lk_maybe_replace "$KEY_FILE.pub" "$KEY" &&
-                chmod "0${LK_SSH_FILE_MODE:-0600}" "$KEY_FILE.pub" || return
+                chmod 00600 "$KEY_FILE.pub" || return
         }
     }
     CONF=$(
@@ -150,51 +150,92 @@ IdentityFile            "$KEY_FILE"}${JUMP_HOST_NAME:+
 ProxyJump               $SSH_PREFIX${JUMP_HOST_NAME#$SSH_PREFIX}}
 EOF
     )
-    CONF_FILE=$h/.ssh/${SSH_PREFIX}config.d/${LK_SSH_PRIORITY:-60}-$NAME
+    CONF_FILE=$h/.ssh/${SSH_PREFIX}config.d/${LK_SSH_PRIORITY:-60}-${NAME#$SSH_PREFIX}
     LK_BACKUP_SUFFIX='' \
         lk_maybe_replace "$CONF_FILE" "$CONF" &&
-        chmod "0${LK_SSH_FILE_MODE:-0600}" "$CONF_FILE" || return
+        chmod 00600 "$CONF_FILE" || return
 }
 
 # lk_ssh_configure [<JUMP_HOST[:JUMP_PORT]> <JUMP_USER> [<JUMP_KEY_FILE>]]
 function lk_ssh_configure() {
     local JUMP_HOST=${1:-} JUMP_USER=${2:-} JUMP_KEY_FILE=${3:-} \
         S="[[:blank:]]" SSH_PREFIX=${LK_SSH_PREFIX:-$LK_PATH_PREFIX} \
-        HOMES=(${LK_SSH_HOMES[@]+"${LK_SSH_HOMES[@]}"}) h OWNER GROUP CONF KEY \
-        LK_SSH_DIR_MODE LK_SSH_FILE_MODE
+        KEY PATTERN CONF PROG AWK OWNER GROUP \
+        HOMES=(${LK_SSH_HOMES[@]+"${LK_SSH_HOMES[@]}"}) h
     [ $# -eq 0 ] || [ $# -ge 2 ] || lk_warn "invalid arguments" || return
     [ "${#HOMES[@]}" -gt 0 ] || HOMES=(~)
     [ "${#HOMES[@]}" -le 1 ] ||
         [ ! "$JUMP_KEY_FILE" = - ] ||
         KEY=$(cat)
+
+    # Prepare awk command that adds "Include ~/.ssh/lk-config.d/*" to
+    # ~/.ssh/config, or replaces an equivalent entry
+    PATTERN="(~/\\.ssh/)?${SSH_PREFIX}config\\.d/\\*"
+    PATTERN="(\"$PATTERN\"|$PATTERN)"
+    PATTERN="^$S*[iI][nN][cC][lL][uU][dD][eE]$S*$PATTERN$S*\$"
+    PATTERN=${PATTERN//\\/\\\\}
+    CONF="Include ~/.ssh/${SSH_PREFIX}config.d/*"
+    # shellcheck disable=SC2016
+    PROG='
+function print_line(line) {
+    if (print_out)
+        print line ? line : $0
+    else
+        lines[++line_count] = line ? line : $0
+}
+function print_previous() {
+    if (previous) {
+        print_line(previous)
+        previous = ""
+    }
+}
+function print_SSH_CONFIG(add_newline) {
+    if (SSH_CONFIG) {
+        print_line(SSH_CONFIG (add_newline ? "\n" : ""))
+        SSH_CONFIG = ""
+    }
+}
+$0 ~ SSH_PATTERN {
+    remove = 1
+    previous = ""
+    next
+}
+remove {
+    remove = 0
+    print_SSH_CONFIG()
+}
+/^# Added by / {
+    print_previous()
+    previous = $0
+    next
+}
+{
+    print_previous()
+    print_line()
+}
+END {
+    print_out = 1
+    print_SSH_CONFIG(1)
+    for (i = 1; i <= line_count; i++)
+        print lines[i]
+}'
+    AWK=(awk -v "SSH_PATTERN=$PATTERN" -v "SSH_CONFIG=$CONF" "$PROG")
+
     for h in "${HOMES[@]}"; do
         OWNER=$(lk_file_owner "$h") &&
             GROUP=$(id -gn "$OWNER") || return
-        unset LK_SSH_DIR_MODE
-        unset LK_SSH_FILE_MODE
-        [[ ! $h =~ ^/etc/skel(\.$LK_PATH_PREFIX_ALPHA)?$ ]] || {
-            LK_SSH_DIR_MODE=0755
-            LK_SSH_FILE_MODE=0644
-        }
         # Create directories in ~/.ssh, or reset modes and ownership of existing
         # directories
-        install -d -m "${LK_SSH_DIR_MODE:-0700}" -o "$OWNER" -g "$GROUP" \
+        install -d -m 0700 -o "$OWNER" -g "$GROUP" \
             "$h/.ssh"{,"/$SSH_PREFIX"{config.d,keys}} ||
             return
-        # Add "Include ~/.ssh/lk-config.d/*" to ~/.ssh/config if not already
-        # present
-        if ! grep -Eq "^\
-$S*[iI][nN][cC][lL][uU][dD][eE]$S*(\"?)(~/\\.ssh/)?\
-${SSH_PREFIX}config\\.d/\\*\\1$S*\$" "$h/.ssh/config" 2>/dev/null; then
-            CONF=$(printf "%s\n%s %s\n\n." \
-                "# Added by $(lk_myself) at $(lk_now)" \
-                "Include" "~/.ssh/${SSH_PREFIX}config.d/*")
-            [ ! -e "$h/.ssh/config" ] ||
-                CONF=${CONF%.}$(cat "$h/.ssh/config" && echo .) ||
-                return
-            echo -n "${CONF%.}" >"$h/.ssh/config" || return
-            ! lk_verbose || lk_console_file "$h/.ssh/config"
-        fi
+        # Add "Include ~/.ssh/lk-config.d/*" to ~/.ssh/config, or replace an
+        # equivalent entry
+        [ -e "$h/.ssh/config" ] ||
+            install -m 0600 -o "$OWNER" -g "$GROUP" \
+                /dev/null "$h/.ssh/config" ||
+            return
+        lk_maybe_replace "$h/.ssh/config" "$("${AWK[@]}" "$h/.ssh/config")"
         # Add defaults for all lk-* hosts to ~/.ssh/lk-config.d/90-defaults
         CONF=$(
             cat <<EOF
@@ -221,7 +262,7 @@ EOF
                 "$JUMP_KEY_FILE" ${KEY+<<<"$KEY"}
         (
             shopt -s nullglob
-            chmod "0${LK_SSH_FILE_MODE:-0600}" \
+            chmod 00600 \
                 "$h/.ssh/"{config,"$SSH_PREFIX"{config.d,keys}/*}
             ! lk_is_root ||
                 chown "$OWNER:$GROUP" \
