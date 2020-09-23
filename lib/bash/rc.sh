@@ -50,28 +50,40 @@ function _lk_bash_completion() {
     done
 }
 
-function lk_diff_bak() {
-    local BACKUP FILE
+function lk_bak_find() {
+    lk_elevate gnu_find / -xdev -regextype posix-egrep \
+        -regex "${_LK_DIFF_REGEX:-.*-[0-9]+\\.bak}" \
+        "$@"
+}
+
+function lk_bak_diff() {
+    local ROOT=${1:-${_LK_DIFF_ROOT:-/}} BACKUP FILE
+    [ "${ROOT:0:1}" != - ] || lk_warn "illegal directory: $ROOT" || return
     [ "$EUID" -eq 0 ] || ! lk_can_sudo bash || {
         sudo -H env \
             _LK_DIFF_ROOT="${_LK_DIFF_ROOT:-}" \
             _LK_DIFF_REGEX="${_LK_DIFF_REGEX:-}" \
             _LK_DIFF_SUFFIX="${_LK_DIFF_SUFFIX:-}" \
-            bash -c "$(declare -f lk_diff_bak); lk_diff_bak \"\$@\"" "bash" "$@"
+            bash -c "$(declare -f lk_bak_diff); lk_bak_diff \"\$@\"" "bash" "$@"
         return
     }
     while IFS= read -rd $'\0' BACKUP; do
         FILE="${BACKUP%${_LK_DIFF_SUFFIX:--*.bak}}"
         diff --unified --color --report-identical-files "$BACKUP" "$FILE" ||
             true
-    done < <(gnu_find "${1:-${_LK_DIFF_ROOT:-/}}" -xdev -regextype posix-egrep \
+    done < <(gnu_find "$ROOT" -xdev -regextype posix-egrep \
         -regex "${_LK_DIFF_REGEX:-.*-[0-9]+\\.bak}" -print0 | sort -z)
 }
 
-function lk_diff_orig() {
+function lk_orig_find() {
+    _LK_DIFF_REGEX=".*\\.orig" \
+        lk_bak_find "$@"
+}
+
+function lk_orig_diff() {
     _LK_DIFF_REGEX=".*\\.orig" \
         _LK_DIFF_SUFFIX=".orig" \
-        lk_diff_bak "$@"
+        lk_bak_diff "$@"
 }
 
 function lk_find_latest() {
