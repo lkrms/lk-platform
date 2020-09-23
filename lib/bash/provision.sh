@@ -235,7 +235,8 @@ END {
             install -m 0600 -o "$OWNER" -g "$GROUP" \
                 /dev/null "$h/.ssh/config" ||
             return
-        lk_maybe_replace "$h/.ssh/config" "$("${AWK[@]}" "$h/.ssh/config")"
+        LK_BACKUP_SUFFIX='' \
+            lk_maybe_replace "$h/.ssh/config" "$("${AWK[@]}" "$h/.ssh/config")"
         # Add defaults for all lk-* hosts to ~/.ssh/lk-config.d/90-defaults
         CONF=$(
             cat <<EOF
