@@ -5,6 +5,10 @@ function lk_systemctl_enable() {
         sudo systemctl enable --now "$@"
 }
 
+function lk_full_name() {
+    getent passwd "${1:-$UID}" | cut -d: -f5 | cut -d, -f1
+}
+
 function lk_icon_install() {
     local TARGET_DIR="${2:-$HOME/.local/share/icons/hicolor}" SIZE SIZES=(
         16x16 22x22 24x24 32x32 36x36 48x48 64x64 72x72 96x96

@@ -12,7 +12,7 @@ lk_die() { s=$? && echo "${BASH_SOURCE[0]}: $1" >&2 &&
 #    environment
 # 3. Copy remaining LK_* variables to the global scope (other variables are
 #    discarded)
-eval "$(
+[[ ,${LK_SKIP:-}, == *,settings,* ]] || eval "$(
     if [ "${LK_SETTINGS_FILES+1}" = 1 ]; then
         SETTINGS=(${LK_SETTINGS_FILES[@]+"${LK_SETTINGS_FILES[@]}"})
     else
@@ -99,13 +99,7 @@ fi
 
 # shellcheck disable=SC2034,SC2206
 eval "$(
-    IFS=$' \t\n,'
-    SKIP=(
-        ${LK_SKIP:-}
-    )
-    unset IFS
-
-    lk_in_array "env" SKIP || {
+    [[ ,${LK_SKIP:-}, == *,env,* ]] || {
         printf '%s=%q\n' \
             LK_PATH_PREFIX "${LK_PATH_PREFIX:-lk-}" \
             LK_PATH_PREFIX_ALPHA "${LK_PATH_PREFIX_ALPHA:-$(
@@ -114,6 +108,6 @@ eval "$(
         . "$LK_BASE/lib/bash/env.sh"
     }
 
-    lk_in_array "trap" SKIP ||
+    [[ ,${LK_SKIP:-}, == *,trap,* ]] ||
         echo "lk_trap_exit"
 )"

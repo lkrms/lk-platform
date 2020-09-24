@@ -134,7 +134,7 @@
     lk_console_message "Checking configuration files"
     LK_PATH_PREFIX=${LK_PATH_PREFIX:-${PATH_PREFIX:-}}
     [ -n "$LK_PATH_PREFIX" ] || lk_die "LK_PATH_PREFIX not set"
-    [ -z "$LK_BASE" ] ||
+    [ -z "${LK_BASE:-}" ] ||
         [ "$LK_BASE" = "$LK_INST" ] ||
         [ ! -d "$LK_BASE" ] ||
         {
@@ -210,7 +210,7 @@
     # Use the opening "Environment:" log entry created by hosting.sh as a last
     # resort when looking for settings
     function install_env() {
-        INSTALL_ENV=${INSTALL_ENV-$(
+        INSTALL_ENV="${INSTALL_ENV-$(
             [ ! -f "/var/log/${LK_PATH_PREFIX}install.log" ] || {
                 PROG="\
 /^[0-9]{4}(-[0-9]{2}){2} [0-9]{2}(:[0-9]{2}){2}( [-+][0-9]{4})? (==> |   -> )?Environment:\$/   { env_started = 1; next }
@@ -221,7 +221,7 @@
 /^[0-9]{4}(-[0-9]{2}){2} [0-9]{2}(:[0-9]{2}){2}( [-+][0-9]{4})? /                               { if (env_started) exit }"
                 awk "$PROG" <"/var/log/${LK_PATH_PREFIX}install.log"
             }
-        )} && awk -F= "/^$1=/ { print \$2 }" <<<"$INSTALL_ENV"
+        )}" && awk -F= "/^$1=/ { print \$2 }" <<<"$INSTALL_ENV"
     }
 
     for i in "${INSTALL_SETTINGS[@]}"; do
@@ -241,15 +241,13 @@ install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
     DEFAULT_LINES=()
     OUTPUT=()
     for i in "${DEFAULT_SETTINGS[@]}"; do
-        if [ -z "${!i:=}" ]; then
-            # Don't include null variables unless they already appear in
-            # /etc/default/lk-platform
-            grep -Eq "^$i=" "$DEFAULT_FILE" ||
-                continue
-            DEFAULT_LINES+=("$(printf '%s=' "$i")")
-        else
-            DEFAULT_LINES+=("$(printf '%s=%q' "$i" "${!i}")")
+        # Don't include null variables unless they already appear in
+        # /etc/default/lk-platform
+        if [ -z "${!i:-}" ] &&
+            ! grep -Eq "^$i=" "$DEFAULT_FILE"; then
+            continue
         fi
+        DEFAULT_LINES+=("$(lk_get_shell_var "$i")")
         OUTPUT+=("$i" "${!i:-<none>}")
     done
     lk_console_item "Settings:" "$(printf '%s: %s\n' "${OUTPUT[@]}")"
@@ -360,6 +358,7 @@ install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
                 'BYOBU_TIME="%H:%M:%S%z"'
             # Turn off UTF-8 support
             maybe_replace_lines "$DIR/statusrc" \
+                '[ ! -f "/etc/arch-release" ] || RELEASE_ABBREVIATED=1' \
                 "BYOBU_CHARMAP=x"
             # Fix output issue when connecting from OpenSSH on Windows
             maybe_replace_lines "$DIR/.tmux.conf" \

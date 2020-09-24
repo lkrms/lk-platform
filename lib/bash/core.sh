@@ -213,12 +213,12 @@ function lk_commands_exist() {
 }
 
 function lk_first_existing_command() {
-    local COMMAND
-    for COMMAND in "$@"; do
-        if type -P "$COMMAND" >/dev/null; then
-            echo "$COMMAND"
+    while [ $# -gt 0 ]; do
+        if type -P "$1" >/dev/null; then
+            echo "$1"
             return
         fi
+        shift
     done
     false
 }
@@ -230,6 +230,11 @@ function _lk_process_regex() {
     fi
 }
 
+# lk_get_regex [<REGEX_NAME>...]
+#
+# Output newline-separated Bash-compatible variable assignments for all
+# available regular expressions or for each REGEX_NAME.
+#
 # shellcheck disable=SC2034
 function lk_get_regex() {
     local DOMAIN_PART_REGEX DOMAIN_NAME_REGEX EMAIL_ADDRESS_REGEX \
@@ -239,7 +244,7 @@ function lk_get_regex() {
         LINUX_USERNAME_REGEX MYSQL_USERNAME_REGEX \
         DPKG_SOURCE_REGEX \
         PHP_SETTING_NAME_REGEX PHP_SETTING_REGEX \
-        _O _H _P ARGS=("$@")
+        _O _H _P _S _U _A _Q _F ARGS=("$@")
 
     _lk_process_regex DOMAIN_PART_REGEX \
         "[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
@@ -267,6 +272,20 @@ function lk_get_regex() {
         "($IPV4_REGEX|$IPV6_REGEX|$DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)"
     _lk_process_regex HOST_OPT_PREFIX_REGEX \
         "($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX|$DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)"
+
+    # https://en.wikipedia.org/wiki/Uniform_Resource_Identifier
+    _S="[a-zA-Z][-a-zA-Z0-9+.]*"                               # scheme
+    _U="[-a-zA-Z0-9._~%!\$&'()*+,;=]+"                         # username
+    _P="[-a-zA-Z0-9._~%!\$&'()*+,;=]*"                         # password
+    _H="([-a-zA-Z0-9._~%!\$&'()*+,;=]+|\\[([0-9a-fA-F:]+)\\])" # host
+    _O="[0-9]+"                                                # port
+    _A="[-a-zA-Z0-9._~%!\$&'()*+,;=:@/]+"                      # path
+    _Q="[-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]+"                     # query
+    _F="[-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]*"                     # fragment
+    _lk_process_regex URI_REGEX \
+        "(($_S):)?(//(($_U)(:($_P))?@)?$_H(:($_O))?)?($_A)?(\\?($_Q))?(#($_F))?"
+    _lk_process_regex URI_REGEX_REQ_SCHEME_HOST \
+        "(($_S):)(//(($_U)(:($_P))?@)?$_H(:($_O))?)($_A)?(\\?($_Q))?(#($_F))?"
 
     _lk_process_regex LINUX_USERNAME_REGEX \
         "[a-z_]([-a-z0-9_]{0,31}|[-a-z0-9_]{0,30}\\\$)"
@@ -297,15 +316,6 @@ function realpath() {
     realpath "$@"
 }
 
-function lk_first_existing_parent() {
-    local FILE
-    FILE=$(gnu_realpath --canonicalize-missing "$1") || return
-    while [ ! -e "$FILE" ]; do
-        FILE=$(dirname "$FILE")
-    done
-    echo "$FILE"
-}
-
 # lk_bash_at_least major [minor]
 function lk_bash_at_least() {
     [ "${BASH_VERSINFO[0]}" -eq "$1" ] &&
@@ -329,8 +339,10 @@ function lk_now() {
 }
 
 # lk_date_log
-#   Output the current time in a format suitable for log files. Redefine
-#   `lk_date_log` to change the line prefix added by `lk_log`.
+#
+# Output the current time in a format suitable for log files.
+#
+# Redefine `lk_date_log` to change the line prefix added by `lk_log`.
 function lk_date_log() {
     lk_date "%Y-%m-%d %H:%M:%S %z"
 }
@@ -339,20 +351,8 @@ function lk_today() {
     lk_date "%b %_d %H:%M:%S %z"
 }
 
-function lk_today_nano() {
-    gnu_date +"%b %_d %H:%M:%S.%N %z"
-}
-
 function lk_date_ymdhms() {
     lk_date "%Y%m%d%H%M%S"
-}
-
-function lk_date_Ymd() {
-    lk_date "%Y%m%d"
-}
-
-function lk_date_ymd() {
-    lk_date "%y%m%d"
 }
 
 function lk_timestamp() {
@@ -362,6 +362,7 @@ function lk_timestamp() {
 # shellcheck disable=SC2162
 if lk_bash_at_least 4 1; then
     function lk_pause() {
+        # A homage to MS-DOS
         read -sN 1 -p "${1:-Press any key to continue . . . }"
         echo
     }
@@ -376,24 +377,12 @@ function lk_is_root() {
     [ "$EUID" -eq 0 ]
 }
 
-function lk_is_yes() {
-    [[ $1 =~ ^[yY]$ ]]
-}
-
-function lk_is_no() {
-    [[ $1 =~ ^[nN]$ ]]
-}
-
 function lk_is_true() {
-    [[ $1 =~ ^([yY1])$ ]]
+    [[ $1 =~ ^(1|[tT][rR][uU][eE]|[yY]([eE][sS])?|[oO][nN])$ ]]
 }
 
 function lk_is_false() {
-    [[ $1 =~ ^([nN0])$ ]]
-}
-
-function lk_full_name() {
-    getent passwd "${1:-$UID}" | cut -d: -f5 | cut -d, -f1
+    [[ $1 =~ ^(0|[fF][aA][lL][sS][eE]|[nN][oO]?|[oO][fF][fF])$ ]]
 }
 
 # [LK_ESCAPE=<ESCAPE_WITH>] lk_escape <STRING> [<ESCAPE_CHAR>...]
@@ -413,20 +402,17 @@ function lk_escape() {
     echo "$STRING"
 }
 
-# lk_esc STRING
-#   POSIX-conformant implementation of `lk_escape_double_quotes`
-function lk_esc() {
-    echo "$1" | sed -Ee 's/\\/\\\\/g' -e 's/[$`"]/\\&/g'
-}
-
-# lk_esc_ere STRING
-#   POSIX-conformant implementation of `lk_escape_ere`
-function lk_esc_ere() {
-    echo "$1" | sed -Ee 's/\\/\\\\/g' -e 's/[]$()*+./?[^{|}]/\\&/g'
-}
-
-function lk_escape_double_quotes() {
-    lk_escape "$1" '$' '`' "\\" '"'
+function lk_get_shell_var() {
+    local _LK_ESCAPED
+    while [ $# -gt 0 ]; do
+        if [ -n "${!1:-}" ]; then
+            _LK_ESCAPED=$(lk_escape "${!1}." '$' '`' "\\" '"')
+            printf '%s="%s"\n' "$1" "${_LK_ESCAPED%.}"
+        else
+            printf '%s=\n' "$1"
+        fi
+        shift
+    done
 }
 
 function lk_escape_ere() {
@@ -1146,31 +1132,28 @@ function lk_is_email() {
 #   and authority components ("scheme://host" at minimum).
 #   See https://en.wikipedia.org/wiki/Uniform_Resource_Identifier
 function lk_is_uri() {
-    local URI_REGEX _Q=
-    URI_REGEX="(([a-zA-Z][-a-zA-Z0-9+.]*):)$_Q(//(([-a-zA-Z0-9._~%!\$&'()*+,;=]+)(:([-a-zA-Z0-9._~%!\$&'()*+,;=]*))?@)?([-a-zA-Z0-9._~%!\$&'()*+,;=]+|\\[([0-9a-fA-F:]+)\\])(:([0-9]+))?)$_Q([-a-zA-Z0-9._~%!\$&'()*+,;=:@/]+)?(\\?([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]+))?(#([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]*))?"
-    [[ $1 =~ ^${URI_REGEX}$ ]]
+    local URI_REGEX_REQ_SCHEME_HOST
+    eval "$(lk_get_regex URI_REGEX_REQ_SCHEME_HOST)"
+    [[ $1 =~ ^${URI_REGEX_REQ_SCHEME_HOST}$ ]]
 }
 
-# lk_uri_parts uri uri_component...
-#   Output _KEY="VALUE" for each URI_COMPONENT in URI. URI_COMPONENT must be
-#   one of the following (case insensitive, leading underscores accepted):
-#     scheme
-#     username
-#     password
-#     host
-#       Brackets are included for IPv6 addresses.
-#     ipv6_address
-#     port
-#     path
-#     query
-#     fragment
+# lk_uri_parts <URI> [<URI_COMPONENT>...]
+#
+# Output newline-separated Bash-compatible variable assignments for all
+# components in URI or for each URI_COMPONENT.
+#
+# URI_COMPONENT can be one of: _SCHEME, _USERNAME, _PASSWORD, _HOST, _PORT,
+# _PATH, _QUERY, _FRAGMENT, _IPV6_ADDRESS
 function lk_uri_parts() {
-    local PART KEY VALUE URI_REGEX _Q="?"
-    URI_REGEX="(([a-zA-Z][-a-zA-Z0-9+.]*):)$_Q(//(([-a-zA-Z0-9._~%!\$&'()*+,;=]+)(:([-a-zA-Z0-9._~%!\$&'()*+,;=]*))?@)?([-a-zA-Z0-9._~%!\$&'()*+,;=]+|\\[([0-9a-fA-F:]+)\\])(:([0-9]+))?)$_Q([-a-zA-Z0-9._~%!\$&'()*+,;=:@/]+)?(\\?([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]+))?(#([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]*))?"
+    local PARTS=("${@:2}") PART VALUE URI_REGEX
+    eval "$(lk_get_regex URI_REGEX)"
     [[ "$1" =~ ^${URI_REGEX}$ ]] || return
-    for PART in "${@:2}"; do
-        KEY=$(lk_upper "_${PART#_}")
-        case "$KEY" in
+    [ "${#PARTS[@]}" -gt 0 ] || PARTS=(
+        _SCHEME _USERNAME _PASSWORD _HOST _PORT _PATH _QUERY _FRAGMENT
+        _IPV6_ADDRESS
+    )
+    for PART in "${PARTS[@]}"; do
+        case "$PART" in
         _SCHEME)
             VALUE=${BASH_REMATCH[2]}
             ;;
@@ -1199,11 +1182,11 @@ function lk_uri_parts() {
             VALUE=${BASH_REMATCH[16]}
             ;;
         *)
-            lk_warn "unknown URI component '$PART'"
+            lk_warn "unknown URI component: $PART"
             return 1
             ;;
         esac
-        printf "%s=%q\n" "$KEY" "$VALUE"
+        printf '%s=%q\n' "$PART" "$VALUE"
     done
 }
 
@@ -1211,9 +1194,9 @@ function lk_uri_parts() {
 #   Match and output URIs ("scheme://host" at minimum) in standard input or
 #   each FILE_PATH.
 function lk_get_uris() {
-    local EXIT_STATUS=0 URI_REGEX _Q=
-    URI_REGEX="(([a-zA-Z][-a-zA-Z0-9+.]*):)$_Q(//(([-a-zA-Z0-9._~%!\$&'()*+,;=]+)(:([-a-zA-Z0-9._~%!\$&'()*+,;=]*))?@)?([-a-zA-Z0-9._~%!\$&'()*+,;=]+|\\[([0-9a-fA-F:]+)\\])(:([0-9]+))?)$_Q([-a-zA-Z0-9._~%!\$&'()*+,;=:@/]+)?(\\?([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]+))?(#([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]*))?"
-    grep -Eo "\\b$URI_REGEX\\b" "$@" || EXIT_STATUS="$?"
+    local EXIT_STATUS=0 URI_REGEX_REQ_SCHEME_HOST
+    eval "$(lk_get_regex URI_REGEX_REQ_SCHEME_HOST)"
+    grep -Eo "\\b$URI_REGEX_REQ_SCHEME_HOST\\b" "$@" || EXIT_STATUS="$?"
     # exit 0 unless there's an actual error
     [ "$EXIT_STATUS" -eq 0 ] || [ "$EXIT_STATUS" -eq 1 ]
 }

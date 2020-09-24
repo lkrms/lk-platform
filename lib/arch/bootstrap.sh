@@ -397,13 +397,13 @@ in_target install -v -d -m 2775 -o "$TARGET_USERNAME" -g "adm" \
 in_target sudo -H -u "$TARGET_USERNAME" \
     git clone -b "$LK_PLATFORM_BRANCH" \
     "https://github.com/lkrms/lk-platform.git" "$LK_BASE"
-printf '%s=%q\n' \
-    LK_BASE "$LK_BASE" \
-    LK_PATH_PREFIX "$LK_PATH_PREFIX" \
-    LK_PATH_PREFIX_ALPHA "$LK_PATH_PREFIX_ALPHA" \
-    LK_NODE_HOSTNAME "$TARGET_HOSTNAME" \
-    LK_NODE_TIMEZONE "$TIMEZONE" \
-    LK_PLATFORM_BRANCH "$LK_PLATFORM_BRANCH" >"/mnt/etc/default/lk-platform"
+LK_NODE_HOSTNAME=$TARGET_HOSTNAME LK_NODE_TIMEZONE=$TIMEZONE lk_get_shell_var \
+    LK_BASE \
+    LK_PATH_PREFIX \
+    LK_PATH_PREFIX_ALPHA \
+    LK_NODE_HOSTNAME \
+    LK_NODE_TIMEZONE \
+    LK_PLATFORM_BRANCH >"/mnt/etc/default/lk-platform"
 in_target "$LK_BASE/bin/lk-platform-install.sh"
 
 if lk_is_qemu; then

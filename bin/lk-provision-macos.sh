@@ -179,12 +179,12 @@ EOF
         [ -e /etc/default ] ||
             sudo install -d -m 0755 -g wheel /etc/default
         sudo install -m 0664 -g admin /dev/null /etc/default/lk-platform
-        printf '%s=%q\n' \
-            LK_BASE "$LK_BASE" \
-            LK_PATH_PREFIX "$LK_PATH_PREFIX" \
-            LK_PATH_PREFIX_ALPHA "$LK_PATH_PREFIX_ALPHA" \
-            LK_PLATFORM_BRANCH "$LK_PLATFORM_BRANCH" \
-            LK_PACKAGES_FILE "$LK_PACKAGES_FILE" |
+        lk_get_shell_var \
+            LK_BASE \
+            LK_PATH_PREFIX \
+            LK_PATH_PREFIX_ALPHA \
+            LK_PLATFORM_BRANCH \
+            LK_PACKAGES_FILE |
             sudo tee /etc/default/lk-platform >/dev/null
         lk_console_detail_file /etc/default/lk-platform
     fi
