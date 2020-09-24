@@ -1464,12 +1464,13 @@ function lk_dirs_exist() {
 }
 
 function lk_remove_false() {
-    local _LK_KEYS _LK_KEY _LK_TEST
-    eval "_LK_KEYS=(\"\${!$2[@]}\")" &&
-        _LK_TEST="$(lk_replace "{}" "\${$2[\$_LK_KEY]}" "$1")" || return
-    for _LK_KEY in ${_LK_KEYS[@]+"${_LK_KEYS[@]}"}; do
-        eval "$_LK_TEST" || unset "$2[$_LK_KEY]"
+    local _LK_ARRAY="$2[@]" _LK_TEMP_ARRAY _LK_TEST _LK_KEY
+    _LK_TEMP_ARRAY=(${!_LK_ARRAY+"${!_LK_ARRAY}"})
+    _LK_TEST="$(lk_replace '{}' '${_LK_TEMP_ARRAY[$_LK_KEY]}' "$1")"
+    for _LK_KEY in "${!_LK_TEMP_ARRAY[@]}"; do
+        eval "$_LK_TEST" || unset "_LK_TEMP_ARRAY[$_LK_KEY]"
     done
+    eval "$2=(\${_LK_TEMP_ARRAY[@]+\"\${_LK_TEMP_ARRAY[@]}\"})"
 }
 
 # lk_remove_missing ARRAY
@@ -1482,26 +1483,23 @@ function lk_remove_missing() {
 #   Remove paths to missing files from ARRAY, then resolve remaining paths to
 #   absolute file names and remove any duplicates.
 function lk_resolve_files() {
-    local _LK_TEMP_FILE
+    local _LK_ARRAY="$1[@]" _LK_TEMP_ARRAY
     lk_is_identifier "$1" || lk_warn "not a valid identifier: $1" || return
     lk_remove_missing "$1" || return
-    if eval "[ \"\${#$1[@]}\" -gt \"0\" ]"; then
-        _LK_TEMP_FILE="$(lk_mktemp_file)" &&
-            lk_delete_on_exit "$_LK_TEMP_FILE" &&
-            eval "gnu_realpath -ez \"\${$1[@]}\"" | sort -zu >"$_LK_TEMP_FILE" &&
-            lk_mapfile -z /dev/stdin "$1" <"$_LK_TEMP_FILE"
-    else
-        eval "$1=()"
-    fi
+    _LK_TEMP_ARRAY=(${!_LK_ARRAY+"${!_LK_ARRAY}"})
+    lk_mapfile -z <(
+        [ ${#_LK_TEMP_ARRAY[@]} -eq 0 ] ||
+            gnu_realpath -ez "${_LK_TEMP_ARRAY[@]}" | sort -zu
+    ) "$1"
 }
 
 function lk_expand_paths() {
     if [ $# -gt 0 ]; then
         while [ $# -gt 0 ]; do
             if [[ $1 =~ ^(~[-a-z0-9\$_]*)(/.*)?$ ]]; then
-                eval "printf '%s\n' $(
-                    printf '%s%q' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
-                )"
+                eval "printf '%s\n' $([ -n "${BASH_REMATCH[2]}" ] &&
+                    printf '%s%q' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" ||
+                    echo "${BASH_REMATCH[1]}")"
             else
                 printf '%s\n' "$1"
             fi

@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC1007,SC1090,SC2001,SC2015,SC2034
+# shellcheck disable=SC1090,SC2001,SC2015,SC2034
 
 # root privileges are required for access to settings files and startup scripts
 # in ~root, /home/*, etc., so elevate immediately rather than waiting for
@@ -83,7 +83,7 @@
         LK_PACKAGES_FILE
     )
 
-    DEFAULT_FILE="/etc/default/lk-platform"
+    DEFAULT_FILE=/etc/default/lk-platform
     GLOBIGNORE="$LK_INST/etc/*example.*:$LK_INST/etc/*default.*"
     LK_SETTINGS_FILES=(
         "$DEFAULT_FILE"
@@ -101,7 +101,7 @@
     LK_SKIP=env include=provision . "$LK_INST/lib/bash/common.sh"
 
     LK_BIN_PATH=${LK_BIN_PATH:-/usr/local/bin}
-    LK_BACKUP_SUFFIX="-$(lk_timestamp).bak"
+    LK_BACKUP_SUFFIX=-$(lk_timestamp).bak
     LK_VERBOSE=1
     lk_log_output
 
@@ -132,9 +132,8 @@
     install_gnu_commands || true
 
     lk_console_message "Checking configuration files"
-    LK_PATH_PREFIX="${LK_PATH_PREFIX:-${PATH_PREFIX:-${1:-}}}"
-    [ -n "$LK_PATH_PREFIX" ] ||
-        lk_die "LK_PATH_PREFIX not set and no value provided on command line"
+    LK_PATH_PREFIX=${LK_PATH_PREFIX:-${PATH_PREFIX:-}}
+    [ -n "$LK_PATH_PREFIX" ] || lk_die "LK_PATH_PREFIX not set"
     [ -z "$LK_BASE" ] ||
         [ "$LK_BASE" = "$LK_INST" ] ||
         [ ! -d "$LK_BASE" ] ||
@@ -142,18 +141,18 @@
             lk_console_detail "Existing installation found at" "$LK_BASE"
             lk_confirm "Reconfigure system?" Y || lk_die
         }
-    export LK_BASE="$LK_INST"
-    LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(
+    export LK_BASE=$LK_INST
+    LK_PATH_PREFIX_ALPHA=${LK_PATH_PREFIX_ALPHA:-$(
         sed 's/[^a-zA-Z0-9]//g' <<<"$LK_PATH_PREFIX"
-    )}"
+    )}
 
     # Check repo state
     cd "$LK_BASE"
-    REPO_OWNER="$(lk_file_owner "$LK_BASE")"
+    REPO_OWNER=$(lk_file_owner "$LK_BASE")
     CONFIG_COMMANDS=()
     function check_repo_config() {
         local VALUE
-        VALUE="$(git config --local "$1")" &&
+        VALUE=$(git config --local "$1") &&
             [ "$VALUE" = "$2" ] ||
             CONFIG_COMMANDS+=("$(printf 'git config %q %q' "$1" "$2")")
     }
@@ -166,9 +165,9 @@
         sudo -Hu "$REPO_OWNER" \
             bash -c "$(lk_implode ' && ' "${CONFIG_COMMANDS[@]}")"
     fi
-    BRANCH="$(git rev-parse --abbrev-ref HEAD)" && [ "$BRANCH" != "HEAD" ] ||
+    BRANCH=$(git rev-parse --abbrev-ref HEAD) && [ "$BRANCH" != "HEAD" ] ||
         lk_die "no branch checked out: $LK_BASE"
-    LK_PLATFORM_BRANCH="${LK_PLATFORM_BRANCH:-$BRANCH}"
+    LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-$BRANCH}
     if [ "$LK_PLATFORM_BRANCH" != "$BRANCH" ]; then
         lk_console_warning "$(printf "%s is set to %s, but %s is checked out" \
             "LK_PLATFORM_BRANCH" \
@@ -177,18 +176,18 @@
         if lk_confirm "Switch to $LK_PLATFORM_BRANCH?" N; then
             lk_console_item "Switching to" "$LK_PLATFORM_BRANCH"
             sudo -Hu "$REPO_OWNER" git checkout "$LK_PLATFORM_BRANCH"
-            BRANCH="$LK_PLATFORM_BRANCH"
+            BRANCH=$LK_PLATFORM_BRANCH
         else
-            LK_PLATFORM_BRANCH="$BRANCH"
+            LK_PLATFORM_BRANCH=$BRANCH
         fi
     fi
-    REMOTE_NAME="$(git for-each-ref --format="%(upstream:remotename)" \
-        "refs/heads/$BRANCH")" && [ -n "$REMOTE_NAME" ] ||
+    REMOTE_NAME=$(git for-each-ref --format="%(upstream:remotename)" \
+        "refs/heads/$BRANCH") && [ -n "$REMOTE_NAME" ] ||
         lk_die "no upstream remote for current branch: $LK_BASE"
     # TODO: skip fetch if .git/FETCH_HEAD <5min old
     if sudo -Hu "$REPO_OWNER" \
         git fetch --quiet --prune --prune-tags "$REMOTE_NAME" "$BRANCH"; then
-        BEHIND="$(git rev-list --count "HEAD..@{upstream}")"
+        BEHIND=$(git rev-list --count "HEAD..@{upstream}")
         if [ "$BEHIND" -gt 0 ]; then
             git merge-base --is-ancestor HEAD "@{upstream}" ||
                 lk_die "local branch has diverged from upstream: $LK_BASE"
@@ -211,7 +210,7 @@
     # Use the opening "Environment:" log entry created by hosting.sh as a last
     # resort when looking for settings
     function install_env() {
-        INSTALL_ENV="${INSTALL_ENV-$(
+        INSTALL_ENV=${INSTALL_ENV-$(
             [ ! -f "/var/log/${LK_PATH_PREFIX}install.log" ] || {
                 PROG="\
 /^[0-9]{4}(-[0-9]{2}){2} [0-9]{2}(:[0-9]{2}){2}( [-+][0-9]{4})? (==> |   -> )?Environment:\$/   { env_started = 1; next }
@@ -222,7 +221,7 @@
 /^[0-9]{4}(-[0-9]{2}){2} [0-9]{2}(:[0-9]{2}){2}( [-+][0-9]{4})? /                               { if (env_started) exit }"
                 awk "$PROG" <"/var/log/${LK_PATH_PREFIX}install.log"
             }
-        )}" && awk -F= "/^$1=/ { print \$2 }" <<<"$INSTALL_ENV"
+        )} && awk -F= "/^$1=/ { print \$2 }" <<<"$INSTALL_ENV"
     }
 
     for i in "${INSTALL_SETTINGS[@]}"; do
@@ -260,93 +259,122 @@ install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
     lk_safe_symlink "$LK_BASE/bin/lk-bash-load.sh" \
         "$LK_BIN_PATH/lk-bash-load.sh"
 
-    # Check .bashrc files
-    RC_FILES=(
-        /etc/skel{,".$LK_PATH_PREFIX_ALPHA"}/.bashrc
-        /{home,Users}/*/.bashrc
-        /srv/www/*/.bashrc
-        ~root/.bashrc
+    LK_HOMES=(
+        /etc/skel{,".$LK_PATH_PREFIX_ALPHA"}
+        ${SUDO_USER:+"$(lk_expand_paths "~$SUDO_USER")"}
+        "$@"
     )
-    lk_resolve_files RC_FILES
-    if [ "${#RC_FILES[@]}" -eq 0 ]; then
-        lk_console_warning "No ~/.bashrc files found"
-    else
-        lk_echo_array RC_FILES |
-            lk_console_list "Checking startup scripts:" "file" "files"
-        LK_BASE_QUOTED=$(printf '%q' "$LK_BASE")
-        RC_PATH=$LK_BASE_QUOTED/lib/bash/rc.sh
-        RC_PATTERN=$(lk_escape_ere "$LK_BASE")
-        [ "$LK_BASE_QUOTED" = "$LK_BASE" ] ||
-            RC_PATTERN="($RC_PATTERN|$(lk_escape_ere "$LK_BASE_QUOTED"))"
-        RC_PATTERN="$RC_PATTERN(\\/.*)?\\/(\\.bashrc|rc\\.sh)"
-        RC_PATTERN=${RC_PATTERN//\\/\\\\}
-        RC_SH="\
-if [ -f $RC_PATH ]; then
-    . $RC_PATH
-fi"
-        # shellcheck disable=SC2016
-        PROG='
-function print_previous() {
-    if (previous) {
-        print previous
-        previous = ""
-    }
-}
-function print_RC_SH(add_newline) {
-    if (RC_SH) {
-        print (add_newline ? "\n" : "") RC_SH
-        RC_SH = ""
-    }
-}
-$0 ~ RC_PATTERN {
-    remove = 1
-    previous = ""
-    next
-}
-remove {
-    remove = 0
-    print_RC_SH()
-    next
-}
-/^# Added by / {
-    print_previous()
-    previous = $0
-    next
-}
-{
-    print_previous()
-    print
-}
-END {
-    print_previous()
-    print_RC_SH(1)
-}'
-        AWK=(awk -v "RC_PATTERN=$RC_PATTERN" -v "RC_SH=$RC_SH" "$PROG")
-        for RC_FILE in "${RC_FILES[@]}"; do
-            lk_maybe_replace "$RC_FILE" "$("${AWK[@]}" "$RC_FILE")"
-        done
-    fi
+    lk_resolve_files LK_HOMES
+    [ ${#LK_HOMES[@]} -gt 0 ] || lk_die "No home directories found"
+    lk_echo_array LK_HOMES |
+        lk_console_list "Checking startup scripts and SSH config files in:" \
+            directory directories
 
-    SSH_DIRS=(
-        /etc/skel{,".$LK_PATH_PREFIX_ALPHA"}/.ssh
-        /{home,Users}/*/.ssh
-        /srv/www/*/.ssh
-        ~root/.ssh
-    )
-    LK_SSH_HOMES=("${SSH_DIRS[@]%/*}")
-    lk_resolve_files LK_SSH_HOMES
-    if [ "${#LK_SSH_HOMES[@]}" -eq 0 ]; then
-        lk_console_warning "No ~/.ssh directories found"
-    else
-        lk_echo_args "${LK_SSH_HOMES[@]/%//.ssh}" |
-            lk_console_list "Checking SSH configuration:" directory directories
-        if [ -n "${LK_SSH_JUMP_HOST:-}" ]; then
-            lk_ssh_configure "$LK_SSH_JUMP_HOST" \
-                "${LK_SSH_JUMP_USER:-}" \
-                "${LK_SSH_JUMP_KEY:-}"
-        else
-            lk_ssh_configure
+    # Prepare awk to update ~/.bashrc
+    LK_BASE_QUOTED=$(printf '%q' "$LK_BASE")
+    RC_PATH=$LK_BASE_QUOTED/lib/bash/rc.sh
+    RC_PATTERN=$(lk_escape_ere "$LK_BASE")
+    [ "$LK_BASE_QUOTED" = "$LK_BASE" ] ||
+        RC_PATTERN="($RC_PATTERN|$(lk_escape_ere "$LK_BASE_QUOTED"))"
+    RC_PATTERN="$RC_PATTERN(\\/.*)?\\/(\\.bashrc|rc\\.sh)"
+    RC_PATTERN=${RC_PATTERN//\\/\\\\}
+    RC_SH=$(printf '%s\n' \
+        "if [ -f $RC_PATH ]; then" \
+        "    . $RC_PATH" \
+        "fi")
+    RC_AWK=(awk
+        -f "$LK_BASE/lib/awk/update-bashrc.awk"
+        -v "RC_PATTERN=$RC_PATTERN"
+        -v "RC_SH=$RC_SH")
+
+    function maybe_replace_lines() {
+        local FILE=$1
+        shift
+        [ -e "$FILE" ] ||
+            install -m 0644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
+        lk_maybe_replace "$FILE" "$([ $# -eq 0 ] || printf "%s\n" "$@")"
+    }
+
+    for h in "${LK_HOMES[@]}"; do
+        [ ! -e "$h/.${LK_PATH_PREFIX}ignore" ] || continue
+        OWNER=$(lk_file_owner "$h")
+        GROUP=$(id -gn "$OWNER")
+
+        # Create ~/.bashrc if it doesn't exist, then add or update commands to
+        # source LK_BASE/lib/bash/rc.sh at startup when Bash is running as a
+        # non-login shell (e.g. in most desktop terminals on Linux)
+        FILE=$h/.bashrc
+        [ -f "$FILE" ] || {
+            lk_console_detail "Creating" "$FILE"
+            install -m 0644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
+        }
+        lk_maybe_replace "$FILE" "$("${RC_AWK[@]}" "$FILE")"
+
+        # Create ~/.profile if no profile file exists, then check that ~/.bashrc
+        # is sourced at startup when Bash is running as a login shell (e.g. in a
+        # default SSH session or a macOS terminal)
+        PROFILES=("$h/.bash_profile" "$h/.bash_login" "$h/.profile")
+        lk_remove_missing PROFILES
+        [ ${#PROFILES[@]} -gt "0" ] || {
+            FILE=$h/.profile
+            PROFILES+=("$FILE")
+            lk_console_detail "Creating" "$FILE"
+            install -m 0644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
+        }
+        grep -q "\\.bashrc" "${PROFILES[@]}" || {
+            FILE=${PROFILES[0]}
+            lk_console_detail "Sourcing ~/.bashrc in" "$FILE"
+            lk_maybe_add_newline "$FILE" &&
+                echo >>"$FILE" \
+                    "[ -z \"\${BASH_VERSION:-}\" ] || [ ! -f ~/.bashrc ] || . ~/.bashrc"
+        }
+
+        DIR=$h/.byobu
+        if [ ! -e "$DIR/.${LK_PATH_PREFIX}ignore" ] &&
+            BYOBU_PATH=$(type -P byobu-launch); then
+            for FILE in "${PROFILES[@]}"; do
+                grep -q "byobu-launch" "$FILE" || {
+                    lk_console_detail "Adding byobu-launch to" "$FILE"
+                    lk_maybe_add_newline "$FILE" &&
+                        printf '_byobu_sourced=1 . %q 2>/dev/null || true\n' \
+                            "$BYOBU_PATH" >>"$FILE"
+                }
+            done
+
+            [ -d "$DIR" ] ||
+                install -d -m 0755 -o "$OWNER" -g "$GROUP" "$DIR"
+            # Prevent byobu from enabling its prompt on first start
+            maybe_replace_lines "$DIR/prompt"
+            # Configure status notifications
+            maybe_replace_lines "$DIR/status" \
+                'screen_upper_left="color"' \
+                'screen_upper_right="color whoami hostname #ip_address menu"' \
+                'screen_lower_left="color #logo #distro release #arch #session"' \
+                'screen_lower_right="color #network #disk_io #custom #entropy raid reboot_required #updates_available #apport #services #mail users uptime #ec2_cost #rcs_cost #fan_speed #cpu_temp #battery #wifi_quality #processes load_average cpu_count cpu_freq memory swap disk #time_utc date time"' \
+                'tmux_left="#logo #distro release #arch #session"' \
+                'tmux_right="#network #disk_io #custom #entropy raid reboot_required #updates_available #apport #services #mail users uptime #ec2_cost #rcs_cost #fan_speed #cpu_temp #battery #wifi_quality #processes load_average cpu_count cpu_freq memory swap disk whoami hostname #ip_address #time_utc date time"'
+            # Display date as 20Aug, remove space between date and time, include
+            # UTC offset
+            maybe_replace_lines "$DIR/datetime.tmux" \
+                'BYOBU_DATE="%-d%b"' \
+                'BYOBU_TIME="%H:%M:%S%z"'
+            # Turn off UTF-8 support
+            maybe_replace_lines "$DIR/statusrc" \
+                "BYOBU_CHARMAP=x"
+            # Fix output issue when connecting from OpenSSH on Windows
+            maybe_replace_lines "$DIR/.tmux.conf" \
+                "set -s escape-time 50"
         fi
+    done
+
+    # Leave ~root/.ssh alone
+    lk_remove_false "[ \"{}\" != $(printf '%q' "$(realpath ~root)") ]" LK_HOMES
+    if [ -n "${LK_SSH_JUMP_HOST:-}" ]; then
+        lk_ssh_configure "$LK_SSH_JUMP_HOST" \
+            "${LK_SSH_JUMP_USER:-}" \
+            "${LK_SSH_JUMP_KEY:-}"
+    else
+        lk_ssh_configure
     fi
 
     if lk_is_desktop; then

@@ -1,10 +1,11 @@
 #!/bin/bash
 
-# shellcheck disable=SC2088,SC2207
+# shellcheck disable=SC2015,SC2088,SC2207
 
 # lk_maybe_install [-v] [-m <MODE>] [-o <OWNER>] [-g <GROUP>] <SOURCE> <DEST>
 # lk_maybe_install -d [-v] [-m <MODE>] [-o <OWNER>] [-g <GROUP>] <DEST>
 function lk_maybe_install() {
+    # shellcheck disable=SC2034
     local DEST=${*: -1:1} VERBOSE MODE OWNER GROUP i \
         ARGS=("$@") LK_ARG_ARRAY=ARGS
     if lk_has_arg "-d" || [ ! -e "$DEST" ]; then
@@ -161,7 +162,7 @@ function lk_ssh_configure() {
     local JUMP_HOST=${1:-} JUMP_USER=${2:-} JUMP_KEY_FILE=${3:-} \
         S="[[:blank:]]" SSH_PREFIX=${LK_SSH_PREFIX:-$LK_PATH_PREFIX} \
         KEY PATTERN CONF PROG AWK OWNER GROUP \
-        HOMES=(${LK_SSH_HOMES[@]+"${LK_SSH_HOMES[@]}"}) h
+        HOMES=(${LK_HOMES[@]+"${LK_HOMES[@]}"}) h
     [ $# -eq 0 ] || [ $# -ge 2 ] || lk_warn "invalid arguments" || return
     [ "${#HOMES[@]}" -gt 0 ] || HOMES=(~)
     [ "${#HOMES[@]}" -le 1 ] ||
@@ -222,6 +223,8 @@ END {
     AWK=(awk -v "SSH_PATTERN=$PATTERN" -v "SSH_CONFIG=$CONF" "$PROG")
 
     for h in "${HOMES[@]}"; do
+        [ ! -e "$h/.${LK_PATH_PREFIX}ignore" ] &&
+            [ ! -e "$h/.ssh/.${LK_PATH_PREFIX}ignore" ] || continue
         OWNER=$(lk_file_owner "$h") &&
             GROUP=$(id -gn "$OWNER") || return
         # Create directories in ~/.ssh, or reset modes and ownership of existing
