@@ -1773,7 +1773,8 @@ function lk_maybe_replace() {
         LK_MAYBE_REPLACE_NO_CHANGE=
         ! diff -q \
             <(lk_maybe_sudo cat "$1" | _lk_maybe_filter "${@:3}") \
-            <(cat <<<"$2" | _lk_maybe_filter "${@:3}") >/dev/null || {
+            <([ -z "$2" ] || cat <<<"$2" | _lk_maybe_filter "${@:3}") \
+            >/dev/null || {
             # shellcheck disable=SC2034
             LK_MAYBE_REPLACE_NO_CHANGE=1
             ! lk_verbose || lk_console_detail "Not changed:" "$1"
