@@ -24,8 +24,9 @@
 
     shopt -s nullglob
 
-    INSTALL_SETTINGS=(
-        # lib/linode/hosting.sh
+    CONF_FILE=/etc/default/lk-platform
+
+    OLD_SETTINGS=(
         NODE_HOSTNAME
         NODE_FQDN
         NODE_TIMEZONE
@@ -52,7 +53,7 @@
         PLATFORM_BRANCH
     )
 
-    DEFAULT_SETTINGS=(
+    SETTINGS=(
         LK_BASE
         LK_PATH_PREFIX
         LK_PATH_PREFIX_ALPHA
@@ -83,13 +84,15 @@
         LK_PACKAGES_FILE
     )
 
-    DEFAULT_FILE=/etc/default/lk-platform
+    # To gather missing settings for CONF_FILE, source CONF_FILE twice:
+    # - first to seed variables like LK_PATH_PREFIX;
+    # - then to ensure values already set in CONF_FILE are not overwritten
     GLOBIGNORE="$LK_INST/etc/*example.*:$LK_INST/etc/*default.*"
     LK_SETTINGS_FILES=(
-        "$DEFAULT_FILE"
+        "$CONF_FILE"
         "$LK_INST/etc"/*.conf
         "~root/.\${LK_PATH_PREFIX:-lk-}settings"
-        "$DEFAULT_FILE"
+        "$CONF_FILE"
     )
     unset GLOBIGNORE
 
@@ -127,7 +130,7 @@
         return "$EXIT_STATUS"
     }
     # Exit if required commands fail to install
-    install_gnu_commands chmod date find getopt realpath sed stat xargs
+    install_gnu_commands awk chmod date find getopt realpath sed stat xargs
     # For other commands, warn and continue
     install_gnu_commands || true
 
@@ -147,84 +150,86 @@
     )}
 
     # Check repo state
-    cd "$LK_BASE"
-    REPO_OWNER=$(lk_file_owner "$LK_BASE")
-    CONFIG_COMMANDS=()
-    function check_repo_config() {
-        local VALUE
-        VALUE=$(git config --local "$1") &&
-            [ "$VALUE" = "$2" ] ||
-            CONFIG_COMMANDS+=("$(printf 'git config %q %q' "$1" "$2")")
-    }
-    check_repo_config "core.sharedRepository" "0664"
-    check_repo_config "merge.ff" "only"
-    check_repo_config "pull.ff" "only"
-    if [ "${#CONFIG_COMMANDS[@]}" -gt 0 ]; then
-        lk_console_item "Running in $LK_BASE:" \
-            "$(lk_echo_array CONFIG_COMMANDS)"
-        sudo -Hu "$REPO_OWNER" \
-            bash -c "$(lk_implode ' && ' "${CONFIG_COMMANDS[@]}")"
-    fi
-    BRANCH=$(git rev-parse --abbrev-ref HEAD) && [ "$BRANCH" != "HEAD" ] ||
-        lk_die "no branch checked out: $LK_BASE"
-    LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-$BRANCH}
-    if [ "$LK_PLATFORM_BRANCH" != "$BRANCH" ]; then
-        lk_console_warning "$(printf "%s is set to %s, but %s is checked out" \
-            "LK_PLATFORM_BRANCH" \
-            "$LK_BOLD$LK_PLATFORM_BRANCH$LK_RESET" \
-            "$LK_BOLD$BRANCH$LK_RESET")"
-        if lk_confirm "Switch to $LK_PLATFORM_BRANCH?" N; then
-            lk_console_item "Switching to" "$LK_PLATFORM_BRANCH"
-            sudo -Hu "$REPO_OWNER" git checkout "$LK_PLATFORM_BRANCH"
-            BRANCH=$LK_PLATFORM_BRANCH
-        else
-            LK_PLATFORM_BRANCH=$BRANCH
-        fi
-    fi
-    REMOTE_NAME=$(git for-each-ref --format="%(upstream:remotename)" \
-        "refs/heads/$BRANCH") && [ -n "$REMOTE_NAME" ] ||
-        lk_die "no upstream remote for current branch: $LK_BASE"
-    # TODO: skip fetch if .git/FETCH_HEAD <5min old
-    if sudo -Hu "$REPO_OWNER" \
-        git fetch --quiet --prune --prune-tags "$REMOTE_NAME" "$BRANCH"; then
-        BEHIND=$(git rev-list --count "HEAD..@{upstream}")
-        if [ "$BEHIND" -gt 0 ]; then
-            git merge-base --is-ancestor HEAD "@{upstream}" ||
-                lk_die "local branch has diverged from upstream: $LK_BASE"
-            lk_console_item \
-                "Updating lk-platform ($BEHIND $(
-                    lk_maybe_plural "$BEHIND" "commit" "commits"
-                ) behind) in" "$LK_BASE"
+    if [ -d "$LK_BASE/.git" ]; then
+        cd "$LK_BASE"
+        REPO_OWNER=$(lk_file_owner "$LK_BASE")
+        CONFIG_COMMANDS=()
+        function check_repo_config() {
+            local VALUE
+            VALUE=$(git config --local "$1") &&
+                [ "$VALUE" = "$2" ] ||
+                CONFIG_COMMANDS+=("$(printf 'git config %q %q' "$1" "$2")")
+        }
+        [ ! -g "$LK_BASE" ] ||
+            check_repo_config "core.sharedRepository" "0664"
+        check_repo_config "merge.ff" "only"
+        check_repo_config "pull.ff" "only"
+        if [ "${#CONFIG_COMMANDS[@]}" -gt 0 ]; then
+            lk_console_item "Running in $LK_BASE:" \
+                "$(lk_echo_array CONFIG_COMMANDS)"
             sudo -Hu "$REPO_OWNER" \
-                git merge --ff-only "@{upstream}"
-            lk_console_message "Restarting ${0##*/}"
-            NO_LOG=1
-            ! lk_has_arg --no-log || unset NO_LOG
-            "$0" "$@" ${NO_LOG+--no-log}
-            exit
+                bash -c "$(lk_implode ' && ' "${CONFIG_COMMANDS[@]}")"
         fi
-    else
-        lk_console_warning0 "Unable to check for lk-platform updates"
+        BRANCH=$(git rev-parse --abbrev-ref HEAD) && [ "$BRANCH" != "HEAD" ] ||
+            lk_die "no branch checked out: $LK_BASE"
+        LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-$BRANCH}
+        if [ "$LK_PLATFORM_BRANCH" != "$BRANCH" ]; then
+            lk_console_warning "$(printf "%s is set to %s, but %s is checked out" \
+                "LK_PLATFORM_BRANCH" \
+                "$LK_BOLD$LK_PLATFORM_BRANCH$LK_RESET" \
+                "$LK_BOLD$BRANCH$LK_RESET")"
+            if lk_confirm "Switch to $LK_PLATFORM_BRANCH?" N; then
+                lk_console_item "Switching to" "$LK_PLATFORM_BRANCH"
+                sudo -Hu "$REPO_OWNER" git checkout "$LK_PLATFORM_BRANCH"
+                BRANCH=$LK_PLATFORM_BRANCH
+            else
+                LK_PLATFORM_BRANCH=$BRANCH
+            fi
+        fi
+        REMOTE_NAME=$(git for-each-ref --format="%(upstream:remotename)" \
+            "refs/heads/$BRANCH") && [ -n "$REMOTE_NAME" ] ||
+            lk_die "no upstream remote for current branch: $LK_BASE"
+        FETCH_TIME=$(lk_modified_timestamp ".git/FETCH_HEAD" 2>/dev/null) ||
+            FETCH_TIME=0
+        if [ $(($(lk_timestamp) - FETCH_TIME)) -gt 300 ]; then
+            if sudo -Hu "$REPO_OWNER" \
+                git fetch --quiet --prune --prune-tags "$REMOTE_NAME" "$BRANCH"; then
+                BEHIND=$(git rev-list --count "HEAD..@{upstream}")
+                if [ "$BEHIND" -gt 0 ]; then
+                    git merge-base --is-ancestor HEAD "@{upstream}" ||
+                        lk_die "local branch has diverged from upstream: $LK_BASE"
+                    lk_console_item \
+                        "Updating lk-platform ($BEHIND $(
+                            lk_maybe_plural "$BEHIND" "commit" "commits"
+                        ) behind) in" "$LK_BASE"
+                    sudo -Hu "$REPO_OWNER" \
+                        git merge --ff-only "@{upstream}"
+                    lk_console_message "Restarting ${0##*/}"
+                    NO_LOG=1
+                    ! lk_has_arg --no-log || unset NO_LOG
+                    "$0" "$@" ${NO_LOG+--no-log}
+                    exit
+                fi
+            else
+                lk_console_warning0 "Unable to check for lk-platform updates"
+            fi
+        fi
     fi
 
     # Use the opening "Environment:" log entry created by hosting.sh as a last
-    # resort when looking for settings
+    # resort when looking for old settings
     function install_env() {
         INSTALL_ENV="${INSTALL_ENV-$(
-            [ ! -f "/var/log/${LK_PATH_PREFIX}install.log" ] || {
-                PROG="\
-/^[0-9]{4}(-[0-9]{2}){2} [0-9]{2}(:[0-9]{2}){2}( [-+][0-9]{4})? (==> |   -> )?Environment:\$/   { env_started = 1; next }
-/^  [a-zA-Z_][a-zA-Z0-9_]*=/                                                                    { if (env_started) { print substr(\$0, 3, length - 2); next } }
-/^[0-9]{4}(-[0-9]{2}){2} [0-9]{2}(:[0-9]{2}){2} [-+][0-9]{4}   [a-zA-Z_][a-zA-Z0-9_]*=/         { if (env_started) { print substr(\$0, 29, length - 28); next } }
-/^[0-9]{4}(-[0-9]{2}){2} [0-9]{2}(:[0-9]{2}){2} [-+][0-9]{4}     [a-zA-Z_][a-zA-Z0-9_]*=/       { if (env_started) { print substr(\$0, 31, length - 30); next } }
-/^[0-9]{4}(-[0-9]{2}){2} [0-9]{2}(:[0-9]{2}){2} [-+][0-9]{4}       [a-zA-Z_][a-zA-Z0-9_]*=/     { if (env_started) { print substr(\$0, 33, length - 32); next } }
-/^[0-9]{4}(-[0-9]{2}){2} [0-9]{2}(:[0-9]{2}){2}( [-+][0-9]{4})? /                               { if (env_started) exit }"
-                awk "$PROG" <"/var/log/${LK_PATH_PREFIX}install.log"
-            }
-        )}" && awk -F= "/^$1=/ { print \$2 }" <<<"$INSTALL_ENV"
+            [ ! -f "/var/log/${LK_PATH_PREFIX}install.log" ] ||
+                awk \
+                    -f "$LK_BASE/lib/awk/get-install-env.awk" \
+                    <"/var/log/${LK_PATH_PREFIX}install.log"
+        )}" && awk -F= \
+            -v "SETTING=$1" \
+            '$1 == SETTING { print $2 }' <<<"$INSTALL_ENV"
     }
 
-    for i in "${INSTALL_SETTINGS[@]}"; do
+    for i in "${OLD_SETTINGS[@]}"; do
         eval "\
 LK_$i=\"\${LK_$i-\${LK_DEFAULT_$i-\${$i-\$(\
 install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
@@ -233,25 +238,25 @@ install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
     lk_console_item "Configuring system for lk-platform installed at" "$LK_BASE"
 
     # Generate /etc/default/lk-platform
-    [ -e "$DEFAULT_FILE" ] || {
-        install -d -m 0755 "${DEFAULT_FILE%/*}" &&
-            install -m 0644 /dev/null "$DEFAULT_FILE"
+    [ -e "$CONF_FILE" ] || {
+        install -d -m 0755 "${CONF_FILE%/*}" &&
+            install -m 0644 /dev/null "$CONF_FILE"
     }
     # TODO: add or replace lines rather than overwriting entire file
     DEFAULT_LINES=()
     OUTPUT=()
-    for i in "${DEFAULT_SETTINGS[@]}"; do
+    for i in "${SETTINGS[@]}"; do
         # Don't include null variables unless they already appear in
         # /etc/default/lk-platform
         if [ -z "${!i:-}" ] &&
-            ! grep -Eq "^$i=" "$DEFAULT_FILE"; then
+            ! grep -Eq "^$i=" "$CONF_FILE"; then
             continue
         fi
         DEFAULT_LINES+=("$(lk_get_shell_var "$i")")
         OUTPUT+=("$i" "${!i:-<none>}")
     done
     lk_console_item "Settings:" "$(printf '%s: %s\n' "${OUTPUT[@]}")"
-    lk_maybe_replace "$DEFAULT_FILE" "$(lk_echo_array DEFAULT_LINES)"
+    lk_maybe_replace "$CONF_FILE" "$(lk_echo_array DEFAULT_LINES)"
 
     lk_console_message "Checking lk-* symlinks"
     lk_safe_symlink "$LK_BASE/bin/lk-bash-load.sh" \

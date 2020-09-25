@@ -300,7 +300,7 @@ EOF
 
     [ -z "$LK_PACKAGES_FILE" ] ||
         LK_PACKAGES_FILE=$(realpath "$LK_PACKAGES_FILE")
-    "$LK_BASE/bin/lk-platform-install.sh" --no-log
+    "$LK_BASE/bin/lk-platform-configure-system.sh" --no-log
 
     lk_console_message "Checking Homebrew packages"
     UPGRADE_FORMULAE=()
