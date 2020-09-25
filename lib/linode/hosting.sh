@@ -639,7 +639,6 @@ sysctl --system
 lk_console_message "Sourcing $LK_BASE/lib/bash/rc.sh in ~/.bashrc for all users"
 RC_ESCAPED="$(printf '%q' "$LK_BASE/lib/bash/rc.sh")"
 BASH_SKEL="
-# Added by ${0##*/} at $(lk_date_log)
 if [ -f $RC_ESCAPED ]; then
     . $RC_ESCAPED
 fi"
@@ -657,9 +656,7 @@ EOF
 DIR="/etc/skel/.byobu"
 install -v -d -m 0755 "$DIR"
 # disable byobu-prompt
-cat <<EOF >"$DIR/prompt"
-[ -r /usr/share/byobu/profiles/bashrc ] && . /usr/share/byobu/profiles/bashrc  #byobu-prompt#
-EOF
+echo -n >"$DIR/prompt"
 # configure status line
 cat <<EOF >"$DIR/status"
 screen_upper_left="color"
@@ -675,6 +672,7 @@ BYOBU_TIME="%H:%M:%S%z"
 EOF
 # disable UTF-8 support by default
 cat <<EOF >"$DIR/statusrc"
+[ ! -f "/etc/arch-release" ] || RELEASE_ABBREVIATED=1
 BYOBU_CHARMAP=x
 EOF
 
