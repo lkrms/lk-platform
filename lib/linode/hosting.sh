@@ -701,7 +701,7 @@ JUMP_KEY=$([ -z "$SSH_JUMP_KEY" ] ||
 
 lk_console_message "Configuring SSH client defaults"
 DIR=/etc/skel
-install -v -d -m 0755 "$DIR/.ssh"{,"/$PATH_PREFIX"{config.d,keys}}
+install -v -d -m 0700 "$DIR/.ssh"{,"/$PATH_PREFIX"{config.d,keys}}
 lk_keep_original "$DIR/.ssh/config"
 cat <<EOF >"$DIR/.ssh/config"
 # Added by ${0##*/} at $(lk_date_log)
@@ -735,15 +735,16 @@ IdentityFile            "~/.ssh/${PATH_PREFIX}keys/jump"}
 EOF
 }
 [ -z "$JUMP_KEY" ] || {
-    install -m 0644 /dev/null "$DIR/.ssh/${PATH_PREFIX}keys/jump"
+    install -m 0600 /dev/null "$DIR/.ssh/${PATH_PREFIX}keys/jump"
     echo "$JUMP_KEY" >"$DIR/.ssh/${PATH_PREFIX}keys/jump"
 }
+chmod -Rc -077 "$DIR/.ssh"
 
 DIR=/etc/skel.$PATH_PREFIX_ALPHA
 [ ! -e "$DIR" ] || lk_die "already exists: $DIR"
 lk_console_message "Creating $DIR (for hosting accounts)"
 cp -av "/etc/skel" "$DIR"
-install -m 0644 /dev/null "$DIR/.ssh/authorized_keys"
+install -m 0600 /dev/null "$DIR/.ssh/authorized_keys"
 [ -z "$HOST_KEYS" ] || echo "$HOST_KEYS" >>"$DIR/.ssh/authorized_keys"
 
 unset FIRST_ADMIN
@@ -757,17 +758,16 @@ for USERNAME in ${ADMIN_USERS//,/ }; do
     install -v -d -m 0750 -o "$USERNAME" -g "$USER_GROUP" "$USER_HOME"
     if [ -z "$ADMIN_USER_KEYS" ]; then
         [ ! -e "/root/.ssh" ] || {
-            lk_console_message "Moving /root/.ssh to /home/$USERNAME/.ssh"
-            mv "/root/.ssh" "/home/$USERNAME/" &&
-                chown -R "$USERNAME": "/home/$USERNAME/.ssh" || exit
+            lk_console_message "Moving /root/.ssh to $USER_HOME/.ssh"
+            mv "/root/.ssh" "$USER_HOME/"
         }
     else
         install -v -d -m 0700 -o "$USERNAME" -g "$USER_GROUP" "$USER_HOME/.ssh"
         install -m 0600 -o "$USERNAME" -g "$USER_GROUP" /dev/null "$USER_HOME/.ssh/authorized_keys"
-        grep -E "$S$USERNAME\$" <<<"$ADMIN_USER_KEYS" >>"$USER_HOME/.ssh/authorized_keys" || :
+        grep -E "$S$USERNAME\$" <<<"$ADMIN_USER_KEYS" >>"$USER_HOME/.ssh/authorized_keys" || true
     fi
-    sudo -Hu "$USERNAME" cp -nRTv "/etc/skel" "$USER_HOME" &&
-        chmod -Rc -077 "$USER_HOME/.ssh"
+    cp -nRTv "/etc/skel" "$USER_HOME"
+    chown -R "$USERNAME": "$USER_HOME"
     install -m 0440 /dev/null "/etc/sudoers.d/nopasswd-$USERNAME"
     echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >"/etc/sudoers.d/nopasswd-$USERNAME"
 done
@@ -1216,8 +1216,8 @@ if [ -n "$HOST_DOMAIN" ]; then
     install -v -d -m 0750 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/.cache"
     install -v -d -m 2750 -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/log"
     [ "$COPY_SKEL" -eq 0 ] || {
-        sudo -Hu "$HOST_ACCOUNT" cp -nRTv "/etc/skel.$PATH_PREFIX_ALPHA" "/srv/www/$HOST_ACCOUNT" &&
-            chmod -Rc -077 "/srv/www/$HOST_ACCOUNT/.ssh" || exit
+        cp -nRTv "/etc/skel.$PATH_PREFIX_ALPHA" "/srv/www/$HOST_ACCOUNT" &&
+            chown -R "$HOST_ACCOUNT": "/srv/www/$HOST_ACCOUNT" || exit
     }
     ! lk_dpkg_installed apache2 || {
         lk_console_message "Adding user 'www-data' to group '$HOST_ACCOUNT_GROUP'"
