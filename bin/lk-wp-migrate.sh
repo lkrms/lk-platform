@@ -7,6 +7,7 @@ REMOTE_PATH=public_html
 LOCAL_PATH=$(lk_wp_get_site_root 2>/dev/null) ||
     LOCAL_PATH=$HOME/public_html
 MAINTENANCE=
+RENAME=
 EXCLUDE=()
 DEFAULT_DB_NAME=
 DEFAULT_DB_USER=
@@ -31,6 +32,7 @@ Options:
                                 on:         enable during migration
                                 indefinite: enable permanently
                             (default: ${MAINTENANCE:-<ask>})
+  -r, --rename <URL>        change site address to URL after migration
   -e, --exclude <PATTERN>   exclude files matching PATTERN
                             (may be given multiple times)
       --db-name <DB_NAME>   if local connection fails, use database DB_NAME
@@ -41,8 +43,8 @@ Options:
 Maintenance mode is always enabled on the local system during migration."
 
 OPTS=$(
-    gnu_getopt --options "s:d:m:e:" \
-        --longoptions "--source:,--dest:,--maintenance:,--exclude:,--db-name:,--db-user:" \
+    gnu_getopt --options "s:d:m:r:e:" \
+        --longoptions "--source:,--dest:,--maintenance:,--rename:,--exclude:,--db-name:,--db-user:" \
         --name "${0##*/}" \
         -- "$@"
 ) || lk_usage
@@ -67,6 +69,10 @@ while :; do
             lk_usage
             ;;
         esac
+        ;;&
+    -r | --rename)
+        RENAME=$1
+        lk_is_uri "$1" || lk_usage
         ;;&
     -e | --exclude)
         EXCLUDE+=("$1")
@@ -116,6 +122,8 @@ lk_console_detail "[remote] Source:" "$SSH_HOST:$REMOTE_PATH"
 lk_console_detail "[local] Destination:" "$LOCAL_PATH"
 [ -z "$MAINTENANCE" ] ||
     lk_console_detail "Remote maintenance mode:" "$MAINTENANCE"
+[ -z "$RENAME" ] ||
+    lk_console_detail "Local site address:" "$RENAME"
 lk_console_detail "Local WP-Cron:" "$(
     [ "$MAINTENANCE" = indefinite ] &&
         echo "enable" ||
@@ -158,6 +166,9 @@ maybe_disable_remote_maintenance
 cd "$LOCAL_PATH"
 LK_NO_INPUT=1 \
     lk_wp_db_restore_local "$DB_FILE" "$DEFAULT_DB_NAME" "$DEFAULT_DB_USER"
+[ -z "$RENAME" ] ||
+    LK_WP_QUIET=1 LK_WP_REPLACE=1 LK_WP_FLUSH=0 \
+        lk_wp_rename_site "$RENAME"
 lk_wp_flush
 
 if [ "$MAINTENANCE" = indefinite ]; then

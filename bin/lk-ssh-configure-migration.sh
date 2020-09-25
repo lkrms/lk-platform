@@ -60,10 +60,10 @@ Options:
 
     case "$#" in
     2)
-        NEW_USER=${1%@*}
-        NEW_HOST=${1##*@}
-        OLD_USER=${2%@*}
-        OLD_HOST=${2##*@}
+        OLD_USER=${1%@*}
+        OLD_HOST=${1##*@}
+        NEW_USER=${2%@*}
+        NEW_HOST=${2##*@}
         shift 2
         ;;
     *)
