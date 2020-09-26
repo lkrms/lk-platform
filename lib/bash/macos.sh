@@ -78,7 +78,7 @@ function lk_macos_install_command_line_tools() {
     rm -f "$TRIGGER" || true
 }
 
-# lk_macos_kb_add_shortcut <DOMAIN> <MENU_TITLE> <SHORTCUT>
+# lk_macos_kb_add_shortcut DOMAIN MENU_TITLE SHORTCUT
 #
 # Add a keyboard shortcut to the NSUserKeyEquivalents dictionary for DOMAIN.
 #
@@ -95,7 +95,7 @@ function lk_macos_kb_add_shortcut() {
             NSUserKeyEquivalents -dict-add "$2" "$3"
 }
 
-# lk_macos_kb_reset_shortcuts <DOMAIN>
+# lk_macos_kb_reset_shortcuts DOMAIN
 function lk_macos_kb_reset_shortcuts() {
     [ $# -eq 1 ] || return
     defaults delete "$HOME/Library/Preferences/$1.plist" \
@@ -157,7 +157,7 @@ function lk_macos_install() {
     esac
 }
 
-# lk_macos_maybe_install_pkg_url <PKGID> <PKG_URL> [<PKG_NAME>]
+# lk_macos_maybe_install_pkg_url PKGID PKG_URL [PKG_NAME]
 #
 # Install PKGID from PKG_URL unless it's already installed.
 function lk_macos_maybe_install_pkg_url() {
@@ -173,7 +173,7 @@ function lk_macos_maybe_install_pkg_url() {
     )
 }
 
-# lk_macos_defaults_maybe_write <EXPECTED> <DOMAIN> <KEY> [<TYPE>] <VALUE>
+# lk_macos_defaults_maybe_write EXPECTED DOMAIN KEY [TYPE] VALUE
 #
 # Run `defaults write DOMAIN KEY VALUE` if `defaults read DOMAIN KEY` doesn't
 # output EXPECTED.
@@ -187,7 +187,7 @@ function lk_macos_defaults_maybe_write() {
     fi
 }
 
-# lk_macos_defaults_dump [<DEFAULTS_ARG>...]
+# lk_macos_defaults_dump [DEFAULTS_ARG...]
 function lk_macos_defaults_dump() {
     local IFS=', ' DOMAINS DIR DOMAIN FILE
     DOMAINS=(
@@ -208,6 +208,6 @@ function lk_macos_defaults_dump() {
             rm -f "$FILE"
     done
     DIR=${DIR//~/"~"}
-    lk_console_log "Output of \"defaults${*:+ $*} read <DOMAIN>\" dumped to:" \
-        "$DIR"
+    lk_console_log \
+        "Output of \"defaults${*:+ $*} read DOMAIN\" dumped to:" "$DIR"
 }

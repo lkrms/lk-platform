@@ -8,7 +8,7 @@
 #   PATH, the following can be used to set LK_BASE and load Bash libraries,
 #   where DEPTH is the number of directories between LK_BASE and the script:
 #
-#     lk_bin_depth=<DEPTH> [include=<LIBRARY>...] . lk-bash-load.sh || exit
+#     lk_bin_depth=DEPTH [include=LIBRARY...] . lk-bash-load.sh || exit
 #
 #   If lk_bin_depth is set, LK_BASE will be determined from the invoking
 #   script's pathname, regardless of lk-bash-load.sh's location.
@@ -19,7 +19,7 @@
 #   whenever the script is invoked (via symlink if needed), this is a convenient
 #   method for using lk-platform's Bash functions elsewhere:
 #
-#     [include=<LIBRARY>...] . lk-bash-load.sh || exit
+#     [include=LIBRARY...] . lk-bash-load.sh || exit
 #
 
 set -euo pipefail
@@ -48,7 +48,7 @@ function lk_bash_load() {
                         "$1"
                 }
             else
-                lk_die "realpath: command not found"
+                lk_die "command not found: realpath"
             fi
         fi
         FILE=$(realpath "$FILE") &&

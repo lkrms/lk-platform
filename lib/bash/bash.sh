@@ -7,7 +7,7 @@ function lk_bash_array_literals() {
         jq -r '..|select(type=="object")|.Array|select(. != null).Elems[].Value.Parts[]|select(.Type=="Lit").Value'
 }
 
-# lk_bash_udf_defaults [<STACKSCRIPT_PATH>]
+# lk_bash_udf_defaults [STACKSCRIPT_PATH]
 #
 # Output Bash variable assignments for UDF tags found in the Linode StackScript
 # at STACKSCRIPT_PATH or on standard input.

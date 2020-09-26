@@ -7,7 +7,7 @@ _FILE=${BASH_SOURCE[0]}
 lk_die() { s=$? && echo "$_FILE: $1" >&2 && (return $s) && false || exit; }
 { type -P realpath || { type -P python && realpath() { python -c \
     "import os,sys;print(os.path.realpath(sys.argv[1]))" "$1"; }; }; } \
-    >/dev/null || lk_die "realpath: command not found"
+    >/dev/null || lk_die "command not found: realpath"
 _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
     LK_BASE=$(realpath "$_DIR$(eval "printf '/..%.s' {1..$_DEPTH}")") &&
     [ "$LK_BASE" != / ] && [ -d "$LK_BASE/lib/bash" ] ||
@@ -28,9 +28,8 @@ REGISTER=0
 RESET_PASSWORD=0
 CHECK_HAS_PASSWORD=0
 
-USAGE="\
-Usage:
-  ${0##*/} [OPTION...] DATABASE_FILE...
+LK_USAGE="\
+Usage: ${0##*/} [OPTION...] DATABASE_FILE...
 
 Use KeePassXC to open each DATABASE_FILE with a password previously stored in
 the current user's secret service. If running on a terminal, prompt the user to
@@ -42,6 +41,7 @@ Options:
       --autostart           only register KeePassXC to open each database at startup
       --check-has-password  only prompt for each missing password"
 
+lk_check_args
 OPTS="$(
     gnu_getopt --options "dr" \
         --longoptions "detach,reset-password,autostart,check-has-password" \

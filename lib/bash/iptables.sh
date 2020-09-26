@@ -9,7 +9,7 @@ function lk_iptables_both() {
         lk_warn "$1 does not start with lk_iptables_" || return
     for LK_IPTABLES_CMD in iptables ip6tables; do
         lk_command_exists "$LK_IPTABLES_CMD" ||
-            lk_warn "$LK_IPTABLES_CMD: command not found" || return 127
+            lk_warn "command not found: $LK_IPTABLES_CMD" || return 127
         "$@" || EXIT_STATUS="$?"
     done
     return "$EXIT_STATUS"

@@ -16,25 +16,24 @@ if [[ ! ${1:-} =~ ^(--new|--old)$ ]]; then
     OLD_HOST=
     OLD_PASSWORD=${SOURCE_PASSWORD:-}
 
-    USAGE="\
-Usage:
-  ${0##*/} [OPTION...] <USER>@<SOURCE>[:<PORT>] <USER>@<TARGET>[:<PORT>]
+    LK_USAGE="\
+Usage: ${0##*/} [OPTION...] [USER@]SOURCE[:PORT] [USER@]TARGET[:PORT]
 
 Configure SSH hosts and keys on SOURCE, TARGET, and the local system to allow
 key-based access to SOURCE from TARGET using private keys held only in an
-authentication agent on the local system. Requires ${LK_PATH_PREFIX}platform to be installed
+authentication agent on the local system. Requires lk-platform to be installed
 on TARGET.
 
 Options:
-  -i, --target-key <FILE>   use key in FILE when logging into TARGET
-                            (default: environment variable TARGET_KEY)
-  -p, --source-password <PASSWORD>
-                            use PASSWORD when logging into SOURCE
-                            (default: environment variable SOURCE_PASSWORD)"
+  -i, --target-key=FILE             use key in FILE when logging into TARGET
+                                    (default: TARGET_KEY from environment)
+  -p, --source-password=PASSWORD    use PASSWORD when logging into SOURCE
+                                    (default: SOURCE_PASSWORD from environment)"
 
+    lk_check_args
     OPTS=$(
         gnu_getopt --options "i:p:" \
-            --longoptions "--target-key:,--source-password:" \
+            --longoptions "target-key:,source-password:" \
             --name "${0##*/}" \
             -- "$@"
     ) || lk_usage
@@ -60,10 +59,12 @@ Options:
 
     case "$#" in
     2)
-        OLD_USER=${1%@*}
-        OLD_HOST=${1##*@}
-        NEW_USER=${2%@*}
-        NEW_HOST=${2##*@}
+        [[ $1 =~ ^(([^@]+)@)?([^@]+)$ ]] || lk_usage
+        OLD_USER=${BASH_REMATCH[2]}
+        OLD_HOST=${BASH_REMATCH[3]}
+        [[ $2 =~ ^(([^@]+)@)?([^@]+)$ ]] || lk_usage
+        NEW_USER=${BASH_REMATCH[2]}
+        NEW_HOST=${BASH_REMATCH[3]}
         shift 2
         ;;
     *)

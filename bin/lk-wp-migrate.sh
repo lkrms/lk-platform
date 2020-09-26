@@ -14,37 +14,39 @@ DEFAULT_DB_USER=
 
 lk_wp_db_set_local "$LOCAL_PATH"
 
-USAGE="\
-Usage:
-  ${0##*/} [OPTION...] <SSH_HOST> [-- <RSYNC_ARG>...]
+LK_USAGE="\
+Usage: ${0##*/} [OPTION...] SSH_HOST [-- RSYNC_ARG...]
 
 Migrate a WordPress site from SSH_HOST to the local system, overwriting local
 changes if previously migrated.
 
 Options:
-  -s, --source <PATH>       sync files from PATH on remote system
-                            (default: $REMOTE_PATH)
-  -d, --dest <PATH>         sync files to PATH on local system
-                            (default: $LOCAL_PATH)
-  -m, --maintenance <ignore|on|indefinite>
-                            control WordPress maintenance mode on remote system
-                                ignore:     don't enable
-                                on:         enable during migration
-                                indefinite: enable permanently
-                            (default: ${MAINTENANCE:-<ask>})
-  -r, --rename <URL>        change site address to URL after migration
-  -e, --exclude <PATTERN>   exclude files matching PATTERN
+  -s, --source=PATH         sync files from PATH on remote system
+                            (default: ~/public_html)
+  -d, --dest=PATH           sync files to PATH on local system
+                            (default: site root if WordPress installation found
+                            in working directory, or ~/public_html)
+  -m, --maintenance=MODE    specify remote WordPress maintenance MODE
+                            (default: <ask>)
+  -r, --rename=URL          change site address to URL after migration
+  -e, --exclude=PATTERN     exclude files matching PATTERN
                             (may be given multiple times)
-      --db-name <DB_NAME>   if local connection fails, use database DB_NAME
+      --db-name=DB_NAME     if local connection fails, use database DB_NAME
                             (default for $LOCAL_PATH: $LOCAL_DB_NAME)
-      --db-user <DB_USER>   if local connection fails, use MySQL user DB_USER
+      --db-user=DB_USER     if local connection fails, use MySQL user DB_USER
                             (default for $LOCAL_PATH: $LOCAL_DB_USER)
+
+Maintenance modes:
+  ignore        don't enable
+  on            enable during migration
+  indefinite    enable permanently
 
 Maintenance mode is always enabled on the local system during migration."
 
+lk_check_args
 OPTS=$(
     gnu_getopt --options "s:d:m:r:e:" \
-        --longoptions "--source:,--dest:,--maintenance:,--rename:,--exclude:,--db-name:,--db-user:" \
+        --longoptions "yes,source:,dest:,maintenance:,rename:,exclude:,db-name:,db-user:" \
         --name "${0##*/}" \
         -- "$@"
 ) || lk_usage

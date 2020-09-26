@@ -115,7 +115,7 @@ function lk_include() {
     done
 }
 
-# lk_myself [<STACK_DEPTH>]
+# lk_myself [STACK_DEPTH]
 #
 # If running from a source file, output the basename of the running script,
 # otherwise print the name of the function at STACK_DEPTH in the call stack,
@@ -159,7 +159,7 @@ function _lk_caller() {
     lk_implode "$DIM->$LK_RESET" "${CALLER[@]}"
 }
 
-# lk_warn [<MESSAGE>]
+# lk_warn [MESSAGE]
 #
 # Output "<context>: MESSAGE" as a warning and return with the previous
 # command's exit status.
@@ -169,7 +169,7 @@ function lk_warn() {
     return "$EXIT_STATUS"
 }
 
-# lk_die [<MESSAGE>]
+# lk_die [MESSAGE]
 #
 # Output "<context>: MESSAGE" as an error and exit non-zero with the previous
 # command's exit status (if available).
@@ -230,7 +230,7 @@ function _lk_process_regex() {
     fi
 }
 
-# lk_get_regex [<REGEX_NAME>...]
+# lk_get_regex [REGEX_NAME...]
 #
 # Output newline-separated Bash-compatible variable assignments for all
 # available regular expressions or for each REGEX_NAME.
@@ -385,7 +385,7 @@ function lk_is_false() {
     [[ $1 =~ ^(0|[fF][aA][lL][sS][eE]|[nN][oO]?|[oO][fF][fF])$ ]]
 }
 
-# [LK_ESCAPE=<ESCAPE_WITH>] lk_escape <STRING> [<ESCAPE_CHAR>...]
+# [LK_ESCAPE=ESCAPE_WITH] lk_escape STRING [ESCAPE_CHAR...]
 #
 # Escape STRING by inserting ESCAPE_WITH (backslash by default) before each
 # occurrence of ESCAPE_CHAR.
@@ -423,7 +423,7 @@ function lk_escape_ere_replace() {
     lk_escape "$1" '&' '/' "\\"
 }
 
-# lk_replace <FIND> <REPLACE_WITH> [<STRING>]
+# lk_replace FIND REPLACE_WITH [STRING]
 #
 # Replace all occurrences of FIND in STRING or input with REPLACE_WITH.
 function lk_replace() {
@@ -438,14 +438,14 @@ function lk_replace() {
         lk_xargs lk_replace "$1" "$2"
 }
 
-# lk_in_string <NEEDLE> <HAYSTACK>
+# lk_in_string NEEDLE HAYSTACK
 #
 # True if NEEDLE is a substring of HAYSTACK.
 function lk_in_string() {
     [ "$(_LK_APPEND=. lk_replace "$1" "" "$2")" != "$2." ]
 }
 
-# lk_expand_template [<FILE>]
+# lk_expand_template [FILE]
 #
 # Output FILE or input with each ${KEY} and {{KEY}} tag replaced with the value
 # of variable KEY.
@@ -506,7 +506,7 @@ function lk_pad_zero() {
     printf "%0$1d" "${BASH_REMATCH[1]}"
 }
 
-# lk_ellipsis <LENGTH> <STRING>
+# lk_ellipsis LENGTH STRING
 function lk_ellipsis() {
     [ "$1" -gt 3 ] &&
         [[ $2 =~ ^(.{$(($1 - 3))}).{4,} ]] &&
@@ -598,7 +598,7 @@ function lk_in_array() {
     false
 }
 
-# lk_array_search <VALUE> <ARRAY_NAME>
+# lk_array_search VALUE ARRAY_NAME
 #
 # Search ARRAY_NAME for VALUE using Bash pattern (glob) matching and output the
 # key of the first match or return false if not matched.
@@ -716,7 +716,7 @@ function lk_log_create_file() {
     return 1
 }
 
-# lk_log_output [<TEMP_LOG_FILE>]
+# lk_log_output [TEMP_LOG_FILE]
 function lk_log_output() {
     local LOG_PATH DIR HEADER=() IFS
     ! lk_has_arg --no-log || return 0
@@ -942,7 +942,7 @@ function lk_console_list() {
         ))" "" ""
 }
 
-# lk_console_read <PROMPT> [<DEFAULT> [<READ_ARG>...]]
+# lk_console_read PROMPT [DEFAULT [READ_ARG...]]
 function lk_console_read() {
     local PROMPT=("$1") DEFAULT=${2:-} VALUE
     if lk_no_input && [ $# -ge 2 ]; then
@@ -958,12 +958,12 @@ $LK_RESET$LK_BOLD${PROMPT[*]//$'\n'/$'\n    '}$LK_RESET" >&"${_LK_FD:-2}"
     echo "$VALUE"
 }
 
-# lk_console_read_secret <PROMPT> [<READ_ARG>...]
+# lk_console_read_secret PROMPT [READ_ARG...]
 function lk_console_read_secret() {
     lk_console_read "$1" "" -s "${@:2}"
 }
 
-# lk_confirm <PROMPT> [<DEFAULT> [<READ_ARG>...]]
+# lk_confirm PROMPT [DEFAULT [READ_ARG...]]
 function lk_confirm() {
     local PROMPT=("$1") DEFAULT=${2:-} VALUE
     if lk_is_true "$DEFAULT"; then
@@ -988,9 +988,9 @@ $LK_RESET$LK_BOLD${PROMPT[*]//$'\n'/$'\n    '}$LK_RESET" >&"${_LK_FD:-2}"
     [[ $VALUE =~ ^[yY]([eE][sS])?$ ]]
 }
 
-# lk_console_checklist <TITLE> <TEXT> [<TAG> <ITEM>...] [<INITIAL_STATUS>]
+# lk_console_checklist TITLE TEXT [TAG ITEM...] [INITIAL_STATUS]
 #
-# Present each ITEM (or input line if no <TAG> <ITEM> pairs are passed) as a
+# Present each ITEM (or input line if no TAG ITEM pairs are passed) as a
 # checklist menu, and output a list of TAG strings (or lines) selected by the
 # user.
 #
@@ -1137,7 +1137,7 @@ function lk_is_uri() {
     [[ $1 =~ ^${URI_REGEX_REQ_SCHEME_HOST}$ ]]
 }
 
-# lk_uri_parts <URI> [<URI_COMPONENT>...]
+# lk_uri_parts URI [URI_COMPONENT...]
 #
 # Output newline-separated Bash-compatible variable assignments for all
 # components in URI or for each URI_COMPONENT.
@@ -1390,7 +1390,7 @@ function lk_safe_symlink() {
     lk_maybe_sudo ln -sv -- "$TARGET" "$LINK"
 }
 
-# lk_keep_trying <COMMAND> [<ARG>...]
+# lk_keep_trying COMMAND [ARG...]
 #
 # Execute COMMAND, with an increasing delay between each attempt, until its exit
 # status is zero or 10 attempts have been made. The delay starts at 5 seconds
@@ -1749,7 +1749,7 @@ function lk_maybe_sed() {
     lk_maybe_replace "$FILE" "$NEW"
 }
 
-# lk_maybe_replace <FILE_PATH> <NEW_CONTENT> [<IGNORE_PATTERN>]
+# lk_maybe_replace FILE_PATH NEW_CONTENT [IGNORE_PATTERN]
 function lk_maybe_replace() {
     if lk_maybe_sudo test -e "$1"; then
         lk_maybe_sudo test -f "$1" || lk_warn "file not found: $1" || return

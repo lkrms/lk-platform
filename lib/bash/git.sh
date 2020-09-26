@@ -2,11 +2,11 @@
 
 # shellcheck disable=SC2015
 
-# lk_git_ancestors <REF>...
+# lk_git_ancestors REF...
 #
-# Output lines with tab-separated fields <behind>, <hash>, and REF, sorted
-# numerically on <behind>, for each REF that is an ancestor of HEAD. If no REF
-# is an ancestor, return false.
+# Output lines with tab-separated fields BEHIND, HASH, and REF, sorted
+# numerically on BEHIND, for each REF that is an ancestor of HEAD. If no REF is
+# an ancestor, return false.
 function lk_git_ancestors() {
     local REF HASH BEHIND ANCESTORS
     for REF in "$@"; do

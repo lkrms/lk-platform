@@ -2,8 +2,8 @@
 
 # shellcheck disable=SC2015,SC2088,SC2207
 
-# lk_maybe_install [-v] [-m <MODE>] [-o <OWNER>] [-g <GROUP>] <SOURCE> <DEST>
-# lk_maybe_install -d [-v] [-m <MODE>] [-o <OWNER>] [-g <GROUP>] <DEST>
+# lk_maybe_install [-v] [-m MODE] [-o OWNER] [-g GROUP] SOURCE DEST
+# lk_maybe_install -d [-v] [-m MODE] [-o OWNER] [-g GROUP] DEST
 function lk_maybe_install() {
     # shellcheck disable=SC2034
     local DEST=${*: -1:1} VERBOSE MODE OWNER GROUP i \
@@ -102,7 +102,7 @@ function lk_sudo_offer_nopasswd() {
     }
 }
 
-# lk_ssh_add_host <NAME> <HOST[:PORT]> <USER> [<KEY_FILE> [<JUMP_HOST_NAME>]]
+# lk_ssh_add_host NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]
 function lk_ssh_add_host() {
     local NAME=$1 HOST=$2 JUMP_USER=$3 KEY_FILE=${4:-} JUMP_HOST_NAME=${5:-} \
         h=${LK_SSH_HOME:-~} SSH_PREFIX=${LK_SSH_PREFIX:-$LK_PATH_PREFIX} \
@@ -112,9 +112,9 @@ function lk_ssh_add_host() {
         [ -f "$h/.ssh/$KEY_FILE" ] ||
         { [ -f "$h/.ssh/${SSH_PREFIX}keys/$KEY_FILE" ] &&
             KEY_FILE="~/.ssh/${SSH_PREFIX}keys/$KEY_FILE"; } ||
-        # If <KEY_FILE> doesn't exist but matches the regex below, check
+        # If KEY_FILE doesn't exist but matches the regex below, check
         # ~/.ssh/authorized_keys for exactly one public key with the comment
-        # field set to <KEY_FILE>
+        # field set to KEY_FILE
         { [[ "$KEY_FILE" =~ ^[-a-zA-Z0-9_]+$ ]] && { KEY=$(grep -E \
             "$S$KEY_FILE\$" "$h/.ssh/authorized_keys" 2>/dev/null) &&
             [ "$(wc -l <<<"$KEY")" -eq 1 ] &&
@@ -157,7 +157,7 @@ EOF
         chmod 00600 "$CONF_FILE" || return
 }
 
-# lk_ssh_configure [<JUMP_HOST[:JUMP_PORT]> <JUMP_USER> [<JUMP_KEY_FILE>]]
+# lk_ssh_configure [JUMP_HOST[:JUMP_PORT] JUMP_USER [JUMP_KEY_FILE]]
 function lk_ssh_configure() {
     local JUMP_HOST=${1:-} JUMP_USER=${2:-} JUMP_KEY_FILE=${3:-} \
         S="[[:blank:]]" SSH_PREFIX=${LK_SSH_PREFIX:-$LK_PATH_PREFIX} \
@@ -364,7 +364,7 @@ function lk_node_public_ipv6() {
     } | sort -u
 }
 
-# lk_hosts_get_records [+<FIELD>[,<FIELD>...]>] <TYPE>[,<TYPE>...] <HOST>...
+# lk_hosts_get_records [+FIELD[,FIELD...]>] TYPE[,TYPE...] HOST...
 #
 # Print space-separated resource records of each TYPE for each HOST, optionally
 # limiting output to each FIELD.
@@ -438,7 +438,7 @@ function lk_hosts_get_records() {
         { [ -z "${CUT:-}" ] && cat || cut -d' ' "$CUT"; }
 }
 
-# lk_hosts_resolve <HOST>...
+# lk_hosts_resolve HOST...
 function lk_hosts_resolve() {
     local HOSTS IP_ADDRESSES
     IP_ADDRESSES=($({
@@ -552,7 +552,7 @@ function lk_certbot_install() {
         --domains "$(lk_implode "," "$@")"
 }
 
-# lk_apply_setting <FILE> <SETTING> <VAL> [<DELIM>] [<COMMENT_CHARS>] [<SPACES>]
+# lk_apply_setting FILE SETTING VAL [DELIM] [COMMENT_CHARS] [SPACES]
 #
 # Set value of SETTING to VAL in FILE.
 #
@@ -597,7 +597,7 @@ function lk_apply_setting() {
 }
 
 # LK_EXPAND_WHITESPACE=<1|0|Y|N> \
-#   lk_enable_entry <FILE> <ENTRY> [<COMMENT_CHARS>] [<TRAILING_PATTERN>]
+#   lk_enable_entry FILE ENTRY [COMMENT_CHARS] [TRAILING_PATTERN]
 #
 # Add ENTRY to FILE if not already present.
 #

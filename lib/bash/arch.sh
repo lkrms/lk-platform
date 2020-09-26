@@ -21,15 +21,15 @@ function lk_pacman_configure() {
         -E "s/^$S*#$S*(Color|TotalDownload)$S*\$/\1/" "$PACMAN_CONF"
 }
 
-# lk_pacman_add_repo <REPO> ...
+# lk_pacman_add_repo REPO ...
 #
 # Add each REPO to /etc/pacman.conf unless it has already been added. REPO is a
 # pipe-separated list of values in this order (trailing pipes are optional):
-# - <REPO>
-# - <SERVER>
-# - <KEY_URL> (optional)
-# - <KEY_ID> (optional)
-# - <SIG_LEVEL> (optional)
+# - REPO
+# - SERVER
+# - KEY_URL (optional)
+# - KEY_ID (optional)
+# - SIG_LEVEL (optional)
 #
 # Examples (line breaks added for legibility):
 # - lk_pacman_add_repo "aur|file:///srv/repo/aur|||Optional TrustAll"
@@ -45,7 +45,7 @@ function lk_pacman_add_repo() {
     [ -f "$PACMAN_CONF" ] ||
         lk_warn "$PACMAN_CONF: file not found" || return
     lk_command_exists pacman-conf ||
-        lk_warn "pacman-conf: command not found" || return
+        lk_warn "command not found: pacman-conf" || return
     for i in "$@"; do
         r=($i)
         REPO=${r[0]}

@@ -21,7 +21,7 @@ lk_die() { s=$? && echo "$_FILE: $1" >&2 && (return $s) && false || exit; }
 # More robust alternative to the above (don't use both)
 { type -P realpath || { type -P python && realpath() { python -c \
     "import os,sys;print(os.path.realpath(sys.argv[1]))" "$1"; }; }; } \
-    >/dev/null || lk_die "realpath: command not found"
+    >/dev/null || lk_die "command not found: realpath"
 _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} ||
     lk_die "unable to resolve path to script"
 #

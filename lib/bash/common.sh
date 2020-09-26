@@ -65,8 +65,21 @@ function lk_delete_on_exit() {
 
 if ! lk_is_true "${LK_NO_SOURCE_FILE:-0}"; then
     function lk_usage() {
-        echo "${1:-${USAGE:-Please see $0 for usage}}" >&2
+        echo "${LK_USAGE:-Please see $0 for usage}" >&2
         exit 1
+    }
+
+    function lk_check_args() {
+        if [ -n "${LK_USAGE:-}" ] && lk_has_arg --help; then
+            echo "$LK_USAGE"
+            exit
+        elif [ -n "${LK_VERSION:-}" ] && lk_has_arg --version; then
+            echo "$LK_VERSION"
+            exit
+        elif lk_has_arg --yes; then
+            # shellcheck disable=SC2034
+            LK_NO_INPUT=1
+        fi
     }
 
     function _lk_elevate() {
