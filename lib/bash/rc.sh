@@ -45,7 +45,7 @@ function _lk_bash_completion() {
         /usr/share/bash-completion/bash_completion \
         ${HOMEBREW_PREFIX:+"$HOMEBREW_PREFIX/etc/profile.d/bash_completion.sh"}; do
         [ -r "$FILE" ] || continue
-        printf '. %q' "$FILE"
+        printf '. %q\n' "$FILE" "$LK_BASE/lib/bash/completion.sh"
         return
     done
 }

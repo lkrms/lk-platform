@@ -65,8 +65,9 @@ function lk_delete_on_exit() {
 
 if ! lk_is_true "${LK_NO_SOURCE_FILE:-0}"; then
     function lk_usage() {
+        local EXIT_STATUS=$?
         echo "${LK_USAGE:-Please see $0 for usage}" >&2
-        exit 1
+        exit "$EXIT_STATUS"
     }
 
     function lk_check_args() {

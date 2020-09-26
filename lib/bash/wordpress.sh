@@ -408,7 +408,9 @@ Proceed?" Y || return
 # lk_wp_sync_files_from_remote ssh_host [remote_path [local_path]]
 function lk_wp_sync_files_from_remote() {
     local REMOTE_PATH="${2:-public_html}" LOCAL_PATH \
-        ARGS=(-vrlptH -x --delete ${RSYNC_ARGS[@]+"${RSYNC_ARGS[@]}"}) \
+        ARGS=(-vrlptH -x --delete
+            ${RSYNC_ARGS[@]+"${RSYNC_ARGS[@]}"}
+            ${LK_RSYNC_ARGS:+"$LK_RSYNC_ARGS"}) \
         KEEP_LOCAL EXCLUDE EXIT_STATUS=0
     # files that already exist on the local system will be added to --exclude
     KEEP_LOCAL=(

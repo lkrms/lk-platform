@@ -15,7 +15,7 @@ DEFAULT_DB_USER=
 lk_wp_db_set_local "$LOCAL_PATH"
 
 LK_USAGE="\
-Usage: ${0##*/} [OPTION...] SSH_HOST [-- RSYNC_ARG...]
+Usage: ${0##*/} [OPTION...] SSH_HOST
 
 Migrate a WordPress site from SSH_HOST to the local system, overwriting local
 changes if previously migrated.
@@ -58,38 +58,37 @@ while :; do
     case "$OPT" in
     -s | --source)
         REMOTE_PATH=$1
-        ;;&
+        shift
+        ;;
     -d | --dest)
         LOCAL_PATH=$1
-        ;;&
+        shift
+        ;;
     -m | --maintenance)
-        case "$1" in
-        ignore | on | indefinite)
-            MAINTENANCE=$1
-            ;;
-        *)
-            lk_usage
-            ;;
-        esac
-        ;;&
+        [[ $1 =~ ^(ignore|on|indefinite)$ ]] ||
+            lk_warn "invalid remote maintenance mode: $1" || lk_usage
+        MAINTENANCE=$1
+        shift
+        ;;
     -r | --rename)
         RENAME=$1
-        lk_is_uri "$1" || lk_usage
-        ;;&
+        lk_is_uri "$1" || lk_warn "invalid URL: $1" || lk_usage
+        shift
+        ;;
     -e | --exclude)
         EXCLUDE+=("$1")
-        ;;&
+        shift
+        ;;
     --db-name)
         DEFAULT_DB_NAME=$1
-        ;;&
+        shift
+        ;;
     --db-user)
         DEFAULT_DB_USER=$1
-        ;;&
+        shift
+        ;;
     --)
         break
-        ;;
-    *)
-        shift
         ;;
     esac
 done
@@ -158,8 +157,9 @@ if [[ $MAINTENANCE =~ ^(on|indefinite)$ ]]; then
 fi
 
 # Migrate files
-RSYNC_ARGS=("$@" ${EXCLUDE[@]+"${EXCLUDE[@]/#/--exclude=}"})
-lk_wp_sync_files_from_remote "$SSH_HOST" "$REMOTE_PATH" "$LOCAL_PATH"
+RSYNC_ARGS=(${EXCLUDE[@]+"${EXCLUDE[@]/#/--exclude=}"})
+LK_NO_INPUT=1 \
+    lk_wp_sync_files_from_remote "$SSH_HOST" "$REMOTE_PATH" "$LOCAL_PATH"
 
 # Migrate database
 DB_FILE=~/$SSH_HOST-${REMOTE_PATH//\//_}-$(lk_date_ymdhms).sql.gz
