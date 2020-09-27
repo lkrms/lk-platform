@@ -16,7 +16,7 @@ lk_die() { s=$? && echo "${BASH_SOURCE[0]}: $1" >&2 &&
     if [ "${LK_SETTINGS_FILES+1}" = 1 ]; then
         SETTINGS=(${LK_SETTINGS_FILES[@]+"${LK_SETTINGS_FILES[@]}"})
     else
-        # passed to eval just before sourcing, to allow expansion of values set
+        # Passed to eval just before sourcing, to allow expansion of values set
         # by earlier files
         SETTINGS=(
             "/etc/default/lk-platform"
@@ -44,6 +44,26 @@ lk_include assert $(
     echo "${include//,/ }"
 )
 
+# lk_die [MESSAGE]
+#
+# Output "<context>: MESSAGE" as an error and exit non-zero with the previous
+# command's exit status (if available).
+#
+# To suppress output, set MESSAGE to the empty string.
+function lk_die() {
+    local EXIT_STATUS=$?
+    if lk_is_true "${LK_DIE_HAPPY:-}"; then
+        EXIT_STATUS=0
+    elif [ "$EXIT_STATUS" -eq 0 ]; then
+        EXIT_STATUS=1
+    fi
+    declare -r EXIT_STATUS
+    if [ $# -eq 0 ] || [ -n "$1" ]; then
+        lk_console_error "$(_lk_caller): ${1:-execution failed}"
+    fi
+    exit "$EXIT_STATUS"
+}
+
 function lk_trap_exit() {
     function lk_exit_trap() {
         local EXIT_STATUS=$? i
@@ -63,26 +83,26 @@ function lk_delete_on_exit() {
     LK_EXIT_DELETE+=("$@")
 }
 
+function lk_usage() {
+    local -r EXIT_STATUS=$?
+    lk_console_log "${1:-${LK_USAGE:-$(_lk_caller): invalid arguments}}"
+    exit "$EXIT_STATUS"
+}
+
+function lk_check_args() {
+    if [ -n "${LK_USAGE:-}" ] && lk_has_arg --help; then
+        echo "$LK_USAGE"
+        exit
+    elif [ -n "${LK_VERSION:-}" ] && lk_has_arg --version; then
+        echo "$LK_VERSION"
+        exit
+    elif lk_has_arg --yes; then
+        # shellcheck disable=SC2034
+        LK_NO_INPUT=1
+    fi
+}
+
 if ! lk_is_true "${LK_NO_SOURCE_FILE:-0}"; then
-    function lk_usage() {
-        local EXIT_STATUS=$?
-        echo "${LK_USAGE:-Please see $0 for usage}" >&2
-        exit "$EXIT_STATUS"
-    }
-
-    function lk_check_args() {
-        if [ -n "${LK_USAGE:-}" ] && lk_has_arg --help; then
-            echo "$LK_USAGE"
-            exit
-        elif [ -n "${LK_VERSION:-}" ] && lk_has_arg --version; then
-            echo "$LK_VERSION"
-            exit
-        elif lk_has_arg --yes; then
-            # shellcheck disable=SC2034
-            LK_NO_INPUT=1
-        fi
-    }
-
     function _lk_elevate() {
         if [ $# -gt 0 ]; then
             sudo -H "$@"

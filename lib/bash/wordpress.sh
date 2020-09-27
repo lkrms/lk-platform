@@ -336,7 +336,7 @@ function lk_wp_db_set_local() {
 
 # lk_wp_db_restore_local SQL_PATH [DB_NAME [DB_USER]]
 function lk_wp_db_restore_local() {
-    local SITE_ROOT DEFAULT_IDENTIFIER SQL _SQL COMMAND EXIT_STATUS=0 \
+    local SITE_ROOT DEFAULT_IDENTIFIER SQL _SQL COMMAND \
         LOCAL_DB_NAME LOCAL_DB_USER LOCAL_DB_PASSWORD LOCAL_DB_HOST \
         DB_NAME DB_USER DB_PASSWORD DB_HOST
     [ -f "$1" ] || lk_warn "file not found: $1" || return
@@ -398,11 +398,9 @@ Proceed?" Y || return
         pv --force "$1" | gunzip
     else
         pv --force "$1"
-    fi | _lk_mysql "$LOCAL_DB_NAME" || EXIT_STATUS=$?
-    [ "$EXIT_STATUS" -eq 0 ] &&
-        lk_console_success "Database restored successfully" ||
-        lk_console_error0 "Restore operation failed"
-    return "$EXIT_STATUS"
+    fi | _lk_mysql "$LOCAL_DB_NAME" ||
+        lk_console_error "Restore operation failed" || return
+    lk_console_success "Database restored successfully"
 }
 
 # lk_wp_sync_files_from_remote ssh_host [remote_path [local_path]]

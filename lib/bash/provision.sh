@@ -107,6 +107,9 @@ function lk_ssh_add_host() {
     local NAME=$1 HOST=$2 JUMP_USER=$3 KEY_FILE=${4:-} JUMP_HOST_NAME=${5:-} \
         h=${LK_SSH_HOME:-~} SSH_PREFIX=${LK_SSH_PREFIX:-$LK_PATH_PREFIX} \
         S="[[:blank:]]" KEY CONF CONF_FILE
+    [ $# -ge 3 ] || lk_usage "\
+Usage: $LK_BOLD$(lk_myself)$LK_RESET NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
+        return
     [ "${KEY_FILE:--}" = - ] ||
         [ -f "$KEY_FILE" ] ||
         [ -f "$h/.ssh/$KEY_FILE" ] ||

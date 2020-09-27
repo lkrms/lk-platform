@@ -169,20 +169,10 @@ function lk_warn() {
     return "$EXIT_STATUS"
 }
 
-# lk_die [MESSAGE]
-#
-# Output "<context>: MESSAGE" as an error and exit non-zero with the previous
-# command's exit status (if available).
-#
-# To suppress output, set MESSAGE to the empty string.
-function lk_die() {
-    local EXIT_STATUS=$?
-    [ "$EXIT_STATUS" -ne 0 ] || EXIT_STATUS=1
-    if [ $# -eq 0 ] || [ -n "$1" ]; then
-        lk_console_error "$(_lk_caller): ${1:-execution failed}"
-    fi
-    lk_is_true "${LK_DIE_HAPPY:-}" || exit "$EXIT_STATUS"
-    exit 0
+function lk_usage() {
+    local -r EXIT_STATUS=$?
+    lk_console_log "${1:-${LK_USAGE:-$(_lk_caller): invalid arguments}}"
+    return "$EXIT_STATUS"
 }
 
 function _lk_mktemp() {
