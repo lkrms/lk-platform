@@ -502,14 +502,36 @@ function lk_host_soa() {
 }
 
 function lk_host_ns_resolve() {
-    local NS IP LK_DIG_SERVER LK_DIG_OPTIONS
+    local NS IP CNAME LK_DIG_SERVER LK_DIG_OPTIONS \
+        _LK_CNAME_DEPTH=${_LK_CNAME_DEPTH:-0}
+    [ "$_LK_CNAME_DEPTH" -lt 7 ] || lk_warn "too much recursion" || return
+    ((++_LK_CNAME_DEPTH))
     NS=$(lk_host_soa "$1" |
         awk '{ print substr($5, 1, length($5) - 1) }') ||
         return
     LK_DIG_SERVER=$NS
     LK_DIG_OPTIONS=(+norecurse)
+    ! lk_verbose || {
+        lk_console_detail "Using name server:" "$NS"
+        lk_console_detail "Looking up A and AAAA records for:" "$1"
+    }
     IP=($(lk_hosts_get_records +VALUE A,AAAA "$1")) || return
+    if [ "${#IP[@]}" -eq 0 ]; then
+        ! lk_verbose || {
+            lk_console_detail "No A or AAAA records returned"
+            lk_console_detail "Looking up CNAME record for:" "$1"
+        }
+        CNAME=($(lk_hosts_get_records +VALUE CNAME "$1")) || return
+        if [ "${#CNAME[@]}" -eq 1 ]; then
+            ! lk_verbose ||
+                lk_console_detail "CNAME record from $NS for $1:" "${CNAME[0]}"
+            lk_host_ns_resolve "${CNAME[0]%.}" || return
+            return
+        fi
+    fi
     [ "${#IP[@]}" -gt 0 ] || lk_warn "could not resolve $1: $NS" || return
+    ! lk_verbose || lk_console_detail "A and AAAA records from $NS for $1:" \
+        "$(lk_echo_array IP)"
     lk_echo_array IP
 }
 
