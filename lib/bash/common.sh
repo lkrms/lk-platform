@@ -57,7 +57,6 @@ function lk_die() {
     elif [ "$EXIT_STATUS" -eq 0 ]; then
         EXIT_STATUS=1
     fi
-    declare -r EXIT_STATUS
     if [ $# -eq 0 ] || [ -n "$1" ]; then
         lk_console_error "$(_lk_caller): ${1:-execution failed}"
     fi
@@ -84,7 +83,7 @@ function lk_delete_on_exit() {
 }
 
 function lk_usage() {
-    local -r EXIT_STATUS=$?
+    local EXIT_STATUS=$?
     lk_console_log "${1:-${LK_USAGE:-$(_lk_caller): invalid arguments}}"
     exit "$EXIT_STATUS"
 }

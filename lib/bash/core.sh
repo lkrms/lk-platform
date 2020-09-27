@@ -164,13 +164,13 @@ function _lk_caller() {
 # Output "<context>: MESSAGE" as a warning and return with the previous
 # command's exit status.
 function lk_warn() {
-    local -r EXIT_STATUS=$?
+    local EXIT_STATUS=$?
     lk_console_warning "$(_lk_caller): ${1:-execution failed}"
     return "$EXIT_STATUS"
 }
 
 function lk_usage() {
-    local -r EXIT_STATUS=$?
+    local EXIT_STATUS=$?
     lk_console_log "${1:-${LK_USAGE:-$(_lk_caller): invalid arguments}}"
     return "$EXIT_STATUS"
 }
@@ -881,13 +881,13 @@ function lk_console_success() {
 }
 
 function lk_console_warning() {
-    local -r EXIT_STATUS=$?
+    local EXIT_STATUS=$?
     _lk_console "$LK_WARNING_COLOUR" "$@"
     return "$EXIT_STATUS"
 }
 
 function lk_console_error() {
-    local -r EXIT_STATUS=$?
+    local EXIT_STATUS=$?
     _lk_console "$LK_ERROR_COLOUR" "$@"
     return "$EXIT_STATUS"
 }
