@@ -404,7 +404,7 @@ LK_NODE_HOSTNAME=$TARGET_HOSTNAME LK_NODE_TIMEZONE=$TIMEZONE lk_get_shell_var \
     LK_NODE_HOSTNAME \
     LK_NODE_TIMEZONE \
     LK_PLATFORM_BRANCH >"/mnt/etc/default/lk-platform"
-in_target "$LK_BASE/bin/lk-platform-configure-system.sh"
+in_target "$LK_BASE/bin/lk-platform-configure-system.sh" --no-log
 
 if lk_is_qemu; then
     lk_console_detail "Enabling QEMU guest agent"

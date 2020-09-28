@@ -108,6 +108,8 @@
     LK_VERBOSE=1
     lk_log_output
 
+    [ "${1:-}" != --no-log ] || shift
+
     # To list gnu_* commands required by lk-platform:
     #
     #   find "$LK_BASE" ! \( -type d -name .git -prune \) -type f -print0 |
@@ -207,7 +209,7 @@
                     lk_console_message "Restarting ${0##*/}"
                     NO_LOG=1
                     ! lk_has_arg --no-log || unset NO_LOG
-                    "$0" "$@" ${NO_LOG+--no-log}
+                    "$0" ${NO_LOG+--no-log} "$@"
                     exit
                 fi
             else

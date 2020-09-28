@@ -1076,7 +1076,7 @@ if [ -f "$FILE" ] && ! grep -Fxq "CONFIG_BSD_PROCESS_ACCT=y" "$FILE"; then
     systemctl disable atopacct.service
 fi
 
-"$LK_BASE/bin/lk-platform-configure-system.sh"
+"$LK_BASE/bin/lk-platform-configure-system.sh" --no-log
 
 # TODO: verify downloads
 lk_console_message "Installing pip, ps_mem, Glances, awscli"
