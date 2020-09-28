@@ -35,6 +35,7 @@ _LK_GNU_COMMANDS=(
     realpath #
     sort     #
     stat     #
+    diff     # diffutils
     find     # findutils
     xargs    #
     awk      # gawk
@@ -541,6 +542,11 @@ function lk_get_colours() {
         "$PREFIX" RESET "$(lk_safe_tput sgr0)"
 }
 
+function lk_maybe_bold() {
+    [ "${1//$LK_BOLD/}" != "$1" ] ||
+        echo "$LK_BOLD"
+}
+
 function lk_maybe_plural() {
     [ "$1" -eq 1 ] && echo "$2" || echo "$3"
 }
@@ -829,15 +835,13 @@ function lk_console_message() {
 
 function lk_console_detail() {
     local LK_CONSOLE_PREFIX="${LK_CONSOLE_PREFIX-   -> }" \
-        LK_CONSOLE_MESSAGE_COLOUR
-    LK_CONSOLE_MESSAGE_COLOUR=""
+        LK_CONSOLE_MESSAGE_COLOUR=''
     lk_console_message "$1" "${2:-}" "${3-$LK_YELLOW}"
 }
 
 function lk_console_detail_list() {
     local LK_CONSOLE_PREFIX="${LK_CONSOLE_PREFIX-   -> }" \
-        LK_CONSOLE_MESSAGE_COLOUR
-    LK_CONSOLE_MESSAGE_COLOUR=""
+        LK_CONSOLE_MESSAGE_COLOUR=''
     if [ $# -le 2 ]; then
         lk_console_list "$1" "${2-$LK_YELLOW}"
     else
@@ -846,9 +850,8 @@ function lk_console_detail_list() {
 }
 
 function lk_console_detail_file() {
-    local LK_CONSOLE_PREFIX="${LK_CONSOLE_PREFIX-   -> }" \
-        LK_CONSOLE_MESSAGE_COLOUR LK_CONSOLE_INDENT=4 \
-        LK_CONSOLE_MESSAGE_COLOUR=""
+    local LK_CONSOLE_PREFIX="${LK_CONSOLE_PREFIX-  >>> }" \
+        LK_CONSOLE_MESSAGE_COLOUR='' LK_CONSOLE_INDENT=4
     lk_console_file "$1" "${2-$LK_YELLOW}" "${3-$LK_CONSOLE_COLOUR}"
 }
 
@@ -859,9 +862,7 @@ function _lk_console() {
         LK_CONSOLE_MESSAGE_COLOUR
     COLOUR=$1
     shift
-    LK_CONSOLE_MESSAGE_COLOUR=$(
-        [ "${1//$LK_BOLD/}" != "$1" ] || echo "$LK_BOLD"
-    )$COLOUR
+    LK_CONSOLE_MESSAGE_COLOUR=$(lk_maybe_bold "$1")$COLOUR
     lk_console_message "$1" "${2:-}" "$COLOUR"
 }
 
@@ -1038,7 +1039,7 @@ function lk_no_input() {
 }
 
 function lk_verbose() {
-    lk_is_true "${LK_VERBOSE:-}"
+    [ "${LK_VERBOSE:-0}" -ge "${1:-1}" ]
 }
 
 # lk_add_file_suffix file_path suffix [ext]
@@ -1709,10 +1710,11 @@ function lk_ssl_client() {
 }
 
 function lk_keep_original() {
-    local LK_BACKUP_SUFFIX=${LK_BACKUP_SUFFIX-.orig}
+    local LK_BACKUP_SUFFIX=${LK_BACKUP_SUFFIX-.orig} VERBOSE
+    ! lk_verbose 2 || VERBOSE=1
     [ -z "$LK_BACKUP_SUFFIX" ] || while [ $# -gt 0 ]; do
         lk_maybe_sudo test ! -s "$1" ||
-            lk_maybe_sudo cp -navL "$1" "$1$LK_BACKUP_SUFFIX"
+            lk_maybe_sudo cp -naL ${VERBOSE:+-v} "$1" "$1$LK_BACKUP_SUFFIX"
         shift
     done
 }
@@ -1748,7 +1750,7 @@ function lk_maybe_replace() {
             >/dev/null || {
             # shellcheck disable=SC2034
             LK_MAYBE_REPLACE_NO_CHANGE=1
-            ! lk_verbose || lk_console_detail "Not changed:" "$1"
+            ! lk_verbose 2 || lk_console_detail "Not changed:" "$1"
             return
         }
         lk_keep_original "$1" || return
@@ -1765,31 +1767,34 @@ function _lk_maybe_filter() {
     fi
 }
 
-# lk_console_file file_path [colour_sequence] [file_colour_sequence]
-#   Print FILE_PATH to the standard output. If a backup of FILE_PATH exists,
-#   print `diff` output, otherwise print all lines. The default backup suffix is
-#   ".orig". Set LK_BACKUP_SUFFIX to override. `diff` output is disabled if
-#   LK_BACKUP_SUFFIX is null.
+# lk_console_file FILE [COLOUR_SEQUENCE] [FILE_COLOUR_SEQUENCE]
+#
+# Output the diff between FILE{SUFFIX} and FILE, or all lines in FILE if SUFFIX
+# is the null string or FILE{SUFFIX} does not exist, where SUFFIX is
+# LK_BACKUP_SUFFIX or ".orig" if LK_BACKUP_SUFFIX is not set.
 function lk_console_file() {
-    local FILE_PATH="$1" LK_CONSOLE_SECONDARY_COLOUR ORIG_FILE \
-        LK_CONSOLE_INDENT="${LK_CONSOLE_INDENT:-2}"
-    shift
-    lk_maybe_sudo test -r "$FILE_PATH" ||
-        lk_warn "cannot read file: $FILE_PATH" || return
-    LK_CONSOLE_SECONDARY_COLOUR="${2-${1-$LK_CONSOLE_COLOUR}}"
-    ORIG_FILE="$FILE_PATH${LK_BACKUP_SUFFIX-.orig}"
-    [ "$FILE_PATH" != "$ORIG_FILE" ] &&
+    local FILE=$1 ORIG_FILE BOLD_COLOUR \
+        LK_CONSOLE_PREFIX=${LK_CONSOLE_PREFIX:->>> } \
+        LK_CONSOLE_MESSAGE_COLOUR='' LK_CONSOLE_SECONDARY_COLOUR='' \
+        COLOUR=${2-${LK_CONSOLE_MESSAGE_COLOUR-$LK_MAGENTA}} \
+        FILE_COLOUR=${3-${LK_CONSOLE_SECONDARY_COLOUR-${2:-$LK_GREEN}}} \
+        LK_CONSOLE_INDENT=${LK_CONSOLE_INDENT:-2}
+    BOLD_COLOUR="$(lk_maybe_bold "$COLOUR")$COLOUR"
+    local LK_CONSOLE_PREFIX_COLOUR=${LK_CONSOLE_PREFIX_COLOUR-$BOLD_COLOUR}
+    lk_maybe_sudo test -r "$FILE" ||
+        lk_warn "cannot read file: $FILE" || return
+    ORIG_FILE=$FILE${LK_BACKUP_SUFFIX-.orig}
+    [ "$FILE" != "$ORIG_FILE" ] &&
         lk_maybe_sudo test -r "$ORIG_FILE" || ORIG_FILE=
-    lk_console_item "$FILE_PATH${ORIG_FILE:+ changed}:" $'<<<<\n'"$(
+    lk_console_item "$BOLD_COLOUR$FILE$LK_RESET" "$(
         if [ -n "$ORIG_FILE" ]; then
-            ! lk_maybe_sudo diff "$ORIG_FILE" "$FILE_PATH" || echo "<unchanged>"
+            ! lk_maybe_sudo gnu_diff --unified --color=always \
+                "$ORIG_FILE" "$FILE" || echo "$FILE_COLOUR<unchanged>"
         else
-            lk_maybe_sudo cat "$FILE_PATH"
+            echo -n "$FILE_COLOUR"
+            lk_maybe_sudo cat "$FILE"
         fi
-    )"$'\n>>>>' ${1+"$1"}
-    unset LK_CONSOLE_SECONDARY_COLOUR
-    [ -z "$ORIG_FILE" ] ||
-        lk_console_detail "Backup path:" "$ORIG_FILE"
+    )"$'\n'"$LK_CONSOLE_PREFIX_COLOUR<<<$LK_RESET"
 }
 
 # lk_user_in_group username groupname...

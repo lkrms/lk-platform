@@ -823,6 +823,7 @@ PACKAGES=(
     coreutils
     cron
     curl
+    diffutils
     dnsutils
     git
     htop

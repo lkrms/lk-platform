@@ -130,7 +130,7 @@
         return "$EXIT_STATUS"
     }
     # Exit if required commands fail to install
-    install_gnu_commands awk chmod date find getopt realpath sed stat xargs
+    install_gnu_commands awk chmod date diff find getopt realpath sed stat xargs
     # For other commands, warn and continue
     install_gnu_commands || true
 

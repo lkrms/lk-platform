@@ -32,9 +32,7 @@ Options:
   -e, --exclude=PATTERN     exclude files matching PATTERN
                             (may be given multiple times)
       --db-name=DB_NAME     if local connection fails, use database DB_NAME
-                            (default for $LOCAL_PATH: $LOCAL_DB_NAME)
       --db-user=DB_USER     if local connection fails, use MySQL user DB_USER
-                            (default for $LOCAL_PATH: $LOCAL_DB_USER)
 
 Maintenance modes:
   ignore        don't enable

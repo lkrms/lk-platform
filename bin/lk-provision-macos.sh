@@ -244,6 +244,7 @@ EOF
 
     INSTALL=(
         coreutils  # GNU utilities
+        diffutils  #
         findutils  #
         gawk       #
         gnu-getopt #
