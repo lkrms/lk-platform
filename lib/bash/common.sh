@@ -63,22 +63,23 @@ function lk_die() {
     exit "$EXIT_STATUS"
 }
 
-function lk_trap_exit() {
-    function lk_exit_trap() {
-        local EXIT_STATUS=$? i
-        [ "$EXIT_STATUS" -eq 0 ] ||
-            [[ ${FUNCNAME[1]:-} =~ ^_?lk_(die|usage|elevate)$ ]] ||
-            lk_console_error0 "$(_lk_caller): unhandled error"
-        for i in ${LK_EXIT_DELETE[@]+"${LK_EXIT_DELETE[@]}"}; do
-            rm -Rf -- "$i" || true
-        done
-    }
-    LK_EXIT_DELETE=()
-    trap 'lk_exit_trap' EXIT
+function lk_exit_trap() {
+    local EXIT_STATUS=$? i
+    [ "$EXIT_STATUS" -eq 0 ] ||
+        [[ ${FUNCNAME[1]:-} =~ ^_?lk_(die|usage|elevate)$ ]] ||
+        lk_console_error0 \
+            "$(_lk_caller "${_LK_ERR_TRAP_CONTEXT:-}"): unhandled error"
+    for i in ${LK_EXIT_DELETE[@]+"${LK_EXIT_DELETE[@]}"}; do
+        rm -Rf -- "$i" || true
+    done
+}
+
+function lk_err_trap() {
+    _LK_ERR_TRAP_CONTEXT=$(caller 0) || _LK_ERR_TRAP_CONTEXT=
 }
 
 function lk_delete_on_exit() {
-    lk_is_declared "LK_EXIT_DELETE" || lk_warn "no exit trap" || return
+    [ "${LK_EXIT_DELETE+1}" = 1 ] || LK_EXIT_DELETE=()
     LK_EXIT_DELETE+=("$@")
 }
 
@@ -141,6 +142,10 @@ eval "$(
         . "$LK_BASE/lib/bash/env.sh"
     }
 
-    [[ ,${LK_SKIP:-}, == *,trap,* ]] ||
-        echo "lk_trap_exit"
+    [[ ,${LK_SKIP:-}, == *,trap,* ]] || {
+        printf 'trap %q %s\n' \
+            "lk_exit_trap" "EXIT" \
+            "lk_err_trap" "ERR"
+        echo "set -E"
+    }
 )"

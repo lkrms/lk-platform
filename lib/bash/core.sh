@@ -127,10 +127,11 @@ function lk_myself() {
         echo "${FUNCNAME[$((1 + ${1:-0}))]:-${0##*/}}"
 }
 
+# shellcheck disable=SC2120
 function _lk_caller() {
     local CONTEXT REGEX='^([0-9]+) ([^ ]+) (.*)$' SOURCE FUNC LINE \
         DIM=${LK_DIM:-$LK_GREY} CALLER=()
-    if CONTEXT=$(caller 1) &&
+    if CONTEXT=${1:-$(caller 1)} &&
         [[ $CONTEXT =~ $REGEX ]]; then
         SOURCE=${BASH_REMATCH[3]}
         FUNC=${BASH_REMATCH[2]}
