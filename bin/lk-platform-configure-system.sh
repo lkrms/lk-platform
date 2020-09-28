@@ -352,6 +352,7 @@ install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
 
             [ -d "$DIR" ] ||
                 install -d -m 0755 -o "$OWNER" -g "$GROUP" "$DIR"
+            LK_NO_DIFF=1
             # Prevent byobu from enabling its prompt on first start
             maybe_replace_lines "$DIR/prompt"
             # Configure status notifications
@@ -374,17 +375,18 @@ install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
             # Fix output issue when connecting from OpenSSH on Windows
             maybe_replace_lines "$DIR/.tmux.conf" \
                 "set -s escape-time 50"
+            unset LK_NO_DIFF
         fi
     done
 
     # Leave ~root/.ssh alone
     lk_remove_false "[ \"{}\" != $(printf '%q' "$(realpath ~root)") ]" LK_HOMES
     if [ -n "${LK_SSH_JUMP_HOST:-}" ]; then
-        lk_ssh_configure "$LK_SSH_JUMP_HOST" \
+        LK_NO_DIFF=1 lk_ssh_configure "$LK_SSH_JUMP_HOST" \
             "${LK_SSH_JUMP_USER:-}" \
             "${LK_SSH_JUMP_KEY:-}"
     else
-        lk_ssh_configure
+        LK_NO_DIFF=1 lk_ssh_configure
     fi
 
     if lk_is_desktop; then
