@@ -216,6 +216,7 @@ AUR_PACKAGES+=(
 
     # multimedia - video
     makemkv
+    video-trimmer
 
     # system
     hfsprogs
