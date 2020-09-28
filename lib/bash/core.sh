@@ -437,37 +437,29 @@ function lk_in_string() {
 
 # lk_expand_template [FILE]
 #
-# Output FILE or input with each ${KEY} and {{KEY}} tag replaced with the value
-# of variable KEY.
+# Output FILE or input with each {{KEY}} tag replaced with the value of variable
+# KEY.
 #
 # Notes:
 # - To specify tags to replace, populate array LK_EXPAND_VARS with the names of
 #   variables to expand
 # - Set LK_EXPAND_QUOTE=1 to use `printf %q` when expanding tags
-# - Set LK_EXPAND_BASH_OFF=1 to ignore ${KEY} tags
 function lk_expand_template() {
-    local i TEMPLATE GREP_ARGS REPLACE \
+    local i TEMPLATE REPLACE \
         VARS=(${LK_EXPAND_VARS[@]+"${LK_EXPAND_VARS[@]}"})
     TEMPLATE=$(cat ${1+"$1"} && echo -n ".") || return
-    lk_is_true "${LK_EXPAND_BASH_OFF:-0}" || {
-        GREP_ARGS=(-e '\$\{[a-zA-Z_][a-zA-Z0-9_]*\}')
-    }
     [ "${#VARS[@]}" -gt 0 ] ||
         VARS=($(
             echo "$TEMPLATE" |
                 grep -Eo \
-                    -e '\{\{[a-zA-Z_][a-zA-Z0-9_]*\}\}' \
-                    ${GREP_ARGS[@]+"${GREP_ARGS[@]}"} |
-                sed -E 's/^[${]+([a-zA-Z0-9_]+)[}]+$/\1/' | sort | uniq
+                    -e '\{\{[a-zA-Z_][a-zA-Z0-9_]*\}\}' |
+                sed -E 's/^\{\{([a-zA-Z0-9_]+)\}\}$/\1/' | sort | uniq
         )) || true
     for i in ${VARS[@]+"${VARS[@]}"}; do
-        REPLACE=${!i:-}
+        REPLACE=${!i:-}.
         ! lk_is_true "${LK_EXPAND_QUOTE:-0}" ||
-            REPLACE=$(printf '%q' "$REPLACE")
-        TEMPLATE=${TEMPLATE//\{\{$i\}\}/$REPLACE}
-        lk_is_true "${LK_EXPAND_BASH_OFF:-0}" || {
-            TEMPLATE=${TEMPLATE//\$\{$i\}/$REPLACE}
-        }
+            REPLACE=$(printf '%q.' "${REPLACE%.}")
+        TEMPLATE=${TEMPLATE//\{\{$i\}\}/${REPLACE%.}}
     done
     echo "${TEMPLATE%.}"
 }
