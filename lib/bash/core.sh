@@ -1706,9 +1706,11 @@ function lk_ssl_client() {
 
 function lk_keep_original() {
     local LK_BACKUP_SUFFIX=${LK_BACKUP_SUFFIX-.orig}
-    [ -z "$LK_BACKUP_SUFFIX" ] ||
+    [ -z "$LK_BACKUP_SUFFIX" ] || while [ $# -gt 0 ]; do
         lk_maybe_sudo test ! -s "$1" ||
-        lk_maybe_sudo cp -navL "$1" "$1$LK_BACKUP_SUFFIX"
+            lk_maybe_sudo cp -navL "$1" "$1$LK_BACKUP_SUFFIX"
+        shift
+    done
 }
 
 function lk_maybe_add_newline() {

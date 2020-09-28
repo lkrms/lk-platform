@@ -54,7 +54,7 @@ function exit_trap() {
     [ ! -d "/mnt/boot" ] || {
         install -v -d -m 0755 "/mnt/var/log" &&
             install -v -m 0640 -g "adm" \
-                "$LOG_FILE" "/mnt/var/log/${LK_PATH_PREFIX}bootstrap.log" || :
+                "$LOG_FILE" "/mnt/var/log/${LK_PATH_PREFIX}bootstrap.log" || true
     }
 }
 
@@ -130,7 +130,7 @@ S="[[:blank:]]"
 
 lk_console_message "Setting up live environment"
 # otherwise mirrorlist may be replaced by reflector
-systemctl stop reflector || :
+systemctl stop reflector || true
 configure_pacman
 [ -z "$MIRROR" ] ||
     # pacstrap will copy this to the new system
