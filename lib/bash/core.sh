@@ -1347,6 +1347,9 @@ function lk_safe_symlink() {
         LK_BACKUP_SUFFIX=${LK_BACKUP_SUFFIX-.orig} CURRENT_TARGET
     [ -n "$LINK" ] || return
     [ -e "$TARGET" ] || {
+        [ "${TARGET:0:1}" != / ] &&
+            lk_maybe_sudo test -e "$LINK_DIR/$TARGET"
+    } || {
         lk_is_true "$TRY_DEFAULT" &&
             TARGET=$(lk_add_file_suffix "$TARGET" "-default") &&
             [ -e "$TARGET" ] || return
