@@ -1756,7 +1756,13 @@ function lk_maybe_replace() {
         lk_keep_original "$1" || return
     fi
     cat <<<"$2" | lk_maybe_sudo tee "$1" >/dev/null || return
-    ! lk_verbose || lk_console_file "$1"
+    ! lk_verbose || {
+        if lk_is_true "${LK_NO_DIFF:-}"; then
+            lk_console_detail "Updated:" "$1"
+        else
+            lk_console_file "$1"
+        fi
+    }
 }
 
 function _lk_maybe_filter() {
