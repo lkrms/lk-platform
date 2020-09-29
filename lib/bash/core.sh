@@ -116,16 +116,24 @@ function lk_include() {
     done
 }
 
-# lk_myself [STACK_DEPTH]
+# lk_myself [-f] [STACK_DEPTH]
 #
-# If running from a source file, output the basename of the running script,
-# otherwise print the name of the function at STACK_DEPTH in the call stack,
-# where stack depth 0 (the default) represents the invoking function, stack
-# depth 1 represents the invoking function's caller, and so on.
+# If running from a source file and -f is not set, output the basename of the
+# running script, otherwise print the name of the function at STACK_DEPTH in the
+# call stack, where stack depth 0 (the default) represents the invoking
+# function, stack depth 1 represents the invoking function's caller, and so on.
 function lk_myself() {
-    [ "${BASH_SOURCE+${BASH_SOURCE[*]: -1:1}}" = "$0" ] &&
-        echo "${0##*/}" ||
+    local FUNC=
+    [ "${1:-}" != -f ] || {
+        FUNC=1
+        shift
+    }
+    if ! lk_is_true "$FUNC" &&
+        [ "${BASH_SOURCE+${BASH_SOURCE[*]: -1:1}}" = "$0" ]; then
+        echo "${0##*/}"
+    else
         echo "${FUNCNAME[$((1 + ${1:-0}))]:-${0##*/}}"
+    fi
 }
 
 # shellcheck disable=SC2120
@@ -171,9 +179,20 @@ function lk_warn() {
     return "$EXIT_STATUS"
 }
 
+function _lk_usage_format() {
+    local CMD BOLD RESET S="[[:blank:]]"
+    CMD=$(lk_escape_ere "$(lk_myself 2)")
+    BOLD=$(lk_escape_ere_replace "$LK_BOLD")
+    RESET=$(lk_escape_ere_replace "$LK_RESET")
+    sed -E \
+        -e "s/^($S*(([uU]sage|[oO]r):$S+)?)($CMD)($S|\$)/\1$BOLD\4$RESET\5/" \
+        -e "s/^\w.*:\$/$BOLD&$RESET/" <<<"$1"
+}
+
 function lk_usage() {
-    local EXIT_STATUS=$?
-    lk_console_log "${1:-${LK_USAGE:-$(_lk_caller): invalid arguments}}"
+    local EXIT_STATUS=$? MESSAGE=${1:-${LK_USAGE:-}}
+    [ -z "$MESSAGE" ] || MESSAGE=$(_lk_usage_format "$MESSAGE")
+    lk_console_log "${MESSAGE:-$(_lk_caller): invalid arguments}"
     return "$EXIT_STATUS"
 }
 
@@ -197,14 +216,7 @@ function lk_mktemp_fifo() {
         echo "$FIFO_PATH"
 }
 
-function lk_commands_exist() {
-    while [ $# -gt 0 ]; do
-        type -P "$1" >/dev/null || return
-        shift
-    done
-}
-
-function lk_first_existing_command() {
+function lk_command_first_existing() {
     while [ $# -gt 0 ]; do
         if type -P "$1" >/dev/null; then
             echo "$1"
@@ -215,7 +227,7 @@ function lk_first_existing_command() {
     false
 }
 
-function _lk_process_regex() {
+function _lk_regex_process() {
     eval "$1=\$2"
     if [ ${#ARGS[@]} -eq 0 ] || lk_in_array "$1" ARGS; then
         printf '%s=%q\n' "$1" "$2"
@@ -238,31 +250,31 @@ function lk_get_regex() {
         PHP_SETTING_NAME_REGEX PHP_SETTING_REGEX \
         _O _H _P _S _U _A _Q _F ARGS=("$@")
 
-    _lk_process_regex DOMAIN_PART_REGEX \
+    _lk_regex_process DOMAIN_PART_REGEX \
         "[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
-    _lk_process_regex DOMAIN_NAME_REGEX \
+    _lk_regex_process DOMAIN_NAME_REGEX \
         "($DOMAIN_PART_REGEX(\\.|\$)){2,}"
-    _lk_process_regex EMAIL_ADDRESS_REGEX \
+    _lk_regex_process EMAIL_ADDRESS_REGEX \
         "[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@$DOMAIN_NAME_REGEX"
 
     _O="(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])"
-    _lk_process_regex IPV4_REGEX \
+    _lk_regex_process IPV4_REGEX \
         "($_O\\.){3}$_O"
-    _lk_process_regex IPV4_OPT_PREFIX_REGEX \
+    _lk_regex_process IPV4_OPT_PREFIX_REGEX \
         "$IPV4_REGEX(/(3[0-2]|[12][0-9]|[1-9]))?"
 
     _H="[0-9a-fA-F]{1,4}"
     _P="/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9])"
-    _lk_process_regex IPV6_REGEX \
+    _lk_regex_process IPV6_REGEX \
         "(($_H:){7}(:|$_H)|($_H:){6}(:|:$_H)|($_H:){5}(:|(:$_H){1,2})|($_H:){4}(:|(:$_H){1,3})|($_H:){3}(:|(:$_H){1,4})|($_H:){2}(:|(:$_H){1,5})|$_H:(:|(:$_H){1,6})|:(:|(:$_H){1,7}))"
-    _lk_process_regex IPV6_OPT_PREFIX_REGEX \
+    _lk_regex_process IPV6_OPT_PREFIX_REGEX \
         "$IPV6_REGEX($_P)?"
 
-    _lk_process_regex IP_OPT_PREFIX_REGEX \
+    _lk_regex_process IP_OPT_PREFIX_REGEX \
         "($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX)"
-    _lk_process_regex HOST_REGEX \
+    _lk_regex_process HOST_REGEX \
         "($IPV4_REGEX|$IPV6_REGEX|$DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)"
-    _lk_process_regex HOST_OPT_PREFIX_REGEX \
+    _lk_regex_process HOST_OPT_PREFIX_REGEX \
         "($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX|$DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)"
 
     # https://en.wikipedia.org/wiki/Uniform_Resource_Identifier
@@ -274,23 +286,23 @@ function lk_get_regex() {
     _A="[-a-zA-Z0-9._~%!\$&'()*+,;=:@/]+"                      # path
     _Q="[-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]+"                     # query
     _F="[-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]*"                     # fragment
-    _lk_process_regex URI_REGEX \
+    _lk_regex_process URI_REGEX \
         "(($_S):)?(//(($_U)(:($_P))?@)?$_H(:($_O))?)?($_A)?(\\?($_Q))?(#($_F))?"
-    _lk_process_regex URI_REGEX_REQ_SCHEME_HOST \
+    _lk_regex_process URI_REGEX_REQ_SCHEME_HOST \
         "(($_S):)(//(($_U)(:($_P))?@)?$_H(:($_O))?)($_A)?(\\?($_Q))?(#($_F))?"
 
-    _lk_process_regex LINUX_USERNAME_REGEX \
+    _lk_regex_process LINUX_USERNAME_REGEX \
         "[a-z_]([-a-z0-9_]{0,31}|[-a-z0-9_]{0,30}\\\$)"
-    _lk_process_regex MYSQL_USERNAME_REGEX \
+    _lk_regex_process MYSQL_USERNAME_REGEX \
         "[a-zA-Z0-9_]+"
 
     # https://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-source
-    _lk_process_regex DPKG_SOURCE_REGEX \
+    _lk_regex_process DPKG_SOURCE_REGEX \
         "[a-z0-9][-a-z0-9+.]+"
 
-    _lk_process_regex PHP_SETTING_NAME_REGEX \
+    _lk_regex_process PHP_SETTING_NAME_REGEX \
         "[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*"
-    _lk_process_regex PHP_SETTING_REGEX \
+    _lk_regex_process PHP_SETTING_REGEX \
         "$PHP_SETTING_NAME_REGEX=.+"
 }
 
@@ -326,21 +338,11 @@ else
     }
 fi
 
-function lk_now() {
-    lk_date "%Y-%m-%d %H:%M:%S %z"
-}
-
 # lk_date_log
 #
 # Output the current time in a format suitable for log files.
-#
-# Redefine `lk_date_log` to change the line prefix added by `lk_log`.
 function lk_date_log() {
     lk_date "%Y-%m-%d %H:%M:%S %z"
-}
-
-function lk_today() {
-    lk_date "%b %_d %H:%M:%S %z"
 }
 
 function lk_date_ymdhms() {
@@ -467,22 +469,26 @@ function lk_expand_template() {
 }
 
 function lk_lower() {
-    { [ $# -gt 0 ] && echo "$@" || cat; } |
+    { [ $# -gt 0 ] && lk_echo_args "$@" || cat; } |
         tr '[:upper:]' '[:lower:]'
 }
 
 function lk_upper() {
-    { [ $# -gt 0 ] && echo "$@" || cat; } |
+    { [ $# -gt 0 ] && lk_echo_args "$@" || cat; } |
         tr '[:lower:]' '[:upper:]'
 }
 
 function lk_upper_first() {
+    local EXIT_STATUS
+    if lk_maybe_xargs 0 "$@"; then
+        return "$EXIT_STATUS"
+    fi
     printf '%s%s\n' "$(lk_upper "${1:0:1}")" "$(lk_lower "${1:1}")"
 }
 
 function lk_trim() {
-    { [ $# -gt 0 ] && echo "$1" || cat; } |
-        sed -Ee 's/^\s+//' -e 's/\s+$//'
+    { [ $# -gt 0 ] && lk_echo_args "$@" || cat; } |
+        sed -Ee 's/^[[:blank:]]+//' -e 's/[[:blank:]]+$//'
 }
 
 function lk_pad_zero() {
@@ -616,13 +622,38 @@ function lk_remove_repeated() {
     done
 }
 
-# lk_xargs command [arg...]
-#   Analogous to xargs(1).
+# lk_xargs COMMAND [ARG...]
+#
+# Invoke `COMMAND [ARG...] LINE` for each LINE of input.
 function lk_xargs() {
     local LINE
     while IFS= read -r LINE || [ -n "$LINE" ]; do
-        "$@" "$LINE"
+        "$@" "$LINE" || return
     done
+}
+
+# lk_maybe_xargs REQUIRED [ARG...]
+#
+# Use lk_xargs to invoke the calling function with REQUIRED arguments if, after
+# consuming each ARG, the number of arguments remaining is not 1, otherwise
+# return false. If zero arguments remain, pipe input to lk_xargs. If two or more
+# arguments remain, pipe each ARG to lk_xargs. Finally, set EXIT_STATUS to the
+# return value of lk_xargs and return true.
+#
+# See lk_upper_first for an example.
+function lk_maybe_xargs() {
+    local REQUIRED=$1 ARGS COMMAND
+    shift
+    ((ARGS = $# - REQUIRED))
+    [ "$ARGS" -ne 1 ] || return
+    COMMAND=("$(lk_myself -f 1)" "${@:1:$REQUIRED}")
+    EXIT_STATUS=0
+    if [ "$ARGS" -eq 0 ]; then
+        lk_xargs "${COMMAND[@]}"
+    else
+        lk_echo_args "${@:$((REQUIRED + 1))}" |
+            lk_xargs "${COMMAND[@]}"
+    fi || EXIT_STATUS=$?
 }
 
 # lk_mapfile [-z] file_path array_name [ignore_pattern]

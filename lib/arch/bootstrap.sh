@@ -344,7 +344,7 @@ EOF
 lk_console_detail "Sourcing $LK_BASE/lib/bash/rc.sh in ~/.bashrc for all users"
 cat <<EOF >>"/mnt/etc/skel/.bashrc"
 
-# Added by bootstrap.sh at $(lk_now)
+# Added by bootstrap.sh at $(lk_date_log)
 if [ -f '$LK_BASE/lib/bash/rc.sh' ]; then
     . '$LK_BASE/lib/bash/rc.sh'
 fi

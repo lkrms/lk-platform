@@ -18,7 +18,7 @@ include= . "$LK_BASE/lib/bash/common.sh"
 
 lk_assert_not_root
 lk_assert_not_wsl
-KEEPASSXC=$(lk_first_existing_command \
+KEEPASSXC=$(lk_command_first_existing \
     keepassxc \
     /Applications/KeePassXC.app/Contents/MacOS/KeePassXC) ||
     lk_die "KeePassXC not found"

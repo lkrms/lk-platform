@@ -84,8 +84,9 @@ function lk_delete_on_exit() {
 }
 
 function lk_usage() {
-    local EXIT_STATUS=$?
-    lk_console_log "${1:-${LK_USAGE:-$(_lk_caller): invalid arguments}}"
+    local EXIT_STATUS=$? MESSAGE=${1:-${LK_USAGE:-}}
+    [ -z "$MESSAGE" ] || MESSAGE=$(_lk_usage_format "$MESSAGE")
+    lk_console_log "${MESSAGE:-$(_lk_caller): invalid arguments}"
     exit "$EXIT_STATUS"
 }
 

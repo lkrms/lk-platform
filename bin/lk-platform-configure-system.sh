@@ -260,7 +260,7 @@ install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
     if lk_verbose 2; then
         lk_console_item "Settings:" "$(printf '%s: %s\n' "${OUTPUT[@]}")"
     else
-        lk_console_item "Settings found:" "${#DEFAULT_LINES[@]}"
+        lk_console_detail "${#DEFAULT_LINES[@]} settings found"
     fi
     lk_maybe_replace "$CONF_FILE" "$(lk_echo_array DEFAULT_LINES)"
 
