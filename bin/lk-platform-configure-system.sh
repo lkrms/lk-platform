@@ -1,9 +1,7 @@
 #!/bin/bash
 # shellcheck disable=SC1090,SC2001,SC2015,SC2034
 
-# root privileges are required for access to settings files and startup scripts
-# in ~root, /home/*, etc., so elevate immediately rather than waiting for
-# lk_elevate to be available
+# Elevate for access to ~root, /home/*, etc.
 [ "$EUID" -eq 0 ] || {
     sudo -H -E "$0" "$@"
     exit
@@ -84,17 +82,15 @@
         LK_PACKAGES_FILE
     )
 
-    # To gather missing settings for CONF_FILE, source CONF_FILE twice:
+    # To gather missing settings for CONF_FILE, source it twice:
     # - first to seed variables like LK_PATH_PREFIX;
-    # - then to ensure values already set in CONF_FILE are not overwritten
-    GLOBIGNORE="$LK_INST/etc/*example.*:$LK_INST/etc/*default.*"
+    # - then to ensure existing values are not overwritten
     LK_SETTINGS_FILES=(
         "$CONF_FILE"
         "$LK_INST/etc"/*.conf
         "~root/.\${LK_PATH_PREFIX:-lk-}settings"
         "$CONF_FILE"
     )
-    unset GLOBIGNORE
 
     # Otherwise the LK_BASE environment variable (if set) will mask the value
     # set in config files
@@ -191,7 +187,7 @@
         REMOTE_NAME=$(git for-each-ref --format="%(upstream:remotename)" \
             "refs/heads/$BRANCH") && [ -n "$REMOTE_NAME" ] ||
             lk_die "no upstream remote for current branch: $LK_BASE"
-        FETCH_TIME=$(lk_modified_timestamp ".git/FETCH_HEAD" 2>/dev/null) ||
+        FETCH_TIME=$(lk_file_modified ".git/FETCH_HEAD" 2>/dev/null) ||
             FETCH_TIME=0
         if [ $(($(lk_timestamp) - FETCH_TIME)) -gt 300 ]; then
             if sudo -Hu "$REPO_OWNER" \
@@ -216,6 +212,26 @@
                 lk_console_warning0 "Unable to check for lk-platform updates"
             fi
         fi
+        lk_console_message "Checking lk-platform file permissions"
+        (
+            DIR_MODE=0755
+            FILE_MODE=0644
+            [ ! -g "$LK_BASE" ] || {
+                DIR_MODE=2775
+                FILE_MODE=0664
+            }
+            cd "$LK_BASE"
+            find . -regextype posix-egrep \
+                -type d ! \( -regex '\./var/log' -prune \) \
+                ! -perm -"$DIR_MODE" -print0 |
+                gnu_xargs -0r gnu_chmod -c +"$DIR_MODE"
+            find . -regextype posix-egrep \
+                ! \( -type d -regex '\./(var/log|\.git/objects)' -prune \) \
+                -type f ! \( -regex '\./etc/[^/]+' \) \
+                ! -perm -"$FILE_MODE" -print0 |
+                gnu_xargs -0r gnu_chmod -c +"$FILE_MODE"
+            install -d -m 00777 "$LK_BASE/var/log"
+        )
     fi
 
     # Use the opening "Environment:" log entry created by hosting.sh as a last

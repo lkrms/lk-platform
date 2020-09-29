@@ -1271,7 +1271,7 @@ function lk_download() {
                 DOWNLOAD_ONE=1
                 DOWNLOAD_ARGS+=(--time-cond "$(
                     lk_timestamp_readable "$(
-                        lk_modified_timestamp "$FILENAME"
+                        lk_file_modified "$FILENAME"
                     )"
                 )")
             }
@@ -1664,7 +1664,7 @@ function lk_remove_secret() {
 
 function lk_sort_paths_by_date() {
     if lk_command_exists "$(_lk_gnu_command stat)" &&
-        lk_command_exists "$(_lk_gnu_command sed)"; then
+        lk_command_exists "$(_lk_gnu_command sed)" || ! lk_macos; then
         function lk_sort_paths_by_date() {
             gnu_stat --printf '%Y :%n\0' "$@" |
                 sort -zn |
@@ -1681,17 +1681,17 @@ function lk_sort_paths_by_date() {
     lk_sort_paths_by_date "$@"
 }
 
-function lk_modified_timestamp() {
+function lk_file_modified() {
     if lk_command_exists "$(_lk_gnu_command stat)" || ! lk_macos; then
-        function lk_modified_timestamp() {
+        function lk_file_modified() {
             gnu_stat --printf '%Y' "$1"
         }
     else
-        function lk_modified_timestamp() {
+        function lk_file_modified() {
             stat -t '%s' -f '%Sm' "$1"
         }
     fi
-    lk_modified_timestamp "$@"
+    lk_file_modified "$@"
 }
 
 function lk_file_owner() {
@@ -1865,7 +1865,7 @@ _LK_INCLUDES=(
     LK_COLOUR=off
 
 # shellcheck disable=SC2034
-case "${LK_COLOUR:-${colour:-}}" in
+case "${LK_COLOUR:-${colour:-static}}" in
 generate)
     eval "$(lk_get_colours)"
     ;;
