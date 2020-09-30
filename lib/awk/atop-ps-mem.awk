@@ -51,7 +51,7 @@ function human_readable(kb, width, i) {
                     "(" count[program] \
                         ", average: " \
                         human_readable(pss[program] / count[program]) \
-                        ", max: " \
+                        ", max (overall): " \
                         human_readable(max[program]) \
                         ")" :
                     "") > TEMP
