@@ -29,10 +29,17 @@ function human_readable(kb, width, i) {
 }
 
 /^PRM[[:blank:]]/ {
-    program = substr($8, 2, length($8) - 2)
-    pss[program] += $24
-    count[program] += 1
+    if (match($0, /\(.*\)/)) {
+        program = substr($0, RSTART + 1, RLENGTH - 2)
+        $0 = substr($0, 1, RSTART) substr($0, RSTART + RLENGTH - 1)
+        pss[program] += $24
+        count[program] += 1
+        if (max[program] < $24) {
+            max[program] = $24
+        }
+    }
 }
+
 /^SEP([[:blank:]]|$)/ {
     total = 0
     for (program in pss) {
@@ -41,9 +48,12 @@ function human_readable(kb, width, i) {
             print human_readable(pss[program], 10),
                 program,
                 (count[program] > 1 ?
-                    "(" count[program] " @ " \
+                    "(" count[program] \
+                        ", average: " \
                         human_readable(pss[program] / count[program]) \
-                    ")" :
+                        ", max: " \
+                        human_readable(max[program]) \
+                        ")" :
                     "") > TEMP
         }
         delete pss[program]
