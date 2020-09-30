@@ -1,5 +1,13 @@
 #!/bin/bash
 
+function lk_atop_ps_mem() {
+    local TEMP
+    TEMP=$(mktemp) &&
+        lk_elevate atop -R -PPRM "$@" |
+        awk -f "$LK_BASE/lib/awk/atop-ps-mem.awk" \
+            -v "TEMP=$TEMP"
+}
+
 function lk_systemctl_enable() {
     systemctl is-enabled --quiet "$@" ||
         sudo systemctl enable --now "$@"
