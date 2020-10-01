@@ -40,32 +40,36 @@ function lk_bash_load() {
             lk_bin_depth=1
             FILE=${BASH_SOURCE[0]}
         fi
-        if ! type -P realpath >/dev/null; then
-            if type -P python >/dev/null; then
-                function realpath() {
-                    python -c \
-                        "import os,sys;print(os.path.realpath(sys.argv[1]))" \
-                        "$1"
-                }
-            else
-                lk_die "command not found: realpath"
+        if [ -z "${LK_BASE:-}" ]; then
+            if ! type -P realpath >/dev/null; then
+                if type -P python >/dev/null; then
+                    function realpath() {
+                        python -c \
+                            "import os,sys;print(os.path.realpath(sys.argv[1]))" \
+                            "$1"
+                    }
+                else
+                    lk_die "command not found: realpath"
+                fi
             fi
+            FILE=$(realpath "$FILE") &&
+                DIR=${FILE%/*} &&
+                LK_BASE=$(realpath "$DIR$(
+                    [ "$lk_bin_depth" -lt 1 ] ||
+                        eval "printf '/..%.s' {1..$lk_bin_depth}"
+                )") &&
+                [ "$LK_BASE" != / ] &&
+                [ -f "$LK_BASE/bin/lk-bash-load.sh" ] ||
+                lk_die "unable to locate LK_BASE"
         fi
-        FILE=$(realpath "$FILE") &&
-            DIR=${FILE%/*} &&
-            LK_BASE=$(realpath "$DIR$(
-                [ "$lk_bin_depth" -lt 1 ] ||
-                    eval "printf '/..%.s' {1..$lk_bin_depth}"
-            )") &&
-            [ "$LK_BASE" != / ] &&
-            [ -f "$LK_BASE/bin/lk-bash-load.sh" ] ||
-            lk_die "unable to locate LK_BASE"
         VARS+=(LK_BASE "$LK_BASE")
         printf '%s=%q\n' "${VARS[@]}"
         echo "export LK_BASE"
     ) || return
     eval "$SH"
 }
+
+_LK_ENV=${_LK_ENV:-$(declare -x)}
 
 lk_bash_load &&
     . "$LK_BASE/lib/bash/common.sh"

@@ -1,6 +1,8 @@
 #!/bin/bash
 # shellcheck disable=SC1090,SC2001,SC2046,SC2086,SC2207
 
+_LK_ENV=${_LK_ENV:-$(declare -x)}
+
 lk_die() { s=$? && echo "${BASH_SOURCE[0]}: $1" >&2 &&
     (return $s) && false || exit; }
 [ -n "${LK_INST:-${LK_BASE:-}}" ] || lk_die "LK_BASE not set"
@@ -101,6 +103,17 @@ function lk_check_args() {
         # shellcheck disable=SC2034
         LK_NO_INPUT=1
     fi
+}
+
+# shellcheck disable=SC2016
+function lk_get_env() {
+    local VAR
+    VAR=$(env -i bash -c "$(
+        printf '%s\n' \
+            "$_LK_ENV" \
+            '[ -n "${!1+1}" ] || exit' \
+            'echo "${!1}."'
+    )" bash "$1") && echo "${VAR%.}"
 }
 
 if ! lk_is_true "${LK_NO_SOURCE_FILE:-0}"; then
