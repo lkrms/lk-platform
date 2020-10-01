@@ -1065,8 +1065,10 @@ function lk_console_checklist() {
 }
 
 function lk_no_input() {
-    [ ! -t 0 ] ||
-        lk_is_true "${LK_NO_INPUT:-}"
+    ! lk_is_true "${LK_FORCE_INPUT:-}" && {
+        [ ! -t 0 ] ||
+            lk_is_true "${LK_NO_INPUT:-}"
+    }
 }
 
 function lk_verbose() {
