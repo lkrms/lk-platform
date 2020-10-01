@@ -244,7 +244,7 @@
                     <"/var/log/${LK_PATH_PREFIX}install.log"
         )}" && awk -F= \
             -v "SETTING=$1" \
-            '$1 == SETTING { print $2 }' <<<"$INSTALL_ENV"
+            '$1 ~ SETTING { print $2 }' <<<"$INSTALL_ENV"
     }
 
     for i in "${OLD_SETTINGS[@]}"; do

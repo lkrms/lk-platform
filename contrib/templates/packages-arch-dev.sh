@@ -102,6 +102,7 @@ PACMAN_PACKAGES+=(
     hwinfo
     mlocate
     sysfsutils
+    ubuntu-keyring
 )
 
 AUR_PACKAGES+=(
