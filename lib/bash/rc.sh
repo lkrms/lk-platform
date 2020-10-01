@@ -125,10 +125,13 @@ function find_all() {
 lk_include prompt provision git wordpress nextcloud
 
 if lk_is_linux; then
+    lk_include linux
+    ! lk_is_ubuntu || lk_include debian
     alias cwd='pwd | xclip'
     alias duh='du -h --max-depth 1 | sort -h'
     alias open='xdg-open'
 elif lk_is_macos; then
+    lk_include macos
     alias duh='du -h -d 1 | sort -h'
     export BASH_SILENCE_DEPRECATION_WARNING=1
 fi
