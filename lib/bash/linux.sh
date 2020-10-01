@@ -8,9 +8,24 @@ function lk_atop_ps_mem() {
             -v "TEMP=$TEMP"
 }
 
+function lk_systemctl_loaded() {
+    [ "$(systemctl show --property=LoadState "$@" | cut -d= -f2-)" = loaded ]
+}
+
 function lk_systemctl_enable() {
-    systemctl is-enabled --quiet "$@" ||
+    systemctl is-enabled --quiet "$@" || {
+        ! lk_verbose ||
+            lk_console_detail "Running:" "systemctl enable --now $*"
         sudo systemctl enable --now "$@"
+    }
+}
+
+function lk_systemctl_disable() {
+    ! systemctl is-enabled --quiet "$@" || {
+        ! lk_verbose ||
+            lk_console_detail "Running:" "systemctl disable --now $*"
+        sudo systemctl disable --now "$@"
+    }
 }
 
 function lk_full_name() {
