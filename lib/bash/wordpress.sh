@@ -279,6 +279,55 @@ exit \${PIPESTATUS[0]}' bash $(printf '%q' "$DB_NAME")" | pv --force ||
     return "$EXIT_STATUS"
 }
 
+# lk_wp_db_dump [SITE_ROOT]
+function lk_wp_db_dump() {
+    local SITE_ROOT OUTPUT_FILE LK_MY_CNF EXIT_STATUS=0 \
+        DB_NAME DB_USER DB_PASSWORD DB_HOST
+    SITE_ROOT=${1:-$(lk_wp_get_site_root)} || return
+    [ ! -t 1 ] || {
+        OUTPUT_FILE=$(lk_replace ~/ "" "$SITE_ROOT")
+        OUTPUT_FILE=localhost-${OUTPUT_FILE//\//_}-$(lk_date_ymdhms).sql.gz
+        ! lk_in_string "$SITE_ROOT" "$PWD" &&
+            OUTPUT_FILE=$PWD/$OUTPUT_FILE ||
+            OUTPUT_FILE=~/$OUTPUT_FILE
+        [ -w "${OUTPUT_FILE%/*}" ] ||
+            lk_warn "cannot write to ${OUTPUT_FILE%/*}" || return
+    }
+    lk_console_message "Preparing to dump WordPress database"
+    lk_console_detail "Getting credentials"
+    DB_NAME=$(lk_wp config get DB_NAME) &&
+        DB_USER=$(lk_wp config get DB_USER) &&
+        DB_PASSWORD=$(lk_wp config get DB_PASSWORD) &&
+        DB_HOST=$(lk_wp config get DB_HOST) || return
+    lk_console_detail \
+        "Creating ~/.lk_mysqldump.cnf with credentials for user" "$DB_USER"
+    LK_MY_CNF=~/.lk_mysqldump.cnf
+    _lk_write_my_cnf &&
+        _lk_mysql_connects "" 2>/dev/null ||
+        lk_warn "database connection failed" || return
+    [ ! -t 1 ] || {
+        exec 6>&1 >"$OUTPUT_FILE"
+    }
+    lk_console_message "Dumping database"
+    lk_console_detail "Database:" "$DB_NAME"
+    lk_console_detail "Host:" "$DB_HOST"
+    [ -z "${OUTPUT_FILE:-}" ] ||
+        lk_console_detail "Writing compressed SQL to" "$OUTPUT_FILE"
+    mysqldump --defaults-file=~/.lk_mysqldump.cnf \
+        --single-transaction --skip-lock-tables "$DB_NAME" |
+        gzip |
+        pv --force ||
+        EXIT_STATUS=$?
+    [ -z "${OUTPUT_FILE:-}" ] || exec 1>&6 6>&-
+    lk_console_message "Deleting ~/.lk_mysqldump.cnf"
+    rm -f ~/.lk_mysqldump.cnf ||
+        lk_console_warning0 "Error deleting" ~/.lk_mysqldump.cnf
+    [ "$EXIT_STATUS" -eq 0 ] &&
+        lk_console_success "Database dump completed successfully" ||
+        lk_console_error0 "Database dump failed"
+    return "$EXIT_STATUS"
+}
+
 # lk_wp_db_set_local [SITE_ROOT [WP_DB_NAME WP_DB_USER WP_DB_PASSWORD \
 #   [DB_NAME [DB_USER]]]]
 #
@@ -498,6 +547,27 @@ function lk_wp_disable_cron() {
             crontab -r 2>/dev/null || true
         fi
     fi
+}
+
+function lk_wp_get_maintenance_php() {
+    # shellcheck disable=SC2016
+    echo '<?php $upgrading = time(); ?>'
+}
+
+# lk_wp_enable_maintenance [SITE_ROOT]
+function lk_wp_enable_maintenance() {
+    local SITE_ROOT MAINTENANCE_PHP
+    SITE_ROOT=${1:-$(lk_wp_get_site_root)} || return
+    MAINTENANCE_PHP=$(lk_wp_get_maintenance_php)
+    echo "$MAINTENANCE_PHP" >"$SITE_ROOT/.maintenance"
+}
+
+# lk_wp_disable_maintenance [SITE_ROOT]
+function lk_wp_disable_maintenance() {
+    local SITE_ROOT
+    SITE_ROOT=${1:-$(lk_wp_get_site_root)} || return
+    [ ! -e "$SITE_ROOT/.maintenance" ] ||
+        rm "$SITE_ROOT/.maintenance"
 }
 
 # lk_wp_set_permissions [SITE_ROOT]
