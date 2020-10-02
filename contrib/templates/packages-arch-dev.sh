@@ -11,7 +11,7 @@ http://sublimetext.mirror.linacreative.com/sublimehq-pub.gpg|\
 PACMAN_PACKAGES=()
 AUR_PACKAGES=()
 
-# if installed, won't be marked as a dependency
+# won't be installed, but won't be uninstalled
 PAC_KEEP=(
     aurutils
 
@@ -29,10 +29,6 @@ PAC_KEEP=(
 PAC_REMOVE=(
     # buggy and insecure
     xfce4-screensaver
-
-    # vscodium-bin is preferred
-    code
-    visual-studio-code-bin
 )
 
 # hardware-related
@@ -41,7 +37,6 @@ lk_is_virtual || {
         guvcview # webcam utility
         linssid  # wireless scanner
 
-        # "general-purpose computing on graphics processing units" (GPGPU)
         # required to run GPU benchmarks, e.g. in Geekbench
         clinfo
         $(
@@ -51,6 +46,8 @@ lk_is_virtual || {
             ! grep -qi "NVIDIA" <<<"$GRAPHICS_CONTROLLERS" ||
                 echo "opencl-nvidia"
         )
+
+        #
         i2c-tools # provides i2c-dev module (required by ddcutil)
     )
 
@@ -107,6 +104,7 @@ PACMAN_PACKAGES+=(
 
 AUR_PACKAGES+=(
     asciicast2gif
+    pacman-cleanup-hook
     powershell-bin
     vpn-slice
 )
@@ -233,6 +231,7 @@ PACMAN_PACKAGES+=(
     bash-language-server
     cloc
     dbeaver
+    dbeaver-plugin-sshj
     eslint
     geckodriver
     nodejs-less
@@ -246,7 +245,7 @@ PACMAN_PACKAGES+=(
     uglify-js
 
     # email
-    msmtp     # smtp client
+    msmtp     # SMTP client
     msmtp-mta # sendmail alias for msmtp
     s-nail    # mail and mailx commands
 
@@ -278,7 +277,7 @@ PACMAN_PACKAGES+=(
     #
     mysql-python
     python
-    python-acme # for working with Let's Encrypt
+    python-acme # Let's Encrypt CLI
     python-dateutil
     python-pip
     python-requests
