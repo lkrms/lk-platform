@@ -2,9 +2,10 @@
 # shellcheck disable=SC1090,SC2001,SC2015,SC2016,SC2034,SC2124,SC2206,SC2207
 
 # To install Arch Linux using the script below:
-#   1. boot from an Arch Linux live CD
-#   2. curl -L https://lkr.ms/bs >bs
-#   3. bash bs
+# 1. boot from an Arch Linux live CD
+# 2. wpa_supplicant -B -i wlan0 -c <(wpa_passphrase SSID passphrase)
+# 3. curl -L https://lkr.ms/bs >bs
+# 4. bash bs
 
 CUSTOM_REPOS=()                 # format: "repo|server|[key_url]|[key_id]|[siglevel]"
 PING_HOSTNAME=one.one.one.one   # see https://blog.cloudflare.com/dns-resolver-1-1-1-1/
@@ -210,6 +211,17 @@ if [ -z "$TARGET_SSH_KEY" ]; then
     [ -n "$TARGET_SSH_KEY" ] || lk_console_warning0 "SSH will not be configured (no key provided)"
 fi
 
+GRUB_CMDLINE="${GRUB_CMDLINE:-}"
+if [ -z "$GRUB_CMDLINE" ]; then
+    lk_console_item \
+        "Kernel command-line argument examples:" \
+        "$(lk_echo_args \
+            "usbcore.autosuspend=5" \
+            "mce=dont_log_ce" \
+            "libata.force=3.00:noncq")"
+    GRUB_CMDLINE="$(lk_console_read "Custom kernel command-line arguments:")"
+fi
+
 export -n TARGET_PASSWORD TARGET_SSH_KEY
 
 ROOT_PARTITION_TYPE="$(_lsblk FSTYPE "$ROOT_PARTITION")" || lk_die "no block device at $ROOT_PARTITION"
@@ -357,7 +369,6 @@ install -v -m 0600 /dev/null "/mnt/etc/skel/.ssh/authorized_keys"
 install -v -m 0600 /dev/null "/mnt/etc/skel/.ssh/config"
 cat <<EOF >"/mnt/etc/skel/.ssh/config"
 Host                    *
-IdentityFile            ~/.ssh/authorized_keys
 IdentitiesOnly          yes
 ForwardAgent            yes
 StrictHostKeyChecking   accept-new
@@ -490,7 +501,7 @@ lk_keep_original "/mnt/etc/default/grub"
 ! lk_is_virtual || CMDLINE_EXTRA="console=tty0 console=ttyS0"
 sed -Ei -e 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=saved/' \
     -e 's/^#?GRUB_SAVEDEFAULT=.*/GRUB_SAVEDEFAULT=true/' \
-    -e "s/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT=\"quiet loglevel=3 audit=0${CMDLINE_EXTRA:+ $CMDLINE_EXTRA}\"/" \
+    -e "s/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT=\"quiet loglevel=3 audit=0${CMDLINE_EXTRA:+ $CMDLINE_EXTRA}${GRUB_CMDLINE:+ $GRUB_CMDLINE}\"/" \
     /mnt/etc/default/grub
 install -v -d -m 0755 "/mnt/usr/local/bin"
 install -v -m 0755 /dev/null "/mnt/usr/local/bin/update-grub"
