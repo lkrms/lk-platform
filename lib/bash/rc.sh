@@ -122,7 +122,7 @@ function find_all() {
     gnu_find -L . -xdev -iname "*$FIND*" "$@"
 }
 
-lk_include prompt provision git wordpress nextcloud
+lk_include prompt provision git wordpress misc
 
 if lk_is_linux; then
     lk_include linux

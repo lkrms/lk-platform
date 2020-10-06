@@ -128,6 +128,10 @@ function lk_include() {
     done
 }
 
+function lk_is_source_file_running() {
+    [ "${BASH_SOURCE+${BASH_SOURCE[*]: -1:1}}" = "$0" ]
+}
+
 # lk_myself [-f] [STACK_DEPTH]
 #
 # If running from a source file and -f is not set, output the basename of the
@@ -140,8 +144,7 @@ function lk_myself() {
         FUNC=1
         shift
     }
-    if ! lk_is_true "$FUNC" &&
-        [ "${BASH_SOURCE+${BASH_SOURCE[*]: -1:1}}" = "$0" ]; then
+    if ! lk_is_true "$FUNC" && lk_is_source_file_running; then
         echo "${0##*/}"
     else
         echo "${FUNCNAME[$((1 + ${1:-0}))]:-${0##*/}}"
@@ -865,14 +868,26 @@ function lk_echoc() {
     echo ${ECHO_ARGS[@]+"${ECHO_ARGS[@]}"} "${COLOUR:-}$MESSAGE$LK_RESET"
 }
 
+function lk_output_length() {
+    local MESSAGE=$1
+    while [[ $MESSAGE =~ (.*)$'\x01'[^$'\x02']*$'\x02'(.*) ]]; do
+        MESSAGE=${BASH_REMATCH[1]}${BASH_REMATCH[2]}
+    done
+    echo ${#MESSAGE}
+}
+
 # lk_console_message message [[secondary_message] colour_sequence]
 function lk_console_message() {
     local PREFIX="${LK_CONSOLE_PREFIX-==> }" MESSAGE="$1" MESSAGE2 \
-        INDENT=0 SPACES COLOUR
+        INDENT=0 SPACES LENGTH COLOUR
     shift
-    [ "${MESSAGE//$'\n'/}" = "$MESSAGE" ] || {
-        SPACES=$'\n'"$(lk_repeat " " "$((${#PREFIX}))")"
-        MESSAGE="${MESSAGE//$'\n'/$SPACES}"
+    [ "${MESSAGE//$'\n'/}" = "$MESSAGE" ] &&
+        [ "$(lk_output_length "$PREFIX$MESSAGE")" -le 80 ] || {
+        SPACES=$'\n'"$(lk_repeat " " ${#PREFIX})"
+        [ "${MESSAGE//$'\n'/}" != "$MESSAGE" ] ||
+            ! lk_command_exists fold ||
+            MESSAGE=$(fold -s -w $((80 - ${#PREFIX})) <<<"$MESSAGE")
+        MESSAGE=${MESSAGE//$'\n'/$SPACES}
         INDENT=2
     }
     [ $# -le 1 ] || {
@@ -883,18 +898,25 @@ function lk_console_message() {
             # line with a space between
             [ "${MESSAGE2//$'\n'/}" = "$MESSAGE2" ] &&
                 [ "$INDENT" -eq 0 ] &&
+                LENGTH=$(lk_output_length "$PREFIX$MESSAGE $MESSAGE2") &&
+                [ "$LENGTH" -le 80 ] &&
                 MESSAGE2=" $MESSAGE2" || {
                 # Otherwise:
                 # - If they both span multiple lines, or MESSAGE2 is a
                 #   one-liner, keep INDENT=2 (increase MESSAGE2's left padding)
                 # - If only MESSAGE2 spans multiple lines, set INDENT=-2
                 #   (decrease the left padding of MESSAGE2)
-                [ "${MESSAGE2//$'\n'/}" = "$MESSAGE2" ] ||
+                { [ "${MESSAGE2//$'\n'/}" = "$MESSAGE2" ] &&
+                    [ -z "${LENGTH:-}" ]; } ||
                     [ "$INDENT" -eq 2 ] ||
                     INDENT=-2
-                INDENT="${LK_CONSOLE_INDENT:-$((${#PREFIX} + INDENT))}"
-                SPACES=$'\n'"$(lk_repeat " " "$INDENT")"
-                MESSAGE2="$SPACES${MESSAGE2//$'\n'/$SPACES}"
+                INDENT=${LK_CONSOLE_INDENT:-$((${#PREFIX} + INDENT))}
+                SPACES=$'\n'$(lk_repeat " " "$INDENT")
+                [ "${MESSAGE2//$'\n'/}" != "$MESSAGE2" ] ||
+                    ! lk_command_exists fold ||
+                    MESSAGE2=$(fold -s -w $((80 - INDENT)) <<<"$MESSAGE2")
+                MESSAGE2=${MESSAGE2#$'\n'}
+                MESSAGE2=$SPACES${MESSAGE2//$'\n'/$SPACES}
             }
         }
     }
@@ -2000,8 +2022,8 @@ off)
     ;;
 esac
 
-lk_maybe_set_readonly LK_CONSOLE_COLOUR '$LK_CYAN'
-lk_maybe_set_readonly LK_SUCCESS_COLOUR '$LK_GREEN'
-lk_maybe_set_readonly LK_WARNING_COLOUR '$LK_YELLOW'
-lk_maybe_set_readonly LK_ERROR_COLOUR '$LK_RED'
+LK_CONSOLE_COLOUR=$LK_CYAN
+LK_SUCCESS_COLOUR=$LK_GREEN
+LK_WARNING_COLOUR=$LK_YELLOW
+LK_ERROR_COLOUR=$LK_RED
 lk_maybe_set_readonly LK_ARGV '("$@")'
