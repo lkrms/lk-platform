@@ -67,6 +67,18 @@ else
     echo \"\$COMMAND/opt/gnu-getopt/bin/getopt\"
 fi"
         ;;
+    diff)
+        SH="\
+if ! lk_is_macos; then
+    echo \"$1\"
+else
+    if ! lk_command_exists brew ||
+        ! COMMAND=\$(brew --prefix); then
+        COMMAND=/usr/local
+    fi
+    echo \"\$COMMAND/bin/$1\"
+fi"
+        ;;
     *)
         SH="\
 PREFIX=g
@@ -306,16 +318,51 @@ function lk_get_regex() {
         "$PHP_SETTING_NAME_REGEX=.+"
 }
 
+function lk_realpath() {
+    local FILE=$1 i COMPONENT LN RESOLVED=
+    [ -e "$FILE" ] || return
+    [ "${FILE:0:1}" = / ] || FILE=${PWD%/}/$FILE
+    while [ -n "$FILE" ]; do
+        ((i++)) || {
+            # 1. Replace "/./" with "/"
+            # 2. Replace subsequent "/"s with one "/"
+            # 3. Remove trailing "/"
+            FILE=$(sed -e 's/\/\.\//\//g' -e 's/\/\+/\//g' -e 's/\/$//' \
+                <<<"$FILE") || return
+            FILE=${FILE:1}
+        }
+        COMPONENT=${FILE%%/*}
+        [ "$COMPONENT" != "$FILE" ] ||
+            FILE=
+        FILE=${FILE#*/}
+        case "$COMPONENT" in
+        '' | .)
+            continue
+            ;;
+        ..)
+            RESOLVED=${RESOLVED%/*}
+            continue
+            ;;
+        esac
+        RESOLVED=$RESOLVED/$COMPONENT
+        [ ! -L "$RESOLVED" ] || {
+            LN=$(readlink "$RESOLVED") || return
+            [ "${LN:0:1}" = / ] || LN=${RESOLVED%/*}/$LN
+            FILE=$LN${FILE:+/$FILE}
+            RESOLVED=
+            unset i
+        }
+    done
+    echo "$RESOLVED"
+}
+
 function realpath() {
     if lk_command_exists realpath; then
         unset -f realpath
-    elif lk_command_exists python; then
-        function realpath() {
-            python -c "import os,sys;print(os.path.realpath(sys.argv[1]))" "$1"
-        }
     else
-        lk_warn "command not found: realpath"
-        return 1
+        function realpath() {
+            lk_realpath "$1"
+        }
     fi
     realpath "$@"
 }
@@ -514,8 +561,10 @@ function lk_hostname() {
 }
 
 function lk_safe_tput() {
-    ! tput "$@" >/dev/null 2>&1 ||
-        tput "$@"
+    local SEQ
+    ! SEQ=$(tput "$@" 2>/dev/null) ||
+        [ -z "$SEQ" ] ||
+        printf '\x01%s\x02' "$SEQ"
 }
 
 function lk_get_colours() {
@@ -812,6 +861,7 @@ function lk_echoc() {
         unset IFS
         MESSAGE="$(lk_replace "$LK_RESET" "$LK_RESET$COLOUR" "$MESSAGE")"
     fi
+    MESSAGE=${MESSAGE//$'\x02\x01'/}
     echo ${ECHO_ARGS[@]+"${ECHO_ARGS[@]}"} "${COLOUR:-}$MESSAGE$LK_RESET"
 }
 
@@ -854,11 +904,10 @@ function lk_console_message() {
         # - there's no portable way to determine buffer size
         # - writing <=512 bytes with echo or printf should be atomic on all
         #   platforms, but this can't be guaranteed
-        lk_echoc -n "$PREFIX" "${LK_CONSOLE_PREFIX_COLOUR-$(
-            [ "${COLOUR//$LK_BOLD/}" != "$COLOUR" ] ||
-                echo "$LK_BOLD"
-        )$COLOUR}"
-        lk_echoc -n "$MESSAGE" "${LK_CONSOLE_MESSAGE_COLOUR-$LK_BOLD}"
+        lk_echoc -n "$PREFIX" \
+            "${LK_CONSOLE_PREFIX_COLOUR-$(lk_maybe_bold "$COLOUR")$COLOUR}"
+        lk_echoc -n "$MESSAGE" \
+            "${LK_CONSOLE_MESSAGE_COLOUR-$(lk_maybe_bold "$MESSAGE")}"
         [ -z "${MESSAGE2:-}" ] ||
             lk_echoc -n "$MESSAGE2" "${LK_CONSOLE_SECONDARY_COLOUR-$COLOUR}"
     )" >&"${_LK_FD:-2}"
@@ -957,6 +1006,14 @@ function lk_console_list() {
         ))" "" ""
 }
 
+function _lk_console_get_prompt() {
+    lk_echoc -n " :: " \
+        "${LK_CONSOLE_PREFIX_COLOUR-$(lk_maybe_bold \
+            "$LK_CONSOLE_COLOUR")$LK_CONSOLE_COLOUR}"
+    lk_echoc -n "${PROMPT[*]//$'\n'/$'\n    '}" \
+        "${LK_CONSOLE_MESSAGE_COLOUR-$(lk_maybe_bold "${PROMPT[*]}")}"
+}
+
 # lk_console_read PROMPT [DEFAULT [READ_ARG...]]
 function lk_console_read() {
     local PROMPT=("$1") DEFAULT=${2:-} VALUE
@@ -965,10 +1022,8 @@ function lk_console_read() {
         return
     fi
     [ -z "$DEFAULT" ] || PROMPT+=("[$DEFAULT]")
-    printf '%s ' "\
-$LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_CONSOLE_COLOUR} :: \
-$LK_RESET$LK_BOLD${PROMPT[*]//$'\n'/$'\n    '}$LK_RESET" >&"${_LK_FD:-2}"
-    read -re "${@:3}" VALUE || return
+    read -rep "$(_lk_console_get_prompt) " "${@:3}" VALUE \
+        2>&"${_LK_FD:-2}" || return
     [ -n "$VALUE" ] || VALUE=$DEFAULT
     echo "$VALUE"
 }
@@ -995,10 +1050,8 @@ function lk_confirm() {
         VALUE=$DEFAULT
     fi
     while [[ ! ${VALUE:-} =~ ^([yY]([eE][sS])?|[nN][oO]?)$ ]]; do
-        printf '%s ' "\
-$LK_BOLD${LK_CONSOLE_PREFIX_COLOUR-$LK_CONSOLE_COLOUR} :: \
-$LK_RESET$LK_BOLD${PROMPT[*]//$'\n'/$'\n    '}$LK_RESET" >&"${_LK_FD:-2}"
-        read -re "${@:3}" VALUE && [ -n "$VALUE" ] || VALUE=$DEFAULT
+        read -rep "$(_lk_console_get_prompt) " "${@:3}" VALUE \
+            2>&"${_LK_FD:-2}" && [ -n "$VALUE" ] || VALUE=$DEFAULT
     done
     [[ $VALUE =~ ^[yY]([eE][sS])?$ ]]
 }
@@ -1466,8 +1519,13 @@ function lk_dirs_exist() {
     lk_test_many "test -d" "$@"
 }
 
+# lk_remove_false TEST_COMMAND ARRAY
+#
+# Reduce ARRAY to each element where TEST_COMMAND returns true after replacing
+# the string `{}' in TEST_COMMAND with the element's value.
 function lk_remove_false() {
     local _LK_ARRAY="$2[@]" _LK_TEMP_ARRAY _LK_TEST _LK_KEY
+    lk_is_identifier "$2" || lk_warn "not a valid identifier: $2" || return
     _LK_TEMP_ARRAY=(${!_LK_ARRAY+"${!_LK_ARRAY}"})
     _LK_TEST="$(lk_replace '{}' '${_LK_TEMP_ARRAY[$_LK_KEY]}' "$1")"
     for _LK_KEY in "${!_LK_TEMP_ARRAY[@]}"; do
@@ -1477,21 +1535,23 @@ function lk_remove_false() {
 }
 
 # lk_remove_missing ARRAY
-#   Reduce ARRAY to elements that are paths to existing files or directories.
+#
+# Remove paths to missing files from ARRAY.
 function lk_remove_missing() {
     lk_remove_false "[ -e \"{}\" ]" "$1"
 }
 
 # lk_resolve_files ARRAY
-#   Remove paths to missing files from ARRAY, then resolve remaining paths to
-#   absolute file names and remove any duplicates.
+#
+# Remove paths to missing files from ARRAY, then resolve remaining paths to
+# absolute file names and remove any duplicates.
 function lk_resolve_files() {
     local _LK_ARRAY="$1[@]" _LK_TEMP_ARRAY
-    lk_is_identifier "$1" || lk_warn "not a valid identifier: $1" || return
     lk_remove_missing "$1" || return
     _LK_TEMP_ARRAY=(${!_LK_ARRAY+"${!_LK_ARRAY}"})
     lk_mapfile -z <(
         [ ${#_LK_TEMP_ARRAY[@]} -eq 0 ] ||
+            # TODO: add alternative implementation if realpath is missing
             gnu_realpath -ez "${_LK_TEMP_ARRAY[@]}" | sort -zu
     ) "$1"
 }
@@ -1532,6 +1592,18 @@ function lk_is_identifier() {
 
 function lk_is_declared() {
     declare -p "$1" >/dev/null 2>&1
+}
+
+function lk_is_readonly() {
+    (unset "$1" 2>/dev/null) || return 0
+    false
+}
+
+function lk_maybe_set_readonly() {
+    lk_is_readonly "$1" || {
+        lk_is_identifier "$1" || lk_warn "not a valid identifier: $1" || return
+        eval "$1=$2"
+    }
 }
 
 function lk_get_var_names() {
@@ -1827,6 +1899,7 @@ function lk_console_file() {
         lk_maybe_sudo test -r "$ORIG_FILE" || ORIG_FILE=
     lk_console_item "$BOLD_COLOUR$FILE$LK_RESET" "$(
         if [ -n "$ORIG_FILE" ]; then
+            # TODO: add alternative implementation if GNU diff is missing
             ! lk_maybe_sudo gnu_diff --unified --color=always \
                 "$ORIG_FILE" "$FILE" || echo "$FILE_COLOUR<unchanged>"
         else
@@ -1868,7 +1941,7 @@ _LK_INCLUDES=(
 
 # shellcheck disable=SC2034
 case "${LK_COLOUR:-${colour:-static}}" in
-generate)
+dynamic)
     eval "$(lk_get_colours)"
     ;;
 off)
@@ -1899,36 +1972,36 @@ off)
     LK_RESET=
     ;;
 *)
-    LK_BLACK=$'\E[30m'
-    LK_RED=$'\E[31m'
-    LK_GREEN=$'\E[32m'
-    LK_YELLOW=$'\E[33m'
-    LK_BLUE=$'\E[34m'
-    LK_MAGENTA=$'\E[35m'
-    LK_CYAN=$'\E[36m'
-    LK_WHITE=$'\E[37m'
-    LK_GREY=$'\E[90m'
-    LK_BLACK_BG=$'\E[40m'
-    LK_RED_BG=$'\E[41m'
-    LK_GREEN_BG=$'\E[42m'
-    LK_YELLOW_BG=$'\E[43m'
-    LK_BLUE_BG=$'\E[44m'
-    LK_MAGENTA_BG=$'\E[45m'
-    LK_CYAN_BG=$'\E[46m'
-    LK_WHITE_BG=$'\E[47m'
-    LK_GREY_BG=$'\E[100m'
-    LK_BOLD=$'\E[1m'
-    LK_DIM=$'\E[2m'
-    LK_STANDOUT=$'\E[7m'
-    LK_STANDOUT_OFF=$'\E[27m'
-    LK_WRAP=$'\E[?7h'
-    LK_WRAP_OFF=$'\E[?7l'
-    LK_RESET=$'\E(B\E[m'
+    LK_BLACK=$'\x01\E[30m\x02'
+    LK_RED=$'\x01\E[31m\x02'
+    LK_GREEN=$'\x01\E[32m\x02'
+    LK_YELLOW=$'\x01\E[33m\x02'
+    LK_BLUE=$'\x01\E[34m\x02'
+    LK_MAGENTA=$'\x01\E[35m\x02'
+    LK_CYAN=$'\x01\E[36m\x02'
+    LK_WHITE=$'\x01\E[37m\x02'
+    LK_GREY=$'\x01\E[90m\x02'
+    LK_BLACK_BG=$'\x01\E[40m\x02'
+    LK_RED_BG=$'\x01\E[41m\x02'
+    LK_GREEN_BG=$'\x01\E[42m\x02'
+    LK_YELLOW_BG=$'\x01\E[43m\x02'
+    LK_BLUE_BG=$'\x01\E[44m\x02'
+    LK_MAGENTA_BG=$'\x01\E[45m\x02'
+    LK_CYAN_BG=$'\x01\E[46m\x02'
+    LK_WHITE_BG=$'\x01\E[47m\x02'
+    LK_GREY_BG=$'\x01\E[100m\x02'
+    LK_BOLD=$'\x01\E[1m\x02'
+    LK_DIM=$'\x01\E[2m\x02'
+    LK_STANDOUT=$'\x01\E[7m\x02'
+    LK_STANDOUT_OFF=$'\x01\E[27m\x02'
+    LK_WRAP=$'\x01\E[?7h\x02'
+    LK_WRAP_OFF=$'\x01\E[?7l\x02'
+    LK_RESET=$'\x01\E(B\E[m\x02'
     ;;
 esac
 
-LK_CONSOLE_COLOUR=$LK_CYAN
-LK_SUCCESS_COLOUR=$LK_GREEN
-LK_WARNING_COLOUR=$LK_YELLOW
-LK_ERROR_COLOUR=$LK_RED
-LK_ARGV=("$@")
+lk_maybe_set_readonly LK_CONSOLE_COLOUR '$LK_CYAN'
+lk_maybe_set_readonly LK_SUCCESS_COLOUR '$LK_GREEN'
+lk_maybe_set_readonly LK_WARNING_COLOUR '$LK_YELLOW'
+lk_maybe_set_readonly LK_ERROR_COLOUR '$LK_RED'
+lk_maybe_set_readonly LK_ARGV '("$@")'

@@ -2,10 +2,10 @@
 
 set -eu
 
-lk_die() { s=$? && echo "${PREFIX-${0##*/}: }$1" >&2 &&
+lk_die() { s=$? && echo "${LK_DIE_PREFIX-${0##*/}: }$1" >&2 &&
     (return $s) && false || exit; }
 
-[ $# -ge 2 ] || PREFIX="" lk_die "\
+[ $# -ge 2 ] || LK_DIE_PREFIX='' lk_die "\
 Usage: ${0##*/} DURATION COMMAND [ARG...]"
 
 DURATION=$1

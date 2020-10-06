@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC1090,SC2001,SC2015,SC2034
+# shellcheck disable=SC1090,SC2001,SC2015,SC2016,SC2034
 
 # Elevate for access to ~root, /home/*, etc.
 [ "$EUID" -eq 0 ] || {
@@ -221,11 +221,11 @@
                 FILE_MODE=0664
             }
             cd "$LK_BASE"
-            find . -regextype posix-egrep \
+            gnu_find . -regextype posix-egrep \
                 -type d ! \( -regex '\./var/log' -prune \) \
                 ! -perm -"$DIR_MODE" -print0 |
                 gnu_xargs -0r gnu_chmod -c +"$DIR_MODE"
-            find . -regextype posix-egrep \
+            gnu_find . -regextype posix-egrep \
                 ! \( -type d -regex '\./(var/log|\.git/objects)' -prune \) \
                 -type f ! \( -regex '\./etc/[^/]+' \) \
                 ! -perm -"$FILE_MODE" -print0 |
@@ -317,7 +317,8 @@ install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
         shift
         [ -e "$FILE" ] ||
             install -m 0644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
-        lk_maybe_replace "$FILE" "$([ $# -eq 0 ] || printf "%s\n" "$@")"
+        lk_maybe_replace "$FILE" "$([ $# -eq 0 ] || printf "%s\n" "$@")" \
+            '^[[:blank:]]*($|#)'
     }
 
     for h in "${LK_HOMES[@]}"; do
@@ -361,7 +362,9 @@ install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
                 grep -q "byobu-launch" "$FILE" || {
                     lk_console_detail "Adding byobu-launch to" "$FILE"
                     lk_maybe_add_newline "$FILE" &&
-                        printf '_byobu_sourced=1 . %q 2>/dev/null || true\n' \
+                        printf '%s_byobu_sourced=1 . %q 2>/dev/null || true\n' \
+                            "$(! lk_is_macos ||
+                                echo '[ ! "$SSH_CONNECTION" ] || ')" \
                             "$BYOBU_PATH" >>"$FILE"
                 }
             done

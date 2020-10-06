@@ -24,6 +24,9 @@ PAC_KEEP=(
 
     #
     woeusb
+
+    #
+    raidar
 )
 
 PAC_REMOVE=(
