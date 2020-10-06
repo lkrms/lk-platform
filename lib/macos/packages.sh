@@ -14,6 +14,7 @@ HOMEBREW_TAPS=(
 HOMEBREW_FORMULAE=(
     # GNU packages
     coreutils
+    diffutils
     findutils
     gawk
     gnu-getopt
