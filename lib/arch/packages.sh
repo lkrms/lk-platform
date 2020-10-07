@@ -223,6 +223,7 @@ lk_is_virtual && {
         galculator
         geany
         gimp
+        gnome-font-viewer
         libreoffice-fresh
         samba
 
