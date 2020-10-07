@@ -8,9 +8,9 @@ function lk_validate_status() {
     return "${LK_VALIDATE_STATUS:-0}"
 }
 
-# shellcheck disable=SC2034,SC2059
+# shellcheck disable=SC2059
 function _lk_validate_fail() {
-    printf "$@"
+    printf "$1" "${LK_VALIDATE_FIELD_NAME:-$2}" "${@:3}"
     LK_VALIDATE_STATUS=1
     false
 }
