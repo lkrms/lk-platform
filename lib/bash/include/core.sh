@@ -181,7 +181,7 @@ function _lk_caller() {
         [ -z "${FUNC:-}" ] ||
         [ "$FUNC" = main ] ||
         CALLER+=("$FUNC$DIM()$LK_RESET")
-    lk_implode "$DIM->$LK_RESET" "${CALLER[@]}"
+    lk_implode "$DIM->$LK_RESET" CALLER
 }
 
 # lk_warn [MESSAGE]
@@ -621,16 +621,19 @@ function lk_echo_array() {
 }
 
 function lk_implode() {
-    local DELIM="$1"
-    DELIM="${DELIM//\\/\\\\}"
-    DELIM="${DELIM//%/%%}"
-    shift
-    [ $# -eq 0 ] || {
-        printf '%s' "$1"
-        shift
-    }
-    [ $# -eq 0 ] ||
-        printf -- "$DELIM%s" "$@"
+    local _LK_DELIM=$1 _LK_ARRAY="$2[@]" _LK_TEMP_ARRAY
+    _LK_DELIM=${_LK_DELIM//\\/\\\\}
+    _LK_DELIM=${_LK_DELIM//%/%%}
+    _LK_TEMP_ARRAY=(${!_LK_ARRAY+"${!_LK_ARRAY}"})
+    [ ${#_LK_TEMP_ARRAY[@]} -eq 0 ] ||
+        printf '%s' "${_LK_TEMP_ARRAY[0]}"
+    [ ${#_LK_TEMP_ARRAY[@]} -le 1 ] ||
+        printf -- "$_LK_DELIM%s" "${_LK_TEMP_ARRAY[@]:1}"
+}
+
+function lk_implode_args() {
+    local ARGS=("${@:2}")
+    lk_implode "$1" ARGS
 }
 
 # lk_in_array value array_name

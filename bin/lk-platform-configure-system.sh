@@ -166,7 +166,7 @@
             lk_console_item "Running in $LK_BASE:" \
                 "$(lk_echo_array CONFIG_COMMANDS)"
             sudo -Hu "$REPO_OWNER" \
-                bash -c "$(lk_implode ' && ' "${CONFIG_COMMANDS[@]}")"
+                bash -c "$(lk_implode ' && ' CONFIG_COMMANDS)"
         fi
         BRANCH=$(git rev-parse --abbrev-ref HEAD) && [ "$BRANCH" != "HEAD" ] ||
             lk_die "no branch checked out: $LK_BASE"

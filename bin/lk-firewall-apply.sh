@@ -33,7 +33,7 @@ if [ -n "${ACCEPT_OUTPUT_CHAIN:-}" ]; then
     )
     [ "${#OUTPUT_ALLOW[@]}" -eq 0 ] ||
         lk_console_detail "Added to whitelist from firewall.conf:" \
-            "$(lk_implode $'\n' "${OUTPUT_ALLOW[@]}")"
+            "$(lk_implode $'\n' OUTPUT_ALLOW)"
     if lk_is_ubuntu; then
         APT_SOURCE_HOSTS=($(
             grep -Eo "^[^#]+${S}https?://[^/[:blank:]]+" "/etc/apt/sources.list" |
@@ -41,7 +41,7 @@ if [ -n "${ACCEPT_OUTPUT_CHAIN:-}" ]; then
         )) || lk_die "no active package sources in /etc/apt/sources.list"
         OUTPUT_ALLOW+=("${APT_SOURCE_HOSTS[@]}")
         lk_console_detail "Added to whitelist from APT source list:" \
-            "$(lk_implode $'\n' "${APT_SOURCE_HOSTS[@]}")"
+            "$(lk_implode $'\n' APT_SOURCE_HOSTS)"
     fi
     # TODO: add temporary entry for api.github.com to /etc/hosts and flush
     # chain with static hosts first (otherwise api.github.com may be

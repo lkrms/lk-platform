@@ -574,7 +574,7 @@ function lk_certbot_install() {
         --no-eff-email \
         --"${LK_CERTBOT_PLUGIN:-apache}" \
         ${LK_CERTBOT_OPTIONS[@]:+"${LK_CERTBOT_OPTIONS[@]}"} \
-        --domains "$(lk_implode "," "$@")"
+        --domains "$(lk_implode_args "," "$@")"
 }
 
 # lk_apply_setting FILE SETTING VAL [DELIM] [COMMENT_CHARS] [SPACES]
