@@ -114,7 +114,10 @@ exec 6>&1 7>&2
 exec > >(tee "$LOG_FILE") 2>&1
 trap exit_trap EXIT
 
-for FILE_PATH in /lib/bash/core.sh /lib/bash/arch.sh /lib/arch/packages.sh; do
+for FILE_PATH in \
+    /lib/bash/include/core.sh \
+    /lib/bash/include/arch.sh \
+    /lib/arch/include/packages.sh; do
     FILE="$_DIR/${FILE_PATH##*/}"
     URL="https://raw.githubusercontent.com/lkrms/lk-platform/$LK_PLATFORM_BRANCH$FILE_PATH"
     [ -e "$FILE" ] ||

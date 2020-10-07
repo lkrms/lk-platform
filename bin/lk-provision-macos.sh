@@ -58,17 +58,17 @@ function exit_trap() {
         fi
     fi
 
-    if [ -f "$LK_BASE/lib/bash/core.sh" ]; then
-        . "$LK_BASE/lib/bash/core.sh"
+    if [ -f "$LK_BASE/lib/bash/include/core.sh" ]; then
+        . "$LK_BASE/lib/bash/include/core.sh"
         lk_include provision macos
         ${CONTRIB_PACKAGES_FILE:+. "$LK_BASE/$CONTRIB_PACKAGES_FILE"}
     else
         echo "Downloading dependencies to: $SCRIPT_DIR" >&2
         for FILE_PATH in \
             ${CONTRIB_PACKAGES_FILE:+"/$CONTRIB_PACKAGES_FILE"} \
-            /lib/bash/core.sh \
-            /lib/bash/provision.sh \
-            /lib/bash/macos.sh; do
+            /lib/bash/include/core.sh \
+            /lib/bash/include/provision.sh \
+            /lib/bash/include/macos.sh; do
             FILE=$SCRIPT_DIR/${FILE_PATH##*/}
             URL=https://raw.githubusercontent.com/lkrms/lk-platform/$LK_PLATFORM_BRANCH$FILE_PATH
             curl --retry 8 --fail --output "$FILE" "$URL" || {

@@ -37,7 +37,7 @@ eval "$(
     )
 )"
 
-. "$LK_BASE/lib/bash/core.sh"
+. "$LK_BASE/lib/bash/include/core.sh"
 
 function _lk_bash_completion() {
     local FILE

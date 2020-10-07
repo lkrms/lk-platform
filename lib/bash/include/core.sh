@@ -120,7 +120,7 @@ function lk_include() {
     local i FILE
     for i in "$@"; do
         ! lk_in_array "$i" _LK_INCLUDES || continue
-        FILE=${LK_INST:-$LK_BASE}/lib/bash/$i.sh
+        FILE=${LK_INST:-$LK_BASE}/lib/bash/include/$i.sh
         [ -r "$FILE" ] || lk_warn "$FILE: file not found" || return
         # shellcheck disable=SC1090
         . "$FILE" || return
@@ -1952,10 +1952,7 @@ function lk_make_iso() {
 
 set -o pipefail
 
-_LK_INCLUDES=(
-    core
-    ${_LK_INCLUDES[@]+"${_LK_INCLUDES[@]}"}
-)
+_LK_INCLUDES=(core)
 
 [ -n "${LK_COLOUR:-${colour:-}}" ] ||
     [ -t 1 ] ||

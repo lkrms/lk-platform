@@ -39,7 +39,7 @@ lk_die() { s=$? && echo "${BASH_SOURCE[0]}: $1" >&2 &&
     )
 )"
 
-colour=dynamic . "${LK_INST:-$LK_BASE}/lib/bash/core.sh"
+colour=dynamic . "${LK_INST:-$LK_BASE}/lib/bash/include/core.sh"
 
 lk_include assert $(
     include=${include:-}
