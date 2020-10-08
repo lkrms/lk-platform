@@ -2,6 +2,76 @@
 
 # shellcheck disable=SC2015
 
+function lk_git_quiet() {
+    [ "${LK_GIT_QUIET:-0}" -ne 0 ]
+}
+
+function lk_git_is_in_work_tree() {
+    local RESULT
+    RESULT=$(cd "${1:-.}" &&
+        git rev-parse --is-inside-work-tree 2>/dev/null) &&
+        lk_is_true "$RESULT"
+}
+
+# lk_git_get_repos ARRAY [DIR...]
+#
+# Populate ARRAY with the path to the top-level working directory of each git
+# repository found in DIR or the current directory.
+function lk_git_get_repos() {
+    local _LK_GIT_REPO _LK_GIT_ROOT
+    lk_is_identifier "$1" || lk_warn "not a valid identifier: $1" || return
+    [ $# -lt 2 ] || for _LK_GIT_ROOT in "${@:2}"; do
+        [ "${_LK_GIT_ROOT:0:1}" != - ] ||
+            lk_warn "illegal directory: $_LK_GIT_ROOT" || return
+    done
+    eval "$1=()"
+    while IFS= read -rd $'\0' _LK_GIT_REPO; do
+        lk_git_is_in_work_tree "$_LK_GIT_REPO" || continue
+        eval "$1+=(\"\$_LK_GIT_REPO\")"
+    done < <(
+        ROOTS=(.)
+        [ $# -lt 2 ] || ROOTS=("${@:2}")
+        find -L "${ROOTS[@]}" \
+            -type d -exec test -d "{}/.git" \; -print0 -prune |
+            sort -z
+    )
+}
+
+function lk_git_with_repos() {
+    local LK_USAGE REPO ERROR_COUNT=0 \
+        REPO_COMMAND=("$@") REPOS=(${LK_GIT_REPOS+"${LK_GIT_REPOS[@]}"})
+    # shellcheck disable=SC2034
+    LK_USAGE="\
+Usage: $(lk_myself -f) COMMAND [ARG...]
+
+Run COMMAND in the top-level directory of each repo in the current directory."
+    [ $# -gt 0 ] || lk_usage || return
+    lk_git_quiet || lk_console_message "Finding repositories"
+    [ ${#REPOS[@]} -gt 0 ] || lk_git_get_repos REPOS
+    [ ${#REPOS[@]} -gt 0 ] || lk_warn "no repos found" || return
+    lk_resolve_files REPOS || return
+    lk_git_quiet ||
+        LK_CONSOLE_NO_FOLD=1 lk_console_detail "Command:" "${REPO_COMMAND[*]}"
+    lk_git_quiet ||
+        lk_echo_array REPOS | lk_console_detail_list "Repositories:" repo repos
+    lk_git_quiet || lk_confirm "Proceed?" Y || return
+    for REPO in "${REPOS[@]}"; do
+        lk_git_quiet || lk_console_item "Processing" "$REPO"
+        (cd "$REPO" &&
+            "${REPO_COMMAND[@]}") || ((++ERROR_COUNT))
+    done
+    lk_git_quiet || {
+        [ "$ERROR_COUNT" -eq 0 ] &&
+            lk_console_success "${REPO_COMMAND[*]}" \
+                "executed without error in ${#REPOS[@]} $(lk_maybe_plural \
+                    ${#REPOS[@]} repository repositories)" ||
+            lk_console_error0 "${REPO_COMMAND[*]}" \
+                "failed in $ERROR_COUNT of ${#REPOS[@]} $(lk_maybe_plural \
+                    ${#REPOS[@]} repository repositories)"
+    }
+    [ "$ERROR_COUNT" -eq 0 ]
+}
+
 # lk_git_ancestors REF...
 #
 # Output lines with tab-separated fields BEHIND, HASH, and REF, sorted

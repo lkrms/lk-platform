@@ -29,7 +29,7 @@ function lk_mediainfo_check() {
     done < <(
         [ $# -gt 0 ] &&
             printf '%s\0' "$@" ||
-            find . -type f ! -name '.*' -print0
+            find -L . -type f ! -name '.*' -print0
     )
     lk_is_source_file_running && ! lk_verbose 2 || {
         lk_console_message \
