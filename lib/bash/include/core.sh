@@ -769,7 +769,7 @@ function lk_log_create_file() {
                 -m "$(lk_pad_zero 4 "${LK_LOG_DIR_MODE:-0777}")" \
                 "$LOG_DIR" 2>/dev/null ||
             continue
-        LOG_PATH=$LOG_DIR/${0##*/}-$UID.log
+        LOG_PATH=$LOG_DIR/${LK_LOG_BASENAME:-${0##*/}}-$UID.log
         if [ -f "$LOG_PATH" ]; then
             [ -w "$LOG_PATH" ] || {
                 lk_elevate_if_error chmod \

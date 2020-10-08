@@ -2,6 +2,35 @@
 
 # shellcheck disable=SC2015
 
+# lk_openconnect USER HOST [ROUTE...]
+function lk_openconnect() {
+    local VPN_USER=$1 VPN_HOST=$2 VPN_PASSWD COMMAND LOG_FILE
+    shift 2 || return
+    ! pgrep -x openconnect >/dev/null ||
+        lk_warn "openconnect is already running" ||
+        return
+    VPN_PASSWD=$(lk_secret \
+        "$VPN_USER@$VPN_HOST" \
+        "openconnect password for $VPN_USER@$VPN_HOST" \
+        openconnect) &&
+        [ -n "$VPN_PASSWD" ] ||
+        lk_warn "password required" ||
+        return
+    COMMAND=(
+        openconnect
+        --background
+        --script "vpn-slice --verbose --dump ${*:---route-internal}"
+        --verbose
+        --dump-http-traffic
+        --passwd-on-stdin
+        --protocol "${LK_OPENCONNECT_PROTOCOL:-gp}"
+        --user "$VPN_USER"
+        "$VPN_HOST"
+    )
+    LOG_FILE=$(LK_LOG_BASENAME=openconnect lk_log_create_file) || return
+    echo "$VPN_PASSWD" | lk_elevate "${COMMAND[@]}" >>"$LOG_FILE" 2>&1
+}
+
 function lk_mediainfo_check() {
     local FILE VALUE COUNT \
         LK_MEDIAINFO_LABEL=${LK_MEDIAINFO_LABEL:-} \
