@@ -33,7 +33,7 @@ function lk_prompt_command() {
             STR=" after ${SECS}s "
             PS+=("$STR$LK_RESET$LK_DIM")
             ((LEN = $(tput cols 2>/dev/null) - LEN - ${#STR})) || true
-            [ "$LEN" -le 0 ] || PS+=("( \$(printf $(printf %q "${COMMAND:0:$LEN}")) )")
+            [ "$LEN" -le 0 ] || PS+=("( \$(printf %s $(printf %q "${COMMAND:0:$LEN}")) )")
             PS+=("$LK_RESET\n")
         fi
         LK_PROMPT_LAST_COMMAND=()

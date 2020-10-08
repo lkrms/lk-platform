@@ -28,8 +28,8 @@ DB_USER="$(lk_wp config get DB_USER)"
 DB_PASSWORD="$(lk_wp config get DB_PASSWORD)"
 DB_HOST="$(lk_wp config get DB_HOST)"
 TABLE_PREFIX="$(lk_wp_get_table_prefix)"
-_lk_write_my_cnf
-_lk_mysql_connects "$DB_NAME"
+lk_mysql_write_cnf
+lk_mysql_connects "$DB_NAME"
 
 # Retrieve particulars
 function get_state() {
@@ -123,7 +123,7 @@ lk_console_detail "Refreshing salts defined in wp-config.php"
 lk_wp config shuffle-salts
 
 lk_console_detail "Updating email addresses"
-_lk_mysql "$DB_NAME" <<SQL
+lk_mysql "$DB_NAME" <<SQL
 UPDATE ${TABLE_PREFIX}options
 SET option_value = '$ADMIN_EMAIL'
 WHERE option_name IN ('admin_email', 'woocommerce_email_from_address', 'woocommerce_stock_email_recipient');
