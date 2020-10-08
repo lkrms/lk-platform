@@ -38,14 +38,12 @@ function lk_git_get_repos() {
 }
 
 function lk_git_with_repos() {
-    local LK_USAGE REPO ERROR_COUNT=0 \
+    local REPO ERROR_COUNT=0 \
         REPO_COMMAND=("$@") REPOS=(${LK_GIT_REPOS+"${LK_GIT_REPOS[@]}"})
-    # shellcheck disable=SC2034
-    LK_USAGE="\
+    [ $# -gt 0 ] || lk_usage "\
 Usage: $(lk_myself -f) COMMAND [ARG...]
 
-Run COMMAND in the top-level directory of each repo in the current directory."
-    [ $# -gt 0 ] || lk_usage || return
+Run COMMAND at the top of each repository in the current directory." || return
     lk_git_quiet || lk_console_message "Finding repositories"
     [ ${#REPOS[@]} -gt 0 ] || lk_git_get_repos REPOS
     [ ${#REPOS[@]} -gt 0 ] || lk_warn "no repos found" || return

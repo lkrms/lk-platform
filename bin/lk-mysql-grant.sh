@@ -65,6 +65,6 @@ lk_elevate mysql ${LK_MYSQL_USERNAME+-u"$LK_MYSQL_USERNAME"} <<EOF
 CREATE DATABASE IF NOT EXISTS \`$1\`;
 
 GRANT ALL PRIVILEGES ON \`$1\`.*
-TO '$(lk_escape "$2" "\\" "'")'@'$(lk_escape "$HOST" "\\" "'")'
-IDENTIFIED BY '$(lk_escape "$3" "\\" "'")';
+TO '$(lk_mysql_escape_sql "$2")'@'$(lk_mysql_escape_sql "$HOST")'
+IDENTIFIED BY '$(lk_mysql_escape_sql "$3")';
 EOF

@@ -282,7 +282,7 @@ function lk_wp_db_set_local() {
         lk_mysql_write_cnf \
             "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD" "$LOCAL_DB_HOST" || return
         # Keep provided credentials if they work
-        ! lk_mysql_connects "" 2>/dev/null || return 0
+        ! lk_mysql_connects 2>/dev/null || return 0
     fi
     if [[ $SITE_ROOT =~ ^/srv/www/([^./]+)/public_html$ ]]; then
         DEFAULT_IDENTIFIER=${BASH_REMATCH[1]}
@@ -304,7 +304,7 @@ function lk_wp_db_set_local() {
     lk_mysql_write_cnf \
         "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD" "$LOCAL_DB_HOST" || return
     # Try existing password with new LOCAL_DB_USER before changing password
-    lk_mysql_connects "" 2>/dev/null || {
+    lk_mysql_connects 2>/dev/null || {
         LOCAL_DB_PASSWORD=$(openssl rand -base64 32) &&
             lk_mysql_write_cnf \
                 "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD" "$LOCAL_DB_HOST"

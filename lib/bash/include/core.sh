@@ -139,7 +139,7 @@ function lk_is_source_file_running() {
 # call stack, where stack depth 0 (the default) represents the invoking
 # function, stack depth 1 represents the invoking function's caller, and so on.
 function lk_myself() {
-    local FUNC=
+    local EXIT_STATUS=$? FUNC=
     [ "${1:-}" != -f ] || {
         FUNC=1
         shift
@@ -149,6 +149,7 @@ function lk_myself() {
     else
         echo "${FUNCNAME[$((1 + ${1:-0}))]:-${0##*/}}"
     fi
+    return "$EXIT_STATUS"
 }
 
 # shellcheck disable=SC2120
