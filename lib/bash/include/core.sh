@@ -207,7 +207,8 @@ function _lk_usage_format() {
 function lk_usage() {
     local EXIT_STATUS=$? MESSAGE=${1:-${LK_USAGE:-}}
     [ -z "$MESSAGE" ] || MESSAGE=$(_lk_usage_format "$MESSAGE")
-    lk_console_log "${MESSAGE:-$(_lk_caller): invalid arguments}"
+    LK_CONSOLE_NO_FOLD=1 \
+        lk_console_log "${MESSAGE:-$(_lk_caller): invalid arguments}"
     return "$EXIT_STATUS"
 }
 
@@ -885,7 +886,8 @@ function lk_console_message() {
         INDENT=0 SPACES LENGTH COLOUR
     shift
     [ "${MESSAGE//$'\n'/}" = "$MESSAGE" ] &&
-        [ "$(lk_output_length "$PREFIX$MESSAGE")" -le 80 ] || {
+        { lk_is_true "${LK_CONSOLE_NO_FOLD:-}" ||
+            [ "$(lk_output_length "$PREFIX$MESSAGE")" -le 80 ]; } || {
         SPACES=$'\n'"$(lk_repeat " " ${#PREFIX})"
         [ "${MESSAGE//$'\n'/}" != "$MESSAGE" ] ||
             ! lk_command_exists fold ||
@@ -901,8 +903,9 @@ function lk_console_message() {
             # line with a space between
             [ "${MESSAGE2//$'\n'/}" = "$MESSAGE2" ] &&
                 [ "$INDENT" -eq 0 ] &&
-                LENGTH=$(lk_output_length "$PREFIX$MESSAGE $MESSAGE2") &&
-                [ "$LENGTH" -le 80 ] &&
+                { lk_is_true "${LK_CONSOLE_NO_FOLD:-}" ||
+                    { LENGTH=$(lk_output_length "$PREFIX$MESSAGE $MESSAGE2") &&
+                        [ "$LENGTH" -le 80 ]; }; } &&
                 MESSAGE2=" $MESSAGE2" || {
                 # Otherwise:
                 # - If they both span multiple lines, or MESSAGE2 is a
@@ -1285,32 +1288,28 @@ function lk_uri_parts() {
     done
 }
 
-# lk_get_uris [file_path...]
-#   Match and output URIs ("scheme://host" at minimum) in standard input or
-#   each FILE_PATH.
+# lk_get_uris [FILE_PATH...]
+#
+# Match and output URIs ("scheme://host" at minimum) in each FILE_PATH or input.
 function lk_get_uris() {
     local EXIT_STATUS=0 URI_REGEX_REQ_SCHEME_HOST
     eval "$(lk_get_regex URI_REGEX_REQ_SCHEME_HOST)"
-    grep -Eo "\\b$URI_REGEX_REQ_SCHEME_HOST\\b" "$@" || EXIT_STATUS="$?"
+    grep -Eo "\\b$URI_REGEX_REQ_SCHEME_HOST\\b" "$@" || EXIT_STATUS=$?
     # exit 0 unless there's an actual error
     [ "$EXIT_STATUS" -eq 0 ] || [ "$EXIT_STATUS" -eq 1 ]
 }
 
-# lk_wget_uris url
-#   Match and output URIs ("scheme://host" at minimum) in the file downloaded
-#   from URL. URIs are converted during download using `wget --convert-links`.
+# lk_wget_uris URL
+#
+# Match and output URIs ("scheme://host" at minimum) in the file downloaded from
+# URL. URIs are converted during download using `wget --convert-links`.
 function lk_wget_uris() {
     local TEMP_FILE
-    # without --output-document, --convert-links doesn't work
+    # --convert-links is disabled if wget uses standard output
     TEMP_FILE="$(lk_mktemp_file)" &&
-        lk_delete_on_exit "$TEMP_FILE" &&
         wget --quiet --convert-links --output-document "$TEMP_FILE" "$1" ||
         return
     lk_get_uris "$TEMP_FILE"
-}
-
-function lk_decode_uri() {
-    echo -e "${1//%/\\x}"
 }
 
 # lk_download file_uri...
