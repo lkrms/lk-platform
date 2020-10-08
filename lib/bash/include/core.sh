@@ -1156,6 +1156,24 @@ function lk_verbose() {
     [ "${LK_VERBOSE:-0}" -ge "${1:-1}" ]
 }
 
+# lk_clip
+#
+# Copy input to the user's clipboard if possible, otherwise print it out.
+function lk_clip() {
+    local OUTPUT COMMAND \
+        LK_CONSOLE_SECONDARY_COLOUR=${LK_CONSOLE_SECONDARY_COLOUR:-$LK_YELLOW}
+    OUTPUT=$(cat)
+    if COMMAND=$(lk_command_first_existing xclip pbcopy) &&
+        echo -n "$OUTPUT" | "$COMMAND" >/dev/null 2>&1; then
+        LK_CONSOLE_INDENT=0 \
+            LK_CONSOLE_NO_FOLD=1 \
+            lk_console_item "Copied to clipboard:" $'\n'"$OUTPUT"
+    else
+        lk_console_error "Unable to copy output to clipboard"
+        echo -n "$OUTPUT"
+    fi
+}
+
 # lk_add_file_suffix file_path suffix [ext]
 #   Add SUFFIX to FILE_PATH without changing FILE_PATH's extension.
 #   Use EXT for special extensions like ".tar.gz".
