@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2015,SC2029
+# shellcheck disable=SC2015,SC2029,SC2120
 
 lk_mysql_escape_cnf() {
     lk_escape "$1" "\\" '"'
@@ -32,6 +32,50 @@ function lk_mysql() {
 
 function lk_mysql_connects() {
     lk_mysql --execute="\\q" ${1+"$1"}
+}
+
+# lk_mysql_dump DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]
+function lk_mysql_dump() {
+    local DB_NAME=$1 DB_USER=${2-${DB_USER-}} DB_PASSWORD=${3-${DB_PASSWORD-}} \
+        DB_HOST=${4-${DB_HOST-${LK_MYSQL_HOST:-localhost}}} \
+        LK_MY_CNF OUTPUT_FILE EXIT_STATUS=0
+    [ $# -ge 1 ] || lk_usage "\
+Usage: $(lk_myself -f) DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
+        return
+    [ -n "$DB_NAME" ] || lk_warn "no database name" || return
+    lk_console_message "Creating temporary mysqldump configuration file"
+    lk_console_detail "Adding credentials for user" "$DB_USER"
+    lk_console_detail "Writing" ~/.lk_mysqldump.cnf
+    LK_MY_CNF=~/.lk_mysqldump.cnf
+    lk_mysql_write_cnf &&
+        lk_mysql_connects "$DB_NAME" 2>/dev/null ||
+        lk_warn "database connection failed" || return
+    [ ! -t 1 ] || {
+        OUTPUT_FILE=~/$DB_HOST-$DB_NAME-$(lk_date_ymdhms).sql.gz
+        exec 6>&1 >"$OUTPUT_FILE"
+    }
+    lk_console_message "Dumping database"
+    lk_console_detail "Database:" "$DB_NAME"
+    lk_console_detail "Host:" "$DB_HOST"
+    [ -z "${OUTPUT_FILE:-}" ] ||
+        lk_console_detail "Writing compressed SQL to" "$OUTPUT_FILE"
+    mysqldump \
+        --defaults-file=~/.lk_mysqldump.cnf \
+        --single-transaction \
+        --skip-lock-tables \
+        "$DB_NAME" |
+        gzip |
+        pv --force ||
+        EXIT_STATUS=$?
+    [ -z "${OUTPUT_FILE:-}" ] || exec 1>&6 6>&-
+    lk_console_message "Deleting mysqldump configuration file"
+    rm -f ~/.lk_mysqldump.cnf &&
+        lk_console_detail "Deleted" ~/.lk_mysqldump.cnf ||
+        lk_console_warning0 "Error deleting" ~/.lk_mysqldump.cnf
+    [ "$EXIT_STATUS" -eq 0 ] &&
+        lk_console_success "Database dump completed successfully" ||
+        lk_console_error0 "Database dump failed"
+    return "$EXIT_STATUS"
 }
 
 # lk_mysql_dump_remote SSH_HOST DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]
