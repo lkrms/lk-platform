@@ -204,16 +204,14 @@ function lk_wp_db_dump_remote() {
     local REMOTE_PATH=${2:-public_html} WP_CONFIG DB_CONFIG \
         DB_NAME=${DB_NAME:-} DB_USER=${DB_USER:-} \
         DB_PASSWORD=${DB_PASSWORD:-} DB_HOST=${DB_HOST:-} \
-        OUTPUT_FILE EXIT_STATUS=0
+        OUTPUT_FILE
     [ -n "${1:-}" ] || lk_warn "no ssh host" || return
-    [ ! -t 1 ] || [ -w "$PWD" ] ||
-        lk_warn "cannot write to current directory" || return
+    REMOTE_PATH=${REMOTE_PATH%/}
     lk_console_message "Preparing to dump remote WordPress database"
     [ -n "$DB_NAME" ] &&
         [ -n "$DB_USER" ] &&
         [ -n "$DB_PASSWORD" ] &&
         [ -n "$DB_HOST" ] || {
-        REMOTE_PATH=${REMOTE_PATH%/}
         lk_console_message "Getting credentials"
         lk_console_detail "Retrieving" "$1:$REMOTE_PATH/wp-config.php"
         WP_CONFIG=$(ssh "$1" cat "$REMOTE_PATH/wp-config.php") || return
@@ -221,33 +219,13 @@ function lk_wp_db_dump_remote() {
         DB_CONFIG=$(lk_wp_db_config <(cat <<<"$WP_CONFIG")) || return
         . /dev/stdin <<<"$DB_CONFIG" || return
     }
-    lk_console_message "Creating temporary mysqldump configuration file"
-    lk_console_detail "Adding credentials for user" "$DB_USER"
-    lk_console_detail "Writing" "$1:.lk_mysqldump.cnf"
-    lk_mysql_get_cnf | ssh "$1" "bash -c 'cat >\".lk_mysqldump.cnf\"'" || return
-    [ ! -t 1 ] || {
-        OUTPUT_FILE=./$DB_NAME-$1-$(lk_date_ymdhms).sql.gz
-        exec 6>&1 >"$OUTPUT_FILE"
-    }
-    lk_console_message "Dumping remote database"
-    lk_console_detail "Database:" "$DB_NAME"
-    lk_console_detail "Host:" "$DB_HOST"
-    [ -z "${OUTPUT_FILE:-}" ] ||
-        lk_console_detail "Writing compressed SQL to" "$OUTPUT_FILE"
-    ssh "$1" "bash -c '\
-mysqldump --defaults-file=.lk_mysqldump.cnf \
---single-transaction --skip-lock-tables \"\$1\" | gzip; \
-exit \${PIPESTATUS[0]}' bash $(printf '%q' "$DB_NAME")" | pv --force ||
-        EXIT_STATUS=$?
-    [ -z "${OUTPUT_FILE:-}" ] || exec 1>&6 6>&-
-    lk_console_message "Deleting mysqldump configuration file"
-    ssh "$1" "bash -c 'rm -f .lk_mysqldump.cnf'" &&
-        lk_console_detail "Deleted" "$1:.lk_mysqldump.cnf" ||
-        lk_console_warning0 "Error deleting" "$1:.lk_mysqldump.cnf"
-    [ "$EXIT_STATUS" -eq 0 ] &&
-        lk_console_success "Database dump completed successfully" ||
-        lk_console_error0 "Database dump failed"
-    return "$EXIT_STATUS"
+    if [ ! -t 1 ]; then
+        lk_mysql_dump_remote "$1" "$DB_NAME"
+    else
+        OUTPUT_FILE=~/$1-${REMOTE_PATH//\//_}-$(lk_date_ymdhms).sql.gz
+        lk_console_item "Initiating MySQL dump to" "$OUTPUT_FILE"
+        lk_mysql_dump_remote "$1" "$DB_NAME" >"$OUTPUT_FILE"
+    fi
 }
 
 # lk_wp_db_dump [SITE_ROOT]
