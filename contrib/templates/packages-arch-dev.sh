@@ -122,6 +122,7 @@ PACMAN_PACKAGES+=(
     flameshot
     freerdp
     ghostwriter
+    gnome-characters
     gucharmap
     inkscape
     keepassxc
@@ -205,6 +206,7 @@ PACMAN_PACKAGES+=(
 )
 
 AUR_PACKAGES+=(
+    emote
     espanso
     masterpdfeditor-free
     pencil
