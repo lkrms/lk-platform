@@ -253,8 +253,8 @@ function _lk_regex_process() {
 
 # lk_get_regex [REGEX_NAME...]
 #
-# Output newline-separated Bash-compatible variable assignments for all
-# available regular expressions or for each REGEX_NAME.
+# Output Bash-compatible variable assignments for all available regular
+# expressions or for each REGEX_NAME.
 #
 # shellcheck disable=SC2034
 function lk_get_regex() {
@@ -738,6 +738,30 @@ function lk_mapfile() {
 
 function lk_has_arg() {
     lk_in_array "$1" "${LK_ARG_ARRAY:-LK_ARGV}"
+}
+
+# lk_get_outputs_of COMMAND [ARG...]
+#
+# Execute COMMAND, output Bash-compatible code that assigns _STDOUT and _STDERR
+# to COMMAND's respective outputs, and exit with COMMAND's exit status.
+function lk_get_outputs_of() {
+    local SH EXIT_STATUS
+    SH=$(
+        unset _LK_FD
+        DIR=$(lk_mktemp_dir) || exit
+        STDOUT=$DIR/out
+        STDERR=$DIR/err
+        "$@" >"$STDOUT" 2>"$STDERR" || EXIT_STATUS=$?
+        _STDOUT=$(cat "$STDOUT") || _STDOUT="<unknown>"
+        _STDERR=$(cat "$STDERR") || _STDERR="<unknown>"
+        rm -Rf -- "$DIR" >/dev/null 2>&1 || true
+        printf '%s=%q\n' \
+            "${LK_OUTPUTS_PREFIX-_}STDOUT" "$_STDOUT" \
+            "${LK_OUTPUTS_PREFIX-_}STDERR" "$_STDERR"
+        exit "${EXIT_STATUS:-0}"
+    ) || EXIT_STATUS=$?
+    echo "$SH"
+    return "${EXIT_STATUS:-0}"
 }
 
 function lk_log() {
@@ -1256,8 +1280,8 @@ function lk_is_uri() {
 
 # lk_uri_parts URI [URI_COMPONENT...]
 #
-# Output newline-separated Bash-compatible variable assignments for all
-# components in URI or for each URI_COMPONENT.
+# Output Bash-compatible variable assignments for all components in URI or for
+# each URI_COMPONENT.
 #
 # URI_COMPONENT can be one of: _SCHEME, _USERNAME, _PASSWORD, _HOST, _PORT,
 # _PATH, _QUERY, _FRAGMENT, _IPV6_ADDRESS

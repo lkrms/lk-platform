@@ -112,7 +112,7 @@ function exit_trap() {
 
     lk_sudo_offer_nopasswd || true
 
-    scutil --get HostName >/dev/null 2>/dev/null ||
+    scutil --get HostName >/dev/null 2>&1 ||
         [ -z "${LK_NODE_HOSTNAME:=$(
             lk_console_read "Hostname for this system:"
         )}" ] ||
@@ -506,7 +506,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
     }
 
     if [ -e /Applications/Xcode.app ] &&
-        ! xcodebuild -license check >/dev/null 2>/dev/null; then
+        ! xcodebuild -license check >/dev/null 2>&1; then
         lk_console_message "Accepting Xcode license"
         lk_console_detail "Running:" "xcodebuild -license accept"
         sudo xcodebuild -license accept

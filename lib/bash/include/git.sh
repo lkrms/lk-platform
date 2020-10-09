@@ -38,12 +38,19 @@ function lk_git_get_repos() {
 }
 
 function lk_git_with_repos() {
-    local REPO ERROR_COUNT=0 \
-        REPO_COMMAND=("$@") REPOS=(${LK_GIT_REPOS+"${LK_GIT_REPOS[@]}"})
+    local PARALLEL REPO_COMMAND REPO ERROR_COUNT=0 \
+        REPOS=(${LK_GIT_REPOS+"${LK_GIT_REPOS[@]}"})
+    [ "${1:-}" != -p ] || {
+        ! lk_bash_at_least 4 3 || PARALLEL=1
+        shift
+    }
+    REPO_COMMAND=("$@")
     [ $# -gt 0 ] || lk_usage "\
-Usage: $(lk_myself -f) COMMAND [ARG...]
+Usage: $(lk_myself -f) [-p] COMMAND [ARG...]
 
-Run COMMAND at the top of each repository in the current directory." || return
+For each Git repository in the directory hierarchy rooted at \".\", run COMMAND in
+the working tree's top-level directory. If -p is set, process multiple
+repositories simultaneously." || return
     lk_git_quiet || lk_console_message "Finding repositories"
     [ ${#REPOS[@]} -gt 0 ] || lk_git_get_repos REPOS
     [ ${#REPOS[@]} -gt 0 ] || lk_warn "no repos found" || return
@@ -53,17 +60,53 @@ Run COMMAND at the top of each repository in the current directory." || return
     lk_git_quiet ||
         lk_echo_array REPOS | lk_console_detail_list "Repositories:" repo repos
     lk_git_quiet || lk_confirm "Proceed?" Y || return
-    for REPO in "${REPOS[@]}"; do
-        lk_git_quiet || lk_console_item "Processing" "$REPO"
-        (cd "$REPO" &&
-            "${REPO_COMMAND[@]}") || ((++ERROR_COUNT))
-    done
+    if lk_is_true "${PARALLEL:-}"; then
+        for REPO in "${REPOS[@]}"; do
+            (
+                exec 2>&4
+                cd "$REPO" || exit
+                EXIT_STATUS=0
+                SH=$(lk_get_outputs_of "${REPO_COMMAND[@]}") ||
+                    EXIT_STATUS=$?
+                eval "$SH"
+                lk_git_quiet || MESSAGE=$(
+                    unset _LK_FD
+                    {
+                        lk_console_item "Processed:" "$REPO"
+                        [ -z "$_STDOUT" ] ||
+                            LK_CONSOLE_SECONDARY_COLOUR=$LK_GREEN \
+                                lk_console_detail "Output:" \
+                                $'\n'"$_STDOUT"
+                        [ -z "$_STDERR" ] ||
+                            LK_CONSOLE_SECONDARY_COLOUR=$LK_RED \
+                                lk_console_detail "Error output:" \
+                                $'\n'"$_STDERR"
+                        [ "$EXIT_STATUS" -eq 0 ] ||
+                            lk_console_detail \
+                                "Exit status:" "$EXIT_STATUS" "$LK_BOLD$LK_RED"
+                    } 2>&1
+                )
+                # TODO: get a lock first?
+                echo "$MESSAGE" >&4
+                exit "$EXIT_STATUS"
+            ) &
+        done 4>&2 2>/dev/null
+        while [ "$(jobs -p | wc -l)" -gt 0 ]; do
+            wait -n 2>/dev/null || ((++ERROR_COUNT))
+        done
+    else
+        for REPO in "${REPOS[@]}"; do
+            lk_git_quiet || lk_console_item "Processing" "$REPO"
+            (cd "$REPO" &&
+                "${REPO_COMMAND[@]}") || ((++ERROR_COUNT))
+        done
+    fi
     lk_git_quiet || {
         [ "$ERROR_COUNT" -eq 0 ] &&
-            lk_console_success "${REPO_COMMAND[*]}" \
+            LK_CONSOLE_NO_FOLD=1 lk_console_success "${REPO_COMMAND[*]}" \
                 "executed without error in ${#REPOS[@]} $(lk_maybe_plural \
                     ${#REPOS[@]} repository repositories)" ||
-            lk_console_error0 "${REPO_COMMAND[*]}" \
+            LK_CONSOLE_NO_FOLD=1 lk_console_error0 "${REPO_COMMAND[*]}" \
                 "failed in $ERROR_COUNT of ${#REPOS[@]} $(lk_maybe_plural \
                     ${#REPOS[@]} repository repositories)"
     }
