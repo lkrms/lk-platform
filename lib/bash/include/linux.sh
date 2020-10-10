@@ -64,7 +64,7 @@ function lk_is_portable() {
 
 function _lk_lid_files() {
     (
-        shopt -s nullglob
+        shopt -s nullglob || exit
         LID_FILES=(/proc/acpi/button/lid/*/state)
         [ ${#LID_FILES[@]} -gt 0 ] || exit
         lk_echo_array LID_FILES

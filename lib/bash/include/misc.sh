@@ -72,19 +72,55 @@ function lk_mediainfo_check() {
     }
 }
 
+function lk_readynas_poweroff() {
+    local NAS_HOSTNAME=$1 NAS_USER=$2 PASSWORD URL
+    PASSWORD="${3-$(lk_secret "$NAS_USER@$NAS_HOSTNAME" \
+        "Password for $NAS_USER@$NAS_HOSTNAME" lk_readynas)}" ||
+        lk_warn "unable to retrieve password for $NAS_USER@$NAS_HOSTNAME" ||
+        return
+    URL="https://$NAS_HOSTNAME/get_handler?$(lk_implode_args "&" \
+        "PAGE=System" "OUTER_TAB=tab_shutdown" "INNER_TAB=NONE" \
+        "shutdown_option1=1" "command=poweroff" "OPERATION=set")"
+    printf -- '--%s "%s"\n' \
+        user "$(lk_escape_curl_config "$NAS_USER:$PASSWORD")" |
+        curl --config - --insecure "$URL"
+}
+
 function lk_nextcloud_get_excluded() {
     (
-        shopt -s globstar nullglob || exit
-        LIST=(
-            ~/.config/**/sync-exclude.lst
-            ~/Library/Preferences/**/sync-exclude.lst
+        shopt -s nullglob || exit
+        FILES=(
+            ~/.config/*/sync-exclude.lst
+            ~/Library/Preferences/*/sync-exclude.lst
         )
-        [ "${#LIST[@]}" -eq 1 ] ||
-            lk_warn "exactly one sync-exclude.lst required (${#LIST[@]} found)" ||
-            return
-        FILE="${LIST[0]}"
-        eval "LIST=($(sed -Ee '/^([[:blank:]]*$|#)/d' -e 's/^[]\]//' -e 's/[[:blank:]]/\\&/g' -e 's/^/**\//' "$FILE"))"
-        lk_console_item "${#LIST[@]} $(lk_maybe_plural "${#LIST[@]}" file files) excluded by $FILE:"
-        lk_echo_array LIST
+        [ ${#FILES[@]} -gt 0 ] ||
+            lk_warn "file not found: sync-exclude.lst" || exit
+        EXCLUDE_FILE=${FILES[0]}
+        # - Ignore blank lines and comments
+        # - Remove fleeting metadata prefixes ("]") and unescape leading hashes
+        lk_mapfile <(sed -Ee '/^([[:blank:]]*$|#)/d' \
+            -e 's/^(\]|\\(#))/\2/' "$EXCLUDE_FILE") EXCLUDE
+        EXCLUDE+=(
+            "._sync_*.db*"
+            ".sync_*.db*"
+            ".csync_journal.db*"
+            ".owncloudsync.log*"
+            "*_conflict-*"
+        )
+        FIND=(-path ./Desktop.ini)
+        for p in "${EXCLUDE[@]}"; do
+            if [[ $p =~ /$ ]]; then
+                FIND+=(-o \( -type d -name "${p%/}" \))
+            else
+                FIND+=(-o -name "$p")
+            fi
+        done
+        FIND=(find . \( "${FIND[@]}" \) -print0)
+        lk_mapfile -z <("${FIND[@]}" | sort -zu) FILES
+        EXCLUDE_FILE=${EXCLUDE_FILE//~/"~"}
+        [ ${#FILES[@]} -eq 0 ] &&
+            lk_console_message "No files excluded by $EXCLUDE_FILE" ||
+            lk_echo_array FILES |
+            lk_console_list "Excluded by $EXCLUDE_FILE:" file files
     )
 }

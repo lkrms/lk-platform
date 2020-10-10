@@ -324,7 +324,7 @@ function lk_get_regex() {
 }
 
 function lk_realpath() {
-    local FILE=$1 i COMPONENT LN RESOLVED=
+    local FILE=$1 i=0 COMPONENT LN RESOLVED=
     [ -e "$FILE" ] || return
     [ "${FILE:0:1}" = / ] || FILE=${PWD%/}/$FILE
     while [ -n "$FILE" ]; do
@@ -355,7 +355,7 @@ function lk_realpath() {
             [ "${LN:0:1}" = / ] || LN=${RESOLVED%/*}/$LN
             FILE=$LN${FILE:+/$FILE}
             RESOLVED=
-            unset i
+            i=0
         }
     done
     echo "$RESOLVED"
@@ -467,6 +467,15 @@ function lk_escape_ere() {
 
 function lk_escape_ere_replace() {
     lk_escape "$1" '&' '/' "\\"
+}
+
+function lk_escape_curl_config() {
+    local ARG
+    ARG=$(lk_escape "$1" "\\" '"')
+    ARG=${ARG//$'\t'/\\t}
+    ARG=${ARG//$'\n'/\\n}
+    ARG=${ARG//$'\r'/\\r}
+    echo "${ARG//$'\v'/\\v}"
 }
 
 # lk_replace FIND REPLACE_WITH [STRING]
@@ -638,28 +647,31 @@ function lk_implode_args() {
     lk_implode "$1" ARGS
 }
 
-# lk_in_array value array_name
-#   True if VALUE exists in ARRAY_NAME.
-#   Pattern matching is not applied.
+# lk_in_array VALUE ARRAY
+#
+# Return true if VALUE exists in ARRAY, otherwise return false.
 function lk_in_array() {
-    local VALUE
-    eval "for VALUE in \${$2[@]+\"\${$2[@]}\"}; do
-        [ \"\$VALUE\" = \"\$1\" ] || continue
+    local _LK_ARRAY="$2[@]" _LK_VALUE
+    for _LK_VALUE in ${!_LK_ARRAY+"${!_LK_ARRAY}"}; do
+        [ "$_LK_VALUE" = "$1" ] || continue
         return
-    done"
+    done
     false
 }
 
-# lk_array_search VALUE ARRAY_NAME
+# lk_array_search PATTERN ARRAY
 #
-# Search ARRAY_NAME for VALUE using Bash pattern (glob) matching and output the
-# key of the first match or return false if not matched.
+# Search ARRAY for PATTERN and output the key of the first match if found,
+# otherwise return false.
 function lk_array_search() {
-    local KEYS KEY
-    eval "KEYS=(\"\${!$2[@]}\")"
-    for KEY in ${KEYS[@]+"${KEYS[@]}"}; do
-        eval "[[ \${$2[\$KEY]} == \$1 ]]" || continue
-        echo "$KEY"
+    local _LK_ARRAY="$2[@]" _LK_ARRAY_KEYS _LK_ARRAY_VALS _LK_KEY=0
+    eval "_LK_ARRAY_KEYS=(\"\${!$2[@]}\")"
+    _LK_ARRAY_VALS=(${!_LK_ARRAY+"${!_LK_ARRAY}"})
+    while [ "$_LK_KEY" -lt ${#_LK_ARRAY_KEYS[@]} ]; do
+        ((++_LK_KEY))
+        # shellcheck disable=SC2053
+        [[ ${_LK_ARRAY_VALS[$_LK_KEY]} == $1 ]] || continue
+        echo "${_LK_ARRAY_KEYS[$_LK_KEY]}"
         return
     done
     false
@@ -1777,7 +1789,7 @@ function lk_secret_forget() {
 
 # lk_secret VALUE LABEL [SERVICE]
 function lk_secret() {
-    local SERVICE=${3:-${0##*/}} KEYCHAIN=keychain PASSWORD
+    local SERVICE=${3:-$(lk_myself 1)} KEYCHAIN=keychain PASSWORD
     [ -n "${1:-}" ] || lk_warn "no value" || return
     [ -n "${2:-}" ] || lk_warn "no label" || return
     lk_is_macos || KEYCHAIN=keyring

@@ -268,7 +268,6 @@ EOF
                 "$JUMP_USER" \
                 "$JUMP_KEY_FILE" ${KEY+<<<"$KEY"}
         (
-            shopt -s nullglob
             chmod 00600 \
                 "$h/.ssh/"{config,"$SSH_PREFIX"{config.d,keys}/*}
             ! lk_is_root ||
