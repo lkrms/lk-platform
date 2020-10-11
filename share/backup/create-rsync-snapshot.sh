@@ -128,18 +128,18 @@ function assert_stage_valid() {
 
 function mark_stage_complete() {
     is_stage_complete "$1" ||
-        touch "$SNAPSHOT_ROOT/.$1"
+        touch "$LK_SNAPSHOT_ROOT/.$1"
 }
 
 function is_stage_complete() {
     assert_stage_valid "$1"
-    [ -e "$SNAPSHOT_ROOT/.$1" ]
+    [ -e "$LK_SNAPSHOT_ROOT/.$1" ]
 }
 
 function get_stage() {
     local STAGE SEPARATOR=${1:--}
     for STAGE in $(tac <(printf '%s\n' "${SNAPSHOT_STAGES[@]}")) not-started; do
-        [ ! -e "$SNAPSHOT_ROOT/.$STAGE" ] || break
+        [ ! -e "$LK_SNAPSHOT_ROOT/.$STAGE" ] || break
     done
     echo "${STAGE//-/$SEPARATOR}"
 }
@@ -190,24 +190,28 @@ esac
 [ -d "$BACKUP_ROOT" ] || lk_die "directory not found: $BACKUP_ROOT"
 [ -w "$BACKUP_ROOT" ] || lk_die "cannot write to directory: $BACKUP_ROOT"
 
+SOURCE_NAME=${SOURCE_NAME//\//_}
 BACKUP_ROOT=$(lk_realpath "$BACKUP_ROOT")
-LOCK_FILE=/tmp/${0##*/}-${BACKUP_ROOT//\//_}.lock
-exec 9>"$LOCK_FILE"
-flock -n 9 || lk_die "unable to acquire a lock on $LOCK_FILE"
+! type -P flock >/dev/null || {
+    LOCK_FILE=/tmp/${0##*/}-${BACKUP_ROOT//\//_}-$SOURCE_NAME.lock
+    exec 9>"$LOCK_FILE" &&
+        flock -n 9 || lk_die "unable to acquire a lock on $LOCK_FILE"
+}
 
 LOG_FILE=$BACKUP_ROOT/log/snapshot.log
-SOURCE_NAME=${SOURCE_NAME//\//_}
 SOURCE_LATEST=$BACKUP_ROOT/latest/$SOURCE_NAME
-SNAPSHOT_TIMESTAMP=${LK_BACKUP_TIMESTAMP:-$(date +"%Y-%m-%d-%H%M%S")}
-SNAPSHOT_ROOT=$BACKUP_ROOT/snapshot/$SOURCE_NAME/$SNAPSHOT_TIMESTAMP
-SNAPSHOT_FS_ROOT=$SNAPSHOT_ROOT/fs
-SNAPSHOT_DB_ROOT=$SNAPSHOT_ROOT/db
-SNAPSHOT_LOG_FILE=$SNAPSHOT_ROOT/log/snapshot.log
-RSYNC_OUT_FILE=$SNAPSHOT_ROOT/log/rsync.log
-RSYNC_ERR_FILE=$SNAPSHOT_ROOT/log/rsync.err.log
+LK_SNAPSHOT_TIMESTAMP=${LK_BACKUP_TIMESTAMP:-$(date +"%Y-%m-%d-%H%M%S")}
+LK_SNAPSHOT_ROOT=$BACKUP_ROOT/snapshot/$SOURCE_NAME/$LK_SNAPSHOT_TIMESTAMP
+LK_SNAPSHOT_FS_ROOT=$LK_SNAPSHOT_ROOT/fs
+LK_SNAPSHOT_DB_ROOT=$LK_SNAPSHOT_ROOT/db
+SNAPSHOT_LOG_FILE=$LK_SNAPSHOT_ROOT/log/snapshot.log
+RSYNC_OUT_FILE=$LK_SNAPSHOT_ROOT/log/rsync.log
+RSYNC_ERR_FILE=$LK_SNAPSHOT_ROOT/log/rsync.err.log
+export LK_SNAPSHOT_TIMESTAMP \
+    LK_SNAPSHOT_ROOT LK_SNAPSHOT_FS_ROOT LK_SNAPSHOT_DB_ROOT
 
 install -d -m 0700 \
-    "$BACKUP_ROOT/"{,latest,log,snapshot/{,"$SOURCE_NAME/"{,"$SNAPSHOT_TIMESTAMP/"{,db,log}}}}
+    "$BACKUP_ROOT/"{,latest,log,snapshot/{,"$SOURCE_NAME/"{,"$LK_SNAPSHOT_TIMESTAMP/"{,db,log}}}}
 for f in LOG_FILE SNAPSHOT_LOG_FILE RSYNC_OUT_FILE RSYNC_ERR_FILE; do
     [ -e "${!f}" ] ||
         install -m 0600 /dev/null "${!f}"
@@ -218,35 +222,35 @@ exec 6>&1 7>&2
 exec > >(tee >(lk_log | tee -a "$SNAPSHOT_LOG_FILE" >>"$LOG_FILE")) 2>&1
 
 ! is_stage_complete finished ||
-    lk_die "already finalised: $SNAPSHOT_ROOT"
+    lk_die "already finalised: $LK_SNAPSHOT_ROOT"
 
 lk_console_message "Backing up $SOURCE_NAME to $BACKUP_ROOT"
 lk_console_detail "Source:" "$SOURCE"
 lk_console_detail "Transport:" "$SOURCE_TYPE"
-lk_console_detail "Snapshot:" "$SNAPSHOT_TIMESTAMP"
+lk_console_detail "Snapshot:" "$LK_SNAPSHOT_TIMESTAMP"
 lk_console_detail "Status:" "$(get_stage " ")"
 
 if [ -d "$SOURCE_LATEST/fs" ] && ! is_stage_complete previous-copy-finished; then
     LATEST=$(lk_realpath "$SOURCE_LATEST/fs")
-    [ "$LATEST" != "$(lk_realpath "$SNAPSHOT_FS_ROOT")" ] || exit
+    [ "$LATEST" != "$(lk_realpath "$LK_SNAPSHOT_FS_ROOT")" ] || exit
     lk_console_message "Duplicating previous snapshot using hard links"
     ! is_stage_complete previous-copy-started || {
         lk_console_detail "Deleting incomplete replica from previous run"
-        rm -Rf "$SNAPSHOT_FS_ROOT"
+        rm -Rf "$LK_SNAPSHOT_FS_ROOT"
     }
-    [ ! -e "$SNAPSHOT_FS_ROOT" ] ||
-        lk_die "directory already exists: $SNAPSHOT_FS_ROOT"
+    [ ! -e "$LK_SNAPSHOT_FS_ROOT" ] ||
+        lk_die "directory already exists: $LK_SNAPSHOT_FS_ROOT"
     lk_console_detail "Snapshot:" "$LATEST"
-    lk_console_detail "Replica:" "$SNAPSHOT_FS_ROOT"
+    lk_console_detail "Replica:" "$LK_SNAPSHOT_FS_ROOT"
     mark_stage_complete previous-copy-started
-    cp -al "$LATEST" "$SNAPSHOT_FS_ROOT"
+    cp -al "$LATEST" "$LK_SNAPSHOT_FS_ROOT"
     mark_stage_complete previous-copy-finished
     lk_console_log "Copy complete"
 else
     mark_stage_complete previous-copy-finished
 fi
 
-lk_console_item "Creating snapshot at" "$SNAPSHOT_ROOT"
+lk_console_item "Creating snapshot at" "$LK_SNAPSHOT_ROOT"
 lk_console_detail "Log files:" "$(printf '%s\n' \
     "$SNAPSHOT_LOG_FILE" "$RSYNC_OUT_FILE" "$RSYNC_ERR_FILE")"
 RSYNC_ARGS=(-vrlpt --delete)
@@ -267,7 +271,7 @@ if SOURCE_SCRIPT=$(find_file "$SOURCE_NAME-hook-pre_rsync") &&
     lk_console_log "Hook script finished"
 fi
 
-RSYNC_ARGS=("${RSYNC_ARGS[@]}" "$@" "$SOURCE/" "$SNAPSHOT_FS_ROOT/")
+RSYNC_ARGS=("${RSYNC_ARGS[@]}" "$@" "$SOURCE/" "$LK_SNAPSHOT_FS_ROOT/")
 
 ! lk_in_array --inplace RSYNC_ARGS &&
     ! lk_in_array --write-devices RSYNC_ARGS ||
@@ -295,8 +299,10 @@ mark_stage_complete rsync-finished
 lk_console_log "rsync $RSYNC_RESULT"
 
 lk_console_message "Updating latest snapshot symlink for $SOURCE_NAME"
-ln -sfnv "$SNAPSHOT_ROOT" "$SOURCE_LATEST"
+ln -sfnv "$LK_SNAPSHOT_ROOT" "$SOURCE_LATEST"
 mark_stage_complete finished
 
-exec 9>&-
-rm -f "$LOCK_FILE"
+[ -z "${LOCK_FILE:-}" ] || {
+    exec 9>&-
+    rm -f "$LOCK_FILE"
+}

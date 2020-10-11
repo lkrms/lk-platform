@@ -1678,13 +1678,6 @@ function lk_is_readonly() {
     false
 }
 
-function lk_maybe_set_readonly() {
-    lk_is_readonly "$1" || {
-        lk_is_identifier "$1" || lk_warn "not a valid identifier: $1" || return
-        eval "$1=$2"
-    }
-}
-
 function lk_get_var_names() {
     eval "printf '%s\n'$(printf ' ${!%s@}' _ {a..z} {A..Z})"
 }
@@ -2080,4 +2073,5 @@ LK_CONSOLE_COLOUR=$LK_CYAN
 LK_SUCCESS_COLOUR=$LK_GREEN
 LK_WARNING_COLOUR=$LK_YELLOW
 LK_ERROR_COLOUR=$LK_RED
-lk_maybe_set_readonly LK_ARGV '("$@")'
+lk_is_readonly LK_ARGV ||
+    readonly LK_ARGV=("$@")
