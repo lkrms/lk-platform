@@ -49,13 +49,13 @@ while :; do
     -x | --exclude)
         EXCLUDE_MODE=1
         ;;
-    -d | --dest=DIR)
+    -d | --dest)
         [ -d "$1" ] || lk_warn "directory not found: $1" || lk_usage
         [ -w "$1" ] || lk_warn "directory not writable: $1" || lk_usage
         DEST=$(realpath "$1")
         shift
         ;;
-    -t | --timestamp=VALUE)
+    -t | --timestamp)
         [[ $1 =~ ^[0-9]{4}(-[0-9]{2}){2}-[0-9]{6}$ ]] ||
             lk_warn "invalid timestamp: $1" || lk_usage
         TIMESTAMP=$1
