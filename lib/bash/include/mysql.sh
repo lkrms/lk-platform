@@ -2,12 +2,22 @@
 
 # shellcheck disable=SC2015,SC2029,SC2120
 
-lk_mysql_escape_sql() {
+function lk_mysql_quiet() {
+    [ "${LK_MYSQL_QUIET:-0}" -ne 0 ]
+}
+
+function lk_mysql_escape() {
     lk_escape "$1" "\\" "'"
 }
 
-lk_mysql_escape_cnf() {
+function lk_mysql_escape_cnf() {
     lk_escape "$1" "\\" '"'
+}
+
+function lk_mysql_batch_unescape() {
+    sed -Ee 's/(^|[^\])\\n/\1\n/g' \
+        -e 's/(^|[^\])\\t/\1\t/g' \
+        -e 's/\\\\/\\/g' <<<"$1"
 }
 
 # lk_mysql_get_cnf [DB_USER [DB_PASSWORD [DB_HOST]]]
@@ -32,10 +42,13 @@ function lk_mysql() {
     if [ -n "${LK_MY_CNF:-}" ]; then
         [ -f "$LK_MY_CNF" ] || lk_warn "file not found: $LK_MY_CNF" || return
         "${LK_MYSQL_COMMAND:-mysql}" --defaults-file="$LK_MY_CNF" "$@"
-    elif lk_is_true "${LK_MYSQL_ELEVATE:-}"; then
+    elif lk_is_root || lk_is_true "${LK_MYSQL_ELEVATE:-}"; then
         lk_elevate "${LK_MYSQL_COMMAND:-mysql}" \
+            --no-defaults \
             --user="${LK_MYSQL_ELEVATE_USER:-root}" \
             "$@"
+    elif [ -f ~/.my.cnf ]; then
+        "${LK_MYSQL_COMMAND:-mysql}" "$@"
     else
         lk_warn "LK_MY_CNF not set"
     fi
@@ -49,6 +62,16 @@ function lk_mysql_list() {
     lk_mysql --batch --skip-column-names "$@"
 }
 
+function lk_mysql_mapfile() {
+    local _LK_LINE
+    lk_is_identifier "$1" || lk_warn "not a valid identifier: $1" || return
+    eval "$1=()"
+    while IFS= read -r _LK_LINE; do
+        _LK_LINE=$(lk_mysql_batch_unescape "$_LK_LINE")
+        eval "$1+=(\"\$_LK_LINE\")"
+    done < <(lk_mysql_list "${@:2}")
+}
+
 function _lk_mysqldump() {
     LK_MYSQL_COMMAND=mysqldump \
         lk_mysql "$@"
@@ -60,7 +83,7 @@ function lk_mysql_innodb_only() {
 FROM information_schema.TABLES
 WHERE TABLE_TYPE = 'BASE TABLE'
     AND ENGINE <> 'InnoDB'
-    AND TABLE_SCHEMA = '$(lk_mysql_escape_sql "$1")'") || return
+    AND TABLE_SCHEMA = '$(lk_mysql_escape "$1")'") || return
     [ "$NOT_INNODB" -eq 0 ] &&
         echo yes ||
         echo no
@@ -98,18 +121,22 @@ Usage: $(lk_myself -f) DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
             --single-transaction
             --skip-lock-tables
         )
-        ARG_COLOUR=$LK_GREEN
     else
         DUMP_ARGS=(
             --lock-tables
         )
         ARG_COLOUR=$LK_BOLD$LK_RED
     fi
-    lk_console_message "Dumping database"
-    lk_console_detail "Database:" "$DB_NAME"
-    lk_console_detail "Host:" "$DB_HOST"
-    lk_console_detail "InnoDB only?" "$INNODB_ONLY" "$ARG_COLOUR"
-    lk_console_detail "mysqldump command line:" "${DUMP_ARGS[*]}" "$ARG_COLOUR"
+    lk_mysql_quiet || {
+        lk_console_item "Dumping database:" "$DB_NAME"
+        lk_console_detail "Host:" "$DB_HOST"
+    }
+    { lk_mysql_quiet && lk_is_true "$INNODB_ONLY"; } || {
+        lk_console_detail "InnoDB only?" \
+            "${ARG_COLOUR+$ARG_COLOUR}$INNODB_ONLY${ARG_COLOUR+$LK_RESET}"
+        lk_console_detail "mysqldump arguments:" \
+            "${ARG_COLOUR+$ARG_COLOUR}${DUMP_ARGS[*]}${ARG_COLOUR+$LK_RESET}"
+    }
     [ -z "${OUTPUT_FILE:-}" ] ||
         lk_console_detail "Writing compressed SQL to" "$OUTPUT_FILE"
     _lk_mysqldump \
@@ -125,9 +152,11 @@ Usage: $(lk_myself -f) DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
             lk_console_detail "Deleted" "$LK_MY_CNF" ||
             lk_console_warning0 "Error deleting" "$LK_MY_CNF"
     }
-    [ "$EXIT_STATUS" -eq 0 ] &&
-        lk_console_success "Database dump completed successfully" ||
-        lk_console_error0 "Database dump failed"
+    lk_mysql_quiet || {
+        [ "$EXIT_STATUS" -eq 0 ] &&
+            lk_console_success "Database dump completed successfully" ||
+            lk_console_error0 "Database dump failed"
+    }
     return "$EXIT_STATUS"
 }
 
