@@ -138,7 +138,8 @@ function is_stage_complete() {
 
 function get_stage() {
     local STAGE SEPARATOR=${1:--}
-    for STAGE in $(tac <(printf '%s\n' "${SNAPSHOT_STAGES[@]}")) not-started; do
+    for STAGE in $(tac < <(printf '%s\n' \
+        "${SNAPSHOT_STAGES[@]}")) not-started; do
         [ ! -e "$LK_SNAPSHOT_ROOT/.$STAGE" ] || break
     done
     echo "${STAGE//-/$SEPARATOR}"
@@ -210,7 +211,7 @@ RSYNC_ERR_FILE=$LK_SNAPSHOT_ROOT/log/rsync.err.log
 export LK_SNAPSHOT_TIMESTAMP \
     LK_SNAPSHOT_ROOT LK_SNAPSHOT_FS_ROOT LK_SNAPSHOT_DB_ROOT
 
-install -d -m 0700 \
+install -d -m 0711 \
     "$BACKUP_ROOT/"{,latest,log,snapshot/{,"$SOURCE_NAME/"{,"$LK_SNAPSHOT_TIMESTAMP/"{,db,log}}}}
 for f in LOG_FILE SNAPSHOT_LOG_FILE RSYNC_OUT_FILE RSYNC_ERR_FILE; do
     [ -e "${!f}" ] ||
