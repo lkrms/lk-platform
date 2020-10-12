@@ -39,7 +39,7 @@ function lk_git_get_repos() {
 
 function lk_git_with_repos() {
     local PARALLEL REPO_COMMAND REPO ERROR_COUNT=0 \
-        REPOS=(${LK_GIT_REPOS+"${LK_GIT_REPOS[@]}"})
+        REPOS=(${LK_GIT_REPOS[@]+"${LK_GIT_REPOS[@]}"})
     [ "${1:-}" != -p ] || {
         ! lk_bash_at_least 4 3 || PARALLEL=1
         shift

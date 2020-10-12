@@ -51,8 +51,8 @@ function lk_realpath() {
 
 function lk_in_array() {
     local _LK_ARRAY _LK_VALUE
-    eval "_LK_ARRAY=(\${$2+\"\${$2[@]}\"})"
-    for _LK_VALUE in ${_LK_ARRAY+"${_LK_ARRAY[@]}"}; do
+    eval "_LK_ARRAY=(\${$2[@]+\"\${$2[@]}\"})"
+    for _LK_VALUE in ${_LK_ARRAY[@]+"${_LK_ARRAY[@]}"}; do
         [ "$_LK_VALUE" = "$1" ] || continue
         return
     done
@@ -224,85 +224,97 @@ exec > >(tee >(lk_log | tee -a "$SNAPSHOT_LOG_FILE" >>"$LOG_FILE")) 2>&1
 ! is_stage_complete finished ||
     lk_die "already finalised: $LK_SNAPSHOT_ROOT"
 
-lk_console_message "Backing up $SOURCE_NAME to $BACKUP_ROOT"
-lk_console_detail "Source:" "$SOURCE"
-lk_console_detail "Transport:" "$SOURCE_TYPE"
-lk_console_detail "Snapshot:" "$LK_SNAPSHOT_TIMESTAMP"
-lk_console_detail "Status:" "$(get_stage " ")"
+{
+    lk_console_message "Backing up $SOURCE_NAME to $BACKUP_ROOT"
+    lk_console_detail "Source:" "$SOURCE"
+    lk_console_detail "Transport:" "$SOURCE_TYPE"
+    lk_console_detail "Snapshot:" "$LK_SNAPSHOT_TIMESTAMP"
+    lk_console_detail "Status:" "$(get_stage " ")"
 
-if [ -d "$SOURCE_LATEST/fs" ] && ! is_stage_complete previous-copy-finished; then
-    LATEST=$(lk_realpath "$SOURCE_LATEST/fs")
-    [ "$LATEST" != "$(lk_realpath "$LK_SNAPSHOT_FS_ROOT")" ] || exit
-    lk_console_message "Duplicating previous snapshot using hard links"
-    ! is_stage_complete previous-copy-started || {
-        lk_console_detail "Deleting incomplete replica from previous run"
-        rm -Rf "$LK_SNAPSHOT_FS_ROOT"
+    if [ -d "$SOURCE_LATEST/fs" ] && ! is_stage_complete previous-copy-finished; then
+        LATEST=$(lk_realpath "$SOURCE_LATEST/fs")
+        [ "$LATEST" != "$(lk_realpath "$LK_SNAPSHOT_FS_ROOT")" ] || exit
+        lk_console_message "Duplicating previous snapshot using hard links"
+        ! is_stage_complete previous-copy-started || {
+            lk_console_detail "Deleting incomplete replica from previous run"
+            rm -Rf "$LK_SNAPSHOT_FS_ROOT"
+        }
+        [ ! -e "$LK_SNAPSHOT_FS_ROOT" ] ||
+            lk_die "directory already exists: $LK_SNAPSHOT_FS_ROOT"
+        lk_console_detail "Snapshot:" "$LATEST"
+        lk_console_detail "Replica:" "$LK_SNAPSHOT_FS_ROOT"
+        mark_stage_complete previous-copy-started
+        cp -al "$LATEST" "$LK_SNAPSHOT_FS_ROOT"
+        mark_stage_complete previous-copy-finished
+        lk_console_log "Copy complete"
+    else
+        mark_stage_complete previous-copy-finished
+    fi
+
+    lk_console_item "Creating snapshot at" "$LK_SNAPSHOT_ROOT"
+    lk_console_detail "Log files:" "$(printf '%s\n' \
+        "$SNAPSHOT_LOG_FILE" "$RSYNC_OUT_FILE" "$RSYNC_ERR_FILE")"
+    RSYNC_ARGS=(-vrlpt --delete)
+    ! RSYNC_FILTER=$(find_file "$SOURCE_NAME-filter") || {
+        lk_console_detail "Rsync filter:" "$RSYNC_FILTER"
+        RSYNC_ARGS=("${RSYNC_ARGS[@]}" --delete-excluded --filter ". $RSYNC_FILTER")
     }
-    [ ! -e "$LK_SNAPSHOT_FS_ROOT" ] ||
-        lk_die "directory already exists: $LK_SNAPSHOT_FS_ROOT"
-    lk_console_detail "Snapshot:" "$LATEST"
-    lk_console_detail "Replica:" "$LK_SNAPSHOT_FS_ROOT"
-    mark_stage_complete previous-copy-started
-    cp -al "$LATEST" "$LK_SNAPSHOT_FS_ROOT"
-    mark_stage_complete previous-copy-finished
-    lk_console_log "Copy complete"
-else
-    mark_stage_complete previous-copy-finished
-fi
 
-lk_console_item "Creating snapshot at" "$LK_SNAPSHOT_ROOT"
-lk_console_detail "Log files:" "$(printf '%s\n' \
-    "$SNAPSHOT_LOG_FILE" "$RSYNC_OUT_FILE" "$RSYNC_ERR_FILE")"
-RSYNC_ARGS=(-vrlpt --delete)
-! RSYNC_FILTER=$(find_file "$SOURCE_NAME-filter") || {
-    lk_console_detail "Rsync filter:" "$RSYNC_FILTER"
-    RSYNC_ARGS=("${RSYNC_ARGS[@]}" --delete-excluded --filter ". $RSYNC_FILTER")
-}
+    # shellcheck disable=SC1090
+    if SOURCE_SCRIPT=$(find_file "$SOURCE_NAME-hook-pre_rsync"); then
+        export LK_SOURCE_SCRIPT_ALREADY_STARTED=0 \
+            LK_SOURCE_SCRIPT_ALREADY_FINISHED=0
+        ! is_stage_complete hook-pre-rsync-started ||
+            LK_SOURCE_SCRIPT_ALREADY_STARTED=1
+        ! is_stage_complete hook-pre-rsync-finished ||
+            LK_SOURCE_SCRIPT_ALREADY_FINISHED=1
+        mark_stage_complete hook-pre-rsync-started
+        lk_console_item "Running hook script:" "$SOURCE_SCRIPT"
+        . "$SOURCE_SCRIPT"
+        mark_stage_complete hook-pre-rsync-finished
+        lk_console_log "Hook script finished"
+    fi
 
-# shellcheck disable=SC1090
-if SOURCE_SCRIPT=$(find_file "$SOURCE_NAME-hook-pre_rsync") &&
-    ! is_stage_complete hook-pre-rsync-finished; then
-    SOURCE_SCRIPT_FIRST_RUN=1
-    ! is_stage_complete hook-pre-rsync-started || SOURCE_SCRIPT_FIRST_RUN=0
-    mark_stage_complete hook-pre-rsync-started
-    lk_console_item "Running hook script:" "$SOURCE_SCRIPT"
-    . "$SOURCE_SCRIPT"
-    mark_stage_complete hook-pre-rsync-finished
-    lk_console_log "Hook script finished"
-fi
+    RSYNC_ARGS=("${RSYNC_ARGS[@]}" "$@" "$SOURCE/" "$LK_SNAPSHOT_FS_ROOT/")
 
-RSYNC_ARGS=("${RSYNC_ARGS[@]}" "$@" "$SOURCE/" "$LK_SNAPSHOT_FS_ROOT/")
+    ! lk_in_array --inplace RSYNC_ARGS &&
+        ! lk_in_array --write-devices RSYNC_ARGS ||
+        lk_die "invalid rsync arguments (--inplace not supported)"
 
-! lk_in_array --inplace RSYNC_ARGS &&
-    ! lk_in_array --write-devices RSYNC_ARGS ||
-    lk_die "invalid rsync arguments (--inplace not supported)"
+    ! lk_in_array --dry-run RSYNC_ARGS &&
+        ! lk_in_array -n RSYNC_ARGS || DRY_RUN=1
 
-mark_stage_complete rsync-started
-lk_console_item "Running rsync:" \
-    $'>>>\n'"  rsync$(printf ' \\ \n    %q' "${RSYNC_ARGS[@]}")"$'\n<<<'
-EXIT_STATUS=0
-rsync "${RSYNC_ARGS[@]}" \
-    > >(tee >(lk_log >>"$RSYNC_OUT_FILE") >&6) \
-    2> >(tee >(lk_log >>"$RSYNC_ERR_FILE") >&7) || EXIT_STATUS=$?
-case "$EXIT_STATUS" in
-0)
-    RSYNC_RESULT="completed successfully"
-    ;;
-23 | 24)
-    RSYNC_RESULT="completed with partial transfer (exit status $EXIT_STATUS)"
-    ;;
-*)
-    lk_die "rsync failed to execute (exit status $EXIT_STATUS)"
-    ;;
-esac
-mark_stage_complete rsync-finished
-lk_console_log "rsync $RSYNC_RESULT"
+    [ "${DRY_RUN:-0}" -ne 0 ] || mark_stage_complete rsync-started
+    lk_console_item "Running rsync:" \
+        $'>>>\n'"  rsync$(printf ' \\ \n    %q' "${RSYNC_ARGS[@]}")"$'\n<<<'
+    EXIT_STATUS=0
+    rsync "${RSYNC_ARGS[@]}" \
+        > >(tee >(lk_log >>"$RSYNC_OUT_FILE") >&6) \
+        2> >(tee >(lk_log >>"$RSYNC_ERR_FILE") >&7) || EXIT_STATUS=$?
+    case "$EXIT_STATUS" in
+    0)
+        RSYNC_RESULT="completed successfully"
+        ;;
+    23 | 24)
+        RSYNC_RESULT="completed with partial transfer (exit status $EXIT_STATUS)"
+        ;;
+    *)
+        lk_die "rsync failed to execute (exit status $EXIT_STATUS)"
+        ;;
+    esac
+    [ "${DRY_RUN:-0}" -ne 0 ] || mark_stage_complete rsync-finished
+    lk_console_log "rsync $RSYNC_RESULT"
 
-lk_console_message "Updating latest snapshot symlink for $SOURCE_NAME"
-ln -sfnv "$LK_SNAPSHOT_ROOT" "$SOURCE_LATEST"
-mark_stage_complete finished
+    [ "${DRY_RUN:-0}" -ne 0 ] || {
+        lk_console_message "Updating latest snapshot symlink for $SOURCE_NAME"
+        ln -sfnv "$LK_SNAPSHOT_ROOT" "$SOURCE_LATEST"
+        mark_stage_complete finished
+    }
 
-[ -z "${LOCK_FILE:-}" ] || {
-    exec 9>&-
-    rm -f "$LOCK_FILE"
+    [ -z "${LOCK_FILE:-}" ] || {
+        exec 9>&-
+        rm -f "$LOCK_FILE"
+    }
+
+    exit
 }

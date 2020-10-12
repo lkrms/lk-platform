@@ -15,7 +15,7 @@ lk_die() { s=$? && echo "${BASH_SOURCE[0]}: $1" >&2 &&
 # 3. Copy remaining LK_* variables to the global scope (other variables are
 #    discarded)
 [[ ,${LK_SKIP:-}, == *,settings,* ]] || eval "$(
-    if [ "${LK_SETTINGS_FILES+1}" = 1 ]; then
+    if [ "${LK_SETTINGS_FILES[*]+1}" = 1 ]; then
         SETTINGS=(${LK_SETTINGS_FILES[@]+"${LK_SETTINGS_FILES[@]}"})
     else
         # Passed to eval just before sourcing, to allow expansion of values set
@@ -81,7 +81,7 @@ function lk_err_trap() {
 }
 
 function lk_delete_on_exit() {
-    [ "${LK_EXIT_DELETE+1}" = 1 ] || LK_EXIT_DELETE=()
+    [ "${LK_EXIT_DELETE[*]+1}" = 1 ] || LK_EXIT_DELETE=()
     LK_EXIT_DELETE+=("$@")
 }
 

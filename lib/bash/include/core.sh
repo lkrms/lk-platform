@@ -129,7 +129,7 @@ function lk_include() {
 }
 
 function lk_is_source_file_running() {
-    [ "${BASH_SOURCE+${BASH_SOURCE[*]: -1:1}}" = "$0" ]
+    [ "${BASH_SOURCE[*]+${BASH_SOURCE[*]: -1:1}}" = "$0" ]
 }
 
 # lk_myself [-f] [STACK_DEPTH]
@@ -626,7 +626,7 @@ function lk_echo_args() {
 }
 
 function lk_echo_array() {
-    eval "[ \"\${$1+1}\" != 1 ] ||
+    eval "[ \"\${$1[*]+1}\" != 1 ] ||
         [ \${#$1[@]} -eq 0 ] ||
         printf '%s\n' \"\${$1[@]}\""
 }
