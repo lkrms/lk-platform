@@ -909,12 +909,19 @@ function lk_echoc() {
     echo ${ECHO_ARGS[@]+"${ECHO_ARGS[@]}"} "${COLOUR:-}$MESSAGE$LK_RESET"
 }
 
-function lk_output_length() {
-    local MESSAGE=$1
-    while [[ $MESSAGE =~ (.*)$'\x01'[^$'\x02']*$'\x02'(.*) ]]; do
-        MESSAGE=${BASH_REMATCH[1]}${BASH_REMATCH[2]}
+function lk_strip_non_printing() {
+    local STRING=$1
+    while [[ $STRING =~ (.*)$'\x01'[^$'\x02']*$'\x02'(.*) ]]; do
+        STRING=${BASH_REMATCH[1]}${BASH_REMATCH[2]}
     done
-    echo ${#MESSAGE}
+    echo "$STRING"
+}
+
+function lk_output_length() {
+    local STRING
+    STRING=$(lk_strip_non_printing "$1.")
+    STRING=${STRING%.}
+    echo ${#STRING}
 }
 
 # lk_console_message message [[secondary_message] colour_sequence]
