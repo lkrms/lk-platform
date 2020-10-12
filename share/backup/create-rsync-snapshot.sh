@@ -152,6 +152,8 @@ SNAPSHOT_STAGES=(
     hook-pre-rsync-finished
     rsync-started
     rsync-finished
+    hook-post-rsync-started
+    hook-post-rsync-finished
     finished
 )
 
@@ -167,7 +169,7 @@ This approach uses less storage than rsync --link-dest, which breaks hard links
 when permissions change."
 
 SOURCE_NAME=$1
-SOURCE=${2%/}
+SOURCE=$2
 BACKUP_ROOT=$3
 shift 3
 
@@ -276,7 +278,7 @@ exec > >(tee >(lk_log | tee -a "$SNAPSHOT_LOG_FILE" >>"$LOG_FILE")) 2>&1
         lk_console_log "Hook script finished"
     fi
 
-    RSYNC_ARGS=("${RSYNC_ARGS[@]}" "$@" "$SOURCE/" "$LK_SNAPSHOT_FS_ROOT/")
+    RSYNC_ARGS=("${RSYNC_ARGS[@]}" "$@" "${SOURCE%/}/" "$LK_SNAPSHOT_FS_ROOT/")
 
     ! lk_in_array --inplace RSYNC_ARGS &&
         ! lk_in_array --write-devices RSYNC_ARGS ||
@@ -305,6 +307,21 @@ exec > >(tee >(lk_log | tee -a "$SNAPSHOT_LOG_FILE" >>"$LOG_FILE")) 2>&1
     esac
     [ "${DRY_RUN:-0}" -ne 0 ] || mark_stage_complete rsync-finished
     lk_console_log "rsync $RSYNC_RESULT"
+
+    # shellcheck disable=SC1090
+    if SOURCE_SCRIPT=$(find_file "$SOURCE_NAME-hook-post_rsync"); then
+        export LK_SOURCE_SCRIPT_ALREADY_STARTED=0 \
+            LK_SOURCE_SCRIPT_ALREADY_FINISHED=0
+        ! is_stage_complete hook-post-rsync-started ||
+            LK_SOURCE_SCRIPT_ALREADY_STARTED=1
+        ! is_stage_complete hook-post-rsync-finished ||
+            LK_SOURCE_SCRIPT_ALREADY_FINISHED=1
+        mark_stage_complete hook-post-rsync-started
+        lk_console_item "Running hook script:" "$SOURCE_SCRIPT"
+        . "$SOURCE_SCRIPT"
+        mark_stage_complete hook-post-rsync-finished
+        lk_console_log "Hook script finished"
+    fi
 
     [ "${DRY_RUN:-0}" -ne 0 ] || {
         lk_console_message "Updating latest snapshot symlink for $SOURCE_NAME"
