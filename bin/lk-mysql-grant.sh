@@ -14,7 +14,7 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
     lk_die "unable to locate LK_BASE"
 export LK_BASE
 
-include= . "$LK_BASE/lib/bash/common.sh"
+include=mysql . "$LK_BASE/lib/bash/common.sh"
 
 USERNAME="${SUDO_USER:-$USER}"
 
