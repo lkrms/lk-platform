@@ -2,119 +2,26 @@
 
 # shellcheck disable=SC2015
 
-set -eu
+set -euo pipefail
+_DEPTH=1
+_FILE=${BASH_SOURCE[0]}
+lk_die() { s=$? && echo "$_FILE: $1" >&2 && (return $s) && false || exit; }
+{ type -P realpath || { type -P python && realpath() { python -c \
+    "import os,sys;print(os.path.realpath(sys.argv[1]))" "$1"; }; }; } \
+    >/dev/null || lk_die "command not found: realpath"
+_FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
+    LK_BASE=$(realpath "$_DIR$(eval "printf '/..%.s' {1..$_DEPTH}")") &&
+    [ "$LK_BASE" != / ] && [ -d "$LK_BASE/lib/bash" ] ||
+    lk_die "unable to locate LK_BASE"
+export LK_BASE
 
-lk_die() { s=$? && echo "${LK_DIE_PREFIX-${0##*/}: }$1" >&2 &&
-    (return $s) && false || exit; }
-_DIR=${0%/*}
-[ "$_DIR" != "$0" ] || _DIR=.
-_DIR=$(cd "$_DIR" && pwd -P) && [ ! -L "$0" ] ||
-    lk_die "unable to resolve path to script"
-
-function lk_realpath() {
-    local FILE=$1 i=0 COMPONENT LN RESOLVED=
-    [ -e "$FILE" ] || return
-    [ "${FILE:0:1}" = / ] || FILE=${PWD%/}/$FILE
-    while [ -n "$FILE" ]; do
-        ((i++)) || {
-            # 1. Replace "/./" with "/"
-            # 2. Replace subsequent "/"s with one "/"
-            # 3. Remove trailing "/"
-            FILE=$(sed -e 's/\/\.\//\//g' -e 's/\/\+/\//g' -e 's/\/$//' \
-                <<<"$FILE") || return
-            FILE=${FILE:1}
-        }
-        COMPONENT=${FILE%%/*}
-        [ "$COMPONENT" != "$FILE" ] ||
-            FILE=
-        FILE=${FILE#*/}
-        case "$COMPONENT" in
-        '' | .)
-            continue
-            ;;
-        ..)
-            RESOLVED=${RESOLVED%/*}
-            continue
-            ;;
-        esac
-        RESOLVED=$RESOLVED/$COMPONENT
-        [ ! -L "$RESOLVED" ] || {
-            LN=$(readlink "$RESOLVED") || return
-            [ "${LN:0:1}" = / ] || LN=${RESOLVED%/*}/$LN
-            FILE=$LN${FILE:+/$FILE}
-            RESOLVED=
-            i=0
-        }
-    done
-    echo "$RESOLVED"
-}
-
-function lk_in_array() {
-    local _LK_ARRAY _LK_VALUE
-    eval "_LK_ARRAY=(\${$2[@]+\"\${$2[@]}\"})"
-    for _LK_VALUE in ${_LK_ARRAY[@]+"${_LK_ARRAY[@]}"}; do
-        [ "$_LK_VALUE" = "$1" ] || continue
-        return
-    done
-    false
-}
-
-function lk_date_log() {
-    date +"%Y-%m-%d %H:%M:%S %z"
-}
-
-function lk_log() {
-    local LINE
-    while IFS= read -r LINE || [ -n "$LINE" ]; do
-        printf '%s %s\n' "$(lk_date_log)" "$LINE"
-    done
-}
-
-function lk_console_message() {
-    local SPACES=$'\n'"${LK_CONSOLE_SPACES-  }"
-    echo "\
-$LK_BOLD${LK_CONSOLE_COLOUR-$LK_CYAN}${LK_CONSOLE_PREFIX-==> }\
-$LK_RESET${LK_CONSOLE_MESSAGE_COLOUR-$LK_BOLD}\
-${1//$'\n'/$SPACES}$LK_RESET"
-}
-
-function lk_console_item() {
-    lk_console_message "\
-$1$LK_RESET${LK_CONSOLE_COLOUR2-${LK_CONSOLE_COLOUR-$LK_CYAN}}$(
-        [ "${2//$'\n'/}" = "$2" ] &&
-            echo " $2" ||
-            echo $'\n'"$2"
-    )"
-}
-
-function lk_console_detail() {
-    local LK_CONSOLE_PREFIX="   -> " LK_CONSOLE_SPACES="    " \
-        LK_CONSOLE_COLOUR=$LK_YELLOW LK_CONSOLE_MESSAGE_COLOUR=
-    [ $# -le 1 ] &&
-        lk_console_message "$1" ||
-        lk_console_item "$1" "$2"
-}
-
-function lk_console_log() {
-    local LK_CONSOLE_PREFIX=" :: " LK_CONSOLE_SPACES="    " \
-        LK_CONSOLE_COLOUR2=$LK_BOLD
-    [ $# -le 1 ] &&
-        lk_console_message "$LK_CYAN$1" ||
-        lk_console_item "$LK_CYAN$1" "$2"
-}
-
-LK_BOLD=$(tput bold 2>/dev/null) || LK_BOLD=
-LK_CYAN=$(tput setaf 6 2>/dev/null) || LK_CYAN=
-LK_YELLOW=$(tput setaf 3 2>/dev/null) || LK_YELLOW=
-LK_RESET=$(tput sgr0 2>/dev/null) || LK_RESET=
-
-##
+include= . "$LK_BASE/lib/bash/common.sh"
 
 function find_file() {
     local DIR
     for DIR in "$BACKUP_ROOT/conf" "$_DIR"; do
         [ -e "$DIR/$1" ] || continue
-        lk_realpath "$DIR/$1"
+        realpath "$DIR/$1"
         return
     done
     false
@@ -138,8 +45,7 @@ function is_stage_complete() {
 
 function get_stage() {
     local STAGE
-    for STAGE in $(tac < <(printf '%s\n' \
-        "${SNAPSHOT_STAGES[@]}")) not-started; do
+    for STAGE in $(tac < <(lk_echo_array SNAPSHOT_STAGES)) not-started; do
         [ ! -e "$LK_SNAPSHOT_ROOT/.$STAGE" ] || break
     done
     echo "${STAGE//-/${1--}}"
@@ -157,7 +63,7 @@ SNAPSHOT_STAGES=(
     finished
 )
 
-[ $# -ge 3 ] || LK_DIE_PREFIX='' lk_die "\
+LK_USAGE="\
 Usage: ${0##*/} SOURCE_NAME SSH_HOST:SOURCE_PATH BACKUP_ROOT [RSYNC_ARG...]
    or: ${0##*/} SOURCE_NAME RSYNC_HOST::SOURCE_PATH BACKUP_ROOT [RSYNC_ARG...]
    or: ${0##*/} SOURCE_NAME SOURCE_PATH BACKUP_ROOT [RSYNC_ARG...]
@@ -167,6 +73,8 @@ then rsync SOURCE_PATH to the replica to create a new snapshot of SOURCE_NAME.
 
 This approach uses less storage than rsync --link-dest, which breaks hard links
 when permissions change."
+
+[ $# -ge 3 ] || lk_usage
 
 SOURCE_NAME=$1
 SOURCE=$2
@@ -194,12 +102,10 @@ esac
 [ -w "$BACKUP_ROOT" ] || lk_die "cannot write to directory: $BACKUP_ROOT"
 
 SOURCE_NAME=${SOURCE_NAME//\//_}
-BACKUP_ROOT=$(lk_realpath "$BACKUP_ROOT")
-! type -P flock >/dev/null || {
-    LOCK_FILE=/tmp/${0##*/}-${BACKUP_ROOT//\//_}-$SOURCE_NAME.lock
-    exec 9>"$LOCK_FILE" &&
-        flock -n 9 || lk_die "unable to acquire a lock on $LOCK_FILE"
-}
+BACKUP_ROOT=$(realpath "$BACKUP_ROOT")
+LOCK_FILE=/tmp/${0##*/}-${BACKUP_ROOT//\//_}-$SOURCE_NAME.lock
+exec 9>"$LOCK_FILE" &&
+    flock -n 9 || lk_die "unable to acquire a lock on $LOCK_FILE"
 
 LK_SNAPSHOT_TIMESTAMP=${LK_BACKUP_TIMESTAMP:-$(date +"%Y-%m-%d-%H%M%S")}
 LK_SNAPSHOT_ROOT=$BACKUP_ROOT/snapshot/$SOURCE_NAME/$LK_SNAPSHOT_TIMESTAMP
@@ -209,7 +115,6 @@ export LK_SNAPSHOT_TIMESTAMP \
     LK_SNAPSHOT_ROOT LK_SNAPSHOT_FS_ROOT LK_SNAPSHOT_DB_ROOT
 
 SOURCE_LATEST=$BACKUP_ROOT/latest/$SOURCE_NAME
-LOG_FILE=$BACKUP_ROOT/log/snapshot.log
 SNAPSHOT_LOG_FILE=$LK_SNAPSHOT_ROOT/log/snapshot.log
 RSYNC_OUT_FILE=$LK_SNAPSHOT_ROOT/log/rsync.log
 RSYNC_ERR_FILE=$LK_SNAPSHOT_ROOT/log/rsync.err.log
@@ -217,16 +122,14 @@ RSYNC_ERR_FILE=$LK_SNAPSHOT_ROOT/log/rsync.err.log
 ! is_stage_complete finished ||
     lk_die "already finalised: $LK_SNAPSHOT_ROOT"
 
+lk_log_output
+
 install -d -m 0711 \
     "$BACKUP_ROOT/"{,latest,log,snapshot/{,"$SOURCE_NAME/"{,"$LK_SNAPSHOT_TIMESTAMP/"{,db,log}}}}
-for f in LOG_FILE SNAPSHOT_LOG_FILE RSYNC_OUT_FILE RSYNC_ERR_FILE; do
+for f in SNAPSHOT_LOG_FILE RSYNC_OUT_FILE RSYNC_ERR_FILE; do
     [ -e "${!f}" ] ||
         install -m 0600 /dev/null "${!f}"
 done
-
-lk_log >>"$LOG_FILE" <<<"====> $(lk_realpath "$0") invoked on $(hostname -f)"
-exec 6>&1 7>&2
-exec > >(tee >(lk_log | tee -a "$SNAPSHOT_LOG_FILE" >>"$LOG_FILE")) 2>&1
 
 {
     lk_console_message "Backing up $SOURCE_NAME to $BACKUP_ROOT"
@@ -236,8 +139,8 @@ exec > >(tee >(lk_log | tee -a "$SNAPSHOT_LOG_FILE" >>"$LOG_FILE")) 2>&1
     lk_console_detail "Status:" "$(get_stage " ")"
 
     if [ -d "$SOURCE_LATEST/fs" ] && ! is_stage_complete previous-copy-finished; then
-        LATEST=$(lk_realpath "$SOURCE_LATEST/fs")
-        [ "$LATEST" != "$(lk_realpath "$LK_SNAPSHOT_FS_ROOT")" ] ||
+        LATEST=$(realpath "$SOURCE_LATEST/fs")
+        [ "$LATEST" != "$(realpath "$LK_SNAPSHOT_FS_ROOT")" ] ||
             lk_die "latest and pending snapshots cannot be the same"
         lk_console_message "Duplicating previous snapshot using hard links"
         ! is_stage_complete previous-copy-started || {
@@ -257,7 +160,7 @@ exec > >(tee >(lk_log | tee -a "$SNAPSHOT_LOG_FILE" >>"$LOG_FILE")) 2>&1
     fi
 
     lk_console_item "Creating snapshot at" "$LK_SNAPSHOT_ROOT"
-    lk_console_detail "Log files:" "$(printf '%s\n' \
+    lk_console_detail "Log files:" "$(lk_echo_args \
         "$SNAPSHOT_LOG_FILE" "$RSYNC_OUT_FILE" "$RSYNC_ERR_FILE")"
     RSYNC_ARGS=(-vrlpt --delete)
     ! RSYNC_FILTER=$(find_file "$SOURCE_NAME-filter") || {
@@ -331,10 +234,8 @@ exec > >(tee >(lk_log | tee -a "$SNAPSHOT_LOG_FILE" >>"$LOG_FILE")) 2>&1
         mark_stage_complete finished
     }
 
-    [ -z "${LOCK_FILE:-}" ] || {
-        exec 9>&-
-        rm -f "$LOCK_FILE"
-    }
+    exec 9>&-
+    rm -f "$LOCK_FILE"
 
     exit
 }
