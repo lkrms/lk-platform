@@ -217,50 +217,10 @@ function lk_ssh_configure() {
     PATTERN=${PATTERN//\\/\\\\}
     CONF="Include ~/.ssh/${SSH_PREFIX}config.d/*"
     # shellcheck disable=SC2016
-    PROG='
-function print_line(line) {
-    if (print_out)
-        print line ? line : $0
-    else
-        lines[++line_count] = line ? line : $0
-}
-function print_previous() {
-    if (previous) {
-        print_line(previous)
-        previous = ""
-    }
-}
-function print_SSH_CONFIG(add_newline) {
-    if (SSH_CONFIG) {
-        print_line(SSH_CONFIG (add_newline ? "\n" : ""))
-        SSH_CONFIG = ""
-    }
-}
-$0 ~ SSH_PATTERN {
-    remove = 1
-    previous = ""
-    next
-}
-remove {
-    remove = 0
-    print_SSH_CONFIG()
-}
-/^# Added by / {
-    print_previous()
-    previous = $0
-    next
-}
-{
-    print_previous()
-    print_line()
-}
-END {
-    print_out = 1
-    print_SSH_CONFIG(1)
-    for (i = 1; i <= line_count; i++)
-        print lines[i]
-}'
-    AWK=(awk -v "SSH_PATTERN=$PATTERN" -v "SSH_CONFIG=$CONF" "$PROG")
+    AWK=(awk
+        -f "$LK_BASE/lib/awk/update-ssh-config.awk"
+        -v "SSH_PATTERN=$PATTERN"
+        -v "SSH_CONFIG=$CONF")
 
     for h in "${HOMES[@]}"; do
         [ ! -e "$h/.${LK_PATH_PREFIX}ignore" ] &&
@@ -343,22 +303,12 @@ function _lk_node_ip() {
     IP=$(if lk_command_exists ip; then
         ip address show
     else
-        # For reference, macOS output examples:
-        # - inet 10.10.10.4 netmask 0xffff0000 broadcast 10.10.255.255
-        # - inet6 fe80::1c43:b79d:5dfe:c0a4%en0 prefixlen 64 secured scopeid 0x8
-        ifconfig | sed -E 's/ (prefixlen |netmask (0xf*[8ce]?0*( |$)))/\/\2/'
-    fi | awk "\
-BEGIN                                       { b[\"f\"] = 4
-                                              b[\"e\"] = 3
-                                              b[\"c\"] = 2
-                                              b[\"8\"] = 1
-                                              b[\"0\"] = 0 }
-\$1 == \"$1\" && \$2 ~ /\\/[0-9]+\$/        { print \$2 }
-\$1 == \"$1\" && \$2 ~ /\\/0x[0-9a-f]{8}\$/ { split(\$2, a, \"/0x\")
-                                              p=0
-                                              for (i = 1; i <= length(a[2]); i++)
-                                                  p += b[substr(a[2], i, 1)]
-                                              printf \"%s/%s\\n\", a[1], p }" |
+        # See parse-ifconfig.awk for macOS output examples
+        ifconfig |
+            sed -E 's/ (prefixlen |netmask (0xf*[8ce]?0*( |$)))/\/\2/'
+    fi | awk \
+        -f "$LK_BASE/lib/awk/parse-ifconfig.awk" \
+        -v "ADDRESS_FAMILY=$1" |
         sed -E 's/%[^/]+\//\//') || return
     {
         IFS='|'
@@ -367,13 +317,11 @@ BEGIN                                       { b[\"f\"] = 4
             for i in "${PRIVATE[@]}"; do
                 grep -E "^$i" <<<"$IP" || true
             done
-    } | {
-        if lk_is_true "${LK_IP_KEEP_PREFIX:-}"; then
-            cat
-        else
-            sed -E 's/\/[0-9]+$//'
-        fi
-    }
+    } | if lk_is_true "${LK_IP_KEEP_PREFIX:-}"; then
+        cat
+    else
+        sed -E 's/\/[0-9]+$//'
+    fi
 }
 
 function lk_node_ipv4() {
@@ -612,6 +560,57 @@ function lk_certbot_install() {
         --"${LK_CERTBOT_PLUGIN:-apache}" \
         ${LK_CERTBOT_OPTIONS[@]:+"${LK_CERTBOT_OPTIONS[@]}"} \
         --domains "$(lk_implode_args "," "$@")"
+}
+
+# lk_cpanel_get_ssl_cert SSH_HOST DOMAIN [TARGET_DIR]
+function lk_cpanel_get_ssl_cert() {
+    local TARGET_DIR=${3:-~/ssl} SSL_JSON CERT KEY TARGET_REL \
+        LK_CONSOLE_NO_FOLD=1 LK_BACKUP_SUFFIX
+    LK_BACKUP_SUFFIX=-$(lk_timestamp).bak
+    [ $# -ge 2 ] && lk_is_fqdn "$2" || lk_usage "\
+Usage: $(lk_myself -f) SSH_HOST DOMAIN [TARGET_DIR]
+
+Use fetch_best_for_domain to retrieve the best available SSL certificate,
+CA bundle and private key for DOMAIN from SSH_HOST to TARGET_DIR
+(default: ~/ssl)." || return
+    TARGET_DIR=${TARGET_DIR%/}
+    [ -e "$TARGET_DIR" ] ||
+        install -d -m 0750 "$TARGET_DIR" &&
+        lk_maybe_install -m 0640 /dev/null "$TARGET_DIR/$2.cert" &&
+        lk_maybe_install -m 0640 /dev/null "$TARGET_DIR/$2.key" || return
+    lk_console_message "Retrieving SSL certificate"
+    lk_console_detail "Host:" "$1"
+    lk_console_detail "Domain:" "$2"
+    SSL_JSON=$(ssh "$1" uapi --output=json \
+        SSL fetch_best_for_domain domain="$2") &&
+        CERT=$(jq -r '.result.data.crt' <<<"$SSL_JSON") &&
+        CA_BUNDLE=$(jq -r '.result.data.cab' <<<"$SSL_JSON") &&
+        KEY=$(jq -r '.result.data.key' <<<"$SSL_JSON") ||
+        lk_warn "unable to retrieve SSL certificate for domain $2" || return
+    lk_console_message "Verifying certificate"
+    lk_ssl_verify_cert "$CERT" "$KEY" "$CA_BUNDLE" || return
+    lk_console_message "Writing certificate files"
+    TARGET_REL=${TARGET_DIR//~/"~"}
+    lk_console_detail "Certificate and CA bundle:" "$TARGET_REL/$2.cert"
+    lk_console_detail "Private key:" "$TARGET_REL/$2.key"
+    lk_maybe_replace "$TARGET_DIR/$2.cert" \
+        "$(lk_echo_args "$CERT" "$CA_BUNDLE")" &&
+        lk_maybe_replace "$TARGET_DIR/$2.key" "$KEY"
+}
+
+# lk_ssl_verify_cert CERT KEY [CA_BUNDLE]
+function lk_ssl_verify_cert() {
+    local CERT=$1 KEY=$2 CA_BUNDLE=${3:-}
+    openssl verify \
+        ${CA_BUNDLE:+-CAfile <(cat <<<"$CA_BUNDLE")} <<<"$CERT" >/dev/null ||
+        lk_warn "invalid certificate chain" || return
+    openssl x509 -noout -checkend 86400 <<<"$CERT" >/dev/null ||
+        lk_warn "certificate has expired" || return
+    CERT_MODULUS=$(openssl x509 -noout -modulus <<<"$CERT") &&
+        KEY_MODULUS=$(openssl rsa -noout -modulus <<<"$KEY") &&
+        [ "$CERT_MODULUS" = "$KEY_MODULUS" ] ||
+        lk_warn "certificate and private key have different modulus" || return
+    lk_console_log "SSL certificate and private key verified"
 }
 
 # lk_apply_setting FILE SETTING VAL [DELIM] [COMMENT_CHARS] [SPACES]
