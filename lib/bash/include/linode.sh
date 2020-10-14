@@ -13,7 +13,8 @@ function lk_linode_list() {
 
 # lk_linode_ssh_add LINODE_ID[,LABEL]...
 function lk_linode_ssh_add() {
-    local JQ_LABEL JQ_IPV4 LINODE_ID JSON LABEL
+    local JQ_LABEL JQ_IPV4 LINODE_ID JSON LABEL \
+        LK_SSH_PRIORITY=${LK_SSH_PRIORITY-45}
     JQ_LABEL=$(
         cat <<"EOF"
 def to_bash:
