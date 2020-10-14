@@ -45,6 +45,7 @@ PACMAN_PACKAGES=(
     dmidecode
     glances
     htop
+    inetutils # for telnet
     jq
     lftp
     lsof
