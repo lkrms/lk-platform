@@ -1642,20 +1642,44 @@ function lk_resolve_files() {
     ) "$1"
 }
 
+# shellcheck disable=SC2034
 function lk_expand_paths() {
+    local _LK_ARRAY _LK_TEMP_ARRAY _PATH _PATHS
     if [ $# -gt 0 ]; then
-        while [ $# -gt 0 ]; do
-            if [[ $1 =~ ^(~[-a-z0-9\$_]*)(/.*)?$ ]]; then
-                eval "printf '%s\n' $([ -n "${BASH_REMATCH[2]}" ] &&
-                    printf '%s%q' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" ||
-                    echo "${BASH_REMATCH[1]}")"
-            else
-                printf '%s\n' "$1"
+        lk_is_identifier "$1" || lk_warn "not a valid identifier: $1" || return
+        _LK_ARRAY="$1[@]"
+        _LK_TEMP_ARRAY=(${!_LK_ARRAY+"${!_LK_ARRAY}"})
+        eval "$1=()"
+        for _PATH in ${_LK_TEMP_ARRAY[@]+"${_LK_TEMP_ARRAY[@]}"}; do
+            unset _PATHS
+            if [[ $_PATH =~ \"(.*)\" ]]; then
+                eval "$1+=(\"\${BASH_REMATCH[1]}\")"
+                continue
             fi
-            shift
+            if [[ $_PATH =~ ^(~[-a-z0-9\$_]*)(/.*)?$ ]]; then
+                _PATH=$(eval "printf '%s\n' $([ -n "${BASH_REMATCH[2]}" ] &&
+                    printf '%s%q' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" ||
+                    echo "${BASH_REMATCH[1]}")")
+            fi
+            if [[ $_PATH =~ [*?] ]]; then
+                _PATH=$(lk_escape "$_PATH" '$' '`' "\\" '"')
+                ! lk_is_true "${LK_EXPAND_PATHS_GLOBSTAR:-0}" ||
+                    _PATH=${_PATH//\*\*/\"\*\*\"}
+                _PATH=${_PATH//\*/\"\*\"}
+                _PATH=\"${_PATH//\?/\"\?\"}\"
+                lk_mapfile -z <(
+                    shopt -s nullglob
+                    eval "printf '%s\0' $_PATH"
+                ) _PATHS
+                unset _PATH
+            fi
+            eval "$1+=(\${_PATHS[@]+\"\${_PATHS[@]}\"} \${_PATH+\"\$_PATH\"})"
         done
     else
-        lk_xargs lk_expand_paths
+        local _LK_INPUT
+        lk_mapfile /dev/stdin _LK_INPUT
+        lk_expand_paths _LK_INPUT
+        lk_echo_array _LK_INPUT
     fi
 }
 

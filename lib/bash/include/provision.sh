@@ -102,6 +102,43 @@ function lk_sudo_offer_nopasswd() {
     }
 }
 
+function lk_ssh_list_hosts() {
+    local IFS S="[[:blank:]]" FILES=(~/.ssh/config) COUNT=0 HOST
+    while [ "$COUNT" -lt "${#FILES[@]}" ]; do
+        COUNT=${#FILES[@]}
+        IFS=$'\n'
+        FILES=(
+            "${FILES[@]}"
+            $(INCLUDE="[iI][nN][cC][lL][uU][dD][eE]" &&
+                grep -Eh \
+                    "^$S*$INCLUDE($S+(\"[^\"]*\"|[^\"]+))+$S*\$" \
+                    "${FILES[@]}" 2>/dev/null |
+                sed -E \
+                    -e "s/^$S*$INCLUDE$S+(.+)$S*\$/\\1/" \
+                    -e "s/$S+/\n/g" |
+                    sed -E "s/^(\"?)([^~/])/\\1~\\/.ssh\\/\\2/")
+        ) || true
+        unset IFS
+        # Expand twice because SSH expands "~" and globs inside double quotes
+        lk_expand_paths FILES &&
+            lk_expand_paths FILES &&
+            lk_resolve_files FILES || return
+    done
+    [ ${#FILES[@]} -eq 0 ] || {
+        HOST="[hH][oO][sS][tT]"
+        grep -Eh \
+            "^$S*$HOST($S+(\"[^\"]*\"|[^\"]+))+$S*\$" \
+            "${FILES[@]}" 2>/dev/null |
+            sed -E \
+                -e "s/^$S*$HOST$S+(.+)$S*\$/\\1/" \
+                -e "s/$S+/\n/g" |
+            sed -E \
+                -e "s/\"(.+)\"/\\1/g" \
+                -e "/[*?]/d" |
+            sort -u
+    }
+}
+
 # lk_ssh_add_host NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]
 function lk_ssh_add_host() {
     local NAME=$1 HOST=$2 JUMP_USER=$3 KEY_FILE=${4:-} JUMP_HOST_NAME=${5:-} \
@@ -176,7 +213,7 @@ function lk_ssh_configure() {
     # ~/.ssh/config, or replaces an equivalent entry
     PATTERN="(~/\\.ssh/)?${SSH_PREFIX}config\\.d/\\*"
     PATTERN="(\"$PATTERN\"|$PATTERN)"
-    PATTERN="^$S*[iI][nN][cC][lL][uU][dD][eE]$S*$PATTERN$S*\$"
+    PATTERN="^$S*[iI][nN][cC][lL][uU][dD][eE]$S+$PATTERN$S*\$"
     PATTERN=${PATTERN//\\/\\\\}
     CONF="Include ~/.ssh/${SSH_PREFIX}config.d/*"
     # shellcheck disable=SC2016
@@ -268,6 +305,7 @@ EOF
                 "$JUMP_USER" \
                 "$JUMP_KEY_FILE" ${KEY+<<<"$KEY"}
         (
+            shopt -s nullglob
             chmod 00600 \
                 "$h/.ssh/"{config,"$SSH_PREFIX"{config.d,keys}/*}
             ! lk_is_root ||
