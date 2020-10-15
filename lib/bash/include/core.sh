@@ -626,9 +626,18 @@ function lk_echo_args() {
 }
 
 function lk_echo_array() {
-    eval "[ \"\${$1[*]+1}\" != 1 ] ||
-        [ \${#$1[@]} -eq 0 ] ||
-        printf '%s\n' \"\${$1[@]}\""
+    local _LK_ARRAY="$1[@]"
+    lk_echo_args ${!_LK_ARRAY+"${!_LK_ARRAY}"}
+}
+
+function lk_quote_args() {
+    [ $# -eq 0 ] ||
+        printf '%q ' "$@"
+}
+
+function lk_quote_array() {
+    local _LK_ARRAY="$1[@]"
+    lk_quote_args ${!_LK_ARRAY+"${!_LK_ARRAY}"}
 }
 
 function lk_implode() {
@@ -864,7 +873,11 @@ function lk_log_output() {
     IFS=
     lk_log "$LK_BOLD====> ${HEADER[*]}$LK_RESET" >>"$LOG_PATH" &&
         exec 6>&1 7>&2 &&
-        exec > >(tee >(lk_log >>"$LOG_PATH")) 2>&1 ||
+        exec > >(tee >(lk_log | { if [ -n "${LK_SECONDARY_LOG_FILE:-}" ]; then
+            tee -a "$LK_SECONDARY_LOG_FILE"
+        else
+            cat
+        fi >>"$LOG_PATH"; })) 2>&1 ||
         return
     lk_echoc "Output is being logged to $LK_BOLD$LOG_PATH$LK_RESET" \
         "$LK_GREY" >&7

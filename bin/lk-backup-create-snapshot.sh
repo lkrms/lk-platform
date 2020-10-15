@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2015
+# shellcheck disable=SC1090,SC2015,SC2034,SC2207
 
 set -euo pipefail
 _DEPTH=1
@@ -15,16 +15,59 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
     lk_die "unable to locate LK_BASE"
 export LK_BASE
 
-include= . "$LK_BASE/lib/bash/common.sh"
+include='' . "$LK_BASE/lib/bash/common.sh"
 
-function find_file() {
-    local DIR
-    for DIR in "$BACKUP_ROOT/conf" "$_DIR"; do
-        [ -e "$DIR/$1" ] || continue
-        realpath "$DIR/$1"
-        return
+function find_custom() {
+    local FILE ALL=0 COUNT=0
+    [ "$1" != --all ] || {
+        ALL=1
+        shift
+    }
+    for FILE in {"$LK_BASE"/etc/backup,"$BACKUP_ROOT"/conf.d}/{"$1","$SOURCE_NAME/${1#$SOURCE_NAME-}"}; do
+        [ -e "$FILE" ] || continue
+        realpath "$FILE" || lk_die
+        ((++COUNT))
+        lk_is_true "$ALL" || break
     done
-    false
+    ((COUNT))
+}
+
+function run_custom_hook() {
+    local HOOK=$1 SCRIPTS SOURCE_SCRIPT LINES LINE SH
+    export LK_SOURCE_SCRIPT_ALREADY_STARTED=0 \
+        LK_SOURCE_SCRIPT_ALREADY_FINISHED=0
+    ! is_stage_complete "hook-$HOOK-started" ||
+        LK_SOURCE_SCRIPT_ALREADY_STARTED=1
+    ! is_stage_complete "hook-$HOOK-finished" ||
+        LK_SOURCE_SCRIPT_ALREADY_FINISHED=1
+    if SCRIPTS=($(find_custom --all "$SOURCE_NAME-hook-$HOOK")); then
+        mark_stage_complete "hook-$HOOK-started"
+        for SOURCE_SCRIPT in "${SCRIPTS[@]}"; do
+            lk_console_item "Running hook script:" "$SOURCE_SCRIPT"
+            (
+                EXIT_STATUS=0
+                . "$SOURCE_SCRIPT" || EXIT_STATUS=$?
+                echo "# ." >&4
+                exit "$EXIT_STATUS"
+            ) &
+            LINES=()
+            while IFS= read -ru 4 LINE && [ "$LINE" != "# ." ]; do
+                LINES+=("$LINE")
+            done
+            wait "$!" ||
+                lk_die "hook script failed (exit status $?)"
+            [ ${#LINES[@]} -eq 0 ] || {
+                SH=$(lk_echo_array LINES)
+                eval "$SH" ||
+                    LK_CONSOLE_SECONDARY_COLOUR='' LK_CONSOLE_NO_FOLD=1 \
+                        lk_console_error "\
+Shell commands emitted by hook script failed (exit status $?):" $'\n'"$SH" ||
+                    lk_die ""
+            }
+            lk_console_log "Hook script finished"
+        done
+        mark_stage_complete "hook-$HOOK-finished"
+    fi
 }
 
 function assert_stage_valid() {
@@ -45,7 +88,7 @@ function is_stage_complete() {
 
 function get_stage() {
     local STAGE
-    for STAGE in $(tac < <(lk_echo_array SNAPSHOT_STAGES)) not-started; do
+    for STAGE in $(tac < <(lk_echo_array SNAPSHOT_STAGES)) starting; do
         [ ! -e "$LK_SNAPSHOT_ROOT/.$STAGE" ] || break
     done
     echo "${STAGE//-/${1--}}"
@@ -106,6 +149,8 @@ BACKUP_ROOT=$(realpath "$BACKUP_ROOT")
 LOCK_FILE=/tmp/${0##*/}-${BACKUP_ROOT//\//_}-$SOURCE_NAME.lock
 exec 9>"$LOCK_FILE" &&
     flock -n 9 || lk_die "unable to acquire a lock on $LOCK_FILE"
+FIFO_FILE=$(lk_mktemp_fifo)
+exec 4<>"$FIFO_FILE"
 
 LK_SNAPSHOT_TIMESTAMP=${LK_BACKUP_TIMESTAMP:-$(date +"%Y-%m-%d-%H%M%S")}
 LK_SNAPSHOT_ROOT=$BACKUP_ROOT/snapshot/$SOURCE_NAME/$LK_SNAPSHOT_TIMESTAMP
@@ -122,14 +167,15 @@ RSYNC_ERR_FILE=$LK_SNAPSHOT_ROOT/log/rsync.err.log
 ! is_stage_complete finished ||
     lk_die "already finalised: $LK_SNAPSHOT_ROOT"
 
-lk_log_output
-
 install -d -m 0711 \
     "$BACKUP_ROOT/"{,latest,log,snapshot/{,"$SOURCE_NAME/"{,"$LK_SNAPSHOT_TIMESTAMP/"{,db,log}}}}
 for f in SNAPSHOT_LOG_FILE RSYNC_OUT_FILE RSYNC_ERR_FILE; do
     [ -e "${!f}" ] ||
         install -m 0600 /dev/null "${!f}"
 done
+
+LK_SECONDARY_LOG_FILE=$SNAPSHOT_LOG_FILE \
+    lk_log_output
 
 {
     lk_console_message "Backing up $SOURCE_NAME to $BACKUP_ROOT"
@@ -163,25 +209,12 @@ done
     lk_console_detail "Log files:" "$(lk_echo_args \
         "$SNAPSHOT_LOG_FILE" "$RSYNC_OUT_FILE" "$RSYNC_ERR_FILE")"
     RSYNC_ARGS=(-vrlpt --delete)
-    ! RSYNC_FILTER=$(find_file "$SOURCE_NAME-filter") || {
+    ! RSYNC_FILTER=$(find_custom "$SOURCE_NAME-filter-rsync") || {
         lk_console_detail "Rsync filter:" "$RSYNC_FILTER"
         RSYNC_ARGS=("${RSYNC_ARGS[@]}" --delete-excluded --filter ". $RSYNC_FILTER")
     }
 
-    # shellcheck disable=SC1090
-    if SOURCE_SCRIPT=$(find_file "$SOURCE_NAME-hook-pre_rsync"); then
-        export LK_SOURCE_SCRIPT_ALREADY_STARTED=0 \
-            LK_SOURCE_SCRIPT_ALREADY_FINISHED=0
-        ! is_stage_complete hook-pre_rsync-started ||
-            LK_SOURCE_SCRIPT_ALREADY_STARTED=1
-        ! is_stage_complete hook-pre_rsync-finished ||
-            LK_SOURCE_SCRIPT_ALREADY_FINISHED=1
-        mark_stage_complete hook-pre_rsync-started
-        lk_console_item "Running hook script:" "$SOURCE_SCRIPT"
-        . "$SOURCE_SCRIPT"
-        mark_stage_complete hook-pre_rsync-finished
-        lk_console_log "Hook script finished"
-    fi
+    run_custom_hook pre_rsync
 
     RSYNC_ARGS=("${RSYNC_ARGS[@]}" "$@" "${SOURCE%/}/" "$LK_SNAPSHOT_FS_ROOT/")
 
@@ -213,20 +246,7 @@ done
     [ "${DRY_RUN:-0}" -ne 0 ] || mark_stage_complete rsync-finished
     lk_console_log "rsync $RSYNC_RESULT"
 
-    # shellcheck disable=SC1090
-    if SOURCE_SCRIPT=$(find_file "$SOURCE_NAME-hook-post_rsync"); then
-        export LK_SOURCE_SCRIPT_ALREADY_STARTED=0 \
-            LK_SOURCE_SCRIPT_ALREADY_FINISHED=0
-        ! is_stage_complete hook-post_rsync-started ||
-            LK_SOURCE_SCRIPT_ALREADY_STARTED=1
-        ! is_stage_complete hook-post_rsync-finished ||
-            LK_SOURCE_SCRIPT_ALREADY_FINISHED=1
-        mark_stage_complete hook-post_rsync-started
-        lk_console_item "Running hook script:" "$SOURCE_SCRIPT"
-        . "$SOURCE_SCRIPT"
-        mark_stage_complete hook-post_rsync-finished
-        lk_console_log "Hook script finished"
-    fi
+    run_custom_hook post_rsync
 
     [ "${DRY_RUN:-0}" -ne 0 ] || {
         lk_console_message "Updating latest snapshot symlink for $SOURCE_NAME"
@@ -234,8 +254,8 @@ done
         mark_stage_complete finished
     }
 
-    exec 9>&-
-    rm -f "$LOCK_FILE"
+    exec 4>&- 9>&-
+    rm -Rf "${FIFO_FILE%/*}" "$LOCK_FILE"
 
     exit
 }
