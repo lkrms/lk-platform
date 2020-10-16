@@ -91,7 +91,7 @@ for DATABASE_FILE in "$@"; do
     PASSWORDS+=("$PASSWORD")
 done
 
-[ "${#PASSWORDS[@]}" -gt 0 ] ||
+[ ${#PASSWORDS[@]} -gt 0 ] ||
     lk_die "no database to open"
 
 if lk_is_true "$REGISTER"; then
@@ -118,7 +118,7 @@ fi
     exit 0
 
 PASSWORD_INPUT="${PASSWORDS[0]}$(
-    [ "${#PASSWORDS[@]}" -lt 2 ] || printf '\n\n\n%s' "${PASSWORDS[@]:1}"
+    [ ${#PASSWORDS[@]} -lt 2 ] || printf '\n\n\n%s' "${PASSWORDS[@]:1}"
 )"
 
 if lk_is_true "$DAEMON"; then

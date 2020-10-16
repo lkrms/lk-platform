@@ -27,13 +27,13 @@ eval "$(
     lk_var() { comm -23 <(printf '%s\n' "${!LK_@}" | sort) <(cat <<<"$ENV"); }
     (
         VAR=($(lk_var))
-        [ "${#VAR[@]}" -eq 0 ] || unset "${VAR[@]}"
+        [ ${#VAR[@]} -eq 0 ] || unset "${VAR[@]}"
         for FILE in "${SETTINGS[@]}"; do
             eval "FILE=\"$FILE\""
             [ ! -f "$FILE" ] || . "$FILE"
         done
         VAR=($(lk_var))
-        [ "${#VAR[@]}" -eq 0 ] || declare -p $(lk_var)
+        [ ${#VAR[@]} -eq 0 ] || declare -p $(lk_var)
     )
 )"
 
@@ -92,7 +92,7 @@ function lk_find_latest() {
     for i in $(seq "${#TYPE}"); do
         TYPE_ARGS+=(${TYPE_ARGS[@]+-o} -type "${TYPE:$i-1:1}")
     done
-    [ "${#TYPE_ARGS[@]}" -eq 2 ] || TYPE_ARGS=(\( "${TYPE_ARGS[@]}" \))
+    [ ${#TYPE_ARGS[@]} -eq 2 ] || TYPE_ARGS=(\( "${TYPE_ARGS[@]}" \))
     gnu_find -L . -xdev -regextype posix-egrep \
         ${@+\( "$@" \)} "${TYPE_ARGS[@]}" -print0 |
         xargs -0 gnu_stat --format '%Y :%y %12s %A %N' |

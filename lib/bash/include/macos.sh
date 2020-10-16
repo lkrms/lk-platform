@@ -126,14 +126,14 @@ function lk_macos_install_dmg() {
         IFS=$'\n' &&
         MOUNT_POINTS=($(hdiutil attach -mountroot "$MOUNT_ROOT" "$1" |
             cut -sf3 | sed '/^[[:blank:]]*$/d')) &&
-        [ "${#MOUNT_POINTS[@]}" -gt 0 ] || return
+        [ ${#MOUNT_POINTS[@]} -gt 0 ] || return
     INSTALL=($(
         unset IFS
         find "${MOUNT_POINTS[@]}" -iname "*.pkg"
     )) || EXIT_STATUS=$?
     unset IFS
     [ "$EXIT_STATUS" -ne 0 ] ||
-        [ "${#INSTALL[@]}" -eq 1 ] ||
+        [ ${#INSTALL[@]} -eq 1 ] ||
         lk_warn "nothing to install" || EXIT_STATUS=$?
     [ "$EXIT_STATUS" -ne 0 ] ||
         lk_macos_install_pkg "${INSTALL[0]}" || EXIT_STATUS=$?

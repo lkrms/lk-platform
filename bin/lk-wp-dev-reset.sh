@@ -52,17 +52,17 @@ get_state
 
 # Check plugins
 TO_DEACTIVATE=($(
-    [ "${#ACTIVE_PLUGINS[@]}" -eq 0 ] ||
-        [ "${#DEACTIVATE_PLUGINS[@]}" -eq 0 ] ||
+    [ ${#ACTIVE_PLUGINS[@]} -eq 0 ] ||
+        [ ${#DEACTIVATE_PLUGINS[@]} -eq 0 ] ||
         comm -12 \
             <(printf '%s\n' "${ACTIVE_PLUGINS[@]}") \
             <(printf '%s\n' "${DEACTIVATE_PLUGINS[@]}" | sort | uniq)
 ))
 
-if [ "${#TO_DEACTIVATE[@]}" -gt 0 ]; then
+if [ ${#TO_DEACTIVATE[@]} -gt 0 ]; then
     lk_echo_array TO_DEACTIVATE |
         lk_console_detail_list "Production-only $(
-            lk_maybe_plural "${#TO_DEACTIVATE[@]}" \
+            lk_maybe_plural ${#TO_DEACTIVATE[@]} \
                 "plugin" "plugins"
         ) must be deactivated to continue:"
     lk_confirm "Proceed?" Y || lk_die
@@ -87,11 +87,11 @@ ADMIN_EMAIL="admin@$SITE_DOMAIN"
 lk_console_detail "Site address:" "$SITE_ADDR"
 lk_console_detail "Domain:" "$SITE_DOMAIN"
 lk_console_detail "Installed at:" "$SITE_ROOT"
-[ "${#ACTIVE_PLUGINS[@]}" -eq 0 ] &&
+[ ${#ACTIVE_PLUGINS[@]} -eq 0 ] &&
     lk_console_detail "Active plugins:" "<none>" ||
     lk_echo_array ACTIVE_PLUGINS |
     lk_console_detail_list "Active $(
-        lk_maybe_plural "${#ACTIVE_PLUGINS[@]}" \
+        lk_maybe_plural ${#ACTIVE_PLUGINS[@]} \
             "plugin" "plugins (${#ACTIVE_PLUGINS[@]})"
     ):"
 
@@ -184,7 +184,7 @@ if lk_wp plugin is-active woocommerce; then
                 "wp wc webhook list --user=1 --field=id --status=active"
             TO_DEACTIVATE=()
         }
-        [ "${#TO_DEACTIVATE[@]}" -eq 0 ] || {
+        [ ${#TO_DEACTIVATE[@]} -eq 0 ] || {
             lk_console_detail "WooCommerce: deleting active webhooks"
             for WEBHOOK_ID in "${TO_DEACTIVATE[@]}"; do
                 # TODO: deactivate instead?

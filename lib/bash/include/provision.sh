@@ -104,7 +104,7 @@ function lk_sudo_offer_nopasswd() {
 
 function lk_ssh_list_hosts() {
     local IFS S="[[:blank:]]" FILES=(~/.ssh/config) COUNT=0 HOST
-    while [ "$COUNT" -lt "${#FILES[@]}" ]; do
+    while [ "$COUNT" -lt ${#FILES[@]} ]; do
         COUNT=${#FILES[@]}
         IFS=$'\n'
         FILES=(
@@ -204,8 +204,8 @@ function lk_ssh_configure() {
         KEY PATTERN CONF PROG AWK OWNER GROUP \
         HOMES=(${LK_HOMES[@]+"${LK_HOMES[@]}"}) h
     [ $# -eq 0 ] || [ $# -ge 2 ] || lk_warn "invalid arguments" || return
-    [ "${#HOMES[@]}" -gt 0 ] || HOMES=(~)
-    [ "${#HOMES[@]}" -le 1 ] ||
+    [ ${#HOMES[@]} -gt 0 ] || HOMES=(~)
+    [ ${#HOMES[@]} -le 1 ] ||
         [ ! "$JUMP_KEY_FILE" = - ] ||
         KEY=$(cat)
 
@@ -377,7 +377,7 @@ function lk_hosts_get_records() {
         FIELDS=(${1:1})
         shift
         unset IFS
-        [ "${#FIELDS[@]}" -gt 0 ] || lk_warn "no output field" || return
+        [ ${#FIELDS[@]} -gt 0 ] || lk_warn "no output field" || return
         FIELDS=($(lk_echo_array FIELDS | sort | uniq))
         CUT=-f
         for FIELD in "${FIELDS[@]}"; do
@@ -501,20 +501,20 @@ function lk_host_ns_resolve() {
         lk_console_detail "Looking up A and AAAA records for:" "$1"
     }
     IP=($(lk_hosts_get_records +VALUE A,AAAA "$1")) || return
-    if [ "${#IP[@]}" -eq 0 ]; then
+    if [ ${#IP[@]} -eq 0 ]; then
         ! lk_verbose || {
             lk_console_detail "No A or AAAA records returned"
             lk_console_detail "Looking up CNAME record for:" "$1"
         }
         CNAME=($(lk_hosts_get_records +VALUE CNAME "$1")) || return
-        if [ "${#CNAME[@]}" -eq 1 ]; then
+        if [ ${#CNAME[@]} -eq 1 ]; then
             ! lk_verbose ||
                 lk_console_detail "CNAME record from $NS for $1:" "${CNAME[0]}"
             lk_host_ns_resolve "${CNAME[0]%.}" || return
             return
         fi
     fi
-    [ "${#IP[@]}" -gt 0 ] || lk_warn "could not resolve $1: $NS" || return
+    [ ${#IP[@]} -gt 0 ] || lk_warn "could not resolve $1: $NS" || return
     ! lk_verbose || lk_console_detail "A and AAAA records from $NS for $1:" \
         "$(lk_echo_array IP)"
     lk_echo_array IP

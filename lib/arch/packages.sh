@@ -295,10 +295,10 @@ pacman -Qq "xfce4-session" >/dev/null 2>&1 ||
 
 PACMAN_PACKAGES+=(${PACMAN_DESKTOP_PACKAGES[@]+"${PACMAN_DESKTOP_PACKAGES[@]}"})
 AUR_PACKAGES+=(${AUR_DESKTOP_PACKAGES[@]+"${AUR_DESKTOP_PACKAGES[@]}"})
-[ "${#AUR_PACKAGES[@]}" -eq 0 ] || {
+[ ${#AUR_PACKAGES[@]} -eq 0 ] || {
     PACMAN_PACKAGES+=($(comm -12 <(pacman -Slq | sort | uniq) <(lk_echo_array AUR_PACKAGES | sort | uniq)))
     AUR_PACKAGES=($(comm -13 <(pacman -Slq | sort | uniq) <(lk_echo_array AUR_PACKAGES | sort | uniq)))
-    [ "${#AUR_PACKAGES[@]}" -eq 0 ] || {
+    [ ${#AUR_PACKAGES[@]} -eq 0 ] || {
         lk_echo_array AUR_PACKAGES | lk_console_list "Unable to install from configured repositories:" package packages
         ! lk_confirm "Manage the above using yay?" Y && AUR_PACKAGES=() || {
             PACMAN_PACKAGES+=($(lk_pacman_group_packages base-devel))

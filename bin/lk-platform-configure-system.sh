@@ -88,7 +88,7 @@
     LK_SETTINGS_FILES=(
         "$CONF_FILE"
         "$LK_INST/etc"/*.conf
-        "~root/.\${LK_PATH_PREFIX:-lk-}settings"
+        ~root/".\${LK_PATH_PREFIX:-lk-}settings"
         "$CONF_FILE"
     )
 
@@ -110,7 +110,7 @@
     #
     #   find "$LK_BASE" ! \( -type d -name .git -prune \) -type f -print0 |
     #       xargs -0 grep -Eho '\bgnu_[a-zA-Z0-9.]+' | sort -u
-    lk_console_message "Checking gnu_* symlinks"
+    lk_console_message "Checking GNU utilities"
     function install_gnu_commands() {
         local COMMAND GCOMMAND COMMAND_PATH COMMANDS=("$@") EXIT_STATUS=0
         [ $# -gt 0 ] ||
@@ -162,7 +162,7 @@
             check_repo_config "core.sharedRepository" "0664"
         check_repo_config "merge.ff" "only"
         check_repo_config "pull.ff" "only"
-        if [ "${#CONFIG_COMMANDS[@]}" -gt 0 ]; then
+        if [ ${#CONFIG_COMMANDS[@]} -gt 0 ]; then
             lk_console_item "Running in $LK_BASE:" \
                 "$(lk_echo_array CONFIG_COMMANDS)"
             sudo -Hu "$REPO_OWNER" \
@@ -226,9 +226,8 @@
                 ! -perm -"$DIR_MODE" -print0 |
                 gnu_xargs -0r gnu_chmod -c +"$DIR_MODE"
             gnu_find . -regextype posix-egrep \
-                ! \( -type d -regex '\./(var/log|\.git/objects)' -prune \) \
-                -type f ! \( -regex '\./etc/[^/]+' \) \
-                ! -perm -"$FILE_MODE" -print0 |
+                ! \( -type d -regex '\./(etc|var/log|\.git/objects)' -prune \) \
+                -type f ! -perm -"$FILE_MODE" -print0 |
                 gnu_xargs -0r gnu_chmod -c +"$FILE_MODE"
             install -d -m 00777 "$LK_BASE/var/log"
         )

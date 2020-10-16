@@ -21,30 +21,27 @@ lk_die() { s=$? && echo "${BASH_SOURCE[0]}: $1" >&2 &&
         # Passed to eval just before sourcing, to allow expansion of values set
         # by earlier files
         SETTINGS=(
-            "/etc/default/lk-platform"
-            ${HOME:+"\$HOME/.\${LK_PATH_PREFIX:-lk-}settings"}
+            /etc/default/lk-platform
+            ~/".\${LK_PATH_PREFIX:-lk-}settings"
         )
     fi
-    ENV="$(printenv | grep -Eio '^LK_[a-z0-9_]*' | sort)" || true
+    ENV=$(printenv | grep -Eo '^LK_[a-z0-9_]*' | sort) || true
     lk_var() { comm -23 <(printf '%s\n' "${!LK_@}" | sort) <(cat <<<"$ENV"); }
     (
         VAR=($(lk_var))
-        [ "${#VAR[@]}" -eq 0 ] || unset "${VAR[@]}"
+        [ ${#VAR[@]} -eq 0 ] || unset "${VAR[@]}"
         for FILE in "${SETTINGS[@]}"; do
             eval "FILE=\"$FILE\""
             [ ! -f "$FILE" ] || . "$FILE"
         done
         VAR=($(lk_var))
-        [ "${#VAR[@]}" -eq 0 ] || declare -p $(lk_var)
+        [ ${#VAR[@]} -eq 0 ] || declare -p $(lk_var)
     )
 )"
 
 colour=dynamic . "${LK_INST:-$LK_BASE}/lib/bash/include/core.sh"
 
-lk_include assert $(
-    include=${include:-}
-    echo "${include//,/ }"
-)
+lk_include assert ${include:+${include//,/ }}
 
 # lk_die [MESSAGE]
 #
@@ -109,12 +106,10 @@ function lk_check_args() {
 # shellcheck disable=SC2016
 function lk_get_env() {
     local VAR
-    VAR=$(env -i bash -c "$(
-        printf '%s\n' \
-            "$_LK_ENV" \
-            '[ -n "${!1+1}" ] || exit' \
-            'echo "${!1}."'
-    )" bash "$1") && echo "${VAR%.}"
+    VAR=$(env -i bash -c "$(printf '%s\n' \
+        "$_LK_ENV" \
+        '[ -n "${!1+1}" ] || exit' \
+        'echo "${!1}."')" bash "$1") && echo "${VAR%.}"
 }
 
 if ! lk_is_true "${LK_NO_SOURCE_FILE:-0}"; then
@@ -151,16 +146,15 @@ eval "$(
     [[ ,${LK_SKIP:-}, == *,env,* ]] || {
         printf '%s=%q\n' \
             LK_PATH_PREFIX "${LK_PATH_PREFIX:-lk-}" \
-            LK_PATH_PREFIX_ALPHA "${LK_PATH_PREFIX_ALPHA:-$(
-                sed 's/[^a-zA-Z0-9]//g' <<<"$LK_PATH_PREFIX"
-            )}"
+            LK_PATH_PREFIX_ALPHA "${LK_PATH_PREFIX_ALPHA:-$(sed \
+                's/[^a-zA-Z0-9]//g' <<<"$LK_PATH_PREFIX")}"
         . "$LK_BASE/lib/bash/env.sh"
     }
 
     [[ ,${LK_SKIP:-}, == *,trap,* ]] || {
         printf 'trap %q %s\n' \
-            "lk_exit_trap" "EXIT" \
-            "lk_err_trap" "ERR"
+            "lk_exit_trap" EXIT \
+            "lk_err_trap" ERR
         echo "set -E"
     }
 )"

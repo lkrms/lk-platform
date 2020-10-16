@@ -129,7 +129,7 @@ lk_console_detail "Local WP-Cron:" "$(
         echo "disable"
 )"
 
-lk_console_detail "Excluded files:" "$([ "${#EXCLUDE[@]}" -eq 0 ] &&
+lk_console_detail "Excluded files:" "$([ ${#EXCLUDE[@]} -eq 0 ] &&
     echo "<none>" ||
     lk_echo_array EXCLUDE)"
 

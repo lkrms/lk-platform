@@ -1,0 +1,7 @@
+Defaults always_set_home
+Defaults env_keep += "LK_*"
+Defaults !mail_badpass
+Defaults !mail_no_user
+Defaults !secure_path
+Defaults umask = 0002
+Defaults !umask_override

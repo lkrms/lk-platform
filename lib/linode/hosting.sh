@@ -613,7 +613,7 @@ for i in "${!REMOVE_PACKAGES[@]}"; do
     lk_dpkg_installed "${REMOVE_PACKAGES[$i]}" ||
         unset "REMOVE_PACKAGES[$i]"
 done
-if [ "${#REMOVE_PACKAGES[@]}" -gt 0 ]; then
+if [ ${#REMOVE_PACKAGES[@]} -gt 0 ]; then
     lk_console_item "Removing APT packages:" "${REMOVE_PACKAGES[*]}"
     apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -yq purge "${REMOVE_PACKAGES[@]}"
 fi
@@ -1179,10 +1179,10 @@ case ",$NODE_SERVICES," in
 esac
 
 PACKAGES=($(printf '%s\n' "${PACKAGES[@]}" | sort | uniq))
-[ "${#EXCLUDE_PACKAGES[@]}" -eq 0 ] ||
+[ ${#EXCLUDE_PACKAGES[@]} -eq 0 ] ||
     PACKAGES=($(printf '%s\n' "${PACKAGES[@]}" | grep -Fxv "$(printf '%s\n' "${EXCLUDE_PACKAGES[@]}")"))
 
-if [ "${#REPOS[@]}" -gt 0 ]; then
+if [ ${#REPOS[@]} -gt 0 ]; then
     lk_console_item "Adding APT repositories:" "$(printf '%s\n' "${REPOS[@]}")"
     for REPO in "${REPOS[@]}"; do
         lk_keep_trying add-apt-repository "${ADD_APT_REPOSITORY_ARGS[@]}" "$REPO"
@@ -1192,7 +1192,7 @@ fi
 lk_console_item "Installing APT packages:" "${PACKAGES[*]}"
 lk_keep_trying apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -q update
 # new repos may include updates for pre-installed packages
-[ "${#REPOS[@]}" -eq 0 ] || lk_keep_trying apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -yq upgrade
+[ ${#REPOS[@]} -eq 0 ] || lk_keep_trying apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -yq upgrade
 lk_keep_trying apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -yq install "${PACKAGES[@]}"
 
 if [ -n "$HOST_DOMAIN" ]; then
@@ -1300,11 +1300,11 @@ if lk_dpkg_installed apache2; then
     APACHE_MODS_ENABLED="$(a2query -m | grep -Eo '^[^ ]+' | sort | uniq || :)"
     APACHE_DISABLE_MODS=($(comm -13 <(printf '%s\n' "${APACHE_MODS[@]}" | sort | uniq) <(echo "$APACHE_MODS_ENABLED")))
     APACHE_ENABLE_MODS=($(comm -23 <(printf '%s\n' "${APACHE_MODS[@]}" | sort | uniq) <(echo "$APACHE_MODS_ENABLED")))
-    [ "${#APACHE_DISABLE_MODS[@]}" -eq 0 ] || {
+    [ ${#APACHE_DISABLE_MODS[@]} -eq 0 ] || {
         lk_console_item "Disabling Apache HTTPD modules:" "${APACHE_DISABLE_MODS[*]}"
         a2dismod --force "${APACHE_DISABLE_MODS[@]}"
     }
-    [ "${#APACHE_ENABLE_MODS[@]}" -eq 0 ] || {
+    [ ${#APACHE_ENABLE_MODS[@]} -eq 0 ] || {
         lk_console_item "Enabling Apache HTTPD modules:" "${APACHE_ENABLE_MODS[*]}"
         a2enmod --force "${APACHE_ENABLE_MODS[@]}"
     }

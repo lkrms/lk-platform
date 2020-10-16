@@ -66,7 +66,7 @@ function lk_validate_many_of() {
     else
         [ ! -t 0 ] &&
             lk_mapfile /dev/stdin OPTIONS &&
-            [ "${#OPTIONS[@]}" -gt 0 ] ||
+            [ ${#OPTIONS[@]} -gt 0 ] ||
             _lk_validate_fail "No options in input: %s\n" "$1" ||
             return
         _lk_validate_list lk_validate_one_of "$@" "${OPTIONS[@]}"

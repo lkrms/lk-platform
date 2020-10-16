@@ -6,68 +6,56 @@ function linode-cli() {
     command linode-cli --suppress-warnings "$@"
 }
 
-function lk_linode_list() {
-    lk_console_message "Retrieving list of Linodes"
-    linode-cli --format="${1:-id}" --text --no-headers linodes list
+function lk_linode_flush_cache() {
+    unset "${!LK_LINODE_@}"
 }
 
-# lk_linode_ssh_add LINODE_ID[,LABEL]...
+function _lk_linode_define() {
+    local _CACHE_VAR
+    _CACHE_VAR=$(lk_upper "$1")
+    eval "function $1() {
+        $_CACHE_VAR=\${$_CACHE_VAR:-\$(linode-cli --json ${*:2})} &&
+            echo \"\$$_CACHE_VAR\"
+    }"
+}
+
+_lk_linode_define lk_linode_linodes linodes list
+
+# lk_linode_ssh_add
+#
+# Add an SSH host for each Linode object in the JSON input array.
 function lk_linode_ssh_add() {
-    local JQ_LABEL JQ_IPV4 LINODE_ID JSON LABEL \
+    local LINODES LINODE SH LINODE_ID LABEL IPV4 IPV4_PUBLIC IPV4_PRIVATE \
         LK_SSH_PRIORITY=${LK_SSH_PRIORITY-45}
-    JQ_LABEL=$(
-        cat <<"EOF"
-def to_bash:
-  to_entries[] | "local \(.key | ascii_upcase)=\(.value | @sh)";
-.[] | {
-    "LABEL": .label
-  } | to_bash
-EOF
-    )
-    JQ_IPV4=$(
-        cat <<"EOF"
-def to_bash:
-  to_entries[] | "local \(.key | ascii_upcase)=\(.value | @sh)";
-.[] | {
-    "IPV4_PUBLIC": .ipv4.public[].address,
-    "IPV4_PRIVATE": .ipv4.private[].address
-  } | to_bash
-EOF
-    )
-    for LINODE_ID in "$@"; do
-        if [[ $LINODE_ID =~ ^([0-9]+),(.+)$ ]]; then
-            LINODE_ID=${BASH_REMATCH[1]}
-            LABEL=${BASH_REMATCH[2]}
-            lk_console_item "Adding SSH host:" "$LABEL (#$LINODE_ID)"
-        else
-            lk_console_item "Adding SSH host:" "#$LINODE_ID"
-            JSON=$(linode-cli linodes view "$LINODE_ID" --json) &&
-                SH=$(jq -r "$JQ_LABEL" <<<"$JSON") &&
-                eval "$SH" || return
-            lk_console_detail "Label:" "$LABEL"
-        fi
-        JSON=$(linode-cli linodes ips-list "$LINODE_ID" --json) &&
-            SH=$(jq -r "$JQ_IPV4" <<<"$JSON") &&
-            eval "$SH" || return
-        lk_console_detail "IPv4 $(lk_maybe_plural \
-            "${IPV4_PUBLIC+1}${IPV4_PRIVATE+1}" address addresses):" \
-            $'\n'"$(lk_implode_args $'\n' ${IPV4_PUBLIC+"$IPV4_PUBLIC"} \
-                ${IPV4_PRIVATE+"$IPV4_PRIVATE"})"
-        lk_ssh_add_host "${LABEL%%.*}" "$IPV4_PRIVATE" "" "" "jump" &&
-            lk_ssh_add_host "${LABEL%%.*}-direct" "$IPV4_PUBLIC" "" || return
+    lk_jq_get_array LINODES &&
+        [ ${#LINODES[@]} -gt 0 ] || lk_warn "no Linodes in input" || return
+    for LINODE in "${LINODES[@]}"; do
+        SH=$(lk_jq_get_shell_var <<<"$LINODE" \
+            LINODE_ID .id \
+            LABEL .label) &&
+            eval "$SH" &&
+            IPV4=$(jq -r ".ipv4[]" <<<"$LINODE") || return
+        IPV4_PUBLIC=$(sed <<<"$IPV4" -E \
+            '/^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.)/d')
+        IPV4_PRIVATE=$(sed <<<"$IPV4" -E \
+            '/^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.)/!d')
+        lk_console_item "Adding SSH host:" "$LABEL (#$LINODE_ID)"
+        lk_console_detail "Public IPv4 address:" "${IPV4_PUBLIC:-<none>}"
+        lk_console_detail "Private IPv4 address:" "${IPV4_PRIVATE:-<none>}"
+        [ -z "$IPV4_PUBLIC" ] || lk_ssh_add_host "${LABEL%%.*}" \
+            "$IPV4_PUBLIC" "" || return
+        [ -z "$IPV4_PRIVATE" ] || lk_ssh_add_host "${LABEL%%.*}-private" \
+            "$IPV4_PRIVATE" "" "" "jump" || return
     done
 }
 
-# shellcheck disable=SC2001,SC2207,SC2034
 function lk_linode_ssh_add_all() {
-    local IFS=$'\n' LINODES LABELS
-    LINODES=($(lk_linode_list "id,label")) || return
-    [ ${#LINODES[@]} -gt 0 ] || lk_warn "no Linodes found" || return
-    LABELS=($(cut -f2 <<<"${LINODES[*]}"))
-    LINODES=($(sed 's/\t/,/' <<<"${LINODES[*]}"))
-    unset IFS
+    local JSON LABELS
+    JSON=$(lk_linode_linodes) || return
+    lk_jq_get_array LABELS ".[].label" <<<"$JSON"
+    [ ${#LABELS[@]} -gt 0 ] || lk_warn "no Linodes found" || return
     lk_echo_array LABELS |
         lk_console_list "Adding to SSH configuration:" Linode Linodes
     lk_confirm "Proceed?" Y || return
-    lk_linode_ssh_add "${LINODES[@]}"
+    lk_linode_ssh_add <<<"$JSON"
 }

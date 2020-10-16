@@ -101,7 +101,7 @@ function in_target() {
 function configure_pacman() {
     lk_console_detail "Configuring pacman"
     lk_pacman_configure
-    [ "${#CUSTOM_REPOS[@]}" -eq 0 ] ||
+    [ ${#CUSTOM_REPOS[@]} -eq 0 ] ||
         lk_pacman_add_repo "${CUSTOM_REPOS[@]}"
 }
 
@@ -145,7 +145,7 @@ configure_pacman
 # in case we're starting over after a failed attempt
 if [ -d "/mnt/boot" ]; then
     OTHER_OS_MOUNTS=(/mnt/mnt/*)
-    [ "${#OTHER_OS_MOUNTS[@]}" -eq 0 ] || {
+    [ ${#OTHER_OS_MOUNTS[@]} -eq 0 ] || {
         umount "${OTHER_OS_MOUNTS[@]}" &&
             rmdir "${OTHER_OS_MOUNTS[@]}" || exit
     }
@@ -172,7 +172,7 @@ if [ $# -eq 3 ]; then
     partprobe "$1"
     sleep 1
     PARTITIONS=($(_lsblk "TYPE,NAME" --paths "$1" | grep -Po '(?<=^part ).*'))
-    [ "${#PARTITIONS[@]}" -eq 2 ] &&
+    [ ${#PARTITIONS[@]} -eq 2 ] &&
         ROOT_PARTITION="${PARTITIONS[1]}" &&
         BOOT_PARTITION="${PARTITIONS[0]}" || exit
     wipefs -a "$ROOT_PARTITION"
@@ -330,7 +330,7 @@ cat <<EOF >>"/mnt/etc/hosts"
 127.0.1.1 $TARGET_HOSTNAME.localdomain $TARGET_HOSTNAME
 EOF
 
-if [ "${#PACMAN_DESKTOP_PACKAGES[@]}" -eq 0 ]; then
+if [ ${#PACMAN_DESKTOP_PACKAGES[@]} -eq 0 ]; then
     in_target systemctl set-default multi-user.target
 else
     in_target systemctl set-default graphical.target
@@ -465,7 +465,7 @@ EOF
     fi
 fi
 
-if [ "${#AUR_PACKAGES[@]}" -gt 0 ]; then
+if [ ${#AUR_PACKAGES[@]} -gt 0 ]; then
     lk_console_message "Installing AUR packages"
     AUR_SCRIPT="{ $YAY_SCRIPT; } &&
     yay -Sy --aur --needed --noconfirm ${AUR_PACKAGES[*]}"

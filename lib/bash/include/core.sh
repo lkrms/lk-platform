@@ -513,7 +513,7 @@ function lk_expand_template() {
     local i TEMPLATE REPLACE \
         VARS=(${LK_EXPAND_VARS[@]+"${LK_EXPAND_VARS[@]}"})
     TEMPLATE=$(cat ${1+"$1"} && echo -n ".") || return
-    [ "${#VARS[@]}" -gt 0 ] ||
+    [ ${#VARS[@]} -gt 0 ] ||
         VARS=($(
             echo "$TEMPLATE" |
                 grep -Eo \
@@ -863,11 +863,11 @@ function lk_log_output() {
         ! DIR=$(cd "${BASH_REMATCH[2]:-.}" && pwd -P) ||
         HEADER+=("${DIR%/}/"); } 2>/dev/null
     HEADER+=("${0##*/} invoked")
-    [ "${#LK_ARGV[@]}" -eq 0 ] || HEADER+=($(
+    [ ${#LK_ARGV[@]} -eq 0 ] || HEADER+=($(
         printf ' with %s %s:' \
-            "${#LK_ARGV[@]}" \
+            ${#LK_ARGV[@]} \
             "$(lk_maybe_plural \
-                "${#LK_ARGV[@]}" "argument" "arguments")"
+                ${#LK_ARGV[@]} "argument" "arguments")"
         printf '\n- %q' "${LK_ARGV[@]}"
     ))
     IFS=
@@ -1087,7 +1087,7 @@ function lk_console_list() {
         "${LK_CONSOLE_SECONDARY_COLOUR-$LK_CONSOLE_COLOUR}" >&"${_LK_FD:-2}"
     [ -z "${SINGLE_NOUN:-}" ] ||
         LK_CONSOLE_PREFIX="$SPACES" lk_console_detail "(${#ITEMS[@]} $(
-            lk_maybe_plural "${#ITEMS[@]}" "$SINGLE_NOUN" "$PLURAL_NOUN"
+            lk_maybe_plural ${#ITEMS[@]} "$SINGLE_NOUN" "$PLURAL_NOUN"
         ))" "" ""
 }
 
@@ -1321,7 +1321,7 @@ function lk_uri_parts() {
     local PARTS=("${@:2}") PART VALUE URI_REGEX
     eval "$(lk_get_regex URI_REGEX)"
     [[ "$1" =~ ^${URI_REGEX}$ ]] || return
-    [ "${#PARTS[@]}" -gt 0 ] || PARTS=(
+    [ ${#PARTS[@]} -gt 0 ] || PARTS=(
         _SCHEME _USERNAME _PASSWORD _HOST _PORT _PATH _QUERY _FRAGMENT
         _IPV6_ADDRESS
     )
@@ -1443,9 +1443,9 @@ function lk_download() {
             printf '%s\n' "$@" ||
             cat
     )
-    [ "${#MANY_DOWNLOAD_ARGS[@]}" -eq 0 ] ||
+    [ ${#MANY_DOWNLOAD_ARGS[@]} -eq 0 ] ||
         curl "${CURL_ARGS[@]}" "${MANY_DOWNLOAD_ARGS[@]}" || return
-    [ "${#ONE_DOWNLOAD_ARGS[@]}" -eq 0 ] ||
+    [ ${#ONE_DOWNLOAD_ARGS[@]} -eq 0 ] ||
         for ARGS in "${ONE_DOWNLOAD_ARGS[@]}"; do
             eval "$ARGS"
             curl "${CURL_ARGS[@]}" "${DOWNLOAD_ARGS[@]}" || return
@@ -1763,6 +1763,36 @@ function lk_is_virtual() {
 
 function lk_is_qemu() {
     _lk_return_cached _LK_IS_QEMU 'lk_is_virtual && grep -Eiq qemu /sys/devices/virtual/dmi/id/*_vendor'
+}
+
+# lk_jq_get_array ARRAY [FILTER]
+#
+# Apply FILTER (default: ".[]") to the input and populate ARRAY with the
+# JSON-encoded value of each result.
+function lk_jq_get_array() {
+    lk_is_identifier "$1" || lk_warn "not a valid identifier: $1" || return
+    eval "$1=($(jq -r "${2:-.[]} | tostring | @sh"))"
+}
+
+# lk_jq_get_shell_var_filter VAR_NAME VAR_FILTER [VAR_NAME VAR_FILTER]...
+function lk_jq_get_shell_var_filter() {
+    [ $# -gt 0 ] && [ $(($# % 2)) -eq 0 ] ||
+        lk_warn "invalid arguments" || return
+    echo "\
+def to_sh:
+  to_entries[] |
+    \"${LK_JQ_VAR_PREFIX-local }\(.key | ascii_upcase)=\(.value | @sh)\";
+{
+  $(printf '"%s": %s' "$1" "$2" && { [ $# -eq 2 ] ||
+        printf ',\n  "%s": %s' "${@:3}"; })
+} | to_sh"
+}
+
+# lk_jq_get_shell_var VAR_NAME VAR_FILTER [VAR_NAME VAR_FILTER]...
+function lk_jq_get_shell_var() {
+    local JQ
+    JQ=$(lk_jq_get_shell_var_filter "$@") || return
+    jq -r "$JQ"
 }
 
 function lk_tty() {
