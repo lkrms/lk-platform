@@ -99,12 +99,46 @@
 
     LK_SKIP=env include=provision . "$LK_INST/lib/bash/common.sh"
 
+    LK_PATH_PREFIX=${LK_PATH_PREFIX:-${PATH_PREFIX:-}}
+    [ -n "$LK_PATH_PREFIX" ] || lk_no_input || {
+        lk_console_message "LK_PATH_PREFIX not set"
+        lk_console_detail \
+            "Value must be 2-4 alphanumeric characters followed by a hyphen"
+        lk_console_detail "Suggestions:" "$(printf '%s\n' lk- \
+            "${USER:0:4}$(lk_repeat 1 $((2 - ${#USER})))-")"
+        while [[ ! $LK_PATH_PREFIX =~ ^[a-zA-Z0-9]{2,4}-$ ]]; do
+            [ -z "$LK_PATH_PREFIX" ] ||
+                lk_console_error0 "Invalid LK_PATH_PREFIX:" "$LK_PATH_PREFIX"
+            LK_PATH_PREFIX=$(lk_console_read "LK_PATH_PREFIX:")
+        done
+    }
+    [ -n "$LK_PATH_PREFIX" ] || lk_die "LK_PATH_PREFIX not set"
+    [ -z "${LK_BASE:-}" ] ||
+        [ "$LK_BASE" = "$LK_INST" ] ||
+        [ ! -d "$LK_BASE" ] ||
+        {
+            lk_console_item "Existing installation found at" "$LK_BASE"
+            lk_confirm "Reconfigure system?" Y || lk_die
+        }
+    export LK_BASE=$LK_INST
+    LK_PATH_PREFIX_ALPHA=${LK_PATH_PREFIX_ALPHA:-$(sed \
+        's/[^a-zA-Z0-9]//g' <<<"$LK_PATH_PREFIX")}
+
     LK_BIN_PATH=${LK_BIN_PATH:-/usr/local/bin}
     LK_BACKUP_SUFFIX=-$(lk_timestamp).bak
     LK_VERBOSE=1
     lk_log_output
 
     [ "${1:-}" != --no-log ] || shift
+
+    lk_console_message "Checking sudo configuration"
+    FILE=/etc/sudoers.d/${LK_PATH_PREFIX}default
+    [ ! -e "${FILE}s" ] || [ -e "$FILE" ] ||
+        mv -v "${FILE}s" "$FILE"
+    [ -e "$FILE" ] ||
+        install -m 0440 /dev/null "$FILE"
+    LK_BACKUP_SUFFIX='' \
+        lk_maybe_replace "$FILE" "$(cat "$LK_BASE/share/sudoers.d/default")"
 
     # To list gnu_* commands required by lk-platform:
     #
@@ -132,23 +166,16 @@
     # For other commands, warn and continue
     install_gnu_commands || true
 
-    lk_console_message "Checking configuration files"
-    LK_PATH_PREFIX=${LK_PATH_PREFIX:-${PATH_PREFIX:-}}
-    [ -n "$LK_PATH_PREFIX" ] || lk_die "LK_PATH_PREFIX not set"
-    [ -z "${LK_BASE:-}" ] ||
-        [ "$LK_BASE" = "$LK_INST" ] ||
-        [ ! -d "$LK_BASE" ] ||
-        {
-            lk_console_detail "Existing installation found at" "$LK_BASE"
-            lk_confirm "Reconfigure system?" Y || lk_die
-        }
-    export LK_BASE=$LK_INST
-    LK_PATH_PREFIX_ALPHA=${LK_PATH_PREFIX_ALPHA:-$(
-        sed 's/[^a-zA-Z0-9]//g' <<<"$LK_PATH_PREFIX"
-    )}
+    function restart_script() {
+        local NO_LOG=1
+        lk_console_message "Restarting ${0##*/}"
+        ! lk_has_arg --no-log || unset NO_LOG
+        "$0" ${NO_LOG+--no-log} "$@"
+        exit
+    }
 
-    # Check repo state
     if [ -d "$LK_BASE/.git" ]; then
+        lk_console_item "Checking repository:" "$LK_BASE"
         cd "$LK_BASE"
         REPO_OWNER=$(lk_file_owner "$LK_BASE")
         CONFIG_COMMANDS=()
@@ -163,7 +190,7 @@
         check_repo_config "merge.ff" "only"
         check_repo_config "pull.ff" "only"
         if [ ${#CONFIG_COMMANDS[@]} -gt 0 ]; then
-            lk_console_item "Running in $LK_BASE:" \
+            lk_console_detail "Running in $LK_BASE:" \
                 "$(lk_echo_array CONFIG_COMMANDS)"
             sudo -Hu "$REPO_OWNER" \
                 bash -c "$(lk_implode ' && ' CONFIG_COMMANDS)"
@@ -177,9 +204,9 @@
                 "$LK_BOLD$LK_PLATFORM_BRANCH$LK_RESET" \
                 "$LK_BOLD$BRANCH$LK_RESET")"
             if lk_confirm "Switch to $LK_PLATFORM_BRANCH?" N; then
-                lk_console_item "Switching to" "$LK_PLATFORM_BRANCH"
+                lk_console_detail "Switching to" "$LK_PLATFORM_BRANCH"
                 sudo -Hu "$REPO_OWNER" git checkout "$LK_PLATFORM_BRANCH"
-                BRANCH=$LK_PLATFORM_BRANCH
+                restart_script "$@"
             else
                 LK_PLATFORM_BRANCH=$BRANCH
             fi
@@ -196,23 +223,19 @@
                 if [ "$BEHIND" -gt 0 ]; then
                     git merge-base --is-ancestor HEAD "@{upstream}" ||
                         lk_die "local branch has diverged from upstream: $LK_BASE"
-                    lk_console_item \
+                    lk_console_detail \
                         "Updating lk-platform ($BEHIND $(
                             lk_maybe_plural "$BEHIND" "commit" "commits"
                         ) behind) in" "$LK_BASE"
                     sudo -Hu "$REPO_OWNER" \
                         git merge --ff-only "@{upstream}"
-                    lk_console_message "Restarting ${0##*/}"
-                    NO_LOG=1
-                    ! lk_has_arg --no-log || unset NO_LOG
-                    "$0" ${NO_LOG+--no-log} "$@"
-                    exit
+                    restart_script "$@"
                 fi
             else
                 lk_console_warning0 "Unable to check for lk-platform updates"
             fi
         fi
-        lk_console_message "Checking lk-platform file permissions"
+        lk_console_detail "Checking file permissions"
         (
             DIR_MODE=0755
             FILE_MODE=0644
@@ -252,7 +275,7 @@ LK_$i=\"\${LK_$i-\${LK_DEFAULT_$i-\${$i-\$(\
 install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
     done
 
-    lk_console_item "Configuring system for lk-platform installed at" "$LK_BASE"
+    lk_console_message "Checking lk-platform configuration"
 
     # Generate /etc/default/lk-platform
     [ -e "$CONF_FILE" ] || {
@@ -273,15 +296,15 @@ install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
         OUTPUT+=("$i" "${!i:-<none>}")
     done
     if lk_verbose 2; then
-        lk_console_item "Settings:" "$(printf '%s: %s\n' "${OUTPUT[@]}")"
+        lk_console_detail "Settings:" "$(printf '%s: %s\n' "${OUTPUT[@]}")"
     else
         lk_console_detail "${#DEFAULT_LINES[@]} settings found"
     fi
     lk_maybe_replace "$CONF_FILE" "$(lk_echo_array DEFAULT_LINES)"
 
-    lk_console_message "Checking lk-* symlinks"
-    lk_safe_symlink "$LK_BASE/bin/lk-bash-load.sh" \
-        "$LK_BIN_PATH/lk-bash-load.sh"
+    lk_console_detail "Checking symbolic links"
+    lk_safe_symlink \
+        "$LK_BASE/bin/lk-bash-load.sh" "$LK_BIN_PATH/lk-bash-load.sh"
 
     LK_HOMES=(
         /etc/skel{,".$LK_PATH_PREFIX_ALPHA"}

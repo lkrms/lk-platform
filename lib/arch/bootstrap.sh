@@ -394,13 +394,12 @@ echo -e "$TARGET_PASSWORD\n$TARGET_PASSWORD" | in_target passwd "$TARGET_USERNAM
 }
 
 lk_console_detail "Configuring sudo"
-cat <<EOF >"/mnt/etc/sudoers.d/${LK_PATH_PREFIX}defaults"
-Defaults umask = 0022
-Defaults umask_override
+FILE=/mnt/etc/sudoers.d/${LK_PATH_PREFIX}default-arch
+install -v -m 0440 /dev/null "$FILE"
+cat <<EOF >"$FILE"
 %wheel ALL=(ALL) ALL
 %wheel ALL=(ALL) NOPASSWD:/usr/bin/pacman
 EOF
-chmod 440 "/mnt/etc/sudoers.d/${LK_PATH_PREFIX}defaults"
 
 lk_console_detail "Disabling root password"
 in_target passwd -l root

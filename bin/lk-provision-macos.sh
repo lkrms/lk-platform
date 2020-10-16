@@ -61,6 +61,7 @@ function exit_trap() {
     if [ -f "$LK_BASE/lib/bash/include/core.sh" ]; then
         . "$LK_BASE/lib/bash/include/core.sh"
         lk_include provision macos
+        SUDOERS=$(cat "$LK_BASE/share/sudoers.d/default")
         ${CONTRIB_PACKAGES_FILE:+. "$LK_BASE/$CONTRIB_PACKAGES_FILE"}
     else
         echo "Downloading dependencies to: $SCRIPT_DIR" >&2
@@ -68,15 +69,18 @@ function exit_trap() {
             ${CONTRIB_PACKAGES_FILE:+"/$CONTRIB_PACKAGES_FILE"} \
             /lib/bash/include/core.sh \
             /lib/bash/include/provision.sh \
-            /lib/bash/include/macos.sh; do
+            /lib/bash/include/macos.sh \
+            /share/sudoers.d/default; do
             FILE=$SCRIPT_DIR/${FILE_PATH##*/}
             URL=https://raw.githubusercontent.com/lkrms/lk-platform/$LK_PLATFORM_BRANCH$FILE_PATH
             curl --retry 8 --fail --output "$FILE" "$URL" || {
                 rm -f "$FILE"
                 lk_die "unable to download from GitHub: $URL"
             }
-            . "$FILE"
+            [ "${FILE: -3}" != .sh ] ||
+                . "$FILE"
         done
+        SUDOERS=$(cat "$SCRIPT_DIR/default")
     fi
 
     LK_BACKUP_SUFFIX=-$(lk_timestamp).bak
@@ -124,16 +128,13 @@ function exit_trap() {
         sudo chsh -s /bin/bash "$USER"
     fi
 
-    FILE=/etc/sudoers.d/${LK_PATH_PREFIX}defaults
-    if ! sudo test -e "$FILE"; then
-        lk_console_message "Configuring sudo"
+    lk_console_message "Configuring sudo"
+    FILE=/etc/sudoers.d/${LK_PATH_PREFIX}default
+    sudo test ! -e "${FILE}s" || sudo test -e "$FILE" ||
+        sudo mv -v "${FILE}s" "$FILE"
+    sudo test -e "$FILE" ||
         sudo install -m 0440 /dev/null "$FILE"
-        cat <<EOF | sudo tee "$FILE" >/dev/null
-Defaults umask = 0022
-Defaults umask_override
-EOF
-        LK_SUDO=1 lk_console_detail_file "$FILE"
-    fi
+    LK_SUDO=1 lk_maybe_replace "$FILE" "$SUDOERS"
 
     if ! USER_UMASK=$(defaults read \
         /var/db/com.apple.xpc.launchd/config/user.plist Umask 2>/dev/null) ||

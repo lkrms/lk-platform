@@ -205,7 +205,7 @@ FIELD_ERRORS=$(
     [ ! "$AUTO_REBOOT" = Y ] || REQUIRED=1
     valid AUTO_REBOOT_TIME "^(([01][0-9]|2[0-3]):[0-5][0-9]|now)\$"
     REQUIRED=0
-    valid PATH_PREFIX "^[a-zA-Z0-9]{2,3}-\$"
+    valid PATH_PREFIX "^[a-zA-Z0-9]{2,4}-\$"
     one_of SCRIPT_DEBUG Y N
     one_of SHUTDOWN_ACTION reboot poweroff
     valid SHUTDOWN_DELAY "^[0-9]+\$"
@@ -786,16 +786,6 @@ MATCH_MANY=Y edit_file "/etc/ssh/sshd_config" \
 
 systemctl restart sshd.service
 FIRST_ADMIN="${FIRST_ADMIN:-root}"
-
-lk_console_message "Configuring sudoers"
-install -m 0440 /dev/null "/etc/sudoers.d/${PATH_PREFIX}defaults"
-cat <<EOF >"/etc/sudoers.d/${PATH_PREFIX}defaults"
-Defaults !mail_no_user
-Defaults !mail_badpass
-Defaults env_keep += "LK_*"
-Defaults secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$LK_BASE/bin"
-EOF
-lk_console_file "/etc/sudoers.d/${PATH_PREFIX}defaults"
 
 lk_console_message "Upgrading pre-installed packages"
 lk_keep_trying apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -q update
