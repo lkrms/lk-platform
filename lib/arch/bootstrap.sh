@@ -346,7 +346,7 @@ else
 fi
 
 lk_console_detail "Setting default umask"
-cat <<EOF >"/mnt/etc/profile.d/Z90-${LK_PATH_PREFIX}umask.sh"
+cat <<"EOF" >"/mnt/etc/profile.d/Z90-${LK_PATH_PREFIX}umask.sh"
 #!/bin/sh
 
 if [ "$(id -u)" -ne 0 ]; then
