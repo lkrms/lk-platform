@@ -4,20 +4,20 @@
 
 # Scenario 1: bootstrapping lk-platform scripts
 #
-#   If a platform script can safely assume lk-bash-load.sh will be found in
-#   PATH, the following can be used to set LK_BASE and load Bash libraries,
-#   where DEPTH is the number of directories between LK_BASE and the script:
+# If a platform script can safely assume lk-bash-load.sh will be found in PATH,
+# the following can be used to set LK_BASE and load Bash libraries, where DEPTH
+# is the number of directories between LK_BASE and the script:
 #
 #     lk_bin_depth=DEPTH [include=LIBRARY...] . lk-bash-load.sh || exit
 #
-#   If lk_bin_depth is set, LK_BASE will be determined from the invoking
-#   script's pathname, regardless of lk-bash-load.sh's location.
+# If lk_bin_depth is set, LK_BASE will be determined from the invoking script's
+# pathname, regardless of lk-bash-load.sh's location.
 #
 # Scenario 2: sourcing lk-platform as a dependency in other Bash scripts
 #
-#   Assuming lk-platform is installed and lk-bash-load.sh can be found in PATH
-#   whenever the script is invoked (via symlink if needed), this is a convenient
-#   method for using lk-platform's Bash functions elsewhere:
+# Assuming lk-platform is installed and lk-bash-load.sh can be found in PATH
+# whenever the script is invoked (via symlink if needed), this is a convenient
+# method for using lk-platform's Bash functions elsewhere:
 #
 #     [include=LIBRARY...] . lk-bash-load.sh || exit
 #

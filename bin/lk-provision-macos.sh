@@ -397,6 +397,7 @@ function exit_trap() {
     fi
 
     INSTALL_APPS=()
+    UPGRADE_APPS=()
     if [ ${#MAS_APPS[@]} -gt "0" ]; then
         lk_console_message "Checking Mac App Store apps"
         while ! APPLE_ID=$(mas account 2>/dev/null); do

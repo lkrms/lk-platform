@@ -80,6 +80,7 @@ HOMEBREW_CASKS+=(
     geekbench
     hex-fiend
     lingon-x
+    shortcutdetective
 
     # non-free
     acorn

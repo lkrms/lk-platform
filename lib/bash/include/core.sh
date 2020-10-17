@@ -247,7 +247,7 @@ function lk_command_first_existing() {
 function _lk_regex_process() {
     eval "$1=\$2"
     if [ ${#ARGS[@]} -eq 0 ] || lk_in_array "$1" ARGS; then
-        printf '%s=%q\n' "$1" "$2"
+        printf "${LK_VAR_PREFIX-local }%s=%q\n" "$1" "$2"
     fi
 }
 
@@ -321,6 +321,12 @@ function lk_get_regex() {
         "[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*"
     _lk_regex_process PHP_SETTING_REGEX \
         "$PHP_SETTING_NAME_REGEX=.+"
+
+    # *_FILTER_REGEX expressions are:
+    # 1. anchored
+    # 2. not intended for validation
+    _lk_regex_process IPV4_PRIVATE_FILTER_REGEX \
+        "^(10\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|192\\.168\\.|127\\.)"
 }
 
 function lk_realpath() {
@@ -582,7 +588,7 @@ function lk_safe_tput() {
 }
 
 function lk_get_colours() {
-    local PREFIX=${LK_COLOUR_PREFIX-LK_}
+    local PREFIX=${LK_VAR_PREFIX-LK_}
     printf '%s%s=%q\n' \
         "$PREFIX" BLACK "$(lk_safe_tput setaf 0)" \
         "$PREFIX" RED "$(lk_safe_tput setaf 1)" \
@@ -777,8 +783,8 @@ function lk_get_outputs_of() {
         _STDERR=$(cat "$STDERR") || _STDERR="<unknown>"
         rm -Rf -- "$DIR" >/dev/null 2>&1 || true
         printf '%s=%q\n' \
-            "${LK_OUTPUTS_PREFIX-_}STDOUT" "$_STDOUT" \
-            "${LK_OUTPUTS_PREFIX-_}STDERR" "$_STDERR"
+            "${LK_VAR_PREFIX-_}STDOUT" "$_STDOUT" \
+            "${LK_VAR_PREFIX-_}STDERR" "$_STDERR"
         exit "${EXIT_STATUS:-0}"
     ) || EXIT_STATUS=$?
     echo "$SH"
@@ -1280,13 +1286,11 @@ function lk_is_pdf() {
 }
 
 function lk_is_host() {
-    local HOST_REGEX
     eval "$(lk_get_regex HOST_REGEX)"
     [[ $1 =~ ^${HOST_REGEX}$ ]]
 }
 
 function lk_is_fqdn() {
-    local DOMAIN_NAME_REGEX
     eval "$(lk_get_regex DOMAIN_NAME_REGEX)"
     [[ $1 =~ ^${DOMAIN_NAME_REGEX}$ ]]
 }
@@ -1295,7 +1299,6 @@ function lk_is_fqdn() {
 #   True if STRING is a valid email address. Quoted local parts are not
 #   supported.
 function lk_is_email() {
-    local EMAIL_ADDRESS_REGEX
     eval "$(lk_get_regex EMAIL_ADDRESS_REGEX)"
     [[ $1 =~ ^${EMAIL_ADDRESS_REGEX}$ ]]
 }
@@ -1305,7 +1308,6 @@ function lk_is_email() {
 #   and authority components ("scheme://host" at minimum).
 #   See https://en.wikipedia.org/wiki/Uniform_Resource_Identifier
 function lk_is_uri() {
-    local URI_REGEX_REQ_SCHEME_HOST
     eval "$(lk_get_regex URI_REGEX_REQ_SCHEME_HOST)"
     [[ $1 =~ ^${URI_REGEX_REQ_SCHEME_HOST}$ ]]
 }
@@ -1318,7 +1320,7 @@ function lk_is_uri() {
 # URI_COMPONENT can be one of: _SCHEME, _USERNAME, _PASSWORD, _HOST, _PORT,
 # _PATH, _QUERY, _FRAGMENT, _IPV6_ADDRESS
 function lk_uri_parts() {
-    local PARTS=("${@:2}") PART VALUE URI_REGEX
+    local PARTS=("${@:2}") PART VALUE
     eval "$(lk_get_regex URI_REGEX)"
     [[ "$1" =~ ^${URI_REGEX}$ ]] || return
     [ ${#PARTS[@]} -gt 0 ] || PARTS=(
@@ -1367,7 +1369,7 @@ function lk_uri_parts() {
 #
 # Match and output URIs ("scheme://host" at minimum) in each FILE_PATH or input.
 function lk_get_uris() {
-    local EXIT_STATUS=0 URI_REGEX_REQ_SCHEME_HOST
+    local EXIT_STATUS=0
     eval "$(lk_get_regex URI_REGEX_REQ_SCHEME_HOST)"
     grep -Eo "\\b$URI_REGEX_REQ_SCHEME_HOST\\b" "$@" || EXIT_STATUS=$?
     # exit 0 unless there's an actual error
@@ -1774,25 +1776,30 @@ function lk_jq_get_array() {
     eval "$1=($(jq -r "${2:-.[]} | tostring | @sh"))"
 }
 
-# lk_jq_get_shell_var_filter VAR_NAME VAR_FILTER [VAR_NAME VAR_FILTER]...
+# lk_jq_get_shell_var_filter VAR FILTER [VAR FILTER]...
 function lk_jq_get_shell_var_filter() {
     [ $# -gt 0 ] && [ $(($# % 2)) -eq 0 ] ||
         lk_warn "invalid arguments" || return
     echo "\
 def to_sh:
   to_entries[] |
-    \"${LK_JQ_VAR_PREFIX-local }\(.key | ascii_upcase)=\(.value | @sh)\";
+    \"${LK_VAR_PREFIX-local }\(.key | ascii_upcase)=\(.value | @sh)\";
 {
   $(printf '"%s": %s' "$1" "$2" && { [ $# -eq 2 ] ||
         printf ',\n  "%s": %s' "${@:3}"; })
 } | to_sh"
 }
 
-# lk_jq_get_shell_var VAR_NAME VAR_FILTER [VAR_NAME VAR_FILTER]...
+# lk_jq_get_shell_var [--arg NAME VALUE]... VAR FILTER [VAR FILTER]...
 function lk_jq_get_shell_var() {
-    local JQ
+    local JQ JQ_ARGS=()
+    while [ "${1:-}" = --arg ]; do
+        [ $# -ge 5 ] || lk_warn "invalid arguments" || return
+        JQ_ARGS+=("${@:1:3}")
+        shift 3
+    done
     JQ=$(lk_jq_get_shell_var_filter "$@") || return
-    jq -r "$JQ"
+    jq -r ${JQ_ARGS[@]+"${JQ_ARGS[@]}"} "$JQ"
 }
 
 function lk_tty() {

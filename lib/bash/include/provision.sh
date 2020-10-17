@@ -142,7 +142,7 @@ function lk_ssh_list_hosts() {
 # lk_ssh_add_host NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]
 function lk_ssh_add_host() {
     local NAME=$1 HOST=$2 JUMP_USER=$3 KEY_FILE=${4:-} JUMP_HOST_NAME=${5:-} \
-        h=${LK_SSH_HOME:-~} SSH_PREFIX=${LK_SSH_PREFIX:-$LK_PATH_PREFIX} \
+        h=${LK_SSH_HOME:-~} SSH_PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX} \
         S="[[:blank:]]" KEY CONF CONF_FILE
     [ $# -ge 3 ] || lk_usage "\
 Usage: $(lk_myself -f) NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
@@ -200,7 +200,7 @@ EOF
 # lk_ssh_configure [JUMP_HOST[:JUMP_PORT] JUMP_USER [JUMP_KEY_FILE]]
 function lk_ssh_configure() {
     local JUMP_HOST=${1:-} JUMP_USER=${2:-} JUMP_KEY_FILE=${3:-} \
-        S="[[:blank:]]" SSH_PREFIX=${LK_SSH_PREFIX:-$LK_PATH_PREFIX} \
+        S="[[:blank:]]" SSH_PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX} \
         KEY PATTERN CONF PROG AWK OWNER GROUP \
         HOMES=(${LK_HOMES[@]+"${LK_HOMES[@]}"}) h
     [ $# -eq 0 ] || [ $# -ge 2 ] || lk_warn "invalid arguments" || return

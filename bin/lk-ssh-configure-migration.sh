@@ -77,11 +77,11 @@ fi
 STAGE=${1:-local}
 STAGE=${STAGE#--}
 if [ "$STAGE" = "local" ]; then
-    SSH_PREFIX=${LK_SSH_PREFIX:-$LK_PATH_PREFIX}
+    SSH_PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX}
     NEW_HOST_NAME=$SSH_PREFIX$NEW_USER
 elif [ "$STAGE" = "new" ]; then
     include=provision . lk-bash-load.sh || exit
-    SSH_PREFIX=${LK_SSH_PREFIX:-$LK_PATH_PREFIX}
+    SSH_PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX}
     NEW_HOST_NAME={{NEW_HOST_NAME}}
     OLD_USER={{OLD_USER}}
     OLD_HOST={{OLD_HOST}}
