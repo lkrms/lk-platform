@@ -175,7 +175,7 @@
     }
 
     if [ -d "$LK_BASE/.git" ]; then
-        lk_console_item "Checking repository:" "$LK_BASE"
+        lk_console_message "Checking repository"
         cd "$LK_BASE"
         REPO_OWNER=$(lk_file_owner "$LK_BASE")
         CONFIG_COMMANDS=()
@@ -235,7 +235,7 @@
                 lk_console_warning0 "Unable to check for lk-platform updates"
             fi
         fi
-        lk_console_detail "Checking file permissions"
+        lk_console_detail "Resetting file permissions"
         (
             DIR_MODE=0755
             FILE_MODE=0644
@@ -276,6 +276,7 @@ install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
     done
 
     lk_console_message "Checking lk-platform configuration"
+    lk_console_detail "Base directory:" "$LK_BASE"
 
     # Generate /etc/default/lk-platform
     [ -e "$CONF_FILE" ] || {

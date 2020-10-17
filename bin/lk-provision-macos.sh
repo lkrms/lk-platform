@@ -145,6 +145,16 @@ function exit_trap() {
     fi
     umask 002
 
+    if ! USER_PATH=$(defaults read \
+        /var/db/com.apple.xpc.launchd/config/user.plist \
+        PathEnvironmentVariable 2>/dev/null) ||
+        [[ ! "$USER_PATH" =~ (:|^)/usr/local/bin(:|$) ]]; then
+        USER_PATH=/usr/local/bin:${USER_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}
+        lk_console_message "Setting default PATH"
+        lk_console_detail "Running:" "launchctl config user path $USER_PATH"
+        sudo launchctl config user path "$USER_PATH" >/dev/null
+    fi
+
     # disable sleep when charging
     sudo pmset -c sleep 0
 
