@@ -39,17 +39,6 @@ eval "$(
 
 . "$LK_BASE/lib/bash/include/core.sh"
 
-function _lk_bash_completion() {
-    local FILE
-    for FILE in \
-        /usr/share/bash-completion/bash_completion \
-        ${HOMEBREW_PREFIX:+"$HOMEBREW_PREFIX/etc/profile.d/bash_completion.sh"}; do
-        [ -r "$FILE" ] || continue
-        printf '. %q\n' "$FILE" "$LK_BASE/lib/bash/completion.sh"
-        return
-    done
-}
-
 function lk_bak_find() {
     lk_elevate gnu_find / -xdev -regextype posix-egrep \
         -regex "${_LK_DIFF_REGEX:-.*-[0-9]+\\.bak}" \
@@ -126,24 +115,21 @@ lk_include prompt provision git wordpress linode misc
 
 if lk_is_linux; then
     lk_include linux
+    ! lk_is_arch || lk_include arch
     ! lk_is_ubuntu || lk_include debian
-    alias cwd='pwd | xclip'
-    alias duh='du -h --max-depth 1 | sort -h'
-    alias open='xdg-open'
+    [[ $- != *i* ]] || {
+        alias cwd='pwd | xclip'
+        alias duh='du -h --max-depth 1 | sort -h'
+        alias open='xdg-open'
+    }
 elif lk_is_macos; then
     lk_include macos
-    alias duh='du -h -d 1 | sort -h'
+    [[ $- != *i* ]] || {
+        alias cwd='pwd | pbcopy'
+        alias duh='du -h -d 1 | sort -h'
+    }
     export BASH_SILENCE_DEPRECATION_WARNING=1
 fi
-
-shopt -s checkwinsize
-
-shopt -s histappend
-HISTCONTROL=ignorespace
-HISTIGNORE=
-HISTSIZE=
-HISTFILESIZE=
-HISTTIMEFORMAT="%b %_d %Y %H:%M:%S %z "
 
 LK_PATH_PREFIX="${LK_PATH_PREFIX:-lk-}"
 LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(
@@ -151,6 +137,23 @@ LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(
 )}"
 eval "$(. "$LK_BASE/lib/bash/env.sh")"
 
-[ "${LK_COMPLETION:-1}" -ne 1 ] || eval "$(_lk_bash_completion)"
+[[ $- != *i* ]] || {
 
-[ "${LK_PROMPT:-1}" -ne 1 ] || lk_enable_prompt
+    shopt -s checkwinsize histappend
+    HISTCONTROL=ignorespace
+    HISTIGNORE=
+    HISTSIZE=
+    HISTFILESIZE=
+    HISTTIMEFORMAT="%b %_d %Y %H:%M:%S %z "
+
+    [ "${LK_COMPLETION:-1}" -ne 1 ] || eval "$(for FILE in \
+        /usr/share/bash-completion/bash_completion \
+        ${HOMEBREW_PREFIX:+"$HOMEBREW_PREFIX/etc/profile.d/bash_completion.sh"}; do
+        [ -r "$FILE" ] || continue
+        printf '. %q\n' "$FILE" "$LK_BASE/lib/bash/completion.sh"
+        return
+    done)"
+
+    [ "${LK_PROMPT:-1}" -ne 1 ] || lk_enable_prompt
+
+}

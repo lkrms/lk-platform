@@ -187,27 +187,40 @@ function lk_macos_defaults_maybe_write() {
     fi
 }
 
-# lk_macos_defaults_dump [DEFAULTS_ARG...]
+# lk_macos_defaults_dump
 function lk_macos_defaults_dump() {
-    local IFS=', ' DOMAINS DIR DOMAIN FILE
-    DOMAINS=(
-        NSGlobalDomain
-        $(defaults "$@" domains)
-    ) || return
-    IFS=-
+    local IFS=', ' DIR HOST DOMAINS DOMAIN FILE
     if [ -n "${LK_DEFAULTS_DIR:-}" ]; then
-        DIR=${LK_DEFAULTS_DIR%/}${*:+/${*#-}}
+        DIR=${LK_DEFAULTS_DIR%/}
     else
-        DIR=~/.${LK_PATH_PREFIX:-lk-}defaults/$(lk_date_ymdhms)${*:+-${*#-}}
+        DIR=~/.${LK_PATH_PREFIX:-lk-}defaults/$(lk_date_ymdhms)
     fi
-    unset IFS
-    mkdir -p "$DIR" || return
-    for DOMAIN in "${DOMAINS[@]}"; do
-        FILE=$DIR/$DOMAIN
-        defaults "$@" read "$DOMAIN" >"$FILE" ||
-            rm -f "$FILE"
+    for HOST in "" currentHost; do
+        mkdir -p "$DIR${HOST:+/$HOST}" || return
+        DOMAINS=(
+            NSGlobalDomain
+            $(${_LK_MACOS_DEFAULTS_DUMP_SUDO:+sudo} \
+                defaults ${HOST:+"-$HOST"} domains)
+        ) || return
+        for DOMAIN in "${DOMAINS[@]}"; do
+            FILE=$DIR${HOST:+/$HOST}/$DOMAIN
+            ${_LK_MACOS_DEFAULTS_DUMP_SUDO:+sudo} \
+                defaults ${HOST:+"-$HOST"} read "$DOMAIN" >"$FILE" ||
+                rm -f "$FILE"
+        done
     done
+    [ -z "${_LK_MACOS_DEFAULTS_DUMP_SUDO:-}" ] ||
+        return 0
+    lk_is_root || ! lk_can_sudo defaults || {
+        local _LK_MACOS_DEFAULTS_DUMP_SUDO=1
+        LK_DEFAULTS_DIR=$DIR-system \
+            lk_macos_defaults_dump || return
+    }
     DIR=${DIR//~/"~"}
     lk_console_log \
-        "Output of \"defaults${*:+ $*} read DOMAIN\" dumped to:" "$DIR"
+        "Output of \"defaults [-currentHost] read \$DOMAIN\" dumped to:" \
+        "$(for d in "$DIR" ${_LK_MACOS_DEFAULTS_DUMP_SUDO:+"$DIR-system"}; do
+            lk_echo_args \
+                "$d" "$d/currentHost"
+        done)"
 }

@@ -40,6 +40,7 @@ HOMEBREW_CASKS+=(
     caprine
     chromium
     firefox
+    icanhazshortcut
     imageoptim
     keepassxc
     keepingyouawake
