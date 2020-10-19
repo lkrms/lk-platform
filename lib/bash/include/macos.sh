@@ -88,20 +88,25 @@ function lk_macos_install_command_line_tools() {
 # - $ = Shift
 # - @ = Command
 function lk_macos_kb_add_shortcut() {
-    [ $# -eq 3 ] &&
-        defaults write "$HOME/Library/Preferences/$1.plist" \
-            NSUserKeyEquivalents -dict-add "$2" "$3" &&
-        defaults write "$1" \
+    local PLIST=${1:-}
+    [ $# -eq 3 ] || return
+    [ "$1" != NSGlobalDomain ] || PLIST=.GlobalPreferences
+    defaults write "$1" \
+        NSUserKeyEquivalents -dict-add "$2" "$3" &&
+        defaults write ~/"Library/Preferences/$PLIST.plist" \
             NSUserKeyEquivalents -dict-add "$2" "$3"
 }
 
 # lk_macos_kb_reset_shortcuts DOMAIN
 function lk_macos_kb_reset_shortcuts() {
+    local PLIST=${1:-}
     [ $# -eq 1 ] || return
-    defaults delete "$HOME/Library/Preferences/$1.plist" \
-        NSUserKeyEquivalents || true
+    [ "$1" != NSGlobalDomain ] || PLIST=.GlobalPreferences
     defaults delete "$1" \
-        NSUserKeyEquivalents || true
+        NSUserKeyEquivalents >/dev/null 2>&1 || true
+    [ ! -e ~/"Library/Preferences/$PLIST.plist" ] ||
+        defaults delete ~/"Library/Preferences/$PLIST.plist" \
+            NSUserKeyEquivalents >/dev/null 2>&1 || true
 }
 
 function lk_macos_unmount() {

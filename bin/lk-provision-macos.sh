@@ -13,6 +13,7 @@ lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (return $s) && false || exit; }
 
 [ "$EUID" -ne 0 ] || lk_die "cannot run as root"
 [ "$(uname -s)" = Darwin ] || lk_die "not running on macOS"
+[[ $- != *s* ]] || lk_die "cannot run from standard input"
 
 function exit_trap() {
     local LOG_PATH

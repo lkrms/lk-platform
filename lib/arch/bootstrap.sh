@@ -107,6 +107,7 @@ function configure_pacman() {
 
 [ -d "/sys/firmware/efi/efivars" ] || lk_die "not booted in UEFI mode"
 [ "$EUID" -eq 0 ] || lk_die "not running as root"
+[[ $- != *s* ]] || lk_die "cannot run from standard input"
 [ $# -ge 3 ] || usage
 
 LOG_FILE="/tmp/${LK_PATH_PREFIX}bootstrap.$(date +'%s').log"
