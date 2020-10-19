@@ -1889,6 +1889,14 @@ function lk_remove_secret() {
     lk_console_message "Password removed successfully"
 }
 
+# lk_random_hex BYTES
+#
+# shellcheck disable=SC2034,SC2046
+function lk_random_hex() {
+    printf '%02x' $(for i in $(seq 1 "$1"); do echo $((RANDOM % 256)); done)
+    printf '\n'
+}
+
 function lk_sort_paths_by_date() {
     if lk_command_exists "$(_lk_gnu_command stat)" &&
         lk_command_exists "$(_lk_gnu_command sed)" || ! lk_macos; then

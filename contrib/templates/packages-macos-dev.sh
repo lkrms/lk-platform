@@ -47,6 +47,7 @@ HOMEBREW_CASKS+=(
     caprine
     chromium
     firefox
+    flycut
     icanhazshortcut
     imageoptim
     keepassxc
