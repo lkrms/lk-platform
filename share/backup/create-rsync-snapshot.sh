@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2015
+# shellcheck disable=SC1090,SC2015,SC2034,SC2046,SC2207
 
 set -eu
 
@@ -107,6 +107,161 @@ function lk_console_error() {
     local EXIT_STATUS=$?
     LK_CONSOLE_COLOUR=$LK_RED lk_console_log "$@"
     return "$EXIT_STATUS"
+}
+
+function lk_random_hex() {
+    printf '%02x' $(for i in $(seq 1 "$1"); do echo $((RANDOM % 256)); done)
+    printf '\n'
+}
+
+function lk_base64() {
+    if type -P openssl >/dev/null &&
+        openssl base64 >/dev/null 2>&1 </dev/null; then
+        openssl base64
+    elif type -P base64 >/dev/null &&
+        base64 --version 2>/dev/null </dev/null | grep -i gnu >/dev/null; then
+        base64
+    else
+        false
+    fi
+}
+
+function lk_mail_new() {
+    _LK_MAIL_TEXT=
+    _LK_MAIL_HTML=
+    _LK_MAIL_ATTACH=()
+    _LK_MAIL_ATTACH_NAME=()
+    _LK_MAIL_ATTACH_TYPE=()
+}
+
+function lk_mail_set_text() {
+    _LK_MAIL_TEXT=$1
+}
+
+function lk_mail_set_html() {
+    _LK_MAIL_HTML=$1
+}
+
+# lk_mail_attach FILE_PATH [FILE_NAME [MIME_TYPE]]
+function lk_mail_attach() {
+    local FILE_NAME MIME_TYPE
+    [ -f "$1" ] || return
+    FILE_NAME=${2:-${1##*/}}
+    MIME_TYPE=${3:-$(file -bi "$(lk_realpath "$1")" | cut -d';' -f1)} ||
+        MIME_TYPE=application/octet-stream
+    _LK_MAIL_ATTACH=(
+        ${_LK_MAIL_ATTACH[@]+"${_LK_MAIL_ATTACH[@]}"} "$1")
+    _LK_MAIL_ATTACH_NAME=(
+        ${_LK_MAIL_ATTACH_NAME[@]+"${_LK_MAIL_ATTACH_NAME[@]}"} "$FILE_NAME")
+    _LK_MAIL_ATTACH_TYPE=(
+        ${_LK_MAIL_ATTACH_TYPE[@]+"${_LK_MAIL_ATTACH_TYPE[@]}"} "$MIME_TYPE")
+}
+
+# _lk_mail_get_part CONTENT CONTENT_TYPE [ENCODING [HEADER...]]
+function _lk_mail_get_part() {
+    local BOUNDARY=${ALT_BOUNDARY:-$BOUNDARY}
+    cat <<EOF
+${BOUNDARY:+${PREAMBLE:+$PREAMBLE
+}--${ALT_BOUNDARY:-$BOUNDARY}
+}Content-Type: $2${3:+
+Content-Transfer-Encoding: $3}$([ $# -lt 4 ] || printf '\n%s' "${@:4}")
+${1:+
+$1}
+EOF
+    PREAMBLE=
+}
+
+function _lk_mail_end_parts() {
+    [ -z "${!1}" ] || {
+        printf -- '--%s--\n\n' "${!1}"
+        eval "$1="
+    }
+}
+
+# lk_mail_get_mime SUBJECT TO [FROM [HEADERS...]]
+#
+# shellcheck disable=SC2097,SC2098
+function lk_mail_get_mime() {
+    local SUBJECT TO FROM HEADERS BOUNDARY='' ALT_BOUNDARY='' ALT_TYPE i \
+        TEXT_PART=() TEXT_PART_TYPE=() ENCODING=8bit CHARSET=utf-8 \
+        PREAMBLE="This is a multi-part message in MIME format."
+    [ $# -ge 2 ] || return
+    SUBJECT=$1
+    TO=$2
+    FROM=${3:-${LK_MAIL_FROM-$({ ADDRESS=${USER:-nobody}@$(hostname -f) ||
+        ADDRESS=${USER:-nobody}@localhost; } &&
+        echo "$ADDRESS")}}
+    case "$SUBJECT$TO$FROM" in
+    *$'\r'* | *$'\n'*)
+        lk_die "line breaks not permitted in SUBJECT, TO, or FROM"
+        ;;
+    esac
+    HEADERS=(
+        "From: $FROM"
+        "To: $TO"
+        "Date: $(date -R)"
+        "Subject: $SUBJECT"
+        "${@:4}"
+    )
+    TEXT_PART=(${_LK_MAIL_TEXT:+"$_LK_MAIL_TEXT"}
+        ${_LK_MAIL_HTML:+"$_LK_MAIL_HTML"})
+    TEXT_PART_TYPE=(${_LK_MAIL_TEXT:+"text/plain"}
+        ${_LK_MAIL_HTML:+"text/html"})
+    printf '%s\n' "${TEXT_PART[@]}" |
+        LC_ALL=C \
+            grep -v "^[[:alnum:][:space:][:punct:][:cntrl:]]*\$" >/dev/null || {
+        ENCODING=7bit
+        CHARSET=us-ascii
+    }
+    [ ${#TEXT_PART[@]} -le 1 ] || {
+        ALT_BOUNDARY=$(lk_random_hex 12)
+        ALT_TYPE="multipart/alternative; boundary=$ALT_BOUNDARY"
+    }
+    [ ${#_LK_MAIL_ATTACH[@]} -eq 0 ] ||
+        { [ ${#_LK_MAIL_ATTACH[@]} -eq 1 ] && [ ${#TEXT_PART[@]} -eq 0 ]; } ||
+        BOUNDARY=$(lk_random_hex 12)
+    [ -z "${BOUNDARY:-$ALT_BOUNDARY}" ] || {
+        HEADERS=(${HEADERS[@]+"${HEADERS[@]}"} "MIME-Version: 1.0")
+        [ -n "$BOUNDARY" ] &&
+            HEADERS=(${HEADERS[@]+"${HEADERS[@]}"}
+                "Content-Type: multipart/mixed; boundary=$BOUNDARY") ||
+            HEADERS=(${HEADERS[@]+"${HEADERS[@]}"}
+                "Content-Type: $ALT_TYPE"
+                "Content-Transfer-Encoding: $ENCODING")
+        HEADERS=(${HEADERS[@]+"${HEADERS[@]}"} "")
+    }
+    printf '%s\n' "${HEADERS[@]}"
+    [ -z "$BOUNDARY" ] || [ -z "$ALT_BOUNDARY" ] ||
+        ALT_BOUNDARY='' _lk_mail_get_part "" "$ALT_TYPE" "$ENCODING"
+    for i in ${TEXT_PART[@]+"${!TEXT_PART[@]}"}; do
+        _lk_mail_get_part "${TEXT_PART[$i]%$'\n'}"$'\n' \
+            "${TEXT_PART_TYPE[$i]}; charset=$CHARSET" "$ENCODING"
+    done
+    _lk_mail_end_parts ALT_BOUNDARY
+    for i in ${_LK_MAIL_ATTACH[@]+"${!_LK_MAIL_ATTACH[@]}"}; do
+        # TODO: implement lk_maybe_encode_header_value
+        _lk_mail_get_part "" \
+            "$(printf '%s; name="%s"' \
+                "${_LK_MAIL_ATTACH_TYPE[$i]}" \
+                "${_LK_MAIL_ATTACH_NAME[$i]//\"/\\\"}")" \
+            "base64" \
+            "$(printf 'Content-Disposition: attachment; filename="%s"' \
+                "${_LK_MAIL_ATTACH_NAME[$i]//\"/\\\"}")"
+        lk_base64 <"${_LK_MAIL_ATTACH[$i]}" || return
+    done
+    _lk_mail_end_parts BOUNDARY
+}
+
+# lk_mail_send SUBJECT TO [FROM [HEADERS...]]
+function lk_mail_send() {
+    [ $# -ge 2 ] || return
+    lk_mail_get_mime "$@" | if type -P sendmail >/dev/null; then
+        sendmail -oi -t
+    elif type -P msmtp >/dev/null; then
+        msmtp -oi -t
+    else
+        false
+    fi
 }
 
 LK_BOLD=$(tput bold 2>/dev/null) || LK_BOLD=

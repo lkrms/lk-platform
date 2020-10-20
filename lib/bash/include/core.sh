@@ -1900,6 +1900,21 @@ function lk_random_hex() {
     printf '\n'
 }
 
+function lk_base64() {
+    if lk_command_exists openssl &&
+        openssl base64 >/dev/null 2>&1 </dev/null; then
+        # OpenSSL's implementation is ubiquitous and well-behaved
+        openssl base64
+    elif lk_command_exists base64 &&
+        base64 --version 2>/dev/null </dev/null | grep -i gnu >/dev/null; then
+        # base64 on BSD and some legacy systems (e.g. RAIDiator 4.x) doesn't
+        # wrap lines by default
+        base64
+    else
+        false
+    fi
+}
+
 function lk_sort_paths_by_date() {
     if lk_command_exists "$(_lk_gnu_command stat)" &&
         lk_command_exists "$(_lk_gnu_command sed)" || ! lk_macos; then

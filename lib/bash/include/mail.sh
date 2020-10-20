@@ -128,7 +128,7 @@ function lk_mail_get_mime() {
             "base64" \
             "$(printf 'Content-Disposition: attachment; filename="%s"' \
                 "${_LK_MAIL_ATTACH_NAME[$i]//\"/\\\"}")"
-        base64 <"${_LK_MAIL_ATTACH[$i]}" || return
+        lk_base64 <"${_LK_MAIL_ATTACH[$i]}" || return
     done
     _lk_mail_end_parts BOUNDARY
 }
