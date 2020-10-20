@@ -1223,14 +1223,17 @@ function lk_verbose() {
 #
 # Copy input to the user's clipboard if possible, otherwise print it out.
 function lk_clip() {
-    local OUTPUT COMMAND \
-        LK_CONSOLE_SECONDARY_COLOUR=${LK_CONSOLE_SECONDARY_COLOUR:-$LK_YELLOW}
+    local OUTPUT COMMAND LINES DISPLAY_LINES=${LK_CLIP_LINES:-4}
     OUTPUT=$(cat)
     if COMMAND=$(lk_command_first_existing xclip pbcopy) &&
         echo -n "$OUTPUT" | "$COMMAND" >/dev/null 2>&1; then
-        LK_CONSOLE_INDENT=0 \
-            LK_CONSOLE_NO_FOLD=1 \
-            lk_console_item "Copied to clipboard:" $'\n'"$OUTPUT"
+        LINES=$(wc -l <<<"$OUTPUT")
+        LK_CONSOLE_NO_FOLD=1 \
+            lk_console_item "Copied to clipboard:" $'\n'"$(
+            head -n"$DISPLAY_LINES" <<<"$OUTPUT"
+            [ "$LINES" -le "$DISPLAY_LINES" ] || echo "..."
+        )"
+        lk_console_detail "Lines copied:" "$LINES"
     else
         lk_console_error "Unable to copy output to clipboard"
         echo -n "$OUTPUT"
