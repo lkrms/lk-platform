@@ -262,9 +262,12 @@ function lk_get_regex() {
         IPV4_REGEX IPV4_OPT_PREFIX_REGEX \
         IPV6_REGEX IPV6_OPT_PREFIX_REGEX \
         IP_OPT_PREFIX_REGEX HOST_REGEX HOST_OPT_PREFIX_REGEX \
+        URI_REGEX URI_REGEX_REQ_SCHEME_HOST \
         LINUX_USERNAME_REGEX MYSQL_USERNAME_REGEX \
         DPKG_SOURCE_REGEX \
         PHP_SETTING_NAME_REGEX PHP_SETTING_REGEX \
+        READLINE_NON_PRINTING_REGEX CONTROL_SEQUENCE_REGEX \
+        IPV4_PRIVATE_FILTER_REGEX \
         _O _H _P _S _U _A _Q _F ARGS=("$@")
 
     _lk_regex_process DOMAIN_PART_REGEX \
@@ -321,6 +324,11 @@ function lk_get_regex() {
         "[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*"
     _lk_regex_process PHP_SETTING_REGEX \
         "$PHP_SETTING_NAME_REGEX=.+"
+
+    _lk_regex_process READLINE_NON_PRINTING_REGEX \
+        $'\x01[^\x02]*\x02'
+    _lk_regex_process CONTROL_SEQUENCE_REGEX \
+        $'\x1b\\[[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]'
 
     # *_FILTER_REGEX expressions are:
     # 1. anchored
@@ -415,12 +423,14 @@ function lk_timestamp() {
 if lk_bash_at_least 4 1; then
     function lk_pause() {
         # A homage to MS-DOS
-        read -sN 1 -p "${1:-Press any key to continue . . . }"
+        read -sN 1 -p "$(lk_readline_escape_non_printing \
+            "${1:-Press any key to continue . . . }")"
         echo
     }
 else
     function lk_pause() {
-        read -sp "${1:-Press return to continue . . . }"
+        read -sp "$(lk_readline_escape_non_printing \
+            "${1:-Press return to continue . . . }")"
         echo
     }
 fi
@@ -584,7 +594,7 @@ function lk_safe_tput() {
     local SEQ
     ! SEQ=$(tput "$@" 2>/dev/null) ||
         [ -z "$SEQ" ] ||
-        printf '\x01%s\x02' "$SEQ"
+        printf '%s' "$SEQ"
 }
 
 function lk_get_colours() {
@@ -924,16 +934,39 @@ function lk_echoc() {
         unset IFS
         MESSAGE="$(lk_replace "$LK_RESET" "$LK_RESET$COLOUR" "$MESSAGE")"
     fi
-    MESSAGE=${MESSAGE//$'\x02\x01'/}
     echo ${ECHO_ARGS[@]+"${ECHO_ARGS[@]}"} "${COLOUR:-}$MESSAGE$LK_RESET"
 }
 
-function lk_strip_non_printing() {
-    local STRING=$1
-    while [[ $STRING =~ (.*)$'\x01'[^$'\x02']*$'\x02'(.*) ]]; do
-        STRING=${BASH_REMATCH[1]}${BASH_REMATCH[2]}
+function lk_readline_escape_non_printing() {
+    local STRING=$1 LC_ALL=C CONTROL_SEQUENCE_REGEX
+    eval "$(lk_get_regex CONTROL_SEQUENCE_REGEX)"
+    while [[ $STRING =~ (.*)(^|[^$'\x01'])($CONTROL_SEQUENCE_REGEX)+(.*) ]]; do
+        STRING=${BASH_REMATCH[1]}${BASH_REMATCH[2]}$'\x01'${BASH_REMATCH[3]}$'\x02'${BASH_REMATCH[$((${#BASH_REMATCH[@]} - 1))]}
     done
     echo "$STRING"
+}
+
+function lk_strip_non_printing() {
+    local LC_ALL=C READLINE_NON_PRINTING_REGEX CONTROL_SEQUENCE_REGEX STRING REGEX
+    eval "$(lk_get_regex \
+        READLINE_NON_PRINTING_REGEX \
+        CONTROL_SEQUENCE_REGEX)"
+    if [ $# -gt 0 ]; then
+        STRING=$1
+        for REGEX in \
+            "$READLINE_NON_PRINTING_REGEX" \
+            "$CONTROL_SEQUENCE_REGEX"; do
+            while [[ $STRING =~ (.*)$REGEX(.*) ]]; do
+                STRING=${BASH_REMATCH[1]}${BASH_REMATCH[$((${#BASH_REMATCH[@]} - 1))]}
+            done
+        done
+        echo "$STRING"
+    else
+        export LC_ALL
+        sed -E \
+            -e "s/$READLINE_NON_PRINTING_REGEX//g" \
+            -e "s/$CONTROL_SEQUENCE_REGEX//g"
+    fi
 }
 
 function lk_output_length() {
@@ -1098,11 +1131,13 @@ function lk_console_list() {
 }
 
 function _lk_console_get_prompt() {
-    lk_echoc -n " :: " \
-        "${LK_CONSOLE_PREFIX_COLOUR-$(lk_maybe_bold \
-            "$LK_CONSOLE_COLOUR")$LK_CONSOLE_COLOUR}"
-    lk_echoc -n "${PROMPT[*]//$'\n'/$'\n    '}" \
-        "${LK_CONSOLE_MESSAGE_COLOUR-$(lk_maybe_bold "${PROMPT[*]}")}"
+    lk_readline_escape_non_printing "$(
+        lk_echoc -n " :: " \
+            "${LK_CONSOLE_PREFIX_COLOUR-$(lk_maybe_bold \
+                "$LK_CONSOLE_COLOUR")$LK_CONSOLE_COLOUR}"
+        lk_echoc -n "${PROMPT[*]//$'\n'/$'\n    '}" \
+            "${LK_CONSOLE_MESSAGE_COLOUR-$(lk_maybe_bold "${PROMPT[*]}")}"
+    )"
 }
 
 # lk_console_read PROMPT [DEFAULT [READ_ARG...]]
@@ -2148,31 +2183,31 @@ off)
     LK_RESET=
     ;;
 *)
-    LK_BLACK=$'\x01\E[30m\x02'
-    LK_RED=$'\x01\E[31m\x02'
-    LK_GREEN=$'\x01\E[32m\x02'
-    LK_YELLOW=$'\x01\E[33m\x02'
-    LK_BLUE=$'\x01\E[34m\x02'
-    LK_MAGENTA=$'\x01\E[35m\x02'
-    LK_CYAN=$'\x01\E[36m\x02'
-    LK_WHITE=$'\x01\E[37m\x02'
-    LK_GREY=$'\x01\E[90m\x02'
-    LK_BLACK_BG=$'\x01\E[40m\x02'
-    LK_RED_BG=$'\x01\E[41m\x02'
-    LK_GREEN_BG=$'\x01\E[42m\x02'
-    LK_YELLOW_BG=$'\x01\E[43m\x02'
-    LK_BLUE_BG=$'\x01\E[44m\x02'
-    LK_MAGENTA_BG=$'\x01\E[45m\x02'
-    LK_CYAN_BG=$'\x01\E[46m\x02'
-    LK_WHITE_BG=$'\x01\E[47m\x02'
-    LK_GREY_BG=$'\x01\E[100m\x02'
-    LK_BOLD=$'\x01\E[1m\x02'
-    LK_DIM=$'\x01\E[2m\x02'
-    LK_STANDOUT=$'\x01\E[7m\x02'
-    LK_STANDOUT_OFF=$'\x01\E[27m\x02'
-    LK_WRAP=$'\x01\E[?7h\x02'
-    LK_WRAP_OFF=$'\x01\E[?7l\x02'
-    LK_RESET=$'\x01\E(B\E[m\x02'
+    LK_BLACK=$'\E[30m'
+    LK_RED=$'\E[31m'
+    LK_GREEN=$'\E[32m'
+    LK_YELLOW=$'\E[33m'
+    LK_BLUE=$'\E[34m'
+    LK_MAGENTA=$'\E[35m'
+    LK_CYAN=$'\E[36m'
+    LK_WHITE=$'\E[37m'
+    LK_GREY=$'\E[90m'
+    LK_BLACK_BG=$'\E[40m'
+    LK_RED_BG=$'\E[41m'
+    LK_GREEN_BG=$'\E[42m'
+    LK_YELLOW_BG=$'\E[43m'
+    LK_BLUE_BG=$'\E[44m'
+    LK_MAGENTA_BG=$'\E[45m'
+    LK_CYAN_BG=$'\E[46m'
+    LK_WHITE_BG=$'\E[47m'
+    LK_GREY_BG=$'\E[100m'
+    LK_BOLD=$'\E[1m'
+    LK_DIM=$'\E[2m'
+    LK_STANDOUT=$'\E[7m'
+    LK_STANDOUT_OFF=$'\E[27m'
+    LK_WRAP=$'\E[?7h'
+    LK_WRAP_OFF=$'\E[?7l'
+    LK_RESET=$'\E(B\E[m'
     ;;
 esac
 

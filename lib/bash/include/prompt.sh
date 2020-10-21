@@ -21,40 +21,34 @@ function lk_prompt_command() {
             [ "$SECS" -gt 1 ] ||
             { [ "$(type -t "${LK_PROMPT_LAST_COMMAND[0]}")" != "builtin" ] &&
                 [[ ! "${LK_PROMPT_LAST_COMMAND[0]}" =~ ^(ls)$ ]]; }; then
-            PS+=("\n$LK_DIM\d \t$LK_RESET ")
+            PS+=("\n\[$LK_DIM\]\d \t\[$LK_RESET\] ")
             if [ "$EXIT_STATUS" -eq 0 ]; then
-                PS+=("$LK_GREEN"$'\xe2\x9c\x94')
+                PS+=("\[$LK_GREEN\]"$'\xe2\x9c\x94')
             else
                 STR=" returned $EXIT_STATUS"
                 ((LEN += ${#STR}))
-                PS+=("$LK_RED"$'\xe2\x9c\x98'"$STR")
+                PS+=("\[$LK_RED\]"$'\xe2\x9c\x98'"$STR")
             fi
             STR=" after ${SECS}s "
-            PS+=("$STR$LK_RESET$LK_DIM")
+            PS+=("$STR\[$LK_RESET$LK_DIM\]")
             ((LEN = $(tput cols 2>/dev/null) - LEN - ${#STR})) || true
             [ "$LEN" -le 0 ] || {
                 LK_PROMPT_LAST_COMMAND_CLEAN=$(lk_strip_non_printing \
                     "${LK_PROMPT_LAST_COMMAND[*]}")
                 PS+=("( \$(echo \"\${LK_PROMPT_LAST_COMMAND_CLEAN:0:$LEN}\") )")
             }
-            PS+=("$LK_RESET\n")
+            PS+=("\[$LK_RESET\]\n")
         fi
         LK_PROMPT_LAST_COMMAND=()
     fi
     if [ "$EUID" -ne 0 ]; then
-        PS+=("$LK_BOLD$LK_GREEN\u@")
+        PS+=("\[$LK_BOLD$LK_GREEN\]\u@")
     else
-        PS+=("$LK_BOLD$LK_RED\u@")
+        PS+=("\[$LK_BOLD$LK_RED\]\u@")
     fi
-    PS+=("\h$LK_RESET$LK_BOLD$LK_BLUE \w $LK_RESET")
+    PS+=("\h\[$LK_RESET$LK_BOLD$LK_BLUE\] \w \[$LK_RESET\]")
     IFS=
-    PS1="${PS[*]//$'\x02\x01'/}\\\$ "
-    # Fix alignment issues with versions of Bash that ignore non-printing
-    # characters between "\[" and "\]", but not the equivalent \x01 and \x02,
-    # when calculating prompt width
-    PS1="${PS1//$'\x01'/\\[}"
-    PS1="${PS1//$'\x02'/\\]}"
-    unset IFS
+    PS1="${PS[*]}\\\$ "
     LK_PROMPT_DISPLAYED=1
 }
 
