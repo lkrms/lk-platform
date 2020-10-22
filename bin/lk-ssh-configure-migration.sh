@@ -78,7 +78,8 @@ STAGE=${1:-local}
 STAGE=${STAGE#--}
 if [ "$STAGE" = "local" ]; then
     SSH_PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX}
-    NEW_HOST_NAME=$SSH_PREFIX$NEW_USER
+    NEW_HOST_NAME=${NEW_USER:+$SSH_PREFIX$NEW_USER}
+    NEW_HOST_NAME=${NEW_HOST_NAME:-$NEW_HOST}
 elif [ "$STAGE" = "new" ]; then
     include=provision . lk-bash-load.sh || exit
     SSH_PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX}
@@ -86,7 +87,8 @@ elif [ "$STAGE" = "new" ]; then
     OLD_USER={{OLD_USER}}
     OLD_HOST={{OLD_HOST}}
     OLD_PASSWORD={{OLD_PASSWORD}}
-    OLD_HOST_NAME=${SSH_PREFIX}old-$OLD_USER
+    OLD_HOST_NAME=${OLD_USER:+${SSH_PREFIX}old-$OLD_USER}
+    OLD_HOST_NAME=${OLD_HOST_NAME:-$OLD_HOST}
 else
     set -euo pipefail
     LK_BOLD={{LK_BOLD}}
@@ -144,13 +146,15 @@ case "$STAGE" in
 local)
     lk_console_message "Configuring SSH"
     lk_ssh_configure
-    lk_console_detail "Adding host:" "$NEW_HOST_NAME ($NEW_USER@$NEW_HOST)"
-    lk_ssh_add_host \
-        "$NEW_HOST_NAME" \
-        "$NEW_HOST" \
-        "$NEW_USER" \
-        "${NEW_KEY:-}" \
-        "${LK_SSH_JUMP_HOST:-}"
+    lk_ssh_list_hosts | grep -Fx "$NEW_HOST_NAME" >/dev/null || {
+        lk_console_detail "Adding host:" "$NEW_HOST_NAME ($NEW_USER@$NEW_HOST)"
+        lk_ssh_add_host \
+            "$NEW_HOST_NAME" \
+            "$NEW_HOST" \
+            "$NEW_USER" \
+            "${NEW_KEY:-}" \
+            "${LK_SSH_JUMP_HOST:+jump}"
+    }
 
     lk_console_item "Connecting to" "$NEW_HOST_NAME"
     ssh -o LogLevel=QUIET -t "$NEW_HOST_NAME" "bash -c$(
@@ -161,13 +165,15 @@ local)
 new)
     lk_console_message "Configuring SSH"
     lk_ssh_configure
-    lk_console_detail "Adding host:" "$OLD_HOST_NAME ($OLD_USER@$OLD_HOST)"
-    lk_ssh_add_host \
-        "$OLD_HOST_NAME" \
-        "$OLD_HOST" \
-        "$OLD_USER" \
-        "${LK_SSH_JUMP_KEY:-}" \
-        "${LK_SSH_JUMP_HOST:+jump}"
+    lk_ssh_list_hosts | grep -Fx "$OLD_HOST_NAME" >/dev/null || {
+        lk_console_detail "Adding host:" "$OLD_HOST_NAME ($OLD_USER@$OLD_HOST)"
+        lk_ssh_add_host \
+            "$OLD_HOST_NAME" \
+            "$OLD_HOST" \
+            "$OLD_USER" \
+            "${LK_SSH_JUMP_KEY:-}" \
+            "${LK_SSH_JUMP_HOST:+jump}"
+    }
 
     KEY_FILE=$(ssh -G "$OLD_HOST_NAME" |
         awk '/^identityfile / { print $2 }' |
