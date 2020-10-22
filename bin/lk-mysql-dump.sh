@@ -157,7 +157,7 @@ for DB_NAME in "${DB_INCLUDE[@]}"; do
         lk_console_error "Skipping (backup already exists)"
         continue
     }
-    install -m 0600 /dev/null "$FILE.pending"
+    install -m 00600 /dev/null "$FILE.pending"
     if lk_mysql_dump \
         "$DB_NAME" "$DB_USER" "$DB_PASSWORD" "$DB_HOST" >"$FILE.pending" &&
         mv -f "$FILE.pending" "$FILE"; then

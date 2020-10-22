@@ -134,7 +134,7 @@ function exit_trap() {
     sudo test ! -e "${FILE}s" || sudo test -e "$FILE" ||
         sudo mv -v "${FILE}s" "$FILE"
     sudo test -e "$FILE" ||
-        sudo install -m 0440 /dev/null "$FILE"
+        sudo install -m 00440 /dev/null "$FILE"
     LK_SUDO=1 lk_maybe_replace "$FILE" "$SUDOERS"
 
     if ! USER_UMASK=$(defaults read \
@@ -183,14 +183,14 @@ function exit_trap() {
 
     if [ ! -e "$LK_BASE" ] || [ -z "$(ls -A "$LK_BASE")" ]; then
         lk_console_item "Installing lk-platform to:" "$LK_BASE"
-        sudo install -d -m 2775 -o "$USER" -g admin "$LK_BASE"
+        sudo install -d -m 02775 -o "$USER" -g admin "$LK_BASE"
         lk_keep_trying lk_tty caffeinate -i \
             git clone -b "$LK_PLATFORM_BRANCH" \
             https://github.com/lkrms/lk-platform.git "$LK_BASE"
         lk_keep_original /etc/default/lk-platform
         [ -e /etc/default ] ||
-            sudo install -d -m 0755 -g wheel /etc/default
-        sudo install -m 0664 -g admin /dev/null /etc/default/lk-platform
+            sudo install -d -m 00755 -g wheel /etc/default
+        sudo install -m 00664 -g admin /dev/null /etc/default/lk-platform
         lk_get_shell_var \
             LK_BASE \
             LK_PATH_PREFIX \

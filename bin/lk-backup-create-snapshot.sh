@@ -167,11 +167,11 @@ RSYNC_ERR_FILE=$LK_SNAPSHOT_ROOT/log/rsync.err.log
 ! is_stage_complete finished ||
     lk_die "already finalised: $LK_SNAPSHOT_ROOT"
 
-install -d -m 0711 \
+install -d -m 00711 \
     "$BACKUP_ROOT/"{,latest,log,snapshot/{,"$SOURCE_NAME/"{,"$LK_SNAPSHOT_TIMESTAMP/"{,db,log}}}}
 for f in SNAPSHOT_LOG_FILE RSYNC_OUT_FILE RSYNC_ERR_FILE; do
     [ -e "${!f}" ] ||
-        install -m 0600 /dev/null "${!f}"
+        install -m 00600 /dev/null "${!f}"
 done
 
 LK_SECONDARY_LOG_FILE=$SNAPSHOT_LOG_FILE \

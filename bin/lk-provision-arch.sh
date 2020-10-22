@@ -109,7 +109,7 @@ EOF
 
     [ -e "/opt/opcache-gui" ] || {
         lk_console_message "Installing opcache-gui"
-        sudo install -d -m 0755 -o "$USER" -g "$(id -gn)" "/opt/opcache-gui" &&
+        sudo install -d -m 00755 -o "$USER" -g "$(id -gn)" "/opt/opcache-gui" &&
             git clone "https://github.com/lkrms/opcache-gui.git" \
                 "/opt/opcache-gui" || exit
     }
@@ -158,7 +158,7 @@ EOF
         lk_apply_setting "/etc/conf.d/libvirt-guests" "SHUTDOWN_TIMEOUT" "300" "=" "#"
         sudo usermod --append --groups libvirt,kvm "$USER"
         [ -e "/etc/qemu/bridge.conf" ] || {
-            sudo install -d -m 0755 "/etc/qemu" &&
+            sudo install -d -m 00755 "/etc/qemu" &&
                 echo "allow all" |
                 sudo tee "/etc/qemu/bridge.conf" >/dev/null || exit
         }
@@ -177,7 +177,7 @@ EOF
         lk_enable_php_entry "extension=$PHP_EXT"
     done
     lk_enable_php_entry "zend_extension=opcache"
-    sudo install -d -m 0700 -o "http" -g "http" "/var/cache/php/opcache"
+    sudo install -d -m 00700 -o "http" -g "http" "/var/cache/php/opcache"
     lk_apply_php_setting "max_execution_time" "0"
     lk_apply_php_setting "memory_limit" "128M"
     lk_apply_php_setting "error_reporting" "E_ALL"
@@ -196,8 +196,8 @@ EOF
         PHP_INI_FILE="/etc/php/conf.d/memcached.ini" \
             lk_enable_php_entry "extension=memcached.so"
     [ ! -f "/etc/php/conf.d/xdebug.ini" ] || {
-        install -d -m 0777 "$HOME/.tmp/cachegrind"
-        install -d -m 0777 "$HOME/.tmp/trace"
+        install -d -m 00777 "$HOME/.tmp/cachegrind"
+        install -d -m 00777 "$HOME/.tmp/trace"
         PHP_INI_FILE="/etc/php/conf.d/xdebug.ini"
         lk_enable_php_entry "zend_extension=xdebug.so"
         lk_apply_php_setting "xdebug.remote_enable" "On"
@@ -214,7 +214,7 @@ EOF
     }
     [ ! -f "/etc/php/php-fpm.d/www.conf" ] ||
         {
-            sudo install -d -m 0775 -o "root" -g "http" "/var/log/httpd"
+            sudo install -d -m 00775 -o "root" -g "http" "/var/log/httpd"
             PHP_INI_FILE="/etc/php/php-fpm.d/www.conf"
             lk_apply_php_setting "pm" "static"
             lk_apply_php_setting "pm.max_children" "4"
@@ -234,7 +234,7 @@ EOF
     lk_is_true "$MINIMAL" || lk_systemctl_enable php-fpm
 
     HTTPD_CONF_FILE="/etc/httpd/conf/httpd.conf"
-    sudo install -d -m 0755 -o "$USER" -g "$(id -gn)" "/srv/http"
+    sudo install -d -m 00755 -o "$USER" -g "$(id -gn)" "/srv/http"
     mkdir -p "/srv/http/localhost/html" "/srv/http/127.0.0.1"
     [ -e "/srv/http/127.0.0.1/html" ] ||
         ln -sfT "../localhost/html" "/srv/http/127.0.0.1/html"

@@ -53,8 +53,8 @@ $(lsblk --output "NAME,RM,RO,SIZE,TYPE,FSTYPE,MOUNTPOINT" --paths)" >&2
 function exit_trap() {
     exec >&6 2>&7 6>&- 7>&-
     [ ! -d "/mnt/boot" ] || {
-        install -v -d -m 0755 "/mnt/var/log" &&
-            install -v -m 0640 -g "adm" \
+        install -v -d -m 00755 "/mnt/var/log" &&
+            install -v -m 00640 -g "adm" \
                 "$LOG_FILE" "/mnt/var/log/${LK_PATH_PREFIX}bootstrap.log" || true
     }
 }
@@ -339,7 +339,7 @@ else
     lk_console_detail "Enabling LightDM"
     in_target systemctl enable lightdm.service
 
-    install -v -d -m 0755 "/mnt/etc/skel/.config/xfce4"
+    install -v -d -m 00755 "/mnt/etc/skel/.config/xfce4"
     ln -sv "$LK_BASE/etc/xfce4/xinitrc" \
         "/mnt/etc/skel/.config/xfce4/xinitrc"
     in_target bash -c \
@@ -365,12 +365,12 @@ if [ -f '$LK_BASE/lib/bash/rc.sh' ]; then
     . '$LK_BASE/lib/bash/rc.sh'
 fi
 EOF
-install -v -m 0600 "/mnt/etc/skel/.bashrc" "/mnt/root/.bashrc"
+install -v -m 00600 "/mnt/etc/skel/.bashrc" "/mnt/root/.bashrc"
 
 lk_console_detail "Configuring SSH defaults for all users"
-install -v -d -m 0700 "/mnt/etc/skel/.ssh"
-install -v -m 0600 /dev/null "/mnt/etc/skel/.ssh/authorized_keys"
-install -v -m 0600 /dev/null "/mnt/etc/skel/.ssh/config"
+install -v -d -m 00700 "/mnt/etc/skel/.ssh"
+install -v -m 00600 /dev/null "/mnt/etc/skel/.ssh/authorized_keys"
+install -v -m 00600 /dev/null "/mnt/etc/skel/.ssh/config"
 cat <<EOF >"/mnt/etc/skel/.ssh/config"
 Host                    *
 IdentitiesOnly          yes
@@ -396,7 +396,7 @@ echo -e "$TARGET_PASSWORD\n$TARGET_PASSWORD" | in_target passwd "$TARGET_USERNAM
 
 lk_console_detail "Configuring sudo"
 FILE=/mnt/etc/sudoers.d/${LK_PATH_PREFIX}default-arch
-install -v -m 0440 /dev/null "$FILE"
+install -v -m 00440 /dev/null "$FILE"
 cat <<EOF >"$FILE"
 %wheel ALL=(ALL) ALL
 %wheel ALL=(ALL) NOPASSWD:/usr/bin/pacman
@@ -406,7 +406,7 @@ lk_console_detail "Disabling root password"
 in_target passwd -l root
 
 lk_console_detail "Installing lk-platform to:" "$LK_BASE"
-in_target install -v -d -m 2775 -o "$TARGET_USERNAME" -g "adm" \
+in_target install -v -d -m 02775 -o "$TARGET_USERNAME" -g "adm" \
     "$LK_BASE"
 in_target sudo -H -u "$TARGET_USERNAME" \
     git clone -b "$LK_PLATFORM_BRANCH" \
@@ -506,8 +506,8 @@ sed -Ei -e 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=saved/' \
     -e 's/^#?GRUB_SAVEDEFAULT=.*/GRUB_SAVEDEFAULT=true/' \
     -e "s/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT=\"quiet loglevel=3 audit=0${CMDLINE_EXTRA:+ $CMDLINE_EXTRA}${GRUB_CMDLINE:+ $GRUB_CMDLINE}\"/" \
     /mnt/etc/default/grub
-install -v -d -m 0755 "/mnt/usr/local/bin"
-install -v -m 0755 /dev/null "/mnt/usr/local/bin/update-grub"
+install -v -d -m 00755 "/mnt/usr/local/bin"
+install -v -m 00755 /dev/null "/mnt/usr/local/bin/update-grub"
 cat <<EOF >"/mnt/usr/local/bin/update-grub"
 #!/bin/bash
 

@@ -828,7 +828,7 @@ function lk_log_create_file() {
         # needed, running commands via sudo only if they fail without it
         [ -d "$LOG_DIR" ] ||
             lk_elevate_if_error install -d \
-                -m "$(lk_pad_zero 4 "${LK_LOG_DIR_MODE:-0777}")" \
+                -m "$(lk_pad_zero 5 "${LK_LOG_DIR_MODE:-0777}")" \
                 "$LOG_DIR" 2>/dev/null ||
             continue
         LOG_PATH=$LOG_DIR/${LK_LOG_BASENAME:-${0##*/}}-$UID.log
@@ -844,7 +844,7 @@ function lk_log_create_file() {
             } 2>/dev/null
         else
             lk_elevate_if_error install \
-                -m "$(lk_pad_zero 4 "${LK_LOG_FILE_MODE:-0600}")" \
+                -m "$(lk_pad_zero 5 "${LK_LOG_FILE_MODE:-0600}")" \
                 -o "$OWNER" ${GROUP:+-g "$GROUP"} \
                 /dev/null "$LOG_PATH" 2>/dev/null || continue
         fi

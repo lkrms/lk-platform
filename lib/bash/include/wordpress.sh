@@ -161,7 +161,7 @@ function lk_wp_rename_site() {
 OK to flush rewrite rules, caches and transients? \
 Plugin code will be allowed to run." Y; }; then
         lk_wp_flush
-    else
+    elif [ -z "${LK_WP_FLUSH:-}" ]; then
         lk_console_detail "To flush rewrite rules:" "wp rewrite flush"
         lk_console_detail "To flush everything:" "lk_wp_flush"
     fi

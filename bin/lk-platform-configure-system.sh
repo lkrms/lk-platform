@@ -136,7 +136,7 @@
     [ ! -e "${FILE}s" ] || [ -e "$FILE" ] ||
         mv -v "${FILE}s" "$FILE"
     [ -e "$FILE" ] ||
-        install -m 0440 /dev/null "$FILE"
+        install -m 00440 /dev/null "$FILE"
     LK_BACKUP_SUFFIX='' \
         lk_maybe_replace "$FILE" "$(cat "$LK_BASE/share/sudoers.d/default")"
 
@@ -280,8 +280,8 @@ install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
 
     # Generate /etc/default/lk-platform
     [ -e "$CONF_FILE" ] || {
-        install -d -m 0755 "${CONF_FILE%/*}" &&
-            install -m 0644 /dev/null "$CONF_FILE"
+        install -d -m 00755 "${CONF_FILE%/*}" &&
+            install -m 00644 /dev/null "$CONF_FILE"
     }
     # TODO: add or replace lines rather than overwriting entire file
     DEFAULT_LINES=()
@@ -339,7 +339,7 @@ install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
         local FILE=$1
         shift
         [ -e "$FILE" ] ||
-            install -m 0644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
+            install -m 00644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
         lk_maybe_replace "$FILE" "$([ $# -eq 0 ] || printf "%s\n" "$@")" \
             '^[[:blank:]]*($|#)'
     }
@@ -355,7 +355,7 @@ install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
         FILE=$h/.bashrc
         [ -f "$FILE" ] || {
             lk_console_detail "Creating" "$FILE"
-            install -m 0644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
+            install -m 00644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
         }
         lk_maybe_replace "$FILE" "$("${RC_AWK[@]}" "$FILE")"
 
@@ -368,7 +368,7 @@ install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
             FILE=$h/.profile
             PROFILES+=("$FILE")
             lk_console_detail "Creating" "$FILE"
-            install -m 0644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
+            install -m 00644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
         }
         grep -q "\\.bashrc" "${PROFILES[@]}" || {
             FILE=${PROFILES[0]}
@@ -393,7 +393,7 @@ install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
             done
 
             [ -d "$DIR" ] ||
-                install -d -m 0755 -o "$OWNER" -g "$GROUP" "$DIR"
+                install -d -m 00755 -o "$OWNER" -g "$GROUP" "$DIR"
             LK_NO_DIFF=1
             # Prevent byobu from enabling its prompt on first start
             maybe_replace_lines "$DIR/prompt"

@@ -16,7 +16,7 @@ function lk_maybe_install() {
         ! i=$(lk_array_search "-o" ARGS) || OWNER=${ARGS[*]:$((i + 1)):1}
         ! i=$(lk_array_search "-g" ARGS) || GROUP=${ARGS[*]:$((i + 1)):1}
         [ -z "${MODE:-}" ] ||
-            lk_maybe_sudo chmod ${VERBOSE+-v} "0$MODE" "$DEST" || return
+            lk_maybe_sudo chmod ${VERBOSE+-v} "$MODE" "$DEST" || return
         [ -z "${OWNER:-}${GROUP:-}" ] ||
             lk_elevate chown ${VERBOSE+-v} \
                 "${OWNER:-}${GROUP:+:$GROUP}" "$DEST" || return
@@ -96,7 +96,7 @@ function lk_sudo_offer_nopasswd() {
     sudo -n test -e "$FILE" 2>/dev/null || {
         lk_can_sudo install || return
         lk_confirm "Allow user '$USER' to run sudo without entering a password?" Y || return
-        sudo install -m 440 /dev/null "$FILE" &&
+        sudo install -m 00440 /dev/null "$FILE" &&
             sudo tee "$FILE" >/dev/null <<<"$USER ALL=(ALL) NOPASSWD:ALL" &&
             lk_console_message "User '$USER' may now run any command as any user" || return
     }
@@ -140,13 +140,25 @@ function lk_ssh_list_hosts() {
 }
 
 # lk_ssh_add_host NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]
+#
+# Create or update ~/.ssh/lk-config.d/60-NAME to apply HOST, PORT, USER,
+# KEY_FILE and JUMP_HOST_NAME to HostName, Port, User, IdentityFile and
+# ProxyJump for SSH host NAME.
+#
+# Notes:
+# - KEY_FILE can be relative to ~/.ssh or ~/.ssh/lk-keys
+# - If KEY_FILE is -, the key will be read from standard input and written to
+#   ~/.ssh/lk-keys/NAME
+# - LK_SSH_PREFIX is removed from the start of NAME and JUMP_HOST_NAME to ensure
+#   it's not added twice
 function lk_ssh_add_host() {
-    local NAME=$1 HOST=$2 JUMP_USER=$3 KEY_FILE=${4:-} JUMP_HOST_NAME=${5:-} \
+    local NAME=$1 HOST=$2 SSH_USER=$3 KEY_FILE=${4:-} JUMP_HOST_NAME=${5:-} \
         h=${LK_SSH_HOME:-~} SSH_PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX} \
         S="[[:blank:]]" KEY CONF CONF_FILE
     [ $# -ge 3 ] || lk_usage "\
 Usage: $(lk_myself -f) NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
         return
+    NAME=${NAME#$SSH_PREFIX}
     [ "${KEY_FILE:--}" = - ] ||
         [ -f "$KEY_FILE" ] ||
         [ -f "$h/.ssh/$KEY_FILE" ] ||
@@ -163,17 +175,17 @@ Usage: $(lk_myself -f) NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
     [ ! "$KEY_FILE" = - ] || {
         KEY=${KEY:-$(cat)}
         KEY_FILE=$h/.ssh/${SSH_PREFIX}keys/$NAME
-        LK_BACKUP_SUFFIX='' LK_VERBOSE=0 \
-            lk_maybe_replace "$KEY_FILE" "$KEY" &&
-            chmod 00600 "$KEY_FILE" || return
+        lk_maybe_install -m 00600 /dev/null "$KEY_FILE" &&
+            LK_BACKUP_SUFFIX='' LK_VERBOSE=0 \
+                lk_maybe_replace "$KEY_FILE" "$KEY" || return
         ssh-keygen -l -f "$KEY_FILE" >/dev/null 2>&1 || {
             # `ssh-keygen -l -f FILE` exits without error if FILE contains an
             # OpenSSH public key
             lk_console_log "Reading $KEY_FILE to create public key file"
             KEY=$(unset DISPLAY && ssh-keygen -y -f "$KEY_FILE") &&
+                lk_maybe_install -m 00600 /dev/null "$KEY_FILE.pub" &&
                 LK_BACKUP_SUFFIX='' LK_VERBOSE=0 \
-                    lk_maybe_replace "$KEY_FILE.pub" "$KEY" &&
-                chmod 00600 "$KEY_FILE.pub" || return
+                    lk_maybe_replace "$KEY_FILE.pub" "$KEY" || return
         }
     }
     CONF=$(
@@ -183,18 +195,18 @@ Usage: $(lk_myself -f) NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
         }
         KEY_FILE=${KEY_FILE//${h//\//\\\/}/"~"}
         cat <<EOF
-Host                    $SSH_PREFIX${NAME#$SSH_PREFIX}
+Host                    $SSH_PREFIX$NAME
 HostName                $HOST${PORT:+
-Port                    $PORT}${JUMP_USER:+
-User                    $JUMP_USER}${KEY_FILE:+
+Port                    $PORT}${SSH_USER:+
+User                    $SSH_USER}${KEY_FILE:+
 IdentityFile            "$KEY_FILE"}${JUMP_HOST_NAME:+
 ProxyJump               $SSH_PREFIX${JUMP_HOST_NAME#$SSH_PREFIX}}
 EOF
     )
-    CONF_FILE=$h/.ssh/${SSH_PREFIX}config.d/${LK_SSH_PRIORITY:-60}-${NAME#$SSH_PREFIX}
-    LK_BACKUP_SUFFIX='' \
-        lk_maybe_replace "$CONF_FILE" "$CONF" &&
-        chmod 00600 "$CONF_FILE" || return
+    CONF_FILE=$h/.ssh/${SSH_PREFIX}config.d/${LK_SSH_PRIORITY:-60}-$NAME
+    lk_maybe_install -m 00600 /dev/null "$CONF_FILE" &&
+        LK_BACKUP_SUFFIX='' \
+            lk_maybe_replace "$CONF_FILE" "$CONF" || return
 }
 
 # lk_ssh_configure [JUMP_HOST[:JUMP_PORT] JUMP_USER [JUMP_KEY_FILE]]
@@ -229,13 +241,13 @@ function lk_ssh_configure() {
             GROUP=$(id -gn "$OWNER") || return
         # Create directories in ~/.ssh, or reset modes and ownership of existing
         # directories
-        install -d -m 0700 -o "$OWNER" -g "$GROUP" \
+        install -d -m 00700 -o "$OWNER" -g "$GROUP" \
             "$h/.ssh"{,"/$SSH_PREFIX"{config.d,keys}} ||
             return
         # Add "Include ~/.ssh/lk-config.d/*" to ~/.ssh/config, or replace an
         # equivalent entry
         [ -e "$h/.ssh/config" ] ||
-            install -m 0600 -o "$OWNER" -g "$GROUP" \
+            install -m 00600 -o "$OWNER" -g "$GROUP" \
                 /dev/null "$h/.ssh/config" ||
             return
         LK_BACKUP_SUFFIX='' \
@@ -575,9 +587,9 @@ CA bundle and private key for DOMAIN from SSH_HOST to TARGET_DIR
 (default: ~/ssl)." || return
     TARGET_DIR=${TARGET_DIR%/}
     [ -e "$TARGET_DIR" ] ||
-        install -d -m 0750 "$TARGET_DIR" &&
-        lk_maybe_install -m 0640 /dev/null "$TARGET_DIR/$2.cert" &&
-        lk_maybe_install -m 0640 /dev/null "$TARGET_DIR/$2.key" || return
+        install -d -m 00750 "$TARGET_DIR" &&
+        lk_maybe_install -m 00640 /dev/null "$TARGET_DIR/$2.cert" &&
+        lk_maybe_install -m 00640 /dev/null "$TARGET_DIR/$2.key" || return
     lk_console_message "Retrieving SSL certificate"
     lk_console_detail "Host:" "$1"
     lk_console_detail "Domain:" "$2"
