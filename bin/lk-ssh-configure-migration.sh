@@ -183,7 +183,7 @@ case "$STAGE" in
 local)
     lk_console_message "Configuring SSH"
     lk_ssh_configure
-    lk_ssh_host_exists "$NEW_HOST_NAME" || {
+    [ -z "$NEW_KEY_FILE" ] && lk_ssh_host_exists "$NEW_HOST_NAME" || {
         lk_console_detail \
             "Adding host:" "$NEW_HOST_NAME ($NEW_USER@$NEW_HOST)"
         lk_ssh_add_host \
@@ -205,7 +205,7 @@ new)
     lk_ssh_configure
     [ -z "$NEW_KEY" ] ||
         add_authorized_key "$NEW_KEY"
-    lk_ssh_host_exists "$OLD_HOST_NAME" || {
+    [ -z "$OLD_KEY" ] && lk_ssh_host_exists "$OLD_HOST_NAME" || {
         lk_console_detail \
             "Adding host:" "$OLD_HOST_NAME ($OLD_USER@$OLD_HOST)"
         lk_ssh_add_host \
@@ -215,7 +215,7 @@ new)
             "${OLD_KEY:+-}" \
             "${LK_SSH_JUMP_HOST:+jump}" <<<"$OLD_KEY"
     }
-    KEY_FILE=$(lk_ssh_get_host_key_files | head -n1) ||
+    KEY_FILE=$(lk_ssh_get_host_key_files "$OLD_HOST_NAME" | head -n1) ||
         lk_die "no IdentityFile for host $OLD_HOST_NAME"
     KEY=$(lk_ssh_get_public_key "$KEY_FILE") ||
         lk_die "no public key for $KEY_FILE"
@@ -236,7 +236,8 @@ EOF
             "Password will be requested if public key not already installed"
     fi
     ${OLD_PASSWORD:+setsid -w} ssh -o LogLevel=QUIET -t "$OLD_HOST_NAME" \
-        "bash -c$(printf ' %q' "$BASH_EXECUTION_STRING" bash --old "$KEY")"
+        "bash -c$(printf ' %q' "$BASH_EXECUTION_STRING" bash --old "$KEY")" ||
+        lk_die "ssh command failed (exit status $?)"
     if [ -n "${SSH_ASKPASS:-}" ]; then
         lk_console_detail "Deleting:" "$SSH_ASKPASS"
         rm "$SSH_ASKPASS"
