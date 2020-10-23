@@ -689,11 +689,10 @@ function lk_in_array() {
 # Search ARRAY for PATTERN and output the key of the first match if found,
 # otherwise return false.
 function lk_array_search() {
-    local _LK_ARRAY="$2[@]" _LK_ARRAY_KEYS _LK_ARRAY_VALS _LK_KEY=0
+    local _LK_ARRAY="$2[@]" _LK_ARRAY_KEYS _LK_ARRAY_VALS _LK_KEY
     eval "_LK_ARRAY_KEYS=(\"\${!$2[@]}\")"
     _LK_ARRAY_VALS=(${!_LK_ARRAY+"${!_LK_ARRAY}"})
-    while [ "$_LK_KEY" -lt ${#_LK_ARRAY_KEYS[@]} ]; do
-        ((++_LK_KEY))
+    for _LK_KEY in "${!_LK_ARRAY_VALS[@]}"; do
         # shellcheck disable=SC2053
         [[ ${_LK_ARRAY_VALS[$_LK_KEY]} == $1 ]] || continue
         echo "${_LK_ARRAY_KEYS[$_LK_KEY]}"
