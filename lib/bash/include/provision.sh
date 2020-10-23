@@ -139,6 +139,52 @@ function lk_ssh_list_hosts() {
     }
 }
 
+function lk_ssh_host_exists() {
+    [ -n "${1:-}" ] &&
+        lk_ssh_list_hosts | grep -Fx "$1" >/dev/null
+}
+
+function lk_ssh_get_host_key_files() {
+    local KEY_FILE
+    [ -n "${1:-}" ] || lk_warn "no ssh host" || return
+    lk_ssh_host_exists "$1" || lk_warn "ssh host not found: $1" || return
+    KEY_FILE=$(ssh -G "$1" |
+        awk '/^identityfile / { print $2 }' |
+        lk_expand_paths |
+        lk_filter -f) &&
+        [ -n "$KEY_FILE" ] &&
+        echo "$KEY_FILE"
+}
+
+# lk_ssh_get_public_key [KEY_FILE]
+#
+# Read a private or public OpenSSH key from KEY_FILE or input and output an
+# OpenSSH public key.
+function lk_ssh_get_public_key() {
+    local KEY KEY_FILE EXIT_STATUS=0
+    if [ $# -eq 0 ]; then
+        KEY=$(cat) || return
+    elif [ "$1" = "${1%.pub}" ] &&
+        [ -f "$1.pub" ] &&
+        KEY=$(lk_ssh_get_public_key "$1.pub" 2>/dev/null); then
+        echo "$KEY"
+        return
+    else
+        [ -f "$1" ] || lk_warn "file not found: $1" || return
+        KEY=$(cat <"$1") || return
+    fi
+    if ssh-keygen -l -f <(cat <<<"$KEY") >/dev/null 2>&1; then
+        echo "$KEY"
+    else
+        # ssh-keygen doesn't allow fingerprinting from a file descriptor
+        KEY_FILE=$(lk_mktemp_file) &&
+            cat <<<"$KEY" >"$KEY_FILE" || return
+        ssh-keygen -y -f "$KEY_FILE" || EXIT_STATUS=$?
+        rm -f "$KEY_FILE" || true
+        return "$EXIT_STATUS"
+    fi
+}
+
 # lk_ssh_add_host NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]
 #
 # Create or update ~/.ssh/lk-config.d/60-NAME to apply HOST, PORT, USER,

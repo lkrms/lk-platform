@@ -6,15 +6,17 @@ if [[ ! ${1:-} =~ ^(--new|--old)$ ]]; then
 
     lk_bin_depth=1 include=provision . lk-bash-load.sh || exit
 
-    # TODO: implement TARGET_PASSWORD
+    # TODO: implement NEW_PASSWORD
     NEW_USER=
     NEW_HOST=
-    NEW_KEY=${TARGET_KEY:-}
+    NEW_KEY_FILE=
+    NEW_KEY=
+    NEW_PASSWORD=
 
-    # TODO: implement SOURCE_KEY
     OLD_USER=
     OLD_HOST=
-    OLD_PASSWORD=${SOURCE_PASSWORD:-}
+    OLD_KEY=
+    OLD_PASSWORD=
 
     LK_USAGE="\
 Usage: ${0##*/} [OPTION...] [USER@]SOURCE[:PORT] [USER@]TARGET[:PORT]
@@ -25,15 +27,16 @@ authentication agent on the local system. Requires lk-platform to be installed
 on TARGET.
 
 Options:
+  -o, --source-name=HOST            configure SOURCE as HOST in ~/.ssh
+  -n, --target-name=HOST            configure TARGET as HOST in ~/.ssh
+  -k, --source-key=FILE             use key in FILE when logging into SOURCE
   -i, --target-key=FILE             use key in FILE when logging into TARGET
-                                    (default: TARGET_KEY from environment)
-  -p, --source-password=PASSWORD    use PASSWORD when logging into SOURCE
-                                    (default: SOURCE_PASSWORD from environment)"
+  -p, --source-password=PASSWORD    use PASSWORD when logging into SOURCE"
 
     lk_check_args
     OPTS=$(
-        gnu_getopt --options "i:p:" \
-            --longoptions "target-key:,source-password:" \
+        gnu_getopt --options "o:n:k:i:p:" \
+            --longoptions "source-name:,target-name:,source-key:,target-key:,source-password:" \
             --name "${0##*/}" \
             -- "$@"
     ) || lk_usage
@@ -43,12 +46,28 @@ Options:
         OPT=$1
         shift
         case "$OPT" in
+        -o | --source-name)
+            OLD_HOST_NAME=$1
+            ;;
+        -n | --target-name)
+            NEW_HOST_NAME=$1
+            ;;
+        -k | --source-key)
+            [ -f "$1" ] || lk_warn "file not found: $1" || lk_usage
+            OLD_KEY=$(lk_ssh_get_public_key "$1" 2>/dev/null) ||
+                lk_warn "invalid key file: $1" || lk_usage
+            ;;
         -i | --target-key)
             [ -f "$1" ] || lk_warn "file not found: $1" || lk_usage
-            NEW_KEY=$1
+            NEW_KEY=$(lk_ssh_get_public_key "$1" 2>/dev/null) ||
+                lk_warn "invalid key file: $1" || lk_usage
+            NEW_KEY_FILE=$1
             ;;
         -p | --source-password)
             OLD_PASSWORD=$1
+            ;;
+        -w | --target-password)
+            NEW_PASSWORD=$1
             ;;
         --)
             break
@@ -78,17 +97,20 @@ STAGE=${1:-local}
 STAGE=${STAGE#--}
 if [ "$STAGE" = "local" ]; then
     SSH_PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX}
-    NEW_HOST_NAME=${NEW_USER:+$SSH_PREFIX$NEW_USER}
-    NEW_HOST_NAME=${NEW_HOST_NAME:-$NEW_HOST}
+    NEW_HOST_NAME=${NEW_HOST_NAME:-${NEW_USER:-$NEW_HOST}}
+    NEW_HOST_NAME=$SSH_PREFIX${NEW_HOST_NAME#$SSH_PREFIX}
 elif [ "$STAGE" = "new" ]; then
     include=provision . lk-bash-load.sh || exit
     SSH_PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX}
     NEW_HOST_NAME={{NEW_HOST_NAME}}
+    NEW_KEY={{NEW_KEY}}
     OLD_USER={{OLD_USER}}
     OLD_HOST={{OLD_HOST}}
+    OLD_KEY={{OLD_KEY}}
     OLD_PASSWORD={{OLD_PASSWORD}}
-    OLD_HOST_NAME=${OLD_USER:+${SSH_PREFIX}old-$OLD_USER}
-    OLD_HOST_NAME=${OLD_HOST_NAME:-$OLD_HOST}
+    OLD_HOST_NAME={{OLD_HOST_NAME}}
+    OLD_HOST_NAME=${OLD_HOST_NAME:-${OLD_USER:-$OLD_HOST}}
+    OLD_HOST_NAME=$SSH_PREFIX${OLD_HOST_NAME#$SSH_PREFIX}
 else
     set -euo pipefail
     LK_BOLD={{LK_BOLD}}
@@ -138,6 +160,21 @@ function lk_ellipsis() {
         echo "$2"
 }
 
+function add_authorized_key() {
+    local FILE DIR
+    FILE=~/.ssh/authorized_keys
+    DIR=~/.ssh
+    if ! grep -Fxq "$1" "$FILE" 2>/dev/null; then
+        lk_console_item "Adding public key to" "$FILE"
+        mkdir -p "$DIR" &&
+            cat >>"$FILE" <<<"$1" || return
+    else
+        lk_console_item "Public key already present in" "$FILE"
+    fi
+    chmod 700 "$DIR" &&
+        chmod 600 "$FILE"
+}
+
 H=${HOSTNAME:-$(hostname -s)} || H="<unknown>"
 H=$(lk_ellipsis 10 "$(printf '%10s' "$H")")
 H_SPACES="               "
@@ -146,13 +183,14 @@ case "$STAGE" in
 local)
     lk_console_message "Configuring SSH"
     lk_ssh_configure
-    lk_ssh_list_hosts | grep -Fx "$NEW_HOST_NAME" >/dev/null || {
-        lk_console_detail "Adding host:" "$NEW_HOST_NAME ($NEW_USER@$NEW_HOST)"
+    lk_ssh_host_exists "$NEW_HOST_NAME" || {
+        lk_console_detail \
+            "Adding host:" "$NEW_HOST_NAME ($NEW_USER@$NEW_HOST)"
         lk_ssh_add_host \
             "$NEW_HOST_NAME" \
             "$NEW_HOST" \
             "$NEW_USER" \
-            "${NEW_KEY:-}" \
+            "${NEW_KEY_FILE:-}" \
             "${LK_SSH_JUMP_HOST:+jump}"
     }
 
@@ -165,36 +203,22 @@ local)
 new)
     lk_console_message "Configuring SSH"
     lk_ssh_configure
-    lk_ssh_list_hosts | grep -Fx "$OLD_HOST_NAME" >/dev/null || {
-        lk_console_detail "Adding host:" "$OLD_HOST_NAME ($OLD_USER@$OLD_HOST)"
+    [ -z "$NEW_KEY" ] ||
+        add_authorized_key "$NEW_KEY"
+    lk_ssh_host_exists "$OLD_HOST_NAME" || {
+        lk_console_detail \
+            "Adding host:" "$OLD_HOST_NAME ($OLD_USER@$OLD_HOST)"
         lk_ssh_add_host \
             "$OLD_HOST_NAME" \
             "$OLD_HOST" \
             "$OLD_USER" \
-            "${LK_SSH_JUMP_KEY:-}" \
-            "${LK_SSH_JUMP_HOST:+jump}"
+            "${OLD_KEY:+-}" \
+            "${LK_SSH_JUMP_HOST:+jump}" <<<"$OLD_KEY"
     }
-
-    KEY_FILE=$(ssh -G "$OLD_HOST_NAME" |
-        awk '/^identityfile / { print $2 }' |
-        lk_expand_paths |
-        lk_filter -f |
-        head -n1) &&
-        [ -n "$KEY_FILE" ] ||
+    KEY_FILE=$(lk_ssh_get_host_key_files | head -n1) ||
         lk_die "no IdentityFile for host $OLD_HOST_NAME"
-    KEY=$(
-        # Use the key's .pub file if it's valid
-        if [ -f "$KEY_FILE.pub" ] &&
-            ssh-keygen -l -f <(cat "$KEY_FILE.pub") >/dev/null 2>&1; then
-            cat "$KEY_FILE.pub"
-        elif ssh-keygen -l -f <(cat "$KEY_FILE") >/dev/null 2>&1; then
-            # Or the key file itself if it's a public key
-            cat "$KEY_FILE"
-        else
-            # Otherwise, get the public key from the private key
-            ssh-keygen -y -f "$KEY_FILE"
-        fi
-    ) || lk_die "no public key for $KEY_FILE"
+    KEY=$(lk_ssh_get_public_key "$KEY_FILE") ||
+        lk_die "no public key for $KEY_FILE"
 
     lk_console_item "Connecting to" "$OLD_HOST_NAME"
     if [ -n "$OLD_PASSWORD" ]; then
@@ -224,17 +248,7 @@ access using an authentication agent"
 
 old)
     KEY=$2
-    FILE=~/.ssh/authorized_keys
-    DIR=~/.ssh
-    if ! grep -Fxq "$KEY" "$FILE" 2>/dev/null; then
-        lk_console_item "Adding public key to" "$FILE"
-        mkdir -p "$DIR"
-        cat >>"$FILE" <<<"$KEY"
-    else
-        lk_console_item "Public key already present in" "$FILE"
-    fi
-    chmod 700 "$DIR"
-    chmod 600 "$FILE"
+    add_authorized_key "$KEY"
     exit
     ;;
 *)
