@@ -244,13 +244,6 @@ function lk_command_first_existing() {
     false
 }
 
-function _lk_regex_process() {
-    eval "$1=\$2"
-    if [ ${#ARGS[@]} -eq 0 ] || lk_in_array "$1" ARGS; then
-        printf "${LK_VAR_PREFIX-local }%s=%q\n" "$1" "$2"
-    fi
-}
-
 # lk_get_regex [REGEX_NAME...]
 #
 # Output Bash-compatible variable assignments for all available regular
@@ -268,34 +261,25 @@ function lk_get_regex() {
         PHP_SETTING_NAME_REGEX PHP_SETTING_REGEX \
         READLINE_NON_PRINTING_REGEX CONTROL_SEQUENCE_REGEX \
         IPV4_PRIVATE_FILTER_REGEX \
-        _O _H _P _S _U _A _Q _F ARGS=("$@")
+        _O _H _P _S _U _A _Q _F \
+        REGEX EXIT_STATUS=0
 
-    _lk_regex_process DOMAIN_PART_REGEX \
-        "[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
-    _lk_regex_process DOMAIN_NAME_REGEX \
-        "($DOMAIN_PART_REGEX(\\.|\$)){2,}"
-    _lk_regex_process EMAIL_ADDRESS_REGEX \
-        "[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@$DOMAIN_NAME_REGEX"
+    DOMAIN_PART_REGEX="[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
+    DOMAIN_NAME_REGEX="($DOMAIN_PART_REGEX(\\.|\$)){2,}"
+    EMAIL_ADDRESS_REGEX="[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@$DOMAIN_NAME_REGEX"
 
     _O="(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])"
-    _lk_regex_process IPV4_REGEX \
-        "($_O\\.){3}$_O"
-    _lk_regex_process IPV4_OPT_PREFIX_REGEX \
-        "$IPV4_REGEX(/(3[0-2]|[12][0-9]|[1-9]))?"
+    IPV4_REGEX="($_O\\.){3}$_O"
+    IPV4_OPT_PREFIX_REGEX="$IPV4_REGEX(/(3[0-2]|[12][0-9]|[1-9]))?"
 
     _H="[0-9a-fA-F]{1,4}"
     _P="/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9])"
-    _lk_regex_process IPV6_REGEX \
-        "(($_H:){7}(:|$_H)|($_H:){6}(:|:$_H)|($_H:){5}(:|(:$_H){1,2})|($_H:){4}(:|(:$_H){1,3})|($_H:){3}(:|(:$_H){1,4})|($_H:){2}(:|(:$_H){1,5})|$_H:(:|(:$_H){1,6})|:(:|(:$_H){1,7}))"
-    _lk_regex_process IPV6_OPT_PREFIX_REGEX \
-        "$IPV6_REGEX($_P)?"
+    IPV6_REGEX="(($_H:){7}(:|$_H)|($_H:){6}(:|:$_H)|($_H:){5}(:|(:$_H){1,2})|($_H:){4}(:|(:$_H){1,3})|($_H:){3}(:|(:$_H){1,4})|($_H:){2}(:|(:$_H){1,5})|$_H:(:|(:$_H){1,6})|:(:|(:$_H){1,7}))"
+    IPV6_OPT_PREFIX_REGEX="$IPV6_REGEX($_P)?"
 
-    _lk_regex_process IP_OPT_PREFIX_REGEX \
-        "($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX)"
-    _lk_regex_process HOST_REGEX \
-        "($IPV4_REGEX|$IPV6_REGEX|$DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)"
-    _lk_regex_process HOST_OPT_PREFIX_REGEX \
-        "($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX|$DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)"
+    IP_OPT_PREFIX_REGEX="($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX)"
+    HOST_REGEX="($IPV4_REGEX|$IPV6_REGEX|$DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)"
+    HOST_OPT_PREFIX_REGEX="($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX|$DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)"
 
     # https://en.wikipedia.org/wiki/Uniform_Resource_Identifier
     _S="[a-zA-Z][-a-zA-Z0-9+.]*"                               # scheme
@@ -306,35 +290,31 @@ function lk_get_regex() {
     _A="[-a-zA-Z0-9._~%!\$&'()*+,;=:@/]+"                      # path
     _Q="[-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]+"                     # query
     _F="[-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]*"                     # fragment
-    _lk_regex_process URI_REGEX \
-        "(($_S):)?(//(($_U)(:($_P))?@)?$_H(:($_O))?)?($_A)?(\\?($_Q))?(#($_F))?"
-    _lk_regex_process URI_REGEX_REQ_SCHEME_HOST \
-        "(($_S):)(//(($_U)(:($_P))?@)?$_H(:($_O))?)($_A)?(\\?($_Q))?(#($_F))?"
+    URI_REGEX="(($_S):)?(//(($_U)(:($_P))?@)?$_H(:($_O))?)?($_A)?(\\?($_Q))?(#($_F))?"
+    URI_REGEX_REQ_SCHEME_HOST="(($_S):)(//(($_U)(:($_P))?@)?$_H(:($_O))?)($_A)?(\\?($_Q))?(#($_F))?"
 
-    _lk_regex_process LINUX_USERNAME_REGEX \
-        "[a-z_]([-a-z0-9_]{0,31}|[-a-z0-9_]{0,30}\\\$)"
-    _lk_regex_process MYSQL_USERNAME_REGEX \
-        "[a-zA-Z0-9_]+"
+    LINUX_USERNAME_REGEX="[a-z_]([-a-z0-9_]{0,31}|[-a-z0-9_]{0,30}\\\$)"
+    MYSQL_USERNAME_REGEX="[a-zA-Z0-9_]+"
 
     # https://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-source
-    _lk_regex_process DPKG_SOURCE_REGEX \
-        "[a-z0-9][-a-z0-9+.]+"
+    DPKG_SOURCE_REGEX="[a-z0-9][-a-z0-9+.]+"
 
-    _lk_regex_process PHP_SETTING_NAME_REGEX \
-        "[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*"
-    _lk_regex_process PHP_SETTING_REGEX \
-        "$PHP_SETTING_NAME_REGEX=.+"
+    PHP_SETTING_NAME_REGEX="[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*"
+    PHP_SETTING_REGEX="$PHP_SETTING_NAME_REGEX=.+"
 
-    _lk_regex_process READLINE_NON_PRINTING_REGEX \
-        $'\x01[^\x02]*\x02'
-    _lk_regex_process CONTROL_SEQUENCE_REGEX \
-        $'\x1b\\[[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]'
+    READLINE_NON_PRINTING_REGEX=$'\x01[^\x02]*\x02'
+    CONTROL_SEQUENCE_REGEX=$'\x1b\\[[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]'
 
     # *_FILTER_REGEX expressions are:
     # 1. anchored
     # 2. not intended for validation
-    _lk_regex_process IPV4_PRIVATE_FILTER_REGEX \
-        "^(10\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|192\\.168\\.|127\\.)"
+    IPV4_PRIVATE_FILTER_REGEX="^(10\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|192\\.168\\.|127\\.)"
+
+    for REGEX in "$@"; do
+        printf "${LK_VAR_PREFIX-local }%s=%q\n" "$REGEX" "${!REGEX}" ||
+            EXIT_STATUS=$?
+    done
+    return "$EXIT_STATUS"
 }
 
 function lk_realpath() {
