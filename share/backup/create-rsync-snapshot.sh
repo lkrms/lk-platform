@@ -188,7 +188,7 @@ function lk_mail_get_mime() {
     [ $# -ge 2 ] || return
     SUBJECT=$1
     TO=$2
-    FROM=${3:-${LK_MAIL_FROM-${USER:-nobody}@$(hostname -f)}} || return
+    FROM=${3:-${LK_MAIL_FROM-${USER:-nobody}@$FQDN}} || return
     case "$SUBJECT$TO$FROM" in
     *$'\r'* | *$'\n'*)
         lk_die "line breaks not permitted in SUBJECT, TO, or FROM"
@@ -219,14 +219,16 @@ function lk_mail_get_mime() {
         { [ ${#_LK_MAIL_ATTACH[@]} -eq 1 ] && [ ${#TEXT_PART[@]} -eq 0 ]; } ||
         BOUNDARY=$(lk_random_hex 12)
     [ -z "${BOUNDARY:-$ALT_BOUNDARY}" ] || {
-        HEADERS=(${HEADERS[@]+"${HEADERS[@]}"} "MIME-Version: 1.0")
         [ -n "$BOUNDARY" ] &&
             HEADERS=(${HEADERS[@]+"${HEADERS[@]}"}
-                "Content-Type: multipart/mixed; boundary=$BOUNDARY") ||
+                "MIME-Version: 1.0"
+                "Content-Type: multipart/mixed; boundary=$BOUNDARY"
+                "") ||
             HEADERS=(${HEADERS[@]+"${HEADERS[@]}"}
+                "MIME-Version: 1.0"
                 "Content-Type: $ALT_TYPE"
-                "Content-Transfer-Encoding: $ENCODING")
-        HEADERS=(${HEADERS[@]+"${HEADERS[@]}"} "")
+                "Content-Transfer-Encoding: $ENCODING"
+                "")
     }
     printf '%s\n' "${HEADERS[@]}"
     [ -z "$BOUNDARY" ] || [ -z "$ALT_BOUNDARY" ] ||
@@ -297,7 +299,7 @@ function exit_trap() {
                 "${RSYNC_ERR_FILE##*/}" || {
             lk_mail_attach \
                 "$TAR" \
-                "$(hostname -s)-$SOURCE_NAME-$LK_SNAPSHOT_TIMESTAMP-rsync.log.tgz" \
+                "$HN-$SOURCE_NAME-$LK_SNAPSHOT_TIMESTAMP-rsync.log.tgz" \
                 application/gzip &&
                 MESSAGE="the attached log files and " || true
         }
@@ -318,13 +320,14 @@ ${MESSAGE}the output below${MESSAGE:+,} and take action if required."
 The following backup ${RSYNC_RESULT:-failed to complete}. Please review \
 ${MESSAGE}the output below${MESSAGE:+,} and action accordingly."
         }
-        SUBJECT="$SUBJECT: backup of $SOURCE_NAME to $(hostname -s):$BACKUP_ROOT"
+        SUBJECT="$SUBJECT: backup of $SOURCE_NAME to $HN:$BACKUP_ROOT"
         MESSAGE="
 Hello
 
 $MESSAGE
 
 Source: $SOURCE
+Destination: $BACKUP_ROOT on $FQDN
 Transport: $SOURCE_TYPE
 Snapshot: $LK_SNAPSHOT_TIMESTAMP
 Status: $(get_stage)
@@ -335,7 +338,7 @@ $(printf '%q' "$0" && { [ ${#ARGS[@]} -eq 0 ] || printf ' \\\n    %q' "${ARGS[@]
 
 Output:
 
-$(sed -E \
+$(LC_ALL=C sed \
             -e $'s/\x01[^\x02]*\x02//g' \
             -e $'s/\x1b\\[[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]//g' \
             "$SNAPSHOT_LOG_FILE")" &&
@@ -485,18 +488,17 @@ mkfifo "$FIFO_FILE"
 exec 4<>"$FIFO_FILE"
 
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
+HN=$(hostname -s) || HN=localhost
+FQDN=$(hostname -f) || FQDN=$HN.localdomain
 PLATFORM_NAME=${LK_PATH_PREFIX}platform
-SENDER_NAME="${LK_PATH_PREFIX}backup on $(hostname -s)"
+SENDER_NAME="${LK_PATH_PREFIX}backup on $HN"
 LK_SNAPSHOT_TIMESTAMP=${LK_BACKUP_TIMESTAMP:-$(date +"%Y-%m-%d-%H%M%S")}
 LK_SNAPSHOT_ROOT=$BACKUP_ROOT/snapshot/$SOURCE_NAME/$LK_SNAPSHOT_TIMESTAMP
 LK_SNAPSHOT_FS_ROOT=$LK_SNAPSHOT_ROOT/fs
 LK_SNAPSHOT_DB_ROOT=$LK_SNAPSHOT_ROOT/db
 LK_BACKUP_MAIL=${LK_BACKUP_MAIL-root}
-LK_BACKUP_MAIL_FROM=${LK_BACKUP_MAIL_FROM-"\"$SENDER_NAME\" <$PLATFORM_NAME@$(hostname -f)>"}
+LK_BACKUP_MAIL_FROM=${LK_BACKUP_MAIL_FROM-"$SENDER_NAME <$PLATFORM_NAME@$FQDN>"}
 LK_BACKUP_MAIL_ERROR_ONLY=${LK_BACKUP_MAIL_ERROR_ONLY-Y}
-
-export LK_SNAPSHOT_TIMESTAMP \
-    LK_SNAPSHOT_ROOT LK_SNAPSHOT_FS_ROOT LK_SNAPSHOT_DB_ROOT
 
 SOURCE_LATEST=$BACKUP_ROOT/latest/$SOURCE_NAME
 LOG_FILE=$BACKUP_ROOT/log/snapshot.log
@@ -514,7 +516,7 @@ for f in LOG_FILE SNAPSHOT_LOG_FILE RSYNC_OUT_FILE RSYNC_ERR_FILE; do
         install -m 00600 /dev/null "${!f}"
 done
 
-lk_log >>"$LOG_FILE" <<<"====> $(lk_realpath "$0") invoked on $(hostname -f)"
+lk_log >>"$LOG_FILE" <<<"====> $(lk_realpath "$0") invoked on $FQDN"
 exec 6>&1 7>&2
 exec > >(tee >(lk_log | tee -a "$SNAPSHOT_LOG_FILE" >>"$LOG_FILE")) 2>&1
 
@@ -525,8 +527,9 @@ RSYNC_STAGE_SUFFIX=
 trap exit_trap EXIT
 
 {
-    lk_console_message "Backing up $SOURCE_NAME to $BACKUP_ROOT"
+    lk_console_message "Backing up $SOURCE_NAME to $HN:$BACKUP_ROOT"
     lk_console_detail "Source:" "$SOURCE"
+    lk_console_detail "Destination:" "$BACKUP_ROOT on $FQDN"
     lk_console_detail "Transport:" "$SOURCE_TYPE"
     lk_console_detail "Snapshot:" "$LK_SNAPSHOT_TIMESTAMP"
     lk_console_detail "Status:" "$(get_stage)"

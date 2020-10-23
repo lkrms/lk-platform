@@ -567,7 +567,11 @@ function lk_repeat() {
 }
 
 function lk_hostname() {
-    hostname -s | lk_lower
+    hostname -s
+}
+
+function lk_fqdn() {
+    hostname -f
 }
 
 function lk_safe_tput() {

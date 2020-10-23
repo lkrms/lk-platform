@@ -17,6 +17,70 @@ export LK_BASE
 
 include='' . "$LK_BASE/lib/bash/common.sh"
 
+function exit_trap() {
+    local EXIT_STATUS=$? MESSAGE TAR SUBJECT
+    exec 4>&- 9>&- &&
+        rm -Rf "${FIFO_FILE%/*}" "$LOCK_FILE" || true
+    lk_log_close
+    lk_log_output
+    [ -z "$LK_BACKUP_MAIL" ] ||
+        { [ "$EXIT_STATUS" -eq 0 ] &&
+            [ "$RSYNC_EXIT_VALUE" -eq 0 ] &&
+            [ "$LK_BACKUP_MAIL_ERROR_ONLY" = Y ]; } || {
+        lk_mail_new
+        MESSAGE=
+        { [ ! -s "$RSYNC_OUT_FILE" ] && [ ! -s "$RSYNC_ERR_FILE" ]; } ||
+            ! TAR=$(lk_mktemp_file) ||
+            ! tar -C "${RSYNC_OUT_FILE%/*}" -czf "$TAR" \
+                "${RSYNC_OUT_FILE##*/}" \
+                "${RSYNC_ERR_FILE##*/}" || {
+            lk_mail_attach \
+                "$TAR" \
+                "$HN-$SOURCE_NAME-$LK_SNAPSHOT_TIMESTAMP-rsync.log.tgz" \
+                application/gzip &&
+                MESSAGE="the attached log files and " || true
+        }
+        [ "$EXIT_STATUS" -eq 0 ] && {
+            [ "$RSYNC_EXIT_VALUE" -eq 0 ] && {
+                SUBJECT="Success"
+                MESSAGE="\
+Just confirming the following backup ${RSYNC_RESULT:-completed without error}."
+            } || {
+                SUBJECT="Please review"
+                MESSAGE="\
+The following backup ${RSYNC_RESULT:-completed with errors}. Please review \
+${MESSAGE}the output below${MESSAGE:+,} and take action if required."
+            }
+        } || {
+            SUBJECT="ACTION REQUIRED"
+            MESSAGE="\
+The following backup ${RSYNC_RESULT:-failed to complete}. Please review \
+${MESSAGE}the output below${MESSAGE:+,} and action accordingly."
+        }
+        SUBJECT="$SUBJECT: backup of $SOURCE_NAME to $HN:$BACKUP_ROOT"
+        MESSAGE="
+Hello
+
+$MESSAGE
+
+Source: $SOURCE
+Destination: $BACKUP_ROOT on $FQDN
+Transport: $SOURCE_TYPE
+Snapshot: $LK_SNAPSHOT_TIMESTAMP
+Status: $(get_stage)
+
+Running as: ${USER:-<unknown>}
+Command line:
+$(printf '%q' "$0" && { [ ${#LK_ARGV[@]} -eq 0 ] || printf ' \\\n    %q' "${LK_ARGV[@]}"; })
+
+Output:
+
+$(lk_strip_non_printing <"$SNAPSHOT_LOG_FILE")" &&
+            lk_mail_set_text "$MESSAGE" &&
+            lk_mail_send "$SUBJECT" "$LK_BACKUP_MAIL" "$LK_BACKUP_MAIL_FROM" || true
+    }
+}
+
 function find_custom() {
     local FILE ALL=0 COUNT=0
     [ "$1" != --all ] || {
@@ -27,7 +91,7 @@ function find_custom() {
         [ -e "$FILE" ] || continue
         realpath "$FILE" || lk_die
         ((++COUNT))
-        lk_is_true "$ALL" || break
+        [ "$ALL" -eq 1 ] || break
     done
     ((COUNT))
 }
@@ -91,7 +155,7 @@ function get_stage() {
     for STAGE in $(tac < <(lk_echo_array SNAPSHOT_STAGES)) starting; do
         [ ! -e "$LK_SNAPSHOT_ROOT/.$STAGE" ] || break
     done
-    echo "${STAGE//-/${1--}}"
+    echo "${STAGE//-/ }"
 }
 
 SNAPSHOT_STAGES=(
@@ -100,6 +164,7 @@ SNAPSHOT_STAGES=(
     hook-pre_rsync-started
     hook-pre_rsync-finished
     rsync-started
+    rsync-partial_transfer-finished
     rsync-finished
     hook-post_rsync-started
     hook-post_rsync-finished
@@ -149,15 +214,21 @@ BACKUP_ROOT=$(realpath "$BACKUP_ROOT")
 LOCK_FILE=/tmp/${0##*/}-${BACKUP_ROOT//\//_}-$SOURCE_NAME.lock
 exec 9>"$LOCK_FILE" &&
     flock -n 9 || lk_die "unable to acquire a lock on $LOCK_FILE"
-FIFO_FILE=$(lk_mktemp_fifo)
+FIFO_FILE=$(lk_mktemp_dir)/fifo
+mkfifo "$FIFO_FILE"
 exec 4<>"$FIFO_FILE"
 
+HN=$(lk_hostname) || HN=localhost
+FQDN=$(lk_fqdn) || FQDN=$HN.localdomain
+PLATFORM_NAME=${LK_PATH_PREFIX}platform
+SENDER_NAME="${LK_PATH_PREFIX}backup on $HN"
 LK_SNAPSHOT_TIMESTAMP=${LK_BACKUP_TIMESTAMP:-$(date +"%Y-%m-%d-%H%M%S")}
 LK_SNAPSHOT_ROOT=$BACKUP_ROOT/snapshot/$SOURCE_NAME/$LK_SNAPSHOT_TIMESTAMP
 LK_SNAPSHOT_FS_ROOT=$LK_SNAPSHOT_ROOT/fs
 LK_SNAPSHOT_DB_ROOT=$LK_SNAPSHOT_ROOT/db
-export LK_SNAPSHOT_TIMESTAMP \
-    LK_SNAPSHOT_ROOT LK_SNAPSHOT_FS_ROOT LK_SNAPSHOT_DB_ROOT
+LK_BACKUP_MAIL=${LK_BACKUP_MAIL-root}
+LK_BACKUP_MAIL_FROM=${LK_BACKUP_MAIL_FROM-"$SENDER_NAME <$PLATFORM_NAME@$FQDN>"}
+LK_BACKUP_MAIL_ERROR_ONLY=${LK_BACKUP_MAIL_ERROR_ONLY-Y}
 
 SOURCE_LATEST=$BACKUP_ROOT/latest/$SOURCE_NAME
 SNAPSHOT_LOG_FILE=$LK_SNAPSHOT_ROOT/log/snapshot.log
@@ -177,12 +248,19 @@ done
 LK_SECONDARY_LOG_FILE=$SNAPSHOT_LOG_FILE \
     lk_log_output
 
+RSYNC_EXIT_VALUE=0
+RSYNC_RESULT=
+RSYNC_STAGE_SUFFIX=
+
+trap exit_trap EXIT
+
 {
-    lk_console_message "Backing up $SOURCE_NAME to $BACKUP_ROOT"
+    lk_console_message "Backing up $SOURCE_NAME to $HN:$BACKUP_ROOT"
     lk_console_detail "Source:" "$SOURCE"
+    lk_console_detail "Destination:" "$BACKUP_ROOT on $FQDN"
     lk_console_detail "Transport:" "$SOURCE_TYPE"
     lk_console_detail "Snapshot:" "$LK_SNAPSHOT_TIMESTAMP"
-    lk_console_detail "Status:" "$(get_stage " ")"
+    lk_console_detail "Status:" "$(get_stage)"
 
     if [ -d "$SOURCE_LATEST/fs" ] && ! is_stage_complete previous-copy-finished; then
         LATEST=$(realpath "$SOURCE_LATEST/fs")
@@ -228,34 +306,35 @@ LK_SECONDARY_LOG_FILE=$SNAPSHOT_LOG_FILE \
     [ "${DRY_RUN:-0}" -ne 0 ] || mark_stage_complete rsync-started
     lk_console_item "Running rsync:" \
         $'>>>\n'"  rsync$(printf ' \\ \n    %q' "${RSYNC_ARGS[@]}")"$'\n<<<'
-    EXIT_STATUS=0
     rsync "${RSYNC_ARGS[@]}" \
         > >(tee >(lk_log >>"$RSYNC_OUT_FILE") >&6) \
-        2> >(tee >(lk_log >>"$RSYNC_ERR_FILE") >&7) || EXIT_STATUS=$?
+        2> >(tee >(lk_log >>"$RSYNC_ERR_FILE") >&7) || RSYNC_EXIT_VALUE=$?
+    EXIT_STATUS=$RSYNC_EXIT_VALUE
     case "$EXIT_STATUS" in
     0)
         RSYNC_RESULT="completed successfully"
         ;;
     23 | 24)
-        RSYNC_RESULT="completed with partial transfer (exit status $EXIT_STATUS)"
+        RSYNC_RESULT="completed with transfer errors"
+        RSYNC_STAGE_SUFFIX=partial_transfer
+        EXIT_STATUS=0
         ;;
     *)
-        lk_die "rsync failed to execute (exit status $EXIT_STATUS)"
+        RSYNC_RESULT="failed to complete"
         ;;
     esac
-    [ "${DRY_RUN:-0}" -ne 0 ] || mark_stage_complete rsync-finished
-    lk_console_log "rsync $RSYNC_RESULT"
+    [ "${DRY_RUN:-0}" -ne 0 ] || [ "$EXIT_STATUS" -ne 0 ] ||
+        mark_stage_complete \
+            "rsync${RSYNC_STAGE_SUFFIX:+-$RSYNC_STAGE_SUFFIX}-finished"
+    lk_console_log "rsync $RSYNC_RESULT (exit status $RSYNC_EXIT_VALUE)"
 
     run_custom_hook post_rsync
 
-    [ "${DRY_RUN:-0}" -ne 0 ] || {
+    [ "${DRY_RUN:-0}" -ne 0 ] || [ "$EXIT_STATUS" -ne 0 ] || {
         lk_console_message "Updating latest snapshot symlink for $SOURCE_NAME"
         ln -sfnv "$LK_SNAPSHOT_ROOT" "$SOURCE_LATEST"
         mark_stage_complete finished
     }
 
-    exec 4>&- 9>&-
-    rm -Rf "${FIFO_FILE%/*}" "$LOCK_FILE"
-
-    exit
+    exit "$EXIT_STATUS"
 }

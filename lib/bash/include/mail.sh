@@ -69,13 +69,9 @@ function lk_mail_get_mime() {
     [ $# -ge 2 ] || lk_warn "invalid arguments" || return
     SUBJECT=$1
     TO=$2
-    FROM=${3:-${LK_MAIL_FROM-$({ ADDRESS=${USER:-nobody}@$(hostname -f) ||
-        ADDRESS=${USER:-nobody}@localhost; } &&
-        { NAME=$(lk_full_name 2>/dev/null) ||
-            NAME=${USER:-nobody}; } &&
-        printf '"%s" <%s>' \
-            "${NAME//\"/\\\"}" \
-            "$ADDRESS")}}
+    FROM=${3:-${LK_MAIL_FROM-$(ADDRESS=${USER:-nobody}@$(hostname -f) &&
+        { NAME=$(lk_full_name 2>/dev/null) || NAME=${USER:-nobody}; } &&
+        printf '"%s" <%s>' "${NAME//\"/\\\"}" "$ADDRESS")}} || return
     [[ ! $SUBJECT$TO$FROM =~ .*[$'\r\n'].* ]] ||
         lk_warn "line breaks not permitted in SUBJECT, TO, or FROM" ||
         return
