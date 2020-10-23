@@ -183,7 +183,7 @@ function _lk_mail_end_parts() {
 # shellcheck disable=SC2097,SC2098
 function lk_mail_get_mime() {
     local SUBJECT TO FROM HEADERS BOUNDARY='' ALT_BOUNDARY='' ALT_TYPE i \
-        TEXT_PART=() TEXT_PART_TYPE=() ENCODING=8bit CHARSET=utf-8 \
+        TEXT TEXT_PART=() TEXT_PART_TYPE=() ENCODING=8bit CHARSET=utf-8 \
         PREAMBLE="This is a multi-part message in MIME format."
     [ $# -ge 2 ] || return
     SUBJECT=$1
@@ -233,22 +233,25 @@ function lk_mail_get_mime() {
     printf '%s\n' "${HEADERS[@]}"
     [ -z "$BOUNDARY" ] || [ -z "$ALT_BOUNDARY" ] ||
         ALT_BOUNDARY='' _lk_mail_get_part "" "$ALT_TYPE" "$ENCODING"
-    for i in ${TEXT_PART[@]+"${!TEXT_PART[@]}"}; do
-        _lk_mail_get_part "${TEXT_PART[$i]%$'\n'}"$'\n' \
-            "${TEXT_PART_TYPE[$i]}; charset=$CHARSET" "$ENCODING"
-    done
+    [ ${#TEXT_PART[@]} -eq 0 ] ||
+        for i in $(seq 0 $((${#TEXT_PART[@]} - 1))); do
+            TEXT=${TEXT_PART[$i]}
+            [ "${TEXT: -1:1}" = $'\n' ] || TEXT=$TEXT$'\n'
+            _lk_mail_get_part "$TEXT" \
+                "${TEXT_PART_TYPE[$i]}; charset=$CHARSET" "$ENCODING"
+        done
     _lk_mail_end_parts ALT_BOUNDARY
-    for i in ${_LK_MAIL_ATTACH[@]+"${!_LK_MAIL_ATTACH[@]}"}; do
-        # TODO: implement lk_maybe_encode_header_value
-        _lk_mail_get_part "" \
-            "$(printf '%s; name="%s"' \
-                "${_LK_MAIL_ATTACH_TYPE[$i]}" \
-                "${_LK_MAIL_ATTACH_NAME[$i]//\"/\\\"}")" \
-            "base64" \
-            "$(printf 'Content-Disposition: attachment; filename="%s"' \
-                "${_LK_MAIL_ATTACH_NAME[$i]//\"/\\\"}")"
-        lk_base64 <"${_LK_MAIL_ATTACH[$i]}" || return
-    done
+    [ ${#_LK_MAIL_ATTACH[@]} -eq 0 ] ||
+        for i in $(seq 0 $((${#_LK_MAIL_ATTACH[@]} - 1))); do
+            _lk_mail_get_part "" \
+                "$(printf '%s; name="%s"' \
+                    "${_LK_MAIL_ATTACH_TYPE[$i]}" \
+                    "${_LK_MAIL_ATTACH_NAME[$i]//\"/\\\"}")" \
+                "base64" \
+                "$(printf 'Content-Disposition: attachment; filename="%s"' \
+                    "${_LK_MAIL_ATTACH_NAME[$i]//\"/\\\"}")"
+            lk_base64 <"${_LK_MAIL_ATTACH[$i]}" || return
+        done
     _lk_mail_end_parts BOUNDARY
 }
 
@@ -558,7 +561,7 @@ trap exit_trap EXIT
     lk_console_item "Creating snapshot at" "$LK_SNAPSHOT_ROOT"
     lk_console_detail "Log files:" "$(printf '%s\n' \
         "$SNAPSHOT_LOG_FILE" "$RSYNC_OUT_FILE" "$RSYNC_ERR_FILE")"
-    RSYNC_ARGS=(-vrlpt --delete)
+    RSYNC_ARGS=(-vrlpt --delete --stats)
     ! RSYNC_FILTER=$(find_custom "$SOURCE_NAME-filter-rsync") || {
         lk_console_detail "Rsync filter:" "$RSYNC_FILTER"
         RSYNC_ARGS=("${RSYNC_ARGS[@]}" --delete-excluded --filter ". $RSYNC_FILTER")

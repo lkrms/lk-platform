@@ -286,7 +286,7 @@ trap exit_trap EXIT
     lk_console_item "Creating snapshot at" "$LK_SNAPSHOT_ROOT"
     lk_console_detail "Log files:" "$(lk_echo_args \
         "$SNAPSHOT_LOG_FILE" "$RSYNC_OUT_FILE" "$RSYNC_ERR_FILE")"
-    RSYNC_ARGS=(-vrlpt --delete)
+    RSYNC_ARGS=(-vrlpt --delete --stats)
     ! RSYNC_FILTER=$(find_custom "$SOURCE_NAME-filter-rsync") || {
         lk_console_detail "Rsync filter:" "$RSYNC_FILTER"
         RSYNC_ARGS=("${RSYNC_ARGS[@]}" --delete-excluded --filter ". $RSYNC_FILTER")
