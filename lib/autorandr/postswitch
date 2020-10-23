@@ -30,3 +30,8 @@ done
 
 ! type -P displaycal-apply-profiles >/dev/null ||
     displaycal-apply-profiles
+
+! killall devilspie2 -u "$USER" || {
+    nohup devilspie2 >/dev/null &
+    disown
+}
