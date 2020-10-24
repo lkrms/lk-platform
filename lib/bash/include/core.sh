@@ -1844,7 +1844,7 @@ function lk_tty() {
 function lk_secret_set() {
     if lk_is_macos; then
         function lk_secret_set() {
-            security add-generic-password -a "$USER" -l "$2" -s "${3:-${0##*/}}" -G "$1" -U -w
+            security add-generic-password -a "$1" -l "$2" -s "${3:-${0##*/}}" -U -w
         }
     else
         function lk_secret_set() {
@@ -1858,7 +1858,7 @@ function lk_secret_set() {
 function lk_secret_get() {
     if lk_is_macos; then
         function lk_secret_get() {
-            security find-generic-password -a "$USER" -s "${2:-${0##*/}}" -G "$1" -w
+            security find-generic-password -a "$1" -s "${2:-${0##*/}}" -w
         }
     else
         function lk_secret_get() {
@@ -1872,7 +1872,7 @@ function lk_secret_get() {
 function lk_secret_forget() {
     if lk_is_macos; then
         function lk_secret_forget() {
-            security delete-generic-password -a "$USER" -s "${2:-${0##*/}}" -G "$1"
+            security delete-generic-password -a "$1" -s "${2:-${0##*/}}"
         }
     else
         function lk_secret_forget() {

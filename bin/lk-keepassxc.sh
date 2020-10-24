@@ -124,7 +124,9 @@ else
     nohup "$KEEPASSXC" \
         --pw-stdin "${DATABASES[@]}" >/dev/null 2>&1 &
     disown
-fi < <(for PASSWORD in "${PASSWORDS[@]}"; do
-    echo "$PASSWORD"
-    sleep 5
-done)
+fi < <(echo "${PASSWORDS[0]}" &&
+    [ ${#PASSWORDS[@]} -le 1 ] ||
+    for PASSWORD in "${PASSWORDS[@]:1}"; do
+        sleep 5
+        echo "$PASSWORD"
+    done)
