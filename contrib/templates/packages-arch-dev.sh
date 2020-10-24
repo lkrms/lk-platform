@@ -96,6 +96,7 @@ PACMAN_PACKAGES+=(
     arch-install-scripts
     at
     $(pacman -Sgq base-devel) # TODO: add lk_pacman_group_packages function
+    binwalk
     cloud-utils
     cronie
     expac

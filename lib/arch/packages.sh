@@ -98,6 +98,7 @@ PACMAN_DESKTOP_PACKAGES=(
     lightdm-gtk-greeter
     lightdm-gtk-greeter-settings
     xorg-server
+    xorg-xinput
     xorg-xrandr
 
     #
@@ -138,6 +139,7 @@ AUR_DESKTOP_PACKAGES=(
     autorandr-git
     mugshot
     xfce4-panel-profiles
+    xrandr-invert-colors
 
     #
     ${AUR_DESKTOP_PACKAGES[@]+"${AUR_DESKTOP_PACKAGES[@]}"}

@@ -74,7 +74,7 @@ EOF
         {
             lk_echo_array PAC_TO_PURGE |
                 lk_console_list "Installed but no longer required:" package packages
-            ! lk_confirm "Remove the above?" Y ||
+            ! lk_confirm "Remove the above?" N ||
                 lk_tty sudo pacman -Rns "${PAC_TO_PURGE[@]}"
         }
 
