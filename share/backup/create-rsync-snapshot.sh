@@ -582,8 +582,8 @@ trap exit_trap EXIT
     lk_console_item "Running rsync:" \
         $'>>>\n'"  rsync$(printf ' \\ \n    %q' "${RSYNC_ARGS[@]}")"$'\n<<<'
     rsync "${RSYNC_ARGS[@]}" \
-        > >(tee >(lk_log >>"$RSYNC_OUT_FILE") >&6) \
-        2> >(tee >(lk_log >>"$RSYNC_ERR_FILE") >&7) || RSYNC_EXIT_VALUE=$?
+        > >(tee -a "$RSYNC_OUT_FILE" >&6) \
+        2> >(tee -a "$RSYNC_ERR_FILE" >&7) || RSYNC_EXIT_VALUE=$?
     EXIT_STATUS=$RSYNC_EXIT_VALUE
     case "$EXIT_STATUS" in
     0)

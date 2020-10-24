@@ -117,15 +117,14 @@ fi
 ! lk_is_true "$CHECK_HAS_PASSWORD" ||
     exit 0
 
-PASSWORD_INPUT="${PASSWORDS[0]}$(
-    [ ${#PASSWORDS[@]} -lt 2 ] || printf '\n\n\n%s' "${PASSWORDS[@]:1}"
-)"
-
 if lk_is_true "$DAEMON"; then
     exec "$KEEPASSXC" \
-        --pw-stdin "${DATABASES[@]}" <<<"$PASSWORD_INPUT"
+        --pw-stdin "${DATABASES[@]}"
 else
     nohup "$KEEPASSXC" \
-        --pw-stdin "${DATABASES[@]}" <<<"$PASSWORD_INPUT" >/dev/null 2>&1 &
+        --pw-stdin "${DATABASES[@]}" >/dev/null 2>&1 &
     disown
-fi
+fi < <(for PASSWORD in "${PASSWORDS[@]}"; do
+    echo "$PASSWORD"
+    sleep 5
+done)
