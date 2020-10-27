@@ -210,8 +210,8 @@
                 LK_PLATFORM_BRANCH=$BRANCH
             fi
         fi
-        REMOTE_NAME=$(git for-each-ref --format="%(upstream:remotename)" \
-            "refs/heads/$BRANCH") && [ -n "$REMOTE_NAME" ] ||
+        REMOTE_NAME=$(git rev-parse --abbrev-ref "@{u}" | sed 's/\/.*//') &&
+            [ -n "$REMOTE_NAME" ] ||
             lk_die "no upstream remote for current branch"
         FETCH_TIME=$(lk_file_modified ".git/FETCH_HEAD" 2>/dev/null) ||
             FETCH_TIME=0
