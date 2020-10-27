@@ -96,7 +96,7 @@ FIELD_ERRORS=$(
         shift
         SELECTED=(${!1})
         unset IFS
-        for i in "${SELECTED[@]}"; do
+        for i in ${SELECTED[@]+"${SELECTED[@]}"}; do
             eval "$1=\$i"
             [ -z "${!1}" ] || { NULL=0 && "$FN" "$@" || VALID=0; }
         done
