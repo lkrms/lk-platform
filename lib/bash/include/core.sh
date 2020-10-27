@@ -921,7 +921,7 @@ function lk_echoc() {
 }
 
 function lk_readline_escape_non_printing() {
-    local STRING=$1 LC_ALL=C CONTROL_SEQUENCE_REGEX
+    local STRING=$1 LC_ALL=C
     eval "$(lk_get_regex CONTROL_SEQUENCE_REGEX)"
     while [[ $STRING =~ (.*)(^|[^$'\x01'])($CONTROL_SEQUENCE_REGEX)+(.*) ]]; do
         STRING=${BASH_REMATCH[1]}${BASH_REMATCH[2]}$'\x01'${BASH_REMATCH[3]}$'\x02'${BASH_REMATCH[$((${#BASH_REMATCH[@]} - 1))]}
@@ -930,7 +930,7 @@ function lk_readline_escape_non_printing() {
 }
 
 function lk_strip_non_printing() {
-    local LC_ALL=C READLINE_NON_PRINTING_REGEX CONTROL_SEQUENCE_REGEX STRING REGEX
+    local LC_ALL=C STRING REGEX
     eval "$(lk_get_regex \
         READLINE_NON_PRINTING_REGEX \
         CONTROL_SEQUENCE_REGEX)"

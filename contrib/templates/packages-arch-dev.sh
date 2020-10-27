@@ -213,6 +213,7 @@ AUR_PACKAGES+=(
     pencil
     skypeforlinux-stable-bin
     spotify
+    stretchly-git
     teams
     todoist-electron
     trimage

@@ -130,6 +130,29 @@ function lk_git_ancestors() {
     printf '%s\t%s\t%s\n' "${ANCESTORS[@]}" | sort -n
 }
 
+# lk_git_config_remote_push_all [REMOTE]
+#
+# Configure the repository to push to all remotes when pushing to REMOTE
+# (default: the upstream remote of the current branch).
+function lk_git_config_remote_push_all() {
+    local UPSTREAM REMOTE_URL REMOTE
+    UPSTREAM=${1:-$(git rev-parse --abbrev-ref "@{u}" | sed 's/\/.*//')} &&
+        REMOTE_URL=$(git config "remote.$UPSTREAM.url") &&
+        [ -n "$REMOTE_URL" ] || lk_warn "remote URL not found" || return
+    lk_console_item "Configuring" "remote.$UPSTREAM.pushUrl"
+    lk_console_detail "Adding:" "$REMOTE_URL"
+    git config push.default current &&
+        git config remote.pushDefault "$UPSTREAM" &&
+        git config --replace-all "remote.$UPSTREAM.pushUrl" "$REMOTE_URL" &&
+        for REMOTE in $(git remote | grep -Fxv "$UPSTREAM"); do
+            REMOTE_URL=$(git config "remote.$REMOTE.url") &&
+                [ -n "$REMOTE_URL" ] ||
+                lk_warn "URL not found for remote $REMOTE" || continue
+            lk_console_detail "Adding:" "$REMOTE_URL"
+            git config --add "remote.$UPSTREAM.pushUrl" "$REMOTE_URL"
+        done
+}
+
 function lk_git_recheckout() {
     local REPO_ROOT COMMIT
     lk_console_message "Preparing to delete the index and check out HEAD again"
