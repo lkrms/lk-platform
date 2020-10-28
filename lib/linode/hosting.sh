@@ -497,6 +497,7 @@ case "$DISTRIB_RELEASE" in
 16.04)
     REPOS+=("$CERTBOT_REPO")
     ADD_APT_REPOSITORY_ARGS=(-y)
+    EXCLUDE_PACKAGES+=(php-apcu-bc php-yaml)
     PHPVER=7.0
     ;;
 18.04)
@@ -1439,16 +1440,23 @@ EOF
         install -m 00640 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.key"
 
         lk_console_message "Creating a self-signed SSL certificate for '$HOST_DOMAIN'"
+        OPENSSL_CONF=$(cat /etc/ssl/openssl.cnf)
+        OPENSSL_EXT_CONF=$(printf '\n%s' \
+            "[ san ]" \
+            "subjectAltName = DNS:www.$HOST_DOMAIN")
         openssl genrsa \
             -out "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.key" \
             2048
         openssl req -new \
             -key "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.key" \
             -subj "/C=AU/CN=$HOST_DOMAIN" \
-            -addext "subjectAltName = DNS:www.$HOST_DOMAIN" \
+            -reqexts san \
+            -config <(cat <<<"$OPENSSL_CONF$OPENSSL_EXT_CONF") \
             -out "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.csr"
         openssl x509 -req -days 365 \
             -in "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.csr" \
+            -extensions san \
+            -extfile <(cat <<<"$OPENSSL_EXT_CONF") \
             -signkey "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.key" \
             -out "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.cert"
         rm -f "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.csr"
