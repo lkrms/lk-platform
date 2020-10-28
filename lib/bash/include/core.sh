@@ -2,6 +2,9 @@
 
 # shellcheck disable=SC2015,SC2016,SC2207
 
+HOME=${HOME:-$(u=$(id -un) && eval "echo ~$u")} || return
+USER=${USER:-$(id -un)} || return
+
 function lk_command_exists() {
     type -P "$1" >/dev/null
 }

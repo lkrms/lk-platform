@@ -188,7 +188,7 @@ function lk_mail_get_mime() {
     [ $# -ge 2 ] || return
     SUBJECT=$1
     TO=$2
-    FROM=${3:-${LK_MAIL_FROM-${USER:-nobody}@$FQDN}} || return
+    FROM=${3:-${LK_MAIL_FROM-${USER:-$(whoami)}@$FQDN}} || return
     case "$SUBJECT$TO$FROM" in
     *$'\r'* | *$'\n'*)
         lk_die "line breaks not permitted in SUBJECT, TO, or FROM"
@@ -493,14 +493,13 @@ exec 4<>"$FIFO_FILE"
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
 HN=$(hostname -s) || HN=localhost
 FQDN=$(hostname -f) || FQDN=$HN.localdomain
-PLATFORM_NAME=${LK_PATH_PREFIX}platform
 SENDER_NAME="${LK_PATH_PREFIX}backup on $HN"
 LK_SNAPSHOT_TIMESTAMP=${LK_BACKUP_TIMESTAMP:-$(date +"%Y-%m-%d-%H%M%S")}
 LK_SNAPSHOT_ROOT=$BACKUP_ROOT/snapshot/$SOURCE_NAME/$LK_SNAPSHOT_TIMESTAMP
 LK_SNAPSHOT_FS_ROOT=$LK_SNAPSHOT_ROOT/fs
 LK_SNAPSHOT_DB_ROOT=$LK_SNAPSHOT_ROOT/db
 LK_BACKUP_MAIL=${LK_BACKUP_MAIL-root}
-LK_BACKUP_MAIL_FROM=${LK_BACKUP_MAIL_FROM-"$SENDER_NAME <$PLATFORM_NAME@$FQDN>"}
+LK_BACKUP_MAIL_FROM=${LK_BACKUP_MAIL_FROM-"$SENDER_NAME <${USER:-$(whoami)}@$FQDN>"}
 LK_BACKUP_MAIL_ERROR_ONLY=${LK_BACKUP_MAIL_ERROR_ONLY-Y}
 
 SOURCE_LATEST=$BACKUP_ROOT/latest/$SOURCE_NAME

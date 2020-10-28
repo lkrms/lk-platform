@@ -17,6 +17,9 @@ PAC_KEEP=(
 
     #
     azure-cli
+    storageexplorer
+
+    #
     sfdx-cli
 
     #
@@ -305,6 +308,7 @@ PACMAN_PACKAGES+=(
 
 AUR_PACKAGES+=(
     demjson
+    robo3t-bin
     trickle
     vscodium-bin
 
