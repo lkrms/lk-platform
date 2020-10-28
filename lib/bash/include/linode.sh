@@ -182,11 +182,13 @@ function lk_linode_dns_check() {
     done < <(comm -23 \
         <(lk_echo_array NEW_REVERSE_RECORDS | sort) \
         <(sort <<<"$REVERSE_RECORDS"))
-    RECORDS=$(comm -13 \
-        <(lk_echo_array NEW_RECORDS | sort) \
-        <(sort <<<"$RECORDS"))
-    [ -z "$RECORDS" ] ||
-        lk_console_warning0 "No matching Linode:" "$RECORDS"
+    ! lk_verbose || {
+        RECORDS=$(comm -13 \
+            <(lk_echo_array NEW_RECORDS | sort) \
+            <(sort <<<"$RECORDS"))
+        [ -z "$RECORDS" ] ||
+            lk_console_warning0 "No matching Linode:" "$RECORDS"
+    }
 }
 
 function lk_linode_dns_check_all() {
@@ -197,6 +199,6 @@ function lk_linode_dns_check_all() {
     lk_echo_array LABELS |
         lk_console_list "Checking DNS and RDNS records for:" Linode Linodes
     lk_confirm "Proceed?" Y || return
-    lk_linode_dns_check "$1" <<<"$JSON" || return
+    LK_VERBOSE=1 lk_linode_dns_check "$1" <<<"$JSON" || return
     lk_console_success "DNS check complete"
 }
