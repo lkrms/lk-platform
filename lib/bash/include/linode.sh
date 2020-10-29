@@ -17,7 +17,8 @@ function lk_linode_flush_cache() {
 }
 
 function _lk_linode_maybe_flush_cache() {
-    [ -z "${_LK_LINODE_CACHE_DIRTY:-}" ] ||
+    [ "$BASH_SUBSHELL" -gt 0 ] ||
+        [ -z "${_LK_LINODE_CACHE_DIRTY:-}" ] ||
         lk_linode_flush_cache
 }
 
@@ -107,6 +108,7 @@ function lk_linode_ssh_add() {
 
 function lk_linode_ssh_add_all() {
     local JSON LABELS
+    _lk_linode_maybe_flush_cache
     JSON=$(lk_linode_linodes) || return
     lk_jq_get_array LABELS ".[].label" <<<"$JSON"
     [ ${#LABELS[@]} -gt 0 ] || lk_warn "no Linodes found" || return
@@ -118,6 +120,7 @@ function lk_linode_ssh_add_all() {
 
 function lk_linode_get_only_domain() {
     local DOMAIN_ID
+    _lk_linode_maybe_flush_cache
     DOMAIN_ID=$(lk_linode_domains | jq -r '.[].id') || return
     [ -n "$DOMAIN_ID" ] && [ "$(wc -l <<<"$DOMAIN_ID")" -eq 1 ] ||
         lk_warn "domain count must be 1" || return
@@ -127,7 +130,7 @@ function lk_linode_get_only_domain() {
 function lk_linode_dns_check() {
     local LINODES DOMAIN_ID DOMAIN RECORDS REVERSE_RECORDS \
         NEW_RECORDS NEW_REVERSE_RECORDS LINODE SH LABEL \
-        OUTPUT RECORD_ID
+        OUTPUT RECORD_ID NEW_RECORD_COUNT=0 NEW_REVERSE_RECORD_COUNT=0
     lk_jq_get_array LINODES &&
         [ ${#LINODES[@]} -gt 0 ] || lk_warn "no Linodes in input" || return
     DOMAIN_ID=${1:-$(lk_linode_get_only_domain)} &&
@@ -167,17 +170,24 @@ function lk_linode_dns_check() {
             RECORD_ID=$(jq '.[0].id' <<<"$OUTPUT") ||
             lk_warn "linode-cli failed with: $OUTPUT" || return
         _LK_LINODE_CACHE_DIRTY=1
+        ((++NEW_RECORD_COUNT))
         lk_console_detail "Record ID:" "$RECORD_ID"
     done < <(comm -23 \
         <(lk_echo_array NEW_RECORDS | sort) \
         <(sort <<<"$RECORDS"))
     while read -r ADDRESS RDNS; do
+        [ "$NEW_RECORD_COUNT" -eq 0 ] ||
+            [ "$NEW_REVERSE_RECORD_COUNT" -gt 0 ] || {
+            lk_console_message "Waiting 60 seconds"
+            sleep 60
+        }
         lk_console_item "Adding RDNS record:" "$ADDRESS $RDNS"
         OUTPUT=$(linode-cli --json networking ip-update \
             --rdns "$RDNS" \
             "$ADDRESS") ||
             lk_warn "linode-cli failed with: $OUTPUT" || return
         _LK_LINODE_CACHE_DIRTY=1
+        ((++NEW_REVERSE_RECORD_COUNT))
         lk_console_detail "Record added"
     done < <(comm -23 \
         <(lk_echo_array NEW_REVERSE_RECORDS | sort) \
@@ -193,6 +203,7 @@ function lk_linode_dns_check() {
 
 function lk_linode_dns_check_all() {
     local JSON LABELS
+    _lk_linode_maybe_flush_cache
     JSON=$(lk_linode_linodes) || return
     lk_jq_get_array LABELS ".[].label" <<<"$JSON"
     [ ${#LABELS[@]} -gt 0 ] || lk_warn "no Linodes found" || return
