@@ -181,7 +181,8 @@ lk_wp_flush
 
 if lk_is_true "$SSL"; then
     SITE_ADDR=$(lk_wp_get_site_address) &&
-        lk_cpanel_get_ssl_cert "$SSH_HOST" "${SITE_ADDR#www.}"
+        [[ $SITE_ADDR =~ ^https?://(www\.)?(.*) ]] &&
+        lk_cpanel_get_ssl_cert "$SSH_HOST" "${BASH_REMATCH[2]}"
 fi || true
 
 if [ "$MAINTENANCE" = indefinite ]; then
