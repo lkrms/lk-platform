@@ -1510,13 +1510,13 @@ function lk_can_sudo() {
     }
 }
 
-function lk_get_maybe_sudo() {
-    echo "${LK_SUDO:-${SUDO_OR_NOT:-0}}"
+function lk_will_sudo() {
+    lk_is_true "${LK_SUDO:-}"
 }
 
-# LK_SUDO=<1|0|Y|N> lk_maybe_sudo command [arg1...]
+# LK_SUDO=<1|0|Y|N> lk_maybe_sudo COMMAND [ARG...]
 function lk_maybe_sudo() {
-    if lk_is_true "${LK_SUDO:-${SUDO_OR_NOT:-0}}"; then
+    if lk_is_true "${LK_SUDO:-}"; then
         lk_elevate "$@"
     else
         "$@"
@@ -1552,20 +1552,15 @@ function lk_maybe_elevate() {
     fi
 }
 
-# lk_safe_symlink target_path link_path [use_sudo [try_default]]
+# lk_safe_symlink TARGET LINK [LN_ARG...]
 function lk_safe_symlink() {
-    local TARGET=$1 LINK=$2 LINK_DIR=${2%/*} \
-        LK_SUDO=${3:-$(lk_get_maybe_sudo)} TRY_DEFAULT=${4:-0} \
-        LK_BACKUP_SUFFIX=${LK_BACKUP_SUFFIX-.orig} CURRENT_TARGET
-    [ -n "$LINK" ] || return
-    [ -e "$TARGET" ] || {
-        [ "${TARGET:0:1}" != / ] &&
-            lk_maybe_sudo test -e "$LINK_DIR/$TARGET"
-    } || {
-        lk_is_true "$TRY_DEFAULT" &&
-            TARGET=$(lk_add_file_suffix "$TARGET" "-default") &&
-            [ -e "$TARGET" ] || return
-    }
+    local TARGET=${1:-} LINK=${2:-} LINK_DIR CURRENT_TARGET \
+        LK_BACKUP_SUFFIX=${LK_BACKUP_SUFFIX-.orig}
+    [ -n "$LINK" ] || lk_warn "no link" || return
+    LINK_DIR=${LINK%/*}
+    [ -e "$TARGET" ] || { [ "${TARGET:0:1}" != / ] &&
+        lk_maybe_sudo test -e "$LINK_DIR/$TARGET"; } ||
+        lk_warn "target not found: $TARGET" || return
     LK_SAFE_SYMLINK_NO_CHANGE=
     if lk_maybe_sudo test -L "$LINK"; then
         CURRENT_TARGET=$(lk_maybe_sudo readlink -- "$LINK") || return
@@ -1577,15 +1572,14 @@ function lk_safe_symlink() {
         lk_maybe_sudo rm -f -- "$LINK" || return
     elif lk_maybe_sudo test -e "$LINK"; then
         if [ -n "$LK_BACKUP_SUFFIX" ]; then
-            lk_maybe_sudo \
-                mv -fv -- "$LINK" "$LINK${LK_BACKUP_SUFFIX:-.orig}" || return
+            lk_maybe_sudo mv -fv -- "$LINK" "$LINK$LK_BACKUP_SUFFIX" || return
         else
             lk_maybe_sudo rm -fv -- "$LINK" || return
         fi
     elif lk_maybe_sudo test ! -d "$LINK_DIR"; then
         lk_maybe_sudo mkdir -pv -- "$LINK_DIR" || return
     fi
-    lk_maybe_sudo ln -sv -- "$TARGET" "$LINK"
+    lk_maybe_sudo ln -sv "${@:3}" -- "$TARGET" "$LINK"
 }
 
 # lk_keep_trying COMMAND [ARG...]

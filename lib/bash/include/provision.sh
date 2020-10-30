@@ -44,7 +44,7 @@ function lk_dir_set_permissions() {
     [ -z "$OWNER" ] ||
         if lk_is_root || lk_is_true "$(lk_get_maybe_sudo)"; then
             lk_console_detail "Owner:" "$OWNER"
-            lk_maybe_sudo chown -Rhc "$OWNER" "$DIR" >"$LOG_DIR/chown.log" || return
+            lk_maybe_sudo gnu_chown -Rhc "$OWNER" "$DIR" >"$LOG_DIR/chown.log" || return
             lk_console_detail "File ownership changes:" "$(wc -l <"$LOG_DIR/chown.log")" "$LK_GREEN"
         else
             lk_console_warning0 "Unable to set owner (not running as root)"
