@@ -39,6 +39,24 @@ eval "$(
 
 . "$LK_BASE/lib/bash/include/core.sh"
 
+function lk_cat_log() {
+    local IFS FILES FILE
+    lk_files_exist "$@" || lk_usage "\
+Usage: $(lk_myself -f) LOG_FILE[.gz] [LOG_FILE...]" || return
+    IFS=$'\n'
+    FILES=($(lk_sort_paths_by_date "$@"))
+    for FILE in "${FILES[@]}"; do
+        case "$FILE" in
+        *.gz)
+            zcat "$FILE"
+            ;;
+        *)
+            cat "$FILE"
+            ;;
+        esac
+    done
+}
+
 function lk_bak_find() {
     lk_elevate gnu_find / -xdev -regextype posix-egrep \
         -regex "${_LK_DIFF_REGEX:-.*-[0-9]+\\.bak}" \
