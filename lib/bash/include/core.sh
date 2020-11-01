@@ -218,7 +218,7 @@ function lk_usage() {
 
 function _lk_mktemp() {
     local TMPDIR=${TMPDIR:-/tmp}
-    mktemp "$@" -- "${TMPDIR%/}/${0##*/}.XXXXXXXXXX"
+    mktemp "$@" -- "${TMPDIR%/}/$(lk_myself 2).XXXXXXXXXX"
 }
 
 function lk_mktemp_file() {
@@ -245,6 +245,15 @@ function lk_command_first_existing() {
         shift
     done
     false
+}
+
+function lk_regex_implode() {
+    [ $# -gt 0 ] || lk_warn "no subexpression" || return
+    if [ $# -gt 1 ]; then
+        printf '(%s)' "$(lk_implode_args "|" "$@")"
+    else
+        printf '%s' "$1"
+    fi
 }
 
 # lk_get_regex [REGEX_NAME...]
@@ -634,8 +643,9 @@ function lk_echo_array() {
 }
 
 function lk_quote_args() {
-    [ $# -eq 0 ] ||
-        printf '%q ' "$@"
+    [ $# -gt 0 ] || return 0
+    printf '%q' "$1"
+    [ $# -eq 1 ] || printf ' %q' "${@:2}"
 }
 
 function lk_quote_array() {
