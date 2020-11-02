@@ -63,6 +63,10 @@ function lk_bash_load() {
                 lk_die "unable to locate LK_BASE"
         fi
         VARS+=(LK_BASE "$LK_BASE")
+        [ -z "${BASH_SOURCE[2]:-}" ] ||
+            ! _FILE=$(realpath "${BASH_SOURCE[2]:-}") ||
+            VARS+=(_FILE "$_FILE"
+                _DIR "${_FILE%/*}")
         printf '%s=%q\n' "${VARS[@]}"
         echo "export LK_BASE"
     ) || return

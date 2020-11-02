@@ -6,15 +6,16 @@
 # lk_maybe_install -d [-v] [-m MODE] [-o OWNER] [-g GROUP] DEST
 function lk_maybe_install() {
     # shellcheck disable=SC2034
-    local DEST=${*: -1:1} VERBOSE MODE OWNER GROUP i \
+    local DEST=${*: -1:1} LK_SUDO=${LK_SUDO:-} OWNER GROUP VERBOSE MODE i \
         ARGS=("$@") LK_ARG_ARRAY=ARGS
-    if lk_has_arg "-d" || [ ! -e "$DEST" ]; then
+    ! i=$(lk_array_search "-o" ARGS) || OWNER=${ARGS[*]:$((i + 1)):1}
+    ! i=$(lk_array_search "-g" ARGS) || GROUP=${ARGS[*]:$((i + 1)):1}
+    [ -z "${OWNER:-}${GROUP:-}" ] || LK_SUDO=1
+    if lk_has_arg "-d" || lk_maybe_sudo test ! -e "$DEST"; then
         lk_maybe_sudo install "$@"
     else
         ! lk_has_arg "-v" || VERBOSE=1
         ! i=$(lk_array_search "-m" ARGS) || MODE=${ARGS[*]:$((i + 1)):1}
-        ! i=$(lk_array_search "-o" ARGS) || OWNER=${ARGS[*]:$((i + 1)):1}
-        ! i=$(lk_array_search "-g" ARGS) || GROUP=${ARGS[*]:$((i + 1)):1}
         [ -z "${MODE:-}" ] ||
             lk_maybe_sudo chmod ${VERBOSE+-v} "$MODE" "$DEST" || return
         [ -z "${OWNER:-}${GROUP:-}" ] ||

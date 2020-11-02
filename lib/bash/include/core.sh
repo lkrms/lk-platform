@@ -407,6 +407,10 @@ function lk_date_ymdhms() {
     lk_date "%Y%m%d%H%M%S"
 }
 
+function lk_date_ymd() {
+    lk_date "%Y%m%d"
+}
+
 function lk_timestamp() {
     lk_date "%s"
 }
@@ -1119,7 +1123,7 @@ function lk_console_list() {
             column -s $'\n' | expand)"
     SPACES="$(lk_repeat " " "$((${#LK_CONSOLE_PREFIX} + INDENT))")"
     lk_echoc "$SPACES${LIST//$'\n'/$'\n'$SPACES}" \
-        "${LK_CONSOLE_SECONDARY_COLOUR-$LK_CONSOLE_COLOUR}" >&"${_LK_FD:-2}"
+        "${LK_CONSOLE_SECONDARY_COLOUR-$COLOUR}" >&"${_LK_FD:-2}"
     [ -z "${SINGLE_NOUN:-}" ] ||
         LK_CONSOLE_PREFIX="$SPACES" lk_console_detail "(${#ITEMS[@]} $(
             lk_maybe_plural ${#ITEMS[@]} "$SINGLE_NOUN" "$PLURAL_NOUN"
