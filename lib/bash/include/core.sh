@@ -977,7 +977,7 @@ function lk_fold() {
     local LC_ALL=C STRING WIDTH=${2:-80} REGEX \
         PARTS=() CODES=() LINE_TEXT LINE i PART CODE _LINE_TEXT
     [ $# -gt 0 ] || lk_usage "\
-Usage: $(lk_myself -f) STRING [WIDTH]"
+Usage: $(lk_myself -f) STRING [WIDTH]" || return
     STRING=$1
     eval "$(lk_get_regex NON_PRINTING_REGEX)"
     REGEX=$'^([^\x1b\x01]*)'"(($NON_PRINTING_REGEX)+)(.*)"

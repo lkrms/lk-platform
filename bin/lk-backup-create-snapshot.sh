@@ -44,7 +44,7 @@ function exit_trap() {
             [ "$RSYNC_EXIT_VALUE" -eq 0 ] && {
                 SUBJECT="Success"
                 MESSAGE="\
-Just confirming the following backup ${RSYNC_RESULT:-completed without error}."
+The following backup ${RSYNC_RESULT:-completed without error}."
             } || {
                 SUBJECT="Please review"
                 MESSAGE="\
