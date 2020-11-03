@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# shellcheck disable=SC2207
+
 function lk_dpkg_installed() {
     local STATUS
     [ $# -gt 0 ] || lk_warn "no package name" || return
@@ -27,23 +29,47 @@ function lk_dpkg_installed_versions() {
         awk '$1 == "installed" { print $2 }'
 }
 
+function lk_apt_available_list() {
+    apt-cache pkgnames
+}
+
+function lk_apt_marked_manual_list() {
+    apt-mark showmanual "$@"
+}
+
+function lk_apt_not_marked_manual_list() {
+    [ $# -gt 0 ] || return
+    comm -13 \
+        <(lk_apt_marked_manual_list "$@" | sort | uniq) \
+        <(lk_echo_args "$@" | sort | uniq)
+}
+
 function lk_apt_update() {
     lk_console_message "Updating APT package indexes"
     lk_elevate apt-get -q update
 }
 
 function lk_apt_install() {
-    lk_console_item "Installing APT $(lk_maybe_plural "$#" package packages):" \
-        "$(printf '%s\n' "$@")"
-    lk_elevate apt-get -yq install "$@"
+    local INSTALL UNAVAILABLE
+    INSTALL=($(lk_apt_not_marked_manual_list "$@")) &&
+        UNAVAILABLE=$(comm -13 \
+            <(lk_apt_available_list | sort | uniq) \
+            <(lk_echo_array INSTALL | sort | uniq)) || return
+    [ ${#UNAVAILABLE[@]} -eq 0 ] ||
+        lk_warn "unavailable for installation: ${UNAVAILABLE[*]}" || return
+    [ ${#INSTALL[@]} -eq 0 ] || {
+        lk_echo_array INSTALL |
+            lk_console_list "Installing:" "APT package" "APT packages"
+        lk_elevate apt-get -yq install "${INSTALL[@]}"
+    }
 }
 
 function lk_apt_remove() {
     local REMOVE
-    # shellcheck disable=SC2207
     REMOVE=($(lk_dpkg_installed_list "$@")) || return
     [ ${#REMOVE[@]} -eq 0 ] || {
-        lk_console_item "Removing APT packages:" "$(lk_echo_array REMOVE)"
+        lk_echo_array REMOVE |
+            lk_console_list "Removing:" "APT package" "APT packages"
         lk_elevate apt-get -yq purge "${REMOVE[@]}"
     }
 }

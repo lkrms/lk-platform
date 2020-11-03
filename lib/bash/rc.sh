@@ -39,6 +39,17 @@ eval "$(
 
 . "$LK_BASE/lib/bash/include/core.sh"
 
+function clip() {
+    if lk_command_exists clip; then
+        unset -f clip
+    else
+        function clip() {
+            lk_clip
+        }
+    fi
+    clip "$@"
+}
+
 function lk_cat_log() {
     local IFS FILES FILE
     lk_files_exist "$@" || lk_usage "\

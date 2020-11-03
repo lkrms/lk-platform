@@ -237,8 +237,11 @@ function lk_mktemp_fifo() {
 }
 
 function lk_command_first_existing() {
+    local COMMAND
     while [ $# -gt 0 ]; do
-        if type -P "$1" >/dev/null; then
+        # shellcheck disable=SC2206
+        COMMAND=($1)
+        if type -P "${COMMAND[0]}" >/dev/null; then
             echo "$1"
             return
         fi
@@ -272,6 +275,7 @@ function lk_get_regex() {
         DPKG_SOURCE_REGEX \
         PHP_SETTING_NAME_REGEX PHP_SETTING_REGEX \
         READLINE_NON_PRINTING_REGEX CONTROL_SEQUENCE_REGEX \
+        ESCAPE_SEQUENCE_REGEX NON_PRINTING_REGEX \
         IPV4_PRIVATE_FILTER_REGEX \
         _O _H _P _S _U _A _Q _F \
         REGEX EXIT_STATUS=0
@@ -315,7 +319,9 @@ function lk_get_regex() {
     PHP_SETTING_REGEX="$PHP_SETTING_NAME_REGEX=.+"
 
     READLINE_NON_PRINTING_REGEX=$'\x01[^\x02]*\x02'
-    CONTROL_SEQUENCE_REGEX=$'\x1b\\[[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]'
+    CONTROL_SEQUENCE_REGEX=$'\x1b\\\x5b[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]'
+    ESCAPE_SEQUENCE_REGEX=$'\x1b[\x20-\x2f]*[\x30-\x7e]'
+    NON_PRINTING_REGEX=$'(\x01[^\x02]*\x02|\x1b(\\\x5b[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]|[\x20-\x2f]*[\x30-\x5a\\\x5c-\x7e]))'
 
     # *_FILTER_REGEX expressions are:
     # 1. anchored
@@ -938,34 +944,28 @@ function lk_echoc() {
 }
 
 function lk_readline_escape_non_printing() {
-    local STRING=$1 LC_ALL=C
-    eval "$(lk_get_regex CONTROL_SEQUENCE_REGEX)"
-    while [[ $STRING =~ (.*)(^|[^$'\x01'])($CONTROL_SEQUENCE_REGEX)+(.*) ]]; do
-        STRING=${BASH_REMATCH[1]}${BASH_REMATCH[2]}$'\x01'${BASH_REMATCH[3]}$'\x02'${BASH_REMATCH[$((${#BASH_REMATCH[@]} - 1))]}
+    local LC_ALL=C STRING=$1 REGEX
+    for REGEX in CONTROL_SEQUENCE_REGEX ESCAPE_SEQUENCE_REGEX; do
+        eval "$(lk_get_regex "$REGEX")"
+        while [[ $STRING =~ ((.*)(^|[^$'\x01']))(${!REGEX})+(.*) ]]; do
+            STRING=${BASH_REMATCH[1]}$'\x01'${BASH_REMATCH[4]}$'\x02'${BASH_REMATCH[$((${#BASH_REMATCH[@]} - 1))]}
+        done
     done
     echo "$STRING"
 }
 
 function lk_strip_non_printing() {
     local LC_ALL=C STRING REGEX
-    eval "$(lk_get_regex \
-        READLINE_NON_PRINTING_REGEX \
-        CONTROL_SEQUENCE_REGEX)"
+    eval "$(lk_get_regex NON_PRINTING_REGEX)"
     if [ $# -gt 0 ]; then
         STRING=$1
-        for REGEX in \
-            "$READLINE_NON_PRINTING_REGEX" \
-            "$CONTROL_SEQUENCE_REGEX"; do
-            while [[ $STRING =~ (.*)$REGEX(.*) ]]; do
-                STRING=${BASH_REMATCH[1]}${BASH_REMATCH[$((${#BASH_REMATCH[@]} - 1))]}
-            done
+        while [[ $STRING =~ (.*)$NON_PRINTING_REGEX(.*) ]]; do
+            STRING=${BASH_REMATCH[1]}${BASH_REMATCH[$((${#BASH_REMATCH[@]} - 1))]}
         done
         echo "$STRING"
     else
         export LC_ALL
-        sed -E \
-            -e "s/$READLINE_NON_PRINTING_REGEX//g" \
-            -e "s/$CONTROL_SEQUENCE_REGEX//g"
+        sed -E "s/$NON_PRINTING_REGEX//g"
     fi
 }
 
@@ -1258,17 +1258,21 @@ function lk_verbose() {
 #
 # Copy input to the user's clipboard if possible, otherwise print it out.
 function lk_clip() {
-    local OUTPUT COMMAND LINES DISPLAY_LINES=${LK_CLIP_LINES:-4}
+    local OUTPUT COMMAND LINES MESSAGE DISPLAY_LINES=${LK_CLIP_LINES:-5}
     OUTPUT=$(cat)
-    if COMMAND=$(lk_command_first_existing xclip pbcopy) &&
-        echo -n "$OUTPUT" | "$COMMAND" >/dev/null 2>&1; then
+    if COMMAND=$(lk_command_first_existing \
+        "xclip -selection clipboard" \
+        pbcopy) &&
+        echo -n "$OUTPUT" | $COMMAND >/dev/null 2>&1; then
         LINES=$(wc -l <<<"$OUTPUT")
+        [ "$LINES" -le "$DISPLAY_LINES" ] || {
+            OUTPUT=$(head -n$((DISPLAY_LINES - 1)) <<<"$OUTPUT" &&
+                echo "$LK_BOLD$LK_MAGENTA...$LK_RESET")
+            MESSAGE="$LINES lines copied"
+        }
         LK_CONSOLE_NO_FOLD=1 \
-            lk_console_item "Copied to clipboard:" $'\n'"$(
-            head -n"$DISPLAY_LINES" <<<"$OUTPUT"
-            [ "$LINES" -le "$DISPLAY_LINES" ] || echo "..."
-        )"
-        lk_console_detail "Lines copied:" "$LINES"
+            lk_console_item "${MESSAGE:-Copied} to clipboard:" \
+            $'\n'"$LK_GREEN$OUTPUT$LK_RESET" "$LK_MAGENTA"
     else
         lk_console_error "Unable to copy output to clipboard"
         echo -n "$OUTPUT"
@@ -2145,7 +2149,7 @@ _LK_INCLUDES=(core)
     LK_COLOUR=off
 
 # shellcheck disable=SC2034
-case "${LK_COLOUR:-${colour:-static}}" in
+case "${LK_COLOUR:-${colour:-xterm-256color}}" in
 dynamic)
     eval "$(lk_get_colours)"
     ;;
@@ -2176,7 +2180,7 @@ off)
     LK_WRAP_OFF=
     LK_RESET=
     ;;
-*)
+xterm-256color)
     LK_BLACK=$'\E[30m'
     LK_RED=$'\E[31m'
     LK_GREEN=$'\E[32m'
