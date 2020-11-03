@@ -969,6 +969,63 @@ function lk_strip_non_printing() {
     fi
 }
 
+# lk_fold STRING [WIDTH]
+#
+# Wrap STRING to fit in WIDTH (default: 80) after accounting for non-printing
+# character sequences, breaking at whitespace only.
+function lk_fold() {
+    local LC_ALL=C STRING WIDTH=${2:-80} REGEX \
+        PARTS=() CODES=() LINE_TEXT LINE i PART CODE _LINE_TEXT
+    [ $# -gt 0 ] || lk_usage "\
+Usage: $(lk_myself -f) STRING [WIDTH]"
+    STRING=$1
+    eval "$(lk_get_regex NON_PRINTING_REGEX)"
+    REGEX=$'^([^\x1b\x01]*)'"(($NON_PRINTING_REGEX)+)(.*)"
+    while [[ $STRING =~ $REGEX ]]; do
+        PARTS+=("${BASH_REMATCH[1]}")
+        CODES+=("${BASH_REMATCH[2]}")
+        STRING=${BASH_REMATCH[$((${#BASH_REMATCH[@]} - 1))]}
+    done
+    [ -z "$STRING" ] || {
+        PARTS+=("$STRING")
+        CODES+=("")
+    }
+    STRING=
+    LINE_TEXT=
+    LINE=
+    REGEX="^(([^[:space:]]*)([[:space:]]*))(.*)"
+    for i in "${!PARTS[@]}"; do
+        PART=${PARTS[$i]}
+        CODE=${CODES[$i]}
+        while [ -n "$PART" ]; do
+            [[ $PART =~ $REGEX ]]
+            _LINE_TEXT=$LINE_TEXT
+            LINE_TEXT=$LINE_TEXT${BASH_REMATCH[2]}
+            [ ${#LINE_TEXT} -le "$WIDTH" ] ||
+                [ "${BASH_REMATCH[2]}" = "$LINE_TEXT" ] ||
+                {
+                    [[ ! $_LINE_TEXT =~ ^.{$WIDTH}([[:space:]]+)$ ]] ||
+                        LINE=${LINE%${BASH_REMATCH[1]}}
+                    STRING=$STRING$LINE$'\n'
+                    LINE_TEXT=
+                    LINE=
+                    continue
+                }
+            LINE_TEXT=$LINE_TEXT${BASH_REMATCH[3]}
+            LINE=$LINE${BASH_REMATCH[1]}
+            PART=${BASH_REMATCH[4]}
+            if [ "${BASH_REMATCH[3]//$'\n'/}" != "${BASH_REMATCH[3]}" ]; then
+                STRING=$STRING${LINE%$'\n'*}$'\n'
+                LINE_TEXT=${LINE_TEXT##*$'\n'}
+                LINE=$LINE_TEXT
+            fi
+        done
+        LINE=$LINE$CODE
+    done
+    STRING=$STRING$LINE
+    echo "${STRING%$'\n'}"$'\n'
+}
+
 function lk_output_length() {
     local STRING
     STRING=$(lk_strip_non_printing "$1.")
@@ -986,8 +1043,7 @@ function lk_console_message() {
             [ "$(lk_output_length "$PREFIX$MESSAGE")" -le 80 ]; } || {
         SPACES=$'\n'"$(lk_repeat " " ${#PREFIX})"
         [ "${MESSAGE//$'\n'/}" != "$MESSAGE" ] ||
-            ! lk_command_exists fold ||
-            MESSAGE=$(fold -s -w $((80 - ${#PREFIX})) <<<"$MESSAGE")
+            MESSAGE=$(lk_fold "$MESSAGE" $((80 - ${#PREFIX})))
         MESSAGE=${MESSAGE//$'\n'/$SPACES}
         INDENT=2
     }
@@ -1015,8 +1071,7 @@ function lk_console_message() {
                 INDENT=${LK_CONSOLE_INDENT:-$((${#PREFIX} + INDENT))}
                 SPACES=$'\n'$(lk_repeat " " "$INDENT")
                 [ "${MESSAGE2//$'\n'/}" != "$MESSAGE2" ] ||
-                    ! lk_command_exists fold ||
-                    MESSAGE2=$(fold -s -w $((80 - INDENT)) <<<"$MESSAGE2")
+                    MESSAGE2=$(lk_fold "$MESSAGE2" $((80 - INDENT)))
                 MESSAGE2=${MESSAGE2#$'\n'}
                 MESSAGE2=$SPACES${MESSAGE2//$'\n'/$SPACES}
             }
@@ -1227,7 +1282,7 @@ function lk_console_checklist() {
     ! lk_no_input || return 0
     [ ${#ITEMS[@]} -ge "$LIST_HEIGHT" ] || LIST_HEIGHT=${#ITEMS[@]}
     ((WIDTH += 16, WIDTH += WIDTH % 2))
-    TEXT=$(fold -s -w $((WIDTH - 4)) <<<"$TEXT")
+    TEXT=$(lk_fold "$TEXT" $((WIDTH - 4)))
     eval "ITEMS=(${ITEMS[*]/%/ $INITIAL_STATUS})"
     # shellcheck disable=SC2086
     whiptail \
