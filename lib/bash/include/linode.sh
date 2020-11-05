@@ -213,3 +213,37 @@ function lk_linode_dns_check_all() {
     LK_VERBOSE=1 lk_linode_dns_check "$1" <<<"$JSON" || return
     lk_console_success "DNS check complete"
 }
+
+# lk_linode_hosting_get_meta DIR HOST...
+function lk_linode_hosting_get_meta() {
+    local DIR=${1:-} HOST SSH_HOST FILE PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX}
+    [ $# -ge 2 ] || lk_usage "\
+Usage: $(lk_myself -f) DIR HOST..." || return
+    [ -d "$DIR" ] || lk_warn "not a directory: $DIR" || return
+    DIR=${DIR%/}
+    for HOST in "${@:2}"; do
+        SSH_HOST=$PREFIX${HOST#$PREFIX}
+        FILE=$DIR/StackScript-$HOST
+        [ -e "$FILE" ] || {
+            ssh "$SSH_HOST" \
+                "sudo bash -c 'cp -pv /root/StackScript . && chown \$SUDO_USER: StackScript'" &&
+                scp -p "$SSH_HOST":StackScript "$FILE"
+        } || return
+        FILE=$DIR/install.log-$HOST
+        [ -e "$FILE" ] ||
+            scp -p "$SSH_HOST:/var/log/${PREFIX}install.log" "$FILE" || return
+        FILE=$DIR/install.out-$HOST
+        [ -e "$FILE" ] ||
+            scp -p "$SSH_HOST:/var/log/${PREFIX}install.out" "$FILE" || return
+        awk -f "$LK_BASE/lib/awk/get-install-env.awk" "$DIR/install.log-$HOST" |
+            sed -E \
+                -e '/^(DEBCONF_NONINTERACTIVE_SEEN|DEBIAN_FRONTEND|HOME|LINODE_.*|PATH|PWD|SHLVL|TERM|_)=/d' \
+                -e "s/^((LK_)?NODE_(HOSTNAME|FQDN)=)/\\1test-/" \
+                -e "s/^((LK_)?ADMIN_EMAIL=).*/\\1nobody@localhost/" \
+                -e "s/^(CALL_HOME_MX=).*/\\1/" |
+            while IFS='=' read -r VAR VALUE; do
+                printf '%s=%q\n' "$VAR" "$VALUE"
+            done >"$DIR/StackScript-env-$HOST" &&
+            touch -r "$DIR/install.log-$HOST" "$DIR/StackScript-env-$HOST" || return
+    done
+}

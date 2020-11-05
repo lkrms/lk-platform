@@ -14,9 +14,11 @@ AUR_PACKAGES=()
 # won't be installed, but won't be uninstalled
 PAC_KEEP=(
     aurutils
+    vifm
 
     #
     azure-cli
+    azure-functions-core-tools-bin
     storageexplorer
 
     #
@@ -24,6 +26,7 @@ PAC_KEEP=(
 
     #
     mongodb-bin
+    mongodb-tools-bin
 
     #
     woeusb

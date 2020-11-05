@@ -77,6 +77,7 @@ PACMAN_PACKAGES=(
     btrfs-progs
     dosfstools
     exfat-utils
+    ext4magic
     f2fs-tools
     jfsutils
     reiserfsprogs
