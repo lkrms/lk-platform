@@ -116,18 +116,22 @@ repositories simultaneously." || return
 # lk_git_ancestors REF...
 #
 # Output lines with tab-separated fields BEHIND, HASH, and REF, sorted
-# numerically on BEHIND, for each REF that is an ancestor of HEAD. If no REF is
-# an ancestor, return false.
+# numerically on BEHIND, for each REF that shares an ancestor with HEAD,
+# measuring BEHIND from the point where HEAD and REF diverged. Output REFs with
+# identical BEHIND values in argument order. If no REF is an ancestor, return
+# false.
+#
+# To compare ancestors of a ref other than HEAD, set LK_GIT_REF.
 function lk_git_ancestors() {
-    local REF HASH BEHIND ANCESTORS
+    local i REF HASH BEHIND ANCESTORS
     for REF in "$@"; do
-        git merge-base --is-ancestor "$REF" HEAD &&
-            HASH=$(git merge-base "$REF" HEAD) &&
-            BEHIND=$(git rev-list --count "$HASH..HEAD") || continue
-        ANCESTORS+=("$BEHIND" "$HASH" "$REF")
+        HASH=$(git merge-base --fork-point "$REF" "${LK_GIT_REF:-HEAD}") &&
+            BEHIND=$(git rev-list --count "$HASH..${LK_GIT_REF:-HEAD}") ||
+            continue
+        ANCESTORS+=("$((i++))" "$BEHIND" "$HASH" "$REF")
     done
     [ ${#ANCESTORS[@]} -gt 0 ] || return
-    printf '%s\t%s\t%s\n' "${ANCESTORS[@]}" | sort -n
+    printf '%s\t%s\t%s\t%s\n' "${ANCESTORS[@]}" | sort -n -k2 -k1 | cut -f2-
 }
 
 # lk_git_config_remote_push_all [REMOTE]
