@@ -39,8 +39,12 @@ function _lk_linode_define() {
     local _CACHE_VAR
     _CACHE_VAR=$(lk_upper "$1")
     eval "function $1() {
+    [ \$# -eq 0 ] || {
+        linode-cli --json ${*:2} \"\$@\"
+        return
+    }
     _lk_linode_maybe_flush_cache
-    $_CACHE_VAR=\${$_CACHE_VAR:-\$(_lk_linode_cache $_CACHE_VAR linode-cli --json ${*:2} \"\$@\")} &&
+    $_CACHE_VAR=\${$_CACHE_VAR:-\$(_lk_linode_cache $_CACHE_VAR linode-cli --json ${*:2})} &&
         echo \"\$$_CACHE_VAR\" ||
         echo \"\$$_CACHE_VAR\" >&2
 }"
@@ -52,9 +56,13 @@ function _lk_linode_define_indexed() {
     eval "function $1() {
     local _LK_VAR
     [ \$# -ge 1 ] && [[ \$1 =~ ^[0-9]+$ ]] || lk_warn \"invalid arguments\" || return
+    [ \$# -eq 1 ] || {
+        linode-cli --json ${*:2} \"\$@\"
+        return
+    }
     _lk_linode_maybe_flush_cache
     _LK_VAR=${_CACHE_VAR}_\$1
-    eval \"\$_LK_VAR=\\\${\$_LK_VAR:-\\\$(_lk_linode_cache \$_LK_VAR linode-cli --json ${*:2} \\\"\\\$@\\\")}\" &&
+    eval \"\$_LK_VAR=\\\${\$_LK_VAR:-\\\$(_lk_linode_cache \$_LK_VAR linode-cli --json ${*:2} \\\"\\\$1\\\")}\" &&
         echo \"\${!_LK_VAR}\" ||
         echo \"\${!_LK_VAR}\" >&2
 }"
@@ -106,41 +114,55 @@ function lk_linode_ssh_add() {
     done
 }
 
+# lk_linode_ssh_add_all [LINODE_ARG...]
 function lk_linode_ssh_add_all() {
     local JSON LABELS
     _lk_linode_maybe_flush_cache
-    JSON=$(lk_linode_linodes) || return
-    lk_jq_get_array LABELS ".[].label" <<<"$JSON"
-    [ ${#LABELS[@]} -gt 0 ] || lk_warn "no Linodes found" || return
+    JSON=$(lk_linode_linodes "$@") || return
+    lk_jq_get_array LABELS ".[].label" <<<"$JSON" &&
+        [ ${#LABELS[@]} -gt 0 ] || lk_warn "no Linodes found" || return
     lk_echo_array LABELS |
         lk_console_list "Adding to SSH configuration:" Linode Linodes
     lk_confirm "Proceed?" Y || return
     lk_linode_ssh_add <<<"$JSON"
 }
 
+# lk_linode_get_only_domain [LINODE_ARG...]
 function lk_linode_get_only_domain() {
     local DOMAIN_ID
     _lk_linode_maybe_flush_cache
-    DOMAIN_ID=$(lk_linode_domains | jq -r '.[].id') || return
+    DOMAIN_ID=$(lk_linode_domains "$@" | jq -r '.[].id') || return
     [ -n "$DOMAIN_ID" ] && [ "$(wc -l <<<"$DOMAIN_ID")" -eq 1 ] ||
         lk_warn "domain count must be 1" || return
     echo "$DOMAIN_ID"
 }
 
+# lk_linode_dns_check [DOMAIN_ID [LINODE_ARG...]]
+#
+# For each Linode object in the JSON input array, check DOMAIN_ID for each of
+# the following records, add any that are missing, and if LK_VERBOSE >= 1,
+# report any unmatched records.
+# - {LABEL}             A       {IPV4_PUBLIC}
+# - {LABEL}.PRIVATE     A       {IPV4_PRIVATE}
+# - {LABEL}             AAAA    {IPV6}
+#
+# Characters after the first "." in each label are discarded. If DOMAIN_ID is
+# not specified, `linode-cli domains list` will be called and if exactly one
+# domain is returned, its ID will be used, otherwise false will be returned.
 function lk_linode_dns_check() {
     local LINODES DOMAIN_ID DOMAIN RECORDS REVERSE_RECORDS \
         NEW_RECORDS NEW_REVERSE_RECORDS LINODE SH LABEL \
         OUTPUT RECORD_ID NEW_RECORD_COUNT=0 NEW_REVERSE_RECORD_COUNT=0
     lk_jq_get_array LINODES &&
         [ ${#LINODES[@]} -gt 0 ] || lk_warn "no Linodes in input" || return
-    DOMAIN_ID=${1:-$(lk_linode_get_only_domain)} &&
-        DOMAIN=$(lk_linode_domains |
+    DOMAIN_ID=${1:-$(lk_linode_get_only_domain "${@:2}")} &&
+        DOMAIN=$(lk_linode_domains "${@:2}" |
             jq -r --arg domainId "$DOMAIN_ID" \
                 '.[]|select(.id==($domainId|tonumber)).domain') &&
         [ -n "$DOMAIN" ] || lk_warn "unable to retrieve domain" || return
-    RECORDS=$(lk_linode_domain_records "$DOMAIN_ID" |
+    RECORDS=$(lk_linode_domain_records "$DOMAIN_ID" "${@:2}" |
         jq -r '.[]|"\(.name)\t\(.type)\t\(.target)"') &&
-        REVERSE_RECORDS=$(lk_linode_ips |
+        REVERSE_RECORDS=$(lk_linode_ips "${@:2}" |
             jq -r '.[]|select(.rdns!=null)|"\(.address)\t\(.rdns)"' |
             sed 's/\.$//') || return
     eval "$(lk_get_regex DOMAIN_PART_REGEX)"
@@ -166,7 +188,8 @@ function lk_linode_dns_check() {
             --type "$TYPE" \
             --name "$NAME" \
             --target "$TARGET" \
-            "$DOMAIN_ID") &&
+            "$DOMAIN_ID" \
+            "${@:2}") &&
             RECORD_ID=$(jq '.[0].id' <<<"$OUTPUT") ||
             lk_warn "linode-cli failed with: $OUTPUT" || return
         _LK_LINODE_CACHE_DIRTY=1
@@ -184,7 +207,8 @@ function lk_linode_dns_check() {
         lk_console_item "Adding RDNS record:" "$ADDRESS $RDNS"
         OUTPUT=$(linode-cli --json networking ip-update \
             --rdns "$RDNS" \
-            "$ADDRESS") ||
+            "$ADDRESS" \
+            "${@:2}") ||
             lk_warn "linode-cli failed with: $OUTPUT" || return
         _LK_LINODE_CACHE_DIRTY=1
         ((++NEW_REVERSE_RECORD_COUNT))
@@ -201,17 +225,56 @@ function lk_linode_dns_check() {
     }
 }
 
+# lk_linode_dns_check_all [DOMAIN_ID [LINODE_ARG...]]
 function lk_linode_dns_check_all() {
     local JSON LABELS
     _lk_linode_maybe_flush_cache
-    JSON=$(lk_linode_linodes) || return
+    JSON=$(lk_linode_linodes "${@:2}") || return
     lk_jq_get_array LABELS ".[].label" <<<"$JSON"
     [ ${#LABELS[@]} -gt 0 ] || lk_warn "no Linodes found" || return
     lk_echo_array LABELS |
         lk_console_list "Checking DNS and RDNS records for:" Linode Linodes
     lk_confirm "Proceed?" Y || return
-    LK_VERBOSE=1 lk_linode_dns_check "$1" <<<"$JSON" || return
+    LK_VERBOSE=1 lk_linode_dns_check "$1" "${@:2}" <<<"$JSON" || return
     lk_console_success "DNS check complete"
+}
+
+# lk_linode_hosting_update_stackscript [REPO [REF [LINODE_ARG...]]]
+#
+# shellcheck disable=SC2207
+function lk_linode_hosting_update_stackscript() {
+    local REPO=${1:-$LK_BASE} REF=${2:-HEAD} HASH BASED_ON \
+        SCRIPT STACKSCRIPT ARGS MESSAGE OUTPUT
+    cd "$REPO" || return
+    HASH=$(git rev-parse --verify "$REF") &&
+        BASED_ON=($(LK_GIT_REF=$HASH \
+            lk_git_ancestors master develop | head -n1)) ||
+        lk_warn "invalid ref: $REF" || return
+    SCRIPT=$(git show "$HASH:lib/linode/hosting.sh") || return
+    if STACKSCRIPT=$(lk_linode_stackscripts --label hosting.sh "${@:3}" |
+        jq -r '.[].id' | head -n1) && [ -n "$STACKSCRIPT" ]; then
+        ARGS=(update "$STACKSCRIPT")
+        MESSAGE="updated to"
+        lk_console_item "Updating StackScript" "$STACKSCRIPT"
+    else
+        ARGS=(create)
+        MESSAGE="created with"
+        lk_console_message "Creating StackScript"
+    fi
+    OUTPUT=$(linode-cli --json stackscripts "${ARGS[@]}" \
+        --label hosting.sh \
+        --images linode/ubuntu20.04 \
+        --images linode/ubuntu18.04 \
+        --images linode/ubuntu16.04lts \
+        --script "$SCRIPT" \
+        --description "Provision a new Linode configured for hosting" \
+        --is_public false \
+        --rev_note "commit: ${HASH:0:7} (based on lk-platform/${BASED_ON[2]}@${BASED_ON[1]:0:7}" \
+        "${@:3}") ||
+        lk_warn "linode-cli failed with: $OUTPUT" || return
+    _LK_LINODE_CACHE_DIRTY=1
+    STACKSCRIPT=$(jq -r '.[0].id' <<<"$OUTPUT") &&
+        lk_console_detail "StackScript $STACKSCRIPT $MESSAGE" "${HASH:0:7}:hosting.sh"
 }
 
 # lk_linode_hosting_get_meta DIR HOST...
