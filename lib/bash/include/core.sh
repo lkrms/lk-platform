@@ -277,7 +277,8 @@ function lk_get_regex() {
         READLINE_NON_PRINTING_REGEX CONTROL_SEQUENCE_REGEX \
         ESCAPE_SEQUENCE_REGEX NON_PRINTING_REGEX \
         IPV4_PRIVATE_FILTER_REGEX \
-        _O _H _P _S _U _A _Q _F \
+        BACKUP_TIMESTAMP_FINDUTILS_REGEX \
+        _O _H _P _S _U _A _Q _F _1 _2 _4 _6 \
         REGEX EXIT_STATUS=0
 
     DOMAIN_PART_REGEX="[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
@@ -327,6 +328,12 @@ function lk_get_regex() {
     # 1. anchored
     # 2. not intended for validation
     IPV4_PRIVATE_FILTER_REGEX="^(10\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|192\\.168\\.|127\\.)"
+
+    _1="[0-9]"
+    _2="$_1$_1"
+    _4="$_2$_2"
+    _6="$_2$_2$_2"
+    BACKUP_TIMESTAMP_FINDUTILS_REGEX="$_4-$_2-$_2-$_6"
 
     for REGEX in "$@"; do
         printf "${LK_VAR_PREFIX-local }%s=%q\n" "$REGEX" "${!REGEX}" ||
