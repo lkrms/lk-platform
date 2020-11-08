@@ -131,7 +131,7 @@ ${1//$'\n'/$'\n'"$H_SPACES${LK_CONSOLE_SPACES-  }"}$LK_RESET" >&2
 function lk_console_item() {
     lk_console_message "\
 $1$LK_RESET${LK_CONSOLE_COLOUR2-${LK_CONSOLE_COLOUR-$LK_CYAN}}$(
-        [ "${2//$'\n'/}" = "$2" ] &&
+        [ "${2/$'\n'/}" = "$2" ] &&
             echo " $2" ||
             echo $'\n'"$2"
     )"

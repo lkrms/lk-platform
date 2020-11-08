@@ -265,7 +265,7 @@ ${1//$'\n'/$'\n'"${LK_CONSOLE_SPACES-  }"}" >&"${_LK_FD:-2}"
 
 function lk_console_item() {
     lk_console_message "$1$(
-        [ "${2//$'\n'/}" = "$2" ] &&
+        [ "${2/$'\n'/}" = "$2" ] &&
             echo " $2" ||
             echo $'\n'"$2"
     )"

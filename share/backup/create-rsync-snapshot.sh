@@ -70,18 +70,22 @@ function lk_log() {
     done
 }
 
+function lk_echo_array() {
+    eval "printf '%s\n' \${$1[@]+\"\${$1[@]}\"}"
+}
+
 function lk_console_message() {
-    local SPACES=$'\n'"${LK_CONSOLE_SPACES-  }"
+    local SPACES=${LK_CONSOLE_SPACES-  }
     echo "\
 $LK_BOLD${LK_CONSOLE_COLOUR-$LK_CYAN}${LK_CONSOLE_PREFIX-==> }\
 $LK_RESET${LK_CONSOLE_MESSAGE_COLOUR-$LK_BOLD}\
-${1//$'\n'/$SPACES}$LK_RESET"
+$(sed "1b;s/^/$SPACES/" <<<"$1")$LK_RESET"
 }
 
 function lk_console_item() {
     lk_console_message "\
 $1$LK_RESET${LK_CONSOLE_COLOUR2-${LK_CONSOLE_COLOUR-$LK_CYAN}}$(
-        [ "${2//$'\n'/}" = "$2" ] &&
+        [ "${2/$'\n'/}" = "$2" ] &&
             echo " $2" ||
             echo $'\n'"${2#$'\n'}"
     )"
@@ -205,7 +209,7 @@ function lk_mail_get_mime() {
         ${_LK_MAIL_HTML:+"$_LK_MAIL_HTML"})
     TEXT_PART_TYPE=(${_LK_MAIL_TEXT:+"text/plain"}
         ${_LK_MAIL_HTML:+"text/html"})
-    printf '%s\n' "${TEXT_PART[@]}" |
+    lk_echo_array TEXT_PART |
         LC_ALL=C \
             grep -v "^[[:alnum:][:space:][:punct:][:cntrl:]]*\$" >/dev/null || {
         ENCODING=7bit
@@ -230,7 +234,7 @@ function lk_mail_get_mime() {
                 "Content-Transfer-Encoding: $ENCODING"
                 "")
     }
-    printf '%s\n' "${HEADERS[@]}"
+    lk_echo_array HEADERS
     [ -z "$BOUNDARY" ] || [ -z "$ALT_BOUNDARY" ] ||
         ALT_BOUNDARY='' _lk_mail_get_part "" "$ALT_TYPE" "$ENCODING"
     [ ${#TEXT_PART[@]} -eq 0 ] ||
@@ -390,7 +394,7 @@ function run_custom_hook() {
             wait "$!" ||
                 lk_die "hook script failed (exit status $?)"
             [ ${#LINES[@]} -eq 0 ] || {
-                SH=$(printf '%s\n' "${LINES[@]}")
+                SH=$(lk_echo_array LINES)
                 eval "$SH" ||
                     LK_CONSOLE_COLOUR2='' lk_console_error "\
 Shell commands emitted by hook script failed (exit status $?):" $'\n'"$SH" ||
@@ -518,9 +522,11 @@ for f in LOG_FILE SNAPSHOT_LOG_FILE RSYNC_OUT_FILE RSYNC_ERR_FILE; do
         install -m 00600 /dev/null "${!f}"
 done
 
-lk_log >>"$LOG_FILE" <<<"====> $(lk_realpath "$0") invoked on $FQDN"
-exec 6>&1 7>&2
-exec > >(tee >(lk_log | tee -a "$SNAPSHOT_LOG_FILE" >>"$LOG_FILE")) 2>&1
+if [[ $- != *x* ]]; then
+    lk_log >>"$LOG_FILE" <<<"====> $(lk_realpath "$0") invoked on $FQDN"
+    exec 6>&1 7>&2
+    exec > >(tee >(lk_log | tee -a "$SNAPSHOT_LOG_FILE" >>"$LOG_FILE")) 2>&1
+fi
 
 RSYNC_EXIT_VALUE=0
 RSYNC_RESULT=

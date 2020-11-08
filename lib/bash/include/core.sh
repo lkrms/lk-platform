@@ -765,18 +765,18 @@ function lk_maybe_xargs() {
 
 # lk_mapfile [-z] file_path array_name [ignore_pattern]
 function lk_mapfile() {
-    local READ_ARGS=() GREP_ARGS=() LINE
-    if [ "${1:-}" = "-z" ]; then
-        READ_ARGS+=(-d $'\0')
-        GREP_ARGS+=(-z)
+    local READ_ARGS=() GREP_ARGS=() i=0 LINE
+    [ "${1:-}" != -z ] || {
+        READ_ARGS=(-d $'\0')
+        GREP_ARGS=(-z)
         shift
-    fi
+    }
     [ -e "$1" ] || lk_warn "file not found: $1" || return
     lk_is_identifier "$2" || lk_warn "not a valid identifier: $2" || return
     eval "$2=()"
     while IFS= read -r ${READ_ARGS[@]+"${READ_ARGS[@]}"} LINE ||
         [ -n "$LINE" ]; do
-        eval "$2+=(\"\$LINE\")"
+        eval "$2[$((i++))]=\$LINE"
     done < <(
         if [ -n "${3:-}" ]; then
             grep -Ev ${GREP_ARGS[@]+"${GREP_ARGS[@]}"} "$3" "$1" || true
@@ -871,6 +871,7 @@ function lk_log_create_file() {
 function lk_log_output() {
     local LOG_PATH DIR HEADER=() IFS
     ! lk_has_arg --no-log || return 0
+    [[ $- != *x* ]] || [ -n "${BASH_XTRACEFD:-}" ] || return 0
     if [ $# -ge 1 ]; then
         if LOG_PATH=$(lk_log_create_file); then
             # If TEMP_LOG_FILE exists, move its contents to the end of LOG_PATH
@@ -1045,7 +1046,7 @@ function lk_console_message() {
     local PREFIX="${LK_CONSOLE_PREFIX-==> }" MESSAGE="$1" MESSAGE2 \
         INDENT=0 SPACES LENGTH COLOUR
     shift
-    [ "${MESSAGE//$'\n'/}" = "$MESSAGE" ] &&
+    [ "${MESSAGE/$'\n'/}" = "$MESSAGE" ] &&
         { lk_is_true "${LK_CONSOLE_NO_FOLD:-}" ||
             [ "$(lk_output_length "$PREFIX$MESSAGE")" -le 80 ]; } || {
         SPACES=$'\n'"$(lk_repeat " " ${#PREFIX})"
@@ -1060,7 +1061,7 @@ function lk_console_message() {
         [ -z "$MESSAGE2" ] || {
             # If MESSAGE and MESSAGE2 are both one-liners, print them on one
             # line with a space between
-            [ "${MESSAGE2//$'\n'/}" = "$MESSAGE2" ] &&
+            [ "${MESSAGE2/$'\n'/}" = "$MESSAGE2" ] &&
                 [ "$INDENT" -eq 0 ] &&
                 { lk_is_true "${LK_CONSOLE_NO_FOLD:-}" ||
                     { LENGTH=$(lk_output_length "$PREFIX$MESSAGE $MESSAGE2") &&
@@ -1071,7 +1072,7 @@ function lk_console_message() {
                 #   one-liner, keep INDENT=2 (increase MESSAGE2's left padding)
                 # - If only MESSAGE2 spans multiple lines, set INDENT=-2
                 #   (decrease the left padding of MESSAGE2)
-                { [ "${MESSAGE2//$'\n'/}" = "$MESSAGE2" ] &&
+                { [ "${MESSAGE2/$'\n'/}" = "$MESSAGE2" ] &&
                     [ -z "${LENGTH:-}" ]; } ||
                     [ "$INDENT" -eq 2 ] ||
                     INDENT=-2
