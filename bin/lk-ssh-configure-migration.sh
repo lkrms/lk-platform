@@ -109,7 +109,7 @@ elif [ "$STAGE" = "new" ]; then
     OLD_KEY={{OLD_KEY}}
     OLD_PASSWORD={{OLD_PASSWORD}}
     OLD_HOST_NAME={{OLD_HOST_NAME}}
-    OLD_HOST_NAME=${OLD_HOST_NAME:-${OLD_USER:-$OLD_HOST}}
+    OLD_HOST_NAME=${OLD_HOST_NAME:-${OLD_USER:-$OLD_HOST}-old}
     OLD_HOST_NAME=$SSH_PREFIX${OLD_HOST_NAME#$SSH_PREFIX}
 else
     set -euo pipefail
@@ -131,7 +131,7 @@ ${1//$'\n'/$'\n'"$H_SPACES${LK_CONSOLE_SPACES-  }"}$LK_RESET" >&2
 function lk_console_item() {
     lk_console_message "\
 $1$LK_RESET${LK_CONSOLE_COLOUR2-${LK_CONSOLE_COLOUR-$LK_CYAN}}$(
-        [ "${2//$'\n'/}" = "$2" ] &&
+        [ "${2/$'\n'/}" = "$2" ] &&
             echo " $2" ||
             echo $'\n'"$2"
     )"
@@ -208,11 +208,14 @@ new)
     [ -z "$OLD_KEY" ] && lk_ssh_host_exists "$OLD_HOST_NAME" || {
         lk_console_detail \
             "Adding host:" "$OLD_HOST_NAME ($OLD_USER@$OLD_HOST)"
+        [ -n "$OLD_KEY" ] &&
+            KEY_FILE=- ||
+            KEY_FILE=${LK_SSH_JUMP_HOST:+jump}
         lk_ssh_add_host \
             "$OLD_HOST_NAME" \
             "$OLD_HOST" \
             "$OLD_USER" \
-            "${OLD_KEY:+-}" \
+            "$KEY_FILE" \
             "${LK_SSH_JUMP_HOST:+jump}" <<<"$OLD_KEY"
     }
     KEY_FILE=$(lk_ssh_get_host_key_files "$OLD_HOST_NAME" | head -n1) ||

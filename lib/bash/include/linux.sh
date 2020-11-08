@@ -82,3 +82,14 @@ function lk_x_dpi() {
         grep -Eo '^[[:blank:]]+resolution:[[:blank:]]*[0-9]+x[0-9]+' |
         grep -Eo '[0-9]+' | head -n1
 }
+
+function lk_xfce4_xfconf_dump() {
+    local CHANNELS
+    # shellcheck disable=SC2207
+    CHANNELS=($(xfconf-query -l | tail -n+2 | sort -f))
+    for CHANNEL in "${CHANNELS[@]}"; do
+        while read -r PROPERTY VALUE; do
+            printf '%s,%s,%s\n' "$CHANNEL" "$PROPERTY" "$VALUE"
+        done < <(xfconf-query -c "$CHANNEL" -lv | sort -f)
+    done
+}

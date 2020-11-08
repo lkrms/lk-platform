@@ -39,6 +39,35 @@ eval "$(
 
 . "$LK_BASE/lib/bash/include/core.sh"
 
+function clip() {
+    if lk_command_exists clip; then
+        unset -f clip
+    else
+        function clip() {
+            lk_clip
+        }
+    fi
+    clip "$@"
+}
+
+function lk_cat_log() {
+    local IFS FILES FILE
+    lk_files_exist "$@" || lk_usage "\
+Usage: $(lk_myself -f) LOG_FILE[.gz] [LOG_FILE...]" || return
+    IFS=$'\n'
+    FILES=($(lk_sort_paths_by_date "$@"))
+    for FILE in "${FILES[@]}"; do
+        case "$FILE" in
+        *.gz)
+            zcat "$FILE"
+            ;;
+        *)
+            cat "$FILE"
+            ;;
+        esac
+    done
+}
+
 function lk_bak_find() {
     lk_elevate gnu_find / -xdev -regextype posix-egrep \
         -regex "${_LK_DIFF_REGEX:-.*-[0-9]+\\.bak}" \
@@ -155,5 +184,14 @@ eval "$(. "$LK_BASE/lib/bash/env.sh")"
     done)"
 
     [ "${LK_PROMPT:-1}" -ne 1 ] || lk_enable_prompt
+
+    ! lk_command_exists dircolors || eval "$(
+        COMMAND=(dircolors -b)
+        [ ! -r ~/.dircolors ] || COMMAND+=(~/.dircolors)
+        # OTHER_WRITABLE defaults to 34;42 (blue on green), which is almost
+        # always unreadable; replace it with white on green
+        OUTPUT=$("${COMMAND[@]}") &&
+            echo "${OUTPUT//=34;42:/=37;42:}"
+    )"
 
 }

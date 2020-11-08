@@ -79,7 +79,7 @@ export -n \
 
 [ ! "$SCRIPT_DEBUG" = Y ] || {
     TRACE_FILE=/var/log/${PATH_PREFIX}install.trace
-    install -m 0640 -g adm /dev/null "$TRACE_FILE"
+    install -m 00640 -g adm /dev/null "$TRACE_FILE"
     exec 4>>"$TRACE_FILE"
     BASH_XTRACEFD=4
     set -x
@@ -96,7 +96,7 @@ FIELD_ERRORS=$(
         shift
         SELECTED=(${!1})
         unset IFS
-        for i in "${SELECTED[@]}"; do
+        for i in ${SELECTED[@]+"${SELECTED[@]}"}; do
             eval "$1=\$i"
             [ -z "${!1}" ] || { NULL=0 && "$FN" "$@" || VALID=0; }
         done
@@ -265,7 +265,7 @@ ${1//$'\n'/$'\n'"${LK_CONSOLE_SPACES-  }"}" >&"${_LK_FD:-2}"
 
 function lk_console_item() {
     lk_console_message "$1$(
-        [ "${2//$'\n'/}" = "$2" ] &&
+        [ "${2/$'\n'/}" = "$2" ] &&
             echo " $2" ||
             echo $'\n'"$2"
     )"
@@ -356,8 +356,8 @@ flock -n 9 || lk_die "unable to acquire a lock on $LOCK_FILE"
 
 LOG_FILE=/var/log/${PATH_PREFIX}install.log
 OUT_FILE=/var/log/${PATH_PREFIX}install.out
-install -m 0640 -g adm /dev/null "$LOG_FILE"
-install -m 0640 -g adm /dev/null "$OUT_FILE"
+install -m 00640 -g adm /dev/null "$LOG_FILE"
+install -m 00640 -g adm /dev/null "$OUT_FILE"
 exec > >(tee >(lk_log >>"$OUT_FILE")) 2>&1
 exec 3> >(tee >(lk_log >>"$LOG_FILE") >&1)
 _LK_FD=3
@@ -411,7 +411,7 @@ lk_dpkg_installed git || {
 }
 
 lk_console_item "Downloading lk-platform to" "$LK_BASE"
-install -v -d -m 2775 -g adm "$LK_BASE"
+install -v -d -m 02775 -g adm "$LK_BASE"
 if [ -z "$(ls -A "$LK_BASE")" ]; then
     lk_keep_trying \
         git clone -b "$LK_PLATFORM_BRANCH" \
@@ -420,7 +420,7 @@ fi
 
 LK_SKIP=env,settings include=provision . "$LK_BASE/lib/bash/common.sh"
 
-install -m 0644 /dev/null /etc/default/lk-platform
+install -m 00644 /dev/null /etc/default/lk-platform
 LK_PATH_PREFIX=$PATH_PREFIX \
     LK_PATH_PREFIX_ALPHA=$PATH_PREFIX_ALPHA \
     LK_NODE_HOSTNAME=$NODE_HOSTNAME \
@@ -475,8 +475,8 @@ LK_PATH_PREFIX=$PATH_PREFIX \
     LK_SCRIPT_DEBUG \
     LK_PLATFORM_BRANCH >/etc/default/lk-platform
 
-install -v -d -m 2775 -g adm "$LK_BASE/etc"
-install -m 0664 -g adm /dev/null "$LK_BASE/etc/packages.conf"
+install -v -d -m 02775 -g adm "$LK_BASE/etc"
+install -m 00664 -g adm /dev/null "$LK_BASE/etc/packages.conf"
 printf '%s=(\n%s\n)\n' \
     "IMAGE_BASE_PACKAGES" "$(
         printf '    %q\n' "${IMAGE_BASE_PACKAGES[@]}"
@@ -497,6 +497,7 @@ case "$DISTRIB_RELEASE" in
 16.04)
     REPOS+=("$CERTBOT_REPO")
     ADD_APT_REPOSITORY_ARGS=(-y)
+    EXCLUDE_PACKAGES+=(php-apcu-bc php-yaml)
     PHPVER=7.0
     ;;
 18.04)
@@ -654,7 +655,7 @@ cat <<EOF >>"/etc/skel/.profile"
 _byobu_sourced=1 . /usr/bin/byobu-launch 2>/dev/null || true
 EOF
 DIR="/etc/skel/.byobu"
-install -v -d -m 0755 "$DIR"
+install -v -d -m 00755 "$DIR"
 # disable byobu-prompt
 echo -n >"$DIR/prompt"
 # configure status line
@@ -699,7 +700,7 @@ JUMP_KEY=$([ -z "$SSH_JUMP_KEY" ] ||
 
 lk_console_message "Configuring SSH client defaults"
 DIR=/etc/skel
-install -v -d -m 0700 "$DIR/.ssh"{,"/$PATH_PREFIX"{config.d,keys}}
+install -v -d -m 00700 "$DIR/.ssh"{,"/$PATH_PREFIX"{config.d,keys}}
 lk_keep_original "$DIR/.ssh/config"
 cat <<EOF >"$DIR/.ssh/config"
 # Added by ${0##*/} at $(lk_date_log)
@@ -733,7 +734,7 @@ IdentityFile            "~/.ssh/${PATH_PREFIX}keys/jump"}
 EOF
 }
 [ -z "$JUMP_KEY" ] || {
-    install -m 0600 /dev/null "$DIR/.ssh/${PATH_PREFIX}keys/jump"
+    install -m 00600 /dev/null "$DIR/.ssh/${PATH_PREFIX}keys/jump"
     echo "$JUMP_KEY" >"$DIR/.ssh/${PATH_PREFIX}keys/jump"
 }
 chmod -Rc -077 "$DIR/.ssh"
@@ -742,7 +743,7 @@ DIR=/etc/skel.$PATH_PREFIX_ALPHA
 [ ! -e "$DIR" ] || lk_die "already exists: $DIR"
 lk_console_message "Creating $DIR (for hosting accounts)"
 cp -av "/etc/skel" "$DIR"
-install -m 0600 /dev/null "$DIR/.ssh/authorized_keys"
+install -m 00600 /dev/null "$DIR/.ssh/authorized_keys"
 [ -z "$HOST_KEYS" ] || echo "$HOST_KEYS" >>"$DIR/.ssh/authorized_keys"
 
 unset FIRST_ADMIN
@@ -753,20 +754,20 @@ for USERNAME in ${ADMIN_USERS//,/ }; do
     useradd --no-create-home --groups "adm,sudo" --shell "/bin/bash" "$USERNAME"
     USER_GROUP="$(id -gn "$USERNAME")"
     USER_HOME="$(getent passwd "$USERNAME" | cut -d: -f6)"
-    install -v -d -m 0750 -o "$USERNAME" -g "$USER_GROUP" "$USER_HOME"
+    install -v -d -m 00750 -o "$USERNAME" -g "$USER_GROUP" "$USER_HOME"
     if [ -z "$ADMIN_USER_KEYS" ]; then
         [ ! -e "/root/.ssh" ] || {
             lk_console_message "Moving /root/.ssh to $USER_HOME/.ssh"
             mv "/root/.ssh" "$USER_HOME/"
         }
     else
-        install -v -d -m 0700 -o "$USERNAME" -g "$USER_GROUP" "$USER_HOME/.ssh"
-        install -m 0600 -o "$USERNAME" -g "$USER_GROUP" /dev/null "$USER_HOME/.ssh/authorized_keys"
+        install -v -d -m 00700 -o "$USERNAME" -g "$USER_GROUP" "$USER_HOME/.ssh"
+        install -m 00600 -o "$USERNAME" -g "$USER_GROUP" /dev/null "$USER_HOME/.ssh/authorized_keys"
         grep -E "$S$USERNAME\$" <<<"$ADMIN_USER_KEYS" >>"$USER_HOME/.ssh/authorized_keys" || true
     fi
     cp -nRTv "/etc/skel" "$USER_HOME"
     chown -R "$USERNAME": "$USER_HOME"
-    install -m 0440 /dev/null "/etc/sudoers.d/nopasswd-$USERNAME"
+    install -m 00440 /dev/null "/etc/sudoers.d/nopasswd-$USERNAME"
     echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >"/etc/sudoers.d/nopasswd-$USERNAME"
 done
 
@@ -856,7 +857,7 @@ lk_console_item "Installing APT packages:" "${PACKAGES[*]}"
 lk_keep_trying apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -yq install "${PACKAGES[@]}"
 
 lk_console_message "Configuring iptables"
-install -m 0660 -g adm /dev/null "$LK_BASE/etc/firewall.conf"
+install -m 00660 -g adm /dev/null "$LK_BASE/etc/firewall.conf"
 if [ "$REJECT_OUTPUT" != "N" ]; then
     APT_SOURCE_HOSTS=($(grep -Eo "^[^#]+${S}https?://[^/[:space:]]+" "/etc/apt/sources.list" |
         sed -E 's/^.*:\/\///' | sort | uniq)) || lk_die "no active package sources in /etc/apt/sources.list"
@@ -1075,7 +1076,7 @@ python3 /root/get-pip.py
 lk_keep_trying pip install ps_mem glances awscli
 
 lk_console_message "Configuring Glances"
-install -v -d -m 0755 "/etc/glances"
+install -v -d -m 00755 "/etc/glances"
 cat <<EOF >"/etc/glances/glances.conf"
 # Created by ${0##*/} at $(lk_date_log)
 
@@ -1087,7 +1088,7 @@ disable=true
 EOF
 
 lk_console_message "Creating virtual host base directory at /srv/www"
-install -v -d -m 0751 -g adm "/srv/www"
+install -v -d -m 00751 -g adm "/srv/www"
 
 PACKAGES=(
     postfix
@@ -1199,11 +1200,11 @@ if [ -n "$HOST_DOMAIN" ]; then
         )
     }
     HOST_ACCOUNT_GROUP="$(id -gn "$HOST_ACCOUNT")"
-    install -v -d -m 0750 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT"
-    install -v -d -m 0750 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/public_html"
-    install -v -d -m 0750 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/ssl"
-    install -v -d -m 0750 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/.cache"
-    install -v -d -m 2750 -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/log"
+    install -v -d -m 00750 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT"
+    install -v -d -m 00750 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/public_html"
+    install -v -d -m 00750 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/ssl"
+    install -v -d -m 00750 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/.cache"
+    install -v -d -m 02750 -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/log"
     [ "$COPY_SKEL" -eq 0 ] || {
         cp -nRTv "/etc/skel.$PATH_PREFIX_ALPHA" "/srv/www/$HOST_ACCOUNT" &&
             chown -R "$HOST_ACCOUNT": "/srv/www/$HOST_ACCOUNT" || exit
@@ -1302,7 +1303,7 @@ if lk_dpkg_installed apache2; then
     # TODO: make PHP-FPM setup conditional
     [ -e "/opt/opcache-gui" ] || {
         lk_console_message "Cloning 'https://github.com/lkrms/opcache-gui.git' to '/opt/opcache-gui'"
-        install -v -d -m 2775 -o "$FIRST_ADMIN" -g adm "/opt/opcache-gui"
+        install -v -d -m 02775 -o "$FIRST_ADMIN" -g adm "/opt/opcache-gui"
         lk_keep_trying sudo -Hu "$FIRST_ADMIN" \
             git clone "https://github.com/lkrms/opcache-gui.git" \
             "/opt/opcache-gui"
@@ -1433,22 +1434,29 @@ EOF
 #   in /etc/php/$PHPVER/fpm/pool.d/$HOST_ACCOUNT.conf
 Use PhpFpmProxy${PHPVER//./} $HOST_ACCOUNT 300
 EOF
-        install -m 0640 -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/error.log"
-        install -m 0640 -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/access.log"
-        install -m 0640 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.cert"
-        install -m 0640 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.key"
+        install -m 00640 -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/error.log"
+        install -m 00640 -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/access.log"
+        install -m 00640 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.cert"
+        install -m 00640 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.key"
 
         lk_console_message "Creating a self-signed SSL certificate for '$HOST_DOMAIN'"
+        OPENSSL_CONF=$(cat /etc/ssl/openssl.cnf)
+        OPENSSL_EXT_CONF=$(printf '\n%s' \
+            "[ san ]" \
+            "subjectAltName = DNS:www.$HOST_DOMAIN")
         openssl genrsa \
             -out "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.key" \
             2048
         openssl req -new \
             -key "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.key" \
             -subj "/C=AU/CN=$HOST_DOMAIN" \
-            -addext "subjectAltName = DNS:www.$HOST_DOMAIN" \
+            -reqexts san \
+            -config <(cat <<<"$OPENSSL_CONF$OPENSSL_EXT_CONF") \
             -out "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.csr"
         openssl x509 -req -days 365 \
             -in "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.csr" \
+            -extensions san \
+            -extfile <(cat <<<"$OPENSSL_EXT_CONF") \
             -signkey "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.key" \
             -out "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.cert"
         rm -f "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.csr"
@@ -1459,7 +1467,7 @@ EOF
 
         lk_console_message "Configuring PHP-FPM umask for group-writable files"
         FILE="/etc/systemd/system/php$PHPVER-fpm.service.d/override.conf"
-        install -v -d -m 0755 "$(dirname "$FILE")"
+        install -v -d -m 00755 "$(dirname "$FILE")"
         cat <<EOF >"$FILE"
 [Service]
 UMask=0002
@@ -1510,10 +1518,10 @@ php_value[post_max_size] = 50M
 ;php_admin_flag[xdebug.remote_connect_back] = On
 ;php_admin_value[xdebug.remote_log] = "/srv/www/\$pool/log/php$PHPVER-fpm.xdebug.log"
 EOF
-        install -m 0640 -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/php$PHPVER-fpm.access.log"
-        install -m 0640 -o "$PHP_FPM_POOL_USER" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/php$PHPVER-fpm.error.log"
-        install -m 0640 -o "$PHP_FPM_POOL_USER" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/php$PHPVER-fpm.xdebug.log"
-        install -v -d -m 0700 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/.cache/opcache"
+        install -m 00640 -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/php$PHPVER-fpm.access.log"
+        install -m 00640 -o "$PHP_FPM_POOL_USER" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/php$PHPVER-fpm.error.log"
+        install -m 00640 -o "$PHP_FPM_POOL_USER" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/php$PHPVER-fpm.xdebug.log"
+        install -v -d -m 00700 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/.cache/opcache"
         lk_console_file "/etc/php/$PHPVER/fpm/pool.d/$HOST_ACCOUNT.conf"
     fi
 
@@ -1569,7 +1577,7 @@ WITH GRANT OPTION" | mysql -uroot
     fi
 
     lk_console_message "Configuring MySQL account self-service"
-    install -m 0440 /dev/null "/etc/sudoers.d/${PATH_PREFIX}mysql-self-service"
+    install -m 00440 /dev/null "/etc/sudoers.d/${PATH_PREFIX}mysql-self-service"
     cat <<EOF >"/etc/sudoers.d/${PATH_PREFIX}mysql-self-service"
 ALL ALL=(root) NOPASSWD:$LK_BASE/bin/lk-mysql-grant.sh
 EOF

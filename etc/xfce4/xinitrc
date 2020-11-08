@@ -31,6 +31,7 @@ if [ -n "${LK_BASE:-}" ]; then
 
     ! type autorandr >/dev/null 2>&1 ||
         autorandr -c --default default --force ||
+        [ -z "${HOME:-}" ] ||
         AUTORANDR_PROFILE_FOLDER="$HOME/.config/autorandr/default" \
             "$LK_BASE/lib/autorandr/postswitch" || true
 

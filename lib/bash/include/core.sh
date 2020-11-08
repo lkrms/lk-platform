@@ -2,6 +2,9 @@
 
 # shellcheck disable=SC2015,SC2016,SC2207
 
+HOME=${HOME:-$(u=$(id -un) && eval "echo ~$u")} || return
+USER=${USER:-$(id -un)} || return
+
 function lk_command_exists() {
     type -P "$1" >/dev/null
 }
@@ -30,6 +33,8 @@ _LK_GNU_COMMANDS=(
     chmod    #
     chown    #
     date     #
+    df       #
+    du       #
     ln       #
     mktemp   #
     realpath #
@@ -215,7 +220,7 @@ function lk_usage() {
 
 function _lk_mktemp() {
     local TMPDIR=${TMPDIR:-/tmp}
-    mktemp "$@" -- "${TMPDIR%/}/${0##*/}.XXXXXXXXXX"
+    mktemp "$@" -- "${TMPDIR%/}/$(lk_myself 2).XXXXXXXXXX"
 }
 
 function lk_mktemp_file() {
@@ -234,14 +239,26 @@ function lk_mktemp_fifo() {
 }
 
 function lk_command_first_existing() {
+    local COMMAND
     while [ $# -gt 0 ]; do
-        if type -P "$1" >/dev/null; then
+        # shellcheck disable=SC2206
+        COMMAND=($1)
+        if type -P "${COMMAND[0]}" >/dev/null; then
             echo "$1"
             return
         fi
         shift
     done
     false
+}
+
+function lk_regex_implode() {
+    [ $# -gt 0 ] || lk_warn "no subexpression" || return
+    if [ $# -gt 1 ]; then
+        printf '(%s)' "$(lk_implode_args "|" "$@")"
+    else
+        printf '%s' "$1"
+    fi
 }
 
 # lk_get_regex [REGEX_NAME...]
@@ -260,8 +277,10 @@ function lk_get_regex() {
         DPKG_SOURCE_REGEX \
         PHP_SETTING_NAME_REGEX PHP_SETTING_REGEX \
         READLINE_NON_PRINTING_REGEX CONTROL_SEQUENCE_REGEX \
+        ESCAPE_SEQUENCE_REGEX NON_PRINTING_REGEX \
         IPV4_PRIVATE_FILTER_REGEX \
-        _O _H _P _S _U _A _Q _F \
+        BACKUP_TIMESTAMP_FINDUTILS_REGEX \
+        _O _H _P _S _U _A _Q _F _1 _2 _4 _6 \
         REGEX EXIT_STATUS=0
 
     DOMAIN_PART_REGEX="[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
@@ -303,12 +322,20 @@ function lk_get_regex() {
     PHP_SETTING_REGEX="$PHP_SETTING_NAME_REGEX=.+"
 
     READLINE_NON_PRINTING_REGEX=$'\x01[^\x02]*\x02'
-    CONTROL_SEQUENCE_REGEX=$'\x1b\\[[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]'
+    CONTROL_SEQUENCE_REGEX=$'\x1b\\\x5b[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]'
+    ESCAPE_SEQUENCE_REGEX=$'\x1b[\x20-\x2f]*[\x30-\x7e]'
+    NON_PRINTING_REGEX=$'(\x01[^\x02]*\x02|\x1b(\\\x5b[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]|[\x20-\x2f]*[\x30-\x5a\\\x5c-\x7e]))'
 
     # *_FILTER_REGEX expressions are:
     # 1. anchored
     # 2. not intended for validation
     IPV4_PRIVATE_FILTER_REGEX="^(10\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|192\\.168\\.|127\\.)"
+
+    _1="[0-9]"
+    _2="$_1$_1"
+    _4="$_2$_2"
+    _6="$_2$_2$_2"
+    BACKUP_TIMESTAMP_FINDUTILS_REGEX="$_4-$_2-$_2-$_6"
 
     for REGEX in "$@"; do
         printf "${LK_VAR_PREFIX-local }%s=%q\n" "$REGEX" "${!REGEX}" ||
@@ -393,6 +420,10 @@ function lk_date_log() {
 
 function lk_date_ymdhms() {
     lk_date "%Y%m%d%H%M%S"
+}
+
+function lk_date_ymd() {
+    lk_date "%Y%m%d"
 }
 
 function lk_timestamp() {
@@ -631,8 +662,9 @@ function lk_echo_array() {
 }
 
 function lk_quote_args() {
-    [ $# -eq 0 ] ||
-        printf '%q ' "$@"
+    [ $# -gt 0 ] || return 0
+    printf '%q' "$1"
+    [ $# -eq 1 ] || printf ' %q' "${@:2}"
 }
 
 function lk_quote_array() {
@@ -735,18 +767,18 @@ function lk_maybe_xargs() {
 
 # lk_mapfile [-z] file_path array_name [ignore_pattern]
 function lk_mapfile() {
-    local READ_ARGS=() GREP_ARGS=() LINE
-    if [ "${1:-}" = "-z" ]; then
-        READ_ARGS+=(-d $'\0')
-        GREP_ARGS+=(-z)
+    local READ_ARGS=() GREP_ARGS=() i=0 LINE
+    [ "${1:-}" != -z ] || {
+        READ_ARGS=(-d $'\0')
+        GREP_ARGS=(-z)
         shift
-    fi
+    }
     [ -e "$1" ] || lk_warn "file not found: $1" || return
     lk_is_identifier "$2" || lk_warn "not a valid identifier: $2" || return
     eval "$2=()"
     while IFS= read -r ${READ_ARGS[@]+"${READ_ARGS[@]}"} LINE ||
         [ -n "$LINE" ]; do
-        eval "$2+=(\"\$LINE\")"
+        eval "$2[$((i++))]=\$LINE"
     done < <(
         if [ -n "${3:-}" ]; then
             grep -Ev ${GREP_ARGS[@]+"${GREP_ARGS[@]}"} "$3" "$1" || true
@@ -841,6 +873,7 @@ function lk_log_create_file() {
 function lk_log_output() {
     local LOG_PATH DIR HEADER=() IFS
     ! lk_has_arg --no-log || return 0
+    [[ $- != *x* ]] || [ -n "${BASH_XTRACEFD:-}" ] || return 0
     if [ $# -ge 1 ]; then
         if LOG_PATH=$(lk_log_create_file); then
             # If TEMP_LOG_FILE exists, move its contents to the end of LOG_PATH
@@ -921,35 +954,86 @@ function lk_echoc() {
 }
 
 function lk_readline_escape_non_printing() {
-    local STRING=$1 LC_ALL=C CONTROL_SEQUENCE_REGEX
-    eval "$(lk_get_regex CONTROL_SEQUENCE_REGEX)"
-    while [[ $STRING =~ (.*)(^|[^$'\x01'])($CONTROL_SEQUENCE_REGEX)+(.*) ]]; do
-        STRING=${BASH_REMATCH[1]}${BASH_REMATCH[2]}$'\x01'${BASH_REMATCH[3]}$'\x02'${BASH_REMATCH[$((${#BASH_REMATCH[@]} - 1))]}
+    local LC_ALL=C STRING=$1 REGEX
+    for REGEX in CONTROL_SEQUENCE_REGEX ESCAPE_SEQUENCE_REGEX; do
+        eval "$(lk_get_regex "$REGEX")"
+        while [[ $STRING =~ ((.*)(^|[^$'\x01']))(${!REGEX})+(.*) ]]; do
+            STRING=${BASH_REMATCH[1]}$'\x01'${BASH_REMATCH[4]}$'\x02'${BASH_REMATCH[$((${#BASH_REMATCH[@]} - 1))]}
+        done
     done
     echo "$STRING"
 }
 
 function lk_strip_non_printing() {
-    local LC_ALL=C READLINE_NON_PRINTING_REGEX CONTROL_SEQUENCE_REGEX STRING REGEX
-    eval "$(lk_get_regex \
-        READLINE_NON_PRINTING_REGEX \
-        CONTROL_SEQUENCE_REGEX)"
+    local LC_ALL=C STRING REGEX
+    eval "$(lk_get_regex NON_PRINTING_REGEX)"
     if [ $# -gt 0 ]; then
         STRING=$1
-        for REGEX in \
-            "$READLINE_NON_PRINTING_REGEX" \
-            "$CONTROL_SEQUENCE_REGEX"; do
-            while [[ $STRING =~ (.*)$REGEX(.*) ]]; do
-                STRING=${BASH_REMATCH[1]}${BASH_REMATCH[$((${#BASH_REMATCH[@]} - 1))]}
-            done
+        while [[ $STRING =~ (.*)$NON_PRINTING_REGEX(.*) ]]; do
+            STRING=${BASH_REMATCH[1]}${BASH_REMATCH[$((${#BASH_REMATCH[@]} - 1))]}
         done
         echo "$STRING"
     else
         export LC_ALL
-        sed -E \
-            -e "s/$READLINE_NON_PRINTING_REGEX//g" \
-            -e "s/$CONTROL_SEQUENCE_REGEX//g"
+        sed -E "s/$NON_PRINTING_REGEX//g"
     fi
+}
+
+# lk_fold STRING [WIDTH]
+#
+# Wrap STRING to fit in WIDTH (default: 80) after accounting for non-printing
+# character sequences, breaking at whitespace only.
+function lk_fold() {
+    local LC_ALL=C STRING WIDTH=${2:-80} REGEX \
+        PARTS=() CODES=() LINE_TEXT LINE i PART CODE _LINE_TEXT
+    [ $# -gt 0 ] || lk_usage "\
+Usage: $(lk_myself -f) STRING [WIDTH]" || return
+    STRING=$1
+    eval "$(lk_get_regex NON_PRINTING_REGEX)"
+    REGEX=$'^([^\x1b\x01]*)'"(($NON_PRINTING_REGEX)+)(.*)"
+    while [[ $STRING =~ $REGEX ]]; do
+        PARTS+=("${BASH_REMATCH[1]}")
+        CODES+=("${BASH_REMATCH[2]}")
+        STRING=${BASH_REMATCH[$((${#BASH_REMATCH[@]} - 1))]}
+    done
+    [ -z "$STRING" ] || {
+        PARTS+=("$STRING")
+        CODES+=("")
+    }
+    STRING=
+    LINE_TEXT=
+    LINE=
+    REGEX="^(([^[:space:]]*)([[:space:]]*))(.*)"
+    for i in "${!PARTS[@]}"; do
+        PART=${PARTS[$i]}
+        CODE=${CODES[$i]}
+        while [ -n "$PART" ]; do
+            [[ $PART =~ $REGEX ]]
+            _LINE_TEXT=$LINE_TEXT
+            LINE_TEXT=$LINE_TEXT${BASH_REMATCH[2]}
+            [ ${#LINE_TEXT} -le "$WIDTH" ] ||
+                [ "${BASH_REMATCH[2]}" = "$LINE_TEXT" ] ||
+                {
+                    [[ ! $_LINE_TEXT =~ ^.{$WIDTH}([[:space:]]+)$ ]] ||
+                        LINE=${LINE%${BASH_REMATCH[1]}}
+                    STRING=$STRING$LINE$'\n'
+                    LINE_TEXT=
+                    LINE=
+                    continue
+                }
+            LINE_TEXT=$LINE_TEXT${BASH_REMATCH[3]}
+            LINE=$LINE${BASH_REMATCH[1]}
+            PART=${BASH_REMATCH[4]}
+            if [ "${BASH_REMATCH[3]//$'\n'/}" != "${BASH_REMATCH[3]}" ]; then
+                STRING=$STRING${LINE%$'\n'*}$'\n'
+                LINE_TEXT=${LINE_TEXT##*$'\n'}
+                LINE=$LINE_TEXT
+            fi
+        done
+        LINE=$LINE$CODE
+    done
+    STRING=$STRING$LINE
+    echo "${STRING%$'\n'}"$'\n'
 }
 
 function lk_output_length() {
@@ -964,13 +1048,12 @@ function lk_console_message() {
     local PREFIX="${LK_CONSOLE_PREFIX-==> }" MESSAGE="$1" MESSAGE2 \
         INDENT=0 SPACES LENGTH COLOUR
     shift
-    [ "${MESSAGE//$'\n'/}" = "$MESSAGE" ] &&
+    [ "${MESSAGE/$'\n'/}" = "$MESSAGE" ] &&
         { lk_is_true "${LK_CONSOLE_NO_FOLD:-}" ||
             [ "$(lk_output_length "$PREFIX$MESSAGE")" -le 80 ]; } || {
         SPACES=$'\n'"$(lk_repeat " " ${#PREFIX})"
         [ "${MESSAGE//$'\n'/}" != "$MESSAGE" ] ||
-            ! lk_command_exists fold ||
-            MESSAGE=$(fold -s -w $((80 - ${#PREFIX})) <<<"$MESSAGE")
+            MESSAGE=$(lk_fold "$MESSAGE" $((80 - ${#PREFIX})))
         MESSAGE=${MESSAGE//$'\n'/$SPACES}
         INDENT=2
     }
@@ -980,7 +1063,7 @@ function lk_console_message() {
         [ -z "$MESSAGE2" ] || {
             # If MESSAGE and MESSAGE2 are both one-liners, print them on one
             # line with a space between
-            [ "${MESSAGE2//$'\n'/}" = "$MESSAGE2" ] &&
+            [ "${MESSAGE2/$'\n'/}" = "$MESSAGE2" ] &&
                 [ "$INDENT" -eq 0 ] &&
                 { lk_is_true "${LK_CONSOLE_NO_FOLD:-}" ||
                     { LENGTH=$(lk_output_length "$PREFIX$MESSAGE $MESSAGE2") &&
@@ -991,15 +1074,14 @@ function lk_console_message() {
                 #   one-liner, keep INDENT=2 (increase MESSAGE2's left padding)
                 # - If only MESSAGE2 spans multiple lines, set INDENT=-2
                 #   (decrease the left padding of MESSAGE2)
-                { [ "${MESSAGE2//$'\n'/}" = "$MESSAGE2" ] &&
+                { [ "${MESSAGE2/$'\n'/}" = "$MESSAGE2" ] &&
                     [ -z "${LENGTH:-}" ]; } ||
                     [ "$INDENT" -eq 2 ] ||
                     INDENT=-2
                 INDENT=${LK_CONSOLE_INDENT:-$((${#PREFIX} + INDENT))}
                 SPACES=$'\n'$(lk_repeat " " "$INDENT")
                 [ "${MESSAGE2//$'\n'/}" != "$MESSAGE2" ] ||
-                    ! lk_command_exists fold ||
-                    MESSAGE2=$(fold -s -w $((80 - INDENT)) <<<"$MESSAGE2")
+                    MESSAGE2=$(lk_fold "$MESSAGE2" $((80 - INDENT)))
                 MESSAGE2=${MESSAGE2#$'\n'}
                 MESSAGE2=$SPACES${MESSAGE2//$'\n'/$SPACES}
             }
@@ -1106,7 +1188,7 @@ function lk_console_list() {
             column -s $'\n' | expand)"
     SPACES="$(lk_repeat " " "$((${#LK_CONSOLE_PREFIX} + INDENT))")"
     lk_echoc "$SPACES${LIST//$'\n'/$'\n'$SPACES}" \
-        "${LK_CONSOLE_SECONDARY_COLOUR-$LK_CONSOLE_COLOUR}" >&"${_LK_FD:-2}"
+        "${LK_CONSOLE_SECONDARY_COLOUR-$COLOUR}" >&"${_LK_FD:-2}"
     [ -z "${SINGLE_NOUN:-}" ] ||
         LK_CONSOLE_PREFIX="$SPACES" lk_console_detail "(${#ITEMS[@]} $(
             lk_maybe_plural ${#ITEMS[@]} "$SINGLE_NOUN" "$PLURAL_NOUN"
@@ -1210,7 +1292,7 @@ function lk_console_checklist() {
     ! lk_no_input || return 0
     [ ${#ITEMS[@]} -ge "$LIST_HEIGHT" ] || LIST_HEIGHT=${#ITEMS[@]}
     ((WIDTH += 16, WIDTH += WIDTH % 2))
-    TEXT=$(fold -s -w $((WIDTH - 4)) <<<"$TEXT")
+    TEXT=$(lk_fold "$TEXT" $((WIDTH - 4)))
     eval "ITEMS=(${ITEMS[*]/%/ $INITIAL_STATUS})"
     # shellcheck disable=SC2086
     whiptail \
@@ -1241,17 +1323,21 @@ function lk_verbose() {
 #
 # Copy input to the user's clipboard if possible, otherwise print it out.
 function lk_clip() {
-    local OUTPUT COMMAND LINES DISPLAY_LINES=${LK_CLIP_LINES:-4}
+    local OUTPUT COMMAND LINES MESSAGE DISPLAY_LINES=${LK_CLIP_LINES:-5}
     OUTPUT=$(cat)
-    if COMMAND=$(lk_command_first_existing xclip pbcopy) &&
-        echo -n "$OUTPUT" | "$COMMAND" >/dev/null 2>&1; then
+    if COMMAND=$(lk_command_first_existing \
+        "xclip -selection clipboard" \
+        pbcopy) &&
+        echo -n "$OUTPUT" | $COMMAND >/dev/null 2>&1; then
         LINES=$(wc -l <<<"$OUTPUT")
+        [ "$LINES" -le "$DISPLAY_LINES" ] || {
+            OUTPUT=$(head -n$((DISPLAY_LINES - 1)) <<<"$OUTPUT" &&
+                echo "$LK_BOLD$LK_MAGENTA...$LK_RESET")
+            MESSAGE="$LINES lines copied"
+        }
         LK_CONSOLE_NO_FOLD=1 \
-            lk_console_item "Copied to clipboard:" $'\n'"$(
-            head -n"$DISPLAY_LINES" <<<"$OUTPUT"
-            [ "$LINES" -le "$DISPLAY_LINES" ] || echo "..."
-        )"
-        lk_console_detail "Lines copied:" "$LINES"
+            lk_console_item "${MESSAGE:-Copied} to clipboard:" \
+            $'\n'"$LK_GREEN$OUTPUT$LK_RESET" "$LK_MAGENTA"
     else
         lk_console_error "Unable to copy output to clipboard"
         echo -n "$OUTPUT"
@@ -1507,13 +1593,13 @@ function lk_can_sudo() {
     }
 }
 
-function lk_get_maybe_sudo() {
-    echo "${LK_SUDO:-${SUDO_OR_NOT:-0}}"
+function lk_will_sudo() {
+    lk_is_true "${LK_SUDO:-}"
 }
 
-# LK_SUDO=<1|0|Y|N> lk_maybe_sudo command [arg1...]
+# LK_SUDO=<1|0|Y|N> lk_maybe_sudo COMMAND [ARG...]
 function lk_maybe_sudo() {
-    if lk_is_true "${LK_SUDO:-${SUDO_OR_NOT:-0}}"; then
+    if lk_is_true "${LK_SUDO:-}"; then
         lk_elevate "$@"
     else
         "$@"
@@ -1549,20 +1635,15 @@ function lk_maybe_elevate() {
     fi
 }
 
-# lk_safe_symlink target_path link_path [use_sudo [try_default]]
+# lk_safe_symlink TARGET LINK [LN_ARG...]
 function lk_safe_symlink() {
-    local TARGET=$1 LINK=$2 LINK_DIR=${2%/*} \
-        LK_SUDO=${3:-$(lk_get_maybe_sudo)} TRY_DEFAULT=${4:-0} \
-        LK_BACKUP_SUFFIX=${LK_BACKUP_SUFFIX-.orig} CURRENT_TARGET
-    [ -n "$LINK" ] || return
-    [ -e "$TARGET" ] || {
-        [ "${TARGET:0:1}" != / ] &&
-            lk_maybe_sudo test -e "$LINK_DIR/$TARGET"
-    } || {
-        lk_is_true "$TRY_DEFAULT" &&
-            TARGET=$(lk_add_file_suffix "$TARGET" "-default") &&
-            [ -e "$TARGET" ] || return
-    }
+    local TARGET=${1:-} LINK=${2:-} LINK_DIR CURRENT_TARGET \
+        LK_BACKUP_SUFFIX=${LK_BACKUP_SUFFIX-.orig}
+    [ -n "$LINK" ] || lk_warn "no link" || return
+    LINK_DIR=${LINK%/*}
+    [ -e "$TARGET" ] || { [ "${TARGET:0:1}" != / ] &&
+        lk_maybe_sudo test -e "$LINK_DIR/$TARGET"; } ||
+        lk_warn "target not found: $TARGET" || return
     LK_SAFE_SYMLINK_NO_CHANGE=
     if lk_maybe_sudo test -L "$LINK"; then
         CURRENT_TARGET=$(lk_maybe_sudo readlink -- "$LINK") || return
@@ -1574,15 +1655,14 @@ function lk_safe_symlink() {
         lk_maybe_sudo rm -f -- "$LINK" || return
     elif lk_maybe_sudo test -e "$LINK"; then
         if [ -n "$LK_BACKUP_SUFFIX" ]; then
-            lk_maybe_sudo \
-                mv -fv -- "$LINK" "$LINK${LK_BACKUP_SUFFIX:-.orig}" || return
+            lk_maybe_sudo mv -fv -- "$LINK" "$LINK$LK_BACKUP_SUFFIX" || return
         else
             lk_maybe_sudo rm -fv -- "$LINK" || return
         fi
     elif lk_maybe_sudo test ! -d "$LINK_DIR"; then
         lk_maybe_sudo mkdir -pv -- "$LINK_DIR" || return
     fi
-    lk_maybe_sudo ln -sv -- "$TARGET" "$LINK"
+    lk_maybe_sudo ln -sv "${@:3}" -- "$TARGET" "$LINK"
 }
 
 # lk_keep_trying COMMAND [ARG...]
@@ -2134,7 +2214,7 @@ _LK_INCLUDES=(core)
     LK_COLOUR=off
 
 # shellcheck disable=SC2034
-case "${LK_COLOUR:-${colour:-static}}" in
+case "${LK_COLOUR:-${colour:-xterm-256color}}" in
 dynamic)
     eval "$(lk_get_colours)"
     ;;
@@ -2165,7 +2245,7 @@ off)
     LK_WRAP_OFF=
     LK_RESET=
     ;;
-*)
+xterm-256color)
     LK_BLACK=$'\E[30m'
     LK_RED=$'\E[31m'
     LK_GREEN=$'\E[32m'

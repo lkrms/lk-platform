@@ -44,7 +44,7 @@ function exit_trap() {
             [ "$RSYNC_EXIT_VALUE" -eq 0 ] && {
                 SUBJECT="Success"
                 MESSAGE="\
-Just confirming the following backup ${RSYNC_RESULT:-completed without error}."
+The following backup ${RSYNC_RESULT:-completed without error}."
             } || {
                 SUBJECT="Please review"
                 MESSAGE="\
@@ -69,7 +69,7 @@ Transport: $SOURCE_TYPE
 Snapshot: $LK_SNAPSHOT_TIMESTAMP
 Status: $(get_stage)
 
-Running as: ${USER:-<unknown>}
+Running as: $USER
 Command line:
 $(printf '%q' "$0" && { [ ${#LK_ARGV[@]} -eq 0 ] || printf ' \\\n    %q' "${LK_ARGV[@]}"; })
 
@@ -220,14 +220,13 @@ exec 4<>"$FIFO_FILE"
 
 HN=$(lk_hostname) || HN=localhost
 FQDN=$(lk_fqdn) || FQDN=$HN.localdomain
-PLATFORM_NAME=${LK_PATH_PREFIX}platform
 SENDER_NAME="${LK_PATH_PREFIX}backup on $HN"
 LK_SNAPSHOT_TIMESTAMP=${LK_BACKUP_TIMESTAMP:-$(date +"%Y-%m-%d-%H%M%S")}
 LK_SNAPSHOT_ROOT=$BACKUP_ROOT/snapshot/$SOURCE_NAME/$LK_SNAPSHOT_TIMESTAMP
 LK_SNAPSHOT_FS_ROOT=$LK_SNAPSHOT_ROOT/fs
 LK_SNAPSHOT_DB_ROOT=$LK_SNAPSHOT_ROOT/db
 LK_BACKUP_MAIL=${LK_BACKUP_MAIL-root}
-LK_BACKUP_MAIL_FROM=${LK_BACKUP_MAIL_FROM-"$SENDER_NAME <$PLATFORM_NAME@$FQDN>"}
+LK_BACKUP_MAIL_FROM=${LK_BACKUP_MAIL_FROM-"$SENDER_NAME <$USER@$FQDN>"}
 LK_BACKUP_MAIL_ERROR_ONLY=${LK_BACKUP_MAIL_ERROR_ONLY-Y}
 
 SOURCE_LATEST=$BACKUP_ROOT/latest/$SOURCE_NAME

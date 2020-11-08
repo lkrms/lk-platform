@@ -500,18 +500,26 @@ function lk_wp_disable_maintenance() {
 
 # lk_wp_set_permissions [SITE_ROOT]
 function lk_wp_set_permissions() {
-    local SITE_ROOT OWNER \
-        LK_DIR_MODE="${LK_DIR_MODE:-0750}" \
-        LK_FILE_MODE="${LK_FILE_MODE:-0640}" \
-        LK_WRITABLE_DIR_MODE="${LK_WRITABLE_DIR_MODE:-2770}" \
-        LK_WRITABLE_FILE_MODE="${LK_WRITABLE_FILE_MODE:-0660}"
-    SITE_ROOT="${1:-$(lk_wp_get_site_root)}" &&
-        SITE_ROOT="$(realpath "$SITE_ROOT")" || return
-    if lk_is_root || lk_is_true "$(lk_get_maybe_sudo)"; then
-        OWNER="$(lk_file_owner "$SITE_ROOT/..")" || return
+    local SITE_ROOT OWNER LOG_FILE CHANGES
+    SITE_ROOT=${1:-$(lk_wp_get_site_root)} &&
+        SITE_ROOT=$(realpath "$SITE_ROOT") || return
+    if lk_is_root || lk_will_sudo; then
+        OWNER=$(lk_file_owner "$SITE_ROOT/..") &&
+            LOG_FILE=$(lk_mktemp_file) || return
+        lk_console_item "Setting file ownership in" "$SITE_ROOT"
+        lk_console_detail "Owner:" "$OWNER"
+        CHANGES=$(lk_maybe_sudo gnu_chown -Rhc "$OWNER" "$SITE_ROOT" |
+            tee -a "$LOG_FILE" | wc -l) || return
+        lk_console_detail "Changes:" "$CHANGES"
+        lk_console_log "Changes have been logged to" "$LOG_FILE"
+    else
+        lk_console_warning0 "Unable to set owner (not running as root)"
     fi
-    lk_dir_set_permissions \
-        "$SITE_ROOT" \
+    lk_dir_set_modes "$SITE_ROOT" \
+        "" \
+        "${LK_DIR_MODE:-0750}" "${LK_FILE_MODE:-0640}" \
         ".*/wp-content/(cache|uploads|w3tc-config)" \
-        ${OWNER+"$OWNER:"}
+        "${LK_WRITABLE_DIR_MODE:-2770}" "${LK_WRITABLE_FILE_MODE:-0660}" \
+        ".*/\\.git/objects/([0-9a-f]{2}|pack)/.*" \
+        0555 0444
 }

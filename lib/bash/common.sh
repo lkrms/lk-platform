@@ -51,11 +51,7 @@ lk_include assert ${include:+${include//,/ }}
 # To suppress output, set MESSAGE to the empty string.
 function lk_die() {
     local EXIT_STATUS=$?
-    if lk_is_true "${LK_DIE_HAPPY:-}"; then
-        EXIT_STATUS=0
-    elif [ "$EXIT_STATUS" -eq 0 ]; then
-        EXIT_STATUS=1
-    fi
+    [ "$EXIT_STATUS" -ne 0 ] || EXIT_STATUS=1
     if [ $# -eq 0 ] || [ -n "$1" ]; then
         lk_console_error "$(_lk_caller): ${1:-execution failed}"
     fi

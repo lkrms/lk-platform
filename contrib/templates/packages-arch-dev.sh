@@ -14,13 +14,19 @@ AUR_PACKAGES=()
 # won't be installed, but won't be uninstalled
 PAC_KEEP=(
     aurutils
+    vifm
 
     #
     azure-cli
+    azure-functions-core-tools-bin
+    storageexplorer
+
+    #
     sfdx-cli
 
     #
     mongodb-bin
+    mongodb-tools-bin
 
     #
     woeusb
@@ -213,6 +219,7 @@ AUR_PACKAGES+=(
     pencil
     skypeforlinux-stable-bin
     spotify
+    stretchly-git
     teams
     todoist-electron
     trimage
@@ -304,6 +311,7 @@ PACMAN_PACKAGES+=(
 
 AUR_PACKAGES+=(
     demjson
+    robo3t-bin
     trickle
     vscodium-bin
 

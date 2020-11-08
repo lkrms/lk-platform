@@ -6,15 +6,16 @@
 # lk_maybe_install -d [-v] [-m MODE] [-o OWNER] [-g GROUP] DEST
 function lk_maybe_install() {
     # shellcheck disable=SC2034
-    local DEST=${*: -1:1} VERBOSE MODE OWNER GROUP i \
+    local DEST=${*: -1:1} LK_SUDO=${LK_SUDO:-} OWNER GROUP VERBOSE MODE i \
         ARGS=("$@") LK_ARG_ARRAY=ARGS
-    if lk_has_arg "-d" || [ ! -e "$DEST" ]; then
+    ! i=$(lk_array_search "-o" ARGS) || OWNER=${ARGS[*]:$((i + 1)):1}
+    ! i=$(lk_array_search "-g" ARGS) || GROUP=${ARGS[*]:$((i + 1)):1}
+    [ -z "${OWNER:-}${GROUP:-}" ] || LK_SUDO=1
+    if lk_has_arg "-d" || lk_maybe_sudo test ! -e "$DEST"; then
         lk_maybe_sudo install "$@"
     else
         ! lk_has_arg "-v" || VERBOSE=1
         ! i=$(lk_array_search "-m" ARGS) || MODE=${ARGS[*]:$((i + 1)):1}
-        ! i=$(lk_array_search "-o" ARGS) || OWNER=${ARGS[*]:$((i + 1)):1}
-        ! i=$(lk_array_search "-g" ARGS) || GROUP=${ARGS[*]:$((i + 1)):1}
         [ -z "${MODE:-}" ] ||
             lk_maybe_sudo chmod ${VERBOSE+-v} "$MODE" "$DEST" || return
         [ -z "${OWNER:-}${GROUP:-}" ] ||
@@ -23,67 +24,69 @@ function lk_maybe_install() {
     fi
 }
 
-# lk_dir_set_permissions DIR [WRITABLE_REGEX [OWNER][:[GROUP]]]
-function lk_dir_set_permissions() {
-    local DIR="${1:-}" WRITABLE_REGEX="${2:-}" OWNER="${3:-}" \
-        LOG_DIR WRITABLE TYPE MODE ARGS \
-        DIR_MODE="${LK_DIR_MODE:-0755}" \
-        FILE_MODE="${LK_FILE_MODE:-0644}" \
-        WRITABLE_DIR_MODE="${LK_WRITABLE_DIR_MODE:-0775}" \
-        WRITABLE_FILE_MODE="${LK_WRITABLE_FILE_MODE:-0664}"
-    [ -d "$DIR" ] || lk_warn "not a directory: $DIR" || return
-    DIR="$(realpath "$DIR")" &&
-        LOG_DIR="$(lk_mktemp_dir)" || return
-    lk_console_item "Setting permissions on" "$DIR"
-    lk_console_detail "Logging changes in" "$LOG_DIR" "$LK_RED"
-    lk_console_detail "File modes:" "$DIR_MODE, $FILE_MODE"
-    [ -z "$WRITABLE_REGEX" ] || {
-        lk_console_detail "Writable file modes:" "$WRITABLE_DIR_MODE, $WRITABLE_FILE_MODE"
-        lk_console_detail "Writable paths:" "$WRITABLE_REGEX"
-    }
-    [ -z "$OWNER" ] ||
-        if lk_is_root || lk_is_true "$(lk_get_maybe_sudo)"; then
-            lk_console_detail "Owner:" "$OWNER"
-            lk_maybe_sudo chown -Rhc "$OWNER" "$DIR" >"$LOG_DIR/chown.log" || return
-            lk_console_detail "File ownership changes:" "$(wc -l <"$LOG_DIR/chown.log")" "$LK_GREEN"
-        else
-            lk_console_warning0 "Unable to set owner (not running as root)"
-        fi
-    for WRITABLE in "" w; do
-        [ -z "$WRITABLE" ] || [ -n "$WRITABLE_REGEX" ] || continue
-        for TYPE in d f; do
-            case "$WRITABLE$TYPE" in
-            d)
-                MODE="$DIR_MODE"
-                ;;
-            f)
-                MODE="$FILE_MODE"
-                ;;
-            wd)
-                MODE="$WRITABLE_DIR_MODE"
-                ;;
-            wf)
-                MODE="$WRITABLE_FILE_MODE"
-                ;;
-            esac
-            ARGS=(-type "$TYPE" ! -perm "$MODE")
-            case "$WRITABLE$TYPE" in
-            d | f)
-                # exclude writable directories and their descendants
-                ARGS=(! \( -type d -regex "$WRITABLE_REGEX" -prune \) "${ARGS[@]}")
-                [ "$WRITABLE$TYPE" != f ] ||
-                    # exclude writable files (i.e. not just files in writable directories)
-                    ARGS+=(! -regex "$WRITABLE_REGEX")
-                ;;
-            w*)
-                ARGS+=(-regex "$WRITABLE_REGEX(/.*)?")
-                ;;
-            esac
-            gnu_find "$DIR" -regextype posix-egrep "${ARGS[@]}" -print0 |
-                lk_maybe_sudo gnu_xargs -0r gnu_chmod -c "0$MODE" >>"$LOG_DIR/chmod.log" || return
-        done
+# lk_dir_set_modes DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]...
+function lk_dir_set_modes() {
+    local DIR REGEX LOG_FILE _DIR i TYPE MODE ARGS CHANGES _CHANGES \
+        _PRUNE _EXCLUDE MATCH=() DIR_MODE=() FILE_MODE=() PRUNE=() LK_USAGE="\
+Usage: $(lk_myself -f) DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..."
+    [ $# -ge 4 ] && ! ((($# - 1) % 3)) || lk_usage || return
+    lk_maybe_sudo test -d "$1" || lk_warn "not a directory: $1" || return
+    DIR=$(lk_maybe_sudo realpath "$1") || return
+    shift
+    while [ $# -gt 0 ]; do
+        [[ $2 =~ ^(\+?[0-7]+)?$ ]] || lk_warn "invalid mode: $2" || return
+        [[ $3 =~ ^(\+?[0-7]+)?$ ]] || lk_warn "invalid mode: $3" || return
+        REGEX=${1%/}
+        [ -n "$REGEX" ] || REGEX=".*"
+        [ "$REGEX" != "$1" ] || REGEX="$REGEX(/.*)?"
+        MATCH+=("$REGEX")
+        DIR_MODE+=("$2")
+        FILE_MODE+=("$3")
+        PRUNE+=("${1%/}")
+        shift 3
     done
-    lk_console_detail "File mode changes:" "$(wc -l <"$LOG_DIR/chmod.log")" "$LK_GREEN"
+    LOG_FILE=$(lk_mktemp_file) || return
+    _DIR=${DIR/~/"~"}
+    lk_console_item "Setting file modes in" "$_DIR"
+    for i in "${!MATCH[@]}"; do
+        lk_console_item "Finding matches for" "${MATCH[$i]}" "$LK_BLUE$LK_BOLD"
+        CHANGES=0
+        for TYPE in DIR_MODE FILE_MODE; do
+            MODE=${TYPE}"[$i]"
+            MODE=${!MODE}
+            [ -n "$MODE" ] || continue
+            lk_console_detail "$([ "$TYPE" = DIR_MODE ] &&
+                echo Directory ||
+                echo File) mode:" "$MODE"
+            ARGS=(-regextype posix-egrep)
+            _PRUNE=(
+                "${PRUNE[@]:$((i + 1)):$((${#PRUNE[@]} - (i + 1)))}"
+            )
+            [ ${#_PRUNE[@]} -eq 0 ] ||
+                ARGS+=(! \(
+                    -type d
+                    -regex "$(lk_regex_implode "${_PRUNE[@]}")"
+                    -prune \))
+            ARGS+=(-type "$(lk_lower "${TYPE:0:1}")")
+            [ "$TYPE" = DIR_MODE ] || {
+                _EXCLUDE=(
+                    "${MATCH[@]:$((i + 1)):$((${#MATCH[@]} - (i + 1)))}"
+                )
+                [ ${#_EXCLUDE[@]} -eq 0 ] ||
+                    ARGS+=(
+                        ! -regex "$(lk_regex_implode "${_EXCLUDE[@]}")"
+                    )
+            }
+            ARGS+=(! -perm "${MODE//+/-}" -regex "${MATCH[$i]}" -print0)
+            _CHANGES=$(bash -c 'cd "$1" &&
+    gnu_find . "${@:3}" |
+    gnu_xargs -0r gnu_chmod -c "$2"' bash "$DIR" "$MODE" "${ARGS[@]}" |
+                tee -a "$LOG_FILE" | wc -l) || return
+            ((CHANGES += _CHANGES)) || true
+        done
+        lk_console_detail "Changes:" "$CHANGES"
+    done
+    lk_console_log "Changes have been logged to" "$LOG_FILE"
 }
 
 # lk_sudo_offer_nopasswd

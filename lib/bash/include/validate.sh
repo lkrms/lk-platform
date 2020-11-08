@@ -21,7 +21,7 @@ function _lk_validate_list() {
     # shellcheck disable=SC2206
     SELECTED=($VAL)
     unset IFS
-    for i in "${SELECTED[@]}"; do
+    for i in ${SELECTED[@]+"${SELECTED[@]}"}; do
         [ -z "$i" ] || {
             NULL=0
             eval "$VAR=\$i $FN \"\$@\"" || VALID=0
