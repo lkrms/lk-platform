@@ -185,4 +185,13 @@ eval "$(. "$LK_BASE/lib/bash/env.sh")"
 
     [ "${LK_PROMPT:-1}" -ne 1 ] || lk_enable_prompt
 
+    ! lk_command_exists dircolors || eval "$(
+        COMMAND=(dircolors -b)
+        [ ! -r ~/.dircolors ] || COMMAND+=(~/.dircolors)
+        # OTHER_WRITABLE defaults to 34;42 (blue on green), which is almost
+        # always unreadable; replace it with white on green
+        OUTPUT=$("${COMMAND[@]}") &&
+            echo "${OUTPUT//=34;42:/=37;42:}"
+    )"
+
 }
