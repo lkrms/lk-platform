@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2001,SC1090,SC2015,SC2153
+# shellcheck disable=SC2015,SC2016,SC2153,SC2207
 
 set -eu
 
@@ -121,7 +121,6 @@ function lk_mapfile() {
 }
 
 LK_BOLD=$(tput bold 2>/dev/null) || LK_BOLD=
-LK_RED=$(tput setaf 1 2>/dev/null) || LK_RED=
 LK_GREEN=$(tput setaf 2 2>/dev/null) || LK_GREEN=
 LK_CYAN=$(tput setaf 6 2>/dev/null) || LK_CYAN=
 LK_YELLOW=$(tput setaf 3 2>/dev/null) || LK_YELLOW=
@@ -158,7 +157,12 @@ function prune_snapshot() {
         rm -Rf "$PRUNE"
 }
 
-PRUNE_DAILY_AFTER_DAYS=${LK_SNAPSHOT_PRUNE_DAILY_AFTER_DAYS:-14}
+function get_usage() {
+    df --sync --portability --block-size=$((1024 * 1024)) "$@" |
+        awk 'NR > 1 { print $3, $5 }'
+}
+
+PRUNE_DAILY_AFTER_DAYS=${LK_SNAPSHOT_PRUNE_DAILY_AFTER_DAYS:-7}
 PRUNE_FAILED_AFTER_DAYS=${LK_SNAPSHOT_PRUNE_FAILED_AFTER_DAYS-28}
 PRUNE_WEEKLY_AFTER_WEEKS=${LK_SNAPSHOT_PRUNE_WEEKLY_AFTER_WEEKS-52}
 
@@ -186,7 +190,7 @@ _2="[0-9][0-9]"
 _4="$_2$_2"
 BACKUP_TIMESTAMP_FINDUTILS_REGEX="$_4-$_2-$_2-$_4$_2"
 
-LOG_FILE=$BACKUP_ROOT/log/snapshot.log
+LOG_FILE=$BACKUP_ROOT/log/snapshot-prune.log
 install -d -m 00711 "$BACKUP_ROOT/log"
 [ -e "$LOG_FILE" ] ||
     install -m 00600 /dev/null "$LOG_FILE"
@@ -200,6 +204,9 @@ fi
 {
     TZ=UTC
     lk_console_log "Pruning backups at $BACKUP_ROOT on $FQDN"
+    USAGE_START=($(get_usage "$BACKUP_ROOT"))
+    lk_console_detail "Storage used on backup volume:" \
+        "${USAGE_START[0]%M}M (${USAGE_START[1]})"
     lk_mapfile <(find "$BACKUP_ROOT/snapshot" -mindepth 1 -maxdepth 1 \
         -type d -printf '%f\n' | sort) SOURCE_NAMES
     for SOURCE_NAME in ${SOURCE_NAMES[@]+"${SOURCE_NAMES[@]}"}; do
@@ -224,7 +231,7 @@ fi
         [ "$SNAPSHOTS_PRUNING_COUNT" -eq 0 ] || {
             lk_echo_array SNAPSHOTS_PRUNING |
                 lk_console_detail_list \
-                    "Removing $SNAPSHOTS_PRUNING_COUNT partially pruned snapshot snapshot(s):"
+                    "Removing $SNAPSHOTS_PRUNING_COUNT partially pruned snapshot(s):"
             for SNAPSHOT in "${SNAPSHOTS_PRUNING[@]}"; do
                 prune_snapshot "$SNAPSHOT" || lk_die
             done
@@ -309,5 +316,8 @@ fi
             rm -f "$LOCK_FILE" || true
     }
     lk_console_success "Pruning complete"
+    USAGE_END=($(get_usage "$BACKUP_ROOT"))
+    lk_console_detail "Storage used on backup volume:" \
+        "${USAGE_END[0]%M}M (${USAGE_END[1]})"
     exit
 }

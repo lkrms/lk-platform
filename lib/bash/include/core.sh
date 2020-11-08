@@ -33,6 +33,8 @@ _LK_GNU_COMMANDS=(
     chmod    #
     chown    #
     date     #
+    df       #
+    du       #
     ln       #
     mktemp   #
     realpath #

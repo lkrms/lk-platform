@@ -45,7 +45,11 @@ function prune_snapshot() {
         rm -Rf "$PRUNE"
 }
 
-PRUNE_DAILY_AFTER_DAYS=${LK_SNAPSHOT_PRUNE_DAILY_AFTER_DAYS:-14}
+function get_usage() {
+    gnu_df --sync --output=used,pcent --block-size=M "$@" | sed '1d'
+}
+
+PRUNE_DAILY_AFTER_DAYS=${LK_SNAPSHOT_PRUNE_DAILY_AFTER_DAYS:-7}
 PRUNE_FAILED_AFTER_DAYS=${LK_SNAPSHOT_PRUNE_FAILED_AFTER_DAYS-28}
 PRUNE_WEEKLY_AFTER_WEEKS=${LK_SNAPSHOT_PRUNE_WEEKLY_AFTER_WEEKS-52}
 
@@ -76,6 +80,9 @@ lk_log_output
 {
     TZ=UTC
     lk_console_log "Pruning backups at $BACKUP_ROOT on $FQDN"
+    USAGE_START=($(get_usage "$BACKUP_ROOT"))
+    lk_console_detail "Storage used on backup volume:" \
+        "${USAGE_START[0]} (${USAGE_START[1]})"
     lk_mapfile <(find "$BACKUP_ROOT/snapshot" -mindepth 1 -maxdepth 1 \
         -type d -printf '%f\n' | sort) SOURCE_NAMES
     for SOURCE_NAME in ${SOURCE_NAMES[@]+"${SOURCE_NAMES[@]}"}; do
@@ -200,5 +207,8 @@ lk_log_output
     exec 9>&-
     rm -f "$LOCK_FILE"
     lk_console_success "Pruning complete"
+    USAGE_END=($(get_usage "$BACKUP_ROOT"))
+    lk_console_detail "Storage used on backup volume:" \
+        "${USAGE_END[0]} (${USAGE_END[1]})"
     exit
 }
