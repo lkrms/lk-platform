@@ -225,7 +225,8 @@ function exit_trap() {
     }
 
     function lk_brew_casks() {
-        brew list --casks --full-name
+        #brew list --casks --full-name
+        brew cask list --full-name 2>/dev/null
     }
 
     NEW_HOMEBREW=0
