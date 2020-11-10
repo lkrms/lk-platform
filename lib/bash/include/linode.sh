@@ -1,5 +1,7 @@
 #!/bin/bash
 
+lk_include linux
+
 function linode-cli() {
     # Suppress "Unable to determine if a new linode-cli package is available in
     # pypi"
@@ -14,6 +16,16 @@ function lk_linode_flush_cache() {
     [ "$BASH_SUBSHELL" -eq 0 ] ||
         lk_warn "cannot flush cache in subshell" || exit
     unset "${!LK_LINODE_@}"
+}
+
+function _lk_linode_filter() {
+    local REGEX=${LK_LINODE_SKIP_REGEX-^jump\\b}
+    if [ -n "$REGEX" ]; then
+        jq --arg skipRegex "$REGEX" \
+            '[.[]|select(.label|test($skipRegex)==false)]'
+    else
+        cat
+    fi
 }
 
 function _lk_linode_maybe_flush_cache() {
@@ -91,26 +103,36 @@ function lk_linode_get_shell_var() {
         LINODE_IPV6 '.ipv6|split("/")[0]'
 }
 
-# lk_linode_ssh_add
+# lk_linode_ssh_add [NAME [USER]]
 #
 # Add an SSH host for each Linode object in the JSON input array.
+#
+# shellcheck disable=SC2120
 function lk_linode_ssh_add() {
-    local LINODES LINODE SH LK_SSH_PRIORITY=${LK_SSH_PRIORITY-45}
+    local LINODES LINODE SH LABEL USERNAME PUBLIC_SUFFIX \
+        LK_SSH_PRIORITY=${LK_SSH_PRIORITY-45}
     lk_jq_get_array LINODES &&
         [ ${#LINODES[@]} -gt 0 ] || lk_warn "no Linodes in input" || return
     for LINODE in "${LINODES[@]}"; do
         SH=$(lk_linode_get_shell_var <<<"$LINODE") &&
             eval "$SH"
-        LABEL=${LINODE_LABEL%%.*}
-        lk_console_item "Adding SSH host:" \
-            "${LK_SSH_PREFIX-$LK_PATH_PREFIX}$LABEL (Linode $LINODE_ID)"
-        lk_console_detail "Public IP address:" "${LINODE_IPV4_PUBLIC:-<none>}"
-        lk_console_detail "Private IP address:" "${LINODE_IPV4_PRIVATE:-<none>}"
-        [ -z "$LINODE_IPV4_PUBLIC" ] || lk_ssh_add_host "$LABEL" \
-            "$LINODE_IPV4_PUBLIC" "" || return
-        [ "${LINODE_IPV4_PRIVATE:+1}${LK_SSH_JUMP_HOST:+1}" != 11 ] ||
-            lk_ssh_add_host "$LABEL-private" \
-                "$LINODE_IPV4_PRIVATE" "" "" "jump" || return
+        eval "LABEL=${1:-}"
+        LABEL=${LABEL:-${LINODE_LABEL%%.*}}
+        eval "USERNAME=${2:-}"
+        LK_CONSOLE_NO_FOLD=1 \
+            lk_console_detail "Adding SSH host:" \
+            $'\n'"${LK_SSH_PREFIX-$LK_PATH_PREFIX}$LABEL ($(lk_implode_args \
+                " + " \
+                ${LINODE_IPV4_PRIVATE:+"$LK_BOLD$LINODE_IPV4_PRIVATE$LK_RESET"} \
+                ${LINODE_IPV4_PUBLIC:+"$LINODE_IPV4_PUBLIC"}))"
+        PUBLIC_SUFFIX=
+        [ "${LINODE_IPV4_PRIVATE:+1}${LK_SSH_JUMP_HOST:+1}" != 11 ] || {
+            lk_ssh_add_host "$LABEL" \
+                "$LINODE_IPV4_PRIVATE" "$USERNAME" "" "jump" || return
+            PUBLIC_SUFFIX=-direct
+        }
+        [ -z "$LINODE_IPV4_PUBLIC" ] || lk_ssh_add_host "$LABEL$PUBLIC_SUFFIX" \
+            "$LINODE_IPV4_PUBLIC" "$USERNAME" || return
     done
 }
 
@@ -118,13 +140,49 @@ function lk_linode_ssh_add() {
 function lk_linode_ssh_add_all() {
     local JSON LABELS
     _lk_linode_maybe_flush_cache
-    JSON=$(lk_linode_linodes "$@") || return
+    JSON=$(lk_linode_linodes "$@" | _lk_linode_filter) || return
     lk_jq_get_array LABELS ".[].label" <<<"$JSON" &&
         [ ${#LABELS[@]} -gt 0 ] || lk_warn "no Linodes found" || return
-    lk_echo_array LABELS |
+    lk_echo_array LABELS | sort |
         lk_console_list "Adding to SSH configuration:" Linode Linodes
     lk_confirm "Proceed?" Y || return
     lk_linode_ssh_add <<<"$JSON"
+    lk_console_success "SSH configuration complete"
+}
+
+# lk_linode_hosting_ssh_add_all [LINODE_ARG...]
+#
+# shellcheck disable=SC2029,SC2207
+function lk_linode_hosting_ssh_add_all() {
+    local GET_USERS_SH JSON LINODES LINODE SH IFS USERS USERNAME ALL_USERS=()
+    _lk_linode_maybe_flush_cache
+    GET_USERS_SH="$(declare -f lk_get_standard_users);lk_get_standard_users" &&
+        GET_USERS_SH=$(printf '%q' "$GET_USERS_SH") || return
+    JSON=$(lk_linode_linodes "$@" | _lk_linode_filter) &&
+        lk_jq_get_array LINODES <<<"$JSON" &&
+        [ ${#LINODES[@]} -gt 0 ] || lk_warn "no Linodes found" || return
+    jq -r '.[].label' <<<"$JSON" | sort | lk_console_list \
+        "Adding hosting accounts to SSH configuration:" Linode Linodes
+    lk_confirm "Proceed?" Y || return
+    for LINODE in "${LINODES[@]}"; do
+        SH=$(lk_linode_get_shell_var <<<"$LINODE") &&
+            eval "$SH" || return
+        lk_console_item "Retrieving hosting accounts from" "$LINODE_LABEL"
+        IFS=$'\n'
+        USERS=($(ssh "${LK_SSH_PREFIX-$LK_PATH_PREFIX}${LINODE_LABEL%%.*}" \
+            "bash -c $GET_USERS_SH")) || return
+        unset IFS
+        for USERNAME in ${USERS[@]+"${USERS[@]}"}; do
+            ! lk_in_array "$USERNAME" ALL_USERS || {
+                lk_console_warning "Skipping $USERNAME (already used)"
+                continue
+            }
+            ALL_USERS+=("$USERNAME")
+            LK_SSH_PRIORITY='' \
+                lk_linode_ssh_add "$USERNAME" "$USERNAME" <<<"[$LINODE]"
+        done
+    done
+    lk_console_success "SSH configuration complete"
 }
 
 # lk_linode_get_only_domain [LINODE_ARG...]
@@ -155,11 +213,14 @@ function lk_linode_dns_check() {
         OUTPUT RECORD_ID NEW_RECORD_COUNT=0 NEW_REVERSE_RECORD_COUNT=0
     lk_jq_get_array LINODES &&
         [ ${#LINODES[@]} -gt 0 ] || lk_warn "no Linodes in input" || return
+    lk_console_message "Retrieving domain records and Linode IP addresses"
     DOMAIN_ID=${1:-$(lk_linode_get_only_domain "${@:2}")} &&
+        lk_console_detail "Domain ID:" "$DOMAIN_ID" &&
         DOMAIN=$(lk_linode_domains "${@:2}" |
             jq -r --arg domainId "$DOMAIN_ID" \
                 '.[]|select(.id==($domainId|tonumber)).domain') &&
         [ -n "$DOMAIN" ] || lk_warn "unable to retrieve domain" || return
+    lk_console_detail "Domain name:" "$DOMAIN"
     RECORDS=$(lk_linode_domain_records "$DOMAIN_ID" "${@:2}" |
         jq -r '.[]|"\(.name)\t\(.type)\t\(.target)"') &&
         REVERSE_RECORDS=$(lk_linode_ips "${@:2}" |
@@ -232,7 +293,7 @@ function lk_linode_dns_check_all() {
     JSON=$(lk_linode_linodes "${@:2}") || return
     lk_jq_get_array LABELS ".[].label" <<<"$JSON"
     [ ${#LABELS[@]} -gt 0 ] || lk_warn "no Linodes found" || return
-    lk_echo_array LABELS |
+    lk_echo_array LABELS | sort |
         lk_console_list "Checking DNS and RDNS records for:" Linode Linodes
     lk_confirm "Proceed?" Y || return
     LK_VERBOSE=1 lk_linode_dns_check "$1" "${@:2}" <<<"$JSON" || return
