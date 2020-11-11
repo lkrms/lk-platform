@@ -76,6 +76,7 @@ if [ -n "$IP" ] && ! lk_node_is_host "$SITE_HOST"; then
         -i "http://${SITE_DOMAIN%%.*}.localhost")
     [ -z "$NEW_SITE_ADDR" ] || [ "$NEW_SITE_ADDR" = "$SITE_ADDR" ] || {
         LK_WP_QUIET=1 LK_WP_REPLACE=1 LK_WP_FLUSH=0 \
+            LK_WP_REPLACE_COMMAND=wp \
             lk_wp_rename_site "$NEW_SITE_ADDR" && STALE=1
     }
 fi
