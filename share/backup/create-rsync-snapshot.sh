@@ -75,11 +75,10 @@ function lk_echo_array() {
 }
 
 function lk_console_message() {
-    local SPACES=${LK_CONSOLE_SPACES-  }
     echo "\
 $LK_BOLD${LK_CONSOLE_COLOUR-$LK_CYAN}${LK_CONSOLE_PREFIX-==> }\
 $LK_RESET${LK_CONSOLE_MESSAGE_COLOUR-$LK_BOLD}\
-$(sed "1b;s/^/$SPACES/" <<<"$1")$LK_RESET"
+$(sed "1b;s/^/${LK_CONSOLE_SPACES-  }/" <<<"$1")$LK_RESET" >&2
 }
 
 function lk_console_item() {
@@ -99,12 +98,27 @@ function lk_console_detail() {
         lk_console_item "$1" "$2"
 }
 
+function lk_console_detail_list() {
+    lk_console_detail \
+        "$1" "$(COLUMNS=${COLUMNS+$((COLUMNS - 4))} column | expand)"
+}
+
 function lk_console_log() {
     local LK_CONSOLE_PREFIX=" :: " LK_CONSOLE_SPACES="    " \
         LK_CONSOLE_COLOUR2=${LK_CONSOLE_COLOUR2-$LK_BOLD}
     [ $# -le 1 ] &&
         lk_console_message "${LK_CONSOLE_COLOUR-$LK_CYAN}$1" ||
         lk_console_item "${LK_CONSOLE_COLOUR-$LK_CYAN}$1" "$2"
+}
+
+function lk_console_success() {
+    LK_CONSOLE_COLOUR=$LK_GREEN lk_console_log "$@"
+}
+
+function lk_console_warning() {
+    local EXIT_STATUS=$?
+    LK_CONSOLE_COLOUR=$LK_YELLOW lk_console_log "$@"
+    return "$EXIT_STATUS"
 }
 
 function lk_console_error() {

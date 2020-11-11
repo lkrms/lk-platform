@@ -125,7 +125,7 @@ function lk_console_message() {
 $LK_GREY[ $H ] \
 $LK_RESET$LK_BOLD${LK_CONSOLE_COLOUR-$LK_CYAN}${LK_CONSOLE_PREFIX-==> }\
 $LK_RESET${LK_CONSOLE_MESSAGE_COLOUR-$LK_BOLD}\
-${1//$'\n'/$'\n'"$H_SPACES${LK_CONSOLE_SPACES-  }"}$LK_RESET" >&2
+$(sed "1b;s/^/$H_SPACES${LK_CONSOLE_SPACES-  }/" <<<"$1")$LK_RESET" >&2
 }
 
 function lk_console_item() {
@@ -133,7 +133,7 @@ function lk_console_item() {
 $1$LK_RESET${LK_CONSOLE_COLOUR2-${LK_CONSOLE_COLOUR-$LK_CYAN}}$(
         [ "${2/$'\n'/}" = "$2" ] &&
             echo " $2" ||
-            echo $'\n'"$2"
+            echo $'\n'"${2#$'\n'}"
     )"
 }
 
@@ -147,10 +147,10 @@ function lk_console_detail() {
 
 function lk_console_log() {
     local LK_CONSOLE_PREFIX=" :: " LK_CONSOLE_SPACES="    " \
-        LK_CONSOLE_COLOUR2=$LK_BOLD
+        LK_CONSOLE_COLOUR2=${LK_CONSOLE_COLOUR2-$LK_BOLD}
     [ $# -le 1 ] &&
-        lk_console_message "$LK_CYAN$1" ||
-        lk_console_item "$LK_CYAN$1" "$2"
+        lk_console_message "${LK_CONSOLE_COLOUR-$LK_CYAN}$1" ||
+        lk_console_item "${LK_CONSOLE_COLOUR-$LK_CYAN}$1" "$2"
 }
 
 function lk_ellipsis() {
