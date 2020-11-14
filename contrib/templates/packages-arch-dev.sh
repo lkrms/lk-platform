@@ -11,8 +11,11 @@ http://sublimetext.mirror.linacreative.com/sublimehq-pub.gpg|\
 PACMAN_PACKAGES=()
 AUR_PACKAGES=()
 
-# won't be installed, but won't be uninstalled
+# won't be uninstalled if present
 PAC_KEEP=(
+    subversion
+
+    #
     aurutils
     vifm
 
@@ -57,11 +60,8 @@ lk_is_virtual || {
         )
 
         #
-        i2c-tools # provides i2c-dev module (required by ddcutil)
-    )
-
-    AUR_PACKAGES+=(
         ddcutil
+        i2c-tools # provides i2c-dev module (required by ddcutil)
     )
 }
 
@@ -210,6 +210,7 @@ PACMAN_PACKAGES+=(
     xclip
     xdotool
     xorg-xev
+    xprintidle
 )
 
 AUR_PACKAGES+=(
