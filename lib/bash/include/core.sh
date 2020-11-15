@@ -2,30 +2,68 @@
 
 # shellcheck disable=SC2015,SC2016,SC2207
 
-HOME=${HOME:-$(u=$(id -un) && eval "echo ~$u")} || return
-USER=${USER:-$(id -un)} || return
+USER=${USER:-$(id -un)} &&
+    HOME=${HOME:-$(eval "echo ~$USER")} || return
 
 function lk_command_exists() {
     type -P "$1" >/dev/null
 }
 
-function _lk_return_cached() {
-    if [ "${!1+1}" != 1 ]; then
-        eval "$1=0; { $2; } || $1=\$?"
-    fi
-    return "${!1}"
-}
-
 function lk_is_macos() {
-    _lk_return_cached _LK_IS_MACOS '[ "$(uname -s)" = "Darwin" ]'
+    [[ $OSTYPE == darwin* ]]
 }
 
 function lk_is_linux() {
-    _lk_return_cached _LK_IS_LINUX '[ "$(uname -s)" = "Linux" ]'
+    [[ $OSTYPE == linux-gnu ]]
+}
+
+function lk_is_arch() {
+    return "${_LK_IS_ARCH:=$(lk_is_linux &&
+        [ -f /etc/arch-release ] &&
+        echo 0 || echo 1)}"
+}
+
+function lk_is_ubuntu() {
+    return "${_LK_IS_UBUNTU:=$(lk_is_linux &&
+        [ -r /etc/os-release ] && . /etc/os-release && [ "$NAME" = Ubuntu ] &&
+        echo 0 || echo 1)}"
+}
+
+function lk_ubuntu_at_least() {
+    local VERSION
+    lk_is_ubuntu &&
+        VERSION=$(. /etc/os-release && echo "$VERSION_ID") &&
+        lk_version_at_least "$VERSION" "$1"
 }
 
 function lk_is_wsl() {
-    _lk_return_cached _LK_IS_WSL 'lk_is_linux && grep -qi microsoft /proc/version >/dev/null 2>&1'
+    return "${_LK_IS_WSL:=$(lk_is_linux &&
+        grep -qi microsoft /proc/version >/dev/null 2>&1 &&
+        echo 0 || echo 1)}"
+}
+
+function lk_is_desktop() {
+    return "${_LK_IS_DESKTOP:=$({ lk_is_macos || lk_command_exists X; } &&
+        echo 0 || echo 1)}"
+}
+
+function lk_is_server() {
+    ! lk_is_desktop
+}
+
+function lk_is_virtual() {
+    return "${_LK_IS_VIRTUAL:=$(lk_is_linux &&
+        S="[[:blank:]]" &&
+        grep -Eq "^flags$S*:.*${S}hypervisor($S|$)" /proc/cpuinfo &&
+        echo 0 || echo 1)}"
+}
+
+function lk_is_qemu() {
+    return "${_LK_IS_QEMU:=$(lk_is_virtual &&
+        shopt -s nullglob &&
+        FILES=(/sys/devices/virtual/dmi/id/*_vendor) &&
+        [ ${#FILES[@]} -gt 0 ] && grep -iq qemu "${FILES[@]}" &&
+        echo 0 || echo 1)}"
 }
 
 _LK_GNU_COMMANDS=(
@@ -1834,38 +1872,6 @@ function lk_version_at_least() {
     local MIN
     MIN="$(sort -V <(printf '%s\n' "$1" "$2") | head -n1 || lk_warn "error sorting versions")" &&
         [ "$MIN" = "$2" ]
-}
-
-function lk_is_arch() {
-    _lk_return_cached _LK_IS_ARCH 'lk_is_linux && [ -f "/etc/arch-release" ]'
-}
-
-function lk_is_ubuntu() {
-    _lk_return_cached _LK_IS_UBUNTU 'lk_is_linux && lk_command_exists lsb_release && [ "$(lsb_release -si)" = "Ubuntu" ]'
-}
-
-function lk_is_ubuntu_lts() {
-    _lk_return_cached _LK_IS_UBUNTU_LTS 'lk_is_ubuntu && lk_command_exists ubuntu-distro-info && ubuntu-distro-info --supported-esm | grep -Fx "$(lsb_release -sc)" >/dev/null 2>&1'
-}
-
-function lk_ubuntu_at_least() {
-    lk_is_ubuntu && lk_version_at_least "$(lsb_release -sr)" "$1"
-}
-
-function lk_is_desktop() {
-    _lk_return_cached _LK_IS_DESKTOP 'lk_is_macos || lk_command_exists X'
-}
-
-function lk_is_server() {
-    ! lk_is_desktop
-}
-
-function lk_is_virtual() {
-    _lk_return_cached _LK_IS_VIRTUAL 'lk_is_linux && grep -Eq "^flags\\s*:.*\\shypervisor(\\s|\$)" /proc/cpuinfo'
-}
-
-function lk_is_qemu() {
-    _lk_return_cached _LK_IS_QEMU 'lk_is_virtual && grep -Eiq qemu /sys/devices/virtual/dmi/id/*_vendor'
 }
 
 # lk_jq_get_array ARRAY [FILTER]
