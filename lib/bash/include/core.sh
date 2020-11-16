@@ -53,7 +53,6 @@ function lk_is_server() {
 
 function lk_is_virtual() {
     return "${_LK_IS_VIRTUAL:=$(lk_is_linux &&
-        S="[[:blank:]]" &&
         grep -Eq "^flags$S*:.*${S}hypervisor($S|$)" /proc/cpuinfo &&
         echo 0 || echo 1)}"
 }
@@ -239,7 +238,7 @@ function lk_warn() {
 }
 
 function _lk_usage_format() {
-    local CMD BOLD RESET S="[[:blank:]]"
+    local CMD BOLD RESET
     CMD=$(lk_escape_ere "$(lk_myself 2)")
     BOLD=$(lk_escape_ere_replace "$LK_BOLD")
     RESET=$(lk_escape_ere_replace "$LK_RESET")
@@ -2215,15 +2214,12 @@ set -o pipefail
 
 _LK_INCLUDES=(core)
 
-[ -n "${LK_COLOUR:-${colour:-}}" ] ||
+[ -n "${LK_COLOUR:-}" ] ||
     [ -t 1 ] ||
     LK_COLOUR=off
 
 # shellcheck disable=SC2034
-case "${LK_COLOUR:-${colour:-xterm-256color}}" in
-dynamic)
-    eval "$(lk_get_colours)"
-    ;;
+case "${LK_COLOUR:-${TERM:-xterm-256color}}" in
 off)
     LK_BLACK=
     LK_RED=
@@ -2278,11 +2274,14 @@ xterm-256color)
     LK_WRAP_OFF=$'\E[?7l'
     LK_RESET=$'\E(B\E[m'
     ;;
+*)
+    eval "$(lk_get_colours)"
+    ;;
 esac
 
 LK_CONSOLE_COLOUR=$LK_CYAN
 LK_SUCCESS_COLOUR=$LK_GREEN
 LK_WARNING_COLOUR=$LK_YELLOW
 LK_ERROR_COLOUR=$LK_RED
-lk_is_readonly LK_ARGV ||
-    readonly LK_ARGV=("$@")
+lk_is_readonly LK_ARGV || readonly LK_ARGV=("$@")
+lk_is_readonly S || readonly S="[[:blank:]]"

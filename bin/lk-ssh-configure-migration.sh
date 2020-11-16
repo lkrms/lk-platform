@@ -33,14 +33,9 @@ Options:
   -i, --target-key=FILE             use key in FILE when logging into TARGET
   -p, --source-password=PASSWORD    use PASSWORD when logging into SOURCE"
 
-    lk_check_args
-    OPTS=$(
-        gnu_getopt --options "o:n:k:i:p:" \
-            --longoptions "source-name:,target-name:,source-key:,target-key:,source-password:" \
-            --name "${0##*/}" \
-            -- "$@"
-    ) || lk_usage
-    eval "set -- $OPTS"
+    lk_getopt "o:n:k:i:p:" \
+        "source-name:,target-name:,source-key:,target-key:,source-password:"
+    eval "set -- $LK_GETOPT"
 
     while :; do
         OPT=$1

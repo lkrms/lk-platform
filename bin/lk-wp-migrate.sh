@@ -44,14 +44,9 @@ Maintenance modes:
 
 Maintenance mode is always enabled on the local system during migration."
 
-lk_check_args
-OPTS=$(
-    gnu_getopt --options "s:d:m:r:ce:" \
-        --longoptions "yes,source:,dest:,maintenance:,rename:,ssl-cert,exclude:,db-name:,db-user:" \
-        --name "${0##*/}" \
-        -- "$@"
-) || lk_usage
-eval "set -- $OPTS"
+lk_getopt "s:d:m:r:ce:" \
+    "source:,dest:,maintenance:,rename:,ssl-cert,exclude:,db-name:,db-user:"
+eval "set -- $LK_GETOPT"
 
 while :; do
     OPT=$1

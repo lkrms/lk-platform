@@ -14,7 +14,7 @@ function _lk_arch_chroot_path() {
 }
 
 function lk_pacman_configure() {
-    local PACMAN_CONF=${LK_PACMAN_CONF:-/etc/pacman.conf} S="[[:blank:]]"
+    local PACMAN_CONF=${LK_PACMAN_CONF:-/etc/pacman.conf}
     PACMAN_CONF=$(_lk_arch_chroot_path "$PACMAN_CONF")
     # leading and trailing whitespace in pacman.conf is ignored
     LK_SUDO=1 lk_maybe_sed \

@@ -98,12 +98,9 @@ Options:
 
 #LK_VERSION=0.1.0
 
-lk_check_args
-OPTS="$(gnu_getopt --options "fv:s::" \
-    --longoptions "yes,flag,value:,setting::" \
-    --name "${0##*/}" \
-    -- "$@")" || lk_usage
-eval "set -- $OPTS"
+lk_getopt "fv:s::" \
+    "flag,value:,setting::"
+eval "set -- $LK_GETOPT"
 
 while :; do
     OPT=$1

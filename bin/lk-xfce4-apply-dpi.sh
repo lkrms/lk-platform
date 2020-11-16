@@ -5,7 +5,8 @@ lk_bin_depth=1 . lk-bash-load.sh || exit
 
 LK_USAGE="Usage: ${0##*/} [DPI]"
 
-lk_check_args
+lk_getopt
+eval "set -- $LK_GETOPT"
 
 DPI="${1:-$(xdpyinfo |
     grep -Eo '^[[:blank:]]+resolution:[[:blank:]]*[0-9]+x[0-9]+' |

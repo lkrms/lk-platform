@@ -24,8 +24,6 @@ lk_log_output
     lk_die "cannot read file: $LK_BASE/etc/firewall.conf"
 . "$LK_BASE/etc/firewall.conf"
 
-S="[[:blank:]]"
-
 if [ -n "${ACCEPT_OUTPUT_CHAIN:-}" ]; then
     lk_console_message "Applying outgoing traffic policy to firewall"
     OUTPUT_ALLOW=(

@@ -1,12 +1,18 @@
 #!/bin/bash
-# shellcheck disable=SC1090,SC2001,SC2046,SC2086,SC2207
+# shellcheck disable=SC1090,SC2001,SC2016,SC2046,SC2120,SC2207
 
-_LK_ENV=${_LK_ENV:-$(declare -x)}
+_LK_ENV=$(
+    _env() { [ -n "${!1+1}" ] && echo "${!1}."; }
+    declare -f _env
+    echo "${_LK_ENV:-$(declare -x)}"
+)
 
 lk_die() { s=$? && echo "${BASH_SOURCE[0]}: $1" >&2 &&
     (return $s) && false || exit; }
 [ -n "${LK_INST:-${LK_BASE:-}}" ] || lk_die "LK_BASE not set"
 [ -z "${LK_BASE:-}" ] || export LK_BASE
+
+. "${LK_INST:-$LK_BASE}/lib/bash/include/core.sh"
 
 # 1. Source each SETTINGS file in order, allowing later files to override values
 #    set earlier
@@ -15,7 +21,7 @@ lk_die() { s=$? && echo "${BASH_SOURCE[0]}: $1" >&2 &&
 # 3. Copy remaining LK_* variables to the global scope (other variables are
 #    discarded)
 [[ ,${LK_SKIP:-}, == *,settings,* ]] || eval "$(
-    if [ "${LK_SETTINGS_FILES[*]+1}" = 1 ]; then
+    if lk_is_declared LK_SETTINGS_FILES; then
         SETTINGS=(${LK_SETTINGS_FILES[@]+"${LK_SETTINGS_FILES[@]}"})
     else
         # Passed to eval just before sourcing, to allow expansion of values set
@@ -26,27 +32,28 @@ lk_die() { s=$? && echo "${BASH_SOURCE[0]}: $1" >&2 &&
         )
     fi
     ENV=$(printenv | grep -Eo '^LK_[a-z0-9_]*' | sort) || true
-    lk_var() { comm -23 <(printf '%s\n' "${!LK_@}" | sort) <(cat <<<"$ENV"); }
+    lk_var() { comm -23 \
+        <(printf '%s\n' "${!LK_@}" | sort) \
+        <(cat <<<"$ENV") | sed '/^LK_ARGV$/d'; }
     (
         VAR=($(lk_var))
         [ ${#VAR[@]} -eq 0 ] || unset "${VAR[@]}"
         for FILE in "${SETTINGS[@]}"; do
-            eval "FILE=\"$FILE\""
-            [ ! -f "$FILE" ] || . "$FILE"
+            eval "FILE=$FILE"
+            [ ! -r "$FILE" ] || . "$FILE"
         done
         VAR=($(lk_var))
         [ ${#VAR[@]} -eq 0 ] || declare -p $(lk_var)
     )
 )"
 
-colour=dynamic . "${LK_INST:-$LK_BASE}/lib/bash/include/core.sh"
-
+# shellcheck disable=SC2154
 lk_include assert ${include:+${include//,/ }}
 
 # lk_die [MESSAGE]
 #
-# Output "<context>: MESSAGE" as an error and exit non-zero with the previous
-# command's exit status (if available).
+# Output "<context>: MESSAGE" using lk_console_error and exit non-zero with the
+# previous command's exit status (if available).
 #
 # To suppress output, set MESSAGE to the empty string.
 function lk_die() {
@@ -64,7 +71,7 @@ function lk_exit_trap() {
         [[ ${FUNCNAME[1]:-} =~ ^_?lk_(die|usage|elevate)$ ]] ||
         lk_console_error0 \
             "$(_lk_caller "${_LK_ERR_TRAP_CONTEXT:-}"): unhandled error"
-    for i in ${LK_EXIT_DELETE[@]+"${LK_EXIT_DELETE[@]}"}; do
+    for i in ${_LK_EXIT_DELETE[@]+"${_LK_EXIT_DELETE[@]}"}; do
         rm -Rf -- "$i" || true
     done
 }
@@ -74,8 +81,8 @@ function lk_err_trap() {
 }
 
 function lk_delete_on_exit() {
-    [ "${LK_EXIT_DELETE[*]+1}" = 1 ] || LK_EXIT_DELETE=()
-    LK_EXIT_DELETE+=("$@")
+    lk_is_declared _LK_EXIT_DELETE || _LK_EXIT_DELETE=()
+    _LK_EXIT_DELETE+=("$@")
 }
 
 function lk_usage() {
@@ -86,26 +93,75 @@ function lk_usage() {
     exit "$EXIT_STATUS"
 }
 
-function lk_check_args() {
-    if [ -n "${LK_USAGE:-}" ] && lk_has_arg --help; then
-        echo "$LK_USAGE"
-        exit
-    elif [ -n "${LK_VERSION:-}" ] && lk_has_arg --version; then
-        echo "$LK_VERSION"
-        exit
-    elif lk_has_arg --yes; then
-        # shellcheck disable=SC2034
-        LK_NO_INPUT=1
-    fi
+# shellcheck disable=SC2034
+function lk_getopt() {
+    local SHORT=${1:-} LONG=${2:-} ARGC=$# _OPTS HAS_ARG OPT OPTS=()
+    [[ ,$LONG, == *,help,* ]] || [ -z "${LK_USAGE:-}" ] ||
+        LONG=${LONG:+$LONG,}help
+    [[ ,$LONG, == *,version,* ]] || [ -z "${LK_VERSION:-}" ] ||
+        LONG=${LONG:+$LONG,}version
+    [[ ,$LONG, == *,dry-run,* ]] ||
+        LONG=${LONG:+$LONG,}dry-run
+    [[ ,$LONG, == *,yes,* ]] ||
+        LONG=${LONG:+$LONG,}yes
+    _OPTS=$(gnu_getopt --options "$SHORT" \
+        --longoptions "$LONG" \
+        --name "${0##*/}" \
+        -- ${LK_ARGV[@]+"${LK_ARGV[@]}"}) || lk_usage
+    eval "set -- $_OPTS"
+    while :; do
+        case "$1" in
+        --help)
+            [ -z "${LK_USAGE:-}" ] || {
+                echo "$LK_USAGE"
+                exit
+            }
+            ;;
+        --version)
+            [ -z "${LK_VERSION:-}" ] || {
+                echo "$LK_VERSION"
+                exit
+            }
+            ;;
+        esac
+        HAS_ARG=0
+        case "$1" in
+        --dry-run)
+            LK_DRY_RUN=1
+            shift
+            continue
+            ;;
+        --yes)
+            LK_NO_INPUT=1
+            shift
+            continue
+            ;;
+        --)
+            break
+            ;;
+        --*)
+            OPT=${1:2}
+            [[ ,$LONG, == *,$OPT,* ]] || HAS_ARG=1
+            ;;
+        -*)
+            OPT=${1:1}
+            [[ $SHORT != *$OPT:* ]] || HAS_ARG=1
+            ;;
+        esac
+        while [ $((HAS_ARG--)) -ge 0 ]; do
+            OPTS+=("$1")
+            shift
+        done
+    done
+    [ "$ARGC" -gt 0 ] || shift
+    OPTS+=("$@")
+    LK_GETOPT=$(lk_quote_array OPTS)
 }
 
-# shellcheck disable=SC2016
 function lk_get_env() {
-    local VAR
-    VAR=$(env -i bash -c "$(printf '%s\n' \
-        "$_LK_ENV" \
-        '[ -n "${!1+1}" ] || exit' \
-        'echo "${!1}."')" bash "$1") && echo "${VAR%.}"
+    local SH VAR
+    SH=$(printf '%s\n' "$_LK_ENV" '_env "$1"')
+    VAR=$(env -i bash -c "$SH" bash "$1") && echo "${VAR%.}"
 }
 
 if ! lk_is_true "${LK_NO_SOURCE_FILE:-0}"; then
@@ -137,7 +193,6 @@ if ! lk_is_true "${LK_NO_SOURCE_FILE:-0}"; then
     }
 fi
 
-# shellcheck disable=SC2034,SC2206
 eval "$(
     [[ ,${LK_SKIP:-}, == *,env,* ]] || {
         printf '%s=%q\n' \

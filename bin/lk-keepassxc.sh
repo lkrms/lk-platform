@@ -41,14 +41,9 @@ Options:
       --autostart           only register KeePassXC to open each database at startup
       --check-has-password  only prompt for each missing password"
 
-lk_check_args
-OPTS="$(
-    gnu_getopt --options "dr" \
-        --longoptions "detach,reset-password,autostart,check-has-password" \
-        --name "${0##*/}" \
-        -- "$@"
-)" || lk_usage
-eval "set -- $OPTS"
+lk_getopt "dr" \
+    "detach,reset-password,autostart,check-has-password"
+eval "set -- $LK_GETOPT"
 
 while :; do
     OPT=$1

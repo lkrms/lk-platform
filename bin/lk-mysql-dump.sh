@@ -33,14 +33,9 @@ Options:
                             or output of \`date +%Y-%m-%d-%H%M%S\`)
   -s, --no-timestamp        don't add backup file timestamp"
 
-lk_check_args
-OPTS=$(
-    gnu_getopt --options "xd:t:s" \
-        --longoptions "yes,exclude,dest:,timestamp:,no-timestamp" \
-        --name "${0##*/}" \
-        -- "$@"
-) || lk_usage
-eval "set -- $OPTS"
+lk_getopt "xd:t:s" \
+    "exclude,dest:,timestamp:,no-timestamp"
+eval "set -- $LK_GETOPT"
 
 while :; do
     OPT=$1

@@ -31,8 +31,6 @@ function exit_trap() {
 {
     export SUDO_PROMPT="[sudo] password for %p: "
 
-    S="[[:blank:]]"
-
     SCRIPT_DIR=/tmp/${LK_PATH_PREFIX}install
     mkdir -p "$SCRIPT_DIR"
 

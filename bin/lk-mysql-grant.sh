@@ -32,7 +32,8 @@ underscore. Examples of DB_NAME and DB_USER values allowed for the current user:
   - ${USERNAME}_blog
   - ${USERNAME}_backup"
 
-lk_check_args
+lk_getopt
+eval "set -- $LK_GETOPT"
 [ $# -eq 3 ] || lk_usage
 
 # Validate DB_NAME and DB_USER against SUDO_USER if:

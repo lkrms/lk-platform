@@ -29,7 +29,7 @@ eval "$(
         VAR=($(lk_var))
         [ ${#VAR[@]} -eq 0 ] || unset "${VAR[@]}"
         for FILE in "${SETTINGS[@]}"; do
-            eval "FILE=\"$FILE\""
+            eval "FILE=$FILE"
             [ ! -f "$FILE" ] || . "$FILE"
         done
         VAR=($(lk_var))
