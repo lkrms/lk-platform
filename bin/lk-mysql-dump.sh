@@ -137,8 +137,9 @@ lk_echo_array DB_INCLUDE |
 lk_confirm "Proceed?" Y || lk_die
 
 LOCK_FILE=/tmp/${0##*/}-${DEST//\//_}.lock
-exec 8>"$LOCK_FILE"
-flock -n 8 || lk_die "unable to acquire a lock on $LOCK_FILE"
+LOCK_FD=$(lk_next_fd)
+eval "exec $LOCK_FD>\"\$LOCK_FILE\""
+flock -n "$LOCK_FD" || lk_die "unable to acquire a lock on $LOCK_FILE"
 
 for DB_NAME in "${DB_INCLUDE[@]}"; do
     lk_console_item "Dumping database:" "$DB_NAME"
@@ -163,7 +164,7 @@ for DB_NAME in "${DB_INCLUDE[@]}"; do
     fi
 done
 
-exec 8>&-
+eval "exec $LOCK_FD>&-"
 rm -f "$LOCK_FILE"
 
 (exit "$EXIT_STATUS") || lk_die

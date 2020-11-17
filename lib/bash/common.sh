@@ -93,17 +93,20 @@ function lk_usage() {
     exit "$EXIT_STATUS"
 }
 
+function _lk_getopt_maybe_add_long() {
+    [[ ,$LONG, == *,$1,* ]] ||
+        { [ $# -gt 1 ] && [ -z "${!2:-}" ]; } ||
+        LONG=${LONG:+$LONG,}$1
+}
+
 # shellcheck disable=SC2034
 function lk_getopt() {
     local SHORT=${1:-} LONG=${2:-} ARGC=$# _OPTS HAS_ARG OPT OPTS=()
-    [[ ,$LONG, == *,help,* ]] || [ -z "${LK_USAGE:-}" ] ||
-        LONG=${LONG:+$LONG,}help
-    [[ ,$LONG, == *,version,* ]] || [ -z "${LK_VERSION:-}" ] ||
-        LONG=${LONG:+$LONG,}version
-    [[ ,$LONG, == *,dry-run,* ]] ||
-        LONG=${LONG:+$LONG,}dry-run
-    [[ ,$LONG, == *,yes,* ]] ||
-        LONG=${LONG:+$LONG,}yes
+    _lk_getopt_maybe_add_long help LK_USAGE
+    _lk_getopt_maybe_add_long version LK_VERSION
+    _lk_getopt_maybe_add_long dry-run
+    _lk_getopt_maybe_add_long yes
+    _lk_getopt_maybe_add_long no-log
     _OPTS=$(gnu_getopt --options "$SHORT" \
         --longoptions "$LONG" \
         --name "${0##*/}" \
@@ -133,6 +136,11 @@ function lk_getopt() {
             ;;
         --yes)
             LK_NO_INPUT=1
+            shift
+            continue
+            ;;
+        --no-log)
+            LK_NO_LOG=1
             shift
             continue
             ;;

@@ -586,7 +586,7 @@ function lk_expand_template() {
         )) || true
     for i in ${VARS[@]+"${VARS[@]}"}; do
         REPLACE=${!i:-}.
-        ! lk_is_true "${LK_EXPAND_QUOTE:-0}" ||
+        ! lk_is_true "${LK_EXPAND_QUOTE:-}" ||
             REPLACE=$(printf '%q.' "${REPLACE%.}")
         TEMPLATE=${TEMPLATE//\{\{$i\}\}/${REPLACE%.}}
     done
@@ -853,6 +853,27 @@ function lk_get_outputs_of() {
     return "${EXIT_STATUS:-0}"
 }
 
+# lk_next_fd
+#
+# Output the next available file descriptor greater than or equal to 10.
+#
+# Essentially a shim for Bash 4.1's {var}>, {var}<, etc.
+function lk_next_fd() {
+    local USED
+    [ -d /dev/fd ] &&
+        USED=(/dev/fd/*) &&
+        [ ${#USED[@]} -ge 3 ] ||
+        lk_warn "not supported: /dev/fd" || return
+    USED=("${USED[@]#\/dev\/fd\/}")
+    lk_echo_array USED | sort -n |
+        awk 'BEGIN{n=10} n>$1{next} n==$1{n++;next} {exit} END{print n}'
+}
+
+# lk_is_fd_open FILE_DESCRIPTOR
+function lk_is_fd_open() {
+    { true >&"$1"; } 2>/dev/null
+}
+
 function lk_log() {
     local IFS LINE
     [ $# -eq 0 ] || {
@@ -909,7 +930,8 @@ function lk_log_create_file() {
 # lk_log_output [TEMP_LOG_FILE]
 function lk_log_output() {
     local LOG_PATH DIR HEADER=() IFS
-    ! lk_has_arg --no-log || return 0
+    ! lk_is_true "${LK_NO_LOG:-}" &&
+        [ -z "${_LK_LOG_FILE:-}" ] || return 0
     [[ $- != *x* ]] || [ -n "${BASH_XTRACEFD:-}" ] || return 0
     if [ $# -ge 1 ]; then
         if LOG_PATH=$(lk_log_create_file); then
@@ -951,17 +973,17 @@ function lk_log_output() {
     lk_echoc "Output is being logged to $LK_BOLD$LOG_PATH$LK_RESET" \
         "$LK_GREY" >&7
     # shellcheck disable=SC2034
-    LK_LOG_FILE=$LOG_PATH
+    export _LK_LOG_FILE=$LOG_PATH
 }
 
 function lk_log_close() {
-    if [ -n "${LK_LOG_FILE:-}" ]; then
+    if [ -n "${_LK_LOG_FILE:-}" ]; then
         exec >&6 2>&7 6>&- 7>&-
     fi
 }
 
 function lk_log_bypass() {
-    if [ -n "${LK_LOG_FILE:-}" ]; then
+    if [ -n "${_LK_LOG_FILE:-}" ]; then
         if [ -t 1 ]; then
             "$@" >&6 2>&7
         else
@@ -1816,7 +1838,7 @@ function lk_expand_paths() {
             fi
             if [[ $_PATH =~ [*?] ]]; then
                 _PATH=$(lk_escape "$_PATH" '$' '`' "\\" '"')
-                ! lk_is_true "${LK_EXPAND_PATHS_GLOBSTAR:-0}" ||
+                ! lk_is_true "${LK_EXPAND_PATHS_GLOBSTAR:-}" ||
                     _PATH=${_PATH//\*\*/\"\*\*\"}
                 _PATH=${_PATH//\*/\"\*\"}
                 _PATH=\"${_PATH//\?/\"\?\"}\"
@@ -2214,7 +2236,7 @@ set -o pipefail
 
 _LK_INCLUDES=(core)
 
-[ -n "${LK_COLOUR:-}" ] ||
+[ -n "${LK_COLOUR:-${TERM:-}}" ] ||
     [ -t 1 ] ||
     LK_COLOUR=off
 

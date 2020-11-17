@@ -79,7 +79,6 @@ The following variables can be set in `/etc/default/lk-platform` or
 - `LK_LINODE_SKIP_REGEX`
 - `LK_LOG_BASENAME`
 - `LK_LOG_DIR_MODE`
-- `LK_LOG_FILE`
 - `LK_LOG_FILE_GROUP`
 - `LK_LOG_FILE_MODE`
 - `LK_LOG_FILE_OWNER`

@@ -19,10 +19,10 @@ function exit_trap() {
     local LOG_PATH
     if lk_log_close &&
         LOG_PATH=$(lk_log_create_file) &&
-        [ "$LOG_PATH" != "$LK_LOG_FILE" ]; then
-        lk_console_log "Moving:" "$LK_LOG_FILE -> $LOG_PATH"
-        cat "$LK_LOG_FILE" >>"$LOG_PATH" &&
-            rm "$LK_LOG_FILE" ||
+        [ "$LOG_PATH" != "$_LK_LOG_FILE" ]; then
+        lk_console_log "Moving:" "$_LK_LOG_FILE -> $LOG_PATH"
+        cat "$_LK_LOG_FILE" >>"$LOG_PATH" &&
+            rm "$_LK_LOG_FILE" ||
             lk_console_warning0 \
                 "Error moving provisioning log entries to" "$LOG_PATH"
     fi

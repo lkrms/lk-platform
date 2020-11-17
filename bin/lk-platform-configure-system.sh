@@ -99,6 +99,9 @@
 
     LK_SKIP=env include=provision . "$LK_INST/lib/bash/common.sh"
 
+    lk_getopt
+    eval "set -- $LK_GETOPT"
+
     LK_PATH_PREFIX=${LK_PATH_PREFIX:-${PATH_PREFIX:-}}
     [ -n "$LK_PATH_PREFIX" ] || lk_no_input || {
         lk_console_message "LK_PATH_PREFIX not set"
@@ -128,8 +131,6 @@
     LK_BACKUP_SUFFIX=-$(lk_timestamp).bak
     LK_VERBOSE=1
     lk_log_output
-
-    [ "${1:-}" != --no-log ] || shift
 
     lk_console_message "Checking sudo configuration"
     FILE=/etc/sudoers.d/${LK_PATH_PREFIX}default
@@ -168,10 +169,8 @@
     install_gnu_commands || true
 
     function restart_script() {
-        local NO_LOG=1
         lk_console_message "Restarting ${0##*/}"
-        ! lk_has_arg --no-log || unset NO_LOG
-        "$0" ${NO_LOG+--no-log} "$@"
+        "$0" --no-log "$@"
         exit
     }
 
