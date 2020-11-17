@@ -93,7 +93,7 @@ WHERE TABLE_TYPE = 'BASE TABLE'
 function lk_mysql_dump() {
     local DB_NAME=$1 DB_USER=${2-${DB_USER-}} DB_PASSWORD=${3-${DB_PASSWORD-}} \
         DB_HOST=${4-${DB_HOST-${LK_MYSQL_HOST:-localhost}}} \
-        LK_MYSQL_ELEVATE LK_MY_CNF OUTPUT_FILE \
+        LK_MYSQL_ELEVATE LK_MY_CNF OUTPUT_FILE OUTPUT_FD \
         INNODB_ONLY DUMP_ARGS ARG_COLOUR EXIT_STATUS=0
     [ $# -ge 1 ] || lk_usage "\
 Usage: $(lk_myself -f) DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
@@ -113,7 +113,8 @@ Usage: $(lk_myself -f) DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
         lk_warn "database connection failed" || return
     [ ! -t 1 ] || {
         OUTPUT_FILE=~/$DB_HOST-$DB_NAME-$(lk_date_ymdhms).sql.gz
-        exec 6>&1 >"$OUTPUT_FILE"
+        OUTPUT_FD=$(lk_next_fd) &&
+            eval "exec $OUTPUT_FD>&1 >\"\$OUTPUT_FILE\"" || return
     }
     INNODB_ONLY=$(lk_mysql_innodb_only "$DB_NAME") || return
     if lk_is_true "$INNODB_ONLY"; then
@@ -145,7 +146,7 @@ Usage: $(lk_myself -f) DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
         gzip |
         pv --force ||
         EXIT_STATUS=$?
-    [ -z "${OUTPUT_FILE:-}" ] || exec 1>&6 6>&-
+    [ -z "${OUTPUT_FILE:-}" ] || eval "exec >&$OUTPUT_FD $OUTPUT_FD>&-"
     [ -z "${LK_MY_CNF:-}" ] || {
         lk_console_message "Deleting mysqldump configuration file"
         rm -f "$LK_MY_CNF" &&
@@ -165,7 +166,7 @@ function lk_mysql_dump_remote() {
     local SSH_HOST=$1 DB_NAME=$2 \
         DB_USER=${3-${DB_USER-}} DB_PASSWORD=${4-${DB_PASSWORD-}} \
         DB_HOST=${5-${DB_HOST-${LK_MYSQL_HOST:-localhost}}} \
-        OUTPUT_FILE EXIT_STATUS=0
+        OUTPUT_FILE OUTPUT_FD EXIT_STATUS=0
     [ $# -ge 2 ] || lk_usage "\
 Usage: $(lk_myself -f) SSH_HOST DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
         return
@@ -178,7 +179,8 @@ Usage: $(lk_myself -f) SSH_HOST DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
         ssh "$SSH_HOST" "bash -c 'cat >.lk_mysqldump.cnf'" || return
     [ ! -t 1 ] || {
         OUTPUT_FILE=~/$SSH_HOST-$DB_NAME-$(lk_date_ymdhms).sql.gz
-        exec 6>&1 >"$OUTPUT_FILE"
+        OUTPUT_FD=$(lk_next_fd) &&
+            eval "exec $OUTPUT_FD>&1 >\"\$OUTPUT_FILE\"" || return
     }
     lk_console_message "Dumping remote database"
     lk_console_detail "Database:" "$DB_NAME"
@@ -192,7 +194,7 @@ Usage: $(lk_myself -f) SSH_HOST DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
     \"\$1\" | gzip
 exit \${PIPESTATUS[0]}' bash $(printf '%q' "$DB_NAME")" | pv --force ||
         EXIT_STATUS=$?
-    [ -z "${OUTPUT_FILE:-}" ] || exec 1>&6 6>&-
+    [ -z "${OUTPUT_FILE:-}" ] || eval "exec >&$OUTPUT_FD $OUTPUT_FD>&-"
     lk_console_message "Deleting mysqldump configuration file"
     ssh "$SSH_HOST" "bash -c 'rm -f .lk_mysqldump.cnf'" &&
         lk_console_detail "Deleted" "$SSH_HOST:.lk_mysqldump.cnf" ||

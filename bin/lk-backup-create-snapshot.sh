@@ -19,7 +19,7 @@ include='' . "$LK_BASE/lib/bash/common.sh"
 
 function exit_trap() {
     local EXIT_STATUS=$? MESSAGE TAR SUBJECT
-    exec 4>&- 9>&- &&
+    eval "exec $FIFO_FD>&- $LOCK_FD>&-" &&
         rm -Rf "${FIFO_FILE%/*}" "$LOCK_FILE" || true
     lk_log_close
     lk_log_output
@@ -111,11 +111,11 @@ function run_custom_hook() {
             (
                 EXIT_STATUS=0
                 . "$SOURCE_SCRIPT" || EXIT_STATUS=$?
-                echo "# ." >&4
+                echo "# ." >&"$FIFO_FD"
                 exit "$EXIT_STATUS"
             ) &
             LINES=()
-            while IFS= read -ru 4 LINE && [ "$LINE" != "# ." ]; do
+            while IFS= read -ru "$FIFO_FD" LINE && [ "$LINE" != "# ." ]; do
                 LINES+=("$LINE")
             done
             wait "$!" ||
@@ -212,11 +212,13 @@ esac
 SOURCE_NAME=${SOURCE_NAME//\//_}
 BACKUP_ROOT=$(realpath "$BACKUP_ROOT")
 LOCK_FILE=/tmp/${0##*/}-${BACKUP_ROOT//\//_}-$SOURCE_NAME.lock
-exec 9>"$LOCK_FILE" &&
-    flock -n 9 || lk_die "unable to acquire a lock on $LOCK_FILE"
+LOCK_FD=$(lk_next_fd)
+eval "exec $LOCK_FD>\"\$LOCK_FILE\"" &&
+    flock -n "$LOCK_FD" || lk_die "unable to acquire a lock on $LOCK_FILE"
 FIFO_FILE=$(lk_mktemp_dir)/fifo
+FIFO_FD=$(lk_next_fd)
 mkfifo "$FIFO_FILE"
-exec 4<>"$FIFO_FILE"
+eval "exec $FIFO_FD<>\"\$FIFO_FILE\""
 
 HN=$(lk_hostname) || HN=localhost
 FQDN=$(lk_fqdn) || FQDN=$HN.localdomain

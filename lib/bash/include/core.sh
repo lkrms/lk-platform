@@ -963,7 +963,8 @@ function lk_log_output() {
     ))
     IFS=
     lk_log "$LK_BOLD====> ${HEADER[*]}$LK_RESET" >>"$LOG_PATH" &&
-        exec 6>&1 7>&2 &&
+        _LK_LOG_OUT_FD=$(lk_next_fd) && eval "exec $_LK_LOG_OUT_FD>&1" &&
+        _LK_LOG_ERR_FD=$(lk_next_fd) && eval "exec $_LK_LOG_ERR_FD>&2" &&
         exec > >(tee >(lk_log | { if [ -n "${LK_SECONDARY_LOG_FILE:-}" ]; then
             tee -a "$LK_SECONDARY_LOG_FILE"
         else
@@ -971,23 +972,29 @@ function lk_log_output() {
         fi >>"$LOG_PATH"; })) 2>&1 ||
         return
     lk_echoc "Output is being logged to $LK_BOLD$LOG_PATH$LK_RESET" \
-        "$LK_GREY" >&7
+        "$LK_GREY" >&"$_LK_LOG_ERR_FD"
     # shellcheck disable=SC2034
     export _LK_LOG_FILE=$LOG_PATH
 }
 
+function lk_log_is_open() {
+    [ "${_LK_LOG_OUT_FD:+1}${_LK_LOG_ERR_FD:+1}" = 11 ] &&
+        lk_is_fd_open "$_LK_LOG_OUT_FD" &&
+        lk_is_fd_open "$_LK_LOG_ERR_FD"
+}
+
 function lk_log_close() {
-    if [ -n "${_LK_LOG_FILE:-}" ]; then
-        exec >&6 2>&7 6>&- 7>&-
-    fi
+    lk_log_is_open || lk_warn "no output log to close" || return
+    exec >&"$_LK_LOG_OUT_FD" 2>&"$_LK_LOG_ERR_FD" &&
+        eval "exec $_LK_LOG_OUT_FD>&- $_LK_LOG_ERR_FD>&-"
 }
 
 function lk_log_bypass() {
-    if [ -n "${_LK_LOG_FILE:-}" ]; then
+    if lk_log_is_open; then
         if [ -t 1 ]; then
-            "$@" >&6 2>&7
+            "$@" >&"$_LK_LOG_OUT_FD" 2>&"$_LK_LOG_ERR_FD"
         else
-            "$@" 2>&7
+            "$@" 2>&"$_LK_LOG_ERR_FD"
         fi
     else
         "$@"

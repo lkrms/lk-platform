@@ -68,8 +68,9 @@ BACKUP_ROOT=$1
 
 BACKUP_ROOT=$(realpath "$BACKUP_ROOT")
 LOCK_FILE=/tmp/${0##*/}-${BACKUP_ROOT//\//_}.lock
-exec 9>"$LOCK_FILE" &&
-    flock -n 9 || lk_die "unable to acquire a lock on $LOCK_FILE"
+LOCK_FD=$(lk_next_fd)
+eval "exec $LOCK_FD>\"\$LOCK_FILE\"" &&
+    flock -n "$LOCK_FD" || lk_die "unable to acquire a lock on $LOCK_FILE"
 
 HN=$(lk_hostname) || HN=localhost
 FQDN=$(lk_fqdn) || FQDN=$HN.localdomain
@@ -204,7 +205,7 @@ lk_log_output
             done
         }
     done
-    exec 9>&-
+    eval "exec $LOCK_FD>&-"
     rm -f "$LOCK_FILE"
     lk_console_success "Pruning complete"
     USAGE_END=($(get_usage "$BACKUP_ROOT"))
