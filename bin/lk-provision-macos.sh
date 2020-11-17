@@ -135,12 +135,25 @@ function exit_trap() {
         sudo install -m 00440 /dev/null "$FILE"
     LK_SUDO=1 lk_maybe_replace "$FILE" "$SUDOERS"
 
+    lk_console_message "Configuring default umask"
     if ! USER_UMASK=$(defaults read \
         /var/db/com.apple.xpc.launchd/config/user.plist Umask 2>/dev/null) ||
         [ "$USER_UMASK" -ne 2 ]; then
-        lk_console_message "Setting default umask"
         lk_console_detail "Running:" "launchctl config user umask 002"
         sudo launchctl config user umask 002 >/dev/null
+    fi
+    FILE=/etc/profile
+    if [ -r "$FILE" ] && ! grep -q umask "$FILE"; then
+        lk_console_detail "Setting umask in" "$FILE"
+        LK_SUDO=1 lk_keep_original "$FILE"
+        sudo tee -a "$FILE" <<"EOF" >/dev/null
+
+if [ "$(id -u)" -ne 0 ]; then
+    umask 002
+else
+    umask 022
+fi
+EOF
     fi
     umask 002
 
