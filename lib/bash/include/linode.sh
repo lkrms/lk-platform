@@ -340,7 +340,8 @@ function lk_linode_hosting_update_stackscript() {
 
 # lk_linode_hosting_get_meta DIR HOST...
 function lk_linode_hosting_get_meta() {
-    local DIR=${1:-} HOST SSH_HOST FILE PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX}
+    local DIR=${1:-} HOST SSH_HOST FILE COMMIT \
+        PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX}
     [ $# -ge 2 ] || lk_usage "\
 Usage: $(lk_myself -f) DIR HOST..." || return
     [ -d "$DIR" ] || lk_warn "not a directory: $DIR" || return
@@ -351,8 +352,18 @@ Usage: $(lk_myself -f) DIR HOST..." || return
         [ -e "$FILE" ] || {
             ssh "$SSH_HOST" \
                 "sudo bash -c 'cp -pv /root/StackScript . && chown \$SUDO_USER: StackScript'" &&
-                scp -p "$SSH_HOST":StackScript "$FILE"
-        } || return
+                scp -p "$SSH_HOST":StackScript "$FILE" || return
+            # shellcheck disable=SC2016,SC2029
+            ! COMMIT=$(ssh "$SSH_HOST" "bash -c$(printf ' %q' \
+                'cd "$1" && git rev-list -g HEAD | tail -n1' \
+                bash \
+                "/opt/${PREFIX}platform")") ||
+                [ -z "$COMMIT" ] || {
+                awk -f "$LK_BASE/lib/awk/patch-hosting-script.awk" \
+                    -v commit="$COMMIT" <"$FILE" >"$FILE-patched" &&
+                    touch -r "$FILE" "$FILE-patched" || return
+            }
+        }
         FILE=$DIR/install.log-$HOST
         [ -e "$FILE" ] ||
             scp -p "$SSH_HOST:/var/log/${PREFIX}install.log" "$FILE" || return
