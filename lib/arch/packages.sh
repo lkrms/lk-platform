@@ -56,10 +56,12 @@ PACMAN_PACKAGES=(
     nmap
     openbsd-netcat
     p7zip
+    pcp
     ps_mem
     pv
     rsync
     stow
+    sysstat
     tcpdump
     traceroute
     unzip
