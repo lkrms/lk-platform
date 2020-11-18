@@ -60,8 +60,13 @@ function lk_log() {
     done
 }
 
+function lk_echo_args() {
+    [ $# -eq 0 ] ||
+        printf '%s\n' "$@"
+}
+
 function lk_echo_array() {
-    eval "printf '%s\n' \${$1[@]+\"\${$1[@]}\"}"
+    eval "lk_echo_args \${$1[@]+\"\${$1[@]}\"}"
 }
 
 function lk_console_message() {

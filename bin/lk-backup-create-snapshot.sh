@@ -287,8 +287,8 @@ SOURCE_NAME=${SOURCE_NAME//\//_}
 BACKUP_ROOT=$(realpath "$BACKUP_ROOT")
 LOCK_FILE=/tmp/${0##*/}-${BACKUP_ROOT//\//_}-$SOURCE_NAME.lock
 LOCK_FD=$(lk_next_fd)
-eval "exec $LOCK_FD>\"\$LOCK_FILE\"" &&
-    flock -n "$LOCK_FD" || lk_die "unable to acquire a lock on $LOCK_FILE"
+eval "exec $LOCK_FD>\"\$LOCK_FILE\""
+flock -n "$LOCK_FD" || lk_die "unable to acquire a lock on $LOCK_FILE"
 FIFO_FILE=$(lk_mktemp_dir)/fifo
 FIFO_FD=$(lk_next_fd)
 mkfifo "$FIFO_FILE"

@@ -183,84 +183,87 @@
     }
 
     if [ -d "$LK_BASE/.git" ]; then
-        lk_console_item "Checking repository:" "$LK_BASE"
-        cd "$LK_BASE"
-        REPO_OWNER=$(lk_file_owner "$LK_BASE")
-        CONFIG_COMMANDS=()
-        function check_repo_config() {
-            local VALUE
-            VALUE=$(git config --local "$1") &&
-                [ "$VALUE" = "$2" ] ||
-                CONFIG_COMMANDS+=("$(printf 'git config %q %q' "$1" "$2")")
-        }
-        [ ! -g "$LK_BASE" ] ||
-            check_repo_config "core.sharedRepository" "0664"
-        check_repo_config "merge.ff" "only"
-        check_repo_config "pull.ff" "only"
-        if [ ${#CONFIG_COMMANDS[@]} -gt 0 ]; then
-            lk_console_detail "Running:" "$(lk_echo_array CONFIG_COMMANDS)"
-            sudo -Hu "$REPO_OWNER" \
-                bash -c "$(lk_implode ' && ' CONFIG_COMMANDS)"
-        fi
-        BRANCH=$(git rev-parse --abbrev-ref HEAD) && [ "$BRANCH" != "HEAD" ] ||
-            lk_die "no branch checked out"
-        LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-$BRANCH}
-        if [ "$LK_PLATFORM_BRANCH" != "$BRANCH" ]; then
-            lk_console_warning "$(printf "%s is set to %s, but %s is checked out" \
-                "LK_PLATFORM_BRANCH" \
-                "$LK_BOLD$LK_PLATFORM_BRANCH$LK_RESET" \
-                "$LK_BOLD$BRANCH$LK_RESET")"
-            if lk_confirm "Switch to $LK_PLATFORM_BRANCH?" N; then
-                lk_console_detail "Switching to" "$LK_PLATFORM_BRANCH"
-                sudo -Hu "$REPO_OWNER" git checkout "$LK_PLATFORM_BRANCH"
-                restart_script "$@"
-            else
-                LK_PLATFORM_BRANCH=$BRANCH
-            fi
-        fi
-        REMOTE_NAME=$(git rev-parse --abbrev-ref "@{u}" | sed 's/\/.*//') &&
-            [ -n "$REMOTE_NAME" ] ||
-            lk_die "no upstream remote for current branch"
-        FETCH_TIME=$(lk_file_modified ".git/FETCH_HEAD" 2>/dev/null) ||
-            FETCH_TIME=0
-        if [ $(($(lk_timestamp) - FETCH_TIME)) -gt 300 ]; then
-            lk_console_detail "Checking for changes"
-            if sudo -Hu "$REPO_OWNER" \
-                git fetch --quiet --prune --prune-tags "$REMOTE_NAME" "$BRANCH"; then
-                BEHIND=$(git rev-list --count "HEAD..@{upstream}")
-                if [ "$BEHIND" -gt 0 ]; then
-                    git merge-base --is-ancestor HEAD "@{upstream}" ||
-                        lk_die "local branch has diverged from upstream"
-                    lk_console_detail \
-                        "Updating lk-platform ($BEHIND $(
-                            lk_maybe_plural "$BEHIND" "commit" "commits"
-                        ) behind)"
-                    sudo -Hu "$REPO_OWNER" \
-                        git merge --ff-only "@{upstream}"
-                    restart_script "$@"
-                fi
-            else
-                lk_console_warning "Unable to retrieve changes from upstream"
-            fi
-        fi
-        lk_console_detail "Resetting file permissions"
         (
-            DIR_MODE=0755
-            FILE_MODE=0644
-            [ ! -g "$LK_BASE" ] || {
-                DIR_MODE=2775
-                FILE_MODE=0664
-            }
+            umask 002
+            lk_console_item "Checking repository:" "$LK_BASE"
             cd "$LK_BASE"
-            gnu_find . -regextype posix-egrep \
-                -type d ! \( -regex '\./var/log' -prune \) \
-                ! -perm -"$DIR_MODE" -print0 |
-                gnu_xargs -0r gnu_chmod -c +"$DIR_MODE"
-            gnu_find . -regextype posix-egrep \
-                ! \( -type d -regex '\./(etc|var/log|\.git/objects)' -prune \) \
-                -type f ! -perm -"$FILE_MODE" -print0 |
-                gnu_xargs -0r gnu_chmod -c +"$FILE_MODE"
-            install -d -m 00777 "$LK_BASE/var/log"
+            REPO_OWNER=$(lk_file_owner "$LK_BASE")
+            CONFIG_COMMANDS=()
+            function check_repo_config() {
+                local VALUE
+                VALUE=$(git config --local "$1") &&
+                    [ "$VALUE" = "$2" ] ||
+                    CONFIG_COMMANDS+=("$(printf 'git config %q %q' "$1" "$2")")
+            }
+            [ ! -g "$LK_BASE" ] ||
+                check_repo_config "core.sharedRepository" "0664"
+            check_repo_config "merge.ff" "only"
+            check_repo_config "pull.ff" "only"
+            if [ ${#CONFIG_COMMANDS[@]} -gt 0 ]; then
+                lk_console_detail "Running:" "$(lk_echo_array CONFIG_COMMANDS)"
+                sudo -Hu "$REPO_OWNER" \
+                    bash -c "$(lk_implode ' && ' CONFIG_COMMANDS)"
+            fi
+            BRANCH=$(git rev-parse --abbrev-ref HEAD) && [ "$BRANCH" != "HEAD" ] ||
+                lk_die "no branch checked out"
+            LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-$BRANCH}
+            if [ "$LK_PLATFORM_BRANCH" != "$BRANCH" ]; then
+                lk_console_warning "$(printf "%s is set to %s, but %s is checked out" \
+                    "LK_PLATFORM_BRANCH" \
+                    "$LK_BOLD$LK_PLATFORM_BRANCH$LK_RESET" \
+                    "$LK_BOLD$BRANCH$LK_RESET")"
+                if lk_confirm "Switch to $LK_PLATFORM_BRANCH?" N; then
+                    lk_console_detail "Switching to" "$LK_PLATFORM_BRANCH"
+                    sudo -Hu "$REPO_OWNER" git checkout "$LK_PLATFORM_BRANCH"
+                    restart_script "$@"
+                else
+                    LK_PLATFORM_BRANCH=$BRANCH
+                fi
+            fi
+            REMOTE_NAME=$(git rev-parse --abbrev-ref "@{u}" | sed 's/\/.*//') &&
+                [ -n "$REMOTE_NAME" ] ||
+                lk_die "no upstream remote for current branch"
+            FETCH_TIME=$(lk_file_modified ".git/FETCH_HEAD" 2>/dev/null) ||
+                FETCH_TIME=0
+            if [ $(($(lk_timestamp) - FETCH_TIME)) -gt 300 ]; then
+                lk_console_detail "Checking for changes"
+                if sudo -Hu "$REPO_OWNER" \
+                    git fetch --quiet --prune --prune-tags "$REMOTE_NAME" "$BRANCH"; then
+                    BEHIND=$(git rev-list --count "HEAD..@{upstream}")
+                    if [ "$BEHIND" -gt 0 ]; then
+                        git merge-base --is-ancestor HEAD "@{upstream}" ||
+                            lk_die "local branch has diverged from upstream"
+                        lk_console_detail \
+                            "Updating lk-platform ($BEHIND $(
+                                lk_maybe_plural "$BEHIND" "commit" "commits"
+                            ) behind)"
+                        sudo -Hu "$REPO_OWNER" \
+                            git merge --ff-only "@{upstream}"
+                        restart_script "$@"
+                    fi
+                else
+                    lk_console_warning "Unable to retrieve changes from upstream"
+                fi
+            fi
+            lk_console_detail "Resetting file permissions"
+            (
+                DIR_MODE=0755
+                FILE_MODE=0644
+                [ ! -g "$LK_BASE" ] || {
+                    DIR_MODE=2775
+                    FILE_MODE=0664
+                }
+                cd "$LK_BASE"
+                gnu_find . -regextype posix-egrep \
+                    -type d ! \( -regex '\./var/log' -prune \) \
+                    ! -perm -"$DIR_MODE" -print0 |
+                    gnu_xargs -0r gnu_chmod -c +"$DIR_MODE"
+                gnu_find . -regextype posix-egrep \
+                    ! \( -type d -regex '\./(etc|var/log|\.git/objects)' -prune \) \
+                    -type f ! -perm -"$FILE_MODE" -print0 |
+                    gnu_xargs -0r gnu_chmod -c +"$FILE_MODE"
+                install -d -m 00777 "$LK_BASE/var/log"
+            )
         )
     fi
 

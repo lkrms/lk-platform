@@ -413,9 +413,12 @@ lk_dpkg_installed git || {
 lk_console_item "Downloading lk-platform to" "$LK_BASE"
 install -v -d -m 02775 -g adm "$LK_BASE"
 if [ -z "$(ls -A "$LK_BASE")" ]; then
-    lk_keep_trying \
-        git clone -b "$LK_PLATFORM_BRANCH" \
-        "https://github.com/lkrms/lk-platform.git" "$LK_BASE"
+    (
+        umask 002
+        lk_keep_trying \
+            git clone -b "$LK_PLATFORM_BRANCH" \
+            "https://github.com/lkrms/lk-platform.git" "$LK_BASE"
+    )
 fi
 
 # shellcheck disable=SC2034

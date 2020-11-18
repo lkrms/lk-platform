@@ -70,8 +70,13 @@ function lk_log() {
     done
 }
 
+function lk_echo_args() {
+    [ $# -eq 0 ] ||
+        printf '%s\n' "$@"
+}
+
 function lk_echo_array() {
-    eval "printf '%s\n' \${$1[@]+\"\${$1[@]}\"}"
+    eval "lk_echo_args \${$1[@]+\"\${$1[@]}\"}"
 }
 
 function lk_console_message() {
@@ -611,12 +616,12 @@ trap exit_trap EXIT
     fi
 
     lk_console_item "Creating snapshot at" "$LK_SNAPSHOT_ROOT"
-    lk_console_detail "Log files:" "$(printf '%s\n' \
+    lk_console_detail "Log files:" "$(lk_echo_args \
         "$SNAPSHOT_LOG_FILE" "$RSYNC_OUT_FILE" "$RSYNC_ERR_FILE")"
     RSYNC_ARGS=(-vrlpt --delete --stats "$@")
     ! RSYNC_FILTERS=($(find_custom filter-rsync | tac)) || {
         lk_console_detail "Rsync filter:" \
-            "$(printf '%s\n' "${RSYNC_FILTERS[@]/#/. }")"
+            "$(lk_echo_args "${RSYNC_FILTERS[@]/#/. }")"
         RSYNC_ARGS[${#RSYNC_ARGS[@]}]=--delete-excluded
         for RSYNC_FILTER in "${RSYNC_FILTERS[@]}"; do
             RSYNC_ARGS[${#RSYNC_ARGS[@]}]=--filter
