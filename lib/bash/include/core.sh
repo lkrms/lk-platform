@@ -542,6 +542,33 @@ function lk_escape_curl_config() {
     echo "${ARG//$'\v'/\\v}"
 }
 
+function lk_ere_case_insensitive() {
+    local i LOWER UPPER REGEX=
+    for i in $(seq 0 $((${#1} - 1))); do
+        LOWER=$(lk_lower "${1:$i:1}")
+        UPPER=$(lk_upper "${1:$i:1}")
+        [ "$LOWER" = "$UPPER" ] &&
+            REGEX=$REGEX${1:$i:1} ||
+            REGEX="${REGEX}[$LOWER$UPPER]"
+    done
+    echo "$REGEX"
+}
+
+# lk_ere_expand_whitespace STRING
+#
+# Replace each unquoted sequence of one or more whitespace characters in STRING
+# with "[[:blank:]]+". Escaped delimiters within double- and single-quoted
+# sequences are recognised.
+#
+# For example, pass "message = 'Here\'s a message'" to get the following output:
+#   message[[:blank:]]+=[[:blank:]]+'Here\'s a message'
+function lk_ere_expand_whitespace() {
+    sed -E "\
+:start
+s/^(([^'\"[:blank:]]*|(''|'([^']|\\\\')*[^\\]')|(\"\"|\"([^\"]|\\\\\")*[^\\]\"))*)$S+/\\1[[:blank:]]+/
+t start" <<<"$1"
+}
+
 # lk_replace FIND REPLACE_WITH [STRING]
 #
 # Replace all occurrences of FIND in STRING or input with REPLACE_WITH.
@@ -2162,7 +2189,7 @@ function lk_maybe_replace() {
         LK_MAYBE_REPLACE_NO_CHANGE=
         ! diff -q \
             <(lk_maybe_sudo cat "$1" | _lk_maybe_filter "${@:3}") \
-            <([ -z "$2" ] || cat <<<"$2" | _lk_maybe_filter "${@:3}") \
+            <([ -z "$2" ] || echo "${2%$'\n'}" | _lk_maybe_filter "${@:3}") \
             >/dev/null || {
             # shellcheck disable=SC2034
             LK_MAYBE_REPLACE_NO_CHANGE=1
@@ -2171,7 +2198,7 @@ function lk_maybe_replace() {
         }
         lk_keep_original "$1" || return
     fi
-    cat <<<"$2" | lk_maybe_sudo tee "$1" >/dev/null || return
+    echo "${2%$'\n'}" | lk_maybe_sudo tee "$1" >/dev/null || return
     ! lk_verbose || {
         if lk_is_true "${LK_NO_DIFF:-}"; then
             lk_console_detail "Updated:" "$1"

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2015,SC2088,SC2207
+# shellcheck disable=SC2015,SC2086,SC2088,SC2206,SC2207
 
 # lk_maybe_install [-v] [-m MODE] [-o OWNER] [-g GROUP] SOURCE DEST
 # lk_maybe_install -d [-v] [-m MODE] [-o OWNER] [-g GROUP] DEST
@@ -27,7 +27,9 @@ function lk_maybe_install() {
 # lk_dir_set_modes DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]...
 function lk_dir_set_modes() {
     local DIR REGEX LOG_FILE _DIR i TYPE MODE ARGS CHANGES _CHANGES \
-        _PRUNE _EXCLUDE MATCH=() DIR_MODE=() FILE_MODE=() PRUNE=() LK_USAGE="\
+        _PRUNE _EXCLUDE MATCH=() DIR_MODE=() FILE_MODE=() PRUNE=() LK_USAGE
+    # shellcheck disable=SC2034
+    LK_USAGE="\
 Usage: $(lk_myself -f) DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..."
     [ $# -ge 4 ] && ! ((($# - 1) % 3)) || lk_usage || return
     lk_maybe_sudo test -d "$1" || lk_warn "not a directory: $1" || return
@@ -90,12 +92,13 @@ Usage: $(lk_myself -f) DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..
 }
 
 # lk_sudo_offer_nopasswd
-#   Invite the current user to add themselves to the system's sudoers policy
-#   with unlimited access and no password prompts.
+#
+# Invite the current user to add themselves to the system's sudoers policy with
+# unlimited access and no password prompts.
 function lk_sudo_offer_nopasswd() {
     local FILE
-    FILE="/etc/sudoers.d/nopasswd-$USER"
     ! lk_is_root || lk_warn "cannot run as root" || return
+    FILE=/etc/sudoers.d/nopasswd-$USER
     sudo -n test -e "$FILE" 2>/dev/null || {
         lk_can_sudo install || return
         lk_confirm "Allow user '$USER' to run sudo without entering a password?" Y || return
@@ -103,6 +106,17 @@ function lk_sudo_offer_nopasswd() {
             sudo tee "$FILE" >/dev/null <<<"$USER ALL=(ALL) NOPASSWD:ALL" &&
             lk_console_message "User '$USER' may now run any command as any user" || return
     }
+}
+
+# lk_ssh_set_option OPTION VALUE [FILE]
+function lk_ssh_set_option() {
+    local OPTION VALUE FILE=${3:-$LK_CONF_OPTION_FILE}
+    OPTION=$(lk_ere_case_insensitive "$(lk_escape_ere "$1")")
+    VALUE=$(lk_escape_ere "$2")
+    lk_option_set "$FILE" \
+        "$1 $2" \
+        "^$S*$OPTION($S+|$S*=$S*)$VALUE$S*\$" \
+        "^$S*$OPTION($S+|$S*=).*" "^$S*#$S*$OPTION($S+|$S*=).*"
 }
 
 function lk_ssh_list_hosts() {
@@ -203,6 +217,7 @@ function lk_ssh_get_public_key() {
 function lk_ssh_add_host() {
     local NAME=$1 HOST=$2 SSH_USER=$3 KEY_FILE=${4:-} JUMP_HOST_NAME=${5:-} \
         h=${LK_SSH_HOME:-~} SSH_PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX} \
+        LK_BACKUP_SUFFIX='' LK_VERBOSE=0 \
         KEY CONF CONF_FILE
     [ $# -ge 3 ] || lk_usage "\
 Usage: $(lk_myself -f) NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
@@ -212,7 +227,7 @@ Usage: $(lk_myself -f) NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
         [ -f "$KEY_FILE" ] ||
         [ -f "$h/.ssh/$KEY_FILE" ] ||
         { [ -f "$h/.ssh/${SSH_PREFIX}keys/$KEY_FILE" ] &&
-            KEY_FILE="~/.ssh/${SSH_PREFIX}keys/$KEY_FILE"; } ||
+            KEY_FILE=$h/.ssh/${SSH_PREFIX}keys/$KEY_FILE; } ||
         # If KEY_FILE doesn't exist but matches the regex below, check
         # ~/.ssh/authorized_keys for exactly one public key with the comment
         # field set to KEY_FILE
@@ -225,16 +240,14 @@ Usage: $(lk_myself -f) NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
         KEY=${KEY:-$(cat)}
         KEY_FILE=$h/.ssh/${SSH_PREFIX}keys/$NAME
         lk_maybe_install -m 00600 /dev/null "$KEY_FILE" &&
-            LK_BACKUP_SUFFIX='' LK_VERBOSE=0 \
-                lk_maybe_replace "$KEY_FILE" "$KEY" || return
+            lk_maybe_replace "$KEY_FILE" "$KEY" || return
         ssh-keygen -l -f "$KEY_FILE" >/dev/null 2>&1 || {
             # `ssh-keygen -l -f FILE` exits without error if FILE contains an
             # OpenSSH public key
             lk_console_log "Reading $KEY_FILE to create public key file"
             KEY=$(unset DISPLAY && ssh-keygen -y -f "$KEY_FILE") &&
                 lk_maybe_install -m 00600 /dev/null "$KEY_FILE.pub" &&
-                LK_BACKUP_SUFFIX='' LK_VERBOSE=0 \
-                    lk_maybe_replace "$KEY_FILE.pub" "$KEY" || return
+                lk_maybe_replace "$KEY_FILE.pub" "$KEY" || return
         }
     }
     CONF=$(
@@ -244,25 +257,26 @@ Usage: $(lk_myself -f) NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
         }
         KEY_FILE=${KEY_FILE//${h//\//\\\/}/"~"}
         cat <<EOF
-Host                    $SSH_PREFIX$NAME
-HostName                $HOST${PORT:+
-Port                    $PORT}${SSH_USER:+
-User                    $SSH_USER}${KEY_FILE:+
-IdentityFile            "$KEY_FILE"}${JUMP_HOST_NAME:+
-ProxyJump               $SSH_PREFIX${JUMP_HOST_NAME#$SSH_PREFIX}}
+Host            $SSH_PREFIX$NAME
+HostName        $HOST${PORT:+
+Port            $PORT}${SSH_USER:+
+User            $SSH_USER}${KEY_FILE:+
+IdentityFile    "$KEY_FILE"}${JUMP_HOST_NAME:+
+ProxyJump       $SSH_PREFIX${JUMP_HOST_NAME#$SSH_PREFIX}}
 EOF
     )
     CONF_FILE=$h/.ssh/${SSH_PREFIX}config.d/${LK_SSH_PRIORITY:-60}-$NAME
     lk_maybe_install -m 00600 /dev/null "$CONF_FILE" &&
-        LK_BACKUP_SUFFIX='' \
-            lk_maybe_replace "$CONF_FILE" "$CONF" || return
+        lk_maybe_replace "$CONF_FILE" "$CONF" || return
 }
 
 # lk_ssh_configure [JUMP_HOST[:JUMP_PORT] JUMP_USER [JUMP_KEY_FILE]]
 function lk_ssh_configure() {
+    # shellcheck disable=SC2034
     local JUMP_HOST=${1:-} JUMP_USER=${2:-} JUMP_KEY_FILE=${3:-} \
         SSH_PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX} \
-        KEY PATTERN CONF PROG AWK OWNER GROUP \
+        LK_BACKUP_SUFFIX='' LK_VERBOSE=0 \
+        KEY PATTERN CONF AWK OWNER GROUP \
         HOMES=(${LK_HOMES[@]+"${LK_HOMES[@]}"}) h
     [ $# -eq 0 ] || [ $# -ge 2 ] || lk_warn "invalid arguments" || return
     [ ${#HOMES[@]} -gt 0 ] || HOMES=(~)
@@ -277,7 +291,6 @@ function lk_ssh_configure() {
     PATTERN="^$S*[iI][nN][cC][lL][uU][dD][eE]$S+$PATTERN$S*\$"
     PATTERN=${PATTERN//\\/\\\\}
     CONF="Include ~/.ssh/${SSH_PREFIX}config.d/*"
-    # shellcheck disable=SC2016
     AWK=(awk
         -f "$LK_BASE/lib/awk/update-ssh-config.awk"
         -v "SSH_PATTERN=$PATTERN"
@@ -299,8 +312,7 @@ function lk_ssh_configure() {
             install -m 00600 -o "$OWNER" -g "$GROUP" \
                 /dev/null "$h/.ssh/config" ||
             return
-        LK_BACKUP_SUFFIX='' \
-            lk_maybe_replace "$h/.ssh/config" "$("${AWK[@]}" "$h/.ssh/config")"
+        lk_maybe_replace "$h/.ssh/config" "$("${AWK[@]}" "$h/.ssh/config")"
         # Add defaults for all lk-* hosts to ~/.ssh/lk-config.d/90-defaults
         CONF=$(
             cat <<EOF
@@ -315,8 +327,7 @@ SendEnv                 LANG LC_*
 ServerAliveInterval     30
 EOF
         )
-        LK_BACKUP_SUFFIX='' \
-            lk_maybe_replace "$h/.ssh/${SSH_PREFIX}config.d/90-defaults" "$CONF"
+        lk_maybe_replace "$h/.ssh/${SSH_PREFIX}config.d/90-defaults" "$CONF"
         # Add jump proxy configuration
         [ $# -lt 2 ] ||
             LK_SSH_HOME=$h LK_SSH_PRIORITY=40 \
@@ -336,27 +347,20 @@ EOF
     done
 }
 
-# lk_grep_ipv4
-#   Print each input line that is a valid dotted-decimal IPv4 address or CIDR.
-function lk_grep_ipv4() {
-    local OCTET='(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])'
-    grep -E "^($OCTET\\.){3}$OCTET(/(3[0-2]|[12][0-9]|[1-9]))?\$"
+# lk_filter_ipv4
+#
+# Print each input line that is a valid dotted-decimal IPv4 address or CIDR.
+function lk_filter_ipv4() {
+    eval "$(lk_get_regex IPV4_OPT_PREFIX_REGEX)"
+    sed -E "/^$IPV4_OPT_PREFIX_REGEX$/!d"
 }
 
-# lk_grep_ipv6
-#   Print each input line that is a valid 8-hextet IPv6 address or CIDR.
-function lk_grep_ipv6() {
-    local HEXTET='[0-9a-fA-F]{1,4}' \
-        PREFIX='/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9])'
-    grep -E "\
-^(($HEXTET:){7}(:|$HEXTET)|\
-($HEXTET:){6}(:|:$HEXTET)|\
-($HEXTET:){5}(:|(:$HEXTET){1,2})|\
-($HEXTET:){4}(:|(:$HEXTET){1,3})|\
-($HEXTET:){3}(:|(:$HEXTET){1,4})|\
-($HEXTET:){2}(:|(:$HEXTET){1,5})|\
-$HEXTET:(:|(:$HEXTET){1,6})|\
-:(:|(:$HEXTET){1,7}))($PREFIX)?\$"
+# lk_filter_ipv6
+#
+# Print each input line that is a valid 8-hextet IPv6 address or CIDR.
+function lk_filter_ipv6() {
+    eval "$(lk_get_regex IPV6_OPT_PREFIX_REGEX)"
+    sed -E "/^$IPV6_OPT_PREFIX_REGEX$/!d"
 }
 
 function _lk_node_ip() {
@@ -434,7 +438,6 @@ function lk_hosts_get_records() {
         )
     if [ "${1:0:1}" = + ]; then
         IFS=,
-        # shellcheck disable=SC2206
         FIELDS=(${1:1})
         shift
         unset IFS
@@ -472,7 +475,6 @@ function lk_hosts_get_records() {
         lk_warn "invalid type(s): $TYPE" || return
     lk_test_many "lk_is_host" "$@" || lk_warn "invalid host(s): $*" || return
     IFS=,
-    # shellcheck disable=SC2206
     TYPES=($TYPE)
     for TYPE in "${TYPES[@]}"; do
         for HOST in "$@"; do
@@ -491,8 +493,8 @@ function lk_hosts_get_records() {
 function lk_hosts_resolve() {
     local HOSTS IP_ADDRESSES
     IP_ADDRESSES=($({
-        lk_echo_args "$@" | lk_grep_ipv4 || true
-        lk_echo_args "$@" | lk_grep_ipv6 || true
+        lk_echo_args "$@" | lk_filter_ipv4
+        lk_echo_args "$@" | lk_filter_ipv6
     }))
     HOSTS=($(comm -23 <(lk_echo_args "$@" | sort | uniq) \
         <(lk_echo_array IP_ADDRESSES | sort | uniq)))
@@ -624,6 +626,8 @@ function lk_certbot_install() {
 }
 
 # lk_cpanel_get_ssl_cert SSH_HOST DOMAIN [TARGET_DIR]
+#
+# shellcheck disable=SC2034
 function lk_cpanel_get_ssl_cert() {
     local TARGET_DIR=${3:-~/ssl} SSL_JSON CERT KEY TARGET_REL \
         LK_CONSOLE_NO_FOLD=1 LK_BACKUP_SUFFIX
@@ -674,48 +678,113 @@ function lk_ssl_verify_cert() {
     lk_console_log "SSL certificate and private key verified"
 }
 
-# lk_apply_setting FILE SETTING VAL [DELIM] [COMMENT_CHARS] [SPACES]
+function _lk_option_check() {
+    { { [ $# -gt 0 ] &&
+        echo -n "$1" ||
+        lk_maybe_sudo cat "$FILE"; } |
+        grep -E "$CHECK_REGEX"; } >/dev/null 2>&1
+}
+
+# lk_option_set [-p] FILE SETTING CHECK_REGEX REPLACE_REGEX...
 #
-# Set value of SETTING to VAL in FILE.
+# If CHECK_REGEX doesn't match any lines in FILE, replace each REPLACE_REGEX
+# match with SETTING until there's a match for CHECK_REGEX. If there is still no
+# match, append SETTING to FILE.
 #
-# Notes:
-# - DELIM defaults to "="
-# - To uncomment an existing SETTING assignment first, use COMMENT_CHARS to
-#   specify which characters can be removed from the beginning of lines
-# - Use SPACES to specify whitespace characters considered legal before and
-#   after SETTING, VAL and DELIMITER
-function lk_apply_setting() {
-    local FILE_PATH="$1" SETTING_NAME="$2" SETTING_VALUE="$3" DELIMITER="${4:-=}" \
-        COMMENT_PATTERN SPACE_PATTERN NAME_ESCAPED VALUE_ESCAPED DELIMITER_ESCAPED CHECK_PATTERN SEARCH_PATTERN REPLACE REPLACED
-    lk_maybe_sudo test -f "$FILE_PATH" || lk_warn "$FILE_PATH must exist" || return
-    COMMENT_PATTERN="${5:+[$(lk_escape_ere "$5")]*}"
-    SPACE_PATTERN="${6:+[$(lk_escape_ere "$6")]*}"
-    NAME_ESCAPED="$(lk_escape_ere "$SETTING_NAME")"
-    VALUE_ESCAPED="$(lk_escape_ere "$SETTING_VALUE")"
-    DELIMITER_ESCAPED="$(sed -Ee "s/^$SPACE_PATTERN//" -e "s/$SPACE_PATTERN\$//" <<<"$DELIMITER")"
-    [ -n "$DELIMITER_ESCAPED" ] || DELIMITER_ESCAPED="$DELIMITER"
-    DELIMITER_ESCAPED="$(lk_escape_ere "$DELIMITER_ESCAPED")"
-    CHECK_PATTERN="^$SPACE_PATTERN$NAME_ESCAPED$SPACE_PATTERN$DELIMITER_ESCAPED$SPACE_PATTERN$VALUE_ESCAPED$SPACE_PATTERN\$"
-    grep -Eq "$CHECK_PATTERN" "$FILE_PATH" || {
-        REPLACE="$SETTING_NAME$DELIMITER$SETTING_VALUE"
-        # try to replace an uncommented value first
-        SEARCH_PATTERN="^($SPACE_PATTERN)$NAME_ESCAPED$SPACE_PATTERN$DELIMITER_ESCAPED.*\$"
-        REPLACED="$(sed -E "0,/$SEARCH_PATTERN/{s/$SEARCH_PATTERN/\\1$(lk_escape_ere_replace "$REPLACE")/}" "$FILE_PATH")" || return
-        # failing that, try for a commented one
-        grep -Eq "$CHECK_PATTERN" <<<"$REPLACED" || {
-            SEARCH_PATTERN="^($SPACE_PATTERN)$COMMENT_PATTERN($SPACE_PATTERN)$NAME_ESCAPED$SPACE_PATTERN$DELIMITER_ESCAPED.*\$"
-            REPLACED="$(sed -E "0,/$SEARCH_PATTERN/{s/$SEARCH_PATTERN/\\1\\2$(lk_escape_ere_replace "$REPLACE")/}" "$FILE_PATH")" || return
-        }
-        lk_keep_original "$FILE_PATH" || return
-        if grep -Eq "$CHECK_PATTERN" <<<"$REPLACED"; then
-            lk_maybe_sudo tee "$FILE_PATH" <<<"$REPLACED" >/dev/null || return
-        else
-            {
-                echo "$REPLACED"
-                echo "$REPLACE"
-            } | lk_maybe_sudo tee "$FILE_PATH" >/dev/null || return
-        fi
+# If -p is set, pass each REPLACE_REGEX to sed as-is, otherwise pass
+# "0,/REPLACE_REGEX/{s/REGEX/SETTING/}" (after escaping SETTING).
+function lk_option_set() {
+    local FILE SETTING CHECK_REGEX REPLACE_WITH PRESERVE
+    [ "${1:-}" != -p ] || {
+        PRESERVE=
+        shift
     }
+    [ $# -ge 4 ] || lk_usage "\
+$(lk_myself -f) [-p] FILE SETTING CHECK_REGEX REPLACE_REGEX..." || return
+    FILE=$1
+    SETTING=$2
+    CHECK_REGEX=$3
+    ! _lk_option_check || return 0
+    lk_maybe_sudo test -e "$FILE" ||
+        { lk_maybe_install -d -m 00755 "${FILE%/*}" &&
+            lk_maybe_install -m 00644 /dev/null "$FILE"; } || return
+    lk_maybe_sudo test -f "$FILE" || lk_warn "file not found: $FILE" || return
+    _FILE=$(lk_maybe_sudo cat "$FILE" && printf '.') &&
+        _FILE=${_FILE%.} || return
+    lk_is_true "${PRESERVE+1}" ||
+        REPLACE_WITH=$(lk_escape_ere_replace "$SETTING")
+    shift 3
+    for REGEX in "$@"; do
+        _FILE=$(gnu_sed -E \
+            ${PRESERVE+"$REGEX"} \
+            ${PRESERVE-"0,/$REGEX/{s/$REGEX/$REPLACE_WITH/}"} <<<"$_FILE"$'\n.') &&
+            _FILE=${_FILE%$'\n.'} || return
+        ! _lk_option_check "$_FILE" || {
+            lk_maybe_replace "$FILE" "$_FILE"
+            return
+        }
+    done
+    lk_keep_original "$FILE" &&
+        lk_maybe_add_newline "$FILE" &&
+        lk_maybe_sudo tee -a "$FILE" <<<"$SETTING" >/dev/null
+}
+
+# lk_conf_set_option OPTION VALUE [FILE]
+function lk_conf_set_option() {
+    local OPTION VALUE FILE=${3:-$LK_CONF_OPTION_FILE}
+    OPTION=$(lk_escape_ere "$1")
+    VALUE=$(lk_escape_ere "$2")
+    lk_option_set "$FILE" \
+        "$1=$2" \
+        "^$S*$OPTION$S*=$S*$VALUE$S*\$" \
+        "^$S*$OPTION$S*=.*" "^$S*#$S*$OPTION$S*=.*"
+}
+
+# lk_php_set_option OPTION VALUE [FILE]
+function lk_php_set_option() {
+    local OPTION VALUE FILE=${3:-$LK_CONF_OPTION_FILE}
+    OPTION=$(lk_escape_ere "$1")
+    VALUE=$(lk_escape_ere "$2")
+    lk_option_set "$FILE" \
+        "$1=$2" \
+        "^$S*$OPTION$S*=$S*$VALUE$S*\$" \
+        "^$S*$OPTION$S*=.*" "^$S*;$S*$OPTION$S*=.*"
+}
+
+# lk_php_enable_option OPTION VALUE [FILE]
+function lk_php_enable_option() {
+    local OPTION VALUE FILE=${3:-$LK_CONF_OPTION_FILE}
+    OPTION=$(lk_escape_ere "$1")
+    VALUE=$(lk_escape_ere "$2")
+    lk_option_set "$FILE" \
+        "$1=$2" \
+        "^$S*$OPTION$S*=$S*$VALUE$S*\$" \
+        "^$S*;$S*$OPTION$S*=$S*$VALUE$S*\$"
+}
+
+# lk_httpd_set_option OPTION VALUE [FILE]
+function lk_httpd_set_option() {
+    local OPTION VALUE FILE=${3:-$LK_CONF_OPTION_FILE}
+    OPTION=$(lk_ere_case_insensitive "$(lk_escape_ere "$1")")
+    VALUE=$(lk_ere_expand_whitespace "$(lk_escape_ere "$2")")
+    REPLACE_WITH=$(lk_escape_ere_replace "$1 $2")
+    lk_option_set -p "$FILE" \
+        "$1 $2" \
+        "^$S*$OPTION$S+$VALUE$S*\$" \
+        "0,/^$S*$OPTION$S+.*/{s/^($S*)$OPTION$S+.*/\\1$REPLACE_WITH/}" \
+        "0,/^$S*#$S*$OPTION$S+.*/{s/^($S*)#$S*$OPTION$S+.*/\\1$REPLACE_WITH/}"
+}
+
+# lk_httpd_enable_option OPTION VALUE [FILE]
+function lk_httpd_enable_option() {
+    local OPTION VALUE FILE=${3:-$LK_CONF_OPTION_FILE}
+    OPTION=$(lk_ere_case_insensitive "$(lk_escape_ere "$1")")
+    VALUE=$(lk_ere_expand_whitespace "$(lk_escape_ere "$2")")
+    REPLACE_WITH=$(lk_escape_ere_replace "$1 $2")
+    lk_option_set -p "$FILE" \
+        "$1 $2" \
+        "^$S*$OPTION$S+$VALUE$S*\$" \
+        "0,/^$S*#$S*$OPTION$S+$VALUE$S*\$/{s/^($S*)#$S*$OPTION$S+$VALUE$S*\$/\\1$REPLACE_WITH/}"
 }
 
 # LK_EXPAND_WHITESPACE=<1|0|Y|N> \

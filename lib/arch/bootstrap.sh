@@ -7,26 +7,20 @@
 # 3. curl -L https://lkr.ms/bs >bs
 # 4. bash bs
 
-CUSTOM_REPOS=()                 # format: "repo|server|[key_url]|[key_id]|[siglevel]"
-PING_HOSTNAME=one.one.one.one   # see https://blog.cloudflare.com/dns-resolver-1-1-1-1/
-NTP_SERVER=ntp.linacreative.com #
-MOUNT_OPTIONS=defaults          # ",discard" is added automatically if TRIM support is detected (VMs only)
-TIMEZONE=Australia/Sydney       # see /usr/share/zoneinfo
-LOCALES=(en_AU en_GB)           # UTF-8 is enforced
-LANGUAGE=en_AU:en_GB:en
-MIRROR=http://archlinux.mirror.linacreative.com/archlinux/\$repo/os/\$arch
+BOOTSTRAP_PING_HOST=${BOOTSTRAP_PING_HOST:-one.one.one.one}  # https://blog.cloudflare.com/dns-resolver-1-1-1-1/
+BOOTSTRAP_MOUNT_OPTIONS=${BOOTSTRAP_MOUNT_OPTIONS:-defaults} # On VMs with TRIM support, "discard" is added automatically
+LK_NODE_TIMEZONE=${LK_NODE_TIMEZONE:-UTC}                    # See `timedatectl list-timezones`
+LK_NODE_LOCALES=${LK_NODE_LOCALES-en_AU.UTF-8 en_GB.UTF-8}   # "en_US.UTF-8" is added automatically
+LK_NODE_LANGUAGE=${LK_NODE_LANGUAGE-en_AU:en_GB:en}          #
+LK_NTP_SERVER=${LK_NTP_SERVER-time.apple.com}                #
+LK_ARCH_CUSTOM_REPOS=${LK_ARCH_CUSTOM_REPOS:-}               # REPO|SERVER|KEY_URL|KEY_ID|SIG_LEVEL,...
+LK_ARCH_MIRROR=${LK_ARCH_MIRROR:-}
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
-LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(
+LK_PATH_PREFIX_ALPHA=${LK_PATH_PREFIX_ALPHA:-$(
     sed 's/[^a-zA-Z0-9]//g' <<<"$LK_PATH_PREFIX"
-)}"
+)}
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
 export LK_BASE=${LK_BASE:-/opt/${LK_PATH_PREFIX}platform}
-
-# these will be added to the defaults in packages.sh
-PACMAN_PACKAGES=()
-PACMAN_DESKTOP_PACKAGES=()
-AUR_PACKAGES=()
-AUR_DESKTOP_PACKAGES=()
 
 set -euo pipefail
 _FILE=${BASH_SOURCE[0]}
@@ -53,8 +47,8 @@ $(lsblk --output "NAME,RM,RO,SIZE,TYPE,FSTYPE,MOUNTPOINT" --paths)" >&2
 function exit_trap() {
     exec >&6 2>&7 6>&- 7>&-
     [ ! -d "/mnt/boot" ] || {
-        install -v -d -m 00755 "/mnt/var/log" &&
-            install -v -m 00640 -g "adm" \
+        install -d -m 00755 "/mnt/var/log" &&
+            install -m 00640 -g "adm" \
                 "$LOG_FILE" "/mnt/var/log/${LK_PATH_PREFIX}bootstrap.log" || true
     }
 }
@@ -82,15 +76,15 @@ function is_ssd() {
 
 function before_install() {
     lk_console_detail "Checking network connection"
-    ping -c 1 "${PING_HOSTNAME:-one.one.one.one}" || lk_die "no network"
+    ping -c 1 "$BOOTSTRAP_PING_HOST" || lk_die "no network"
 
-    if [ -n "${NTP_SERVER:-}" ]; then
+    if [ -n "$LK_NTP_SERVER" ]; then
         if ! type -P ntpd >/dev/null; then
             lk_console_detail "Installing ntpd in live environment"
             pacman -Sy --noconfirm ntp >/dev/null || lk_die "unable to install ntpd"
         fi
-        lk_console_detail "Synchronising system time with" "$NTP_SERVER"
-        ntpd -qgx "$NTP_SERVER" || lk_die "unable to sync system time"
+        lk_console_detail "Synchronising system time with" "$LK_NTP_SERVER"
+        ntpd -qgx "$LK_NTP_SERVER" || lk_die "unable to sync system time"
     fi
 }
 
@@ -110,7 +104,7 @@ function configure_pacman() {
 [[ $- != *s* ]] || lk_die "cannot run from standard input"
 [ $# -ge 3 ] || usage
 
-LOG_FILE="/tmp/${LK_PATH_PREFIX}bootstrap.$(date +'%s').log"
+LOG_FILE=/tmp/${LK_PATH_PREFIX}bootstrap.$(date +'%s').log
 exec 6>&1 7>&2
 exec > >(tee "$LOG_FILE") 2>&1
 trap exit_trap EXIT
@@ -135,9 +129,9 @@ lk_console_message "Setting up live environment"
 # otherwise mirrorlist may be replaced by reflector
 systemctl stop reflector || true
 configure_pacman
-[ -z "$MIRROR" ] ||
+[ -z "$LK_ARCH_MIRROR" ] ||
     # pacstrap will copy this to the new system
-    echo "Server=$MIRROR" >"/etc/pacman.d/mirrorlist"
+    echo "Server=$LK_ARCH_MIRROR" >"/etc/pacman.d/mirrorlist"
 
 . "$_DIR/packages.sh" >&6 2>&7
 
@@ -178,7 +172,7 @@ if [ $# -eq 3 ]; then
     wipefs -a "$BOOT_PARTITION"
 
     REPARTITIONED=1
-    TARGET_HOSTNAME="$2"
+    LK_NODE_HOSTNAME="$2"
     TARGET_USERNAME="$3"
 
 elif [ $# -ge 4 ]; then
@@ -191,7 +185,7 @@ elif [ $# -ge 4 ]; then
     ROOT_PARTITION="$1"
     BOOT_PARTITION="$2"
     OTHER_OS_PARTITIONS=("${@:3:$#-4}")
-    TARGET_HOSTNAME="${@: -2:1}"
+    LK_NODE_HOSTNAME="${@: -2:1}"
     TARGET_USERNAME="${@: -1:1}"
 
 fi
@@ -265,9 +259,9 @@ if lk_is_virtual; then
     ! is_ssd "$ROOT_PARTITION" || ROOT_OPTION_EXTRA=",discard"
     ! is_ssd "$BOOT_PARTITION" || BOOT_OPTION_EXTRA=",discard"
 fi
-mount -o "${MOUNT_OPTIONS:-defaults}${ROOT_OPTION_EXTRA:-}" "$ROOT_PARTITION" /mnt &&
+mount -o "$BOOTSTRAP_MOUNT_OPTIONS${ROOT_OPTION_EXTRA:-}" "$ROOT_PARTITION" /mnt &&
     mkdir /mnt/boot &&
-    mount -o "${MOUNT_OPTIONS:-defaults}${BOOT_OPTION_EXTRA:-}" "$BOOT_PARTITION" /mnt/boot || exit
+    mount -o "$BOOTSTRAP_MOUNT_OPTIONS${BOOT_OPTION_EXTRA:-}" "$BOOT_PARTITION" /mnt/boot || exit
 
 lk_is_false "$KEEP_BOOT_PARTITION" || {
     lk_console_message "Checking for files from previous installations in boot filesystem"
@@ -287,46 +281,44 @@ genfstab -U /mnt >>"/mnt/etc/fstab"
 
 configure_pacman
 
-if [ -n "${NTP_SERVER:-}" ]; then
+if [ -n "$LK_NTP_SERVER" ]; then
     lk_console_detail "Configuring NTP"
     FILE="/mnt/etc/ntp.conf"
     lk_keep_original "$FILE"
     sed -Ei 's/^(server|pool)\b/#&/' "$FILE"
-    echo "server $NTP_SERVER iburst" >>"$FILE"
+    echo "server $LK_NTP_SERVER iburst" >>"$FILE"
 fi
 
 lk_console_detail "Setting the time zone"
-ln -sfv "/usr/share/zoneinfo/${TIMEZONE:-UTC}" "/mnt/etc/localtime"
+ln -sfv "/usr/share/zoneinfo/$LK_NODE_TIMEZONE" "/mnt/etc/localtime"
 
 lk_console_detail "Configuring hardware clock"
 in_target hwclock --systohc
 
-LOCALES=(${LOCALES[@]+"${LOCALES[@]}"} "en_US")
-IFS=$'\n'
+LOCALES=($LK_NODE_LOCALES en_US.UTF-8)
 lk_console_detail "Configuring locales"
-unset IFS
 lk_keep_original "/mnt/etc/locale.gen"
-for _LOCALE in $(printf '%s\n' "${LOCALES[@]}" | sed 's/\..*$//' | sort | uniq); do
-    sed -Ei "s/^#($(lk_escape_ere "$_LOCALE")\\.UTF-8$S+UTF-8)\\b/\\1/" "/mnt/etc/locale.gen"
+for _LOCALE in $(printf '%s\n' "${LOCALES[@]}" | sort -u); do
+    sed -Ei "s/^$S*#$S*($(lk_escape_ere "$_LOCALE")$S+)/\\1/" "/mnt/etc/locale.gen"
 done
 in_target locale-gen
 
 lk_keep_original "/mnt/etc/locale.conf"
 cat <<EOF >"/mnt/etc/locale.conf"
-LANG=${LOCALES[0]}.UTF-8${LANGUAGE:+
-LANGUAGE=$LANGUAGE}
+LANG=${LOCALES[0]}${LK_NODE_LANGUAGE:+
+LANGUAGE=$LK_NODE_LANGUAGE}
 EOF
 
 lk_console_detail "Setting hostname"
 lk_keep_original "/mnt/etc/hostname"
-echo "$TARGET_HOSTNAME" >"/mnt/etc/hostname"
+echo "$LK_NODE_HOSTNAME" >"/mnt/etc/hostname"
 
 lk_console_detail "Configuring hosts"
 lk_keep_original "/mnt/etc/hosts"
 cat <<EOF >>"/mnt/etc/hosts"
 127.0.0.1 localhost
 ::1 localhost
-127.0.1.1 $TARGET_HOSTNAME.localdomain $TARGET_HOSTNAME
+127.0.1.1 $LK_NODE_HOSTNAME.localdomain $LK_NODE_HOSTNAME
 EOF
 
 if [ ${#PACMAN_DESKTOP_PACKAGES[@]} -eq 0 ]; then
@@ -409,12 +401,17 @@ in_target install -v -d -m 02775 -o "$TARGET_USERNAME" -g "adm" \
 in_target sudo -H -u "$TARGET_USERNAME" \
     git clone -b "$LK_PLATFORM_BRANCH" \
     "https://github.com/lkrms/lk-platform.git" "$LK_BASE"
-LK_NODE_HOSTNAME=$TARGET_HOSTNAME LK_NODE_TIMEZONE=$TIMEZONE lk_get_shell_var \
+lk_get_shell_var \
     LK_BASE \
     LK_PATH_PREFIX \
     LK_PATH_PREFIX_ALPHA \
     LK_NODE_HOSTNAME \
     LK_NODE_TIMEZONE \
+    LK_NODE_LOCALES \
+    LK_NODE_LANGUAGE \
+    LK_NTP_SERVER \
+    LK_ARCH_CUSTOM_REPOS \
+    LK_ARCH_MIRROR \
     LK_PLATFORM_BRANCH >"/mnt/etc/default/lk-platform"
 in_target "$LK_BASE/bin/lk-platform-configure-system.sh" --no-log
 
@@ -494,7 +491,7 @@ may cause efibootmgr to fail with 'Input/output error'"
                 dosfsck -a "$BOOT_PARTITION" || EXIT_STATUS="$?"
                 lk_console_detail "dosfsck exit status:" "$EXIT_STATUS"
             } &&
-            mount -o "${MOUNT_OPTIONS:-defaults}${BOOT_OPTION_EXTRA:-}" "$BOOT_PARTITION" /mnt/boot || exit
+            mount -o "$BOOTSTRAP_MOUNT_OPTIONS${BOOT_OPTION_EXTRA:-}" "$BOOT_PARTITION" /mnt/boot || exit
     }
 }
 lk_console_message "Installing boot loader"

@@ -1,4 +1,5 @@
 #!/bin/bash
+
 # shellcheck disable=SC1090,SC2001,SC2015,SC2016,SC2034
 
 # Elevate for access to ~root, /home/*, etc.
@@ -60,6 +61,9 @@
         LK_NODE_TIMEZONE
         LK_NODE_SERVICES
         LK_NODE_PACKAGES
+        LK_NODE_LOCALES
+        LK_NODE_LANGUAGE
+        LK_NTP_SERVER
         LK_ADMIN_EMAIL
         LK_TRUSTED_IP_ADDRESSES
         LK_SSH_TRUSTED_ONLY
@@ -77,6 +81,8 @@
         LK_EMAIL_BLACKHOLE
         LK_AUTO_REBOOT
         LK_AUTO_REBOOT_TIME
+        LK_ARCH_CUSTOM_REPOS
+        LK_ARCH_MIRROR
         LK_SCRIPT_DEBUG
         LK_PLATFORM_BRANCH
         LK_PACKAGES_FILE

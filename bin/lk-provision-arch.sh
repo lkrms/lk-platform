@@ -1,7 +1,7 @@
 #!/bin/bash
 # shellcheck disable=SC1090,SC2016,SC2031,SC2034,SC2207
 
-lk_bin_depth=1 include=provision,linux,arch,httpd,php . lk-bash-load.sh || exit
+lk_bin_depth=1 include=provision,linux,arch . lk-bash-load.sh || exit
 
 lk_assert_not_root
 lk_assert_is_arch
@@ -145,8 +145,9 @@ EOF
     #
     # auth [success=1 default=ignore] pam_succeed_if.so quiet user ingroup wheel
     # account [success=1 default=ignore] pam_succeed_if.so quiet user ingroup wheel
-    lk_apply_setting "/etc/ssh/sshd_config" "PasswordAuthentication" "no" " " "#" " "
-    lk_apply_setting "/etc/ssh/sshd_config" "AcceptEnv" "LANG LC_*" " " "#" " "
+    LK_CONF_OPTION_FILE=/etc/ssh/sshd_config
+    lk_ssh_set_option PasswordAuthentication "no"
+    lk_ssh_set_option AcceptEnv "LANG LC_*"
     lk_systemctl_enable sshd
 
     lk_systemctl_enable atd
@@ -155,19 +156,20 @@ EOF
 
     lk_systemctl_enable ntpd
 
-    lk_systemctl_enable org.cups.cupsd
+    lk_systemctl_enable cups
 
     if ! lk_is_virtual; then
         [ ! -f "/etc/bluetooth/main.conf" ] || {
-            lk_apply_setting "/etc/bluetooth/main.conf" "AutoEnable" "true" "=" "#" &&
+            lk_conf_set_option AutoEnable "true" /etc/bluetooth/main.conf &&
                 lk_systemctl_enable bluetooth || exit
         }
 
-        lk_apply_setting "/etc/conf.d/libvirt-guests" "URIS" \
-            '"default$(for i in /run/user/*/libvirt/libvirt-sock; do [ ! -e "$i" ] || printf " qemu:///session?socket=%s" "$i"; done)"' "=" "#"
-        lk_apply_setting "/etc/conf.d/libvirt-guests" "ON_BOOT" "ignore" "=" "#"
-        lk_apply_setting "/etc/conf.d/libvirt-guests" "ON_SHUTDOWN" "shutdown" "=" "#"
-        lk_apply_setting "/etc/conf.d/libvirt-guests" "SHUTDOWN_TIMEOUT" "300" "=" "#"
+        LK_CONF_OPTION_FILE=/etc/conf.d/libvirt-guests
+        lk_conf_set_option URIS \
+            '"default$(for i in /run/user/*/libvirt/libvirt-sock; do [ ! -e "$i" ] || printf " qemu:///session?socket=%s" "$i"; done)"'
+        lk_conf_set_option ON_BOOT "ignore"
+        lk_conf_set_option ON_SHUTDOWN "shutdown"
+        lk_conf_set_option SHUTDOWN_TIMEOUT "300"
         sudo usermod --append --groups libvirt,kvm "$USER"
         [ -e "/etc/qemu/bridge.conf" ] || {
             sudo install -d -m 00755 "/etc/qemu" &&
@@ -184,83 +186,83 @@ EOF
         sudo mariadb-install-db --user="mysql" --basedir="/usr" --datadir="/var/lib/mysql"
     lk_is_true "$MINIMAL" || lk_systemctl_enable mysqld
 
-    PHP_INI_FILE=/etc/php/php.ini
+    LK_CONF_OPTION_FILE=/etc/php/php.ini
     for PHP_EXT in bcmath curl exif gd gettext iconv imap intl mysqli pdo_sqlite soap sqlite3 xmlrpc zip; do
-        lk_enable_php_entry "extension=$PHP_EXT"
+        lk_php_enable_option "extension" "$PHP_EXT"
     done
-    lk_enable_php_entry "zend_extension=opcache"
+    lk_php_enable_option "zend_extension" "opcache"
     sudo install -d -m 00700 -o "http" -g "http" "/var/cache/php/opcache"
-    lk_apply_php_setting "max_execution_time" "0"
-    lk_apply_php_setting "memory_limit" "128M"
-    lk_apply_php_setting "error_reporting" "E_ALL"
-    lk_apply_php_setting "display_errors" "On"
-    lk_apply_php_setting "display_startup_errors" "On"
-    lk_apply_php_setting "log_errors" "Off"
-    lk_apply_php_setting "opcache.enable" "Off"
-    lk_apply_php_setting "opcache.file_cache" "/var/cache/php/opcache"
+    lk_php_set_option "max_execution_time" "0"
+    lk_php_set_option "memory_limit" "128M"
+    lk_php_set_option "error_reporting" "E_ALL"
+    lk_php_set_option "display_errors" "On"
+    lk_php_set_option "display_startup_errors" "On"
+    lk_php_set_option "log_errors" "Off"
+    lk_php_set_option "opcache.enable" "Off"
+    lk_php_set_option "opcache.file_cache" "/var/cache/php/opcache"
     [ ! -f "/etc/php/conf.d/imagick.ini" ] ||
-        PHP_INI_FILE="/etc/php/conf.d/imagick.ini" \
-            lk_enable_php_entry "extension=imagick"
+        LK_CONF_OPTION_FILE="/etc/php/conf.d/imagick.ini" \
+            lk_php_enable_option "extension" "imagick"
     [ ! -f "/etc/php/conf.d/memcache.ini" ] ||
-        PHP_INI_FILE="/etc/php/conf.d/memcache.ini" \
-            lk_enable_php_entry "extension=memcache.so"
+        LK_CONF_OPTION_FILE="/etc/php/conf.d/memcache.ini" \
+            lk_php_enable_option "extension" "memcache.so"
     [ ! -f "/etc/php/conf.d/memcached.ini" ] ||
-        PHP_INI_FILE="/etc/php/conf.d/memcached.ini" \
-            lk_enable_php_entry "extension=memcached.so"
+        LK_CONF_OPTION_FILE="/etc/php/conf.d/memcached.ini" \
+            lk_php_enable_option "extension" "memcached.so"
     [ ! -f "/etc/php/conf.d/xdebug.ini" ] || {
         install -d -m 00777 "$HOME/.tmp/cachegrind"
         install -d -m 00777 "$HOME/.tmp/trace"
-        PHP_INI_FILE="/etc/php/conf.d/xdebug.ini"
-        lk_enable_php_entry "zend_extension=xdebug.so"
-        lk_apply_php_setting "xdebug.remote_enable" "On"
-        lk_apply_php_setting "xdebug.remote_autostart" "Off"
-        lk_apply_php_setting "xdebug.profiler_enable_trigger" "On"
-        lk_apply_php_setting "xdebug.profiler_output_dir" "$HOME/.tmp/cachegrind"
-        lk_apply_php_setting "xdebug.profiler_output_name" "callgrind.out.%H.%R.%u"
-        lk_apply_php_setting "xdebug.trace_enable_trigger" "On"
-        lk_apply_php_setting "xdebug.collect_params" "4"
-        lk_apply_php_setting "xdebug.collect_return" "On"
-        lk_apply_php_setting "xdebug.collect_vars" "On"
-        lk_apply_php_setting "xdebug.trace_output_dir" "$HOME/.tmp/trace"
-        lk_apply_php_setting "xdebug.trace_output_name" "trace.%H.%R.%u"
+        LK_CONF_OPTION_FILE="/etc/php/conf.d/xdebug.ini"
+        lk_php_enable_option "zend_extension" "xdebug.so"
+        lk_php_set_option "xdebug.remote_enable" "On"
+        lk_php_set_option "xdebug.remote_autostart" "Off"
+        lk_php_set_option "xdebug.profiler_enable_trigger" "On"
+        lk_php_set_option "xdebug.profiler_output_dir" "$HOME/.tmp/cachegrind"
+        lk_php_set_option "xdebug.profiler_output_name" "callgrind.out.%H.%R.%u"
+        lk_php_set_option "xdebug.trace_enable_trigger" "On"
+        lk_php_set_option "xdebug.collect_params" "4"
+        lk_php_set_option "xdebug.collect_return" "On"
+        lk_php_set_option "xdebug.collect_vars" "On"
+        lk_php_set_option "xdebug.trace_output_dir" "$HOME/.tmp/trace"
+        lk_php_set_option "xdebug.trace_output_name" "trace.%H.%R.%u"
     }
     [ ! -f "/etc/php/php-fpm.d/www.conf" ] ||
         {
             sudo install -d -m 00775 -o "root" -g "http" "/var/log/httpd"
-            PHP_INI_FILE="/etc/php/php-fpm.d/www.conf"
-            lk_apply_php_setting "pm" "static"
-            lk_apply_php_setting "pm.max_children" "4"
-            lk_apply_php_setting "pm.max_requests" "0"
-            lk_apply_php_setting "request_terminate_timeout" "0"
-            lk_apply_php_setting "pm.status_path" "/php-fpm-status"
-            lk_apply_php_setting "ping.path" "/php-fpm-ping"
-            lk_apply_php_setting "access.log" '/var/log/httpd/php-fpm-$pool.access.log'
-            lk_apply_php_setting "access.format" '"%{REMOTE_ADDR}e - %u %t \"%m %r%Q%q\" %s %f %{mili}d %{kilo}M %C%%"'
-            lk_apply_php_setting "catch_workers_output" "yes"
-            lk_apply_php_setting "php_admin_value[memory_limit]" "128M"
-            lk_apply_php_setting "php_admin_value[error_log]" '/var/log/httpd/php-fpm-$pool.error.log'
-            lk_apply_php_setting "php_admin_flag[log_errors]" "On"
-            lk_apply_php_setting "php_flag[display_errors]" "Off"
-            lk_apply_php_setting "php_flag[display_startup_errors]" "Off"
+            LK_CONF_OPTION_FILE="/etc/php/php-fpm.d/www.conf"
+            lk_php_set_option "pm" "static"
+            lk_php_set_option "pm.max_children" "4"
+            lk_php_set_option "pm.max_requests" "0"
+            lk_php_set_option "request_terminate_timeout" "0"
+            lk_php_set_option "pm.status_path" "/php-fpm-status"
+            lk_php_set_option "ping.path" "/php-fpm-ping"
+            lk_php_set_option "access.log" '/var/log/httpd/php-fpm-$pool.access.log'
+            lk_php_set_option "access.format" '"%{REMOTE_ADDR}e - %u %t \"%m %r%Q%q\" %s %f %{mili}d %{kilo}M %C%%"'
+            lk_php_set_option "catch_workers_output" "yes"
+            lk_php_set_option "php_admin_value[memory_limit]" "128M"
+            lk_php_set_option "php_admin_value[error_log]" '/var/log/httpd/php-fpm-$pool.error.log'
+            lk_php_set_option "php_admin_flag[log_errors]" "On"
+            lk_php_set_option "php_flag[display_errors]" "Off"
+            lk_php_set_option "php_flag[display_startup_errors]" "Off"
         }
     lk_is_true "$MINIMAL" || lk_systemctl_enable php-fpm
 
-    HTTPD_CONF_FILE="/etc/httpd/conf/httpd.conf"
+    LK_CONF_OPTION_FILE="/etc/httpd/conf/httpd.conf"
     sudo install -d -m 00755 -o "$USER" -g "$(id -gn)" "/srv/http"
     mkdir -p "/srv/http/localhost/html" "/srv/http/127.0.0.1"
     [ -e "/srv/http/127.0.0.1/html" ] ||
         ln -sfT "../localhost/html" "/srv/http/127.0.0.1/html"
     lk_safe_symlink "$LK_BASE/etc/httpd/dev-defaults.conf" "/etc/httpd/conf/extra/httpd-dev-defaults.conf"
-    lk_enable_httpd_entry "Include conf/extra/httpd-dev-defaults.conf"
-    lk_enable_httpd_entry "LoadModule alias_module modules/mod_alias.so"
-    lk_enable_httpd_entry "LoadModule dir_module modules/mod_dir.so"
-    lk_enable_httpd_entry "LoadModule headers_module modules/mod_headers.so"
-    lk_enable_httpd_entry "LoadModule info_module modules/mod_info.so"
-    lk_enable_httpd_entry "LoadModule proxy_fcgi_module modules/mod_proxy_fcgi.so"
-    lk_enable_httpd_entry "LoadModule proxy_module modules/mod_proxy.so"
-    lk_enable_httpd_entry "LoadModule rewrite_module modules/mod_rewrite.so"
-    lk_enable_httpd_entry "LoadModule status_module modules/mod_status.so"
-    lk_enable_httpd_entry "LoadModule vhost_alias_module modules/mod_vhost_alias.so"
+    lk_httpd_enable_option Include "conf/extra/httpd-dev-defaults.conf"
+    lk_httpd_enable_option LoadModule "alias_module modules/mod_alias.so"
+    lk_httpd_enable_option LoadModule "dir_module modules/mod_dir.so"
+    lk_httpd_enable_option LoadModule "headers_module modules/mod_headers.so"
+    lk_httpd_enable_option LoadModule "info_module modules/mod_info.so"
+    lk_httpd_enable_option LoadModule "proxy_fcgi_module modules/mod_proxy_fcgi.so"
+    lk_httpd_enable_option LoadModule "proxy_module modules/mod_proxy.so"
+    lk_httpd_enable_option LoadModule "rewrite_module modules/mod_rewrite.so"
+    lk_httpd_enable_option LoadModule "status_module modules/mod_status.so"
+    lk_httpd_enable_option LoadModule "vhost_alias_module modules/mod_vhost_alias.so"
     sudo usermod --append --groups "http" "$USER"
     sudo usermod --append --groups "$(id -gn)" "http"
     lk_is_true "$MINIMAL" || lk_systemctl_enable httpd

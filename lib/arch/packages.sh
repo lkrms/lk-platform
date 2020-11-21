@@ -1,13 +1,12 @@
 #!/bin/bash
-# shellcheck disable=SC2015,SC2016,SC2034,SC2207
+# shellcheck disable=SC2015,SC2016,SC2034,SC2206,SC2207
 
+IFS=','
 CUSTOM_REPOS=(
-    "aur|http://arch.repo.linacreative.com/aur|||Optional TrustAll"
-    "lk-aur|http://arch.repo.linacreative.com/lk-aur|||Optional TrustAll"
-
-    #
+    ${LK_ARCH_CUSTOM_REPOS:-}
     ${CUSTOM_REPOS[@]+"${CUSTOM_REPOS[@]}"}
 )
+unset IFS
 
 lk_pacman_add_repo "${CUSTOM_REPOS[@]}"
 

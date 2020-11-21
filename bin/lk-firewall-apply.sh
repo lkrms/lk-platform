@@ -59,8 +59,8 @@ if [ -n "${ACCEPT_OUTPUT_CHAIN:-}" ]; then
     if [ ${#OUTPUT_ALLOW[@]} -gt 0 ]; then
         OUTPUT_ALLOW_RESOLVED="$(lk_hosts_resolve "${OUTPUT_ALLOW[@]}")" ||
             lk_die "unable to resolve domain names"
-        OUTPUT_ALLOW_IPV4=($(echo "$OUTPUT_ALLOW_RESOLVED" | lk_grep_ipv4 || true))
-        OUTPUT_ALLOW_IPV6=($(echo "$OUTPUT_ALLOW_RESOLVED" | lk_grep_ipv6 || true))
+        OUTPUT_ALLOW_IPV4=($(echo "$OUTPUT_ALLOW_RESOLVED" | lk_filter_ipv4))
+        OUTPUT_ALLOW_IPV6=($(echo "$OUTPUT_ALLOW_RESOLVED" | lk_filter_ipv6))
     fi
     lk_console_detail "Flushing iptables chain:" "$ACCEPT_OUTPUT_CHAIN"
     lk_iptables_both lk_iptables_flush_chain "$ACCEPT_OUTPUT_CHAIN"

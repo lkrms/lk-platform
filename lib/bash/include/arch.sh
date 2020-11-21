@@ -1,5 +1,6 @@
 #!/bin/bash
-# shellcheck disable=SC2206,SC2120
+
+# shellcheck disable=SC2206,SC2120,SC2016
 
 function _lk_arch_maybe_chroot() {
     if [ -n "${LK_ARCH_CHROOT_DIR:-}" ]; then
@@ -9,16 +10,16 @@ function _lk_arch_maybe_chroot() {
     fi
 }
 
-function _lk_arch_chroot_path() {
+function _lk_arch_path() {
     echo "${LK_ARCH_CHROOT_DIR:-}$1"
 }
 
 function lk_pacman_configure() {
     local PACMAN_CONF=${LK_PACMAN_CONF:-/etc/pacman.conf}
-    PACMAN_CONF=$(_lk_arch_chroot_path "$PACMAN_CONF")
+    PACMAN_CONF=$(_lk_arch_path "$PACMAN_CONF")
     # leading and trailing whitespace in pacman.conf is ignored
-    LK_SUDO=1 lk_maybe_sed \
-        -E "s/^$S*#$S*(Color|TotalDownload)$S*\$/\1/" "$PACMAN_CONF"
+    LK_SUDO=1 lk_maybe_sed -E \
+        "s/^$S*#$S*(Color|TotalDownload)$S*\$/\1/" "$PACMAN_CONF"
 }
 
 # lk_pacman_add_repo REPO ...
@@ -40,33 +41,38 @@ function lk_pacman_configure() {
 #
 function lk_pacman_add_repo() {
     local PACMAN_CONF=${LK_PACMAN_CONF:-/etc/pacman.conf} IFS='|' \
-        i r REPO SERVER KEY_URL KEY_ID SIG_LEVEL
-    PACMAN_CONF=$(_lk_arch_chroot_path "$PACMAN_CONF")
+        REPO_LIST SH i r REPO SERVER KEY_URL KEY_ID SIG_LEVEL
+    [ $# -gt 0 ] || return 0
+    PACMAN_CONF=$(_lk_arch_path "$PACMAN_CONF")
     [ -f "$PACMAN_CONF" ] ||
         lk_warn "$PACMAN_CONF: file not found" || return
     lk_command_exists pacman-conf ||
         lk_warn "command not found: pacman-conf" || return
+    REPO_LIST=$(pacman-conf --config "$PACMAN_CONF" --repo-list) || return
+    SH=$(
+        _add_key() { KEY_FILE=$(mktemp) &&
+            curl --fail --output "$KEY_FILE" "$1" &&
+            pacman-key --add "$KEY_FILE"; }
+        declare -f _add_key
+        echo '_add_key "$1"'
+    )
     for i in "$@"; do
         r=($i)
         REPO=${r[0]}
-        ! pacman-conf --config "$PACMAN_CONF" --repo-list |
-            grep -Fx "$REPO" >/dev/null || continue
+        ! grep -Fx "$REPO" <<<"$REPO_LIST" >/dev/null || continue
         SERVER=${r[1]}
         KEY_URL=${r[2]:-}
         KEY_ID=${r[3]:-}
         SIG_LEVEL=${r[4]:-}
         if [ -n "$KEY_URL" ]; then
-            _lk_arch_maybe_chroot bash -c "\
-KEY_FILE=\"\$(mktemp)\" &&
-    curl --fail --output \"\$KEY_FILE\" \"\$1\" &&
-    pacman-key --add \"\$KEY_FILE\"" bash "$KEY_URL" || return
+            _lk_arch_maybe_chroot bash -c "$SH" bash "$KEY_URL"
         elif [ -n "$KEY_ID" ]; then
-            _lk_arch_maybe_chroot pacman-key --recv-keys "$KEY_ID" || return
-        fi
+            _lk_arch_maybe_chroot pacman-key --recv-keys "$KEY_ID"
+        fi || return
         [ -z "$KEY_ID" ] ||
             _lk_arch_maybe_chroot pacman-key --lsign-key "$KEY_ID" || return
         LK_SUDO=1 lk_keep_original "$PACMAN_CONF"
-        cat <<EOF | lk_elevate tee -a "$PACMAN_CONF" >/dev/null
+        lk_elevate tee -a "$PACMAN_CONF" <<EOF >/dev/null
 
 [$REPO]${SIG_LEVEL:+
 SigLevel = $SIG_LEVEL}
