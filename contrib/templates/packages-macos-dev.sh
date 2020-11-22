@@ -82,7 +82,7 @@ HOMEBREW_CASKS+=(
     geekbench
     hex-fiend
     lingon-x
-    shortcutdetective
+    #shortcutdetective
 
     # non-free
     acorn
@@ -168,8 +168,8 @@ MAS_APPS+=(
 
 # VMs and containers
 HOMEBREW_CASKS+=(
-    #virtualbox
-    #virtualbox-extension-pack
+    virtualbox
+    virtualbox-extension-pack
 )
 
 # hardware-related
