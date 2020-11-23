@@ -125,11 +125,15 @@ function lk_linode_ssh_add() {
                 ${LINODE_IPV4_PRIVATE:+"$LK_BOLD$LINODE_IPV4_PRIVATE$LK_RESET"} \
                 ${LINODE_IPV4_PUBLIC:+"$LINODE_IPV4_PUBLIC"}))"
         PUBLIC_SUFFIX=
-        [ "${LINODE_IPV4_PRIVATE:+1}${LK_SSH_JUMP_HOST:+1}" != 11 ] || {
+        if [ "$(lk_hostname)" = jump ]; then
+            lk_ssh_add_host "$LABEL" \
+                "$LINODE_IPV4_PRIVATE" "$USERNAME" || return
+            PUBLIC_SUFFIX=-public
+        elif [ "${LINODE_IPV4_PRIVATE:+1}${LK_SSH_JUMP_HOST:+1}" = 11 ]; then
             lk_ssh_add_host "$LABEL" \
                 "$LINODE_IPV4_PRIVATE" "$USERNAME" "" "jump" || return
             PUBLIC_SUFFIX=-direct
-        }
+        fi
         [ -z "$LINODE_IPV4_PUBLIC" ] || lk_ssh_add_host "$LABEL$PUBLIC_SUFFIX" \
             "$LINODE_IPV4_PUBLIC" "$USERNAME" || return
     done
