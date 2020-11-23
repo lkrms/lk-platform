@@ -123,7 +123,7 @@ repositories simultaneously." || return
 #
 # To compare ancestors of a ref other than HEAD, set LK_GIT_REF.
 function lk_git_ancestors() {
-    local i REF HASH BEHIND ANCESTORS
+    local i REF HASH BEHIND ANCESTORS=()
     for REF in "$@"; do
         HASH=$(git merge-base --fork-point "$REF" "${LK_GIT_REF:-HEAD}") &&
             BEHIND=$(git rev-list --count "$HASH..${LK_GIT_REF:-HEAD}") ||
