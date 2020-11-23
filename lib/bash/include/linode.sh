@@ -487,7 +487,7 @@ Usage: $(lk_myself -f) DIR HOST..." || return
             sed -E \
                 -e '/^(DEBCONF_NONINTERACTIVE_SEEN|DEBIAN_FRONTEND|HOME|LINODE_.*|PATH|PWD|SHLVL|TERM|_)=/d' \
                 -e "s/^((LK_)?NODE_(HOSTNAME|FQDN)=)/\\1test-/" \
-                -e "s/^((LK_)?ADMIN_EMAIL=).*/\\1nobody@localhost/" \
+                -e "s/^((LK_)?ADMIN_EMAIL=).*/\\1nobody@localhost.localdomain/" \
                 -e "s/^(CALL_HOME_MX=).*/\\1/" |
             while IFS='=' read -r VAR VALUE; do
                 printf '%s=%q\n' "$VAR" "$VALUE"
