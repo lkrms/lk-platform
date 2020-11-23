@@ -10,14 +10,12 @@
 
 {
     set -euo pipefail
-    _DEPTH=1
-    _FILE=${BASH_SOURCE[0]}
+    readonly _FILE=${BASH_SOURCE[0]}
     lk_die() { s=$? && echo "$_FILE: $1" >&2 && (return $s) && false || exit; }
-    [ "${_FILE%/*}" != "$_FILE" ] || _FILE=./$_FILE
-    LK_INST=$(i=0 && F=$_FILE && while [ $((i++)) -le "$_DEPTH" ]; do
-        [ "$F" != / ] && [ ! -L "$F" ] &&
-            cd "${F%/*}" && F=$PWD || exit
-    done && pwd -P) || lk_die "symlinks in path are not supported"
+    _DIR=${_FILE%/*}
+    [ "$_DIR" != "$_FILE" ] || _DIR=.
+    readonly _DIR=$(cd "$_DIR" && pwd)
+    LK_INST=${_DIR%/*}
     [ -d "$LK_INST/lib/bash" ] || lk_die "unable to locate LK_BASE"
     export LK_INST
 
@@ -108,6 +106,12 @@
     lk_getopt
     eval "set -- $LK_GETOPT"
 
+    [ "${LK_INST##*/}" = lk-platform ] || {
+        OLD_LK_INST=$LK_INST
+        LK_INST=${LK_INST%/*}/lk-platform
+        lk_safe_symlink "$OLD_LK_INST" "$LK_INST"
+    }
+
     LK_PATH_PREFIX=${LK_PATH_PREFIX:-${PATH_PREFIX:-}}
     [ -n "$LK_PATH_PREFIX" ] || lk_no_input || {
         lk_console_message "LK_PATH_PREFIX not set"
@@ -124,6 +128,7 @@
     [ -n "$LK_PATH_PREFIX" ] || lk_die "LK_PATH_PREFIX not set"
     [ -z "${LK_BASE:-}" ] ||
         [ "$LK_BASE" = "$LK_INST" ] ||
+        [ "$LK_BASE" = "$OLD_LK_INST" ] ||
         [ ! -d "$LK_BASE" ] ||
         {
             lk_console_item "Existing installation found at" "$LK_BASE"
