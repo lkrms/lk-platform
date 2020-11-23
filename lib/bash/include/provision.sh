@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2015,SC2086,SC2088,SC2206,SC2207
+# shellcheck disable=SC2015,SC2030,SC2031,SC2086,SC2088,SC2206,SC2207
 
 # lk_maybe_install [-v] [-m MODE] [-o OWNER] [-g GROUP] SOURCE DEST
 # lk_maybe_install -d [-v] [-m MODE] [-o OWNER] [-g GROUP] DEST
@@ -255,7 +255,8 @@ Usage: $(lk_myself -f) NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
             HOST=${BASH_REMATCH[1]}
             PORT=${BASH_REMATCH[2]}
         }
-        KEY_FILE=${KEY_FILE//${h//\//\\\/}/"~"}
+        h=${h//\//\\\/}
+        KEY_FILE=${KEY_FILE//$h/"~"}
         cat <<EOF
 Host            $SSH_PREFIX$NAME
 HostName        $HOST${PORT:+
