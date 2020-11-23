@@ -169,6 +169,7 @@ EOF
     # always restart on power loss
     sudo pmset -a autorestart 1
 
+    lk_macos_xcode_maybe_accept_license
     lk_macos_install_command_line_tools
 
     # If Xcode and the standalone Command Line Tools package are both installed,
@@ -528,12 +529,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
             mas install "${INSTALL_APPS[@]}"
     }
 
-    if [ -e /Applications/Xcode.app ] &&
-        ! xcodebuild -license check >/dev/null 2>&1; then
-        lk_console_message "Accepting Xcode license"
-        lk_console_detail "Running:" "xcodebuild -license accept"
-        sudo xcodebuild -license accept
-    fi
+    lk_macos_xcode_maybe_accept_license
 
     INSTALLED_FORMULAE=($(comm -12 \
         <(lk_brew_formulae | sort | uniq) \

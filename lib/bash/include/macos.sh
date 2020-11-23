@@ -78,6 +78,15 @@ function lk_macos_install_command_line_tools() {
     rm -f "$TRIGGER" || true
 }
 
+function lk_macos_xcode_maybe_accept_license() {
+    if [ -e /Applications/Xcode.app ] &&
+        ! xcodebuild -license check >/dev/null 2>&1; then
+        lk_console_message "Accepting Xcode license"
+        lk_console_detail "Running:" "xcodebuild -license accept"
+        sudo xcodebuild -license accept
+    fi
+}
+
 # lk_macos_kb_add_shortcut DOMAIN MENU_TITLE SHORTCUT
 #
 # Add a keyboard shortcut to the NSUserKeyEquivalents dictionary for DOMAIN.
