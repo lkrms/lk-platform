@@ -35,26 +35,22 @@ function exit_trap() {
     mkdir -p "$SCRIPT_DIR"
 
     export LK_PACKAGES_FILE=${1:-}
-    if [ -n "$LK_PACKAGES_FILE" ]; then
-        if [ -f "$LK_PACKAGES_FILE" ]; then
-            . "$LK_PACKAGES_FILE"
-        else
-            case "$LK_PACKAGES_FILE" in
-            $LK_BASE/*/*)
-                CONTRIB_PACKAGES_FILE=${LK_PACKAGES_FILE:${#LK_BASE}}
-                ;;
-            /*/*)
-                CONTRIB_PACKAGES_FILE=${LK_PACKAGES_FILE:1}
-                ;;
-            */*)
-                CONTRIB_PACKAGES_FILE=$LK_PACKAGES_FILE
-                ;;
-            *)
-                lk_die "$1: file not found"
-                ;;
-            esac
-            LK_PACKAGES_FILE=$LK_BASE/$CONTRIB_PACKAGES_FILE
-        fi
+    if [ -n "$LK_PACKAGES_FILE" ] && [ ! -f "$LK_PACKAGES_FILE" ]; then
+        case "$LK_PACKAGES_FILE" in
+        $LK_BASE/*/*)
+            CONTRIB_PACKAGES_FILE=${LK_PACKAGES_FILE:${#LK_BASE}}
+            ;;
+        /*/*)
+            CONTRIB_PACKAGES_FILE=${LK_PACKAGES_FILE:1}
+            ;;
+        */*)
+            CONTRIB_PACKAGES_FILE=$LK_PACKAGES_FILE
+            ;;
+        *)
+            lk_die "$1: file not found"
+            ;;
+        esac
+        LK_PACKAGES_FILE=$LK_BASE/$CONTRIB_PACKAGES_FILE
     fi
 
     if [ -f "$LK_BASE/lib/bash/include/core.sh" ]; then
@@ -210,6 +206,8 @@ EOF
             LK_PACKAGES_FILE |
             sudo tee /etc/default/lk-platform >/dev/null
         lk_console_detail_file /etc/default/lk-platform
+    elif [ -n "$LK_PACKAGES_FILE" ]; then
+        sudo sed -i '' '/^LK_PACKAGES_FILE=/d' /etc/default/lk-platform
     fi
 
     [ -n "$LK_PACKAGES_FILE" ] ||
