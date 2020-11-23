@@ -40,7 +40,9 @@ function _lk_linode_cache() {
     local _CACHE_VAR=$1 _DIR=${TMPDIR:-/tmp} _FILE
     _DIR=${_DIR%/}/_lk_linode_cache_$UID
     _FILE=$_DIR/$1
-    if [ -e "$_FILE" ]; then
+    if [ -e "$_FILE" ] &&
+        _MODIFIED=$(lk_file_modified "$_FILE") &&
+        [ $(($(lk_timestamp) - _MODIFIED)) -le 300 ]; then
         cat "$_FILE"
     else
         [ -e "$_DIR" ] ||
