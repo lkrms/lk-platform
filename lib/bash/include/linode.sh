@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# shellcheck disable=SC2016,SC2029,SC2086,SC2207
+
 lk_include linux
 
 function linode-cli() {
@@ -88,7 +90,6 @@ _lk_linode_define lk_linode_stackscripts stackscripts list --is_public false
 
 function lk_linode_get_shell_var() {
     eval "$(lk_get_regex IPV4_PRIVATE_FILTER_REGEX)"
-    # shellcheck disable=SC2016
     lk_jq_get_shell_var \
         --arg ipv4Private "$IPV4_PRIVATE_FILTER_REGEX" \
         LINODE_ID .id \
@@ -106,8 +107,6 @@ function lk_linode_get_shell_var() {
 # lk_linode_ssh_add [NAME [USER]]
 #
 # Add an SSH host for each Linode object in the JSON input array.
-#
-# shellcheck disable=SC2120
 function lk_linode_ssh_add() {
     local LINODES LINODE SH LABEL USERNAME PUBLIC_SUFFIX \
         LK_SSH_PRIORITY=${LK_SSH_PRIORITY-45}
@@ -151,8 +150,6 @@ function lk_linode_ssh_add_all() {
 }
 
 # lk_linode_hosting_ssh_add_all [LINODE_ARG...]
-#
-# shellcheck disable=SC2029,SC2207
 function lk_linode_hosting_ssh_add_all() {
     local GET_USERS_SH JSON LINODES LINODE SH IFS USERS USERNAME ALL_USERS=()
     _lk_linode_maybe_flush_cache
@@ -300,9 +297,19 @@ function lk_linode_dns_check_all() {
     lk_console_success "DNS check complete"
 }
 
+function lk_linode_hosting_get_stackscript() {
+    local STACKSCRIPT
+    STACKSCRIPT=$(lk_linode_stackscripts --label hosting.sh "$@" |
+        jq -r '.[].id' |
+        sort -n) &&
+        [ -n "$STACKSCRIPT" ] && {
+        [ "$(wc -l <<<"$STACKSCRIPT")" -eq 1 ] ||
+            lk_warn "multiple hosting.sh StackScripts found" || true
+        echo "$STACKSCRIPT" | tail -n1
+    }
+}
+
 # lk_linode_hosting_update_stackscript [REPO [REF [LINODE_ARG...]]]
-#
-# shellcheck disable=SC2207
 function lk_linode_hosting_update_stackscript() {
     local REPO=${1:-$LK_BASE} REF=${2:-HEAD} HASH BASED_ON \
         SCRIPT STACKSCRIPT ARGS MESSAGE OUTPUT
@@ -312,8 +319,7 @@ function lk_linode_hosting_update_stackscript() {
             lk_git_ancestors master develop | head -n1)) ||
         lk_warn "invalid ref: $REF" || return
     SCRIPT=$(git show "$HASH:lib/linode/hosting.sh") || return
-    if STACKSCRIPT=$(lk_linode_stackscripts --label hosting.sh "${@:3}" |
-        jq -r '.[].id' | head -n1) && [ -n "$STACKSCRIPT" ]; then
+    if STACKSCRIPT=$(lk_linode_hosting_get_stackscript "${@:3}"); then
         ARGS=(update "$STACKSCRIPT")
         MESSAGE="updated to"
         lk_console_item "Updating StackScript" "$STACKSCRIPT"
@@ -338,6 +344,108 @@ function lk_linode_hosting_update_stackscript() {
         lk_console_detail "StackScript $STACKSCRIPT $MESSAGE" "${HASH:0:7}:hosting.sh"
 }
 
+function lk_linode_provision_hosting() {
+    local IFS=$'\n' NODE_FQDN NODE_HOSTNAME HOST_DOMAIN HOST_ACCOUNT \
+        ROOT_PASS AUTHORIZED_KEYS STACKSCRIPT STACKSCRIPT_DATA \
+        ARGS KEY FILE LINODES EXIT_STATUS LINODE SH
+    [ $# -ge 2 ] || lk_usage "\
+Usage: $(lk_myself -f) FQDN DOMAIN [ACCOUNT [DATA_JSON [LINODE_ARG...]]]
+
+Create a new Linode at FQDN and configure it to serve DOMAIN from user ACCOUNT.
+
+SSH public keys are added from:
+- array variable LK_LINODE_SSH_KEYS
+- file LK_LINODE_SSH_KEYS_FILE
+- ~/.ssh/authorized_keys (if both LK_LINODE_SSH_KEYS and LK_LINODE_SSH_KEYS_FILE
+  are empty or unset)
+
+Example:
+  $(lk_myself -f) syd06.linode.myhosting.com linacreative.com lina" || return
+    lk_is_fqdn "$1" || lk_warn "invalid domain: $1" || return
+    lk_is_fqdn "$2" || lk_warn "invalid domain: $2" || return
+    eval "$(lk_get_regex LINUX_USERNAME_REGEX)"
+    NODE_FQDN=$1
+    NODE_HOSTNAME=${1%%.*}
+    HOST_DOMAIN=$2
+    HOST_ACCOUNT=${3:-${2%%.*}}
+    [[ $HOST_ACCOUNT =~ ^$LINUX_USERNAME_REGEX$ ]] ||
+        lk_warn "invalid username: $HOST_ACCOUNT" || return
+    AUTHORIZED_KEYS=(
+        ${LK_LINODE_SSH_KEYS[@]+"${LK_LINODE_SSH_KEYS[@]}"}
+        $([ ! -f "${LK_LINODE_SSH_KEYS_FILE:-}" ] ||
+            cat "$LK_LINODE_SSH_KEYS_FILE")
+    )
+    [ ${#AUTHORIZED_KEYS[@]} -gt 0 ] ||
+        [ ! -f ~/.ssh/authorized_keys ] ||
+        AUTHORIZED_KEYS=($(cat ~/.ssh/authorized_keys)) || return
+    [ ${#AUTHORIZED_KEYS[@]} -gt 0 ] ||
+        lk_warn "at least one authorized SSH key is required" || return
+    unset IFS
+    _lk_linode_maybe_flush_cache
+    STACKSCRIPT=$(lk_linode_hosting_get_stackscript) ||
+        lk_warn "hosting.sh StackScript not found"
+    STACKSCRIPT_DATA=$(jq -n \
+        --arg nodeHostname "$NODE_HOSTNAME" \
+        --arg nodeFqdn "$NODE_FQDN" \
+        --arg hostDomain "$HOST_DOMAIN" \
+        --arg hostAccount "$HOST_ACCOUNT" \
+        --arg adminEmail "${LK_ADMIN_EMAIL:-root@$NODE_FQDN}" \
+        --arg autoReboot "${LK_AUTO_REBOOT:-Y}" \
+        '{
+    "NODE_HOSTNAME": $nodeHostname,
+    "NODE_FQDN": $nodeFqdn,
+    "HOST_DOMAIN": $hostDomain,
+    "HOST_ACCOUNT": $hostAccount,
+    "ADMIN_EMAIL": $adminEmail,
+    "AUTO_REBOOT": $autoReboot
+}'"${4:+ + $4}")
+    ROOT_PASS=$(openssl rand -base64 48)
+    ARGS=(
+        linodes
+        create
+        --json
+        --root_pass "$ROOT_PASS"
+        --stackscript_id "$STACKSCRIPT"
+        --stackscript_data "$STACKSCRIPT_DATA"
+        --label "$NODE_HOSTNAME"
+        --tags "${HOST_ACCOUNT:-$NODE_HOSTNAME}"
+        --private_ip true
+        "${@:5}"
+    )
+    for KEY in "${AUTHORIZED_KEYS[@]}"; do
+        ARGS+=(--authorized_keys "$KEY")
+    done
+    lk_console_item "Running:" \
+        $'>>>\n'"  linode-cli$(printf ' \\ \n    %q' "${ARGS[@]##ssh-??? * }")"$'\n<<<'
+    lk_confirm "Proceed?" Y || return
+    lk_console_message "Creating Linode"
+    FILE=/tmp/$(lk_myself -f)-$1-$(lk_date %s).json
+    LINODES=$(linode-cli "${ARGS[@]}" | tee "$FILE") || {
+        EXIT_STATUS=$?
+        rm -f "$FILE"
+        return "$EXIT_STATUS"
+    }
+    _LK_LINODE_CACHE_DIRTY=1
+    LINODE=$(jq -c '.[0]' <<<"$LINODES")
+    lk_console_message "Linode created successfully"
+    lk_console_detail "Root password:" "$ROOT_PASS"
+    lk_console_detail "Response written to:" "$FILE"
+    SH=$(lk_linode_get_shell_var <<<"$LINODE") &&
+        eval "$SH" || return
+    lk_console_detail "Linode ID:" "$LINODE_ID"
+    lk_console_detail "Linode type:" "$LINODE_TYPE"
+    lk_console_detail "CPU count:" "$LINODE_VPCUS"
+    lk_console_detail "Memory:" "$LINODE_MEMORY"
+    lk_console_detail "Image:" "$LINODE_IMAGE"
+    lk_console_detail "IP addresses:" $'\n'"$(lk_echo_args \
+        $LINODE_IPV4_PUBLIC $LINODE_IPV6 $LINODE_IPV4_PRIVATE)"
+    lk_linode_ssh_add <<<"$LINODES"
+    [ -z "$HOST_ACCOUNT" ] ||
+        LK_SSH_PRIORITY='' \
+            lk_linode_ssh_add "$HOST_ACCOUNT" "$HOST_ACCOUNT" <<<"$LINODES"
+    lk_linode_dns_check <<<"$LINODES"
+}
+
 # lk_linode_hosting_get_meta DIR HOST...
 function lk_linode_hosting_get_meta() {
     local DIR=${1:-} HOST SSH_HOST FILE COMMIT \
@@ -353,7 +461,6 @@ Usage: $(lk_myself -f) DIR HOST..." || return
             ssh "$SSH_HOST" \
                 "sudo bash -c 'cp -pv /root/StackScript . && chown \$SUDO_USER: StackScript'" &&
                 scp -p "$SSH_HOST":StackScript "$FILE" || return
-            # shellcheck disable=SC2016,SC2029
             ! COMMIT=$(ssh "$SSH_HOST" "bash -c$(printf ' %q' \
                 'cd "$1" && git rev-list -g HEAD | tail -n1' \
                 bash \
