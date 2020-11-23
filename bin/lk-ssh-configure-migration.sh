@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1083,SC1087,SC2015,SC2034
+# shellcheck disable=SC1083,SC1087,SC2001,SC2015,SC2034
 
 if [[ ! ${1:-} =~ ^(--new|--old)$ ]]; then
 
@@ -120,7 +120,8 @@ function lk_console_message() {
 $LK_GREY[ $H ] \
 $LK_RESET$LK_BOLD${LK_CONSOLE_COLOUR-$LK_CYAN}${LK_CONSOLE_PREFIX-==> }\
 $LK_RESET${LK_CONSOLE_MESSAGE_COLOUR-$LK_BOLD}\
-$(sed "1b;s/^/$H_SPACES${LK_CONSOLE_SPACES-  }/" <<<"$1")$LK_RESET" >&2
+$(sed "1b
+s/^/$H_SPACES${LK_CONSOLE_SPACES-  }/" <<<"$1")$LK_RESET" >&2
 }
 
 function lk_console_item() {

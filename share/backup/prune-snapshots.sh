@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2015,SC2016,SC2153,SC2207
+# shellcheck disable=SC2001,SC2015,SC2016,SC2153,SC2207
 
 set -eu
 
@@ -68,7 +68,8 @@ function lk_console_message() {
     echo "\
 $LK_BOLD${LK_CONSOLE_COLOUR-$LK_CYAN}${LK_CONSOLE_PREFIX-==> }\
 $LK_RESET${LK_CONSOLE_MESSAGE_COLOUR-$LK_BOLD}\
-$(sed "1b;s/^/${LK_CONSOLE_SPACES-  }/" <<<"$1")$LK_RESET" >&2
+$(sed "1b
+s/^/${LK_CONSOLE_SPACES-  }/" <<<"$1")$LK_RESET" >&2
 }
 
 function lk_console_item() {
