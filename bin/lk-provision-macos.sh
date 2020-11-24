@@ -384,7 +384,7 @@ EOF
                 "$FORMULA_DESC"
             )
         done
-        INSTALL_FORMULAE=($(lk_log_bypass lk_console_checklist \
+        INSTALL_FORMULAE=($(lk_log_bypass_stderr lk_console_checklist \
             "Installing new formulae" \
             "Selected Homebrew formulae will be installed:" \
             "${FORMULAE[@]}")) && [ ${#INSTALL_FORMULAE[@]} -gt 0 ] ||
@@ -411,7 +411,7 @@ EOF
                 "$CASK_DESC"
             )
         done
-        INSTALL_CASKS=($(lk_log_bypass lk_console_checklist \
+        INSTALL_CASKS=($(lk_log_bypass_stderr lk_console_checklist \
             "Installing new casks" \
             "Selected Homebrew casks will be installed:" \
             "${CASKS[@]}")) && [ ${#INSTALL_CASKS[@]} -gt 0 ] ||
@@ -475,7 +475,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
             done
             if [ ${#INSTALL_APPS[@]} -gt 0 ]; then
                 APP_IDS=("${INSTALL_APPS[@]}")
-                if INSTALL_APPS=($(lk_log_bypass lk_console_checklist \
+                if INSTALL_APPS=($(lk_log_bypass_stderr lk_console_checklist \
                     "Installing new apps" \
                     "Selected apps will be installed from the Mac App Store:" \
                     "${APPS[@]}")) && [ ${#INSTALL_APPS[@]} -gt 0 ]; then

@@ -165,8 +165,8 @@ function run_rsync() {
         $'>>>\n'"  rsync$(printf ' \\ \n    %q' \
             "${RSYNC_ARGS[@]}" "$SRC" "$DEST")"$'\n<<<'
     rsync "${RSYNC_ARGS[@]}" "$SRC" "$DEST" \
-        > >(lk_log_bypass tee -a "$RSYNC_OUT_FILE") \
-        2> >(lk_log_bypass tee -a "$RSYNC_ERR_FILE")
+        > >(lk_log_bypass_stdout tee -a "$RSYNC_OUT_FILE") \
+        2> >(lk_log_bypass_stdout tee -a "$RSYNC_ERR_FILE")
 }
 
 SNAPSHOT_STAGES=(

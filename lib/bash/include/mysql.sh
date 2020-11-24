@@ -15,9 +15,10 @@ function lk_mysql_escape_cnf() {
 }
 
 function lk_mysql_batch_unescape() {
-    sed -Ee 's/(^|[^\])\\n/\1\n/g' \
-        -e 's/(^|[^\])\\t/\1\t/g' \
-        -e 's/\\\\/\\/g' <<<"$1"
+    { [ $# -gt 0 ] && lk_echo_args "$@" || cat; } |
+        sed -Ee 's/(^|[^\])\\n/\1\n/g' \
+            -e 's/(^|[^\])\\t/\1\t/g' \
+            -e 's/\\\\/\\/g'
 }
 
 # lk_mysql_get_cnf [DB_USER [DB_PASSWORD [DB_HOST]]]
@@ -63,13 +64,12 @@ function lk_mysql_list() {
 }
 
 function lk_mysql_mapfile() {
-    local _LK_LINE
+    local i=0 _LK_LINE
     lk_is_identifier "$1" || lk_warn "not a valid identifier: $1" || return
     eval "$1=()"
     while IFS= read -r _LK_LINE; do
-        _LK_LINE=$(lk_mysql_batch_unescape "$_LK_LINE")
-        eval "$1+=(\"\$_LK_LINE\")"
-    done < <(lk_mysql_list "${@:2}")
+        eval "$1[$((i++))]=\$_LK_LINE"
+    done < <(lk_mysql_list "${@:2}" | lk_mysql_batch_unescape)
 }
 
 function _lk_mysqldump() {
@@ -128,6 +128,7 @@ Usage: $(lk_myself -f) DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
         )
         ARG_COLOUR=$LK_BOLD$LK_RED
     fi
+    DUMP_ARGS+=(--no-tablespaces)
     lk_mysql_quiet || {
         lk_console_item "Dumping database:" "$DB_NAME"
         lk_console_detail "Host:" "$DB_HOST"
@@ -144,7 +145,7 @@ Usage: $(lk_myself -f) DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
         "${DUMP_ARGS[@]}" \
         "$DB_NAME" |
         gzip |
-        pv --force ||
+        lk_log_bypass_stderr pv ||
         EXIT_STATUS=$?
     [ -z "${OUTPUT_FILE:-}" ] || eval "exec >&$OUTPUT_FD $OUTPUT_FD>&-"
     [ -z "${LK_MY_CNF:-}" ] || {
@@ -191,8 +192,10 @@ Usage: $(lk_myself -f) SSH_HOST DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
     --defaults-file=.lk_mysqldump.cnf \\
     --single-transaction \\
     --skip-lock-tables \\
+    --no-tablespaces \\
     \"\$1\" | gzip
-exit \${PIPESTATUS[0]}' bash $(printf '%q' "$DB_NAME")" | pv --force ||
+exit \${PIPESTATUS[0]}' bash $(printf '%q' "$DB_NAME")" |
+        lk_log_bypass_stderr pv ||
         EXIT_STATUS=$?
     [ -z "${OUTPUT_FILE:-}" ] || eval "exec >&$OUTPUT_FD $OUTPUT_FD>&-"
     lk_console_message "Deleting mysqldump configuration file"

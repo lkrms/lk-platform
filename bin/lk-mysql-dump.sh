@@ -88,7 +88,7 @@ lk_log_output
 
 lk_console_message "Preparing database backup"
 lk_console_detail "Retrieving list of databases on" "$DB_HOST"
-lk_mysql_mapfile DB_ALL ${DB_HOST:+-h"$DB_HOST"} <<<"SHOW DATABASES"
+lk_mysql_mapfile DB_ALL -h"$DB_HOST" <<<"SHOW DATABASES"
 lk_console_detail "${#DB_ALL[@]} $(lk_maybe_plural \
     ${#DB_ALL[@]} database databases) found"
 

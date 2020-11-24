@@ -372,9 +372,9 @@ Proceed?" Y || return
     echo "$_SQL" | lk_mysql || return
     lk_console_detail "Restoring from" "$1"
     if [[ "$1" =~ \.gz(ip)?$ ]]; then
-        pv --force "$1" | gunzip
+        lk_log_bypass_stderr pv "$1" | gunzip
     else
-        pv --force "$1"
+        lk_log_bypass_stderr pv "$1"
     fi | lk_mysql "$LOCAL_DB_NAME" ||
         lk_console_error "Restore operation failed" || return
     lk_console_success "Database restored successfully"

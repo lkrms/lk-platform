@@ -49,7 +49,9 @@ for SOURCE in "${SOURCES[@]}"; do
     OWNER=$(lk_file_owner "$SOURCE")
     GROUP=$(id -gn "$OWNER")
     "$LK_BASE/bin/lk-backup-create-snapshot.sh" \
+        --hook post_rsync:"$LK_BASE/lib/hosting/backup-hook-post_rsync.sh" \
         "${SOURCE##*/}" "$SOURCE" "$BACKUP_ROOT" \
+        -- \
         --chown="root:$GROUP" \
         --chmod=go-w
 done

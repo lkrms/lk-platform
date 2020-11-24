@@ -1000,8 +1000,7 @@ function lk_log_output() {
         return
     lk_echoc "Output is being logged to $LK_BOLD$LOG_PATH$LK_RESET" \
         "$LK_GREY" >&"$_LK_LOG_ERR_FD"
-    # shellcheck disable=SC2034
-    export _LK_LOG_FILE=$LOG_PATH
+    _LK_LOG_FILE=$LOG_PATH
 }
 
 function lk_log_is_open() {
@@ -1013,16 +1012,29 @@ function lk_log_is_open() {
 function lk_log_close() {
     lk_log_is_open || lk_warn "no output log to close" || return
     exec >&"$_LK_LOG_OUT_FD" 2>&"$_LK_LOG_ERR_FD" &&
-        eval "exec $_LK_LOG_OUT_FD>&- $_LK_LOG_ERR_FD>&-"
+        eval "exec $_LK_LOG_OUT_FD>&- $_LK_LOG_ERR_FD>&-" &&
+        unset _LK_LOG_FILE
 }
 
 function lk_log_bypass() {
     if lk_log_is_open; then
-        if [ -t 1 ]; then
-            "$@" >&"$_LK_LOG_OUT_FD" 2>&"$_LK_LOG_ERR_FD"
-        else
-            "$@" 2>&"$_LK_LOG_ERR_FD"
-        fi
+        "$@" >&"$_LK_LOG_OUT_FD" 2>&"$_LK_LOG_ERR_FD"
+    else
+        "$@"
+    fi
+}
+
+function lk_log_bypass_stdout() {
+    if lk_log_is_open; then
+        "$@" >&"$_LK_LOG_OUT_FD"
+    else
+        "$@"
+    fi
+}
+
+function lk_log_bypass_stderr() {
+    if lk_log_is_open; then
+        "$@" 2>&"$_LK_LOG_ERR_FD"
     else
         "$@"
     fi
