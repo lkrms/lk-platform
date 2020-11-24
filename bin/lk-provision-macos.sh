@@ -565,7 +565,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
     [ ${#PURGE_FORMULAE[@]} -eq 0 ] || {
         lk_echo_array PURGE_FORMULAE |
             lk_console_list "Installed but no longer required:" formula formulae
-        ! lk_confirm "Remove the above?" Y ||
+        ! lk_confirm "Remove the above?" N ||
             brew uninstall "${PURGE_FORMULAE[@]}"
     }
 
@@ -575,7 +575,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
     [ ${#PURGE_CASKS[@]} -eq 0 ] || {
         lk_echo_array PURGE_CASKS |
             lk_console_list "Installed but no longer required:" cask casks
-        ! lk_confirm "Remove the above?" Y ||
+        ! lk_confirm "Remove the above?" N ||
             brew cask uninstall "${PURGE_CASKS[@]}"
     }
 
