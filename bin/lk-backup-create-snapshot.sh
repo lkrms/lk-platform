@@ -15,7 +15,7 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
     lk_die "unable to locate LK_BASE"
 export LK_BASE
 
-include=mail . "$LK_BASE/lib/bash/common.sh"
+include=mysql,mail . "$LK_BASE/lib/bash/common.sh"
 
 function exit_trap() {
     local EXIT_STATUS=$? MESSAGE TAR SUBJECT
@@ -304,7 +304,7 @@ RSYNC_ERR_FILE=$LK_SNAPSHOT_ROOT/log/rsync.err.log
     lk_die "already finalised: $LK_SNAPSHOT_ROOT"
 
 install -d -m 00711 \
-    "$BACKUP_ROOT/"{,latest,log,snapshot/{,"$SOURCE_NAME/"{,"$LK_SNAPSHOT_TIMESTAMP/"{,db,log}}}}
+    "$BACKUP_ROOT/"{,latest,snapshot/{,"$SOURCE_NAME/"{,"$LK_SNAPSHOT_TIMESTAMP/"{,db,log}}}}
 for f in SNAPSHOT_LOG_FILE RSYNC_OUT_FILE RSYNC_ERR_FILE; do
     [ -e "${!f}" ] ||
         install -m 00600 /dev/null "${!f}"

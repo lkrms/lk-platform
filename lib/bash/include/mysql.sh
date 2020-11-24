@@ -10,6 +10,10 @@ function lk_mysql_escape() {
     lk_escape "$1" "\\" "'"
 }
 
+function lk_mysql_escape_like() {
+    lk_escape "$1" "\\" "'" "%" "_"
+}
+
 function lk_mysql_escape_cnf() {
     lk_escape "$1" "\\" '"'
 }

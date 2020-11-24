@@ -3,7 +3,7 @@
 # shellcheck disable=SC1090,SC2015,SC2153,SC2206
 
 set -euo pipefail
-_DEPTH=1
+_DEPTH=2
 _FILE=${BASH_SOURCE[0]}
 lk_die() { s=$? && echo "$_FILE: $1" >&2 && (return $s) && false || exit; }
 { type -P realpath || { type -P python && realpath() { python -c \
@@ -18,6 +18,8 @@ export LK_BASE
 include='' . "$LK_BASE/lib/bash/common.sh"
 
 lk_elevate
+
+lk_log_output
 
 BACKUP_ROOT=${LK_BACKUP_ROOT:-/srv/backup}
 install -d -m 00751 -g adm "$BACKUP_ROOT"
@@ -43,15 +45,26 @@ lk_mapfile <(comm -12 \
 [ ${#SOURCES[@]} -gt 0 ] ||
     lk_die "nothing to back up"
 lk_echo_array SOURCES |
-    lk_console_list "Creating local snapshot of:" account accounts
+    lk_console_list "Backing up:" account accounts
 
+EXIT_STATUS=0
+i=0
 for SOURCE in "${SOURCES[@]}"; do
     OWNER=$(lk_file_owner "$SOURCE")
     GROUP=$(id -gn "$OWNER")
-    "$LK_BASE/bin/lk-backup-create-snapshot.sh" \
+    MESSAGE="Backup $((++i)) of ${#SOURCES[@]} "
+    lk_log_bypass "$LK_BASE/bin/lk-backup-create-snapshot.sh" \
         --hook post_rsync:"$LK_BASE/lib/hosting/backup-hook-post_rsync.sh" \
         "${SOURCE##*/}" "$SOURCE" "$BACKUP_ROOT" \
         -- \
         --chown="root:$GROUP" \
-        --chmod=go-w
+        --chmod=go-w &&
+        lk_console_success "${MESSAGE}completed successfully:" "$SOURCE" || {
+        EXIT_STATUS=$?
+        lk_console_error \
+            "${MESSAGE}failed to complete (exit status $EXIT_STATUS):" \
+            "$SOURCE"
+    }
 done
+
+exit "$EXIT_STATUS"
