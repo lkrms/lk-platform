@@ -332,10 +332,20 @@ install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
     # Prepare awk to update ~/.bashrc
     LK_BASE_QUOTED=$(printf '%q' "$LK_BASE")
     RC_PATH=$LK_BASE_QUOTED/lib/bash/rc.sh
-    RC_PATTERN=$(lk_escape_ere "$LK_BASE")
+    LK_BASE_REAL=$(realpath "$LK_BASE")
+    [ "$LK_BASE_REAL" != "$LK_BASE" ] &&
+        LK_BASE_REAL_QUOTED=$(printf '%q' "$LK_BASE_REAL") ||
+        LK_BASE_REAL=
+    RC_PATTERNS=("$(lk_escape_ere "$LK_BASE")")
     [ "$LK_BASE_QUOTED" = "$LK_BASE" ] ||
-        RC_PATTERN="($RC_PATTERN|$(lk_escape_ere "$LK_BASE_QUOTED"))"
-    RC_PATTERN="$RC_PATTERN(\\/.*)?\\/(\\.bashrc|rc\\.sh)"
+        RC_PATTERNS+=("$(lk_escape_ere "$LK_BASE_QUOTED")")
+    [ -z "$LK_BASE_REAL" ] || {
+        RC_PATTERNS+=("$(lk_escape_ere "$LK_BASE_REAL")")
+        [ "$LK_BASE_REAL_QUOTED" = "$LK_BASE_REAL" ] ||
+            RC_PATTERNS+=("$(lk_escape_ere "$LK_BASE_REAL_QUOTED")")
+    }
+    IFS='|'
+    RC_PATTERN="(${RC_PATTERNS[*]})(\\/.*)?\\/(\\.bashrc|rc\\.sh)"
     RC_PATTERN=${RC_PATTERN//\\/\\\\}
     RC_SH=$(printf '%s\n' \
         "if [ -f $RC_PATH ]; then" \
@@ -345,6 +355,7 @@ install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
         -f "$LK_BASE/lib/awk/update-bashrc.awk"
         -v "RC_PATTERN=$RC_PATTERN"
         -v "RC_SH=$RC_SH")
+    unset IFS
 
     function maybe_replace_lines() {
         local FILE=$1
