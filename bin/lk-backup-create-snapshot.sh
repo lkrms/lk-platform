@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2015,SC2034,SC2207
+# shellcheck disable=SC1090,SC2015,SC2034,SC2120,SC2207
 
 set -euo pipefail
 _DEPTH=1
@@ -15,7 +15,7 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
     lk_die "unable to locate LK_BASE"
 export LK_BASE
 
-include='' . "$LK_BASE/lib/bash/common.sh"
+include=mail . "$LK_BASE/lib/bash/common.sh"
 
 function exit_trap() {
     local EXIT_STATUS=$? MESSAGE TAR SUBJECT
@@ -82,16 +82,12 @@ $(lk_strip_non_printing <"$SNAPSHOT_LOG_FILE")" &&
 }
 
 function find_custom() {
-    local FILE ALL=0 COUNT=0
-    [ "$1" != --all ] || {
-        ALL=1
-        shift
-    }
-    for FILE in {"$LK_BASE"/etc/backup,"$BACKUP_ROOT"/conf.d}/{"$1","$SOURCE_NAME/${1#$SOURCE_NAME-}"}; do
+    local ARR="${1//-/_}[@]" FILE COUNT=0
+    for FILE in {"$LK_BASE/etc/backup","$BACKUP_ROOT/conf.d"}/{"$1","$SOURCE_NAME/$1"} \
+        ${!ARR+"${!ARR}"}; do
         [ -e "$FILE" ] || continue
         realpath "$FILE" || lk_die
         ((++COUNT))
-        [ "$ALL" -eq 1 ] || break
     done
     ((COUNT))
 }
@@ -104,7 +100,7 @@ function run_custom_hook() {
         LK_SOURCE_SCRIPT_ALREADY_STARTED=1
     ! is_stage_complete "hook-$HOOK-finished" ||
         LK_SOURCE_SCRIPT_ALREADY_FINISHED=1
-    if SCRIPTS=($(find_custom --all "$SOURCE_NAME-hook-$HOOK")); then
+    if SCRIPTS=($(find_custom "hook-$HOOK")); then
         mark_stage_complete "hook-$HOOK-started"
         for SOURCE_SCRIPT in "${SCRIPTS[@]}"; do
             lk_console_item "Running hook script:" "$SOURCE_SCRIPT"
@@ -158,6 +154,21 @@ function get_stage() {
     echo "${STAGE//-/ }"
 }
 
+# run_rsync [SOURCE DEST]
+function run_rsync() {
+    local SRC=${1:-} DEST=${2:-}
+    [ $# -eq 2 ] || {
+        SRC=${SOURCE%/}/
+        DEST=$LK_SNAPSHOT_FS_ROOT/
+    }
+    lk_console_item "Running rsync:" \
+        $'>>>\n'"  rsync$(printf ' \\ \n    %q' \
+            "${RSYNC_ARGS[@]}" "$SRC" "$DEST")"$'\n<<<'
+    rsync "${RSYNC_ARGS[@]}" "$SRC" "$DEST" \
+        > >(lk_log_bypass tee -a "$RSYNC_OUT_FILE") \
+        2> >(lk_log_bypass tee -a "$RSYNC_ERR_FILE")
+}
+
 SNAPSHOT_STAGES=(
     previous-copy-started
     previous-copy-finished
@@ -171,16 +182,69 @@ SNAPSHOT_STAGES=(
     finished
 )
 
+filter_rsync=()
+hook_pre_rsync=()
+hook_post_rsync=()
+
 LK_USAGE="\
-Usage: ${0##*/} SOURCE_NAME SSH_HOST:SOURCE_PATH BACKUP_ROOT [RSYNC_ARG...]
-   or: ${0##*/} SOURCE_NAME RSYNC_HOST::SOURCE_PATH BACKUP_ROOT [RSYNC_ARG...]
-   or: ${0##*/} SOURCE_NAME SOURCE_PATH BACKUP_ROOT [RSYNC_ARG...]
+Usage: ${0##*/} [OPTIONS] SOURCE_NAME SOURCE BACKUP_ROOT [-- RSYNC_ARG...]
 
 Use hard links to duplicate the previous SOURCE_NAME snapshot at BACKUP_ROOT,
-then rsync SOURCE_PATH to the replica to create a new snapshot of SOURCE_NAME.
+then rsync from SOURCE to the replica to create a new snapshot of SOURCE_NAME.
 
-This approach uses less storage than rsync --link-dest, which breaks hard links
-when permissions change."
+This approach doesn't preserve historical file modes but uses less storage than
+rsync --link-dest, which breaks hard links when permissions change.
+
+Custom rsync filters and hook scripts are processed in the following order.
+  1. $LK_BASE/etc/backup/<filter-rsync|hook-HOOK>
+  2. $LK_BASE/etc/backup/<SOURCE_NAME>/<filter-rsync|hook-HOOK>
+  3. <BACKUP_ROOT>/conf.d/<filter-rsync|hook-HOOK>
+  4. <BACKUP_ROOT>/conf.d/<SOURCE_NAME>/<filter-rsync|hook-HOOK>
+  5. command-line
+
+Hook scripts are sourced in a Bash subshell. If they return zero, any output on
+file descriptor 4 is eval'd in the global scope of ${0##*/}.
+
+Options:
+  -f, --filter RSYNC_FILTER     Add filtering rules from file RSYNC_FILTER
+  -h, --hook HOOK:BASH_SCRIPT   Register BASH_SCRIPT with HOOK
+
+Sources:
+  SSH_HOST:SOURCE_PATH
+  RSYNC_HOST::SOURCE_PATH
+  SOURCE_PATH
+
+Hooks:
+  pre_rsync
+  post_rsync"
+
+lk_getopt "f:h:" \
+    "filter:,hook:"
+eval "set -- $LK_GETOPT"
+
+while :; do
+    OPT=$1
+    shift
+    case "$OPT" in
+    -f | --filter)
+        [ -f "$1" ] || lk_die "file not found: $1"
+        filter_rsync+=("$1")
+        shift
+        ;;
+    -h | --hook)
+        [[ $1 =~ ^(pre_rsync|post_rsync):(.+)$ ]] ||
+            lk_die "invalid argument: $1"
+        HOOK=${BASH_REMATCH[1]}
+        HOOK_SCRIPT=${BASH_REMATCH[2]}
+        [ -f "$HOOK_SCRIPT" ] || lk_die "file not found: $HOOK_SCRIPT"
+        eval "hook_$HOOK+=(\"\$HOOK_SCRIPT\")"
+        shift
+        ;;
+    --)
+        break
+        ;;
+    esac
+done
 
 [ $# -ge 3 ] || lk_usage
 
@@ -287,15 +351,17 @@ trap exit_trap EXIT
     lk_console_item "Creating snapshot at" "$LK_SNAPSHOT_ROOT"
     lk_console_detail "Log files:" "$(lk_echo_args \
         "$SNAPSHOT_LOG_FILE" "$RSYNC_OUT_FILE" "$RSYNC_ERR_FILE")"
-    RSYNC_ARGS=(-vrlpt --delete --stats)
-    ! RSYNC_FILTER=$(find_custom "$SOURCE_NAME-filter-rsync") || {
-        lk_console_detail "Rsync filter:" "$RSYNC_FILTER"
-        RSYNC_ARGS=("${RSYNC_ARGS[@]}" --delete-excluded --filter ". $RSYNC_FILTER")
+    RSYNC_ARGS=(-vrlpt --delete --stats "$@")
+    ! RSYNC_FILTERS=($(find_custom filter-rsync)) || {
+        lk_console_detail "Rsync filter:" \
+            "$(lk_echo_args "${RSYNC_FILTERS[@]/#/. }")"
+        RSYNC_ARGS+=(--delete-excluded)
+        for RSYNC_FILTER in "${RSYNC_FILTERS[@]}"; do
+            RSYNC_ARGS+=(--filter ". $RSYNC_FILTER")
+        done
     }
 
     run_custom_hook pre_rsync
-
-    RSYNC_ARGS=("${RSYNC_ARGS[@]}" "$@" "${SOURCE%/}/" "$LK_SNAPSHOT_FS_ROOT/")
 
     ! lk_in_array --inplace RSYNC_ARGS &&
         ! lk_in_array --write-devices RSYNC_ARGS ||
@@ -305,11 +371,7 @@ trap exit_trap EXIT
         ! lk_in_array -n RSYNC_ARGS || DRY_RUN=1
 
     [ "${DRY_RUN:-0}" -ne 0 ] || mark_stage_complete rsync-started
-    lk_console_item "Running rsync:" \
-        $'>>>\n'"  rsync$(printf ' \\ \n    %q' "${RSYNC_ARGS[@]}")"$'\n<<<'
-    rsync "${RSYNC_ARGS[@]}" \
-        > >(tee -a "$RSYNC_OUT_FILE" >&6) \
-        2> >(tee -a "$RSYNC_ERR_FILE" >&7) || RSYNC_EXIT_VALUE=$?
+    run_rsync || RSYNC_EXIT_VALUE=$?
     EXIT_STATUS=$RSYNC_EXIT_VALUE
     case "$EXIT_STATUS" in
     0)
