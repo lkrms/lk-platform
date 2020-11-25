@@ -21,75 +21,76 @@ lk_elevate
 
 lk_log_output
 
-BACKUP_ROOT=${LK_BACKUP_ROOT:-/srv/backup}
-install -d -m 00751 -g adm "$BACKUP_ROOT"
+{
+    BACKUP_ROOT=${LK_BACKUP_ROOT:-/srv/backup}
+    install -d -m 00751 -g adm "$BACKUP_ROOT"
 
-# Use one timestamp for all snapshots in this batch
-LK_BACKUP_TIMESTAMP=$(date +"%Y-%m-%d-%H%M%S")
-export LK_BACKUP_TIMESTAMP
+    # Use one timestamp for all snapshots in this batch
+    LK_BACKUP_TIMESTAMP=$(date +"%Y-%m-%d-%H%M%S")
+    export LK_BACKUP_TIMESTAMP
 
-IFS=':'
-BASE_DIRS=(
-    /srv/www
-    ${LK_BACKUP_BASE_DIRS:-}
-    "$@"
-)
-lk_resolve_files BASE_DIRS
-[ ${#BASE_DIRS[@]} -gt 0 ] ||
-    lk_die "no base directories found"
-unset IFS
-lk_mapfile <(comm -12 \
-    <(getent passwd | cut -d: -f6 | sort -u) \
-    <(find "${BASE_DIRS[@]}" -mindepth 1 -maxdepth 1 -type d | sort |
-        sed -E '/^\/(proc|sys|dev|run|tmp)$/d')) SOURCES
-[ ${#SOURCES[@]} -gt 0 ] ||
-    lk_die "nothing to back up"
-lk_echo_array SOURCES |
-    lk_console_list "Backing up:" account accounts
+    IFS=':'
+    BASE_DIRS=(
+        ${LK_BACKUP_BASE_DIRS:-/srv/www}
+    )
+    lk_resolve_files BASE_DIRS
+    [ ${#BASE_DIRS[@]} -gt 0 ] ||
+        lk_die "no base directories found"
+    unset IFS
+    lk_mapfile <(comm -12 \
+        <(getent passwd | cut -d: -f6 | sort -u) \
+        <(find "${BASE_DIRS[@]}" -mindepth 1 -maxdepth 1 -type d | sort |
+            sed -E '/^\/(proc|sys|dev|run|tmp)$/d')) SOURCES
+    [ ${#SOURCES[@]} -gt 0 ] ||
+        lk_die "nothing to back up"
+    lk_echo_array SOURCES |
+        lk_console_list "Backing up:" account accounts
 
-RSYNC_FILTER_ARGS=()
-EXIT_STATUS=0
-i=0
-for SOURCE in "${SOURCES[@]}"; do
-    RSYNC_FILTER_ARGS+=(--filter "- $SOURCE")
-    OWNER=$(lk_file_owner "$SOURCE")
-    GROUP=$(id -gn "$OWNER")
-    MESSAGE="Backup $((++i)) of ${#SOURCES[@]} "
+    RSYNC_FILTER_ARGS=()
+    EXIT_STATUS=0
+    i=0
+    for SOURCE in "${SOURCES[@]}"; do
+        RSYNC_FILTER_ARGS+=(--filter "- $SOURCE")
+        OWNER=$(lk_file_owner "$SOURCE")
+        GROUP=$(id -gn "$OWNER")
+        MESSAGE="Backup $((++i)) of ${#SOURCES[@]} "
+        lk_log_bypass "$LK_BASE/bin/lk-backup-create-snapshot.sh" \
+            --group "$GROUP" \
+            --hook post_rsync:"$LK_BASE/lib/hosting/backup-hook-post_rsync.sh" \
+            "${SOURCE##*/}" "$SOURCE" "$BACKUP_ROOT" \
+            -- \
+            --chmod=go-w,g+r,Dg+x \
+            --owner \
+            --group \
+            --chown="root:$GROUP" \
+            "$@" &&
+            lk_console_success "${MESSAGE}completed successfully:" "$SOURCE" || {
+            EXIT_STATUS=$?
+            lk_console_error \
+                "${MESSAGE}failed to complete (exit status $EXIT_STATUS):" \
+                "$SOURCE"
+            continue
+        }
+        lk_safe_symlink "$BACKUP_ROOT/snapshot/${SOURCE##*/}" "$SOURCE/backup"
+    done
+
+    lk_console_message "Backing up system files"
     lk_log_bypass "$LK_BASE/bin/lk-backup-create-snapshot.sh" \
-        --group "$GROUP" \
+        --filter "$LK_BASE/lib/hosting/backup-filter-rsync" \
         --hook post_rsync:"$LK_BASE/lib/hosting/backup-hook-post_rsync.sh" \
-        "${SOURCE##*/}" "$SOURCE" "$BACKUP_ROOT" \
+        "root" "/" "$BACKUP_ROOT" \
         -- \
-        --chmod=go-w,g+r,Dg+x \
         --owner \
         --group \
-        --chown="root:$GROUP" &&
-        lk_console_success "${MESSAGE}completed successfully:" "$SOURCE" || {
+        "${RSYNC_FILTER_ARGS[@]}" &&
+        lk_console_success "System backup completed successfully" || {
         EXIT_STATUS=$?
         lk_console_error \
-            "${MESSAGE}failed to complete (exit status $EXIT_STATUS):" \
-            "$SOURCE"
-        continue
+            "System backup failed to complete (exit status $EXIT_STATUS)"
     }
-    lk_safe_symlink "$BACKUP_ROOT/snapshot/${SOURCE##*/}" "$SOURCE/backup"
-done
 
-lk_console_message "Backing up system files"
-lk_log_bypass "$LK_BASE/bin/lk-backup-create-snapshot.sh" \
-    --filter "$LK_BASE/lib/hosting/backup-filter-rsync" \
-    --hook post_rsync:"$LK_BASE/lib/hosting/backup-hook-post_rsync.sh" \
-    "root" "/" "$BACKUP_ROOT" \
-    -- \
-    --owner \
-    --group \
-    "${RSYNC_FILTER_ARGS[@]}" &&
-    lk_console_success "System backup completed successfully" || {
-    EXIT_STATUS=$?
-    lk_console_error \
-        "System backup failed to complete (exit status $EXIT_STATUS)"
+    "$LK_BASE/bin/lk-backup-prune-snapshots.sh" "$BACKUP_ROOT" ||
+        EXIT_STATUS=$?
+
+    exit "$EXIT_STATUS"
 }
-
-"$LK_BASE/bin/lk-backup-prune-snapshots.sh" "$BACKUP_ROOT" ||
-    EXIT_STATUS=$?
-
-exit "$EXIT_STATUS"
