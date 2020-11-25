@@ -103,8 +103,27 @@
 
     LK_SKIP=env include=provision . "$LK_INST/lib/bash/common.sh"
 
-    lk_getopt
+    NEW_SETTINGS=()
+
+    lk_getopt "s:" "set:"
     eval "set -- $LK_GETOPT"
+
+    while :; do
+        OPT=$1
+        shift
+        case "$OPT" in
+        -s | --set)
+            [[ $1 =~ ^([a-zA-Z_][a-zA-Z0-9_]*)=(.*) ]] ||
+                lk_die "invalid argument: $1"
+            NEW_SETTINGS+=("${BASH_REMATCH[1]}")
+            eval "${BASH_REMATCH[1]}=\${BASH_REMATCH[2]}"
+            shift
+            ;;
+        --)
+            break
+            ;;
+        esac
+    done
 
     [ "${LK_INST##*/}" = lk-platform ] || {
         OLD_LK_INST=$LK_INST
@@ -139,8 +158,8 @@
         's/[^a-zA-Z0-9]//g' <<<"$LK_PATH_PREFIX")}
 
     LK_BIN_PATH=${LK_BIN_PATH:-/usr/local/bin}
-    LK_BACKUP_SUFFIX=-$(lk_timestamp).bak
-    LK_VERBOSE=1
+    LK_BACKUP_SUFFIX=${LK_BACKUP_SUFFIX--$(lk_timestamp).bak}
+    LK_VERBOSE=${LK_VERBOSE-1}
     lk_log_output
 
     lk_console_message "Checking sudo configuration"
@@ -296,13 +315,19 @@ install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
     }
     KNOWN_SETTINGS=()
     for i in "${SETTINGS[@]}"; do
-        # Don't include null variables
-        [ -n "${!i:-}" ] || continue
+        # Don't include null variables unless they already appear in
+        # /etc/default/lk-platform
+        [ -n "${!i:-}" ] ||
+            grep -Eq "^$i=" "$CONF_FILE" ||
+            continue
         KNOWN_SETTINGS+=("$i")
     done
-    OTHER_SETTINGS=($(sed -En \
-        -e "/^($(lk_implode '|' KNOWN_SETTINGS))=/d" \
-        -e 's/^([a-zA-Z_][a-zA-Z0-9_]*)=.*/\1/p' "$CONF_FILE"))
+    OTHER_SETTINGS=($(comm -23 \
+        <({ lk_echo_array NEW_SETTINGS &&
+            sed -En \
+                's/^([a-zA-Z_][a-zA-Z0-9_]*)=.*/\1/p' "$CONF_FILE"; } |
+            sort -u) \
+        <(lk_echo_array KNOWN_SETTINGS | sort)))
     lk_maybe_replace "$CONF_FILE" "$(lk_get_shell_var \
         "${KNOWN_SETTINGS[@]}" \
         ${OTHER_SETTINGS[@]+"${OTHER_SETTINGS[@]}"})"

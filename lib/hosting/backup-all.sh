@@ -89,4 +89,7 @@ lk_log_bypass "$LK_BASE/bin/lk-backup-create-snapshot.sh" \
         "System backup failed to complete (exit status $EXIT_STATUS)"
 }
 
+"$LK_BASE/bin/lk-backup-prune-snapshots.sh" "$BACKUP_ROOT" ||
+    EXIT_STATUS=$?
+
 exit "$EXIT_STATUS"

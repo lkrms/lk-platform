@@ -4,6 +4,8 @@
 + /home
 
 + /opt
+
+- /srv/backup
 + /srv
 
 + /var/log
