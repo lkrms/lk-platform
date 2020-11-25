@@ -365,7 +365,7 @@ function lk_filter_ipv6() {
 }
 
 function _lk_node_ip() {
-    local i PRIVATE=("${@:2}") IP IFS
+    local i PRIVATE=("${@:2}") IP
     IP=$(if lk_command_exists ip; then
         ip address show
     else
@@ -377,8 +377,7 @@ function _lk_node_ip() {
         -v "ADDRESS_FAMILY=$1" |
         sed -E 's/%[^/]+\//\//') || return
     {
-        IFS='|'
-        grep -Ev "^(${PRIVATE[*]})" <<<"$IP" || true
+        grep -Ev "^$(lk_regex_implode "${PRIVATE[@]}")" <<<"$IP" || true
         lk_is_true "${LK_IP_PUBLIC_ONLY:-}" ||
             for i in "${PRIVATE[@]}"; do
                 grep -E "^$i" <<<"$IP" || true
@@ -484,9 +483,10 @@ function lk_hosts_get_records() {
             )
         done
     done
-    IFS='|'
     REGEX="s/^($NS+)$S+($NS+)$S+($NS+)$S+($NS+)$S+($NS+)/\\1 \\2 \\3 \\4 \\5/"
-    "${COMMAND[@]}" | sed -E "$REGEX" | awk "\$4 ~ /^(${TYPES[*]})$/" |
+    "${COMMAND[@]}" |
+        sed -E "$REGEX" |
+        awk "\$4 ~ /^$(lk_regex_implode "${TYPES[@]}")$/" |
         { [ -z "${CUT:-}" ] && cat || cut -d' ' "$CUT"; }
 }
 

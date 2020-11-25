@@ -66,91 +66,45 @@ function lk_is_qemu() {
 }
 
 _LK_GNU_COMMANDS=(
-    chgrp    # coreutils
-    chmod    #
-    chown    #
-    cp       #
-    date     #
-    df       #
-    du       #
-    ln       #
-    mktemp   #
-    realpath #
-    sort     #
-    stat     #
-    diff     # diffutils
-    find     # findutils
-    xargs    #
-    awk      # gawk
-    grep     # grep
-    nc       # netcat
-    sed      # sed
-    tar      # tar
-    getopt   # util-linux
+    awk chgrp chmod chown cp date df diff du find getopt grep ln mktemp nc
+    realpath sed sort stat tar xargs
 )
 
 function _lk_gnu_command() {
-    local SH
+    local COMMAND PREFIX=
+    ! lk_is_macos || {
+        PREFIX=g
+        COMMAND=${HOMEBREW_PREFIX:-$(brew --prefix 2>/dev/null)} ||
+            COMMAND=/usr/local
+    }
     case "$1" in
+    diff)
+        ! lk_is_macos &&
+            COMMAND=$1 ||
+            COMMAND=$COMMAND/bin/$1
+        ;;
     awk)
-        echo "gawk"
+        COMMAND=gawk
         ;;
     nc)
-        echo "netcat"
+        COMMAND=netcat
         ;;
     getopt)
-        SH="\
-if ! lk_is_macos; then
-    echo \"getopt\"
-else
-    if ! lk_command_exists brew ||
-        ! COMMAND=\$(brew --prefix); then
-        COMMAND=/usr/local
-    fi
-    echo \"\$COMMAND/opt/gnu-getopt/bin/getopt\"
-fi"
-        ;;
-    diff)
-        SH="\
-if ! lk_is_macos; then
-    echo \"$1\"
-else
-    if ! lk_command_exists brew ||
-        ! COMMAND=\$(brew --prefix); then
-        COMMAND=/usr/local
-    fi
-    echo \"\$COMMAND/bin/$1\"
-fi"
+        ! lk_is_macos &&
+            COMMAND=getopt ||
+            COMMAND=$COMMAND/opt/gnu-getopt/bin/getopt
         ;;
     *)
-        SH="\
-PREFIX=g
-lk_is_macos || PREFIX=
-echo \"\${PREFIX}$1\""
+        COMMAND=$PREFIX$1
         ;;
     esac
-    [ -z "${SH:-}" ] ||
-        if [ "${2:-}" = defer ]; then
-            echo "$SH"
-            return 1
-        else
-            eval "($SH)"
-        fi
+    echo "$COMMAND"
 }
 
 function _lk_gnu_define() {
-    local COMMAND GCOMMAND
+    local COMMAND
     for COMMAND in "${_LK_GNU_COMMANDS[@]}"; do
-        if GCOMMAND=$(_lk_gnu_command "$COMMAND" defer); then
-            eval "function gnu_$COMMAND() { $GCOMMAND \"\$@\"; }"
-        else
-            eval "function gnu_$COMMAND() {
-                local GCOMMAND
-                GCOMMAND=\$($GCOMMAND) || return
-                eval \"function gnu_$COMMAND() { \$GCOMMAND \\\"\\\$@\\\"; }\"
-                gnu_$COMMAND \"\$@\"
-            }"
-        fi
+        eval "function gnu_$COMMAND() { $(_lk_gnu_command "$COMMAND") \"\$@\"; }"
     done
 }
 
@@ -171,7 +125,7 @@ function lk_include() {
     done
 }
 
-function lk_is_source_file_running() {
+function lk_is_script_running() {
     [ "${BASH_SOURCE[*]+${BASH_SOURCE[*]: -1:1}}" = "$0" ]
 }
 
@@ -181,13 +135,16 @@ function lk_is_source_file_running() {
 # running script, otherwise print the name of the function at STACK_DEPTH in the
 # call stack, where stack depth 0 (the default) represents the invoking
 # function, stack depth 1 represents the invoking function's caller, and so on.
+#
+# Returns the most recent command's exit status to facilitate typical lk_usage
+# scenarios.
 function lk_myself() {
-    local EXIT_STATUS=$? FUNC=
+    local EXIT_STATUS=$? FUNC
     [ "${1:-}" != -f ] || {
         FUNC=1
         shift
     }
-    if ! lk_is_true "$FUNC" && lk_is_source_file_running; then
+    if ! lk_is_true "${FUNC:-}" && lk_is_script_running; then
         echo "${0##*/}"
     else
         echo "${FUNCNAME[$((1 + ${1:-0}))]:-${0##*/}}"
@@ -198,19 +155,20 @@ function lk_myself() {
 # shellcheck disable=SC2120
 function _lk_caller() {
     local CONTEXT REGEX='^([0-9]+) ([^ ]+) (.*)$' SOURCE FUNC LINE \
-        DIM=${LK_DIM:-$LK_GREY} CALLER=()
+        VERBOSE DIM=${LK_DIM:-$LK_GREY} CALLER=()
     if CONTEXT=${1:-$(caller 1)} &&
         [[ $CONTEXT =~ $REGEX ]]; then
         SOURCE=${BASH_REMATCH[3]}
         FUNC=${BASH_REMATCH[2]}
         LINE=${BASH_REMATCH[1]}
     fi
+    ! lk_verbose || VERBOSE=1
     # If the caller isn't in the running script (or no script is running), start
     # with the shell/script name
     if [ "${SOURCE:=}" != "$0" ] || [ "$SOURCE" = main ]; then
         CALLER=("$LK_BOLD${0##*/}$LK_RESET")
     fi
-    # Always include source filename and line number
+    # Always include source filename (and line number if being verbose)
     if [ -n "$SOURCE" ] && [ "$SOURCE" != main ]; then
         CALLER+=("$(
             if [ "$SOURCE" = "$0" ]; then
@@ -219,7 +177,7 @@ function _lk_caller() {
                 SOURCE=${SOURCE//~/"~"}
                 echo "$SOURCE"
             fi
-        )$DIM:$LINE$LK_RESET")
+        )${VERBOSE:+$DIM:$LINE$LK_RESET}")
     fi
     lk_is_false "${LK_DEBUG:-0}" ||
         [ -z "${FUNC:-}" ] ||
@@ -230,8 +188,8 @@ function _lk_caller() {
 
 # lk_warn [MESSAGE]
 #
-# Output "<context>: MESSAGE" as a warning and return with the previous
-# command's exit status.
+# Output "<context>: MESSAGE" as a warning and return the most recent command's
+# exit status.
 function lk_warn() {
     local EXIT_STATUS=$?
     lk_console_warning "$(_lk_caller): ${1:-execution failed}"
@@ -291,7 +249,7 @@ function lk_command_first_existing() {
 }
 
 function lk_regex_implode() {
-    [ $# -gt 0 ] || lk_warn "no subexpression" || return
+    [ $# -gt 0 ] || return 0
     if [ $# -gt 1 ]; then
         printf '(%s)' "$(lk_implode_args "|" "$@")"
     else

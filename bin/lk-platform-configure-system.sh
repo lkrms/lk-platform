@@ -362,8 +362,8 @@ install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
         [ "$LK_BASE_REAL_QUOTED" = "$LK_BASE_REAL" ] ||
             RC_PATTERNS+=("$(lk_escape_ere "$LK_BASE_REAL_QUOTED")")
     }
-    IFS='|'
-    RC_PATTERN="(${RC_PATTERNS[*]})(\\/.*)?\\/(\\.bashrc|rc\\.sh)"
+    RC_PATTERN="$(lk_regex_implode \
+        "${RC_PATTERNS[@]}")(\\/.*)?\\/(\\.bashrc|rc\\.sh)"
     RC_PATTERN=${RC_PATTERN//\\/\\\\}
     RC_SH=$(printf '%s\n' \
         "if [ -f $RC_PATH ]; then" \
@@ -373,7 +373,6 @@ install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
         -f "$LK_BASE/lib/awk/update-bashrc.awk"
         -v "RC_PATTERN=$RC_PATTERN"
         -v "RC_SH=$RC_SH")
-    unset IFS
 
     function maybe_replace_lines() {
         local FILE=$1
@@ -397,7 +396,8 @@ install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
             lk_console_detail "Creating" "$FILE"
             install -m 00644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
         }
-        lk_maybe_replace "$FILE" "$("${RC_AWK[@]}" "$FILE")"
+        LK_BACKUP_SUFFIX='' \
+            lk_maybe_replace "$FILE" "$("${RC_AWK[@]}" "$FILE")"
 
         # Create ~/.profile if no profile file exists, then check that ~/.bashrc
         # is sourced at startup when Bash is running as a login shell (e.g. in a

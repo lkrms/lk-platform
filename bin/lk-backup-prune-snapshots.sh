@@ -83,7 +83,7 @@ lk_log_output
 {
     TZ=UTC
     USAGE_START=($(get_usage "$BACKUP_ROOT"))
-    lk_console_log "Pruning backups at $BACKUP_ROOT on $FQDN (storage used: ${USAGE_START[0]} / ${USAGE_START[1]})"
+    lk_console_log "Pruning backups at $BACKUP_ROOT on $FQDN (storage used: ${USAGE_START[0]}/${USAGE_START[1]})"
     lk_mapfile <(find "$BACKUP_ROOT/snapshot" -mindepth 1 -maxdepth 1 \
         -type d -printf '%f\n' | sort) SOURCE_NAMES
     for SOURCE_NAME in ${SOURCE_NAMES[@]+"${SOURCE_NAMES[@]}"}; do
@@ -196,6 +196,6 @@ lk_log_output
     rm -f "$LOCK_FILE"
     USAGE_END=($(get_usage "$BACKUP_ROOT"))
     lk_console_success \
-        "Pruning complete (storage used: ${USAGE_END[0]} / ${USAGE_END[1]})"
+        "Pruning complete (storage used: ${USAGE_END[0]}/${USAGE_END[1]})"
     exit
 }
