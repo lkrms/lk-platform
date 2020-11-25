@@ -23,33 +23,6 @@
 
     CONF_FILE=/etc/default/lk-platform
 
-    OLD_SETTINGS=(
-        NODE_HOSTNAME
-        NODE_FQDN
-        NODE_TIMEZONE
-        NODE_SERVICES
-        NODE_PACKAGES
-        ADMIN_EMAIL
-        TRUSTED_IP_ADDRESSES
-        SSH_TRUSTED_ONLY
-        SSH_JUMP_HOST
-        SSH_JUMP_USER
-        SSH_JUMP_KEY
-        REJECT_OUTPUT
-        ACCEPT_OUTPUT_HOSTS
-        INNODB_BUFFER_SIZE
-        OPCACHE_MEMORY_CONSUMPTION
-        PHP_SETTINGS
-        PHP_ADMIN_SETTINGS
-        MEMCACHED_MEMORY_LIMIT
-        SMTP_RELAY
-        EMAIL_BLACKHOLE
-        AUTO_REBOOT
-        AUTO_REBOOT_TIME
-        SCRIPT_DEBUG
-        PLATFORM_BRANCH
-    )
-
     SETTINGS=(
         LK_BASE
         LK_PATH_PREFIX
@@ -289,20 +262,22 @@
     # Use the opening "Environment:" log entry created by hosting.sh as a last
     # resort when looking for old settings
     function install_env() {
-        INSTALL_ENV="${INSTALL_ENV-$(
-            [ ! -f "/var/log/${LK_PATH_PREFIX}install.log" ] ||
-                awk \
-                    -f "$LK_BASE/lib/awk/get-install-env.awk" \
-                    <"/var/log/${LK_PATH_PREFIX}install.log"
-        )}" && awk -F= \
+        if [ "${INSTALL_ENV+1}" != 1 ]; then
+            INSTALL_ENV=$(
+                FILE=/var/log/${LK_PATH_PREFIX}install.log
+                [ ! -f "$FILE" ] ||
+                    awk -f "$LK_BASE/lib/awk/get-install-env.awk" <"$FILE"
+            ) || return
+        fi
+        awk -F= \
             -v "SETTING=$1" \
             '$1 ~ "^" SETTING "$" { print $2 }' <<<"$INSTALL_ENV"
     }
 
-    for i in "${OLD_SETTINGS[@]}"; do
-        eval "\
-LK_$i=\"\${LK_$i-\${LK_DEFAULT_$i-\${$i-\$(\
-install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
+    for i in "${SETTINGS[@]}"; do
+        eval "$(printf \
+            '%s=${%s-${%s-${%s-$(install_env "(LK_(DEFAULT_)?)?%s")}}}' \
+            "$i" "$i" "LK_DEFAULT_${i#LK_}" "${i#LK_}" "${i#LK_}")"
     done
 
     lk_console_message "Checking lk-platform configuration"
@@ -396,7 +371,7 @@ install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
             lk_console_detail "Creating" "$FILE"
             install -m 00644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
         }
-        LK_BACKUP_SUFFIX='' \
+        LK_BACKUP_SUFFIX='' LK_VERBOSE=0 \
             lk_maybe_replace "$FILE" "$("${RC_AWK[@]}" "$FILE")"
 
         # Create ~/.profile if no profile file exists, then check that ~/.bashrc
