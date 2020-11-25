@@ -1,0 +1,13 @@
++ /etc
+
++ /root
++ /home
+
++ /opt
++ /srv
+
++ /var/log
++ /var/spool
+- /var/*
+
+- /*

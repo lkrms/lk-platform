@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2001,SC2015,SC2016,SC2034
+# shellcheck disable=SC1090,SC2001,SC2015,SC2016,SC2034,SC2207
 
 # Elevate for access to ~root, /home/*, etc.
 [ "$EUID" -eq 0 ] || {
@@ -294,25 +294,18 @@ install_env \"(LK_(DEFAULT_)?)?$i\")}}}\"" || exit
         install -d -m 00755 "${CONF_FILE%/*}" &&
             install -m 00644 /dev/null "$CONF_FILE"
     }
-    # TODO: add or replace lines rather than overwriting entire file
-    DEFAULT_LINES=()
-    OUTPUT=()
+    KNOWN_SETTINGS=()
     for i in "${SETTINGS[@]}"; do
-        # Don't include null variables unless they already appear in
-        # /etc/default/lk-platform
-        if [ -z "${!i:-}" ] &&
-            ! grep -Eq "^$i=" "$CONF_FILE"; then
-            continue
-        fi
-        DEFAULT_LINES+=("$(lk_get_shell_var "$i")")
-        OUTPUT+=("$i" "${!i:-<none>}")
+        # Don't include null variables
+        [ -n "${!i:-}" ] || continue
+        KNOWN_SETTINGS+=("$i")
     done
-    if lk_verbose 2; then
-        lk_console_detail "Settings:" "$(printf '%s: %s\n' "${OUTPUT[@]}")"
-    else
-        lk_console_detail "${#DEFAULT_LINES[@]} settings found"
-    fi
-    lk_maybe_replace "$CONF_FILE" "$(lk_echo_array DEFAULT_LINES)"
+    OTHER_SETTINGS=($(sed -En \
+        -e "/^($(lk_implode '|' KNOWN_SETTINGS))=/d" \
+        -e 's/^([a-zA-Z_][a-zA-Z0-9_]*)=.*/\1/p' "$CONF_FILE"))
+    lk_maybe_replace "$CONF_FILE" "$(lk_get_shell_var \
+        "${KNOWN_SETTINGS[@]}" \
+        ${OTHER_SETTINGS[@]+"${OTHER_SETTINGS[@]}"})"
 
     lk_console_detail "Checking symbolic links"
     lk_safe_symlink \

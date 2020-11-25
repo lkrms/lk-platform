@@ -47,9 +47,11 @@ lk_mapfile <(comm -12 \
 lk_echo_array SOURCES |
     lk_console_list "Backing up:" account accounts
 
+RSYNC_FILTER_ARGS=()
 EXIT_STATUS=0
 i=0
 for SOURCE in "${SOURCES[@]}"; do
+    RSYNC_FILTER_ARGS+=(--filter "- $SOURCE")
     OWNER=$(lk_file_owner "$SOURCE")
     GROUP=$(id -gn "$OWNER")
     MESSAGE="Backup $((++i)) of ${#SOURCES[@]} "
@@ -67,7 +69,24 @@ for SOURCE in "${SOURCES[@]}"; do
         lk_console_error \
             "${MESSAGE}failed to complete (exit status $EXIT_STATUS):" \
             "$SOURCE"
+        continue
     }
+    lk_safe_symlink "$BACKUP_ROOT/snapshot/${SOURCE##*/}" "$SOURCE/backup"
 done
+
+lk_console_message "Backing up system files"
+lk_log_bypass "$LK_BASE/bin/lk-backup-create-snapshot.sh" \
+    --filter "$LK_BASE/lib/hosting/backup-filter-rsync" \
+    --hook post_rsync:"$LK_BASE/lib/hosting/backup-hook-post_rsync.sh" \
+    "root" "/" "$BACKUP_ROOT" \
+    -- \
+    --owner \
+    --group \
+    "${RSYNC_FILTER_ARGS[@]}" &&
+    lk_console_success "System backup completed successfully" || {
+    EXIT_STATUS=$?
+    lk_console_error \
+        "System backup failed to complete (exit status $EXIT_STATUS)"
+}
 
 exit "$EXIT_STATUS"

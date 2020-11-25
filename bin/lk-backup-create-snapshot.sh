@@ -196,7 +196,8 @@ then rsync from SOURCE to the replica to create a new snapshot of SOURCE_NAME.
 This approach doesn't preserve historical file modes but uses less storage than
 rsync --link-dest, which breaks hard links when permissions change.
 
-Custom rsync filters and hook scripts are processed in the following order.
+Custom hook scripts are processed in the following order. Rsync filters are
+added in the reverse order.
   1. $LK_BASE/etc/backup/<filter-rsync|hook-HOOK>
   2. $LK_BASE/etc/backup/<SOURCE_NAME>/<filter-rsync|hook-HOOK>
   3. <BACKUP_ROOT>/conf.d/<filter-rsync|hook-HOOK>
@@ -313,16 +314,21 @@ RSYNC_ERR_FILE=$LK_SNAPSHOT_ROOT/log/rsync.err.log
     lk_die "already finalised: $LK_SNAPSHOT_ROOT"
 
 umask 022
+SOURCE_MODE=00700
 SNAPSHOT_MODE=00700
 LOG_MODE=00600
 [ -z "$SNAPSHOT_GROUP" ] || {
+    SOURCE_MODE=02770
     SNAPSHOT_MODE=02750
     LOG_MODE=00640
 }
 
-install -d -m 00711 "$BACKUP_ROOT"/{,latest,snapshot}
+install -d -m 00755 "$BACKUP_ROOT"
+install -d -m 00751 "$BACKUP_ROOT"/{latest,snapshot}
+install -d -m "$SOURCE_MODE" ${SNAPSHOT_GROUP:+-g "$SNAPSHOT_GROUP"} \
+    "$BACKUP_ROOT/snapshot/$SOURCE_NAME"
 install -d -m "$SNAPSHOT_MODE" ${SNAPSHOT_GROUP:+-g "$SNAPSHOT_GROUP"} \
-    "$BACKUP_ROOT/snapshot/$SOURCE_NAME"/{,"$LK_SNAPSHOT_TIMESTAMP"/{,db,log}}
+    "$BACKUP_ROOT/snapshot/$SOURCE_NAME/$LK_SNAPSHOT_TIMESTAMP"/{,db,log}
 for f in SNAPSHOT_LOG_FILE RSYNC_OUT_FILE RSYNC_ERR_FILE; do
     [ -e "${!f}" ] ||
         install -m "$LOG_MODE" /dev/null "${!f}"
@@ -370,7 +376,7 @@ trap exit_trap EXIT
     lk_console_detail "Log files:" "$(lk_echo_args \
         "$SNAPSHOT_LOG_FILE" "$RSYNC_OUT_FILE" "$RSYNC_ERR_FILE")"
     RSYNC_ARGS=(-vrlpt --delete --stats "$@")
-    ! RSYNC_FILTERS=($(find_custom filter-rsync)) || {
+    ! RSYNC_FILTERS=($(find_custom filter-rsync | tac)) || {
         lk_console_detail "Rsync filter:" \
             "$(lk_echo_args "${RSYNC_FILTERS[@]/#/. }")"
         RSYNC_ARGS+=(--delete-excluded)
