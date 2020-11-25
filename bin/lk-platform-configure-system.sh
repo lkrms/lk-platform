@@ -194,7 +194,7 @@
     }
     # Exit if required commands fail to install
     install_gnu_commands \
-        awk chmod chown date df diff find getopt realpath sed stat xargs
+        awk chmod chown cp date df diff find getopt realpath sed stat xargs
     # For other commands, warn and continue
     install_gnu_commands || true
 

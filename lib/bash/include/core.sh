@@ -69,6 +69,7 @@ _LK_GNU_COMMANDS=(
     chgrp    # coreutils
     chmod    #
     chown    #
+    cp       #
     date     #
     df       #
     du       #

@@ -365,7 +365,9 @@ trap exit_trap EXIT
         lk_console_detail "Snapshot:" "$LATEST"
         lk_console_detail "Replica:" "$LK_SNAPSHOT_FS_ROOT"
         mark_stage_complete previous-copy-started
-        cp -al "$LATEST" "$LK_SNAPSHOT_FS_ROOT"
+        # Prevent unwelcome set-group-ID propagation
+        install -d -m 00700 "$LK_SNAPSHOT_FS_ROOT"
+        gnu_cp -alT "$LATEST" "$LK_SNAPSHOT_FS_ROOT"
         mark_stage_complete previous-copy-finished
         lk_console_log "Copy complete"
     else
