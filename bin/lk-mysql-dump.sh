@@ -10,6 +10,7 @@ DB_HOST=${LK_MYSQL_HOST:-localhost}
 
 EXCLUDE_MODE=0
 DEST=$PWD
+DEST_GROUP=
 TIMESTAMP=${LK_BACKUP_TIMESTAMP:-}
 NO_TIMESTAMP=0
 DB_INCLUDE=()
@@ -31,10 +32,11 @@ Options:
   -t, --timestamp=VALUE     use VALUE as backup file timestamp
                             (default: LK_BACKUP_TIMESTAMP from environment
                             or output of \`date +%Y-%m-%d-%H%M%S\`)
-  -s, --no-timestamp        don't add backup file timestamp"
+  -s, --no-timestamp        don't add backup file timestamp
+  -g, --group GROUP         create backup files with group GROUP"
 
-lk_getopt "xd:t:s" \
-    "exclude,dest:,timestamp:,no-timestamp"
+lk_getopt "xd:t:sg:" \
+    "exclude,dest:,timestamp:,no-timestamp,group:"
 eval "set -- $LK_GETOPT"
 
 while :; do
@@ -59,6 +61,13 @@ while :; do
         ;;
     -s | --no-timestamp)
         NO_TIMESTAMP=1
+        ;;
+    -g | --group)
+        # TODO: add macOS-friendly test
+        getent group "$1" >/dev/null 2>&1 ||
+            lk_die "group not found: $1"
+        DEST_GROUP=$1
+        shift
         ;;
     --)
         break
@@ -141,6 +150,9 @@ LOCK_FD=$(lk_next_fd)
 eval "exec $LOCK_FD>\"\$LOCK_FILE\""
 flock -n "$LOCK_FD" || lk_die "unable to acquire a lock on $LOCK_FILE"
 
+DEST_MODE=00600
+[ -z "$DEST_GROUP" ] ||
+    DEST_MODE=00640
 for DB_NAME in "${DB_INCLUDE[@]}"; do
     lk_console_item "Dumping database:" "$DB_NAME"
     FILE=$DEST/$DB_NAME
@@ -153,7 +165,8 @@ for DB_NAME in "${DB_INCLUDE[@]}"; do
         lk_console_error "Skipping (backup already exists)"
         continue
     }
-    install -m 00600 /dev/null "$FILE.pending"
+    install -m "$DEST_MODE" ${DEST_GROUP:+-g "$DEST_GROUP"} \
+        /dev/null "$FILE.pending"
     if lk_mysql_dump \
         "$DB_NAME" "$DB_USER" "$DB_PASSWORD" "$DB_HOST" >"$FILE.pending" &&
         mv -f "$FILE.pending" "$FILE"; then

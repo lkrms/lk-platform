@@ -182,6 +182,7 @@ SNAPSHOT_STAGES=(
     finished
 )
 
+SNAPSHOT_GROUP=
 filter_rsync=()
 hook_pre_rsync=()
 hook_post_rsync=()
@@ -206,8 +207,9 @@ Hook scripts are sourced in a Bash subshell. If they return zero, any output on
 file descriptor 4 is eval'd in the global scope of ${0##*/}.
 
 Options:
-  -f, --filter RSYNC_FILTER     Add filtering rules from file RSYNC_FILTER
-  -h, --hook HOOK:BASH_SCRIPT   Register BASH_SCRIPT with HOOK
+  -g, --group GROUP             create snapshot directories with group GROUP
+  -f, --filter RSYNC_FILTER     add filtering rules from file RSYNC_FILTER
+  -h, --hook HOOK:BASH_SCRIPT   register BASH_SCRIPT with HOOK
 
 Sources:
   SSH_HOST:SOURCE_PATH
@@ -218,14 +220,21 @@ Hooks:
   pre_rsync
   post_rsync"
 
-lk_getopt "f:h:" \
-    "filter:,hook:"
+lk_getopt "g:f:h:" \
+    "group:,filter:,hook:"
 eval "set -- $LK_GETOPT"
 
 while :; do
     OPT=$1
     shift
     case "$OPT" in
+    -g | --group)
+        # TODO: add macOS-friendly test
+        getent group "$1" >/dev/null 2>&1 ||
+            lk_die "group not found: $1"
+        SNAPSHOT_GROUP=$1
+        shift
+        ;;
     -f | --filter)
         [ -f "$1" ] || lk_die "file not found: $1"
         filter_rsync+=("$1")
@@ -303,11 +312,20 @@ RSYNC_ERR_FILE=$LK_SNAPSHOT_ROOT/log/rsync.err.log
 ! is_stage_complete finished ||
     lk_die "already finalised: $LK_SNAPSHOT_ROOT"
 
-install -d -m 00711 \
-    "$BACKUP_ROOT/"{,latest,snapshot/{,"$SOURCE_NAME/"{,"$LK_SNAPSHOT_TIMESTAMP/"{,db,log}}}}
+umask 022
+SNAPSHOT_MODE=00700
+LOG_MODE=00600
+[ -z "$SNAPSHOT_GROUP" ] || {
+    SNAPSHOT_MODE=02750
+    LOG_MODE=00640
+}
+
+install -d -m 00711 "$BACKUP_ROOT"/{,latest,snapshot}
+install -d -m "$SNAPSHOT_MODE" ${SNAPSHOT_GROUP:+-g "$SNAPSHOT_GROUP"} \
+    "$BACKUP_ROOT/snapshot/$SOURCE_NAME"/{,"$LK_SNAPSHOT_TIMESTAMP"/{,db,log}}
 for f in SNAPSHOT_LOG_FILE RSYNC_OUT_FILE RSYNC_ERR_FILE; do
     [ -e "${!f}" ] ||
-        install -m 00600 /dev/null "${!f}"
+        install -m "$LOG_MODE" /dev/null "${!f}"
 done
 
 LK_SECONDARY_LOG_FILE=$SNAPSHOT_LOG_FILE \

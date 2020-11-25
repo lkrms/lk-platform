@@ -54,11 +54,14 @@ for SOURCE in "${SOURCES[@]}"; do
     GROUP=$(id -gn "$OWNER")
     MESSAGE="Backup $((++i)) of ${#SOURCES[@]} "
     lk_log_bypass "$LK_BASE/bin/lk-backup-create-snapshot.sh" \
+        --group "$GROUP" \
         --hook post_rsync:"$LK_BASE/lib/hosting/backup-hook-post_rsync.sh" \
         "${SOURCE##*/}" "$SOURCE" "$BACKUP_ROOT" \
         -- \
-        --chown="root:$GROUP" \
-        --chmod=go-w &&
+        --chmod=go-w,g+r,Dg+x \
+        --owner \
+        --group \
+        --chown="root:$GROUP" &&
         lk_console_success "${MESSAGE}completed successfully:" "$SOURCE" || {
         EXIT_STATUS=$?
         lk_console_error \

@@ -21,6 +21,7 @@ if [ ${#MYSQL_DATABASES[@]} -gt 0 ]; then
     LK_BACKUP_TIMESTAMP='' \
         "$LK_BASE/bin/lk-mysql-dump.sh" \
         --dest "$LK_SNAPSHOT_DB_ROOT" \
+        ${SNAPSHOT_GROUP:+--group "$SNAPSHOT_GROUP"} \
         "${MYSQL_DATABASES[@]}" || return
     lk_console_message \
         "Running rsync again in case of filesystem changes since first rsync"
