@@ -40,7 +40,9 @@ function first_snapshot_on_date() {
 
 function prune_snapshot() {
     local PRUNE=$SNAPSHOT_ROOT/$1
-    lk_console_warning "Pruning ${PRUNE#$BACKUP_ROOT/snapshot/}"
+    lk_console_item \
+        "Pruning (${2:-expired}):" "${PRUNE#$BACKUP_ROOT/snapshot/}" \
+        "$LK_BOLD$LK_RED"
     touch "$PRUNE/.pruning" &&
         rm -Rf "$PRUNE"
 }
@@ -80,16 +82,13 @@ lk_log_output
 
 {
     TZ=UTC
-    lk_console_log "Pruning backups at $BACKUP_ROOT on $FQDN"
     USAGE_START=($(get_usage "$BACKUP_ROOT"))
-    lk_console_detail "Storage used on backup volume:" \
-        "${USAGE_START[0]} (${USAGE_START[1]})"
+    lk_console_log "Pruning backups at $BACKUP_ROOT on $FQDN (storage used: ${USAGE_START[0]} / ${USAGE_START[1]})"
     lk_mapfile <(find "$BACKUP_ROOT/snapshot" -mindepth 1 -maxdepth 1 \
         -type d -printf '%f\n' | sort) SOURCE_NAMES
     for SOURCE_NAME in ${SOURCE_NAMES[@]+"${SOURCE_NAMES[@]}"}; do
-        lk_console_message "Checking $SOURCE_NAME snapshots"
+        lk_console_message "Checking '$SOURCE_NAME' snapshots"
         SNAPSHOT_ROOT=$BACKUP_ROOT/snapshot/$SOURCE_NAME
-        lk_console_detail "Snapshot directory:" "$SNAPSHOT_ROOT"
 
         find_snapshots SNAPSHOTS_CLEAN \
             -exec test -e '{}/.finished' \; \
@@ -100,29 +99,18 @@ lk_log_output
         LATEST_CLEAN=$(snapshot_date "${SNAPSHOTS_CLEAN[0]}")
         OLDEST_CLEAN=$(snapshot_date \
             "${SNAPSHOTS_CLEAN[$((SNAPSHOTS_CLEAN_COUNT - 1))]}")
-        lk_console_detail "Clean snapshots:" \
+        lk_console_detail "Clean:" \
             "$SNAPSHOTS_CLEAN_COUNT ($([ "$LATEST_CLEAN" = "$OLDEST_CLEAN" ] ||
                 echo "$OLDEST_CLEAN to ")$LATEST_CLEAN)"
 
         find_snapshots SNAPSHOTS_PRUNING -exec test -e '{}/.pruning' \;
-        [ "$SNAPSHOTS_PRUNING_COUNT" -eq 0 ] || {
-            lk_echo_array SNAPSHOTS_PRUNING |
-                lk_console_detail_list \
-                    "Removing $SNAPSHOTS_PRUNING_COUNT partially pruned $(
-                        lk_maybe_plural \
-                            "$SNAPSHOTS_PRUNING_COUNT" snapshot snapshots
-                    ):"
-            for SNAPSHOT in "${SNAPSHOTS_PRUNING[@]}"; do
-                prune_snapshot "$SNAPSHOT" || lk_die
-            done
-        }
+        [ "$SNAPSHOTS_PRUNING_COUNT" -eq 0 ] ||
+            lk_console_detail \
+                "Partially pruned:" "$SNAPSHOTS_PRUNING_COUNT"
 
         if [ -n "$PRUNE_FAILED_AFTER_DAYS" ]; then
             PRUNE_FAILED_BEFORE_DATE=$(date \
                 -d "$LATEST_CLEAN -$PRUNE_FAILED_AFTER_DAYS day" +"%F")
-            ! lk_verbose ||
-                lk_console_detail "Checking for failed snapshots before" \
-                    "$PRUNE_FAILED_BEFORE_DATE"
             # Add a strict -regex test to keep failed snapshots with
             # non-standard names
             find_snapshots SNAPSHOTS_FAILED \
@@ -130,17 +118,9 @@ lk_log_output
                 -regex ".*/$BACKUP_TIMESTAMP_FINDUTILS_REGEX" \
                 -exec sh -c 'test "${1##*/}" \< "$2"' sh \
                 '{}' "$PRUNE_FAILED_BEFORE_DATE" \;
-            [ "$SNAPSHOTS_FAILED_COUNT" -eq 0 ] || {
-                lk_echo_array SNAPSHOTS_FAILED |
-                    lk_console_detail_list \
-                        "Removing $SNAPSHOTS_FAILED_COUNT failed $(
-                            lk_maybe_plural \
-                                "$SNAPSHOTS_FAILED_COUNT" snapshot snapshots
-                        ):"
-                for SNAPSHOT in "${SNAPSHOTS_FAILED[@]}"; do
-                    prune_snapshot "$SNAPSHOT" || lk_die
-                done
-            }
+            [ "$SNAPSHOTS_FAILED_COUNT" -eq 0 ] ||
+                lk_console_detail "Failed >$PRUNE_FAILED_AFTER_DAYS days ago:" \
+                    "$SNAPSHOTS_FAILED_COUNT"
         fi
 
         # Keep the latest snapshot
@@ -184,22 +164,29 @@ lk_log_output
             lk_echo_array KEEP | sort -ru
         ) SNAPSHOTS_KEEP
         SNAPSHOTS_KEEP_COUNT=${#SNAPSHOTS_KEEP[@]}
-        ! lk_verbose ||
-            lk_echo_array SNAPSHOTS_KEEP |
-            lk_console_detail_list \
-                "Keeping $SNAPSHOTS_KEEP_COUNT $(lk_maybe_plural \
-                    "$SNAPSHOTS_KEEP_COUNT" snapshot snapshots):" "$LK_GREEN"
 
         lk_mapfile <(comm -23 \
             <(lk_echo_array SNAPSHOTS_CLEAN | sort) \
             <(lk_echo_array SNAPSHOTS_KEEP | sort)) \
             SNAPSHOTS_PRUNE
         SNAPSHOTS_PRUNE_COUNT=${#SNAPSHOTS_PRUNE[@]}
+
+        lk_console_detail \
+            "Expired:" "$SNAPSHOTS_PRUNE_COUNT"
+        lk_console_detail \
+            "Fresh:" "$SNAPSHOTS_KEEP_COUNT" "$LK_BOLD$LK_GREEN"
+
+        [ "$SNAPSHOTS_PRUNING_COUNT" -eq 0 ] || {
+            for SNAPSHOT in "${SNAPSHOTS_PRUNING[@]}"; do
+                prune_snapshot "$SNAPSHOT" "partially pruned" || lk_die
+            done
+        }
+        [ "${SNAPSHOTS_FAILED_COUNT:-0}" -eq 0 ] || {
+            for SNAPSHOT in "${SNAPSHOTS_FAILED[@]}"; do
+                prune_snapshot "$SNAPSHOT" "failed" || lk_die
+            done
+        }
         [ "$SNAPSHOTS_PRUNE_COUNT" -eq 0 ] || {
-            lk_echo_array SNAPSHOTS_PRUNE | tac |
-                lk_console_detail_list \
-                    "Removing $SNAPSHOTS_PRUNE_COUNT expired $(lk_maybe_plural \
-                        "$SNAPSHOTS_PRUNE_COUNT" snapshot snapshots):"
             for SNAPSHOT in "${SNAPSHOTS_PRUNE[@]}"; do
                 prune_snapshot "$SNAPSHOT" || lk_die
             done
@@ -207,9 +194,8 @@ lk_log_output
     done
     eval "exec $LOCK_FD>&-"
     rm -f "$LOCK_FILE"
-    lk_console_success "Pruning complete"
     USAGE_END=($(get_usage "$BACKUP_ROOT"))
-    lk_console_detail "Storage used on backup volume:" \
-        "${USAGE_END[0]} (${USAGE_END[1]})"
+    lk_console_success \
+        "Pruning complete (storage used: ${USAGE_END[0]} / ${USAGE_END[1]})"
     exit
 }

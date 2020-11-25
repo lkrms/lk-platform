@@ -722,8 +722,12 @@ function lk_echo_args() {
 }
 
 function lk_echo_array() {
-    local _LK_ARRAY="$1[@]"
-    lk_echo_args ${!_LK_ARRAY+"${!_LK_ARRAY}"}
+    local _LK_ARRAY
+    while [ $# -gt 0 ]; do
+        _LK_ARRAY="$1[@]"
+        lk_echo_args ${!_LK_ARRAY+"${!_LK_ARRAY}"}
+        shift
+    done
 }
 
 function lk_quote_args() {
@@ -999,8 +1003,9 @@ function lk_log_output() {
             cat
         fi >>"$LOG_PATH"; })) 2>&1 ||
         return
-    lk_echoc "Output is being logged to $LK_BOLD$LOG_PATH$LK_RESET" \
-        "$LK_GREY" >&"$_LK_LOG_ERR_FD"
+    ! lk_verbose ||
+        lk_echoc "Output is being logged to $LK_BOLD$LOG_PATH$LK_RESET" \
+            "$LK_GREY" >&"$_LK_LOG_ERR_FD"
     _LK_LOG_FILE=$LOG_PATH
 }
 
@@ -2175,24 +2180,17 @@ function lk_keep_original() {
     done
 }
 
+# lk_maybe_add_newline FILE
+#
+# Add a newline to FILE if its last byte is not a newline.
 function lk_maybe_add_newline() {
     local WC
-    [ -f "$1" ] || lk_warn "file not found: $1" || return
-    # if the last byte is a newline, `wc -l` will return 1
-    WC="$(tail -c 1 "$1" | wc -l)" || return
-    if [ -s "$1" ] && [ "$WC" -eq 0 ]; then
+    lk_maybe_sudo test -f "$1" || lk_warn "file not found: $1" || return
+    # If the last byte is a newline, `wc -l` will return 1
+    WC=$(lk_maybe_sudo tail -c1 "$1" | wc -l) || return
+    if lk_maybe_sudo -s "$1" && [ "$WC" -eq 0 ]; then
         echo >>"$1"
     fi
-}
-
-# lk_maybe_sed sed_arg... input_file
-function lk_maybe_sed() {
-    local ARGS=("$@") FILE="${*: -1:1}" NEW
-    [ -f "$FILE" ] && [ ! -L "$FILE" ] ||
-        lk_warn "file not found: $FILE" || return
-    lk_remove_false "[[ ! \"{}\" =~ ^(-i|--in-place(=|\$)) ]]" ARGS
-    NEW="$(lk_maybe_sudo sed "${ARGS[@]}")" || return
-    lk_maybe_replace "$FILE" "$NEW"
 }
 
 # lk_maybe_replace FILE_PATH NEW_CONTENT [IGNORE_PATTERN]
