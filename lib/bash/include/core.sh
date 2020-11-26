@@ -241,7 +241,7 @@ function lk_command_first_existing() {
         COMMAND=($1)
         if type -P "${COMMAND[0]}" >/dev/null; then
             echo "$1"
-            return
+            return 0
         fi
         shift
     done
@@ -722,7 +722,7 @@ function lk_in_array() {
     local _LK_ARRAY="$2[@]" _LK_VALUE
     for _LK_VALUE in ${!_LK_ARRAY+"${!_LK_ARRAY}"}; do
         [ "$_LK_VALUE" = "$1" ] || continue
-        return
+        return 0
     done
     false
 }
@@ -739,7 +739,7 @@ function lk_array_search() {
         # shellcheck disable=SC2053
         [[ ${_LK_ARRAY_VALS[$_LK_KEY]} == $1 ]] || continue
         echo "${_LK_ARRAY_KEYS[$_LK_KEY]}"
-        return
+        return 0
     done
     false
 }
@@ -870,7 +870,7 @@ function lk_log() {
         IFS=$'\n'
         LINE="$*"
         printf '%s %s\n' "$(lk_date_log)" "${LINE//$'\n'/$'\n  '}"
-        return
+        return 0
     }
     while IFS= read -r LINE || [ -n "$LINE" ]; do
         printf '%s %s\n' "$(lk_date_log)" "$LINE"
@@ -912,7 +912,7 @@ function lk_log_create_file() {
                 /dev/null "$LOG_PATH" 2>/dev/null || continue
         fi
         echo "$LOG_PATH"
-        return
+        return 0
     done
     return 1
 }
@@ -1279,7 +1279,7 @@ function lk_console_read() {
     local PROMPT=("$1") DEFAULT=${2:-} VALUE
     if lk_no_input && [ $# -ge 2 ]; then
         echo "$DEFAULT"
-        return
+        return 0
     fi
     [ -z "$DEFAULT" ] || PROMPT+=("[$DEFAULT]")
     read -rep "$(_lk_console_get_prompt) " "${@:3}" VALUE \
@@ -1719,7 +1719,7 @@ function lk_safe_symlink() {
         [ "$CURRENT_TARGET" != "$TARGET" ] || {
             # shellcheck disable=SC2034
             LK_SAFE_SYMLINK_NO_CHANGE=1
-            return
+            return 0
         }
         lk_maybe_sudo rm -f -- "$LINK" || return
     elif lk_maybe_sudo test -e "$LINK"; then
@@ -1752,7 +1752,7 @@ function lk_keep_trying() {
             WAIT=$NEW_WAIT
             lk_console_detail "Retrying (attempt $((++ATTEMPT))/$MAX_ATTEMPTS)"
             if "$@"; then
-                return
+                return 0
             else
                 EXIT_STATUS=$?
             fi
@@ -2163,7 +2163,7 @@ function lk_maybe_replace() {
             # shellcheck disable=SC2034
             LK_MAYBE_REPLACE_NO_CHANGE=1
             ! lk_verbose 2 || lk_console_detail "Not changed:" "$1"
-            return
+            return 0
         }
         lk_keep_original "$1" || return
     fi

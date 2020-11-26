@@ -185,7 +185,7 @@ function lk_ssh_get_public_key() {
         [ -f "$1.pub" ] &&
         KEY=$(lk_ssh_get_public_key "$1.pub" 2>/dev/null); then
         echo "$KEY"
-        return
+        return 0
     else
         [ -f "$1" ] || lk_warn "file not found: $1" || return
         KEY=$(cat <"$1") || return
@@ -517,7 +517,7 @@ function lk_host_first_answer() {
             continue
         }
         echo "$ANSWER"
-        return
+        return 0
     done
 }
 
@@ -544,7 +544,7 @@ function lk_host_soa() {
             lk_console_detail "SOA from $NS for $DOMAIN:" \
                 "$(cut -d' ' -f5- <<<"$SOA")"
         echo "$SOA"
-        return
+        return 0
     done
     lk_warn "SOA lookup failed: $1"
     return 1
@@ -575,7 +575,7 @@ function lk_host_ns_resolve() {
             ! lk_verbose ||
                 lk_console_detail "CNAME record from $NS for $1:" "${CNAME[0]}"
             lk_host_ns_resolve "${CNAME[0]%.}" || return
-            return
+            return 0
         fi
     fi
     [ ${#IP[@]} -gt 0 ] || lk_warn "could not resolve $1: $NS" || return
@@ -722,7 +722,7 @@ $(lk_myself -f) [-p] FILE SETTING CHECK_REGEX REPLACE_REGEX..." || return
             _FILE=${_FILE%$'\n.'} || return
         ! _lk_option_check "$_FILE" || {
             lk_maybe_replace "$FILE" "$_FILE"
-            return
+            return 0
         }
     done
     lk_keep_original "$FILE" &&

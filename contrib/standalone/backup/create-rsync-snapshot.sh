@@ -54,7 +54,7 @@ function lk_in_array() {
     eval "_LK_ARRAY=(\${$2[@]+\"\${$2[@]}\"})"
     for _LK_VALUE in ${_LK_ARRAY[@]+"${_LK_ARRAY[@]}"}; do
         [ "$_LK_VALUE" = "$1" ] || continue
-        return
+        return 0
     done
     false
 }
