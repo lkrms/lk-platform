@@ -38,6 +38,16 @@ function first_snapshot_on_date() {
         tail -n1
 }
 
+function snapshot_hour() {
+    echo "${1:0:10} ${1:11:2}:00:00"
+}
+
+function first_snapshot_in_hour() {
+    lk_echo_array SNAPSHOTS_CLEAN |
+        grep "^${1:0:10}-${1:11:2}" |
+        tail -n1
+}
+
 function prune_snapshot() {
     local PRUNE=$SNAPSHOT_ROOT/$1
     lk_console_item \
@@ -51,9 +61,10 @@ function get_usage() {
     gnu_df --sync --output=used,pcent --block-size=M "$@" | sed '1d'
 }
 
-PRUNE_DAILY_AFTER_DAYS=${LK_SNAPSHOT_PRUNE_DAILY_AFTER_DAYS:-7}
+PRUNE_HOURLY_AFTER=${LK_SNAPSHOT_PRUNE_HOURLY_AFTER-24}
+PRUNE_DAILY_AFTER=${LK_SNAPSHOT_PRUNE_DAILY_AFTER:-7}
 PRUNE_FAILED_AFTER_DAYS=${LK_SNAPSHOT_PRUNE_FAILED_AFTER_DAYS-28}
-PRUNE_WEEKLY_AFTER_WEEKS=${LK_SNAPSHOT_PRUNE_WEEKLY_AFTER_WEEKS-52}
+PRUNE_WEEKLY_AFTER=${LK_SNAPSHOT_PRUNE_WEEKLY_AFTER-52}
 
 LK_USAGE="\
 Usage: ${0##*/} BACKUP_ROOT"
@@ -74,6 +85,7 @@ LOCK_FD=$(lk_next_fd)
 eval "exec $LOCK_FD>\"\$LOCK_FILE\"" &&
     flock -n "$LOCK_FD" || lk_die "unable to acquire a lock on $LOCK_FILE"
 
+export TZ=UTC
 HN=$(lk_hostname) || HN=localhost
 FQDN=$(lk_fqdn) || FQDN=$HN.localdomain
 eval "$(LK_VAR_PREFIX='' lk_get_regex BACKUP_TIMESTAMP_FINDUTILS_REGEX)"
@@ -81,7 +93,6 @@ eval "$(LK_VAR_PREFIX='' lk_get_regex BACKUP_TIMESTAMP_FINDUTILS_REGEX)"
 lk_log_output
 
 {
-    TZ=UTC
     USAGE_START=($(get_usage "$BACKUP_ROOT"))
     lk_console_log "Pruning backups at $BACKUP_ROOT on $FQDN (storage used: ${USAGE_START[0]}/${USAGE_START[1]})"
     lk_mapfile <(find "$BACKUP_ROOT/snapshot" -mindepth 1 -maxdepth 1 \
@@ -110,7 +121,7 @@ lk_log_output
 
         if [ -n "$PRUNE_FAILED_AFTER_DAYS" ]; then
             PRUNE_FAILED_BEFORE_DATE=$(date \
-                -d "$LATEST_CLEAN -$PRUNE_FAILED_AFTER_DAYS day" +"%F")
+                -d "$LATEST_CLEAN $PRUNE_FAILED_AFTER_DAYS days ago" +"%F")
             # Add a strict -regex test to keep failed snapshots with
             # non-standard names
             find_snapshots SNAPSHOTS_FAILED \
@@ -128,30 +139,42 @@ lk_log_output
             "${SNAPSHOTS_CLEAN[0]}"
         )
 
-        # Keep one snapshot per day for the last PRUNE_DAILY_AFTER_DAYS
+        if [ -n "$PRUNE_HOURLY_AFTER" ]; then
+            # Keep one snapshot per hour for the last PRUNE_HOURLY_AFTER hours
+            LATEST_CLEAN_HOUR=$(snapshot_hour "${SNAPSHOTS_CLEAN[0]}")
+            HOUR=$LATEST_CLEAN_HOUR
+            for i in $(seq 0 "$PRUNE_HOURLY_AFTER"); do
+                [ "$i" -eq 0 ] ||
+                    HOUR=$(date -d "$LATEST_CLEAN_HOUR $i hours ago" +"%F %T")
+                SNAPSHOT=$(first_snapshot_in_hour "$HOUR") || continue
+                KEEP[${#KEEP[@]}]=$SNAPSHOT
+            done
+        fi
+
+        # Keep one snapshot per day for the last PRUNE_DAILY_AFTER days
         DAY=$LATEST_CLEAN
-        for i in $(seq 0 "$PRUNE_DAILY_AFTER_DAYS"); do
-            [ "$i" -eq 0 ] || DAY=$(date -d "$LATEST_CLEAN -$i day" +"%F")
+        for i in $(seq 0 "$PRUNE_DAILY_AFTER"); do
+            [ "$i" -eq 0 ] || DAY=$(date -d "$LATEST_CLEAN $i days ago" +"%F")
             SNAPSHOT=$(first_snapshot_on_date "$DAY") || continue
             KEEP[${#KEEP[@]}]=$SNAPSHOT
         done
 
-        # Keep one snapshot per week for the last PRUNE_WEEKLY_AFTER_WEEKS
-        # (indefinitely if PRUNE_WEEKLY_AFTER_WEEKS is the empty string)
-        SUNDAY=$(date -d "$(date -d "$LATEST_CLEAN" +"%F -%u day")" +"%F")
+        # Keep one snapshot per week for the last PRUNE_WEEKLY_AFTER weeks
+        # (indefinitely if PRUNE_WEEKLY_AFTER is the empty string)
+        SUNDAY=$(date -d "$(date -d "$LATEST_CLEAN" +"%F %u days ago")" +"%F")
         WEEKS=0
         while { [ "$OLDEST_CLEAN" \< "$SUNDAY" ] ||
             [ "$OLDEST_CLEAN" = "$SUNDAY" ]; } &&
-            { [ -z "$PRUNE_WEEKLY_AFTER_WEEKS" ] ||
-                [ $((WEEKS++)) -le "$PRUNE_WEEKLY_AFTER_WEEKS" ]; }; do
+            { [ -z "$PRUNE_WEEKLY_AFTER" ] ||
+                [ $((WEEKS++)) -le "$PRUNE_WEEKLY_AFTER" ]; }; do
             DAY=$SUNDAY
             for i in $(seq 0 6); do
-                [ "$i" -eq 0 ] || DAY=$(date -d "$SUNDAY -$i day" +"%F")
+                [ "$i" -eq 0 ] || DAY=$(date -d "$SUNDAY $i days ago" +"%F")
                 SNAPSHOT=$(first_snapshot_on_date "$DAY") || continue
                 KEEP[${#KEEP[@]}]=$SNAPSHOT
                 break
             done
-            SUNDAY=$(date -d "$SUNDAY -7 day" +"%F")
+            SUNDAY=$(date -d "$SUNDAY 7 days ago" +"%F")
         done
 
         # Keep snapshots with non-standard names

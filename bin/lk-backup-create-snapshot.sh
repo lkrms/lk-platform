@@ -83,7 +83,7 @@ $(lk_strip_non_printing <"$SNAPSHOT_LOG_FILE")" &&
 
 function find_custom() {
     local ARR="${1//-/_}[@]" FILE COUNT=0
-    for FILE in {"$LK_BASE/etc/backup","$BACKUP_ROOT/conf.d"}/{"$1","$SOURCE_NAME/$1"} \
+    for FILE in {"$LK_BASE/etc/backup","$BACKUP_ROOT/conf.d"}/{"$1","$SOURCE_NAME-$1","$SOURCE_NAME/$1"} \
         ${!ARR+"${!ARR}"}; do
         [ -e "$FILE" ] || continue
         realpath "$FILE" || lk_die
@@ -93,8 +93,8 @@ function find_custom() {
 }
 
 function run_custom_hook() {
-    local HOOK=$1 SCRIPTS SOURCE_SCRIPT LINES LINE SH
-    export LK_SOURCE_SCRIPT_ALREADY_STARTED=0 \
+    local HOOK=$1 SCRIPTS SOURCE_SCRIPT i=0 LINES LINE SH \
+        LK_SOURCE_SCRIPT_ALREADY_STARTED=0 \
         LK_SOURCE_SCRIPT_ALREADY_FINISHED=0
     ! is_stage_complete "hook-$HOOK-started" ||
         LK_SOURCE_SCRIPT_ALREADY_STARTED=1
@@ -112,7 +112,7 @@ function run_custom_hook() {
             ) &
             LINES=()
             while IFS= read -ru "$FIFO_FD" LINE && [ "$LINE" != "# ." ]; do
-                LINES+=("$LINE")
+                LINES[$((i++))]=$LINE
             done
             wait "$!" ||
                 lk_die "hook script failed (exit status $?)"
@@ -294,6 +294,7 @@ FIFO_FD=$(lk_next_fd)
 mkfifo "$FIFO_FILE"
 eval "exec $FIFO_FD<>\"\$FIFO_FILE\""
 
+export TZ=UTC
 HN=$(lk_hostname) || HN=localhost
 FQDN=$(lk_fqdn) || FQDN=$HN.localdomain
 SENDER_NAME="${LK_PATH_PREFIX}backup on $HN"

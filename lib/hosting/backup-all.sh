@@ -19,6 +19,8 @@ include='' . "$LK_BASE/lib/bash/common.sh"
 
 lk_elevate
 
+export TZ=UTC
+
 lk_log_output
 
 {
@@ -26,7 +28,7 @@ lk_log_output
     install -d -m 00751 -g adm "$BACKUP_ROOT"
 
     # Use one timestamp for all snapshots in this batch
-    LK_BACKUP_TIMESTAMP=$(date +"%Y-%m-%d-%H%M%S")
+    LK_BACKUP_TIMESTAMP=${LK_BACKUP_TIMESTAMP:-$(date +"%Y-%m-%d-%H%M%S")}
     export LK_BACKUP_TIMESTAMP
 
     IFS=':'
