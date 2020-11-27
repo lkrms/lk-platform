@@ -684,7 +684,7 @@ function _lk_option_check() {
         grep -E "$CHECK_REGEX"; } >/dev/null 2>&1
 }
 
-# lk_option_set [-p] FILE SETTING CHECK_REGEX REPLACE_REGEX...
+# lk_option_set [-p] FILE SETTING CHECK_REGEX [REPLACE_REGEX...]
 #
 # If CHECK_REGEX doesn't match any lines in FILE, replace each REPLACE_REGEX
 # match with SETTING until there's a match for CHECK_REGEX. If there is still no
@@ -698,8 +698,8 @@ function lk_option_set() {
         PRESERVE=
         shift
     }
-    [ $# -ge 4 ] || lk_usage "\
-$(lk_myself -f) [-p] FILE SETTING CHECK_REGEX REPLACE_REGEX..." || return
+    [ $# -ge 3 ] || lk_usage "\
+Usage: $(lk_myself -f) [-p] FILE SETTING CHECK_REGEX [REPLACE_REGEX...]" || return
     FILE=$1
     SETTING=$2
     CHECK_REGEX=$3
@@ -737,6 +737,16 @@ function lk_conf_set_option() {
         "$1=$2" \
         "^$S*$OPTION$S*=$S*$VALUE$S*\$" \
         "^$S*$OPTION$S*=.*" "^$S*#$S*$OPTION$S*=.*"
+}
+
+# lk_conf_enable_row ROW [FILE]
+function lk_conf_enable_row() {
+    local ROW FILE=${2:-$LK_CONF_OPTION_FILE}
+    ROW=$(lk_ere_expand_whitespace "$(lk_escape_ere "$1")")
+    lk_option_set "$FILE" \
+        "$1" \
+        "^$ROW\$" \
+        "^$S*$ROW$S*\$" "^$S*#$S*$ROW$S*\$"
 }
 
 # lk_php_set_option OPTION VALUE [FILE]
