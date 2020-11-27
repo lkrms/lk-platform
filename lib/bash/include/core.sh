@@ -2211,7 +2211,7 @@ function lk_maybe_add_newline() {
     lk_maybe_sudo test -f "$1" || lk_warn "file not found: $1" || return
     # If the last byte is a newline, `wc -l` will return 1
     WC=$(lk_maybe_sudo tail -c1 "$1" | wc -l) || return
-    if lk_maybe_sudo -s "$1" && [ "$WC" -eq 0 ]; then
+    if lk_maybe_sudo test -s "$1" && [ "$WC" -eq 0 ]; then
         echo >>"$1"
     fi
 }
