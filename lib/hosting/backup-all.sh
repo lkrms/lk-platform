@@ -39,10 +39,10 @@ lk_log_output
     [ ${#BASE_DIRS[@]} -gt 0 ] ||
         lk_die "no base directories found"
     unset IFS
-    lk_mapfile <(comm -12 \
+    lk_mapfile SOURCES <(comm -12 \
         <(getent passwd | cut -d: -f6 | sort -u) \
         <(find "${BASE_DIRS[@]}" -mindepth 1 -maxdepth 1 -type d | sort |
-            sed -E '/^\/(proc|sys|dev|run|tmp)$/d')) SOURCES
+            sed -E '/^\/(proc|sys|dev|run|tmp)$/d'))
     [ ${#SOURCES[@]} -gt 0 ] ||
         lk_die "nothing to back up"
     lk_echo_array SOURCES |

@@ -120,10 +120,10 @@ function lk_console_error() {
 
 function lk_mapfile() {
     local i=0 LINE
-    eval "$2=()"
+    eval "$1=()"
     while IFS= read -r LINE || [ -n "$LINE" ]; do
-        eval "$2[$((i++))]=\$LINE"
-    done <"$1"
+        eval "$1[$((i++))]=\$LINE"
+    done <"$2"
 }
 
 LK_BOLD=$(tput bold 2>/dev/null) || LK_BOLD=
@@ -135,13 +135,13 @@ LK_RESET=$(tput sgr0 2>/dev/null) || LK_RESET=
 ##
 
 function find_snapshots() {
-    lk_mapfile <(
+    lk_mapfile "$1" <(
         find "$SNAPSHOT_ROOT" \
             -mindepth 1 -maxdepth 1 -type d \
             -regex ".*/${BACKUP_TIMESTAMP_FINDUTILS_REGEX}[^/]*" \
             "${@:2}" \
             -printf '%f\n' | sort -r
-    ) "$1"
+    )
     eval "$1_COUNT=\${#$1[@]}"
 }
 
@@ -224,8 +224,8 @@ fi
 {
     USAGE_START=($(get_usage "$BACKUP_ROOT"))
     lk_console_log "Pruning backups at $BACKUP_ROOT on $FQDN (storage used: ${USAGE_START[0]}/${USAGE_START[1]})"
-    lk_mapfile <(find "$BACKUP_ROOT/snapshot" -mindepth 1 -maxdepth 1 \
-        -type d -printf '%f\n' | sort) SOURCE_NAMES
+    lk_mapfile SOURCE_NAMES <(find "$BACKUP_ROOT/snapshot" -mindepth 1 -maxdepth 1 \
+        -type d -printf '%f\n' | sort)
     for SOURCE_NAME in ${SOURCE_NAMES[@]+"${SOURCE_NAMES[@]}"}; do
         lk_console_message "Checking '$SOURCE_NAME' snapshots"
         SNAPSHOT_ROOT=$BACKUP_ROOT/snapshot/$SOURCE_NAME
@@ -307,19 +307,18 @@ fi
         done
 
         # Keep snapshots with non-standard names
-        lk_mapfile <(lk_echo_array SNAPSHOTS_CLEAN |
-            grep -v "^$BACKUP_TIMESTAMP_FINDUTILS_REGEX$") _KEEP
+        lk_mapfile _KEEP <(lk_echo_array SNAPSHOTS_CLEAN |
+            grep -v "^$BACKUP_TIMESTAMP_FINDUTILS_REGEX$")
         KEEP=("${KEEP[@]}" ${_KEEP[@]+"${_KEEP[@]}"})
 
-        lk_mapfile <(
+        lk_mapfile SNAPSHOTS_KEEP <(
             lk_echo_array KEEP | sort -ru
-        ) SNAPSHOTS_KEEP
+        )
         SNAPSHOTS_KEEP_COUNT=${#SNAPSHOTS_KEEP[@]}
 
-        lk_mapfile <(comm -23 \
+        lk_mapfile SNAPSHOTS_PRUNE <(comm -23 \
             <(lk_echo_array SNAPSHOTS_CLEAN | sort) \
-            <(lk_echo_array SNAPSHOTS_KEEP | sort)) \
-            SNAPSHOTS_PRUNE
+            <(lk_echo_array SNAPSHOTS_KEEP | sort))
         SNAPSHOTS_PRUNE_COUNT=${#SNAPSHOTS_PRUNE[@]}
 
         lk_console_detail \

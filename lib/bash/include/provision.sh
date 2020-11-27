@@ -136,9 +136,7 @@ function lk_ssh_list_hosts() {
                     sed -E "s/^(\"?)([^~/])/\\1~\\/.ssh\\/\\2/")
         ) || true
         unset IFS
-        # Expand twice because SSH expands "~" and globs inside double quotes
         lk_expand_paths FILES &&
-            lk_expand_paths FILES &&
             lk_resolve_files FILES || return
     done
     [ ${#FILES[@]} -eq 0 ] || {

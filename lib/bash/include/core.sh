@@ -591,9 +591,7 @@ function lk_upper() {
 
 function lk_upper_first() {
     local EXIT_STATUS
-    if lk_maybe_xargs 0 "$@"; then
-        return "$EXIT_STATUS"
-    fi
+    ! _lk_maybe_xargs 0 "$@" || return "$EXIT_STATUS"
     printf '%s%s\n' "$(lk_upper "${1:0:1}")" "$(lk_lower "${1:1}")"
 }
 
@@ -674,45 +672,74 @@ function lk_maybe_plural() {
     [ "$1" -eq 1 ] && echo "$2" || echo "$3"
 }
 
-function lk_echo_args() {
-    [ $# -eq 0 ] ||
-        printf '%s\n' "$@"
-}
-
-function lk_echo_array() {
+# _lk_array_fill_temp ARRAY...
+#
+# Create new array _LK_TEMP_ARRAY and copy the elements of each ARRAY to it.
+function _lk_array_fill_temp() {
     local _LK_ARRAY
+    _LK_TEMP_ARRAY=()
     while [ $# -gt 0 ]; do
+        lk_is_identifier "$1" ||
+            lk_warn "not a valid identifier: $1" || return
         _LK_ARRAY="$1[@]"
-        lk_echo_args ${!_LK_ARRAY+"${!_LK_ARRAY}"}
+        _LK_TEMP_ARRAY+=(${!_LK_ARRAY+"${!_LK_ARRAY}"})
         shift
     done
 }
 
+# _lk_array_action COMMAND ARRAY...
+#
+# Run COMMAND with the elements of each ARRAY as arguments. COMMAND is executed
+# once and any fixed arguments must be quoted (see lk_implode for an example).
+function _lk_array_action() {
+    local _LK_COMMAND _LK_TEMP_ARRAY
+    eval "_LK_COMMAND=($1)"
+    _lk_array_fill_temp "${@:2}"
+    "${_LK_COMMAND[@]}" ${_LK_TEMP_ARRAY[@]+"${_LK_TEMP_ARRAY[@]}"}
+}
+
+# lk_echo_args [-z] [ARG...]
+function lk_echo_args() {
+    local DELIM=${_LK_NUL_DELIM:+'\0'}
+    [ "${1:-}" != -z ] || { DELIM='\0' && shift; }
+    printf "%s${DELIM:-\\n}" "$@"
+}
+
+# lk_echo_array [-z] [ARRAY...]
+function lk_echo_array() {
+    local _LK_ARG=
+    [ "${1:-}" != -z ] || { _LK_ARG=" -z" && shift; }
+    _lk_array_action "lk_echo_args$_LK_ARG" "$@"
+}
+
+# lk_quote_args [ARG...]
+#
+# Use `printf %q` to quote each ARG, and output the results on a single
+# space-delimited line.
 function lk_quote_args() {
-    [ $# -gt 0 ] || return 0
-    printf '%q' "$1"
-    [ $# -eq 1 ] || printf ' %q' "${@:2}"
+    [ $# -eq 0 ] || printf '%q' "$1"
+    [ $# -le 1 ] || printf ' %q' "${@:2}"
+    printf '\n'
 }
 
-function lk_quote_array() {
-    local _LK_ARRAY="$1[@]"
-    lk_quote_args ${!_LK_ARRAY+"${!_LK_ARRAY}"}
+# lk_quote [ARRAY...]
+function lk_quote() {
+    _lk_array_action lk_quote_args "$@"
 }
 
-function lk_implode() {
-    local _LK_DELIM=$1 _LK_ARRAY="$2[@]" _LK_TEMP_ARRAY
+# lk_implode_args GLUE [ARG...]
+function lk_implode_args() {
+    local _LK_DELIM=$1
     _LK_DELIM=${_LK_DELIM//\\/\\\\}
     _LK_DELIM=${_LK_DELIM//%/%%}
-    _LK_TEMP_ARRAY=(${!_LK_ARRAY+"${!_LK_ARRAY}"})
-    [ ${#_LK_TEMP_ARRAY[@]} -eq 0 ] ||
-        printf '%s' "${_LK_TEMP_ARRAY[0]}"
-    [ ${#_LK_TEMP_ARRAY[@]} -le 1 ] ||
-        printf -- "$_LK_DELIM%s" "${_LK_TEMP_ARRAY[@]:1}"
+    [ $# -eq 1 ] || printf '%s' "$2"
+    [ $# -le 2 ] || printf -- "$_LK_DELIM%s" "${@:3}"
+    printf '\n'
 }
 
-function lk_implode_args() {
-    local ARGS=("${@:2}")
-    lk_implode "$1" ARGS
+# lk_implode GLUE [ARRAY...]
+function lk_implode() {
+    _lk_array_action "$(lk_quote_args lk_implode_args "$1")" "${@:2}"
 }
 
 # lk_in_array VALUE ARRAY
@@ -758,61 +785,82 @@ function lk_remove_repeated() {
     done
 }
 
-# lk_xargs COMMAND [ARG...]
+# lk_xargs [-z] COMMAND [ARG...]
 #
-# Invoke `COMMAND [ARG...] LINE` for each LINE of input.
+# Invoke the given command line for each LINE of input, passing LINE as the
+# final argument. If -z is set, use NUL instead of newline as the input
+# delimiter.
 function lk_xargs() {
-    local LINE
-    while IFS= read -r LINE || [ -n "$LINE" ]; do
-        "$@" "$LINE" || return
+    local _LK_NUL_DELIM=${_LK_NUL_DELIM-} _LK_NUL_READ=(-d '') _LK_LINE
+    [ "${1:-}" != -z ] || { _LK_NUL_DELIM=1 && shift; }
+    while IFS= read -r ${_LK_NUL_DELIM:+"${_LK_NUL_READ[@]}"} _LK_LINE ||
+        [ -n "$_LK_LINE" ]; do
+        "$@" "$_LK_LINE" || return
     done
 }
 
-# lk_maybe_xargs REQUIRED [ARG...]
+# _lk_maybe_xargs FIXED_ARGS [ARG...]
 #
-# Use lk_xargs to invoke the calling function with REQUIRED arguments if, after
-# consuming each ARG, the number of arguments remaining is not 1, otherwise
-# return false. If zero arguments remain, pipe input to lk_xargs. If two or more
-# arguments remain, pipe each ARG to lk_xargs. Finally, set EXIT_STATUS to the
-# return value of lk_xargs and return true.
+# For functions that take FIXED_ARGS followed by one value argument, add support
+# for passing multiple values in subsequent arguments or on standard input via
+# newline- or NUL-delimited lines.
 #
-# See lk_upper_first for an example.
-function lk_maybe_xargs() {
-    local REQUIRED=$1 ARGS COMMAND
-    shift
-    ((ARGS = $# - REQUIRED))
-    [ "$ARGS" -ne 1 ] || return
-    COMMAND=("$(lk_myself -f 1)" "${@:1:$REQUIRED}")
+# After accounting for FIXED_ARGS, the number of arguments remaining determines
+# next steps.
+# 1. one argument: return false immediately, signalling the caller to process
+#    the value passed
+# 2. zero arguments: use lk_xargs to invoke the caller with each line of input,
+#    then set EXIT_STATUS to the return value and return true
+# 3. two or more arguments: invoke the caller with each argument, then set
+#    EXIT_STATUS to the return value and return true
+#
+# If there are no value arguments and the caller is invoked with -z as the first
+# argument, use NUL instead of newline as the input delimiter.
+#
+# Example:
+#
+#     function my_function() {
+#         local EXIT_STATUS
+#         ! _lk_maybe_xargs 0 "$@" || return "$EXIT_STATUS"
+#         # process $1
+#     }
+function _lk_maybe_xargs() {
+    local _LK_NUL_DELIM=${_LK_NUL_DELIM-} COMMAND
+    # Check for -z and no value arguments, i.e. NUL-delimited input
+    [ "${2:-}" != -z ] || (($# - $1 - 2)) ||
+        { _LK_NUL_DELIM=1 && set -- "$1" "${@:3}"; }
+    # Return false ASAP if there's exactly one value for the caller to process
+    (($# - $1 - 2)) || return
+    COMMAND=("$(lk_myself -f 1)" "${@:2:$1}")
     EXIT_STATUS=0
-    if [ "$ARGS" -eq 0 ]; then
-        lk_xargs "${COMMAND[@]}"
+    # If there are no values to process, use lk_xargs to pass input lines
+    if ! (($# - $1 - 1)); then
+        lk_xargs "${COMMAND[@]}" || EXIT_STATUS=$?
     else
-        lk_echo_args "${@:$((REQUIRED + 1))}" |
-            lk_xargs "${COMMAND[@]}"
-    fi || EXIT_STATUS=$?
+        # Otherwise pass each value
+        for i in "${@:$(($1 + 2))}"; do
+            "${COMMAND[@]}" "$i" || {
+                EXIT_STATUS=$?
+                return 0
+            }
+        done
+    fi
 }
 
-# lk_mapfile [-z] file_path array_name [ignore_pattern]
+# lk_mapfile [-z] ARRAY [FILE]
+#
+# Read lines from FILE or input into array variable ARRAY.
 function lk_mapfile() {
-    local READ_ARGS=() GREP_ARGS=() i=0 LINE
-    [ "${1:-}" != -z ] || {
-        READ_ARGS=(-d $'\0')
-        GREP_ARGS=(-z)
-        shift
-    }
-    [ -e "$1" ] || lk_warn "file not found: $1" || return
-    lk_is_identifier "$2" || lk_warn "not a valid identifier: $2" || return
-    eval "$2=()"
-    while IFS= read -r ${READ_ARGS[@]+"${READ_ARGS[@]}"} LINE ||
-        [ -n "$LINE" ]; do
-        eval "$2[$((i++))]=\$LINE"
-    done < <(
-        if [ -n "${3:-}" ]; then
-            grep -Ev ${GREP_ARGS[@]+"${GREP_ARGS[@]}"} "$3" "$1" || true
-        else
-            cat "$1"
-        fi
-    )
+    local _LK_NUL_DELIM=${_LK_NUL_DELIM-} _LK_NUL_READ=(-d '') _LK_LINE _lk_i=0
+    [ "${1:-}" != -z ] || { _LK_NUL_DELIM=1 && shift; }
+    lk_is_identifier "$1" || lk_warn "not a valid identifier: $1" || return
+    [ -z "${2:-}" ] ||
+        [ -e "$2" ] || lk_warn "file not found: $2" || return
+    eval "$1=()"
+    while IFS= read -r ${_LK_NUL_DELIM:+"${_LK_NUL_READ[@]}"} _LK_LINE ||
+        [ -n "$_LK_LINE" ]; do
+        eval "$1[$((_lk_i++))]=\$_LK_LINE"
+    done < <(cat ${2:+"$2"})
 }
 
 function lk_has_arg() {
@@ -1249,7 +1297,7 @@ function lk_console_list() {
         shift 2
     }
     COLOUR="${1-$LK_CONSOLE_COLOUR}"
-    lk_mapfile /dev/stdin ITEMS
+    lk_mapfile ITEMS /dev/stdin
     lk_console_message "$MESSAGE" "$COLOUR"
     ! lk_in_string $'\n' "$MESSAGE" || INDENT=2
     LIST="$(lk_echo_array ITEMS |
@@ -1643,7 +1691,7 @@ function lk_download() {
 function lk_can_sudo() {
     local COMMAND="${1:-}" USERNAME="${2:-}" ERROR
     [ -n "$COMMAND" ] || lk_warn "no command" || return
-    [ -z "$USERNAME" ] || lk_users_exist "$USERNAME" ||
+    [ -z "$USERNAME" ] || lk_user_exists "$USERNAME" ||
         lk_warn "user not found: $USERNAME" || return
     # 1. sudo exists
     lk_command_exists sudo && {
@@ -1761,11 +1809,8 @@ function lk_keep_trying() {
     fi
 }
 
-function lk_users_exist() {
-    while [ $# -gt 0 ]; do
-        id "$1" >/dev/null 2>&1 || return
-        shift
-    done
+function lk_user_exists() {
+    id "$1" >/dev/null 2>&1 || return
 }
 
 function lk_test_many() {
@@ -1790,26 +1835,27 @@ function lk_dirs_exist() {
     lk_test_many "test -d" "$@"
 }
 
-# lk_remove_false TEST_COMMAND ARRAY
+# lk_remove_false TEST ARRAY
 #
-# Reduce ARRAY to each element where TEST_COMMAND returns true after replacing
-# the string `{}' in TEST_COMMAND with the element's value.
+# Reduce ARRAY to each element where evaluating TEST returns true after
+# replacing the string '{}' with the element's value. Array indices are not
+# preserved.
 function lk_remove_false() {
-    local _LK_ARRAY="$2[@]" _LK_TEMP_ARRAY _LK_TEST _LK_KEY
-    lk_is_identifier "$2" || lk_warn "not a valid identifier: $2" || return
-    _LK_TEMP_ARRAY=(${!_LK_ARRAY+"${!_LK_ARRAY}"})
-    _LK_TEST="$(lk_replace '{}' '${_LK_TEMP_ARRAY[$_LK_KEY]}' "$1")"
-    for _LK_KEY in "${!_LK_TEMP_ARRAY[@]}"; do
-        eval "$_LK_TEST" || unset "_LK_TEMP_ARRAY[$_LK_KEY]"
+    local _LK_TEMP_ARRAY _LK_TEST _LK_VAL i=0
+    _lk_array_fill_temp "$2"
+    _LK_TEST="$(lk_replace '{}' '$_LK_VAL' "$1")"
+    eval "$2=()"
+    # shellcheck disable=SC2034
+    for _LK_VAL in ${_LK_TEMP_ARRAY[@]+"${_LK_TEMP_ARRAY[@]}"}; do
+        ! eval "$_LK_TEST" || eval "$2[$((i++))]=\$_LK_VAL"
     done
-    eval "$2=(\${_LK_TEMP_ARRAY[@]+\"\${_LK_TEMP_ARRAY[@]}\"})"
 }
 
 # lk_remove_missing ARRAY
 #
 # Remove paths to missing files from ARRAY.
 function lk_remove_missing() {
-    lk_remove_false "[ -e \"{}\" ]" "$1"
+    lk_remove_false '[ -e "{}" ]' "$1"
 }
 
 # lk_resolve_files ARRAY
@@ -1817,55 +1863,74 @@ function lk_remove_missing() {
 # Remove paths to missing files from ARRAY, then resolve remaining paths to
 # absolute file names and remove any duplicates.
 function lk_resolve_files() {
-    local _LK_ARRAY="$1[@]" _LK_TEMP_ARRAY
+    local _LK_TEMP_ARRAY
     lk_remove_missing "$1" || return
-    _LK_TEMP_ARRAY=(${!_LK_ARRAY+"${!_LK_ARRAY}"})
-    lk_mapfile -z <(
+    _lk_array_fill_temp "$1"
+    lk_mapfile -z "$1" <(
         [ ${#_LK_TEMP_ARRAY[@]} -eq 0 ] ||
-            # TODO: add alternative implementation if realpath is missing
-            gnu_realpath -ez "${_LK_TEMP_ARRAY[@]}" | sort -zu
-    ) "$1"
+            gnu_realpath -z "${_LK_TEMP_ARRAY[@]}" | sort -zu
+    )
 }
 
-# shellcheck disable=SC2034
-function lk_expand_paths() {
-    local _LK_ARRAY _LK_TEMP_ARRAY _PATH _PATHS
-    if [ $# -gt 0 ]; then
-        lk_is_identifier "$1" || lk_warn "not a valid identifier: $1" || return
-        _LK_ARRAY="$1[@]"
-        _LK_TEMP_ARRAY=(${!_LK_ARRAY+"${!_LK_ARRAY}"})
-        eval "$1=()"
-        for _PATH in ${_LK_TEMP_ARRAY[@]+"${_LK_TEMP_ARRAY[@]}"}; do
-            unset _PATHS
-            if [[ $_PATH =~ \"(.*)\" ]]; then
-                eval "$1+=(\"\${BASH_REMATCH[1]}\")"
-                continue
-            fi
-            if [[ $_PATH =~ ^(~[-a-z0-9\$_]*)(/.*)?$ ]]; then
-                _PATH=$(eval "printf '%s\n' $([ -n "${BASH_REMATCH[2]}" ] &&
-                    printf '%s%q' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" ||
-                    echo "${BASH_REMATCH[1]}")")
-            fi
-            if [[ $_PATH =~ [*?] ]]; then
-                _PATH=$(lk_escape "$_PATH" '$' '`' "\\" '"')
-                ! lk_is_true "${LK_EXPAND_PATHS_GLOBSTAR:-}" ||
-                    _PATH=${_PATH//\*\*/\"\*\*\"}
-                _PATH=${_PATH//\*/\"\*\"}
-                _PATH=\"${_PATH//\?/\"\?\"}\"
-                lk_mapfile -z <(
-                    shopt -s nullglob
-                    eval "printf '%s\0' $_PATH"
-                ) _PATHS
-                unset _PATH
-            fi
-            eval "$1+=(\${_PATHS[@]+\"\${_PATHS[@]}\"} \${_PATH+\"\$_PATH\"})"
-        done
-    else
-        local _LK_INPUT
-        lk_mapfile /dev/stdin _LK_INPUT
-        lk_expand_paths _LK_INPUT
-        lk_echo_array _LK_INPUT
+# lk_expand_path [-z] PATH
+#
+# Perform quote removal, tilde expansion and glob expansion on PATH, then print
+# each result. If -z is set, output NUL instead of newline after each result.
+# The globstar shell option must be enabled with `shopt -s globstar` for **
+# globs to be expanded.
+function lk_expand_path() {
+    local _LK_NUL_DELIM=${_LK_NUL_DELIM-} EXIT_STATUS _PATH SHOPT DELIM q g ARR
+    [ "${1:-}" != -z ] || { _LK_NUL_DELIM=1 && shift; }
+    ! _lk_maybe_xargs 0 "$@" || return "$EXIT_STATUS"
+    [ -n "${1:-}" ] || lk_warn "no path" || return
+    _PATH=$1
+    SHOPT=$(shopt -p nullglob) || true
+    shopt -s nullglob
+    DELIM=${_LK_NUL_DELIM:+'\0'}
+    # If the path is double- or single-quoted, remove enclosing quotes and
+    # unescape
+    if [[ $_PATH =~ ^\"(.*)\"$ ]]; then
+        _PATH=${BASH_REMATCH[1]//\\\"/\"}
+    elif [[ $_PATH =~ ^\'(.*)\'$ ]]; then
+        _PATH=${BASH_REMATCH[1]//\\\'/\'}
     fi
+    # Perform tilde expansion
+    if [[ $_PATH =~ ^(~[-a-z0-9\$_]*)(/.*)?$ ]]; then
+        eval "_PATH=$([ -n "${BASH_REMATCH[2]}" ] &&
+            # Outputs "~username''", which doesn't expand, if used with no path
+            printf '%s%q' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" ||
+            printf '%s' "${BASH_REMATCH[1]}")"
+    fi
+    # Expand globs
+    if [[ $_PATH =~ [*?] ]]; then
+        # Escape characters that have special meanings within double quotes
+        _PATH=$(lk_escape "$_PATH" '$' '`' "\\" '"')
+        # Add quotes around glob sequences so that when the whole path is
+        # quoted, they will be unquoted
+        q='"'
+        for g in '\*+' '\?+'; do
+            while [[ $_PATH =~ (.*([^$q${g:1:1}]|^))($g)(.*) ]]; do
+                _PATH=${BASH_REMATCH[1]}$q${BASH_REMATCH[3]}$q${BASH_REMATCH[4]}
+            done
+        done
+        eval "ARR=($q$_PATH$q)"
+        [ ${#ARR[@]} -eq 0 ] ||
+            printf "%s${DELIM:-\\n}" "${ARR[@]}"
+    else
+        # shellcheck disable=SC2059
+        printf "%s${DELIM:-\\n}" "$_PATH"
+    fi
+    eval "$SHOPT"
+}
+
+# lk_expand_paths ARRAY
+function lk_expand_paths() {
+    local _LK_TEMP_ARRAY
+    _lk_array_fill_temp "$1"
+    lk_mapfile -z "$1" <(
+        [ ${#_LK_TEMP_ARRAY[@]} -eq 0 ] ||
+            lk_expand_path -z "${_LK_TEMP_ARRAY[@]}"
+    )
 }
 
 function lk_filter() {
@@ -2157,8 +2222,8 @@ function lk_maybe_replace() {
         lk_maybe_sudo test -f "$1" || lk_warn "file not found: $1" || return
         LK_MAYBE_REPLACE_NO_CHANGE=
         ! diff -q \
-            <(lk_maybe_sudo cat "$1" | _lk_maybe_filter "${@:3}") \
-            <([ -z "$2" ] || echo "${2%$'\n'}" | _lk_maybe_filter "${@:3}") \
+            <(lk_maybe_sudo cat "$1" | _lk_maybe_filter "${@:3:1}") \
+            <([ -z "$2" ] || echo "${2%$'\n'}" | _lk_maybe_filter "${@:3:1}") \
             >/dev/null || {
             # shellcheck disable=SC2034
             LK_MAYBE_REPLACE_NO_CHANGE=1
@@ -2179,7 +2244,7 @@ function lk_maybe_replace() {
 
 function _lk_maybe_filter() {
     if [ -n "${1:-}" ]; then
-        grep -Ev "$1" || true
+        sed -E "/$1/d"
     else
         cat
     fi

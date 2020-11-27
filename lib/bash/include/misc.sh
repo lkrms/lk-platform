@@ -98,8 +98,8 @@ function lk_nextcloud_get_excluded() {
         EXCLUDE_FILE=${FILES[0]}
         # - Ignore blank lines and comments
         # - Remove fleeting metadata prefixes ("]") and unescape leading hashes
-        lk_mapfile <(sed -Ee '/^([[:blank:]]*$|#)/d' \
-            -e 's/^(\]|\\(#))/\2/' "$EXCLUDE_FILE") EXCLUDE
+        lk_mapfile EXCLUDE <(sed -Ee '/^([[:blank:]]*$|#)/d' \
+            -e 's/^(\]|\\(#))/\2/' "$EXCLUDE_FILE")
         EXCLUDE+=(
             "._sync_*.db*"
             ".sync_*.db*"
@@ -116,7 +116,7 @@ function lk_nextcloud_get_excluded() {
             fi
         done
         FIND=(find . \( "${FIND[@]}" \) -print0)
-        lk_mapfile -z <("${FIND[@]}" | sort -zu) FILES
+        lk_mapfile -z FILES <("${FIND[@]}" | sort -zu)
         EXCLUDE_FILE=${EXCLUDE_FILE//~/"~"}
         [ ${#FILES[@]} -eq 0 ] &&
             lk_console_message "No files excluded by $EXCLUDE_FILE" ||

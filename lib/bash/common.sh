@@ -163,7 +163,7 @@ function lk_getopt() {
     done
     [ "$ARGC" -gt 0 ] || shift
     OPTS+=("$@")
-    LK_GETOPT=$(lk_quote_array OPTS)
+    LK_GETOPT=$(lk_quote OPTS)
 }
 
 function lk_get_env() {

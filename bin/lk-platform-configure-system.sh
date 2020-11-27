@@ -313,7 +313,7 @@
 
     LK_HOMES=(
         /etc/skel{,".$LK_PATH_PREFIX_ALPHA"}
-        ${SUDO_USER:+"$(lk_expand_paths <<<"~$SUDO_USER")"}
+        ${SUDO_USER:+"$(lk_expand_path "~$SUDO_USER")"}
         "$@"
     )
     lk_resolve_files LK_HOMES
