@@ -87,7 +87,7 @@ eval "exec $LOCK_FD>\"\$LOCK_FILE\"" &&
 export TZ=UTC
 HN=$(lk_hostname) || HN=localhost
 FQDN=$(lk_fqdn) || FQDN=$HN.localdomain
-eval "$(LK_VAR_PREFIX='' lk_get_regex BACKUP_TIMESTAMP_FINDUTILS_REGEX)"
+eval "$(lk_get_regex BACKUP_TIMESTAMP_FINDUTILS_REGEX)"
 
 lk_log_output
 

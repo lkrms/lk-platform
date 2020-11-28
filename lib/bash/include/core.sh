@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2015,SC2016,SC2207
+# shellcheck disable=SC1090,SC2015,SC2016,SC2120,SC2207
 
 USER=${USER:-$(id -un)} &&
     HOME=${HOME:-$(eval "echo ~$USER")} || return
@@ -119,7 +119,6 @@ function lk_include() {
         ! lk_in_array "$i" _LK_INCLUDES || continue
         FILE=${LK_INST:-$LK_BASE}/lib/bash/include/$i.sh
         [ -r "$FILE" ] || lk_warn "$FILE: file not found" || return
-        # shellcheck disable=SC1090
         . "$FILE" || return
         _LK_INCLUDES+=("$i")
     done
@@ -152,7 +151,6 @@ function lk_myself() {
     return "$EXIT_STATUS"
 }
 
-# shellcheck disable=SC2120
 function _lk_caller() {
     local CONTEXT REGEX='^([0-9]+) ([^ ]+) (.*)$' SOURCE FUNC LINE \
         VERBOSE DIM=${LK_DIM:-$LK_GREY} CALLER=()
@@ -237,8 +235,7 @@ function lk_mktemp_fifo() {
 function lk_command_first_existing() {
     local COMMAND
     while [ $# -gt 0 ]; do
-        # shellcheck disable=SC2206
-        COMMAND=($1)
+        eval "COMMAND=($1)"
         if type -P "${COMMAND[0]}" >/dev/null; then
             echo "$1"
             return 0
@@ -257,44 +254,39 @@ function lk_regex_implode() {
     fi
 }
 
+function _lk_var_prefix() {
+    [ -z "${FUNCNAME[2]:-}" ] || printf 'local '
+}
+
+function _lk_get_regex() {
+    printf 'local %s=%q\n' "$1" "$2"
+    printf 'REGEX_VARS[$((i++))]=%s\n' "$1"
+}
+
 # lk_get_regex [REGEX_NAME...]
 #
 # Output Bash-compatible variable assignments for all available regular
 # expressions or for each REGEX_NAME.
-#
-# shellcheck disable=SC2034
 function lk_get_regex() {
-    local DOMAIN_PART_REGEX DOMAIN_NAME_REGEX EMAIL_ADDRESS_REGEX \
-        IPV4_REGEX IPV4_OPT_PREFIX_REGEX \
-        IPV6_REGEX IPV6_OPT_PREFIX_REGEX \
-        IP_OPT_PREFIX_REGEX HOST_REGEX HOST_OPT_PREFIX_REGEX \
-        URI_REGEX URI_REGEX_REQ_SCHEME_HOST \
-        LINUX_USERNAME_REGEX MYSQL_USERNAME_REGEX \
-        DPKG_SOURCE_REGEX \
-        PHP_SETTING_NAME_REGEX PHP_SETTING_REGEX \
-        READLINE_NON_PRINTING_REGEX CONTROL_SEQUENCE_REGEX \
-        ESCAPE_SEQUENCE_REGEX NON_PRINTING_REGEX \
-        IPV4_PRIVATE_FILTER_REGEX \
-        BACKUP_TIMESTAMP_FINDUTILS_REGEX \
-        _O _H _P _S _U _A _Q _F _1 _2 _4 _6 \
-        REGEX EXIT_STATUS=0
+    local _O _H _P _S _U _A _Q _F _1 _2 _4 _6 \
+        REGEX_VARS=() i=0 REGEX EXIT_STATUS=0
 
-    DOMAIN_PART_REGEX="[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
-    DOMAIN_NAME_REGEX="($DOMAIN_PART_REGEX(\\.|\$)){2,}"
-    EMAIL_ADDRESS_REGEX="[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@$DOMAIN_NAME_REGEX"
+    eval "$(_lk_get_regex DOMAIN_PART_REGEX "[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?")"
+    eval "$(_lk_get_regex DOMAIN_NAME_REGEX "($DOMAIN_PART_REGEX(\\.|\$)){2,}")"
+    eval "$(_lk_get_regex EMAIL_ADDRESS_REGEX "[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@$DOMAIN_NAME_REGEX")"
 
     _O="(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])"
-    IPV4_REGEX="($_O\\.){3}$_O"
-    IPV4_OPT_PREFIX_REGEX="$IPV4_REGEX(/(3[0-2]|[12][0-9]|[1-9]))?"
+    eval "$(_lk_get_regex IPV4_REGEX "($_O\\.){3}$_O")"
+    eval "$(_lk_get_regex IPV4_OPT_PREFIX_REGEX "$IPV4_REGEX(/(3[0-2]|[12][0-9]|[1-9]))?")"
 
     _H="[0-9a-fA-F]{1,4}"
     _P="/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9])"
-    IPV6_REGEX="(($_H:){7}(:|$_H)|($_H:){6}(:|:$_H)|($_H:){5}(:|(:$_H){1,2})|($_H:){4}(:|(:$_H){1,3})|($_H:){3}(:|(:$_H){1,4})|($_H:){2}(:|(:$_H){1,5})|$_H:(:|(:$_H){1,6})|:(:|(:$_H){1,7}))"
-    IPV6_OPT_PREFIX_REGEX="$IPV6_REGEX($_P)?"
+    eval "$(_lk_get_regex IPV6_REGEX "(($_H:){7}(:|$_H)|($_H:){6}(:|:$_H)|($_H:){5}(:|(:$_H){1,2})|($_H:){4}(:|(:$_H){1,3})|($_H:){3}(:|(:$_H){1,4})|($_H:){2}(:|(:$_H){1,5})|$_H:(:|(:$_H){1,6})|:(:|(:$_H){1,7}))")"
+    eval "$(_lk_get_regex IPV6_OPT_PREFIX_REGEX "$IPV6_REGEX($_P)?")"
 
-    IP_OPT_PREFIX_REGEX="($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX)"
-    HOST_REGEX="($IPV4_REGEX|$IPV6_REGEX|$DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)"
-    HOST_OPT_PREFIX_REGEX="($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX|$DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)"
+    eval "$(_lk_get_regex IP_OPT_PREFIX_REGEX "($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX)")"
+    eval "$(_lk_get_regex HOST_REGEX "($IPV4_REGEX|$IPV6_REGEX|$DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)")"
+    eval "$(_lk_get_regex HOST_OPT_PREFIX_REGEX "($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX|$DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)")"
 
     # https://en.wikipedia.org/wiki/Uniform_Resource_Identifier
     _S="[a-zA-Z][-a-zA-Z0-9+.]*"                               # scheme
@@ -305,37 +297,38 @@ function lk_get_regex() {
     _A="[-a-zA-Z0-9._~%!\$&'()*+,;=:@/]+"                      # path
     _Q="[-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]+"                     # query
     _F="[-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]*"                     # fragment
-    URI_REGEX="(($_S):)?(//(($_U)(:($_P))?@)?$_H(:($_O))?)?($_A)?(\\?($_Q))?(#($_F))?"
-    URI_REGEX_REQ_SCHEME_HOST="(($_S):)(//(($_U)(:($_P))?@)?$_H(:($_O))?)($_A)?(\\?($_Q))?(#($_F))?"
+    eval "$(_lk_get_regex URI_REGEX "(($_S):)?(//(($_U)(:($_P))?@)?$_H(:($_O))?)?($_A)?(\\?($_Q))?(#($_F))?")"
+    eval "$(_lk_get_regex URI_REGEX_REQ_SCHEME_HOST "(($_S):)(//(($_U)(:($_P))?@)?$_H(:($_O))?)($_A)?(\\?($_Q))?(#($_F))?")"
 
-    LINUX_USERNAME_REGEX="[a-z_]([-a-z0-9_]{0,31}|[-a-z0-9_]{0,30}\\\$)"
-    MYSQL_USERNAME_REGEX="[a-zA-Z0-9_]+"
+    eval "$(_lk_get_regex LINUX_USERNAME_REGEX "[a-z_]([-a-z0-9_]{0,31}|[-a-z0-9_]{0,30}\\\$)")"
+    eval "$(_lk_get_regex MYSQL_USERNAME_REGEX "[a-zA-Z0-9_]+")"
 
     # https://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-source
-    DPKG_SOURCE_REGEX="[a-z0-9][-a-z0-9+.]+"
+    eval "$(_lk_get_regex DPKG_SOURCE_REGEX "[a-z0-9][-a-z0-9+.]+")"
 
-    PHP_SETTING_NAME_REGEX="[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*"
-    PHP_SETTING_REGEX="$PHP_SETTING_NAME_REGEX=.+"
+    eval "$(_lk_get_regex PHP_SETTING_NAME_REGEX "[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*")"
+    eval "$(_lk_get_regex PHP_SETTING_REGEX "$PHP_SETTING_NAME_REGEX=.+")"
 
-    READLINE_NON_PRINTING_REGEX=$'\x01[^\x02]*\x02'
-    CONTROL_SEQUENCE_REGEX=$'\x1b\\\x5b[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]'
-    ESCAPE_SEQUENCE_REGEX=$'\x1b[\x20-\x2f]*[\x30-\x7e]'
-    NON_PRINTING_REGEX=$'(\x01[^\x02]*\x02|\x1b(\\\x5b[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]|[\x20-\x2f]*[\x30-\x5a\\\x5c-\x7e]))'
+    eval "$(_lk_get_regex READLINE_NON_PRINTING_REGEX $'\x01[^\x02]*\x02')"
+    eval "$(_lk_get_regex CONTROL_SEQUENCE_REGEX $'\x1b\\\x5b[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]')"
+    eval "$(_lk_get_regex ESCAPE_SEQUENCE_REGEX $'\x1b[\x20-\x2f]*[\x30-\x7e]')"
+    eval "$(_lk_get_regex NON_PRINTING_REGEX $'(\x01[^\x02]*\x02|\x1b(\\\x5b[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]|[\x20-\x2f]*[\x30-\x5a\\\x5c-\x7e]))')"
 
     # *_FILTER_REGEX expressions are:
     # 1. anchored
     # 2. not intended for validation
-    IPV4_PRIVATE_FILTER_REGEX="^(10\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|192\\.168\\.|127\\.)"
+    eval "$(_lk_get_regex IPV4_PRIVATE_FILTER_REGEX "^(10\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|192\\.168\\.|127\\.)")"
 
     _1="[0-9]"
     _2="$_1$_1"
     _4="$_2$_2"
     _6="$_2$_2$_2"
-    BACKUP_TIMESTAMP_FINDUTILS_REGEX="$_4-$_2-$_2-$_6"
+    eval "$(_lk_get_regex BACKUP_TIMESTAMP_FINDUTILS_REGEX "$_4-$_2-$_2-$_6")"
 
+    [ $# -gt 0 ] || set -- "${REGEX_VARS[@]}"
     for REGEX in "$@"; do
-        printf "${LK_VAR_PREFIX-local }%s=%q\n" "$REGEX" "${!REGEX}" ||
-            EXIT_STATUS=$?
+        _lk_var_prefix
+        printf "%s=%q\n" "$REGEX" "${!REGEX}" || EXIT_STATUS=$?
     done
     return "$EXIT_STATUS"
 }
@@ -426,17 +419,16 @@ function lk_timestamp() {
     lk_date "%s"
 }
 
-# shellcheck disable=SC2162
 if lk_bash_at_least 4 1; then
     function lk_pause() {
         # A homage to MS-DOS
-        read -sN 1 -p "$(lk_readline_escape_non_printing \
+        read -rsN 1 -p "$(lk_readline_escape_non_printing \
             "${1:-Press any key to continue . . . }")"
         echo
     }
 else
     function lk_pause() {
-        read -sp "$(lk_readline_escape_non_printing \
+        read -rsp "$(lk_readline_escape_non_printing \
             "${1:-Press return to continue . . . }")"
         echo
     }
@@ -925,7 +917,6 @@ function lk_log() {
     done
 }
 
-# shellcheck disable=SC2120
 function lk_log_create_file() {
     local OWNER="${LK_LOG_FILE_OWNER:-$UID}" GROUP="${LK_LOG_FILE_GROUP:-}" \
         LOG_DIRS=() LOG_DIR LOG_PATH
@@ -1411,7 +1402,6 @@ function lk_console_checklist() {
     ((WIDTH += 16, WIDTH += WIDTH % 2))
     TEXT=$(lk_fold "$TEXT" $((WIDTH - 4)))
     eval "ITEMS=(${ITEMS[*]/%/ $INITIAL_STATUS})"
-    # shellcheck disable=SC2086
     whiptail \
         --backtitle "$(lk_myself 1)" \
         --title "$TITLE" \
@@ -1896,8 +1886,9 @@ function lk_expand_path() {
     fi
     # Perform tilde expansion
     if [[ $_PATH =~ ^(~[-a-z0-9\$_]*)(/.*)?$ ]]; then
+        # `printf '%s%q'` outputs "~username''", which doesn't expand, if used
+        # with no path
         eval "_PATH=$([ -n "${BASH_REMATCH[2]}" ] &&
-            # Outputs "~username''", which doesn't expand, if used with no path
             printf '%s%q' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" ||
             printf '%s' "${BASH_REMATCH[1]}")"
     fi
@@ -1917,7 +1908,6 @@ function lk_expand_path() {
         [ ${#ARR[@]} -eq 0 ] ||
             printf "%s${DELIM:-\\n}" "${ARR[@]}"
     else
-        # shellcheck disable=SC2059
         printf "%s${DELIM:-\\n}" "$_PATH"
     fi
     eval "$SHOPT"
@@ -1979,20 +1969,6 @@ function lk_jq_get_array() {
     eval "$1=($(jq -r "${2:-.[]} | tostring | @sh"))"
 }
 
-# lk_jq_get_shell_var_filter VAR FILTER [VAR FILTER]...
-function lk_jq_get_shell_var_filter() {
-    [ $# -gt 0 ] && [ $(($# % 2)) -eq 0 ] ||
-        lk_warn "invalid arguments" || return
-    echo "\
-def to_sh:
-  to_entries[] |
-    \"${LK_VAR_PREFIX-local }\(.key | ascii_upcase)=\(.value | @sh)\";
-{
-  $(printf '"%s": %s' "$1" "$2" && { [ $# -eq 2 ] ||
-        printf ',\n  "%s": %s' "${@:3}"; })
-} | to_sh"
-}
-
 # lk_jq_get_shell_var [--arg NAME VALUE]... VAR FILTER [VAR FILTER]...
 function lk_jq_get_shell_var() {
     local JQ JQ_ARGS=()
@@ -2001,7 +1977,15 @@ function lk_jq_get_shell_var() {
         JQ_ARGS+=("${@:1:3}")
         shift 3
     done
-    JQ=$(lk_jq_get_shell_var_filter "$@") || return
+    [ $# -gt 0 ] && ! (($# % 2)) || lk_warn "invalid arguments" || return
+    JQ="\
+def to_sh:
+  to_entries[] |
+    \"$(_lk_var_prefix)\(.key | ascii_upcase)=\(.value | @sh)\";
+{
+  $(printf '"%s": %s' "$1" "$2" && { [ $# -eq 2 ] ||
+        printf ',\n  "%s": %s' "${@:3}"; })
+} | to_sh"
     jq -r ${JQ_ARGS[@]+"${JQ_ARGS[@]}"} "$JQ"
 }
 
@@ -2093,9 +2077,8 @@ function lk_remove_secret() {
 }
 
 # lk_random_hex BYTES
-#
-# shellcheck disable=SC2034,SC2046
 function lk_random_hex() {
+    # shellcheck disable=SC2046
     printf '%02x' $(for i in $(seq 1 "$1"); do echo $((RANDOM % 256)); done)
     printf '\n'
 }
