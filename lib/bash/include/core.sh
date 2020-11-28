@@ -446,19 +446,17 @@ function lk_is_false() {
     [[ $1 =~ ^(0|[fF][aA][lL][sS][eE]|[nN][oO]?|[oO][fF][fF])$ ]]
 }
 
-# [LK_ESCAPE=ESCAPE_WITH] lk_escape STRING [ESCAPE_CHAR...]
+# lk_escape STRING [ESCAPE_CHAR...]
 #
-# Escape STRING by inserting ESCAPE_WITH (backslash by default) before each
-# occurrence of ESCAPE_CHAR.
+# Escape STRING by inserting a backslash before each occurrence of each
+# ESCAPE_CHAR.
 function lk_escape() {
-    local i=0 STRING=$1 ESCAPE=${LK_ESCAPE:-\\} SPECIAL SEARCH REPLACE
-    shift
-    SPECIAL=("$ESCAPE" "$@")
-    for REPLACE in "${SPECIAL[@]}"; do
+    local STRING=$1 ESCAPE=${LK_ESCAPE:-\\} SPECIAL SEARCH i=0
+    SPECIAL=("$ESCAPE" "${@:2}")
+    for SEARCH in "${SPECIAL[@]}"; do
         # Ensure ESCAPE itself is only escaped once
-        [ "$((i++))" -eq 0 ] || [ "$REPLACE" != "$ESCAPE" ] || continue
-        SEARCH="\\$REPLACE"
-        STRING=${STRING//$SEARCH/$ESCAPE$REPLACE}
+        ! ((i++)) || [ "$SEARCH" != "$ESCAPE" ] || continue
+        STRING=${STRING//"$SEARCH"/$ESCAPE$SEARCH}
     done
     echo "$STRING"
 }
@@ -520,26 +518,20 @@ s/^(([^'\"[:blank:]]*|(''|'([^']|\\\\')*[^\\]')|(\"\"|\"([^\"]|\\\\\")*[^\\]\"))
 t start" <<<"$1"
 }
 
-# lk_replace FIND REPLACE_WITH [STRING]
+# lk_replace FIND REPLACE STRING
 #
-# Replace all occurrences of FIND in STRING or input with REPLACE_WITH.
+# Replace all occurrences of FIND in STRING with REPLACE.
 function lk_replace() {
-    local _LK_FIND="${_LK_FIND:-}"
-    [ -n "$_LK_FIND" ] || {
-        _LK_FIND=$(printf '%q.' "$1")
-        _LK_FIND=${_LK_FIND//\//\\\/}
-        _LK_FIND=${_LK_FIND%.}
-    }
-    [ $# -gt 2 ] &&
-        eval "echo \"\${3//$_LK_FIND/\$2}\${_LK_APPEND:-}\"" ||
-        lk_xargs lk_replace "$1" "$2"
+    local STRING
+    STRING=${3//"$1"/$2}
+    echo "$STRING"
 }
 
 # lk_in_string NEEDLE HAYSTACK
 #
 # True if NEEDLE is a substring of HAYSTACK.
 function lk_in_string() {
-    [ "$(_LK_APPEND=. lk_replace "$1" "" "$2")" != "$2." ]
+    [ "$(lk_replace "$1" "" "$2.")" != "$2." ]
 }
 
 # lk_expand_template [FILE]
