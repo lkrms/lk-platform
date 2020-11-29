@@ -622,8 +622,9 @@ function _lk_get_colour() {
     done
 }
 
+# lk_get_colours [PREFIX]
 function lk_get_colours() {
-    local PREFIX=${LK_VAR_PREFIX-LK_}
+    local PREFIX=${1-LK_}
     _lk_get_colour \
         BLACK "setaf 0" \
         RED "setaf 1" \
@@ -736,9 +737,9 @@ function lk_implode() {
 #
 # Return true if VALUE exists in ARRAY, otherwise return false.
 function lk_in_array() {
-    local _LK_ARRAY="$2[@]" _LK_VALUE
-    for _LK_VALUE in ${!_LK_ARRAY+"${!_LK_ARRAY}"}; do
-        [ "$_LK_VALUE" = "$1" ] || continue
+    local _LK_ARRAY="$2[@]" _LK_VAL
+    for _LK_VAL in ${!_LK_ARRAY+"${!_LK_ARRAY}"}; do
+        [ "$_LK_VAL" = "$1" ] || continue
         return 0
     done
     false
@@ -749,30 +750,16 @@ function lk_in_array() {
 # Search ARRAY for PATTERN and output the key of the first match if found,
 # otherwise return false.
 function lk_array_search() {
-    local _LK_ARRAY="$2[@]" _LK_ARRAY_KEYS _LK_ARRAY_VALS _LK_KEY
-    eval "_LK_ARRAY_KEYS=(\"\${!$2[@]}\")"
-    _LK_ARRAY_VALS=(${!_LK_ARRAY+"${!_LK_ARRAY}"})
-    for _LK_KEY in "${!_LK_ARRAY_VALS[@]}"; do
+    local _LK_KEYS _LK_VALS _lk_i
+    eval "_LK_KEYS=(\"\${!$2[@]}\")"
+    eval "_LK_VALS=(\"\${$2[@]}\")"
+    for _lk_i in "${!_LK_VALS[@]}"; do
         # shellcheck disable=SC2053
-        [[ ${_LK_ARRAY_VALS[$_LK_KEY]} == $1 ]] || continue
-        echo "${_LK_ARRAY_KEYS[$_LK_KEY]}"
+        [[ ${_LK_VALS[$_lk_i]} == $1 ]] || continue
+        echo "${_LK_KEYS[$_lk_i]}"
         return 0
     done
     false
-}
-
-# lk_remove_repeated ARRAY_NAME
-function lk_remove_repeated() {
-    # shellcheck disable=SC2034
-    local KEYS KEY UNIQUE=()
-    eval "KEYS=(\"\${!$1[@]}\")"
-    for KEY in ${KEYS[@]+"${KEYS[@]}"}; do
-        if eval "lk_in_array \"\${$1[\$KEY]}\" UNIQUE"; then
-            unset "$1[$KEY]"
-        else
-            eval "UNIQUE+=(\"\${$1[\$KEY]}\")"
-        fi
-    done
 }
 
 # lk_xargs [-z] COMMAND [ARG...]
@@ -859,22 +846,20 @@ function lk_has_arg() {
 
 # lk_get_outputs_of COMMAND [ARG...]
 #
-# Execute COMMAND, output Bash-compatible code that assigns _STDOUT and _STDERR
+# Execute COMMAND, output Bash-compatible code that sets _STDOUT and _STDERR
 # to COMMAND's respective outputs, and exit with COMMAND's exit status.
 function lk_get_outputs_of() {
     local SH EXIT_STATUS
     SH=$(
+        _LK_STDOUT=$(lk_mktemp_file) &&
+            _LK_STDERR=$(lk_mktemp_file) || exit
         unset _LK_FD
-        DIR=$(lk_mktemp_dir) || exit
-        STDOUT=$DIR/out
-        STDERR=$DIR/err
-        "$@" >"$STDOUT" 2>"$STDERR" || EXIT_STATUS=$?
-        _STDOUT=$(cat "$STDOUT") || _STDOUT="<unknown>"
-        _STDERR=$(cat "$STDERR") || _STDERR="<unknown>"
-        rm -Rf -- "$DIR" >/dev/null 2>&1 || true
-        printf '%s=%q\n' \
-            "${LK_VAR_PREFIX-_}STDOUT" "$_STDOUT" \
-            "${LK_VAR_PREFIX-_}STDERR" "$_STDERR"
+        "$@" >"$_LK_STDOUT" 2>"$_LK_STDERR" || EXIT_STATUS=$?
+        for i in _LK_STDOUT _LK_STDERR; do
+            _lk_var_prefix
+            printf '%s=%q\n' "${i#_LK}" "$(cat "${!i}")"
+            rm -f "${!i}" || true
+        done
         exit "${EXIT_STATUS:-0}"
     ) || EXIT_STATUS=$?
     echo "$SH"
