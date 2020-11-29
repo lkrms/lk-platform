@@ -860,7 +860,7 @@ lk_console_message "Configuring iptables"
 install -m 00660 -g adm /dev/null "$LK_BASE/etc/firewall.conf"
 if [ "$REJECT_OUTPUT" != "N" ]; then
     APT_SOURCE_HOSTS=($(grep -Eo "^[^#]+${S}https?://[^/[:space:]]+" "/etc/apt/sources.list" |
-        sed -E 's/^.*:\/\///' | sort | uniq)) || lk_die "no active package sources in /etc/apt/sources.list"
+        sed -E 's/^.*:\/\///' | sort -u)) || lk_die "no active package sources in /etc/apt/sources.list"
     if [[ ",$NODE_SERVICES," =~ .*,wp-cli,.* ]]; then
         WORDPRESS_HOSTS="\
     # used by wp-cli when installing WordPress plugins and updates
@@ -1169,7 +1169,7 @@ case ",$NODE_SERVICES," in
 
 esac
 
-PACKAGES=($(printf '%s\n' "${PACKAGES[@]}" | sort | uniq))
+PACKAGES=($(printf '%s\n' "${PACKAGES[@]}" | sort -u))
 [ ${#EXCLUDE_PACKAGES[@]} -eq 0 ] ||
     PACKAGES=($(printf '%s\n' "${PACKAGES[@]}" | grep -Fxv "$(printf '%s\n' "${EXCLUDE_PACKAGES[@]}")"))
 
@@ -1288,9 +1288,9 @@ if lk_dpkg_installed apache2; then
         #
         ${APACHE_MODS[@]+"${APACHE_MODS[@]}"}
     )
-    APACHE_MODS_ENABLED="$(a2query -m | grep -Eo '^[^ ]+' | sort | uniq || :)"
-    APACHE_DISABLE_MODS=($(comm -13 <(printf '%s\n' "${APACHE_MODS[@]}" | sort | uniq) <(echo "$APACHE_MODS_ENABLED")))
-    APACHE_ENABLE_MODS=($(comm -23 <(printf '%s\n' "${APACHE_MODS[@]}" | sort | uniq) <(echo "$APACHE_MODS_ENABLED")))
+    APACHE_MODS_ENABLED="$(a2query -m | grep -Eo '^[^ ]+' | sort -u || :)"
+    APACHE_DISABLE_MODS=($(comm -13 <(printf '%s\n' "${APACHE_MODS[@]}" | sort -u) <(echo "$APACHE_MODS_ENABLED")))
+    APACHE_ENABLE_MODS=($(comm -23 <(printf '%s\n' "${APACHE_MODS[@]}" | sort -u) <(echo "$APACHE_MODS_ENABLED")))
     [ ${#APACHE_DISABLE_MODS[@]} -eq 0 ] || {
         lk_console_item "Disabling Apache HTTPD modules:" "${APACHE_DISABLE_MODS[*]}"
         a2dismod --force "${APACHE_DISABLE_MODS[@]}"

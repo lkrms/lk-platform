@@ -35,7 +35,7 @@ if [ -n "${ACCEPT_OUTPUT_CHAIN:-}" ]; then
     if lk_is_ubuntu; then
         APT_SOURCE_HOSTS=($(
             grep -Eo "^[^#]+${S}https?://[^/[:blank:]]+" "/etc/apt/sources.list" |
-                sed -E 's/^.*:\/\///' | sort | uniq
+                sed -E 's/^.*:\/\///' | sort -u
         )) || lk_die "no active package sources in /etc/apt/sources.list"
         OUTPUT_ALLOW+=("${APT_SOURCE_HOSTS[@]}")
         lk_console_detail "Added to whitelist from APT source list:" \
@@ -46,7 +46,7 @@ if [ -n "${ACCEPT_OUTPUT_CHAIN:-}" ]; then
     # unreachable)
     if lk_in_array "api.github.com" ACCEPT_OUTPUT_HOSTS; then
         if GITHUB_META="$(curl --fail --silent --show-error "https://api.github.com/meta")" &&
-            GITHUB_IPS=($(jq -r ".web[],.api[]" <<<"$GITHUB_META" | sort | uniq)); then
+            GITHUB_IPS=($(jq -r ".web[],.api[]" <<<"$GITHUB_META" | sort -u)); then
             OUTPUT_ALLOW+=("${GITHUB_IPS[@]}")
             lk_console_detail "Added to whitelist from GitHub API:" "${#GITHUB_IPS[@]} IP $(lk_maybe_plural ${#GITHUB_IPS[@]} range ranges)"
         else

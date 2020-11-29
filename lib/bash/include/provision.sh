@@ -111,7 +111,7 @@ function lk_sudo_offer_nopasswd() {
 # lk_ssh_set_option OPTION VALUE [FILE]
 function lk_ssh_set_option() {
     local OPTION VALUE FILE=${3:-$LK_CONF_OPTION_FILE}
-    OPTION=$(lk_ere_case_insensitive "$(lk_escape_ere "$1")")
+    OPTION=$(lk_regex_case_insensitive "$(lk_escape_ere "$1")")
     VALUE=$(lk_escape_ere "$2")
     lk_option_set "$FILE" \
         "$1 $2" \
@@ -440,7 +440,7 @@ function lk_hosts_get_records() {
         shift
         unset IFS
         [ ${#FIELDS[@]} -gt 0 ] || lk_warn "no output field" || return
-        FIELDS=($(lk_echo_array FIELDS | sort | uniq))
+        FIELDS=($(lk_echo_array FIELDS | sort -u))
         CUT=-f
         for FIELD in "${FIELDS[@]}"; do
             case "$FIELD" in
@@ -495,11 +495,11 @@ function lk_hosts_resolve() {
         lk_echo_args "$@" | lk_filter_ipv4
         lk_echo_args "$@" | lk_filter_ipv6
     }))
-    HOSTS=($(comm -23 <(lk_echo_args "$@" | sort | uniq) \
-        <(lk_echo_array IP_ADDRESSES | sort | uniq)))
+    HOSTS=($(comm -23 <(lk_echo_args "$@" | sort -u) \
+        <(lk_echo_array IP_ADDRESSES | sort -u)))
     IP_ADDRESSES+=($(lk_hosts_get_records +VALUE A,AAAA "${HOSTS[@]}")) ||
         return
-    lk_echo_array IP_ADDRESSES | sort | uniq
+    lk_echo_array IP_ADDRESSES | sort -u
 }
 
 function lk_host_first_answer() {
@@ -742,7 +742,7 @@ function lk_conf_set_option() {
 # lk_conf_enable_row ROW [FILE]
 function lk_conf_enable_row() {
     local ROW FILE=${2:-$LK_CONF_OPTION_FILE}
-    ROW=$(lk_ere_expand_whitespace "$(lk_escape_ere "$1")")
+    ROW=$(lk_regex_expand_whitespace "$(lk_escape_ere "$1")")
     lk_option_set "$FILE" \
         "$1" \
         "^$ROW\$" \
@@ -774,8 +774,8 @@ function lk_php_enable_option() {
 # lk_httpd_set_option OPTION VALUE [FILE]
 function lk_httpd_set_option() {
     local OPTION VALUE FILE=${3:-$LK_CONF_OPTION_FILE}
-    OPTION=$(lk_ere_case_insensitive "$(lk_escape_ere "$1")")
-    VALUE=$(lk_ere_expand_whitespace "$(lk_escape_ere "$2")")
+    OPTION=$(lk_regex_case_insensitive "$(lk_escape_ere "$1")")
+    VALUE=$(lk_regex_expand_whitespace "$(lk_escape_ere "$2")")
     REPLACE_WITH=$(lk_escape_ere_replace "$1 $2")
     lk_option_set -p "$FILE" \
         "$1 $2" \
@@ -787,8 +787,8 @@ function lk_httpd_set_option() {
 # lk_httpd_enable_option OPTION VALUE [FILE]
 function lk_httpd_enable_option() {
     local OPTION VALUE FILE=${3:-$LK_CONF_OPTION_FILE}
-    OPTION=$(lk_ere_case_insensitive "$(lk_escape_ere "$1")")
-    VALUE=$(lk_ere_expand_whitespace "$(lk_escape_ere "$2")")
+    OPTION=$(lk_regex_case_insensitive "$(lk_escape_ere "$1")")
+    VALUE=$(lk_regex_expand_whitespace "$(lk_escape_ere "$2")")
     REPLACE_WITH=$(lk_escape_ere_replace "$1 $2")
     lk_option_set -p "$FILE" \
         "$1 $2" \

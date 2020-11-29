@@ -81,9 +81,10 @@ function lk_readynas_poweroff() {
     URL="https://$NAS_HOSTNAME/get_handler?$(lk_implode_args "&" \
         "PAGE=System" "OUTER_TAB=tab_shutdown" "INNER_TAB=NONE" \
         "shutdown_option1=1" "command=poweroff" "OPERATION=set")"
-    printf -- '--%s "%s"\n' \
-        user "$(lk_escape_curl_config "$NAS_USER:$PASSWORD")" |
-        curl --config - --insecure "$URL"
+    lk_curl_config \
+        --user="$NAS_USER:$PASSWORD" \
+        --insecure |
+        curl --config - "$URL"
 }
 
 function lk_nextcloud_get_excluded() {

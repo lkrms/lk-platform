@@ -219,8 +219,8 @@ EOF
     function lk_brew_check_taps() {
         local TAP
         TAP=($(comm -13 \
-            <(brew tap | sort | uniq) \
-            <(lk_echo_array HOMEBREW_TAPS | sort | uniq)))
+            <(brew tap | sort -u) \
+            <(lk_echo_array HOMEBREW_TAPS | sort -u)))
         [ ${#TAP[@]} -eq 0 ] || {
             for TAP in "${TAP[@]}"; do
                 lk_console_detail "Tapping" "$TAP"
@@ -283,8 +283,8 @@ EOF
         python-yq  # for plist parsing with `xq`
     )
     INSTALL=($(comm -13 \
-        <(lk_brew_formulae | sort | uniq) \
-        <(lk_echo_array INSTALL | sort | uniq)))
+        <(lk_brew_formulae | sort -u) \
+        <(lk_echo_array INSTALL | sort -u)))
     [ ${#INSTALL[@]} -eq 0 ] || {
         lk_console_message "Installing lk-platform dependencies"
         lk_keep_trying lk_tty caffeinate -i brew install "${INSTALL[@]}"
@@ -368,8 +368,8 @@ EOF
     }
 
     INSTALL_FORMULAE=($(comm -13 \
-        <(lk_brew_formulae | sort | uniq) \
-        <(lk_echo_array HOMEBREW_FORMULAE | sort | uniq)))
+        <(lk_brew_formulae | sort -u) \
+        <(lk_echo_array HOMEBREW_FORMULAE | sort -u)))
     if [ ${#INSTALL_FORMULAE[@]} -gt 0 ]; then
         FORMULAE=()
         for FORMULA in "${INSTALL_FORMULAE[@]}"; do
@@ -392,9 +392,9 @@ EOF
     fi
 
     INSTALL_CASKS=($(comm -13 \
-        <(lk_brew_casks | sort | uniq) \
+        <(lk_brew_casks | sort -u) \
         <(lk_echo_array HOMEBREW_CASKS |
-            sort | uniq)))
+            sort -u)))
     if [ ${#INSTALL_CASKS[@]} -gt 0 ]; then
         HOMEBREW_CASKS_JSON=$(lk_keep_trying caffeinate -i \
             brew cask info --json=v1 "${INSTALL_CASKS[@]}")
@@ -444,8 +444,8 @@ Please open the Mac App Store and sign in"
             fi
 
             INSTALL_APPS=($(comm -13 \
-                <(mas list | grep -Eo '^[0-9]+' | sort | uniq) \
-                <(lk_echo_array MAS_APPS | sort | uniq)))
+                <(mas list | grep -Eo '^[0-9]+' | sort -u) \
+                <(lk_echo_array MAS_APPS | sort -u)))
             PROG='
 NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[[0-9]+\.[0-9]+\])?$/, "\\1", "g")
                 printf "%s=%s\n", "APP_VER" , gensub(/.* ([0-9]+(\.[0-9]+)*)( \[[0-9]+\.[0-9]+\])?$/, "\\1", "g") }
@@ -532,11 +532,11 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
     lk_macos_xcode_maybe_accept_license
 
     INSTALLED_FORMULAE=($(comm -12 \
-        <(lk_brew_formulae | sort | uniq) \
-        <(lk_echo_array HOMEBREW_FORMULAE | sort | uniq)))
+        <(lk_brew_formulae | sort -u) \
+        <(lk_echo_array HOMEBREW_FORMULAE | sort -u)))
     INSTALLED_CASKS=($(comm -12 \
-        <(lk_brew_casks | sort | uniq) \
-        <(lk_echo_array HOMEBREW_CASKS | sort | uniq)))
+        <(lk_brew_casks | sort -u) \
+        <(lk_echo_array HOMEBREW_CASKS | sort -u)))
     INSTALLED_CASKS_JSON=$(
         [ ${#INSTALLED_CASKS[@]} -eq 0 ] ||
             lk_keep_trying caffeinate -i \
@@ -551,16 +551,16 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
             { [ ${#INSTALLED_FORMULAE[@]} -eq 0 ] ||
                 brew deps --union --full-name \
                     "${INSTALLED_FORMULAE[@]}" 2>/dev/null; }
-    } | sort | uniq))
+    } | sort -u))
     ALL_CASKS=($({
         lk_echo_array INSTALLED_CASKS &&
             { [ -z "$INSTALLED_CASKS_JSON" ] ||
                 # TODO: recurse?
                 jq -r '.[].depends_on.cask[]?' <<<"$INSTALLED_CASKS_JSON"; }
-    } | sort | uniq))
+    } | sort -u))
 
     PURGE_FORMULAE=($(comm -23 \
-        <(lk_brew_formulae | sort | uniq) \
+        <(lk_brew_formulae | sort -u) \
         <(lk_echo_array ALL_FORMULAE)))
     [ ${#PURGE_FORMULAE[@]} -eq 0 ] || {
         lk_echo_array PURGE_FORMULAE |
@@ -570,7 +570,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
     }
 
     PURGE_CASKS=($(comm -23 \
-        <(lk_brew_casks | sort | uniq) \
+        <(lk_brew_casks | sort -u) \
         <(lk_echo_array ALL_CASKS)))
     [ ${#PURGE_CASKS[@]} -eq 0 ] || {
         lk_echo_array PURGE_CASKS |

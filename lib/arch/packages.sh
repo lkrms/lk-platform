@@ -301,12 +301,12 @@ PACMAN_PACKAGES+=(${PACMAN_DESKTOP_PACKAGES[@]+"${PACMAN_DESKTOP_PACKAGES[@]}"})
 AUR_PACKAGES+=(${AUR_DESKTOP_PACKAGES[@]+"${AUR_DESKTOP_PACKAGES[@]}"})
 [ ${#AUR_PACKAGES[@]} -eq 0 ] || {
     NOT_AUR=($(comm -12 \
-        <(pacman -Slq core extra community | sort | uniq) \
-        <(lk_echo_array AUR_PACKAGES | sort | uniq)))
+        <(pacman -Slq core extra community | sort -u) \
+        <(lk_echo_array AUR_PACKAGES | sort -u)))
     [ ${#NOT_AUR[@]} -eq 0 ] ||
         lk_console_warning "Moved from AUR to repo:" $'\n'"$(lk_echo_array NOT_AUR)"
-    PACMAN_PACKAGES+=($(comm -12 <(pacman -Slq | sort | uniq) <(lk_echo_array AUR_PACKAGES | sort | uniq)))
-    AUR_PACKAGES=($(comm -13 <(pacman -Slq | sort | uniq) <(lk_echo_array AUR_PACKAGES | sort | uniq)))
+    PACMAN_PACKAGES+=($(comm -12 <(pacman -Slq | sort -u) <(lk_echo_array AUR_PACKAGES | sort -u)))
+    AUR_PACKAGES=($(comm -13 <(pacman -Slq | sort -u) <(lk_echo_array AUR_PACKAGES | sort -u)))
     [ ${#AUR_PACKAGES[@]} -eq 0 ] || {
         lk_echo_array AUR_PACKAGES | lk_console_list "Unable to install from configured repositories:" package packages
         ! lk_confirm "Manage the above using yay?" Y && AUR_PACKAGES=() || {

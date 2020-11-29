@@ -20,8 +20,8 @@ function lk_dpkg_installed() {
 function lk_dpkg_installed_list() {
     [ $# -eq 0 ] || {
         comm -12 \
-            <(lk_dpkg_installed_list | sort | uniq) \
-            <(lk_echo_args "$@" | sort | uniq)
+            <(lk_dpkg_installed_list | sort -u) \
+            <(lk_echo_args "$@" | sort -u)
         return
     }
     dpkg-query --show --showformat \
@@ -60,8 +60,8 @@ function lk_apt_marked_manual_list() {
 function lk_apt_not_marked_manual_list() {
     [ $# -gt 0 ] || return
     comm -13 \
-        <(lk_apt_marked_manual_list "$@" | sort | uniq) \
-        <(lk_echo_args "$@" | sort | uniq)
+        <(lk_apt_marked_manual_list "$@" | sort -u) \
+        <(lk_echo_args "$@" | sort -u)
 }
 
 # lk_apt_update
@@ -78,8 +78,8 @@ function lk_apt_update() {
 function lk_apt_unavailable_list() {
     [ $# -gt 0 ] || return
     comm -13 \
-        <(lk_apt_available_list | sort | uniq) \
-        <(lk_echo_args "$@" | sort | uniq)
+        <(lk_apt_available_list | sort -u) \
+        <(lk_echo_args "$@" | sort -u)
 }
 
 # lk_apt_install PACKAGE...

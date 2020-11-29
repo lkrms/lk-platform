@@ -192,7 +192,7 @@ local)
 
     lk_console_item "Connecting to" "$NEW_HOST_NAME"
     ssh -o LogLevel=QUIET -t "$NEW_HOST_NAME" "bash -c$(
-        printf ' %q' "$(LK_EXPAND_QUOTE=1 lk_expand_template "$0")" bash --new
+        printf ' %q' "$(lk_expand_template -q "$0")" bash --new
     )"
     ;;
 

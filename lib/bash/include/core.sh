@@ -454,36 +454,65 @@ function lk_escape_ere_replace() {
     lk_escape "$1" '&' '/' "\\"
 }
 
-function lk_escape_curl_config() {
-    local ARG
-    ARG=$(lk_escape "$1" "\\" '"')
-    ARG=${ARG//$'\t'/\\t}
-    ARG=${ARG//$'\n'/\\n}
-    ARG=${ARG//$'\r'/\\r}
-    echo "${ARG//$'\v'/\\v}"
+# lk_curl_config [--]ARG[=PARAM]...
+#
+# Output each ARG=PARAM pair formatted for use with `curl --config`.
+function lk_curl_config() {
+    local PARAM
+    while [ $# -gt 0 ]; do
+        [[ $1 =~ ^([^=]+)(=(.*))?$ ]] ||
+            lk_warn "invalid argument: $1" || return
+        if [ -z "${BASH_REMATCH[2]}" ]; then
+            printf -- '--%s\n' "${1#--}"
+        else
+            PARAM=$(lk_escape "${BASH_REMATCH[3]}" "\\" '"')
+            PARAM=${PARAM//$'\t'/\\t}
+            PARAM=${PARAM//$'\n'/\\n}
+            PARAM=${PARAM//$'\r'/\\r}
+            PARAM=${PARAM//$'\v'/\\v}
+            printf -- '--%s "%s"\n' "${BASH_REMATCH[1]#--}" "$PARAM"
+        fi
+        shift
+    done
 }
 
-function lk_ere_case_insensitive() {
-    local i LOWER UPPER REGEX=
+# lk_regex_case_insensitive STRING
+#
+# Replace each alphabetic character in STRING with a bracket expression that
+# matches its lower- and upper-case equivalents.
+#
+# Example:
+#
+#     $ lk_regex_case_insensitive True
+#     [tT][rR][uU][eE]
+function lk_regex_case_insensitive() {
+    local i l LOWER UPPER REGEX=
     for i in $(seq 0 $((${#1} - 1))); do
-        LOWER=$(lk_lower "${1:$i:1}")
-        UPPER=$(lk_upper "${1:$i:1}")
-        [ "$LOWER" = "$UPPER" ] &&
-            REGEX=$REGEX${1:$i:1} ||
-            REGEX="${REGEX}[$LOWER$UPPER]"
+        l=${1:$i:1}
+        [[ ! $l =~ [[:alpha:]] ]] || {
+            LOWER=$(lk_lower "$l")
+            UPPER=$(lk_upper "$l")
+            [ "$LOWER" = "$UPPER" ] || {
+                REGEX="${REGEX}[$LOWER$UPPER]"
+                continue
+            }
+        }
+        REGEX=$REGEX$l
     done
     echo "$REGEX"
 }
 
-# lk_ere_expand_whitespace STRING
+# lk_regex_expand_whitespace STRING
 #
 # Replace each unquoted sequence of one or more whitespace characters in STRING
 # with "[[:blank:]]+". Escaped delimiters within double- and single-quoted
 # sequences are recognised.
 #
-# For example, pass "message = 'Here\'s a message'" to get the following output:
-#   message[[:blank:]]+=[[:blank:]]+'Here\'s a message'
-function lk_ere_expand_whitespace() {
+# Example:
+#
+#     $ lk_regex_expand_whitespace "message = 'Here\'s a message'"
+#     message[[:blank:]]+=[[:blank:]]+'Here\'s a message'
+function lk_regex_expand_whitespace() {
     sed -E "\
 :start
 s/^(([^'\"[:blank:]]*|(''|'([^']|\\\\')*[^\\]')|(\"\"|\"([^\"]|\\\\\")*[^\\]\"))*)$S+/\\1[[:blank:]]+/
@@ -506,31 +535,27 @@ function lk_in_string() {
     [ "$(lk_replace "$1" "" "$2.")" != "$2." ]
 }
 
-# lk_expand_template [FILE]
+# lk_expand_template [-q] [FILE]
 #
-# Output FILE or input with each {{KEY}} tag replaced with the value of variable
-# KEY.
-#
-# Notes:
-# - To specify tags to replace, populate array LK_EXPAND_VARS with the names of
-#   variables to expand
-# - Set LK_EXPAND_QUOTE=1 to use `printf %q` when expanding tags
+# Output FILE or input with each {{KEY}} tag (or each {{KEY}} tag where KEY is
+# an element of array LK_EXPAND_KEYS) replaced with the value of variable KEY.
+# If -q is set, use `printf %q` when expanding tags.
 function lk_expand_template() {
-    local i TEMPLATE REPLACE \
-        VARS=(${LK_EXPAND_VARS[@]+"${LK_EXPAND_VARS[@]}"})
-    TEMPLATE=$(cat ${1+"$1"} && echo -n ".") || return
-    [ ${#VARS[@]} -gt 0 ] ||
-        VARS=($(
-            echo "$TEMPLATE" |
-                grep -Eo \
-                    -e '\{\{[a-zA-Z_][a-zA-Z0-9_]*\}\}' |
-                sed -E 's/^\{\{([a-zA-Z0-9_]+)\}\}$/\1/' | sort | uniq
-        )) || true
-    for i in ${VARS[@]+"${VARS[@]}"}; do
-        REPLACE=${!i:-}.
-        ! lk_is_true LK_EXPAND_QUOTE ||
-            REPLACE=$(printf '%q.' "${REPLACE%.}")
-        TEMPLATE=${TEMPLATE//\{\{$i\}\}/${REPLACE%.}}
+    local QUOTE TEMPLATE KEY REPLACE \
+        KEYS=(${LK_EXPAND_KEYS[@]+"${LK_EXPAND_KEYS[@]}"})
+    [ "${1:-}" != -q ] || { QUOTE=1 && shift; }
+    TEMPLATE=$(cat ${1+"$1"} && printf .) || return
+    [ ${#KEYS[@]} -gt 0 ] ||
+        KEYS=($(echo "$TEMPLATE" |
+            grep -Eo '\{\{[a-zA-Z_][a-zA-Z0-9_]*\}\}' | sort -u |
+            sed -E 's/^\{\{([a-zA-Z0-9_]+)\}\}$/\1/')) || true
+    for KEY in ${KEYS[@]+"${KEYS[@]}"}; do
+        REPLACE=${!KEY:-}
+        ! lk_is_true QUOTE || {
+            REPLACE=$(printf '%q.' "$REPLACE")
+            REPLACE=${REPLACE%.}
+        }
+        TEMPLATE=${TEMPLATE//"{{$KEY}}"/$REPLACE}
     done
     echo "${TEMPLATE%.}"
 }
@@ -569,9 +594,14 @@ function lk_ellipsis() {
         echo "$2"
 }
 
+# lk_repeat STRING MULTIPLIER
 function lk_repeat() {
-    [ "$2" -le 0 ] ||
-        eval "printf -- \"\$1%.s\" {1..$2}"
+    [ "$2" -le 0 ] || {
+        local STRING=$1
+        STRING=${STRING//\\/\\\\}
+        STRING=${STRING//%/%%}
+        printf -- "$STRING%.s" $(seq 1 "$2")
+    }
 }
 
 function lk_hostname() {
@@ -582,45 +612,48 @@ function lk_fqdn() {
     hostname -f
 }
 
-function lk_safe_tput() {
+# shellcheck disable=SC2086
+function _lk_get_colour() {
     local SEQ
-    ! SEQ=$(tput "$@" 2>/dev/null) ||
-        [ -z "$SEQ" ] ||
-        printf '%s' "$SEQ"
+    while [ $# -ge 2 ]; do
+        SEQ=$(tput $2 2>/dev/null) || SEQ=
+        printf '%s%s=%q\n' "$PREFIX" "$1" "$SEQ"
+        shift 2
+    done
 }
 
 function lk_get_colours() {
     local PREFIX=${LK_VAR_PREFIX-LK_}
-    printf '%s%s=%q\n' \
-        "$PREFIX" BLACK "$(lk_safe_tput setaf 0)" \
-        "$PREFIX" RED "$(lk_safe_tput setaf 1)" \
-        "$PREFIX" GREEN "$(lk_safe_tput setaf 2)" \
-        "$PREFIX" YELLOW "$(lk_safe_tput setaf 3)" \
-        "$PREFIX" BLUE "$(lk_safe_tput setaf 4)" \
-        "$PREFIX" MAGENTA "$(lk_safe_tput setaf 5)" \
-        "$PREFIX" CYAN "$(lk_safe_tput setaf 6)" \
-        "$PREFIX" WHITE "$(lk_safe_tput setaf 7)" \
-        "$PREFIX" GREY "$(lk_safe_tput setaf 8)" \
-        "$PREFIX" BLACK_BG "$(lk_safe_tput setab 0)" \
-        "$PREFIX" RED_BG "$(lk_safe_tput setab 1)" \
-        "$PREFIX" GREEN_BG "$(lk_safe_tput setab 2)" \
-        "$PREFIX" YELLOW_BG "$(lk_safe_tput setab 3)" \
-        "$PREFIX" BLUE_BG "$(lk_safe_tput setab 4)" \
-        "$PREFIX" MAGENTA_BG "$(lk_safe_tput setab 5)" \
-        "$PREFIX" CYAN_BG "$(lk_safe_tput setab 6)" \
-        "$PREFIX" WHITE_BG "$(lk_safe_tput setab 7)" \
-        "$PREFIX" GREY_BG "$(lk_safe_tput setab 8)" \
-        "$PREFIX" BOLD "$(lk_safe_tput bold)" \
-        "$PREFIX" DIM "$(lk_safe_tput dim)" \
-        "$PREFIX" STANDOUT "$(lk_safe_tput smso)" \
-        "$PREFIX" STANDOUT_OFF "$(lk_safe_tput rmso)" \
-        "$PREFIX" WRAP "$(lk_safe_tput smam)" \
-        "$PREFIX" WRAP_OFF "$(lk_safe_tput rmam)" \
-        "$PREFIX" RESET "$(lk_safe_tput sgr0)"
+    _lk_get_colour \
+        BLACK "setaf 0" \
+        RED "setaf 1" \
+        GREEN "setaf 2" \
+        YELLOW "setaf 3" \
+        BLUE "setaf 4" \
+        MAGENTA "setaf 5" \
+        CYAN "setaf 6" \
+        WHITE "setaf 7" \
+        GREY "setaf 8" \
+        BLACK_BG "setab 0" \
+        RED_BG "setab 1" \
+        GREEN_BG "setab 2" \
+        YELLOW_BG "setab 3" \
+        BLUE_BG "setab 4" \
+        MAGENTA_BG "setab 5" \
+        CYAN_BG "setab 6" \
+        WHITE_BG "setab 7" \
+        GREY_BG "setab 8" \
+        BOLD "bold" \
+        DIM "dim" \
+        STANDOUT "smso" \
+        STANDOUT_OFF "rmso" \
+        WRAP "smam" \
+        WRAP_OFF "rmam" \
+        RESET "sgr0"
 }
 
 function lk_maybe_bold() {
-    [ "${1//$LK_BOLD/}" != "$1" ] ||
+    [[ ${1//"$LK_BOLD"/} != "$1" ]] ||
         echo "$LK_BOLD"
 }
 
@@ -645,8 +678,9 @@ function _lk_array_fill_temp() {
 
 # _lk_array_action COMMAND ARRAY...
 #
-# Run COMMAND with the elements of each ARRAY as arguments. COMMAND is executed
-# once and any fixed arguments must be quoted (see lk_implode for an example).
+# Run COMMAND with the combined elements of each ARRAY as arguments. COMMAND is
+# executed once and any fixed arguments must be quoted (see lk_implode for an
+# example).
 function _lk_array_action() {
     local _LK_COMMAND _LK_TEMP_ARRAY
     eval "_LK_COMMAND=($1)"
@@ -663,9 +697,9 @@ function lk_echo_args() {
 
 # lk_echo_array [-z] [ARRAY...]
 function lk_echo_array() {
-    local _LK_ARG=
-    [ "${1:-}" != -z ] || { _LK_ARG=" -z" && shift; }
-    _lk_array_action "lk_echo_args$_LK_ARG" "$@"
+    local _LK_NUL_DELIM=${_LK_NUL_DELIM-}
+    [ "${1:-}" != -z ] || { _LK_NUL_DELIM=1 && shift; }
+    _lk_array_action lk_echo_args "$@"
 }
 
 # lk_quote_args [ARG...]
@@ -685,11 +719,11 @@ function lk_quote() {
 
 # lk_implode_args GLUE [ARG...]
 function lk_implode_args() {
-    local _LK_DELIM=$1
-    _LK_DELIM=${_LK_DELIM//\\/\\\\}
-    _LK_DELIM=${_LK_DELIM//%/%%}
+    local GLUE=$1
+    GLUE=${GLUE//\\/\\\\}
+    GLUE=${GLUE//%/%%}
     [ $# -eq 1 ] || printf '%s' "$2"
-    [ $# -le 2 ] || printf -- "$_LK_DELIM%s" "${@:3}"
+    [ $# -le 2 ] || printf -- "$GLUE%s" "${@:3}"
     printf '\n'
 }
 
@@ -816,7 +850,7 @@ function lk_mapfile() {
     while IFS= read -r ${_LK_NUL_DELIM:+"${_LK_NUL_READ[@]}"} _LK_LINE ||
         [ -n "$_LK_LINE" ]; do
         eval "$1[$((_lk_i++))]=\$_LK_LINE"
-    done < <(cat ${2:+"$2"})
+    done < <(cat ${2+"$2"})
 }
 
 function lk_has_arg() {
@@ -2237,7 +2271,7 @@ function lk_console_file() {
 function lk_user_in_group() {
     [ "$(comm -12 \
         <(groups "$1" | sed -E 's/^.*://' | grep -Eo '[^[:blank:]]+' | sort) \
-        <(lk_echo_args "${@:2}" | sort | uniq) | wc -l)" -gt 0 ]
+        <(lk_echo_args "${@:2}" | sort -u) | wc -l)" -gt 0 ]
 }
 
 # lk_make_iso path...
