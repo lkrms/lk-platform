@@ -81,7 +81,7 @@ if [ -n "$IP" ] && ! lk_node_is_host "$SITE_HOST"; then
     }
 fi
 
-lk_is_false "$STALE" ||
+lk_is_false STALE ||
     get_state
 
 ADMIN_EMAIL="admin@$SITE_DOMAIN"

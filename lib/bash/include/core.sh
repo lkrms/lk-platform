@@ -112,6 +112,7 @@ function _lk_gnu_define() {
 # certain commands (e.g. `gfind`) on systems where standard utilities are not
 # compatible with their GNU counterparts (notably BSD/macOS)
 _lk_gnu_define
+unset -f _lk_gnu_define
 
 function lk_include() {
     local i FILE
@@ -143,7 +144,7 @@ function lk_myself() {
         FUNC=1
         shift
     }
-    if ! lk_is_true "${FUNC:-}" && lk_is_script_running; then
+    if ! lk_is_true FUNC && lk_is_script_running; then
         echo "${0##*/}"
     else
         echo "${FUNCNAME[$((1 + ${1:-0}))]:-${0##*/}}"
@@ -177,7 +178,7 @@ function _lk_caller() {
             fi
         )${VERBOSE:+$DIM:$LINE$LK_RESET}")
     fi
-    lk_is_false "${LK_DEBUG:-0}" ||
+    ! lk_is_true LK_DEBUG ||
         [ -z "${FUNC:-}" ] ||
         [ "$FUNC" = main ] ||
         CALLER+=("$FUNC$DIM()$LK_RESET")
@@ -333,56 +334,7 @@ function lk_get_regex() {
     return "$EXIT_STATUS"
 }
 
-function lk_realpath() {
-    local FILE=$1 i=0 COMPONENT LN RESOLVED=
-    [ -e "$FILE" ] || return
-    [ "${FILE:0:1}" = / ] || FILE=${PWD%/}/$FILE
-    while [ -n "$FILE" ]; do
-        ((i++)) || {
-            # 1. Replace "/./" with "/"
-            # 2. Replace subsequent "/"s with one "/"
-            # 3. Remove trailing "/"
-            FILE=$(sed -e 's/\/\.\//\//g' -e 's/\/\+/\//g' -e 's/\/$//' \
-                <<<"$FILE") || return
-            FILE=${FILE:1}
-        }
-        COMPONENT=${FILE%%/*}
-        [ "$COMPONENT" != "$FILE" ] ||
-            FILE=
-        FILE=${FILE#*/}
-        case "$COMPONENT" in
-        '' | .)
-            continue
-            ;;
-        ..)
-            RESOLVED=${RESOLVED%/*}
-            continue
-            ;;
-        esac
-        RESOLVED=$RESOLVED/$COMPONENT
-        [ ! -L "$RESOLVED" ] || {
-            LN=$(readlink "$RESOLVED") || return
-            [ "${LN:0:1}" = / ] || LN=${RESOLVED%/*}/$LN
-            FILE=$LN${FILE:+/$FILE}
-            RESOLVED=
-            i=0
-        }
-    done
-    echo "$RESOLVED"
-}
-
-function realpath() {
-    if lk_command_exists realpath; then
-        unset -f realpath
-    else
-        function realpath() {
-            lk_realpath "$1"
-        }
-    fi
-    realpath "$@"
-}
-
-# lk_bash_at_least major [minor]
+# lk_bash_at_least MAJOR [MINOR]
 function lk_bash_at_least() {
     [ "${BASH_VERSINFO[0]}" -eq "$1" ] &&
         [ "${BASH_VERSINFO[1]}" -ge "${2:-0}" ] ||
@@ -421,16 +373,18 @@ function lk_timestamp() {
 
 if lk_bash_at_least 4 1; then
     function lk_pause() {
+        local REPLY
         # A homage to MS-DOS
-        read -rsN 1 -p "$(lk_readline_escape_non_printing \
-            "${1:-Press any key to continue . . . }")"
-        echo
+        read -rs -N 1 \
+            -p "$(lk_readline_format "${1:-Press any key to continue . . . }")"
+        lk_console_blank
     }
 else
     function lk_pause() {
-        read -rsp "$(lk_readline_escape_non_printing \
-            "${1:-Press return to continue . . . }")"
-        echo
+        local REPLY
+        read -rs \
+            -p "$(lk_readline_format "${1:-Press return to continue . . . }")"
+        lk_console_blank
     }
 fi
 
@@ -438,12 +392,30 @@ function lk_is_root() {
     [ "$EUID" -eq 0 ]
 }
 
+# lk_is_true VAR
+#
+# Return true if the value of variable VAR is one of the following "truthy"
+# values (case-insensitive).
+# - 1
+# - True
+# - Y
+# - Yes
+# - On
 function lk_is_true() {
-    [[ $1 =~ ^(1|[tT][rR][uU][eE]|[yY]([eE][sS])?|[oO][nN])$ ]]
+    [[ ${!1:-} =~ ^(1|[tT][rR][uU][eE]|[yY]([eE][sS])?|[oO][nN])$ ]]
 }
 
+# lk_is_false VAR
+#
+# Return true if the value of variable VAR is one of the following "falsy"
+# values (case-insensitive).
+# - 0
+# - False
+# - N
+# - No
+# - Off
 function lk_is_false() {
-    [[ $1 =~ ^(0|[fF][aA][lL][sS][eE]|[nN][oO]?|[oO][fF][fF])$ ]]
+    [[ ${!1:-} =~ ^(0|[fF][aA][lL][sS][eE]|[nN][oO]?|[oO][fF][fF])$ ]]
 }
 
 # lk_escape STRING [ESCAPE_CHAR...]
@@ -556,7 +528,7 @@ function lk_expand_template() {
         )) || true
     for i in ${VARS[@]+"${VARS[@]}"}; do
         REPLACE=${!i:-}.
-        ! lk_is_true "${LK_EXPAND_QUOTE:-}" ||
+        ! lk_is_true LK_EXPAND_QUOTE ||
             REPLACE=$(printf '%q.' "${REPLACE%.}")
         TEMPLATE=${TEMPLATE//\{\{$i\}\}/${REPLACE%.}}
     done
@@ -951,7 +923,7 @@ function lk_log_create_file() {
 # lk_log_output [TEMP_LOG_FILE]
 function lk_log_output() {
     local LOG_PATH DIR HEADER=() IFS
-    ! lk_is_true "${LK_NO_LOG:-}" &&
+    ! lk_is_true LK_NO_LOG &&
         [ -z "${_LK_LOG_FILE:-}" ] || return 0
     [[ $- != *x* ]] || [ -n "${BASH_XTRACEFD:-}" ] || return 0
     if [ $# -ge 1 ]; then
@@ -1053,7 +1025,7 @@ function lk_echoc() {
     echo ${ECHO_ARGS[@]+"${ECHO_ARGS[@]}"} "${COLOUR:-}$MESSAGE$LK_RESET"
 }
 
-function lk_readline_escape_non_printing() {
+function lk_readline_format() {
     local LC_ALL=C STRING=$1 REGEX
     for REGEX in CONTROL_SEQUENCE_REGEX ESCAPE_SEQUENCE_REGEX; do
         eval "$(lk_get_regex "$REGEX")"
@@ -1143,13 +1115,17 @@ function lk_output_length() {
     echo ${#STRING}
 }
 
+function lk_console_blank() {
+    echo >&"${_LK_FD:-2}"
+}
+
 # lk_console_message message [[secondary_message] colour_sequence]
 function lk_console_message() {
     local PREFIX="${LK_CONSOLE_PREFIX-==> }" MESSAGE="$1" MESSAGE2 \
         INDENT=0 SPACES LENGTH COLOUR
     shift
     [ "${MESSAGE/$'\n'/}" = "$MESSAGE" ] &&
-        { lk_is_true "${LK_CONSOLE_NO_FOLD:-}" ||
+        { lk_is_true LK_CONSOLE_NO_FOLD ||
             [ "$(lk_output_length "$PREFIX$MESSAGE")" -le 80 ]; } || {
         SPACES=$'\n'"$(lk_repeat " " ${#PREFIX})"
         [ "${MESSAGE//$'\n'/}" != "$MESSAGE" ] ||
@@ -1165,7 +1141,7 @@ function lk_console_message() {
             # line with a space between
             [ "${MESSAGE2/$'\n'/}" = "$MESSAGE2" ] &&
                 [ "$INDENT" -eq 0 ] &&
-                { lk_is_true "${LK_CONSOLE_NO_FOLD:-}" ||
+                { lk_is_true LK_CONSOLE_NO_FOLD ||
                     { LENGTH=$(lk_output_length "$PREFIX$MESSAGE $MESSAGE2") &&
                         [ "$LENGTH" -le 80 ]; }; } &&
                 MESSAGE2=" $MESSAGE2" || {
@@ -1296,7 +1272,7 @@ function lk_console_list() {
 }
 
 function _lk_console_get_prompt() {
-    lk_readline_escape_non_printing "$(
+    lk_readline_format "$(
         lk_echoc -n " :: " \
             "${LK_CONSOLE_PREFIX_COLOUR-$(lk_maybe_bold \
                 "$LK_CONSOLE_COLOUR")$LK_CONSOLE_COLOUR}"
@@ -1327,10 +1303,10 @@ function lk_console_read_secret() {
 # lk_confirm PROMPT [DEFAULT [READ_ARG...]]
 function lk_confirm() {
     local PROMPT=("$1") DEFAULT=${2:-} VALUE
-    if lk_is_true "$DEFAULT"; then
+    if lk_is_true DEFAULT; then
         PROMPT+=("[Y/n]")
         DEFAULT=Y
-    elif lk_is_false "$DEFAULT"; then
+    elif lk_is_false DEFAULT; then
         PROMPT+=("[y/N]")
         DEFAULT=N
     else
@@ -1408,9 +1384,9 @@ function lk_console_checklist() {
 }
 
 function lk_no_input() {
-    ! lk_is_true "${LK_FORCE_INPUT:-}" && {
+    ! lk_is_true LK_FORCE_INPUT && {
         [ ! -t 0 ] ||
-            lk_is_true "${LK_NO_INPUT:-}"
+            lk_is_true LK_NO_INPUT
     }
 }
 
@@ -1608,7 +1584,7 @@ function lk_download() {
         CURL_ARGS=(--fail --location --remote-time) ARGS
     CURL_VERSION="$(curl --version | grep -Eo '\b[0-9]+(\.[0-9]+){1,2}\b' | head -n1)" ||
         lk_warn "curl version unknown" || return
-    lk_is_false "$IGNORE_FILENAMES" || {
+    lk_is_false IGNORE_FILENAMES || {
         # TODO: download to a temporary directory and move to $PWD only if successful
         lk_version_at_least "$CURL_VERSION" "7.26.0" ||
             lk_warn "installed version of curl too old to output effective filename" || return
@@ -1621,7 +1597,7 @@ function lk_download() {
         lk_is_uri "$URI" || lk_warn "not a URI: $URI" || return
         DOWNLOAD_ONE=0
         DOWNLOAD_ARGS=()
-        if lk_is_true "$IGNORE_FILENAMES"; then
+        if lk_is_true IGNORE_FILENAMES; then
             DOWNLOAD_ARGS+=(--remote-name)
         else
             [ -n "$FILENAME" ] || {
@@ -1641,7 +1617,7 @@ function lk_download() {
             FILENAMES+=("$FILENAME")
         fi
         DOWNLOAD_ARGS+=("$URI")
-        if lk_is_true "$DOWNLOAD_ONE"; then
+        if lk_is_true DOWNLOAD_ONE; then
             ONE_DOWNLOAD_ARGS+=("$(declare -p DOWNLOAD_ARGS)")
         else
             MANY_DOWNLOAD_ARGS+=("${DOWNLOAD_ARGS[@]}")
@@ -1658,7 +1634,7 @@ function lk_download() {
             eval "$ARGS"
             curl "${CURL_ARGS[@]}" "${DOWNLOAD_ARGS[@]}" || return
         done
-    lk_is_true "$IGNORE_FILENAMES" ||
+    lk_is_true IGNORE_FILENAMES ||
         lk_echo_array FILENAMES
 }
 
@@ -1693,12 +1669,12 @@ function lk_can_sudo() {
 }
 
 function lk_will_sudo() {
-    lk_is_true "${LK_SUDO:-}"
+    lk_is_true LK_SUDO
 }
 
 # LK_SUDO=<1|0|Y|N> lk_maybe_sudo COMMAND [ARG...]
 function lk_maybe_sudo() {
-    if lk_is_true "${LK_SUDO:-}"; then
+    if lk_is_true LK_SUDO; then
         lk_elevate "$@"
     else
         "$@"
@@ -2209,7 +2185,7 @@ function lk_maybe_replace() {
     fi
     echo "${2%$'\n'}" | lk_maybe_sudo tee "$1" >/dev/null || return
     ! lk_verbose || {
-        if lk_is_true "${LK_NO_DIFF:-}"; then
+        if lk_is_true LK_NO_DIFF; then
             lk_console_detail "Updated:" "$1"
         else
             lk_console_file "$1"

@@ -176,15 +176,15 @@ EOF
                 echo "allow all" |
                 sudo tee "/etc/qemu/bridge.conf" >/dev/null || exit
         }
-        lk_is_true "$MINIMAL" || lk_systemctl_enable libvirtd libvirt-guests
+        lk_is_true MINIMAL || lk_systemctl_enable libvirtd libvirt-guests
 
         sudo usermod --append --groups docker "$USER"
-        lk_is_true "$MINIMAL" || lk_systemctl_enable docker
+        lk_is_true MINIMAL || lk_systemctl_enable docker
     fi
 
     sudo test -d "/var/lib/mysql/mysql" ||
         sudo mariadb-install-db --user="mysql" --basedir="/usr" --datadir="/var/lib/mysql"
-    lk_is_true "$MINIMAL" || lk_systemctl_enable mysqld
+    lk_is_true MINIMAL || lk_systemctl_enable mysqld
 
     LK_CONF_OPTION_FILE=/etc/php/php.ini
     for PHP_EXT in bcmath curl exif gd gettext iconv imap intl mysqli pdo_sqlite soap sqlite3 xmlrpc zip; do
@@ -245,7 +245,7 @@ EOF
             lk_php_set_option "php_flag[display_errors]" "Off"
             lk_php_set_option "php_flag[display_startup_errors]" "Off"
         }
-    lk_is_true "$MINIMAL" || lk_systemctl_enable php-fpm
+    lk_is_true MINIMAL || lk_systemctl_enable php-fpm
 
     LK_CONF_OPTION_FILE="/etc/httpd/conf/httpd.conf"
     sudo install -d -m 00755 -o "$USER" -g "$(id -gn)" "/srv/http"
@@ -265,7 +265,7 @@ EOF
     lk_httpd_enable_option LoadModule "vhost_alias_module modules/mod_vhost_alias.so"
     sudo usermod --append --groups "http" "$USER"
     sudo usermod --append --groups "$(id -gn)" "http"
-    lk_is_true "$MINIMAL" || lk_systemctl_enable httpd
+    lk_is_true MINIMAL || lk_systemctl_enable httpd
 
     unset LK_SUDO
 

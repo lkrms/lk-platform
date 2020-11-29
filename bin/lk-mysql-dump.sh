@@ -84,7 +84,7 @@ done
     ): \"${INVALID_DB_NAME//$'\n'/$'", "'}\"" ||
     lk_usage
 
-lk_is_true "$EXCLUDE_MODE" &&
+lk_is_true EXCLUDE_MODE &&
     DB_EXCLUDE+=("$@") ||
     DB_INCLUDE+=("$@")
 
@@ -156,7 +156,7 @@ DEST_MODE=00600
 for DB_NAME in "${DB_INCLUDE[@]}"; do
     lk_console_item "Dumping database:" "$DB_NAME"
     FILE=$DEST/$DB_NAME
-    lk_is_true "$NO_TIMESTAMP" ||
+    lk_is_true NO_TIMESTAMP ||
         FILE=$FILE-${TIMESTAMP:-$(lk_date "%Y-%m-%d-%H%M%S")}
     FILE=$FILE.sql.gz
     lk_console_detail "Backup file:" "$FILE"

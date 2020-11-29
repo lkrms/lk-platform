@@ -10,7 +10,7 @@ function lk_git_is_in_work_tree() {
     local RESULT
     RESULT=$(cd "${1:-.}" &&
         git rev-parse --is-inside-work-tree 2>/dev/null) &&
-        lk_is_true "$RESULT"
+        lk_is_true RESULT
 }
 
 # lk_git_get_repos ARRAY [DIR...]
@@ -60,7 +60,7 @@ repositories simultaneously." || return
     lk_git_quiet ||
         lk_echo_array REPOS | lk_console_detail_list "Repositories:" repo repos
     lk_git_quiet || lk_confirm "Proceed?" Y || return
-    if lk_is_true "${PARALLEL:-}"; then
+    if lk_is_true PARALLEL; then
         for REPO in "${REPOS[@]}"; do
             (
                 exec 2>&4

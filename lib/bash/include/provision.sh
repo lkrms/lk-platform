@@ -376,11 +376,11 @@ function _lk_node_ip() {
         sed -E 's/%[^/]+\//\//') || return
     {
         grep -Ev "^$(lk_regex_implode "${PRIVATE[@]}")" <<<"$IP" || true
-        lk_is_true "${LK_IP_PUBLIC_ONLY:-}" ||
+        lk_is_true LK_IP_PUBLIC_ONLY ||
             for i in "${PRIVATE[@]}"; do
                 grep -E "^$i" <<<"$IP" || true
             done
-    } | if lk_is_true "${LK_IP_KEEP_PREFIX:-}"; then
+    } | if lk_is_true LK_IP_KEEP_PREFIX; then
         cat
     else
         sed -E 's/\/[0-9]+$//'
@@ -609,8 +609,8 @@ function lk_certbot_install() {
                 "Domain does not resolve to this system:" "$DOMAIN" ||
             DOMAINS_OK=0
     done
-    lk_is_true "${DOMAINS_OK:-1}" ||
-        lk_is_true "${LK_LETSENCRYPT_IGNORE_DNS:-}" ||
+    ! lk_is_false DOMAINS_OK ||
+        lk_is_true LK_LETSENCRYPT_IGNORE_DNS ||
         lk_confirm "Ignore domain resolution errors?" N || return
     lk_elevate certbot run \
         --non-interactive \
@@ -710,7 +710,7 @@ Usage: $(lk_myself -f) [-p] FILE SETTING CHECK_REGEX [REPLACE_REGEX...]" || retu
     lk_maybe_sudo test -f "$FILE" || lk_warn "file not found: $FILE" || return
     _FILE=$(lk_maybe_sudo cat "$FILE" && printf '.') &&
         _FILE=${_FILE%.} || return
-    lk_is_true "${PRESERVE+1}" ||
+    [ "${PRESERVE+1}" = 1 ] ||
         REPLACE_WITH=$(lk_escape_ere_replace "$SETTING")
     shift 3
     for REGEX in "$@"; do

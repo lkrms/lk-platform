@@ -172,7 +172,7 @@ function lk_get_env() {
     VAR=$(env -i bash -c "$SH" bash "$1") && echo "${VAR%.}"
 }
 
-if ! lk_is_true "${LK_NO_SOURCE_FILE:-0}"; then
+if ! lk_is_true LK_NO_SOURCE_FILE; then
     function _lk_elevate() {
         if [ $# -gt 0 ]; then
             sudo -H "$@"

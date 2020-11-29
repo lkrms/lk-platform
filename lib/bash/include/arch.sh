@@ -84,7 +84,7 @@ EOF
 
 function _lk_pacman_sync() {
     if { lk_is_root || lk_can_sudo pacman; } &&
-        lk_is_true "${LK_PACMAN_SYNC:-1}"; then
+        ! lk_is_false LK_PACMAN_SYNC; then
         lk_elevate pacman -Sy || return
         LK_PACMAN_SYNC=0
     fi

@@ -76,7 +76,7 @@ PASSWORDS=()
 
 for DATABASE_FILE in "$@"; do
     DATABASE_FILE=$(realpath "$DATABASE_FILE")
-    if lk_is_true "$RESET_PASSWORD"; then
+    if lk_is_true RESET_PASSWORD; then
         lk_remove_secret "$DATABASE_FILE"
     fi
     PASSWORD="$(lk_secret "$DATABASE_FILE" "KeePassXC password for ${DATABASE_FILE##*/}")" ||
@@ -89,7 +89,7 @@ done
 [ ${#PASSWORDS[@]} -gt 0 ] ||
     lk_die "no database to open"
 
-if lk_is_true "$REGISTER"; then
+if lk_is_true REGISTER; then
     if lk_is_macos; then
         function plist() {
             defaults write "$PLIST" "$@"
@@ -109,10 +109,10 @@ if lk_is_true "$REGISTER"; then
     exit
 fi
 
-! lk_is_true "$CHECK_HAS_PASSWORD" ||
+! lk_is_true CHECK_HAS_PASSWORD ||
     exit 0
 
-if lk_is_true "$DAEMON"; then
+if lk_is_true DAEMON; then
     exec "$KEEPASSXC" \
         --pw-stdin "${DATABASES[@]}"
 else

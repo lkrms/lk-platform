@@ -125,7 +125,7 @@ lk_console_detail "[local] Destination:" "$LOCAL_PATH"
 [ -z "$RENAME" ] ||
     lk_console_detail "Local site address:" "$RENAME"
 lk_console_detail "Copy remote SSL certificate:" \
-    "$(lk_is_true "$SSL" && echo "yes" || echo "no")"
+    "$(lk_is_true SSL && echo "yes" || echo "no")"
 lk_console_detail "Local WP-Cron:" "$(
     [ "$MAINTENANCE" = indefinite ] &&
         echo "enable" ||
@@ -175,7 +175,7 @@ LK_NO_INPUT=1 \
         lk_wp_rename_site "$RENAME"
 lk_wp_flush
 
-if lk_is_true "$SSL"; then
+if lk_is_true SSL; then
     SITE_ADDR=$(lk_wp_get_site_address) &&
         [[ $SITE_ADDR =~ ^https?://(www\.)?(.*) ]] &&
         lk_cpanel_get_ssl_cert "$SSH_HOST" "${BASH_REMATCH[2]}"

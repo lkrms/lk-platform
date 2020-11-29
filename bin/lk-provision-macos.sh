@@ -329,7 +329,7 @@ EOF
     lk_console_message "Checking Homebrew packages"
     UPGRADE_FORMULAE=()
     UPGRADE_CASKS=()
-    lk_is_true "$NEW_HOMEBREW" || {
+    lk_is_true NEW_HOMEBREW || {
         OUTDATED=$(brew outdated --json=v2)
         UPGRADE_FORMULAE=($(jq -r ".formulae[].name" <<<"$OUTDATED"))
         [ ${#UPGRADE_FORMULAE[@]} -eq 0 ] || {

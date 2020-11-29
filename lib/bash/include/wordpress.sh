@@ -112,7 +112,7 @@ function lk_wp_rename_site() {
     lk_wp_quiet || lk_confirm "Proceed?" Y || return
     lk_wp option update home "$NEW_URL" &&
         lk_wp option update siteurl "$NEW_SITE_URL" || return
-    if lk_is_true "${LK_WP_REPLACE:-}" || { [ -z "${LK_WP_REPLACE:-}" ] &&
+    if lk_is_true LK_WP_REPLACE || { [ -z "${LK_WP_REPLACE:-}" ] &&
         lk_confirm "Replace the previous URL in all tables?" Y; }; then
         lk_console_message "Performing WordPress search/replace"
         REPLACE=(
@@ -139,7 +139,7 @@ function lk_wp_rename_site() {
                 lk_wp_json_encode "${NEW_URL#http*:}"
             )"
         )
-        ! lk_is_true "${LK_WP_REPLACE_WITHOUT_SCHEME:-0}" ||
+        ! lk_is_true LK_WP_REPLACE_WITHOUT_SCHEME ||
             REPLACE+=(
                 "${OLD_URL#http*://}$DELIM${NEW_URL#http*://}"
                 "$(
@@ -156,7 +156,7 @@ function lk_wp_rename_site() {
             _lk_wp_replace "${s[@]}" || return
         done
     fi
-    if lk_is_true "${LK_WP_FLUSH:-}" ||
+    if lk_is_true LK_WP_FLUSH ||
         { [ -z "${LK_WP_FLUSH:-}" ] && lk_confirm "\
 OK to flush rewrite rules, caches and transients? \
 Plugin code will be allowed to run." Y; }; then

@@ -47,7 +47,7 @@ function lk_mysql() {
     if [ -n "${LK_MY_CNF:-}" ]; then
         [ -f "$LK_MY_CNF" ] || lk_warn "file not found: $LK_MY_CNF" || return
         "${LK_MYSQL_COMMAND:-mysql}" --defaults-file="$LK_MY_CNF" "$@"
-    elif lk_is_root || lk_is_true "${LK_MYSQL_ELEVATE:-}"; then
+    elif lk_is_root || lk_is_true LK_MYSQL_ELEVATE; then
         lk_elevate "${LK_MYSQL_COMMAND:-mysql}" \
             --no-defaults \
             --user="${LK_MYSQL_ELEVATE_USER:-root}" \
@@ -121,7 +121,7 @@ Usage: $(lk_myself -f) DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
             eval "exec $OUTPUT_FD>&1 >\"\$OUTPUT_FILE\"" || return
     }
     INNODB_ONLY=$(lk_mysql_innodb_only "$DB_NAME") || return
-    if lk_is_true "$INNODB_ONLY"; then
+    if lk_is_true INNODB_ONLY; then
         DUMP_ARGS=(
             --single-transaction
             --skip-lock-tables
@@ -137,7 +137,7 @@ Usage: $(lk_myself -f) DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
         lk_console_item "Dumping database:" "$DB_NAME"
         lk_console_detail "Host:" "$DB_HOST"
     }
-    { lk_mysql_quiet && lk_is_true "$INNODB_ONLY"; } || {
+    { lk_mysql_quiet && lk_is_true INNODB_ONLY; } || {
         lk_console_detail "InnoDB only?" \
             "${ARG_COLOUR+$ARG_COLOUR}$INNODB_ONLY${ARG_COLOUR+$LK_RESET}"
         lk_console_detail "mysqldump arguments:" \

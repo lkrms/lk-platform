@@ -230,8 +230,8 @@ vfat)
     ;;&
 
 vfat | "")
-    if lk_is_false "$KEEP_BOOT_PARTITION"; then
-        lk_is_true "$REPARTITIONED" ||
+    if lk_is_false KEEP_BOOT_PARTITION; then
+        lk_is_true REPARTITIONED ||
             lk_confirm "OK to format $BOOT_PARTITION as FAT32?"
 
         lk_console_message "Formatting $BOOT_PARTITION"
@@ -248,7 +248,7 @@ esac
 [ -z "$ROOT_PARTITION_TYPE" ] ||
     lk_console_warning0 "Unexpected filesystem at $ROOT_PARTITION: $ROOT_PARTITION_TYPE"
 
-lk_is_true "$REPARTITIONED" ||
+lk_is_true REPARTITIONED ||
     lk_confirm "OK to format $ROOT_PARTITION as ext4?" || exit
 
 lk_console_message "Formatting $ROOT_PARTITION"
@@ -263,7 +263,7 @@ mount -o "$BOOTSTRAP_MOUNT_OPTIONS${ROOT_OPTION_EXTRA:-}" "$ROOT_PARTITION" /mnt
     mkdir /mnt/boot &&
     mount -o "$BOOTSTRAP_MOUNT_OPTIONS${BOOT_OPTION_EXTRA:-}" "$BOOT_PARTITION" /mnt/boot || exit
 
-lk_is_false "$KEEP_BOOT_PARTITION" || {
+lk_is_false KEEP_BOOT_PARTITION || {
     lk_console_message "Checking for files from previous installations in boot filesystem"
     rm -Rfv /mnt/boot/syslinux /mnt/boot/intel-ucode.img
 }
@@ -479,7 +479,7 @@ for PARTITION in ${OTHER_OS_PARTITIONS[@]+"${OTHER_OS_PARTITIONS[@]}"}; do
     ((++i))
 done
 
-! lk_is_true "$KEEP_BOOT_PARTITION" || {
+! lk_is_true KEEP_BOOT_PARTITION || {
     lk_console_warning0 "\
 If installing to a boot partition created by Windows, filesystem damage
 may cause efibootmgr to fail with 'Input/output error'"
@@ -520,7 +520,7 @@ while :; do
     lk_confirm "Try again?" Y || break
 done
 
-if ! lk_is_true "${GRUB_INSTALLED:-0}"; then
+if ! lk_is_true GRUB_INSTALLED; then
     lk_console_message "To install the boot loader manually:" \
         'arch-chroot /mnt update-grub --install'
 fi
