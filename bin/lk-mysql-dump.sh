@@ -91,7 +91,7 @@ lk_is_true EXCLUDE_MODE &&
 EXIT_STATUS=0
 
 LK_MYSQL_QUIET=1
-LK_CONSOLE_NO_FOLD=1
+LK_TTY_NO_FOLD=1
 
 lk_log_output
 

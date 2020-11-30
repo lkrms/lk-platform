@@ -114,7 +114,7 @@ if lk_wp plugin is-active woocommerce; then
     lk_console_detail "Active WooCommerce webhooks will be deleted"
 fi
 [ "${PLUGIN_CODE:-0}" -eq 0 ] ||
-    lk_console_warning0 "Plugin code will be allowed to run where necessary"
+    lk_console_warning "Plugin code will be allowed to run where necessary"
 
 lk_confirm "Proceed?" Y || lk_die
 
@@ -181,7 +181,7 @@ if lk_wp plugin is-active woocommerce; then
         TO_DEACTIVATE=($(
             wp wc webhook list --user=1 --field=id --status=active
         )) || {
-            lk_console_error0 "Command failed with exit status $?:" \
+            lk_console_error "Command failed with exit status $?:" \
                 "wp wc webhook list --user=1 --field=id --status=active"
             TO_DEACTIVATE=()
         }

@@ -113,7 +113,7 @@
             "${USER:0:4}$(lk_repeat 1 $((2 - ${#USER})))-")"
         while [[ ! $LK_PATH_PREFIX =~ ^[a-zA-Z0-9]{2,4}-$ ]]; do
             [ -z "$LK_PATH_PREFIX" ] ||
-                lk_console_error0 "Invalid LK_PATH_PREFIX:" "$LK_PATH_PREFIX"
+                lk_console_error "Invalid LK_PATH_PREFIX:" "$LK_PATH_PREFIX"
             LK_PATH_PREFIX=$(lk_console_read "LK_PATH_PREFIX:")
         done
     }
@@ -235,7 +235,7 @@
                     restart_script "$@"
                 fi
             else
-                lk_console_warning0 "Unable to retrieve changes from upstream"
+                lk_console_warning "Unable to retrieve changes from upstream"
             fi
         fi
         lk_console_detail "Resetting file permissions"

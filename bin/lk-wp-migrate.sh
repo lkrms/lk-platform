@@ -185,7 +185,7 @@ if [ "$MAINTENANCE" = indefinite ]; then
     lk_console_warning "Enabling WP-Cron (remote site offline)"
     lk_wp_enable_system_cron
 else
-    lk_console_warning0 "Disabling WP-Cron (remote site online)"
+    lk_console_warning "Disabling WP-Cron (remote site online)"
     lk_wp_disable_cron
 fi
 

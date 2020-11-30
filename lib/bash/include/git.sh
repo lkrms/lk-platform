@@ -56,7 +56,7 @@ repositories simultaneously." || return
     [ ${#REPOS[@]} -gt 0 ] || lk_warn "no repos found" || return
     lk_resolve_files REPOS || return
     lk_git_quiet ||
-        LK_CONSOLE_NO_FOLD=1 lk_console_detail "Command:" "${REPO_COMMAND[*]}"
+        LK_TTY_NO_FOLD=1 lk_console_detail "Command:" "${REPO_COMMAND[*]}"
     lk_git_quiet ||
         lk_echo_array REPOS | lk_console_detail_list "Repositories:" repo repos
     lk_git_quiet || lk_confirm "Proceed?" Y || return
@@ -74,11 +74,11 @@ repositories simultaneously." || return
                     {
                         lk_console_item "Processed:" "$REPO"
                         [ -z "$_STDOUT" ] ||
-                            LK_CONSOLE_SECONDARY_COLOUR=$LK_GREEN \
+                            LK_TTY_COLOUR2=$LK_GREEN \
                                 lk_console_detail "Output:" \
                                 $'\n'"$_STDOUT"
                         [ -z "$_STDERR" ] ||
-                            LK_CONSOLE_SECONDARY_COLOUR=$LK_RED \
+                            LK_TTY_COLOUR2=$LK_RED \
                                 lk_console_detail "Error output:" \
                                 $'\n'"$_STDERR"
                         [ "$EXIT_STATUS" -eq 0 ] ||
@@ -103,10 +103,10 @@ repositories simultaneously." || return
     fi
     lk_git_quiet || {
         [ "$ERROR_COUNT" -eq 0 ] &&
-            LK_CONSOLE_NO_FOLD=1 lk_console_success "${REPO_COMMAND[*]}" \
+            LK_TTY_NO_FOLD=1 lk_console_success "${REPO_COMMAND[*]}" \
                 "executed without error in ${#REPOS[@]} $(lk_maybe_plural \
                     ${#REPOS[@]} repository repositories)" ||
-            LK_CONSOLE_NO_FOLD=1 lk_console_error0 "${REPO_COMMAND[*]}" \
+            LK_TTY_NO_FOLD=1 lk_console_error "${REPO_COMMAND[*]}" \
                 "failed in $ERROR_COUNT of ${#REPOS[@]} $(lk_maybe_plural \
                     ${#REPOS[@]} repository repositories)"
     }

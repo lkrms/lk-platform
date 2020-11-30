@@ -204,7 +204,7 @@ fi
 TARGET_SSH_KEY="${TARGET_SSH_KEY:-}"
 if [ -z "$TARGET_SSH_KEY" ]; then
     TARGET_SSH_KEY="$(lk_console_read "Authorised SSH key for $TARGET_USERNAME:")"
-    [ -n "$TARGET_SSH_KEY" ] || lk_console_warning0 "SSH will not be configured (no key provided)"
+    [ -n "$TARGET_SSH_KEY" ] || lk_console_warning "SSH will not be configured (no key provided)"
 fi
 
 GRUB_CMDLINE="${GRUB_CMDLINE:-}"
@@ -246,7 +246,7 @@ vfat | "")
 esac
 
 [ -z "$ROOT_PARTITION_TYPE" ] ||
-    lk_console_warning0 "Unexpected filesystem at $ROOT_PARTITION: $ROOT_PARTITION_TYPE"
+    lk_console_warning "Unexpected filesystem at $ROOT_PARTITION: $ROOT_PARTITION_TYPE"
 
 lk_is_true REPARTITIONED ||
     lk_confirm "OK to format $ROOT_PARTITION as ext4?" || exit
@@ -475,12 +475,12 @@ i=0
 for PARTITION in ${OTHER_OS_PARTITIONS[@]+"${OTHER_OS_PARTITIONS[@]}"}; do
     MOUNT_DIR="/mnt/mnt/temp$i"
     mkdir -p "$MOUNT_DIR" &&
-        mount "$PARTITION" "$MOUNT_DIR" || lk_console_warning0 "unable to mount partition $PARTITION"
+        mount "$PARTITION" "$MOUNT_DIR" || lk_console_warning "unable to mount partition $PARTITION"
     ((++i))
 done
 
 ! lk_is_true KEEP_BOOT_PARTITION || {
-    lk_console_warning0 "\
+    lk_console_warning "\
 If installing to a boot partition created by Windows, filesystem damage
 may cause efibootmgr to fail with 'Input/output error'"
     ! lk_confirm "Run 'dosfsck -a $BOOT_PARTITION' before installing boot loader?" Y || {

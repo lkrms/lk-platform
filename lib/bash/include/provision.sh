@@ -605,7 +605,7 @@ function lk_certbot_install() {
     for DOMAIN in "$@"; do
         lk_node_is_host "$DOMAIN" &&
             lk_console_log "Domain resolves to this system:" "$DOMAIN" ||
-            lk_console_warning \
+            lk_console_warning -r \
                 "Domain does not resolve to this system:" "$DOMAIN" ||
             DOMAINS_OK=0
     done
@@ -629,7 +629,7 @@ function lk_certbot_install() {
 # shellcheck disable=SC2034
 function lk_cpanel_get_ssl_cert() {
     local TARGET_DIR=${3:-~/ssl} SSL_JSON CERT KEY TARGET_REL \
-        LK_CONSOLE_NO_FOLD=1 LK_BACKUP_SUFFIX
+        LK_TTY_NO_FOLD=1 LK_BACKUP_SUFFIX
     LK_BACKUP_SUFFIX=-$(lk_timestamp).bak
     [ $# -ge 2 ] && lk_is_fqdn "$2" || lk_usage "\
 Usage: $(lk_myself -f) SSH_HOST DOMAIN [TARGET_DIR]

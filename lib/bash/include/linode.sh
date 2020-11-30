@@ -120,7 +120,7 @@ function lk_linode_ssh_add() {
         eval "LABEL=${1:-}"
         LABEL=${LABEL:-${LINODE_LABEL%%.*}}
         eval "USERNAME=${2:-}"
-        LK_CONSOLE_NO_FOLD=1 \
+        LK_TTY_NO_FOLD=1 \
             lk_console_detail "Adding SSH host:" \
             $'\n'"${LK_SSH_PREFIX-$LK_PATH_PREFIX}$LABEL ($(lk_implode_args \
                 " + " \
@@ -285,7 +285,7 @@ function lk_linode_dns_check() {
             <(lk_echo_array NEW_RECORDS | sort) \
             <(sort <<<"$RECORDS"))
         [ -z "$RECORDS" ] ||
-            lk_console_warning0 "No matching Linode:" "$RECORDS"
+            lk_console_warning "No matching Linode:" "$RECORDS"
     }
 }
 

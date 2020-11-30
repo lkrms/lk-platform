@@ -104,7 +104,7 @@ lk_log_output
             -exec test -e '{}/.finished' \; \
             ! -exec test -e '{}/.pruning' \;
         [ "$SNAPSHOTS_CLEAN_COUNT" -gt 0 ] ||
-            lk_console_warning "Skipping $SOURCE_NAME (no clean snapshots)" ||
+            lk_console_warning -r "Skipping $SOURCE_NAME (no clean snapshots)" ||
             continue
         LATEST_CLEAN=$(snapshot_date "${SNAPSHOTS_CLEAN[0]}")
         OLDEST_CLEAN=$(snapshot_date \

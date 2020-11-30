@@ -1,5 +1,6 @@
 #!/bin/bash
-# shellcheck disable=SC1090,SC2001,SC2034,SC2207
+
+# shellcheck disable=SC1090,SC2001,SC2015,SC2034,SC2207
 
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
 LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(
@@ -16,15 +17,15 @@ lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (return $s) && false || exit; }
 [[ $- != *s* ]] || lk_die "cannot run from standard input"
 
 function exit_trap() {
-    local LOG_PATH
+    local _LOG_FILE=$_LK_LOG_FILE LOG_FILE
     if lk_log_close &&
-        LOG_PATH=$(lk_log_create_file) &&
-        [ "$LOG_PATH" != "$_LK_LOG_FILE" ]; then
-        lk_console_log "Moving:" "$_LK_LOG_FILE -> $LOG_PATH"
-        cat "$_LK_LOG_FILE" >>"$LOG_PATH" &&
-            rm "$_LK_LOG_FILE" ||
-            lk_console_warning0 \
-                "Error moving provisioning log entries to" "$LOG_PATH"
+        LOG_FILE=$(lk_log_create_file) &&
+        [ "$LOG_FILE" != "$_LOG_FILE" ]; then
+        lk_console_log "Moving:" "$_LOG_FILE -> $LOG_FILE"
+        cat "$_LOG_FILE" >>"$LOG_FILE" &&
+            rm "$_LOG_FILE" ||
+            lk_console_warning \
+                "Error moving provisioning log entries to" "$LOG_FILE"
     fi
 }
 
@@ -470,7 +471,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
                     APP_NAMES+=("$APP_NAME")
                     continue
                 fi
-                lk_console_warning0 "Unknown App ID:" "$APP_ID"
+                lk_console_warning "Unknown App ID:" "$APP_ID"
                 unset "INSTALL_APPS[$i]"
             done
             if [ ${#INSTALL_APPS[@]} -gt 0 ]; then

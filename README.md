@@ -10,7 +10,6 @@ The following variables can be set in `/etc/default/lk-platform` or
 - `LK_ADD_TO_PATH`
 - `LK_ADD_TO_PATH_FIRST`
 - `LK_ADMIN_EMAIL`
-- `LK_ADMIN_USERS`
 - `LK_APT_REMOVE_COMMAND`
 - `LK_APT_REMOVE_MESSAGE`
 - `LK_ARCH_CHROOT_DIR`
@@ -36,15 +35,6 @@ The following variables can be set in `/etc/default/lk-platform` or
 - `LK_CLIP_LINES`
 - `LK_COLOUR`
 - `LK_COMPLETION`
-- `LK_CONSOLE_COLOUR`
-- `LK_CONSOLE_COLOUR2`
-- `LK_CONSOLE_INDENT`
-- `LK_CONSOLE_MESSAGE_COLOUR`
-- `LK_CONSOLE_NO_FOLD`
-- `LK_CONSOLE_PREFIX`
-- `LK_CONSOLE_PREFIX_COLOUR`
-- `LK_CONSOLE_SECONDARY_COLOUR`
-- `LK_CONSOLE_SPACES`
 - `LK_DEBUG`
 - `LK_DEFAULTS_DIR`
 - `LK_DIE_PREFIX`
@@ -56,20 +46,13 @@ The following variables can be set in `/etc/default/lk-platform` or
 - `LK_DIR_MODE`
 - `LK_EMAIL_BLACKHOLE`
 - `LK_ESCAPE`
-- `LK_EXIT_DELETE`
-- `LK_EXPAND_PATHS_GLOBSTAR`
-- `LK_EXPAND_QUOTE`
-- `LK_EXPAND_VARS`
-- `LK_EXPAND_WHITESPACE`
+- `LK_EXPAND_KEYS`
 - `LK_FILE_MODE`
 - `LK_FORCE_INPUT`
 - `LK_GIT_QUIET`
 - `LK_GIT_REF`
 - `LK_GIT_REPOS`
 - `LK_HOMES`
-- `LK_HOST_ACCOUNT`
-- `LK_HOST_DOMAIN`
-- `LK_HOST_SITE_ENABLE`
 - `LK_INNODB_BUFFER_SIZE`
 - `LK_INST`
 - `LK_IP_KEEP_PREFIX`
@@ -84,9 +67,7 @@ The following variables can be set in `/etc/default/lk-platform` or
 - `LK_LINODE_SSH_KEYS_FILE`
 - `LK_LOG_BASENAME`
 - `LK_LOG_DIR_MODE`
-- `LK_LOG_FILE_GROUP`
 - `LK_LOG_FILE_MODE`
-- `LK_LOG_FILE_OWNER`
 - `LK_MAIL_FROM`
 - `LK_MEDIAINFO_FORMAT`
 - `LK_MEDIAINFO_LABEL`
@@ -98,7 +79,6 @@ The following variables can be set in `/etc/default/lk-platform` or
 - `LK_MYSQL_ELEVATE`
 - `LK_MYSQL_ELEVATE_USER`
 - `LK_MYSQL_HOST`
-- `LK_MYSQL_PASSWORD`
 - `LK_MYSQL_QUIET`
 - `LK_MYSQL_USERNAME`
 - `LK_NODE_FQDN`
@@ -117,7 +97,6 @@ The following variables can be set in `/etc/default/lk-platform` or
 - `LK_OPENCONNECT_PROTOCOL`
 - `LK_PACKAGES_FILE`
 - `LK_PACMAN_CONF`
-- `LK_PACMAN_SYNC`
 - `LK_PATH_PREFIX`
 - `LK_PATH_PREFIX_ALPHA`
 - `LK_PHP_ADMIN_SETTINGS`
@@ -127,7 +106,6 @@ The following variables can be set in `/etc/default/lk-platform` or
 - `LK_PROMPT_DISPLAYED`
 - `LK_PROMPT_LAST_COMMAND`
 - `LK_PROMPT_LAST_COMMAND_CLEAN`
-- `LK_PROVISION_BOOTSTRAP`
 - `LK_RED`
 - `LK_REJECT_OUTPUT`
 - `LK_REQUIRED`
@@ -135,8 +113,6 @@ The following variables can be set in `/etc/default/lk-platform` or
 - `LK_SCRIPT_DEBUG`
 - `LK_SECONDARY_LOG_FILE`
 - `LK_SETTINGS_FILES`
-- `LK_SHUTDOWN_ACTION`
-- `LK_SHUTDOWN_DELAY`
 - `LK_SKIP`
 - `LK_SMTP_RELAY`
 - `LK_SNAPSHOT_PRUNE_DAILY_AFTER`
@@ -152,10 +128,18 @@ The following variables can be set in `/etc/default/lk-platform` or
 - `LK_SSH_TRUSTED_ONLY`
 - `LK_SUDO`
 - `LK_TRUSTED_IP_ADDRESSES`
+- `LK_TTY_COLOUR`
+- `LK_TTY_COLOUR2`
+- `LK_TTY_INDENT`
+- `LK_TTY_MESSAGE_COLOUR`
+- `LK_TTY_NO_FOLD`
+- `LK_TTY_PREFIX`
+- `LK_TTY_PREFIX_COLOUR`
+- `LK_TTY_SPACES`
+- `LK_TTY_WIDTH`
 - `LK_USAGE`
 - `LK_VALIDATE_FIELD_NAME`
 - `LK_VALIDATE_STATUS`
-- `LK_VAR_PREFIX`
 - `LK_VERBOSE`
 - `LK_VERSION`
 - `LK_WP_FLUSH`
@@ -172,6 +156,7 @@ The following variables can be set in `/etc/default/lk-platform` or
 To re-generate the list above:
 
 ```bash
-find "$LK_BASE" ! \( -type d -name .git -prune \) -type f -print0 |
-    xargs -0 grep -Pho '(?<=\$\{)LK_[a-zA-Z0-9_]+' | sort -u
+find "$LK_BASE" ! \( -type d -name .git -prune \) \
+    -type f ! -name README.md -print0 |
+    xargs -0 grep -Pho '((?<=\$\{)|(?<=lk_is_true )|(?<=lk_is_false ))LK_[a-zA-Z0-9_]+' | sort -u
 ```

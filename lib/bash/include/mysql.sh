@@ -156,12 +156,12 @@ Usage: $(lk_myself -f) DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
         lk_console_message "Deleting mysqldump configuration file"
         rm -f "$LK_MY_CNF" &&
             lk_console_detail "Deleted" "$LK_MY_CNF" ||
-            lk_console_warning0 "Error deleting" "$LK_MY_CNF"
+            lk_console_warning "Error deleting" "$LK_MY_CNF"
     }
     lk_mysql_quiet || {
         [ "$EXIT_STATUS" -eq 0 ] &&
             lk_console_success "Database dump completed successfully" ||
-            lk_console_error0 "Database dump failed"
+            lk_console_error "Database dump failed"
     }
     return "$EXIT_STATUS"
 }
@@ -205,9 +205,9 @@ exit \${PIPESTATUS[0]}' bash $(printf '%q' "$DB_NAME")" |
     lk_console_message "Deleting mysqldump configuration file"
     ssh "$SSH_HOST" "bash -c 'rm -f .lk_mysqldump.cnf'" &&
         lk_console_detail "Deleted" "$SSH_HOST:.lk_mysqldump.cnf" ||
-        lk_console_warning0 "Error deleting" "$SSH_HOST:.lk_mysqldump.cnf"
+        lk_console_warning "Error deleting" "$SSH_HOST:.lk_mysqldump.cnf"
     [ "$EXIT_STATUS" -eq 0 ] &&
         lk_console_success "Database dump completed successfully" ||
-        lk_console_error0 "Database dump failed"
+        lk_console_error "Database dump failed"
     return "$EXIT_STATUS"
 }

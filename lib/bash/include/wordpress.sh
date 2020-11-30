@@ -376,7 +376,7 @@ Proceed?" Y || return
     else
         lk_log_bypass_stderr pv "$1"
     fi | lk_mysql "$LOCAL_DB_NAME" ||
-        lk_console_error "Restore operation failed" || return
+        lk_console_error -r "Restore operation failed" || return
     lk_console_success "Database restored successfully"
 }
 
@@ -425,7 +425,7 @@ function lk_wp_sync_files_from_remote() {
     rsync "${ARGS[@]}" || EXIT_STATUS="$?"
     [ "$EXIT_STATUS" -eq 0 ] &&
         lk_console_success "File sync completed successfully" ||
-        lk_console_error0 "File sync failed"
+        lk_console_error "File sync failed"
     return "$EXIT_STATUS"
 }
 
@@ -513,7 +513,7 @@ function lk_wp_set_permissions() {
         lk_console_detail "Changes:" "$CHANGES"
         lk_console_log "Changes have been logged to" "$LOG_FILE"
     else
-        lk_console_warning0 "Unable to set owner (not running as root)"
+        lk_console_warning "Unable to set owner (not running as root)"
     fi
     lk_dir_set_modes "$SITE_ROOT" \
         "" \

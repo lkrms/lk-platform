@@ -69,7 +69,7 @@ function lk_exit_trap() {
     local EXIT_STATUS=$? i
     [ "$EXIT_STATUS" -eq 0 ] ||
         [[ ${FUNCNAME[1]:-} =~ ^_?lk_(die|usage|elevate)$ ]] ||
-        lk_console_error0 \
+        lk_console_error \
             "$(_lk_caller "${_LK_ERR_TRAP_CONTEXT:-}"): unhandled error"
     for i in ${_LK_EXIT_DELETE[@]+"${_LK_EXIT_DELETE[@]}"}; do
         rm -Rf -- "$i" || true
@@ -88,7 +88,7 @@ function lk_delete_on_exit() {
 function lk_usage() {
     local EXIT_STATUS=$? MESSAGE=${1:-${LK_USAGE:-}}
     [ -z "$MESSAGE" ] || MESSAGE=$(_lk_usage_format "$MESSAGE")
-    LK_CONSOLE_NO_FOLD=1 \
+    LK_TTY_NO_FOLD=1 \
         lk_console_log "${MESSAGE:-$(_lk_caller): invalid arguments}"
     exit "$EXIT_STATUS"
 }

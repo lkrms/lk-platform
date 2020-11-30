@@ -208,7 +208,7 @@ function _lk_usage_format() {
 function lk_usage() {
     local EXIT_STATUS=$? MESSAGE=${1:-${LK_USAGE:-}}
     [ -z "$MESSAGE" ] || MESSAGE=$(_lk_usage_format "$MESSAGE")
-    LK_CONSOLE_NO_FOLD=1 \
+    LK_TTY_NO_FOLD=1 \
         lk_console_log "${MESSAGE:-$(_lk_caller): invalid arguments}"
     return "$EXIT_STATUS"
 }
@@ -535,6 +535,10 @@ function lk_in_string() {
     [ "$(lk_replace "$1" "" "$2.")" != "$2." ]
 }
 
+function lk_has_newline() {
+    [ "${!1/$'\n'/}" != "${!1}" ]
+}
+
 # lk_expand_template [-q] [FILE]
 #
 # Output FILE or input with each {{KEY}} tag (or each {{KEY}} tag where KEY is
@@ -654,7 +658,7 @@ function lk_get_colours() {
 }
 
 function lk_maybe_bold() {
-    [[ ${1//"$LK_BOLD"/} != "$1" ]] ||
+    [[ ${1/"$LK_BOLD"/} != "$1" ]] ||
         echo "$LK_BOLD"
 }
 
@@ -888,21 +892,14 @@ function lk_is_fd_open() {
 }
 
 function lk_log() {
-    local IFS LINE
-    [ $# -eq 0 ] || {
-        IFS=$'\n'
-        LINE="$*"
-        printf '%s %s\n' "$(lk_date_log)" "${LINE//$'\n'/$'\n  '}"
-        return 0
-    }
+    local LINE
     while IFS= read -r LINE || [ -n "$LINE" ]; do
         printf '%s %s\n' "$(lk_date_log)" "$LINE"
     done
 }
 
 function lk_log_create_file() {
-    local OWNER="${LK_LOG_FILE_OWNER:-$UID}" GROUP="${LK_LOG_FILE_GROUP:-}" \
-        LOG_DIRS=() LOG_DIR LOG_PATH
+    local OWNER=$UID LOG_DIRS=() LOG_DIR LOG_PATH
     [ ! -d "${LK_INST:-$LK_BASE}" ] ||
         [ -z "$(ls -A "${LK_INST:-$LK_BASE}")" ] ||
         LOG_DIRS=("${LK_INST:-$LK_BASE}/var/log")
@@ -924,13 +921,13 @@ function lk_log_create_file() {
                     "$LOG_PATH" || continue
                 [ -w "$LOG_PATH" ] ||
                     lk_elevate chown \
-                        "$OWNER${GROUP:+:$GROUP}" \
+                        "$OWNER" \
                         "$LOG_PATH" || continue
             } 2>/dev/null
         else
             lk_elevate_if_error install \
                 -m "$(lk_pad_zero 5 "${LK_LOG_FILE_MODE:-0600}")" \
-                -o "$OWNER" ${GROUP:+-g "$GROUP"} \
+                -o "$OWNER" \
                 /dev/null "$LOG_PATH" 2>/dev/null || continue
         fi
         echo "$LOG_PATH"
@@ -943,7 +940,7 @@ function lk_log_create_file() {
 function lk_log_output() {
     local LOG_PATH DIR HEADER=() IFS
     ! lk_is_true LK_NO_LOG &&
-        [ -z "${_LK_LOG_FILE:-}" ] || return 0
+        ! lk_log_is_open || return 0
     [[ $- != *x* ]] || [ -n "${BASH_XTRACEFD:-}" ] || return 0
     if [ $# -ge 1 ]; then
         if LOG_PATH=$(lk_log_create_file); then
@@ -974,7 +971,7 @@ function lk_log_output() {
         printf '\n- %q' "${LK_ARGV[@]}"
     ))
     IFS=
-    lk_log "$LK_BOLD====> ${HEADER[*]}$LK_RESET" >>"$LOG_PATH" &&
+    echo "$LK_BOLD====> ${HEADER[*]}$LK_RESET" | lk_log >>"$LOG_PATH" &&
         _LK_LOG_OUT_FD=$(lk_next_fd) && eval "exec $_LK_LOG_OUT_FD>&1" &&
         _LK_LOG_ERR_FD=$(lk_next_fd) && eval "exec $_LK_LOG_ERR_FD>&2" &&
         exec > >(tee >(lk_log | { if [ -n "${LK_SECONDARY_LOG_FILE:-}" ]; then
@@ -990,7 +987,7 @@ function lk_log_output() {
 }
 
 function lk_log_is_open() {
-    [ "${_LK_LOG_OUT_FD:+1}${_LK_LOG_ERR_FD:+1}" = 11 ] &&
+    [ "${_LK_LOG_FILE:+1}${_LK_LOG_OUT_FD:+1}${_LK_LOG_ERR_FD:+1}" = 111 ] &&
         lk_is_fd_open "$_LK_LOG_OUT_FD" &&
         lk_is_fd_open "$_LK_LOG_ERR_FD"
 }
@@ -1026,22 +1023,17 @@ function lk_log_bypass_stderr() {
     fi
 }
 
-# lk_echoc [-neE] message [colour_sequence...]
+# lk_echoc [-n] [MESSAGE [COLOUR]]
 function lk_echoc() {
-    local ECHO_ARGS=() MESSAGE IFS COLOUR
-    while [[ ${1:-} =~ ^-[neE]+$ ]]; do
-        ECHO_ARGS+=("$1")
+    local NEWLINE MESSAGE
+    [ "${1:-}" != -n ] || {
+        NEWLINE=0
         shift
-    done
-    MESSAGE="${1:-}"
-    shift || true
-    if [ $# -gt 0 ] && [ -n "$LK_RESET" ]; then
-        IFS=
-        COLOUR="$*"
-        unset IFS
-        MESSAGE="$(lk_replace "$LK_RESET" "$LK_RESET$COLOUR" "$MESSAGE")"
-    fi
-    echo ${ECHO_ARGS[@]+"${ECHO_ARGS[@]}"} "${COLOUR:-}$MESSAGE$LK_RESET"
+    }
+    MESSAGE=${1:-}
+    [ $# -le 1 ] || [ -z "$LK_RESET" ] ||
+        MESSAGE=$2${MESSAGE//"$LK_RESET"/$LK_RESET$2}$LK_RESET
+    echo ${NEWLINE:+-n} "$MESSAGE"
 }
 
 function lk_readline_format() {
@@ -1080,6 +1072,8 @@ function lk_fold() {
     [ $# -gt 0 ] || lk_usage "\
 Usage: $(lk_myself -f) STRING [WIDTH]" || return
     STRING=$1
+    ! lk_command_exists expand ||
+        STRING=$(expand <<<"$STRING") || return
     eval "$(lk_get_regex NON_PRINTING_REGEX)"
     REGEX=$'^([^\x1b\x01]*)'"(($NON_PRINTING_REGEX)+)(.*)"
     while [[ $STRING =~ $REGEX ]]; do
@@ -1105,6 +1099,8 @@ Usage: $(lk_myself -f) STRING [WIDTH]" || return
             [ ${#LINE_TEXT} -le "$WIDTH" ] ||
                 [ "${BASH_REMATCH[2]}" = "$LINE_TEXT" ] ||
                 {
+                    # If this line only exceeds WIDTH because of trailing
+                    # whitespace, trim the excess
                     [[ ! $_LINE_TEXT =~ ^.{$WIDTH}([[:space:]]+)$ ]] ||
                         LINE=${LINE%${BASH_REMATCH[1]}}
                     STRING=$STRING$LINE$'\n'
@@ -1115,7 +1111,7 @@ Usage: $(lk_myself -f) STRING [WIDTH]" || return
             LINE_TEXT=$LINE_TEXT${BASH_REMATCH[3]}
             LINE=$LINE${BASH_REMATCH[1]}
             PART=${BASH_REMATCH[4]}
-            if [ "${BASH_REMATCH[3]//$'\n'/}" != "${BASH_REMATCH[3]}" ]; then
+            if lk_has_newline "BASH_REMATCH[3]"; then
                 STRING=$STRING${LINE%$'\n'*}$'\n'
                 LINE_TEXT=${LINE_TEXT##*$'\n'}
                 LINE=$LINE_TEXT
@@ -1127,7 +1123,7 @@ Usage: $(lk_myself -f) STRING [WIDTH]" || return
     echo "${STRING%$'\n'}"$'\n'
 }
 
-function lk_output_length() {
+function lk_tty_length() {
     local STRING
     STRING=$(lk_strip_non_printing "$1.")
     STRING=${STRING%.}
@@ -1138,74 +1134,95 @@ function lk_console_blank() {
     echo >&"${_LK_FD:-2}"
 }
 
-# lk_console_message message [[secondary_message] colour_sequence]
-function lk_console_message() {
-    local PREFIX="${LK_CONSOLE_PREFIX-==> }" MESSAGE="$1" MESSAGE2 \
-        INDENT=0 SPACES LENGTH COLOUR
-    shift
-    [ "${MESSAGE/$'\n'/}" = "$MESSAGE" ] &&
-        { lk_is_true LK_CONSOLE_NO_FOLD ||
-            [ "$(lk_output_length "$PREFIX$MESSAGE")" -le 80 ]; } || {
-        SPACES=$'\n'"$(lk_repeat " " ${#PREFIX})"
-        [ "${MESSAGE//$'\n'/}" != "$MESSAGE" ] ||
-            MESSAGE=$(lk_fold "$MESSAGE" $((80 - ${#PREFIX})))
-        MESSAGE=${MESSAGE//$'\n'/$SPACES}
-        INDENT=2
-    }
-    [ $# -le 1 ] || {
-        MESSAGE2="$1"
-        shift
-        [ -z "$MESSAGE2" ] || {
-            # If MESSAGE and MESSAGE2 are both one-liners, print them on one
-            # line with a space between
-            [ "${MESSAGE2/$'\n'/}" = "$MESSAGE2" ] &&
-                [ "$INDENT" -eq 0 ] &&
-                { lk_is_true LK_CONSOLE_NO_FOLD ||
-                    { LENGTH=$(lk_output_length "$PREFIX$MESSAGE $MESSAGE2") &&
-                        [ "$LENGTH" -le 80 ]; }; } &&
-                MESSAGE2=" $MESSAGE2" || {
-                # Otherwise:
-                # - If they both span multiple lines, or MESSAGE2 is a
-                #   one-liner, keep INDENT=2 (increase MESSAGE2's left padding)
-                # - If only MESSAGE2 spans multiple lines, set INDENT=-2
-                #   (decrease the left padding of MESSAGE2)
-                { [ "${MESSAGE2/$'\n'/}" = "$MESSAGE2" ] &&
-                    [ -z "${LENGTH:-}" ]; } ||
-                    [ "$INDENT" -eq 2 ] ||
-                    INDENT=-2
-                INDENT=${LK_CONSOLE_INDENT:-$((${#PREFIX} + INDENT))}
-                SPACES=$'\n'$(lk_repeat " " "$INDENT")
-                [ "${MESSAGE2//$'\n'/}" != "$MESSAGE2" ] ||
-                    MESSAGE2=$(lk_fold "$MESSAGE2" $((80 - INDENT)))
-                MESSAGE2=${MESSAGE2#$'\n'}
-                MESSAGE2=$SPACES${MESSAGE2//$'\n'/$SPACES}
-            }
-        }
-    }
-    COLOUR="${1-$LK_CONSOLE_COLOUR}"
-    echo "$(
-        # - atomic unless larger than buffer (smaller of PIPE_BUF, BUFSIZ)
-        # - there's no portable way to determine buffer size
-        # - writing <=512 bytes with echo or printf should be atomic on all
-        #   platforms, but this can't be guaranteed
-        lk_echoc -n "$PREFIX" \
-            "${LK_CONSOLE_PREFIX_COLOUR-$(lk_maybe_bold "$COLOUR")$COLOUR}"
-        lk_echoc -n "$MESSAGE" \
-            "${LK_CONSOLE_MESSAGE_COLOUR-$(lk_maybe_bold "$MESSAGE")}"
-        [ -z "${MESSAGE2:-}" ] ||
-            lk_echoc -n "$MESSAGE2" "${LK_CONSOLE_SECONDARY_COLOUR-$COLOUR}"
-    )" >&"${_LK_FD:-2}"
+function lk_tty_columns() {
+    local _COLUMNS
+    _COLUMNS=${COLUMNS:-$(tput cols 2>/dev/null)} || _COLUMNS=80
+    echo "$_COLUMNS"
 }
 
+# lk_console_message MESSAGE [[MESSAGE2] COLOUR]
+function lk_console_message() {
+    local MESSAGE=$1 MESSAGE2 COLOUR PREFIX=${LK_TTY_PREFIX-==> } \
+        WIDTH INDENT=0 SPACES LENGTH \
+        MESSAGE_HAS_NEWLINE MESSAGE2_HAS_NEWLINE OUTPUT
+    shift
+    [ $# -le 1 ] || {
+        MESSAGE2=$1
+        shift
+    }
+    COLOUR=${1-$LK_TTY_COLOUR}
+    WIDTH=${LK_TTY_WIDTH:-$(lk_tty_columns)}
+    # If MESSAGE breaks over multiple lines (or will after wrapping), align
+    # second and subsequent lines with the first
+    ! lk_has_newline MESSAGE || MESSAGE_HAS_NEWLINE=1
+    if lk_is_true MESSAGE_HAS_NEWLINE || { ! lk_is_true LK_TTY_NO_FOLD &&
+        [ "$(lk_tty_length "$PREFIX$MESSAGE")" -gt "$WIDTH" ]; }; then
+        SPACES=$'\n'"$(lk_repeat " " ${#PREFIX})"
+        # Don't fold if MESSAGE is pre-formatted
+        lk_is_true MESSAGE_HAS_NEWLINE ||
+            MESSAGE=$(lk_fold "$MESSAGE" $((WIDTH - ${#PREFIX})))
+        MESSAGE=${MESSAGE//$'\n'/$SPACES}
+        MESSAGE_HAS_NEWLINE=1
+        INDENT=2
+    fi
+    [ -z "${MESSAGE2:-}" ] || {
+        # If MESSAGE and MESSAGE2 are both one-liners, print them on one line
+        # with a space between
+        ! lk_has_newline MESSAGE2 || MESSAGE2_HAS_NEWLINE=1
+        if ! lk_is_true MESSAGE2_HAS_NEWLINE &&
+            ! lk_is_true MESSAGE_HAS_NEWLINE &&
+            { lk_is_true LK_TTY_NO_FOLD ||
+                [ "$((LENGTH = $(lk_tty_length "$PREFIX$MESSAGE $MESSAGE2")))" -le "$WIDTH" ]; }; then
+            MESSAGE2=" $MESSAGE2"
+        else
+            # Otherwise:
+            # - If they both span multiple lines, or MESSAGE2 is a one-liner,
+            #   keep INDENT=2 (increase MESSAGE2's left padding)
+            # - If only MESSAGE2 spans multiple lines, set INDENT=-2 (decrease
+            #   the left padding of MESSAGE2)
+            if { lk_is_true MESSAGE2_HAS_NEWLINE || [ -n "${LENGTH:-}" ]; } &&
+                ! lk_is_true MESSAGE_HAS_NEWLINE; then
+                INDENT=-2
+            fi
+            INDENT=${LK_TTY_INDENT:-$((${#PREFIX} + INDENT))}
+            SPACES=$'\n'$(lk_repeat " " "$INDENT")
+            lk_is_true MESSAGE2_HAS_NEWLINE ||
+                MESSAGE2=$(lk_fold "$MESSAGE2" $((WIDTH - INDENT)))
+            # If a leading newline was added to force MESSAGE2 onto its own
+            # line, remove it
+            MESSAGE2=${MESSAGE2#$'\n'}
+            MESSAGE2=$SPACES${MESSAGE2//$'\n'/$SPACES}
+        fi
+    }
+    OUTPUT=$(
+        lk_echoc -n "$PREFIX" \
+            "${LK_TTY_PREFIX_COLOUR-$(lk_maybe_bold "$COLOUR")$COLOUR}"
+        lk_echoc -n "$MESSAGE" \
+            "${LK_TTY_MESSAGE_COLOUR-$(lk_maybe_bold "$MESSAGE")}"
+        [ -z "${MESSAGE2:-}" ] ||
+            lk_echoc -n "$MESSAGE2" "${LK_TTY_COLOUR2-$COLOUR}"
+    )
+    case "${FUNCNAME[1]:-}" in
+    lk_console_list)
+        declare -p WIDTH MESSAGE_HAS_NEWLINE OUTPUT
+        ;;
+    *)
+        echo "$OUTPUT" >&"${_LK_FD:-2}"
+        ;;
+    esac
+}
+
+# lk_console_detail MESSAGE [MESSAGE2 [COLOUR]]
 function lk_console_detail() {
-    local LK_CONSOLE_PREFIX="${LK_CONSOLE_PREFIX-   -> }" \
-        LK_CONSOLE_MESSAGE_COLOUR=''
+    local LK_TTY_PREFIX="${LK_TTY_PREFIX-   -> }" \
+        LK_TTY_MESSAGE_COLOUR=''
     lk_console_message "$1" "${2:-}" "${3-$LK_YELLOW}"
 }
 
+# lk_console_detail_list MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]
 function lk_console_detail_list() {
-    local LK_CONSOLE_PREFIX="${LK_CONSOLE_PREFIX-   -> }" \
-        LK_CONSOLE_MESSAGE_COLOUR=''
+    local LK_TTY_PREFIX="${LK_TTY_PREFIX-   -> }" \
+        LK_TTY_MESSAGE_COLOUR=''
     if [ $# -le 2 ]; then
         lk_console_list "$1" "${2-$LK_YELLOW}"
     else
@@ -1213,90 +1230,119 @@ function lk_console_detail_list() {
     fi
 }
 
+# lk_console_detail_file FILE [COLOUR] [FILE_COLOUR]
 function lk_console_detail_file() {
-    local LK_CONSOLE_PREFIX="${LK_CONSOLE_PREFIX-  >>> }" \
-        LK_CONSOLE_MESSAGE_COLOUR='' LK_CONSOLE_INDENT=4
-    lk_console_file "$1" "${2-$LK_YELLOW}" "${3-$LK_CONSOLE_COLOUR}"
+    local LK_TTY_PREFIX="${LK_TTY_PREFIX-  >>> }" \
+        LK_TTY_MESSAGE_COLOUR='' LK_TTY_INDENT=4
+    lk_console_file "$1" "${2-$LK_YELLOW}" "${3-$LK_TTY_COLOUR}"
 }
 
-function _lk_console() {
-    local COLOUR \
-        LK_CONSOLE_PREFIX="${LK_CONSOLE_PREFIX- :: }" \
-        LK_CONSOLE_SECONDARY_COLOUR="${LK_CONSOLE_SECONDARY_COLOUR-$LK_BOLD}" \
-        LK_CONSOLE_MESSAGE_COLOUR
-    COLOUR=$1
+function _lk_tty_log() {
+    local COLOUR=$1 \
+        LK_TTY_PREFIX=${LK_TTY_PREFIX- :: } \
+        LK_TTY_COLOUR2=${LK_TTY_COLOUR2-} \
+        LK_TTY_MESSAGE_COLOUR
     shift
-    LK_CONSOLE_MESSAGE_COLOUR=$(lk_maybe_bold "$1")$COLOUR
-    lk_console_message "$1" "${2:-}" "$COLOUR"
+    [ "${1:-}" != -r ] && STATUS=0 || shift
+    LK_TTY_MESSAGE_COLOUR=$(lk_maybe_bold "$1")$COLOUR
+    LK_TTY_COLOUR2=${LK_TTY_COLOUR2//"$LK_BOLD"/}
+    lk_console_message "$1" "${2:+$(
+        BOLD=$(lk_maybe_bold "$2")
+        RESET=${BOLD:+$LK_RESET}
+        echo "$BOLD$2$RESET"
+    )}${3:+ ${*:3}}" "$COLOUR"
 }
 
+# lk_console_log [-r] MESSAGE [MESSAGE2...]
+#
+# Output the given message to the console. If -r is set, return the most recent
+# command's exit status.
 function lk_console_log() {
-    _lk_console "$LK_CONSOLE_COLOUR" "$@"
+    local STATUS=$?
+    _lk_tty_log "$LK_TTY_COLOUR" "$@"
+    return "$STATUS"
 }
 
+# lk_console_success [-r] MESSAGE [MESSAGE2...]
+#
+# Output the given success message to the console. If -r is set, return the most
+# recent command's exit status.
 function lk_console_success() {
-    _lk_console "$LK_SUCCESS_COLOUR" "$@"
+    local STATUS=$?
+    _lk_tty_log "$LK_SUCCESS_COLOUR" "$@"
+    return "$STATUS"
 }
 
+# lk_console_warning [-r] MESSAGE [MESSAGE2...]
+#
+# Output the given warning to the console. If -r is set, return the most recent
+# command's exit status.
 function lk_console_warning() {
-    local EXIT_STATUS=$?
-    _lk_console "$LK_WARNING_COLOUR" "$@"
-    return "$EXIT_STATUS"
+    local STATUS=$?
+    _lk_tty_log "$LK_WARNING_COLOUR" "$@"
+    return "$STATUS"
 }
 
+# lk_console_error [-r] MESSAGE [MESSAGE2...]
+#
+# Output the given error message to the console. If -r is set, return the most
+# recent command's exit status.
 function lk_console_error() {
-    local EXIT_STATUS=$?
-    _lk_console "$LK_ERROR_COLOUR" "$@"
-    return "$EXIT_STATUS"
+    local STATUS=$?
+    _lk_tty_log "$LK_ERROR_COLOUR" "$@"
+    return "$STATUS"
 }
 
-function lk_console_warning0() {
-    _lk_console "$LK_WARNING_COLOUR" "$@"
-}
-
-function lk_console_error0() {
-    _lk_console "$LK_ERROR_COLOUR" "$@"
-}
-
-# lk_console_item message item [colour_sequence]
+# lk_console_item MESSAGE ITEM [COLOUR]
 function lk_console_item() {
-    lk_console_message "$1" "$2" "${3-$LK_CONSOLE_COLOUR}"
+    lk_console_message "$1" "$2" "${3-$LK_TTY_COLOUR}"
 }
 
-# lk_console_list message [single_noun plural_noun] [colour_sequence]
+# lk_console_list [-z] MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]
 function lk_console_list() {
-    local MESSAGE SINGLE_NOUN PLURAL_NOUN COLOUR ITEMS LIST INDENT=-2 SPACES \
-        LK_CONSOLE_PREFIX="${LK_CONSOLE_PREFIX-==> }"
-    MESSAGE="$1"
+    local _LK_NUL_DELIM=${_LK_NUL_DELIM-} \
+        MESSAGE SINGLE PLURAL COLOUR LK_TTY_PREFIX=${LK_TTY_PREFIX-==> } \
+        ITEMS INDENT=-2 LIST SPACES \
+        SH WIDTH MESSAGE_HAS_NEWLINE OUTPUT
+    [ "${1:-}" != -z ] || { _LK_NUL_DELIM=1 && shift; }
+    MESSAGE=$1
     shift
     [ $# -le 1 ] || {
-        SINGLE_NOUN="$1"
-        PLURAL_NOUN="$2"
+        SINGLE=$1
+        PLURAL=$2
         shift 2
     }
-    COLOUR="${1-$LK_CONSOLE_COLOUR}"
-    lk_mapfile ITEMS /dev/stdin
-    lk_console_message "$MESSAGE" "$COLOUR"
-    ! lk_in_string $'\n' "$MESSAGE" || INDENT=2
+    COLOUR=${1-$LK_TTY_COLOUR}
+    [ -t 0 ] && ITEMS=() && lk_warn "no input" ||
+        lk_mapfile ITEMS || lk_warn "unable to read items from input" || return
+    SH=$(lk_console_message "$MESSAGE" "$COLOUR") &&
+        eval "$SH" || return
+    ! lk_is_true MESSAGE_HAS_NEWLINE ||
+        INDENT=2
     LIST="$(lk_echo_array ITEMS |
-        COLUMNS="${COLUMNS+$((COLUMNS - ${#LK_CONSOLE_PREFIX} - INDENT))}" \
-            column -s $'\n' | expand)"
-    SPACES="$(lk_repeat " " "$((${#LK_CONSOLE_PREFIX} + INDENT))")"
-    lk_echoc "$SPACES${LIST//$'\n'/$'\n'$SPACES}" \
-        "${LK_CONSOLE_SECONDARY_COLOUR-$COLOUR}" >&"${_LK_FD:-2}"
-    [ -z "${SINGLE_NOUN:-}" ] ||
-        LK_CONSOLE_PREFIX="$SPACES" lk_console_detail "(${#ITEMS[@]} $(
-            lk_maybe_plural ${#ITEMS[@]} "$SINGLE_NOUN" "$PLURAL_NOUN"
-        ))" "" ""
+        COLUMNS=$((WIDTH - ${#LK_TTY_PREFIX} - INDENT)) column -s $'\n' |
+        expand)" || return
+    SPACES="$(lk_repeat " " $((${#LK_TTY_PREFIX} + INDENT)))"
+    echo "$(
+        echo "$OUTPUT"
+        lk_echoc "$SPACES${LIST//$'\n'/$'\n'$SPACES}" \
+            "${LK_TTY_COLOUR2-$COLOUR}"
+        [ -z "${SINGLE:-}" ] ||
+            _LK_FD=1 \
+                LK_TTY_PREFIX=$SPACES \
+                lk_console_detail "(${#ITEMS[@]} $(
+                lk_maybe_plural ${#ITEMS[@]} "$SINGLE" "$PLURAL"
+            ))"
+    )" >&"${_LK_FD:-2}"
 }
 
 function _lk_console_get_prompt() {
     lk_readline_format "$(
         lk_echoc -n " :: " \
-            "${LK_CONSOLE_PREFIX_COLOUR-$(lk_maybe_bold \
-                "$LK_CONSOLE_COLOUR")$LK_CONSOLE_COLOUR}"
+            "${LK_TTY_PREFIX_COLOUR-$(lk_maybe_bold \
+                "$LK_TTY_COLOUR")$LK_TTY_COLOUR}"
         lk_echoc -n "${PROMPT[*]//$'\n'/$'\n    '}" \
-            "${LK_CONSOLE_MESSAGE_COLOUR-$(lk_maybe_bold "${PROMPT[*]}")}"
+            "${LK_TTY_MESSAGE_COLOUR-$(lk_maybe_bold "${PROMPT[*]}")}"
     )"
 }
 
@@ -1429,7 +1475,7 @@ function lk_clip() {
                 echo "$LK_BOLD$LK_MAGENTA...$LK_RESET")
             MESSAGE="$LINES lines copied"
         }
-        LK_CONSOLE_NO_FOLD=1 \
+        LK_TTY_NO_FOLD=1 \
             lk_console_item "${MESSAGE:-Copied} to clipboard:" \
             $'\n'"$LK_GREEN$OUTPUT$LK_RESET" "$LK_MAGENTA"
     else
@@ -2227,13 +2273,13 @@ function _lk_maybe_filter() {
 # LK_BACKUP_SUFFIX or ".orig" if LK_BACKUP_SUFFIX is not set.
 function lk_console_file() {
     local FILE=$1 ORIG_FILE BOLD_COLOUR \
-        LK_CONSOLE_PREFIX=${LK_CONSOLE_PREFIX:->>> } \
-        LK_CONSOLE_MESSAGE_COLOUR='' LK_CONSOLE_SECONDARY_COLOUR='' \
-        COLOUR=${2-${LK_CONSOLE_MESSAGE_COLOUR-$LK_MAGENTA}} \
-        FILE_COLOUR=${3-${LK_CONSOLE_SECONDARY_COLOUR-${2:-$LK_GREEN}}} \
-        LK_CONSOLE_INDENT=${LK_CONSOLE_INDENT:-2}
+        LK_TTY_PREFIX=${LK_TTY_PREFIX:->>> } \
+        LK_TTY_MESSAGE_COLOUR='' LK_TTY_COLOUR2='' \
+        COLOUR=${2-${LK_TTY_MESSAGE_COLOUR-$LK_MAGENTA}} \
+        FILE_COLOUR=${3-${LK_TTY_COLOUR2-${2:-$LK_GREEN}}} \
+        LK_TTY_INDENT=${LK_TTY_INDENT:-2}
     BOLD_COLOUR="$(lk_maybe_bold "$COLOUR")$COLOUR"
-    local LK_CONSOLE_PREFIX_COLOUR=${LK_CONSOLE_PREFIX_COLOUR-$BOLD_COLOUR}
+    local LK_TTY_PREFIX_COLOUR=${LK_TTY_PREFIX_COLOUR-$BOLD_COLOUR}
     lk_maybe_sudo test -r "$FILE" ||
         lk_warn "cannot read file: $FILE" || return
     ORIG_FILE=$FILE${LK_BACKUP_SUFFIX-.orig}
@@ -2248,7 +2294,7 @@ function lk_console_file() {
             echo -n "$FILE_COLOUR"
             lk_maybe_sudo cat "$FILE"
         fi
-    )"$'\n'"$LK_CONSOLE_PREFIX_COLOUR<<<$LK_RESET"
+    )"$'\n'"$LK_TTY_PREFIX_COLOUR<<<$LK_RESET"
 }
 
 # lk_user_in_group username groupname...
@@ -2339,7 +2385,7 @@ xterm-256color)
     ;;
 esac
 
-LK_CONSOLE_COLOUR=$LK_CYAN
+LK_TTY_COLOUR=$LK_CYAN
 LK_SUCCESS_COLOUR=$LK_GREEN
 LK_WARNING_COLOUR=$LK_YELLOW
 LK_ERROR_COLOUR=$LK_RED

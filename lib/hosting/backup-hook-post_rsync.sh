@@ -2,7 +2,7 @@
 
 # shellcheck disable=SC2207
 
-[ "$EXIT_STATUS" -eq 0 ] || lk_console_warning0 \
+[ "$EXIT_STATUS" -eq 0 ] || lk_console_warning \
     "WARNING: because rsync failed to complete, database backups may only be \
 useful for diagnostic purposes"
 

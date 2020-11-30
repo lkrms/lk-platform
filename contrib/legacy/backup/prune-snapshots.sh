@@ -66,15 +66,15 @@ function lk_echo_array() {
 
 function lk_console_message() {
     echo "\
-$LK_BOLD${LK_CONSOLE_COLOUR-$LK_CYAN}${LK_CONSOLE_PREFIX-==> }\
-$LK_RESET${LK_CONSOLE_MESSAGE_COLOUR-$LK_BOLD}\
+$LK_BOLD${LK_TTY_COLOUR-$LK_CYAN}${LK_TTY_PREFIX-==> }\
+$LK_RESET${LK_TTY_MESSAGE_COLOUR-$LK_BOLD}\
 $(sed "1b
-s/^/${LK_CONSOLE_SPACES-  }/" <<<"$1")$LK_RESET" >&2
+s/^/${LK_TTY_SPACES-  }/" <<<"$1")$LK_RESET" >&2
 }
 
 function lk_console_item() {
     lk_console_message "\
-$1$LK_RESET${LK_CONSOLE_COLOUR2-${LK_CONSOLE_COLOUR-$LK_CYAN}}$(
+$1$LK_RESET${LK_TTY_COLOUR2-${LK_TTY_COLOUR-$LK_CYAN}}$(
         [ "${2/$'\n'/}" = "$2" ] &&
             echo " $2" ||
             echo $'\n'"${2#$'\n'}"
@@ -82,8 +82,8 @@ $1$LK_RESET${LK_CONSOLE_COLOUR2-${LK_CONSOLE_COLOUR-$LK_CYAN}}$(
 }
 
 function lk_console_detail() {
-    local LK_CONSOLE_PREFIX="   -> " LK_CONSOLE_SPACES="    " \
-        LK_CONSOLE_COLOUR=$LK_YELLOW LK_CONSOLE_MESSAGE_COLOUR=
+    local LK_TTY_PREFIX="   -> " LK_TTY_SPACES="    " \
+        LK_TTY_COLOUR=$LK_YELLOW LK_TTY_MESSAGE_COLOUR=
     [ $# -le 1 ] &&
         lk_console_message "$1" ||
         lk_console_item "$1" "$2"
@@ -95,26 +95,26 @@ function lk_console_detail_list() {
 }
 
 function lk_console_log() {
-    local LK_CONSOLE_PREFIX=" :: " LK_CONSOLE_SPACES="    " \
-        LK_CONSOLE_COLOUR2=${LK_CONSOLE_COLOUR2-$LK_BOLD}
+    local LK_TTY_PREFIX=" :: " LK_TTY_SPACES="    " \
+        LK_TTY_COLOUR2=${LK_TTY_COLOUR2-$LK_BOLD}
     [ $# -le 1 ] &&
-        lk_console_message "${LK_CONSOLE_COLOUR-$LK_CYAN}$1" ||
-        lk_console_item "${LK_CONSOLE_COLOUR-$LK_CYAN}$1" "$2"
+        lk_console_message "${LK_TTY_COLOUR-$LK_CYAN}$1" ||
+        lk_console_item "${LK_TTY_COLOUR-$LK_CYAN}$1" "$2"
 }
 
 function lk_console_success() {
-    LK_CONSOLE_COLOUR=$LK_GREEN lk_console_log "$@"
+    LK_TTY_COLOUR=$LK_GREEN lk_console_log "$@"
 }
 
 function lk_console_warning() {
     local EXIT_STATUS=$?
-    LK_CONSOLE_COLOUR=$LK_YELLOW lk_console_log "$@"
+    LK_TTY_COLOUR=$LK_YELLOW lk_console_log "$@"
     return "$EXIT_STATUS"
 }
 
 function lk_console_error() {
     local EXIT_STATUS=$?
-    LK_CONSOLE_COLOUR=$LK_RED lk_console_log "$@"
+    LK_TTY_COLOUR=$LK_RED lk_console_log "$@"
     return "$EXIT_STATUS"
 }
 

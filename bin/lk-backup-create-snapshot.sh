@@ -119,8 +119,8 @@ function run_custom_hook() {
             [ ${#LINES[@]} -eq 0 ] || {
                 SH=$(lk_echo_array LINES)
                 eval "$SH" ||
-                    LK_CONSOLE_SECONDARY_COLOUR='' LK_CONSOLE_NO_FOLD=1 \
-                        lk_console_error "\
+                    LK_TTY_COLOUR2='' LK_TTY_NO_FOLD=1 \
+                        lk_console_error -r "\
 Shell commands emitted by hook script failed (exit status $?):" $'\n'"$SH" ||
                     lk_die ""
             }
