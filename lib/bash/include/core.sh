@@ -1811,7 +1811,8 @@ function lk_user_exists() {
 }
 
 function lk_test_many() {
-    local TEST="$1"
+    local TEST=$1
+    [ -n "$TEST" ] || lk_warn "no test command" || return
     shift
     [ $# -gt 0 ] || return
     while [ $# -gt 0 ]; do
@@ -1838,12 +1839,12 @@ function lk_dirs_exist() {
 # replacing the string '{}' with the element's value. Array indices are not
 # preserved.
 function lk_remove_false() {
-    local _LK_TEMP_ARRAY _LK_TEST _LK_VAL i=0
+    local _LK_TEMP_ARRAY _LK_TEST _LK_VAL _lk_i=0
     _lk_array_fill_temp "$2"
     _LK_TEST="$(lk_replace '{}' '$_LK_VAL' "$1")"
     eval "$2=()"
     for _LK_VAL in ${_LK_TEMP_ARRAY[@]+"${_LK_TEMP_ARRAY[@]}"}; do
-        ! eval "$_LK_TEST" || eval "$2[$((i++))]=\$_LK_VAL"
+        ! eval "$_LK_TEST" || eval "$2[$((_lk_i++))]=\$_LK_VAL"
     done
 }
 
@@ -1868,7 +1869,7 @@ function lk_resolve_files() {
     )
 }
 
-# lk_expand_path [-z] PATH
+# lk_expand_path [-z] [PATH]
 #
 # Perform quote removal, tilde expansion and glob expansion on PATH, then print
 # each result. If -z is set, output NUL instead of newline after each result.
@@ -1930,16 +1931,14 @@ function lk_expand_paths() {
 }
 
 function lk_filter() {
-    local TEST="$1"
+    local _LK_NUL_DELIM=${_LK_NUL_DELIM-} EXIT_STATUS TEST DELIM
+    [ "${1:-}" != -z ] || { _LK_NUL_DELIM=1 && shift; }
+    ! _lk_maybe_xargs 1 "$@" || return "$EXIT_STATUS"
+    TEST=$1
+    [ -n "$TEST" ] || lk_warn "no test command" || return
     shift
-    if [ $# -gt 0 ]; then
-        while [ $# -gt 0 ]; do
-            ! test "$TEST" "$1" || printf '%s\n' "$1"
-            shift
-        done
-    else
-        lk_xargs lk_filter "$TEST"
-    fi
+    DELIM=${_LK_NUL_DELIM:+'\0'}
+    ! eval "$TEST \"\$1\"" || printf "%s${DELIM:-\\n}" "$1"
 }
 
 function lk_is_identifier() {
