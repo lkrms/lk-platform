@@ -405,7 +405,7 @@ Example:
     "ADMIN_EMAIL": $adminEmail,
     "AUTO_REBOOT": $autoReboot
 }'"${4:+ + $4}")
-    ROOT_PASS=$(openssl rand -base64 48)
+    ROOT_PASS=$(lk_random_password 64)
     ARGS=(
         linodes
         create

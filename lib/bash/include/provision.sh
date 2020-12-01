@@ -429,7 +429,7 @@ function lk_node_public_ipv6() {
 # - VALUE (synonym for RDATA)
 function lk_hosts_get_records() {
     local FIELDS FIELD CUT TYPE IFS TYPES HOST \
-        NS="[^[:blank:]]" COMMAND=(
+        COMMAND=(
             dig +noall +answer
             ${LK_DIG_OPTIONS[@]:+"${LK_DIG_OPTIONS[@]}"}
             ${LK_DIG_SERVER:+@"$LK_DIG_SERVER"}
@@ -520,7 +520,7 @@ function lk_host_first_answer() {
 }
 
 function lk_host_soa() {
-    local ANSWER DOMAIN NAMESERVERS NS SOA
+    local ANSWER DOMAIN NAMESERVERS NAMESERVER SOA
     ANSWER=$(lk_host_first_answer NS "$1") || return
     ! lk_verbose || lk_console_detail "Looking up SOA for domain:" "$1"
     DOMAIN=$(awk '{ print substr($1, 1, length($1) - 1) }' <<<"$ANSWER" |
@@ -532,14 +532,14 @@ function lk_host_soa() {
         lk_console_detail "Domain apex:" "$DOMAIN"
         lk_console_detail "Name servers:" "${NAMESERVERS[*]}"
     }
-    for NS in "${NAMESERVERS[@]}"; do
+    for NAMESERVER in "${NAMESERVERS[@]}"; do
         SOA=$(
-            LK_DIG_SERVER=$NS
+            LK_DIG_SERVER=$NAMESERVER
             LK_DIG_OPTIONS=(+norecurse)
             lk_hosts_get_records SOA "$DOMAIN"
         ) && [ -n "$SOA" ] || continue
         ! lk_verbose ||
-            lk_console_detail "SOA from $NS for $DOMAIN:" \
+            lk_console_detail "SOA from $NAMESERVER for $DOMAIN:" \
                 "$(cut -d' ' -f5- <<<"$SOA")"
         echo "$SOA"
         return 0
@@ -549,17 +549,17 @@ function lk_host_soa() {
 }
 
 function lk_host_ns_resolve() {
-    local NS IP CNAME LK_DIG_SERVER LK_DIG_OPTIONS \
+    local NAMESERVER IP CNAME LK_DIG_SERVER LK_DIG_OPTIONS \
         _LK_CNAME_DEPTH=${_LK_CNAME_DEPTH:-0}
     [ "$_LK_CNAME_DEPTH" -lt 7 ] || lk_warn "too much recursion" || return
     ((++_LK_CNAME_DEPTH))
-    NS=$(lk_host_soa "$1" |
+    NAMESERVER=$(lk_host_soa "$1" |
         awk '{ print substr($5, 1, length($5) - 1) }') ||
         return
-    LK_DIG_SERVER=$NS
+    LK_DIG_SERVER=$NAMESERVER
     LK_DIG_OPTIONS=(+norecurse)
     ! lk_verbose || {
-        lk_console_detail "Using name server:" "$NS"
+        lk_console_detail "Using name server:" "$NAMESERVER"
         lk_console_detail "Looking up A and AAAA records for:" "$1"
     }
     IP=($(lk_hosts_get_records +VALUE A,AAAA "$1")) || return
@@ -571,13 +571,14 @@ function lk_host_ns_resolve() {
         CNAME=($(lk_hosts_get_records +VALUE CNAME "$1")) || return
         if [ ${#CNAME[@]} -eq 1 ]; then
             ! lk_verbose ||
-                lk_console_detail "CNAME record from $NS for $1:" "${CNAME[0]}"
+                lk_console_detail "CNAME record from $NAMESERVER for $1:" \
+                    "${CNAME[0]}"
             lk_host_ns_resolve "${CNAME[0]%.}" || return
             return 0
         fi
     fi
-    [ ${#IP[@]} -gt 0 ] || lk_warn "could not resolve $1: $NS" || return
-    ! lk_verbose || lk_console_detail "A and AAAA records from $NS for $1:" \
+    [ ${#IP[@]} -gt 0 ] || lk_warn "could not resolve $1: $NAMESERVER" || return
+    ! lk_verbose || lk_console_detail "A and AAAA records from $NAMESERVER for $1:" \
         "$(lk_echo_array IP)"
     lk_echo_array IP
 }

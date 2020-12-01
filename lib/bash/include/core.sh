@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2015,SC2016,SC2120,SC2207
+# shellcheck disable=SC1090,SC2015,SC2016,SC2034,SC2046,SC2086,SC2120,SC2207
 
 USER=${USER:-$(id -un)} &&
     HOME=${HOME:-$(eval "echo ~$USER")} || return
@@ -616,7 +616,6 @@ function lk_fqdn() {
     hostname -f
 }
 
-# shellcheck disable=SC2086
 function _lk_get_colour() {
     local SEQ
     while [ $# -ge 2 ]; do
@@ -851,8 +850,8 @@ function lk_has_arg() {
 
 # lk_get_outputs_of COMMAND [ARG...]
 #
-# Execute COMMAND, output Bash-compatible code that sets _STDOUT and _STDERR
-# to COMMAND's respective outputs, and exit with COMMAND's exit status.
+# Execute COMMAND, output Bash-compatible code that sets _STDOUT and _STDERR to
+# COMMAND's respective outputs, and exit with COMMAND's exit status.
 function lk_get_outputs_of() {
     local SH EXIT_STATUS
     SH=$(
@@ -1138,8 +1137,8 @@ function lk_console_blank() {
 
 function lk_tty_columns() {
     local _COLUMNS
-    _COLUMNS=${COLUMNS:-$(tput cols)} || _COLUMNS=80
-    echo "$_COLUMNS"
+    _COLUMNS=${COLUMNS:-${TERM:+$(TERM=$TERM tput cols)}} || _COLUMNS=
+    echo "${_COLUMNS:-80}"
 }
 
 # lk_console_message MESSAGE [[MESSAGE2] COLOUR]
@@ -1251,7 +1250,8 @@ function _lk_tty_log() {
     lk_console_message "$1" "${2:+$(
         BOLD=$(lk_maybe_bold "$2")
         RESET=${BOLD:+$LK_RESET}
-        echo "$BOLD$2$RESET"
+        [ "${2:0:1}" != $'\n' ] || printf $'\n'
+        echo "$BOLD${2#$'\n'}$RESET"
     )}${3:+ ${*:3}}" "$COLOUR"
 }
 
@@ -1738,34 +1738,43 @@ function lk_maybe_elevate() {
     fi
 }
 
-# lk_safe_symlink TARGET LINK [LN_ARG...]
-function lk_safe_symlink() {
-    local TARGET=${1:-} LINK=${2:-} LINK_DIR CURRENT_TARGET \
-        LK_BACKUP_SUFFIX=${LK_BACKUP_SUFFIX-.orig}
-    [ -n "$LINK" ] || lk_warn "no link" || return
+# lk_symlink TARGET LINK
+function lk_symlink() {
+    local TARGET LINK LINK_DIR CURRENT_TARGET \
+        LK_BACKUP_SUFFIX=${LK_BACKUP_SUFFIX-.orig} v='' vv=''
+    [ $# -eq 2 ] || lk_usage "\
+Usage: $(lk_myself -f) TARGET LINK"
+    TARGET=$1
+    LINK=${2%/}
     LINK_DIR=${LINK%/*}
-    [ -e "$TARGET" ] || { [ "${TARGET:0:1}" != / ] &&
-        lk_maybe_sudo test -e "$LINK_DIR/$TARGET"; } ||
+    [ "$LINK_DIR" != "$LINK" ] || LINK_DIR=.
+    lk_maybe_sudo test -e "$TARGET" ||
+        { [ "${TARGET:0:1}" != / ] &&
+            lk_maybe_sudo test -e "$LINK_DIR/$TARGET"; } ||
         lk_warn "target not found: $TARGET" || return
-    LK_SAFE_SYMLINK_NO_CHANGE=
+    ! lk_verbose || v=v
+    ! lk_verbose 2 || vv=v
+    unset LK_SYMLINK_NO_CHANGE
     if lk_maybe_sudo test -L "$LINK"; then
         CURRENT_TARGET=$(lk_maybe_sudo readlink -- "$LINK") || return
         [ "$CURRENT_TARGET" != "$TARGET" ] || {
-            # shellcheck disable=SC2034
-            LK_SAFE_SYMLINK_NO_CHANGE=1
+            LK_SYMLINK_NO_CHANGE=1
             return 0
         }
-        lk_maybe_sudo rm -f -- "$LINK" || return
+        lk_maybe_sudo rm -f"$vv" -- "$LINK" || return
     elif lk_maybe_sudo test -e "$LINK"; then
         if [ -n "$LK_BACKUP_SUFFIX" ]; then
-            lk_maybe_sudo mv -fv -- "$LINK" "$LINK$LK_BACKUP_SUFFIX" || return
+            lk_maybe_sudo \
+                mv -f"$v" -- "$LINK" "$LINK$LK_BACKUP_SUFFIX" || return
         else
-            lk_maybe_sudo rm -fv -- "$LINK" || return
+            lk_maybe_sudo \
+                rm -f"$v" -- "$LINK" || return
         fi
     elif lk_maybe_sudo test ! -d "$LINK_DIR"; then
-        lk_maybe_sudo mkdir -pv -- "$LINK_DIR" || return
+        lk_maybe_sudo \
+            mkdir -p"$v" -- "$LINK_DIR" || return
     fi
-    lk_maybe_sudo ln -sv "${@:3}" -- "$TARGET" "$LINK"
+    lk_maybe_sudo ln -s"$v" -- "$TARGET" "$LINK"
 }
 
 # lk_keep_trying COMMAND [ARG...]
@@ -1775,16 +1784,18 @@ function lk_safe_symlink() {
 # and follows the Fibonnaci sequence (5, 8, 13, 21, 34, etc.).
 function lk_keep_trying() {
     local MAX_ATTEMPTS=${LK_KEEP_TRYING_MAX:-10} \
-        ATTEMPT=1 WAIT=5 LAST_WAIT=3 NEW_WAIT EXIT_STATUS
+        ATTEMPT=0 WAIT=5 LAST_WAIT=3 NEW_WAIT EXIT_STATUS
     if ! "$@"; then
-        while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
-            lk_console_message "Command failed:" "$*" ${LK_RED+"$LK_RED"}
-            lk_console_detail "Waiting $WAIT seconds"
+        while [ $((++ATTEMPT)) -lt "$MAX_ATTEMPTS" ]; do
+            lk_console_log \
+                "Command failed (attempt $ATTEMPT of $MAX_ATTEMPTS):" \
+                $'\n'"$*"
+            lk_console_detail "Trying again in $WAIT seconds"
             sleep "$WAIT"
             ((NEW_WAIT = WAIT + LAST_WAIT))
             LAST_WAIT=$WAIT
             WAIT=$NEW_WAIT
-            lk_console_detail "Retrying (attempt $((++ATTEMPT))/$MAX_ATTEMPTS)"
+            lk_console_blank
             if "$@"; then
                 return 0
             else
@@ -1831,7 +1842,6 @@ function lk_remove_false() {
     _lk_array_fill_temp "$2"
     _LK_TEST="$(lk_replace '{}' '$_LK_VAL' "$1")"
     eval "$2=()"
-    # shellcheck disable=SC2034
     for _LK_VAL in ${_LK_TEMP_ARRAY[@]+"${_LK_TEMP_ARRAY[@]}"}; do
         ! eval "$_LK_TEST" || eval "$2[$((i++))]=\$_LK_VAL"
     done
@@ -2002,81 +2012,17 @@ function lk_tty() {
     lk_tty "$@"
 }
 
-# lk_secret_set VALUE LABEL [SERVICE]
-function lk_secret_set() {
-    if lk_is_macos; then
-        function lk_secret_set() {
-            security add-generic-password -a "$1" -l "$2" -s "${3:-${0##*/}}" -U -w
-        }
-    else
-        function lk_secret_set() {
-            secret-tool store --label="$2" -- service "${3:-${0##*/}}" value "$1"
-        }
-    fi
-    lk_secret_set "$@"
-}
-
-# lk_secret_get VALUE [SERVICE]
-function lk_secret_get() {
-    if lk_is_macos; then
-        function lk_secret_get() {
-            security find-generic-password -a "$1" -s "${2:-${0##*/}}" -w
-        }
-    else
-        function lk_secret_get() {
-            secret-tool lookup -- service "${2:-${0##*/}}" value "$1"
-        }
-    fi
-    lk_secret_get "$@"
-}
-
-# lk_secret_forget VALUE [SERVICE]
-function lk_secret_forget() {
-    if lk_is_macos; then
-        function lk_secret_forget() {
-            security delete-generic-password -a "$1" -s "${2:-${0##*/}}"
-        }
-    else
-        function lk_secret_forget() {
-            secret-tool clear -- service "${2:-${0##*/}}" value "$1"
-        }
-    fi
-    lk_secret_forget "$@"
-}
-
-# lk_secret VALUE LABEL [SERVICE]
-function lk_secret() {
-    local SERVICE=${3:-$(lk_myself 1)} KEYCHAIN=keychain PASSWORD
-    [ -n "${1:-}" ] || lk_warn "no value" || return
-    [ -n "${2:-}" ] || lk_warn "no label" || return
-    lk_is_macos || KEYCHAIN=keyring
-    if ! PASSWORD="$(lk_secret_get "$1" "$SERVICE" 2>/dev/null)"; then
-        if lk_no_input; then
-            lk_console_warning "No password for $SERVICE->$1 found in $KEYCHAIN"
-            return 1
-        fi
-        lk_console_message \
-            "Enter the password for $2 to add it to your $KEYCHAIN"
-        lk_secret_set "$1" "$2" "$SERVICE" &&
-            PASSWORD="$(lk_secret_get "$1" "$SERVICE")" || return
-    fi
-    echo "$PASSWORD"
-}
-
-# lk_remove_secret VALUE [SERVICE]
-function lk_remove_secret() {
-    [ -n "${1:-}" ] || lk_warn "no value" || return
-    lk_secret_get "$@" >/dev/null 2>&1 ||
-        lk_warn "password not found" || return 0
-    lk_secret_forget "$@" || return
-    lk_console_message "Password removed successfully"
-}
-
 # lk_random_hex BYTES
 function lk_random_hex() {
-    # shellcheck disable=SC2046
     printf '%02x' $(for i in $(seq 1 "$1"); do echo $((RANDOM % 256)); done)
-    printf '\n'
+}
+
+# lk_random_password [LENGTH]
+function lk_random_password() {
+    local LENGTH=${1:-16} PASSWORD
+    PASSWORD=$(openssl rand -base64 \
+        $((BITS = LENGTH * 6, BITS / 8 + (BITS % 8 ? 1 : 0)))) &&
+        printf '%s' "${PASSWORD:0:$LENGTH}"
 }
 
 function lk_base64() {
@@ -2204,7 +2150,6 @@ function lk_maybe_replace() {
             <(lk_maybe_sudo cat "$1" | _lk_maybe_filter "${@:3:1}") \
             <([ -z "$2" ] || echo "${2%$'\n'}" | _lk_maybe_filter "${@:3:1}") \
             >/dev/null || {
-            # shellcheck disable=SC2034
             LK_MAYBE_REPLACE_NO_CHANGE=1
             ! lk_verbose 2 || lk_console_detail "Not changed:" "$1"
             return 0
@@ -2283,13 +2228,8 @@ set -o pipefail
 
 _LK_INCLUDES=(core)
 
-[ -n "${LK_COLOUR:-${TERM:-}}" ] ||
-    [ -t 1 ] ||
-    LK_COLOUR=off
-
-# shellcheck disable=SC2034
-case "${LK_COLOUR:-${TERM:-xterm-256color}}" in
-off)
+case "${TERM:-dumb}" in
+dumb | unknown)
     LK_BLACK=
     LK_RED=
     LK_GREEN=
@@ -2354,3 +2294,4 @@ LK_WARNING_COLOUR=$LK_YELLOW
 LK_ERROR_COLOUR=$LK_RED
 lk_is_readonly LK_ARGV || readonly LK_ARGV=("$@")
 lk_is_readonly S || readonly S="[[:blank:]]"
+lk_is_readonly NS || readonly NS="[^[:blank:]]"

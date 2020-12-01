@@ -73,7 +73,7 @@ lk_log_output
                 "$SOURCE"
             continue
         }
-        lk_safe_symlink "$BACKUP_ROOT/snapshot/${SOURCE##*/}" "$SOURCE/backup"
+        lk_symlink "$BACKUP_ROOT/snapshot/${SOURCE##*/}" "$SOURCE/backup"
     done
 
     lk_console_message "Backing up system files"

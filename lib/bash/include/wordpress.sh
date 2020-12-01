@@ -305,7 +305,7 @@ function lk_wp_db_set_local() {
         "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD" "$LOCAL_DB_HOST" || return
     # Try existing password with new LOCAL_DB_USER before changing password
     lk_mysql_connects 2>/dev/null || {
-        LOCAL_DB_PASSWORD=$(openssl rand -base64 32) &&
+        LOCAL_DB_PASSWORD=$(lk_random_password 24) &&
             lk_mysql_write_cnf \
                 "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD" "$LOCAL_DB_HOST"
     }

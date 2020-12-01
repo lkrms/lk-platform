@@ -252,7 +252,7 @@ EOF
     mkdir -p "/srv/http/localhost/html" "/srv/http/127.0.0.1"
     [ -e "/srv/http/127.0.0.1/html" ] ||
         ln -sfT "../localhost/html" "/srv/http/127.0.0.1/html"
-    lk_safe_symlink "$LK_BASE/etc/httpd/dev-defaults.conf" "/etc/httpd/conf/extra/httpd-dev-defaults.conf"
+    lk_symlink "$LK_BASE/etc/httpd/dev-defaults.conf" "/etc/httpd/conf/extra/httpd-dev-defaults.conf"
     lk_httpd_enable_option Include "conf/extra/httpd-dev-defaults.conf"
     lk_httpd_enable_option LoadModule "alias_module modules/mod_alias.so"
     lk_httpd_enable_option LoadModule "dir_module modules/mod_dir.so"

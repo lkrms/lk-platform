@@ -101,7 +101,7 @@
     [ "${LK_INST##*/}" = lk-platform ] || {
         OLD_LK_INST=$LK_INST
         LK_INST=${LK_INST%/*}/lk-platform
-        lk_safe_symlink "$OLD_LK_INST" "$LK_INST"
+        lk_symlink "$OLD_LK_INST" "$LK_INST"
     }
 
     LK_PATH_PREFIX=${LK_PATH_PREFIX:-${PATH_PREFIX:-}}
@@ -160,7 +160,7 @@
                 lk_console_warning "GNU $COMMAND not found:" "$GCOMMAND"
                 continue
             }
-            lk_safe_symlink "$COMMAND_PATH" "$LK_BIN_PATH/gnu_$COMMAND" ||
+            lk_symlink "$COMMAND_PATH" "$LK_BIN_PATH/gnu_$COMMAND" ||
                 EXIT_STATUS=$?
         done
         return "$EXIT_STATUS"
@@ -309,7 +309,7 @@
         ${OTHER_SETTINGS[@]+"${OTHER_SETTINGS[@]}"})"
 
     lk_console_detail "Checking symbolic links"
-    lk_safe_symlink \
+    lk_symlink \
         "$LK_BASE/bin/lk-bash-load.sh" "$LK_BIN_PATH/lk-bash-load.sh"
 
     LK_HOMES=(

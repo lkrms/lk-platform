@@ -2,6 +2,8 @@
 
 # shellcheck disable=SC2015
 
+lk_include secret
+
 # lk_openconnect USER HOST [ROUTE...]
 function lk_openconnect() {
     local VPN_USER=$1 VPN_HOST=$2 VPN_PASSWD COMMAND LOG_FILE
