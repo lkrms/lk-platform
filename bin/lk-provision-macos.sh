@@ -254,14 +254,16 @@ EOF
         fi
         CI=1 lk_keep_trying lk_tty caffeinate -i bash "$FILE" ||
             lk_die "Homebrew installer failed"
-        eval "$(. "$LK_BASE/lib/bash/env.sh")"
+        SH=$(. "$LK_BASE/lib/bash/env.sh") &&
+            eval "$SH"
         lk_command_exists brew || lk_die "command not found: brew"
         lk_console_item "Found Homebrew at:" "$(brew --prefix)"
         lk_brew_check_taps
         NEW_HOMEBREW=1
     else
         lk_console_item "Found Homebrew at:" "$(brew --prefix)"
-        eval "$(. "$LK_BASE/lib/bash/env.sh")"
+        SH=$(. "$LK_BASE/lib/bash/env.sh") &&
+            eval "$SH"
         lk_brew_check_taps
         lk_console_detail "Updating formulae"
         lk_keep_trying lk_tty caffeinate -i brew update --quiet

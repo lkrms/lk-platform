@@ -10,24 +10,24 @@ LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(
     . "$HOME/.${LK_PATH_PREFIX}settings"
 lk_esc() { echo "$1" | sed -Ee 's/\\/\\\\/g' -e 's/[$`"]/\\&/g'; }
 
-[ -n "${LK_BASE:-}" ] ||
-    eval "$(
-        _FILE=$0
-        [ "${_FILE%/*}" != "$_FILE" ] || _FILE=./$_FILE
-        if [ ! -L "$_FILE" ] &&
-            LK_BASE="$(cd "${_FILE%/*}/../.." && pwd -P)" &&
-            [ -d "$LK_BASE/lib/bash" ]; then
-            echo "LK_BASE=\"$(lk_esc "$LK_BASE")\""
-        else
-            echo "$_FILE: LK_BASE not set" >&2
-        fi
-    )"
+[ -n "${LK_BASE:-}" ] || { SH=$(
+    _FILE=$0
+    [ "${_FILE%/*}" != "$_FILE" ] || _FILE=./$_FILE
+    if [ ! -L "$_FILE" ] &&
+        LK_BASE="$(cd "${_FILE%/*}/../.." && pwd -P)" &&
+        [ -d "$LK_BASE/lib/bash" ]; then
+        echo "LK_BASE=\"$(lk_esc "$LK_BASE")\""
+    else
+        echo "$_FILE: LK_BASE not set" >&2
+    fi
+) && eval "$SH"; }
 
 if [ -n "${LK_BASE:-}" ]; then
 
     export LK_BASE
 
-    eval "$(. "$LK_BASE/lib/bash/env.sh")"
+    SH=$(. "$LK_BASE/lib/bash/env.sh") &&
+        eval "$SH"
 
     ! type autorandr >/dev/null 2>&1 ||
         autorandr -c --default default --force ||
@@ -44,6 +44,8 @@ if [ -n "${LK_BASE:-}" ]; then
         unset QT_FONT_DPI
 
 fi
+
+unset SH
 
 xset -b
 xset s "${LK_DIM_AFTER:=240}" "${LK_DIM_TIME:=60}"

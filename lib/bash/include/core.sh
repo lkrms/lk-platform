@@ -256,7 +256,7 @@ function lk_regex_implode() {
 }
 
 function _lk_var_prefix() {
-    [ -z "${FUNCNAME[2]:-}" ] || printf 'local '
+    [[ "${FUNCNAME[2]:-}" =~ ^(source|main)?$ ]] || printf 'local '
 }
 
 function _lk_get_regex() {
@@ -270,24 +270,24 @@ function _lk_get_regex() {
 # expressions or for each REGEX_NAME.
 function lk_get_regex() {
     local _O _H _P _S _U _A _Q _F _1 _2 _4 _6 \
-        REGEX_VARS=() i=0 REGEX EXIT_STATUS=0
+        SH REGEX_VARS=() i=0 REGEX EXIT_STATUS=0
 
-    eval "$(_lk_get_regex DOMAIN_PART_REGEX "[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?")"
-    eval "$(_lk_get_regex DOMAIN_NAME_REGEX "($DOMAIN_PART_REGEX(\\.|\$)){2,}")"
-    eval "$(_lk_get_regex EMAIL_ADDRESS_REGEX "[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@$DOMAIN_NAME_REGEX")"
+    SH=$(_lk_get_regex DOMAIN_PART_REGEX "[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?") && eval "$SH"
+    SH=$(_lk_get_regex DOMAIN_NAME_REGEX "($DOMAIN_PART_REGEX(\\.|\$)){2,}") && eval "$SH"
+    SH=$(_lk_get_regex EMAIL_ADDRESS_REGEX "[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@$DOMAIN_NAME_REGEX") && eval "$SH"
 
     _O="(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])"
-    eval "$(_lk_get_regex IPV4_REGEX "($_O\\.){3}$_O")"
-    eval "$(_lk_get_regex IPV4_OPT_PREFIX_REGEX "$IPV4_REGEX(/(3[0-2]|[12][0-9]|[1-9]))?")"
+    SH=$(_lk_get_regex IPV4_REGEX "($_O\\.){3}$_O") && eval "$SH"
+    SH=$(_lk_get_regex IPV4_OPT_PREFIX_REGEX "$IPV4_REGEX(/(3[0-2]|[12][0-9]|[1-9]))?") && eval "$SH"
 
     _H="[0-9a-fA-F]{1,4}"
     _P="/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9])"
-    eval "$(_lk_get_regex IPV6_REGEX "(($_H:){7}(:|$_H)|($_H:){6}(:|:$_H)|($_H:){5}(:|(:$_H){1,2})|($_H:){4}(:|(:$_H){1,3})|($_H:){3}(:|(:$_H){1,4})|($_H:){2}(:|(:$_H){1,5})|$_H:(:|(:$_H){1,6})|:(:|(:$_H){1,7}))")"
-    eval "$(_lk_get_regex IPV6_OPT_PREFIX_REGEX "$IPV6_REGEX($_P)?")"
+    SH=$(_lk_get_regex IPV6_REGEX "(($_H:){7}(:|$_H)|($_H:){6}(:|:$_H)|($_H:){5}(:|(:$_H){1,2})|($_H:){4}(:|(:$_H){1,3})|($_H:){3}(:|(:$_H){1,4})|($_H:){2}(:|(:$_H){1,5})|$_H:(:|(:$_H){1,6})|:(:|(:$_H){1,7}))") && eval "$SH"
+    SH=$(_lk_get_regex IPV6_OPT_PREFIX_REGEX "$IPV6_REGEX($_P)?") && eval "$SH"
 
-    eval "$(_lk_get_regex IP_OPT_PREFIX_REGEX "($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX)")"
-    eval "$(_lk_get_regex HOST_REGEX "($IPV4_REGEX|$IPV6_REGEX|$DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)")"
-    eval "$(_lk_get_regex HOST_OPT_PREFIX_REGEX "($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX|$DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)")"
+    SH=$(_lk_get_regex IP_OPT_PREFIX_REGEX "($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX)") && eval "$SH"
+    SH=$(_lk_get_regex HOST_REGEX "($IPV4_REGEX|$IPV6_REGEX|$DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)") && eval "$SH"
+    SH=$(_lk_get_regex HOST_OPT_PREFIX_REGEX "($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX|$DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)") && eval "$SH"
 
     # https://en.wikipedia.org/wiki/Uniform_Resource_Identifier
     _S="[a-zA-Z][-a-zA-Z0-9+.]*"                               # scheme
@@ -298,33 +298,33 @@ function lk_get_regex() {
     _A="[-a-zA-Z0-9._~%!\$&'()*+,;=:@/]+"                      # path
     _Q="[-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]+"                     # query
     _F="[-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]*"                     # fragment
-    eval "$(_lk_get_regex URI_REGEX "(($_S):)?(//(($_U)(:($_P))?@)?$_H(:($_O))?)?($_A)?(\\?($_Q))?(#($_F))?")"
-    eval "$(_lk_get_regex URI_REGEX_REQ_SCHEME_HOST "(($_S):)(//(($_U)(:($_P))?@)?$_H(:($_O))?)($_A)?(\\?($_Q))?(#($_F))?")"
+    SH=$(_lk_get_regex URI_REGEX "(($_S):)?(//(($_U)(:($_P))?@)?$_H(:($_O))?)?($_A)?(\\?($_Q))?(#($_F))?") && eval "$SH"
+    SH=$(_lk_get_regex URI_REGEX_REQ_SCHEME_HOST "(($_S):)(//(($_U)(:($_P))?@)?$_H(:($_O))?)($_A)?(\\?($_Q))?(#($_F))?") && eval "$SH"
 
-    eval "$(_lk_get_regex LINUX_USERNAME_REGEX "[a-z_]([-a-z0-9_]{0,31}|[-a-z0-9_]{0,30}\\\$)")"
-    eval "$(_lk_get_regex MYSQL_USERNAME_REGEX "[a-zA-Z0-9_]+")"
+    SH=$(_lk_get_regex LINUX_USERNAME_REGEX "[a-z_]([-a-z0-9_]{0,31}|[-a-z0-9_]{0,30}\\\$)") && eval "$SH"
+    SH=$(_lk_get_regex MYSQL_USERNAME_REGEX "[a-zA-Z0-9_]+") && eval "$SH"
 
     # https://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-source
-    eval "$(_lk_get_regex DPKG_SOURCE_REGEX "[a-z0-9][-a-z0-9+.]+")"
+    SH=$(_lk_get_regex DPKG_SOURCE_REGEX "[a-z0-9][-a-z0-9+.]+") && eval "$SH"
 
-    eval "$(_lk_get_regex PHP_SETTING_NAME_REGEX "[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*")"
-    eval "$(_lk_get_regex PHP_SETTING_REGEX "$PHP_SETTING_NAME_REGEX=.+")"
+    SH=$(_lk_get_regex PHP_SETTING_NAME_REGEX "[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*") && eval "$SH"
+    SH=$(_lk_get_regex PHP_SETTING_REGEX "$PHP_SETTING_NAME_REGEX=.+") && eval "$SH"
 
-    eval "$(_lk_get_regex READLINE_NON_PRINTING_REGEX $'\x01[^\x02]*\x02')"
-    eval "$(_lk_get_regex CONTROL_SEQUENCE_REGEX $'\x1b\\\x5b[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]')"
-    eval "$(_lk_get_regex ESCAPE_SEQUENCE_REGEX $'\x1b[\x20-\x2f]*[\x30-\x7e]')"
-    eval "$(_lk_get_regex NON_PRINTING_REGEX $'(\x01[^\x02]*\x02|\x1b(\\\x5b[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]|[\x20-\x2f]*[\x30-\x5a\\\x5c-\x7e]))')"
+    SH=$(_lk_get_regex READLINE_NON_PRINTING_REGEX $'\x01[^\x02]*\x02') && eval "$SH"
+    SH=$(_lk_get_regex CONTROL_SEQUENCE_REGEX $'\x1b\\\x5b[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]') && eval "$SH"
+    SH=$(_lk_get_regex ESCAPE_SEQUENCE_REGEX $'\x1b[\x20-\x2f]*[\x30-\x7e]') && eval "$SH"
+    SH=$(_lk_get_regex NON_PRINTING_REGEX $'(\x01[^\x02]*\x02|\x1b(\\\x5b[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]|[\x20-\x2f]*[\x30-\x5a\\\x5c-\x7e]))') && eval "$SH"
 
     # *_FILTER_REGEX expressions are:
     # 1. anchored
     # 2. not intended for validation
-    eval "$(_lk_get_regex IPV4_PRIVATE_FILTER_REGEX "^(10\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|192\\.168\\.|127\\.)")"
+    SH=$(_lk_get_regex IPV4_PRIVATE_FILTER_REGEX "^(10\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|192\\.168\\.|127\\.)") && eval "$SH"
 
     _1="[0-9]"
     _2="$_1$_1"
     _4="$_2$_2"
     _6="$_2$_2$_2"
-    eval "$(_lk_get_regex BACKUP_TIMESTAMP_FINDUTILS_REGEX "$_4-$_2-$_2-$_6")"
+    SH=$(_lk_get_regex BACKUP_TIMESTAMP_FINDUTILS_REGEX "$_4-$_2-$_2-$_6") && eval "$SH"
 
     [ $# -gt 0 ] || set -- "${REGEX_VARS[@]}"
     for REGEX in "$@"; do
@@ -618,18 +618,18 @@ function lk_fqdn() {
 
 # shellcheck disable=SC2086
 function _lk_get_colour() {
-    local _LK_VAR_PREFIX SEQ
-    _LK_VAR_PREFIX=$(_lk_var_prefix)
+    local SEQ
     while [ $# -ge 2 ]; do
         SEQ=$(tput $2 2>/dev/null) || SEQ=
-        printf '%s%s%s=%q\n' "$_LK_VAR_PREFIX" "$PREFIX" "$1" "$SEQ"
+        printf '%s%s=%q\n' "$PREFIX" "$1" "$SEQ"
         shift 2
     done
 }
 
 # lk_get_colours [PREFIX]
 function lk_get_colours() {
-    local PREFIX=${1-LK_}
+    local PREFIX
+    PREFIX=$(_lk_var_prefix)${1-LK_}
     _lk_get_colour \
         BLACK "setaf 0" \
         RED "setaf 1" \
@@ -1038,9 +1038,10 @@ function lk_echoc() {
 }
 
 function lk_readline_format() {
-    local LC_ALL=C STRING=$1 REGEX
+    local LC_ALL=C STRING=$1 REGEX SH
     for REGEX in CONTROL_SEQUENCE_REGEX ESCAPE_SEQUENCE_REGEX; do
-        eval "$(lk_get_regex "$REGEX")"
+        SH=$(lk_get_regex "$REGEX") &&
+            eval "$SH"
         while [[ $STRING =~ ((.*)(^|[^$'\x01']))(${!REGEX})+(.*) ]]; do
             STRING=${BASH_REMATCH[1]}$'\x01'${BASH_REMATCH[4]}$'\x02'${BASH_REMATCH[$((${#BASH_REMATCH[@]} - 1))]}
         done
@@ -1580,7 +1581,7 @@ function lk_curl_version() {
 # up-to-date, files previously downloaded will be re-downloaded.
 function lk_download() {
     local SERVER_NAMES CURL_VERSION CURL_COMMAND DOWNLOAD_DIR URI FILENAME \
-        DOWNLOAD_ONE DOWNLOAD_ARGS \
+        SH DOWNLOAD_ONE DOWNLOAD_ARGS \
         FILENAMES=() COMMANDS=() COMMAND_ARGS=() COMMAND
     [ "${1:-}" != -s ] || { SERVER_NAMES=1 && shift; }
     CURL_VERSION=$(lk_curl_version) || return
@@ -1608,7 +1609,8 @@ function lk_download() {
         DOWNLOAD_ARGS=()
         lk_is_true SERVER_NAMES || {
             [ -n "$FILENAME" ] || {
-                eval "$(lk_uri_parts "$URI" _PATH)"
+                SH=$(lk_uri_parts "$URI" _PATH) &&
+                    eval "$SH"
                 FILENAME=${_PATH##*/}
             }
             [ -n "$FILENAME" ] ||

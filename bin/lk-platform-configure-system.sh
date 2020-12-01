@@ -275,9 +275,10 @@
     }
 
     for i in "${SETTINGS[@]}"; do
-        eval "$(printf \
+        SH=$(printf \
             '%s=${%s-${%s-${%s-$(install_env "(LK_(DEFAULT_)?)?%s")}}}' \
-            "$i" "$i" "LK_DEFAULT_${i#LK_}" "${i#LK_}" "${i#LK_}")"
+            "$i" "$i" "LK_DEFAULT_${i#LK_}" "${i#LK_}" "${i#LK_}") &&
+            eval "$SH"
     done
 
     lk_console_message "Checking lk-platform configuration"

@@ -3,7 +3,7 @@
 
 unset LK_PROMPT_DISPLAYED LK_BASE
 
-eval "$(
+SH=$(
     BS=${BASH_SOURCE[0]}
     [ "${BS%/*}" != "$BS" ] || BS=./$BS
     if [ ! -L "$BS" ] &&
@@ -13,12 +13,12 @@ eval "$(
     else
         echo "$BS: LK_BASE not set" >&2
     fi
-)"
+) && eval "$SH"
 [ -n "${LK_BASE:-}" ] || return
 export LK_BASE
 
 # see lib/bash/common.sh
-eval "$(
+SH=$(
     SETTINGS=(
         "/etc/default/lk-platform"
         ${HOME:+"\$HOME/.\${LK_PATH_PREFIX:-lk-}settings"}
@@ -35,7 +35,7 @@ eval "$(
         VAR=($(lk_var))
         [ ${#VAR[@]} -eq 0 ] || declare -p $(lk_var)
     )
-)"
+) && eval "$SH"
 
 . "$LK_BASE/lib/bash/include/core.sh"
 
@@ -164,7 +164,8 @@ LK_PATH_PREFIX="${LK_PATH_PREFIX:-lk-}"
 LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(
     sed 's/[^a-zA-Z0-9]//g' <<<"$LK_PATH_PREFIX"
 )}"
-eval "$(. "$LK_BASE/lib/bash/env.sh")"
+SH=$(. "$LK_BASE/lib/bash/env.sh") &&
+    eval "$SH"
 
 [[ $- != *i* ]] || {
 
@@ -175,23 +176,25 @@ eval "$(. "$LK_BASE/lib/bash/env.sh")"
     HISTFILESIZE=
     HISTTIMEFORMAT="%b %_d %Y %H:%M:%S %z "
 
-    [ "${LK_COMPLETION:-1}" -ne 1 ] || eval "$(for FILE in \
+    [ "${LK_COMPLETION:-1}" -ne 1 ] || { SH=$(for FILE in \
         /usr/share/bash-completion/bash_completion \
         ${HOMEBREW_PREFIX:+"$HOMEBREW_PREFIX/etc/profile.d/bash_completion.sh"}; do
         [ -r "$FILE" ] || continue
         printf '. %q\n' "$FILE" "$LK_BASE/lib/bash/completion.sh"
         return
-    done)"
+    done) && eval "$SH"; }
 
     [ "${LK_PROMPT:-1}" -ne 1 ] || lk_enable_prompt
 
-    ! lk_command_exists dircolors || eval "$(
+    ! lk_command_exists dircolors || { SH=$(
         COMMAND=(dircolors -b)
         [ ! -r ~/.dircolors ] || COMMAND+=(~/.dircolors)
         # OTHER_WRITABLE defaults to 34;42 (blue on green), which is almost
         # always unreadable; replace it with white on green
         OUTPUT=$("${COMMAND[@]}") &&
             echo "${OUTPUT//=34;42:/=37;42:}"
-    )"
+    ) && eval "$SH"; }
 
 }
+
+unset SH
