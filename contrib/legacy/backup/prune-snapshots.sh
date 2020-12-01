@@ -126,11 +126,11 @@ function lk_mapfile() {
     done <"$2"
 }
 
-LK_BOLD=$(tput bold 2>/dev/null) || LK_BOLD=
-LK_GREEN=$(tput setaf 2 2>/dev/null) || LK_GREEN=
-LK_CYAN=$(tput setaf 6 2>/dev/null) || LK_CYAN=
-LK_YELLOW=$(tput setaf 3 2>/dev/null) || LK_YELLOW=
-LK_RESET=$(tput sgr0 2>/dev/null) || LK_RESET=
+LK_BOLD=$(tput bold) || LK_BOLD=
+LK_GREEN=$(tput setaf 2) || LK_GREEN=
+LK_CYAN=$(tput setaf 6) || LK_CYAN=
+LK_YELLOW=$(tput setaf 3) || LK_YELLOW=
+LK_RESET=$(tput sgr0) || LK_RESET=
 
 ##
 

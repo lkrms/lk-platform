@@ -620,7 +620,7 @@ function lk_fqdn() {
 function _lk_get_colour() {
     local SEQ
     while [ $# -ge 2 ]; do
-        SEQ=$(tput $2 2>/dev/null) || SEQ=
+        SEQ=$(tput $2) || SEQ=
         printf '%s%s=%q\n' "$PREFIX" "$1" "$SEQ"
         shift 2
     done
@@ -1138,7 +1138,7 @@ function lk_console_blank() {
 
 function lk_tty_columns() {
     local _COLUMNS
-    _COLUMNS=${COLUMNS:-$(tput cols 2>/dev/null)} || _COLUMNS=80
+    _COLUMNS=${COLUMNS:-$(tput cols)} || _COLUMNS=80
     echo "$_COLUMNS"
 }
 

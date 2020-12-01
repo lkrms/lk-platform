@@ -31,7 +31,7 @@ function lk_prompt_command() {
             fi
             STR=" after ${SECS}s "
             PS+=("$STR\[$LK_RESET$LK_DIM\]")
-            ((LEN = $(tput cols 2>/dev/null) - LEN - ${#STR})) || true
+            ((LEN = $(tput cols) - LEN - ${#STR})) || true
             [ "$LEN" -le 0 ] || {
                 LK_PROMPT_LAST_COMMAND_CLEAN=$(lk_strip_non_printing \
                     "${LK_PROMPT_LAST_COMMAND[*]}")

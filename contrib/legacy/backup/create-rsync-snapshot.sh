@@ -286,11 +286,11 @@ function lk_mail_send() {
     fi
 }
 
-LK_BOLD=$(tput bold 2>/dev/null) || LK_BOLD=
-LK_RED=$(tput setaf 1 2>/dev/null) || LK_RED=
-LK_CYAN=$(tput setaf 6 2>/dev/null) || LK_CYAN=
-LK_YELLOW=$(tput setaf 3 2>/dev/null) || LK_YELLOW=
-LK_RESET=$(tput sgr0 2>/dev/null) || LK_RESET=
+LK_BOLD=$(tput bold) || LK_BOLD=
+LK_RED=$(tput setaf 1) || LK_RED=
+LK_CYAN=$(tput setaf 6) || LK_CYAN=
+LK_YELLOW=$(tput setaf 3) || LK_YELLOW=
+LK_RESET=$(tput sgr0) || LK_RESET=
 
 ##
 
