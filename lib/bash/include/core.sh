@@ -618,10 +618,11 @@ function lk_fqdn() {
 
 # shellcheck disable=SC2086
 function _lk_get_colour() {
-    local SEQ
+    local _LK_VAR_PREFIX SEQ
+    _LK_VAR_PREFIX=$(_lk_var_prefix)
     while [ $# -ge 2 ]; do
         SEQ=$(tput $2 2>/dev/null) || SEQ=
-        printf '%s%s=%q\n' "$PREFIX" "$1" "$SEQ"
+        printf '%s%s%s=%q\n' "$_LK_VAR_PREFIX" "$PREFIX" "$1" "$SEQ"
         shift 2
     done
 }
@@ -1382,77 +1383,18 @@ function lk_confirm() {
         VALUE=$DEFAULT
     fi
     while [[ ! ${VALUE:-} =~ ^([yY]([eE][sS])?|[nN][oO]?)$ ]]; do
-        read -rep "$(_lk_console_get_prompt) " "${@:3}" VALUE \
-            2>&"${_LK_FD:-2}" && [ -n "$VALUE" ] || VALUE=$DEFAULT
+        read -re "${@:3}" \
+            -p "$(_lk_console_get_prompt) " VALUE 2>&"${_LK_FD:-2}" &&
+            [ -n "$VALUE" ] || VALUE=$DEFAULT
     done
     [[ $VALUE =~ ^[yY]([eE][sS])?$ ]]
 }
 
-# lk_console_checklist TITLE TEXT [TAG ITEM...] [INITIAL_STATUS]
-#
-# Present each ITEM (or input line if no TAG ITEM pairs are passed) as a
-# checklist menu, and output a list of TAG strings (or lines) selected by the
-# user.
-#
-# Use INITIAL_STATUS to specify that entries should initially be "on" (the
-# default), or "off".
-function lk_console_checklist() {
-    # minimum dialog width: 54 (i.e. 38+16)
-    # maximum dialog width: 76 (i.e. 60+16)
-    # maximum list height: 10
-    # maximum dialog height: 16 + lines of text after wrapping
-    local TITLE=$1 TEXT=$2 LIST_HEIGHT=10 WIDTH=38 MAX_WIDTH=60 \
-        INITIAL_STATUS LINE ITEM ITEMS=()
-    shift 2 || return
-    # If an odd number of arguments remain, the last one is INITIAL_STATUS
-    ! (($# % 2)) || INITIAL_STATUS="${*: -1:1}"
-    INITIAL_STATUS=${INITIAL_STATUS:-${LK_CHECKLIST_DEFAULT:-on}}
-    if [ $# -lt 2 ]; then
-        while IFS= read -r LINE || [ -n "$LINE" ]; do
-            ! lk_no_input || {
-                [ "$INITIAL_STATUS" = off ] || echo "$LINE"
-                continue
-            }
-            ITEM=$(lk_ellipsis "$MAX_WIDTH" "$LINE")
-            ITEMS+=("$(printf '%q %q' "$LINE" "$ITEM")")
-            [ ${#ITEM} -le "$WIDTH" ] || WIDTH=${#ITEM}
-        done
-    else
-        while [ $# -ge 2 ]; do
-            ! lk_no_input || {
-                [ "$INITIAL_STATUS" = off ] || echo "$1"
-                shift 2
-                continue
-            }
-            ITEM=$(lk_ellipsis "$MAX_WIDTH" "$2")
-            ITEMS+=("$(printf '%q %q' "$1" "$ITEM")")
-            [ ${#ITEM} -le "$WIDTH" ] || WIDTH=${#ITEM}
-            shift 2
-        done
-    fi
-    ! lk_no_input || return 0
-    [ ${#ITEMS[@]} -ge "$LIST_HEIGHT" ] || LIST_HEIGHT=${#ITEMS[@]}
-    ((WIDTH += 16, WIDTH += WIDTH % 2))
-    TEXT=$(lk_fold "$TEXT" $((WIDTH - 4)))
-    eval "ITEMS=(${ITEMS[*]/%/ $INITIAL_STATUS})"
-    whiptail \
-        --backtitle "$(lk_myself 1)" \
-        --title "$TITLE" \
-        --notags \
-        --separate-output \
-        --checklist "$TEXT" \
-        "$((LIST_HEIGHT + 6 + $(wc -l <<<"$TEXT")))" \
-        "$WIDTH" \
-        "$LIST_HEIGHT" \
-        "${ITEMS[@]}" \
-        3>&1 1>&2 2>&3
-}
-
 function lk_no_input() {
-    ! lk_is_true LK_FORCE_INPUT && {
+    if ! lk_is_true LK_FORCE_INPUT; then
         [ ! -t 0 ] ||
             lk_is_true LK_NO_INPUT
-    }
+    fi
 }
 
 function lk_verbose() {
@@ -1464,6 +1406,7 @@ function lk_verbose() {
 # Copy input to the user's clipboard if possible, otherwise print it out.
 function lk_clip() {
     local OUTPUT COMMAND LINES MESSAGE DISPLAY_LINES=${LK_CLIP_LINES:-5}
+    [ ! -t 0 ] || lk_warn "no input" || return
     OUTPUT=$(cat)
     if COMMAND=$(lk_command_first_existing \
         "xclip -selection clipboard" \
@@ -1475,8 +1418,7 @@ function lk_clip() {
                 echo "$LK_BOLD$LK_MAGENTA...$LK_RESET")
             MESSAGE="$LINES lines copied"
         }
-        LK_TTY_NO_FOLD=1 \
-            lk_console_item "${MESSAGE:-Copied} to clipboard:" \
+        lk_console_item "${MESSAGE:-Copied} to clipboard:" \
             $'\n'"$LK_GREEN$OUTPUT$LK_RESET" "$LK_MAGENTA"
     else
         lk_console_error "Unable to copy output to clipboard"
@@ -1484,41 +1426,25 @@ function lk_clip() {
     fi
 }
 
-# lk_add_file_suffix file_path suffix [ext]
-#   Add SUFFIX to FILE_PATH without changing FILE_PATH's extension.
-#   Use EXT for special extensions like ".tar.gz".
-function lk_add_file_suffix() {
-    local BASENAME
-    BASENAME="${1##*/}"
-    if [ -z "${3:-}" ] && [[ $BASENAME =~ .+\..+ ]]; then
-        echo "${1%.*}${2}.${1##*.}"
-    elif [ -n "${3:-}" ] && eval "[[ \"$BASENAME\" =~ .+${3//./\\.}\$ ]]"; then
-        echo "${1%$3}${2}${3}"
-    else
-        echo "${1}${2}"
-    fi
+# lk_file_add_suffix FILENAME SUFFIX
+#
+# Add SUFFIX to FILENAME without changing its extension.
+function lk_file_add_suffix() {
+    local EXT
+    [[ $1 =~ [^/]((\.tar)?\.[-a-zA-Z0-9_]+/*|/*)$ ]] &&
+        EXT=${BASH_REMATCH[1]} ||
+        EXT=
+    echo "${1%$EXT}$2$EXT"
 }
 
-# lk_next_backup_file file_path
-#   Output FILE_PATH with suffix "_backup" or "_backup.N", where N is 2 or
-#   greater, after finding the first that doesn't already exist.
-function lk_next_backup_file() {
-    local BACKUP i=1
-    BACKUP="$(lk_add_file_suffix "$1" "_backup")"
-    while [ -e "$BACKUP" ]; do
-        ((++i))
-        BACKUP="$(lk_add_file_suffix "$1" "_backup.$i")"
-    done
-    echo "$BACKUP"
-}
-
-# lk_maybe_add_extension file_path ext
-#   Output ${FILE_PATH}${EXT} unless FILE_PATH already ends with EXT.
-function lk_maybe_add_extension() {
-    [ -n "$1" ] || lk_warn "no filename" || return
-    [ "$(lk_lower "${1: -${#2}}")" = "$(lk_lower "$2")" ] &&
-        echo "$1" ||
-        echo "$1$2"
+# lk_file_maybe_add_extension FILENAME EXT
+#
+# Add EXT to FILENAME if it's missing.
+function lk_file_maybe_add_extension() {
+    (
+        shopt -s nocasematch
+        [[ $1 == *.${2#.} ]] && echo "$1" || echo "$1.${2#.}"
+    )
 }
 
 function lk_mime_type() {
@@ -1528,48 +1454,38 @@ function lk_mime_type() {
 
 function lk_is_pdf() {
     local MIME_TYPE
-    MIME_TYPE="$(lk_mime_type "$1")" &&
-        [ "$MIME_TYPE" = "application/pdf" ]
+    MIME_TYPE=$(lk_mime_type "$1") &&
+        [ "$MIME_TYPE" = application/pdf ]
 }
 
-function lk_is_host() {
-    eval "$(lk_get_regex HOST_REGEX)"
-    [[ $1 =~ ^${HOST_REGEX}$ ]]
+function _lk_regex_define() {
+    eval "$(lk_get_regex)"
+    while [ $# -ge 2 ]; do
+        eval "function $1() {
+    local $2=$(printf '%q' "${!2}")
+    [[ \$1 =~ ^\$$2\$ ]]
+}"
+        shift 2
+    done
 }
 
-function lk_is_fqdn() {
-    eval "$(lk_get_regex DOMAIN_NAME_REGEX)"
-    [[ $1 =~ ^${DOMAIN_NAME_REGEX}$ ]]
-}
+_lk_regex_define \
+    lk_is_host HOST_REGEX \
+    lk_is_fqdn DOMAIN_NAME_REGEX \
+    lk_is_email EMAIL_ADDRESS_REGEX \
+    lk_is_uri URI_REGEX_REQ_SCHEME_HOST
 
-# lk_is_email STRING
-#   True if STRING is a valid email address. Quoted local parts are not
-#   supported.
-function lk_is_email() {
-    eval "$(lk_get_regex EMAIL_ADDRESS_REGEX)"
-    [[ $1 =~ ^${EMAIL_ADDRESS_REGEX}$ ]]
-}
-
-# lk_is_uri uri
-#   True if URI is a valid Uniform Resource Identifier with explicit scheme
-#   and authority components ("scheme://host" at minimum).
-#   See https://en.wikipedia.org/wiki/Uniform_Resource_Identifier
-function lk_is_uri() {
-    eval "$(lk_get_regex URI_REGEX_REQ_SCHEME_HOST)"
-    [[ $1 =~ ^${URI_REGEX_REQ_SCHEME_HOST}$ ]]
-}
-
-# lk_uri_parts URI [URI_COMPONENT...]
+# lk_uri_parts URI [COMPONENT...]
 #
 # Output Bash-compatible variable assignments for all components in URI or for
-# each URI_COMPONENT.
+# each COMPONENT.
 #
-# URI_COMPONENT can be one of: _SCHEME, _USERNAME, _PASSWORD, _HOST, _PORT,
-# _PATH, _QUERY, _FRAGMENT, _IPV6_ADDRESS
+# COMPONENT can be one of: _SCHEME, _USERNAME, _PASSWORD, _HOST, _PORT, _PATH,
+# _QUERY, _FRAGMENT, _IPV6_ADDRESS
 function lk_uri_parts() {
     local PARTS=("${@:2}") PART VALUE
     eval "$(lk_get_regex URI_REGEX)"
-    [[ "$1" =~ ^${URI_REGEX}$ ]] || return
+    [[ $1 =~ ^$URI_REGEX$ ]] || return
     [ ${#PARTS[@]} -gt 0 ] || PARTS=(
         _SCHEME _USERNAME _PASSWORD _HOST _PORT _PATH _QUERY _FRAGMENT
         _IPV6_ADDRESS
@@ -1608,6 +1524,7 @@ function lk_uri_parts() {
             return 1
             ;;
         esac
+        _lk_var_prefix
         printf '%s=%q\n' "$PART" "$VALUE"
     done
 }
@@ -1636,71 +1553,98 @@ function lk_wget_uris() {
     lk_get_uris "$TEMP_FILE"
 }
 
-# lk_download file_uri...
-#   Download each FILE_URI to the current directory unless an up-to-date
-#   version already exists.
+function lk_curl_version() {
+    curl --version | awk 'NR == 1 { print $2 }' ||
+        lk_warn "unable to determine curl version" || return
+}
+
+# lk_download [-s] [URI[|FILENAME]...]
 #
-#   Add "|filename.ext" after each FILE_URI that doesn't include a filename,
-#   or call with IGNORE_FILENAMES=1 to use the server-specified filename.
-#   If IGNORE_FILENAMES=1, existing downloads are ignored and/or overwritten.
+# Download each URI to the current directory unless an up-to-date version is
+# already present. If no URI arguments are given, read them from input.
+#
+# By default, the file name for each URI is taken from its path, and an error is
+# returned if a URI has an empty or unsuitable path. To override this behaviour,
+# specify the file name for a URI by adding the "|FILENAME" suffix, or set -s to
+# use the file name specified by the server.
+#
+# IMPORTANT: if -s is set, files in the current directory with the same name as
+# a server-specified file name will be overwritten, and even if they are
+# up-to-date, files previously downloaded will be re-downloaded.
 function lk_download() {
-    local IGNORE_FILENAMES="${IGNORE_FILENAMES:-0}" CURL_VERSION URI FILENAME \
-        DOWNLOAD_ONE DOWNLOAD_ARGS _PATH FILENAMES=() ONE_DOWNLOAD_ARGS=() MANY_DOWNLOAD_ARGS=() \
-        CURL_ARGS=(--fail --location --remote-time) ARGS
-    CURL_VERSION="$(curl --version | grep -Eo '\b[0-9]+(\.[0-9]+){1,2}\b' | head -n1)" ||
-        lk_warn "curl version unknown" || return
-    lk_is_false IGNORE_FILENAMES || {
-        # TODO: download to a temporary directory and move to $PWD only if successful
-        lk_version_at_least "$CURL_VERSION" "7.26.0" ||
-            lk_warn "installed version of curl too old to output effective filename" || return
-        CURL_ARGS+=(--remote-header-name --write-out "%{filename_effective}\n")
+    local SERVER_NAMES CURL_VERSION CURL_COMMAND DOWNLOAD_DIR URI FILENAME \
+        DOWNLOAD_ONE DOWNLOAD_ARGS \
+        FILENAMES=() COMMANDS=() COMMAND_ARGS=() COMMAND
+    [ "${1:-}" != -s ] || { SERVER_NAMES=1 && shift; }
+    CURL_VERSION=$(lk_curl_version) || return
+    CURL_COMMAND=(
+        curl
+        --fail
+        --location
+        --remote-time
+    )
+    ! lk_is_true SERVER_NAMES || {
+        lk_version_at_least "$CURL_VERSION" 7.26.0 ||
+            lk_warn "curl too old to output filename_effective" || return
+        DOWNLOAD_DIR=$(lk_mktemp_dir) &&
+            pushd "$DOWNLOAD_DIR" >/dev/null || return
+        CURL_COMMAND+=(
+            --remote-name
+            --remote-header-name
+            --write-out '%{filename_effective}\n'
+        )
     }
-    ! lk_version_at_least "$CURL_VERSION" "7.66.0" ||
-        CURL_ARGS+=(--parallel)
     while IFS='|' read -r URI FILENAME; do
         [ -n "$URI" ] || continue
         lk_is_uri "$URI" || lk_warn "not a URI: $URI" || return
-        DOWNLOAD_ONE=0
+        unset DOWNLOAD_ONE
         DOWNLOAD_ARGS=()
-        if lk_is_true IGNORE_FILENAMES; then
-            DOWNLOAD_ARGS+=(--remote-name)
-        else
+        lk_is_true SERVER_NAMES || {
             [ -n "$FILENAME" ] || {
-                eval "$(lk_uri_parts "$URI" "_PATH")"
-                FILENAME="${_PATH##*/}"
+                eval "$(lk_uri_parts "$URI" _PATH)"
+                FILENAME=${_PATH##*/}
             }
-            [ -n "$FILENAME" ] || lk_warn "no filename in '$URI'" || return
+            [ -n "$FILENAME" ] ||
+                lk_warn "no filename in URI: $URI" || return
             [ ! -f "$FILENAME" ] || {
+                # --time-cond can only be set once per invocation of curl, so
+                # queue separate commands for any files downloaded previously
                 DOWNLOAD_ONE=1
-                DOWNLOAD_ARGS+=(--time-cond "$(
-                    lk_timestamp_readable "$(
-                        lk_file_modified "$FILENAME"
-                    )"
-                )")
+                DOWNLOAD_ARGS+=(--time-cond "$(lk_timestamp_readable \
+                    "$(lk_file_modified "$FILENAME")")")
             }
             DOWNLOAD_ARGS+=(--output "$FILENAME")
             FILENAMES+=("$FILENAME")
-        fi
+        }
         DOWNLOAD_ARGS+=("$URI")
-        if lk_is_true DOWNLOAD_ONE; then
-            ONE_DOWNLOAD_ARGS+=("$(declare -p DOWNLOAD_ARGS)")
-        else
-            MANY_DOWNLOAD_ARGS+=("${DOWNLOAD_ARGS[@]}")
-        fi
-    done < <(
-        [ $# -gt 0 ] &&
-            printf '%s\n' "$@" ||
-            cat
-    )
-    [ ${#MANY_DOWNLOAD_ARGS[@]} -eq 0 ] ||
-        curl "${CURL_ARGS[@]}" "${MANY_DOWNLOAD_ARGS[@]}" || return
-    [ ${#ONE_DOWNLOAD_ARGS[@]} -eq 0 ] ||
-        for ARGS in "${ONE_DOWNLOAD_ARGS[@]}"; do
-            eval "$ARGS"
-            curl "${CURL_ARGS[@]}" "${DOWNLOAD_ARGS[@]}" || return
-        done
-    lk_is_true IGNORE_FILENAMES ||
+        lk_is_true DOWNLOAD_ONE || {
+            COMMAND_ARGS+=("${DOWNLOAD_ARGS[@]}")
+            continue
+        }
+        COMMANDS+=("$(lk_quote CURL_COMMAND DOWNLOAD_ARGS)")
+    done < <([ $# -gt 0 ] &&
+        lk_echo_args "$@" ||
+        cat)
+    [ ${#COMMAND_ARGS[@]} -eq 0 ] || {
+        CURL_COMMAND=("${CURL_COMMAND[@]//--remote-name/--remote-name-all}")
+        ! lk_version_at_least "$CURL_VERSION" 7.66.0 ||
+            CURL_COMMAND+=(--parallel)
+        ! lk_version_at_least "$CURL_VERSION" 7.68.0 ||
+            CURL_COMMAND+=(--parallel-immediate)
+        COMMANDS+=("$(lk_quote CURL_COMMAND COMMAND_ARGS)")
+    }
+    for COMMAND in ${COMMANDS[@]+"${COMMANDS[@]}"}; do
+        eval "$COMMAND" || return
+    done
+    lk_is_true SERVER_NAMES || {
         lk_echo_array FILENAMES
+        return
+    }
+    popd >/dev/null && (
+        shopt -s dotglob &&
+            mv -f "$DOWNLOAD_DIR"/* "$PWD" &&
+            rmdir "$DOWNLOAD_DIR"
+    ) || return
 }
 
 # lk_can_sudo COMMAND [USERNAME]

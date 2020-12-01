@@ -56,7 +56,7 @@ function exit_trap() {
 
     if [ -f "$LK_BASE/lib/bash/include/core.sh" ]; then
         . "$LK_BASE/lib/bash/include/core.sh"
-        lk_include provision macos
+        lk_include provision whiptail macos
         SUDOERS=$(cat "$LK_BASE/share/sudoers.d/default")
         ${CONTRIB_PACKAGES_FILE:+. "$LK_BASE/$CONTRIB_PACKAGES_FILE"}
     else
@@ -65,6 +65,7 @@ function exit_trap() {
             ${CONTRIB_PACKAGES_FILE:+"/$CONTRIB_PACKAGES_FILE"} \
             /lib/bash/include/core.sh \
             /lib/bash/include/provision.sh \
+            /lib/bash/include/whiptail.sh \
             /lib/bash/include/macos.sh \
             /share/sudoers.d/default; do
             FILE=$SCRIPT_DIR/${FILE_PATH##*/}
@@ -385,7 +386,7 @@ EOF
                 "$FORMULA_DESC"
             )
         done
-        INSTALL_FORMULAE=($(lk_log_bypass_stderr lk_console_checklist \
+        INSTALL_FORMULAE=($(lk_log_bypass_stderr lk_whiptail_checklist \
             "Installing new formulae" \
             "Selected Homebrew formulae will be installed:" \
             "${FORMULAE[@]}")) && [ ${#INSTALL_FORMULAE[@]} -gt 0 ] ||
@@ -412,7 +413,7 @@ EOF
                 "$CASK_DESC"
             )
         done
-        INSTALL_CASKS=($(lk_log_bypass_stderr lk_console_checklist \
+        INSTALL_CASKS=($(lk_log_bypass_stderr lk_whiptail_checklist \
             "Installing new casks" \
             "Selected Homebrew casks will be installed:" \
             "${CASKS[@]}")) && [ ${#INSTALL_CASKS[@]} -gt 0 ] ||
@@ -476,7 +477,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
             done
             if [ ${#INSTALL_APPS[@]} -gt 0 ]; then
                 APP_IDS=("${INSTALL_APPS[@]}")
-                if INSTALL_APPS=($(lk_log_bypass_stderr lk_console_checklist \
+                if INSTALL_APPS=($(lk_log_bypass_stderr lk_whiptail_checklist \
                     "Installing new apps" \
                     "Selected apps will be installed from the Mac App Store:" \
                     "${APPS[@]}")) && [ ${#INSTALL_APPS[@]} -gt 0 ]; then
