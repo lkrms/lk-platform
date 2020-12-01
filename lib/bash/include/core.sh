@@ -863,7 +863,7 @@ function lk_get_outputs_of() {
         for i in _LK_STDOUT _LK_STDERR; do
             _lk_var_prefix
             printf '%s=%q\n' "${i#_LK}" "$(cat "${!i}")"
-            rm -f "${!i}" || true
+            rm -f -- "${!i}" || true
         done
         exit "${EXIT_STATUS:-0}"
     ) || EXIT_STATUS=$?
@@ -1529,14 +1529,20 @@ function lk_uri_parts() {
     done
 }
 
-# lk_get_uris [FILE_PATH...]
+# lk_get_uris [FILE...]
 #
-# Match and output URIs ("scheme://host" at minimum) in each FILE_PATH or input.
+# Match and output URIs ("scheme://host" at minimum) in each FILE or input.
 function lk_get_uris() {
-    local EXIT_STATUS=0
+    local REGEX_QUOTED REGEX EXIT_STATUS=0
     eval "$(lk_get_regex URI_REGEX_REQ_SCHEME_HOST)"
-    grep -Eo "\\b$URI_REGEX_REQ_SCHEME_HOST\\b" "$@" || EXIT_STATUS=$?
-    # exit 0 unless there's an actual error
+    REGEX_QUOTED="'($(sed -E "s/(\\[[^]']*)'([^]']*\\])/(\1\2|(\\\\\\\\'))/g" \
+        <<<"$URI_REGEX_REQ_SCHEME_HOST"))'"
+    REGEX="([^a-zA-Z']|^)($URI_REGEX_REQ_SCHEME_HOST)([^']|\$)"
+    grep -Eo "($REGEX|$REGEX_QUOTED)" "$@" |
+        sed -E \
+            -e "s/^${REGEX//\//\\\/}/\2/" \
+            -e "s/^${REGEX_QUOTED//\//\\\/}/\1/" || EXIT_STATUS=$?
+    # `grep` returns 1 if there are no matches
     [ "$EXIT_STATUS" -eq 0 ] || [ "$EXIT_STATUS" -eq 1 ]
 }
 
@@ -1547,10 +1553,11 @@ function lk_get_uris() {
 function lk_wget_uris() {
     local TEMP_FILE
     # --convert-links is disabled if wget uses standard output
-    TEMP_FILE="$(lk_mktemp_file)" &&
+    TEMP_FILE=$(lk_mktemp_file) &&
         wget --quiet --convert-links --output-document "$TEMP_FILE" "$1" ||
         return
     lk_get_uris "$TEMP_FILE"
+    rm -f -- "$TEMP_FILE"
 }
 
 function lk_curl_version() {
