@@ -1655,27 +1655,28 @@ function lk_download() {
 }
 
 # lk_can_sudo COMMAND [USERNAME]
-#   Return true if the current user is allowed to execute COMMAND via sudo.
 #
-#   Specify USERNAME to override the default target user (usually root). Set
-#   LK_NO_INPUT to return false if sudo requires a password.
+# Return true if the current user is allowed to execute COMMAND via sudo.
 #
-#   If the current user has no sudo privileges at all, they will never be
-#   prompted for a password.
+# Specify USERNAME to override the default target user (usually root). Set
+# LK_NO_INPUT to return false if sudo requires a password.
+#
+# If the current user has no sudo privileges at all, they will not be prompted
+# for a password.
 function lk_can_sudo() {
-    local COMMAND="${1:-}" USERNAME="${2:-}" ERROR
+    local COMMAND=${1:-} USERNAME=${2:-} ERROR
     [ -n "$COMMAND" ] || lk_warn "no command" || return
     [ -z "$USERNAME" ] || lk_user_exists "$USERNAME" ||
         lk_warn "user not found: $USERNAME" || return
     # 1. sudo exists
     lk_command_exists sudo && {
-        # 2. the current user (or one of their groups) appears in sudo's
+        # 2. The current user (or one of their groups) appears in sudo's
         #    security policy
-        ERROR="$(sudo -nv 2>&1)" ||
+        ERROR=$(sudo -nv 2>&1) ||
             # "sudo: a password is required" means the user can sudo
             grep -i password <<<"$ERROR" >/dev/null
     } && {
-        # 3. the current user is allowed to execute COMMAND as USERNAME (attempt
+        # 3. The current user is allowed to execute COMMAND as USERNAME (attempt
         #    with prompting disabled first)
         sudo -n ${USERNAME:+-u "$USERNAME"} -l "$COMMAND" >/dev/null 2>&1 || {
             ! lk_no_input &&
@@ -1688,7 +1689,9 @@ function lk_will_sudo() {
     lk_is_true LK_SUDO
 }
 
-# LK_SUDO=<1|0|Y|N> lk_maybe_sudo COMMAND [ARG...]
+# lk_maybe_sudo COMMAND [ARG...]
+#
+# Run the given command line with sudo if LK_SUDO is set.
 function lk_maybe_sudo() {
     if lk_is_true LK_SUDO; then
         lk_elevate "$@"
@@ -1697,6 +1700,9 @@ function lk_maybe_sudo() {
     fi
 }
 
+# lk_elevate COMMAND [ARG...]
+#
+# Run the given command line with sudo unless the current user is root.
 function lk_elevate() {
     if [ "$EUID" -eq 0 ]; then
         "$@"
@@ -1712,12 +1718,16 @@ function lk_elevate_if_error() {
         [ "$EUID" -eq 0 ] || ! lk_can_sudo "$1" ||
             {
                 EXIT_STATUS=0
-                lk_elevate "$@" || EXIT_STATUS=$?
+                sudo -H "$@" || EXIT_STATUS=$?
             }
     }
     return "$EXIT_STATUS"
 }
 
+# lk_maybe_elevate COMMAND [ARG...]
+#
+# Run the given command line with sudo if the current user is allowed to,
+# otherwise run it without elevation.
 function lk_maybe_elevate() {
     if [ "$EUID" -eq 0 ] || ! lk_can_sudo "$1"; then
         "$@"
