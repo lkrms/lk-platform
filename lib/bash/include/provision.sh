@@ -165,7 +165,7 @@ function lk_ssh_get_host_key_files() {
     lk_ssh_host_exists "$1" || lk_warn "ssh host not found: $1" || return
     KEY_FILE=$(ssh -G "$1" |
         awk '/^identityfile / { print $2 }' |
-        lk_expand_paths |
+        lk_expand_path |
         lk_filter "test -f") &&
         [ -n "$KEY_FILE" ] &&
         echo "$KEY_FILE"
