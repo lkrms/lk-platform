@@ -2105,7 +2105,8 @@ function lk_file_get_text() {
     lk_is_identifier "$2" || lk_warn "not a valid identifier: $2" || return
     eval "$2=\$(cat \"\$1\" && printf .)" &&
         eval "$2=\${$2%.}" &&
-        eval "$2=\${$2%\$'\\n'}\$'\\n'"
+        { [ -z "${!2}" ] ||
+            eval "$2=\${$2%\$'\\n'}\$'\\n'"; }
 }
 
 # lk_file_keep_original FILE
