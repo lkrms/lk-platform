@@ -2100,6 +2100,9 @@ else
 fi
 
 # lk_file_get_text FILE VAR
+#
+# Read the entire FILE into variable VAR, adding a newline at the end unless
+# FILE has zero bytes or its last byte is a newline.
 function lk_file_get_text() {
     lk_maybe_sudo test -e "$1" || lk_warn "file not found: $1" || return
     lk_is_identifier "$2" || lk_warn "not a valid identifier: $2" || return
@@ -2119,9 +2122,9 @@ function lk_file_keep_original() {
 
 # lk_file_backup -m FILE
 #
-# Copy FILE to FILE.lk-bak-TIMESTAMP, where TIMESTAMP is the file's UTC last
-# modified time (e.g. 20201202T095515Z). If -m is set, copy FILE to
-# LK_BASE/var/backup if elevated, or ~/.lk-platform/backup otherwise.
+# Copy FILE to FILE.lk-bak-TIMESTAMP, where TIMESTAMP is the file's last
+# modified time in UTC (e.g. 20201202T095515Z). If -m is set, copy FILE to
+# LK_BASE/var/backup if elevated, or ~/.lk-platform/backup if not elevated.
 function lk_file_backup() {
     local MOVE=${LK_FILE_MOVE_BACKUP:-} DEST FILE MODIFIED SUFFIX TZ=UTC vv=
     [ "${1:-}" != -m ] || { MOVE=1 && shift; }
@@ -2130,6 +2133,7 @@ function lk_file_backup() {
     export TZ
     if lk_maybe_sudo test -e "$1"; then
         lk_maybe_sudo test -f "$1" || lk_warn "not a file: $1" || return
+        lk_maybe_sudo test -s "$1" || return 0
         ! lk_is_true MOVE || {
             lk_will_sudo &&
                 DEST=$LK_BASE/var/backup ||
