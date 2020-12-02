@@ -1406,10 +1406,9 @@ function lk_confirm() {
 }
 
 function lk_no_input() {
-    if ! lk_is_true LK_FORCE_INPUT; then
-        [ ! -t 0 ] ||
-            lk_is_true LK_NO_INPUT
-    fi
+    ! lk_is_true LK_FORCE_INPUT || return
+    [ ! -t 0 ] ||
+        lk_is_true LK_NO_INPUT
 }
 
 function lk_verbose() {
