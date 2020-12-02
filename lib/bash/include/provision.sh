@@ -26,7 +26,7 @@ function lk_maybe_install() {
 
 # lk_dir_set_modes DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]...
 function lk_dir_set_modes() {
-    local DIR REGEX LOG_FILE _DIR i TYPE MODE ARGS CHANGES _CHANGES TOTAL=0 \
+    local DIR REGEX LOG_FILE DIR2 i TYPE MODE ARGS CHANGES _CHANGES TOTAL=0 \
         _PRUNE _EXCLUDE MATCH=() DIR_MODE=() FILE_MODE=() PRUNE=() LK_USAGE
     # shellcheck disable=SC2034
     LK_USAGE="\
@@ -49,8 +49,8 @@ Usage: $(lk_myself -f) DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..
         shift 3
     done
     LOG_FILE=$(lk_mktemp_file) || return
-    _DIR=${DIR/~/"~"}
-    lk_console_message "Updating file modes in $_DIR"
+    DIR2=${DIR/~/"~"}
+    lk_console_message "Updating file modes in $DIR2"
     for i in "${!MATCH[@]}"; do
         [ -n "${DIR_MODE[$i]:+1}${FILE_MODE[$i]:+1}" ] || continue
         ! lk_verbose || {

@@ -11,10 +11,10 @@ function linode-cli() {
 }
 
 function lk_linode_flush_cache() {
-    local _DIR=${TMPDIR:-/tmp}
-    _DIR=${_DIR%/}/_lk_linode_cache_$UID
-    [ ! -e "$_DIR" ] ||
-        rm -Rf "$_DIR"
+    local _TMP=${TMPDIR:-/tmp}
+    _TMP=${_TMP%/}/_lk_linode_cache_$UID
+    [ ! -e "$_TMP" ] ||
+        rm -Rf "$_TMP"
     [ "$BASH_SUBSHELL" -eq 0 ] ||
         lk_warn "cannot flush cache in subshell" || exit
     unset "${!LK_LINODE_@}"
@@ -37,17 +37,17 @@ function _lk_linode_maybe_flush_cache() {
 }
 
 function _lk_linode_cache() {
-    local _CACHE_VAR=$1 _DIR=${TMPDIR:-/tmp} _FILE
-    _DIR=${_DIR%/}/_lk_linode_cache_$UID
-    _FILE=$_DIR/$1
+    local _CACHE_VAR=$1 _TMP=${TMPDIR:-/tmp} _FILE
+    _TMP=${_TMP%/}/_lk_linode_cache_$UID
+    _FILE=$_TMP/$1
     if [ -e "$_FILE" ] &&
         _MODIFIED=$(lk_file_modified "$_FILE") &&
         [ $(($(lk_timestamp) - _MODIFIED)) -le 300 ]; then
         cat "$_FILE"
     else
-        [ -e "$_DIR" ] ||
-            install -d -m 00700 "$_DIR" || return
-        "${@:2}" | tee "$_DIR/$1"
+        [ -e "$_TMP" ] ||
+            install -d -m 00700 "$_TMP" || return
+        "${@:2}" | tee "$_TMP/$1"
     fi
 }
 
