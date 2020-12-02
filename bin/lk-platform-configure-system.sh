@@ -130,8 +130,14 @@
     LK_PATH_PREFIX_ALPHA=${LK_PATH_PREFIX_ALPHA:-$(sed \
         's/[^a-zA-Z0-9]//g' <<<"$LK_PATH_PREFIX")}
 
+    _BASHRC='[ -z "${BASH_VERSION:-}" ] || [ ! -f ~/.bashrc ] || . ~/.bashrc'
+    _BYOBU='_byobu_sourced=1 . %q 2>/dev/null || true'
+    ! lk_is_macos ||
+        _BYOBU='[ ! "$SSH_CONNECTION" ] || '$_BYOBU
+
     LK_BIN_PATH=${LK_BIN_PATH:-/usr/local/bin}
-    LK_BACKUP_SUFFIX=${LK_BACKUP_SUFFIX--$(lk_timestamp).bak}
+    LK_FILE_TAKE_BACKUP=${LK_FILE_TAKE_BACKUP-1}
+    LK_FILE_MOVE_BACKUP=1
     LK_VERBOSE=${LK_VERBOSE-1}
     lk_log_output
 
@@ -141,8 +147,7 @@
         mv -v "${FILE}s" "$FILE"
     [ -e "$FILE" ] ||
         install -m 00440 /dev/null "$FILE"
-    LK_BACKUP_SUFFIX='' \
-        lk_maybe_replace "$FILE" "$(cat "$LK_BASE/share/sudoers.d/default")"
+    lk_file_replace "$FILE" "$(cat "$LK_BASE/share/sudoers.d/default")"
 
     # To list gnu_* commands required by lk-platform:
     #
@@ -304,7 +309,7 @@
                 's/^([a-zA-Z_][a-zA-Z0-9_]*)=.*/\1/p' "$CONF_FILE"; } |
             sort -u) \
         <(lk_echo_array KNOWN_SETTINGS | sort)))
-    lk_maybe_replace "$CONF_FILE" "$(lk_get_shell_var \
+    lk_file_replace "$CONF_FILE" "$(lk_get_shell_var \
         "${KNOWN_SETTINGS[@]}" \
         ${OTHER_SETTINGS[@]+"${OTHER_SETTINGS[@]}"})"
 
@@ -350,15 +355,17 @@
         -v "RC_PATTERN=$RC_PATTERN"
         -v "RC_SH=$RC_SH")
 
-    function maybe_replace_lines() {
+    function replace_byobu() {
         local FILE=$1
         shift
         [ -e "$FILE" ] ||
             install -m 00644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
-        lk_maybe_replace "$FILE" "$([ $# -eq 0 ] || printf "%s\n" "$@")" \
+        lk_file_replace "$FILE" "$([ $# -eq 0 ] || printf "%s\n" "$@")" \
             '^[[:blank:]]*($|#)'
     }
 
+    unset LK_FILE_MOVE_BACKUP
+    LK_FILE_NO_DIFF=1
     for h in "${LK_HOMES[@]}"; do
         [ ! -e "$h/.${LK_PATH_PREFIX}ignore" ] || continue
         OWNER=$(lk_file_owner "$h")
@@ -372,8 +379,7 @@
             lk_console_detail "Creating" "$FILE"
             install -m 00644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
         }
-        LK_BACKUP_SUFFIX='' LK_VERBOSE=0 \
-            lk_maybe_replace "$FILE" "$("${RC_AWK[@]}" "$FILE")"
+        lk_file_replace "$FILE" "$("${RC_AWK[@]}" "$FILE")"
 
         # Create ~/.profile if no profile file exists, then check that ~/.bashrc
         # is sourced at startup when Bash is running as a login shell (e.g. in a
@@ -389,9 +395,8 @@
         grep -q "\\.bashrc" "${PROFILES[@]}" || {
             FILE=${PROFILES[0]}
             lk_console_detail "Sourcing ~/.bashrc in" "$FILE"
-            lk_maybe_add_newline "$FILE" &&
-                echo >>"$FILE" \
-                    "[ -z \"\${BASH_VERSION:-}\" ] || [ ! -f ~/.bashrc ] || . ~/.bashrc"
+            lk_file_get_text "$FILE" CONTENT &&
+                lk_file_replace "$FILE" "$CONTENT$_BASHRC"
         }
 
         DIR=$h/.byobu
@@ -400,21 +405,17 @@
             for FILE in "${PROFILES[@]}"; do
                 grep -q "byobu-launch" "$FILE" || {
                     lk_console_detail "Adding byobu-launch to" "$FILE"
-                    lk_maybe_add_newline "$FILE" &&
-                        printf '%s_byobu_sourced=1 . %q 2>/dev/null || true\n' \
-                            "$(! lk_is_macos ||
-                                echo '[ ! "$SSH_CONNECTION" ] || ')" \
-                            "$BYOBU_PATH" >>"$FILE"
+                    lk_file_get_text "$FILE" CONTENT &&
+                        lk_file_replace "$FILE" "$CONTENT$_BYOBU"
                 }
             done
 
             [ -d "$DIR" ] ||
                 install -d -m 00755 -o "$OWNER" -g "$GROUP" "$DIR"
-            LK_NO_DIFF=1
             # Prevent byobu from enabling its prompt on first start
-            maybe_replace_lines "$DIR/prompt"
+            replace_byobu "$DIR/prompt"
             # Configure status notifications
-            maybe_replace_lines "$DIR/status" \
+            replace_byobu "$DIR/status" \
                 'screen_upper_left="color"' \
                 'screen_upper_right="color whoami hostname #ip_address menu"' \
                 'screen_lower_left="color #logo #distro release #arch #session"' \
@@ -423,28 +424,29 @@
                 'tmux_right="#network #disk_io #custom #entropy raid reboot_required #updates_available #apport #services #mail users uptime #ec2_cost #rcs_cost #fan_speed #cpu_temp #battery #wifi_quality #processes load_average cpu_count cpu_freq memory swap disk whoami hostname #ip_address #time_utc date time"'
             # Display date as 20Aug, remove space between date and time, include
             # UTC offset
-            maybe_replace_lines "$DIR/datetime.tmux" \
+            replace_byobu "$DIR/datetime.tmux" \
                 'BYOBU_DATE="%-d%b"' \
                 'BYOBU_TIME="%H:%M:%S%z"'
             # Turn off UTF-8 support
-            maybe_replace_lines "$DIR/statusrc" \
+            replace_byobu "$DIR/statusrc" \
                 '[ ! -f "/etc/arch-release" ] || RELEASE_ABBREVIATED=1' \
                 "BYOBU_CHARMAP=x"
             # Fix output issue when connecting from OpenSSH on Windows
-            maybe_replace_lines "$DIR/.tmux.conf" \
+            replace_byobu "$DIR/.tmux.conf" \
                 "set -s escape-time 50"
-            unset LK_NO_DIFF
         fi
     done
+
+    unset LK_FILE_TAKE_BACKUP
 
     # Leave ~root/.ssh alone
     lk_remove_false "[ \"{}\" != $(printf '%q' "$(realpath ~root)") ]" LK_HOMES
     if [ -n "${LK_SSH_JUMP_HOST:-}" ]; then
-        LK_NO_DIFF=1 lk_ssh_configure "$LK_SSH_JUMP_HOST" \
+        lk_ssh_configure "$LK_SSH_JUMP_HOST" \
             "${LK_SSH_JUMP_USER:-}" \
             "${LK_SSH_JUMP_KEY:-}"
     else
-        LK_NO_DIFF=1 lk_ssh_configure
+        lk_ssh_configure
     fi
 
     if lk_is_desktop; then

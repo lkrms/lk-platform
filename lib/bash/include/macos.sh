@@ -195,7 +195,7 @@ function lk_macos_sshd_set_port() {
     lk_plist_set_file "$FILE"
     PORT=$(lk_plist_get ":Sockets:Listeners:SockServiceName" 2>/dev/null) &&
         [ "$PORT" = "$1" ] || {
-        LK_SUDO=1 lk_keep_original "$FILE" &&
+        LK_SUDO=1 lk_file_keep_original "$FILE" &&
             lk_elevate launchctl unload "$FILE" &&
             LK_SUDO=1 lk_plist_replace \
                 ":Sockets:Listeners:SockServiceName" string "$1" &&

@@ -278,7 +278,7 @@ function lk_console_item() {
 #        lk_console_item "$1" "$2"
 #}
 
-#function lk_keep_original() {
+#function lk_file_keep_original() {
 #    [ ! -e "$1" ] ||
 #        cp -nav "$1" "$1.orig"
 #}
@@ -289,7 +289,7 @@ function edit_file() {
     [ -f "$1" ] || [ -n "${4:-}" ] || lk_die "file not found: $1"
     [ "${MATCH_MANY:-N}" = "N" ] || SED_SCRIPT="s/$2/$3/"
     if grep -Eq -e "$2" "$1" 2>/dev/null; then
-        lk_keep_original "$1"
+        lk_file_keep_original "$1"
         BEFORE="$(cat "$1")"
         AFTER="$(sed -E "$SED_SCRIPT" "$1")"
         [ "$BEFORE" = "$AFTER" ] || {
@@ -418,6 +418,8 @@ if [ -z "$(ls -A "$LK_BASE")" ]; then
         "https://github.com/lkrms/lk-platform.git" "$LK_BASE"
 fi
 
+# shellcheck disable=SC2034
+LK_FILE_DIFF_ORIG=1
 LK_SKIP=env,settings include=provision . "$LK_BASE/lib/bash/common.sh"
 
 install -m 00644 /dev/null /etc/default/lk-platform
@@ -701,7 +703,7 @@ JUMP_KEY=$([ -z "$SSH_JUMP_KEY" ] ||
 lk_console_message "Configuring SSH client defaults"
 DIR=/etc/skel
 install -v -d -m 00700 "$DIR/.ssh"{,"/$PATH_PREFIX"{config.d,keys}}
-lk_keep_original "$DIR/.ssh/config"
+lk_file_keep_original "$DIR/.ssh/config"
 cat <<EOF >"$DIR/.ssh/config"
 # Added by ${0##*/} at $(lk_date_log)
 Include ~/.ssh/${PATH_PREFIX}config.d/*
@@ -1047,7 +1049,7 @@ lk_console_message "Setting system timezone to '$NODE_TIMEZONE'"
 timedatectl set-timezone "$NODE_TIMEZONE"
 
 lk_console_message "Configuring apt-listchanges"
-lk_keep_original "/etc/apt/listchanges.conf"
+lk_file_keep_original "/etc/apt/listchanges.conf"
 cat <<EOF >"/etc/apt/listchanges.conf"
 [apt]
 frontend=pager
@@ -1410,7 +1412,7 @@ EOF
     lk_console_file "/etc/apache2/sites-available/${PATH_PREFIX}default.conf"
 
     lk_console_message "Disabling pre-installed PHP-FPM pools"
-    lk_keep_original "/etc/php/$PHPVER/fpm/pool.d"
+    lk_file_keep_original "/etc/php/$PHPVER/fpm/pool.d"
     rm -f "/etc/php/$PHPVER/fpm/pool.d"/*.conf
 
     if [ -n "$HOST_DOMAIN" ]; then

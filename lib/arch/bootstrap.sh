@@ -276,7 +276,7 @@ lk_console_message "Setting up installed system"
 LK_ARCH_CHROOT_DIR=/mnt
 
 lk_console_detail "Generating fstab"
-lk_keep_original "/mnt/etc/fstab"
+lk_file_keep_original "/mnt/etc/fstab"
 genfstab -U /mnt >>"/mnt/etc/fstab"
 
 configure_pacman
@@ -284,7 +284,7 @@ configure_pacman
 if [ -n "$LK_NTP_SERVER" ]; then
     lk_console_detail "Configuring NTP"
     FILE="/mnt/etc/ntp.conf"
-    lk_keep_original "$FILE"
+    lk_file_keep_original "$FILE"
     sed -Ei 's/^(server|pool)\b/#&/' "$FILE"
     echo "server $LK_NTP_SERVER iburst" >>"$FILE"
 fi
@@ -297,24 +297,24 @@ in_target hwclock --systohc
 
 LOCALES=($LK_NODE_LOCALES en_US.UTF-8)
 lk_console_detail "Configuring locales"
-lk_keep_original "/mnt/etc/locale.gen"
+lk_file_keep_original "/mnt/etc/locale.gen"
 for _LOCALE in $(printf '%s\n' "${LOCALES[@]}" | sort -u); do
     sed -Ei "s/^$S*#$S*($(lk_escape_ere "$_LOCALE")$S+)/\\1/" "/mnt/etc/locale.gen"
 done
 in_target locale-gen
 
-lk_keep_original "/mnt/etc/locale.conf"
+lk_file_keep_original "/mnt/etc/locale.conf"
 cat <<EOF >"/mnt/etc/locale.conf"
 LANG=${LOCALES[0]}${LK_NODE_LANGUAGE:+
 LANGUAGE=$LK_NODE_LANGUAGE}
 EOF
 
 lk_console_detail "Setting hostname"
-lk_keep_original "/mnt/etc/hostname"
+lk_file_keep_original "/mnt/etc/hostname"
 echo "$LK_NODE_HOSTNAME" >"/mnt/etc/hostname"
 
 lk_console_detail "Configuring hosts"
-lk_keep_original "/mnt/etc/hosts"
+lk_file_keep_original "/mnt/etc/hosts"
 cat <<EOF >>"/mnt/etc/hosts"
 127.0.0.1 localhost
 ::1 localhost
@@ -495,7 +495,7 @@ may cause efibootmgr to fail with 'Input/output error'"
     }
 }
 lk_console_message "Installing boot loader"
-lk_keep_original "/mnt/etc/default/grub"
+lk_file_keep_original "/mnt/etc/default/grub"
 ! lk_is_virtual || CMDLINE_EXTRA="console=tty0 console=ttyS0"
 sed -Ei -e 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=saved/' \
     -e 's/^#?GRUB_SAVEDEFAULT=.*/GRUB_SAVEDEFAULT=true/' \

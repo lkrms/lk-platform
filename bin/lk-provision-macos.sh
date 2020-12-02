@@ -80,7 +80,7 @@ function exit_trap() {
         SUDOERS=$(cat "$SCRIPT_DIR/default")
     fi
 
-    LK_BACKUP_SUFFIX=-$(lk_timestamp).bak
+    LK_FILE_TAKE_BACKUP=${LK_FILE_TAKE_BACKUP-1}
 
     LK_LOG_FILE_MODE=0600 \
         lk_log_output ~/"${LK_PATH_PREFIX}install.log"
@@ -131,7 +131,7 @@ function exit_trap() {
         sudo mv -v "${FILE}s" "$FILE"
     sudo test -e "$FILE" ||
         sudo install -m 00440 /dev/null "$FILE"
-    LK_SUDO=1 lk_maybe_replace "$FILE" "$SUDOERS"
+    LK_SUDO=1 lk_file_replace "$FILE" "$SUDOERS"
 
     lk_console_message "Configuring default umask"
     if ! USER_UMASK=$(defaults read \
@@ -143,7 +143,7 @@ function exit_trap() {
     FILE=/etc/profile
     if [ -r "$FILE" ] && ! grep -q umask "$FILE"; then
         lk_console_detail "Setting umask in" "$FILE"
-        LK_SUDO=1 lk_keep_original "$FILE"
+        LK_SUDO=1 lk_file_keep_original "$FILE"
         sudo tee -a "$FILE" <<"EOF" >/dev/null
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -197,7 +197,7 @@ EOF
         lk_keep_trying lk_tty caffeinate -i \
             git clone -b "$LK_PLATFORM_BRANCH" \
             https://github.com/lkrms/lk-platform.git "$LK_BASE"
-        lk_keep_original /etc/default/lk-platform
+        lk_file_keep_original /etc/default/lk-platform
         [ -e /etc/default ] ||
             sudo install -d -m 00755 -g wheel /etc/default
         sudo install -m 00664 -g admin /dev/null /etc/default/lk-platform
@@ -322,7 +322,7 @@ EOF
     [ -f ~/.bash_profile ] ||
         echo "# ~/.bash_profile for bash login shells" >~/.bash_profile
     if ! grep -q "\.bashrc" ~/.bash_profile; then
-        lk_maybe_add_newline ~/.bash_profile
+        lk_file_add_newline ~/.bash_profile
         echo "[ ! -f ~/.bashrc ] || . ~/.bashrc" >>~/.bash_profile
     fi
 

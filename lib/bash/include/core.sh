@@ -114,6 +114,13 @@ function _lk_gnu_define() {
 _lk_gnu_define
 unset -f _lk_gnu_define
 
+function lk_gnu_check() {
+    while [ $# -gt 0 ]; do
+        lk_command_exists "$(_lk_gnu_command "$1")" || return
+        shift
+    done
+}
+
 function lk_include() {
     local i FILE
     for i in "$@"; do
@@ -307,7 +314,8 @@ function lk_get_regex() {
     # https://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-source
     SH=$(_lk_get_regex DPKG_SOURCE_REGEX "[a-z0-9][-a-z0-9+.]+") && eval "$SH"
 
-    SH=$(_lk_get_regex PHP_SETTING_NAME_REGEX "[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*") && eval "$SH"
+    SH=$(_lk_get_regex IDENTIFIER_REGEX "[a-zA-Z_][a-zA-Z0-9_]*") && eval "$SH"
+    SH=$(_lk_get_regex PHP_SETTING_NAME_REGEX "$IDENTIFIER_REGEX(\\.$IDENTIFIER_REGEX)*") && eval "$SH"
     SH=$(_lk_get_regex PHP_SETTING_REGEX "$PHP_SETTING_NAME_REGEX=.+") && eval "$SH"
 
     SH=$(_lk_get_regex READLINE_NON_PRINTING_REGEX $'\x01[^\x02]*\x02') && eval "$SH"
@@ -344,12 +352,18 @@ function lk_bash_at_least() {
 if lk_bash_at_least 4 2; then
     function lk_date() {
         # Take advantage of printf support for strftime in Bash 4.2+
-        printf "%($1)T\n" -1
+        printf "%($1)T\n" "${2:--1}"
     }
 else
-    function lk_date() {
-        date +"$1"
-    }
+    if ! lk_is_macos || lk_gnu_check date; then
+        function lk_date() {
+            gnu_date ${2:+-d "@$2"} +"$1"
+        }
+    else
+        function lk_date() {
+            date ${2:+-jf '%s' "$2"} +"$1"
+        }
+    fi
 fi
 
 # lk_date_log
@@ -947,7 +961,7 @@ function lk_log_output() {
             # If TEMP_LOG_FILE exists, move its contents to the end of LOG_PATH
             [ ! -e "$1" ] || {
                 cat "$1" >>"$LOG_PATH" &&
-                    rm "$1" || return
+                    lk_rm "$1" || return
             }
         else
             LOG_PATH=$1
@@ -1474,7 +1488,8 @@ _lk_regex_define \
     lk_is_host HOST_REGEX \
     lk_is_fqdn DOMAIN_NAME_REGEX \
     lk_is_email EMAIL_ADDRESS_REGEX \
-    lk_is_uri URI_REGEX_REQ_SCHEME_HOST
+    lk_is_uri URI_REGEX_REQ_SCHEME_HOST \
+    lk_is_identifier IDENTIFIER_REGEX
 
 # lk_uri_parts URI [COMPONENT...]
 #
@@ -1688,7 +1703,7 @@ function lk_can_sudo() {
 }
 
 function lk_will_sudo() {
-    lk_is_true LK_SUDO
+    lk_is_root || lk_is_true LK_SUDO
 }
 
 # lk_maybe_sudo COMMAND [ARG...]
@@ -1738,12 +1753,23 @@ function lk_maybe_elevate() {
     fi
 }
 
-# lk_symlink TARGET LINK
+function lk_rm() {
+    if lk_command_exists trash-put; then
+        lk_maybe_sudo trash-put "$@"
+    else
+        lk_maybe_sudo rm "$@"
+    fi
+}
+
+# lk_symlink [-f] TARGET LINK
+#
+# Safely add a symbolic link to TARGET from LINK. If -f is set, delete a file or
+# directory at LINK instead of moving it to LINK.orig.
 function lk_symlink() {
-    local TARGET LINK LINK_DIR CURRENT_TARGET \
-        LK_BACKUP_SUFFIX=${LK_BACKUP_SUFFIX-.orig} v='' vv=''
+    local TARGET LINK LINK_DIR CURRENT_TARGET NO_ORIG v='' vv=''
+    [ "${1:-}" != -f ] || { NO_ORIG=1 && shift; }
     [ $# -eq 2 ] || lk_usage "\
-Usage: $(lk_myself -f) TARGET LINK"
+Usage: $(lk_myself -f) [-f] TARGET LINK"
     TARGET=$1
     LINK=${2%/}
     LINK_DIR=${LINK%/*}
@@ -1763,12 +1789,11 @@ Usage: $(lk_myself -f) TARGET LINK"
         }
         lk_maybe_sudo rm -f"$vv" -- "$LINK" || return
     elif lk_maybe_sudo test -e "$LINK"; then
-        if [ -n "$LK_BACKUP_SUFFIX" ]; then
+        if ! lk_is_true NO_ORIG && ! lk_is_true LK_FILE_NO_BACKUP; then
             lk_maybe_sudo \
-                mv -f"$v" -- "$LINK" "$LINK$LK_BACKUP_SUFFIX" || return
+                mv -f"$v" -- "$LINK" "$LINK.orig" || return
         else
-            lk_maybe_sudo \
-                rm -f"$v" -- "$LINK" || return
+            lk_rm -Rf"$v" -- "$LINK" || return
         fi
     elif lk_maybe_sudo test ! -d "$LINK_DIR"; then
         lk_maybe_sudo \
@@ -1941,10 +1966,6 @@ function lk_filter() {
     ! eval "$TEST \"\$1\"" || printf "%s${DELIM:-\\n}" "$1"
 }
 
-function lk_is_identifier() {
-    [[ $1 =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]
-}
-
 function lk_is_declared() {
     declare -p "$1" >/dev/null 2>&1
 }
@@ -1954,14 +1975,10 @@ function lk_is_readonly() {
     false
 }
 
-function lk_get_var_names() {
-    eval "printf '%s\n'$(printf ' ${!%s@}' _ {a..z} {A..Z})"
-}
-
-# lk_version_at_least installed_version minimum_version
+# lk_version_at_least INSTALLED_VERSION MINIMUM_VERSION
 function lk_version_at_least() {
     local MIN
-    MIN="$(sort -V <(printf '%s\n' "$1" "$2") | head -n1 || lk_warn "error sorting versions")" &&
+    MIN=$(lk_echo_args "$@" | sort -V | head -n1) &&
         [ "$MIN" = "$2" ]
 }
 
@@ -1970,8 +1987,10 @@ function lk_version_at_least() {
 # Apply FILTER (default: ".[]") to the input and populate ARRAY with the
 # JSON-encoded value of each result.
 function lk_jq_get_array() {
+    local SH
     lk_is_identifier "$1" || lk_warn "not a valid identifier: $1" || return
-    eval "$1=($(jq -r "${2:-.[]} | tostring | @sh"))"
+    SH="$1=($(jq -r "${2:-.[]} | tostring | @sh"))" &&
+        eval "$SH"
 }
 
 # lk_jq_get_shell_var [--arg NAME VALUE]... VAR FILTER [VAR FILTER]...
@@ -1994,22 +2013,17 @@ def to_sh:
     jq -r ${JQ_ARGS[@]+"${JQ_ARGS[@]}"} "$JQ"
 }
 
-function lk_tty() {
-    if lk_is_macos; then
-        function lk_tty() {
-            # "-t 0" is equivalent to "-f" on Linux (immediately flush output
-            # after each write)
-            script -q -t 0 /dev/null "$@"
-        }
-    else
-        function lk_tty() {
-            local COMMAND=$1
-            shift
-            script -qfc "$COMMAND$([ $# -eq 0 ] || printf ' %q' "$@")" /dev/null
-        }
-    fi
-    lk_tty "$@"
-}
+if lk_is_macos; then
+    function lk_tty() {
+        # "-t 0" is equivalent to "-f" on Linux (immediately flush output after
+        # each write)
+        script -q -t 0 /dev/null "$@"
+    }
+else
+    function lk_tty() {
+        script -qfc "$(lk_quote_args "$@")" /dev/null
+    }
+fi
 
 # lk_random_hex BYTES
 function lk_random_hex() {
@@ -2039,128 +2053,169 @@ function lk_base64() {
     fi
 }
 
-function lk_sort_paths_by_date() {
-    if lk_command_exists "$(_lk_gnu_command stat)" &&
-        lk_command_exists "$(_lk_gnu_command sed)" || ! lk_macos; then
-        function lk_sort_paths_by_date() {
-            gnu_stat --printf '%Y :%n\0' "$@" |
-                sort -zn |
-                gnu_sed -zE 's/^[0-9]+ ://' |
-                xargs -0 printf '%s\n'
-        }
-    else
-        function lk_sort_paths_by_date() {
-            stat -t '%s' -f '%Sm :%N' "$@" |
-                sort -n |
-                sed -E 's/^[0-9]+ ://'
-        }
-    fi
-    lk_sort_paths_by_date "$@"
+if ! lk_is_macos || lk_gnu_check stat sed; then
+    function lk_sort_paths_by_date() {
+        gnu_stat --printf '%Y :%n\0' "$@" |
+            sort -zn |
+            gnu_sed -zE 's/^[0-9]+ ://' |
+            xargs -0 printf '%s\n'
+    }
+else
+    function lk_sort_paths_by_date() {
+        stat -t '%s' -f '%Sm :%N' "$@" |
+            sort -n |
+            sed -E 's/^[0-9]+ ://'
+    }
+fi
+
+if ! lk_is_macos || lk_gnu_check stat; then
+    function lk_file_modified() {
+        lk_maybe_sudo gnu_stat --printf '%Y' "$1"
+    }
+    function lk_file_owner() {
+        lk_maybe_sudo gnu_stat --printf '%U' "$1"
+    }
+    function lk_file_group() {
+        lk_maybe_sudo gnu_stat --printf '%G' "$1"
+    }
+else
+    function lk_file_modified() {
+        lk_maybe_sudo stat -t '%s' -f '%Sm' "$1"
+    }
+    function lk_file_owner() {
+        lk_maybe_sudo stat -f '%Su' "$1"
+    }
+    function lk_file_group() {
+        lk_maybe_sudo stat -f '%Sg' "$1"
+    }
+fi
+
+if ! lk_is_macos || lk_gnu_check date; then
+    function lk_timestamp_readable() {
+        gnu_date -Rd "@$1"
+    }
+else
+    function lk_timestamp_readable() {
+        date -Rjf '%s' "$1"
+    }
+fi
+
+# lk_file_get_text FILE VAR
+function lk_file_get_text() {
+    lk_maybe_sudo test -e "$1" || lk_warn "file not found: $1" || return
+    lk_is_identifier "$2" || lk_warn "not a valid identifier: $2" || return
+    eval "$2=\$(cat \"\$1\" && printf .)" &&
+        eval "$2=\${$2%.}" &&
+        eval "$2=\${$2%\$'\\n'}\$'\\n'"
 }
 
-function lk_file_modified() {
-    if lk_command_exists "$(_lk_gnu_command stat)" || ! lk_macos; then
-        function lk_file_modified() {
-            gnu_stat --printf '%Y' "$1"
-        }
-    else
-        function lk_file_modified() {
-            stat -t '%s' -f '%Sm' "$1"
-        }
-    fi
-    lk_file_modified "$@"
+# lk_file_keep_original FILE
+function lk_file_keep_original() {
+    local v=
+    ! lk_verbose || v=v
+    ! lk_maybe_sudo test -s "$1" ||
+        lk_maybe_sudo cp -naL"$v" "$1" "$1.orig"
 }
 
-function lk_file_owner() {
-    if lk_command_exists "$(_lk_gnu_command stat)" || ! lk_macos; then
-        function lk_file_owner() {
-            gnu_stat --printf '%U' "$1"
-        }
-    else
-        function lk_file_owner() {
-            stat -f '%Su' "$1"
-        }
-    fi
-    lk_file_owner "$@"
-}
-
-function lk_file_group() {
-    if lk_command_exists "$(_lk_gnu_command stat)" || ! lk_macos; then
-        function lk_file_group() {
-            gnu_stat --printf '%G' "$1"
-        }
-    else
-        function lk_file_group() {
-            stat -f '%Sg' "$1"
-        }
-    fi
-    lk_file_group "$@"
-}
-
-function lk_timestamp_readable() {
-    if lk_command_exists "$(_lk_gnu_command date)" || ! lk_is_macos; then
-        function lk_timestamp_readable() {
-            gnu_date -Rd "@$1"
-        }
-    else
-        function lk_timestamp_readable() {
-            date -Rjf '%s' "$1"
-        }
-    fi
-    lk_timestamp_readable "$@"
-}
-
-function lk_ssl_client() {
-    local HOST="${1:-}" PORT="${2:-}" SERVER_NAME="${3:-${1:-}}"
-    [ -n "$HOST" ] || lk_warn "no hostname" || return
-    [ -n "$PORT" ] || lk_warn "no port" || return
-    openssl s_client -connect "$HOST":"$PORT" -servername "$SERVER_NAME"
-}
-
-function lk_keep_original() {
-    local LK_BACKUP_SUFFIX=${LK_BACKUP_SUFFIX-.orig} VERBOSE
-    ! lk_verbose 2 || VERBOSE=1
-    [ -z "$LK_BACKUP_SUFFIX" ] || while [ $# -gt 0 ]; do
-        lk_maybe_sudo test ! -s "$1" ||
-            lk_maybe_sudo cp -naL ${VERBOSE:+-v} "$1" "$1$LK_BACKUP_SUFFIX"
-        shift
-    done
-}
-
-# lk_maybe_add_newline FILE
+# lk_file_backup -m FILE
 #
-# Add a newline to FILE if its last byte is not a newline.
-function lk_maybe_add_newline() {
-    local WC
-    lk_maybe_sudo test -f "$1" || lk_warn "file not found: $1" || return
-    # If the last byte is a newline, `wc -l` will return 1
-    WC=$(lk_maybe_sudo tail -c1 "$1" | wc -l) || return
-    if lk_maybe_sudo test -s "$1" && [ "$WC" -eq 0 ]; then
-        echo >>"$1"
+# Copy FILE to FILE.lk-bak-TIMESTAMP, where TIMESTAMP is the file's UTC last
+# modified time (e.g. 20201202T095515Z). If -m is set, copy FILE to
+# LK_BASE/var/backup if elevated, or ~/.lk-platform/backup otherwise.
+function lk_file_backup() {
+    local MOVE=${LK_FILE_MOVE_BACKUP:-} DEST FILE MODIFIED SUFFIX TZ=UTC vv=
+    [ "${1:-}" != -m ] || { MOVE=1 && shift; }
+    ! lk_is_true LK_FILE_NO_BACKUP || return 0
+    ! lk_verbose 2 || vv=v
+    export TZ
+    if lk_maybe_sudo test -e "$1"; then
+        lk_maybe_sudo test -f "$1" || lk_warn "not a file: $1" || return
+        ! lk_is_true MOVE || {
+            lk_will_sudo &&
+                DEST=$LK_BASE/var/backup ||
+                DEST=~/.lk-platform/backup
+            FILE=$(lk_maybe_sudo realpath "$1") &&
+                lk_maybe_sudo install -d -m 00700 "$DEST" || return
+            DEST=$DEST/${FILE//"/"/__}
+        }
+        MODIFIED=$(lk_file_modified "$1") &&
+            SUFFIX=.lk-bak-$(lk_date "%Y%m%dT%H%M%SZ" "$MODIFIED") &&
+            lk_maybe_sudo cp -naL"$vv" "$1" "${DEST:-$1}$SUFFIX"
     fi
 }
 
-# lk_maybe_replace FILE_PATH NEW_CONTENT [IGNORE_PATTERN]
-function lk_maybe_replace() {
+function lk_file_prepare_temp() {
+    local DIR=${1%/*} TEMP vv=
+    [ "$DIR" != "$1" ] || DIR=$PWD
+    ! lk_verbose 2 || vv=v
+    TEMP=$(lk_maybe_sudo mktemp "${DIR%/}/.${1##*/}.XXXXXXXXXX") &&
+        { ! lk_maybe_sudo test -f "$1" || cp -a"$vv" "$1" "$TEMP"; } &&
+        echo "$TEMP"
+}
+
+# lk_file_add_newline [-b|-m] FILE
+#
+# Add a newline to FILE if its last byte is not a newline. If -b is set, back up
+# FILE before changing it. If -m is set, back up FILE to a separate location
+# before changing it.
+function lk_file_add_newline() {
+    local BACKUP=${LK_FILE_TAKE_BACKUP:-} MOVE=${LK_FILE_MOVE_BACKUP:-} \
+        WC TEMP vv=
+    [ "${1:-}" != -b ] || { BACKUP=1 && shift; }
+    [ "${1:-}" != -m ] || { BACKUP=1 && MOVE=1 && shift; }
+    ! lk_verbose 2 || vv=v
     if lk_maybe_sudo test -e "$1"; then
-        lk_maybe_sudo test -f "$1" || lk_warn "file not found: $1" || return
-        LK_MAYBE_REPLACE_NO_CHANGE=
+        lk_maybe_sudo test -f "$1" || lk_warn "not a file: $1" || return
+        # If the last byte is a newline, `wc -l` will return 1
+        WC=$(lk_maybe_sudo tail -c1 "$1" | wc -l) || return
+        if lk_maybe_sudo test -s "$1" && [ "$WC" -eq 0 ]; then
+            ! lk_is_true BACKUP ||
+                lk_file_backup ${MOVE:+-m} "$1" || return
+            TEMP=$(lk_file_prepare_temp "$1") &&
+                echo | lk_maybe_sudo tee -a "$TEMP" >/dev/null &&
+                lk_maybe_sudo mv -f"$vv" "$TEMP" "$1" || return
+            ! lk_verbose ||
+                lk_console_detail "Added newline to end of file:" "$1"
+        fi
+    fi
+}
+
+# lk_file_replace [-b|-m] FILE CONTENT [IGNORE]
+#
+# If the content of FILE differs from CONTENT, optionally after removing lines
+# matching regular expression IGNORE, replace FILE with CONTENT. If -b is set,
+# back up FILE before replacing it. If -m is set, back up FILE to a separate
+# location before replacing it.
+function lk_file_replace() {
+    local BACKUP=${LK_FILE_TAKE_BACKUP:-} MOVE=${LK_FILE_MOVE_BACKUP:-} \
+        LK_FILE_PREVIOUS TEMP vv=
+    [ "${1:-}" != -b ] || { BACKUP=1 && shift; }
+    [ "${1:-}" != -m ] || { BACKUP=1 && MOVE=1 && shift; }
+    ! lk_verbose 2 || vv=v
+    if lk_maybe_sudo test -e "$1"; then
+        lk_maybe_sudo test -f "$1" || lk_warn "not a file: $1" || return
+        unset LK_FILE_REPLACE_NO_CHANGE
         ! diff -q \
             <(lk_maybe_sudo cat "$1" | _lk_maybe_filter "${@:3:1}") \
             <([ -z "$2" ] || echo "${2%$'\n'}" | _lk_maybe_filter "${@:3:1}") \
             >/dev/null || {
-            LK_MAYBE_REPLACE_NO_CHANGE=1
+            LK_FILE_REPLACE_NO_CHANGE=1
             ! lk_verbose 2 || lk_console_detail "Not changed:" "$1"
             return 0
         }
-        lk_keep_original "$1" || return
+        ! lk_is_true BACKUP ||
+            lk_file_backup ${MOVE:+-m} "$1" || return
+        ! lk_verbose || lk_is_true LK_FILE_NO_DIFF ||
+            lk_file_get_text "$1" LK_FILE_PREVIOUS || return
     fi
-    echo "${2%$'\n'}" | lk_maybe_sudo tee "$1" >/dev/null || return
+    TEMP=$(lk_file_prepare_temp "$1") &&
+        echo "${2%$'\n'}" | lk_maybe_sudo tee "$TEMP" >/dev/null &&
+        lk_maybe_sudo mv -f"$vv" "$TEMP" "$1" || return
     ! lk_verbose || {
-        if lk_is_true LK_NO_DIFF; then
+        if lk_is_true LK_FILE_NO_DIFF; then
             lk_console_detail "Updated:" "$1"
         else
-            lk_console_file "$1"
+            lk_console_detail_file "$1"
         fi
     }
 }
@@ -2173,54 +2228,39 @@ function _lk_maybe_filter() {
     fi
 }
 
-# lk_console_file FILE [COLOUR_SEQUENCE] [FILE_COLOUR_SEQUENCE]
+# lk_console_file [-o] FILE [COLOUR] [FILE_COLOUR]
 #
-# Output the diff between FILE{SUFFIX} and FILE, or all lines in FILE if SUFFIX
-# is the null string or FILE{SUFFIX} does not exist, where SUFFIX is
-# LK_BACKUP_SUFFIX or ".orig" if LK_BACKUP_SUFFIX is not set.
+# Output the diff between the value of LK_FILE_PREVIOUS and FILE, or all lines
+# in FILE if LK_FILE_PREVIOUS is empty or unset. If -o is set, compare FILE with
+# FILE.orig if it exists.
 function lk_console_file() {
-    local FILE=$1 ORIG_FILE BOLD_COLOUR \
+    local FILE COLOUR FILE_COLOUR BOLD_COLOUR \
+        PREVIOUS=${LK_FILE_PREVIOUS:-} DIFF_ORIG=${LK_FILE_DIFF_ORIG:-} \
         LK_TTY_PREFIX=${LK_TTY_PREFIX:->>> } \
-        LK_TTY_MESSAGE_COLOUR='' LK_TTY_COLOUR2='' \
-        COLOUR=${2-${LK_TTY_MESSAGE_COLOUR-$LK_MAGENTA}} \
-        FILE_COLOUR=${3-${LK_TTY_COLOUR2-${2:-$LK_GREEN}}} \
         LK_TTY_INDENT=${LK_TTY_INDENT:-2}
-    BOLD_COLOUR="$(lk_maybe_bold "$COLOUR")$COLOUR"
+    [ "${1:-}" != -o ] || { DIFF_ORIG=1 && shift; }
+    FILE=$1
+    COLOUR=${2-${LK_TTY_MESSAGE_COLOUR-$LK_MAGENTA}}
+    FILE_COLOUR=${3-${LK_TTY_COLOUR2-${2:-$LK_GREEN}}}
+    BOLD_COLOUR=$(lk_maybe_bold "$COLOUR")$COLOUR
     local LK_TTY_PREFIX_COLOUR=${LK_TTY_PREFIX_COLOUR-$BOLD_COLOUR}
-    lk_maybe_sudo test -r "$FILE" ||
-        lk_warn "cannot read file: $FILE" || return
-    ORIG_FILE=$FILE${LK_BACKUP_SUFFIX-.orig}
-    [ "$FILE" != "$ORIG_FILE" ] &&
-        lk_maybe_sudo test -r "$ORIG_FILE" || ORIG_FILE=
-    lk_console_item "$BOLD_COLOUR$FILE$LK_RESET" "$(
-        if [ -n "$ORIG_FILE" ]; then
-            # TODO: add alternative implementation if GNU diff is missing
+    lk_maybe_sudo test -r "$FILE" || lk_warn "cannot read file: $FILE" || return
+    LK_TTY_MESSAGE_COLOUR='' \
+        LK_TTY_COLOUR2='' \
+        lk_console_item "$BOLD_COLOUR$FILE$LK_RESET" "$(
+        if lk_is_true DIFF_ORIG && lk_maybe_sudo test -r "$FILE.orig"; then
             ! lk_maybe_sudo gnu_diff --unified --color=always \
-                "$ORIG_FILE" "$FILE" || echo "$FILE_COLOUR<unchanged>"
+                "$FILE.orig" "$FILE" ||
+                echo "$FILE_COLOUR<unchanged>"
+        elif [ -n "$PREVIOUS" ]; then
+            ! lk_maybe_sudo gnu_diff --unified --color=always \
+                <(echo -n "$PREVIOUS") "$FILE" ||
+                echo "$FILE_COLOUR<unchanged>"
         else
             echo -n "$FILE_COLOUR"
             lk_maybe_sudo cat "$FILE"
         fi
     )"$'\n'"$LK_TTY_PREFIX_COLOUR<<<$LK_RESET"
-}
-
-# lk_user_in_group username groupname...
-#   True if USERNAME belongs to at least one of GROUPNAME.
-function lk_user_in_group() {
-    [ "$(comm -12 \
-        <(groups "$1" | sed -E 's/^.*://' | grep -Eo '[^[:blank:]]+' | sort) \
-        <(lk_echo_args "${@:2}" | sort -u) | wc -l)" -gt 0 ]
-}
-
-# lk_make_iso path...
-#  Add each PATH to a new ISO image in the current directory. The .iso file
-#  is named after the first file or directory specified.
-function lk_make_iso() {
-    local ISOFILE
-    lk_paths_exist "$@" || lk_warn "all paths must exist" || return
-    ISOFILE="${1##*/}.iso"
-    [ ! -e "$ISOFILE" ] || lk_warn "$ISOFILE already exists" || return
-    mkisofs -V "$(lk_date "%y%m%d")${1##*/}" -J -r -hfs -o "$ISOFILE" "$@"
 }
 
 set -o pipefail

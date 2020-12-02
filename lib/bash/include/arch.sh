@@ -18,7 +18,7 @@ function lk_pacman_configure() {
     local PACMAN_CONF=${LK_PACMAN_CONF:-/etc/pacman.conf}
     PACMAN_CONF=$(_lk_arch_path "$PACMAN_CONF")
     # leading and trailing whitespace in pacman.conf is ignored
-    LK_SUDO=1 lk_maybe_replace "$PACMAN_CONF" \
+    LK_SUDO=1 lk_file_replace "$PACMAN_CONF" \
         "$(sed -E "s/^$S*#$S*(Color|TotalDownload)$S*\$/\1/" "$PACMAN_CONF")"
 }
 
@@ -71,7 +71,7 @@ function lk_pacman_add_repo() {
         fi || return
         [ -z "$KEY_ID" ] ||
             _lk_arch_maybe_chroot pacman-key --lsign-key "$KEY_ID" || return
-        LK_SUDO=1 lk_keep_original "$PACMAN_CONF"
+        LK_SUDO=1 lk_file_keep_original "$PACMAN_CONF"
         lk_elevate tee -a "$PACMAN_CONF" <<EOF >/dev/null
 
 [$REPO]${SIG_LEVEL:+

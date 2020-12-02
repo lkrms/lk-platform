@@ -215,7 +215,7 @@ function lk_ssh_get_public_key() {
 function lk_ssh_add_host() {
     local NAME=$1 HOST=$2 SSH_USER=$3 KEY_FILE=${4:-} JUMP_HOST_NAME=${5:-} \
         h=${LK_SSH_HOME:-~} SSH_PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX} \
-        LK_BACKUP_SUFFIX='' LK_VERBOSE=0 \
+        LK_FILE_TAKE_BACKUP='' LK_VERBOSE=0 \
         KEY CONF CONF_FILE
     [ $# -ge 3 ] || lk_usage "\
 Usage: $(lk_myself -f) NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
@@ -238,14 +238,14 @@ Usage: $(lk_myself -f) NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
         KEY=${KEY:-$(cat)}
         KEY_FILE=$h/.ssh/${SSH_PREFIX}keys/$NAME
         lk_maybe_install -m 00600 /dev/null "$KEY_FILE" &&
-            lk_maybe_replace "$KEY_FILE" "$KEY" || return
+            lk_file_replace "$KEY_FILE" "$KEY" || return
         ssh-keygen -l -f "$KEY_FILE" >/dev/null 2>&1 || {
             # `ssh-keygen -l -f FILE` exits without error if FILE contains an
             # OpenSSH public key
             lk_console_log "Reading $KEY_FILE to create public key file"
             KEY=$(unset DISPLAY && ssh-keygen -y -f "$KEY_FILE") &&
                 lk_maybe_install -m 00600 /dev/null "$KEY_FILE.pub" &&
-                lk_maybe_replace "$KEY_FILE.pub" "$KEY" || return
+                lk_file_replace "$KEY_FILE.pub" "$KEY" || return
         }
     }
     CONF=$(
@@ -266,7 +266,7 @@ EOF
     )
     CONF_FILE=$h/.ssh/${SSH_PREFIX}config.d/${LK_SSH_PRIORITY:-60}-$NAME
     lk_maybe_install -m 00600 /dev/null "$CONF_FILE" &&
-        lk_maybe_replace "$CONF_FILE" "$CONF" || return
+        lk_file_replace "$CONF_FILE" "$CONF" || return
 }
 
 # lk_ssh_configure [JUMP_HOST[:JUMP_PORT] JUMP_USER [JUMP_KEY_FILE]]
@@ -274,7 +274,7 @@ function lk_ssh_configure() {
     # shellcheck disable=SC2034
     local JUMP_HOST=${1:-} JUMP_USER=${2:-} JUMP_KEY_FILE=${3:-} \
         SSH_PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX} \
-        LK_BACKUP_SUFFIX='' LK_VERBOSE=0 \
+        LK_FILE_TAKE_BACKUP='' LK_VERBOSE=0 \
         KEY PATTERN CONF AWK OWNER GROUP \
         HOMES=(${LK_HOMES[@]+"${LK_HOMES[@]}"}) h
     [ $# -eq 0 ] || [ $# -ge 2 ] || lk_warn "invalid arguments" || return
@@ -311,7 +311,7 @@ function lk_ssh_configure() {
             install -m 00600 -o "$OWNER" -g "$GROUP" \
                 /dev/null "$h/.ssh/config" ||
             return
-        lk_maybe_replace "$h/.ssh/config" "$("${AWK[@]}" "$h/.ssh/config")"
+        lk_file_replace "$h/.ssh/config" "$("${AWK[@]}" "$h/.ssh/config")"
         # Add defaults for all lk-* hosts to ~/.ssh/lk-config.d/90-defaults
         CONF=$(
             cat <<EOF
@@ -326,7 +326,7 @@ SendEnv                 LANG LC_*
 ServerAliveInterval     30
 EOF
         )
-        lk_maybe_replace "$h/.ssh/${SSH_PREFIX}config.d/90-defaults" "$CONF"
+        lk_file_replace "$h/.ssh/${SSH_PREFIX}config.d/90-defaults" "$CONF"
         # Add jump proxy configuration
         [ $# -lt 2 ] ||
             LK_SSH_HOME=$h LK_SSH_PRIORITY=40 \
@@ -630,8 +630,7 @@ function lk_certbot_install() {
 # shellcheck disable=SC2034
 function lk_cpanel_get_ssl_cert() {
     local TARGET_DIR=${3:-~/ssl} SSL_JSON CERT KEY TARGET_REL \
-        LK_TTY_NO_FOLD=1 LK_BACKUP_SUFFIX
-    LK_BACKUP_SUFFIX=-$(lk_timestamp).bak
+        LK_TTY_NO_FOLD=1 LK_FILE_TAKE_BACKUP=1
     [ $# -ge 2 ] && lk_is_fqdn "$2" || lk_usage "\
 Usage: $(lk_myself -f) SSH_HOST DOMAIN [TARGET_DIR]
 
@@ -658,9 +657,9 @@ CA bundle and private key for DOMAIN from SSH_HOST to TARGET_DIR
     TARGET_REL=${TARGET_DIR//~/"~"}
     lk_console_detail "Certificate and CA bundle:" "$TARGET_REL/$2.cert"
     lk_console_detail "Private key:" "$TARGET_REL/$2.key"
-    lk_maybe_replace "$TARGET_DIR/$2.cert" \
+    lk_file_replace "$TARGET_DIR/$2.cert" \
         "$(lk_echo_args "$CERT" "$CA_BUNDLE")" &&
-        lk_maybe_replace "$TARGET_DIR/$2.key" "$KEY"
+        lk_file_replace "$TARGET_DIR/$2.key" "$KEY"
 }
 
 # lk_ssl_verify_cert CERT KEY [CA_BUNDLE]
@@ -720,12 +719,12 @@ Usage: $(lk_myself -f) [-p] FILE SETTING CHECK_REGEX [REPLACE_REGEX...]" || retu
             ${PRESERVE-"0,/$REGEX/{s/$REGEX/$REPLACE_WITH/}"} <<<"$_FILE"$'\n.') &&
             _FILE=${_FILE%$'\n.'} || return
         ! _lk_option_check "$_FILE" || {
-            lk_maybe_replace "$FILE" "$_FILE"
+            lk_file_replace "$FILE" "$_FILE"
             return 0
         }
     done
-    lk_keep_original "$FILE" &&
-        lk_maybe_add_newline "$FILE" &&
+    lk_file_keep_original "$FILE" &&
+        lk_file_add_newline "$FILE" &&
         lk_maybe_sudo tee -a "$FILE" <<<"$SETTING" >/dev/null
 }
 

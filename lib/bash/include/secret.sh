@@ -13,7 +13,7 @@ if lk_is_macos; then
     function lk_secret_forget() {
         security delete-generic-password -a "$1" -s "${2:-${0##*/}}"
     }
-elif lk_is_linux; then
+else
     # lk_secret_set VALUE LABEL [SERVICE]
     function lk_secret_set() {
         secret-tool store --label="$2" -- service "${3:-${0##*/}}" value "$1"
