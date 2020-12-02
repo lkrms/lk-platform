@@ -2116,8 +2116,11 @@ function lk_file_get_text() {
 function lk_file_keep_original() {
     local v=
     ! lk_verbose || v=v
-    ! lk_maybe_sudo test -s "$1" ||
-        lk_maybe_sudo cp -naL"$v" "$1" "$1.orig"
+    while [ $# -gt 0 ]; do
+        ! lk_maybe_sudo test -s "$1" ||
+            lk_maybe_sudo cp -naL"$v" "$1" "$1.orig" || return
+        shift
+    done
 }
 
 # lk_file_backup -m FILE

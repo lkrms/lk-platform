@@ -2,8 +2,6 @@
 
 # shellcheck disable=SC2015
 
-lk_include provision
-
 # lk_hosting_add_account LOGIN
 function lk_hosting_add_account() {
     local _GROUP _HOME SKEL
