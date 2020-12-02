@@ -249,20 +249,23 @@
             (
                 DIR_MODE=0755
                 FILE_MODE=0644
+                PRIVILEGED_DIR_MODE=0700
                 [ ! -g "$LK_BASE" ] || {
                     DIR_MODE=2775
                     FILE_MODE=0664
+                    PRIVILEGED_DIR_MODE=0750
                 }
-                cd "$LK_BASE"
-                gnu_find . -regextype posix-egrep \
-                    -type d ! \( -regex '\./var/log' -prune \) \
-                    ! -perm -"$DIR_MODE" -print0 |
-                    gnu_xargs -0r gnu_chmod -c +"$DIR_MODE"
-                gnu_find . -regextype posix-egrep \
-                    ! \( -type d -regex '\./(etc|var/log|\.git/objects)' -prune \) \
-                    -type f ! -perm -"$FILE_MODE" -print0 |
-                    gnu_xargs -0r gnu_chmod -c +"$FILE_MODE"
+                lk_dir_set_modes "$LK_BASE" \
+                    "" \
+                    "+$DIR_MODE" "+$FILE_MODE" \
+                    "\\./etc/" \
+                    "$DIR_MODE" "" \
+                    "\\./var/(log|backup)/" \
+                    "" "" \
+                    "\\./\\.git/objects/([0-9a-f]{2}|pack)/.*" \
+                    0555 0444
                 install -d -m 00777 "$LK_BASE/var/log"
+                install -d -m "0$PRIVILEGED_DIR_MODE" "$LK_BASE/var/backup"
             )
         )
     fi

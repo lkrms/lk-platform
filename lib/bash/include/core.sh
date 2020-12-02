@@ -1421,7 +1421,7 @@ function lk_verbose() {
 function lk_clip() {
     local OUTPUT COMMAND LINES MESSAGE DISPLAY_LINES=${LK_CLIP_LINES:-5}
     [ ! -t 0 ] || lk_warn "no input" || return
-    OUTPUT=$(cat)
+    OUTPUT=$(cat && printf .) && OUTPUT=${OUTPUT%.}
     if COMMAND=$(lk_command_first_existing \
         "xclip -selection clipboard" \
         pbcopy) &&

@@ -26,7 +26,7 @@ function lk_maybe_install() {
 
 # lk_dir_set_modes DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]...
 function lk_dir_set_modes() {
-    local DIR REGEX LOG_FILE _DIR i TYPE MODE ARGS CHANGES _CHANGES \
+    local DIR REGEX LOG_FILE _DIR i TYPE MODE ARGS CHANGES _CHANGES TOTAL=0 \
         _PRUNE _EXCLUDE MATCH=() DIR_MODE=() FILE_MODE=() PRUNE=() LK_USAGE
     # shellcheck disable=SC2034
     LK_USAGE="\
@@ -40,7 +40,8 @@ Usage: $(lk_myself -f) DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..
         [[ $3 =~ ^(\+?[0-7]+)?$ ]] || lk_warn "invalid mode: $3" || return
         REGEX=${1%/}
         [ -n "$REGEX" ] || REGEX=".*"
-        [ "$REGEX" != "$1" ] || REGEX="$REGEX(/.*)?"
+        [ "$REGEX" != "$1" ] || [ "${REGEX%.\*}" != "$1" ] ||
+            REGEX="$REGEX(/.*)?"
         MATCH+=("$REGEX")
         DIR_MODE+=("$2")
         FILE_MODE+=("$3")
@@ -49,15 +50,19 @@ Usage: $(lk_myself -f) DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..
     done
     LOG_FILE=$(lk_mktemp_file) || return
     _DIR=${DIR/~/"~"}
-    lk_console_item "Setting file modes in" "$_DIR"
+    lk_console_message "Updating file modes in $_DIR"
     for i in "${!MATCH[@]}"; do
-        lk_console_item "Finding matches for" "${MATCH[$i]}" "$LK_BLUE$LK_BOLD"
+        [ -n "${DIR_MODE[$i]:+1}${FILE_MODE[$i]:+1}" ] || continue
+        ! lk_verbose || {
+            lk_console_blank
+            lk_console_item "Checking:" "${MATCH[$i]}"
+        }
         CHANGES=0
         for TYPE in DIR_MODE FILE_MODE; do
             MODE=${TYPE}"[$i]"
             MODE=${!MODE}
             [ -n "$MODE" ] || continue
-            lk_console_detail "$([ "$TYPE" = DIR_MODE ] &&
+            ! lk_verbose || lk_console_detail "$([ "$TYPE" = DIR_MODE ] &&
                 echo Directory ||
                 echo File) mode:" "$MODE"
             ARGS=(-regextype posix-egrep)
@@ -86,9 +91,13 @@ Usage: $(lk_myself -f) DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..
                 tee -a "$LOG_FILE" | wc -l) || return
             ((CHANGES += _CHANGES)) || true
         done
-        lk_console_detail "Changes:" "$CHANGES"
+        ! lk_verbose || lk_console_detail "Changes:" "$LK_BOLD$CHANGES"
+        ((TOTAL += CHANGES))
     done
-    lk_console_log "Changes have been logged to" "$LOG_FILE"
+    ! lk_verbose || lk_console_blank
+    lk_console_item "$TOTAL file $(lk_maybe_plural "$TOTAL" mode modes) updated"
+    ! ((TOTAL)) ||
+        lk_console_detail "Changes logged to:" "$LOG_FILE"
 }
 
 # lk_sudo_offer_nopasswd
