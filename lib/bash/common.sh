@@ -20,7 +20,7 @@ lk_die() { s=$? && echo "${BASH_SOURCE[0]}: $1" >&2 &&
 #    environment
 # 3. Copy remaining LK_* variables to the global scope (other variables are
 #    discarded)
-[[ ,${LK_SKIP:-}, == *,settings,* ]] || SH=$(
+[[ ,${LK_SKIP:-}, == *,settings,* ]] || { SH=$(
     if lk_is_declared LK_SETTINGS_FILES; then
         SETTINGS=(${LK_SETTINGS_FILES[@]+"${LK_SETTINGS_FILES[@]}"})
     else
@@ -45,7 +45,7 @@ lk_die() { s=$? && echo "${BASH_SOURCE[0]}: $1" >&2 &&
         VAR=($(lk_var))
         [ ${#VAR[@]} -eq 0 ] || declare -p $(lk_var)
     )
-) && eval "$SH"
+) && eval "$SH"; }
 
 # shellcheck disable=SC2154
 lk_include assert ${include:+${include//,/ }}
