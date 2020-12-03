@@ -52,18 +52,6 @@ EOF
     fi
     . "$LK_BASE/lib/arch/packages.sh"
 
-    ! LK_PACKAGES=$(pacman -Slq | grep -- '-lk$') || {
-        PAC_REPLACE=($(comm -12 \
-            <(lk_echo_array LK_PACKAGES | sed 's/-lk$//' | sort -u) \
-            <(lk_echo_array PACMAN_PACKAGES | sort -u)))
-        [ ${#PAC_REPLACE[@]} -eq 0 ] || {
-            PACMAN_PACKAGES=($(comm -13 \
-                <(lk_echo_array PAC_REPLACE | sort -u) \
-                <(lk_echo_array PACMAN_PACKAGES | sort -u)))
-            PACMAN_PACKAGES+=("${PAC_REPLACE[@]/%/-lk}")
-        }
-    }
-
     "$LK_BASE/bin/lk-platform-configure-system.sh" --no-log
 
     PAC_TO_REMOVE=($(comm -12 <(pacman -Qq | sort -u) <(lk_echo_array PAC_REMOVE | sort -u)))

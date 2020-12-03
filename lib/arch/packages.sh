@@ -305,14 +305,32 @@ AUR_PACKAGES+=(${AUR_DESKTOP_PACKAGES[@]+"${AUR_DESKTOP_PACKAGES[@]}"})
         <(lk_echo_array AUR_PACKAGES | sort -u)))
     [ ${#NOT_AUR[@]} -eq 0 ] ||
         lk_console_warning "Moved from AUR to repo:" $'\n'"$(lk_echo_array NOT_AUR)"
-    PACMAN_PACKAGES+=($(comm -12 <(pacman -Slq | sort -u) <(lk_echo_array AUR_PACKAGES | sort -u)))
-    AUR_PACKAGES=($(comm -13 <(pacman -Slq | sort -u) <(lk_echo_array AUR_PACKAGES | sort -u)))
-    [ ${#AUR_PACKAGES[@]} -eq 0 ] || {
-        lk_echo_array AUR_PACKAGES | lk_console_list "Unable to install from configured repositories:" package packages
-        ! lk_confirm "Manage the above using yay?" Y && AUR_PACKAGES=() || {
-            PACMAN_PACKAGES+=($(lk_pacman_group_packages base-devel))
-            AUR_PACKAGES+=($(pacman -Qq yay 2>/dev/null || true))
+}
+CUSTOM_REPO_PACKAGES=($(comm -13 \
+    <(pacman -Slq core extra community | sort -u) \
+    <(pacman -Slq | sort -u)))
+for SUFFIX in -lk -git ""; do
+    CUSTOM_PACKAGES=($(comm -12 \
+        <(lk_echo_array CUSTOM_REPO_PACKAGES | sort -u) \
+        <(lk_echo_array AUR_PACKAGES ${SUFFIX:+PACMAN_PACKAGES} |
+            sed "s/\$/$SUFFIX/" | sort -u)))
+    [ ${#CUSTOM_PACKAGES[@]} -eq 0 ] || {
+        AUR_PACKAGES=($(comm -13 \
+            <(lk_echo_array CUSTOM_PACKAGES | sed "s/$SUFFIX\$//" | sort -u) \
+            <(lk_echo_array AUR_PACKAGES | sort -u)))
+        [ -z "$SUFFIX" ] || {
+            PACMAN_PACKAGES=($(comm -13 \
+                <(lk_echo_array CUSTOM_PACKAGES | sed "s/$SUFFIX\$//" | sort -u) \
+                <(lk_echo_array PACMAN_PACKAGES | sort -u)))
         }
+        PACMAN_PACKAGES+=("${CUSTOM_PACKAGES[@]}")
+    }
+done
+[ ${#AUR_PACKAGES[@]} -eq 0 ] || {
+    lk_echo_array AUR_PACKAGES | lk_console_list "Unable to install from configured repositories:" package packages
+    ! lk_confirm "Manage the above using yay?" Y && AUR_PACKAGES=() || {
+        PACMAN_PACKAGES+=($(lk_pacman_group_packages base-devel))
+        AUR_PACKAGES+=($(pacman -Qq yay 2>/dev/null || true))
     }
 }
 
