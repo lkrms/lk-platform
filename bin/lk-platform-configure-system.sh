@@ -255,7 +255,8 @@
                     FILE_MODE=0664
                     PRIVILEGED_DIR_MODE=0750
                 }
-                lk_dir_set_modes "$LK_BASE" \
+                LK_VERBOSE='' \
+                    lk_dir_set_modes "$LK_BASE" \
                     "" \
                     "+$DIR_MODE" "+$FILE_MODE" \
                     "\\./etc/" \

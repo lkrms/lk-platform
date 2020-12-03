@@ -50,19 +50,16 @@ Usage: $(lk_myself -f) DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..
     done
     LOG_FILE=$(lk_mktemp_file) || return
     DIR2=${DIR/~/"~"}
-    lk_console_message "Updating file modes in $DIR2"
+    ! lk_verbose || lk_console_message "Updating file modes in $DIR2"
     for i in "${!MATCH[@]}"; do
         [ -n "${DIR_MODE[$i]:+1}${FILE_MODE[$i]:+1}" ] || continue
-        ! lk_verbose || {
-            lk_console_blank
-            lk_console_item "Checking:" "${MATCH[$i]}"
-        }
+        ! lk_verbose 2 || lk_console_item "Checking:" "${MATCH[$i]}"
         CHANGES=0
         for TYPE in DIR_MODE FILE_MODE; do
             MODE=${TYPE}"[$i]"
             MODE=${!MODE}
             [ -n "$MODE" ] || continue
-            ! lk_verbose || lk_console_detail "$([ "$TYPE" = DIR_MODE ] &&
+            ! lk_verbose 2 || lk_console_detail "$([ "$TYPE" = DIR_MODE ] &&
                 echo Directory ||
                 echo File) mode:" "$MODE"
             ARGS=(-regextype posix-egrep)
@@ -91,11 +88,13 @@ Usage: $(lk_myself -f) DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..
                 tee -a "$LOG_FILE" | wc -l) || return
             ((CHANGES += _CHANGES)) || true
         done
-        ! lk_verbose || lk_console_detail "Changes:" "$LK_BOLD$CHANGES"
-        ((TOTAL += CHANGES))
+        ! lk_verbose 2 || lk_console_detail "Changes:" "$LK_BOLD$CHANGES"
+        ((TOTAL += CHANGES)) || true
     done
-    ! lk_verbose || lk_console_blank
-    lk_console_item "$TOTAL file $(lk_maybe_plural "$TOTAL" mode modes) updated"
+    ! lk_verbose && ! ((TOTAL)) ||
+        lk_console_message \
+            "$TOTAL file $(lk_maybe_plural \
+                "$TOTAL" mode modes) updated$(lk_verbose || echo " in $DIR2")"
     ! ((TOTAL)) ||
         lk_console_detail "Changes logged to:" "$LOG_FILE"
 }
