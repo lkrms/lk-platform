@@ -210,20 +210,23 @@ EOF
         LK_CONF_OPTION_FILE="/etc/php/conf.d/memcached.ini" \
             lk_php_enable_option "extension" "memcached.so"
     [ ! -f "/etc/php/conf.d/xdebug.ini" ] || {
-        install -d -m 00777 "$HOME/.tmp/cachegrind"
-        install -d -m 00777 "$HOME/.tmp/trace"
+        [ ! -d "$HOME/.tmp/cachegrind" ] ||
+            rmdir -v "$HOME/.tmp/cachegrind" || true
+        [ ! -d "$HOME/.tmp/trace" ] ||
+            rmdir -v "$HOME/.tmp/trace" || true
+        install -d -m 00777 "$HOME/.xdebug"
         LK_CONF_OPTION_FILE="/etc/php/conf.d/xdebug.ini"
+        grep -q '^xdebug\.mode=' "$LK_CONF_OPTION_FILE" ||
+            [ ! -e "$LK_CONF_OPTION_FILE.orig" ] ||
+            { lk_file_backup "$LK_CONF_OPTION_FILE" &&
+                sudo mv -fv "$LK_CONF_OPTION_FILE.orig" "$LK_CONF_OPTION_FILE"; }
         lk_php_enable_option "zend_extension" "xdebug.so"
-        lk_php_set_option "xdebug.remote_enable" "On"
-        lk_php_set_option "xdebug.remote_autostart" "Off"
-        lk_php_set_option "xdebug.profiler_enable_trigger" "On"
-        lk_php_set_option "xdebug.profiler_output_dir" "$HOME/.tmp/cachegrind"
+        # Alternatives: profile, trace
+        lk_php_set_option "xdebug.mode" "debug"
+        lk_php_set_option "xdebug.start_with_request" "trigger"
+        lk_php_set_option "xdebug.output_dir" "$HOME/.xdebug"
         lk_php_set_option "xdebug.profiler_output_name" "callgrind.out.%H.%R.%u"
-        lk_php_set_option "xdebug.trace_enable_trigger" "On"
-        lk_php_set_option "xdebug.collect_params" "4"
         lk_php_set_option "xdebug.collect_return" "On"
-        lk_php_set_option "xdebug.collect_vars" "On"
-        lk_php_set_option "xdebug.trace_output_dir" "$HOME/.tmp/trace"
         lk_php_set_option "xdebug.trace_output_name" "trace.%H.%R.%u"
     }
     [ ! -f "/etc/php/php-fpm.d/www.conf" ] ||
