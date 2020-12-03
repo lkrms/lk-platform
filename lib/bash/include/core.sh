@@ -2162,7 +2162,8 @@ function lk_file_prepare_temp() {
     [ "$DIR" != "$1" ] || DIR=$PWD
     ! lk_verbose 2 || vv=v
     TEMP=$(lk_maybe_sudo mktemp "${DIR%/}/.${1##*/}.XXXXXXXXXX") &&
-        { ! lk_maybe_sudo test -f "$1" || cp -a"$vv" "$1" "$TEMP"; } &&
+        { ! lk_maybe_sudo test -f "$1" ||
+            lk_maybe_sudo cp -a"$vv" "$1" "$TEMP"; } &&
         echo "$TEMP"
 }
 

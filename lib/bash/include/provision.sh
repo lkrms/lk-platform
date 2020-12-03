@@ -716,8 +716,7 @@ Usage: $(lk_myself -f) [-p] FILE SETTING CHECK_REGEX [REPLACE_REGEX...]" || retu
         { lk_maybe_install -d -m 00755 "${FILE%/*}" &&
             lk_maybe_install -m 00644 /dev/null "$FILE"; } || return
     lk_maybe_sudo test -f "$FILE" || lk_warn "file not found: $FILE" || return
-    _FILE=$(lk_maybe_sudo cat "$FILE" && printf '.') &&
-        _FILE=${_FILE%.} || return
+    lk_file_get_text "$FILE" _FILE || return
     [ "${PRESERVE+1}" = 1 ] ||
         REPLACE_WITH=$(lk_escape_ere_replace "$SETTING")
     shift 3
@@ -727,13 +726,15 @@ Usage: $(lk_myself -f) [-p] FILE SETTING CHECK_REGEX [REPLACE_REGEX...]" || retu
             ${PRESERVE-"0,/$REGEX/{s/$REGEX/$REPLACE_WITH/}"} <<<"$_FILE"$'\n.') &&
             _FILE=${_FILE%$'\n.'} || return
         ! _lk_option_check "$_FILE" || {
-            lk_file_replace "$FILE" "$_FILE"
+            lk_file_keep_original "$FILE" &&
+                lk_file_replace "$FILE" "$_FILE" || return
             return 0
         }
     done
-    lk_file_keep_original "$FILE" &&
-        lk_file_add_newline "$FILE" &&
-        lk_maybe_sudo tee -a "$FILE" <<<"$SETTING" >/dev/null
+    # Get a clean copy of FILE in case of buggy regex
+    lk_file_get_text "$FILE" _FILE &&
+        lk_file_keep_original "$FILE" &&
+        lk_file_replace "$FILE" "$_FILE$SETTING"
 }
 
 # lk_conf_set_option OPTION VALUE [FILE]
