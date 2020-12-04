@@ -4,7 +4,10 @@
 
 function _lk_arch_maybe_chroot() {
     if [ -n "${LK_ARCH_CHROOT_DIR:-}" ]; then
-        arch-chroot ${LK_ARCH_CHROOT_USER:+-u "$LK_ARCH_CHROOT_USER"} "$LK_ARCH_CHROOT_DIR" "$@"
+        arch-chroot \
+            ${LK_ARCH_CHROOT_USER:+-u "$LK_ARCH_CHROOT_USER"} \
+            "$LK_ARCH_CHROOT_DIR" \
+            "$@"
     else
         lk_elevate "$@"
     fi
@@ -17,12 +20,12 @@ function _lk_arch_path() {
 function lk_pacman_configure() {
     local PACMAN_CONF=${LK_PACMAN_CONF:-/etc/pacman.conf}
     PACMAN_CONF=$(_lk_arch_path "$PACMAN_CONF")
-    # leading and trailing whitespace in pacman.conf is ignored
+    # Leading and trailing whitespace in pacman.conf is ignored
     LK_SUDO=1 lk_file_replace "$PACMAN_CONF" \
         "$(sed -E "s/^$S*#$S*(Color|TotalDownload)$S*\$/\1/" "$PACMAN_CONF")"
 }
 
-# lk_pacman_add_repo REPO ...
+# lk_pacman_add_repo REPO...
 #
 # Add each REPO to /etc/pacman.conf unless it has already been added. REPO is a
 # pipe-separated list of values in this order (trailing pipes are optional):
@@ -34,21 +37,20 @@ function lk_pacman_configure() {
 #
 # Examples (line breaks added for legibility):
 # - lk_pacman_add_repo "aur|file:///srv/repo/aur|||Optional TrustAll"
-# - lk_pacman_add_repo "sublime-text|\
-#   https://download.sublimetext.com/arch/stable/\$arch|\
-#   https://download.sublimetext.com/sublimehq-pub.gpg|\
+# - lk_pacman_add_repo "sublime-text|
+#   https://download.sublimetext.com/arch/stable/\$arch|
+#   https://download.sublimetext.com/sublimehq-pub.gpg|
 #   8A8F901A"
-#
 function lk_pacman_add_repo() {
+    # shellcheck disable=SC2034
     local PACMAN_CONF=${LK_PACMAN_CONF:-/etc/pacman.conf} IFS='|' \
-        REPO_LIST SH i r REPO SERVER KEY_URL KEY_ID SIG_LEVEL
+        SH i r REPO SERVER KEY_URL KEY_ID SIG_LEVEL _FILE LK_SUDO=1
     [ $# -gt 0 ] || return 0
     PACMAN_CONF=$(_lk_arch_path "$PACMAN_CONF")
     [ -f "$PACMAN_CONF" ] ||
         lk_warn "$PACMAN_CONF: file not found" || return
     lk_command_exists pacman-conf ||
         lk_warn "command not found: pacman-conf" || return
-    REPO_LIST=$(pacman-conf --config "$PACMAN_CONF" --repo-list) || return
     SH=$(
         _add_key() { KEY_FILE=$(mktemp) &&
             curl --fail --output "$KEY_FILE" "$1" &&
@@ -59,7 +61,8 @@ function lk_pacman_add_repo() {
     for i in "$@"; do
         r=($i)
         REPO=${r[0]}
-        ! grep -Fx "$REPO" <<<"$REPO_LIST" >/dev/null || continue
+        ! pacman-conf --config "$PACMAN_CONF" --repo-list |
+            grep -Fx "$REPO" >/dev/null || continue
         SERVER=${r[1]}
         KEY_URL=${r[2]:-}
         KEY_ID=${r[3]:-}
@@ -71,13 +74,12 @@ function lk_pacman_add_repo() {
         fi || return
         [ -z "$KEY_ID" ] ||
             _lk_arch_maybe_chroot pacman-key --lsign-key "$KEY_ID" || return
-        LK_SUDO=1 lk_file_keep_original "$PACMAN_CONF"
-        lk_elevate tee -a "$PACMAN_CONF" <<EOF >/dev/null
-
+        lk_file_keep_original "$PACMAN_CONF" &&
+            lk_file_get_text "$PACMAN_CONF" _FILE &&
+            lk_file_replace "$PACMAN_CONF" "$_FILE
 [$REPO]${SIG_LEVEL:+
 SigLevel = $SIG_LEVEL}
-Server = $SERVER
-EOF
+Server = $SERVER"
         unset LK_PACMAN_SYNC
     done
 }
@@ -86,6 +88,7 @@ function _lk_pacman_sync() {
     if { lk_is_root || lk_can_sudo pacman; } &&
         ! lk_is_false LK_PACMAN_SYNC; then
         lk_elevate pacman -Sy || return
+        # shellcheck disable=SC2034
         LK_PACMAN_SYNC=0
     fi
 }

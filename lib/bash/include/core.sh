@@ -1048,10 +1048,7 @@ function lk_log_bypass_stderr() {
 # lk_echoc [-n] [MESSAGE [COLOUR]]
 function lk_echoc() {
     local NEWLINE MESSAGE
-    [ "${1:-}" != -n ] || {
-        NEWLINE=0
-        shift
-    }
+    [ "${1:-}" != -n ] || { NEWLINE=0 && shift; }
     MESSAGE=${1:-}
     [ $# -le 1 ] || [ -z "$LK_RESET" ] ||
         MESSAGE=$2${MESSAGE//"$LK_RESET"/$LK_RESET$2}$LK_RESET
@@ -1344,6 +1341,7 @@ function lk_console_list() {
         COLUMNS=$((WIDTH - ${#LK_TTY_PREFIX} - INDENT)) column -s $'\n' |
         expand)" || return
     SPACES="$(lk_repeat " " $((${#LK_TTY_PREFIX} + INDENT)))"
+    # OUTPUT is assigned by lk_console_message
     echo "$(
         echo "$OUTPUT"
         lk_echoc "$SPACES${LIST//$'\n'/$'\n'$SPACES}" \
