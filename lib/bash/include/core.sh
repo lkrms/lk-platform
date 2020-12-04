@@ -2075,32 +2075,32 @@ fi
 
 if ! lk_is_macos || lk_gnu_check stat; then
     function lk_file_modified() {
-        lk_maybe_sudo gnu_stat --printf '%Y' "$1"
+        lk_maybe_sudo gnu_stat --printf '%Y' -- "$1"
     }
     function lk_file_owner() {
-        lk_maybe_sudo gnu_stat --printf '%U' "$1"
+        lk_maybe_sudo gnu_stat --printf '%U' -- "$1"
     }
     function lk_file_group() {
-        lk_maybe_sudo gnu_stat --printf '%G' "$1"
+        lk_maybe_sudo gnu_stat --printf '%G' -- "$1"
     }
     function lk_file_mode() {
-        lk_maybe_sudo gnu_stat --printf '%04a' "$1"
+        lk_maybe_sudo gnu_stat --printf '%04a' -- "$1"
     }
 else
     function lk_file_modified() {
-        lk_maybe_sudo stat -t '%s' -f '%Sm' "$1"
+        lk_maybe_sudo stat -t '%s' -f '%Sm' -- "$1"
     }
     function lk_file_owner() {
-        lk_maybe_sudo stat -f '%Su' "$1"
+        lk_maybe_sudo stat -f '%Su' -- "$1"
     }
     function lk_file_group() {
-        lk_maybe_sudo stat -f '%Sg' "$1"
+        lk_maybe_sudo stat -f '%Sg' -- "$1"
     }
     function lk_file_mode() {
         # Output octal (O) file mode (p) twice, first for the suid, sgid, and
         # sticky bits (M), then with zero-padding (03) for the user, group, and
         # other bits (L)
-        lk_maybe_sudo stat -f '%OMp%03OLp' "$1"
+        lk_maybe_sudo stat -f '%OMp%03OLp' -- "$1"
     }
 fi
 
@@ -2173,13 +2173,13 @@ function lk_file_prepare_temp() {
     DIR=${1%/*}
     [ "$DIR" != "$1" ] || DIR=$PWD
     ! lk_verbose 2 || vv=v
-    TEMP=$(lk_maybe_sudo mktemp "${DIR%/}/.${1##*/}.XXXXXXXXXX") || return
+    TEMP=$(lk_maybe_sudo mktemp -- "${DIR%/}/.${1##*/}.XXXXXXXXXX") || return
     ! lk_maybe_sudo test -f "$1" ||
         if lk_is_true NO_COPY; then
             MODE=$(lk_file_mode "$1") &&
-                lk_maybe_sudo chmod "$(lk_pad_zero 5 "$MODE")" "$TEMP"
+                lk_maybe_sudo chmod "$(lk_pad_zero 5 "$MODE")" -- "$TEMP"
         else
-            lk_maybe_sudo cp -a"$vv" "$1" "$TEMP"
+            lk_maybe_sudo cp -a"$vv" -- "$1" "$TEMP"
         fi || return
     echo "$TEMP"
 }
