@@ -234,9 +234,10 @@ function lk_wp_db_dump_remote() {
     if [ ! -t 1 ]; then
         lk_mysql_dump_remote "$1" "$DB_NAME"
     else
-        OUTPUT_FILE=~/$1-${REMOTE_PATH//\//_}-$(lk_date_ymdhms).sql.gz
+        OUTPUT_FILE=~/.lk-platform/cache/db/$1-${REMOTE_PATH//\//_}-$(lk_date_ymdhms).sql.gz
         lk_console_item "Initiating MySQL dump to" "$OUTPUT_FILE"
-        lk_mysql_dump_remote "$1" "$DB_NAME" >"$OUTPUT_FILE"
+        install -d -m 00700 "${OUTPUT_FILE%/*}" &&
+            lk_mysql_dump_remote "$1" "$DB_NAME" >"$OUTPUT_FILE"
     fi
 }
 
@@ -249,8 +250,10 @@ function lk_wp_db_dump() {
         OUTPUT_FILE=$(lk_replace ~/ "" "$SITE_ROOT")
         OUTPUT_FILE=localhost-${OUTPUT_FILE//\//_}-$(lk_date_ymdhms).sql.gz
         ! lk_in_string "$SITE_ROOT" "$PWD" &&
-            OUTPUT_FILE=$PWD/$OUTPUT_FILE ||
-            OUTPUT_FILE=~/$OUTPUT_FILE
+            OUTPUT_FILE=$PWD/$OUTPUT_FILE || {
+            OUTPUT_FILE=~/.lk-platform/cache/db/$OUTPUT_FILE
+            install -d -m 00700 "${OUTPUT_FILE%/*}" || return
+        }
         [ -w "${OUTPUT_FILE%/*}" ] ||
             lk_warn "cannot write to ${OUTPUT_FILE%/*}" || return
     }

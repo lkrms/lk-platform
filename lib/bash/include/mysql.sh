@@ -2,8 +2,8 @@
 
 # shellcheck disable=SC2015,SC2029,SC2120
 
-function lk_mysql_quiet() {
-    [ "${LK_MYSQL_QUIET:-0}" -ne 0 ]
+function lk_mysql_is_quiet() {
+    [ -n "${LK_MYSQL_QUIET:-}" ]
 }
 
 function lk_mysql_escape() {
@@ -70,11 +70,11 @@ function lk_mysql_list() {
 }
 
 function lk_mysql_mapfile() {
-    local i=0 _LK_LINE
+    local _lk_i=0 _LK_LINE
     lk_is_identifier "$1" || lk_warn "not a valid identifier: $1" || return
     eval "$1=()"
     while IFS= read -r _LK_LINE; do
-        eval "$1[$((i++))]=\$_LK_LINE"
+        eval "$1[$((_lk_i++))]=\$_LK_LINE"
     done < <(lk_mysql_list "${@:2}" | lk_mysql_batch_unescape)
 }
 
@@ -118,8 +118,9 @@ Usage: $(lk_myself -f) DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
     lk_mysql_connects "$DB_NAME" 2>/dev/null ||
         lk_warn "database connection failed" || return
     [ ! -t 1 ] || {
-        OUTPUT_FILE=~/$DB_HOST-$DB_NAME-$(lk_date_ymdhms).sql.gz
-        OUTPUT_FD=$(lk_next_fd) &&
+        OUTPUT_FILE=~/.lk-platform/cache/db/$DB_HOST-$DB_NAME-$(lk_date_ymdhms).sql.gz
+        install -d -m 00700 "${OUTPUT_FILE%/*}" &&
+            OUTPUT_FD=$(lk_next_fd) &&
             eval "exec $OUTPUT_FD>&1 >\"\$OUTPUT_FILE\"" || return
     }
     INNODB_ONLY=$(lk_mysql_innodb_only "$DB_NAME") || return
@@ -135,11 +136,11 @@ Usage: $(lk_myself -f) DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
         ARG_COLOUR=$LK_BOLD$LK_RED
     fi
     DUMP_ARGS+=(--no-tablespaces)
-    lk_mysql_quiet || {
+    lk_mysql_is_quiet || {
         lk_console_item "Dumping database:" "$DB_NAME"
         lk_console_detail "Host:" "$DB_HOST"
     }
-    { lk_mysql_quiet && lk_is_true INNODB_ONLY; } || {
+    { lk_mysql_is_quiet && lk_is_true INNODB_ONLY; } || {
         lk_console_detail "InnoDB only?" \
             "${ARG_COLOUR+$ARG_COLOUR}$INNODB_ONLY${ARG_COLOUR+$LK_RESET}"
         lk_console_detail "mysqldump arguments:" \
@@ -160,7 +161,7 @@ Usage: $(lk_myself -f) DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
             lk_console_detail "Deleted" "$LK_MY_CNF" ||
             lk_console_warning "Error deleting" "$LK_MY_CNF"
     }
-    lk_mysql_quiet || {
+    lk_mysql_is_quiet || {
         [ "$EXIT_STATUS" -eq 0 ] &&
             lk_console_success "Database dump completed successfully" ||
             lk_console_error "Database dump failed"
@@ -185,8 +186,9 @@ Usage: $(lk_myself -f) SSH_HOST DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
     lk_mysql_get_cnf |
         ssh "$SSH_HOST" "bash -c 'cat >.lk_mysqldump.cnf'" || return
     [ ! -t 1 ] || {
-        OUTPUT_FILE=~/$SSH_HOST-$DB_NAME-$(lk_date_ymdhms).sql.gz
-        OUTPUT_FD=$(lk_next_fd) &&
+        OUTPUT_FILE=~/.lk-platform/cache/db/$SSH_HOST-$DB_NAME-$(lk_date_ymdhms).sql.gz
+        install -d -m 00700 "${OUTPUT_FILE%/*}" &&
+            OUTPUT_FD=$(lk_next_fd) &&
             eval "exec $OUTPUT_FD>&1 >\"\$OUTPUT_FILE\"" || return
     }
     lk_console_message "Dumping remote database"
@@ -194,6 +196,7 @@ Usage: $(lk_myself -f) SSH_HOST DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
     lk_console_detail "Host:" "$DB_HOST"
     [ -z "${OUTPUT_FILE:-}" ] ||
         lk_console_detail "Writing compressed SQL to" "$OUTPUT_FILE"
+    # TODO: implement lk_mysql_innodb_only
     ssh "$SSH_HOST" "bash -c 'mysqldump \\
     --defaults-file=.lk_mysqldump.cnf \\
     --single-transaction \\
