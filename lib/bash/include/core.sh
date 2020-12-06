@@ -2028,6 +2028,14 @@ else
     }
 fi
 
+function lk_hash() {
+    local COMMAND
+    COMMAND=$(lk_command_first_existing \
+        xxh128sum xxh64sum xxh32sum xxhsum sha256sum shasum md5sum md5) ||
+        lk_warn "hash command not found" || return
+    printf '%s\n' "$@" | "$COMMAND" | awk '{print $1}'
+}
+
 # lk_random_hex BYTES
 function lk_random_hex() {
     printf '%02x' $(for i in $(seq 1 "$1"); do echo $((RANDOM % 256)); done)

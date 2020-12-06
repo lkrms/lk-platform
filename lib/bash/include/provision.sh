@@ -359,7 +359,7 @@ EOF
 # Print each input line that is a valid dotted-decimal IPv4 address or CIDR.
 function lk_filter_ipv4() {
     eval "$(lk_get_regex IPV4_OPT_PREFIX_REGEX)"
-    sed -E "/^$IPV4_OPT_PREFIX_REGEX$/!d"
+    sed -E "\\#^$IPV4_OPT_PREFIX_REGEX\$#!d"
 }
 
 # lk_filter_ipv6
@@ -367,7 +367,7 @@ function lk_filter_ipv4() {
 # Print each input line that is a valid 8-hextet IPv6 address or CIDR.
 function lk_filter_ipv6() {
     eval "$(lk_get_regex IPV6_OPT_PREFIX_REGEX)"
-    sed -E "/^$IPV6_OPT_PREFIX_REGEX$/!d"
+    sed -E "\\#^$IPV6_OPT_PREFIX_REGEX\$#!d"
 }
 
 function _lk_node_ip() {
@@ -505,7 +505,8 @@ function lk_hosts_resolve() {
     }))
     HOSTS=($(comm -23 <(lk_echo_args "$@" | sort -u) \
         <(lk_echo_array IP_ADDRESSES | sort -u)))
-    IP_ADDRESSES+=($(lk_hosts_get_records +VALUE A,AAAA "${HOSTS[@]}")) ||
+    [ ${#HOSTS[@]} -eq 0 ] ||
+        IP_ADDRESSES+=($(lk_hosts_get_records +VALUE A,AAAA "${HOSTS[@]}")) ||
         return
     lk_echo_array IP_ADDRESSES | sort -u
 }

@@ -75,7 +75,7 @@ if [ -n "$IP" ] && ! lk_node_is_host "$SITE_HOST"; then
     NEW_SITE_ADDR=$(lk_console_read "New site address:" "" \
         -i "http://${SITE_DOMAIN%%.*}.localhost")
     [ -z "$NEW_SITE_ADDR" ] || [ "$NEW_SITE_ADDR" = "$SITE_ADDR" ] || {
-        LK_WP_QUIET=1 LK_WP_REPLACE=1 LK_WP_FLUSH=0 \
+        LK_WP_QUIET=1 LK_WP_REPLACE=1 LK_WP_REAPPLY=0 LK_WP_FLUSH=0 \
             LK_WP_REPLACE_COMMAND=wp \
             lk_wp_rename_site "$NEW_SITE_ADDR" && STALE=1
     }
@@ -177,7 +177,7 @@ if lk_wp plugin is-active woocommerce; then
             woocommerce_eway_settings testmode yes
     fi
 
-    if wp cli has-command 'wc webhook list'; then
+    if wp cli has-command "wc webhook list"; then
         TO_DEACTIVATE=($(
             wp wc webhook list --user=1 --field=id --status=active
         )) || {
@@ -196,6 +196,7 @@ if lk_wp plugin is-active woocommerce; then
     fi
 fi
 
+lk_wp_reapply_config
 lk_wp_flush
 
 lk_console_success "WordPress successfully reset for local development"

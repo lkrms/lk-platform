@@ -1,5 +1,6 @@
 #!/bin/bash
-# shellcheck disable=SC1091,SC2015,SC2029,SC2207,SC2119,SC2120,SC2206
+
+# shellcheck disable=SC2002,SC2015,SC2016,SC2029,SC2034,SC2120,SC2207
 
 lk_include provision mysql
 
@@ -7,8 +8,8 @@ function lk_wp() {
     wp --skip-plugins --skip-themes "$@"
 }
 
-function lk_wp_quiet() {
-    [ "${LK_WP_QUIET:-0}" -ne 0 ]
+function lk_wp_is_quiet() {
+    [ -n "${LK_WP_QUIET:-}" ]
 }
 
 function lk_wp_get_site_root() {
@@ -35,15 +36,15 @@ function _lk_wp_replace() {
         "*_logs"
         redirection_404
 
-        # new Gravity Forms
+        # New Gravity Forms
         gf_form_view
         gf_draft_submissions
-        gf_entry*
+        "gf_entry*"
 
-        # old Gravity Forms
+        # Old Gravity Forms
         rg_form_view
         rg_incomplete_submissions
-        rg_lead*
+        "rg_lead*"
     )
     SKIP_TABLES=("${SKIP_TABLES[@]/#/$TABLE_PREFIX}")
     lk_console_detail "Replacing:" "$1 -> $2"
@@ -53,47 +54,66 @@ function _lk_wp_replace() {
         --skip-columns="guid"
 }
 
+function lk_wp_package_install() {
+    local PACKAGES
+    PACKAGES=($(lk_wp package list --format=ids)) || return
+    lk_in_array "$1" PACKAGES || {
+        lk_console_detail "Installing WP-CLI package:" "$1"
+        lk_wp package install "$1"
+    }
+}
+
 function lk_wp_flush() {
     lk_console_message "Flushing WordPress rewrite rules and caches"
     lk_console_detail "Flushing object cache"
-    lk_wp cache flush
+    wp cache flush || return
     lk_console_detail "Deleting transients"
-    lk_wp transient delete --all
+    wp transient delete --all || return
     lk_console_detail "Flushing rewrite rules"
-    wp rewrite flush
-    if wp cli has-command 'w3-total-cache flush'; then
+    wp rewrite flush || return
+    if wp cli has-command "w3-total-cache flush"; then
         lk_console_detail "Flushing W3 Total Cache"
         wp w3-total-cache flush all
+    fi
+    if lk_wp plugin is-active wp-rocket; then
+        lk_console_detail "Clearing WP Rocket cache"
+        wp cli has-command "rocket clean" ||
+            lk_wp_package_install wp-media/wp-rocket-cli || return
+        wp rocket clean --confirm || return
     fi
 }
 
 function lk_wp_url_encode() {
-    php --run 'echo urlencode(trim(stream_get_contents(STDIN)));' <<<"$1"
+    php --run \
+        'echo urlencode(trim(stream_get_contents(STDIN)));' \
+        <<<"$1"
 }
 
 function lk_wp_json_encode() {
-    php --run 'echo substr(json_encode(trim(stream_get_contents(STDIN))), 1, -1);' <<<"$1"
+    php --run \
+        'echo substr(json_encode(trim(stream_get_contents(STDIN))), 1, -1);' \
+        <<<"$1"
 }
 
 # lk_wp_rename_site NEW_URL
 #
 # Change the WordPress site address to NEW_URL.
 #
-# Environment variables:
-#
-# - LK_WP_OLD_URL=OLD_URL: override `wp option get home`, e.g. to replace
-#   instances of OLD_URL in database tables after changing the site address
-# - LK_WP_REPLACE=<1|0|Y|N>: perform URL replacement in database tables
+# Variables:
+# - LK_WP_OLD_URL: override `wp option get home`, e.g. to replace instances of
+#   OLD_URL in database tables after changing the site address
+# - LK_WP_REPLACE: perform URL replacement in database tables (default: 1)
+# - LK_WP_REPLACE_WITHOUT_SCHEME (DANGEROUS): replace instances of the previous
+#   URL without a scheme component ("http*://" or "//"), e.g. if renaming
+#   "http://domain.com" to "https://new.domain.com", replace "domain.com" with
+#   "new.domain.com" (default: 0)
+# - LK_WP_REAPPLY: regenerate configuration files and rebuild indexes after
+#   renaming (default: 1)
+# - LK_WP_FLUSH: flush rewrite rules, caches and transients after renaming
 #   (default: 1)
-# - LK_WP_REPLACE_WITHOUT_SCHEME=<1|0|Y|N> (DANGEROUS): replace instances of the
-#   previous URL without a scheme component ("http*://" or "//"), e.g. if
-#   renaming "http://domain.com" to "https://new.domain.com", replace
-#   "domain.com" with "new.domain.com" (default: 0)
-# - LK_WP_FLUSH=<1|0|Y|N>: flush WordPress rewrite rules, caches and transients
-#   after renaming (default: 1)
 function lk_wp_rename_site() {
-    local NEW_URL=${1:-} OLD_URL=${LK_WP_OLD_URL:-} \
-        SITE_ROOT OLD_SITE_URL NEW_SITE_URL REPLACE DELIM=$'\t' IFS r s
+    local NEW_URL=${1:-} OLD_URL=${LK_WP_OLD_URL:-} PLUGIN_WARNING \
+        SITE_ROOT OLD_SITE_URL NEW_SITE_URL REPLACE i SEARCH HASH HASHES=
     lk_is_uri "$NEW_URL" ||
         lk_warn "not a valid URL: $NEW_URL" || return
     [ -n "$OLD_URL" ] ||
@@ -109,99 +129,91 @@ function lk_wp_rename_site() {
         "Site address:" "$OLD_URL -> $LK_BOLD$NEW_URL$LK_RESET"
     lk_console_detail \
         "WordPress address:" "$OLD_SITE_URL -> $LK_BOLD$NEW_SITE_URL$LK_RESET"
-    lk_wp_quiet || lk_confirm "Proceed?" Y || return
+    lk_wp_is_quiet || lk_confirm "Proceed?" Y || return
     lk_wp option update home "$NEW_URL" &&
         lk_wp option update siteurl "$NEW_SITE_URL" || return
-    if lk_is_true LK_WP_REPLACE || { [ -z "${LK_WP_REPLACE:-}" ] &&
+    if lk_is_true LK_WP_REPLACE || { [ -z "${LK_WP_REPLACE+1}" ] &&
         lk_confirm "Replace the previous URL in all tables?" Y; }; then
         lk_console_message "Performing WordPress search/replace"
         REPLACE=(
-            "$OLD_URL$DELIM$NEW_URL"
-            "${OLD_URL#http*:}$DELIM${NEW_URL#http*:}"
-            "$(
-                lk_wp_url_encode "$OLD_URL"
-            )$DELIM$(
-                lk_wp_url_encode "$NEW_URL"
-            )"
-            "$(
-                lk_wp_url_encode "${OLD_URL#http*:}"
-            )$DELIM$(
-                lk_wp_url_encode "${NEW_URL#http*:}"
-            )"
-            "$(
-                lk_wp_json_encode "$OLD_URL"
-            )$DELIM$(
-                lk_wp_json_encode "$NEW_URL"
-            )"
-            "$(
-                lk_wp_json_encode "${OLD_URL#http*:}"
-            )$DELIM$(
-                lk_wp_json_encode "${NEW_URL#http*:}"
-            )"
+            "$OLD_URL"
+            "$NEW_URL"
+            "${OLD_URL#http*:}"
+            "${NEW_URL#http*:}"
+            "$(lk_wp_url_encode "$OLD_URL")"
+            "$(lk_wp_url_encode "$NEW_URL")"
+            "$(lk_wp_url_encode "${OLD_URL#http*:}")"
+            "$(lk_wp_url_encode "${NEW_URL#http*:}")"
+            "$(lk_wp_json_encode "$OLD_URL")"
+            "$(lk_wp_json_encode "$NEW_URL")"
+            "$(lk_wp_json_encode "${OLD_URL#http*:}")"
+            "$(lk_wp_json_encode "${NEW_URL#http*:}")"
         )
         ! lk_is_true LK_WP_REPLACE_WITHOUT_SCHEME ||
             REPLACE+=(
-                "${OLD_URL#http*://}$DELIM${NEW_URL#http*://}"
-                "$(
-                    lk_wp_url_encode "${OLD_URL#http*://}"
-                )$DELIM$(
-                    lk_wp_url_encode "${NEW_URL#http*://}"
-                )"
+                "${OLD_URL#http*://}"
+                "${NEW_URL#http*://}"
+                "$(lk_wp_url_encode "${OLD_URL#http*://}")"
+                "$(lk_wp_url_encode "${NEW_URL#http*://}")"
             )
-        lk_remove_repeated REPLACE
-        for r in "${REPLACE[@]}"; do
-            IFS=$DELIM
-            s=($r)
-            unset IFS
-            _lk_wp_replace "${s[@]}" || return
+        for i in $(seq 0 2 $((${#REPLACE[@]} - 1))); do
+            SEARCH=("${REPLACE[@]:$i:2}")
+            HASH=$(lk_hash "${SEARCH[@]}")
+            [[ ,$HASHES, != *,$HASH,* ]] || continue
+            HASHES=${HASHES:+$HASHES,}$HASH
+            _lk_wp_replace "${SEARCH[@]}" || return
         done
     fi
+    PLUGIN_WARNING=" Plugin code will be allowed to run."
+    if lk_is_true LK_WP_REAPPLY ||
+        { [ -z "${LK_WP_REAPPLY+1}" ] &&
+            lk_confirm \
+                "OK to regenerate configuration files and rebuild indexes?$PLUGIN_WARNING" Y &&
+            PLUGIN_WARNING=; }; then
+        lk_wp_reapply_config
+    fi
     if lk_is_true LK_WP_FLUSH ||
-        { [ -z "${LK_WP_FLUSH:-}" ] && lk_confirm "\
-OK to flush rewrite rules, caches and transients? \
-Plugin code will be allowed to run." Y; }; then
+        { [ -z "${LK_WP_FLUSH+1}" ] &&
+            lk_confirm "OK to flush rewrite rules, caches and transients?$PLUGIN_WARNING" Y; }; then
         lk_wp_flush
-    elif [ -z "${LK_WP_FLUSH:-}" ]; then
+    elif [ -z "${LK_WP_FLUSH+1}" ]; then
         lk_console_detail "To flush rewrite rules:" "wp rewrite flush"
         lk_console_detail "To flush everything:" "lk_wp_flush"
     fi
     lk_console_success "Site renamed successfully"
 }
 
-# lk_wp_db_config [WP_CONFIG_PATH]
+# lk_wp_db_config [WP_CONFIG]
 #
-# Output DB_NAME, DB_USER, DB_PASSWORD and DB_HOST values configured in
-# WP_CONFIG_PATH (./wp-config.php by default) as KEY="VALUE" pairs without
-# calling `wp config`.
+# Read a wp-config.php file and output Bash-compatible variable assignments for
+# DB_NAME, DB_USER, DB_PASSWORD and DB_HOST. If WP_CONFIG is not given, read
+# wp-config.php from standard input.
 function lk_wp_db_config() {
-    local WP_CONFIG=${1:-wp-config.php} PHP
-    [ -e "$WP_CONFIG" ] || lk_warn "file not found: $WP_CONFIG" || return
+    local PHP
     PHP=$(
         echo '<?php'
-        # 1. remove comments and whitespace from wp-config.php
-        php --strip "$WP_CONFIG" |
-            # 2. extract the relevant "define(...);" calls, one per line
-            grep -Po "\
-(?<=<\?php|;|^)\s*define\s*\(\s*(['\"])DB_(NAME|USER|PASSWORD|HOST)\1\s*,\
-\s*('([^']+|\\\\')*'|\"([^\"\$]+|\\\\(\"|\\\$))*\")\s*\)\s*(;|\$)" |
-            # 3. add any missing semicolons
+        cat ${1+"$1"} |
+            # 1. Remove comments and whitespace from wp-config.php
+            php --strip |
+            # 2. Extract the relevant "define(...);" calls, one per line
+            gnu_grep -Po "\
+(?<=<\?php|;|^)$S*define$S*\($S*(['\"])DB_(NAME|USER|PASSWORD|HOST)\1$S*,\
+$S*('([^']+|\\\\')*'|\"([^\"\$]+|\\\\(\"|\\\$))*\")$S*\)$S*(;|\$)" |
+            # 3. Add any missing semicolons
             sed -E 's/[^;]$/&;/' || exit
-        # 4. add code to output each value as a shell expression
+        # 4. Add code to output each value as a shell expression
         cat <<"EOF"
-$vals = array_map(function ($v) {
-        return escapeshellarg($v);
-    }, [DB_NAME, DB_USER, DB_PASSWORD, DB_HOST]);
-printf("DB_NAME=%s\nDB_USER=%s\nDB_PASSWORD=%s\nDB_HOST=%s\n",
-    $vals[0], $vals[1], $vals[2], $vals[3]);
+foreach (["DB_NAME", "DB_USER", "DB_PASSWORD", "DB_HOST"] as $const)
+    printf("%s=%s\n", $const, escapeshellarg(constant($const)));
 EOF
     ) || return
-    # 5. run the code
+    # 5. Run the code
     php <<<"$PHP"
 }
 
 # lk_wp_db_dump_remote SSH_HOST [REMOTE_PATH]
 function lk_wp_db_dump_remote() {
-    local REMOTE_PATH=${2:-public_html} WP_CONFIG DB_CONFIG \
+    local REMOTE_PATH=${2:-public_html} WP_CONFIG SH \
         DB_NAME=${DB_NAME:-} DB_USER=${DB_USER:-} \
         DB_PASSWORD=${DB_PASSWORD:-} DB_HOST=${DB_HOST:-} \
         OUTPUT_FILE
@@ -216,8 +228,8 @@ function lk_wp_db_dump_remote() {
         lk_console_detail "Retrieving" "$1:$REMOTE_PATH/wp-config.php"
         WP_CONFIG=$(ssh "$1" cat "$REMOTE_PATH/wp-config.php") || return
         lk_console_detail "Parsing WordPress configuration"
-        DB_CONFIG=$(lk_wp_db_config <(cat <<<"$WP_CONFIG")) || return
-        . /dev/stdin <<<"$DB_CONFIG" || return
+        SH=$(lk_wp_db_config <<<"$WP_CONFIG") &&
+            eval "$SH" || return
     }
     if [ ! -t 1 ]; then
         lk_mysql_dump_remote "$1" "$DB_NAME"
@@ -319,7 +331,7 @@ function lk_wp_db_restore_local() {
     [ -f "$1" ] || lk_warn "file not found: $1" || return
     SITE_ROOT=$(lk_wp_get_site_root) || return
     lk_console_message "Preparing to restore WordPress database"
-    lk_wp_quiet || {
+    lk_wp_is_quiet || {
         lk_console_detail "Backup file:" "$1"
         lk_console_detail "WordPress installation:" "$SITE_ROOT"
     }
@@ -406,7 +418,7 @@ function lk_wp_sync_files_from_remote() {
     lk_console_message "Preparing to sync WordPress files"
     REMOTE_PATH="${REMOTE_PATH%/}"
     LOCAL_PATH="${LOCAL_PATH%/}"
-    lk_wp_quiet || {
+    lk_wp_is_quiet || {
         lk_console_detail "Source:" "$1:$REMOTE_PATH"
         lk_console_detail "Destination:" "$LOCAL_PATH"
     }
@@ -417,7 +429,7 @@ function lk_wp_sync_files_from_remote() {
     ARGS+=("$1:$REMOTE_PATH/" "$LOCAL_PATH/")
     lk_console_detail "Local files will be overwritten with command:" \
         "rsync ${ARGS[*]}"
-    lk_wp_quiet || ! lk_confirm "Perform a trial run first?" N ||
+    lk_wp_is_quiet || ! lk_confirm "Perform a trial run first?" N ||
         rsync --dry-run "${ARGS[@]}" | "${PAGER:-less}" >&2 || true
     lk_confirm "LOCAL CHANGES WILL BE PERMANENTLY LOST. Proceed?" Y ||
         return
@@ -427,6 +439,31 @@ function lk_wp_sync_files_from_remote() {
         lk_console_success "File sync completed successfully" ||
         lk_console_error "File sync failed"
     return "$EXIT_STATUS"
+}
+
+# lk_wp_reapply_config
+#
+# Regenerate configuration files and rebuild indexes. Recommended after
+# migrating WordPress.
+function lk_wp_reapply_config() {
+    local FILE
+    if lk_wp plugin is-active wp-rocket; then
+        lk_console_detail "Regenerating WP Rocket files"
+        wp cli has-command "rocket regenerate" ||
+            lk_wp_package_install wp-media/wp-rocket-cli || return
+        for FILE in htaccess advanced-cache config; do
+            wp rocket regenerate --file="$FILE"
+        done
+    fi
+    if lk_wp plugin is-active email-log; then
+        lk_console_detail "Re-activating Email Log"
+        lk_wp plugin deactivate email-log
+        lk_wp plugin activate email-log
+    fi
+    if wp cli has-command "yoast index"; then
+        lk_console_detail "Building Yoast index"
+        wp yoast index
+    fi
 }
 
 function _lk_wp_get_cron_path() {
@@ -478,7 +515,6 @@ function lk_wp_disable_cron() {
 }
 
 function lk_wp_get_maintenance_php() {
-    # shellcheck disable=SC2016
     echo '<?php $upgrading = time(); ?>'
 }
 

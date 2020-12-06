@@ -170,9 +170,10 @@ cd "$LOCAL_PATH"
 LK_NO_INPUT=1 \
     lk_wp_db_restore_local "$DB_FILE" "$DEFAULT_DB_NAME" "$DEFAULT_DB_USER"
 [ -z "$RENAME" ] ||
-    LK_WP_QUIET=1 LK_WP_REPLACE=1 LK_WP_FLUSH=0 \
+    LK_WP_QUIET=1 LK_WP_REPLACE=1 LK_WP_REAPPLY=0 LK_WP_FLUSH=0 \
         LK_WP_REPLACE_COMMAND=wp \
         lk_wp_rename_site "$RENAME"
+lk_wp_reapply_config
 lk_wp_flush
 
 if lk_is_true SSL; then
