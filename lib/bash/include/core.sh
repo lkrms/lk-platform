@@ -984,13 +984,13 @@ function lk_log_output() {
         ! DIR=$(cd "${BASH_REMATCH[2]:-.}" && pwd -P) ||
         HEADER+=("${DIR%/}/"); } 2>/dev/null
     HEADER+=("${0##*/} invoked")
-    [ ${#LK_ARGV[@]} -eq 0 ] || HEADER+=($(
+    [ ${#LK_ARGV[@]} -eq 0 ] || HEADER+=("$(
         printf ' with %s %s:' \
             ${#LK_ARGV[@]} \
             "$(lk_maybe_plural \
                 ${#LK_ARGV[@]} "argument" "arguments")"
-        printf '\n- %q' "${LK_ARGV[@]}"
-    ))
+        printf '\n -> %q' "${LK_ARGV[@]}"
+    )")
     IFS=
     echo "$LK_BOLD====> ${HEADER[*]}$LK_RESET" | lk_log >>"$LOG_PATH" &&
         _LK_LOG_OUT_FD=$(lk_next_fd) && eval "exec $_LK_LOG_OUT_FD>&1" &&
