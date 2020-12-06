@@ -86,6 +86,7 @@ PACMAN_PACKAGES+=(
     yq
 
     # networking
+    networkmanager-l2tp
     openconnect
 
     # monitoring

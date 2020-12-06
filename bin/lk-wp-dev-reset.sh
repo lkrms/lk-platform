@@ -1,4 +1,5 @@
 #!/bin/bash
+
 # shellcheck disable=SC1090,SC2015,SC2034,SC2207
 
 lk_bin_depth=1 include=wordpress,provision . lk-bash-load.sh || exit
@@ -23,52 +24,44 @@ DEACTIVATE_PLUGINS=(
 lk_console_message "Checking WordPress"
 
 # Connect to MySQL
-DB_NAME="$(lk_wp config get DB_NAME)"
-DB_USER="$(lk_wp config get DB_USER)"
-DB_PASSWORD="$(lk_wp config get DB_PASSWORD)"
-DB_HOST="$(lk_wp config get DB_HOST)"
-TABLE_PREFIX="$(lk_wp_get_table_prefix)"
+SH=$(lk_wp_db_get_vars) && eval "$SH"
+TABLE_PREFIX=$(lk_wp_get_table_prefix)
 lk_mysql_write_cnf
 lk_mysql_connects "$DB_NAME"
 
 # Retrieve particulars
 function get_state() {
-    local _HOST
-    SITE_ADDR=$(lk_wp_get_site_address)
-    _HOST=$(lk_uri_parts "$SITE_ADDR" "_HOST") &&
-        eval "$_HOST" || lk_die "unable to parse site address: $SITE_ADDR"
+    local SH
+    SITE_ADDR=$(lk_wp_get_site_address) &&
+        SH=$(lk_uri_parts "$SITE_ADDR" _HOST) &&
+        eval "$SH" || lk_die "unable to retrieve site address"
     SITE_HOST=$_HOST
-    SITE_DOMAIN=$(
-        sed -E 's/^(www[^.]*|local|dev|staging)\.(.+)$/\2/' <<<"$_HOST"
-    )
-    [ -n "$SITE_DOMAIN" ] || SITE_DOMAIN=$_HOST
-    SITE_ROOT=$(lk_wp_get_site_root)
-    ACTIVE_PLUGINS=($(lk_wp plugin list --status=active --field=name | sort -u))
-    STALE=0
+    [[ $SITE_HOST =~ ^(www[^.]*|local|dev|staging)\.(.+)$ ]] &&
+        SITE_DOMAIN=${BASH_REMATCH[2]} ||
+        SITE_DOMAIN=$SITE_HOST
+    SITE_ROOT=$(lk_wp_get_site_root) &&
+        ACTIVE_PLUGINS=($(lk_wp plugin list --status=active --field=name)) &&
+        STALE=0
 }
 get_state
 
 # Check plugins
 TO_DEACTIVATE=($(
-    [ ${#ACTIVE_PLUGINS[@]} -eq 0 ] ||
-        [ ${#DEACTIVATE_PLUGINS[@]} -eq 0 ] ||
-        comm -12 \
-            <(printf '%s\n' "${ACTIVE_PLUGINS[@]}") \
-            <(printf '%s\n' "${DEACTIVATE_PLUGINS[@]}" | sort -u)
+    comm -12 \
+        <(lk_echo_array ACTIVE_PLUGINS | sort -u) \
+        <(lk_echo_array DEACTIVATE_PLUGINS | sort -u)
 ))
 
 if [ ${#TO_DEACTIVATE[@]} -gt 0 ]; then
-    lk_echo_array TO_DEACTIVATE |
-        lk_console_detail_list "Production-only $(
-            lk_maybe_plural ${#TO_DEACTIVATE[@]} \
-                "plugin" "plugins"
-        ) must be deactivated to continue:"
-    lk_confirm "Proceed?" Y || lk_die
+    lk_echo_array TO_DEACTIVATE | lk_console_detail_list \
+        "Production-only $(lk_maybe_plural ${#TO_DEACTIVATE[@]} \
+            plugin plugins) must be deactivated to continue:"
+    lk_confirm "Proceed?" Y || lk_die ""
     lk_wp plugin deactivate "${TO_DEACTIVATE[@]}"
     STALE=1
 fi
 
-IP="$(LK_DIG_SERVER=1.1.1.1 lk_hosts_get_records A,AAAA "$SITE_DOMAIN")"
+IP=$(LK_DIG_SERVER=1.1.1.1 lk_hosts_get_records A,AAAA "$SITE_DOMAIN")
 if [ -n "$IP" ] && ! lk_node_is_host "$SITE_HOST"; then
     NEW_SITE_ADDR=$(lk_console_read "New site address:" "" \
         -i "http://${SITE_DOMAIN%%.*}.localhost")
@@ -102,19 +95,14 @@ lk_console_detail "User addresses will be updated to:" "user_<ID>@$SITE_DOMAIN"
     lk_console_detail "WP_CACHE in wp-config.php will be set to:" "false"
 lk_console_detail "wp-mail-smtp will be configured to disable outgoing email"
 if lk_wp plugin is-active woocommerce; then
-    PLUGIN_CODE=1
-    printf '%s\n' \
-        "PayPal" \
-        "Stripe" \
-        "eWAY" |
+    printf '%s\n' PayPal Stripe eWAY |
         lk_console_detail_list \
             "Test mode will be enabled for known WooCommerce gateways:"
-    lk_console_detail "Active WooCommerce webhooks will be deleted"
+    lk_console_detail "WooCommerce webhooks will be disabled"
 fi
-[ "${PLUGIN_CODE:-0}" -eq 0 ] ||
-    lk_console_warning "Plugin code will be allowed to run where necessary"
+lk_console_warning "Plugin code will be allowed to run where necessary"
 
-lk_confirm "Proceed?" Y || lk_die
+lk_confirm "Proceed?" Y || lk_die ""
 
 lk_console_message "Resetting WordPress for local development"
 
@@ -124,7 +112,7 @@ lk_wp config shuffle-salts
 lk_console_detail "Updating email addresses"
 lk_mysql "$DB_NAME" <<SQL
 UPDATE ${TABLE_PREFIX}options
-SET option_value = '$ADMIN_EMAIL'
+SET option_value = '$(lk_mysql_escape "$ADMIN_EMAIL")'
 WHERE option_name IN ('admin_email', 'woocommerce_email_from_address', 'woocommerce_stock_email_recipient');
 
 DELETE
@@ -135,7 +123,7 @@ UPDATE ${TABLE_PREFIX}users
 SET user_email = CONCAT (
         'user_'
         ,ID
-        ,'@$SITE_DOMAIN'
+        ,'$(lk_mysql_escape "@$SITE_DOMAIN")'
         )
 WHERE ID <> 1;
 SQL
@@ -147,12 +135,12 @@ if lk_wp config has WP_CACHE --type=constant; then
     lk_wp config set WP_CACHE false --type=constant --raw
 fi
 
-lk_console_detail "Checking that wp-mail-smtp is installed and enabled"
 if ! lk_wp plugin is-installed wp-mail-smtp; then
+    lk_console_detail "Installing and activating wp-mail-smtp"
     lk_wp plugin install wp-mail-smtp --activate
-else
-    lk_wp plugin is-active wp-mail-smtp ||
-        lk_wp plugin activate wp-mail-smtp
+elif ! lk_wp plugin is-active wp-mail-smtp; then
+    lk_console_detail "Activating wp-mail-smtp"
+    lk_wp plugin activate wp-mail-smtp
 fi
 
 lk_console_detail "Disabling outgoing email"
@@ -177,18 +165,13 @@ if lk_wp plugin is-active woocommerce; then
 
     if wp cli has-command "wc webhook list"; then
         TO_DEACTIVATE=($(
-            wp wc webhook list --user=1 --field=id --status=active
-        )) || {
-            lk_console_error "Command failed with exit status $?:" \
-                "wp wc webhook list --user=1 --field=id --status=active"
-            TO_DEACTIVATE=()
-        }
+            wp --user=1 wc webhook list --field=id --status=active
+            wp --user=1 wc webhook list --field=id --status=paused
+        ))
         [ ${#TO_DEACTIVATE[@]} -eq 0 ] || {
-            lk_console_detail "WooCommerce: deleting active webhooks"
+            lk_console_detail "WooCommerce: disabling webhooks"
             for WEBHOOK_ID in "${TO_DEACTIVATE[@]}"; do
-                # TODO: deactivate instead?
-                wp wc webhook delete "$WEBHOOK_ID" --user=1 --force=true ||
-                    lk_die
+                wp --user=1 wc webhook update "$WEBHOOK_ID" --status=disabled
             done
         }
     fi
