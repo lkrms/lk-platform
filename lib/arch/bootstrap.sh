@@ -20,7 +20,7 @@ LK_PATH_PREFIX_ALPHA=${LK_PATH_PREFIX_ALPHA:-$(
     sed 's/[^a-zA-Z0-9]//g' <<<"$LK_PATH_PREFIX"
 )}
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
-export LK_BASE=${LK_BASE:-/opt/${LK_PATH_PREFIX}platform}
+export LK_BASE=${LK_BASE:-/opt/lk-platform}
 
 set -euo pipefail
 _FILE=${BASH_SOURCE[0]}

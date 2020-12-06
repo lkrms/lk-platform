@@ -468,7 +468,7 @@ Usage: $(lk_myself -f) DIR HOST..." || return
                 "sudo bash -c 'cp -pv /root/StackScript . && chown \$SUDO_USER: StackScript'" &&
                 scp -p "$SSH_HOST":StackScript "$FILE" || return
             ! COMMIT=$(ssh "$SSH_HOST" "bash -c$(printf ' %q' \
-                'cd "$1" && git rev-list -g HEAD | tail -n1' \
+                '{ cd "$1" 2>/dev/null || cd /opt/lk-platform; } && git rev-list -g HEAD | tail -n1' \
                 bash \
                 "/opt/${PREFIX}platform")") ||
                 [ -z "$COMMIT" ] || {
