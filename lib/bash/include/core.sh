@@ -984,15 +984,15 @@ function lk_log_output() {
         ! DIR=$(cd "${BASH_REMATCH[2]:-.}" && pwd -P) ||
         HEADER+=("${DIR%/}/"); } 2>/dev/null
     HEADER+=("${0##*/} invoked")
-    [ ${#LK_ARGV[@]} -eq 0 ] || HEADER+=("$(
-        printf ' with %s %s:' \
+    [ ${#LK_ARGV[@]} -eq 0 ] && HEADER+=("$LK_RESET") || HEADER+=("$(
+        printf " with %s %s:$LK_RESET" \
             ${#LK_ARGV[@]} \
             "$(lk_maybe_plural \
                 ${#LK_ARGV[@]} "argument" "arguments")"
-        printf '\n -> %q' "${LK_ARGV[@]}"
+        printf "\\n $LK_BOLD->$LK_RESET %q" "${LK_ARGV[@]}"
     )")
     IFS=
-    echo "$LK_BOLD====> ${HEADER[*]}$LK_RESET" | lk_log >>"$LOG_PATH" &&
+    echo "$LK_BOLD====> ${HEADER[*]}" | lk_log >>"$LOG_PATH" &&
         _LK_LOG_OUT_FD=$(lk_next_fd) && eval "exec $_LK_LOG_OUT_FD>&1" &&
         _LK_LOG_ERR_FD=$(lk_next_fd) && eval "exec $_LK_LOG_ERR_FD>&2" &&
         exec > >(tee >(lk_log | { if [ -n "${LK_SECONDARY_LOG_FILE:-}" ]; then
