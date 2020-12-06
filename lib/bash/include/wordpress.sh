@@ -268,66 +268,75 @@ function lk_wp_db_dump() {
     fi
 }
 
-# lk_wp_db_set_local [SITE_ROOT [WP_DB_NAME WP_DB_USER WP_DB_PASSWORD \
-#   [DB_NAME [DB_USER]]]]
-#
-# Set each of LOCAL_DB_NAME, LOCAL_DB_USER, LOCAL_DB_PASSWORD and LOCAL_DB_HOST
-# to an appropriate value, taking into account:
-# - WP_DB_NAME, WP_DB_USER, WP_DB_PASSWORD (used as-is if validated by the local
-#   MySQL server)
-# - DB_NAME, DB_USER (used instead of defaults if WP_DB_* values aren't valid)
-# - the location of SITE_ROOT relative to well-known home directories
-# - the owner of SITE_ROOT
-# - the invoking user
-#
-# New credentials are generated if necessary but they are not applied.
-function lk_wp_db_set_local() {
-    local SITE_ROOT DEFAULT_IDENTIFIER
+# lk_wp_db_get_vars [-p PREFIX] [SITE_ROOT]
+function lk_wp_db_get_vars() {
+    local SITE_ROOT SH PREFIX=
+    [ "${1:-}" != -p ] || { PREFIX=$2 && shift 2 || return; }
     SITE_ROOT=${1:-$(lk_wp_get_site_root)} || return
-    LOCAL_DB_NAME=${2:-}
-    LOCAL_DB_USER=${3:-}
-    LOCAL_DB_PASSWORD=${4:-}
+    SH=$(
+        for OPTION in DB_NAME DB_USER DB_PASSWORD DB_HOST; do
+            VALUE=$(lk_wp --path="$SITE_ROOT" config get "$OPTION") || exit
+            [ "${FUNCNAME[1]:-}" = lk_wp_db_set_local ] ||
+                _lk_var_prefix
+            printf '%s=%q\n' "$PREFIX$OPTION" "$VALUE"
+        done
+    ) && echo "$SH"
+}
+
+# lk_wp_db_set_local [SITE_ROOT [DB_NAME [DB_USER]]]
+#
+# Set LOCAL_DB_NAME, LOCAL_DB_USER, LOCAL_DB_PASSWORD and LOCAL_DB_HOST to
+# current or recommended values for the WordPress installation at SITE_ROOT or
+# in the current directory, using DB_NAME and/or DB_USER instead of the default
+# directory-, owner- or user-based identifier if current values are not accepted
+# by the local MySQL server.
+#
+# If new credentials are generated, they are not applied to the MySQL server.
+function lk_wp_db_set_local() {
+    local SITE_ROOT SH DEFAULT_IDENTIFIER
+    SITE_ROOT=${1:-$(lk_wp_get_site_root)} || return
+    LOCAL_DB_NAME=
+    LOCAL_DB_USER=
+    LOCAL_DB_PASSWORD=
+    ! SH=$(lk_wp_db_get_vars -p LOCAL_ "$SITE_ROOT") || eval "$SH"
     LOCAL_DB_HOST=${LK_MYSQL_HOST:-localhost}
-    if [ -n "$LOCAL_DB_NAME" ] &&
-        [ -n "$LOCAL_DB_USER" ] &&
-        [ -n "$LOCAL_DB_PASSWORD" ]; then
+    if [ "${LOCAL_DB_NAME:+1}\
+${LOCAL_DB_USER:+1}${LOCAL_DB_PASSWORD:+1}" = 111 ]; then
         lk_mysql_write_cnf \
             "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD" "$LOCAL_DB_HOST" || return
-        # Keep provided credentials if they work
+        # Keep current credentials if they work
         ! lk_mysql_connects 2>/dev/null || return 0
     fi
     if [[ $SITE_ROOT =~ ^/srv/www/([^./]+)/public_html$ ]]; then
         DEFAULT_IDENTIFIER=${BASH_REMATCH[1]}
     elif [[ $SITE_ROOT =~ ^/srv/www/([^./]+)/([^./]+)/public_html$ ]]; then
         DEFAULT_IDENTIFIER=${BASH_REMATCH[1]}_${BASH_REMATCH[2]}
-    elif [[ $SITE_ROOT =~ \
-        ^/srv/http/([^./]+)\.localhost/(public_)?html$ ]]; then
-        DEFAULT_IDENTIFIER=${BASH_REMATCH[1]}
-    elif [[ ! $SITE_ROOT =~ ^/srv/(www|http)(/.*)?$ ]] &&
-        [ "${SITE_ROOT:0:${#HOME}}" = "$HOME" ]; then
+    elif [[ $SITE_ROOT =~ ^/srv/(www|httpd?)/(([^./]+)\.local(host)?|local\.([^./]+)(\.[^./]+)+)/(public_)?html$ ]]; then
+        DEFAULT_IDENTIFIER=${BASH_REMATCH[3]}${BASH_REMATCH[5]}
+    elif [[ ! $SITE_ROOT =~ ^/srv/(www|httpd?)(/.*)?$ ]] && [ "${SITE_ROOT#$HOME}" != "$SITE_ROOT" ]; then
         DEFAULT_IDENTIFIER=${SITE_ROOT##*/}
     elif [ -e "$SITE_ROOT" ]; then
         DEFAULT_IDENTIFIER=$(lk_file_owner "$SITE_ROOT") || return
     else
-        DEFAULT_IDENTIFIER=$USER || return
+        DEFAULT_IDENTIFIER=$USER
     fi
-    LOCAL_DB_NAME=${5:-$DEFAULT_IDENTIFIER}
-    LOCAL_DB_USER=${6:-$DEFAULT_IDENTIFIER}
-    lk_mysql_write_cnf \
-        "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD" "$LOCAL_DB_HOST" || return
-    # Try existing password with new LOCAL_DB_USER before changing password
-    lk_mysql_connects 2>/dev/null || {
-        LOCAL_DB_PASSWORD=$(lk_random_password 24) &&
-            lk_mysql_write_cnf \
-                "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD" "$LOCAL_DB_HOST"
+    LOCAL_DB_NAME=${2:-$DEFAULT_IDENTIFIER}
+    LOCAL_DB_USER=${3:-$DEFAULT_IDENTIFIER}
+    # Try existing password with new LOCAL_DB_USER before generating a new one
+    [ -z "$LOCAL_DB_PASSWORD" ] || {
+        lk_mysql_write_cnf \
+            "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD" "$LOCAL_DB_HOST" || return
+        ! lk_mysql_connects 2>/dev/null || return 0
     }
+    LOCAL_DB_PASSWORD=$(lk_random_password 24) &&
+        lk_mysql_write_cnf \
+            "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD" "$LOCAL_DB_HOST"
 }
 
 # lk_wp_db_restore_local SQL_PATH [DB_NAME [DB_USER]]
 function lk_wp_db_restore_local() {
-    local SITE_ROOT DEFAULT_IDENTIFIER SQL _SQL COMMAND \
-        LOCAL_DB_NAME LOCAL_DB_USER LOCAL_DB_PASSWORD LOCAL_DB_HOST \
-        DB_NAME DB_USER DB_PASSWORD DB_HOST
+    local SITE_ROOT SH SQL _SQL COMMAND \
+        LOCAL_DB_NAME LOCAL_DB_USER LOCAL_DB_PASSWORD LOCAL_DB_HOST
     [ -f "$1" ] || lk_warn "file not found: $1" || return
     SITE_ROOT=$(lk_wp_get_site_root) || return
     lk_console_message "Preparing to restore WordPress database"
@@ -335,12 +344,8 @@ function lk_wp_db_restore_local() {
         lk_console_detail "Backup file:" "$1"
         lk_console_detail "WordPress installation:" "$SITE_ROOT"
     }
-    DB_NAME=$(lk_wp config get DB_NAME) &&
-        DB_USER=$(lk_wp config get DB_USER) &&
-        DB_PASSWORD=$(lk_wp config get DB_PASSWORD) &&
-        DB_HOST=$(lk_wp config get DB_HOST) || return
-    lk_wp_db_set_local \
-        "$SITE_ROOT" "$DB_NAME" "$DB_USER" "$DB_PASSWORD" "${@:2}" || return
+    SH=$(lk_wp_db_get_vars "$SITE_ROOT") && eval "$SH" || return
+    lk_wp_db_set_local "$SITE_ROOT" "${@:2}" || return
     SQL=(
         "DROP DATABASE IF EXISTS \`$LOCAL_DB_NAME\`"
         "CREATE DATABASE \`$LOCAL_DB_NAME\`"

@@ -180,8 +180,7 @@ function _lk_caller() {
             if [ "$SOURCE" = "$0" ]; then
                 echo "$LK_BOLD${0##*/}$LK_RESET"
             else
-                SOURCE=${SOURCE//~/"~"}
-                echo "$SOURCE"
+                lk_pretty_path "$SOURCE"
             fi
         )${VERBOSE:+$DIM:$LINE$LK_RESET}")
     fi
@@ -1956,6 +1955,12 @@ function lk_expand_paths() {
         [ ${#_LK_TEMP_ARRAY[@]} -eq 0 ] ||
             lk_expand_path -z "${_LK_TEMP_ARRAY[@]}"
     )
+}
+
+function lk_pretty_path() {
+    local _PATH=${1#~}
+    [ "$_PATH" = "$1" ] || _PATH="~$_PATH"
+    echo "$_PATH"
 }
 
 function lk_filter() {

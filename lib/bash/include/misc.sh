@@ -120,10 +120,11 @@ function lk_nextcloud_get_excluded() {
         done
         FIND=(find . \( "${FIND[@]}" \) -print0)
         lk_mapfile -z FILES <("${FIND[@]}" | sort -zu)
-        EXCLUDE_FILE=${EXCLUDE_FILE//~/"~"}
         [ ${#FILES[@]} -eq 0 ] &&
-            lk_console_message "No files excluded by $EXCLUDE_FILE" ||
+            lk_console_message \
+                "No files excluded by $(lk_pretty_path "$EXCLUDE_FILE")" ||
             lk_echo_array FILES |
-            lk_console_list "Excluded by $EXCLUDE_FILE:" file files
+            lk_console_list \
+                "Excluded by $(lk_pretty_path "$EXCLUDE_FILE"):" file files
     )
 }

@@ -41,6 +41,8 @@ EOF
 function lk_mysql_write_cnf() {
     LK_MY_CNF=${LK_MY_CNF:-~/.lk_mysql.cnf}
     lk_mysql_get_cnf "$@" >"$LK_MY_CNF"
+    ! type -p lk_delete_on_exit >/dev/null ||
+        lk_delete_on_exit "$LK_MY_CNF"
 }
 
 function lk_mysql() {

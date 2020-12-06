@@ -43,9 +43,7 @@ function get_state() {
     )
     [ -n "$SITE_DOMAIN" ] || SITE_DOMAIN=$_HOST
     SITE_ROOT=$(lk_wp_get_site_root)
-    ACTIVE_PLUGINS=($(
-        lk_wp plugin list --status=active --field=name | sort -u
-    ))
+    ACTIVE_PLUGINS=($(lk_wp plugin list --status=active --field=name | sort -u))
     STALE=0
 }
 get_state

@@ -26,7 +26,7 @@ function lk_maybe_install() {
 
 # lk_dir_set_modes DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]...
 function lk_dir_set_modes() {
-    local DIR REGEX LOG_FILE DIR2 i TYPE MODE ARGS CHANGES _CHANGES TOTAL=0 \
+    local DIR REGEX LOG_FILE i TYPE MODE ARGS CHANGES _CHANGES TOTAL=0 \
         _PRUNE _EXCLUDE MATCH=() DIR_MODE=() FILE_MODE=() PRUNE=() LK_USAGE
     # shellcheck disable=SC2034
     LK_USAGE="\
@@ -49,8 +49,8 @@ Usage: $(lk_myself -f) DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..
         shift 3
     done
     LOG_FILE=$(lk_mktemp_file) || return
-    DIR2=${DIR/~/"~"}
-    ! lk_verbose || lk_console_message "Updating file modes in $DIR2"
+    ! lk_verbose || lk_console_message \
+        "Updating file modes in $(lk_pretty_path "$DIR")"
     for i in "${!MATCH[@]}"; do
         [ -n "${DIR_MODE[$i]:+1}${FILE_MODE[$i]:+1}" ] || continue
         ! lk_verbose 2 || lk_console_item "Checking:" "${MATCH[$i]}"
@@ -94,7 +94,8 @@ Usage: $(lk_myself -f) DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..
     ! lk_verbose && ! ((TOTAL)) ||
         lk_console_message \
             "$TOTAL file $(lk_maybe_plural \
-                "$TOTAL" mode modes) updated$(lk_verbose || echo " in $DIR2")"
+                "$TOTAL" mode modes) updated$(lk_verbose ||
+                    echo " in $(lk_pretty_path "$DIR")")"
     ! ((TOTAL)) ||
         lk_console_detail "Changes logged to:" "$LOG_FILE"
 }
@@ -638,7 +639,7 @@ function lk_certbot_install() {
 #
 # shellcheck disable=SC2034
 function lk_cpanel_get_ssl_cert() {
-    local TARGET_DIR=${3:-~/ssl} SSL_JSON CERT KEY TARGET_REL \
+    local TARGET_DIR=${3:-~/ssl} SSL_JSON CERT KEY \
         LK_TTY_NO_FOLD=1 LK_FILE_TAKE_BACKUP=1
     [ $# -ge 2 ] && lk_is_fqdn "$2" || lk_usage "\
 Usage: $(lk_myself -f) SSH_HOST DOMAIN [TARGET_DIR]
@@ -663,9 +664,10 @@ CA bundle and private key for DOMAIN from SSH_HOST to TARGET_DIR
     lk_console_message "Verifying certificate"
     lk_ssl_verify_cert "$CERT" "$KEY" "$CA_BUNDLE" || return
     lk_console_message "Writing certificate files"
-    TARGET_REL=${TARGET_DIR//~/"~"}
-    lk_console_detail "Certificate and CA bundle:" "$TARGET_REL/$2.cert"
-    lk_console_detail "Private key:" "$TARGET_REL/$2.key"
+    lk_console_detail \
+        "Certificate and CA bundle:" "$(lk_pretty_path "$TARGET_DIR/$2.cert")"
+    lk_console_detail \
+        "Private key:" "$(lk_pretty_path "$TARGET_DIR/$2.key")"
     lk_file_replace "$TARGET_DIR/$2.cert" \
         "$(lk_echo_args "$CERT" "$CA_BUNDLE")" &&
         lk_file_replace "$TARGET_DIR/$2.key" "$KEY"
