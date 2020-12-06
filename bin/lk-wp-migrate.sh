@@ -188,6 +188,8 @@ maybe_disable_remote_maintenance
 cd "$LOCAL_PATH"
 LK_NO_INPUT=1 \
     lk_wp_db_restore_local "$DB_FILE" "$DEFAULT_DB_NAME" "$DEFAULT_DB_USER"
+lk_console_message "Refreshing salts defined in wp-config.php"
+lk_wp config shuffle-salts
 if [ ${#DEACTIVATE[@]} -gt 0 ]; then
     ACTIVE_PLUGINS=($(lk_wp plugin list --status=active --field=name))
     DEACTIVATE=($(comm -12 \
