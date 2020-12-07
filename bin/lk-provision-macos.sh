@@ -237,8 +237,7 @@ EOF
     }
 
     function lk_brew_casks() {
-        #brew list --casks --full-name
-        brew cask list --full-name 2>/dev/null
+        brew list --casks --full-name
     }
 
     NEW_HOMEBREW=0
