@@ -14,10 +14,6 @@ DEACTIVATE_PLUGINS=(
     all-in-one-redirection
 
     #
-    w3-total-cache
-    wp-rocket
-
-    #
     zopim-live-chat
 )
 
