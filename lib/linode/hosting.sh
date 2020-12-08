@@ -1091,6 +1091,8 @@ EOF
 
 lk_console_message "Creating virtual host base directory at /srv/www"
 install -v -d -m 00751 -g adm "/srv/www"
+install -v -d -m 00751 -g adm "/srv/www/.opcache"
+install -v -d -m 00751 -g adm "/srv/www/.tmp"
 
 PACKAGES=(
     postfix
@@ -1205,7 +1207,6 @@ if [ -n "$HOST_DOMAIN" ]; then
     install -v -d -m 00750 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT"
     install -v -d -m 00750 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/public_html"
     install -v -d -m 00750 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/ssl"
-    install -v -d -m 00750 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/.cache"
     install -v -d -m 02750 -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/log"
     [ "$COPY_SKEL" -eq 0 ] || {
         cp -nRTv "/etc/skel.${PATH_PREFIX%-}" "/srv/www/$HOST_ACCOUNT" &&
@@ -1504,7 +1505,7 @@ access.format = "%{REMOTE_ADDR}e - %u %t \"%m %r%Q%q\" %s %f %{mili}d %{kilo}M %
 catch_workers_output = yes${OPCACHE_MEMORY_CONSUMPTION:+
 ; tune based on system resources
 php_admin_value[opcache.memory_consumption] = $OPCACHE_MEMORY_CONSUMPTION}
-php_admin_value[opcache.file_cache] = "/srv/www/\$pool/.cache/opcache"
+php_admin_value[opcache.file_cache] = "/srv/www/.opcache/\$pool"
 php_admin_flag[opcache.validate_permission] = On
 php_admin_value[error_log] = "/srv/www/\$pool/log/php$PHPVER-fpm.error.log"
 php_admin_flag[log_errors] = On
@@ -1512,6 +1513,7 @@ php_flag[display_errors] = Off
 php_flag[display_startup_errors] = Off
 php_value[upload_max_filesize] = 24M
 php_value[post_max_size] = 50M
+env[TMPDIR] = "/srv/www/.tmp/\$pool"
 
 ; do not uncomment the following in production (also, install php-xdebug first)
 ;php_admin_flag[opcache.enable] = Off
@@ -1520,10 +1522,11 @@ php_value[post_max_size] = 50M
 ;php_admin_flag[xdebug.remote_connect_back] = On
 ;php_admin_value[xdebug.remote_log] = "/srv/www/\$pool/log/php$PHPVER-fpm.xdebug.log"
 EOF
+        install -v -d -m 02750 -o "$PHP_FPM_POOL_USER" -g "$HOST_ACCOUNT_GROUP" "/srv/www/.opcache/$HOST_ACCOUNT"
+        install -v -d -m 02770 -o "$PHP_FPM_POOL_USER" -g "$HOST_ACCOUNT_GROUP" "/srv/www/.tmp/$HOST_ACCOUNT"
         install -m 00640 -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/php$PHPVER-fpm.access.log"
         install -m 00640 -o "$PHP_FPM_POOL_USER" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/php$PHPVER-fpm.error.log"
         install -m 00640 -o "$PHP_FPM_POOL_USER" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/php$PHPVER-fpm.xdebug.log"
-        install -v -d -m 00700 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/.cache/opcache"
         lk_console_file "/etc/php/$PHPVER/fpm/pool.d/$HOST_ACCOUNT.conf"
     fi
 
