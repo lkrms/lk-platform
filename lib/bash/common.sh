@@ -204,9 +204,7 @@ fi
 SH=$(
     [[ ,${LK_SKIP:-}, == *,env,* ]] || {
         printf '%s=%q\n' \
-            LK_PATH_PREFIX "${LK_PATH_PREFIX:-lk-}" \
-            LK_PATH_PREFIX_ALPHA "${LK_PATH_PREFIX_ALPHA:-$(sed \
-                's/[^a-zA-Z0-9]//g' <<<"$LK_PATH_PREFIX")}"
+            LK_PATH_PREFIX "${LK_PATH_PREFIX:-lk-}"
         . "$LK_BASE/lib/bash/env.sh"
     }
 

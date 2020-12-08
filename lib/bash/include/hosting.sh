@@ -9,7 +9,7 @@ function lk_hosting_add_account() {
 Usage: $(lk_myself -f) LOGIN" || return
     [ -d /srv/www ] || lk_warn "directory not found: /srv/www" || return
     ! lk_user_exists "$1" || lk_warn "user already exists: $1" || return
-    for SKEL in /etc/skel{${LK_PATH_PREFIX_ALPHA:+.$LK_PATH_PREFIX_ALPHA},}; do
+    for SKEL in /etc/skel{${LK_PATH_PREFIX:+.${LK_PATH_PREFIX%-}},}; do
         [ -d "$SKEL" ] && break || unset SKEL
     done
     lk_console_item "Creating user account:" "$1"

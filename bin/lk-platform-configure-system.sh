@@ -26,7 +26,6 @@
     SETTINGS=(
         LK_BASE
         LK_PATH_PREFIX
-        LK_PATH_PREFIX_ALPHA
         LK_NODE_HOSTNAME
         LK_NODE_FQDN
         LK_NODE_TIMEZONE
@@ -127,8 +126,6 @@
             lk_confirm "Reconfigure system?" Y || lk_die
         }
     export LK_BASE=$LK_INST
-    LK_PATH_PREFIX_ALPHA=${LK_PATH_PREFIX_ALPHA:-$(sed \
-        's/[^a-zA-Z0-9]//g' <<<"$LK_PATH_PREFIX")}
 
     _BASHRC='[ -z "${BASH_VERSION:-}" ] || [ ! -f ~/.bashrc ] || . ~/.bashrc'
     _BYOBU='_byobu_sourced=1 . %q 2>/dev/null || true'
@@ -313,7 +310,8 @@
     OTHER_SETTINGS=($(comm -23 \
         <({ lk_echo_array NEW_SETTINGS &&
             sed -En \
-                's/^([a-zA-Z_][a-zA-Z0-9_]*)=.*/\1/p' "$CONF_FILE"; } |
+                -e '/^LK_PATH_PREFIX_ALPHA=/d' \
+                -e 's/^([a-zA-Z_][a-zA-Z0-9_]*)=.*/\1/p' "$CONF_FILE"; } |
             sort -u) \
         <(lk_echo_array KNOWN_SETTINGS | sort)))
     lk_file_replace "$CONF_FILE" "$(lk_get_shell_var \
@@ -325,7 +323,7 @@
         "$LK_BASE/bin/lk-bash-load.sh" "$LK_BIN_PATH/lk-bash-load.sh"
 
     LK_HOMES=(
-        /etc/skel{,".$LK_PATH_PREFIX_ALPHA"}
+        /etc/skel{,".${LK_PATH_PREFIX%-}"}
         ${SUDO_USER:+"$(lk_expand_path "~$SUDO_USER")"}
         "$@"
     )

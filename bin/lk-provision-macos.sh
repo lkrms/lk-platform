@@ -3,9 +3,6 @@
 # shellcheck disable=SC1090,SC2001,SC2015,SC2034,SC2207
 
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
-LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(
-    sed 's/[^a-zA-Z0-9]//g' <<<"$LK_PATH_PREFIX"
-)}"
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
 export LK_BASE=${LK_BASE:-/opt/lk-platform}
 
@@ -204,7 +201,6 @@ EOF
         lk_get_shell_var \
             LK_BASE \
             LK_PATH_PREFIX \
-            LK_PATH_PREFIX_ALPHA \
             LK_PLATFORM_BRANCH \
             LK_PACKAGES_FILE |
             sudo tee /etc/default/lk-platform >/dev/null

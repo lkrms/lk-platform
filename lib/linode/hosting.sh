@@ -221,7 +221,6 @@ FIELD_ERRORS=$(
 KEYS_FILE=/root/.ssh/authorized_keys
 [ -s "$KEYS_FILE" ] || lk_die "no public keys at $KEYS_FILE"
 
-PATH_PREFIX_ALPHA=$(sed 's/[^a-zA-Z0-9]//g' <<<"$PATH_PREFIX")
 HOST_DOMAIN=${HOST_DOMAIN#www.}
 HOST_ACCOUNT=${HOST_ACCOUNT:-${HOST_DOMAIN%%.*}}
 
@@ -363,7 +362,7 @@ exec 3> >(tee >(lk_log >>"$LOG_FILE") >&1)
 _LK_FD=3
 
 S="[[:space:]]"
-P="${PATH_PREFIX_ALPHA}_"
+P="${PATH_PREFIX%-}_"
 DECLARE_LK_DATE_LOG=$(declare -f lk_date_log)
 export LK_BASE=/opt/lk-platform \
     DEBIAN_FRONTEND=noninteractive \
@@ -427,7 +426,6 @@ LK_SKIP=env,settings include=provision . "$LK_BASE/lib/bash/common.sh"
 
 install -m 00644 /dev/null /etc/default/lk-platform
 LK_PATH_PREFIX=$PATH_PREFIX \
-    LK_PATH_PREFIX_ALPHA=$PATH_PREFIX_ALPHA \
     LK_NODE_HOSTNAME=$NODE_HOSTNAME \
     LK_NODE_FQDN=$NODE_FQDN \
     LK_NODE_TIMEZONE=$NODE_TIMEZONE \
@@ -454,7 +452,6 @@ LK_PATH_PREFIX=$PATH_PREFIX \
     lk_get_shell_var \
     LK_BASE \
     LK_PATH_PREFIX \
-    LK_PATH_PREFIX_ALPHA \
     LK_NODE_HOSTNAME \
     LK_NODE_FQDN \
     LK_NODE_TIMEZONE \
@@ -744,7 +741,7 @@ EOF
 }
 chmod -Rc -077 "$DIR/.ssh"
 
-DIR=/etc/skel.$PATH_PREFIX_ALPHA
+DIR=/etc/skel.${PATH_PREFIX%-}
 [ ! -e "$DIR" ] || lk_die "already exists: $DIR"
 lk_console_message "Creating $DIR (for hosting accounts)"
 cp -av "/etc/skel" "$DIR"
@@ -1211,7 +1208,7 @@ if [ -n "$HOST_DOMAIN" ]; then
     install -v -d -m 00750 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/.cache"
     install -v -d -m 02750 -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/log"
     [ "$COPY_SKEL" -eq 0 ] || {
-        cp -nRTv "/etc/skel.$PATH_PREFIX_ALPHA" "/srv/www/$HOST_ACCOUNT" &&
+        cp -nRTv "/etc/skel.${PATH_PREFIX%-}" "/srv/www/$HOST_ACCOUNT" &&
             chown -R "$HOST_ACCOUNT": "/srv/www/$HOST_ACCOUNT" || exit
     }
     ! lk_dpkg_installed apache2 || {

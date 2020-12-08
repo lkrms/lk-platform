@@ -161,9 +161,6 @@ elif lk_is_macos; then
 fi
 
 LK_PATH_PREFIX="${LK_PATH_PREFIX:-lk-}"
-LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(
-    sed 's/[^a-zA-Z0-9]//g' <<<"$LK_PATH_PREFIX"
-)}"
 SH=$(. "$LK_BASE/lib/bash/env.sh") &&
     eval "$SH"
 

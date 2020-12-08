@@ -16,9 +16,6 @@ LK_NTP_SERVER=${LK_NTP_SERVER-time.apple.com}                #
 LK_ARCH_CUSTOM_REPOS=${LK_ARCH_CUSTOM_REPOS:-}               # REPO|SERVER|KEY_URL|KEY_ID|SIG_LEVEL,...
 LK_ARCH_MIRROR=${LK_ARCH_MIRROR:-}
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
-LK_PATH_PREFIX_ALPHA=${LK_PATH_PREFIX_ALPHA:-$(
-    sed 's/[^a-zA-Z0-9]//g' <<<"$LK_PATH_PREFIX"
-)}
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
 export LK_BASE=${LK_BASE:-/opt/lk-platform}
 
@@ -404,7 +401,6 @@ in_target sudo -H -u "$TARGET_USERNAME" \
 lk_get_shell_var \
     LK_BASE \
     LK_PATH_PREFIX \
-    LK_PATH_PREFIX_ALPHA \
     LK_NODE_HOSTNAME \
     LK_NODE_TIMEZONE \
     LK_NODE_LOCALES \
