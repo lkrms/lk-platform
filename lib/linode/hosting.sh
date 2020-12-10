@@ -422,7 +422,7 @@ fi
 
 # shellcheck disable=SC2034
 LK_FILE_DIFF_ORIG=1
-LK_SKIP=env,settings include=provision . "$LK_BASE/lib/bash/common.sh"
+LK_SKIP=env,settings include=provision,hosting . "$LK_BASE/lib/bash/common.sh"
 
 install -m 00644 /dev/null /etc/default/lk-platform
 LK_PATH_PREFIX=$PATH_PREFIX \
@@ -476,6 +476,7 @@ LK_PATH_PREFIX=$PATH_PREFIX \
     LK_AUTO_REBOOT_TIME \
     LK_SCRIPT_DEBUG \
     LK_PLATFORM_BRANCH >/etc/default/lk-platform
+. /etc/default/lk-platform
 
 install -v -d -m 02775 -g adm "$LK_BASE/etc"
 install -m 00664 -g adm /dev/null "$LK_BASE/etc/packages.conf"
@@ -813,6 +814,7 @@ PACKAGES=(
     apt-utils
     bash-completion
     byobu
+    ca-certificates
     coreutils
     cron
     curl
@@ -1446,13 +1448,13 @@ EOF
         OPENSSL_CONF=$(cat /etc/ssl/openssl.cnf)
         OPENSSL_EXT_CONF=$(printf '\n%s' \
             "[ san ]" \
-            "subjectAltName = DNS:www.$HOST_DOMAIN")
+            "subjectAltName = DNS:$HOST_DOMAIN, DNS:www.$HOST_DOMAIN")
         openssl genrsa \
             -out "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.key" \
             2048
         openssl req -new \
             -key "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.key" \
-            -subj "/C=AU/CN=$HOST_DOMAIN" \
+            -subj "/CN=$HOST_DOMAIN" \
             -reqexts san \
             -config <(cat <<<"$OPENSSL_CONF$OPENSSL_EXT_CONF") \
             -out "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.csr"
@@ -1463,6 +1465,11 @@ EOF
             -signkey "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.key" \
             -out "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.cert"
         rm -f "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.csr"
+
+        lk_console_detail "Adding self-signed certificate to local trust store"
+        install -v -m 00644 "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.cert" \
+            "/usr/local/share/ca-certificates/$HOST_DOMAIN.crt"
+        update-ca-certificates
 
         [ "$HOST_SITE_ENABLE" = "N" ] ||
             ln -s "../sites-available/$HOST_ACCOUNT.conf" "/etc/apache2/sites-enabled/$HOST_ACCOUNT.conf"
@@ -1608,6 +1615,8 @@ lk_console_file "/etc/iptables/rules.v6"
 
 lk_console_message "Running apt-get autoremove"
 apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -yq autoremove
+
+lk_hosting_configure_backup
 
 lk_console_message "Provisioning complete"
 lk_console_detail "Running:" "shutdown --$SHUTDOWN_ACTION +$SHUTDOWN_DELAY"

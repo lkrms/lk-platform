@@ -4,8 +4,8 @@
 
 [ ! -f /etc/default/lk-platform ] || . /etc/default/lk-platform
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
-[ ! -f ~/".${LK_PATH_PREFIX}settings}" ] ||
-    . ~/".${LK_PATH_PREFIX}settings}"
+[ ! -f ~/".${LK_PATH_PREFIX}settings" ] ||
+    . ~/".${LK_PATH_PREFIX}settings"
 lk_esc() { echo "$1" | sed -Ee 's/\\/\\\\/g' -e 's/[$`"]/\\&/g'; }
 
 [ -n "${LK_BASE:-}" ] || { SH=$(

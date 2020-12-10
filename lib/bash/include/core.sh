@@ -1354,6 +1354,27 @@ function lk_console_list() {
     )" >&"${_LK_FD:-2}"
 }
 
+# lk_console_dump CONTENT [MESSAGE [MESSAGE_END [COLOUR [CONTENT_COLOUR]]]]
+function lk_console_dump() {
+    local CONTENT=${1%$'\n'} SPACES BOLD_COLOUR \
+        COLOUR=${4-${LK_TTY_MESSAGE_COLOUR-$LK_TTY_COLOUR}} \
+        LK_TTY_COLOUR2=${5-${LK_TTY_COLOUR2-}} \
+        LK_TTY_PREFIX=${LK_TTY_PREFIX->>> } \
+        LK_TTY_SUFFIX=${LK_TTY_SUFFIX-<<< } \
+        LK_TTY_INDENT=${LK_TTY_INDENT:-0} \
+        LK_TTY_NO_FOLD=1 \
+        LK_TTY_MESSAGE_COLOUR \
+        LK_TTY_PREFIX_COLOUR
+    BOLD_COLOUR=$(lk_maybe_bold "$COLOUR")$COLOUR
+    LK_TTY_MESSAGE_COLOUR=$(lk_maybe_bold "${2:-}${3:-}$COLOUR")$COLOUR
+    LK_TTY_PREFIX_COLOUR=${LK_TTY_PREFIX_COLOUR-$BOLD_COLOUR}
+    SPACES=$'\n'$(lk_repeat " " "$((LK_TTY_INDENT + 2))")
+    CONTENT=$SPACES${CONTENT//$'\n'/$SPACES}
+    lk_console_item "${2:-}" "$(echo "$CONTENT" &&
+        printf '%s' "$LK_TTY_PREFIX_COLOUR$LK_TTY_SUFFIX$LK_RESET" \
+            ${3:+"$LK_TTY_MESSAGE_COLOUR$3$LK_RESET"})"
+}
+
 function _lk_console_get_prompt() {
     lk_readline_format "$(
         lk_echoc -n " :: " \
@@ -1753,6 +1774,10 @@ function lk_maybe_elevate() {
     else
         sudo -H "$@"
     fi
+}
+
+function lk_me() {
+    lk_maybe_sudo id -un
 }
 
 function lk_rm() {
@@ -2264,7 +2289,7 @@ function lk_file_replace() {
 
 function _lk_maybe_filter() {
     if [ -n "${1:-}" ]; then
-        sed -E "/$1/d"
+        grep -Ev "$1" || true
     else
         cat
     fi

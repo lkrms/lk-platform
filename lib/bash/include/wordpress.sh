@@ -492,7 +492,7 @@ function lk_wp_enable_system_cron() {
     CRON_COMMAND="$(type -P php) $WP_CRON_PATH"
     [ "$INTERVAL" -lt 60 ] &&
         CRON_COMMAND="*/$INTERVAL * * * * $CRON_COMMAND" ||
-        CRON_COMMAND="0 1 * * * $CRON_COMMAND"
+        CRON_COMMAND="$((RANDOM % 60)) * * * * $CRON_COMMAND"
     lk_console_detail "Adding cron job:" "$CRON_COMMAND"
     CRONTAB="$(crontab -l 2>/dev/null |
         sed -E "/ $(lk_escape_ere "$WP_CRON_PATH")\$/d")" || CRONTAB=

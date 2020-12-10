@@ -47,6 +47,7 @@ PACMAN_PACKAGES=(
     inetutils # for telnet
     jq
     lftp
+    logrotate
     lsof
     mediainfo
     nano
@@ -172,6 +173,7 @@ lk_is_virtual && {
         parted
 
         #
+        crda
         ethtool
         hdparm
         nvme-cli

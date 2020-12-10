@@ -807,3 +807,74 @@ function lk_httpd_enable_option() {
         "^$S*$OPTION$S+$VALUE$S*\$" \
         "0,/^$S*#$S*$OPTION$S+$VALUE$S*\$/{s/^($S*)#$S*$OPTION$S+$VALUE$S*\$/\\1$REPLACE_WITH/}"
 }
+
+# _lk_crontab REMOVE_REGEX ADD_COMMAND
+function _lk_crontab() {
+    local REGEX=${1:+".*$1.*"} ADD_COMMAND=${2:-} TYPE=${2:+a}${1:+r} \
+        CRONTAB HAD_CRONTAB NEW_CRONTAB
+    lk_command_exists crontab || lk_warn "crontab required" || return
+    CRONTAB=$(lk_maybe_sudo crontab -l 2>/dev/null) &&
+        HAD_CRONTAB= ||
+        CRONTAB=
+    [ "$TYPE" != ar ] ||
+        [[ $ADD_COMMAND =~ $REGEX ]] ||
+        lk_warn "command does not match regex" || return
+    case "$TYPE" in
+    a | ar)
+        REGEX=${REGEX:-"^$S*$(lk_regex_expand_whitespace \
+            "$(lk_escape_ere "$ADD_COMMAND")")$S*\$"}
+        # If the command is already present, replace the first occurrence and
+        # delete any duplicates
+        if grep -E "$REGEX" >/dev/null <<<"$CRONTAB"; then
+            NEW_CRONTAB=$(gnu_sed -E "0,/$REGEX/{s/$REGEX/$(
+                lk_escape_ere_replace "$ADD_COMMAND"
+            )/};t;/$REGEX/d" <<<"$CRONTAB")
+        else
+            # Otherwise, add it to the end of the file
+            NEW_CRONTAB=${CRONTAB:+$CRONTAB$'\n'}$ADD_COMMAND
+        fi
+        ;;
+    r)
+        NEW_CRONTAB=$(sed -E "/$REGEX/d" <<<"$CRONTAB")
+        ;;
+    *)
+        false || lk_warn "invalid arguments"
+        ;;
+    esac || return
+    if [ -z "$NEW_CRONTAB" ]; then
+        [ -z "${HAD_CRONTAB+1}" ] || {
+            lk_console_message "Removing empty crontab for user '$(lk_me)'"
+            lk_maybe_sudo crontab -r
+        }
+    else
+        [ "$NEW_CRONTAB" = "$CRONTAB" ] || {
+            local VERB=${HAD_CRONTAB-Creating}${HAD_CRONTAB+Updating}
+            LK_TTY_COLOUR2='' \
+                lk_console_item "$VERB crontab for user '$(lk_me)'" \
+                "$(gnu_diff --color=always \
+                    <([ -z "$CRONTAB" ] || cat <<<"$CRONTAB") \
+                    <(cat <<<"$NEW_CRONTAB"))"
+            lk_maybe_sudo crontab - <<<"$NEW_CRONTAB"
+        }
+    fi
+}
+
+# lk_crontab_add COMMAND
+function lk_crontab_add() {
+    _lk_crontab "" "${1:-}"
+}
+
+# lk_crontab_remove REGEX
+function lk_crontab_remove() {
+    _lk_crontab "${1:-}" ""
+}
+
+# lk_crontab_apply CHECK_REGEX COMMAND
+function lk_crontab_apply() {
+    _lk_crontab "${1:-}" "${2:-}"
+}
+
+# lk_crontab_remove_command COMMAND
+function lk_crontab_remove_command() {
+    _lk_crontab "$(lk_regex_expand_whitespace "$(lk_escape_ere "${1:-}")")" ""
+}
