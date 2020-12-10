@@ -75,7 +75,7 @@ EOF
             lk_echo_array PAC_TO_PURGE |
                 lk_console_list "Installed but no longer required:" package packages
             ! lk_confirm "Remove the above?" N ||
-                lk_tty sudo pacman -R --noconfirm "${PAC_TO_PURGE[@]}"
+                lk_tty sudo pacman -Rs --noconfirm "${PAC_TO_PURGE[@]}"
         }
 
     lk_console_message "Upgrading installed packages"

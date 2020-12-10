@@ -23,7 +23,7 @@ function _lk_iptables_which() {
     printf ' %q' "$@"
 }
 
-# lk_iptables_maybe_insert [-4|-6] [-t TABLE] CHAIN RULE_SPEC
+# lk_iptables_maybe_insert [-4|-6] CHAIN [-t TABLE] RULE_SPEC
 function lk_iptables_maybe_insert() {
     eval "$(_lk_iptables_which "$@")"
     local IPTABLES_COMMAND=${_LK_IPTABLES_COMMAND:--I}
@@ -32,7 +32,7 @@ function lk_iptables_maybe_insert() {
         bash "$COMMAND" "$IPTABLES_COMMAND" "$@"
 }
 
-# lk_iptables_maybe_append [-4|-6] [-t TABLE] CHAIN RULE_SPEC
+# lk_iptables_maybe_append [-4|-6] CHAIN [-t TABLE] RULE_SPEC
 function lk_iptables_maybe_append() {
     _LK_IPTABLES_COMMAND=-A \
         lk_iptables_maybe_insert "$@"
