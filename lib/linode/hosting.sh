@@ -422,7 +422,8 @@ fi
 
 # shellcheck disable=SC2034
 LK_FILE_DIFF_ORIG=1
-LK_SKIP=env,settings include=provision,hosting . "$LK_BASE/lib/bash/common.sh"
+TERM='' \
+    LK_SKIP=env,settings include=provision,hosting . "$LK_BASE/lib/bash/common.sh"
 
 install -m 00644 /dev/null /etc/default/lk-platform
 LK_PATH_PREFIX=$PATH_PREFIX \

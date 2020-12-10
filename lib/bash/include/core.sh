@@ -671,10 +671,6 @@ function lk_get_colours() {
         GREY_BG "setab 8" \
         BOLD "bold" \
         DIM "dim" \
-        STANDOUT "smso" \
-        STANDOUT_OFF "rmso" \
-        WRAP "smam" \
-        WRAP_OFF "rmam" \
         RESET "sgr0"
 }
 
@@ -2336,31 +2332,27 @@ _LK_INCLUDES=(core)
 
 case "${TERM:-dumb}" in
 dumb | unknown)
-    LK_BLACK=
-    LK_RED=
-    LK_GREEN=
-    LK_YELLOW=
-    LK_BLUE=
-    LK_MAGENTA=
-    LK_CYAN=
-    LK_WHITE=
+    LK_BLACK=$'\E[30m'
+    LK_RED=$'\E[31m'
+    LK_GREEN=$'\E[32m'
+    LK_YELLOW=$'\E[33m'
+    LK_BLUE=$'\E[34m'
+    LK_MAGENTA=$'\E[35m'
+    LK_CYAN=$'\E[36m'
+    LK_WHITE=$'\E[37m'
     LK_GREY=
-    LK_BLACK_BG=
-    LK_RED_BG=
-    LK_GREEN_BG=
-    LK_YELLOW_BG=
-    LK_BLUE_BG=
-    LK_MAGENTA_BG=
-    LK_CYAN_BG=
-    LK_WHITE_BG=
+    LK_BLACK_BG=$'\E[40m'
+    LK_RED_BG=$'\E[41m'
+    LK_GREEN_BG=$'\E[42m'
+    LK_YELLOW_BG=$'\E[43m'
+    LK_BLUE_BG=$'\E[44m'
+    LK_MAGENTA_BG=$'\E[45m'
+    LK_CYAN_BG=$'\E[46m'
+    LK_WHITE_BG=$'\E[47m'
     LK_GREY_BG=
-    LK_BOLD=
-    LK_DIM=
-    LK_STANDOUT=
-    LK_STANDOUT_OFF=
-    LK_WRAP=
-    LK_WRAP_OFF=
-    LK_RESET=
+    LK_BOLD=$'\E[1m'
+    LK_DIM=$'\E[2m'
+    LK_RESET=$'\E[0m'
     ;;
 xterm-256color)
     LK_BLACK=$'\E[30m'
@@ -2383,10 +2375,6 @@ xterm-256color)
     LK_GREY_BG=$'\E[100m'
     LK_BOLD=$'\E[1m'
     LK_DIM=$'\E[2m'
-    LK_STANDOUT=$'\E[7m'
-    LK_STANDOUT_OFF=$'\E[27m'
-    LK_WRAP=$'\E[?7h'
-    LK_WRAP_OFF=$'\E[?7l'
     LK_RESET=$'\E(B\E[m'
     ;;
 *)
