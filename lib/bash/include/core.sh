@@ -486,7 +486,7 @@ function lk_get_env() {
         unset IFS
         _LK_IGNORE=(
             BASH_SOURCE FUNCNAME PATH
-            _LK_ENV _LK_IGNORE _lk_i _lk_i0 _LK_VAR LK_VERBOSE
+            _LK_ENV _LK_IGNORE _lk_i _lk_i0 _LK_VAR _LK_VARS LK_VERBOSE
             _LK_FD "LK_[A-Z0-9_]+_COLOUR2?" "__lk_regex_[a-zA-Z0-9_]+"
             "LK_(BLACK|RED|GREEN|YELLOW|BLUE|MAGENTA|CYAN|WHITE|GREY|BOLD|DIM|RESET)"
         )
@@ -500,9 +500,12 @@ function lk_get_env() {
             lk_console_log "Variables ignored in $(lk_myself -f):" \
                 $'\n'"$(lk_echo_args "${_LK_IGNORE[@]:$_lk_i0}")"
         eval "$_LK_ENV"
-        set -- $({ [ $# -gt 0 ] && lk_echo_args "$@" || lk_var_list_all; } |
+        _LK_VARS=("$@")
+        [ ${#_LK_VARS[@]} -gt 0 ] || lk_mapfile _LK_VARS <(lk_var_list_all |
             sed -E "/^$(lk_implode '|' _LK_IGNORE)\$/d")
-        lk_get_quoted_var "$@"
+        set -- ${_LK_VARS[@]+"${_LK_VARS[@]}"}
+        [ $# -eq 0 ] ||
+            lk_get_quoted_var "$@"
     )
 }
 
@@ -1287,7 +1290,7 @@ function lk_console_message() {
     )
     case "${FUNCNAME[1]:-}" in
     lk_console_list)
-        declare -p WIDTH MESSAGE_HAS_NEWLINE OUTPUT
+        lk_get_quoted_var WIDTH MESSAGE_HAS_NEWLINE OUTPUT
         ;;
     *)
         echo "$OUTPUT" >&"${_LK_FD:-2}"
