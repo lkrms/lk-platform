@@ -135,9 +135,11 @@
     export LK_BASE=$LK_INST
 
     _BASHRC='[ -z "${BASH_VERSION:-}" ] || [ ! -f ~/.bashrc ] || . ~/.bashrc'
-    _BYOBU='_byobu_sourced=1 . %q 2>/dev/null || true'
-    ! lk_is_macos ||
-        _BYOBU='[ ! "$SSH_CONNECTION" ] || '$_BYOBU
+    BYOBU_PATH=$(type -P byobu-launch) &&
+        _BYOBU=$(printf '%s_byobu_sourced=1 . %q 2>/dev/null || true' \
+            "$(! lk_is_macos || echo '[ ! "$SSH_CONNECTION" ] || ')" \
+            "$BYOBU_PATH") ||
+        _BYOBU=
 
     LK_BIN_PATH=${LK_BIN_PATH:-/usr/local/bin}
     LK_FILE_TAKE_BACKUP=${LK_FILE_TAKE_BACKUP-1}
@@ -414,7 +416,7 @@
 
         DIR=$h/.byobu
         if [ ! -e "$DIR/.${LK_PATH_PREFIX}ignore" ] &&
-            BYOBU_PATH=$(type -P byobu-launch); then
+            [ -n "$_BYOBU" ]; then
             for FILE in "${PROFILES[@]}"; do
                 grep -q "byobu-launch" "$FILE" || {
                     lk_console_detail "Adding byobu-launch to" "$FILE"
