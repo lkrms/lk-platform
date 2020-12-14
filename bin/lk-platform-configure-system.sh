@@ -16,7 +16,8 @@
     [ "$_DIR" != "$_FILE" ] || _DIR=.
     readonly _DIR=$(cd "$_DIR" && pwd)
     LK_INST=${_DIR%/*}
-    [ -d "$LK_INST/lib/bash" ] || lk_die "unable to locate LK_BASE"
+    [ -d "$LK_INST/lib/bash" ] &&
+        LK_INST=$(cd "$LK_INST" && pwd -P) || lk_die "unable to locate LK_BASE"
     export LK_INST
 
     shopt -s nullglob
@@ -58,13 +59,8 @@
         LK_PACKAGES_FILE
     )
 
-    # To gather missing settings for CONF_FILE, source it twice:
-    # - first to seed variables like LK_PATH_PREFIX;
-    # - then to ensure existing values are not overwritten
     LK_SETTINGS_FILES=(
-        "$CONF_FILE"
         "$LK_INST/etc"/*.conf
-        ~root/".\${LK_PATH_PREFIX:-lk-}settings"
         "$CONF_FILE"
     )
 
@@ -97,13 +93,24 @@
         esac
     done
 
-    [ "${LK_INST##*/}" = lk-platform ] || {
+    lk_lock LOCK_FILE LOCK_FD
+
+    if [ "${LK_INST##*/}" != lk-platform ] &&
+        [[ "${LK_INST##*/}" =~ ^([a-zA-Z0-9]{2,3}-)platform$ ]]; then
+        ORIGINAL_PATH_PREFIX=${BASH_REMATCH[1]}
         OLD_LK_INST=$LK_INST
         LK_INST=${LK_INST%/*}/lk-platform
-        lk_symlink "$OLD_LK_INST" "$LK_INST"
-    }
+        if [ -e "$LK_INST" ] && [ ! -L "$LK_INST" ]; then
+            BACKUP_DIR=$LK_INST$(lk_file_get_backup_suffix)
+            [ ! -e "$BACKUP_DIR" ] || lk_die "$BACKUP_DIR already exists"
+            mv -fv "$LK_INST" "$BACKUP_DIR"
+        fi
+        rm -fv "$LK_INST"
+        mv -v "$OLD_LK_INST" "$LK_INST"
+        lk_symlink lk-platform "$OLD_LK_INST"
+    fi
 
-    LK_PATH_PREFIX=${LK_PATH_PREFIX:-${PATH_PREFIX:-}}
+    LK_PATH_PREFIX=${LK_PATH_PREFIX:-${PATH_PREFIX:-${ORIGINAL_PATH_PREFIX:-}}}
     [ -n "$LK_PATH_PREFIX" ] || lk_no_input || {
         lk_console_message "LK_PATH_PREFIX not set"
         lk_console_detail \
@@ -458,6 +465,8 @@
     if lk_is_desktop; then
         . "$LK_BASE/lib/desktop/install.sh"
     fi
+
+    lk_lock_drop LOCK_FILE LOCK_FD
 
     lk_console_success "lk-platform successfully installed"
 

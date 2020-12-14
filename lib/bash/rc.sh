@@ -1,6 +1,8 @@
 #!/bin/bash
 # shellcheck disable=SC1090,SC2001,SC2030,SC2031,SC2046,SC2207
 
+_LK_ENV=${_LK_ENV:-$(declare -x)}
+
 unset LK_PROMPT_DISPLAYED LK_BASE
 
 SH=$(

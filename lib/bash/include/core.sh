@@ -2,6 +2,8 @@
 
 # shellcheck disable=SC1090,SC2015,SC2016,SC2034,SC2046,SC2086,SC2120,SC2207
 
+_LK_ENV=${_LK_ENV:-$(declare -x)}
+
 USER=${USER:-$(id -un)} &&
     HOME=${HOME:-$(eval "echo ~$USER")} || return
 
@@ -467,6 +469,43 @@ function lk_get_shell_var() {
     done
 }
 
+function lk_get_quoted_var() {
+    while [ $# -gt 0 ]; do
+        if [ -n "${!1:-}" ]; then
+            printf '%s=%q\n' "$1" "${!1}"
+        else
+            printf '%s=\n' "$1"
+        fi
+        shift
+    done
+}
+
+function lk_get_env() {
+    _LK_ENV=${_LK_ENV:-$(declare -x)}
+    (
+        unset IFS
+        _LK_IGNORE=(
+            BASH_SOURCE FUNCNAME PATH
+            _LK_ENV _LK_IGNORE _lk_i _lk_i0 _LK_VAR LK_VERBOSE
+            _LK_FD "LK_[A-Z0-9_]+_COLOUR2?" "__lk_regex_[a-zA-Z0-9_]+"
+            "LK_(BLACK|RED|GREEN|YELLOW|BLUE|MAGENTA|CYAN|WHITE|GREY|BOLD|DIM|RESET)"
+        )
+        _lk_i=${#_LK_IGNORE[@]}
+        _lk_i0=$_lk_i
+        for _LK_VAR in $(lk_var_list_all |
+            sed -E "/^$(lk_implode '|' _LK_IGNORE)\$/d"); do
+            unset "$_LK_VAR" 2>/dev/null || _LK_IGNORE[$((_lk_i++))]=$_LK_VAR
+        done
+        ! lk_verbose 2 ||
+            lk_console_log "Variables ignored in $(lk_myself -f):" \
+                $'\n'"$(lk_echo_args "${_LK_IGNORE[@]:$_lk_i0}")"
+        eval "$_LK_ENV"
+        set -- $({ [ $# -gt 0 ] && lk_echo_args "$@" || lk_var_list_all; } |
+            sed -E "/^$(lk_implode '|' _LK_IGNORE)\$/d")
+        lk_get_quoted_var "$@"
+    )
+}
+
 function lk_escape_ere() {
     lk_escape "$1" '$' '(' ')' '*' '+' '.' '/' '?' '[' "\\" ']' '^' '{' '|' '}'
 }
@@ -558,6 +597,10 @@ function lk_in_string() {
 
 function lk_has_newline() {
     [ "${!1/$'\n'/}" != "${!1}" ]
+}
+
+function lk_var_list_all() {
+    eval "printf '%s\n'$(printf ' "${!%s@}"' {a..z} {A..Z} _)"
 }
 
 # lk_expand_template [-q] [FILE]
@@ -754,14 +797,17 @@ function lk_implode() {
     _lk_array_action "$(lk_quote_args lk_implode_args "$1")" "${@:2}"
 }
 
-# lk_in_array VALUE ARRAY
+# lk_in_array VALUE ARRAY [ARRAY...]
 #
-# Return true if VALUE exists in ARRAY, otherwise return false.
+# Return true if VALUE exists in any ARRAY, otherwise return false.
 function lk_in_array() {
-    local _LK_ARRAY="$2[@]" _LK_VAL
-    for _LK_VAL in ${!_LK_ARRAY+"${!_LK_ARRAY}"}; do
-        [ "$_LK_VAL" = "$1" ] || continue
-        return 0
+    local _LK_ARRAY _LK_VAL
+    for _LK_ARRAY in "${@:2}"; do
+        _LK_ARRAY="${_LK_ARRAY}[@]"
+        for _LK_VAL in ${!_LK_ARRAY+"${!_LK_ARRAY}"}; do
+            [ "$_LK_VAL" = "$1" ] || continue
+            return 0
+        done
     done
     false
 }
@@ -906,6 +952,31 @@ function lk_next_fd() {
 # lk_is_fd_open FILE_DESCRIPTOR
 function lk_is_fd_open() {
     { true >&"$1"; } 2>/dev/null
+}
+
+function _lk_lock_check_args() {
+    [ $# -ge 2 ] &&
+        lk_test_many lk_is_identifier "${@:1:2}" || lk_warn "invalid arguments"
+}
+
+# lk_lock LOCK_FILE_VAR LOCK_FD_VAR [LOCK_NAME]
+function lk_lock() {
+    _lk_lock_check_args "$@" || return
+    unset "${@:1:2}"
+    eval "$1=/tmp/.\${LK_PATH_PREFIX:-lk-}\${3:-\$(lk_myself 1)}.lock" &&
+        eval "$2=\$(lk_next_fd)" &&
+        eval "exec ${!2}>\"\$$1\"" || return
+    flock -n "${!2}" || lk_warn "unable to acquire a lock on ${!1}"
+}
+
+# lk_lock_drop LOCK_FILE_VAR LOCK_FD_VAR [LOCK_NAME]
+function lk_lock_drop() {
+    _lk_lock_check_args "$@" || return
+    if [ "${!1:+1}${!2:+1}" = 11 ]; then
+        eval "exec ${!2}>&-" &&
+            rm -f "${!1}"
+    fi
+    unset "${@:1:2}"
 }
 
 function lk_log() {
@@ -2178,6 +2249,11 @@ function lk_file_keep_original() {
     done
 }
 
+# lk_file_get_backup_suffix [TIMESTAMP]
+function lk_file_get_backup_suffix() {
+    echo ".lk-bak-$(lk_date "%Y%m%dT%H%M%SZ" ${1+"$1"})"
+}
+
 # lk_file_backup -m FILE
 #
 # Copy FILE to FILE.lk-bak-TIMESTAMP, where TIMESTAMP is the file's last
@@ -2194,14 +2270,14 @@ function lk_file_backup() {
         lk_maybe_sudo test -s "$1" || return 0
         ! lk_is_true MOVE || {
             lk_will_sudo &&
-                DEST=$LK_BASE/var/backup ||
+                DEST=${LK_INST:-$LK_BASE}/var/backup ||
                 DEST=~/.lk-platform/backup
             FILE=$(lk_maybe_sudo realpath "$1") &&
                 lk_maybe_sudo install -d -m 00700 "$DEST" || return
             DEST=$DEST/${FILE//"/"/__}
         }
         MODIFIED=$(lk_file_modified "$1") &&
-            SUFFIX=.lk-bak-$(lk_date "%Y%m%dT%H%M%SZ" "$MODIFIED") &&
+            SUFFIX=$(lk_file_get_backup_suffix "$MODIFIED") &&
             lk_maybe_sudo cp -naL"$vv" "$1" "${DEST:-$1}$SUFFIX"
     fi
 }

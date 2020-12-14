@@ -26,9 +26,12 @@ lk_log_output
 
 if [ -n "${ACCEPT_OUTPUT_CHAIN:-}" ]; then
     lk_console_message "Applying outgoing traffic policy to firewall"
+    IFS=,
     OUTPUT_ALLOW=(
+        ${LK_ACCEPT_OUTPUT_HOSTS:-}
         ${ACCEPT_OUTPUT_HOSTS[@]+"${ACCEPT_OUTPUT_HOSTS[@]}"}
     )
+    unset IFS
     [ ${#OUTPUT_ALLOW[@]} -eq 0 ] ||
         lk_console_detail "Added to whitelist from firewall.conf:" \
             "$(lk_implode $'\n' OUTPUT_ALLOW)"
@@ -44,7 +47,7 @@ if [ -n "${ACCEPT_OUTPUT_CHAIN:-}" ]; then
     # TODO: add temporary entry for api.github.com to /etc/hosts and flush
     # chain with static hosts first (otherwise api.github.com may be
     # unreachable)
-    if lk_in_array "api.github.com" ACCEPT_OUTPUT_HOSTS; then
+    if lk_in_array OUTPUT_ALLOW; then
         if GITHUB_META="$(curl --fail --silent --show-error "https://api.github.com/meta")" &&
             GITHUB_IPS=($(jq -r ".web[],.api[]" <<<"$GITHUB_META" | sort -u)); then
             OUTPUT_ALLOW+=("${GITHUB_IPS[@]}")

@@ -1,39 +1,39 @@
 #!/bin/bash
 # shellcheck disable=SC1090,SC1091,SC2001,SC2086,SC2206,SC2207,SC2088
 #
-# <UDF name="NODE_HOSTNAME" label="Short hostname" example="web01-dev-syd" />
-# <UDF name="NODE_FQDN" label="Host FQDN" example="web01-dev-syd.linode.linacreative.com" />
-# <UDF name="NODE_TIMEZONE" label="System timezone" default="Australia/Sydney" />
-# <UDF name="NODE_SERVICES" label="Services to install and configure" manyof="apache+php,mysql,memcached,fail2ban,wp-cli,jre" default="" />
-# <UDF name="NODE_PACKAGES" label="Additional packages to install (comma-delimited)" default="" />
-# <UDF name="HOST_DOMAIN" label="Initial hosting domain" example="clientname.com.au" default="" />
-# <UDF name="HOST_ACCOUNT" label="Initial hosting account name (default: based on domain)" example="clientname" default="" />
-# <UDF name="HOST_SITE_ENABLE" label="Enable initial hosting site at launch" oneof="Y,N" default="N" />
-# <UDF name="ADMIN_USERS" label="Admin users to create (comma-delimited)" default="linac" />
-# <UDF name="ADMIN_EMAIL" label="Forwarding address for system email" example="tech@linacreative.com" />
-# <UDF name="TRUSTED_IP_ADDRESSES" label="Trusted IP addresses (comma-delimited)" example="10.0.0.0/8,172.16.0.0/12,192.168.0.0/16" default="" />
-# <UDF name="SSH_TRUSTED_ONLY" label="Block SSH access from untrusted IP addresses (trusted IP addresses required)" oneof="Y,N" default="N" />
-# <UDF name="SSH_JUMP_HOST" label="SSH jump proxy: hostname and optional port" example="jump.linacreative.com:9922" default="" />
-# <UDF name="SSH_JUMP_USER" label="SSH jump proxy: default user" default="" />
-# <UDF name="SSH_JUMP_KEY" label="SSH jump proxy: default key (must match the comment field of one installed key)" default="" />
-# <UDF name="REJECT_OUTPUT" label="Reject outgoing traffic by default" oneof="Y,N" default="N" />
-# <UDF name="ACCEPT_OUTPUT_HOSTS" label="Accept outgoing traffic to hosts (comma-delimited)" example="192.168.128.0/17,ip-ranges.amazonaws.com" default="" />
-# <UDF name="MYSQL_USERNAME" label="MySQL admin username (password required)" example="dbadmin" default="" />
-# <UDF name="MYSQL_PASSWORD" label="MySQL admin password (ignored if username not set)" default="" />
-# <UDF name="INNODB_BUFFER_SIZE" label="InnoDB buffer size (~80% of RAM for MySQL-only servers)" oneof="128M,256M,512M,768M,1024M,1536M,2048M,2560M,3072M,4096M,5120M,6144M,7168M,8192M" default="256M" />
-# <UDF name="OPCACHE_MEMORY_CONSUMPTION" label="PHP OPcache size" oneof="128,256,512,768,1024" default="256" />
-# <UDF name="PHP_SETTINGS" label="php.ini settings (user can overwrite, comma-delimited, flag assumed if value is On/True/Yes or Off/False/No)" example="upload_max_filesize=24M,display_errors=On" default="" />
-# <UDF name="PHP_ADMIN_SETTINGS" label="Enforced php.ini settings (comma-delimited)" example="post_max_size=50M,log_errors=Off" default="" />
-# <UDF name="MEMCACHED_MEMORY_LIMIT" label="Memcached size" oneof="64,128,256,512,768,1024" default="256" />
-# <UDF name="SMTP_RELAY" label="SMTP relay (system-wide)" example="[mail.clientname.com.au]:587" default="" />
-# <UDF name="EMAIL_BLACKHOLE" label="Email black hole (system-wide, STAGING ONLY)" example="/dev/null" default="" />
-# <UDF name="AUTO_REBOOT" label="Reboot automatically after unattended upgrades" oneof="Y,N" />
-# <UDF name="AUTO_REBOOT_TIME" label="Preferred automatic reboot time" oneof="02:00,03:00,04:00,05:00,06:00,07:00,08:00,09:00,10:00,11:00,12:00,13:00,14:00,15:00,16:00,17:00,18:00,19:00,20:00,21:00,22:00,23:00,00:00,01:00,now" default="02:00" />
-# <UDF name="PATH_PREFIX" label="Prefix for files installed by this script" default="lk-" />
-# <UDF name="SCRIPT_DEBUG" label="Create trace output from provisioning script" oneof="Y,N" default="Y" />
-# <UDF name="SHUTDOWN_ACTION" label="Reboot or power down after provisioning" oneof="reboot,poweroff" default="reboot" />
-# <UDF name="SHUTDOWN_DELAY" label="Delay before shutdown/reboot after provisioning (in minutes)" default="0" />
-# <UDF name="LK_PLATFORM_BRANCH" label="lk-platform tracking branch" oneof="master,develop" default="master" />
+# <UDF name="LK_NODE_HOSTNAME" label="Short hostname" example="web01-dev-syd" />
+# <UDF name="LK_NODE_FQDN" label="Host FQDN" example="web01-dev-syd.linode.linacreative.com" />
+# <UDF name="LK_NODE_TIMEZONE" label="System timezone" default="Australia/Sydney" />
+# <UDF name="LK_NODE_SERVICES" label="Services to install and configure" manyof="apache+php,mysql,memcached,fail2ban,wp-cli,jre" default="" />
+# <UDF name="LK_NODE_PACKAGES" label="Additional packages to install (comma-delimited)" default="" />
+# <UDF name="LK_HOST_DOMAIN" label="Initial hosting domain" example="clientname.com.au" default="" />
+# <UDF name="LK_HOST_ACCOUNT" label="Initial hosting account name (default: based on domain)" example="clientname" default="" />
+# <UDF name="LK_HOST_SITE_ENABLE" label="Enable initial hosting site at launch" oneof="Y,N" default="N" />
+# <UDF name="LK_ADMIN_USERS" label="Admin users to create (comma-delimited)" default="linac" />
+# <UDF name="LK_ADMIN_EMAIL" label="Forwarding address for system email" example="tech@linacreative.com" />
+# <UDF name="LK_TRUSTED_IP_ADDRESSES" label="Trusted IP addresses (comma-delimited)" example="10.0.0.0/8,172.16.0.0/12,192.168.0.0/16" default="" />
+# <UDF name="LK_SSH_TRUSTED_ONLY" label="Block SSH access from untrusted IP addresses (trusted IP addresses required)" oneof="Y,N" default="N" />
+# <UDF name="LK_SSH_JUMP_HOST" label="SSH jump proxy: hostname and optional port" example="jump.linacreative.com:9922" default="" />
+# <UDF name="LK_SSH_JUMP_USER" label="SSH jump proxy: default user" default="" />
+# <UDF name="LK_SSH_JUMP_KEY" label="SSH jump proxy: default key (must match the comment field of one installed key)" default="" />
+# <UDF name="LK_REJECT_OUTPUT" label="Reject outgoing traffic by default" oneof="Y,N" default="N" />
+# <UDF name="LK_ACCEPT_OUTPUT_HOSTS" label="Accept outgoing traffic to hosts (comma-delimited)" example="192.168.128.0/17,ip-ranges.amazonaws.com" default="" />
+# <UDF name="LK_MYSQL_USERNAME" label="MySQL admin username (password required)" example="dbadmin" default="" />
+# <UDF name="LK_MYSQL_PASSWORD" label="MySQL admin password (ignored if username not set)" default="" />
+# <UDF name="LK_INNODB_BUFFER_SIZE" label="InnoDB buffer size (~80% of RAM for MySQL-only servers)" oneof="128M,256M,512M,768M,1024M,1536M,2048M,2560M,3072M,4096M,5120M,6144M,7168M,8192M" default="256M" />
+# <UDF name="LK_OPCACHE_MEMORY_CONSUMPTION" label="PHP OPcache size" oneof="128,256,512,768,1024" default="256" />
+# <UDF name="LK_PHP_SETTINGS" label="php.ini settings (user can overwrite, comma-delimited, flag assumed if value is On/True/Yes or Off/False/No)" example="upload_max_filesize=24M,display_errors=On" default="" />
+# <UDF name="LK_PHP_ADMIN_SETTINGS" label="Enforced php.ini settings (comma-delimited)" example="post_max_size=50M,log_errors=Off" default="" />
+# <UDF name="LK_MEMCACHED_MEMORY_LIMIT" label="Memcached size" oneof="64,128,256,512,768,1024" default="256" />
+# <UDF name="LK_SMTP_RELAY" label="SMTP relay (system-wide)" example="[mail.clientname.com.au]:587" default="" />
+# <UDF name="LK_EMAIL_BLACKHOLE" label="Email black hole (system-wide, STAGING ONLY)" example="/dev/null" default="" />
+# <UDF name="LK_AUTO_REBOOT" label="Reboot automatically after unattended upgrades" oneof="Y,N" />
+# <UDF name="LK_AUTO_REBOOT_TIME" label="Preferred automatic reboot time" oneof="02:00,03:00,04:00,05:00,06:00,07:00,08:00,09:00,10:00,11:00,12:00,13:00,14:00,15:00,16:00,17:00,18:00,19:00,20:00,21:00,22:00,23:00,00:00,01:00,now" default="02:00" />
+# <UDF name="LK_PATH_PREFIX" label="Prefix for files installed by lk-platform" default="lk-" />
+# <UDF name="LK_SCRIPT_DEBUG" label="Create trace output from provisioning script" oneof="Y,N" default="Y" />
+# <UDF name="LK_SHUTDOWN_ACTION" label="Reboot or power down after provisioning" oneof="reboot,poweroff" default="reboot" />
+# <UDF name="LK_SHUTDOWN_DELAY" label="Delay before shutdown/reboot after provisioning (in minutes)" default="0" />
+# <UDF name="LK_PLATFORM_BRANCH" label="lk-platform tracking branch" oneof="master,develop,provision-hosting" default="master" />
 
 SCRIPT_VARS=$(
     unset BASH_EXECUTION_STRING
@@ -43,42 +43,42 @@ SCRIPT_ENV=$(printenv | sed '/^LS_COLORS=/d' | sort)
 
 # Use lk_bash_udf_defaults to regenerate the following after changes above
 export -n \
-    NODE_HOSTNAME=${NODE_HOSTNAME:-} \
-    NODE_FQDN=${NODE_FQDN:-} \
-    NODE_TIMEZONE=${NODE_TIMEZONE:-Australia/Sydney} \
-    NODE_SERVICES=${NODE_SERVICES:-} \
-    NODE_PACKAGES=${NODE_PACKAGES:-} \
-    HOST_DOMAIN=${HOST_DOMAIN:-} \
-    HOST_ACCOUNT=${HOST_ACCOUNT:-} \
-    HOST_SITE_ENABLE=${HOST_SITE_ENABLE:-N} \
-    ADMIN_USERS=${ADMIN_USERS:-linac} \
-    ADMIN_EMAIL=${ADMIN_EMAIL:-} \
-    TRUSTED_IP_ADDRESSES=${TRUSTED_IP_ADDRESSES:-} \
-    SSH_TRUSTED_ONLY=${SSH_TRUSTED_ONLY:-N} \
-    SSH_JUMP_HOST=${SSH_JUMP_HOST:-} \
-    SSH_JUMP_USER=${SSH_JUMP_USER:-} \
-    SSH_JUMP_KEY=${SSH_JUMP_KEY:-} \
-    REJECT_OUTPUT=${REJECT_OUTPUT:-N} \
-    ACCEPT_OUTPUT_HOSTS=${ACCEPT_OUTPUT_HOSTS:-} \
-    MYSQL_USERNAME=${MYSQL_USERNAME:-} \
-    MYSQL_PASSWORD=${MYSQL_PASSWORD:-} \
-    INNODB_BUFFER_SIZE=${INNODB_BUFFER_SIZE:-256M} \
-    OPCACHE_MEMORY_CONSUMPTION=${OPCACHE_MEMORY_CONSUMPTION:-256} \
-    PHP_SETTINGS=${PHP_SETTINGS:-} \
-    PHP_ADMIN_SETTINGS=${PHP_ADMIN_SETTINGS:-} \
-    MEMCACHED_MEMORY_LIMIT=${MEMCACHED_MEMORY_LIMIT:-256} \
-    SMTP_RELAY=${SMTP_RELAY:-} \
-    EMAIL_BLACKHOLE=${EMAIL_BLACKHOLE:-} \
-    AUTO_REBOOT=${AUTO_REBOOT:-} \
-    AUTO_REBOOT_TIME=${AUTO_REBOOT_TIME:-02:00} \
-    PATH_PREFIX=${PATH_PREFIX:-lk-} \
-    SCRIPT_DEBUG=${SCRIPT_DEBUG:-Y} \
-    SHUTDOWN_ACTION=${SHUTDOWN_ACTION:-reboot} \
-    SHUTDOWN_DELAY=${SHUTDOWN_DELAY:-0} \
+    LK_NODE_HOSTNAME=${LK_NODE_HOSTNAME:-} \
+    LK_NODE_FQDN=${LK_NODE_FQDN:-} \
+    LK_NODE_TIMEZONE=${LK_NODE_TIMEZONE:-Australia/Sydney} \
+    LK_NODE_SERVICES=${LK_NODE_SERVICES:-} \
+    LK_NODE_PACKAGES=${LK_NODE_PACKAGES:-} \
+    LK_HOST_DOMAIN=${LK_HOST_DOMAIN:-} \
+    LK_HOST_ACCOUNT=${LK_HOST_ACCOUNT:-} \
+    LK_HOST_SITE_ENABLE=${LK_HOST_SITE_ENABLE:-N} \
+    LK_ADMIN_USERS=${LK_ADMIN_USERS:-linac} \
+    LK_ADMIN_EMAIL=${LK_ADMIN_EMAIL:-} \
+    LK_TRUSTED_IP_ADDRESSES=${LK_TRUSTED_IP_ADDRESSES:-} \
+    LK_SSH_TRUSTED_ONLY=${LK_SSH_TRUSTED_ONLY:-N} \
+    LK_SSH_JUMP_HOST=${LK_SSH_JUMP_HOST:-} \
+    LK_SSH_JUMP_USER=${LK_SSH_JUMP_USER:-} \
+    LK_SSH_JUMP_KEY=${LK_SSH_JUMP_KEY:-} \
+    LK_REJECT_OUTPUT=${LK_REJECT_OUTPUT:-N} \
+    LK_ACCEPT_OUTPUT_HOSTS=${LK_ACCEPT_OUTPUT_HOSTS:-} \
+    LK_MYSQL_USERNAME=${LK_MYSQL_USERNAME:-} \
+    LK_MYSQL_PASSWORD=${LK_MYSQL_PASSWORD:-} \
+    LK_INNODB_BUFFER_SIZE=${LK_INNODB_BUFFER_SIZE:-256M} \
+    LK_OPCACHE_MEMORY_CONSUMPTION=${LK_OPCACHE_MEMORY_CONSUMPTION:-256} \
+    LK_PHP_SETTINGS=${LK_PHP_SETTINGS:-} \
+    LK_PHP_ADMIN_SETTINGS=${LK_PHP_ADMIN_SETTINGS:-} \
+    LK_MEMCACHED_MEMORY_LIMIT=${LK_MEMCACHED_MEMORY_LIMIT:-256} \
+    LK_SMTP_RELAY=${LK_SMTP_RELAY:-} \
+    LK_EMAIL_BLACKHOLE=${LK_EMAIL_BLACKHOLE:-} \
+    LK_AUTO_REBOOT=${LK_AUTO_REBOOT:-} \
+    LK_AUTO_REBOOT_TIME=${LK_AUTO_REBOOT_TIME:-02:00} \
+    LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-} \
+    LK_SCRIPT_DEBUG=${LK_SCRIPT_DEBUG:-Y} \
+    LK_SHUTDOWN_ACTION=${LK_SHUTDOWN_ACTION:-reboot} \
+    LK_SHUTDOWN_DELAY=${LK_SHUTDOWN_DELAY:-0} \
     LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
 
-[ ! "$SCRIPT_DEBUG" = Y ] || {
-    TRACE_FILE=/var/log/${PATH_PREFIX}install.trace
+[ ! "$LK_SCRIPT_DEBUG" = Y ] || {
+    TRACE_FILE=/var/log/${LK_PATH_PREFIX}install.trace
     install -m 00640 -g adm /dev/null "$TRACE_FILE"
     exec 4>>"$TRACE_FILE"
     BASH_XTRACEFD=4
@@ -156,59 +156,59 @@ FIELD_ERRORS=$(
 
     # required fields
     REQUIRED=1
-    valid NODE_HOSTNAME "^$DOMAIN_PART_REGEX\$"
-    valid NODE_FQDN "^$DOMAIN_NAME_REGEX\$"
+    valid LK_NODE_HOSTNAME "^$DOMAIN_PART_REGEX\$"
+    valid LK_NODE_FQDN "^$DOMAIN_NAME_REGEX\$"
     # if tzdata isn't part of the image, `timedatectl list-timezones` will only
     # list UTC
     if [ -e /usr/share/zoneinfo/Australia/Sydney ]; then
-        one_of NODE_TIMEZONE < <(timedatectl list-timezones)
+        one_of LK_NODE_TIMEZONE < <(timedatectl list-timezones)
     else
-        not_null NODE_TIMEZONE
+        not_null LK_NODE_TIMEZONE
     fi
-    valid ADMIN_EMAIL "^$EMAIL_ADDRESS_REGEX\$"
-    one_of AUTO_REBOOT Y N
+    valid LK_ADMIN_EMAIL "^$EMAIL_ADDRESS_REGEX\$"
+    one_of LK_AUTO_REBOOT Y N
 
     # optional fields
     REQUIRED=0
-    many_of NODE_SERVICES \
+    many_of LK_NODE_SERVICES \
         "apache+php" \
         "mysql" \
         "memcached" \
         "fail2ban" \
         "wp-cli" \
         "jre"
-    valid_list NODE_PACKAGES "^$DPKG_SOURCE_REGEX\$"
-    valid HOST_DOMAIN "^$DOMAIN_NAME_REGEX\$"
-    valid HOST_ACCOUNT "^$LINUX_USERNAME_REGEX\$"
-    [ -z "$HOST_DOMAIN" ] || REQUIRED=1
-    one_of HOST_SITE_ENABLE Y N
+    valid_list LK_NODE_PACKAGES "^$DPKG_SOURCE_REGEX\$"
+    valid LK_HOST_DOMAIN "^$DOMAIN_NAME_REGEX\$"
+    valid LK_HOST_ACCOUNT "^$LINUX_USERNAME_REGEX\$"
+    [ -z "$LK_HOST_DOMAIN" ] || REQUIRED=1
+    one_of LK_HOST_SITE_ENABLE Y N
     REQUIRED=0
-    valid_list ADMIN_USERS "^$LINUX_USERNAME_REGEX\$"
-    [ ! "$SSH_TRUSTED_ONLY" = Y ] || REQUIRED=1
-    valid_list TRUSTED_IP_ADDRESSES "^$IP_OPT_PREFIX_REGEX\$"
+    valid_list LK_ADMIN_USERS "^$LINUX_USERNAME_REGEX\$"
+    [ ! "$LK_SSH_TRUSTED_ONLY" = Y ] || REQUIRED=1
+    valid_list LK_TRUSTED_IP_ADDRESSES "^$IP_OPT_PREFIX_REGEX\$"
     REQUIRED=0
-    one_of SSH_TRUSTED_ONLY Y N
-    valid SSH_JUMP_HOST "^$HOST_REGEX\$"
-    valid SSH_JUMP_USER "^$LINUX_USERNAME_REGEX\$"
-    valid SSH_JUMP_KEY "^[-a-zA-Z0-9_]+\$"
-    one_of REJECT_OUTPUT Y N
-    valid_list ACCEPT_OUTPUT_HOSTS "^$HOST_OPT_PREFIX_REGEX\$"
-    valid MYSQL_USERNAME "^$MYSQL_USERNAME_REGEX\$"
-    [ -z "$MYSQL_USERNAME" ] || not_null MYSQL_PASSWORD
-    valid INNODB_BUFFER_SIZE "^[0-9]+[kmgtpeKMGTPE]?\$"
-    valid OPCACHE_MEMORY_CONSUMPTION "^[0-9]+\$"
-    valid_list PHP_SETTINGS "^$PHP_SETTING_REGEX\$"
-    valid_list PHP_ADMIN_SETTINGS "^$PHP_SETTING_REGEX\$"
-    valid MEMCACHED_MEMORY_LIMIT "^[0-9]+\$"
-    valid SMTP_RELAY "^($HOST_REGEX|\\[$HOST_REGEX\\])(:[0-9]+)?\$"
-    # TODO: validate EMAIL_BLACKHOLE
-    [ ! "$AUTO_REBOOT" = Y ] || REQUIRED=1
-    valid AUTO_REBOOT_TIME "^(([01][0-9]|2[0-3]):[0-5][0-9]|now)\$"
+    one_of LK_SSH_TRUSTED_ONLY Y N
+    valid LK_SSH_JUMP_HOST "^$HOST_REGEX\$"
+    valid LK_SSH_JUMP_USER "^$LINUX_USERNAME_REGEX\$"
+    valid LK_SSH_JUMP_KEY "^[-a-zA-Z0-9_]+\$"
+    one_of LK_REJECT_OUTPUT Y N
+    valid_list LK_ACCEPT_OUTPUT_HOSTS "^$HOST_OPT_PREFIX_REGEX\$"
+    valid LK_MYSQL_USERNAME "^$MYSQL_USERNAME_REGEX\$"
+    [ -z "$LK_MYSQL_USERNAME" ] || not_null LK_MYSQL_PASSWORD
+    valid LK_INNODB_BUFFER_SIZE "^[0-9]+[kmgtpeKMGTPE]?\$"
+    valid LK_OPCACHE_MEMORY_CONSUMPTION "^[0-9]+\$"
+    valid_list LK_PHP_SETTINGS "^$PHP_SETTING_REGEX\$"
+    valid_list LK_PHP_ADMIN_SETTINGS "^$PHP_SETTING_REGEX\$"
+    valid LK_MEMCACHED_MEMORY_LIMIT "^[0-9]+\$"
+    valid LK_SMTP_RELAY "^($HOST_REGEX|\\[$HOST_REGEX\\])(:[0-9]+)?\$"
+    # TODO: validate LK_EMAIL_BLACKHOLE
+    [ ! "$LK_AUTO_REBOOT" = Y ] || REQUIRED=1
+    valid LK_AUTO_REBOOT_TIME "^(([01][0-9]|2[0-3]):[0-5][0-9]|now)\$"
     REQUIRED=0
-    valid PATH_PREFIX "^[a-zA-Z0-9]{2,4}-\$"
-    one_of SCRIPT_DEBUG Y N
-    one_of SHUTDOWN_ACTION reboot poweroff
-    valid SHUTDOWN_DELAY "^[0-9]+\$"
+    valid LK_PATH_PREFIX "^[a-zA-Z0-9]{2,4}-\$"
+    one_of LK_SCRIPT_DEBUG Y N
+    one_of LK_SHUTDOWN_ACTION reboot poweroff
+    valid LK_SHUTDOWN_DELAY "^[0-9]+\$"
     # TODO: validate LK_PLATFORM_BRANCH
     exit $STATUS
 ) || lk_die "$(printf '%s\n' "invalid fields" \
@@ -221,8 +221,8 @@ FIELD_ERRORS=$(
 KEYS_FILE=/root/.ssh/authorized_keys
 [ -s "$KEYS_FILE" ] || lk_die "no public keys at $KEYS_FILE"
 
-HOST_DOMAIN=${HOST_DOMAIN#www.}
-HOST_ACCOUNT=${HOST_ACCOUNT:-${HOST_DOMAIN%%.*}}
+LK_HOST_DOMAIN=${LK_HOST_DOMAIN#www.}
+LK_HOST_ACCOUNT=${LK_HOST_ACCOUNT:-${LK_HOST_DOMAIN%%.*}}
 
 # The following functions are the minimum required to install lk-platform before
 # sourcing core.sh and everything else required to provision the system
@@ -349,12 +349,12 @@ function iptables() {
     command ip6tables "$@"
 }
 
-LOCK_FILE=/tmp/${PATH_PREFIX}install.lock
+LOCK_FILE=/tmp/${LK_PATH_PREFIX}install.lock
 exec 9>"$LOCK_FILE"
 flock -n 9 || lk_die "unable to acquire a lock on $LOCK_FILE"
 
-LOG_FILE=/var/log/${PATH_PREFIX}install.log
-OUT_FILE=/var/log/${PATH_PREFIX}install.out
+LOG_FILE=/var/log/${LK_PATH_PREFIX}install.log
+OUT_FILE=/var/log/${LK_PATH_PREFIX}install.out
 install -m 00640 -g adm /dev/null "$LOG_FILE"
 install -m 00640 -g adm /dev/null "$OUT_FILE"
 exec > >(tee >(lk_log >>"$OUT_FILE")) 2>&1
@@ -362,7 +362,7 @@ exec 3> >(tee >(lk_log >>"$LOG_FILE") >&1)
 _LK_FD=3
 
 S="[[:space:]]"
-P="${PATH_PREFIX%-}_"
+P="${LK_PATH_PREFIX%-}_"
 DECLARE_LK_DATE_LOG=$(declare -f lk_date_log)
 export LK_BASE=/opt/lk-platform \
     DEBIAN_FRONTEND=noninteractive \
@@ -371,7 +371,7 @@ export LK_BASE=/opt/lk-platform \
 
 lk_console_message "Bootstrapping Ubuntu for hosting"
 lk_console_item "Environment:" "$SCRIPT_ENV"
-[ ! "$SCRIPT_DEBUG" = Y ] ||
+[ ! "$LK_SCRIPT_DEBUG" = Y ] ||
     lk_console_item "Variables:" "$SCRIPT_VARS"
 
 IMAGE_BASE_PACKAGES=($(apt-mark showmanual))
@@ -426,30 +426,7 @@ TERM='' \
     LK_SKIP=env,settings include=provision,hosting . "$LK_BASE/lib/bash/common.sh"
 
 install -m 00644 /dev/null /etc/default/lk-platform
-LK_PATH_PREFIX=$PATH_PREFIX \
-    LK_NODE_HOSTNAME=$NODE_HOSTNAME \
-    LK_NODE_FQDN=$NODE_FQDN \
-    LK_NODE_TIMEZONE=$NODE_TIMEZONE \
-    LK_NODE_SERVICES=$NODE_SERVICES \
-    LK_NODE_PACKAGES=$NODE_PACKAGES \
-    LK_ADMIN_EMAIL=$ADMIN_EMAIL \
-    LK_TRUSTED_IP_ADDRESSES=$TRUSTED_IP_ADDRESSES \
-    LK_SSH_TRUSTED_ONLY=$SSH_TRUSTED_ONLY \
-    LK_SSH_JUMP_HOST=$SSH_JUMP_HOST \
-    LK_SSH_JUMP_USER=$SSH_JUMP_USER \
-    LK_SSH_JUMP_KEY=${SSH_JUMP_KEY:+jump} \
-    LK_REJECT_OUTPUT=$REJECT_OUTPUT \
-    LK_ACCEPT_OUTPUT_HOSTS=$ACCEPT_OUTPUT_HOSTS \
-    LK_INNODB_BUFFER_SIZE=$INNODB_BUFFER_SIZE \
-    LK_OPCACHE_MEMORY_CONSUMPTION=$OPCACHE_MEMORY_CONSUMPTION \
-    LK_PHP_SETTINGS=$PHP_SETTINGS \
-    LK_PHP_ADMIN_SETTINGS=$PHP_ADMIN_SETTINGS \
-    LK_MEMCACHED_MEMORY_LIMIT=$MEMCACHED_MEMORY_LIMIT \
-    LK_SMTP_RELAY=$SMTP_RELAY \
-    LK_EMAIL_BLACKHOLE=$EMAIL_BLACKHOLE \
-    LK_AUTO_REBOOT=$AUTO_REBOOT \
-    LK_AUTO_REBOOT_TIME=$AUTO_REBOOT_TIME \
-    LK_SCRIPT_DEBUG=$SCRIPT_DEBUG \
+LK_SSH_JUMP_KEY=${LK_SSH_JUMP_KEY:+jump} \
     lk_get_shell_var \
     LK_BASE \
     LK_PATH_PREFIX \
@@ -477,7 +454,6 @@ LK_PATH_PREFIX=$PATH_PREFIX \
     LK_AUTO_REBOOT_TIME \
     LK_SCRIPT_DEBUG \
     LK_PLATFORM_BRANCH >/etc/default/lk-platform
-. /etc/default/lk-platform
 
 install -v -d -m 02775 -g adm "$LK_BASE/etc"
 install -m 00664 -g adm /dev/null "$LK_BASE/etc/packages.conf"
@@ -529,27 +505,27 @@ systemctl restart systemd-journald.service
 ### //
 
 lk_console_message "Setting system hostname"
-lk_console_detail "Running:" "hostnamectl set-hostname $NODE_HOSTNAME"
-hostnamectl set-hostname "$NODE_HOSTNAME"
+lk_console_detail "Running:" "hostnamectl set-hostname $LK_NODE_HOSTNAME"
+hostnamectl set-hostname "$LK_NODE_HOSTNAME"
 
 # Apache won't resolve a name-based <VirtualHost> correctly if ServerName
 # resolves to a loopback address, so if the host's FQDN is also the initial
 # hosting domain, don't associate it with 127.0.1.1
-[ "${NODE_FQDN#www.}" = "$HOST_DOMAIN" ] || HOSTS_NODE_FQDN="$NODE_FQDN"
+[ "${LK_NODE_FQDN#www.}" = "$LK_HOST_DOMAIN" ] || HOSTS_NODE_FQDN="$LK_NODE_FQDN"
 FILE=/etc/hosts
 lk_console_detail "Adding entries to" "$FILE"
 cat <<EOF >>"$FILE"
 
 # Added by ${0##*/} at $(lk_date_log)
-127.0.1.1 ${HOSTS_NODE_FQDN:+$HOSTS_NODE_FQDN }$NODE_HOSTNAME${HOSTS_NODE_FQDN:+${IPV4_ADDRESS:+
-$IPV4_ADDRESS $NODE_FQDN}${IPV6_ADDRESS:+
-$IPV6_ADDRESS $NODE_FQDN}}
+127.0.1.1 ${HOSTS_NODE_FQDN:+$HOSTS_NODE_FQDN }$LK_NODE_HOSTNAME${HOSTS_NODE_FQDN:+${IPV4_ADDRESS:+
+$IPV4_ADDRESS $LK_NODE_FQDN}${IPV6_ADDRESS:+
+$IPV6_ADDRESS $LK_NODE_FQDN}}
 EOF
 lk_console_file "$FILE"
 
 ### move to lk-provision-hosting.sh
 lk_console_message "Configuring APT"
-FILE=/etc/apt/apt.conf.d/90${PATH_PREFIX}defaults
+FILE=/etc/apt/apt.conf.d/90${LK_PATH_PREFIX}defaults
 APT_OPTIONS=()
 lk_console_detail "Disabling installation of recommended and suggested packages"
 APT_OPTIONS+=(
@@ -563,11 +539,11 @@ APT_OPTIONS+=(
     "Unattended-Upgrade::Mail" "root"
     "Unattended-Upgrade::Remove-Unused-Kernel-Packages" "true"
 )
-if [ "$AUTO_REBOOT" = Y ]; then
+if [ "$LK_AUTO_REBOOT" = Y ]; then
     lk_console_detail "Enabling automatic reboot"
     APT_OPTIONS+=(
         "Unattended-Upgrade::Automatic-Reboot" "true"
-        "Unattended-Upgrade::Automatic-Reboot-Time" "$AUTO_REBOOT_TIME"
+        "Unattended-Upgrade::Automatic-Reboot-Time" "$LK_AUTO_REBOOT_TIME"
     )
 fi
 {
@@ -589,7 +565,7 @@ LOG=(
 \$([ "\$#" -eq 0 ] || printf '  - %q\n' "\$@")")
 DEPLOY_PENDING=N
 EXIT_STATUS=0
-exec 9>"/tmp/${PATH_PREFIX}install.lock"
+exec 9>"/tmp/${LK_PATH_PREFIX}install.lock"
 if ! flock -n 9; then
     DEPLOY_PENDING=Y
     [ "\${DPKG_MAINTSCRIPT_NAME:-}" != postinst ] || EXIT_STATUS=101
@@ -599,7 +575,7 @@ LOG+=("Exit status: \$EXIT_STATUS")
 printf '%s %s\n%s\n' "\$(lk_date_log)" "\${LOG[0]}" "\$(
     LOG=("\${LOG[@]:1}")
     printf '  %s\n' "\${LOG[@]//\$'\n'/\$'\n' }"
-)" >>"/var/log/${PATH_PREFIX}policy-rc.log"
+)" >>"/var/log/${LK_PATH_PREFIX}policy-rc.log"
 exit "\$EXIT_STATUS"
 EOF
 chmod a+x "/usr/sbin/policy-rc.d"
@@ -629,7 +605,7 @@ for FILE in 10-help-text 50-motd-news 91-release-upgrade 98-fsck-at-reboot; do
 done
 
 lk_console_message "Configuring kernel parameters"
-FILE="/etc/sysctl.d/90-${PATH_PREFIX}defaults.conf"
+FILE="/etc/sysctl.d/90-${LK_PATH_PREFIX}defaults.conf"
 cat <<EOF >"$FILE"
 # Avoid paging and swapping if at all possible
 vm.swappiness = 1
@@ -681,38 +657,38 @@ cat <<EOF >"$DIR/statusrc"
 BYOBU_CHARMAP=x
 EOF
 
-ADMIN_USER_KEYS=$([ -z "$ADMIN_USERS" ] ||
-    grep -E "$S(${ADMIN_USERS//,/|})\$" "$KEYS_FILE") || true
-HOST_KEYS=$([ -z "$ADMIN_USERS" ] &&
+ADMIN_USER_KEYS=$([ -z "$LK_ADMIN_USERS" ] ||
+    grep -E "$S(${LK_ADMIN_USERS//,/|})\$" "$KEYS_FILE") || true
+HOST_KEYS=$([ -z "$LK_ADMIN_USERS" ] &&
     cat "$KEYS_FILE" ||
-    grep -Ev "$S(${ADMIN_USERS//,/|})\$" "$KEYS_FILE") || true
-JUMP_KEY=$([ -z "$SSH_JUMP_KEY" ] ||
-    grep -E "$S$SSH_JUMP_KEY\$" "$KEYS_FILE") || true
-[ -z "$SSH_JUMP_KEY" ] ||
+    grep -Ev "$S(${LK_ADMIN_USERS//,/|})\$" "$KEYS_FILE") || true
+JUMP_KEY=$([ -z "$LK_SSH_JUMP_KEY" ] ||
+    grep -E "$S$LK_SSH_JUMP_KEY\$" "$KEYS_FILE") || true
+[ -z "$LK_SSH_JUMP_KEY" ] ||
     case "$([ -z "$JUMP_KEY" ] && echo 0 || wc -l <<<"$JUMP_KEY")" in
     0)
-        lk_console_item "SSH jump proxy key not found:" "$SSH_JUMP_KEY"
+        lk_console_item "SSH jump proxy key not found:" "$LK_SSH_JUMP_KEY"
         ;;
     1)
-        lk_console_item "SSH jump proxy key found:" "$SSH_JUMP_KEY"
+        lk_console_item "SSH jump proxy key found:" "$LK_SSH_JUMP_KEY"
         ;;
     *)
-        lk_console_item "Too many keys for SSH jump proxy key:" "$SSH_JUMP_KEY"
+        lk_console_item "Too many keys for SSH jump proxy key:" "$LK_SSH_JUMP_KEY"
         JUMP_KEY=
         ;;
     esac
 
 lk_console_message "Configuring SSH client defaults"
 DIR=/etc/skel
-install -v -d -m 00700 "$DIR/.ssh"{,"/$PATH_PREFIX"{config.d,keys}}
+install -v -d -m 00700 "$DIR/.ssh"{,"/$LK_PATH_PREFIX"{config.d,keys}}
 lk_file_keep_original "$DIR/.ssh/config"
 cat <<EOF >"$DIR/.ssh/config"
 # Added by ${0##*/} at $(lk_date_log)
-Include ~/.ssh/${PATH_PREFIX}config.d/*
+Include ~/.ssh/${LK_PATH_PREFIX}config.d/*
 EOF
 lk_console_file "$DIR/.ssh/config"
-cat <<EOF >"$DIR/.ssh/${PATH_PREFIX}config.d/90-defaults"
-Host                    ${PATH_PREFIX}*
+cat <<EOF >"$DIR/.ssh/${LK_PATH_PREFIX}config.d/90-defaults"
+Host                    ${LK_PATH_PREFIX}*
 IdentitiesOnly          yes
 ForwardAgent            yes
 StrictHostKeyChecking   accept-new
@@ -722,28 +698,28 @@ ControlPersist          120
 SendEnv                 LANG LC_*
 ServerAliveInterval     30
 EOF
-lk_console_file "$DIR/.ssh/${PATH_PREFIX}config.d/90-defaults"
-[ -z "$SSH_JUMP_HOST" ] || {
-    HOST=$SSH_JUMP_HOST
+lk_console_file "$DIR/.ssh/${LK_PATH_PREFIX}config.d/90-defaults"
+[ -z "$LK_SSH_JUMP_HOST" ] || {
+    HOST=$LK_SSH_JUMP_HOST
     [[ ! $HOST =~ (.*):([0-9]+)$ ]] || {
         HOST=${BASH_REMATCH[1]}
         PORT=${BASH_REMATCH[2]}
     }
-    cat <<EOF >"$DIR/.ssh/${PATH_PREFIX}config.d/40-jump"
-Host                    ${PATH_PREFIX}jump
+    cat <<EOF >"$DIR/.ssh/${LK_PATH_PREFIX}config.d/40-jump"
+Host                    ${LK_PATH_PREFIX}jump
 HostName                $HOST${PORT:+
-Port                    $PORT}${SSH_JUMP_USER:+
-User                    $SSH_JUMP_USER}${JUMP_KEY:+
-IdentityFile            "~/.ssh/${PATH_PREFIX}keys/jump"}
+Port                    $PORT}${LK_SSH_JUMP_USER:+
+User                    $LK_SSH_JUMP_USER}${JUMP_KEY:+
+IdentityFile            "~/.ssh/${LK_PATH_PREFIX}keys/jump"}
 EOF
 }
 [ -z "$JUMP_KEY" ] || {
-    install -m 00600 /dev/null "$DIR/.ssh/${PATH_PREFIX}keys/jump"
-    echo "$JUMP_KEY" >"$DIR/.ssh/${PATH_PREFIX}keys/jump"
+    install -m 00600 /dev/null "$DIR/.ssh/${LK_PATH_PREFIX}keys/jump"
+    echo "$JUMP_KEY" >"$DIR/.ssh/${LK_PATH_PREFIX}keys/jump"
 }
 chmod -Rc -077 "$DIR/.ssh"
 
-DIR=/etc/skel.${PATH_PREFIX%-}
+DIR=/etc/skel.${LK_PATH_PREFIX%-}
 [ ! -e "$DIR" ] || lk_die "already exists: $DIR"
 lk_console_message "Creating $DIR (for hosting accounts)"
 cp -av "/etc/skel" "$DIR"
@@ -751,7 +727,7 @@ install -m 00600 /dev/null "$DIR/.ssh/authorized_keys"
 [ -z "$HOST_KEYS" ] || echo "$HOST_KEYS" >>"$DIR/.ssh/authorized_keys"
 
 unset FIRST_ADMIN
-for USERNAME in ${ADMIN_USERS//,/ }; do
+for USERNAME in ${LK_ADMIN_USERS//,/ }; do
     FIRST_ADMIN="${FIRST_ADMIN:-$USERNAME}"
     lk_console_message "Creating superuser '$USERNAME'"
     # HOME_DIR may already exist, e.g. if filesystems have been mounted in it
@@ -800,9 +776,9 @@ debconf-set-selections <<EOF
 iptables-persistent	iptables-persistent/autosave_v4	boolean	false
 iptables-persistent	iptables-persistent/autosave_v6	boolean	false
 postfix	postfix/main_mailer_type	select	Internet Site
-postfix	postfix/mailname	string	$NODE_FQDN
-postfix	postfix/relayhost	string	$SMTP_RELAY
-postfix	postfix/root_address	string	$ADMIN_EMAIL
+postfix	postfix/mailname	string	$LK_NODE_FQDN
+postfix	postfix/relayhost	string	$LK_SMTP_RELAY
+postfix	postfix/root_address	string	$LK_ADMIN_EMAIL
 EOF
 
 # bare necessities
@@ -863,10 +839,10 @@ lk_keep_trying apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -yq install "${PA
 
 lk_console_message "Configuring iptables"
 install -m 00660 -g adm /dev/null "$LK_BASE/etc/firewall.conf"
-if [ "$REJECT_OUTPUT" != "N" ]; then
+if [ "$LK_REJECT_OUTPUT" != "N" ]; then
     APT_SOURCE_HOSTS=($(grep -Eo "^[^#]+${S}https?://[^/[:space:]]+" "/etc/apt/sources.list" |
         sed -E 's/^.*:\/\///' | sort -u)) || lk_die "no active package sources in /etc/apt/sources.list"
-    if [[ ",$NODE_SERVICES," =~ .*,wp-cli,.* ]]; then
+    if [[ ",$LK_NODE_SERVICES," =~ .*,wp-cli,.* ]]; then
         WORDPRESS_HOSTS="\
     # used by wp-cli when installing WordPress plugins and updates
     api.wordpress.org
@@ -897,16 +873,16 @@ ACCEPT_OUTPUT_HOSTS=(
 $WORDPRESS_HOSTS}
 
     # ==== user-defined
-${ACCEPT_OUTPUT_HOSTS:+    ${ACCEPT_OUTPUT_HOSTS//,/$'\n'    }
+${LK_ACCEPT_OUTPUT_HOSTS:+    ${LK_ACCEPT_OUTPUT_HOSTS//,/$'\n'    }
 })"
     . /dev/stdin <<<"$ACCEPT_OUTPUT_HOSTS_SH"
-    if [[ " ${ACCEPT_OUTPUT_HOSTS[*]} " =~ .*" api.github.com ".* ]]; then
+    if [[ " ${LK_ACCEPT_OUTPUT_HOSTS[*]} " =~ .*" api.github.com ".* ]]; then
         lk_keep_trying eval "GITHUB_META=\"\$(curl --fail \"https://api.github.com/meta\")\""
         GITHUB_IPS=($(jq -r ".web[]" <<<"$GITHUB_META"))
     fi
     OUTPUT_ALLOW=(
         "${APT_SOURCE_HOSTS[@]}"
-        "${ACCEPT_OUTPUT_HOSTS[@]}"
+        "${LK_ACCEPT_OUTPUT_HOSTS[@]}"
         ${GITHUB_IPS[@]+"${GITHUB_IPS[@]}"}
     )
     OUTPUT_ALLOW_IPV4=()
@@ -1023,7 +999,7 @@ ip6tables-restore <<EOF
 -A ${P}reject -j REJECT --reject-with icmp6-adm-prohibited
 COMMIT
 EOF
-if [ "$REJECT_OUTPUT" = "N" ]; then
+if [ "$LK_REJECT_OUTPUT" = "N" ]; then
     iptables -A "${P}output" -j ACCEPT
 else
     for IPV4 in "${OUTPUT_ALLOW_IPV4[@]}"; do
@@ -1033,10 +1009,10 @@ else
         command ip6tables -A "${P}output" -d "$IPV6" -j ACCEPT
     done
 fi
-if [ "$SSH_TRUSTED_ONLY" = "N" ] || [ -z "$TRUSTED_IP_ADDRESSES" ]; then
+if [ "$LK_SSH_TRUSTED_ONLY" = "N" ] || [ -z "$LK_TRUSTED_IP_ADDRESSES" ]; then
     iptables -A "${P}trusted" -j ACCEPT
 else
-    for IP in ${TRUSTED_IP_ADDRESSES[*]//,/ }; do
+    for IP in ${LK_TRUSTED_IP_ADDRESSES[*]//,/ }; do
         if is_ipv4 "$IP"; then
             command iptables -A "${P}trusted" -s "$IP" -j ACCEPT
         elif is_ipv6 "$IP"; then
@@ -1048,8 +1024,8 @@ fi
 lk_console_message "Configuring logrotate"
 edit_file "/etc/logrotate.conf" "^#?su( .*)?\$" "su root adm" "su root adm"
 
-lk_console_message "Setting system timezone to '$NODE_TIMEZONE'"
-timedatectl set-timezone "$NODE_TIMEZONE"
+lk_console_message "Setting system timezone to '$LK_NODE_TIMEZONE'"
+timedatectl set-timezone "$LK_NODE_TIMEZONE"
 
 lk_console_message "Configuring apt-listchanges"
 lk_file_keep_original "/etc/apt/listchanges.conf"
@@ -1101,7 +1077,7 @@ PACKAGES=(
     postfix
     certbot
 )
-case ",$NODE_SERVICES," in
+case ",$LK_NODE_SERVICES," in
 *,apache+php,*)
     PACKAGES+=(
         #
@@ -1193,27 +1169,27 @@ lk_keep_trying apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -q update
 [ ${#REPOS[@]} -eq 0 ] || lk_keep_trying apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -yq upgrade
 lk_keep_trying apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -yq install "${PACKAGES[@]}"
 
-if [ -n "$HOST_DOMAIN" ]; then
+if [ -n "$LK_HOST_DOMAIN" ]; then
     COPY_SKEL=0
     PHP_FPM_POOL_USER="www-data"
-    id "$HOST_ACCOUNT" >/dev/null 2>&1 || {
-        lk_console_message "Creating user account '$HOST_ACCOUNT'"
-        useradd --no-create-home --home-dir "/srv/www/$HOST_ACCOUNT" --shell "/bin/bash" "$HOST_ACCOUNT"
+    id "$LK_HOST_ACCOUNT" >/dev/null 2>&1 || {
+        lk_console_message "Creating user account '$LK_HOST_ACCOUNT'"
+        useradd --no-create-home --home-dir "/srv/www/$LK_HOST_ACCOUNT" --shell "/bin/bash" "$LK_HOST_ACCOUNT"
         COPY_SKEL=1
-        PHP_FPM_POOL_USER="$HOST_ACCOUNT"
+        PHP_FPM_POOL_USER="$LK_HOST_ACCOUNT"
         APACHE_MODS=(
             qos
             unique_id # used by "qos"
         )
     }
-    HOST_ACCOUNT_GROUP="$(id -gn "$HOST_ACCOUNT")"
-    install -v -d -m 00750 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT"
-    install -v -d -m 00750 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/public_html"
-    install -v -d -m 00750 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/ssl"
-    install -v -d -m 02750 -g "$HOST_ACCOUNT_GROUP" "/srv/www/$HOST_ACCOUNT/log"
+    HOST_ACCOUNT_GROUP="$(id -gn "$LK_HOST_ACCOUNT")"
+    install -v -d -m 00750 -o "$LK_HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$LK_HOST_ACCOUNT"
+    install -v -d -m 00750 -o "$LK_HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$LK_HOST_ACCOUNT/public_html"
+    install -v -d -m 00750 -o "$LK_HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" "/srv/www/$LK_HOST_ACCOUNT/ssl"
+    install -v -d -m 02750 -g "$HOST_ACCOUNT_GROUP" "/srv/www/$LK_HOST_ACCOUNT/log"
     [ "$COPY_SKEL" -eq 0 ] || {
-        cp -nRTv "/etc/skel.${PATH_PREFIX%-}" "/srv/www/$HOST_ACCOUNT" &&
-            chown -R "$HOST_ACCOUNT": "/srv/www/$HOST_ACCOUNT" || exit
+        cp -nRTv "/etc/skel.${LK_PATH_PREFIX%-}" "/srv/www/$LK_HOST_ACCOUNT" &&
+            chown -R "$LK_HOST_ACCOUNT": "/srv/www/$LK_HOST_ACCOUNT" || exit
     }
     ! lk_dpkg_installed apache2 || {
         lk_console_message "Adding user 'www-data' to group '$HOST_ACCOUNT_GROUP'"
@@ -1221,9 +1197,9 @@ if [ -n "$HOST_DOMAIN" ]; then
     }
 fi
 
-if [ -n "$NODE_PACKAGES" ]; then
+if [ -n "$LK_NODE_PACKAGES" ]; then
     lk_console_message "Installing additional packages"
-    lk_keep_trying apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -yq install ${NODE_PACKAGES//,/ }
+    lk_keep_trying apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -yq install ${LK_NODE_PACKAGES//,/ }
 fi
 
 if lk_dpkg_installed fail2ban; then
@@ -1233,23 +1209,23 @@ if lk_dpkg_installed fail2ban; then
     EDIT_FILE_LOG=N edit_file "$FILE" \
         "^#?backend$S*=($S*(pyinotify|gamin|polling|systemd|auto))?($S*; .*)?\$" \
         "backend = systemd\3"
-    [ -z "$TRUSTED_IP_ADDRESSES" ] ||
+    [ -z "$LK_TRUSTED_IP_ADDRESSES" ] ||
         EDIT_FILE_LOG=N edit_file "$FILE" \
             "^#?ignoreip$S*=($S*[^#]+)?($S*; .*)?\$" \
-            "ignoreip = 127.0.0.1\\/8 ::1 ${TRUSTED_IP_ADDRESSES//\//\\\/}\2"
+            "ignoreip = 127.0.0.1\\/8 ::1 ${LK_TRUSTED_IP_ADDRESSES//\//\\\/}\2"
     lk_console_file "$FILE"
 fi
 
 if lk_dpkg_installed postfix; then
     lk_console_message "Binding Postfix to the loopback interface"
     postconf -e "inet_interfaces = loopback-only"
-    if [ -n "$EMAIL_BLACKHOLE" ]; then
-        lk_console_message "Configuring Postfix to map all recipient addresses to '$EMAIL_BLACKHOLE'"
+    if [ -n "$LK_EMAIL_BLACKHOLE" ]; then
+        lk_console_message "Configuring Postfix to map all recipient addresses to '$LK_EMAIL_BLACKHOLE'"
         postconf -e "recipient_canonical_maps = static:blackhole"
         cat <<EOF >>"/etc/aliases"
 
 # Added by ${0##*/} at $(lk_date_log)
-blackhole:	$EMAIL_BLACKHOLE
+blackhole:	$LK_EMAIL_BLACKHOLE
 EOF
         newaliases
     fi
@@ -1316,14 +1292,14 @@ if lk_dpkg_installed apache2; then
     }
 
     lk_console_message "Configuring Apache HTTPD to serve PHP-FPM virtual hosts"
-    cat <<EOF >"/etc/apache2/sites-available/${PATH_PREFIX}default.conf"
+    cat <<EOF >"/etc/apache2/sites-available/${LK_PATH_PREFIX}default.conf"
 <IfModule event.c>
     MaxRequestWorkers 300
     ThreadsPerChild 25
 </IfModule>
 <Macro RequireTrusted>
-    Require local${TRUSTED_IP_ADDRESSES:+
-    Require ip ${TRUSTED_IP_ADDRESSES//,/ }}
+    Require local${LK_TRUSTED_IP_ADDRESSES:+
+    Require ip ${LK_TRUSTED_IP_ADDRESSES//,/ }}
 </Macro>
 # Add 'Use Staging' to virtual hosts search engines should ignore
 <Macro Staging>
@@ -1349,7 +1325,7 @@ Use PublicDirectory /srv/www/*/*/public_html
     ExtendedStatus On
 </IfModule>
 <VirtualHost *:80>
-    ServerAdmin $ADMIN_EMAIL
+    ServerAdmin $LK_ADMIN_EMAIL
     DocumentRoot /var/www/html
     ErrorLog \${APACHE_LOG_DIR}/error.log
     CustomLog \${APACHE_LOG_DIR}/access.log combined
@@ -1373,7 +1349,7 @@ Use PublicDirectory /srv/www/*/*/public_html
     </IfModule>
 </VirtualHost>
 <Macro PhpFpmVirtualHostCustom${PHPVER//./} %sitename% %customroot%>
-    ServerAdmin $ADMIN_EMAIL
+    ServerAdmin $LK_ADMIN_EMAIL
     DocumentRoot /srv/www/%sitename%%customroot%public_html
     Alias /php-opcache /opt/opcache-gui
     ErrorLog /srv/www/%sitename%%customroot%log/error.log
@@ -1390,7 +1366,7 @@ Use PublicDirectory /srv/www/*/*/public_html
         RewriteRule ^/php-fpm-(status|ping)\$ - [END]
     </IfModule>
     <IfModule mod_alias.c>
-        RedirectMatch 404 .*/\.(git|svn|${PATH_PREFIX}settings)
+        RedirectMatch 404 .*/\.(git|svn|${LK_PATH_PREFIX}settings)
     </IfModule>
 </Macro>
 <Macro PhpFpmVirtualHost${PHPVER//./} %sitename%>
@@ -1412,69 +1388,69 @@ Use PublicDirectory /srv/www/*/*/public_html
 </Macro>
 EOF
     rm -f "/etc/apache2/sites-enabled"/*
-    ln -s "../sites-available/${PATH_PREFIX}default.conf" "/etc/apache2/sites-enabled/000-${PATH_PREFIX}default.conf"
-    lk_console_file "/etc/apache2/sites-available/${PATH_PREFIX}default.conf"
+    ln -s "../sites-available/${LK_PATH_PREFIX}default.conf" "/etc/apache2/sites-enabled/000-${LK_PATH_PREFIX}default.conf"
+    lk_console_file "/etc/apache2/sites-available/${LK_PATH_PREFIX}default.conf"
 
     lk_console_message "Disabling pre-installed PHP-FPM pools"
     lk_file_keep_original "/etc/php/$PHPVER/fpm/pool.d"
     rm -f "/etc/php/$PHPVER/fpm/pool.d"/*.conf
 
-    if [ -n "$HOST_DOMAIN" ]; then
-        lk_console_message "Adding site to Apache HTTPD: $HOST_DOMAIN"
-        cat <<EOF >"/etc/apache2/sites-available/$HOST_ACCOUNT.conf"
+    if [ -n "$LK_HOST_DOMAIN" ]; then
+        lk_console_message "Adding site to Apache HTTPD: $LK_HOST_DOMAIN"
+        cat <<EOF >"/etc/apache2/sites-available/$LK_HOST_ACCOUNT.conf"
 <VirtualHost *:80>
-    ServerName $HOST_DOMAIN
-    ServerAlias www.$HOST_DOMAIN
-    Use PhpFpmVirtualHost${PHPVER//./} $HOST_ACCOUNT
+    ServerName $LK_HOST_DOMAIN
+    ServerAlias www.$LK_HOST_DOMAIN
+    Use PhpFpmVirtualHost${PHPVER//./} $LK_HOST_ACCOUNT
 </VirtualHost>
 <VirtualHost *:443>
-    ServerName $HOST_DOMAIN
-    ServerAlias www.$HOST_DOMAIN
-    Use PhpFpmVirtualHostSsl${PHPVER//./} $HOST_ACCOUNT
+    ServerName $LK_HOST_DOMAIN
+    ServerAlias www.$LK_HOST_DOMAIN
+    Use PhpFpmVirtualHostSsl${PHPVER//./} $LK_HOST_ACCOUNT
     SSLEngine on
-    SSLCertificateFile /srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.cert
-    SSLCertificateKeyFile /srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.key
+    SSLCertificateFile /srv/www/$LK_HOST_ACCOUNT/ssl/$LK_HOST_DOMAIN.cert
+    SSLCertificateKeyFile /srv/www/$LK_HOST_ACCOUNT/ssl/$LK_HOST_DOMAIN.key
 </VirtualHost>
 # PhpFpmProxy${PHPVER//./} %sitename% %timeout%
 #   %timeout% should correlate with \`request_terminate_timeout\`
-#   in /etc/php/$PHPVER/fpm/pool.d/$HOST_ACCOUNT.conf
-Use PhpFpmProxy${PHPVER//./} $HOST_ACCOUNT 300
+#   in /etc/php/$PHPVER/fpm/pool.d/$LK_HOST_ACCOUNT.conf
+Use PhpFpmProxy${PHPVER//./} $LK_HOST_ACCOUNT 300
 EOF
-        install -m 00640 -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/error.log"
-        install -m 00640 -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/access.log"
-        install -m 00640 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.cert"
-        install -m 00640 -o "$HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.key"
+        install -m 00640 -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$LK_HOST_ACCOUNT/log/error.log"
+        install -m 00640 -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$LK_HOST_ACCOUNT/log/access.log"
+        install -m 00640 -o "$LK_HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$LK_HOST_ACCOUNT/ssl/$LK_HOST_DOMAIN.cert"
+        install -m 00640 -o "$LK_HOST_ACCOUNT" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$LK_HOST_ACCOUNT/ssl/$LK_HOST_DOMAIN.key"
 
-        lk_console_message "Creating a self-signed SSL certificate for '$HOST_DOMAIN'"
+        lk_console_message "Creating a self-signed SSL certificate for '$LK_HOST_DOMAIN'"
         OPENSSL_CONF=$(cat /etc/ssl/openssl.cnf)
         OPENSSL_EXT_CONF=$(printf '\n%s' \
             "[ san ]" \
-            "subjectAltName = DNS:$HOST_DOMAIN, DNS:www.$HOST_DOMAIN")
+            "subjectAltName = DNS:$LK_HOST_DOMAIN, DNS:www.$LK_HOST_DOMAIN")
         openssl genrsa \
-            -out "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.key" \
+            -out "/srv/www/$LK_HOST_ACCOUNT/ssl/$LK_HOST_DOMAIN.key" \
             2048
         openssl req -new \
-            -key "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.key" \
-            -subj "/CN=$HOST_DOMAIN" \
+            -key "/srv/www/$LK_HOST_ACCOUNT/ssl/$LK_HOST_DOMAIN.key" \
+            -subj "/CN=$LK_HOST_DOMAIN" \
             -reqexts san \
             -config <(cat <<<"$OPENSSL_CONF$OPENSSL_EXT_CONF") \
-            -out "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.csr"
+            -out "/srv/www/$LK_HOST_ACCOUNT/ssl/$LK_HOST_DOMAIN.csr"
         openssl x509 -req -days 365 \
-            -in "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.csr" \
+            -in "/srv/www/$LK_HOST_ACCOUNT/ssl/$LK_HOST_DOMAIN.csr" \
             -extensions san \
             -extfile <(cat <<<"$OPENSSL_EXT_CONF") \
-            -signkey "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.key" \
-            -out "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.cert"
-        rm -f "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.csr"
+            -signkey "/srv/www/$LK_HOST_ACCOUNT/ssl/$LK_HOST_DOMAIN.key" \
+            -out "/srv/www/$LK_HOST_ACCOUNT/ssl/$LK_HOST_DOMAIN.cert"
+        rm -f "/srv/www/$LK_HOST_ACCOUNT/ssl/$LK_HOST_DOMAIN.csr"
 
         lk_console_detail "Adding self-signed certificate to local trust store"
-        install -v -m 00644 "/srv/www/$HOST_ACCOUNT/ssl/$HOST_DOMAIN.cert" \
-            "/usr/local/share/ca-certificates/$HOST_DOMAIN.crt"
+        install -v -m 00644 "/srv/www/$LK_HOST_ACCOUNT/ssl/$LK_HOST_DOMAIN.cert" \
+            "/usr/local/share/ca-certificates/$LK_HOST_DOMAIN.crt"
         update-ca-certificates
 
-        [ "$HOST_SITE_ENABLE" = "N" ] ||
-            ln -s "../sites-available/$HOST_ACCOUNT.conf" "/etc/apache2/sites-enabled/$HOST_ACCOUNT.conf"
-        lk_console_file "/etc/apache2/sites-available/$HOST_ACCOUNT.conf"
+        [ "$LK_HOST_SITE_ENABLE" = "N" ] ||
+            ln -s "../sites-available/$LK_HOST_ACCOUNT.conf" "/etc/apache2/sites-enabled/$LK_HOST_ACCOUNT.conf"
+        lk_console_file "/etc/apache2/sites-available/$LK_HOST_ACCOUNT.conf"
 
         lk_console_message "Configuring PHP-FPM umask for group-writable files"
         FILE="/etc/systemd/system/php$PHPVER-fpm.service.d/override.conf"
@@ -1486,12 +1462,12 @@ EOF
         systemctl daemon-reload
         lk_console_file "$FILE"
 
-        lk_console_message "Adding pool to PHP-FPM: $HOST_ACCOUNT"
-        cat <<EOF >"/etc/php/$PHPVER/fpm/pool.d/$HOST_ACCOUNT.conf"
-; Values in /etc/apache2/sites-available/$HOST_ACCOUNT.conf and/or
-; /etc/mysql/mariadb.conf.d/90-${PATH_PREFIX}defaults.cnf should be updated
+        lk_console_message "Adding pool to PHP-FPM: $LK_HOST_ACCOUNT"
+        cat <<EOF >"/etc/php/$PHPVER/fpm/pool.d/$LK_HOST_ACCOUNT.conf"
+; Values in /etc/apache2/sites-available/$LK_HOST_ACCOUNT.conf and/or
+; /etc/mysql/mariadb.conf.d/90-${LK_PATH_PREFIX}defaults.cnf should be updated
 ; if \`request_terminate_timeout\` or \`pm.max_children\` are changed here
-[$HOST_ACCOUNT]
+[$LK_HOST_ACCOUNT]
 user = $PHP_FPM_POOL_USER
 listen = /run/php/php$PHPVER-fpm-\$pool.sock
 listen.owner = www-data
@@ -1510,9 +1486,9 @@ pm.status_path = /php-fpm-status
 ping.path = /php-fpm-ping
 access.log = "/srv/www/\$pool/log/php$PHPVER-fpm.access.log"
 access.format = "%{REMOTE_ADDR}e - %u %t \"%m %r%Q%q\" %s %f %{mili}d %{kilo}M %C%%"
-catch_workers_output = yes${OPCACHE_MEMORY_CONSUMPTION:+
+catch_workers_output = yes${LK_OPCACHE_MEMORY_CONSUMPTION:+
 ; tune based on system resources
-php_admin_value[opcache.memory_consumption] = $OPCACHE_MEMORY_CONSUMPTION}
+php_admin_value[opcache.memory_consumption] = $LK_OPCACHE_MEMORY_CONSUMPTION}
 php_admin_value[opcache.file_cache] = "/srv/www/.opcache/\$pool"
 php_admin_flag[opcache.validate_permission] = On
 php_admin_value[error_log] = "/srv/www/\$pool/log/php$PHPVER-fpm.error.log"
@@ -1530,18 +1506,18 @@ env[TMPDIR] = "/srv/www/.tmp/\$pool"
 ;php_admin_flag[xdebug.remote_connect_back] = On
 ;php_admin_value[xdebug.remote_log] = "/srv/www/\$pool/log/php$PHPVER-fpm.xdebug.log"
 EOF
-        install -v -d -m 02750 -o "$PHP_FPM_POOL_USER" -g "$HOST_ACCOUNT_GROUP" "/srv/www/.opcache/$HOST_ACCOUNT"
-        install -v -d -m 02770 -o "$PHP_FPM_POOL_USER" -g "$HOST_ACCOUNT_GROUP" "/srv/www/.tmp/$HOST_ACCOUNT"
-        install -m 00640 -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/php$PHPVER-fpm.access.log"
-        install -m 00640 -o "$PHP_FPM_POOL_USER" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/php$PHPVER-fpm.error.log"
-        install -m 00640 -o "$PHP_FPM_POOL_USER" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$HOST_ACCOUNT/log/php$PHPVER-fpm.xdebug.log"
-        lk_console_file "/etc/php/$PHPVER/fpm/pool.d/$HOST_ACCOUNT.conf"
+        install -v -d -m 02750 -o "$PHP_FPM_POOL_USER" -g "$HOST_ACCOUNT_GROUP" "/srv/www/.opcache/$LK_HOST_ACCOUNT"
+        install -v -d -m 02770 -o "$PHP_FPM_POOL_USER" -g "$HOST_ACCOUNT_GROUP" "/srv/www/.tmp/$LK_HOST_ACCOUNT"
+        install -m 00640 -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$LK_HOST_ACCOUNT/log/php$PHPVER-fpm.access.log"
+        install -m 00640 -o "$PHP_FPM_POOL_USER" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$LK_HOST_ACCOUNT/log/php$PHPVER-fpm.error.log"
+        install -m 00640 -o "$PHP_FPM_POOL_USER" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$LK_HOST_ACCOUNT/log/php$PHPVER-fpm.xdebug.log"
+        lk_console_file "/etc/php/$PHPVER/fpm/pool.d/$LK_HOST_ACCOUNT.conf"
     fi
 
     lk_console_message "Adding virtual host log files to logrotate.d"
     mv -v "/etc/logrotate.d/apache2" "/etc/logrotate.d/apache2.disabled"
     mv -v "/etc/logrotate.d/php$PHPVER-fpm" "/etc/logrotate.d/php$PHPVER-fpm.disabled"
-    cat <<EOF >"/etc/logrotate.d/${PATH_PREFIX}log"
+    cat <<EOF >"/etc/logrotate.d/${LK_PATH_PREFIX}log"
 /var/log/apache2/*.log /var/log/php$PHPVER-fpm.log /srv/www/*/log/*.log {
     daily
     missingok
@@ -1564,39 +1540,39 @@ EOF
 fi
 
 if lk_dpkg_installed mariadb-server; then
-    FILE="/etc/mysql/mariadb.conf.d/90-${PATH_PREFIX}defaults.cnf"
+    FILE="/etc/mysql/mariadb.conf.d/90-${LK_PATH_PREFIX}defaults.cnf"
     cat <<EOF >"$FILE"
 [mysqld]
 # must exceed the sum of pm.max_children across all PHP-FPM pools
-max_connections = 301${INNODB_BUFFER_SIZE:+
+max_connections = 301${LK_INNODB_BUFFER_SIZE:+
 
-innodb_buffer_pool_size = $INNODB_BUFFER_SIZE
-innodb_buffer_pool_instances = $(((${INNODB_BUFFER_SIZE%M} - 1) / 1024 + 1))
+innodb_buffer_pool_size = $LK_INNODB_BUFFER_SIZE
+innodb_buffer_pool_instances = $(((${LK_INNODB_BUFFER_SIZE%M} - 1) / 1024 + 1))
 innodb_buffer_pool_dump_at_shutdown = 1
 innodb_buffer_pool_load_at_startup = 1}
 EOF
     lk_console_file "$FILE"
     lk_console_message "Starting mysql.service (MariaDB)"
     systemctl start mysql.service
-    if [ -n "$MYSQL_USERNAME" ]; then
-        MYSQL_PASSWORD="${MYSQL_PASSWORD//\\/\\\\}"
-        MYSQL_PASSWORD="${MYSQL_PASSWORD//\'/\\\'}"
-        lk_console_message "Creating MySQL administrator '$MYSQL_USERNAME'"
+    if [ -n "$LK_MYSQL_USERNAME" ]; then
+        LK_MYSQL_PASSWORD="${LK_MYSQL_PASSWORD//\\/\\\\}"
+        LK_MYSQL_PASSWORD="${LK_MYSQL_PASSWORD//\'/\\\'}"
+        lk_console_message "Creating MySQL administrator '$LK_MYSQL_USERNAME'"
         echo "\
 GRANT ALL PRIVILEGES ON *.* \
-TO '$MYSQL_USERNAME'@'localhost' \
-IDENTIFIED BY '$MYSQL_PASSWORD' \
+TO '$LK_MYSQL_USERNAME'@'localhost' \
+IDENTIFIED BY '$LK_MYSQL_PASSWORD' \
 WITH GRANT OPTION" | mysql -uroot
     fi
 
     lk_console_message "Configuring MySQL account self-service"
-    install -m 00440 /dev/null "/etc/sudoers.d/${PATH_PREFIX}mysql-self-service"
-    cat <<EOF >"/etc/sudoers.d/${PATH_PREFIX}mysql-self-service"
+    install -m 00440 /dev/null "/etc/sudoers.d/${LK_PATH_PREFIX}mysql-self-service"
+    cat <<EOF >"/etc/sudoers.d/${LK_PATH_PREFIX}mysql-self-service"
 ALL ALL=(root) NOPASSWD:$LK_BASE/bin/lk-mysql-grant.sh
 EOF
-    lk_console_file "/etc/sudoers.d/${PATH_PREFIX}mysql-self-service"
+    lk_console_file "/etc/sudoers.d/${LK_PATH_PREFIX}mysql-self-service"
 
-    # TODO: create $HOST_ACCOUNT database
+    # TODO: create $LK_HOST_ACCOUNT database
 fi
 
 if lk_dpkg_installed memcached; then
@@ -1604,8 +1580,8 @@ if lk_dpkg_installed memcached; then
     FILE="/etc/memcached.conf"
     edit_file "$FILE" \
         "^#?(-m$S+|--memory-limit(=|$S+))[0-9]+$S*\$" \
-        "\1$MEMCACHED_MEMORY_LIMIT" \
-        "-m $MEMCACHED_MEMORY_LIMIT"
+        "\1$LK_MEMCACHED_MEMORY_LIMIT" \
+        "-m $LK_MEMCACHED_MEMORY_LIMIT"
 fi
 
 lk_console_message "Saving iptables rules"
@@ -1620,5 +1596,5 @@ apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -yq autoremove
 lk_hosting_configure_backup
 
 lk_console_message "Provisioning complete"
-lk_console_detail "Running:" "shutdown --$SHUTDOWN_ACTION +$SHUTDOWN_DELAY"
-shutdown --"$SHUTDOWN_ACTION" +"$SHUTDOWN_DELAY"
+lk_console_detail "Running:" "shutdown --$LK_SHUTDOWN_ACTION +$LK_SHUTDOWN_DELAY"
+shutdown --"$LK_SHUTDOWN_ACTION" +"$LK_SHUTDOWN_DELAY"

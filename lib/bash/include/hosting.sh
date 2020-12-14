@@ -43,7 +43,7 @@ function lk_hosting_configure_backup() {
         lk_crontab_remove "$REGEX"
     else
         # If LK_AUTO_BACKUP_SCHEDULE is not set, default to "0 1 * * *" (daily
-        # at 1 a.m.) unless AUTO_REBOOT is enabled, in which case default to
+        # at 1 a.m.) unless LK_AUTO_REBOOT is enabled, in which case default to
         # "((REBOOT_MINUTE)) ((REBOOT_HOUR - 1)) * * *" (daily, 1 hour before
         # any automatic reboots)
         [ -n "$BACKUP_SCHEDULE" ] || ! lk_is_true AUTO_REBOOT ||

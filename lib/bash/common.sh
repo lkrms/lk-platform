@@ -1,11 +1,7 @@
 #!/bin/bash
 # shellcheck disable=SC1090,SC2001,SC2016,SC2046,SC2120,SC2207
 
-_LK_ENV=$(
-    _env() { [ -n "${!1+1}" ] && echo "${!1}."; }
-    declare -f _env
-    echo "${_LK_ENV:-$(declare -x)}"
-)
+_LK_ENV=${_LK_ENV:-$(declare -x)}
 
 lk_die() { s=$? && echo "${BASH_SOURCE[0]}: $1" >&2 &&
     (return $s) && false || exit; }
@@ -164,12 +160,6 @@ function lk_getopt() {
     [ "$ARGC" -gt 0 ] || shift
     OPTS+=("$@")
     LK_GETOPT=$(lk_quote OPTS)
-}
-
-function lk_get_env() {
-    local SH VAR
-    SH=$(printf '%s\n' "$_LK_ENV" '_env "$1"')
-    VAR=$(env -i bash -c "$SH" bash "$1") && echo "${VAR%.}"
 }
 
 if ! lk_is_true LK_NO_SOURCE_FILE; then

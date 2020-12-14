@@ -398,12 +398,12 @@ Example:
         --arg adminEmail "${LK_ADMIN_EMAIL:-root@$NODE_FQDN}" \
         --arg autoReboot "${LK_AUTO_REBOOT:-Y}" \
         '{
-    "NODE_HOSTNAME": $nodeHostname,
-    "NODE_FQDN": $nodeFqdn,
-    "HOST_DOMAIN": $hostDomain,
-    "HOST_ACCOUNT": $hostAccount,
-    "ADMIN_EMAIL": $adminEmail,
-    "AUTO_REBOOT": $autoReboot
+    "LK_NODE_HOSTNAME": $nodeHostname,
+    "LK_NODE_FQDN": $nodeFqdn,
+    "LK_HOST_DOMAIN": $hostDomain,
+    "LK_HOST_ACCOUNT": $hostAccount,
+    "LK_ADMIN_EMAIL": $adminEmail,
+    "LK_AUTO_REBOOT": $autoReboot
 }'"${4:+ + $4}")
     ROOT_PASS=$(lk_random_password 64)
     ARGS=(
