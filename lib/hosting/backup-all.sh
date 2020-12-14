@@ -35,6 +35,7 @@ lk_log_output
     BASE_DIRS=(
         ${LK_BACKUP_BASE_DIRS:-/srv/www}
     )
+    lk_remove_missing BASE_DIRS
     lk_resolve_files BASE_DIRS
     [ ${#BASE_DIRS[@]} -gt 0 ] ||
         lk_die "no base directories found"

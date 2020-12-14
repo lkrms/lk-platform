@@ -146,6 +146,7 @@ function lk_ssh_list_hosts() {
         ) || true
         unset IFS
         lk_expand_paths FILES &&
+            lk_remove_missing FILES &&
             lk_resolve_files FILES || return
     done
     [ ${#FILES[@]} -eq 0 ] || {

@@ -6,11 +6,31 @@ function lk_git_quiet() {
     [ "${LK_GIT_QUIET:-0}" -ne 0 ]
 }
 
-function lk_git_is_in_work_tree() {
+function lk_git_is_work_tree() {
     local RESULT
-    RESULT=$(cd "${1:-.}" &&
+    RESULT=$({ [ -z "${1:-}" ] || cd "$1"; } &&
         git rev-parse --is-inside-work-tree 2>/dev/null) &&
         lk_is_true RESULT
+}
+
+function lk_git_is_submodule() {
+    local RESULT
+    RESULT=$({ [ -z "${1:-}" ] || cd "$1"; } &&
+        git rev-parse --show-superproject-working-tree) &&
+        [ -n "$RESULT" ]
+}
+
+function lk_git_is_top_level() {
+    local RESULT
+    RESULT=$({ [ -z "${1:-}" ] || cd "$1"; } &&
+        git rev-parse --show-prefix) &&
+        [ -z "$RESULT" ]
+}
+
+function lk_git_is_project_top_level() {
+    lk_git_is_work_tree "${1:-}" &&
+        ! lk_git_is_submodule "${1:-}" &&
+        lk_git_is_top_level "${1:-}"
 }
 
 # lk_git_get_repos ARRAY [DIR...]
@@ -18,30 +38,32 @@ function lk_git_is_in_work_tree() {
 # Populate ARRAY with the path to the top-level working directory of each git
 # repository found in DIR or the current directory.
 function lk_git_get_repos() {
-    local _LK_GIT_REPO _LK_GIT_ROOT
+    local _LK_GIT_REPO _LK_GIT_ROOTS=(.) _lk_i=0
     lk_is_identifier "$1" || lk_warn "not a valid identifier: $1" || return
-    [ $# -lt 2 ] || for _LK_GIT_ROOT in "${@:2}"; do
-        [ "${_LK_GIT_ROOT:0:1}" != - ] ||
-            lk_warn "illegal directory: $_LK_GIT_ROOT" || return
-    done
+    [ $# -lt 2 ] || {
+        lk_paths_exist "${@:2}" || lk_warn "directory not found" || return
+        _LK_GIT_ROOTS=("${@:2}")
+        lk_resolve_files _LK_GIT_ROOTS
+    }
     eval "$1=()"
-    while IFS= read -rd $'\0' _LK_GIT_REPO; do
-        lk_git_is_in_work_tree "$_LK_GIT_REPO" || continue
-        eval "$1+=(\"\$_LK_GIT_REPO\")"
+    while IFS= read -rd '' _LK_GIT_REPO; do
+        lk_git_is_work_tree "$_LK_GIT_REPO" || continue
+        eval "$1[$((_lk_i++))]=\$_LK_GIT_REPO"
     done < <(
-        ROOTS=(.)
-        [ $# -lt 2 ] || ROOTS=("${@:2}")
-        find -L "${ROOTS[@]}" \
+        find -L "${_LK_GIT_ROOTS[@]}" \
             -type d -exec test -d "{}/.git" \; -print0 -prune |
             sort -z
     )
 }
 
 function lk_git_with_repos() {
-    local PARALLEL REPO_COMMAND REPO ERROR_COUNT=0 \
+    local PARALLEL GIT_SSH_COMMAND REPO_COMMAND FD REPO ERROR_COUNT=0 \
         REPOS=(${LK_GIT_REPOS[@]+"${LK_GIT_REPOS[@]}"})
     [ "${1:-}" != -p ] || {
-        ! lk_bash_at_least 4 3 || PARALLEL=1
+        ! lk_bash_at_least 4 3 || {
+            PARALLEL=1
+            export GIT_SSH_COMMAND="ssh -o ControlPath=none"
+        }
         shift
     }
     REPO_COMMAND=("$@")
@@ -51,28 +73,41 @@ Usage: $(lk_myself -f) [-p] COMMAND [ARG...]
 For each Git repository in the directory hierarchy rooted at \".\", run COMMAND in
 the working tree's top-level directory. If -p is set, process multiple
 repositories simultaneously." || return
-    lk_git_quiet || lk_console_message "Finding repositories"
-    [ ${#REPOS[@]} -gt 0 ] || lk_git_get_repos REPOS
-    [ ${#REPOS[@]} -gt 0 ] || lk_warn "no repos found" || return
-    lk_resolve_files REPOS || return
-    lk_git_quiet ||
-        LK_TTY_NO_FOLD=1 lk_console_detail "Command:" "${REPO_COMMAND[*]}"
-    lk_git_quiet ||
-        lk_echo_array REPOS | lk_console_detail_list "Repositories:" repo repos
-    lk_git_quiet || lk_confirm "Proceed?" Y || return
+    if [ ${#REPOS[@]} -gt 0 ]; then
+        lk_test_many lk_git_is_top_level "${REPOS[@]}" ||
+            lk_warn "each element of LK_GIT_REPOS must be the top-level directory \
+of a working tree" || return
+        lk_resolve_files REPOS
+    else
+        lk_git_quiet || lk_console_message "Finding repositories"
+        lk_git_get_repos REPOS
+        [ ${#REPOS[@]} -gt 0 ] || lk_warn "no repos found" || return
+    fi
+    lk_git_quiet || {
+        lk_console_detail "Command:" $'\n'"${REPO_COMMAND[*]}"
+        lk_echo_array REPOS | lk_pretty_path |
+            lk_console_detail_list "Repositories:" repo repos
+        lk_confirm "Proceed?" Y || return
+    }
     if lk_is_true PARALLEL; then
+        FD=$(lk_next_fd) &&
+            eval "exec $FD>&2 2>/dev/null" || return
         for REPO in "${REPOS[@]}"; do
             (
-                exec 2>&4
-                cd "$REPO" || exit
+                exec 2>&"$FD" &&
+                    cd "$REPO" || exit
                 EXIT_STATUS=0
                 SH=$(lk_get_outputs_of "${REPO_COMMAND[@]}") ||
                     EXIT_STATUS=$?
-                eval "$SH"
-                lk_git_quiet || MESSAGE=$(
+                eval "$SH" || exit
+                lk_git_quiet && [ "$EXIT_STATUS" -eq 0 ] || echo "$(
                     unset _LK_FD
+                    LK_TTY_NO_FOLD=1
                     {
                         lk_console_item "Processed:" "$REPO"
+                        [ "$EXIT_STATUS" -eq 0 ] ||
+                            lk_console_error \
+                                "Exit status:" "$EXIT_STATUS"
                         [ -z "$_STDOUT" ] ||
                             LK_TTY_COLOUR2=$LK_GREEN \
                                 lk_console_detail "Output:" \
@@ -81,17 +116,13 @@ repositories simultaneously." || return
                             LK_TTY_COLOUR2=$LK_RED \
                                 lk_console_detail "Error output:" \
                                 $'\n'"$_STDERR"
-                        [ "$EXIT_STATUS" -eq 0 ] ||
-                            lk_console_detail \
-                                "Exit status:" "$EXIT_STATUS" "$LK_BOLD$LK_RED"
                     } 2>&1
-                )
-                # TODO: get a lock first?
-                echo "$MESSAGE" >&4
+                )" >&"$FD"
                 exit "$EXIT_STATUS"
             ) &
-        done 4>&2 2>/dev/null
-        while [ "$(jobs -p | wc -l)" -gt 0 ]; do
+        done
+        eval "exec 2>&$FD $FD>&-"
+        while [ -n "$(jobs -p)" ]; do
             wait -n 2>/dev/null || ((++ERROR_COUNT))
         done
     else

@@ -706,8 +706,8 @@ function _lk_array_fill_temp() {
 function _lk_array_action() {
     local _LK_COMMAND _LK_TEMP_ARRAY
     eval "_LK_COMMAND=($1)"
-    _lk_array_fill_temp "${@:2}"
-    "${_LK_COMMAND[@]}" ${_LK_TEMP_ARRAY[@]+"${_LK_TEMP_ARRAY[@]}"}
+    _lk_array_fill_temp "${@:2}" &&
+        "${_LK_COMMAND[@]}" ${_LK_TEMP_ARRAY[@]+"${_LK_TEMP_ARRAY[@]}"}
 }
 
 # lk_echo_args [-z] [ARG...]
@@ -1888,7 +1888,7 @@ function lk_dirs_exist() {
 # preserved.
 function lk_remove_false() {
     local _LK_TEMP_ARRAY _LK_TEST _LK_VAL _lk_i=0
-    _lk_array_fill_temp "$2"
+    _lk_array_fill_temp "$2" || return
     _LK_TEST="$(lk_replace '{}' '$_LK_VAL' "$1")"
     eval "$2=()"
     for _LK_VAL in ${_LK_TEMP_ARRAY[@]+"${_LK_TEMP_ARRAY[@]}"}; do
@@ -1905,15 +1905,13 @@ function lk_remove_missing() {
 
 # lk_resolve_files ARRAY
 #
-# Remove paths to missing files from ARRAY, then resolve remaining paths to
-# absolute file names and remove any duplicates.
+# Resolve paths in ARRAY to absolute file names and remove any duplicates.
 function lk_resolve_files() {
     local _LK_TEMP_ARRAY
-    lk_remove_missing "$1" || return
-    _lk_array_fill_temp "$1"
+    _lk_array_fill_temp "$1" || return
     lk_mapfile -z "$1" <(
         [ ${#_LK_TEMP_ARRAY[@]} -eq 0 ] ||
-            gnu_realpath -z "${_LK_TEMP_ARRAY[@]}" | sort -zu
+            gnu_realpath -zm "${_LK_TEMP_ARRAY[@]}" | sort -zu
     )
 }
 
@@ -1971,17 +1969,27 @@ function lk_expand_path() {
 # lk_expand_paths ARRAY
 function lk_expand_paths() {
     local _LK_TEMP_ARRAY
-    _lk_array_fill_temp "$1"
+    _lk_array_fill_temp "$1" || return
     lk_mapfile -z "$1" <(
         [ ${#_LK_TEMP_ARRAY[@]} -eq 0 ] ||
             lk_expand_path -z "${_LK_TEMP_ARRAY[@]}"
     )
 }
 
+# lk_pretty_path [-z] [PATH...]
 function lk_pretty_path() {
-    local _PATH=${1#~}
-    [ "$_PATH" = "$1" ] || _PATH="~$_PATH"
-    echo "$_PATH"
+    local _LK_NUL_DELIM=${_LK_NUL_DELIM-} _LK_NUL_READ=(-d '') DELIM
+    [ "${1:-}" != -z ] || { _LK_NUL_DELIM=1 && shift; }
+    DELIM=${_LK_NUL_DELIM:+'\0'}
+    # Piping to `while` creates a subshell, so we don't need to declare locals
+    { [ $# -gt 0 ] && lk_echo_args "$@" || cat; } |
+        while IFS= read -r ${_LK_NUL_DELIM:+"${_LK_NUL_READ[@]}"} _PATH; do
+            __PATH=$_PATH
+            [ "$_PATH" = "${_PATH#~}" ] || __PATH="~${_PATH#~}"
+            [ "$PWD" = / ] || [ "$PWD" = "$_PATH" ] || [[ $PWD = ~ ]] ||
+                [ "$_PATH" = "${_PATH#$PWD}" ] || __PATH=.${_PATH#$PWD}
+            printf "%s${DELIM:-\\n}" "$__PATH"
+        done
 }
 
 function lk_filter() {

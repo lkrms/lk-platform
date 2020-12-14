@@ -327,6 +327,7 @@
         ${SUDO_USER:+"$(lk_expand_path "~$SUDO_USER")"}
         "$@"
     )
+    lk_remove_missing LK_HOMES
     lk_resolve_files LK_HOMES
     [ ${#LK_HOMES[@]} -gt 0 ] || lk_die "No home directories found"
     lk_echo_array LK_HOMES |
