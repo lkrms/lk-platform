@@ -52,7 +52,7 @@ EOF
     fi
     . "$LK_BASE/lib/arch/packages.sh"
 
-    "$LK_BASE/bin/lk-platform-configure-system.sh" --no-log
+    "$LK_BASE/bin/lk-platform-configure.sh" --no-log
 
     PAC_TO_REMOVE=($(comm -12 <(pacman -Qq | sort -u) <(lk_echo_array PAC_REMOVE | sort -u)))
     [ ${#PAC_TO_REMOVE[@]} -eq 0 ] || {

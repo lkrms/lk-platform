@@ -70,7 +70,13 @@
 
     include=provision,git . "$LK_INST/lib/bash/common.sh"
 
+    LK_BIN_PATH=${LK_BIN_PATH:-/usr/local/bin}
+    LK_FILE_TAKE_BACKUP=${LK_FILE_TAKE_BACKUP-1}
+    LK_FILE_MOVE_BACKUP=1
+    LK_VERBOSE=${LK_VERBOSE-1}
+
     NEW_SETTINGS=()
+    unset ELEVATED
 
     lk_getopt "s:" "elevated,set:"
     eval "set -- $LK_GETOPT"
@@ -115,17 +121,17 @@
         lk_symlink lk-platform "$OLD_LK_INST"
     fi
 
+    lk_console_item "Checking setting:" "LK_PATH_PREFIX"
     LK_PATH_PREFIX=${LK_PATH_PREFIX:-${PATH_PREFIX:-${ORIGINAL_PATH_PREFIX:-}}}
     [ -n "$LK_PATH_PREFIX" ] || lk_no_input || {
-        lk_console_message "LK_PATH_PREFIX not set"
+        lk_console_detail "LK_PATH_PREFIX is not set"
         lk_console_detail \
             "Value must be 2-3 alphanumeric characters followed by a hyphen"
-        lk_console_detail "Suggestions:" "$(printf '%s\n' lk- \
-            "${USER:0:3}$(lk_repeat 1 $((2 - ${#USER})))-")"
+        lk_console_detail "Default value:" "lk-"
         while [[ ! $LK_PATH_PREFIX =~ ^[a-zA-Z0-9]{2,3}-$ ]]; do
             [ -z "$LK_PATH_PREFIX" ] ||
                 lk_console_error "Invalid LK_PATH_PREFIX:" "$LK_PATH_PREFIX"
-            LK_PATH_PREFIX=$(lk_console_read "LK_PATH_PREFIX:")
+            LK_PATH_PREFIX=$(lk_console_read "Path prefix (required):")
         done
     }
     [ -n "$LK_PATH_PREFIX" ] || lk_die "LK_PATH_PREFIX not set"
@@ -145,11 +151,6 @@
             "$(! lk_is_macos || echo '[ ! "$SSH_CONNECTION" ] || ')" \
             "$BYOBU_PATH") ||
         _BYOBU=
-
-    LK_BIN_PATH=${LK_BIN_PATH:-/usr/local/bin}
-    LK_FILE_TAKE_BACKUP=${LK_FILE_TAKE_BACKUP-1}
-    LK_FILE_MOVE_BACKUP=1
-    LK_VERBOSE=${LK_VERBOSE-1}
 
     lk_console_message "Checking sudo configuration"
     FILE=/etc/sudoers.d/${LK_PATH_PREFIX}default

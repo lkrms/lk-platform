@@ -409,7 +409,7 @@ lk_get_shell_var \
     LK_ARCH_CUSTOM_REPOS \
     LK_ARCH_MIRROR \
     LK_PLATFORM_BRANCH >"/mnt/etc/default/lk-platform"
-in_target "$LK_BASE/bin/lk-platform-configure-system.sh" --no-log
+in_target "$LK_BASE/bin/lk-platform-configure.sh" --no-log
 
 if lk_is_qemu; then
     lk_console_detail "Enabling QEMU guest agent"

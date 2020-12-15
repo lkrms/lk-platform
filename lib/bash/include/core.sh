@@ -1311,15 +1311,15 @@ function lk_console_message() {
 
 # lk_console_detail MESSAGE [MESSAGE2 [COLOUR]]
 function lk_console_detail() {
-    local LK_TTY_PREFIX="${LK_TTY_PREFIX-   -> }" \
-        LK_TTY_MESSAGE_COLOUR=''
+    local LK_TTY_PREFIX=${LK_TTY_PREFIX-   -> } \
+        LK_TTY_MESSAGE_COLOUR=${LK_TTY_MESSAGE_COLOUR-}
     lk_console_message "$1" "${2:-}" "${3-$LK_YELLOW}"
 }
 
 # lk_console_detail_list MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]
 function lk_console_detail_list() {
-    local LK_TTY_PREFIX="${LK_TTY_PREFIX-   -> }" \
-        LK_TTY_MESSAGE_COLOUR=''
+    local LK_TTY_PREFIX=${LK_TTY_PREFIX-   -> } \
+        LK_TTY_MESSAGE_COLOUR=${LK_TTY_MESSAGE_COLOUR-}
     if [ $# -le 2 ]; then
         lk_console_list "$1" "${2-$LK_YELLOW}"
     else
@@ -1329,8 +1329,8 @@ function lk_console_detail_list() {
 
 # lk_console_detail_file FILE [COLOUR] [FILE_COLOUR]
 function lk_console_detail_file() {
-    local LK_TTY_PREFIX="${LK_TTY_PREFIX-  >>> }" \
-        LK_TTY_MESSAGE_COLOUR='' LK_TTY_INDENT=4
+    local LK_TTY_PREFIX=${LK_TTY_PREFIX-  >>> } \
+        LK_TTY_MESSAGE_COLOUR=${LK_TTY_MESSAGE_COLOUR-} LK_TTY_INDENT=4
     lk_console_file "$1" "${2-$LK_YELLOW}" "${3-$LK_TTY_COLOUR}"
 }
 
