@@ -1,11 +1,12 @@
 #!/bin/bash
-# shellcheck disable=SC1090,SC2001,SC2016,SC2046,SC2120,SC2128,SC2207
+
+# shellcheck disable=SC1090,SC2120,SC2128,SC2207
 
 _LK_ENV=${_LK_ENV:-$(declare -x)}
 
 lk_die() { s=$? && echo "$BASH_SOURCE: $1" >&2 && (exit $s) && false || exit; }
 [ -n "${LK_INST:-${LK_BASE:-}}" ] || lk_die "LK_BASE not set"
-[ -z "${LK_BASE:-}" ] || export LK_BASE
+[ ! "${LK_INST:+1}${LK_BASE:+2}" = 2 ] || export LK_BASE
 
 . "${LK_INST:-$LK_BASE}/lib/bash/include/core.sh"
 
@@ -16,17 +17,18 @@ lk_die() { s=$? && echo "$BASH_SOURCE: $1" >&2 && (exit $s) && false || exit; }
 # 3. Copy remaining LK_* variables to the global scope (other variables are
 #    discarded)
 [[ ,${LK_SKIP:-}, == *,settings,* ]] || { SH=$(
-    if lk_is_declared LK_SETTINGS_FILES; then
-        SETTINGS=(${LK_SETTINGS_FILES[@]+"${LK_SETTINGS_FILES[@]}"})
+    if [ -n "${LK_SETTINGS_FILES+1}" ]; then
+        SETTINGS=("${LK_SETTINGS_FILES[@]}")
     else
-        # Passed to eval just before sourcing, to allow expansion of values set
-        # by earlier files
+        # Passed to lk_expand_template just before sourcing, to allow expansion
+        # of values set by earlier files
         SETTINGS=(
             /etc/default/lk-platform
-            ~/".\${LK_PATH_PREFIX:-lk-}settings"
+            ~/".{{LK_PATH_PREFIX}}settings"
         )
     fi
-    ENV=$(printenv | grep -Eo '^LK_[a-z0-9_]*' | sort) || true
+    # lk_var lists all LK_* variables that aren't environment variables
+    ENV=$(lk_get_env -n | sed '/^LK_/!d' | sort)
     lk_var() { comm -23 \
         <(printf '%s\n' "${!LK_@}" | sort) \
         <(cat <<<"$ENV") | sed '/^LK_ARGV$/d'; }
@@ -34,11 +36,11 @@ lk_die() { s=$? && echo "$BASH_SOURCE: $1" >&2 && (exit $s) && false || exit; }
         VAR=($(lk_var))
         [ ${#VAR[@]} -eq 0 ] || unset "${VAR[@]}"
         for FILE in "${SETTINGS[@]}"; do
-            eval "FILE=$FILE"
+            FILE=$(lk_expand_template <<<"$FILE" 2>/dev/null) || continue
             [ ! -r "$FILE" ] || . "$FILE"
         done
         VAR=($(lk_var))
-        [ ${#VAR[@]} -eq 0 ] || declare -p $(lk_var)
+        [ ${#VAR[@]} -eq 0 ] || lk_get_quoted_var "${VAR[@]}"
     )
 ) && eval "$SH"; }
 
@@ -67,7 +69,7 @@ function lk_exit_trap() {
         lk_console_error \
             "$(_lk_caller "${_LK_ERR_TRAP_CONTEXT:-}"): unhandled error"
     for i in ${_LK_EXIT_DELETE[@]+"${_LK_EXIT_DELETE[@]}"}; do
-        rm -Rf -- "$i" || true
+        lk_elevate_if_error rm -Rf -- "$i" || true
     done
 }
 
@@ -76,7 +78,7 @@ function lk_err_trap() {
 }
 
 function lk_delete_on_exit() {
-    lk_is_declared _LK_EXIT_DELETE || _LK_EXIT_DELETE=()
+    [ -n "${_LK_EXIT_DELETE+1}" ] || _LK_EXIT_DELETE=()
     _LK_EXIT_DELETE+=("$@")
 }
 
@@ -194,13 +196,13 @@ SH=$(
     [[ ,${LK_SKIP:-}, == *,env,* ]] || {
         printf '%s=%q\n' \
             LK_PATH_PREFIX "${LK_PATH_PREFIX:-lk-}"
-        . "$LK_BASE/lib/bash/env.sh"
+        . "${LK_INST:-$LK_BASE}/lib/bash/env.sh"
     }
 
     [[ ,${LK_SKIP:-}, == *,trap,* ]] || {
         printf 'trap %q %s\n' \
-            "lk_exit_trap" EXIT \
-            "lk_err_trap" ERR
+            lk_exit_trap EXIT \
+            lk_err_trap ERR
         echo "set -E"
     }
 ) && eval "$SH"

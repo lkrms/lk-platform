@@ -367,7 +367,7 @@ function lk_wp_db_restore_local() {
 All data in local database '$LOCAL_DB_NAME' will be permanently destroyed.
 Proceed?" Y || return
     [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] || {
-        COMMAND=(lk_elevate "$LK_BASE/bin/lk-mysql-grant.sh"
+        COMMAND=(lk_elevate "${LK_INST:-$LK_BASE}/bin/lk-mysql-grant.sh"
             "$LOCAL_DB_NAME" "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD")
         [[ "$USER" =~ ^[a-zA-Z0-9_]+$ ]] &&
             [[ "$LOCAL_DB_NAME" =~ ^$USER(_[a-zA-Z0-9_]*)?$ ]] ||

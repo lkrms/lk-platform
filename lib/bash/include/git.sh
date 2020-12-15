@@ -33,27 +33,54 @@ function lk_git_is_project_top_level() {
         lk_git_is_top_level "${1:-}"
 }
 
+function lk_git_branch_current() {
+    local BRANCH
+    BRANCH=$(git rev-parse --abbrev-ref HEAD) &&
+        [ "$BRANCH" != HEAD ] &&
+        echo "$BRANCH"
+}
+
 function lk_git_branch_list_local() {
     lk_require_output \
         git for-each-ref --format="%(refname:short)" refs/heads
 }
 
-# lk_git_branch_get_upstream [BRANCH]
+# lk_git_branch_upstream [BRANCH]
 #
 # Output upstream ("pull") <REMOTE>/<REMOTE_BRANCH> for BRANCH or the current
 # branch.
-function lk_git_branch_get_upstream() {
+function lk_git_branch_upstream() {
     lk_require_output -s \
         git rev-parse --abbrev-ref "${1:-}@{upstream}" 2>/dev/null
 }
 
-# lk_git_branch_get_push [BRANCH]
+# lk_git_branch_upstream_remote [BRANCH]
+#
+# Output upstream ("pull") remote for BRANCH or the current branch.
+function lk_git_branch_upstream_remote() {
+    local UPSTREAM
+    UPSTREAM=$(lk_git_branch_upstream "$@") &&
+        [[ $UPSTREAM =~ ^([^/]+)/[^/]+$ ]] &&
+        echo "${BASH_REMATCH[1]}"
+}
+
+# lk_git_branch_push [BRANCH]
 #
 # Output downstream ("push") <REMOTE>/<REMOTE_BRANCH> for BRANCH or the current
 # branch.
-function lk_git_branch_get_push() {
+function lk_git_branch_push() {
     lk_require_output -s \
         git rev-parse --abbrev-ref "${1:-}@{push}" 2>/dev/null
+}
+
+# lk_git_branch_push_remote [BRANCH]
+#
+# Output downstream ("push") remote for BRANCH or the current branch.
+function lk_git_branch_push_remote() {
+    local PUSH
+    PUSH=$(lk_git_branch_push "$@") &&
+        [[ $PUSH =~ ^([^/]+)/[^/]+$ ]] &&
+        echo "${BASH_REMATCH[1]}"
 }
 
 # lk_git_get_repos ARRAY [DIR...]

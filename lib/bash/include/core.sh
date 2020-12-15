@@ -264,7 +264,8 @@ function lk_regex_implode() {
 }
 
 function _lk_var_prefix() {
-    [[ "${FUNCNAME[2]:-}" =~ ^(source|main)?$ ]] || printf 'local '
+    [[ "${FUNCNAME[$((${_LK_VAR_PREFIX_DEPTH:-0} + 2))]:-}" =~ ^(source|main)?$ ]] ||
+        printf 'local '
 }
 
 function _lk_regex_sh() {
@@ -472,6 +473,7 @@ function lk_get_shell_var() {
 function lk_get_quoted_var() {
     while [ $# -gt 0 ]; do
         if [ -n "${!1:-}" ]; then
+            _lk_var_prefix
             printf '%s=%q\n' "$1" "${!1}"
         else
             printf '%s=\n' "$1"
@@ -480,20 +482,24 @@ function lk_get_quoted_var() {
     done
 }
 
+# lk_get_env [-n] [VAR...]
 function lk_get_env() {
+    local _LK_VAR_LIST
+    unset _LK_VAR_LIST
+    [ "${1:-}" != -n ] || { _LK_VAR_LIST= && shift; }
     _LK_ENV=${_LK_ENV:-$(declare -x)}
     (
         unset IFS
         _LK_IGNORE=(
-            BASH_SOURCE FUNCNAME PATH
-            _LK_ENV _LK_IGNORE _lk_i _lk_i0 _LK_VAR _LK_VARS LK_VERBOSE
+            BASH_SOURCE FUNCNAME PATH LK_VERBOSE
+            _LK_VAR_LIST _LK_ENV _LK_IGNORE _lk_i _lk_i0 _LK_VAR _LK_VARS
             _LK_FD "LK_[A-Z0-9_]+_COLOUR2?" "__lk_regex_[a-zA-Z0-9_]+"
             "LK_(BLACK|RED|GREEN|YELLOW|BLUE|MAGENTA|CYAN|WHITE|GREY|BOLD|DIM|RESET)"
         )
         _lk_i=${#_LK_IGNORE[@]}
         _lk_i0=$_lk_i
         for _LK_VAR in $(lk_var_list_all |
-            sed -E "/^$(lk_implode '|' _LK_IGNORE)\$/d"); do
+            sed -E "/^($(lk_implode '|' _LK_IGNORE))\$/d"); do
             unset "$_LK_VAR" 2>/dev/null || _LK_IGNORE[$((_lk_i++))]=$_LK_VAR
         done
         ! lk_verbose 2 ||
@@ -502,10 +508,13 @@ function lk_get_env() {
         eval "$_LK_ENV"
         _LK_VARS=("$@")
         [ ${#_LK_VARS[@]} -gt 0 ] || lk_mapfile _LK_VARS <(lk_var_list_all |
-            sed -E "/^$(lk_implode '|' _LK_IGNORE)\$/d")
+            sed -E "/^($(lk_implode '|' _LK_IGNORE))\$/d")
         set -- ${_LK_VARS[@]+"${_LK_VARS[@]}"}
         [ $# -eq 0 ] ||
-            lk_get_quoted_var "$@"
+            _LK_VAR_PREFIX_DEPTH=1 \
+                ${_LK_VAR_LIST-lk_get_quoted_var} \
+                ${_LK_VAR_LIST+lk_echo_args} \
+                "$@"
     )
 }
 
@@ -621,7 +630,9 @@ function lk_expand_template() {
             grep -Eo '\{\{[a-zA-Z_][a-zA-Z0-9_]*\}\}' | sort -u |
             sed -E 's/^\{\{([a-zA-Z0-9_]+)\}\}$/\1/')) || true
     for KEY in ${KEYS[@]+"${KEYS[@]}"}; do
-        REPLACE=${!KEY:-}
+        [ -n "${!KEY+1}" ] ||
+            lk_warn "variable not set: $KEY" || return
+        REPLACE=${!KEY}
         ! lk_is_true QUOTE || {
             REPLACE=$(printf '%q.' "$REPLACE")
             REPLACE=${REPLACE%.}
@@ -1389,8 +1400,7 @@ function lk_console_item() {
 function lk_console_list() {
     local _LK_NUL_DELIM=${_LK_NUL_DELIM-} \
         MESSAGE SINGLE PLURAL COLOUR LK_TTY_PREFIX=${LK_TTY_PREFIX-==> } \
-        ITEMS INDENT=-2 LIST SPACES \
-        SH WIDTH MESSAGE_HAS_NEWLINE OUTPUT
+        ITEMS INDENT=-2 LIST SPACES SH
     [ "${1:-}" != -z ] || { _LK_NUL_DELIM=1 && shift; }
     MESSAGE=$1
     shift

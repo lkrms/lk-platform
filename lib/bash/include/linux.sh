@@ -4,7 +4,7 @@ function lk_atop_ps_mem() {
     local TEMP
     TEMP=$(mktemp) &&
         lk_elevate atop -R -PPRM "$@" |
-        awk -f "$LK_BASE/lib/awk/atop-ps-mem.awk" \
+        awk -f "${LK_INST:-$LK_BASE}/lib/awk/atop-ps-mem.awk" \
             -v "TEMP=$TEMP"
 }
 

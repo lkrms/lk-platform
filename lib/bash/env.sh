@@ -1,4 +1,5 @@
 #!/bin/sh
+
 # shellcheck disable=SC2016
 
 lk_esc() {
@@ -55,18 +56,18 @@ EOF
         echo 'export INFOPATH="$HOMEBREW_PREFIX/share/info:${INFOPATH:-}"'
 }
 
-OLD_PATH="$PATH"
-ADD_TO_PATH="${LK_ADD_TO_PATH:+$LK_ADD_TO_PATH:}$LK_BASE/bin"
+OLD_PATH=$PATH
+ADD_TO_PATH=${LK_ADD_TO_PATH:+$LK_ADD_TO_PATH:}${LK_INST:-$LK_BASE}/bin
 ADD_TO_PATH_FIRST="\
 ${HOME:+$HOME/.homebrew/bin:$HOME/.local/bin:}\
 ${HOMEBREW_PREFIX:+$HOMEBREW_PREFIX/bin:$HOMEBREW_PREFIX/sbin:}\
 ${LK_ADD_TO_PATH_FIRST:+$LK_ADD_TO_PATH_FIRST:}"
-IFS=:
+IFS=':'
 for DIR in $ADD_TO_PATH; do
-    PATH="$(lk_path_add "$DIR")"
+    PATH=$(lk_path_add "$DIR")
 done
 for DIR in $ADD_TO_PATH_FIRST; do
-    PATH="$(lk_path_add_to_front "$DIR")"
+    PATH=$(lk_path_add_to_front "$DIR")
 done
 unset IFS
 [ "$PATH" = "$OLD_PATH" ] || {
@@ -75,5 +76,5 @@ unset IFS
 cat <<EOF
 unset LK_ADD_TO_PATH LK_ADD_TO_PATH_FIRST
 export SUDO_PROMPT="[sudo] password for %p: "
-export WP_CLI_CONFIG_PATH="\$LK_BASE/etc/wp-cli.yml"
+export WP_CLI_CONFIG_PATH=\${LK_INST:-\$LK_BASE}/etc/wp-cli.yml
 EOF

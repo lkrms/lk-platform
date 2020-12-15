@@ -317,7 +317,7 @@ function lk_linode_hosting_get_stackscript() {
 
 # lk_linode_hosting_update_stackscript [REPO [REF [LINODE_ARG...]]]
 function lk_linode_hosting_update_stackscript() {
-    local REPO=${1:-$LK_BASE} REF=${2:-HEAD} HASH BASED_ON \
+    local REPO=${1:-${LK_INST:-$LK_BASE}} REF=${2:-HEAD} HASH BASED_ON \
         SCRIPT STACKSCRIPT ARGS MESSAGE OUTPUT
     cd "$REPO" || return
     HASH=$(git rev-parse --verify "$REF") &&
@@ -472,7 +472,7 @@ Usage: $(lk_myself -f) DIR HOST..." || return
                 bash \
                 "/opt/${PREFIX}platform")") ||
                 [ -z "$COMMIT" ] || {
-                awk -f "$LK_BASE/lib/awk/patch-hosting-script.awk" \
+                awk -f "${LK_INST:-$LK_BASE}/lib/awk/patch-hosting-script.awk" \
                     -v commit="$COMMIT" <"$FILE" >"$FILE-patched" &&
                     touch -r "$FILE" "$FILE-patched" || return
             }
@@ -483,7 +483,8 @@ Usage: $(lk_myself -f) DIR HOST..." || return
         FILE=$DIR/install.out-$HOST
         [ -e "$FILE" ] ||
             scp -p "$SSH_HOST:/var/log/${PREFIX}install.out" "$FILE" || return
-        awk -f "$LK_BASE/lib/awk/get-install-env.awk" "$DIR/install.log-$HOST" |
+        awk -f "${LK_INST:-$LK_BASE}/lib/awk/get-install-env.awk" \
+            "$DIR/install.log-$HOST" |
             sed -E \
                 -e '/^(DEBCONF_NONINTERACTIVE_SEEN|DEBIAN_FRONTEND|HOME|LINODE_.*|PATH|PWD|SHLVL|TERM|_)=/d' \
                 -e "s/^((LK_)?NODE_(HOSTNAME|FQDN)=)/\\1test-/" \
@@ -492,6 +493,7 @@ Usage: $(lk_myself -f) DIR HOST..." || return
             while IFS='=' read -r VAR VALUE; do
                 printf '%s=%q\n' "$VAR" "$VALUE"
             done >"$DIR/StackScript-env-$HOST" &&
-            touch -r "$DIR/install.log-$HOST" "$DIR/StackScript-env-$HOST" || return
+            touch -r "$DIR/install.log-$HOST" "$DIR/StackScript-env-$HOST" ||
+            return
     done
 }
