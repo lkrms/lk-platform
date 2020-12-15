@@ -4,8 +4,7 @@
 
 set -eu
 
-lk_die() { s=$? && echo "${LK_DIE_PREFIX-${0##*/}: }$1" >&2 &&
-    (return $s) && false || exit; }
+lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
 _DIR=${0%/*}
 [ "$_DIR" != "$0" ] || _DIR=.
 _DIR=$(cd "$_DIR" && pwd -P) && [ ! -L "$0" ] ||
@@ -476,7 +475,8 @@ SNAPSHOT_STAGES=(
 
 SNAPSHOT_GROUP=
 
-[ $# -ge 3 ] || LK_DIE_PREFIX='' lk_die "\
+[ $# -ge 3 ] || {
+    echo "\
 Usage: ${0##*/} SOURCE_NAME SSH_HOST:SOURCE_PATH BACKUP_ROOT [RSYNC_ARG...]
    or: ${0##*/} SOURCE_NAME RSYNC_HOST::SOURCE_PATH BACKUP_ROOT [RSYNC_ARG...]
    or: ${0##*/} SOURCE_NAME SOURCE_PATH BACKUP_ROOT [RSYNC_ARG...]
@@ -485,7 +485,9 @@ Use hard links to duplicate the previous SOURCE_NAME snapshot at BACKUP_ROOT,
 then rsync SOURCE_PATH to the replica to create a new snapshot of SOURCE_NAME.
 
 This approach uses less storage than rsync --link-dest, which breaks hard links
-when permissions change."
+when permissions change." >&2
+    exit 1
+}
 
 ARGS=("$@")
 

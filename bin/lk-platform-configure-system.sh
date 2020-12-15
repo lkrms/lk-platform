@@ -11,7 +11,7 @@
 {
     set -euo pipefail
     readonly _FILE=${BASH_SOURCE[0]}
-    lk_die() { s=$? && echo "$_FILE: $1" >&2 && (return $s) && false || exit; }
+    lk_die() { s=$? && echo "$_FILE: $1" >&2 && (exit $s) && false || exit; }
     _DIR=${_FILE%/*}
     [ "$_DIR" != "$_FILE" ] || _DIR=.
     readonly _DIR=$(cd "$_DIR" && pwd)

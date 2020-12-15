@@ -4,8 +4,7 @@
 
 set -eu
 
-lk_die() { s=$? && echo "${LK_DIE_PREFIX-${0##*/}: }$1" >&2 &&
-    (return $s) && false || exit; }
+lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
 _DIR=${0%/*}
 [ "$_DIR" != "$0" ] || _DIR=.
 _DIR=$(cd "$_DIR" && pwd -P) && [ ! -L "$0" ] ||
@@ -190,8 +189,11 @@ PRUNE_DAILY_AFTER=${LK_SNAPSHOT_PRUNE_DAILY_AFTER:-7}
 PRUNE_FAILED_AFTER_DAYS=${LK_SNAPSHOT_PRUNE_FAILED_AFTER_DAYS-28}
 PRUNE_WEEKLY_AFTER=${LK_SNAPSHOT_PRUNE_WEEKLY_AFTER-52}
 
-[ $# -ge 1 ] || LK_DIE_PREFIX='' lk_die "\
-Usage: ${0##*/} BACKUP_ROOT"
+[ $# -ge 1 ] || {
+    echo "\
+Usage: ${0##*/} BACKUP_ROOT" >&2
+    exit 1
+}
 
 BACKUP_ROOT=$1
 

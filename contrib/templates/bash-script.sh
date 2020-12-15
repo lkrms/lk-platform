@@ -6,7 +6,7 @@
 
 set -euo pipefail
 _FILE=${BASH_SOURCE[0]}
-lk_die() { s=$? && echo "$_FILE: $1" >&2 && (return $s) && false || exit; }
+lk_die() { s=$? && echo "$_FILE: $1" >&2 && (exit $s) && false || exit; }
 
 ##
 # Remove if _DIR is not required

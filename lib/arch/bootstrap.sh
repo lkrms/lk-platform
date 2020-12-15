@@ -21,7 +21,7 @@ export LK_BASE=${LK_BASE:-/opt/lk-platform}
 
 set -euo pipefail
 _FILE=${BASH_SOURCE[0]}
-lk_die() { s=$? && echo "$_FILE: $1" >&2 && (return $s) && false || exit; }
+lk_die() { s=$? && echo "$_FILE: $1" >&2 && (exit $s) && false || exit; }
 [ "${_FILE%/*}" != "$_FILE" ] || _FILE=./$_FILE
 [ ! -L "$_FILE" ] &&
     _DIR="$(cd "${_FILE%/*}" && pwd -P)" ||

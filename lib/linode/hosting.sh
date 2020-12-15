@@ -87,7 +87,7 @@ export -n \
 
 set -euo pipefail
 shopt -s nullglob
-lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (return $s) && false || exit; }
+lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
 
 FIELD_ERRORS=$(
     STATUS=0

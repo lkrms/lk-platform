@@ -1,10 +1,9 @@
 #!/bin/bash
-# shellcheck disable=SC1090,SC2001,SC2016,SC2046,SC2120,SC2207
+# shellcheck disable=SC1090,SC2001,SC2016,SC2046,SC2120,SC2128,SC2207
 
 _LK_ENV=${_LK_ENV:-$(declare -x)}
 
-lk_die() { s=$? && echo "${BASH_SOURCE[0]}: $1" >&2 &&
-    (return $s) && false || exit; }
+lk_die() { s=$? && echo "$BASH_SOURCE: $1" >&2 && (exit $s) && false || exit; }
 [ -n "${LK_INST:-${LK_BASE:-}}" ] || lk_die "LK_BASE not set"
 [ -z "${LK_BASE:-}" ] || export LK_BASE
 
