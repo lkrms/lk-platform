@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2015,SC2016,SC2034,SC2046,SC2086,SC2120,SC2207
+# shellcheck disable=SC1090,SC2015,SC2016,SC2034,SC2046,SC2086,SC2116,SC2120,SC2207
 
 _LK_ENV=${_LK_ENV:-$(declare -x)}
 
@@ -1506,6 +1506,25 @@ function lk_no_input() {
 
 function lk_verbose() {
     [ "${LK_VERBOSE:-0}" -ge "${1:-1}" ]
+}
+
+# lk_require_output -s COMMAND [ARG...]
+#
+# Run COMMAND and return true if its exit status is zero and output other than
+# newline characters was written. If -s is set, suppress output if COMMAND
+# fails.
+function lk_require_output() {
+    local SUPPRESS FD OUTPUT EXIT_STATUS=
+    unset SUPPRESS
+    [ "${1:-}" != -s ] || { SUPPRESS= && shift; }
+    FD=$(lk_next_fd) && eval "exec $FD>&1" || return
+    OUTPUT=$("$@" |
+        tee ${SUPPRESS-/dev/fd/"$FD"} ${SUPPRESS+/dev/null} && echo ".") &&
+        OUTPUT=${OUTPUT%.} || EXIT_STATUS=$?
+    eval "exec $FD>&-" || EXIT_STATUS=${EXIT_STATUS:-$?}
+    (exit "${EXIT_STATUS:-0}") &&
+        [ -n "$(echo "$OUTPUT")" ] &&
+        { [ -z "${SUPPRESS+1}" ] || printf '%s' "$OUTPUT"; }
 }
 
 # lk_clip

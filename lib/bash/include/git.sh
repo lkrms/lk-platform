@@ -2,8 +2,8 @@
 
 # shellcheck disable=SC2015
 
-function lk_git_quiet() {
-    [ "${LK_GIT_QUIET:-0}" -ne 0 ]
+function lk_git_is_quiet() {
+    [ -n "${LK_GIT_QUIET:-}" ]
 }
 
 function lk_git_is_work_tree() {
@@ -31,6 +31,29 @@ function lk_git_is_project_top_level() {
     lk_git_is_work_tree "${1:-}" &&
         ! lk_git_is_submodule "${1:-}" &&
         lk_git_is_top_level "${1:-}"
+}
+
+function lk_git_branch_list_local() {
+    lk_require_output \
+        git for-each-ref --format="%(refname:short)" refs/heads
+}
+
+# lk_git_branch_get_upstream [BRANCH]
+#
+# Output upstream ("pull") <REMOTE>/<REMOTE_BRANCH> for BRANCH or the current
+# branch.
+function lk_git_branch_get_upstream() {
+    lk_require_output -s \
+        git rev-parse --abbrev-ref "${1:-}@{upstream}" 2>/dev/null
+}
+
+# lk_git_branch_get_push [BRANCH]
+#
+# Output downstream ("push") <REMOTE>/<REMOTE_BRANCH> for BRANCH or the current
+# branch.
+function lk_git_branch_get_push() {
+    lk_require_output -s \
+        git rev-parse --abbrev-ref "${1:-}@{push}" 2>/dev/null
 }
 
 # lk_git_get_repos ARRAY [DIR...]
@@ -79,11 +102,11 @@ repositories simultaneously." || return
 of a working tree" || return
         lk_resolve_files REPOS
     else
-        lk_git_quiet || lk_console_message "Finding repositories"
+        lk_git_is_quiet || lk_console_message "Finding repositories"
         lk_git_get_repos REPOS
         [ ${#REPOS[@]} -gt 0 ] || lk_warn "no repos found" || return
     fi
-    lk_git_quiet || {
+    lk_git_is_quiet || {
         lk_console_detail "Command:" $'\n'"${REPO_COMMAND[*]}"
         lk_echo_array REPOS | lk_pretty_path |
             lk_console_detail_list "Repositories:" repo repos
@@ -100,7 +123,7 @@ of a working tree" || return
                 SH=$(lk_get_outputs_of "${REPO_COMMAND[@]}") ||
                     EXIT_STATUS=$?
                 eval "$SH" || exit
-                lk_git_quiet && [ "$EXIT_STATUS" -eq 0 ] || echo "$(
+                lk_git_is_quiet && [ "$EXIT_STATUS" -eq 0 ] || echo "$(
                     unset _LK_FD
                     LK_TTY_NO_FOLD=1
                     {
@@ -127,12 +150,12 @@ of a working tree" || return
         done
     else
         for REPO in "${REPOS[@]}"; do
-            lk_git_quiet || lk_console_item "Processing" "$REPO"
+            lk_git_is_quiet || lk_console_item "Processing" "$REPO"
             (cd "$REPO" &&
                 "${REPO_COMMAND[@]}") || ((++ERROR_COUNT))
         done
     fi
-    lk_git_quiet || {
+    lk_git_is_quiet || {
         [ "$ERROR_COUNT" -eq 0 ] &&
             LK_TTY_NO_FOLD=1 lk_console_success "${REPO_COMMAND[*]}" \
                 "executed without error in ${#REPOS[@]} $(lk_maybe_plural \

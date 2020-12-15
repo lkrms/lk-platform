@@ -205,7 +205,7 @@ FIELD_ERRORS=$(
     [ ! "$LK_AUTO_REBOOT" = Y ] || REQUIRED=1
     valid LK_AUTO_REBOOT_TIME "^(([01][0-9]|2[0-3]):[0-5][0-9]|now)\$"
     REQUIRED=0
-    valid LK_PATH_PREFIX "^[a-zA-Z0-9]{2,4}-\$"
+    valid LK_PATH_PREFIX "^[a-zA-Z0-9]{2,3}-\$"
     one_of LK_SCRIPT_DEBUG Y N
     one_of LK_SHUTDOWN_ACTION reboot poweroff
     valid LK_SHUTDOWN_DELAY "^[0-9]+\$"

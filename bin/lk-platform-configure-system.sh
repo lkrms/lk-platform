@@ -69,7 +69,7 @@
     unset LK_BASE
     export -n LK_PATH_PREFIX
 
-    LK_SKIP=env include=provision . "$LK_INST/lib/bash/common.sh"
+    LK_SKIP=env include=provision,git . "$LK_INST/lib/bash/common.sh"
 
     NEW_SETTINGS=()
 
@@ -100,6 +100,8 @@
         ORIGINAL_PATH_PREFIX=${BASH_REMATCH[1]}
         OLD_LK_INST=$LK_INST
         LK_INST=${LK_INST%/*}/lk-platform
+        lk_console_message \
+            "Renaming installation from '${OLD_LK_INST##*/}' to 'lk-platform'"
         if [ -e "$LK_INST" ] && [ ! -L "$LK_INST" ]; then
             BACKUP_DIR=$LK_INST$(lk_file_get_backup_suffix)
             [ ! -e "$BACKUP_DIR" ] || lk_die "$BACKUP_DIR already exists"
@@ -114,10 +116,10 @@
     [ -n "$LK_PATH_PREFIX" ] || lk_no_input || {
         lk_console_message "LK_PATH_PREFIX not set"
         lk_console_detail \
-            "Value must be 2-4 alphanumeric characters followed by a hyphen"
+            "Value must be 2-3 alphanumeric characters followed by a hyphen"
         lk_console_detail "Suggestions:" "$(printf '%s\n' lk- \
-            "${USER:0:4}$(lk_repeat 1 $((2 - ${#USER})))-")"
-        while [[ ! $LK_PATH_PREFIX =~ ^[a-zA-Z0-9]{2,4}-$ ]]; do
+            "${USER:0:3}$(lk_repeat 1 $((2 - ${#USER})))-")"
+        while [[ ! $LK_PATH_PREFIX =~ ^[a-zA-Z0-9]{2,3}-$ ]]; do
             [ -z "$LK_PATH_PREFIX" ] ||
                 lk_console_error "Invalid LK_PATH_PREFIX:" "$LK_PATH_PREFIX"
             LK_PATH_PREFIX=$(lk_console_read "LK_PATH_PREFIX:")
@@ -150,7 +152,7 @@
     lk_console_message "Checking sudo configuration"
     FILE=/etc/sudoers.d/${LK_PATH_PREFIX}default
     [ ! -e "${FILE}s" ] || [ -e "$FILE" ] ||
-        mv -v "${FILE}s" "$FILE"
+        mv -fv "${FILE}s" "$FILE"
     [ -e "$FILE" ] ||
         install -m 00440 /dev/null "$FILE"
     lk_file_replace "$FILE" "$(cat "$LK_BASE/share/sudoers.d/default")"
@@ -210,46 +212,68 @@
                 sudo -Hu "$REPO_OWNER" \
                     bash -c "$(lk_implode ' && ' CONFIG_COMMANDS)"
             fi
-            BRANCH=$(git rev-parse --abbrev-ref HEAD) && [ "$BRANCH" != "HEAD" ] ||
+            REMOTE=$(lk_git_branch_get_upstream | sed 's/\/.*//') &&
+                [ -n "$REMOTE" ] ||
+                lk_die "no upstream remote for current branch"
+            BRANCH=$(git rev-parse --abbrev-ref HEAD) &&
+                [ "$BRANCH" != "HEAD" ] ||
                 lk_die "no branch checked out"
+            function update_repo() {
+                local _BRANCH=${1:-$BRANCH} UPSTREAM BEHIND
+                UPSTREAM=$REMOTE/$_BRANCH
+                sudo -Hu "$REPO_OWNER" \
+                    git fetch -q --prune --prune-tags "$REMOTE" ||
+                    lk_warn "unable to fetch from $REMOTE" ||
+                    return
+                if lk_git_branch_list_local |
+                    grep -Fx "$_BRANCH" >/dev/null; then
+                    BEHIND=$(git rev-list --count "$_BRANCH..$UPSTREAM")
+                    if [ "$BEHIND" -gt 0 ]; then
+                        git merge-base --is-ancestor "$_BRANCH" "$UPSTREAM" ||
+                            lk_warn "local branch $_BRANCH has diverged" ||
+                            return
+                        lk_console_detail \
+                            "Updating lk-platform ($_BRANCH branch is $BEHIND $(
+                                lk_maybe_plural "$BEHIND" "commit" "commits"
+                            ) behind)"
+                        REPO_MERGED=1
+                        if [ "$_BRANCH" = "$BRANCH" ]; then
+                            sudo -Hu "$REPO_OWNER" \
+                                git merge --ff-only
+                        else
+                            sudo -Hu "$REPO_OWNER" \
+                                git fetch . "$UPSTREAM:$BRANCH"
+                        fi
+                    fi
+                fi
+            }
             LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-$BRANCH}
             if [ "$LK_PLATFORM_BRANCH" != "$BRANCH" ]; then
                 lk_console_warning "$(printf "%s is set to %s, but %s is checked out" \
                     "LK_PLATFORM_BRANCH" \
                     "$LK_BOLD$LK_PLATFORM_BRANCH$LK_RESET" \
                     "$LK_BOLD$BRANCH$LK_RESET")"
-                if lk_confirm "Switch to $LK_PLATFORM_BRANCH?" N; then
+                if lk_confirm "Switch to $LK_PLATFORM_BRANCH?" Y; then
                     lk_console_detail "Switching to" "$LK_PLATFORM_BRANCH"
-                    sudo -Hu "$REPO_OWNER" git checkout "$LK_PLATFORM_BRANCH"
+                    update_repo "$LK_PLATFORM_BRANCH"
+                    sudo -Hu "$REPO_OWNER" \
+                        git checkout "$LK_PLATFORM_BRANCH"
+                    lk_git_branch_get_upstream ||
+                        sudo -Hu "$REPO_OWNER" \
+                            git branch -u "$REMOTE/$LK_PLATFORM_BRANCH"
                     restart_script "$@"
                 else
                     LK_PLATFORM_BRANCH=$BRANCH
                 fi
             fi
-            REMOTE_NAME=$(git rev-parse --abbrev-ref "@{u}" | sed 's/\/.*//') &&
-                [ -n "$REMOTE_NAME" ] ||
-                lk_die "no upstream remote for current branch"
             FETCH_TIME=$(lk_file_modified ".git/FETCH_HEAD" 2>/dev/null) ||
                 FETCH_TIME=0
             if [ $(($(lk_timestamp) - FETCH_TIME)) -gt 300 ]; then
                 lk_console_detail "Checking for changes"
-                if sudo -Hu "$REPO_OWNER" \
-                    git fetch --quiet --prune --prune-tags "$REMOTE_NAME" "$BRANCH"; then
-                    BEHIND=$(git rev-list --count "HEAD..@{upstream}")
-                    if [ "$BEHIND" -gt 0 ]; then
-                        git merge-base --is-ancestor HEAD "@{upstream}" ||
-                            lk_die "local branch has diverged from upstream"
-                        lk_console_detail \
-                            "Updating lk-platform ($BEHIND $(
-                                lk_maybe_plural "$BEHIND" "commit" "commits"
-                            ) behind)"
-                        sudo -Hu "$REPO_OWNER" \
-                            git merge --ff-only "@{upstream}"
-                        restart_script "$@"
-                    fi
-                else
-                    lk_console_warning "Unable to retrieve changes from upstream"
-                fi
+                unset REPO_MERGED
+                update_repo
+                ! lk_is_true REPO_MERGED ||
+                    restart_script "$@"
             fi
             lk_console_detail "Resetting file permissions"
             (
@@ -379,12 +403,15 @@
             '^[[:blank:]]*($|#)'
     }
 
-    unset LK_FILE_MOVE_BACKUP
     LK_FILE_NO_DIFF=1
     for h in "${LK_HOMES[@]}"; do
         [ ! -e "$h/.${LK_PATH_PREFIX}ignore" ] || continue
         OWNER=$(lk_file_owner "$h")
         GROUP=$(id -gn "$OWNER")
+
+        [ "$h" = "$(lk_expand_path "~$OWNER")" ] &&
+            unset LK_FILE_MOVE_BACKUP ||
+            LK_FILE_MOVE_BACKUP=1
 
         # Create ~/.bashrc if it doesn't exist, then add or update commands to
         # source LK_BASE/lib/bash/rc.sh at startup when Bash is running as a
