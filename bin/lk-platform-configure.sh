@@ -121,7 +121,7 @@
         lk_symlink lk-platform "$OLD_LK_INST"
     fi
 
-    lk_console_item "Checking setting:" "LK_PATH_PREFIX"
+    lk_console_message "Checking environment"
     LK_PATH_PREFIX=${LK_PATH_PREFIX:-${PATH_PREFIX:-${ORIGINAL_PATH_PREFIX:-}}}
     [ -n "$LK_PATH_PREFIX" ] || lk_no_input || {
         lk_console_detail "LK_PATH_PREFIX is not set"
@@ -245,10 +245,7 @@
         (
             # shellcheck disable=SC2086
             function _git() {
-                while [ $# -gt 0 ]; do
-                    sudo -Hu "$REPO_OWNER" git $1 || return
-                    shift
-                done
+                sudo -Hu "$REPO_OWNER" git "$@"
             }
             function check_repo_config() {
                 local VALUE
@@ -297,7 +294,9 @@
             if [ ${#CONFIG_COMMANDS[@]} -gt 0 ]; then
                 lk_console_detail "Running:" \
                     "$(lk_echo_args "${CONFIG_COMMANDS[@]/#/git }")"
-                _git "${CONFIG_COMMANDS[@]}"
+                for COMMAND in "${CONFIG_COMMANDS[@]}"; do
+                    _git $COMMAND
+                done
             fi
             REMOTE=$(lk_git_branch_upstream_remote) ||
                 lk_die "no upstream remote for current branch"
