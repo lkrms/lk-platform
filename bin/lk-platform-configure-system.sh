@@ -104,8 +104,7 @@
         ORIGINAL_PATH_PREFIX=${BASH_REMATCH[1]}
         OLD_LK_INST=$LK_INST
         LK_INST=${LK_INST%/*}/lk-platform
-        lk_console_message \
-            "Renaming installation from '${OLD_LK_INST##*/}' to 'lk-platform'"
+        lk_console_message "Renaming installation directory"
         if [ -e "$LK_INST" ] && [ ! -L "$LK_INST" ]; then
             BACKUP_DIR=$LK_INST$(lk_file_get_backup_suffix)
             [ ! -e "$BACKUP_DIR" ] || lk_die "$BACKUP_DIR already exists"
@@ -187,7 +186,7 @@
     # For other commands, warn and continue
     install_gnu_commands || true
 
-    lk_console_item "Checking lk-platform configuration file:" "$CONF_FILE"
+    lk_console_item "Checking lk-platform configuration:" "$CONF_FILE"
     [ -e "$CONF_FILE" ] || {
         install -d -m 00755 "${CONF_FILE%/*}" &&
             install -m 00644 /dev/null "$CONF_FILE"
@@ -381,17 +380,17 @@
     # Prepare awk to update ~/.bashrc
     LK_BASE_QUOTED=$(printf '%q' "$LK_BASE")
     RC_PATH=$LK_BASE_QUOTED/lib/bash/rc.sh
-    LK_BASE_REAL=$(realpath "$LK_BASE")
-    [ "$LK_BASE_REAL" != "$LK_BASE" ] &&
-        LK_BASE_REAL_QUOTED=$(printf '%q' "$LK_BASE_REAL") ||
-        LK_BASE_REAL=
+    LK_BASE_ALT=${LK_BASE%/*}/${LK_PATH_PREFIX}platform
+    [ "$LK_BASE_ALT" != "$LK_BASE" ] &&
+        LK_BASE_ALT_QUOTED=$(printf '%q' "$LK_BASE_ALT") ||
+        LK_BASE_ALT=
     RC_PATTERNS=("$(lk_escape_ere "$LK_BASE")")
     [ "$LK_BASE_QUOTED" = "$LK_BASE" ] ||
         RC_PATTERNS+=("$(lk_escape_ere "$LK_BASE_QUOTED")")
-    [ -z "$LK_BASE_REAL" ] || {
-        RC_PATTERNS+=("$(lk_escape_ere "$LK_BASE_REAL")")
-        [ "$LK_BASE_REAL_QUOTED" = "$LK_BASE_REAL" ] ||
-            RC_PATTERNS+=("$(lk_escape_ere "$LK_BASE_REAL_QUOTED")")
+    [ -z "$LK_BASE_ALT" ] || {
+        RC_PATTERNS+=("$(lk_escape_ere "$LK_BASE_ALT")")
+        [ "$LK_BASE_ALT_QUOTED" = "$LK_BASE_ALT" ] ||
+            RC_PATTERNS+=("$(lk_escape_ere "$LK_BASE_ALT_QUOTED")")
     }
     RC_PATTERN="$(lk_regex_implode \
         "${RC_PATTERNS[@]}")(\\/.*)?\\/(\\.bashrc|rc\\.sh)"
