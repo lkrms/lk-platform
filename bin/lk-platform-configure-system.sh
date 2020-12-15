@@ -97,6 +97,8 @@
 
     lk_lock LOCK_FILE LOCK_FD
 
+    lk_log_output
+
     if [ "${LK_INST##*/}" != lk-platform ] &&
         [[ "${LK_INST##*/}" =~ ^([a-zA-Z0-9]{2,3}-)platform$ ]]; then
         ORIGINAL_PATH_PREFIX=${BASH_REMATCH[1]}
@@ -149,7 +151,6 @@
     LK_FILE_TAKE_BACKUP=${LK_FILE_TAKE_BACKUP-1}
     LK_FILE_MOVE_BACKUP=1
     LK_VERBOSE=${LK_VERBOSE-1}
-    lk_log_output
 
     lk_console_message "Checking sudo configuration"
     FILE=/etc/sudoers.d/${LK_PATH_PREFIX}default
@@ -355,7 +356,7 @@
         )
     fi
 
-    lk_console_detail "Checking symbolic links"
+    lk_console_message "Checking symbolic links"
     lk_symlink \
         "$LK_BASE/bin/lk-bash-load.sh" "$LK_BIN_PATH/lk-bash-load.sh"
 
