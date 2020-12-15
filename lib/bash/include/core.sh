@@ -2469,6 +2469,7 @@ dumb | unknown)
     LK_BOLD=$'\E[1m'
     LK_DIM=$'\E[2m'
     LK_RESET=$'\E[0m'
+    unset TERM
     ;;
 xterm-256color)
     LK_BLACK=$'\E[30m'
