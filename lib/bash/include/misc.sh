@@ -40,7 +40,7 @@ function lk_mediainfo_check() {
     LK_MEDIAINFO_FILES=()
     LK_MEDIAINFO_VALUES=()
     LK_MEDIAINFO_EMPTY_FILES=()
-    while IFS= read -rd $'\0' FILE; do
+    while IFS= read -rd '' FILE; do
         ((++COUNT))
         VALUE=$(mediainfo \
             --Output="${LK_MEDIAINFO_FORMAT:-General;%ContentType%}" \

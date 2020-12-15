@@ -159,7 +159,7 @@ function lk_linode_ssh_add_all() {
 function lk_linode_hosting_ssh_add_all() {
     local GET_USERS_SH JSON LINODES LINODE SH IFS USERS USERNAME ALL_USERS=()
     _lk_linode_maybe_flush_cache
-    GET_USERS_SH="$(declare -f lk_get_standard_users);lk_get_standard_users" &&
+    GET_USERS_SH="$(declare -f lk_get_standard_users); lk_get_standard_users" &&
         GET_USERS_SH=$(printf '%q' "$GET_USERS_SH") || return
     JSON=$(lk_linode_linodes "$@" | _lk_linode_filter) &&
         lk_jq_get_array LINODES <<<"$JSON" &&

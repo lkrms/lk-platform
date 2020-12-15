@@ -1,5 +1,6 @@
 #!/bin/bash
-# shellcheck disable=SC1090,SC2001,SC2030,SC2031,SC2046,SC2207
+
+# shellcheck disable=SC1090,SC2015,SC2030,SC2031,SC2207
 
 _LK_ENV=${_LK_ENV:-$(declare -x)}
 
@@ -19,27 +20,29 @@ SH=$(
 [ -n "${LK_BASE:-}" ] || return
 export LK_BASE
 
+. "$LK_BASE/lib/bash/include/core.sh"
+
 # see lib/bash/common.sh
 SH=$(
     SETTINGS=(
-        "/etc/default/lk-platform"
-        ${HOME:+"\$HOME/.\${LK_PATH_PREFIX:-lk-}settings"}
+        /etc/default/lk-platform
+        ~/".{{LK_PATH_PREFIX}}settings"
     )
-    ENV="$(printenv | grep -Eio '^LK_[a-z0-9_]*' | sort)" || true
-    lk_var() { comm -23 <(printf '%s\n' "${!LK_@}" | sort) <(cat <<<"$ENV"); }
+    ENV=$(lk_get_env -n | sed '/^LK_/!d' | sort)
+    lk_var() { comm -23 \
+        <(printf '%s\n' "${!LK_@}" | sort) \
+        <(cat <<<"$ENV") | sed '/^LK_ARGV$/d'; }
     (
         VAR=($(lk_var))
         [ ${#VAR[@]} -eq 0 ] || unset "${VAR[@]}"
         for FILE in "${SETTINGS[@]}"; do
-            eval "FILE=$FILE"
-            [ ! -f "$FILE" ] || . "$FILE"
+            FILE=$(lk_expand_template <<<"$FILE" 2>/dev/null) || continue
+            [ ! -r "$FILE" ] || . "$FILE"
         done
         VAR=($(lk_var))
-        [ ${#VAR[@]} -eq 0 ] || declare -p $(lk_var)
+        [ ${#VAR[@]} -eq 0 ] || lk_get_quoted_var "${VAR[@]}"
     )
 ) && eval "$SH"
-
-. "$LK_BASE/lib/bash/include/core.sh"
 
 function clip() {
     if lk_command_exists clip; then
@@ -71,28 +74,33 @@ Usage: $(lk_myself -f) LOG_FILE[.gz] [LOG_FILE...]" || return
 }
 
 function lk_bak_find() {
+    local REGEX=".*(-[0-9]+\\.bak|\\.lk-bak-[0-9]{8}T[0-9]{6}Z)"
     lk_elevate gnu_find / -xdev -regextype posix-egrep \
-        -regex "${_LK_DIFF_REGEX:-.*-[0-9]+\\.bak}" \
+        -regex "${_LK_DIFF_REGEX:-$REGEX}" \
         "$@"
 }
 
 function lk_bak_diff() {
-    local ROOT=${1:-${_LK_DIFF_ROOT:-/}} BACKUP FILE
-    [ "${ROOT:0:1}" != - ] || lk_warn "illegal directory: $ROOT" || return
+    local BACKUP FILE FILE2 \
+        REGEX=".*(-[0-9]+\\.bak|\\.lk-bak-[0-9]{8}T[0-9]{6}Z)"
     [ "$EUID" -eq 0 ] || ! lk_can_sudo bash || {
         sudo -H env \
-            _LK_DIFF_ROOT="${_LK_DIFF_ROOT:-}" \
             _LK_DIFF_REGEX="${_LK_DIFF_REGEX:-}" \
-            _LK_DIFF_SUFFIX="${_LK_DIFF_SUFFIX:-}" \
             bash -c "$(declare -f lk_bak_diff); lk_bak_diff \"\$@\"" "bash" "$@"
         return
     }
-    while IFS= read -rd $'\0' BACKUP; do
-        FILE="${BACKUP%${_LK_DIFF_SUFFIX:--*.bak}}"
+    while IFS= read -rd '' BACKUP; do
+        [[ $BACKUP =~ ${_LK_DIFF_REGEX:-$REGEX} ]] || continue
+        FILE=${BACKUP%${BASH_REMATCH[1]}}
+        [ -e "$FILE" ] || {
+            FILE2=${FILE##*/}
+            FILE=${FILE2//"__"/\/}
+            [ "$FILE" != "$FILE2" ] && [ -e "$FILE" ] || continue
+        }
         diff --unified --color --report-identical-files "$BACKUP" "$FILE" ||
             true
-    done < <(gnu_find "$ROOT" -xdev -regextype posix-egrep \
-        -regex "${_LK_DIFF_REGEX:-.*-[0-9]+\\.bak}" -print0 | sort -z)
+    done < <(gnu_find / -xdev -regextype posix-egrep \
+        -regex "${_LK_DIFF_REGEX:-$REGEX}" -print0 | sort -z)
 }
 
 function lk_orig_find() {
@@ -101,16 +109,15 @@ function lk_orig_find() {
 }
 
 function lk_orig_diff() {
-    _LK_DIFF_REGEX=".*\\.orig" \
-        _LK_DIFF_SUFFIX=".orig" \
+    _LK_DIFF_REGEX=".*(\\.orig)" \
         lk_bak_diff "$@"
 }
 
 function lk_find_latest() {
-    local i TYPE="${1:-}" TYPE_ARGS=()
-    [[ "$TYPE" =~ ^[bcdflps]+$ ]] && shift || TYPE="f"
-    for i in $(seq "${#TYPE}"); do
-        TYPE_ARGS+=(${TYPE_ARGS[@]+-o} -type "${TYPE:$i-1:1}")
+    local i TYPE=f TYPE_ARGS=()
+    [[ ! ${1:-} =~ ^[bcdflps]+$ ]] || { TYPE=$1 && shift; }
+    for i in $(seq 0 $((${#TYPE} - 1))); do
+        TYPE_ARGS+=(${TYPE_ARGS[@]+-o} -type "${TYPE:$i:1}")
     done
     [ ${#TYPE_ARGS[@]} -eq 2 ] || TYPE_ARGS=(\( "${TYPE_ARGS[@]}" \))
     gnu_find -L . -xdev -regextype posix-egrep \
@@ -136,10 +143,8 @@ function latest_all_dir() {
 }
 
 function find_all() {
-    local FIND="${1:-}"
-    [ -n "$FIND" ] || return
-    shift
-    gnu_find -L . -xdev -iname "*$FIND*" "$@"
+    [ -n "${1:-}" ] || lk_warn "no search term" || return
+    gnu_find -L . -xdev -iname "*$1*" "${@:2}"
 }
 
 lk_include prompt provision git wordpress linode misc
@@ -149,20 +154,19 @@ if lk_is_linux; then
     ! lk_is_arch || lk_include arch
     ! lk_is_ubuntu || lk_include debian
     [[ $- != *i* ]] || {
-        alias cwd='pwd | xclip'
         alias duh='du -h --max-depth 1 | sort -h'
         alias open='xdg-open'
     }
 elif lk_is_macos; then
     lk_include macos
     [[ $- != *i* ]] || {
-        alias cwd='pwd | pbcopy'
         alias duh='du -h -d 1 | sort -h'
     }
     export BASH_SILENCE_DEPRECATION_WARNING=1
 fi
+alias cwd='pwd | lk_clip'
 
-LK_PATH_PREFIX="${LK_PATH_PREFIX:-lk-}"
+LK_PATH_PREFIX=${LK_PATH_PREFIX-lk-}
 SH=$(. "$LK_BASE/lib/bash/env.sh") &&
     eval "$SH"
 
@@ -175,7 +179,7 @@ SH=$(. "$LK_BASE/lib/bash/env.sh") &&
     HISTFILESIZE=
     HISTTIMEFORMAT="%b %_d %Y %H:%M:%S %z "
 
-    [ "${LK_COMPLETION:-1}" -ne 1 ] || { SH=$(for FILE in \
+    lk_is_false LK_COMPLETION || { SH=$(for FILE in \
         /usr/share/bash-completion/bash_completion \
         ${HOMEBREW_PREFIX:+"$HOMEBREW_PREFIX/etc/profile.d/bash_completion.sh"}; do
         [ -r "$FILE" ] || continue
@@ -183,7 +187,7 @@ SH=$(. "$LK_BASE/lib/bash/env.sh") &&
         return
     done) && eval "$SH"; }
 
-    [ "${LK_PROMPT:-1}" -ne 1 ] || lk_enable_prompt
+    lk_is_false LK_PROMPT || lk_enable_prompt
 
     ! lk_command_exists dircolors || { SH=$(
         COMMAND=(dircolors -b)

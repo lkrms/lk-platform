@@ -1,8 +1,7 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2001,SC2015,SC2016,SC2034,SC2207
+# shellcheck disable=SC1090,SC2015,SC2016,SC2034,SC2207
 
-# Elevate for access to ~root, /home/*, etc.
 [ "$EUID" -eq 0 ] || {
     sudo -H -E "$0" --elevated "$@"
     exit
@@ -65,6 +64,9 @@
 
     # Don't allow environment variables to override values set in config files
     export -n "${!LK_@}"
+
+    # Don't allow common.sh to override ORIGINAL_PATH_PREFIX (see below)
+    LK_PATH_PREFIX=${LK_PATH_PREFIX-}
 
     include=provision,git . "$LK_INST/lib/bash/common.sh"
 

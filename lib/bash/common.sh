@@ -195,7 +195,7 @@ fi
 SH=$(
     [[ ,${LK_SKIP:-}, == *,env,* ]] || {
         printf '%s=%q\n' \
-            LK_PATH_PREFIX "${LK_PATH_PREFIX:-lk-}"
+            LK_PATH_PREFIX "${LK_PATH_PREFIX-lk-}"
         . "${LK_INST:-$LK_BASE}/lib/bash/env.sh"
     }
 
