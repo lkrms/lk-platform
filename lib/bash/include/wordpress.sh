@@ -350,8 +350,8 @@ function lk_wp_db_restore_local() {
     SH=$(lk_wp_db_get_vars "$SITE_ROOT") && eval "$SH" || return
     lk_wp_db_set_local "$SITE_ROOT" "${@:2}" || return
     SQL=(
-        "DROP DATABASE IF EXISTS \`$LOCAL_DB_NAME\`"
-        "CREATE DATABASE \`$LOCAL_DB_NAME\`"
+        "DROP DATABASE IF EXISTS $(lk_mysql_quote_identifier "$LOCAL_DB_NAME")"
+        "CREATE DATABASE $(lk_mysql_quote_identifier "$LOCAL_DB_NAME")"
     )
     _SQL=$(printf '%s;\n' "${SQL[@]}")
     [ "$DB_NAME" = "$LOCAL_DB_NAME" ] ||
@@ -369,8 +369,8 @@ Proceed?" Y || return
     [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] || {
         COMMAND=(lk_elevate "${LK_INST:-$LK_BASE}/bin/lk-mysql-grant.sh"
             "$LOCAL_DB_NAME" "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD")
-        [[ "$USER" =~ ^[a-zA-Z0-9_]+$ ]] &&
-            [[ "$LOCAL_DB_NAME" =~ ^$USER(_[a-zA-Z0-9_]*)?$ ]] ||
+        [[ $USER =~ ^[a-zA-Z0-9_]+$ ]] &&
+            [[ $LOCAL_DB_NAME =~ ^$USER(_[a-zA-Z0-9_]*)?$ ]] ||
             unset "COMMAND[0]"
         "${COMMAND[@]}" || return
     }
@@ -388,10 +388,10 @@ Proceed?" Y || return
     [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] ||
         lk_wp config set \
             DB_PASSWORD "$LOCAL_DB_PASSWORD" --type=constant --quiet || return
-    lk_console_detail "Preparing database" "$LOCAL_DB_NAME"
+    lk_console_detail "Resetting database" "$LOCAL_DB_NAME"
     echo "$_SQL" | lk_mysql || return
     lk_console_detail "Restoring from" "$1"
-    if [[ "$1" =~ \.gz(ip)?$ ]]; then
+    if [[ $1 =~ \.gz(ip)?$ ]]; then
         lk_log_bypass_stderr pv "$1" | gunzip
     else
         lk_log_bypass_stderr pv "$1"

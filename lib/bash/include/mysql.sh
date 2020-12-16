@@ -18,6 +18,11 @@ function lk_mysql_escape_cnf() {
     lk_escape "$1" "\\" '"'
 }
 
+function lk_mysql_quote_identifier() {
+    local IDENTIFIER=${1//"\`"/\`\`}
+    echo "\`$IDENTIFIER\`"
+}
+
 function lk_mysql_batch_unescape() {
     { [ $# -gt 0 ] && lk_echo_args "$@" || cat; } |
         sed -Ee 's/(^|[^\])\\n/\1\n/g' \
@@ -215,4 +220,36 @@ exit \${PIPESTATUS[0]}' bash $(printf '%q' "$DB_NAME")" |
         lk_console_success "Database dump completed successfully" ||
         lk_console_error "Database dump failed"
     return "$EXIT_STATUS"
+}
+
+# lk_mysql_restore_local FILE DB_NAME
+function lk_mysql_restore_local() {
+    local FILE=$1 DB_NAME=$2 SQL _SQL LK_MYSQL_ELEVATE
+    [ -f "$FILE" ] || lk_warn "file not found: $FILE" || return
+    [ -n "$DB_NAME" ] || lk_warn "no database name" || return
+    ! lk_can_sudo mysql ||
+        LK_MYSQL_ELEVATE=1
+    lk_console_message "Preparing to restore database"
+    lk_console_detail "Backup file:" "$FILE"
+    lk_console_detail "Database:" "$DB_NAME"
+    SQL=(
+        "DROP DATABASE IF EXISTS $(lk_mysql_quote_identifier "$DB_NAME")"
+        "CREATE DATABASE $(lk_mysql_quote_identifier "$DB_NAME")"
+    )
+    _SQL=$(printf '%s;\n' "${SQL[@]}")
+    lk_console_detail "Local database will be reset with:" "$_SQL"
+    lk_confirm "\
+All data in local database '$DB_NAME' will be permanently destroyed.
+Proceed?" Y || return
+    lk_console_message "Restoring database to local system"
+    lk_console_detail "Resetting database" "$DB_NAME"
+    echo "$_SQL" | lk_mysql || return
+    lk_console_detail "Restoring from" "$FILE"
+    if [[ $FILE =~ \.gz(ip)?$ ]]; then
+        lk_log_bypass_stderr pv "$FILE" | gunzip
+    else
+        lk_log_bypass_stderr pv "$FILE"
+    fi | lk_mysql "$DB_NAME" ||
+        lk_console_error -r "Restore operation failed" || return
+    lk_console_success "Database restored successfully"
 }
