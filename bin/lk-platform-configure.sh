@@ -420,10 +420,6 @@
         OWNER=$(lk_file_owner "$h")
         GROUP=$(id -gn "$OWNER")
 
-        [ "$h" = "$(lk_expand_path "~$OWNER")" ] &&
-            unset LK_FILE_MOVE_BACKUP ||
-            LK_FILE_MOVE_BACKUP=1
-
         # Create ~/.bashrc if it doesn't exist, then add or update commands to
         # source LK_BASE/lib/bash/rc.sh at startup when Bash is running as a
         # non-login shell (e.g. in most desktop terminals on Linux)

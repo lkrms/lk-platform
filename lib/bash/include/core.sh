@@ -2302,7 +2302,8 @@ function lk_file_get_backup_suffix() {
 # modified time in UTC (e.g. 20201202T095515Z). If -m is set, copy FILE to
 # LK_BASE/var/backup if elevated, or ~/.lk-platform/backup if not elevated.
 function lk_file_backup() {
-    local MOVE=${LK_FILE_MOVE_BACKUP:-} DEST FILE MODIFIED SUFFIX TZ=UTC s vv=
+    local MOVE=${LK_FILE_MOVE_BACKUP:-} FILE OWNER OWNER_HOME DEST GROUP \
+        MODIFIED SUFFIX TZ=UTC s vv=
     [ "${1:-}" != -m ] || { MOVE=1 && shift; }
     ! lk_is_true LK_FILE_NO_BACKUP || return 0
     ! lk_verbose 2 || vv=v
@@ -2311,11 +2312,23 @@ function lk_file_backup() {
         lk_maybe_sudo test -f "$1" || lk_warn "not a file: $1" || return
         lk_maybe_sudo test -s "$1" || return 0
         ! lk_is_true MOVE || {
-            lk_will_sudo &&
-                DEST=${LK_INST:-$LK_BASE}/var/backup ||
+            FILE=$(lk_maybe_sudo realpath "$1") || return
+            { OWNER=$(lk_file_owner "$FILE") &&
+                OWNER_HOME=$(lk_expand_path "~$OWNER") &&
+                OWNER_HOME=$(realpath "$OWNER_HOME"); } 2>/dev/null ||
+                OWNER_HOME=
+            if lk_will_sudo && [ "${FILE#$OWNER_HOME}" = "$FILE" ]; then
+                DEST=${LK_INST:-$LK_BASE}/var/backup
+                unset OWNER
+            elif lk_will_sudo; then
+                DEST=$OWNER_HOME/.lk-platform/backup
+                GROUP=$(id -gn "$OWNER") || return
+            else
                 DEST=~/.lk-platform/backup
-            FILE=$(lk_maybe_sudo realpath "$1") &&
-                lk_maybe_sudo install -d -m 00700 "$DEST" || return
+                unset OWNER
+            fi
+            lk_maybe_sudo install -d -m 00700 \
+                ${OWNER:+-o "$OWNER" -g "$GROUP"} "$DEST" || return
             s=/
             DEST=$DEST/${FILE//"$s"/__}
         }
