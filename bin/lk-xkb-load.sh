@@ -4,7 +4,8 @@ lk_bin_depth=1 . lk-bash-load.sh || exit
 
 LK_USAGE="Usage: ${0##*/} KEYMAP_FILE"
 
-lk_check_args
+lk_getopt
+eval "set -- $LK_GETOPT"
 [ $# -eq 1 ] || lk_usage
 [ -f "$1" ] || lk_die "file not found: $1"
 

@@ -1,13 +1,12 @@
 #!/bin/bash
-# shellcheck disable=SC2015,SC2016,SC2034,SC2207
+# shellcheck disable=SC2015,SC2016,SC2034,SC2206,SC2207
 
+IFS=','
 CUSTOM_REPOS=(
-    "aur|http://arch.repo.linacreative.com/aur|||Optional TrustAll"
-    "lk-aur|http://arch.repo.linacreative.com/lk-aur|||Optional TrustAll"
-
-    #
+    ${LK_ARCH_CUSTOM_REPOS:-}
     ${CUSTOM_REPOS[@]+"${CUSTOM_REPOS[@]}"}
 )
+unset IFS
 
 lk_pacman_add_repo "${CUSTOM_REPOS[@]}"
 
@@ -48,6 +47,7 @@ PACMAN_PACKAGES=(
     inetutils # for telnet
     jq
     lftp
+    logrotate
     lsof
     mediainfo
     nano
@@ -56,10 +56,12 @@ PACMAN_PACKAGES=(
     nmap
     openbsd-netcat
     p7zip
+    pcp
     ps_mem
     pv
     rsync
     stow
+    sysstat
     tcpdump
     traceroute
     unzip
@@ -171,6 +173,7 @@ lk_is_virtual && {
         parted
 
         #
+        crda
         ethtool
         hdparm
         nvme-cli
@@ -299,14 +302,37 @@ pacman -Qq "xfce4-session" >/dev/null 2>&1 ||
 PACMAN_PACKAGES+=(${PACMAN_DESKTOP_PACKAGES[@]+"${PACMAN_DESKTOP_PACKAGES[@]}"})
 AUR_PACKAGES+=(${AUR_DESKTOP_PACKAGES[@]+"${AUR_DESKTOP_PACKAGES[@]}"})
 [ ${#AUR_PACKAGES[@]} -eq 0 ] || {
-    PACMAN_PACKAGES+=($(comm -12 <(pacman -Slq | sort | uniq) <(lk_echo_array AUR_PACKAGES | sort | uniq)))
-    AUR_PACKAGES=($(comm -13 <(pacman -Slq | sort | uniq) <(lk_echo_array AUR_PACKAGES | sort | uniq)))
-    [ ${#AUR_PACKAGES[@]} -eq 0 ] || {
-        lk_echo_array AUR_PACKAGES | lk_console_list "Unable to install from configured repositories:" package packages
-        ! lk_confirm "Manage the above using yay?" Y && AUR_PACKAGES=() || {
-            PACMAN_PACKAGES+=($(lk_pacman_group_packages base-devel))
-            AUR_PACKAGES+=($(pacman -Qq yay 2>/dev/null || true))
+    NOT_AUR=($(comm -12 \
+        <(pacman -Slq core extra community | sort -u) \
+        <(lk_echo_array AUR_PACKAGES | sort -u)))
+    [ ${#NOT_AUR[@]} -eq 0 ] ||
+        lk_console_warning "Moved from AUR to repo:" $'\n'"$(lk_echo_array NOT_AUR)"
+}
+CUSTOM_REPO_PACKAGES=($(comm -13 \
+    <(pacman -Slq core extra community | sort -u) \
+    <(pacman -Slq | sort -u)))
+for SUFFIX in -lk -git ""; do
+    CUSTOM_PACKAGES=($(comm -12 \
+        <(lk_echo_array CUSTOM_REPO_PACKAGES | sort -u) \
+        <(lk_echo_array AUR_PACKAGES ${SUFFIX:+PACMAN_PACKAGES} |
+            sed "s/\$/$SUFFIX/" | sort -u)))
+    [ ${#CUSTOM_PACKAGES[@]} -eq 0 ] || {
+        AUR_PACKAGES=($(comm -13 \
+            <(lk_echo_array CUSTOM_PACKAGES | sed "s/$SUFFIX\$//" | sort -u) \
+            <(lk_echo_array AUR_PACKAGES | sort -u)))
+        [ -z "$SUFFIX" ] || {
+            PACMAN_PACKAGES=($(comm -13 \
+                <(lk_echo_array CUSTOM_PACKAGES | sed "s/$SUFFIX\$//" | sort -u) \
+                <(lk_echo_array PACMAN_PACKAGES | sort -u)))
         }
+        PACMAN_PACKAGES+=("${CUSTOM_PACKAGES[@]}")
+    }
+done
+[ ${#AUR_PACKAGES[@]} -eq 0 ] || {
+    lk_echo_array AUR_PACKAGES | lk_console_list "Unable to install from configured repositories:" package packages
+    ! lk_confirm "Manage the above using yay?" Y && AUR_PACKAGES=() || {
+        PACMAN_PACKAGES+=($(lk_pacman_group_packages base-devel))
+        AUR_PACKAGES+=($(pacman -Qq yay 2>/dev/null || true))
     }
 }
 

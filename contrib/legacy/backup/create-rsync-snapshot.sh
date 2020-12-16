@@ -1,11 +1,10 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2015,SC2034,SC2046,SC2207
+# shellcheck disable=SC1090,SC2001,SC2015,SC2034,SC2046,SC2120,SC2207
 
 set -eu
 
-lk_die() { s=$? && echo "${LK_DIE_PREFIX-${0##*/}: }$1" >&2 &&
-    (return $s) && false || exit; }
+lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
 _DIR=${0%/*}
 [ "$_DIR" != "$0" ] || _DIR=.
 _DIR=$(cd "$_DIR" && pwd -P) && [ ! -L "$0" ] ||
@@ -54,7 +53,7 @@ function lk_in_array() {
     eval "_LK_ARRAY=(\${$2[@]+\"\${$2[@]}\"})"
     for _LK_VALUE in ${_LK_ARRAY[@]+"${_LK_ARRAY[@]}"}; do
         [ "$_LK_VALUE" = "$1" ] || continue
-        return
+        return 0
     done
     false
 }
@@ -70,21 +69,26 @@ function lk_log() {
     done
 }
 
+function lk_echo_args() {
+    [ $# -eq 0 ] ||
+        printf '%s\n' "$@"
+}
+
 function lk_echo_array() {
-    eval "printf '%s\n' \${$1[@]+\"\${$1[@]}\"}"
+    eval "lk_echo_args \${$1[@]+\"\${$1[@]}\"}"
 }
 
 function lk_console_message() {
-    local SPACES=${LK_CONSOLE_SPACES-  }
     echo "\
-$LK_BOLD${LK_CONSOLE_COLOUR-$LK_CYAN}${LK_CONSOLE_PREFIX-==> }\
-$LK_RESET${LK_CONSOLE_MESSAGE_COLOUR-$LK_BOLD}\
-$(sed "1b;s/^/$SPACES/" <<<"$1")$LK_RESET"
+$LK_BOLD${LK_TTY_COLOUR-$LK_CYAN}${LK_TTY_PREFIX-==> }\
+$LK_RESET${LK_TTY_MESSAGE_COLOUR-$LK_BOLD}\
+$(sed "1b
+s/^/${LK_TTY_SPACES-  }/" <<<"$1")$LK_RESET" >&2
 }
 
 function lk_console_item() {
     lk_console_message "\
-$1$LK_RESET${LK_CONSOLE_COLOUR2-${LK_CONSOLE_COLOUR-$LK_CYAN}}$(
+$1$LK_RESET${LK_TTY_COLOUR2-${LK_TTY_COLOUR-$LK_CYAN}}$(
         [ "${2/$'\n'/}" = "$2" ] &&
             echo " $2" ||
             echo $'\n'"${2#$'\n'}"
@@ -92,24 +96,39 @@ $1$LK_RESET${LK_CONSOLE_COLOUR2-${LK_CONSOLE_COLOUR-$LK_CYAN}}$(
 }
 
 function lk_console_detail() {
-    local LK_CONSOLE_PREFIX="   -> " LK_CONSOLE_SPACES="    " \
-        LK_CONSOLE_COLOUR=$LK_YELLOW LK_CONSOLE_MESSAGE_COLOUR=
+    local LK_TTY_PREFIX="   -> " LK_TTY_SPACES="    " \
+        LK_TTY_COLOUR=$LK_YELLOW LK_TTY_MESSAGE_COLOUR=
     [ $# -le 1 ] &&
         lk_console_message "$1" ||
         lk_console_item "$1" "$2"
 }
 
+function lk_console_detail_list() {
+    lk_console_detail \
+        "$1" "$(COLUMNS=${COLUMNS+$((COLUMNS - 4))} column | expand)"
+}
+
 function lk_console_log() {
-    local LK_CONSOLE_PREFIX=" :: " LK_CONSOLE_SPACES="    " \
-        LK_CONSOLE_COLOUR2=${LK_CONSOLE_COLOUR2-$LK_BOLD}
+    local LK_TTY_PREFIX=" :: " LK_TTY_SPACES="    " \
+        LK_TTY_COLOUR2=${LK_TTY_COLOUR2-$LK_BOLD}
     [ $# -le 1 ] &&
-        lk_console_message "${LK_CONSOLE_COLOUR-$LK_CYAN}$1" ||
-        lk_console_item "${LK_CONSOLE_COLOUR-$LK_CYAN}$1" "$2"
+        lk_console_message "${LK_TTY_COLOUR-$LK_CYAN}$1" ||
+        lk_console_item "${LK_TTY_COLOUR-$LK_CYAN}$1" "$2"
+}
+
+function lk_console_success() {
+    LK_TTY_COLOUR=$LK_GREEN lk_console_log "$@"
+}
+
+function lk_console_warning() {
+    local EXIT_STATUS=$?
+    LK_TTY_COLOUR=$LK_YELLOW lk_console_log "$@"
+    return "$EXIT_STATUS"
 }
 
 function lk_console_error() {
     local EXIT_STATUS=$?
-    LK_CONSOLE_COLOUR=$LK_RED lk_console_log "$@"
+    LK_TTY_COLOUR=$LK_RED lk_console_log "$@"
     return "$EXIT_STATUS"
 }
 
@@ -192,7 +211,7 @@ function lk_mail_get_mime() {
     [ $# -ge 2 ] || return
     SUBJECT=$1
     TO=$2
-    FROM=${3:-${LK_MAIL_FROM-${USER:-$(whoami)}@$FQDN}} || return
+    FROM=${3:-${LK_MAIL_FROM-$USER@$FQDN}} || return
     case "$SUBJECT$TO$FROM" in
     *$'\r'* | *$'\n'*)
         lk_die "line breaks not permitted in SUBJECT, TO, or FROM"
@@ -271,11 +290,11 @@ function lk_mail_send() {
     fi
 }
 
-LK_BOLD=$(tput bold 2>/dev/null) || LK_BOLD=
-LK_RED=$(tput setaf 1 2>/dev/null) || LK_RED=
-LK_CYAN=$(tput setaf 6 2>/dev/null) || LK_CYAN=
-LK_YELLOW=$(tput setaf 3 2>/dev/null) || LK_YELLOW=
-LK_RESET=$(tput sgr0 2>/dev/null) || LK_RESET=
+LK_BOLD=$(tput bold) || LK_BOLD=
+LK_RED=$(tput setaf 1) || LK_RED=
+LK_CYAN=$(tput setaf 6) || LK_CYAN=
+LK_YELLOW=$(tput setaf 3) || LK_YELLOW=
+LK_RESET=$(tput sgr0) || LK_RESET=
 
 ##
 
@@ -339,7 +358,7 @@ Transport: $SOURCE_TYPE
 Snapshot: $LK_SNAPSHOT_TIMESTAMP
 Status: $(get_stage)
 
-Running as: ${USER:-<unknown>}
+Running as: $USER
 Command line:
 $(printf '%q' "$0" && { [ ${#ARGS[@]} -eq 0 ] || printf ' \\\n    %q' "${ARGS[@]}"; })
 
@@ -347,7 +366,8 @@ Output:
 
 $(LC_ALL=C sed \
             -e $'s/\x01[^\x02]*\x02//g' \
-            -e $'s/\x1b\\[[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]//g' \
+            -e $'s/\x1b\\\x5b[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]//g' \
+            -e $'s/\x1b[\x20-\x2f]*[\x30-\x7e]//g' \
             "$SNAPSHOT_LOG_FILE")" &&
             lk_mail_set_text "$MESSAGE" &&
             lk_mail_send "$SUBJECT" "$LK_BACKUP_MAIL" "$LK_BACKUP_MAIL_FROM" || true
@@ -355,29 +375,24 @@ $(LC_ALL=C sed \
 }
 
 function find_custom() {
-    local FILE ALL=0 COUNT=0
-    [ "$1" != --all ] || {
-        ALL=1
-        shift
-    }
-    for FILE in {"$_DIR","$BACKUP_ROOT"/conf.d}/{"$1","$SOURCE_NAME/${1#$SOURCE_NAME-}"}; do
+    local FILE COUNT=0
+    for FILE in {"$_DIR","$BACKUP_ROOT/conf.d"}/{"$1","$SOURCE_NAME-$1","$SOURCE_NAME/$1"}; do
         [ -e "$FILE" ] || continue
         lk_realpath "$FILE" || lk_die
         ((++COUNT))
-        [ "$ALL" -eq 1 ] || break
     done
     ((COUNT))
 }
 
 function run_custom_hook() {
-    local HOOK=$1 SCRIPTS SOURCE_SCRIPT LINES LINE SH
-    export LK_SOURCE_SCRIPT_ALREADY_STARTED=0 \
+    local HOOK=$1 SCRIPTS SOURCE_SCRIPT i=0 LINES LINE SH \
+        LK_SOURCE_SCRIPT_ALREADY_STARTED=0 \
         LK_SOURCE_SCRIPT_ALREADY_FINISHED=0
     ! is_stage_complete "hook-$HOOK-started" ||
         LK_SOURCE_SCRIPT_ALREADY_STARTED=1
     ! is_stage_complete "hook-$HOOK-finished" ||
         LK_SOURCE_SCRIPT_ALREADY_FINISHED=1
-    if SCRIPTS=($(find_custom --all "$SOURCE_NAME-hook-$HOOK")); then
+    if SCRIPTS=($(find_custom "hook-$HOOK")); then
         mark_stage_complete "hook-$HOOK-started"
         for SOURCE_SCRIPT in "${SCRIPTS[@]}"; do
             lk_console_item "Running hook script:" "$SOURCE_SCRIPT"
@@ -389,14 +404,14 @@ function run_custom_hook() {
             ) &
             LINES=()
             while IFS= read -ru 4 LINE && [ "$LINE" != "# ." ]; do
-                LINES=(${LINES[@]+"${LINES[@]}"} "$LINE")
+                LINES[$((i++))]=$LINE
             done
             wait "$!" ||
                 lk_die "hook script failed (exit status $?)"
             [ ${#LINES[@]} -eq 0 ] || {
                 SH=$(lk_echo_array LINES)
                 eval "$SH" ||
-                    LK_CONSOLE_COLOUR2='' lk_console_error "\
+                    LK_TTY_COLOUR2='' lk_console_error "\
 Shell commands emitted by hook script failed (exit status $?):" $'\n'"$SH" ||
                     lk_die ""
             }
@@ -424,11 +439,25 @@ function is_stage_complete() {
 
 function get_stage() {
     local STAGE
-    for STAGE in $(tac < <(printf '%s\n' \
-        "${SNAPSHOT_STAGES[@]}")) starting; do
+    for STAGE in $(tac < <(lk_echo_array SNAPSHOT_STAGES)) starting; do
         [ ! -e "$LK_SNAPSHOT_ROOT/.$STAGE" ] || break
     done
     echo "${STAGE//-/ }"
+}
+
+# run_rsync [SOURCE DEST]
+function run_rsync() {
+    local SRC=${1:-} DEST=${2:-}
+    [ $# -eq 2 ] || {
+        SRC=${SOURCE%/}/
+        DEST=$LK_SNAPSHOT_FS_ROOT/
+    }
+    lk_console_item "Running rsync:" \
+        $'>>>\n'"  rsync$(printf ' \\ \n    %q' \
+            "${RSYNC_ARGS[@]}" "$SRC" "$DEST")"$'\n<<<'
+    rsync "${RSYNC_ARGS[@]}" "$SRC" "$DEST" \
+        > >(tee -a "$RSYNC_OUT_FILE" >&6) \
+        2> >(tee -a "$RSYNC_ERR_FILE" >&7)
 }
 
 SNAPSHOT_STAGES=(
@@ -444,7 +473,10 @@ SNAPSHOT_STAGES=(
     finished
 )
 
-[ $# -ge 3 ] || LK_DIE_PREFIX='' lk_die "\
+SNAPSHOT_GROUP=
+
+[ $# -ge 3 ] || {
+    echo "\
 Usage: ${0##*/} SOURCE_NAME SSH_HOST:SOURCE_PATH BACKUP_ROOT [RSYNC_ARG...]
    or: ${0##*/} SOURCE_NAME RSYNC_HOST::SOURCE_PATH BACKUP_ROOT [RSYNC_ARG...]
    or: ${0##*/} SOURCE_NAME SOURCE_PATH BACKUP_ROOT [RSYNC_ARG...]
@@ -453,7 +485,9 @@ Use hard links to duplicate the previous SOURCE_NAME snapshot at BACKUP_ROOT,
 then rsync SOURCE_PATH to the replica to create a new snapshot of SOURCE_NAME.
 
 This approach uses less storage than rsync --link-dest, which breaks hard links
-when permissions change."
+when permissions change." >&2
+    exit 1
+}
 
 ARGS=("$@")
 
@@ -494,6 +528,8 @@ FIFO_FILE=$(mktemp -d -- "${TMPDIR%/}/${0##*/}.XXXXXXXXXX")/fifo
 mkfifo "$FIFO_FILE"
 exec 4<>"$FIFO_FILE"
 
+export TZ=UTC
+USER=${USER:-$(id -un)}
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
 HN=$(hostname -s) || HN=localhost
 FQDN=$(hostname -f) || FQDN=$HN.localdomain
@@ -503,7 +539,7 @@ LK_SNAPSHOT_ROOT=$BACKUP_ROOT/snapshot/$SOURCE_NAME/$LK_SNAPSHOT_TIMESTAMP
 LK_SNAPSHOT_FS_ROOT=$LK_SNAPSHOT_ROOT/fs
 LK_SNAPSHOT_DB_ROOT=$LK_SNAPSHOT_ROOT/db
 LK_BACKUP_MAIL=${LK_BACKUP_MAIL-root}
-LK_BACKUP_MAIL_FROM=${LK_BACKUP_MAIL_FROM-"$SENDER_NAME <${USER:-$(whoami)}@$FQDN>"}
+LK_BACKUP_MAIL_FROM=${LK_BACKUP_MAIL_FROM-"$SENDER_NAME <$USER@$FQDN>"}
 LK_BACKUP_MAIL_ERROR_ONLY=${LK_BACKUP_MAIL_ERROR_ONLY-Y}
 
 SOURCE_LATEST=$BACKUP_ROOT/latest/$SOURCE_NAME
@@ -515,11 +551,25 @@ RSYNC_ERR_FILE=$LK_SNAPSHOT_ROOT/log/rsync.err.log
 ! is_stage_complete finished ||
     lk_die "already finalised: $LK_SNAPSHOT_ROOT"
 
-install -d -m 00711 \
-    "$BACKUP_ROOT/"{,latest,log,snapshot/{,"$SOURCE_NAME/"{,"$LK_SNAPSHOT_TIMESTAMP/"{,db,log}}}}
+umask 022
+SOURCE_MODE=00700
+SNAPSHOT_MODE=00700
+LOG_MODE=00600
+[ -z "$SNAPSHOT_GROUP" ] || {
+    SOURCE_MODE=02770
+    SNAPSHOT_MODE=02750
+    LOG_MODE=00640
+}
+
+install -d -m 00755 "$BACKUP_ROOT"
+install -d -m 00751 "$BACKUP_ROOT"/{latest,log,snapshot}
+install -d -m "$SOURCE_MODE" ${SNAPSHOT_GROUP:+-g "$SNAPSHOT_GROUP"} \
+    "$BACKUP_ROOT/snapshot/$SOURCE_NAME"
+install -d -m "$SNAPSHOT_MODE" ${SNAPSHOT_GROUP:+-g "$SNAPSHOT_GROUP"} \
+    "$BACKUP_ROOT/snapshot/$SOURCE_NAME/$LK_SNAPSHOT_TIMESTAMP"/{,db,log}
 for f in LOG_FILE SNAPSHOT_LOG_FILE RSYNC_OUT_FILE RSYNC_ERR_FILE; do
     [ -e "${!f}" ] ||
-        install -m 00600 /dev/null "${!f}"
+        install -m "$LOG_MODE" /dev/null "${!f}"
 done
 
 if [[ $- != *x* ]]; then
@@ -556,7 +606,11 @@ trap exit_trap EXIT
         lk_console_detail "Snapshot:" "$LATEST"
         lk_console_detail "Replica:" "$LK_SNAPSHOT_FS_ROOT"
         mark_stage_complete previous-copy-started
-        cp -al "$LATEST" "$LK_SNAPSHOT_FS_ROOT"
+        # Prevent unwelcome set-group-ID propagation
+        LATEST_MODE=$(stat --format=%a "$LATEST")
+        install -d -m "0$LATEST_MODE" "$LK_SNAPSHOT_FS_ROOT"
+        (shopt -s dotglob &&
+            cp -al "$LATEST"/* "$LK_SNAPSHOT_FS_ROOT")
         mark_stage_complete previous-copy-finished
         lk_console_log "Copy complete"
     else
@@ -564,17 +618,20 @@ trap exit_trap EXIT
     fi
 
     lk_console_item "Creating snapshot at" "$LK_SNAPSHOT_ROOT"
-    lk_console_detail "Log files:" "$(printf '%s\n' \
+    lk_console_detail "Log files:" "$(lk_echo_args \
         "$SNAPSHOT_LOG_FILE" "$RSYNC_OUT_FILE" "$RSYNC_ERR_FILE")"
-    RSYNC_ARGS=(-vrlpt --delete --stats)
-    ! RSYNC_FILTER=$(find_custom "$SOURCE_NAME-filter-rsync") || {
-        lk_console_detail "Rsync filter:" "$RSYNC_FILTER"
-        RSYNC_ARGS=("${RSYNC_ARGS[@]}" --delete-excluded --filter ". $RSYNC_FILTER")
+    RSYNC_ARGS=(-vrlpt --delete --stats "$@")
+    ! RSYNC_FILTERS=($(find_custom filter-rsync | tac)) || {
+        lk_console_detail "Rsync filter:" \
+            "$(lk_echo_args "${RSYNC_FILTERS[@]/#/. }")"
+        RSYNC_ARGS[${#RSYNC_ARGS[@]}]=--delete-excluded
+        for RSYNC_FILTER in "${RSYNC_FILTERS[@]}"; do
+            RSYNC_ARGS[${#RSYNC_ARGS[@]}]=--filter
+            RSYNC_ARGS[${#RSYNC_ARGS[@]}]=". $RSYNC_FILTER"
+        done
     }
 
     run_custom_hook pre_rsync
-
-    RSYNC_ARGS=("${RSYNC_ARGS[@]}" "$@" "${SOURCE%/}/" "$LK_SNAPSHOT_FS_ROOT/")
 
     ! lk_in_array --inplace RSYNC_ARGS &&
         ! lk_in_array --write-devices RSYNC_ARGS ||
@@ -584,11 +641,7 @@ trap exit_trap EXIT
         ! lk_in_array -n RSYNC_ARGS || DRY_RUN=1
 
     [ "${DRY_RUN:-0}" -ne 0 ] || mark_stage_complete rsync-started
-    lk_console_item "Running rsync:" \
-        $'>>>\n'"  rsync$(printf ' \\ \n    %q' "${RSYNC_ARGS[@]}")"$'\n<<<'
-    rsync "${RSYNC_ARGS[@]}" \
-        > >(tee -a "$RSYNC_OUT_FILE" >&6) \
-        2> >(tee -a "$RSYNC_ERR_FILE" >&7) || RSYNC_EXIT_VALUE=$?
+    run_rsync || RSYNC_EXIT_VALUE=$?
     EXIT_STATUS=$RSYNC_EXIT_VALUE
     case "$EXIT_STATUS" in
     0)

@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2015,SC2034,SC2207
+# shellcheck disable=SC1090,SC2015,SC2034,SC2120,SC2207
 
 set -euo pipefail
 _DEPTH=1
 _FILE=${BASH_SOURCE[0]}
-lk_die() { s=$? && echo "$_FILE: $1" >&2 && (return $s) && false || exit; }
+lk_die() { s=$? && echo "$_FILE: $1" >&2 && (exit $s) && false || exit; }
 { type -P realpath || { type -P python && realpath() { python -c \
     "import os,sys;print(os.path.realpath(sys.argv[1]))" "$1"; }; }; } \
     >/dev/null || lk_die "command not found: realpath"
@@ -15,11 +15,11 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
     lk_die "unable to locate LK_BASE"
 export LK_BASE
 
-include='' . "$LK_BASE/lib/bash/common.sh"
+include=mysql,mail . "$LK_BASE/lib/bash/common.sh"
 
 function exit_trap() {
     local EXIT_STATUS=$? MESSAGE TAR SUBJECT
-    exec 4>&- 9>&- &&
+    eval "exec $FIFO_FD>&- $LOCK_FD>&-" &&
         rm -Rf "${FIFO_FILE%/*}" "$LOCK_FILE" || true
     lk_log_close
     lk_log_output
@@ -82,49 +82,45 @@ $(lk_strip_non_printing <"$SNAPSHOT_LOG_FILE")" &&
 }
 
 function find_custom() {
-    local FILE ALL=0 COUNT=0
-    [ "$1" != --all ] || {
-        ALL=1
-        shift
-    }
-    for FILE in {"$LK_BASE"/etc/backup,"$BACKUP_ROOT"/conf.d}/{"$1","$SOURCE_NAME/${1#$SOURCE_NAME-}"}; do
+    local ARR="${1//-/_}[@]" FILE COUNT=0
+    for FILE in {"$LK_BASE/etc/backup","$BACKUP_ROOT/conf.d"}/{"$1","$SOURCE_NAME-$1","$SOURCE_NAME/$1"} \
+        ${!ARR+"${!ARR}"}; do
         [ -e "$FILE" ] || continue
         realpath "$FILE" || lk_die
         ((++COUNT))
-        [ "$ALL" -eq 1 ] || break
     done
     ((COUNT))
 }
 
 function run_custom_hook() {
-    local HOOK=$1 SCRIPTS SOURCE_SCRIPT LINES LINE SH
-    export LK_SOURCE_SCRIPT_ALREADY_STARTED=0 \
+    local HOOK=$1 SCRIPTS SOURCE_SCRIPT i=0 LINES LINE SH \
+        LK_SOURCE_SCRIPT_ALREADY_STARTED=0 \
         LK_SOURCE_SCRIPT_ALREADY_FINISHED=0
     ! is_stage_complete "hook-$HOOK-started" ||
         LK_SOURCE_SCRIPT_ALREADY_STARTED=1
     ! is_stage_complete "hook-$HOOK-finished" ||
         LK_SOURCE_SCRIPT_ALREADY_FINISHED=1
-    if SCRIPTS=($(find_custom --all "$SOURCE_NAME-hook-$HOOK")); then
+    if SCRIPTS=($(find_custom "hook-$HOOK")); then
         mark_stage_complete "hook-$HOOK-started"
         for SOURCE_SCRIPT in "${SCRIPTS[@]}"; do
             lk_console_item "Running hook script:" "$SOURCE_SCRIPT"
             (
                 EXIT_STATUS=0
                 . "$SOURCE_SCRIPT" || EXIT_STATUS=$?
-                echo "# ." >&4
+                echo "# ." >&"$FIFO_FD"
                 exit "$EXIT_STATUS"
             ) &
             LINES=()
-            while IFS= read -ru 4 LINE && [ "$LINE" != "# ." ]; do
-                LINES+=("$LINE")
+            while IFS= read -ru "$FIFO_FD" LINE && [ "$LINE" != "# ." ]; do
+                LINES[$((i++))]=$LINE
             done
             wait "$!" ||
                 lk_die "hook script failed (exit status $?)"
             [ ${#LINES[@]} -eq 0 ] || {
                 SH=$(lk_echo_array LINES)
                 eval "$SH" ||
-                    LK_CONSOLE_SECONDARY_COLOUR='' LK_CONSOLE_NO_FOLD=1 \
-                        lk_console_error "\
+                    LK_TTY_COLOUR2='' LK_TTY_NO_FOLD=1 \
+                        lk_console_error -r "\
 Shell commands emitted by hook script failed (exit status $?):" $'\n'"$SH" ||
                     lk_die ""
             }
@@ -158,6 +154,21 @@ function get_stage() {
     echo "${STAGE//-/ }"
 }
 
+# run_rsync [SOURCE DEST]
+function run_rsync() {
+    local SRC=${1:-} DEST=${2:-}
+    [ $# -eq 2 ] || {
+        SRC=${SOURCE%/}/
+        DEST=$LK_SNAPSHOT_FS_ROOT/
+    }
+    lk_console_item "Running rsync:" \
+        $'>>>\n'"  rsync$(printf ' \\ \n    %q' \
+            "${RSYNC_ARGS[@]}" "$SRC" "$DEST")"$'\n<<<'
+    rsync "${RSYNC_ARGS[@]}" "$SRC" "$DEST" \
+        > >(lk_log_bypass_stdout tee -a "$RSYNC_OUT_FILE") \
+        2> >(lk_log_bypass_stdout tee -a "$RSYNC_ERR_FILE")
+}
+
 SNAPSHOT_STAGES=(
     previous-copy-started
     previous-copy-finished
@@ -171,16 +182,79 @@ SNAPSHOT_STAGES=(
     finished
 )
 
+SNAPSHOT_GROUP=
+filter_rsync=()
+hook_pre_rsync=()
+hook_post_rsync=()
+
 LK_USAGE="\
-Usage: ${0##*/} SOURCE_NAME SSH_HOST:SOURCE_PATH BACKUP_ROOT [RSYNC_ARG...]
-   or: ${0##*/} SOURCE_NAME RSYNC_HOST::SOURCE_PATH BACKUP_ROOT [RSYNC_ARG...]
-   or: ${0##*/} SOURCE_NAME SOURCE_PATH BACKUP_ROOT [RSYNC_ARG...]
+Usage: ${0##*/} [OPTIONS] SOURCE_NAME SOURCE BACKUP_ROOT [-- RSYNC_ARG...]
 
 Use hard links to duplicate the previous SOURCE_NAME snapshot at BACKUP_ROOT,
-then rsync SOURCE_PATH to the replica to create a new snapshot of SOURCE_NAME.
+then rsync from SOURCE to the replica to create a new snapshot of SOURCE_NAME.
 
-This approach uses less storage than rsync --link-dest, which breaks hard links
-when permissions change."
+This approach doesn't preserve historical file modes but uses less storage than
+rsync --link-dest, which breaks hard links when permissions change.
+
+Custom hook scripts are processed in the following order. Rsync filters are
+added in the reverse order.
+  1. $LK_BASE/etc/backup/<filter-rsync|hook-HOOK>
+  2. $LK_BASE/etc/backup/<SOURCE_NAME>/<filter-rsync|hook-HOOK>
+  3. <BACKUP_ROOT>/conf.d/<filter-rsync|hook-HOOK>
+  4. <BACKUP_ROOT>/conf.d/<SOURCE_NAME>/<filter-rsync|hook-HOOK>
+  5. command-line
+
+Hook scripts are sourced in a Bash subshell. If they return zero, any output on
+file descriptor 4 is eval'd in the global scope of ${0##*/}.
+
+Options:
+  -g, --group GROUP             create snapshot directories with group GROUP
+  -f, --filter RSYNC_FILTER     add filtering rules from file RSYNC_FILTER
+  -h, --hook HOOK:BASH_SCRIPT   register BASH_SCRIPT with HOOK
+
+Sources:
+  SSH_HOST:SOURCE_PATH
+  RSYNC_HOST::SOURCE_PATH
+  SOURCE_PATH
+
+Hooks:
+  pre_rsync
+  post_rsync"
+
+lk_getopt "g:f:h:" \
+    "group:,filter:,hook:"
+eval "set -- $LK_GETOPT"
+
+while :; do
+    OPT=$1
+    shift
+    case "$OPT" in
+    -g | --group)
+        # TODO: add macOS-friendly test
+        getent group "$1" >/dev/null 2>&1 ||
+            lk_die "group not found: $1"
+        SNAPSHOT_GROUP=$1
+        shift
+        ;;
+    -f | --filter)
+        [ -f "$1" ] || lk_die "file not found: $1"
+        filter_rsync+=("$1")
+        shift
+        ;;
+    -h | --hook)
+        [[ $1 =~ ^(pre_rsync|post_rsync):(.+)$ ]] ||
+            lk_die "invalid argument: $1"
+        HOOK=${BASH_REMATCH[1]}
+        HOOK_SCRIPT=${BASH_REMATCH[2]}
+        [ -f "$HOOK_SCRIPT" ] || lk_die "file not found: $HOOK_SCRIPT"
+        eval "hook_$HOOK+=(\"\$HOOK_SCRIPT\")"
+        shift
+        ;;
+    --)
+        break
+        ;;
+    esac
+done
 
 [ $# -ge 3 ] || lk_usage
 
@@ -212,12 +286,15 @@ esac
 SOURCE_NAME=${SOURCE_NAME//\//_}
 BACKUP_ROOT=$(realpath "$BACKUP_ROOT")
 LOCK_FILE=/tmp/${0##*/}-${BACKUP_ROOT//\//_}-$SOURCE_NAME.lock
-exec 9>"$LOCK_FILE" &&
-    flock -n 9 || lk_die "unable to acquire a lock on $LOCK_FILE"
+LOCK_FD=$(lk_next_fd)
+eval "exec $LOCK_FD>\"\$LOCK_FILE\""
+flock -n "$LOCK_FD" || lk_die "unable to acquire a lock on $LOCK_FILE"
 FIFO_FILE=$(lk_mktemp_dir)/fifo
+FIFO_FD=$(lk_next_fd)
 mkfifo "$FIFO_FILE"
-exec 4<>"$FIFO_FILE"
+eval "exec $FIFO_FD<>\"\$FIFO_FILE\""
 
+export TZ=UTC
 HN=$(lk_hostname) || HN=localhost
 FQDN=$(lk_fqdn) || FQDN=$HN.localdomain
 SENDER_NAME="${LK_PATH_PREFIX}backup on $HN"
@@ -237,11 +314,25 @@ RSYNC_ERR_FILE=$LK_SNAPSHOT_ROOT/log/rsync.err.log
 ! is_stage_complete finished ||
     lk_die "already finalised: $LK_SNAPSHOT_ROOT"
 
-install -d -m 00711 \
-    "$BACKUP_ROOT/"{,latest,log,snapshot/{,"$SOURCE_NAME/"{,"$LK_SNAPSHOT_TIMESTAMP/"{,db,log}}}}
+umask 022
+SOURCE_MODE=00700
+SNAPSHOT_MODE=00700
+LOG_MODE=00600
+[ -z "$SNAPSHOT_GROUP" ] || {
+    SOURCE_MODE=02770
+    SNAPSHOT_MODE=02750
+    LOG_MODE=00640
+}
+
+install -d -m 00755 "$BACKUP_ROOT"
+install -d -m 00751 "$BACKUP_ROOT"/{latest,snapshot}
+install -d -m "$SOURCE_MODE" ${SNAPSHOT_GROUP:+-g "$SNAPSHOT_GROUP"} \
+    "$BACKUP_ROOT/snapshot/$SOURCE_NAME"
+install -d -m "$SNAPSHOT_MODE" ${SNAPSHOT_GROUP:+-g "$SNAPSHOT_GROUP"} \
+    "$BACKUP_ROOT/snapshot/$SOURCE_NAME/$LK_SNAPSHOT_TIMESTAMP"/{,db,log}
 for f in SNAPSHOT_LOG_FILE RSYNC_OUT_FILE RSYNC_ERR_FILE; do
     [ -e "${!f}" ] ||
-        install -m 00600 /dev/null "${!f}"
+        install -m "$LOG_MODE" /dev/null "${!f}"
 done
 
 LK_SECONDARY_LOG_FILE=$SNAPSHOT_LOG_FILE \
@@ -275,7 +366,9 @@ trap exit_trap EXIT
         lk_console_detail "Snapshot:" "$LATEST"
         lk_console_detail "Replica:" "$LK_SNAPSHOT_FS_ROOT"
         mark_stage_complete previous-copy-started
-        cp -al "$LATEST" "$LK_SNAPSHOT_FS_ROOT"
+        # Prevent unwelcome set-group-ID propagation
+        install -d -m 00700 "$LK_SNAPSHOT_FS_ROOT"
+        gnu_cp -alT "$LATEST" "$LK_SNAPSHOT_FS_ROOT"
         mark_stage_complete previous-copy-finished
         lk_console_log "Copy complete"
     else
@@ -285,15 +378,17 @@ trap exit_trap EXIT
     lk_console_item "Creating snapshot at" "$LK_SNAPSHOT_ROOT"
     lk_console_detail "Log files:" "$(lk_echo_args \
         "$SNAPSHOT_LOG_FILE" "$RSYNC_OUT_FILE" "$RSYNC_ERR_FILE")"
-    RSYNC_ARGS=(-vrlpt --delete --stats)
-    ! RSYNC_FILTER=$(find_custom "$SOURCE_NAME-filter-rsync") || {
-        lk_console_detail "Rsync filter:" "$RSYNC_FILTER"
-        RSYNC_ARGS=("${RSYNC_ARGS[@]}" --delete-excluded --filter ". $RSYNC_FILTER")
+    RSYNC_ARGS=(-vrlpt --delete --stats "$@")
+    ! RSYNC_FILTERS=($(find_custom filter-rsync | tac)) || {
+        lk_console_detail "Rsync filter:" \
+            "$(lk_echo_args "${RSYNC_FILTERS[@]/#/. }")"
+        RSYNC_ARGS+=(--delete-excluded)
+        for RSYNC_FILTER in "${RSYNC_FILTERS[@]}"; do
+            RSYNC_ARGS+=(--filter ". $RSYNC_FILTER")
+        done
     }
 
     run_custom_hook pre_rsync
-
-    RSYNC_ARGS=("${RSYNC_ARGS[@]}" "$@" "${SOURCE%/}/" "$LK_SNAPSHOT_FS_ROOT/")
 
     ! lk_in_array --inplace RSYNC_ARGS &&
         ! lk_in_array --write-devices RSYNC_ARGS ||
@@ -303,11 +398,7 @@ trap exit_trap EXIT
         ! lk_in_array -n RSYNC_ARGS || DRY_RUN=1
 
     [ "${DRY_RUN:-0}" -ne 0 ] || mark_stage_complete rsync-started
-    lk_console_item "Running rsync:" \
-        $'>>>\n'"  rsync$(printf ' \\ \n    %q' "${RSYNC_ARGS[@]}")"$'\n<<<'
-    rsync "${RSYNC_ARGS[@]}" \
-        > >(tee -a "$RSYNC_OUT_FILE" >&6) \
-        2> >(tee -a "$RSYNC_ERR_FILE" >&7) || RSYNC_EXIT_VALUE=$?
+    run_rsync || RSYNC_EXIT_VALUE=$?
     EXIT_STATUS=$RSYNC_EXIT_VALUE
     case "$EXIT_STATUS" in
     0)

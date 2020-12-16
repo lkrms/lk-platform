@@ -4,7 +4,7 @@ function lk_atop_ps_mem() {
     local TEMP
     TEMP=$(mktemp) &&
         lk_elevate atop -R -PPRM "$@" |
-        awk -f "$LK_BASE/lib/awk/atop-ps-mem.awk" \
+        awk -f "${LK_INST:-$LK_BASE}/lib/awk/atop-ps-mem.awk" \
             -v "TEMP=$TEMP"
 }
 
@@ -26,6 +26,21 @@ function lk_systemctl_disable() {
             lk_console_detail "Running:" "systemctl disable --now $*"
         sudo systemctl disable --now "$@"
     }
+}
+
+# shellcheck disable=SC2034,SC2207
+function lk_get_standard_users() {
+    local IFS ADM_USERS USERS
+    IFS=,
+    ADM_USERS=($(getent group adm | cut -d: -f4))
+    IFS=$'\n'
+    USERS=($(getent passwd |
+        awk -F: '$3 >= 1000 && $3 < 65534 { print $1 }'))
+    # lk_linode_hosting_ssh_add_all relies on this being a standalone function,
+    # so don't use lk_echo_array
+    comm -13 \
+        <(printf '%s\n' "${ADM_USERS[@]}" | sort) \
+        <(printf '%s\n' "${USERS[@]}" | sort)
 }
 
 function lk_full_name() {

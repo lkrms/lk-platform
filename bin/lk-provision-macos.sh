@@ -1,67 +1,59 @@
 #!/bin/bash
-# shellcheck disable=SC1090,SC2001,SC2034,SC2207
+
+# shellcheck disable=SC1090,SC2001,SC2015,SC2034,SC2207
 
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
-LK_PATH_PREFIX_ALPHA="${LK_PATH_PREFIX_ALPHA:-$(
-    sed 's/[^a-zA-Z0-9]//g' <<<"$LK_PATH_PREFIX"
-)}"
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
-export LK_BASE=${LK_BASE:-/opt/${LK_PATH_PREFIX}platform}
+export LK_BASE=${LK_BASE:-/opt/lk-platform}
 
 set -euo pipefail
-lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (return $s) && false || exit; }
+lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
 
 [ "$EUID" -ne 0 ] || lk_die "cannot run as root"
-[ "$(uname -s)" = Darwin ] || lk_die "not running on macOS"
+[[ $OSTYPE == darwin* ]] || lk_die "not running on macOS"
 [[ $- != *s* ]] || lk_die "cannot run from standard input"
 
 function exit_trap() {
-    local LOG_PATH
+    local _LOG_FILE=$_LK_LOG_FILE LOG_FILE
     if lk_log_close &&
-        LOG_PATH=$(lk_log_create_file) &&
-        [ "$LOG_PATH" != "$LK_LOG_FILE" ]; then
-        lk_console_log "Moving:" "$LK_LOG_FILE -> $LOG_PATH"
-        cat "$LK_LOG_FILE" >>"$LOG_PATH" &&
-            rm "$LK_LOG_FILE" ||
-            lk_console_warning0 \
-                "Error moving provisioning log entries to" "$LOG_PATH"
+        LOG_FILE=$(lk_log_create_file) &&
+        [ "$LOG_FILE" != "$_LOG_FILE" ]; then
+        lk_console_log "Moving:" "$_LOG_FILE -> $LOG_FILE"
+        cat "$_LOG_FILE" >>"$LOG_FILE" &&
+            rm "$_LOG_FILE" ||
+            lk_console_warning \
+                "Error moving provisioning log entries to" "$LOG_FILE"
     fi
 }
 
 {
     export SUDO_PROMPT="[sudo] password for %p: "
 
-    S="[[:blank:]]"
-
     SCRIPT_DIR=/tmp/${LK_PATH_PREFIX}install
     mkdir -p "$SCRIPT_DIR"
 
     export LK_PACKAGES_FILE=${1:-}
-    if [ -n "$LK_PACKAGES_FILE" ]; then
-        if [ -f "$LK_PACKAGES_FILE" ]; then
-            . "$LK_PACKAGES_FILE"
-        else
-            case "$LK_PACKAGES_FILE" in
-            $LK_BASE/*/*)
-                CONTRIB_PACKAGES_FILE=${LK_PACKAGES_FILE:${#LK_BASE}}
-                ;;
-            /*/*)
-                CONTRIB_PACKAGES_FILE=${LK_PACKAGES_FILE:1}
-                ;;
-            */*)
-                CONTRIB_PACKAGES_FILE=$LK_PACKAGES_FILE
-                ;;
-            *)
-                lk_die "$1: file not found"
-                ;;
-            esac
-            LK_PACKAGES_FILE=$LK_BASE/$CONTRIB_PACKAGES_FILE
-        fi
+    if [ -n "$LK_PACKAGES_FILE" ] && [ ! -f "$LK_PACKAGES_FILE" ]; then
+        case "$LK_PACKAGES_FILE" in
+        $LK_BASE/*/*)
+            CONTRIB_PACKAGES_FILE=${LK_PACKAGES_FILE:${#LK_BASE}}
+            ;;
+        /*/*)
+            CONTRIB_PACKAGES_FILE=${LK_PACKAGES_FILE:1}
+            ;;
+        */*)
+            CONTRIB_PACKAGES_FILE=$LK_PACKAGES_FILE
+            ;;
+        *)
+            lk_die "$1: file not found"
+            ;;
+        esac
+        LK_PACKAGES_FILE=$LK_BASE/$CONTRIB_PACKAGES_FILE
     fi
 
     if [ -f "$LK_BASE/lib/bash/include/core.sh" ]; then
         . "$LK_BASE/lib/bash/include/core.sh"
-        lk_include provision macos
+        lk_include provision whiptail macos
         SUDOERS=$(cat "$LK_BASE/share/sudoers.d/default")
         ${CONTRIB_PACKAGES_FILE:+. "$LK_BASE/$CONTRIB_PACKAGES_FILE"}
     else
@@ -70,6 +62,7 @@ function exit_trap() {
             ${CONTRIB_PACKAGES_FILE:+"/$CONTRIB_PACKAGES_FILE"} \
             /lib/bash/include/core.sh \
             /lib/bash/include/provision.sh \
+            /lib/bash/include/whiptail.sh \
             /lib/bash/include/macos.sh \
             /share/sudoers.d/default; do
             FILE=$SCRIPT_DIR/${FILE_PATH##*/}
@@ -84,7 +77,7 @@ function exit_trap() {
         SUDOERS=$(cat "$SCRIPT_DIR/default")
     fi
 
-    LK_BACKUP_SUFFIX=-$(lk_timestamp).bak
+    LK_FILE_TAKE_BACKUP=${LK_FILE_TAKE_BACKUP-1}
 
     LK_LOG_FILE_MODE=0600 \
         lk_log_output ~/"${LK_PATH_PREFIX}install.log"
@@ -135,14 +128,27 @@ function exit_trap() {
         sudo mv -v "${FILE}s" "$FILE"
     sudo test -e "$FILE" ||
         sudo install -m 00440 /dev/null "$FILE"
-    LK_SUDO=1 lk_maybe_replace "$FILE" "$SUDOERS"
+    LK_SUDO=1 lk_file_replace "$FILE" "$SUDOERS"
 
+    lk_console_message "Configuring default umask"
     if ! USER_UMASK=$(defaults read \
         /var/db/com.apple.xpc.launchd/config/user.plist Umask 2>/dev/null) ||
         [ "$USER_UMASK" -ne 2 ]; then
-        lk_console_message "Setting default umask"
         lk_console_detail "Running:" "launchctl config user umask 002"
         sudo launchctl config user umask 002 >/dev/null
+    fi
+    FILE=/etc/profile
+    if [ -r "$FILE" ] && ! grep -q umask "$FILE"; then
+        lk_console_detail "Setting umask in" "$FILE"
+        LK_SUDO=1 lk_file_keep_original "$FILE"
+        sudo tee -a "$FILE" <<"EOF" >/dev/null
+
+if [ "$(id -u)" -ne 0 ]; then
+    umask 002
+else
+    umask 022
+fi
+EOF
     fi
     umask 002
 
@@ -162,6 +168,7 @@ function exit_trap() {
     # always restart on power loss
     sudo pmset -a autorestart 1
 
+    lk_macos_xcode_maybe_accept_license
     lk_macos_install_command_line_tools
 
     # If Xcode and the standalone Command Line Tools package are both installed,
@@ -187,18 +194,19 @@ function exit_trap() {
         lk_keep_trying lk_tty caffeinate -i \
             git clone -b "$LK_PLATFORM_BRANCH" \
             https://github.com/lkrms/lk-platform.git "$LK_BASE"
-        lk_keep_original /etc/default/lk-platform
+        lk_file_keep_original /etc/default/lk-platform
         [ -e /etc/default ] ||
             sudo install -d -m 00755 -g wheel /etc/default
         sudo install -m 00664 -g admin /dev/null /etc/default/lk-platform
         lk_get_shell_var \
             LK_BASE \
             LK_PATH_PREFIX \
-            LK_PATH_PREFIX_ALPHA \
             LK_PLATFORM_BRANCH \
             LK_PACKAGES_FILE |
             sudo tee /etc/default/lk-platform >/dev/null
         lk_console_detail_file /etc/default/lk-platform
+    elif [ -n "$LK_PACKAGES_FILE" ]; then
+        sudo sed -i '' '/^LK_PACKAGES_FILE=/d' /etc/default/lk-platform
     fi
 
     [ -n "$LK_PACKAGES_FILE" ] ||
@@ -209,8 +217,8 @@ function exit_trap() {
     function lk_brew_check_taps() {
         local TAP
         TAP=($(comm -13 \
-            <(brew tap | sort | uniq) \
-            <(lk_echo_array HOMEBREW_TAPS | sort | uniq)))
+            <(brew tap | sort -u) \
+            <(lk_echo_array HOMEBREW_TAPS | sort -u)))
         [ ${#TAP[@]} -eq 0 ] || {
             for TAP in "${TAP[@]}"; do
                 lk_console_detail "Tapping" "$TAP"
@@ -241,14 +249,16 @@ function exit_trap() {
         fi
         CI=1 lk_keep_trying lk_tty caffeinate -i bash "$FILE" ||
             lk_die "Homebrew installer failed"
-        eval "$(. "$LK_BASE/lib/bash/env.sh")"
+        SH=$(. "$LK_BASE/lib/bash/env.sh") &&
+            eval "$SH"
         lk_command_exists brew || lk_die "command not found: brew"
         lk_console_item "Found Homebrew at:" "$(brew --prefix)"
         lk_brew_check_taps
         NEW_HOMEBREW=1
     else
         lk_console_item "Found Homebrew at:" "$(brew --prefix)"
-        eval "$(. "$LK_BASE/lib/bash/env.sh")"
+        SH=$(. "$LK_BASE/lib/bash/env.sh") &&
+            eval "$SH"
         lk_brew_check_taps
         lk_console_detail "Updating formulae"
         lk_keep_trying lk_tty caffeinate -i brew update --quiet
@@ -272,8 +282,8 @@ function exit_trap() {
         python-yq  # for plist parsing with `xq`
     )
     INSTALL=($(comm -13 \
-        <(lk_brew_formulae | sort | uniq) \
-        <(lk_echo_array INSTALL | sort | uniq)))
+        <(lk_brew_formulae | sort -u) \
+        <(lk_echo_array INSTALL | sort -u)))
     [ ${#INSTALL[@]} -eq 0 ] || {
         lk_console_message "Installing lk-platform dependencies"
         lk_keep_trying lk_tty caffeinate -i brew install "${INSTALL[@]}"
@@ -307,18 +317,18 @@ function exit_trap() {
     [ -f ~/.bash_profile ] ||
         echo "# ~/.bash_profile for bash login shells" >~/.bash_profile
     if ! grep -q "\.bashrc" ~/.bash_profile; then
-        lk_maybe_add_newline ~/.bash_profile
+        lk_file_add_newline ~/.bash_profile
         echo "[ ! -f ~/.bashrc ] || . ~/.bashrc" >>~/.bash_profile
     fi
 
     [ -z "$LK_PACKAGES_FILE" ] ||
         LK_PACKAGES_FILE=$(realpath "$LK_PACKAGES_FILE")
-    "$LK_BASE/bin/lk-platform-configure-system.sh" --no-log
+    "$LK_BASE/bin/lk-platform-configure.sh" --no-log
 
     lk_console_message "Checking Homebrew packages"
     UPGRADE_FORMULAE=()
     UPGRADE_CASKS=()
-    lk_is_true "$NEW_HOMEBREW" || {
+    lk_is_true NEW_HOMEBREW || {
         OUTDATED=$(brew outdated --json=v2)
         UPGRADE_FORMULAE=($(jq -r ".formulae[].name" <<<"$OUTDATED"))
         [ ${#UPGRADE_FORMULAE[@]} -eq 0 ] || {
@@ -357,8 +367,8 @@ function exit_trap() {
     }
 
     INSTALL_FORMULAE=($(comm -13 \
-        <(lk_brew_formulae | sort | uniq) \
-        <(lk_echo_array HOMEBREW_FORMULAE | sort | uniq)))
+        <(lk_brew_formulae | sort -u) \
+        <(lk_echo_array HOMEBREW_FORMULAE | sort -u)))
     if [ ${#INSTALL_FORMULAE[@]} -gt 0 ]; then
         FORMULAE=()
         for FORMULA in "${INSTALL_FORMULAE[@]}"; do
@@ -373,7 +383,7 @@ function exit_trap() {
                 "$FORMULA_DESC"
             )
         done
-        INSTALL_FORMULAE=($(lk_log_bypass lk_console_checklist \
+        INSTALL_FORMULAE=($(lk_log_bypass_stderr lk_whiptail_checklist \
             "Installing new formulae" \
             "Selected Homebrew formulae will be installed:" \
             "${FORMULAE[@]}")) && [ ${#INSTALL_FORMULAE[@]} -gt 0 ] ||
@@ -381,9 +391,9 @@ function exit_trap() {
     fi
 
     INSTALL_CASKS=($(comm -13 \
-        <(lk_brew_casks | sort | uniq) \
+        <(lk_brew_casks | sort -u) \
         <(lk_echo_array HOMEBREW_CASKS |
-            sort | uniq)))
+            sort -u)))
     if [ ${#INSTALL_CASKS[@]} -gt 0 ]; then
         HOMEBREW_CASKS_JSON=$(lk_keep_trying caffeinate -i \
             brew cask info --json=v1 "${INSTALL_CASKS[@]}")
@@ -400,7 +410,7 @@ function exit_trap() {
                 "$CASK_DESC"
             )
         done
-        INSTALL_CASKS=($(lk_log_bypass lk_console_checklist \
+        INSTALL_CASKS=($(lk_log_bypass_stderr lk_whiptail_checklist \
             "Installing new casks" \
             "Selected Homebrew casks will be installed:" \
             "${CASKS[@]}")) && [ ${#INSTALL_CASKS[@]} -gt 0 ] ||
@@ -433,8 +443,8 @@ Please open the Mac App Store and sign in"
             fi
 
             INSTALL_APPS=($(comm -13 \
-                <(mas list | grep -Eo '^[0-9]+' | sort | uniq) \
-                <(lk_echo_array MAS_APPS | sort | uniq)))
+                <(mas list | grep -Eo '^[0-9]+' | sort -u) \
+                <(lk_echo_array MAS_APPS | sort -u)))
             PROG='
 NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[[0-9]+\.[0-9]+\])?$/, "\\1", "g")
                 printf "%s=%s\n", "APP_VER" , gensub(/.* ([0-9]+(\.[0-9]+)*)( \[[0-9]+\.[0-9]+\])?$/, "\\1", "g") }
@@ -459,12 +469,12 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
                     APP_NAMES+=("$APP_NAME")
                     continue
                 fi
-                lk_console_warning0 "Unknown App ID:" "$APP_ID"
+                lk_console_warning "Unknown App ID:" "$APP_ID"
                 unset "INSTALL_APPS[$i]"
             done
             if [ ${#INSTALL_APPS[@]} -gt 0 ]; then
                 APP_IDS=("${INSTALL_APPS[@]}")
-                if INSTALL_APPS=($(lk_log_bypass lk_console_checklist \
+                if INSTALL_APPS=($(lk_log_bypass_stderr lk_whiptail_checklist \
                     "Installing new apps" \
                     "Selected apps will be installed from the Mac App Store:" \
                     "${APPS[@]}")) && [ ${#INSTALL_APPS[@]} -gt 0 ]; then
@@ -518,19 +528,14 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
             mas install "${INSTALL_APPS[@]}"
     }
 
-    if [ -e /Applications/Xcode.app ] &&
-        ! xcodebuild -license check >/dev/null 2>&1; then
-        lk_console_message "Accepting Xcode license"
-        lk_console_detail "Running:" "xcodebuild -license accept"
-        sudo xcodebuild -license accept
-    fi
+    lk_macos_xcode_maybe_accept_license
 
     INSTALLED_FORMULAE=($(comm -12 \
-        <(lk_brew_formulae | sort | uniq) \
-        <(lk_echo_array HOMEBREW_FORMULAE | sort | uniq)))
+        <(lk_brew_formulae | sort -u) \
+        <(lk_echo_array HOMEBREW_FORMULAE | sort -u)))
     INSTALLED_CASKS=($(comm -12 \
-        <(lk_brew_casks | sort | uniq) \
-        <(lk_echo_array HOMEBREW_CASKS | sort | uniq)))
+        <(lk_brew_casks | sort -u) \
+        <(lk_echo_array HOMEBREW_CASKS | sort -u)))
     INSTALLED_CASKS_JSON=$(
         [ ${#INSTALLED_CASKS[@]} -eq 0 ] ||
             lk_keep_trying caffeinate -i \
@@ -545,31 +550,31 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
             { [ ${#INSTALLED_FORMULAE[@]} -eq 0 ] ||
                 brew deps --union --full-name \
                     "${INSTALLED_FORMULAE[@]}" 2>/dev/null; }
-    } | sort | uniq))
+    } | sort -u))
     ALL_CASKS=($({
         lk_echo_array INSTALLED_CASKS &&
             { [ -z "$INSTALLED_CASKS_JSON" ] ||
                 # TODO: recurse?
                 jq -r '.[].depends_on.cask[]?' <<<"$INSTALLED_CASKS_JSON"; }
-    } | sort | uniq))
+    } | sort -u))
 
     PURGE_FORMULAE=($(comm -23 \
-        <(lk_brew_formulae | sort | uniq) \
+        <(lk_brew_formulae | sort -u) \
         <(lk_echo_array ALL_FORMULAE)))
     [ ${#PURGE_FORMULAE[@]} -eq 0 ] || {
         lk_echo_array PURGE_FORMULAE |
             lk_console_list "Installed but no longer required:" formula formulae
-        ! lk_confirm "Remove the above?" Y ||
+        ! lk_confirm "Remove the above?" N ||
             brew uninstall "${PURGE_FORMULAE[@]}"
     }
 
     PURGE_CASKS=($(comm -23 \
-        <(lk_brew_casks | sort | uniq) \
+        <(lk_brew_casks | sort -u) \
         <(lk_echo_array ALL_CASKS)))
     [ ${#PURGE_CASKS[@]} -eq 0 ] || {
         lk_echo_array PURGE_CASKS |
             lk_console_list "Installed but no longer required:" cask casks
-        ! lk_confirm "Remove the above?" Y ||
+        ! lk_confirm "Remove the above?" N ||
             brew cask uninstall "${PURGE_CASKS[@]}"
     }
 

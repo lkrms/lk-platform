@@ -33,9 +33,9 @@ EOF
 
     if lk_command_exists autorandr; then
         lk_console_message "Configuring autorandr hooks"
-        lk_safe_symlink "$LK_BASE/lib/autorandr/postsave" \
+        lk_symlink "$LK_BASE/lib/autorandr/postsave" \
             "/etc/xdg/autorandr/postsave"
-        lk_safe_symlink "$LK_BASE/lib/autorandr/postswitch" \
+        lk_symlink "$LK_BASE/lib/autorandr/postswitch" \
             "/etc/xdg/autorandr/postswitch"
     fi
 

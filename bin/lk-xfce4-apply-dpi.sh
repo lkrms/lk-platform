@@ -5,7 +5,8 @@ lk_bin_depth=1 . lk-bash-load.sh || exit
 
 LK_USAGE="Usage: ${0##*/} [DPI]"
 
-lk_check_args
+lk_getopt
+eval "set -- $LK_GETOPT"
 
 DPI="${1:-$(xdpyinfo |
     grep -Eo '^[[:blank:]]+resolution:[[:blank:]]*[0-9]+x[0-9]+' |
@@ -94,7 +95,7 @@ xfconf-query -c "thunar" -p "/last-details-view-zoom-level" \
 xfconf-query -c "thunar" -p "/last-compact-view-zoom-level" \
     -n -t string -s "$THUNAR_ZOOM_LEVEL_25_PERCENT"
 
-for PANEL in $(xfconf-query -c "xfce4-panel" -p "/panels" -lv 2>/dev/null | grep -Eo '^/panels/[^/]+/' | sort | uniq); do
+for PANEL in $(xfconf-query -c "xfce4-panel" -p "/panels" -lv 2>/dev/null | grep -Eo '^/panels/[^/]+/' | sort -u); do
     xfconf-query -c "xfce4-panel" -p "${PANEL}size" -n -t int -s "${_24}"
     xfconf-query -c "xfce4-panel" -p "${PANEL}icon-size" -n -t int -s "${_16}"
 done

@@ -4,7 +4,7 @@
 set -euo pipefail
 _DEPTH=1
 _FILE=${BASH_SOURCE[0]}
-lk_die() { s=$? && echo "$_FILE: $1" >&2 && (return $s) && false || exit; }
+lk_die() { s=$? && echo "$_FILE: $1" >&2 && (exit $s) && false || exit; }
 { type -P realpath || { type -P python && realpath() { python -c \
     "import os,sys;print(os.path.realpath(sys.argv[1]))" "$1"; }; }; } \
     >/dev/null || lk_die "command not found: realpath"
@@ -14,7 +14,7 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
     lk_die "unable to locate LK_BASE"
 export LK_BASE
 
-include= . "$LK_BASE/lib/bash/common.sh"
+include=secret . "$LK_BASE/lib/bash/common.sh"
 
 lk_assert_not_root
 lk_assert_not_wsl
@@ -41,14 +41,9 @@ Options:
       --autostart           only register KeePassXC to open each database at startup
       --check-has-password  only prompt for each missing password"
 
-lk_check_args
-OPTS="$(
-    gnu_getopt --options "dr" \
-        --longoptions "detach,reset-password,autostart,check-has-password" \
-        --name "${0##*/}" \
-        -- "$@"
-)" || lk_usage
-eval "set -- $OPTS"
+lk_getopt "dr" \
+    "detach,reset-password,autostart,check-has-password"
+eval "set -- $LK_GETOPT"
 
 while :; do
     OPT=$1
@@ -81,7 +76,7 @@ PASSWORDS=()
 
 for DATABASE_FILE in "$@"; do
     DATABASE_FILE=$(realpath "$DATABASE_FILE")
-    if lk_is_true "$RESET_PASSWORD"; then
+    if lk_is_true RESET_PASSWORD; then
         lk_remove_secret "$DATABASE_FILE"
     fi
     PASSWORD="$(lk_secret "$DATABASE_FILE" "KeePassXC password for ${DATABASE_FILE##*/}")" ||
@@ -94,7 +89,7 @@ done
 [ ${#PASSWORDS[@]} -gt 0 ] ||
     lk_die "no database to open"
 
-if lk_is_true "$REGISTER"; then
+if lk_is_true REGISTER; then
     if lk_is_macos; then
         function plist() {
             defaults write "$PLIST" "$@"
@@ -114,19 +109,17 @@ if lk_is_true "$REGISTER"; then
     exit
 fi
 
-! lk_is_true "$CHECK_HAS_PASSWORD" ||
+! lk_is_true CHECK_HAS_PASSWORD ||
     exit 0
 
-if lk_is_true "$DAEMON"; then
+if lk_is_true DAEMON; then
     exec "$KEEPASSXC" \
         --pw-stdin "${DATABASES[@]}"
 else
     nohup "$KEEPASSXC" \
         --pw-stdin "${DATABASES[@]}" >/dev/null 2>&1 &
     disown
-fi < <(echo "${PASSWORDS[0]}" &&
-    [ ${#PASSWORDS[@]} -le 1 ] ||
-    for PASSWORD in "${PASSWORDS[@]:1}"; do
-        sleep 5
-        echo "$PASSWORD"
-    done)
+fi < <(for PASSWORD in "${PASSWORDS[@]}"; do
+    sleep 5
+    echo "$PASSWORD"
+done)

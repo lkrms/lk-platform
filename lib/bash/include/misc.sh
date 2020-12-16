@@ -2,6 +2,8 @@
 
 # shellcheck disable=SC2015
 
+lk_include secret
+
 # lk_openconnect USER HOST [ROUTE...]
 function lk_openconnect() {
     local VPN_USER=$1 VPN_HOST=$2 VPN_PASSWD COMMAND LOG_FILE
@@ -38,7 +40,7 @@ function lk_mediainfo_check() {
     LK_MEDIAINFO_FILES=()
     LK_MEDIAINFO_VALUES=()
     LK_MEDIAINFO_EMPTY_FILES=()
-    while IFS= read -rd $'\0' FILE; do
+    while IFS= read -rd '' FILE; do
         ((++COUNT))
         VALUE=$(mediainfo \
             --Output="${LK_MEDIAINFO_FORMAT:-General;%ContentType%}" \
@@ -46,12 +48,12 @@ function lk_mediainfo_check() {
         LK_MEDIAINFO_FILES+=("$FILE")
         LK_MEDIAINFO_VALUES+=("$VALUE")
         if [ -n "${VALUE// /}" ]; then
-            lk_is_source_file_running && ! lk_verbose ||
+            lk_is_script_running && ! lk_verbose ||
                 lk_console_log "${FILE#./}:" \
                     "$LK_MEDIAINFO_LABEL$VALUE"
         else
             LK_MEDIAINFO_EMPTY_FILES+=("$FILE")
-            lk_is_source_file_running && ! lk_verbose ||
+            lk_is_script_running && ! lk_verbose ||
                 lk_console_warning "${FILE#./}:" \
                     "$LK_MEDIAINFO_LABEL$LK_MEDIAINFO_NO_VALUE"
         fi
@@ -60,7 +62,7 @@ function lk_mediainfo_check() {
             printf '%s\0' "$@" ||
             find -L . -type f ! -name '.*' -print0
     )
-    lk_is_source_file_running && ! lk_verbose 2 || {
+    lk_is_script_running && ! lk_verbose 2 || {
         lk_console_message \
             "$COUNT $(lk_maybe_plural "$COUNT" file files) checked"
         lk_console_detail \
@@ -81,9 +83,10 @@ function lk_readynas_poweroff() {
     URL="https://$NAS_HOSTNAME/get_handler?$(lk_implode_args "&" \
         "PAGE=System" "OUTER_TAB=tab_shutdown" "INNER_TAB=NONE" \
         "shutdown_option1=1" "command=poweroff" "OPERATION=set")"
-    printf -- '--%s "%s"\n' \
-        user "$(lk_escape_curl_config "$NAS_USER:$PASSWORD")" |
-        curl --config - --insecure "$URL"
+    lk_curl_config \
+        --user="$NAS_USER:$PASSWORD" \
+        --insecure |
+        curl --config - "$URL"
 }
 
 function lk_nextcloud_get_excluded() {
@@ -98,8 +101,8 @@ function lk_nextcloud_get_excluded() {
         EXCLUDE_FILE=${FILES[0]}
         # - Ignore blank lines and comments
         # - Remove fleeting metadata prefixes ("]") and unescape leading hashes
-        lk_mapfile <(sed -Ee '/^([[:blank:]]*$|#)/d' \
-            -e 's/^(\]|\\(#))/\2/' "$EXCLUDE_FILE") EXCLUDE
+        lk_mapfile EXCLUDE <(sed -Ee '/^([[:blank:]]*$|#)/d' \
+            -e 's/^(\]|\\(#))/\2/' "$EXCLUDE_FILE")
         EXCLUDE+=(
             "._sync_*.db*"
             ".sync_*.db*"
@@ -116,11 +119,12 @@ function lk_nextcloud_get_excluded() {
             fi
         done
         FIND=(find . \( "${FIND[@]}" \) -print0)
-        lk_mapfile -z <("${FIND[@]}" | sort -zu) FILES
-        EXCLUDE_FILE=${EXCLUDE_FILE//~/"~"}
+        lk_mapfile -z FILES <("${FIND[@]}" | sort -zu)
         [ ${#FILES[@]} -eq 0 ] &&
-            lk_console_message "No files excluded by $EXCLUDE_FILE" ||
+            lk_console_message \
+                "No files excluded by $(lk_pretty_path "$EXCLUDE_FILE")" ||
             lk_echo_array FILES |
-            lk_console_list "Excluded by $EXCLUDE_FILE:" file files
+            lk_console_list \
+                "Excluded by $(lk_pretty_path "$EXCLUDE_FILE"):" file files
     )
 }

@@ -10,6 +10,7 @@ DB_HOST=${LK_MYSQL_HOST:-localhost}
 
 EXCLUDE_MODE=0
 DEST=$PWD
+DEST_GROUP=
 TIMESTAMP=${LK_BACKUP_TIMESTAMP:-}
 NO_TIMESTAMP=0
 DB_INCLUDE=()
@@ -31,16 +32,12 @@ Options:
   -t, --timestamp=VALUE     use VALUE as backup file timestamp
                             (default: LK_BACKUP_TIMESTAMP from environment
                             or output of \`date +%Y-%m-%d-%H%M%S\`)
-  -s, --no-timestamp        don't add backup file timestamp"
+  -s, --no-timestamp        don't add backup file timestamp
+  -g, --group GROUP         create backup files with group GROUP"
 
-lk_check_args
-OPTS=$(
-    gnu_getopt --options "xd:t:s" \
-        --longoptions "yes,exclude,dest:,timestamp:,no-timestamp" \
-        --name "${0##*/}" \
-        -- "$@"
-) || lk_usage
-eval "set -- $OPTS"
+lk_getopt "xd:t:sg:" \
+    "exclude,dest:,timestamp:,no-timestamp,group:"
+eval "set -- $LK_GETOPT"
 
 while :; do
     OPT=$1
@@ -65,6 +62,13 @@ while :; do
     -s | --no-timestamp)
         NO_TIMESTAMP=1
         ;;
+    -g | --group)
+        # TODO: add macOS-friendly test
+        getent group "$1" >/dev/null 2>&1 ||
+            lk_die "group not found: $1"
+        DEST_GROUP=$1
+        shift
+        ;;
     --)
         break
         ;;
@@ -80,20 +84,20 @@ done
     ): \"${INVALID_DB_NAME//$'\n'/$'", "'}\"" ||
     lk_usage
 
-lk_is_true "$EXCLUDE_MODE" &&
+lk_is_true EXCLUDE_MODE &&
     DB_EXCLUDE+=("$@") ||
     DB_INCLUDE+=("$@")
 
 EXIT_STATUS=0
 
 LK_MYSQL_QUIET=1
-LK_CONSOLE_NO_FOLD=1
+LK_TTY_NO_FOLD=1
 
 lk_log_output
 
 lk_console_message "Preparing database backup"
 lk_console_detail "Retrieving list of databases on" "$DB_HOST"
-lk_mysql_mapfile DB_ALL ${DB_HOST:+-h"$DB_HOST"} <<<"SHOW DATABASES"
+lk_mysql_mapfile DB_ALL -h"$DB_HOST" <<<"SHOW DATABASES"
 lk_console_detail "${#DB_ALL[@]} $(lk_maybe_plural \
     ${#DB_ALL[@]} database databases) found"
 
@@ -142,13 +146,17 @@ lk_echo_array DB_INCLUDE |
 lk_confirm "Proceed?" Y || lk_die
 
 LOCK_FILE=/tmp/${0##*/}-${DEST//\//_}.lock
-exec 8>"$LOCK_FILE"
-flock -n 8 || lk_die "unable to acquire a lock on $LOCK_FILE"
+LOCK_FD=$(lk_next_fd)
+eval "exec $LOCK_FD>\"\$LOCK_FILE\""
+flock -n "$LOCK_FD" || lk_die "unable to acquire a lock on $LOCK_FILE"
 
+DEST_MODE=00600
+[ -z "$DEST_GROUP" ] ||
+    DEST_MODE=00640
 for DB_NAME in "${DB_INCLUDE[@]}"; do
     lk_console_item "Dumping database:" "$DB_NAME"
     FILE=$DEST/$DB_NAME
-    lk_is_true "$NO_TIMESTAMP" ||
+    lk_is_true NO_TIMESTAMP ||
         FILE=$FILE-${TIMESTAMP:-$(lk_date "%Y-%m-%d-%H%M%S")}
     FILE=$FILE.sql.gz
     lk_console_detail "Backup file:" "$FILE"
@@ -157,7 +165,8 @@ for DB_NAME in "${DB_INCLUDE[@]}"; do
         lk_console_error "Skipping (backup already exists)"
         continue
     }
-    install -m 00600 /dev/null "$FILE.pending"
+    install -m "$DEST_MODE" ${DEST_GROUP:+-g "$DEST_GROUP"} \
+        /dev/null "$FILE.pending"
     if lk_mysql_dump \
         "$DB_NAME" "$DB_USER" "$DB_PASSWORD" "$DB_HOST" >"$FILE.pending" &&
         mv -f "$FILE.pending" "$FILE"; then
@@ -168,7 +177,7 @@ for DB_NAME in "${DB_INCLUDE[@]}"; do
     fi
 done
 
-exec 8>&-
+eval "exec $LOCK_FD>&-"
 rm -f "$LOCK_FILE"
 
 (exit "$EXIT_STATUS") || lk_die

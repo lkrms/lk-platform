@@ -1,22 +1,22 @@
 #!/bin/bash
-# shellcheck disable=SC2015,SC2016,SC2029,SC2034
+
+# shellcheck disable=SC2015,SC2016,SC2029,SC2034,SC2207
 
 lk_bin_depth=1 include=wordpress . lk-bash-load.sh || exit
 
 REMOTE_PATH=public_html
 LOCAL_PATH=$(lk_wp_get_site_root 2>/dev/null) ||
-    LOCAL_PATH=$HOME/public_html
+    LOCAL_PATH=~/public_html
 MAINTENANCE=
+DEACTIVATE=()
 RENAME=
 SSL=0
 EXCLUDE=()
 DEFAULT_DB_NAME=
 DEFAULT_DB_USER=
 
-lk_wp_db_set_local "$LOCAL_PATH"
-
 LK_USAGE="\
-Usage: ${0##*/} [OPTION...] SSH_HOST
+Usage: ${0##*/} [OPTION...] SSH_HOST [-- RSYNC_ARG...]
 
 Migrate a WordPress site from SSH_HOST to the local system, overwriting local
 changes if previously migrated.
@@ -29,6 +29,8 @@ Options:
                             in working directory, or ~/public_html)
   -m, --maintenance=MODE    specify remote WordPress maintenance MODE
                             (default: <ask>)
+  -p, --deactivate=PLUGIN   deactivate the specified WordPress plugin after
+                            migration (may be given multiple times)
   -r, --rename=URL          change site address to URL after migration
   -c, --ssl-cert            attempt to retrieve SSL certificate, CA bundle and
                             private key from remote system (cPanel only)
@@ -44,14 +46,9 @@ Maintenance modes:
 
 Maintenance mode is always enabled on the local system during migration."
 
-lk_check_args
-OPTS=$(
-    gnu_getopt --options "s:d:m:r:ce:" \
-        --longoptions "yes,source:,dest:,maintenance:,rename:,ssl-cert,exclude:,db-name:,db-user:" \
-        --name "${0##*/}" \
-        -- "$@"
-) || lk_usage
-eval "set -- $OPTS"
+lk_getopt "s:d:m:p:r:ce:" \
+    "source:,dest:,maintenance:,deactivate:,rename:,ssl-cert,exclude:,db-name:,db-user:"
+eval "set -- $LK_GETOPT"
 
 while :; do
     OPT=$1
@@ -69,6 +66,10 @@ while :; do
         [[ $1 =~ ^(ignore|on|indefinite)$ ]] ||
             lk_warn "invalid remote maintenance mode: $1" || lk_usage
         MAINTENANCE=$1
+        shift
+        ;;
+    -p | --deactivate)
+        DEACTIVATE+=("$1")
         shift
         ;;
     -r | --rename)
@@ -101,6 +102,10 @@ done
 SSH_HOST=$1
 shift
 
+function is_final() {
+    [ "$MAINTENANCE" = indefinite ]
+}
+
 function maybe_disable_remote_maintenance() {
     if [ "$MAINTENANCE" = on ]; then
         MAINTENANCE=
@@ -127,17 +132,20 @@ lk_console_detail "[remote] Source:" "$SSH_HOST:$REMOTE_PATH"
 lk_console_detail "[local] Destination:" "$LOCAL_PATH"
 [ -z "$MAINTENANCE" ] ||
     lk_console_detail "Remote maintenance mode:" "$MAINTENANCE"
+lk_console_detail "Plugins to deactivate:" "$([ ${#DEACTIVATE[@]} -eq 0 ] &&
+    echo "<none>" ||
+    lk_echo_array DEACTIVATE)"
 [ -z "$RENAME" ] ||
-    lk_console_detail "Local site address:" "$RENAME"
+    lk_console_detail "Rename site to:" "$RENAME"
 lk_console_detail "Copy remote SSL certificate:" \
-    "$(lk_is_true "$SSL" && echo "yes" || echo "no")"
+    "$(lk_is_true SSL && echo "yes" || echo "no")"
 lk_console_detail "Local WP-Cron:" "$(
     [ "$MAINTENANCE" = indefinite ] &&
         echo "enable" ||
         echo "disable"
 )"
 
-lk_console_detail "Excluded files:" "$([ ${#EXCLUDE[@]} -eq 0 ] &&
+lk_console_detail "Exclude files:" "$([ ${#EXCLUDE[@]} -eq 0 ] &&
     echo "<none>" ||
     lk_echo_array EXCLUDE)"
 
@@ -162,34 +170,56 @@ if [[ $MAINTENANCE =~ ^(on|indefinite)$ ]]; then
         "$REMOTE_PATH" <<<"$MAINTENANCE_PHP"
 fi
 
+! is_final || {
+    lk_console_message "Waiting 60 seconds for active requests to complete"
+    sleep 60
+}
+
 # Migrate files
-RSYNC_ARGS=(${EXCLUDE[@]+"${EXCLUDE[@]/#/--exclude=}"})
+RSYNC_ARGS=(${EXCLUDE[@]+"${EXCLUDE[@]/#/--exclude=}"} "$@")
 LK_NO_INPUT=1 \
     lk_wp_sync_files_from_remote "$SSH_HOST" "$REMOTE_PATH" "$LOCAL_PATH"
 
 # Migrate database
-DB_FILE=~/$SSH_HOST-${REMOTE_PATH//\//_}-$(lk_date_ymdhms).sql.gz
+DB_FILE=~/.lk-platform/cache/db/$SSH_HOST-${REMOTE_PATH//\//_}-$(lk_date_ymdhms).sql.gz
+install -d -m 00700 "${DB_FILE%/*}"
 lk_wp_db_dump_remote "$SSH_HOST" "$REMOTE_PATH" >"$DB_FILE"
 maybe_disable_remote_maintenance
 cd "$LOCAL_PATH"
 LK_NO_INPUT=1 \
     lk_wp_db_restore_local "$DB_FILE" "$DEFAULT_DB_NAME" "$DEFAULT_DB_USER"
+lk_console_message "Refreshing salts defined in wp-config.php"
+lk_wp config shuffle-salts
+if [ ${#DEACTIVATE[@]} -gt 0 ]; then
+    ACTIVE_PLUGINS=($(lk_wp plugin list --status=active --field=name))
+    DEACTIVATE=($(comm -12 \
+        <(lk_echo_array ACTIVE_PLUGINS | sort -u) \
+        <(lk_echo_array DEACTIVATE | sort -u)))
+    [ ${#DEACTIVATE[@]} -eq 0 ] || {
+        lk_console_item \
+            "Deactivating plugins:" $'\n'"$(lk_echo_array DEACTIVATE)"
+        lk_wp plugin deactivate "${DEACTIVATE[@]}"
+    }
+fi
+
 [ -z "$RENAME" ] ||
-    LK_WP_QUIET=1 LK_WP_REPLACE=1 LK_WP_FLUSH=0 \
+    LK_WP_QUIET=1 LK_WP_REPLACE=1 LK_WP_REAPPLY=0 LK_WP_FLUSH=0 \
+        LK_WP_REPLACE_COMMAND=wp \
         lk_wp_rename_site "$RENAME"
+lk_wp_reapply_config
 lk_wp_flush
 
-if lk_is_true "$SSL"; then
+if lk_is_true SSL; then
     SITE_ADDR=$(lk_wp_get_site_address) &&
         [[ $SITE_ADDR =~ ^https?://(www\.)?(.*) ]] &&
         lk_cpanel_get_ssl_cert "$SSH_HOST" "${BASH_REMATCH[2]}"
 fi || true
 
-if [ "$MAINTENANCE" = indefinite ]; then
-    lk_console_warning "Enabling WP-Cron (remote site offline)"
+if is_final; then
+    lk_console_warning "Enabling WP-Cron"
     lk_wp_enable_system_cron
 else
-    lk_console_warning0 "Disabling WP-Cron (remote site online)"
+    lk_console_warning "Disabling WP-Cron (remote site still online)"
     lk_wp_disable_cron
 fi
 

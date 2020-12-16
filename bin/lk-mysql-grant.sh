@@ -4,7 +4,7 @@
 set -euo pipefail
 _DEPTH=1
 _FILE=${BASH_SOURCE[0]}
-lk_die() { s=$? && echo "$_FILE: $1" >&2 && (return $s) && false || exit; }
+lk_die() { s=$? && echo "$_FILE: $1" >&2 && (exit $s) && false || exit; }
 { type -P realpath || { type -P python && realpath() { python -c \
     "import os,sys;print(os.path.realpath(sys.argv[1]))" "$1"; }; }; } \
     >/dev/null || lk_die "command not found: realpath"
@@ -32,7 +32,8 @@ underscore. Examples of DB_NAME and DB_USER values allowed for the current user:
   - ${USERNAME}_blog
   - ${USERNAME}_backup"
 
-lk_check_args
+lk_getopt
+eval "set -- $LK_GETOPT"
 [ $# -eq 3 ] || lk_usage
 
 # Validate DB_NAME and DB_USER against SUDO_USER if:

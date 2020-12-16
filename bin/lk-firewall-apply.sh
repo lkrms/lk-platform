@@ -4,7 +4,7 @@
 set -euo pipefail
 _DEPTH=1
 _FILE=${BASH_SOURCE[0]}
-lk_die() { s=$? && echo "$_FILE: $1" >&2 && (return $s) && false || exit; }
+lk_die() { s=$? && echo "$_FILE: $1" >&2 && (exit $s) && false || exit; }
 { type -P realpath || { type -P python && realpath() { python -c \
     "import os,sys;print(os.path.realpath(sys.argv[1]))" "$1"; }; }; } \
     >/dev/null || lk_die "command not found: realpath"
@@ -24,20 +24,21 @@ lk_log_output
     lk_die "cannot read file: $LK_BASE/etc/firewall.conf"
 . "$LK_BASE/etc/firewall.conf"
 
-S="[[:blank:]]"
-
 if [ -n "${ACCEPT_OUTPUT_CHAIN:-}" ]; then
     lk_console_message "Applying outgoing traffic policy to firewall"
+    IFS=,
     OUTPUT_ALLOW=(
+        ${LK_ACCEPT_OUTPUT_HOSTS:-}
         ${ACCEPT_OUTPUT_HOSTS[@]+"${ACCEPT_OUTPUT_HOSTS[@]}"}
     )
+    unset IFS
     [ ${#OUTPUT_ALLOW[@]} -eq 0 ] ||
         lk_console_detail "Added to whitelist from firewall.conf:" \
             "$(lk_implode $'\n' OUTPUT_ALLOW)"
     if lk_is_ubuntu; then
         APT_SOURCE_HOSTS=($(
             grep -Eo "^[^#]+${S}https?://[^/[:blank:]]+" "/etc/apt/sources.list" |
-                sed -E 's/^.*:\/\///' | sort | uniq
+                sed -E 's/^.*:\/\///' | sort -u
         )) || lk_die "no active package sources in /etc/apt/sources.list"
         OUTPUT_ALLOW+=("${APT_SOURCE_HOSTS[@]}")
         lk_console_detail "Added to whitelist from APT source list:" \
@@ -46,13 +47,13 @@ if [ -n "${ACCEPT_OUTPUT_CHAIN:-}" ]; then
     # TODO: add temporary entry for api.github.com to /etc/hosts and flush
     # chain with static hosts first (otherwise api.github.com may be
     # unreachable)
-    if lk_in_array "api.github.com" ACCEPT_OUTPUT_HOSTS; then
+    if lk_in_array OUTPUT_ALLOW; then
         if GITHUB_META="$(curl --fail --silent --show-error "https://api.github.com/meta")" &&
-            GITHUB_IPS=($(jq -r ".web[],.api[]" <<<"$GITHUB_META" | sort | uniq)); then
+            GITHUB_IPS=($(jq -r ".web[],.api[]" <<<"$GITHUB_META" | sort -u)); then
             OUTPUT_ALLOW+=("${GITHUB_IPS[@]}")
             lk_console_detail "Added to whitelist from GitHub API:" "${#GITHUB_IPS[@]} IP $(lk_maybe_plural ${#GITHUB_IPS[@]} range ranges)"
         else
-            lk_console_warning0 "Unable to retrieve IP ranges from GitHub API"
+            lk_console_warning "Unable to retrieve IP ranges from GitHub API"
             unset GITHUB_IPS
         fi
     fi
@@ -61,8 +62,8 @@ if [ -n "${ACCEPT_OUTPUT_CHAIN:-}" ]; then
     if [ ${#OUTPUT_ALLOW[@]} -gt 0 ]; then
         OUTPUT_ALLOW_RESOLVED="$(lk_hosts_resolve "${OUTPUT_ALLOW[@]}")" ||
             lk_die "unable to resolve domain names"
-        OUTPUT_ALLOW_IPV4=($(echo "$OUTPUT_ALLOW_RESOLVED" | lk_grep_ipv4 || true))
-        OUTPUT_ALLOW_IPV6=($(echo "$OUTPUT_ALLOW_RESOLVED" | lk_grep_ipv6 || true))
+        OUTPUT_ALLOW_IPV4=($(echo "$OUTPUT_ALLOW_RESOLVED" | lk_filter_ipv4))
+        OUTPUT_ALLOW_IPV6=($(echo "$OUTPUT_ALLOW_RESOLVED" | lk_filter_ipv6))
     fi
     lk_console_detail "Flushing iptables chain:" "$ACCEPT_OUTPUT_CHAIN"
     lk_iptables_both lk_iptables_flush_chain "$ACCEPT_OUTPUT_CHAIN"

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1083,SC1087,SC2015,SC2034
+# shellcheck disable=SC1083,SC1087,SC2001,SC2015,SC2034
 
 if [[ ! ${1:-} =~ ^(--new|--old)$ ]]; then
 
@@ -33,14 +33,9 @@ Options:
   -i, --target-key=FILE             use key in FILE when logging into TARGET
   -p, --source-password=PASSWORD    use PASSWORD when logging into SOURCE"
 
-    lk_check_args
-    OPTS=$(
-        gnu_getopt --options "o:n:k:i:p:" \
-            --longoptions "source-name:,target-name:,source-key:,target-key:,source-password:" \
-            --name "${0##*/}" \
-            -- "$@"
-    ) || lk_usage
-    eval "set -- $OPTS"
+    lk_getopt "o:n:k:i:p:" \
+        "source-name:,target-name:,source-key:,target-key:,source-password:"
+    eval "set -- $LK_GETOPT"
 
     while :; do
         OPT=$1
@@ -123,34 +118,35 @@ fi
 function lk_console_message() {
     echo "\
 $LK_GREY[ $H ] \
-$LK_RESET$LK_BOLD${LK_CONSOLE_COLOUR-$LK_CYAN}${LK_CONSOLE_PREFIX-==> }\
-$LK_RESET${LK_CONSOLE_MESSAGE_COLOUR-$LK_BOLD}\
-${1//$'\n'/$'\n'"$H_SPACES${LK_CONSOLE_SPACES-  }"}$LK_RESET" >&2
+$LK_RESET$LK_BOLD${LK_TTY_COLOUR-$LK_CYAN}${LK_TTY_PREFIX-==> }\
+$LK_RESET${LK_TTY_MESSAGE_COLOUR-$LK_BOLD}\
+$(sed "1b
+s/^/$H_SPACES${LK_TTY_SPACES-  }/" <<<"$1")$LK_RESET" >&2
 }
 
 function lk_console_item() {
     lk_console_message "\
-$1$LK_RESET${LK_CONSOLE_COLOUR2-${LK_CONSOLE_COLOUR-$LK_CYAN}}$(
+$1$LK_RESET${LK_TTY_COLOUR2-${LK_TTY_COLOUR-$LK_CYAN}}$(
         [ "${2/$'\n'/}" = "$2" ] &&
             echo " $2" ||
-            echo $'\n'"$2"
+            echo $'\n'"${2#$'\n'}"
     )"
 }
 
 function lk_console_detail() {
-    local LK_CONSOLE_PREFIX="   -> " LK_CONSOLE_SPACES="    " \
-        LK_CONSOLE_COLOUR=$LK_YELLOW LK_CONSOLE_MESSAGE_COLOUR=
+    local LK_TTY_PREFIX="   -> " LK_TTY_SPACES="    " \
+        LK_TTY_COLOUR=$LK_YELLOW LK_TTY_MESSAGE_COLOUR=
     [ $# -le 1 ] &&
         lk_console_message "$1" ||
         lk_console_item "$1" "$2"
 }
 
 function lk_console_log() {
-    local LK_CONSOLE_PREFIX=" :: " LK_CONSOLE_SPACES="    " \
-        LK_CONSOLE_COLOUR2=$LK_BOLD
+    local LK_TTY_PREFIX=" :: " LK_TTY_SPACES="    " \
+        LK_TTY_COLOUR2=${LK_TTY_COLOUR2-$LK_BOLD}
     [ $# -le 1 ] &&
-        lk_console_message "$LK_CYAN$1" ||
-        lk_console_item "$LK_CYAN$1" "$2"
+        lk_console_message "${LK_TTY_COLOUR-$LK_CYAN}$1" ||
+        lk_console_item "${LK_TTY_COLOUR-$LK_CYAN}$1" "$2"
 }
 
 function lk_ellipsis() {
@@ -196,7 +192,7 @@ local)
 
     lk_console_item "Connecting to" "$NEW_HOST_NAME"
     ssh -o LogLevel=QUIET -t "$NEW_HOST_NAME" "bash -c$(
-        printf ' %q' "$(LK_EXPAND_QUOTE=1 lk_expand_template "$0")" bash --new
+        printf ' %q' "$(lk_expand_template -q "$0")" bash --new
     )"
     ;;
 

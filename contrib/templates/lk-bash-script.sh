@@ -29,7 +29,7 @@
 set -euo pipefail
 _DEPTH=2
 _FILE=${BASH_SOURCE[0]}
-lk_die() { s=$? && echo "$_FILE: $1" >&2 && (return $s) && false || exit; }
+lk_die() { s=$? && echo "$_FILE: $1" >&2 && (exit $s) && false || exit; }
 [ "${_FILE%/*}" != "$_FILE" ] || _FILE=./$_FILE
 LK_BASE=$(i=0 && F=$_FILE && while [ $((i++)) -le "$_DEPTH" ]; do
     [ "$F" != / ] && [ ! -L "$F" ] &&
@@ -57,7 +57,7 @@ include='' . "$LK_BASE/lib/bash/common.sh"
 set -euo pipefail
 _DEPTH=2
 _FILE=${BASH_SOURCE[0]}
-lk_die() { s=$? && echo "$_FILE: $1" >&2 && (return $s) && false || exit; }
+lk_die() { s=$? && echo "$_FILE: $1" >&2 && (exit $s) && false || exit; }
 { type -P realpath || { type -P python && realpath() { python -c \
     "import os,sys;print(os.path.realpath(sys.argv[1]))" "$1"; }; }; } \
     >/dev/null || lk_die "command not found: realpath"
@@ -98,12 +98,9 @@ Options:
 
 #LK_VERSION=0.1.0
 
-lk_check_args
-OPTS="$(gnu_getopt --options "fv:s::" \
-    --longoptions "yes,flag,value:,setting::" \
-    --name "${0##*/}" \
-    -- "$@")" || lk_usage
-eval "set -- $OPTS"
+lk_getopt "fv:s::" \
+    "flag,value:,setting::"
+eval "set -- $LK_GETOPT"
 
 while :; do
     OPT=$1

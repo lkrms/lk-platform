@@ -56,7 +56,7 @@ function lk_macos_command_line_tools_installed() {
 }
 
 function lk_macos_install_command_line_tools() {
-    local ITEM_NAME S="[[:blank:]]" \
+    local ITEM_NAME \
         TRIGGER=/tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress
     ! lk_macos_command_line_tools_installed || return 0
     lk_console_message "Installing command line tools"
@@ -76,6 +76,15 @@ function lk_macos_install_command_line_tools() {
         softwareupdate --install "$ITEM_NAME" >/dev/null || return
     lk_macos_command_line_tools_installed || return
     rm -f "$TRIGGER" || true
+}
+
+function lk_macos_xcode_maybe_accept_license() {
+    if [ -e /Applications/Xcode.app ] &&
+        ! xcodebuild -license check >/dev/null 2>&1; then
+        lk_console_message "Accepting Xcode license"
+        lk_console_detail "Running:" "xcodebuild -license accept"
+        sudo xcodebuild -license accept
+    fi
 }
 
 # lk_macos_kb_add_shortcut DOMAIN MENU_TITLE SHORTCUT
@@ -178,6 +187,25 @@ function lk_macos_maybe_install_pkg_url() {
     )
 }
 
+# lk_macos_sshd_set_port SERVICE_NAME
+function lk_macos_sshd_set_port() {
+    local PORT FILE=/System/Library/LaunchDaemons/ssh.plist
+    [ -n "${1:-}" ] || lk_usage "Usage: $(lk_myself -f) SERVICE_NAME" || return
+    [ -f "$FILE" ] || lk_warn "file not found: $FILE" || return
+    lk_plist_set_file "$FILE"
+    PORT=$(lk_plist_get ":Sockets:Listeners:SockServiceName" 2>/dev/null) &&
+        [ "$PORT" = "$1" ] || {
+        LK_SUDO=1 lk_file_keep_original "$FILE" &&
+            lk_elevate launchctl unload "$FILE" &&
+            LK_SUDO=1 lk_plist_replace \
+                ":Sockets:Listeners:SockServiceName" string "$1" &&
+            { LK_SUDO=1 lk_plist_replace \
+                ":Sockets:Listeners:Bonjour:0" string "$1" 2>/dev/null ||
+                true; } &&
+            lk_elevate launchctl load -w "$FILE"
+    }
+}
+
 # lk_macos_defaults_maybe_write EXPECTED DOMAIN KEY [TYPE] VALUE
 #
 # Run `defaults write DOMAIN KEY VALUE` if `defaults read DOMAIN KEY` doesn't
@@ -221,11 +249,84 @@ function lk_macos_defaults_dump() {
         LK_DEFAULTS_DIR=$DIR-system \
             lk_macos_defaults_dump || return
     }
-    DIR=${DIR//~/"~"}
+    DIR=$(lk_pretty_path "$DIR")
     lk_console_log \
         "Output of \"defaults [-currentHost] read \$DOMAIN\" dumped to:" \
         "$(for d in "$DIR" ${_LK_MACOS_DEFAULTS_DUMP_SUDO:+"$DIR-system"}; do
             lk_echo_args \
                 "$d" "$d/currentHost"
         done)"
+}
+
+function PlistBuddy() {
+    lk_maybe_sudo /usr/libexec/PlistBuddy "$@"
+}
+
+function _lk_plist_buddy() {
+    [ -n "${_LK_PLIST:-}" ] ||
+        lk_warn "lk_plist_set_file must be called before $(lk_myself -f 1)" ||
+        return
+    PlistBuddy -c "$1" "$_LK_PLIST" || return
+}
+
+function _lk_plist_quote() {
+    echo "\"${1//\"/\\\"}\""
+}
+
+# lk_plist_set_file PLIST_FILE
+#
+# Run subsequent lk_plist_* commands on PLIST_FILE.
+function lk_plist_set_file() {
+    _LK_PLIST=$1
+}
+
+# lk_plist_delete ENTRY
+function lk_plist_delete() {
+    _lk_plist_buddy "Delete $(_lk_plist_quote "$1")"
+}
+
+# lk_plist_add ENTRY TYPE [VALUE]
+#
+# TYPE must be one of:
+# - string
+# - array
+# - dict
+# - bool
+# - real
+# - integer
+# - date
+# - data
+function lk_plist_add() {
+    _lk_plist_buddy \
+        "Add $(_lk_plist_quote "$1") $2${3+ $(_lk_plist_quote "$3")}"
+}
+
+# lk_plist_replace ENTRY TYPE [VALUE]
+function lk_plist_replace() {
+    lk_plist_delete "$1" 2>/dev/null || true
+    lk_plist_add "$@"
+}
+
+# lk_plist_replace_from_file ENTRY TYPE PLIST_FILE
+#
+# TYPE must match the top-level element of PLIST_FILE.
+function lk_plist_replace_from_file() {
+    lk_plist_replace "${@:1:2}"
+    _lk_plist_buddy "Merge $(_lk_plist_quote "$3") $(_lk_plist_quote "$1")"
+}
+
+# lk_plist_get ENTRY
+function lk_plist_get() {
+    _lk_plist_buddy "Print $(_lk_plist_quote "$1")"
+}
+
+# lk_plist_exists ENTRY
+function lk_plist_exists() {
+    lk_plist_get "$1" >/dev/null 2>&1
+}
+
+# lk_plist_maybe_add ENTRY TYPE [VALUE]
+function lk_plist_maybe_add() {
+    lk_plist_exists "$1" ||
+        lk_plist_add "$@"
 }

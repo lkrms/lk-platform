@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2030,SC2031
+# shellcheck disable=SC1090,SC2030,SC2031,SC2128
 
 # Scenario 1: bootstrapping lk-platform scripts
 #
@@ -23,12 +23,11 @@
 #
 
 set -euo pipefail
+lk_die() { s=$? && echo "$BASH_SOURCE: $1" >&2 && (exit $s) && false || exit; }
 
 function lk_bash_load() {
     local SH
     SH=$(
-        lk_die() { s=$? && echo "lk-bash-load.sh: $1" >&2 &&
-            (return $s) && false || exit; }
         VARS=()
         if [ -n "${lk_bin_depth:-}" ]; then
             [ -n "${BASH_SOURCE[2]:-}" ] ||
