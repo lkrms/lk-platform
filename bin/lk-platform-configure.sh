@@ -236,6 +236,7 @@
         ${OTHER_SETTINGS[@]+"${OTHER_SETTINGS[@]}"})"
 
     function restart_script() {
+        lk_lock_drop LOCK_FILE LOCK_FD
         lk_console_message "Restarting ${0##*/}"
         "$0" --no-log "$@"
         exit

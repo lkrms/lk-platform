@@ -969,13 +969,22 @@ function lk_is_fd_open() {
 }
 
 function _lk_lock_check_args() {
+    EXIT_STATUS=0
+    lk_is_linux || lk_command_exists flock || {
+        [ ! "${FUNCNAME[1]:-}" = lk_lock ] ||
+            lk_console_warning "File locking is not supported on this platform"
+        return 1
+    }
     [ $# -ge 2 ] &&
-        lk_test_many lk_is_identifier "${@:1:2}" || lk_warn "invalid arguments"
+        lk_test_many lk_is_identifier "${@:1:2}" ||
+        lk_warn "invalid arguments" || EXIT_STATUS=$?
+    return "$EXIT_STATUS"
 }
 
 # lk_lock LOCK_FILE_VAR LOCK_FD_VAR [LOCK_NAME]
 function lk_lock() {
-    _lk_lock_check_args "$@" || return
+    local EXIT_STATUS
+    _lk_lock_check_args "$@" || return "$EXIT_STATUS"
     unset "${@:1:2}"
     eval "$1=/tmp/.\${LK_PATH_PREFIX:-lk-}\${3:-\$(lk_myself 1)}.lock" &&
         eval "$2=\$(lk_next_fd)" &&
@@ -985,7 +994,8 @@ function lk_lock() {
 
 # lk_lock_drop LOCK_FILE_VAR LOCK_FD_VAR [LOCK_NAME]
 function lk_lock_drop() {
-    _lk_lock_check_args "$@" || return
+    local EXIT_STATUS
+    _lk_lock_check_args "$@" || return "$EXIT_STATUS"
     if [ "${!1:+1}${!2:+1}" = 11 ]; then
         eval "exec ${!2}>&-" &&
             rm -f "${!1}"
