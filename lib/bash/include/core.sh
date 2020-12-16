@@ -2302,7 +2302,7 @@ function lk_file_get_backup_suffix() {
 # modified time in UTC (e.g. 20201202T095515Z). If -m is set, copy FILE to
 # LK_BASE/var/backup if elevated, or ~/.lk-platform/backup if not elevated.
 function lk_file_backup() {
-    local MOVE=${LK_FILE_MOVE_BACKUP:-} DEST FILE MODIFIED SUFFIX TZ=UTC vv=
+    local MOVE=${LK_FILE_MOVE_BACKUP:-} DEST FILE MODIFIED SUFFIX TZ=UTC s vv=
     [ "${1:-}" != -m ] || { MOVE=1 && shift; }
     ! lk_is_true LK_FILE_NO_BACKUP || return 0
     ! lk_verbose 2 || vv=v
@@ -2316,7 +2316,8 @@ function lk_file_backup() {
                 DEST=~/.lk-platform/backup
             FILE=$(lk_maybe_sudo realpath "$1") &&
                 lk_maybe_sudo install -d -m 00700 "$DEST" || return
-            DEST=$DEST/${FILE//"/"/__}
+            s=/
+            DEST=$DEST/${FILE//"$s"/__}
         }
         MODIFIED=$(lk_file_modified "$1") &&
             SUFFIX=$(lk_file_get_backup_suffix "$MODIFIED") &&
