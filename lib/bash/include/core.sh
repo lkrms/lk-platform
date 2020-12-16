@@ -1925,7 +1925,7 @@ Usage: $(lk_myself -f) [-f] TARGET LINK"
         }
         lk_maybe_sudo rm -f"$vv" -- "$LINK" || return
     elif lk_maybe_sudo test -e "$LINK"; then
-        if ! lk_is_true NO_ORIG && ! lk_is_true LK_FILE_NO_BACKUP; then
+        if ! lk_is_true NO_ORIG; then
             lk_maybe_sudo \
                 mv -f"$v" -- "$LINK" "$LINK.orig" || return
         else
@@ -2305,7 +2305,6 @@ function lk_file_backup() {
     local MOVE=${LK_FILE_MOVE_BACKUP:-} FILE OWNER OWNER_HOME DEST GROUP \
         MODIFIED SUFFIX TZ=UTC s vv=
     [ "${1:-}" != -m ] || { MOVE=1 && shift; }
-    ! lk_is_true LK_FILE_NO_BACKUP || return 0
     ! lk_verbose 2 || vv=v
     export TZ
     if lk_maybe_sudo test -e "$1"; then

@@ -18,6 +18,8 @@ The following variables can be set in `/etc/default/lk-platform` or
 - `LK_ARCH_MIRROR`
 - `LK_ARG_ARRAY`
 - `LK_ARGV`
+- `LK_AUTO_BACKUP`
+- `LK_AUTO_BACKUP_SCHEDULE`
 - `LK_AUTO_REBOOT`
 - `LK_AUTO_REBOOT_TIME`
 - `LK_BACKUP_BASE_DIRS`
@@ -25,7 +27,6 @@ The following variables can be set in `/etc/default/lk-platform` or
 - `LK_BACKUP_MAIL_ERROR_ONLY`
 - `LK_BACKUP_MAIL_FROM`
 - `LK_BACKUP_ROOT`
-- `LK_BACKUP_SUFFIX`
 - `LK_BACKUP_TIMESTAMP`
 - `LK_BASE`
 - `LK_BIN_PATH`
@@ -33,11 +34,9 @@ The following variables can be set in `/etc/default/lk-platform` or
 - `LK_CERTBOT_PLUGIN`
 - `LK_CHECKLIST_DEFAULT`
 - `LK_CLIP_LINES`
-- `LK_COLOUR`
 - `LK_COMPLETION`
 - `LK_DEBUG`
 - `LK_DEFAULTS_DIR`
-- `LK_DIE_PREFIX`
 - `LK_DIG_OPTIONS`
 - `LK_DIG_SERVER`
 - `LK_DIM`
@@ -47,7 +46,12 @@ The following variables can be set in `/etc/default/lk-platform` or
 - `LK_EMAIL_BLACKHOLE`
 - `LK_ESCAPE`
 - `LK_EXPAND_KEYS`
+- `LK_FILE_DIFF_ORIG`
 - `LK_FILE_MODE`
+- `LK_FILE_MOVE_BACKUP`
+- `LK_FILE_NO_DIFF`
+- `LK_FILE_PREVIOUS`
+- `LK_FILE_TAKE_BACKUP`
 - `LK_FORCE_INPUT`
 - `LK_GIT_QUIET`
 - `LK_GIT_REF`
@@ -57,8 +61,6 @@ The following variables can be set in `/etc/default/lk-platform` or
 - `LK_INST`
 - `LK_IP_KEEP_PREFIX`
 - `LK_IP_PUBLIC_ONLY`
-- `LK_IPTABLES_CMD`
-- `LK_IPTABLES_COMMAND`
 - `LK_KEEP_TRYING_MAX`
 - `LK_LETSENCRYPT_EMAIL`
 - `LK_LETSENCRYPT_IGNORE_DNS`
@@ -88,7 +90,6 @@ The following variables can be set in `/etc/default/lk-platform` or
 - `LK_NODE_PACKAGES`
 - `LK_NODE_SERVICES`
 - `LK_NODE_TIMEZONE`
-- `LK_NO_DIFF`
 - `LK_NO_INPUT`
 - `LK_NO_LOG`
 - `LK_NO_SOURCE_FILE`
@@ -97,8 +98,8 @@ The following variables can be set in `/etc/default/lk-platform` or
 - `LK_OPENCONNECT_PROTOCOL`
 - `LK_PACKAGES_FILE`
 - `LK_PACMAN_CONF`
+- `LK_PACMAN_SYNC`
 - `LK_PATH_PREFIX`
-- `LK_PATH_PREFIX_ALPHA`
 - `LK_PHP_ADMIN_SETTINGS`
 - `LK_PHP_SETTINGS`
 - `LK_PLATFORM_BRANCH`
@@ -136,6 +137,7 @@ The following variables can be set in `/etc/default/lk-platform` or
 - `LK_TTY_PREFIX`
 - `LK_TTY_PREFIX_COLOUR`
 - `LK_TTY_SPACES`
+- `LK_TTY_SUFFIX`
 - `LK_TTY_WIDTH`
 - `LK_USAGE`
 - `LK_VALIDATE_FIELD_NAME`
@@ -145,6 +147,7 @@ The following variables can be set in `/etc/default/lk-platform` or
 - `LK_WP_FLUSH`
 - `LK_WP_OLD_URL`
 - `LK_WP_QUIET`
+- `LK_WP_REAPPLY`
 - `LK_WP_REPLACE`
 - `LK_WP_REPLACE_COMMAND`
 - `LK_WP_REPLACE_WITHOUT_SCHEME`
