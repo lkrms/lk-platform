@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2015,SC2016,SC2034,SC2046,SC2086,SC2116,SC2120,SC2207
+# shellcheck disable=SC1090,SC2015,SC2016,SC2034,SC2046,SC2086,SC2094,SC2116,SC2120,SC2207
 
 _LK_ENV=${_LK_ENV:-$(declare -x)}
 
@@ -1337,11 +1337,20 @@ function lk_console_detail_list() {
     fi
 }
 
-# lk_console_detail_file FILE [COLOUR] [FILE_COLOUR]
+# lk_console_detail_file FILE [COLOUR [FILE_COLOUR]]
 function lk_console_detail_file() {
     local LK_TTY_PREFIX=${LK_TTY_PREFIX-  >>> } \
-        LK_TTY_MESSAGE_COLOUR=${LK_TTY_MESSAGE_COLOUR-} LK_TTY_INDENT=4
-    lk_console_file "$1" "${2-$LK_YELLOW}" "${3-$LK_TTY_COLOUR}"
+        LK_TTY_SUFFIX=${LK_TTY_SUFFIX-  <<< } \
+        LK_TTY_MESSAGE_COLOUR=${LK_TTY_MESSAGE_COLOUR-$LK_YELLOW} \
+        LK_TTY_COLOUR2=${LK_TTY_COLOUR2-$LK_TTY_COLOUR} \
+        LK_TTY_INDENT=2
+    ${_LK_TTY_COMMAND:-lk_console_file} "$@"
+}
+
+# lk_console_detail_diff FILE1 FILE2 [MESSAGE [COLOUR]]
+function lk_console_detail_diff() {
+    _LK_TTY_COMMAND=lk_console_diff \
+        lk_console_detail_file "$@"
 }
 
 function _lk_tty_log() {
@@ -1453,16 +1462,65 @@ function lk_console_dump() {
         LK_TTY_SUFFIX=${LK_TTY_SUFFIX-<<< } \
         LK_TTY_INDENT=${LK_TTY_INDENT:-0} \
         LK_TTY_NO_FOLD=1 \
-        LK_TTY_MESSAGE_COLOUR \
-        LK_TTY_PREFIX_COLOUR
+        LK_TTY_MESSAGE_COLOUR
+    [ -n "$CONTENT" ] || [ -t 0 ] || CONTENT=$(cat)
     BOLD_COLOUR=$(lk_maybe_bold "$COLOUR")$COLOUR
-    LK_TTY_MESSAGE_COLOUR=$(lk_maybe_bold "${2:-}${3:-}$COLOUR")$COLOUR
-    LK_TTY_PREFIX_COLOUR=${LK_TTY_PREFIX_COLOUR-$BOLD_COLOUR}
+    LK_TTY_MESSAGE_COLOUR=$(lk_maybe_bold "${2:-}$COLOUR")$COLOUR
+    local LK_TTY_PREFIX_COLOUR=${LK_TTY_PREFIX_COLOUR-$BOLD_COLOUR}
     SPACES=$'\n'$(lk_repeat " " "$((LK_TTY_INDENT + 2))")
     CONTENT=$SPACES${CONTENT//$'\n'/$SPACES}
-    lk_console_item "${2:-}" "$(echo "$CONTENT" &&
-        printf '%s' "$LK_TTY_PREFIX_COLOUR$LK_TTY_SUFFIX$LK_RESET" \
-            ${3:+"$LK_TTY_MESSAGE_COLOUR$3$LK_RESET"})"
+    LK_TTY_INDENT=0 \
+        lk_console_item "${2:-}" "$(echo "$CONTENT" &&
+            printf '%s' "$LK_TTY_PREFIX_COLOUR$LK_TTY_SUFFIX$LK_RESET" \
+                ${3:+"$COLOUR$3$LK_RESET"})"
+}
+
+# lk_console_file FILE [COLOUR [FILE_COLOUR]]
+function lk_console_file() {
+    lk_maybe_sudo test -r "$1" || lk_warn "file not found: $1" || return
+    lk_console_dump "" \
+        "$1" \
+        "($(lk_file_summary "$1"))" \
+        "${2-${LK_TTY_MESSAGE_COLOUR-$LK_MAGENTA}}" \
+        "${3-${LK_TTY_COLOUR2-$LK_GREEN}}" \
+        <"$1"
+}
+
+# lk_console_diff FILE1 FILE2 [MESSAGE [COLOUR]]
+function lk_console_diff() {
+    local FILE1=$1 FILE2=${2:-} f MESSAGE
+    [ -n "$FILE1$FILE2" ] || lk_warn "invalid arguments" || return
+    for f in FILE1 FILE2; do
+        [ -n "${!f}" ] || {
+            if [ "$f" = FILE2 ] && { [ -t 0 ] || [ $# -eq 1 ]; }; then
+                ! lk_maybe_sudo test -r "$1.orig" || {
+                    FILE1=$1.orig
+                    FILE2=$1
+                    set -- "$FILE1" "$FILE2" "${@:3}"
+                    break
+                }
+                lk_console_file "$1" \
+                    "${4-${LK_TTY_MESSAGE_COLOUR-$LK_MAGENTA}}"
+                return
+            fi
+            eval "$f=/dev/stdin"
+            continue
+        }
+        lk_maybe_sudo test -r "${!f}" ||
+            lk_warn "file not found: ${!f}" || return
+    done
+    MESSAGE="\
+${1:-${LK_TTY_INPUT_NAME:-/dev/stdin}} -> \
+$LK_BOLD${2:-${LK_TTY_INPUT_NAME:-/dev/stdin}}$LK_RESET"
+    MESSAGE=${3-$MESSAGE}
+    lk_console_dump \
+        "$(! lk_maybe_sudo gnu_diff --unified --color=always \
+            "$FILE1" "$FILE2" ||
+            echo "${LK_CYAN}Files are identical$LK_RESET")" \
+        "$MESSAGE" \
+        "" \
+        "${4-${LK_TTY_MESSAGE_COLOUR-$LK_MAGENTA}}" \
+        "${LK_TTY_COLOUR2-}"
 }
 
 function _lk_console_get_prompt() {
@@ -1925,7 +1983,7 @@ Usage: $(lk_myself -f) [-f] TARGET LINK"
         }
         lk_maybe_sudo rm -f"$vv" -- "$LINK" || return
     elif lk_maybe_sudo test -e "$LINK"; then
-        if ! lk_is_true NO_ORIG && ! lk_is_true LK_FILE_NO_BACKUP; then
+        if ! lk_is_true NO_ORIG; then
             lk_maybe_sudo \
                 mv -f"$v" -- "$LINK" "$LINK.orig" || return
         else
@@ -2257,6 +2315,25 @@ else
     }
 fi
 
+function lk_file_summary() {
+    local IFS=$'\t' f
+    # e.g. "-rwxrwxr-x  lina    adm     19162   1608099521"
+    if ! lk_is_macos || lk_gnu_check stat; then
+        f=($(lk_maybe_sudo gnu_stat -L --printf '%A\t%U\t%G\t%s\t%Y' -- "$1"))
+    else
+        f=($(lk_maybe_sudo stat -L -t '%s' -f '%Sp%t%Su%t%Sg%t%z%t%Sm' -- "$1"))
+    fi
+    f[3]="${f[3]} bytes"
+    if ! lk_maybe_sudo test -f "$1"; then
+        f[3]=
+    elif lk_maybe_sudo test -L "$1"; then
+        f[3]="target: ${f[3]}"
+    fi
+    f[4]=$(lk_date "%-d %b %Y %H:%M%z" "${f[4]}")
+    f[4]=${f[4]/"$(lk_date " %Y ")"/ }
+    echo "${f[3]:+${f[3]}, }modified ${f[4]}, ${f[0]} ${f[1]} ${f[2]}"
+}
+
 if ! lk_is_macos || lk_gnu_check date; then
     function lk_timestamp_readable() {
         gnu_date -Rd "@$1"
@@ -2305,7 +2382,6 @@ function lk_file_backup() {
     local MOVE=${LK_FILE_MOVE_BACKUP:-} FILE OWNER OWNER_HOME DEST GROUP \
         MODIFIED SUFFIX TZ=UTC s vv=
     [ "${1:-}" != -m ] || { MOVE=1 && shift; }
-    ! lk_is_true LK_FILE_NO_BACKUP || return 0
     ! lk_verbose 2 || vv=v
     export TZ
     if lk_maybe_sudo test -e "$1"; then
@@ -2391,9 +2467,10 @@ function lk_file_add_newline() {
 # location before replacing it.
 function lk_file_replace() {
     local BACKUP=${LK_FILE_TAKE_BACKUP:-} MOVE=${LK_FILE_MOVE_BACKUP:-} \
-        LK_FILE_PREVIOUS TEMP vv=
+        PREVIOUS TEMP vv=
     [ "${1:-}" != -b ] || { BACKUP=1 && shift; }
     [ "${1:-}" != -m ] || { BACKUP=1 && MOVE=1 && shift; }
+    unset PREVIOUS
     ! lk_verbose 2 || vv=v
     if lk_maybe_sudo test -e "$1"; then
         lk_maybe_sudo test -f "$1" || lk_warn "not a file: $1" || return
@@ -2409,7 +2486,7 @@ function lk_file_replace() {
         ! lk_is_true BACKUP ||
             lk_file_backup ${MOVE:+-m} "$1" || return
         ! lk_verbose || lk_is_true LK_FILE_NO_DIFF ||
-            lk_file_get_text "$1" LK_FILE_PREVIOUS || return
+            lk_file_get_text "$1" PREVIOUS || return
     fi
     TEMP=$(lk_file_prepare_temp "$1") &&
         echo "${2%$'\n'}" | lk_maybe_sudo tee "$TEMP" >/dev/null &&
@@ -2417,6 +2494,8 @@ function lk_file_replace() {
     ! lk_verbose || {
         if lk_is_true LK_FILE_NO_DIFF; then
             lk_console_detail "Updated:" "$1"
+        elif [ -n "${PREVIOUS+1}" ]; then
+            lk_console_detail_diff "" "$1" <<<"$PREVIOUS"
         else
             lk_console_detail_file "$1"
         fi
@@ -2429,41 +2508,6 @@ function _lk_maybe_filter() {
     else
         cat
     fi
-}
-
-# lk_console_file [-o] FILE [COLOUR] [FILE_COLOUR]
-#
-# Output the diff between the value of LK_FILE_PREVIOUS and FILE, or all lines
-# in FILE if LK_FILE_PREVIOUS is empty or unset. If -o is set, compare FILE with
-# FILE.orig if it exists.
-function lk_console_file() {
-    local FILE COLOUR FILE_COLOUR BOLD_COLOUR \
-        PREVIOUS=${LK_FILE_PREVIOUS:-} DIFF_ORIG=${LK_FILE_DIFF_ORIG:-} \
-        LK_TTY_PREFIX=${LK_TTY_PREFIX:->>> } \
-        LK_TTY_INDENT=${LK_TTY_INDENT:-2}
-    [ "${1:-}" != -o ] || { DIFF_ORIG=1 && shift; }
-    FILE=$1
-    COLOUR=${2-${LK_TTY_MESSAGE_COLOUR-$LK_MAGENTA}}
-    FILE_COLOUR=${3-${LK_TTY_COLOUR2-${2:-$LK_GREEN}}}
-    BOLD_COLOUR=$(lk_maybe_bold "$COLOUR")$COLOUR
-    local LK_TTY_PREFIX_COLOUR=${LK_TTY_PREFIX_COLOUR-$BOLD_COLOUR}
-    lk_maybe_sudo test -r "$FILE" || lk_warn "cannot read file: $FILE" || return
-    LK_TTY_MESSAGE_COLOUR='' \
-        LK_TTY_COLOUR2='' \
-        lk_console_item "$BOLD_COLOUR$FILE$LK_RESET" "$(
-        if lk_is_true DIFF_ORIG && lk_maybe_sudo test -r "$FILE.orig"; then
-            ! lk_maybe_sudo gnu_diff --unified --color=always \
-                "$FILE.orig" "$FILE" ||
-                echo "$FILE_COLOUR<unchanged>"
-        elif [ -n "$PREVIOUS" ]; then
-            ! lk_maybe_sudo gnu_diff --unified --color=always \
-                <(echo -n "$PREVIOUS") "$FILE" ||
-                echo "$FILE_COLOUR<unchanged>"
-        else
-            echo -n "$FILE_COLOUR"
-            lk_maybe_sudo cat "$FILE"
-        fi
-    )"$'\n'"$LK_TTY_PREFIX_COLOUR<<<$LK_RESET"
 }
 
 set -o pipefail

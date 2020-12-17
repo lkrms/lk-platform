@@ -396,12 +396,12 @@ EOF
             sort -u)))
     if [ ${#INSTALL_CASKS[@]} -gt 0 ]; then
         HOMEBREW_CASKS_JSON=$(lk_keep_trying caffeinate -i \
-            brew cask info --json=v1 "${INSTALL_CASKS[@]}")
+            brew info --cask --json=v2 "${INSTALL_CASKS[@]}")
         CASKS=()
         for CASK in "${INSTALL_CASKS[@]}"; do
             CASK_DESC="$(jq <<<"$HOMEBREW_CASKS_JSON" -r \
                 --arg cask "${CASK##*/}" "\
-.[] | select(.token == \$cask) |
+.casks[] | select(.token == \$cask) |
     \"\\(.name[0]//.token) \\(.version)\\(
         if .desc != null then \": \" + .desc else \"\" end
     )\"")"
@@ -432,14 +432,18 @@ Please open the Mac App Store and sign in"
         if [ -n "$APPLE_ID" ]; then
             lk_console_detail "Apple ID:" "$APPLE_ID"
 
-            OUTDATED=$(mas outdated)
-            if UPGRADE_APPS=($(grep -Eo '^[0-9]+' <<<"$OUTDATED")); then
-                sed -E "s/^[0-9]+$S*//" <<<"$OUTDATED" |
-                    lk_console_detail_list "$(
-                        lk_maybe_plural ${#UPGRADE_APPS[@]} Update Updates
-                    ) available:" app apps
-                lk_confirm "OK to upgrade outdated apps?" Y ||
-                    UPGRADE_APPS=()
+            # `mas outdated` and `mas upgrade` stopped working after Mojave
+            if MACOS_VERSION=$(lk_macos_version) &&
+                lk_version_at_least 10.14 "$MACOS_VERSION"; then
+                OUTDATED=$(mas outdated)
+                if UPGRADE_APPS=($(grep -Eo '^[0-9]+' <<<"$OUTDATED")); then
+                    sed -E "s/^[0-9]+$S*//" <<<"$OUTDATED" |
+                        lk_console_detail_list "$(
+                            lk_maybe_plural ${#UPGRADE_APPS[@]} Update Updates
+                        ) available:" app apps
+                    lk_confirm "OK to upgrade outdated apps?" Y ||
+                        UPGRADE_APPS=()
+                fi
             fi
 
             INSTALL_APPS=($(comm -13 \
@@ -539,13 +543,13 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
     INSTALLED_CASKS_JSON=$(
         [ ${#INSTALLED_CASKS[@]} -eq 0 ] ||
             lk_keep_trying caffeinate -i \
-                brew cask info --json=v1 "${INSTALLED_CASKS[@]}"
+                brew info --cask --json=v2 "${INSTALLED_CASKS[@]}"
     )
 
     ALL_FORMULAE=($({
         lk_echo_array INSTALLED_FORMULAE &&
             { [ -z "$INSTALLED_CASKS_JSON" ] ||
-                jq -r '.[].depends_on.formula[]?' \
+                jq -r '.casks[].depends_on.formula[]?' \
                     <<<"$INSTALLED_CASKS_JSON"; } &&
             { [ ${#INSTALLED_FORMULAE[@]} -eq 0 ] ||
                 brew deps --union --full-name \
@@ -555,7 +559,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
         lk_echo_array INSTALLED_CASKS &&
             { [ -z "$INSTALLED_CASKS_JSON" ] ||
                 # TODO: recurse?
-                jq -r '.[].depends_on.cask[]?' <<<"$INSTALLED_CASKS_JSON"; }
+                jq -r '.casks[].depends_on.cask[]?' <<<"$INSTALLED_CASKS_JSON"; }
     } | sort -u))
 
     PURGE_FORMULAE=($(comm -23 \
