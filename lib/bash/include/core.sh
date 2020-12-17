@@ -2398,7 +2398,10 @@ function lk_file_backup() {
                 unset OWNER
             elif lk_will_sudo; then
                 DEST=$OWNER_HOME/.lk-platform/backup
-                GROUP=$(id -gn "$OWNER") || return
+                GROUP=$(id -gn "$OWNER") &&
+                    lk_maybe_sudo install -d -m 00755 \
+                        -o "$OWNER" -g "$GROUP" "$OWNER_HOME/.lk-platform" ||
+                    return
             else
                 DEST=~/.lk-platform/backup
                 unset OWNER

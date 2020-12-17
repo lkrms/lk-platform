@@ -449,6 +449,8 @@
                 lk_file_replace "$FILE" "$CONTENT$_BASHRC"
         }
 
+        install -d -m 00755 -o "$OWNER" -g "$GROUP" "$h/.lk-platform"
+
         DIR=$h/.byobu
         if [ ! -e "$DIR/.${LK_PATH_PREFIX}ignore" ] &&
             [ -n "$_BYOBU" ]; then
