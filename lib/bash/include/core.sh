@@ -1462,12 +1462,11 @@ function lk_console_dump() {
         LK_TTY_SUFFIX=${LK_TTY_SUFFIX-<<< } \
         LK_TTY_INDENT=${LK_TTY_INDENT:-0} \
         LK_TTY_NO_FOLD=1 \
-        LK_TTY_MESSAGE_COLOUR \
-        LK_TTY_PREFIX_COLOUR
+        LK_TTY_MESSAGE_COLOUR
     [ -n "$CONTENT" ] || [ -t 0 ] || CONTENT=$(cat)
     BOLD_COLOUR=$(lk_maybe_bold "$COLOUR")$COLOUR
     LK_TTY_MESSAGE_COLOUR=$(lk_maybe_bold "${2:-}$COLOUR")$COLOUR
-    LK_TTY_PREFIX_COLOUR=${LK_TTY_PREFIX_COLOUR-$BOLD_COLOUR}
+    local LK_TTY_PREFIX_COLOUR=${LK_TTY_PREFIX_COLOUR-$BOLD_COLOUR}
     SPACES=$'\n'$(lk_repeat " " "$((LK_TTY_INDENT + 2))")
     CONTENT=$SPACES${CONTENT//$'\n'/$SPACES}
     LK_TTY_INDENT=0 \
