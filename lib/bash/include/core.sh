@@ -1340,15 +1340,17 @@ function lk_console_detail_list() {
 # lk_console_detail_file FILE [COLOUR [FILE_COLOUR]]
 function lk_console_detail_file() {
     local LK_TTY_PREFIX=${LK_TTY_PREFIX-  >>> } \
-        LK_TTY_MESSAGE_COLOUR=${LK_TTY_MESSAGE_COLOUR-} LK_TTY_INDENT=4
-    lk_console_file "$1" "${2-$LK_YELLOW}" "${3-$LK_TTY_COLOUR}"
+        LK_TTY_SUFFIX=${LK_TTY_SUFFIX-  <<< } \
+        LK_TTY_MESSAGE_COLOUR=${LK_TTY_MESSAGE_COLOUR-$LK_YELLOW} \
+        LK_TTY_COLOUR2=${LK_TTY_COLOUR2-$LK_TTY_COLOUR} \
+        LK_TTY_INDENT=2
+    ${_LK_TTY_COMMAND:-lk_console_file} "$@"
 }
 
 # lk_console_detail_diff FILE1 FILE2 [MESSAGE [COLOUR]]
 function lk_console_detail_diff() {
-    local LK_TTY_PREFIX=${LK_TTY_PREFIX-  >>> } \
-        LK_TTY_MESSAGE_COLOUR=${LK_TTY_MESSAGE_COLOUR-} LK_TTY_INDENT=4
-    lk_console_diff "$1" "${2:-}" "${3:-}" "${4-$LK_YELLOW}"
+    _LK_TTY_COMMAND=lk_console_diff \
+        lk_console_detail_file "$@"
 }
 
 function _lk_tty_log() {
@@ -1468,9 +1470,10 @@ function lk_console_dump() {
     LK_TTY_PREFIX_COLOUR=${LK_TTY_PREFIX_COLOUR-$BOLD_COLOUR}
     SPACES=$'\n'$(lk_repeat " " "$((LK_TTY_INDENT + 2))")
     CONTENT=$SPACES${CONTENT//$'\n'/$SPACES}
-    lk_console_item "${2:-}" "$(echo "$CONTENT" &&
-        printf '%s' "$LK_TTY_PREFIX_COLOUR$LK_TTY_SUFFIX$LK_RESET" \
-            ${3:+"$COLOUR$3$LK_RESET"})"
+    LK_TTY_INDENT=0 \
+        lk_console_item "${2:-}" "$(echo "$CONTENT" &&
+            printf '%s' "$LK_TTY_PREFIX_COLOUR$LK_TTY_SUFFIX$LK_RESET" \
+                ${3:+"$COLOUR$3$LK_RESET"})"
 }
 
 # lk_console_file FILE [COLOUR [FILE_COLOUR]]
@@ -1490,7 +1493,7 @@ function lk_console_diff() {
     [ -n "$FILE1$FILE2" ] || lk_warn "invalid arguments" || return
     for f in FILE1 FILE2; do
         [ -n "${!f}" ] || {
-            [ ! -t 0 ] || [ "$f" = FILE1 ] || {
+            if [ "$f" = FILE2 ] && { [ -t 0 ] || [ $# -eq 1 ]; }; then
                 ! lk_maybe_sudo test -r "$1.orig" || {
                     FILE1=$1.orig
                     FILE2=$1
@@ -1500,7 +1503,7 @@ function lk_console_diff() {
                 lk_console_file "$1" \
                     "${4-${LK_TTY_MESSAGE_COLOUR-$LK_MAGENTA}}"
                 return
-            }
+            fi
             eval "$f=/dev/stdin"
             continue
         }
