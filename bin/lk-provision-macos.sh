@@ -229,11 +229,11 @@ EOF
     }
 
     function lk_brew_formulae() {
-        brew list --formulae --full-name
+        brew list --formula --full-name
     }
 
     function lk_brew_casks() {
-        brew list --casks --full-name
+        brew list --cask --full-name
     }
 
     NEW_HOMEBREW=0
@@ -286,7 +286,7 @@ EOF
         <(lk_echo_array INSTALL | sort -u)))
     [ ${#INSTALL[@]} -eq 0 ] || {
         lk_console_message "Installing lk-platform dependencies"
-        lk_keep_trying lk_tty caffeinate -i brew install "${INSTALL[@]}"
+        lk_keep_trying lk_tty caffeinate -i brew install --formula "${INSTALL[@]}"
     }
 
     lk_console_message "Applying user defaults"
@@ -360,9 +360,9 @@ EOF
     # Resolve formulae to their full names, e.g. python -> python@3.8
     [ ${#HOMEBREW_FORMULAE[@]} -eq 0 ] || {
         HOMEBREW_FORMULAE_JSON=$(lk_keep_trying caffeinate -i \
-            brew info --json=v1 "${HOMEBREW_FORMULAE[@]}") &&
+            brew info --formula --json=v2 "${HOMEBREW_FORMULAE[@]}") &&
             HOMEBREW_FORMULAE=(
-                $(jq -r .[].full_name <<<"$HOMEBREW_FORMULAE_JSON")
+                $(jq -r .formulae[].full_name <<<"$HOMEBREW_FORMULAE_JSON")
             )
     }
 
@@ -496,27 +496,27 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
     [ ${#UPGRADE_FORMULAE[@]} -eq 0 ] || {
         lk_console_message "Upgrading formulae"
         lk_keep_trying lk_tty caffeinate -i \
-            brew upgrade "${UPGRADE_FORMULAE[@]}" --formula
+            brew upgrade --formula "${UPGRADE_FORMULAE[@]}"
     }
 
     [ ${#UPGRADE_CASKS[@]} -eq 0 ] || {
         lk_console_message "Upgrading casks"
         lk_keep_trying lk_tty caffeinate -i \
-            brew upgrade "${UPGRADE_CASKS[@]}" --cask
+            brew upgrade --cask "${UPGRADE_CASKS[@]}"
     }
 
     [ ${#INSTALL_FORMULAE[@]} -eq 0 ] || {
         lk_echo_array INSTALL_FORMULAE |
             lk_console_list "Installing new formulae:"
         lk_keep_trying lk_tty caffeinate -i \
-            brew install "${INSTALL_FORMULAE[@]}"
+            brew install --formula "${INSTALL_FORMULAE[@]}"
     }
 
     [ ${#INSTALL_CASKS[@]} -eq 0 ] || {
         lk_echo_array INSTALL_CASKS |
             lk_console_list "Installing new casks:"
         lk_keep_trying lk_tty caffeinate -i \
-            brew cask install "${INSTALL_CASKS[@]}"
+            brew install --cask "${INSTALL_CASKS[@]}"
     }
 
     [ ${#UPGRADE_APPS[@]} -eq 0 ] || {
@@ -569,7 +569,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
         lk_echo_array PURGE_FORMULAE |
             lk_console_list "Installed but no longer required:" formula formulae
         ! lk_confirm "Remove the above?" N ||
-            brew uninstall "${PURGE_FORMULAE[@]}"
+            brew uninstall --formula "${PURGE_FORMULAE[@]}"
     }
 
     PURGE_CASKS=($(comm -23 \
@@ -579,7 +579,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
         lk_echo_array PURGE_CASKS |
             lk_console_list "Installed but no longer required:" cask casks
         ! lk_confirm "Remove the above?" N ||
-            brew cask uninstall "${PURGE_CASKS[@]}"
+            brew uninstall --cask "${PURGE_CASKS[@]}"
     }
 
     lk_console_success "Provisioning complete"
