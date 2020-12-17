@@ -2495,7 +2495,7 @@ function lk_file_replace() {
         if lk_is_true LK_FILE_NO_DIFF; then
             lk_console_detail "Updated:" "$1"
         elif [ -n "${PREVIOUS+1}" ]; then
-            lk_console_detail_diff "" "$1" <<<"$PREVIOUS"
+            echo -n "$PREVIOUS" | lk_console_detail_diff "" "$1"
         else
             lk_console_detail_file "$1"
         fi
