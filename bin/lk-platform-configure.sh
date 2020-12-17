@@ -145,6 +145,7 @@
         }
     export LK_BASE=$LK_INST
 
+    lk_is_arch && _IS_ARCH=1 || _IS_ARCH=
     _BASHRC='[ -z "${BASH_VERSION:-}" ] || [ ! -f ~/.bashrc ] || . ~/.bashrc'
     BYOBU_PATH=$(type -P byobu-launch) &&
         _BYOBU=$(printf '%s_byobu_sourced=1 . %q 2>/dev/null || true' \
@@ -478,7 +479,7 @@
                 'BYOBU_TIME="%H:%M:%S%z"'
             # Turn off UTF-8 support
             replace_byobu "$DIR/statusrc" \
-                '[ ! -f "/etc/arch-release" ] || RELEASE_ABBREVIATED=1' \
+                ${_IS_ARCH:+'[ ! -f "/etc/arch-release" ] || RELEASE_ABBREVIATED=1'} \
                 "BYOBU_CHARMAP=x"
             # Fix output issue when connecting from OpenSSH on Windows
             replace_byobu "$DIR/.tmux.conf" \

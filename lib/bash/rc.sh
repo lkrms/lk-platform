@@ -76,6 +76,7 @@ Usage: $(lk_myself -f) LOG_FILE[.gz] [LOG_FILE...]" || return
 function lk_bak_find() {
     local REGEX=".*(-[0-9]+\\.bak|\\.lk-bak-[0-9]{8}T[0-9]{6}Z)"
     lk_elevate gnu_find / -xdev -regextype posix-egrep \
+        ! \( -type d -path /srv/backup/snapshot -prune \) \
         -regex "${_LK_DIFF_REGEX:-$REGEX}" \
         "$@"
 }
@@ -100,6 +101,7 @@ function lk_bak_diff() {
         diff --unified --color --report-identical-files "$BACKUP" "$FILE" ||
             true
     done < <(gnu_find / -xdev -regextype posix-egrep \
+        ! \( -type d -path /srv/backup/snapshot -prune \) \
         -regex "${_LK_DIFF_REGEX:-$REGEX}" -print0 | sort -z)
 }
 

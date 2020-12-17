@@ -46,7 +46,6 @@ The following variables can be set in `/etc/default/lk-platform` or
 - `LK_EMAIL_BLACKHOLE`
 - `LK_ESCAPE`
 - `LK_EXPAND_KEYS`
-- `LK_FILE_DIFF_ORIG`
 - `LK_FILE_MODE`
 - `LK_FILE_MOVE_BACKUP`
 - `LK_FILE_NO_DIFF`

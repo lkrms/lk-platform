@@ -299,19 +299,8 @@ function edit_file() {
     else
         lk_die "no line matching $2 in $1"
     fi
-    [ "${EDIT_FILE_LOG:-Y}" = "N" ] || lk_console_file "$1"
+    [ "${EDIT_FILE_LOG:-Y}" = "N" ] || lk_console_diff "$1"
 }
-
-#function lk_console_file() {
-#    lk_console_item "$1:" "\
-#<<<<
-#$(if [ -f "$1.orig" ]; then
-#        ! diff "$1.orig" "$1" || echo "<unchanged>"
-#    else
-#        cat "$1"
-#    fi)
-#>>>>"
-#}
 
 function lk_keep_trying() {
     local MAX_ATTEMPTS=${LK_KEEP_TRYING_MAX:-10} \
@@ -421,7 +410,6 @@ if [ -z "$(ls -A "$LK_BASE")" ]; then
 fi
 
 # shellcheck disable=SC2034
-LK_FILE_DIFF_ORIG=1
 TERM='' \
     LK_SKIP=env,settings include=provision,hosting . "$LK_BASE/lib/bash/common.sh"
 
@@ -521,7 +509,7 @@ cat <<EOF >>"$FILE"
 $IPV4_ADDRESS $LK_NODE_FQDN}${IPV6_ADDRESS:+
 $IPV6_ADDRESS $LK_NODE_FQDN}}
 EOF
-lk_console_file "$FILE"
+lk_console_diff "$FILE"
 
 ### move to lk-provision-hosting.sh
 lk_console_message "Configuring APT"
@@ -550,7 +538,7 @@ fi
     printf '# Created by %s at %s\n' "${0##*/}" "$(lk_date_log)"
     printf '%s "%s";\n' "${APT_OPTIONS[@]}"
 } >"$FILE"
-lk_console_file "$FILE"
+lk_console_diff "$FILE"
 ### //
 
 # see `man invoke-rc.d` for more information
@@ -579,7 +567,7 @@ printf '%s %s\n%s\n' "\$(lk_date_log)" "\${LOG[0]}" "\$(
 exit "\$EXIT_STATUS"
 EOF
 chmod a+x "/usr/sbin/policy-rc.d"
-lk_console_file "/usr/sbin/policy-rc.d"
+lk_console_diff "/usr/sbin/policy-rc.d"
 
 REMOVE_PACKAGES=(
     mlocate # waste of CPU
@@ -614,7 +602,7 @@ vm.swappiness = 1
 # default value of SOMAXCONN is only 128
 net.core.somaxconn = 1024
 EOF
-lk_console_file "$FILE"
+lk_console_diff "$FILE"
 sysctl --system
 
 lk_console_message "Sourcing $LK_BASE/lib/bash/rc.sh in ~/.bashrc for all users"
@@ -686,7 +674,7 @@ cat <<EOF >"$DIR/.ssh/config"
 # Added by ${0##*/} at $(lk_date_log)
 Include ~/.ssh/${LK_PATH_PREFIX}config.d/*
 EOF
-lk_console_file "$DIR/.ssh/config"
+lk_console_diff "$DIR/.ssh/config"
 cat <<EOF >"$DIR/.ssh/${LK_PATH_PREFIX}config.d/90-defaults"
 Host                    ${LK_PATH_PREFIX}*
 IdentitiesOnly          yes
@@ -698,7 +686,7 @@ ControlPersist          120
 SendEnv                 LANG LC_*
 ServerAliveInterval     30
 EOF
-lk_console_file "$DIR/.ssh/${LK_PATH_PREFIX}config.d/90-defaults"
+lk_console_diff "$DIR/.ssh/${LK_PATH_PREFIX}config.d/90-defaults"
 [ -z "$LK_SSH_JUMP_HOST" ] || {
     HOST=$LK_SSH_JUMP_HOST
     [[ ! $HOST =~ (.*):([0-9]+)$ ]] || {
@@ -1040,7 +1028,7 @@ headers=true
 reverse=false
 save_seen=/var/lib/apt/listchanges.db
 EOF
-lk_console_file "/etc/apt/listchanges.conf"
+lk_console_diff "/etc/apt/listchanges.conf"
 
 FILE="/boot/config-$(uname -r)"
 if [ -f "$FILE" ] && ! grep -Fxq "CONFIG_BSD_PROCESS_ACCT=y" "$FILE"; then
@@ -1213,7 +1201,7 @@ if lk_dpkg_installed fail2ban; then
         EDIT_FILE_LOG=N edit_file "$FILE" \
             "^#?ignoreip$S*=($S*[^#]+)?($S*; .*)?\$" \
             "ignoreip = 127.0.0.1\\/8 ::1 ${LK_TRUSTED_IP_ADDRESSES//\//\\\/}\2"
-    lk_console_file "$FILE"
+    lk_console_diff "$FILE"
 fi
 
 if lk_dpkg_installed postfix; then
@@ -1229,8 +1217,8 @@ blackhole:	$LK_EMAIL_BLACKHOLE
 EOF
         newaliases
     fi
-    lk_console_file "/etc/postfix/main.cf"
-    lk_console_file "/etc/aliases"
+    lk_console_diff "/etc/postfix/main.cf"
+    lk_console_diff "/etc/aliases"
 fi
 
 if lk_dpkg_installed apache2; then
@@ -1389,7 +1377,7 @@ Use PublicDirectory /srv/www/*/*/public_html
 EOF
     rm -f "/etc/apache2/sites-enabled"/*
     ln -s "../sites-available/${LK_PATH_PREFIX}default.conf" "/etc/apache2/sites-enabled/000-${LK_PATH_PREFIX}default.conf"
-    lk_console_file "/etc/apache2/sites-available/${LK_PATH_PREFIX}default.conf"
+    lk_console_diff "/etc/apache2/sites-available/${LK_PATH_PREFIX}default.conf"
 
     lk_console_message "Disabling pre-installed PHP-FPM pools"
     lk_file_keep_original "/etc/php/$PHPVER/fpm/pool.d"
@@ -1450,7 +1438,7 @@ EOF
 
         [ "$LK_HOST_SITE_ENABLE" = "N" ] ||
             ln -s "../sites-available/$LK_HOST_ACCOUNT.conf" "/etc/apache2/sites-enabled/$LK_HOST_ACCOUNT.conf"
-        lk_console_file "/etc/apache2/sites-available/$LK_HOST_ACCOUNT.conf"
+        lk_console_diff "/etc/apache2/sites-available/$LK_HOST_ACCOUNT.conf"
 
         lk_console_message "Configuring PHP-FPM umask for group-writable files"
         FILE="/etc/systemd/system/php$PHPVER-fpm.service.d/override.conf"
@@ -1460,7 +1448,7 @@ EOF
 UMask=0002
 EOF
         systemctl daemon-reload
-        lk_console_file "$FILE"
+        lk_console_diff "$FILE"
 
         lk_console_message "Adding pool to PHP-FPM: $LK_HOST_ACCOUNT"
         cat <<EOF >"/etc/php/$PHPVER/fpm/pool.d/$LK_HOST_ACCOUNT.conf"
@@ -1511,7 +1499,7 @@ EOF
         install -m 00640 -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$LK_HOST_ACCOUNT/log/php$PHPVER-fpm.access.log"
         install -m 00640 -o "$PHP_FPM_POOL_USER" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$LK_HOST_ACCOUNT/log/php$PHPVER-fpm.error.log"
         install -m 00640 -o "$PHP_FPM_POOL_USER" -g "$HOST_ACCOUNT_GROUP" /dev/null "/srv/www/$LK_HOST_ACCOUNT/log/php$PHPVER-fpm.xdebug.log"
-        lk_console_file "/etc/php/$PHPVER/fpm/pool.d/$LK_HOST_ACCOUNT.conf"
+        lk_console_diff "/etc/php/$PHPVER/fpm/pool.d/$LK_HOST_ACCOUNT.conf"
     fi
 
     lk_console_message "Adding virtual host log files to logrotate.d"
@@ -1551,7 +1539,7 @@ innodb_buffer_pool_instances = $(((${LK_INNODB_BUFFER_SIZE%M} - 1) / 1024 + 1))
 innodb_buffer_pool_dump_at_shutdown = 1
 innodb_buffer_pool_load_at_startup = 1}
 EOF
-    lk_console_file "$FILE"
+    lk_console_diff "$FILE"
     lk_console_message "Starting mysql.service (MariaDB)"
     systemctl start mysql.service
     if [ -n "$LK_MYSQL_USERNAME" ]; then
@@ -1570,7 +1558,7 @@ WITH GRANT OPTION" | mysql -uroot
     cat <<EOF >"/etc/sudoers.d/${LK_PATH_PREFIX}mysql-self-service"
 ALL ALL=(root) NOPASSWD:$LK_BASE/bin/lk-mysql-grant.sh
 EOF
-    lk_console_file "/etc/sudoers.d/${LK_PATH_PREFIX}mysql-self-service"
+    lk_console_diff "/etc/sudoers.d/${LK_PATH_PREFIX}mysql-self-service"
 
     # TODO: create $LK_HOST_ACCOUNT database
 fi
@@ -1587,8 +1575,8 @@ fi
 lk_console_message "Saving iptables rules"
 iptables-save >"/etc/iptables/rules.v4"
 ip6tables-save >"/etc/iptables/rules.v6"
-lk_console_file "/etc/iptables/rules.v4"
-lk_console_file "/etc/iptables/rules.v6"
+lk_console_diff "/etc/iptables/rules.v4"
+lk_console_diff "/etc/iptables/rules.v6"
 
 lk_console_message "Running apt-get autoremove"
 apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -yq autoremove
