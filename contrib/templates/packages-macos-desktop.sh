@@ -37,7 +37,6 @@ HOMEBREW_FORMULAE+=(
 )
 
 HOMEBREW_CASKS+=(
-    caprine
     chromium
     firefox
     flycut
@@ -46,6 +45,7 @@ HOMEBREW_CASKS+=(
     keepassxc
     keepingyouawake
     libreoffice
+    messenger
     nextcloud
     skype
     spotify
