@@ -240,11 +240,31 @@ kernel.sysrq = 1"
         lk_php_set_option "xdebug.collect_return" "On"
         lk_php_set_option "xdebug.trace_output_name" "trace.%H.%R.%u"
     }
-    if [ -f "/etc/php/php-fpm.d/www.conf" ]; then
+    if [ -f /etc/php/php-fpm.d/www.conf ]; then
         # Reverse a previous change that broke logrotate
         sudo install -d -m 00755 -o root -g root /var/log/httpd
         sudo install -d -m 00775 -o root -g http /var/log/php-fpm
-        LK_CONF_OPTION_FILE="/etc/php/php-fpm.d/www.conf"
+        FILE=/etc/logrotate.d/php-fpm
+        [ -e "$FILE" ] ||
+            sudo install -m 00644 /dev/null "$FILE"
+        lk_file_replace "$FILE" "\
+/var/log/php-fpm/*.access.log {
+    missingok
+    sharedscripts
+    postrotate
+        /usr/bin/systemctl kill --kill-who=main --signal=SIGUSR1 php-fpm.service 2>/dev/null || true
+    endscript
+    su root root
+}
+/var/log/php-fpm/*.error.log {
+    missingok
+    sharedscripts
+    postrotate
+        /usr/bin/systemctl kill --kill-who=main --signal=SIGUSR1 php-fpm.service 2>/dev/null || true
+    endscript
+    su http http
+}"
+        LK_CONF_OPTION_FILE=/etc/php/php-fpm.d/www.conf
         lk_php_set_option "pm" "static"
         lk_php_set_option "pm.max_children" "4"
         lk_php_set_option "pm.max_requests" "0"
