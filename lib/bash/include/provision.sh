@@ -210,23 +210,28 @@ function lk_ssh_get_public_key() {
     fi
 }
 
-# lk_ssh_add_host NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]
+# lk_ssh_add_host [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]
 #
-# Create or update ~/.ssh/lk-config.d/60-NAME to apply HOST, PORT, USER,
-# KEY_FILE and JUMP_HOST_NAME to HostName, Port, User, IdentityFile and
-# ProxyJump for SSH host NAME.
+# Configure access to the given SSH host by creating or updating
+# ~/.ssh/{PREFIX}config.d/60-NAME. If -t is set, test reachability first.
 #
 # Notes:
-# - KEY_FILE can be relative to ~/.ssh or ~/.ssh/lk-keys
+# - KEY_FILE can be relative to ~/.ssh or ~/.ssh/{PREFIX}keys
 # - If KEY_FILE is -, the key will be read from standard input and written to
-#   ~/.ssh/lk-keys/NAME
+#   ~/.ssh/{PREFIX}keys/NAME
 # - LK_SSH_PREFIX is removed from the start of NAME and JUMP_HOST_NAME to ensure
 #   it's not added twice
 function lk_ssh_add_host() {
-    local NAME=$1 HOST=$2 SSH_USER=$3 KEY_FILE=${4:-} JUMP_HOST_NAME=${5:-} \
+    local NAME HOST SSH_USER KEY_FILE JUMP_HOST_NAME PORT='' \
         h=${LK_SSH_HOME:-~} SSH_PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX} \
         LK_FILE_TAKE_BACKUP='' LK_VERBOSE=0 \
-        KEY CONF CONF_FILE
+        KEY JUMP_ARGS JUMP_PORT CONF CONF_FILE TEST=
+    [ "${1:-}" != -t ] || { TEST=1 && shift; }
+    NAME=$1
+    HOST=$2
+    SSH_USER=$3
+    KEY_FILE=${4:-}
+    JUMP_HOST_NAME=${5:-}
     [ $# -ge 3 ] || lk_usage "\
 Usage: $(lk_myself -f) NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
         return
@@ -258,11 +263,39 @@ Usage: $(lk_myself -f) NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
                 lk_file_replace "$KEY_FILE.pub" "$KEY" || return
         }
     }
+    [[ ! $HOST =~ (.*):([0-9]+)$ ]] || {
+        HOST=${BASH_REMATCH[1]}
+        PORT=${BASH_REMATCH[2]}
+    }
+    JUMP_HOST_NAME=${JUMP_HOST_NAME:+$SSH_PREFIX${JUMP_HOST_NAME#$SSH_PREFIX}}
+    ! lk_is_true TEST || {
+        if [ -z "$JUMP_HOST_NAME" ]; then
+            lk_ssh_is_reachable "$HOST" "${PORT:-22}"
+        else
+            JUMP_ARGS=(
+                -o ConnectTimeout=5
+                -o ControlMaster=auto
+                -o ControlPath="/tmp/.$(lk_myself -f)_%h-%p-%r-%l"
+                -o ControlPersist=120
+            )
+            ssh -O check "${JUMP_ARGS[@]}" "$JUMP_HOST_NAME" 2>/dev/null ||
+                ssh -fN "${JUMP_ARGS[@]}" "$JUMP_HOST_NAME" ||
+                lk_warn "could not connect to jump host: $JUMP_HOST_NAME" ||
+                return
+            JUMP_PORT=9999
+            while :; do
+                JUMP_PORT=$(lk_tcp_next_port $((JUMP_PORT + 1))) || return
+                [ "$JUMP_PORT" -le 10999 ] ||
+                    lk_warn "could not establish tunnel to $HOST:${PORT:-22}" ||
+                    return
+                ! ssh -O forward -L "$JUMP_PORT:$HOST:${PORT:-22}" \
+                    "${JUMP_ARGS[@]}" "$JUMP_HOST_NAME" >/dev/null 2>&1 ||
+                    break
+            done
+            lk_ssh_is_reachable localhost "$JUMP_PORT"
+        fi || lk_warn "host not reachable: $HOST:${PORT:-22}" || return
+    }
     CONF=$(
-        [[ ! $HOST =~ (.*):([0-9]+)$ ]] || {
-            HOST=${BASH_REMATCH[1]}
-            PORT=${BASH_REMATCH[2]}
-        }
         h=${h//\//\\\/}
         KEY_FILE=${KEY_FILE//$h/"~"}
         cat <<EOF
@@ -277,6 +310,13 @@ EOF
     CONF_FILE=$h/.ssh/${SSH_PREFIX}config.d/${LK_SSH_PRIORITY:-60}-$NAME
     lk_maybe_install -m 00600 /dev/null "$CONF_FILE" &&
         lk_file_replace "$CONF_FILE" "$CONF" || return
+}
+
+# lk_ssh_is_reachable HOST PORT [TIMEOUT_SECONDS]
+function lk_ssh_is_reachable() {
+    { echo QUIT | gnu_nc -w "${3:-5}" "$1" "$2" | head -n1 |
+        grep -E "^SSH-[^[:blank:]-]+-[^[:blank:]-]+" >/dev/null; } \
+        2>/dev/null
 }
 
 # lk_ssh_configure [JUMP_HOST[:JUMP_PORT] JUMP_USER [JUMP_KEY_FILE]]
@@ -609,6 +649,34 @@ function lk_node_is_host() {
         <(lk_echo_array NODE_IP) | wc -l)" -gt 0 ]
 }
 
+if lk_is_macos; then
+    function lk_tcp_listening_ports() {
+        netstat -nap tcp | sed "/${S}LISTEN$S*\$/!d" |
+            awk '{print $4}' |
+            sed -E 's/.*\.([0-9]+)$/\1/' |
+            sort -nu
+    }
+else
+    function lk_tcp_listening_ports() {
+        ss -nHO --listening --tcp |
+            awk '{print $4}' |
+            sed -E 's/.*:([0-9]+)$/\1/' |
+            sort -nu
+    }
+fi
+
+# lk_tcp_next_port [FIRST_PORT]
+function lk_tcp_next_port() {
+    lk_tcp_listening_ports |
+        awk -v "p=${1:-10000}" \
+            'p>$1{next} p==$1{p++;next} {exit} END{print p}'
+}
+
+# lk_tcp_is_reachable HOST PORT [TIMEOUT_SECONDS]
+function lk_tcp_is_reachable() {
+    gnu_nc -z -w "${3:-5}" "$1" "$2" >/dev/null 2>&1
+}
+
 function lk_certbot_install() {
     local EMAIL=${LK_LETSENCRYPT_EMAIL-${LK_ADMIN_EMAIL:-}} DOMAIN DOMAINS_OK
     lk_test_many "lk_is_fqdn" "$@" || lk_warn "invalid domain(s): $*" || return
@@ -878,4 +946,22 @@ function lk_crontab_apply() {
 # lk_crontab_remove_command COMMAND
 function lk_crontab_remove_command() {
     _lk_crontab "$(lk_regex_expand_whitespace "$(lk_escape_ere "${1:-}")")" ""
+}
+
+# lk_system_memory [POWER]
+#
+# Output total installed memory in units of 1024 ^ POWER bytes, where:
+# - 0 = bytes
+# - 1 = KiB
+# - 2 = MiB
+# - 3 = GiB (default)
+function lk_system_memory() {
+    local POWER=${1:-3}
+    if lk_is_linux; then
+        awk "/^MemTotal\W/{print int(\$2/1024^$((POWER - 1)))}" /proc/meminfo
+    elif lk_is_macos; then
+        sysctl -n hw.memsize | awk "{print int(\$1/1024^$POWER)}"
+    else
+        false
+    fi
 }

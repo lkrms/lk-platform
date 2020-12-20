@@ -9,25 +9,24 @@ lk_assert_is_arch
 lk_log_output
 
 {
+    LK_SUDO=1
+
     if lk_sudo_offer_nopasswd; then
-        PASSWORD_STATUS="$(sudo passwd -S root | cut -d' ' -f2)"
-        [ "$PASSWORD_STATUS" = "L" ] || {
-            lk_console_message "Disabling password-based login as root"
+        PASSWORD_STATUS=$(sudo passwd -S root | cut -d' ' -f2)
+        [ "$PASSWORD_STATUS" = L ] || {
+            lk_console_message "Locking root password"
             sudo passwd -l root
         }
 
-        ! sudo test -d "/etc/polkit-1/rules.d" ||
-            sudo test -e "/etc/polkit-1/rules.d/49-wheel.rules" || {
-            lk_console_message "Disabling polkit password prompts"
-            sudo tee "/etc/polkit-1/rules.d/49-wheel.rules" <<EOF >/dev/null
-// Allow any user in the 'wheel' group to take any action without
-// entering a password.
+        ! sudo test -d /etc/polkit-1/rules.d || {
+            lk_console_message "Checking polkit rules"
+            lk_file_replace /etc/polkit-1/rules.d/49-wheel.rules "\
+// Authorize all actions by users in 'wheel' without authentication
 polkit.addRule(function (action, subject) {
-    if (subject.isInGroup("wheel")) {
+    if (subject.isInGroup(\"wheel\")) {
         return polkit.Result.YES;
     }
-});
-EOF
+});"
         }
     fi
 
@@ -54,16 +53,23 @@ EOF
 
     "$LK_BASE/bin/lk-platform-configure.sh" --no-log
 
-    PAC_TO_REMOVE=($(comm -12 <(pacman -Qq | sort -u) <(lk_echo_array PAC_REMOVE | sort -u)))
+    PAC_TO_REMOVE=($(comm -12 \
+        <(pacman -Qq | sort -u) \
+        <(lk_echo_array PAC_REMOVE | sort -u)))
     [ ${#PAC_TO_REMOVE[@]} -eq 0 ] || {
         lk_console_message "Removing packages"
         lk_tty sudo pacman -R --noconfirm "${PAC_TO_REMOVE[@]}"
     }
 
     lk_console_message "Checking install reasons"
-    PAC_EXPLICIT=($(lk_echo_args "${PACMAN_PACKAGES[@]}" "${AUR_PACKAGES[@]}" ${PAC_KEEP[@]+"${PAC_KEEP[@]}"} | sort -u))
-    PAC_TO_MARK_ASDEPS=($(comm -23 <(pacman -Qeq | sort -u) <(lk_echo_array PAC_EXPLICIT)))
-    PAC_TO_MARK_EXPLICIT=($(comm -12 <(pacman -Qdq | sort -u) <(lk_echo_array PAC_EXPLICIT)))
+    PAC_EXPLICIT=($(lk_echo_array PACMAN_PACKAGES AUR_PACKAGES PAC_KEEP |
+        sort -u))
+    PAC_TO_MARK_ASDEPS=($(comm -23 \
+        <(pacman -Qeq | sort -u) \
+        <(lk_echo_array PAC_EXPLICIT)))
+    PAC_TO_MARK_EXPLICIT=($(comm -12 \
+        <(pacman -Qdq | sort -u) \
+        <(lk_echo_array PAC_EXPLICIT)))
     [ ${#PAC_TO_MARK_ASDEPS[@]} -eq 0 ] ||
         lk_tty sudo pacman -D --asdeps "${PAC_TO_MARK_ASDEPS[@]}"
     [ ${#PAC_TO_MARK_EXPLICIT[@]} -eq 0 ] ||
@@ -73,16 +79,18 @@ EOF
         [ ${#PAC_TO_PURGE[@]} -eq 0 ] ||
         {
             lk_echo_array PAC_TO_PURGE |
-                lk_console_list "Installed but no longer required:" package packages
+                lk_console_list \
+                    "Installed but no longer required:" package packages
             ! lk_confirm "Remove the above?" N ||
                 lk_tty sudo pacman -Rs --noconfirm "${PAC_TO_PURGE[@]}"
         }
 
     lk_console_message "Upgrading installed packages"
-    lk_pacman_add_repo ${CUSTOM_REPOS[@]+"${CUSTOM_REPOS[@]}"}
     lk_tty sudo pacman -Syu
 
-    PAC_TO_INSTALL=($(comm -13 <(pacman -Qeq | sort -u) <(lk_echo_array PACMAN_PACKAGES | sort -u)))
+    PAC_TO_INSTALL=($(comm -13 \
+        <(pacman -Qeq | sort -u) \
+        <(lk_echo_array PACMAN_PACKAGES | sort -u)))
     [ ${#PAC_TO_INSTALL[@]} -eq 0 ] || {
         lk_console_message "Installing new packages from repo"
         lk_tty sudo pacman -S "${PAC_TO_INSTALL[@]}"
@@ -93,7 +101,9 @@ EOF
             lk_console_message "Installing yay to manage AUR packages"
             eval "$YAY_SCRIPT"
         }
-        AUR_TO_INSTALL=($(comm -13 <(pacman -Qeq | sort -u) <(lk_echo_array AUR_PACKAGES | sort -u)))
+        AUR_TO_INSTALL=($(comm -13 \
+            <(pacman -Qeq | sort -u) \
+            <(lk_echo_array AUR_PACKAGES | sort -u)))
         [ ${#AUR_TO_INSTALL[@]} -eq 0 ] || {
             lk_console_message "Installing new packages from AUR"
             lk_tty yay -Sy --aur "${AUR_TO_INSTALL[@]}"
@@ -102,37 +112,33 @@ EOF
         lk_tty yay -Syu --aur
     fi
 
-    PAC_KEPT=($(comm -12 <(pacman -Qeq | sort -u) <(lk_echo_array PAC_KEEP | sort -u)))
+    PAC_KEPT=($(comm -12 \
+        <(pacman -Qeq | sort -u) \
+        <(lk_echo_array PAC_KEEP | sort -u)))
     [ ${#PAC_KEPT[@]} -eq 0 ] ||
         lk_echo_array PAC_KEPT |
-        lk_console_list "Marked 'explicitly installed' because of PAC_KEEP:" package packages
+        lk_console_list "Retained because of PAC_KEEP:" package packages
 
-    [ -e "/opt/opcache-gui" ] || {
+    [[ ${LK_PACKAGES_FILE##*/} != *-dev* ]] ||
+        [ -e /opt/opcache-gui ] || {
         lk_console_message "Installing opcache-gui"
-        sudo install -d -m 00755 -o "$USER" -g "$(id -gn)" "/opt/opcache-gui" &&
-            git clone "https://github.com/lkrms/opcache-gui.git" \
-                "/opt/opcache-gui" || exit
+        sudo install -d -m 00755 -o "$USER" -g "$(id -gn)" /opt/opcache-gui &&
+            git clone https://github.com/lkrms/opcache-gui.git \
+                /opt/opcache-gui
     }
 
     MINIMAL=0
-    [ "$(free -g | grep -Eo "[0-9]+" | head -n1)" -ge 15 ] || MINIMAL=1
+    MEMORY=$(lk_system_memory)
+    [ "$MEMORY" -ge 7 ] || MINIMAL=1
 
-    LK_SUDO=1
-
-    FILE="/etc/sysctl.d/90-sysrq.conf"
-    [ -e "$FILE" ] || {
-        cat <<EOF | sudo tee "$FILE" >/dev/null
+    lk_console_message "Checking kernel parameters"
+    lk_file_replace /etc/sysctl.d/90-sysrq.conf "\
 # Enable Alt+SysRq shortcuts (e.g. for REISUB)
-# See https://www.kernel.org/doc/html/latest/admin-guide/sysrq.html
-kernel.sysrq = 1
-EOF
-        sudo sysctl --system
-    }
+kernel.sysrq = 1"
+    sudo sysctl --system
 
-    # TODO: add the following above the relevant pam_nologin.so lines in /etc/pam.d/system-login:
-    #
-    # auth [success=1 default=ignore] pam_succeed_if.so quiet user ingroup wheel
-    # account [success=1 default=ignore] pam_succeed_if.so quiet user ingroup wheel
+    ###
+
     LK_CONF_OPTION_FILE=/etc/ssh/sshd_config
     lk_ssh_set_option PasswordAuthentication "no"
     lk_ssh_set_option AcceptEnv "LANG LC_*"
@@ -257,8 +263,6 @@ EOF
     sudo usermod --append --groups "http" "$USER"
     sudo usermod --append --groups "$(id -gn)" "http"
     lk_is_true MINIMAL || lk_systemctl_enable httpd
-
-    unset LK_SUDO
 
     exit
 }

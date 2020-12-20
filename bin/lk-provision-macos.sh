@@ -90,7 +90,6 @@ function exit_trap() {
         lk_console_item "Dumping user defaults to domain files in" \
             ~/".${LK_PATH_PREFIX}defaults"
         lk_macos_defaults_dump
-        lk_macos_defaults_dump -currentHost
     fi
 
     # This doubles as an early Full Disk Access check/reminder
@@ -362,7 +361,7 @@ EOF
         HOMEBREW_FORMULAE_JSON=$(lk_keep_trying caffeinate -i \
             brew info --formula --json=v2 "${HOMEBREW_FORMULAE[@]}") &&
             HOMEBREW_FORMULAE=(
-                $(jq -r .formulae[].full_name <<<"$HOMEBREW_FORMULAE_JSON")
+                $(jq -r ".formulae[].full_name" <<<"$HOMEBREW_FORMULAE_JSON")
             )
     }
 
@@ -374,7 +373,7 @@ EOF
         for FORMULA in "${INSTALL_FORMULAE[@]}"; do
             FORMULA_DESC="$(jq <<<"$HOMEBREW_FORMULAE_JSON" -r \
                 --arg formula "$FORMULA" "\
-.[] | select(.full_name == \$formula) |
+.formulae[] | select(.full_name == \$formula) |
     \"\\(.full_name)@\\(.versions.stable): \\(
         if .desc != null then \": \" + .desc else \"\" end
     )\"")"

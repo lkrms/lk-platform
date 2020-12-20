@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2015,SC2016,SC2034,SC2046,SC2086,SC2094,SC2116,SC2120,SC2207
+# shellcheck disable=SC1090,SC2015,SC2016,SC2034,SC2046,SC2086,SC2094,SC2116,SC2120,SC2154,SC2207
 
 _LK_ENV=${_LK_ENV:-$(declare -x)}
 
@@ -502,7 +502,7 @@ function lk_get_env() {
             sed -E "/^($(lk_implode '|' _LK_IGNORE))\$/d"); do
             unset "$_LK_VAR" 2>/dev/null || _LK_IGNORE[$((_lk_i++))]=$_LK_VAR
         done
-        ! lk_verbose 2 ||
+        ! lk_verbose 3 ||
             lk_console_log "Variables ignored in $(lk_myself -f):" \
                 $'\n'"$(lk_echo_args "${_LK_IGNORE[@]:$_lk_i0}")"
         eval "$_LK_ENV"
@@ -516,6 +516,15 @@ function lk_get_env() {
                 ${_LK_VAR_LIST+lk_echo_args} \
                 "$@"
     )
+}
+
+# lk_check_pid PID
+#
+# Return true if a signal could be sent to the given process by the current
+# user.
+function lk_check_pid() {
+    [ $# -eq 1 ] || return
+    lk_maybe_sudo kill -0 "$1" 2>/dev/null
 }
 
 function lk_escape_ere() {

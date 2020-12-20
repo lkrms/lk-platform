@@ -13,7 +13,9 @@ AUR_PACKAGES=()
 
 # won't be uninstalled if present
 PAC_KEEP=(
+    offlineimap
     subversion
+    zoom
 
     #
     aurutils
