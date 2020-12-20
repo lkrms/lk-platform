@@ -1374,7 +1374,7 @@ function _lk_tty_log() {
     lk_console_message "$1" "${2:+$(
         BOLD=$(lk_maybe_bold "$2")
         RESET=${BOLD:+$LK_RESET}
-        [ "${2:0:1}" != $'\n' ] || printf $'\n'
+        [ "${2#$'\n'}" = "$2" ] || printf '\n'
         echo "$BOLD${2#$'\n'}$RESET"
     )}${3:+ ${*:3}}" "$COLOUR"
 }

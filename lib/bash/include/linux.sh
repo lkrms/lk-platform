@@ -8,23 +8,71 @@ function lk_atop_ps_mem() {
             -v "TEMP=$TEMP"
 }
 
-function lk_systemctl_loaded() {
-    [ "$(systemctl show --property=LoadState "$@" | cut -d= -f2-)" = loaded ]
+function lk_systemctl_get_property() {
+    local VALUE
+    VALUE=$(systemctl show --property "$1" "${@:2}") &&
+        [ -n "$VALUE" ] &&
+        echo "${VALUE#$1=}"
 }
 
-function lk_systemctl_enable() {
-    systemctl is-enabled --quiet "$@" || {
-        ! lk_verbose ||
-            lk_console_detail "Running:" "systemctl enable --now $*"
-        sudo systemctl enable --now "$@"
+function lk_systemctl_property_is() {
+    local VALUE
+    VALUE=$(lk_systemctl_get_property "$1" "${@:3}") &&
+        [ "$VALUE" = "$2" ]
+}
+
+function lk_systemctl_enabled() {
+    systemctl is-enabled --quiet "$@"
+}
+
+function lk_systemctl_running() {
+    systemctl is-active --quiet "$@"
+}
+
+function lk_systemctl_failed() {
+    systemctl is-failed --quiet "$@"
+}
+
+function lk_systemctl_exists() {
+    lk_systemctl_property_is LoadState loaded "$@" ||
+        lk_warn "unknown service: $*"
+}
+
+function lk_systemctl_start() {
+    lk_systemctl_running "$@" || {
+        lk_console_detail "Starting service:" "$*"
+        lk_elevate systemctl start "$@" ||
+            lk_warn "could not start service: $*"
     }
 }
 
+function lk_systemctl_stop() {
+    ! lk_systemctl_running "$@" || {
+        lk_console_detail "Stopping service:" "$*"
+        lk_elevate systemctl stop "$@" ||
+            lk_warn "could not stop service: $*"
+    }
+}
+
+function lk_systemctl_enable() {
+    lk_systemctl_exists "$@" || return
+    lk_systemctl_enabled "$@" || {
+        lk_console_detail "Enabling service:" "$*"
+        lk_elevate systemctl enable "$@" ||
+            lk_warn "could not enable service: $*" || return
+    }
+    ! lk_systemctl_failed "$@" ||
+        lk_warn "not starting failed service: $*" || return
+    lk_systemctl_start "$@"
+}
+
 function lk_systemctl_disable() {
-    ! systemctl is-enabled --quiet "$@" || {
-        ! lk_verbose ||
-            lk_console_detail "Running:" "systemctl disable --now $*"
-        sudo systemctl disable --now "$@"
+    lk_systemctl_exists "$@" &&
+        lk_systemctl_stop "$@" || return
+    ! lk_systemctl_enabled "$@" || {
+        lk_console_detail "Disabling service:" "$*"
+        lk_elevate systemctl disable "$@" ||
+            lk_warn "could not disable service: $*"
     }
 }
 

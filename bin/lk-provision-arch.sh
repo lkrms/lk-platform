@@ -1,7 +1,10 @@
 #!/bin/bash
+
 # shellcheck disable=SC1090,SC2016,SC2031,SC2034,SC2207
 
 lk_bin_depth=1 include=provision,linux,arch . lk-bash-load.sh || exit
+
+shopt -s nullglob
 
 lk_assert_not_root
 lk_assert_is_arch
@@ -12,9 +15,10 @@ lk_log_output
     LK_SUDO=1
 
     if lk_sudo_offer_nopasswd; then
+        lk_console_message "Checking root account"
         PASSWORD_STATUS=$(sudo passwd -S root | cut -d' ' -f2)
         [ "$PASSWORD_STATUS" = L ] || {
-            lk_console_message "Locking root password"
+            lk_console_detail "Locking password"
             sudo passwd -l root
         }
 
@@ -76,14 +80,13 @@ polkit.addRule(function (action, subject) {
         lk_tty sudo pacman -D --asexplicit "${PAC_TO_MARK_EXPLICIT[@]}"
 
     ! PAC_TO_PURGE=($(pacman -Qdttq)) ||
-        [ ${#PAC_TO_PURGE[@]} -eq 0 ] ||
-        {
-            lk_echo_array PAC_TO_PURGE |
-                lk_console_list \
-                    "Installed but no longer required:" package packages
-            ! lk_confirm "Remove the above?" N ||
-                lk_tty sudo pacman -Rs --noconfirm "${PAC_TO_PURGE[@]}"
-        }
+        [ ${#PAC_TO_PURGE[@]} -eq 0 ] || {
+        lk_echo_array PAC_TO_PURGE |
+            lk_console_list \
+                "Installed but no longer required:" package packages
+        ! lk_confirm "Remove the above?" N ||
+            lk_tty sudo pacman -Rs --noconfirm "${PAC_TO_PURGE[@]}"
+    }
 
     lk_console_message "Upgrading installed packages"
     lk_tty sudo pacman -Syu
@@ -129,13 +132,16 @@ polkit.addRule(function (action, subject) {
 
     MINIMAL=0
     MEMORY=$(lk_system_memory)
-    [ "$MEMORY" -ge 7 ] || MINIMAL=1
+    [ "$MEMORY" -ge 7 ] || {
+        lk_console_warning "Low-memory system detected"
+        MINIMAL=1
+    }
 
-    lk_console_message "Checking kernel parameters"
-    lk_file_replace /etc/sysctl.d/90-sysrq.conf "\
-# Enable Alt+SysRq shortcuts (e.g. for REISUB)
-kernel.sysrq = 1"
-    sudo sysctl --system
+    if ! lk_command_exists code &&
+        TARGET=$(type -P codium); then
+        LK_VERBOSE=${LK_VERBOSE-1} \
+            lk_symlink "$TARGET" /usr/local/bin/code
+    fi
 
     ###
 
@@ -153,6 +159,13 @@ kernel.sysrq = 1"
     lk_systemctl_enable cups
 
     if ! lk_is_virtual; then
+        lk_console_message "Checking kernel parameters"
+        lk_file_replace /etc/sysctl.d/90-sysrq.conf "\
+# Enable Alt+SysRq shortcuts (e.g. for REISUB)
+kernel.sysrq = 1"
+        lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
+            sudo sysctl --system
+
         [ ! -f "/etc/bluetooth/main.conf" ] || {
             lk_conf_set_option AutoEnable "true" /etc/bluetooth/main.conf &&
                 lk_systemctl_enable bluetooth || exit
@@ -170,7 +183,10 @@ kernel.sysrq = 1"
                 echo "allow all" |
                 sudo tee "/etc/qemu/bridge.conf" >/dev/null || exit
         }
-        lk_is_true MINIMAL || lk_systemctl_enable libvirtd libvirt-guests
+        lk_is_true MINIMAL || {
+            lk_systemctl_enable libvirtd
+            lk_systemctl_enable libvirt-guests
+        }
 
         sudo usermod --append --groups docker "$USER"
         lk_is_true MINIMAL || lk_systemctl_enable docker
@@ -178,7 +194,7 @@ kernel.sysrq = 1"
 
     sudo test -d "/var/lib/mysql/mysql" ||
         sudo mariadb-install-db --user="mysql" --basedir="/usr" --datadir="/var/lib/mysql"
-    lk_is_true MINIMAL || lk_systemctl_enable mysqld
+    lk_is_true MINIMAL || lk_systemctl_enable mariadb
 
     LK_CONF_OPTION_FILE=/etc/php/php.ini
     for PHP_EXT in bcmath curl exif gd gettext iconv imap intl mysqli pdo_sqlite soap sqlite3 xmlrpc zip; do
@@ -211,9 +227,10 @@ kernel.sysrq = 1"
         install -d -m 00777 "$HOME/.xdebug"
         LK_CONF_OPTION_FILE="/etc/php/conf.d/xdebug.ini"
         grep -q '^xdebug\.mode=' "$LK_CONF_OPTION_FILE" ||
-            [ ! -e "$LK_CONF_OPTION_FILE.orig" ] ||
-            { lk_file_backup "$LK_CONF_OPTION_FILE" &&
-                sudo mv -fv "$LK_CONF_OPTION_FILE.orig" "$LK_CONF_OPTION_FILE"; }
+            [ ! -e "$LK_CONF_OPTION_FILE.orig" ] || {
+            lk_file_backup "$LK_CONF_OPTION_FILE" &&
+                sudo mv -fv "$LK_CONF_OPTION_FILE.orig" "$LK_CONF_OPTION_FILE"
+        }
         lk_php_enable_option "zend_extension" "xdebug.so"
         # Alternatives: profile, trace
         lk_php_set_option "xdebug.mode" "debug"
@@ -223,25 +240,31 @@ kernel.sysrq = 1"
         lk_php_set_option "xdebug.collect_return" "On"
         lk_php_set_option "xdebug.trace_output_name" "trace.%H.%R.%u"
     }
-    [ ! -f "/etc/php/php-fpm.d/www.conf" ] ||
-        {
-            sudo install -d -m 00775 -o "root" -g "http" "/var/log/httpd"
-            LK_CONF_OPTION_FILE="/etc/php/php-fpm.d/www.conf"
-            lk_php_set_option "pm" "static"
-            lk_php_set_option "pm.max_children" "4"
-            lk_php_set_option "pm.max_requests" "0"
-            lk_php_set_option "request_terminate_timeout" "0"
-            lk_php_set_option "pm.status_path" "/php-fpm-status"
-            lk_php_set_option "ping.path" "/php-fpm-ping"
-            lk_php_set_option "access.log" '/var/log/httpd/php-fpm-$pool.access.log'
-            lk_php_set_option "access.format" '"%{REMOTE_ADDR}e - %u %t \"%m %r%Q%q\" %s %f %{mili}d %{kilo}M %C%%"'
-            lk_php_set_option "catch_workers_output" "yes"
-            lk_php_set_option "php_admin_value[memory_limit]" "128M"
-            lk_php_set_option "php_admin_value[error_log]" '/var/log/httpd/php-fpm-$pool.error.log'
-            lk_php_set_option "php_admin_flag[log_errors]" "On"
-            lk_php_set_option "php_flag[display_errors]" "Off"
-            lk_php_set_option "php_flag[display_startup_errors]" "Off"
-        }
+    if [ -f "/etc/php/php-fpm.d/www.conf" ]; then
+        # Reverse a previous change that broke logrotate
+        sudo install -d -m 00755 -o root -g root /var/log/httpd
+        sudo install -d -m 00775 -o root -g http /var/log/php-fpm
+        LK_CONF_OPTION_FILE="/etc/php/php-fpm.d/www.conf"
+        lk_php_set_option "pm" "static"
+        lk_php_set_option "pm.max_children" "4"
+        lk_php_set_option "pm.max_requests" "0"
+        lk_php_set_option "request_terminate_timeout" "0"
+        lk_php_set_option "pm.status_path" "/php-fpm-status"
+        lk_php_set_option "ping.path" "/php-fpm-ping"
+        lk_php_set_option "access.log" '/var/log/php-fpm/php-fpm-$pool.access.log'
+        lk_php_set_option "access.format" '"%{REMOTE_ADDR}e - %u %t \"%m %r%Q%q\" %s %f %{mili}d %{kilo}M %C%%"'
+        lk_php_set_option "catch_workers_output" "yes"
+        lk_php_set_option "php_admin_value[memory_limit]" "128M"
+        lk_php_set_option "php_admin_value[error_log]" '/var/log/php-fpm/php-fpm-$pool.error.log'
+        lk_php_set_option "php_admin_flag[log_errors]" "On"
+        lk_php_set_option "php_flag[display_errors]" "Off"
+        lk_php_set_option "php_flag[display_startup_errors]" "Off"
+        OLD_LOGS=(/var/log/httpd/php-fpm-*.log)
+        if [ ${#OLD_LOGS[@]} -gt 0 ] && [ -z "$(ls -A /var/log/php-fpm)" ]; then
+            lk_systemctl_stop php-fpm
+            sudo mv -v "${OLD_LOGS[@]}" /var/log/php-fpm/
+        fi
+    fi
     lk_is_true MINIMAL || lk_systemctl_enable php-fpm
 
     LK_CONF_OPTION_FILE="/etc/httpd/conf/httpd.conf"
