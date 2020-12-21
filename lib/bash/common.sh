@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2120,SC2128,SC2207
+# shellcheck disable=SC1090,SC2015,SC2120,SC2128,SC2207
 
 _LK_ENV=${_LK_ENV:-$(declare -x)}
 
@@ -80,6 +80,23 @@ function lk_err_trap() {
 function lk_delete_on_exit() {
     [ -n "${_LK_EXIT_DELETE+1}" ] || _LK_EXIT_DELETE=()
     _LK_EXIT_DELETE+=("$@")
+}
+
+function lk_is_dry_run() {
+    [ -n "${LK_DRY_RUN:-}" ]
+}
+
+# lk_maybe [-p] COMMAND [ARG...]
+function lk_maybe() {
+    local PRINT=
+    [ "${1:-}" != -p ] || { PRINT=1 && shift; }
+    if lk_is_dry_run; then
+        ! lk_is_true PRINT && ! lk_verbose ||
+            lk_console_item \
+                "[DRY RUN] Not running:" $'\n'"$(lk_quote_args "$@")"
+    else
+        "$@"
+    fi
 }
 
 function lk_usage() {
