@@ -233,7 +233,7 @@ function lk_ssh_add_host() {
     KEY_FILE=${4:-}
     JUMP_HOST_NAME=${5:-}
     [ $# -ge 3 ] || lk_usage "\
-Usage: $(lk_myself -f) NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
+Usage: $(lk_myself -f) [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
         return
     NAME=${NAME#$SSH_PREFIX}
     [ "${KEY_FILE:--}" = - ] ||

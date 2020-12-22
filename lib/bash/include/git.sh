@@ -1,6 +1,14 @@
 #!/bin/bash
 
-# shellcheck disable=SC2015
+# shellcheck disable=SC2015,SC2034,SC2207
+
+function _lk_git() {
+    if [ -n "${LK_GIT_USER:-}" ]; then
+        sudo -H -u "$LK_GIT_USER" git "$@"
+    else
+        lk_maybe_sudo git "$@"
+    fi
+}
 
 function lk_git_is_quiet() {
     [ -n "${LK_GIT_QUIET:-}" ]
@@ -31,6 +39,24 @@ function lk_git_is_project_top_level() {
     lk_git_is_work_tree "${1:-}" &&
         ! lk_git_is_submodule "${1:-}" &&
         lk_git_is_top_level "${1:-}"
+}
+
+function lk_git_remote_singleton() {
+    local REMOTES
+    REMOTES=($(git remote)) &&
+        [ ${#REMOTES[@]} -eq 1 ] || return
+    echo "${REMOTES[0]}"
+}
+
+# lk_git_remote_head [REMOTE]
+#
+# Output the default branch configured on REMOTE (if known).
+function lk_git_remote_head() {
+    local REMOTE HEAD
+    REMOTE=${1:-$(lk_git_remote_singleton)} || lk_warn "no remote" || return
+    HEAD=$(git rev-parse --abbrev-ref "$REMOTE/HEAD" -- 2>/dev/null) &&
+        [ "$HEAD" != "$REMOTE/HEAD" ] &&
+        echo "${HEAD#$REMOTE/}"
 }
 
 function lk_git_branch_current() {
@@ -81,6 +107,59 @@ function lk_git_branch_push_remote() {
     PUSH=$(lk_git_branch_push "$@") &&
         [[ $PUSH =~ ^([^/]+)/[^/]+$ ]] &&
         echo "${BASH_REMATCH[1]}"
+}
+
+# lk_git_update_repo_to REMOTE [BRANCH]
+function lk_git_update_repo_to() {
+    local REMOTE BRANCH UPSTREAM _BRANCH BEHIND _UPSTREAM
+    [ $# -eq 2 ] || lk_usage "\
+Usage: $(lk_myself -f) REMOTE [BRANCH]" || return
+    REMOTE=$1
+    _lk_git fetch --quiet --prune --prune-tags "$REMOTE" ||
+        lk_warn "unable to fetch from remote: $REMOTE" ||
+        return
+    BRANCH=${2:-$(lk_git_remote_head "$REMOTE")} ||
+        lk_warn "no default branch for remote: $REMOTE" || return
+    UPSTREAM=$REMOTE/$BRANCH
+    _BRANCH=$(lk_git_branch_current) || _BRANCH=
+    unset LK_GIT_REPO_UPDATED
+    if lk_git_branch_list_local |
+        grep -Fx "$BRANCH" >/dev/null; then
+        BEHIND=$(git rev-list --count "$BRANCH..$UPSTREAM")
+        if [ "$BEHIND" -gt 0 ]; then
+            git merge-base --is-ancestor "$BRANCH" "$UPSTREAM" ||
+                lk_warn "local branch $BRANCH has diverged from $UPSTREAM" ||
+                return
+            lk_console_detail \
+                "Updating $LK_BOLD$BRANCH$LK_RESET ($BEHIND $(lk_maybe_plural \
+                    "$BEHIND" commit commits) behind)"
+            LK_GIT_REPO_UPDATED=1
+            if [ "$_BRANCH" = "$BRANCH" ]; then
+                _lk_git merge --ff-only "$UPSTREAM"
+            else
+                # Fast-forward local BRANCH (e.g. 'develop') to UPSTREAM
+                # ('origin/develop') without checking it out
+                _lk_git fetch . "$UPSTREAM:$BRANCH"
+            fi || return
+        fi
+        [ "$_BRANCH" = "$BRANCH" ] || {
+            lk_console_detail \
+                "Switching ${_BRANCH:+from $LK_BOLD$_BRANCH$LK_RESET }to $LK_BOLD$BRANCH$LK_RESET"
+            LK_GIT_REPO_UPDATED=1
+            _lk_git checkout "$BRANCH" || return
+        }
+        _UPSTREAM=$(lk_git_branch_upstream) || _UPSTREAM=
+        [ "$_UPSTREAM" = "$UPSTREAM" ] || {
+            lk_console_detail \
+                "Updating remote-tracking branch for $LK_BOLD$BRANCH$LK_RESET"
+            _lk_git branch --set-upstream-to "$UPSTREAM"
+        }
+    else
+        lk_console_detail \
+            "Switching ${_BRANCH:+from $LK_BOLD$_BRANCH$LK_RESET }to $REMOTE/$LK_BOLD$BRANCH$LK_RESET"
+        LK_GIT_REPO_UPDATED=1
+        _lk_git checkout -b "$BRANCH" --track "$UPSTREAM"
+    fi
 }
 
 # lk_git_get_repos ARRAY [DIR...]
