@@ -100,6 +100,15 @@ Usage: $(lk_myself -f) DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..
         lk_console_detail "Changes logged to:" "$LOG_FILE"
 }
 
+function lk_sudo_add_nopasswd() {
+    local LK_SUDO=1 FILE
+    [ -n "${1:-}" ] || lk_warn "no user" || return
+    lk_user_exists "$1" || lk_warn "user does not exist: $1" || return
+    FILE=/etc/sudoers.d/nopasswd-$1
+    lk_maybe_install -m 00440 /dev/null "$FILE" &&
+        lk_file_replace "$FILE" "$1 ALL=(ALL) NOPASSWD:ALL"
+}
+
 # lk_sudo_offer_nopasswd
 #
 # Invite the current user to add themselves to the system's sudoers policy with
@@ -110,10 +119,12 @@ function lk_sudo_offer_nopasswd() {
     FILE=/etc/sudoers.d/nopasswd-$USER
     sudo -n test -e "$FILE" 2>/dev/null || {
         lk_can_sudo install || return
-        lk_confirm "Allow user '$USER' to run sudo without entering a password?" Y || return
-        sudo install -m 00440 /dev/null "$FILE" &&
-            sudo tee "$FILE" >/dev/null <<<"$USER ALL=(ALL) NOPASSWD:ALL" &&
-            lk_console_message "User '$USER' may now run any command as any user" || return
+        lk_confirm \
+            "Allow user '$USER' to run sudo without entering a password?" Y ||
+            return
+        lk_sudo_add_nopasswd "$USER" &&
+            lk_console_message \
+                "User '$USER' may now run any command as any user"
     }
 }
 

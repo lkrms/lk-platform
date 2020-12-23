@@ -188,7 +188,7 @@ EOF
     fi
 
     if [ ! -e "$LK_BASE" ] || [ -z "$(ls -A "$LK_BASE")" ]; then
-        lk_console_item "Installing lk-platform to:" "$LK_BASE"
+        lk_console_item "Installing lk-platform to" "$LK_BASE"
         sudo install -d -m 02775 -o "$USER" -g admin "$LK_BASE"
         lk_keep_trying lk_tty caffeinate -i \
             git clone -b "$LK_PLATFORM_BRANCH" \

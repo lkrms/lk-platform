@@ -1356,7 +1356,7 @@ function lk_console_detail_file() {
     ${_LK_TTY_COMMAND:-lk_console_file} "$@"
 }
 
-# lk_console_detail_diff FILE1 FILE2 [MESSAGE [COLOUR]]
+# lk_console_detail_diff FILE1 [FILE2 [MESSAGE [COLOUR]]]
 function lk_console_detail_diff() {
     _LK_TTY_COMMAND=lk_console_diff \
         lk_console_detail_file "$@"
@@ -1495,7 +1495,11 @@ function lk_console_file() {
         <"$1"
 }
 
-# lk_console_diff FILE1 FILE2 [MESSAGE [COLOUR]]
+# lk_console_diff FILE1 [FILE2 [MESSAGE [COLOUR]]]
+#
+# Compare FILE1 and FILE2 using diff. If FILE2 is the empty string, read it from
+# input. If FILE1 is the only argument, compare with FILE1.orig if it exists,
+# otherwise pass FILE1 to lk_console_file.
 function lk_console_diff() {
     local FILE1=$1 FILE2=${2:-} f MESSAGE
     [ -n "$FILE1$FILE2" ] || lk_warn "invalid arguments" || return

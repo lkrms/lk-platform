@@ -392,7 +392,7 @@ EOF
 lk_console_detail "Disabling root password"
 in_target passwd -l root
 
-lk_console_detail "Installing lk-platform to:" "$LK_BASE"
+lk_console_detail "Installing lk-platform to" "$LK_BASE"
 in_target install -v -d -m 02775 -o "$TARGET_USERNAME" -g "adm" \
     "$LK_BASE"
 in_target sudo -H -u "$TARGET_USERNAME" \

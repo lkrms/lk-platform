@@ -4,6 +4,33 @@
 
 lk_include debian git provision
 
+# lk_hosting_add_admin LOGIN [AUTHORIZED_KEY...]
+function lk_hosting_add_admin() {
+    local _GROUP _HOME
+    [ -n "${1:-}" ] || lk_usage "\
+Usage: $(lk_myself -f) LOGIN" || return
+    ! lk_user_exists "$1" || lk_warn "user already exists: $1" || return
+    lk_console_item "Creating admin user:" "$1"
+    lk_console_detail "Supplementary groups:" "$(lk_echo_args adm sudo)"
+    lk_elevate useradd \
+        --groups adm,sudo \
+        --create-home \
+        --shell /bin/bash \
+        "$1" &&
+        _GROUP=$(id -gn "$1") &&
+        _HOME=$(lk_expand_path "~$1") || return
+    lk_console_message "Account created successfully"
+    lk_console_detail "Login group:" "$_GROUP"
+    lk_console_detail "Home directory:" "$_HOME"
+    [ $# -lt 2 ] || {
+        local LK_SUDO=1 FILE=$_HOME/.ssh/authorized_keys
+        lk_maybe_install -d -m 00700 -o "$1" -g "$_GROUP" "${FILE%/*}"
+        lk_maybe_install -m 00600 -o "$1" -g "$_GROUP" /dev/null "$FILE"
+        lk_file_replace "$FILE" "$(lk_echo_args "${@:2}")"
+    }
+    lk_sudo_add_nopasswd "$1"
+}
+
 # lk_hosting_add_account LOGIN
 function lk_hosting_add_account() {
     local _GROUP _HOME SKEL
@@ -11,7 +38,7 @@ function lk_hosting_add_account() {
 Usage: $(lk_myself -f) LOGIN" || return
     [ -d /srv/www ] || lk_warn "directory not found: /srv/www" || return
     ! lk_user_exists "$1" || lk_warn "user already exists: $1" || return
-    for SKEL in /etc/skel{${LK_PATH_PREFIX:+.${LK_PATH_PREFIX%-}},}; do
+    for SKEL in /etc/skel{.${LK_PATH_PREFIX%-},}; do
         [ -d "$SKEL" ] && break || unset SKEL
     done
     lk_console_item "Creating user account:" "$1"
@@ -40,12 +67,16 @@ function lk_hosting_install_repo() {
     lk_elevate install -d -m 02775 -g adm "$DIR" || return
     if [ -z "$(ls -A "$DIR")" ]; then
         lk_console_item "Installing $NAME to" "$DIR"
-        lk_elevate \
-            git clone ${BRANCH:+-b "$BRANCH"} "$REMOTE_URL" "$DIR" || return
+        (
+            umask 002 &&
+                lk_elevate git clone \
+                    ${BRANCH:+-b "$BRANCH"} "$REMOTE_URL" "$DIR"
+        )
     else
         lk_console_item "Updating $NAME in" "$DIR"
         (
-            cd "$DIR" || exit
+            umask 002 &&
+                cd "$DIR" || exit
             REMOTES=$(git remote) &&
                 [ "$REMOTES" = origin ] &&
                 _REMOTE_URL=$(git remote get-url origin 2>/dev/null) &&
