@@ -472,8 +472,8 @@ function lk_get_shell_var() {
 
 function lk_get_quoted_var() {
     while [ $# -gt 0 ]; do
+        _lk_var_prefix
         if [ -n "${!1:-}" ]; then
-            _lk_var_prefix
             printf '%s=%q\n' "$1" "${!1}"
         else
             printf '%s=\n' "$1"
@@ -624,20 +624,53 @@ function lk_var_list_all() {
     eval "printf '%s\n'$(printf ' "${!%s@}"' {a..z} {A..Z} _)"
 }
 
-# lk_expand_template [-q] [FILE]
+# lk_expand_template [-e] [-q] [FILE]
 #
-# Output FILE or input with each {{KEY}} tag (or each {{KEY}} tag where KEY is
-# an element of array LK_EXPAND_KEYS) replaced with the value of variable KEY.
-# If -q is set, use `printf %q` when expanding tags.
+# Replace each {{KEY}} in FILE or input with the value of variable KEY. If -e is
+# set, also replace each ({:LIST:}) with the output of `eval LIST`. If -q is
+# set, use `printf %q` to quote each replacement value.
 function lk_expand_template() {
-    local QUOTE TEMPLATE KEY REPLACE \
-        KEYS=(${LK_EXPAND_KEYS[@]+"${LK_EXPAND_KEYS[@]}"})
-    [ "${1:-}" != -q ] || { QUOTE=1 && shift; }
+    local EVAL QUOTE TEMPLATE KEYS i REPLACE KEY
+    unset EVAL QUOTE
+    while getopts ":eq" OPT; do
+        case "$OPT" in
+        e)
+            EVAL=1
+            ;;
+        q)
+            QUOTE=1
+            ;;
+        \? | :)
+            lk_usage "\
+Usage: $(lk_myself -f) [-e] [-q] [FILE]"
+            return 1
+            ;;
+        esac
+    done
+    shift $((OPTIND - 1))
     TEMPLATE=$(cat ${1+"$1"} && printf .) || return
-    [ ${#KEYS[@]} -gt 0 ] ||
-        KEYS=($(echo "$TEMPLATE" |
-            grep -Eo '\{\{[a-zA-Z_][a-zA-Z0-9_]*\}\}' | sort -u |
-            sed -E 's/^\{\{([a-zA-Z0-9_]+)\}\}$/\1/')) || true
+    ! lk_is_true EVAL || {
+        lk_mapfile KEYS <(
+            printf '%q' "$TEMPLATE" |
+                sed -E \
+                    -e "s/$(lk_escape_ere "$(printf '%q' "({:")")/\(\{:/g" \
+                    -e "s/$(lk_escape_ere "$(printf '%q' ":})")")/:\}\)/g" |
+                grep -Eo '\(\{:([^:]*|:[^}]|:\}[^)])*:\}\)' |
+                sort -u
+        )
+        for i in $(seq 0 $((${#KEYS[@]} - 1))); do
+            eval "KEYS[$i]=\$'${KEYS[$i]:3:$((${#KEYS[$i]} - 6))}'"
+            eval "REPLACE=\$({ ${KEYS[$i]}"$'\n'"} && printf .)" ||
+                lk_warn "error evaluating: ${KEYS[$i]}" || return
+            ! lk_is_true QUOTE ||
+                REPLACE=$(printf '%q.' "${REPLACE%.}")
+            REPLACE=${REPLACE%.}
+            TEMPLATE=${TEMPLATE//"({:${KEYS[$i]}:})"/$REPLACE}
+        done
+    }
+    KEYS=($(echo "$TEMPLATE" |
+        grep -Eo '\{\{[a-zA-Z_][a-zA-Z0-9_]*\}\}' | sort -u |
+        sed -E 's/^\{\{([a-zA-Z0-9_]+)\}\}$/\1/')) || true
     for KEY in ${KEYS[@]+"${KEYS[@]}"}; do
         [ -n "${!KEY+1}" ] ||
             lk_warn "variable not set: $KEY" || return
@@ -797,6 +830,12 @@ function lk_echo_array() {
 function lk_quote_args() {
     [ $# -eq 0 ] || printf '%q' "$1"
     [ $# -le 1 ] || printf ' %q' "${@:2}"
+    printf '\n'
+}
+
+function lk_quote_args_folded() {
+    [ $# -eq 0 ] || printf '%q' "$1"
+    [ $# -le 1 ] || printf ' \\ \n    %q' "${@:2}"
     printf '\n'
 }
 
@@ -1536,6 +1575,21 @@ $LK_BOLD${2:-${LK_TTY_INPUT_NAME:-/dev/stdin}}$LK_RESET"
         "${LK_TTY_COLOUR2-}"
 }
 
+function lk_run() {
+    local COMMAND WIDTH
+    COMMAND=$(lk_quote_args "$@")
+    WIDTH=${LK_TTY_WIDTH:-$(lk_tty_columns)}
+    [ ${#COMMAND} -le "$WIDTH" ] ||
+        COMMAND=$(lk_quote_args_folded "$@")
+    ${_LK_TTY_COMMAND:-lk_console_item} "Running:" $'\n'"$COMMAND"
+    "$@"
+}
+
+function lk_run_detail() {
+    _LK_TTY_COMMAND=lk_console_detail \
+        lk_run "$@"
+}
+
 function _lk_console_get_prompt() {
     lk_readline_format "$(
         lk_echoc -n " :: " \
@@ -2040,6 +2094,18 @@ function lk_keep_trying() {
 
 function lk_user_exists() {
     id "$1" >/dev/null 2>&1 || return
+}
+
+# lk_user_groups [USER]
+function lk_user_groups() {
+    eval "$(lk_get_regex LINUX_USERNAME_REGEX)"
+    groups ${1+"$1"} | sed 's/^.*:[[:blank:]]*//' |
+        grep -Eo "$LINUX_USERNAME_REGEX"
+}
+
+# lk_user_in_group GROUP [USER]
+function lk_user_in_group() {
+    lk_user_groups "${@:2}" | grep -Fx "$1" >/dev/null
 }
 
 function lk_test_many() {

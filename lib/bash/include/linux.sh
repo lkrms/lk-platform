@@ -61,19 +61,27 @@ function lk_systemctl_enable() {
         lk_elevate systemctl enable "$@" ||
             lk_warn "could not enable service: $*" || return
     }
+}
+
+function lk_systemctl_enable_now() {
+    lk_systemctl_enable "$@" || return
     ! lk_systemctl_failed "$@" ||
         lk_warn "not starting failed service: $*" || return
     lk_systemctl_start "$@"
 }
 
 function lk_systemctl_disable() {
-    lk_systemctl_exists "$@" &&
-        lk_systemctl_stop "$@" || return
+    lk_systemctl_exists "$@" || return
     ! lk_systemctl_enabled "$@" || {
         lk_console_detail "Disabling service:" "$*"
         lk_elevate systemctl disable "$@" ||
             lk_warn "could not disable service: $*"
     }
+}
+
+function lk_systemctl_disable_now() {
+    lk_systemctl_disable "$@" &&
+        lk_systemctl_stop "$@" || return
 }
 
 # shellcheck disable=SC2034,SC2207

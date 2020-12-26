@@ -1,16 +1,16 @@
 #!/bin/bash
 
-# shellcheck disable=SC2015
+# shellcheck disable=SC1090,SC2015,SC2046,SC2207
 
 lk_include debian git provision
 
-# lk_hosting_add_admin LOGIN [AUTHORIZED_KEY...]
-function lk_hosting_add_admin() {
+# lk_hosting_add_administrator LOGIN [AUTHORIZED_KEY...]
+function lk_hosting_add_administrator() {
     local _GROUP _HOME
     [ -n "${1:-}" ] || lk_usage "\
 Usage: $(lk_myself -f) LOGIN" || return
     ! lk_user_exists "$1" || lk_warn "user already exists: $1" || return
-    lk_console_item "Creating admin user:" "$1"
+    lk_console_item "Creating administrator account:" "$1"
     lk_console_detail "Supplementary groups:" "$(lk_echo_args adm sudo)"
     lk_elevate useradd \
         --groups adm,sudo \
@@ -31,8 +31,8 @@ Usage: $(lk_myself -f) LOGIN" || return
     lk_sudo_add_nopasswd "$1"
 }
 
-# lk_hosting_add_account LOGIN
-function lk_hosting_add_account() {
+# lk_hosting_add_user LOGIN
+function lk_hosting_add_user() {
     local _GROUP _HOME SKEL
     [ -n "${1:-}" ] || lk_usage "\
 Usage: $(lk_myself -f) LOGIN" || return
@@ -56,15 +56,94 @@ Usage: $(lk_myself -f) LOGIN" || return
     lk_console_detail "Home directory:" "$_HOME"
 }
 
-# lk_hosting_install_repo REMOTE_URL DIR [BRANCH [NAME]]
-function lk_hosting_install_repo() {
+# lk_hosting_get_site_settings DOMAIN
+function lk_hosting_get_site_settings() {
+    [ $# -gt 0 ] || lk_warn "no domain" || return
+    lk_is_fqdn "$1" || lk_warn "invalid domain: $1" || return
+    (
+        unset "${!SITE_@}"
+        FILE=$LK_BASE/etc/sites/$1.conf
+        [ ! -e "$FILE" ] || . "$FILE" || exit
+        _LK_VAR_PREFIX_DEPTH=1 \
+            lk_get_quoted_var $({ printf 'SITE_%s\n' \
+                ROOT ENABLE DISABLE_WWW DISABLE_HTTPS \
+                PHP_FPM_USER PHP_FPM_TIMEOUT PHP_VERSION &&
+                lk_echo_args "${!SITE_@}"; } | sort -u)
+    )
+}
+
+# lk_hosting_set_site_settings DOMAIN
+function lk_hosting_set_site_settings() {
+    local LK_SUDO=1 FILE
+    [ $# -gt 0 ] || lk_warn "no domain" || return
+    lk_is_fqdn "$1" || lk_warn "invalid domain: $1" || return
+    FILE=$LK_BASE/etc/sites/$1.conf
+    lk_maybe_install -d -m 02770 -g adm "$LK_BASE/etc/sites" &&
+        lk_maybe_install -m 00660 -g adm /dev/null "$FILE" &&
+        lk_file_replace "$FILE" $(lk_get_shell_var "${!SITE_@}")
+}
+
+# lk_hosting_configure_site DOMAIN HOME USER
+function lk_hosting_configure_site() {
+    local LK_SUDO=1 DOMAIN _HOME _USER SH GROUP
+    [ $# -eq 3 ] || lk_warn "invalid arguments" || return
+    lk_dirs_exist /srv/www{,/.tmp,/.opcache} ||
+        lk_warn "hosting base directories not found" || return
+    lk_is_fqdn "$1" || lk_warn "invalid domain: $1" || return
+    lk_user_exists "$3" || lk_warn "user does not exist: $3" || return
+    [[ $2 =~ ^/srv/www/$3(/[^/]+)?/?$ ]] &&
+        [[ ! ${BASH_REMATCH[1]} =~ ^/(public_html|log|backup|ssl|\..*)$ ]] ||
+        lk_warn "invalid directory: $2" || return
+    DOMAIN=${1#www.}
+    _HOME=${2%/}
+    _USER=$3
+    lk_console_item "Configuring site:" "$DOMAIN"
+    SH=$(lk_hosting_get_site_settings "$DOMAIN") &&
+        eval "$SH" || return
+    SITE_ROOT=$_HOME
+    SITE_ENABLE=${SITE_ENABLE:-Y}
+    SITE_DISABLE_WWW=${SITE_DISABLE_WWW:-N}
+    SITE_DISABLE_HTTPS=${SITE_DISABLE_HTTPS:-N}
+    if lk_apt_installed php-fpm; then
+        if lk_user_in_group adm "$_USER"; then
+            SITE_PHP_FPM_USER=${SITE_PHP_FPM_USER:-www-data}
+        else
+            SITE_PHP_FPM_USER=${SITE_PHP_FPM_USER:-$_USER}
+        fi
+        SITE_PHP_FPM_TIMEOUT=${SITE_PHP_FPM_TIMEOUT:-300}
+    fi
+    lk_console_detail "Checking files and directories in" "$_HOME"
+    GROUP=$(id -gn "$_USER") &&
+        lk_maybe_install \
+            -d -m 00750 -o "$_USER" -g "$GROUP" "$_HOME"/{,public_html,ssl} &&
+        lk_maybe_install \
+            -d -m 02750 -o root -g "$GROUP" "$_HOME"/log || return
+    if lk_apt_installed apache2; then
+        lk_maybe_install \
+            -m 00640 -o root -g "$GROUP" /dev/null "$_HOME"/log/error.log
+        lk_maybe_install \
+            -m 00640 -o root -g "$GROUP" /dev/null "$_HOME"/log/access.log
+        lk_maybe_install \
+            -m 00640 -o "$_USER" -g "$GROUP" /dev/null "$_HOME"/ssl/$DOMAIN.cert
+        lk_maybe_install \
+            -m 00640 -o "$_USER" -g "$GROUP" /dev/null "$_HOME"/ssl/$DOMAIN.key
+        lk_user_in_group "$GROUP" www-data || {
+            lk_console_detail "Adding user 'www-data' to group:" "$GROUP"
+            lk_elevate usermod --append --groups "$GROUP" www-data || return
+        }
+    fi
+    lk_hosting_set_site_settings "$DOMAIN"
+}
+
+# lk_hosting_configure_repo REMOTE_URL DIR [BRANCH [NAME]]
+function lk_hosting_configure_repo() {
     local REMOTE_URL DIR BRANCH NAME
     [ $# -ge 2 ] || lk_warn "invalid arguments" || return
     REMOTE_URL=$1
     DIR=$2
     BRANCH=${3:-}
     NAME=${4:-$1}
-    lk_elevate install -d -m 02775 -g adm "$DIR" || return
+    lk_elevate install -d -m 02775 -o root -g adm "$DIR" || return
     if [ -z "$(ls -A "$DIR")" ]; then
         lk_console_item "Installing $NAME to" "$DIR"
         (
@@ -95,7 +174,7 @@ function lk_hosting_install_repo() {
 
 function lk_hosting_configure_modsecurity() {
     lk_apt_install libapache2-mod-security2 &&
-        lk_hosting_install_repo \
+        lk_hosting_configure_repo \
             https://github.com/coreruleset/coreruleset.git \
             /opt/coreruleset \
             "${LK_OWASP_CRS_BRANCH:-v3.3/master}" \
