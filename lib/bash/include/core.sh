@@ -568,6 +568,8 @@ function lk_curl_config() {
 #     [tT][rR][uU][eE]
 function lk_regex_case_insensitive() {
     local i l LOWER UPPER REGEX=
+    [ $# -gt 0 ] || lk_warn "no string" || return
+    [ -n "$1" ] || return 0
     for i in $(seq 0 $((${#1} - 1))); do
         l=${1:$i:1}
         [[ ! $l =~ [[:alpha:]] ]] || {
@@ -658,15 +660,16 @@ Usage: $(lk_myself -f) [-e] [-q] [FILE]"
                 grep -Eo '\(\{:([^:]*|:[^}]|:\}[^)])*:\}\)' |
                 sort -u
         )
-        for i in $(seq 0 $((${#KEYS[@]} - 1))); do
-            eval "KEYS[$i]=\$'${KEYS[$i]:3:$((${#KEYS[$i]} - 6))}'"
-            eval "REPLACE=\$({ ${KEYS[$i]}"$'\n'"} && printf .)" ||
-                lk_warn "error evaluating: ${KEYS[$i]}" || return
-            ! lk_is_true QUOTE ||
-                REPLACE=$(printf '%q.' "${REPLACE%.}")
-            REPLACE=${REPLACE%.}
-            TEMPLATE=${TEMPLATE//"({:${KEYS[$i]}:})"/$REPLACE}
-        done
+        [ ${#KEYS[@]} -eq 0 ] ||
+            for i in $(seq 0 $((${#KEYS[@]} - 1))); do
+                eval "KEYS[$i]=\$'${KEYS[$i]:3:$((${#KEYS[$i]} - 6))}'"
+                eval "REPLACE=\$({ ${KEYS[$i]}"$'\n'"} && printf .)" ||
+                    lk_warn "error evaluating: ${KEYS[$i]}" || return
+                ! lk_is_true QUOTE ||
+                    REPLACE=$(printf '%q.' "${REPLACE%.}")
+                REPLACE=${REPLACE%.}
+                TEMPLATE=${TEMPLATE//"({:${KEYS[$i]}:})"/$REPLACE}
+            done
     }
     KEYS=($(echo "$TEMPLATE" |
         grep -Eo '\{\{[a-zA-Z_][a-zA-Z0-9_]*\}\}' | sort -u |
@@ -2322,7 +2325,10 @@ function lk_hash() {
 
 # lk_random_hex BYTES
 function lk_random_hex() {
-    printf '%02x' $(for i in $(seq 1 "$1"); do echo $((RANDOM % 256)); done)
+    [ $# -gt 0 ] && [[ $1 =~ ^[0-9]+$ ]] ||
+        lk_warn "invalid arguments" || return
+    [ "$1" -lt 1 ] ||
+        printf '%02x' $(for i in $(seq 1 "$1"); do echo $((RANDOM % 256)); done)
 }
 
 # lk_random_password [LENGTH]
