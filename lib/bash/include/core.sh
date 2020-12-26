@@ -632,7 +632,7 @@ function lk_var_list_all() {
 # set, also replace each ({:LIST:}) with the output of `eval LIST`. If -q is
 # set, use `printf %q` to quote each replacement value.
 function lk_expand_template() {
-    local EVAL QUOTE TEMPLATE KEYS i REPLACE KEY
+    local OPTIND OPT EVAL QUOTE TEMPLATE KEYS i REPLACE KEY
     unset EVAL QUOTE
     while getopts ":eq" OPT; do
         case "$OPT" in
