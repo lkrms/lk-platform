@@ -684,7 +684,8 @@ Usage: $(lk_myself -f) [-e] [-q] [FILE]"
         }
         TEMPLATE=${TEMPLATE//"{{$KEY}}"/$REPLACE}
     done
-    echo "${TEMPLATE%.}"
+    TEMPLATE=${TEMPLATE%.}
+    echo "${TEMPLATE%$'\n'}"
 }
 
 function lk_lower() {
@@ -1278,7 +1279,7 @@ Usage: $(lk_myself -f) STRING [WIDTH]" || return
         LINE=$LINE$CODE
     done
     STRING=$STRING$LINE
-    echo "${STRING%$'\n'}"$'\n'
+    echo "${STRING%$'\n'}"
 }
 
 function lk_tty_length() {
