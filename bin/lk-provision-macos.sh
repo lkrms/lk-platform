@@ -573,7 +573,8 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
         lk_echo_array PURGE_FORMULAE |
             lk_console_list "Installed but no longer required:" formula formulae
         ! lk_confirm "Remove the above?" N ||
-            brew uninstall --formula "${PURGE_FORMULAE[@]}"
+            brew uninstall --formula \
+                --force --ignore-dependencies "${PURGE_FORMULAE[@]}"
     }
 
     PURGE_CASKS=($(comm -23 \
