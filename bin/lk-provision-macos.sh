@@ -533,33 +533,38 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
 
     lk_macos_xcode_maybe_accept_license
 
-    INSTALLED_FORMULAE=($(comm -12 \
+    # `brew deps` is buggy AF, so find dependencies recursively via `brew info`
+    lk_console_message "Checking for orphaned packages"
+    ALL_FORMULAE=($(comm -12 \
         <(lk_brew_formulae | sort -u) \
         <(lk_echo_array HOMEBREW_FORMULAE | sort -u)))
-    INSTALLED_CASKS=($(comm -12 \
+    ALL_CASKS=($(comm -12 \
         <(lk_brew_casks | sort -u) \
         <(lk_echo_array HOMEBREW_CASKS | sort -u)))
-    INSTALLED_CASKS_JSON=$(
-        [ ${#INSTALLED_CASKS[@]} -eq 0 ] ||
-            lk_keep_trying caffeinate -i \
-                brew info --cask --json=v2 "${INSTALLED_CASKS[@]}"
-    )
-
-    ALL_FORMULAE=($({
-        lk_echo_array INSTALLED_FORMULAE &&
-            { [ -z "$INSTALLED_CASKS_JSON" ] ||
-                jq -r '.casks[].depends_on.formula[]?' \
-                    <<<"$INSTALLED_CASKS_JSON"; } &&
-            { [ ${#INSTALLED_FORMULAE[@]} -eq 0 ] ||
-                brew deps --union --full-name \
-                    "${INSTALLED_FORMULAE[@]}" 2>/dev/null; }
-    } | sort -u))
-    ALL_CASKS=($({
-        lk_echo_array INSTALLED_CASKS &&
-            { [ -z "$INSTALLED_CASKS_JSON" ] ||
-                # TODO: recurse?
-                jq -r '.casks[].depends_on.cask[]?' <<<"$INSTALLED_CASKS_JSON"; }
-    } | sort -u))
+    LAST_FORMULAE=()
+    LAST_CASKS=()
+    while :; do
+        NEW_FORMULAE=($(comm -23 \
+            <(lk_echo_array ALL_FORMULAE) \
+            <(lk_echo_array LAST_FORMULAE)))
+        NEW_CASKS=($(comm -23 \
+            <(lk_echo_array ALL_CASKS) \
+            <(lk_echo_array LAST_CASKS)))
+        [ ${#NEW_FORMULAE[@]}+${#NEW_CASKS[@]} != 0+0 ] || break
+        LAST_FORMULAE=(${ALL_FORMULAE[@]+"${ALL_FORMULAE[@]}"})
+        LAST_CASKS=(${ALL_CASKS[@]+"${ALL_CASKS[@]}"})
+        NEW_JSON=$({
+            [ ${#NEW_FORMULAE[@]} -eq 0 ] ||
+                brew info --json=v2 --formula "${NEW_FORMULAE[@]}"
+            [ ${#NEW_CASKS[@]} -eq 0 ] ||
+                brew info --json=v2 --cask "${NEW_CASKS[@]}"
+        } | jq --slurp '{"formulae":[.[].formulae[]],"casks":[.[].casks[]]}')
+        ALL_FORMULAE=($({ lk_echo_array ALL_FORMULAE && jq -r "\
+.formulae[].dependencies[]?,\
+.casks[].depends_on.formula[]?" <<<"$NEW_JSON"; } | sort -u))
+        ALL_CASKS=($({ lk_echo_array ALL_CASKS && jq -r "\
+.casks[].depends_on.cask[]?" <<<"$NEW_JSON"; } | sort -u))
+    done
 
     PURGE_FORMULAE=($(comm -23 \
         <(lk_brew_formulae | sort -u) \
