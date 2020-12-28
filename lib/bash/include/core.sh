@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2015,SC2016,SC2034,SC2046,SC2086,SC2094,SC2116,SC2120,SC2154,SC2207
+# shellcheck disable=SC1090,SC1091,SC2015,SC2016,SC2034,SC2046,SC2086,SC2094,SC2116,SC2120,SC2154,SC2207
 
 _LK_ENV=${_LK_ENV:-$(declare -x)}
 
@@ -457,12 +457,16 @@ function lk_escape() {
     echo "$STRING"
 }
 
+function lk_double_quote() {
+    local STRING
+    STRING=$(lk_escape "$1." '$' '`' "\\" '"')
+    printf '"%s"\n' "${STRING%.}"
+}
+
 function lk_get_shell_var() {
-    local _LK_ESCAPED
     while [ $# -gt 0 ]; do
         if [ -n "${!1:-}" ]; then
-            _LK_ESCAPED=$(lk_escape "${!1}." '$' '`' "\\" '"')
-            printf '%s="%s"\n' "$1" "${_LK_ESCAPED%.}"
+            printf '%s=%s\n' "$1" "$(lk_double_quote "${!1}")"
         else
             printf '%s=\n' "$1"
         fi
@@ -2599,7 +2603,31 @@ function _lk_maybe_filter() {
     fi
 }
 
+function lk_exit_trap() {
+    local EXIT_STATUS=$? DELETE_ARRAY="_LK_EXIT_DELETE_${BASH_SUBSHELL}[@]" i
+    [ "$EXIT_STATUS" -eq 0 ] ||
+        [[ ${FUNCNAME[1]:-} =~ ^_?lk_(die|usage|elevate)$ ]] ||
+        lk_console_error \
+            "$(_lk_caller "${_LK_ERR_TRAP_CONTEXT:-}"): unhandled error"
+    for i in ${!DELETE_ARRAY+"${!DELETE_ARRAY}"}; do
+        lk_elevate_if_error rm -Rf -- "$i" || true
+    done
+}
+
+function lk_err_trap() {
+    _LK_ERR_TRAP_CONTEXT=$(caller 0) || _LK_ERR_TRAP_CONTEXT=
+}
+
+function lk_delete_on_exit() {
+    local ARRAY=_LK_EXIT_DELETE_$BASH_SUBSHELL
+    [ -n "${!ARRAY+1}" ] || eval "$ARRAY=()"
+    eval "${ARRAY}[\${#${ARRAY}[@]}]=\$1"
+}
+
 set -o pipefail
+
+trap lk_exit_trap EXIT
+trap lk_err_trap ERR
 
 _LK_INCLUDES=(core)
 

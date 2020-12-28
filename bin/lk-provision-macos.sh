@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2001,SC2015,SC2034,SC2207
+# shellcheck disable=SC1090,SC2015,SC2034,SC2207
 
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
@@ -131,10 +131,10 @@ function exit_trap() {
 
     lk_console_message "Configuring default umask"
     if ! USER_UMASK=$(defaults read \
-        /var/db/com.apple.xpc.launchd/config/user.plist Umask 2>/dev/null) ||
+        /var/db/com.apple.xpc.launchd/config/user.plist \
+        Umask 2>/dev/null) ||
         [ "$USER_UMASK" -ne 2 ]; then
-        lk_console_detail "Running:" "launchctl config user umask 002"
-        sudo launchctl config user umask 002 >/dev/null
+        lk_run_detail sudo launchctl config user umask 002 >/dev/null
     fi
     FILE=/etc/profile
     if [ -r "$FILE" ] && ! grep -q umask "$FILE"; then
@@ -151,14 +151,13 @@ EOF
     fi
     umask 002
 
+    lk_console_message "Configuring default PATH"
     if ! USER_PATH=$(defaults read \
         /var/db/com.apple.xpc.launchd/config/user.plist \
         PathEnvironmentVariable 2>/dev/null) ||
         [[ ! "$USER_PATH" =~ (:|^)/usr/local/bin(:|$) ]]; then
         USER_PATH=/usr/local/bin:${USER_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}
-        lk_console_message "Setting default PATH"
-        lk_console_detail "Running:" "launchctl config user path $USER_PATH"
-        sudo launchctl config user path "$USER_PATH" >/dev/null
+        lk_run_detail sudo launchctl config user path "$USER_PATH" >/dev/null
     fi
 
     # disable sleep when charging

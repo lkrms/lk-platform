@@ -10,6 +10,8 @@ lk_die() { s=$? && echo "$BASH_SOURCE: $1" >&2 && (exit $s) && false || exit; }
 
 . "${LK_INST:-$LK_BASE}/lib/bash/include/core.sh"
 
+set -E
+
 # 1. Source each SETTINGS file in order, allowing later files to override values
 #    set earlier
 # 2. Discard settings with the same name as any LK_* variables found in the
@@ -60,26 +62,6 @@ function lk_die() {
         lk_console_error "$(_lk_caller): ${1:-execution failed}"
     fi
     exit "$EXIT_STATUS"
-}
-
-function lk_exit_trap() {
-    local EXIT_STATUS=$? i
-    [ "$EXIT_STATUS" -eq 0 ] ||
-        [[ ${FUNCNAME[1]:-} =~ ^_?lk_(die|usage|elevate)$ ]] ||
-        lk_console_error \
-            "$(_lk_caller "${_LK_ERR_TRAP_CONTEXT:-}"): unhandled error"
-    for i in ${_LK_EXIT_DELETE[@]+"${_LK_EXIT_DELETE[@]}"}; do
-        lk_elevate_if_error rm -Rf -- "$i" || true
-    done
-}
-
-function lk_err_trap() {
-    _LK_ERR_TRAP_CONTEXT=$(caller 0) || _LK_ERR_TRAP_CONTEXT=
-}
-
-function lk_delete_on_exit() {
-    [ -n "${_LK_EXIT_DELETE+1}" ] || _LK_EXIT_DELETE=()
-    _LK_EXIT_DELETE+=("$@")
 }
 
 function lk_is_dry_run() {
@@ -209,18 +191,9 @@ if ! lk_is_true LK_NO_SOURCE_FILE; then
     }
 fi
 
-SH=$(
-    [[ ,${LK_SKIP:-}, == *,env,* ]] || {
-        printf '%s=%q\n' \
-            LK_PATH_PREFIX "${LK_PATH_PREFIX-lk-}"
-        . "${LK_INST:-$LK_BASE}/lib/bash/env.sh"
-    }
-
-    [[ ,${LK_SKIP:-}, == *,trap,* ]] || {
-        printf 'trap %q %s\n' \
-            lk_exit_trap EXIT \
-            lk_err_trap ERR
-        echo "set -E"
-    }
-) && eval "$SH"
+SH=$([[ ,${LK_SKIP:-}, == *,env,* ]] || {
+    printf '%s=%q\n' \
+        LK_PATH_PREFIX "${LK_PATH_PREFIX-lk-}"
+    . "${LK_INST:-$LK_BASE}/lib/bash/env.sh"
+}) && eval "$SH"
 unset SH

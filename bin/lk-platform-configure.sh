@@ -142,7 +142,7 @@
     [ -n "$LK_PATH_PREFIX" ] || lk_die "LK_PATH_PREFIX not set"
     [ -z "${LK_BASE:-}" ] ||
         [ "$LK_BASE" = "$LK_INST" ] ||
-        [ "$LK_BASE" = "$OLD_LK_INST" ] ||
+        [ "$LK_BASE" = "${OLD_LK_INST:-}" ] ||
         [ ! -d "$LK_BASE" ] ||
         {
             lk_console_item "Existing installation found at" "$LK_BASE"
