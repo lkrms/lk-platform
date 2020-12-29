@@ -96,15 +96,13 @@ function exit_trap() {
     STATUS=$(sudo systemsetup -getremotelogin)
     if [[ ! "$STATUS" =~ ${S}On$ ]]; then
         lk_console_message "Enabling Remote Login (SSH)"
-        lk_console_detail "Running:" "systemsetup -setremotelogin on"
-        sudo systemsetup -setremotelogin on
+        lk_run_detail sudo systemsetup -setremotelogin on
     fi
 
     STATUS=$(sudo systemsetup -getcomputersleep)
     if [[ ! "$STATUS" =~ ${S}Never$ ]]; then
         lk_console_message "Disabling computer sleep"
-        lk_console_detail "Running:" "systemsetup -setcomputersleep off"
-        sudo systemsetup -setcomputersleep off
+        lk_run_detail sudo systemsetup -setcomputersleep off
     fi
 
     lk_sudo_offer_nopasswd || true
@@ -536,10 +534,10 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
     lk_console_message "Checking for orphaned packages"
     ALL_FORMULAE=($(comm -12 \
         <(lk_brew_formulae | sort -u) \
-        <(lk_echo_array HOMEBREW_FORMULAE | sort -u)))
+        <(lk_echo_array HOMEBREW_FORMULAE HOMEBREW_KEEP_FORMULAE | sort -u)))
     ALL_CASKS=($(comm -12 \
         <(lk_brew_casks | sort -u) \
-        <(lk_echo_array HOMEBREW_CASKS | sort -u)))
+        <(lk_echo_array HOMEBREW_CASKS HOMEBREW_KEEP_CASKS | sort -u)))
     LAST_FORMULAE=()
     LAST_CASKS=()
     while :; do

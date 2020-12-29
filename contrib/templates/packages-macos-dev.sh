@@ -5,6 +5,15 @@ HOMEBREW_FORMULAE=()
 HOMEBREW_CASKS=()
 MAS_APPS=()
 
+# won't be uninstalled if present
+HOMEBREW_KEEP_FORMULAE=(
+    ocaml
+)
+
+HOMEBREW_KEEP_CASKS=(
+    zoom
+)
+
 # terminal-based
 HOMEBREW_FORMULAE+=(
     # utilities
@@ -81,7 +90,7 @@ HOMEBREW_CASKS+=(
     displaycal
     geekbench
     hex-fiend
-    lingon-x
+    #lingon-x
     #shortcutdetective
 
     # non-free

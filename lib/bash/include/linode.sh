@@ -422,7 +422,7 @@ Example:
         ARGS+=(--authorized_keys "$KEY")
     done
     lk_console_item "Running:" \
-        $'>>>\n'"  linode-cli$(printf ' \\ \n    %q' "${ARGS[@]##ssh-??? * }")"$'\n<<<'
+        $'\n'"$(lk_quote_args_folded linode-cli "${ARGS[@]##ssh-??? * }")"
     lk_confirm "Proceed?" Y || return
     lk_console_message "Creating Linode"
     FILE=/tmp/$(lk_myself -f)-$1-$(lk_date %s).json

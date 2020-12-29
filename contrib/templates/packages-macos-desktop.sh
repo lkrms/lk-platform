@@ -5,6 +5,13 @@ HOMEBREW_FORMULAE=()
 HOMEBREW_CASKS=()
 MAS_APPS=()
 
+# won't be uninstalled if present
+HOMEBREW_KEEP_FORMULAE=()
+
+HOMEBREW_KEEP_CASKS=(
+    zoom
+)
+
 # terminal-based
 HOMEBREW_FORMULAE+=(
     # utilities

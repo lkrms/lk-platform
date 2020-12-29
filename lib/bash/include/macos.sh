@@ -86,8 +86,7 @@ function lk_macos_xcode_maybe_accept_license() {
     if [ -e /Applications/Xcode.app ] &&
         ! xcodebuild -license check >/dev/null 2>&1; then
         lk_console_message "Accepting Xcode license"
-        lk_console_detail "Running:" "xcodebuild -license accept"
-        sudo xcodebuild -license accept
+        lk_run_detail lk_elevate xcodebuild -license accept
     fi
 }
 
