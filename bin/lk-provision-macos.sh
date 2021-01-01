@@ -584,6 +584,17 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
             brew uninstall --cask "${PURGE_CASKS[@]}"
     }
 
+    lk_remove_missing LOGIN_ITEMS
+    ADD_LOGIN_ITEMS=($(comm -13 \
+        <("$LK_BASE/lib/macos/login-items-list.js" | tail -n+2 |
+            cut -f2 | sort -u) \
+        <(lk_echo_array LOGIN_ITEMS | sort -u)))
+    [ ${#ADD_LOGIN_ITEMS[@]} -eq 0 ] || {
+        lk_echo_array ADD_LOGIN_ITEMS |
+            lk_console_list "Adding login items:"
+        "$LK_BASE/lib/macos/login-items-add.js" "${ADD_LOGIN_ITEMS[@]}"
+    }
+
     lk_console_success "Provisioning complete"
 
     exit

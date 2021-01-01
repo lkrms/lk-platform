@@ -61,3 +61,7 @@ MAS_APPS=(
     #
     ${MAS_APPS[@]+"${MAS_APPS[@]}"}
 )
+
+LOGIN_ITEMS=(
+    ${LOGIN_ITEMS[@]+"${LOGIN_ITEMS[@]}"}
+)

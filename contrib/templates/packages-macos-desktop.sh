@@ -4,6 +4,7 @@ HOMEBREW_TAPS=()
 HOMEBREW_FORMULAE=()
 HOMEBREW_CASKS=()
 MAS_APPS=()
+LOGIN_ITEMS=()
 
 # won't be uninstalled if present
 HOMEBREW_KEEP_FORMULAE=()
@@ -92,4 +93,13 @@ MAS_APPS+=(
 # hardware-related
 HOMEBREW_CASKS+=(
     sonos
+)
+
+LOGIN_ITEMS+=(
+    "/Applications/Lightshot Screenshot.app"
+    "/Applications/Magnet.app"
+    "/Applications/Messenger.app"
+    "/Applications/nextcloud.app"
+    "/Applications/Skype.app"
+    "/Applications/Todoist.app"
 )
