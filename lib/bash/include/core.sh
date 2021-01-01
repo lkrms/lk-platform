@@ -68,7 +68,7 @@ function lk_is_qemu() {
 }
 
 _LK_GNU_COMMANDS=(
-    awk chgrp chmod chown cp date df diff du find getopt grep ln mktemp nc
+    awk chgrp chmod chown cp date df diff du find getopt grep ln mktemp mv nc
     realpath sed sort stat tar xargs
 )
 

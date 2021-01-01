@@ -591,7 +591,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
         <(lk_echo_array LOGIN_ITEMS | sort -u)))
     [ ${#ADD_LOGIN_ITEMS[@]} -eq 0 ] || {
         lk_echo_array ADD_LOGIN_ITEMS |
-            lk_console_list "Adding login items:"
+            lk_console_list "Adding to Login Items:" app apps
         "$LK_BASE/lib/macos/login-items-add.js" "${ADD_LOGIN_ITEMS[@]}"
     }
 

@@ -188,6 +188,7 @@ HOMEBREW_CASKS+=(
 )
 
 LOGIN_ITEMS+=(
+    "/Applications/Flycut.app"
     "/Applications/Lightshot Screenshot.app"
     "/Applications/Magnet.app"
     "/Applications/Messenger.app"
