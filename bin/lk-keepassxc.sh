@@ -102,6 +102,8 @@ if lk_is_true REGISTER; then
         plist ProcessType -string "Interactive"
         plist ProgramArguments -array "$(realpath "${BASH_SOURCE[0]}")" "${DATABASES[@]}"
         plist RunAtLoad -bool true
+        plist StandardErrorPath -string /tmp/lk-keepassxc.sh.err
+        plist StandardOutPath -string /tmp/lk-keepassxc.sh.out
         launchctl load -w "$PLIST"
     else
         lk_die "--autostart not implemented on this platform"

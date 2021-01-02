@@ -2405,6 +2405,15 @@ else
     }
 fi
 
+# lk_file_age FILE
+#
+# Output the number of seconds since FILE was last modified.
+function lk_file_age() {
+    local MODIFIED
+    MODIFIED=$(lk_file_modified "$1") &&
+        echo $(($(lk_timestamp) - MODIFIED))
+}
+
 function lk_file_summary() {
     local IFS=$'\t' f
     # e.g. "-rwxrwxr-x  lina    adm     19162   1608099521"

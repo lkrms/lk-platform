@@ -241,7 +241,7 @@ function lk_macos_defaults_dump() {
         for DOMAIN in "${DOMAINS[@]}"; do
             FILE=$DIR${HOST:+/$HOST}/$DOMAIN
             ${_LK_MACOS_DEFAULTS_DUMP_SUDO:+sudo} \
-                defaults ${HOST:+"-$HOST"} read "$DOMAIN" >"$FILE" ||
+                defaults ${HOST:+"-$HOST"} export "$DOMAIN" - >"$FILE" ||
                 rm -f "$FILE"
         done
     done
@@ -254,7 +254,7 @@ function lk_macos_defaults_dump() {
     }
     DIR=$(lk_pretty_path "$DIR")
     lk_console_log \
-        "Output of \"defaults [-currentHost] read \$DOMAIN\" dumped to:" \
+        "Output of \"defaults [-currentHost] export \$DOMAIN\" dumped to:" \
         "$(for d in "$DIR" ${_LK_MACOS_DEFAULTS_DUMP_SUDO:+"$DIR-system"}; do
             lk_echo_args \
                 "$d" "$d/currentHost"

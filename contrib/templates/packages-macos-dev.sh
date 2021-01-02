@@ -4,37 +4,30 @@ HOMEBREW_TAPS=()
 HOMEBREW_FORMULAE=()
 HOMEBREW_CASKS=()
 MAS_APPS=()
+HOMEBREW_KEEP_FORMULAE=()
+HOMEBREW_KEEP_CASKS=()
 LOGIN_ITEMS=()
 
-# won't be uninstalled if present
-HOMEBREW_KEEP_FORMULAE=(
-    ocaml
-)
-
-HOMEBREW_KEEP_CASKS=(
-    zoom
-)
-
-# terminal-based
+# Terminal-based
 HOMEBREW_FORMULAE+=(
-    # utilities
+    # Utilities
     exiftool
     imagemagick
     unison
 
-    # networking
+    # Networking
     openconnect
     vpn-slice
 
-    # network monitoring
-    iftop # shows network traffic by service and host
-    nload # shows bandwidth by interface
+    # Network monitoring
+    iftop # Shows network traffic by service and host
+    nload # Shows bandwidth by interface
 
-    # system
+    # System
     #acme.sh
 )
 
-# desktop
+# Desktop
 HOMEBREW_TAPS+=(
     federico-terzi/espanso
 )
@@ -49,7 +42,7 @@ HOMEBREW_FORMULAE+=(
     poppler
     pstoedit
 
-    # multimedia - video
+    # Multimedia (video)
     youtube-dl
 )
 
@@ -77,24 +70,24 @@ HOMEBREW_CASKS+=(
     # PDF
     basictex
 
-    # photography
+    # Photography
     adobe-dng-converter
 
-    # multimedia - video
+    # Multimedia (video)
     handbrake
     #makemkv
     #mkvtoolnix
     subler
     vlc
 
-    # system
+    # System
     displaycal
     geekbench
     hex-fiend
     #lingon-x
     #shortcutdetective
 
-    # non-free
+    # Non-free
     acorn
     microsoft-office
 )
@@ -120,16 +113,16 @@ MAS_APPS+=(
     585829637 # Todoist
 )
 
-# development
+# Development
 HOMEBREW_TAPS+=(
     adoptopenjdk/openjdk
     #mongodb/brew
 )
 
 HOMEBREW_FORMULAE+=(
-    # email
-    msmtp  # smtp client
-    s-nail # mail and mailx commands
+    # Email
+    msmtp  # SMTP client
+    s-nail # `mail` and `mailx` commands
 
     #
     git-filter-repo
@@ -154,7 +147,7 @@ HOMEBREW_FORMULAE+=(
     shellcheck
     shfmt
 
-    # platforms
+    # Platforms
     awscli
 )
 
@@ -182,7 +175,7 @@ HOMEBREW_CASKS+=(
     virtualbox-extension-pack
 )
 
-# hardware-related
+# Hardware-related
 HOMEBREW_CASKS+=(
     sonos
 )
