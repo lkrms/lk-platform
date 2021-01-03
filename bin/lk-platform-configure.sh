@@ -152,11 +152,15 @@
 
     lk_is_arch && _IS_ARCH=1 || _IS_ARCH=
     _BASHRC='[ -z "${BASH_VERSION:-}" ] || [ ! -f ~/.bashrc ] || . ~/.bashrc'
-    BYOBU_PATH=$(type -P byobu-launch) &&
+    _BYOBU=
+    _BYOBURC=
+    if BYOBU_PATH=$(type -P byobu-launch); then
         _BYOBU=$(printf '%s_byobu_sourced=1 . %q 2>/dev/null || true' \
             "$(! lk_is_macos || echo '[ ! "$SSH_CONNECTION" ] || ')" \
-            "$BYOBU_PATH") ||
-        _BYOBU=
+            "$BYOBU_PATH")
+        ! lk_is_macos ||
+            _BYOBURC='[[ $OSTYPE != darwin* ]] || ! type -P gdf >/dev/null || df() { gdf "$@"; }'
+    fi
 
     lk_console_message "Checking sudo configuration"
     FILE=/etc/sudoers.d/${LK_PATH_PREFIX}default
@@ -428,7 +432,7 @@
         # source LK_BASE/lib/bash/rc.sh at startup when Bash is running as a
         # non-login shell (e.g. in most desktop terminals on Linux)
         FILE=$h/.bashrc
-        [ -f "$FILE" ] || {
+        [ -e "$FILE" ] || {
             lk_console_detail "Creating" "$FILE"
             install -m 00644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
         }
@@ -464,6 +468,18 @@
                         lk_file_replace "$FILE" "$CONTENT$_BYOBU"
                 }
             done
+            FILE=$h/.byoburc
+            if [ -n "$_BYOBURC" ] &&
+                ! grep -q '\bdf()' "$FILE" 2>/dev/null; then
+                lk_console_detail "Adding df wrapper to" "$FILE"
+                if [ ! -e "$FILE" ]; then
+                    install -m 00644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
+                    CONTENT=$'#!/bin/bash\n\n'
+                else
+                    lk_file_get_text "$FILE" CONTENT
+                fi
+                lk_file_replace "$FILE" "$CONTENT$_BYOBURC"
+            fi
 
             [ -d "$DIR" ] ||
                 install -d -m 00755 -o "$OWNER" -g "$GROUP" "$DIR"
