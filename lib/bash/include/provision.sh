@@ -969,9 +969,35 @@ function lk_crontab_remove_command() {
 function lk_system_memory() {
     local POWER=${1:-3}
     if lk_is_linux; then
-        awk "/^MemTotal\W/{print int(\$2/1024^$((POWER - 1)))}" /proc/meminfo
+        lk_require_output \
+            awk -v"p=$((POWER - 1))" \
+            '/^MemTotal\W/{print int($2/1024^p)}' \
+            /proc/meminfo
     elif lk_is_macos; then
-        sysctl -n hw.memsize | awk "{print int(\$1/1024^$POWER)}"
+        sysctl -n hw.memsize |
+            lk_require_output \
+                awk -v"p=$POWER" '{print int($1/1024^p)}'
+    else
+        false
+    fi
+}
+
+# lk_system_memory_free [POWER]
+#
+# Output available memory in units of 1024 ^ POWER bytes (see lk_system_memory).
+function lk_system_memory_free() {
+    local POWER=${1:-3}
+    if lk_is_linux; then
+        lk_require_output \
+            awk -v"p=$((POWER - 1))" \
+            '/^MemAvailable\W/{print int($2/1024^p)}' \
+            /proc/meminfo
+    elif lk_is_macos; then
+        vm_stat |
+            lk_require_output \
+                awk -v"p=$POWER" \
+                -F"[^0-9]+" \
+                'NR==1{b=$2;FS=":"} /^Pages free\W/{print int(b*$2/1024^p)}'
     else
         false
     fi
