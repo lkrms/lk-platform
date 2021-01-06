@@ -2493,6 +2493,9 @@ function lk_file_backup() {
                 OWNER_HOME=$(realpath "$OWNER_HOME"); } 2>/dev/null ||
                 OWNER_HOME=
             if lk_will_sudo && [ "${FILE#$OWNER_HOME}" = "$FILE" ]; then
+                lk_maybe_sudo install -d \
+                    -m "$([ -g "$LK_BASE" ] && echo 02775 || echo 00755)" \
+                    "${LK_INST:-$LK_BASE}/var" || return
                 DEST=${LK_INST:-$LK_BASE}/var/backup
                 unset OWNER
             elif lk_will_sudo; then
@@ -2616,6 +2619,7 @@ function lk_exit_trap() {
     local EXIT_STATUS=$? DELETE_ARRAY="_LK_EXIT_DELETE_${BASH_SUBSHELL}[@]" i
     [ "$EXIT_STATUS" -eq 0 ] ||
         [[ ${FUNCNAME[1]:-} =~ ^_?lk_(die|usage|elevate)$ ]] ||
+        { [[ $- == *i* ]] && [ "$BASH_SUBSHELL" -eq 0 ]; } ||
         lk_console_error \
             "$(_lk_caller "${_LK_ERR_TRAP_CONTEXT:-}"): unhandled error"
     for i in ${!DELETE_ARRAY+"${!DELETE_ARRAY}"}; do
