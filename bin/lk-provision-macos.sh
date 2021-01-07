@@ -57,7 +57,7 @@ function exit_trap() {
         SUDOERS=$(cat "$LK_BASE/share/sudoers.d/default")
         ${CONTRIB_PACKAGES_FILE:+. "$LK_BASE/$CONTRIB_PACKAGES_FILE"}
     else
-        echo "Downloading dependencies to: $_DIR" >&2
+        echo "Downloading dependencies" >&2
         for FILE_PATH in \
             ${CONTRIB_PACKAGES_FILE:+"/$CONTRIB_PACKAGES_FILE"} \
             /lib/bash/include/core.sh \

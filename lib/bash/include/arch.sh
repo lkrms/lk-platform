@@ -1,13 +1,10 @@
 #!/bin/bash
 
-# shellcheck disable=SC2206,SC2120,SC2016
+# shellcheck disable=SC2016,SC2034,SC2206
 
 function _lk_arch_maybe_chroot() {
     if [ -n "${LK_ARCH_CHROOT_DIR:-}" ]; then
-        arch-chroot \
-            ${LK_ARCH_CHROOT_USER:+-u "$LK_ARCH_CHROOT_USER"} \
-            "$LK_ARCH_CHROOT_DIR" \
-            "$@"
+        arch-chroot "$LK_ARCH_CHROOT_DIR" "$@"
     else
         lk_elevate "$@"
     fi
@@ -42,7 +39,6 @@ function lk_pacman_configure() {
 #   https://download.sublimetext.com/sublimehq-pub.gpg|
 #   8A8F901A"
 function lk_pacman_add_repo() {
-    # shellcheck disable=SC2034
     local PACMAN_CONF=${LK_PACMAN_CONF:-/etc/pacman.conf} IFS='|' \
         SH i r REPO SERVER KEY_URL KEY_ID SIG_LEVEL _FILE LK_SUDO=1
     [ $# -gt 0 ] || return 0
@@ -53,7 +49,7 @@ function lk_pacman_add_repo() {
         lk_warn "command not found: pacman-conf" || return
     SH=$(
         _add_key() { KEY_FILE=$(mktemp) &&
-            curl --fail --output "$KEY_FILE" "$1" &&
+            curl --fail --location --output "$KEY_FILE" "$1" &&
             pacman-key --add "$KEY_FILE"; }
         declare -f _add_key
         echo '_add_key "$1"'
@@ -88,7 +84,6 @@ function _lk_pacman_sync() {
     if { lk_is_root || lk_can_sudo pacman; } &&
         ! lk_is_false LK_PACMAN_SYNC; then
         lk_elevate pacman -Sy || return
-        # shellcheck disable=SC2034
         LK_PACMAN_SYNC=0
     fi
 }

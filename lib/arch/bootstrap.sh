@@ -1,4 +1,5 @@
 #!/bin/bash
+
 # shellcheck disable=SC1090,SC2001,SC2015,SC2016,SC2034,SC2124,SC2206,SC2207
 
 # To install Arch Linux using the script below:
@@ -9,6 +10,7 @@
 
 BOOTSTRAP_PING_HOST=${BOOTSTRAP_PING_HOST:-one.one.one.one}  # https://blog.cloudflare.com/dns-resolver-1-1-1-1/
 BOOTSTRAP_MOUNT_OPTIONS=${BOOTSTRAP_MOUNT_OPTIONS:-defaults} # On VMs with TRIM support, "discard" is added automatically
+BOOTSTRAP_USERNAME=${BOOTSTRAP_USERNAME:-arch}               #
 LK_NODE_TIMEZONE=${LK_NODE_TIMEZONE:-UTC}                    # See `timedatectl list-timezones`
 LK_NODE_LOCALES=${LK_NODE_LOCALES-en_AU.UTF-8 en_GB.UTF-8}   # "en_US.UTF-8" is added automatically
 LK_NODE_LANGUAGE=${LK_NODE_LANGUAGE-en_AU:en_GB:en}          #
@@ -20,72 +22,112 @@ LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
 export LK_BASE=${LK_BASE:-/opt/lk-platform}
 
 set -euo pipefail
-_FILE=${BASH_SOURCE[0]}
-lk_die() { s=$? && echo "$_FILE: $1" >&2 && (exit $s) && false || exit; }
-[ "${_FILE%/*}" != "$_FILE" ] || _FILE=./$_FILE
-[ ! -L "$_FILE" ] &&
-    _DIR="$(cd "${_FILE%/*}" && pwd -P)" ||
-    lk_die "unable to resolve path to script"
+lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
 
 shopt -s nullglob
 
-function usage() {
-    echo "\
-Usage:
-  ${0##*/} <root_partition> <boot_partition> [<other_os_partition>...] <hostname> <username>
-  ${0##*/} <install_disk> <hostname> <username>
+[ -d /sys/firmware/efi/efivars ] || lk_die "not booted in UEFI mode"
+[ "$EUID" -eq 0 ] || lk_die "not running as root"
+[ "$OSTYPE" = linux-gnu ] || lk_die "not running on Linux"
+[ -f /etc/arch-release ] || lk_die "not running on Arch Linux"
+[[ $- != *s* ]] || lk_die "cannot run from standard input"
 
-Current block devices:
+LK_USAGE="\
+Usage: ${0##*/} [OPTIONS] ROOT_PART BOOT_PART HOSTNAME
+   or: ${0##*/} [OPTIONS] INSTALL_DISK HOSTNAME
 
-$(lsblk --output "NAME,RM,RO,SIZE,TYPE,FSTYPE,MOUNTPOINT" --paths)" >&2
-    exit 1
-}
+Options:
+  -u USERNAME       set the default user's login name (default: arch)
+  -o PARTITION      add the operating system on PARTITION to the boot menu
+                    (may be given multiple times)
+
+Block devices:
+$(lsblk --output NAME,RM,SIZE,RO,TYPE,FSTYPE,MOUNTPOINT --paths |
+    sed 's/^/  /')"
+
+LK_FILE_TAKE_BACKUP=${LK_FILE_TAKE_BACKUP-1}
+
+ROOT_PARTITION=
+BOOT_PARTITION=
+INSTALL_DISK=
+OTHER_OS_PARTITIONS=()
+CUSTOM_REPOS=()
+
+CURL_OPTIONS=(
+    --fail
+    --header "Cache-Control: no-cache"
+    --location
+    --retry 8
+    --show-error
+    --silent
+)
+
+_DIR=/tmp/${LK_PATH_PREFIX}install
+mkdir -p "$_DIR"
+
+echo "Downloading dependencies" >&2
+for FILE_PATH in \
+    /lib/bash/include/core.sh \
+    /lib/bash/include/linux.sh \
+    /lib/bash/include/arch.sh \
+    /lib/arch/packages.sh; do
+    FILE=$_DIR/${FILE_PATH##*/}
+    FILE_PATH=$LK_PLATFORM_BRANCH$FILE_PATH
+    URL=https://raw.githubusercontent.com/lkrms/lk-platform/$FILE_PATH
+    curl "${CURL_OPTIONS[@]}" --output "$FILE" "$URL" || {
+        rm -f "$FILE"
+        lk_die "unable to download from GitHub: $URL"
+    }
+    [[ $FILE == */packages.sh ]] ||
+        . "$FILE"
+done
+
+while getopts ":u:o:" OPT; do
+    case "$OPT" in
+    u)
+        BOOTSTRAP_USERNAME=$OPTARG
+        ;;
+    o)
+        lk_block_device_is part "$OPTARG" ||
+            lk_warn "invalid partition: $OPTARG" || lk_usage
+        OTHER_OS_PARTITIONS+=("$OPTARG")
+        ;;
+    \? | :)
+        lk_usage
+        ;;
+    esac
+done
+shift $((OPTIND - 1))
+case $# in
+3)
+    lk_block_device_is part "${@:1:2}" ||
+        lk_warn "invalid partitions: ${*:1:2}" || lk_usage
+    ROOT_PARTITION=$1
+    BOOT_PARTITION=$2
+    ;;
+2)
+    lk_block_device_is disk "$1" ||
+        lk_warn "invalid disk: $1" || lk_usage
+    INSTALL_DISK=$1
+    ;;
+*)
+    lk_usage
+    ;;
+esac
+LK_NODE_HOSTNAME=${*: -1:1}
 
 function exit_trap() {
-    exec >&6 2>&7 6>&- 7>&-
-    [ ! -d "/mnt/boot" ] || {
-        install -d -m 00755 "/mnt/var/log" &&
-            install -m 00640 -g "adm" \
-                "$LOG_FILE" "/mnt/var/log/${LK_PATH_PREFIX}bootstrap.log" || true
+    [ ! -d /mnt/boot ] || {
+        exec >&"$LOG_OUT_FD" 2>&"$LOG_ERR_FD" &&
+            eval "exec $LOG_OUT_FD>&- $LOG_ERR_FD>&-"
+        local FILE=/var/log/${LK_PATH_PREFIX}install.log
+        in_target install -m 00640 -g adm /dev/null "$FILE" &&
+            cp -v --preserve=timestamps "$LOG_FILE" "/mnt/$FILE"
     }
 }
 
-function _lsblk() {
-    lsblk --list --noheadings --output "$@"
-}
-
-function check_devices() {
-    local COLUMN="${COLUMN:-TYPE}" MATCH="$1" DEV LIST
-    shift
-    for DEV in "$@"; do
-        [ -e "$DEV" ] || return
-    done
-    LIST="$(_lsblk "$COLUMN" --nodeps "$@")" &&
-        echo "$LIST" | grep -Fx "$MATCH" >/dev/null &&
-        ! echo "$LIST" | grep -Fxv "$MATCH" >/dev/null
-}
-
-function is_ssd() {
-    local COLUMNS
-    COLUMNS="$(_lsblk "DISC-GRAN,DISC-MAX" --nodeps "$1")" || return
-    [[ ! "$COLUMNS" =~ ^$S*0B$S+0B$S*$ ]]
-}
-
-function before_install() {
-    lk_console_detail "Checking network connection"
-    ping -c 1 "$BOOTSTRAP_PING_HOST" || lk_die "no network"
-
-    if [ -n "$LK_NTP_SERVER" ]; then
-        if ! type -P ntpd >/dev/null; then
-            lk_console_detail "Installing ntpd in live environment"
-            pacman -Sy --noconfirm ntp >/dev/null || lk_die "unable to install ntpd"
-        fi
-        lk_console_detail "Synchronising system time with" "$LK_NTP_SERVER"
-        ntpd -qgx "$LK_NTP_SERVER" || lk_die "unable to sync system time"
-    fi
-}
-
 function in_target() {
+    [ -d /mnt/boot ] || lk_die "no target mounted"
     arch-chroot /mnt "$@"
 }
 
@@ -96,103 +138,75 @@ function configure_pacman() {
         lk_pacman_add_repo "${CUSTOM_REPOS[@]}"
 }
 
-[ -d "/sys/firmware/efi/efivars" ] || lk_die "not booted in UEFI mode"
-[ "$EUID" -eq 0 ] || lk_die "not running as root"
-[[ $- != *s* ]] || lk_die "cannot run from standard input"
-[ $# -ge 3 ] || usage
-
-LOG_FILE=/tmp/${LK_PATH_PREFIX}bootstrap.$(date +'%s').log
-exec 6>&1 7>&2
-exec > >(tee "$LOG_FILE") 2>&1
+LOG_OUT_FD=$(lk_next_fd)
+eval "exec $LOG_OUT_FD>&1"
+LOG_ERR_FD=$(lk_next_fd)
+eval "exec $LOG_ERR_FD>&2"
+LOG_FILE=$_DIR/install.$(lk_timestamp).log
+exec > >(tee >(lk_log >>"$LOG_FILE")) 2>&1
 trap exit_trap EXIT
 
-for FILE_PATH in \
-    /lib/bash/include/core.sh \
-    /lib/bash/include/arch.sh \
-    /lib/arch/include/packages.sh; do
-    FILE="$_DIR/${FILE_PATH##*/}"
-    URL="https://raw.githubusercontent.com/lkrms/lk-platform/$LK_PLATFORM_BRANCH$FILE_PATH"
-    [ -e "$FILE" ] ||
-        curl --fail --output "$FILE" "$URL" || {
-        rm -f "$FILE"
-        lk_die "unable to download from GitHub: $URL"
-    }
-done
-
-. "$_DIR/core.sh"
-. "$_DIR/arch.sh"
-
 lk_console_message "Setting up live environment"
-# otherwise mirrorlist may be replaced by reflector
-systemctl stop reflector || true
 configure_pacman
-[ -z "$LK_ARCH_MIRROR" ] ||
-    # pacstrap will copy this to the new system
+if [ -n "$LK_ARCH_MIRROR" ]; then
+    lk_systemctl_stop reflector || true
     echo "Server=$LK_ARCH_MIRROR" >"/etc/pacman.d/mirrorlist"
-
-. "$_DIR/packages.sh" >&6 2>&7
-
-# in case we're starting over after a failed attempt
-if [ -d "/mnt/boot" ]; then
-    OTHER_OS_MOUNTS=(/mnt/mnt/*)
-    [ ${#OTHER_OS_MOUNTS[@]} -eq 0 ] || {
-        umount "${OTHER_OS_MOUNTS[@]}" &&
-            rmdir "${OTHER_OS_MOUNTS[@]}" || exit
-    }
-    umount /mnt/boot &&
-        umount /mnt || exit
 fi
 
-OTHER_OS_PARTITIONS=()
+. "$_DIR/packages.sh" >&"$LOG_OUT_FD" 2>&"$LOG_ERR_FD"
 
-if [ $# -eq 3 ]; then
+# Clean up after failed attempts
+if [ -d /mnt/boot ]; then
+    OTHER_OS_MOUNTS=(/mnt/mnt/*)
+    if [ ${#OTHER_OS_MOUNTS[@]} -gt 0 ]; then
+        umount "${OTHER_OS_MOUNTS[@]}"
+        rmdir "${OTHER_OS_MOUNTS[@]}"
+    fi
+    umount /mnt/boot
+    umount /mnt
+fi
 
-    check_devices disk "$1" || lk_die "not a disk: $1"
+lk_console_detail "Checking network connection"
+ping -c 1 "$BOOTSTRAP_PING_HOST" || lk_die "no network"
 
-    before_install
+if [ -n "$LK_NTP_SERVER" ]; then
+    if ! lk_command_exists ntpd; then
+        lk_console_detail "Installing ntpd"
+        pacman -Sy --noconfirm ntp >&"$LOG_OUT_FD" 2>&"$LOG_ERR_FD" ||
+            lk_die "unable to install ntpd"
+    fi
+    lk_console_detail "Synchronising system time with" "$LK_NTP_SERVER"
+    ntpd -qgx "$LK_NTP_SERVER" ||
+        lk_die "unable to sync system time"
+fi
 
-    lk_confirm "Repartition $1? ALL DATA WILL BE LOST."
-
-    lk_console_message "Partitioning $1"
-    parted --script "$1" \
+REPARTITIONED=
+if [ -n "$INSTALL_DISK" ]; then
+    lk_confirm "Repartition $INSTALL_DISK? ALL DATA WILL BE LOST." Y
+    lk_console_message "Partitioning $INSTALL_DISK"
+    parted --script "$INSTALL_DISK" \
         mklabel gpt \
         mkpart fat32 2048s 260MiB \
         mkpart ext4 260MiB 100% \
-        set 1 boot on || lk_die "parted failed (exit status $?)"
-    partprobe "$1"
+        set 1 boot on
+    partprobe "$INSTALL_DISK"
     sleep 1
-    PARTITIONS=($(_lsblk "TYPE,NAME" --paths "$1" | grep -Po '(?<=^part ).*'))
+    PARTITIONS=($(_lk_lsblk TYPE,NAME --paths "$INSTALL_DISK" |
+        awk '$1=="part"{print $2}'))
     [ ${#PARTITIONS[@]} -eq 2 ] &&
-        ROOT_PARTITION="${PARTITIONS[1]}" &&
-        BOOT_PARTITION="${PARTITIONS[0]}" || exit
+        ROOT_PARTITION=${PARTITIONS[1]} &&
+        BOOT_PARTITION=${PARTITIONS[0]} || lk_die "invalid partition table"
     wipefs -a "$ROOT_PARTITION"
     wipefs -a "$BOOT_PARTITION"
-
     REPARTITIONED=1
-    LK_NODE_HOSTNAME="$2"
-    TARGET_USERNAME="$3"
-
-elif [ $# -ge 4 ]; then
-
-    check_devices part "${@:1:$#-2}" || lk_die "not partitions: ${*:1:$#-2}"
-
-    before_install
-
-    REPARTITIONED=0
-    ROOT_PARTITION="$1"
-    BOOT_PARTITION="$2"
-    OTHER_OS_PARTITIONS=("${@:3:$#-4}")
-    LK_NODE_HOSTNAME="${@: -2:1}"
-    TARGET_USERNAME="${@: -1:1}"
-
 fi
 
 TARGET_PASSWORD="${TARGET_PASSWORD:-}"
 if [ -z "$TARGET_PASSWORD" ]; then
     while :; do
-        TARGET_PASSWORD="$(lk_console_read_secret "Password for $TARGET_USERNAME:")"
+        TARGET_PASSWORD="$(lk_console_read_secret "Password for $BOOTSTRAP_USERNAME:")"
         [ -n "$TARGET_PASSWORD" ] || lk_warn "Password cannot be empty" || continue
-        CONFIRM_PASSWORD="$(lk_console_read_secret "Password for $TARGET_USERNAME (again):")"
+        CONFIRM_PASSWORD="$(lk_console_read_secret "Password for $BOOTSTRAP_USERNAME (again):")"
         [ "$TARGET_PASSWORD" = "$CONFIRM_PASSWORD" ] || lk_warn "Passwords do not match" || continue
         break
     done
@@ -200,7 +214,7 @@ fi
 
 TARGET_SSH_KEY="${TARGET_SSH_KEY:-}"
 if [ -z "$TARGET_SSH_KEY" ]; then
-    TARGET_SSH_KEY="$(lk_console_read "Authorised SSH key for $TARGET_USERNAME:")"
+    TARGET_SSH_KEY="$(lk_console_read "Authorised SSH key for $BOOTSTRAP_USERNAME:")"
     [ -n "$TARGET_SSH_KEY" ] || lk_console_warning "SSH will not be configured (no key provided)"
 fi
 
@@ -217,8 +231,8 @@ fi
 
 export -n TARGET_PASSWORD TARGET_SSH_KEY
 
-ROOT_PARTITION_TYPE="$(_lsblk FSTYPE "$ROOT_PARTITION")" || lk_die "no block device at $ROOT_PARTITION"
-BOOT_PARTITION_TYPE="$(_lsblk FSTYPE "$BOOT_PARTITION")" || lk_die "no block device at $BOOT_PARTITION"
+ROOT_PARTITION_TYPE="$(_lk_lsblk FSTYPE "$ROOT_PARTITION")" || lk_die "no block device at $ROOT_PARTITION"
+BOOT_PARTITION_TYPE="$(_lk_lsblk FSTYPE "$BOOT_PARTITION")" || lk_die "no block device at $BOOT_PARTITION"
 
 KEEP_BOOT_PARTITION=0
 case "$BOOT_PARTITION_TYPE" in
@@ -253,8 +267,8 @@ mkfs.ext4 -vL root "$ROOT_PARTITION"
 
 lk_console_message "Mounting partitions"
 if lk_is_virtual; then
-    ! is_ssd "$ROOT_PARTITION" || ROOT_OPTION_EXTRA=",discard"
-    ! is_ssd "$BOOT_PARTITION" || BOOT_OPTION_EXTRA=",discard"
+    ! lk_block_device_is_ssd "$ROOT_PARTITION" || ROOT_OPTION_EXTRA=",discard"
+    ! lk_block_device_is_ssd "$BOOT_PARTITION" || BOOT_OPTION_EXTRA=",discard"
 fi
 mount -o "$BOOTSTRAP_MOUNT_OPTIONS${ROOT_OPTION_EXTRA:-}" "$ROOT_PARTITION" /mnt &&
     mkdir /mnt/boot &&
@@ -266,7 +280,7 @@ lk_is_false KEEP_BOOT_PARTITION || {
 }
 
 lk_console_message "Installing system"
-pacstrap /mnt "${PACMAN_PACKAGES[@]}" >&6 2>&7
+pacstrap /mnt "${PACMAN_PACKAGES[@]}" >&"$LOG_OUT_FD" 2>&"$LOG_ERR_FD"
 
 lk_console_message "Setting up installed system"
 
@@ -370,11 +384,11 @@ SendEnv                 LANG LC_*
 ServerAliveInterval     30
 EOF
 
-lk_console_detail "Creating superuser:" "$TARGET_USERNAME"
-in_target useradd -m "$TARGET_USERNAME" -G adm,wheel -s /bin/bash
-echo -e "$TARGET_PASSWORD\n$TARGET_PASSWORD" | in_target passwd "$TARGET_USERNAME"
+lk_console_detail "Creating superuser:" "$BOOTSTRAP_USERNAME"
+in_target useradd -m "$BOOTSTRAP_USERNAME" -G adm,wheel -s /bin/bash
+echo -e "$TARGET_PASSWORD\n$TARGET_PASSWORD" | in_target passwd "$BOOTSTRAP_USERNAME"
 [ -z "$TARGET_SSH_KEY" ] || {
-    echo "$TARGET_SSH_KEY" | in_target sudo -H -u "$TARGET_USERNAME" \
+    echo "$TARGET_SSH_KEY" | in_target sudo -H -u "$BOOTSTRAP_USERNAME" \
         bash -c 'cat >"$HOME/.ssh/authorized_keys"'
     sed -Ei -e "s/^#?(PasswordAuthentication|PermitRootLogin)\b.*\$/\1 no/" \
         "/mnt/etc/ssh/sshd_config"
@@ -393,9 +407,9 @@ lk_console_detail "Disabling root password"
 in_target passwd -l root
 
 lk_console_detail "Installing lk-platform to" "$LK_BASE"
-in_target install -v -d -m 02775 -o "$TARGET_USERNAME" -g "adm" \
+in_target install -v -d -m 02775 -o "$BOOTSTRAP_USERNAME" -g "adm" \
     "$LK_BASE"
-in_target sudo -H -u "$TARGET_USERNAME" \
+in_target sudo -H -u "$BOOTSTRAP_USERNAME" \
     git clone -b "$LK_PLATFORM_BRANCH" \
     "https://github.com/lkrms/lk-platform.git" "$LK_BASE"
 lk_get_shell_var \
@@ -437,7 +451,7 @@ USB_BLACKLIST="0bda:8153"
 USB_BLACKLIST_PHONE=1
 EOF
 
-    if { is_ssd "$ROOT_PARTITION" || is_ssd "$BOOT_PARTITION"; }; then
+    if { lk_block_device_is_ssd "$ROOT_PARTITION" || lk_block_device_is_ssd "$BOOT_PARTITION"; }; then
         lk_console_detail "Enabling fstrim (TRIM support detected)"
         # replace the default timer
         cat <<EOF >"/mnt/etc/systemd/system/fstrim.timer"
@@ -460,8 +474,8 @@ if [ ${#AUR_PACKAGES[@]} -gt 0 ]; then
     lk_console_message "Installing AUR packages"
     AUR_SCRIPT="{ $YAY_SCRIPT; } &&
     yay -Sy --aur --needed --noconfirm ${AUR_PACKAGES[*]}"
-    in_target sudo -H -u "$TARGET_USERNAME" \
-        bash -c "$AUR_SCRIPT" >&6 2>&7
+    in_target sudo -H -u "$BOOTSTRAP_USERNAME" \
+        bash -c "$AUR_SCRIPT" >&"$LOG_OUT_FD" 2>&"$LOG_ERR_FD"
 fi
 
 in_target bash -c \
