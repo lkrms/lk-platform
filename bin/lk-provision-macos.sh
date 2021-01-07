@@ -29,8 +29,8 @@ function exit_trap() {
 {
     export SUDO_PROMPT="[sudo] password for %p: "
 
-    SCRIPT_DIR=/tmp/${LK_PATH_PREFIX}install
-    mkdir -p "$SCRIPT_DIR"
+    _DIR=/tmp/${LK_PATH_PREFIX}install
+    mkdir -p "$_DIR"
 
     export LK_PACKAGES_FILE=${1:-}
     if [ -n "$LK_PACKAGES_FILE" ] && [ ! -f "$LK_PACKAGES_FILE" ]; then
@@ -57,7 +57,7 @@ function exit_trap() {
         SUDOERS=$(cat "$LK_BASE/share/sudoers.d/default")
         ${CONTRIB_PACKAGES_FILE:+. "$LK_BASE/$CONTRIB_PACKAGES_FILE"}
     else
-        echo "Downloading dependencies to: $SCRIPT_DIR" >&2
+        echo "Downloading dependencies to: $_DIR" >&2
         for FILE_PATH in \
             ${CONTRIB_PACKAGES_FILE:+"/$CONTRIB_PACKAGES_FILE"} \
             /lib/bash/include/core.sh \
@@ -65,7 +65,7 @@ function exit_trap() {
             /lib/bash/include/whiptail.sh \
             /lib/bash/include/macos.sh \
             /share/sudoers.d/default; do
-            FILE=$SCRIPT_DIR/${FILE_PATH##*/}
+            FILE=$_DIR/${FILE_PATH##*/}
             URL=https://raw.githubusercontent.com/lkrms/lk-platform/$LK_PLATFORM_BRANCH$FILE_PATH
             curl --retry 8 --fail --output "$FILE" "$URL" || {
                 rm -f "$FILE"
@@ -74,7 +74,7 @@ function exit_trap() {
             [ "${FILE: -3}" != .sh ] ||
                 . "$FILE"
         done
-        SUDOERS=$(cat "$SCRIPT_DIR/default")
+        SUDOERS=$(cat "$_DIR/default")
     fi
 
     LK_FILE_TAKE_BACKUP=${LK_FILE_TAKE_BACKUP-1}
@@ -235,7 +235,7 @@ EOF
     NEW_HOMEBREW=0
     if ! lk_command_exists brew; then
         lk_console_message "Installing Homebrew"
-        FILE=$SCRIPT_DIR/homebrew-install.sh
+        FILE=$_DIR/homebrew-install.sh
         URL=https://raw.githubusercontent.com/Homebrew/install/master/install.sh
         if [ ! -e "$FILE" ]; then
             curl --retry 8 --fail --output "$FILE" "$URL" || {

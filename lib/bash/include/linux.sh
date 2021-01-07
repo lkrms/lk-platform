@@ -84,6 +84,27 @@ function lk_systemctl_disable_now() {
         lk_systemctl_stop "$@" || return
 }
 
+function _lk_lsblk() {
+    lsblk --list --noheadings --output "$@"
+}
+
+# lk_block_device_is TYPE DEVICE_PATH...
+function lk_block_device_is() {
+    local COUNT
+    lk_paths_exist "${@:2}" || lk_warn "not found: ${*:2}" || return
+    COUNT=$(_lk_lsblk TYPE --nodeps "${@:2}" | grep -Fxc "$1") &&
+        [ "$COUNT" -eq $(($# - 1)) ]
+}
+
+# lk_block_device_is_ssd DEVICE_PATH...
+function lk_block_device_is_ssd() {
+    local COUNT
+    lk_paths_exist "$@" || lk_warn "not found: $*" || return
+    COUNT=$(_lk_lsblk DISC-GRAN,DISC-MAX --nodeps "$@" |
+        grep -Evc "^$S*0B$S+0B$S*\$") &&
+        [ "$COUNT" -eq $# ]
+}
+
 # shellcheck disable=SC2034,SC2207
 function lk_get_standard_users() {
     local IFS ADM_USERS USERS
