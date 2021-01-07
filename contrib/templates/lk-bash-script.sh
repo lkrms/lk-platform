@@ -62,8 +62,8 @@ lk_die() { s=$? && echo "$_FILE: $1" >&2 && (exit $s) && false || exit; }
     "import os,sys;print(os.path.realpath(sys.argv[1]))" "$1"; }; }; } \
     >/dev/null || lk_die "command not found: realpath"
 _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
-    LK_BASE=$(realpath "$_DIR$(eval "printf '/..%.s' {1..$_DEPTH}")") &&
-    [ "$LK_BASE" != / ] && [ -d "$LK_BASE/lib/bash" ] ||
+    LK_BASE=$(realpath "$_DIR$(eval printf '/..%.s' $(seq 1 "$_DEPTH"))") &&
+    [ -d "$LK_BASE/lib/bash" ] ||
     lk_die "unable to locate LK_BASE"
 export LK_BASE
 

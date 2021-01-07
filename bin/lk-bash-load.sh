@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2030,SC2031,SC2128
+# shellcheck disable=SC1090,SC2015,SC2128
 
 # Scenario 1: bootstrapping lk-platform scripts
 #
@@ -24,55 +24,29 @@
 
 set -euo pipefail
 lk_die() { s=$? && echo "$BASH_SOURCE: $1" >&2 && (exit $s) && false || exit; }
+{ type -P realpath || { type -P python && realpath() { python -c \
+    "import os,sys;print(os.path.realpath(sys.argv[1]))" "$1"; }; }; } \
+    >/dev/null || lk_die "command not found: realpath"
 
-function lk_bash_load() {
-    local SH
-    SH=$(
-        VARS=()
-        if [ -n "${lk_bin_depth:-}" ]; then
-            [ -n "${BASH_SOURCE[2]:-}" ] ||
-                lk_die "not sourced from a shell script"
-            FILE=${BASH_SOURCE[2]}
-        else
-            [ -n "${BASH_SOURCE[2]:-}" ] ||
-                VARS+=(LK_NO_SOURCE_FILE 1)
-            lk_bin_depth=1
-            FILE=${BASH_SOURCE[0]}
-        fi
-        if [ -z "${LK_BASE:-}" ]; then
-            if ! type -P realpath >/dev/null; then
-                if type -P python >/dev/null; then
-                    function realpath() {
-                        python -c \
-                            "import os,sys;print(os.path.realpath(sys.argv[1]))" \
-                            "$1"
-                    }
-                else
-                    lk_die "command not found: realpath"
-                fi
-            fi
-            FILE=$(realpath "$FILE") &&
-                DIR=${FILE%/*} &&
-                LK_BASE=$(realpath "$DIR$(
-                    [ "$lk_bin_depth" -lt 1 ] ||
-                        eval "printf '/..%.s' {1..$lk_bin_depth}"
-                )") &&
-                [ "$LK_BASE" != / ] &&
-                [ -f "$LK_BASE/bin/lk-bash-load.sh" ] ||
-                lk_die "unable to locate LK_BASE"
-        fi
-        VARS+=(LK_BASE "$LK_BASE")
-        [ -z "${BASH_SOURCE[2]:-}" ] ||
-            ! _FILE=$(realpath "${BASH_SOURCE[2]:-}") ||
-            VARS+=(_FILE "$_FILE"
-                _DIR "${_FILE%/*}")
-        printf '%s=%q\n' "${VARS[@]}"
-        echo "export LK_BASE"
-    ) || return
-    eval "$SH"
+function _lk_bash_load() {
+    local _DEPTH=${lk_bin_depth:-} _FILE _DIR
+    if [ -n "$_DEPTH" ]; then
+        [ -n "${BASH_SOURCE[2]:-}" ] ||
+            lk_die "not sourced from a shell script"
+        _FILE=${BASH_SOURCE[2]}
+    else
+        _DEPTH=1
+        _FILE=${BASH_SOURCE[0]}
+    fi
+    _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
+        LK_BASE=$(realpath "$_DIR$(eval printf '/..%.s' $(seq 1 "$_DEPTH"))") &&
+        [ -d "$LK_BASE/lib/bash" ] ||
+        lk_die "unable to locate LK_BASE"
+    export LK_BASE
 }
 
 _LK_ENV=${_LK_ENV:-$(declare -x)}
 
-lk_bash_load &&
+_lk_bash_load &&
+    unset -f _lk_bash_load &&
     . "$LK_BASE/lib/bash/common.sh"

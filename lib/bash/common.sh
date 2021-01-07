@@ -81,14 +81,6 @@ function lk_maybe() {
     fi
 }
 
-function lk_usage() {
-    local EXIT_STATUS=$? MESSAGE=${1:-${LK_USAGE:-}}
-    [ -z "$MESSAGE" ] || MESSAGE=$(_lk_usage_format "$MESSAGE")
-    LK_TTY_NO_FOLD=1 \
-        lk_console_log "${MESSAGE:-$(_lk_caller): invalid arguments}"
-    exit "$EXIT_STATUS"
-}
-
 function _lk_getopt_maybe_add_long() {
     [[ ,$LONG, == *,$1,* ]] ||
         { [ $# -gt 1 ] && [ -z "${!2:-}" ]; } ||
@@ -162,7 +154,7 @@ function lk_getopt() {
     LK_GETOPT=$(lk_quote OPTS)
 }
 
-if ! lk_is_true LK_NO_SOURCE_FILE; then
+if lk_is_script_running; then
     function _lk_elevate() {
         if [ $# -gt 0 ]; then
             sudo -H "$@"

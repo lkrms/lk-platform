@@ -218,7 +218,11 @@ function lk_usage() {
     [ -z "$MESSAGE" ] || MESSAGE=$(_lk_usage_format "$MESSAGE")
     LK_TTY_NO_FOLD=1 \
         lk_console_log "${MESSAGE:-$(_lk_caller): invalid arguments}"
-    return "$EXIT_STATUS"
+    if lk_is_script_running; then
+        exit "$EXIT_STATUS"
+    else
+        return "$EXIT_STATUS"
+    fi
 }
 
 function _lk_mktemp() {

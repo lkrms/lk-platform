@@ -9,8 +9,10 @@ function lk_realpath() {
             # 1. Replace "/./" with "/"
             # 2. Replace subsequent "/"s with one "/"
             # 3. Remove trailing "/"
-            FILE=$(sed -e 's/\/\.\//\//g' -e 's/\/\+/\//g' -e 's/\/$//' \
-                <<<"$FILE") || return
+            FILE=$(sed -E \
+                -e 's/\/\.\//\//g' \
+                -e 's/\/+/\//g' \
+                -e 's/\/$//' <<<"$FILE") || return
             FILE=${FILE:1}
         }
         COMPONENT=${FILE%%/*}
