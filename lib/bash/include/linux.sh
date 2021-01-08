@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# shellcheck disable=SC2207
+
 function lk_atop_ps_mem() {
     local TEMP
     TEMP=$(mktemp) &&
@@ -173,6 +175,34 @@ function lk_x_dpi() {
     xdpyinfo |
         grep -Eo '^[[:blank:]]+resolution:[[:blank:]]*[0-9]+x[0-9]+' |
         grep -Eo '[0-9]+' | head -n1
+}
+
+function lk_fc_charset() {
+    local MATCH FAMILY SH
+    [ -n "${1:-}" ] || lk_warn "no pattern" || return
+    MATCH=$(fc-match "$1" family charset) && [ -n "$MATCH" ] &&
+        FAMILY=$(cut -d: -f1 <<<"$MATCH") ||
+        lk_warn "match not found" || return
+    lk_console_item "Loading glyphs from" "$FAMILY"
+    SH=$(cut -d: -f2 <<<"$MATCH" |
+        cut -d= -f2 |
+        sed 's/ /\n/g' |
+        sed -En \
+            -e "s/^([0-9a-f]+)-([0-9a-f]+)\$/printf '{%d..%d} ' 0x\1 0x\2/p" \
+            -e "s/^[0-9a-f]+\$/printf '%d ' 0x&/p") &&
+        SH="printf '%s\n' $(eval "$SH")" &&
+        eval "$SH"
+}
+
+function lk_fc_glyphs() {
+    local CHARSET GLYPHS
+    CHARSET=($(lk_fc_charset "$1")) &&
+        eval "GLYPHS=\$'$(for GLYPH in "${CHARSET[@]}"; do
+            printf '%08x \\U%08x\\n' "$GLYPH" "$GLYPH"
+        done)'" ||
+        return
+    lk_console_detail "Glyphs found:" "${#CHARSET[@]}"
+    echo "$GLYPHS"
 }
 
 function lk_xfce4_xfconf_dump() {

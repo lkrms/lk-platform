@@ -200,6 +200,7 @@ PACMAN_PACKAGES+=(
     # system
     dconf-editor
     displaycal
+    fontconfig-docs
     gparted
     guake
     libsecret   # secret-tool
