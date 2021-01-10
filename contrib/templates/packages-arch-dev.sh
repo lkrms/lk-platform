@@ -1,14 +1,14 @@
 #!/bin/bash
 # shellcheck disable=SC2034,SC2207
 
-CUSTOM_REPOS=(
+PAC_REPOS=(
     "sublime-text|\
 http://sublimetext.mirror.linacreative.com/arch/stable/\$arch|\
 http://sublimetext.mirror.linacreative.com/sublimehq-pub.gpg|\
 8A8F901A"
 )
 
-PACMAN_PACKAGES=()
+PAC_PACKAGES=()
 AUR_PACKAGES=()
 
 # won't be uninstalled if present
@@ -40,14 +40,14 @@ PAC_KEEP=(
     raidar
 )
 
-PAC_REMOVE=(
+PAC_REJECT=(
     # buggy and insecure
     xfce4-screensaver
 )
 
 # hardware-related
 lk_is_virtual || {
-    PACMAN_PACKAGES+=(
+    PAC_PACKAGES+=(
         guvcview # webcam utility
         linssid  # wireless scanner
 
@@ -73,7 +73,7 @@ AUR_PACKAGES+=(
 )
 
 # terminal-based
-PACMAN_PACKAGES+=(
+PAC_PACKAGES+=(
     # shells
     asciinema
     dash
@@ -82,10 +82,10 @@ PACMAN_PACKAGES+=(
 
     # utilities
     cdrtools #
-    cpio     # libguestfs doesn't work without it
+    cpio     # for libguestfs
+    ext4magic
     unison
     wimlib
-    yq
 
     # networking
     networkmanager-l2tp
@@ -124,7 +124,7 @@ AUR_PACKAGES+=(
 )
 
 # desktop
-PACMAN_PACKAGES+=(
+PAC_PACKAGES+=(
     caprine
     chromium
     copyq
@@ -245,7 +245,7 @@ AUR_PACKAGES+=(
 )
 
 # development
-PACMAN_PACKAGES+=(
+PAC_PACKAGES+=(
     autopep8
     bash-language-server
     cloc
@@ -330,14 +330,14 @@ AUR_PACKAGES+=(
 )
 
 # development services
-PACMAN_PACKAGES+=(
+PAC_PACKAGES+=(
     apache
     mariadb
     php-fpm
 )
 
 # VMs and containers
-PACMAN_PACKAGES+=(
+PAC_PACKAGES+=(
     # KVM/QEMU
     dnsmasq
     ebtables

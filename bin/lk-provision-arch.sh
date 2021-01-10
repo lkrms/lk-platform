@@ -59,15 +59,14 @@ polkit.addRule(function (action, subject) {
 
     PAC_TO_REMOVE=($(comm -12 \
         <(pacman -Qq | sort -u) \
-        <(lk_echo_array PAC_REMOVE | sort -u)))
+        <(lk_echo_array PAC_REJECT | sort -u)))
     [ ${#PAC_TO_REMOVE[@]} -eq 0 ] || {
         lk_console_message "Removing packages"
         lk_tty sudo pacman -R --noconfirm "${PAC_TO_REMOVE[@]}"
     }
 
     lk_console_message "Checking install reasons"
-    PAC_EXPLICIT=($(lk_echo_array PACMAN_PACKAGES AUR_PACKAGES PAC_KEEP |
-        sort -u))
+    PAC_EXPLICIT=($(lk_echo_array PAC_PACKAGES AUR_PACKAGES PAC_KEEP | sort -u))
     PAC_TO_MARK_ASDEPS=($(comm -23 \
         <(pacman -Qeq | sort -u) \
         <(lk_echo_array PAC_EXPLICIT)))
@@ -93,7 +92,7 @@ polkit.addRule(function (action, subject) {
 
     PAC_TO_INSTALL=($(comm -13 \
         <(pacman -Qeq | sort -u) \
-        <(lk_echo_array PACMAN_PACKAGES | sort -u)))
+        <(lk_echo_array PAC_PACKAGES | sort -u)))
     [ ${#PAC_TO_INSTALL[@]} -eq 0 ] || {
         lk_console_message "Installing new packages from repo"
         lk_tty sudo pacman -S "${PAC_TO_INSTALL[@]}"

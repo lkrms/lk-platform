@@ -14,8 +14,8 @@ The following variables can be set in `/etc/default/lk-platform` or
 - `LK_APT_REMOVE_MESSAGE`
 - `LK_ARCH_CHROOT_DIR`
 - `LK_ARCH_CHROOT_USER`
-- `LK_ARCH_CUSTOM_REPOS`
 - `LK_ARCH_MIRROR`
+- `LK_ARCH_REPOS`
 - `LK_ARG_ARRAY`
 - `LK_ARGV`
 - `LK_AUTO_BACKUP`

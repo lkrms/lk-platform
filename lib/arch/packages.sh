@@ -1,66 +1,65 @@
 #!/bin/bash
+
 # shellcheck disable=SC2015,SC2016,SC2034,SC2206,SC2207
 
 IFS=','
-CUSTOM_REPOS=(
-    ${LK_ARCH_CUSTOM_REPOS:-}
-    ${CUSTOM_REPOS[@]+"${CUSTOM_REPOS[@]}"}
+PAC_REPOS=(
+    ${LK_ARCH_REPOS:-}
+    ${PAC_REPOS[@]+"${PAC_REPOS[@]}"}
 )
 unset IFS
 
-lk_pacman_add_repo "${CUSTOM_REPOS[@]}"
+lk_pacman_add_repo "${PAC_REPOS[@]}"
 
-PACMAN_PACKAGES=(
-    # bare minimum
+PAC_REJECT=(
+    xfce4-screensaver # Buggy and insecure
+
+    #
+    ${PAC_REJECT[@]+"${PAC_REJECT[@]}"}
+)
+
+PAC_PACKAGES=(
+    # Bare minimum
     base
     linux
     mkinitcpio
-
-    # boot
     grub
     efibootmgr
 
-    # multi-boot
-    os-prober
-    ntfs-3g
-
-    # bootstrap.sh dependencies
-    sudo
-    networkmanager
-    openssh
-    ntp
-    networkmanager-dispatcher-ntpd
-    git
-    libnewt # for whiptail
-
-    # basics
+    # Basics
     bash-completion
     bc
-    bind
-    bridge-utils
+    bind # dig
     byobu
     curl
     diffutils
     dmidecode
+    git
     glances
     htop
-    inetutils # for telnet
+    inetutils # telnet
     jq
     lftp
+    libnewt # whiptail
     logrotate
     lsof
     mediainfo
     nano
     ncdu
-    ndisc6 # for rdisc6
+    ndisc6 # rdisc6
+    networkmanager
+    nfs-utils
     nmap
+    ntp
     openbsd-netcat
+    openssh
     p7zip
     pcp
     ps_mem
     pv
     rsync
     stow
+    sudo
     sysstat
     tcpdump
     traceroute
@@ -68,34 +67,38 @@ PACMAN_PACKAGES=(
     vim
     wget
     whois
+    yq
 
-    # == UNNECESSARY ON DISPOSABLE SERVERS
-    #
+    # Documentation
     man-db
     man-pages
     texinfo
 
-    # filesystems
+    # Filesystems
     btrfs-progs
     dosfstools
-    exfat-utils
-    ext4magic
+    e2fsprogs
+    exfatprogs
     f2fs-tools
     jfsutils
+    nilfs-utils
+    ntfs-3g
     reiserfsprogs
+    udftools
     xfsprogs
-    nfs-utils
 
     #
-    ${PACMAN_PACKAGES[@]+"${PACMAN_PACKAGES[@]}"}
+    ${PAC_PACKAGES[@]+"${PAC_PACKAGES[@]}"}
 )
 
 AUR_PACKAGES=(
+    networkmanager-dispatcher-ntpd
+
     #
     ${AUR_PACKAGES[@]+"${AUR_PACKAGES[@]}"}
 )
 
-PACMAN_DESKTOP_PACKAGES=(
+PAC_DESKTOP_PACKAGES=(
     xdg-user-dirs
     lightdm
     lightdm-gtk-greeter
@@ -109,33 +112,25 @@ PACMAN_DESKTOP_PACKAGES=(
     gnome-keyring
     gvfs
     gvfs-smb
+    libcanberra
+    libcanberra-pulse
     network-manager-applet
+    pavucontrol
+    pulseaudio-alsa
     seahorse
     zenity
 
     #
-    $(
-        # xfce4-screensaver is buggy and insecure, and it autostarts
-        # by default, so exclude it from xfce4-goodies
-        lk_pacman_group_packages xfce4 xfce4-goodies |
-            grep -Fxv xfce4-screensaver
-    )
+    $(lk_pacman_group_packages xfce4 xfce4-goodies |
+        grep -Fxv xfce4-screensaver)
     catfish
     engrampa
-    pavucontrol
-    libcanberra
-    libcanberra-pulse
     plank
-
-    # xfce4-screensaver replacement
     xsecurelock
     xss-lock
 
     #
-    pulseaudio-alsa
-
-    #
-    ${PACMAN_DESKTOP_PACKAGES[@]+"${PACMAN_DESKTOP_PACKAGES[@]}"}
+    ${PAC_DESKTOP_PACKAGES[@]+"${PAC_DESKTOP_PACKAGES[@]}"}
 )
 
 AUR_DESKTOP_PACKAGES=(
@@ -148,14 +143,13 @@ AUR_DESKTOP_PACKAGES=(
     ${AUR_DESKTOP_PACKAGES[@]+"${AUR_DESKTOP_PACKAGES[@]}"}
 )
 
-lk_is_virtual && {
-    ! lk_is_qemu || {
-        PACMAN_PACKAGES+=(qemu-guest-agent)
-        PACMAN_DESKTOP_PACKAGES+=(spice-vdagent)
-    }
-} || {
-    # VMs don't need these
-    PACMAN_PACKAGES+=(
+if lk_is_virtual; then
+    if lk_is_qemu; then
+        PAC_PACKAGES+=(qemu-guest-agent)
+        PAC_DESKTOP_PACKAGES+=(spice-vdagent)
+    fi
+else
+    PAC_PACKAGES+=(
         linux-firmware
         linux-headers
 
@@ -167,9 +161,9 @@ lk_is_virtual && {
         tlp-rdw
 
         #
-        gptfdisk # provides sgdisk
-        lvm2     #
-        mdadm    # software RAID
+        gptfdisk # sgdisk
+        lvm2
+        mdadm
         parted
 
         #
@@ -191,13 +185,16 @@ lk_is_virtual && {
         ipw2200-fw
     )
     ! grep -Eq '^vendor_id\s*:\s+GenuineIntel$' /proc/cpuinfo ||
-        PACMAN_PACKAGES+=(intel-ucode)
+        PAC_PACKAGES+=(intel-ucode)
     ! grep -Eq '^vendor_id\s*:\s+AuthenticAMD$' /proc/cpuinfo ||
-        PACMAN_PACKAGES+=(amd-ucode)
+        PAC_PACKAGES+=(amd-ucode)
     ! grep -iq 'thinkpad' /sys/devices/virtual/dmi/id/product_family ||
-        PACMAN_PACKAGES+=(acpi_call)
+        PAC_PACKAGES+=(acpi_call)
 
-    PACMAN_DESKTOP_PACKAGES+=(
+    PAC_DESKTOP_PACKAGES+=(
+        os-prober
+
+        #
         mesa
         libvdpau-va-gl
 
@@ -206,14 +203,14 @@ lk_is_virtual && {
         pulseaudio-bluetooth
     )
 
-    GRAPHICS_CONTROLLERS="$(lspci | grep -E 'VGA|3D')"
+    GRAPHICS_CONTROLLERS=$(lspci | grep -E 'VGA|3D')
     ! grep -qi "Intel" <<<"$GRAPHICS_CONTROLLERS" ||
-        PACMAN_DESKTOP_PACKAGES+=(
+        PAC_DESKTOP_PACKAGES+=(
             intel-media-driver
             libva-intel-driver
         )
     ! grep -qi "NVIDIA" <<<"$GRAPHICS_CONTROLLERS" ||
-        PACMAN_DESKTOP_PACKAGES+=(
+        PAC_DESKTOP_PACKAGES+=(
             nvidia
             nvidia-utils
         )
@@ -221,85 +218,81 @@ lk_is_virtual && {
     AUR_DESKTOP_PACKAGES+=(
         xiccd
     )
-}
+fi
 
-[ "${PACMAN_DESKTOP_APPS:-1}" -ne 1 ] ||
-    PACMAN_DESKTOP_PACKAGES+=(
-        # basics
-        evince
-        galculator
-        geany
-        gimp
-        gnome-font-viewer
-        libreoffice-fresh
-        samba
+PAC_DESKTOP_PACKAGES+=(
+    # Basics
+    evince
+    galculator
+    geany
+    gimp
+    gnome-font-viewer
+    libreoffice-fresh
+    samba
 
-        # browsers
-        falkon
-        firefox
-        lynx
+    # Browsers
+    falkon
+    firefox
+    lynx
+    midori
 
-        # will be reinstated when catfish conflict with zeitgeist is removed
-        # (see https://bugzilla.xfce.org/show_bug.cgi?id=16419)
-        #midori
+    # Multimedia
+    libdvdcss
+    libdvdnav
+    libvpx
+    vlc
 
-        # multimedia
-        libdvdcss
-        libdvdnav
-        libvpx
-        vlc
+    # Remote desktop
+    x11vnc
 
-        # remote desktop
-        x11vnc
+    #
+    adapta-gtk-theme
+    arc-gtk-theme
+    arc-icon-theme
+    arc-solid-gtk-theme
+    breeze-gtk
+    breeze-icons
 
-        #
-        adapta-gtk-theme
-        arc-gtk-theme
-        arc-icon-theme
-        arc-solid-gtk-theme
-        breeze-gtk
-        breeze-icons
+    #
+    gtk-engine-murrine
+    materia-gtk-theme
 
-        #
-        gtk-engine-murrine
-        materia-gtk-theme
+    #
+    elementary-icon-theme
+    elementary-wallpapers
+    gtk-theme-elementary
+    sound-theme-elementary
 
-        #
-        elementary-icon-theme
-        elementary-wallpapers
-        gtk-theme-elementary
-        sound-theme-elementary
+    #
+    moka-icon-theme
+    papirus-icon-theme
 
-        #
-        moka-icon-theme
-        papirus-icon-theme
+    #
+    noto-fonts
+    noto-fonts-cjk
+    noto-fonts-emoji
+    terminus-font
+    ttf-dejavu
+    ttf-inconsolata
+    ttf-jetbrains-mono
+    ttf-lato
+    ttf-opensans
+    ttf-roboto
+    ttf-roboto-mono
+    ttf-ubuntu-font-family
 
-        #
-        noto-fonts
-        noto-fonts-cjk
-        noto-fonts-emoji
-        terminus-font
-        ttf-dejavu
-        ttf-inconsolata
-        ttf-jetbrains-mono
-        ttf-lato
-        ttf-opensans
-        ttf-roboto
-        ttf-roboto-mono
-        ttf-ubuntu-font-family
+    #
+    archlinux-wallpaper
+)
 
-        #
-        archlinux-wallpaper
-    )
-
-pacman -Qq "xfce4-session" >/dev/null 2>&1 ||
+pacman -Qq xfce4-session >/dev/null 2>&1 ||
     lk_confirm "Include Xfce?" ||
     {
-        PACMAN_DESKTOP_PACKAGES=()
+        PAC_DESKTOP_PACKAGES=()
         AUR_DESKTOP_PACKAGES=()
     }
 
-PACMAN_PACKAGES+=(${PACMAN_DESKTOP_PACKAGES[@]+"${PACMAN_DESKTOP_PACKAGES[@]}"})
+PAC_PACKAGES+=(${PAC_DESKTOP_PACKAGES[@]+"${PAC_DESKTOP_PACKAGES[@]}"})
 AUR_PACKAGES+=(${AUR_DESKTOP_PACKAGES[@]+"${AUR_DESKTOP_PACKAGES[@]}"})
 [ ${#AUR_PACKAGES[@]} -eq 0 ] || {
     NOT_AUR=($(comm -12 \
@@ -314,24 +307,24 @@ CUSTOM_REPO_PACKAGES=($(comm -13 \
 for SUFFIX in -lk -git ""; do
     CUSTOM_PACKAGES=($(comm -12 \
         <(lk_echo_array CUSTOM_REPO_PACKAGES | sort -u) \
-        <(lk_echo_array AUR_PACKAGES ${SUFFIX:+PACMAN_PACKAGES} |
+        <(lk_echo_array AUR_PACKAGES ${SUFFIX:+PAC_PACKAGES} |
             sed "s/\$/$SUFFIX/" | sort -u)))
     [ ${#CUSTOM_PACKAGES[@]} -eq 0 ] || {
         AUR_PACKAGES=($(comm -13 \
             <(lk_echo_array CUSTOM_PACKAGES | sed "s/$SUFFIX\$//" | sort -u) \
             <(lk_echo_array AUR_PACKAGES | sort -u)))
         [ -z "$SUFFIX" ] || {
-            PACMAN_PACKAGES=($(comm -13 \
+            PAC_PACKAGES=($(comm -13 \
                 <(lk_echo_array CUSTOM_PACKAGES | sed "s/$SUFFIX\$//" | sort -u) \
-                <(lk_echo_array PACMAN_PACKAGES | sort -u)))
+                <(lk_echo_array PAC_PACKAGES | sort -u)))
         }
-        PACMAN_PACKAGES+=("${CUSTOM_PACKAGES[@]}")
+        PAC_PACKAGES+=("${CUSTOM_PACKAGES[@]}")
     }
 done
 [ ${#AUR_PACKAGES[@]} -eq 0 ] || {
     lk_echo_array AUR_PACKAGES | lk_console_list "Unable to install from configured repositories:" package packages
     ! lk_confirm "Manage the above using yay?" Y && AUR_PACKAGES=() || {
-        PACMAN_PACKAGES+=($(lk_pacman_group_packages base-devel))
+        PAC_PACKAGES+=($(lk_pacman_group_packages base-devel))
         AUR_PACKAGES+=($(pacman -Qq yay 2>/dev/null || true))
     }
 }

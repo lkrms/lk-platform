@@ -15,8 +15,8 @@ LK_NODE_TIMEZONE=${LK_NODE_TIMEZONE:-UTC}                    # See `timedatectl 
 LK_NODE_LOCALES=${LK_NODE_LOCALES-en_AU.UTF-8 en_GB.UTF-8}   # "en_US.UTF-8" is added automatically
 LK_NODE_LANGUAGE=${LK_NODE_LANGUAGE-en_AU:en_GB:en}          #
 LK_NTP_SERVER=${LK_NTP_SERVER-time.apple.com}                #
-LK_ARCH_CUSTOM_REPOS=${LK_ARCH_CUSTOM_REPOS:-}               # REPO|SERVER|KEY_URL|KEY_ID|SIG_LEVEL,...
-LK_ARCH_MIRROR=${LK_ARCH_MIRROR:-}
+LK_ARCH_MIRROR=${LK_ARCH_MIRROR:-}                           #
+LK_ARCH_REPOS=${LK_ARCH_REPOS:-}                             # REPO|SERVER|KEY_URL|KEY_ID|SIG_LEVEL,...
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
 export LK_BASE=${LK_BASE:-/opt/lk-platform}
@@ -51,7 +51,7 @@ ROOT_PARTITION=
 BOOT_PARTITION=
 INSTALL_DISK=
 OTHER_OS_PARTITIONS=()
-CUSTOM_REPOS=()
+PAC_REPOS=()
 
 CURL_OPTIONS=(
     --fail
@@ -134,8 +134,8 @@ function in_target() {
 function configure_pacman() {
     lk_console_detail "Configuring pacman"
     lk_pacman_configure
-    [ ${#CUSTOM_REPOS[@]} -eq 0 ] ||
-        lk_pacman_add_repo "${CUSTOM_REPOS[@]}"
+    [ ${#PAC_REPOS[@]} -eq 0 ] ||
+        lk_pacman_add_repo "${PAC_REPOS[@]}"
 }
 
 LOG_OUT_FD=$(lk_next_fd)
@@ -280,7 +280,7 @@ lk_is_false KEEP_BOOT_PARTITION || {
 }
 
 lk_console_message "Installing system"
-pacstrap /mnt "${PACMAN_PACKAGES[@]}" >&"$LOG_OUT_FD" 2>&"$LOG_ERR_FD"
+pacstrap /mnt "${PAC_PACKAGES[@]}" >&"$LOG_OUT_FD" 2>&"$LOG_ERR_FD"
 
 lk_console_message "Setting up installed system"
 
@@ -332,7 +332,7 @@ cat <<EOF >>"/mnt/etc/hosts"
 127.0.1.1 $LK_NODE_HOSTNAME.localdomain $LK_NODE_HOSTNAME
 EOF
 
-if [ ${#PACMAN_DESKTOP_PACKAGES[@]} -eq 0 ]; then
+if [ ${#PAC_DESKTOP_PACKAGES[@]} -eq 0 ]; then
     in_target systemctl set-default multi-user.target
 else
     in_target systemctl set-default graphical.target
@@ -420,8 +420,8 @@ lk_get_shell_var \
     LK_NODE_LOCALES \
     LK_NODE_LANGUAGE \
     LK_NTP_SERVER \
-    LK_ARCH_CUSTOM_REPOS \
     LK_ARCH_MIRROR \
+    LK_ARCH_REPOS \
     LK_PLATFORM_BRANCH >"/mnt/etc/default/lk-platform"
 in_target "$LK_BASE/bin/lk-platform-configure.sh" --no-log
 
