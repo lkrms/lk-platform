@@ -43,3 +43,5 @@ function lk_assert_is_desktop() {
 function lk_assert_is_server() {
     lk_is_server || lk_die "server environment required"
 }
+
+lk_provide assert

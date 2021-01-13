@@ -59,3 +59,5 @@ function lk_whiptail_checklist() {
         "${ITEMS[@]}" \
         3>&1 1>&2 2>&3
 }
+
+lk_provide whiptail

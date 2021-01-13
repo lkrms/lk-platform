@@ -54,3 +54,5 @@ function lk_remove_secret() {
     lk_secret_forget "$@" || return
     lk_console_message "Password removed successfully"
 }
+
+lk_provide secret

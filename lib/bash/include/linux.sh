@@ -107,6 +107,24 @@ function lk_block_device_is_ssd() {
         [ "$COUNT" -eq $# ]
 }
 
+function lk_system_list_graphics() {
+    local EXIT_STATUS
+    LK_SYSTEM_GRAPHICS=${LK_SYSTEM_GRAPHICS-$(lspci | grep -E "VGA|3D")} || {
+        EXIT_STATUS=$?
+        unset LK_SYSTEM_GRAPHICS
+        return "$EXIT_STATUS"
+    }
+    echo "$LK_SYSTEM_GRAPHICS"
+}
+
+function lk_system_has_intel_graphics() {
+    lk_system_list_graphics | grep -i Intel >/dev/null
+}
+
+function lk_system_has_nvidia_graphics() {
+    lk_system_list_graphics | grep -i NVIDIA >/dev/null
+}
+
 # shellcheck disable=SC2034,SC2207
 function lk_get_standard_users() {
     local IFS ADM_USERS USERS
@@ -215,3 +233,5 @@ function lk_xfce4_xfconf_dump() {
         done < <(xfconf-query -c "$CHANNEL" -lv | sort -f)
     done
 }
+
+lk_provide linux

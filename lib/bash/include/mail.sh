@@ -139,3 +139,5 @@ Usage: $(lk_myself -f) SUBJECT TO [FROM [HEADERS...]]" || return
         lk_warn "MTA not found" || return
     lk_mail_get_mime "$@" | "$MTA" -oi -t
 }
+
+lk_provide mail

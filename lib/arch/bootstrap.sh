@@ -68,8 +68,9 @@ mkdir -p "$_DIR"
 echo "Downloading dependencies" >&2
 for FILE_PATH in \
     /lib/bash/include/core.sh \
-    /lib/bash/include/linux.sh \
     /lib/bash/include/arch.sh \
+    /lib/bash/include/linux.sh \
+    /lib/bash/include/provision.sh \
     /lib/arch/packages.sh; do
     FILE=$_DIR/${FILE_PATH##*/}
     FILE_PATH=$LK_PLATFORM_BRANCH$FILE_PATH
@@ -132,10 +133,9 @@ function in_target() {
 }
 
 function configure_pacman() {
-    lk_console_detail "Configuring pacman"
-    lk_pacman_configure
+    lk_pac_configure
     [ ${#PAC_REPOS[@]} -eq 0 ] ||
-        lk_pacman_add_repo "${PAC_REPOS[@]}"
+        lk_pac_add_repo "${PAC_REPOS[@]}"
 }
 
 LOG_OUT_FD=$(lk_next_fd)

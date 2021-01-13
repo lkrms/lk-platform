@@ -128,3 +128,5 @@ function lk_nextcloud_get_excluded() {
                 "Excluded by $(lk_pretty_path "$EXCLUDE_FILE"):" file files
     )
 }
+
+lk_provide misc

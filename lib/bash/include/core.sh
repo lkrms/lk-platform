@@ -130,8 +130,11 @@ function lk_include() {
         FILE=${LK_INST:-$LK_BASE}/lib/bash/include/$i.sh
         [ -r "$FILE" ] || lk_warn "$FILE: file not found" || return
         . "$FILE" || return
-        _LK_INCLUDES+=("$i")
     done
+}
+
+function lk_provide() {
+    _LK_INCLUDES+=("$1")
 }
 
 function lk_is_script_running() {
@@ -871,6 +874,11 @@ function lk_implode() {
     _lk_array_action "$(lk_quote_args lk_implode_args "$1")" "${@:2}"
 }
 
+# lk_implode_input [GLUE]
+function lk_implode_input() {
+    awk -v"OFS=${1:-,}" 'NR > 1 { printf "%s", OFS } { printf "%s", $0 }'
+}
+
 # lk_in_array VALUE ARRAY [ARRAY...]
 #
 # Return true if VALUE exists in any ARRAY, otherwise return false.
@@ -1351,7 +1359,7 @@ function lk_console_message() {
                 ! lk_is_true MESSAGE_HAS_NEWLINE; then
                 INDENT=-2
             fi
-            INDENT=${LK_TTY_INDENT:-$((${#PREFIX} + INDENT))}
+            INDENT=${_LK_TTY_INDENT:-$((${#PREFIX} + INDENT))}
             SPACES=$'\n'$(lk_repeat " " "$INDENT")
             lk_is_true MESSAGE2_HAS_NEWLINE ||
                 MESSAGE2=$(lk_fold "$MESSAGE2" $((WIDTH - INDENT)))
@@ -1403,7 +1411,7 @@ function lk_console_detail_file() {
         LK_TTY_SUFFIX=${LK_TTY_SUFFIX-  <<< } \
         LK_TTY_MESSAGE_COLOUR=${LK_TTY_MESSAGE_COLOUR-$LK_YELLOW} \
         LK_TTY_COLOUR2=${LK_TTY_COLOUR2-$LK_TTY_COLOUR} \
-        LK_TTY_INDENT=2
+        _LK_TTY_INDENT=2
     ${_LK_TTY_COMMAND:-lk_console_file} "$@"
 }
 
@@ -1520,16 +1528,16 @@ function lk_console_dump() {
         LK_TTY_COLOUR2=${5-${LK_TTY_COLOUR2-}} \
         LK_TTY_PREFIX=${LK_TTY_PREFIX->>> } \
         LK_TTY_SUFFIX=${LK_TTY_SUFFIX-<<< } \
-        LK_TTY_INDENT=${LK_TTY_INDENT:-0} \
+        _LK_TTY_INDENT=${_LK_TTY_INDENT:-0} \
         LK_TTY_NO_FOLD=1 \
         LK_TTY_MESSAGE_COLOUR
     [ -n "$CONTENT" ] || [ -t 0 ] || CONTENT=$(cat)
     BOLD_COLOUR=$(lk_maybe_bold "$COLOUR")$COLOUR
     LK_TTY_MESSAGE_COLOUR=$(lk_maybe_bold "${2:-}$COLOUR")$COLOUR
     local LK_TTY_PREFIX_COLOUR=${LK_TTY_PREFIX_COLOUR-$BOLD_COLOUR}
-    SPACES=$'\n'$(lk_repeat " " "$((LK_TTY_INDENT + 2))")
+    SPACES=$'\n'$(lk_repeat " " "$((_LK_TTY_INDENT + 2))")
     CONTENT=$SPACES${CONTENT//$'\n'/$SPACES}
-    LK_TTY_INDENT=0 \
+    _LK_TTY_INDENT=0 \
         lk_console_item "${2:-}" "$(echo "$CONTENT" &&
             printf '%s' "$LK_TTY_PREFIX_COLOUR$LK_TTY_SUFFIX$LK_RESET" \
                 ${3:+"$COLOUR$3$LK_RESET"})"
@@ -1588,17 +1596,22 @@ $LK_BOLD${2:-${LK_TTY_INPUT_NAME:-/dev/stdin}}$LK_RESET"
 }
 
 function lk_run() {
-    local COMMAND WIDTH
-    COMMAND=$(lk_quote_args "$@")
+    local COMMAND=("$@") ARGS WIDTH
+    while [[ "${1:-}" =~ ^(lk_(elevate|maybe_sudo)|sudo)$ ]]; do
+        shift
+    done
+    ARGS=$(lk_quote_args "$@")
     WIDTH=${LK_TTY_WIDTH:-$(lk_tty_columns)}
-    [ ${#COMMAND} -le "$WIDTH" ] ||
-        COMMAND=$(lk_quote_args_folded "$@")
-    ${_LK_TTY_COMMAND:-lk_console_item} "Running:" $'\n'"$COMMAND"
-    "$@"
+    [ ${#ARGS} -le $((WIDTH - ${_LK_TTY_INDENT:-2} - 11)) ] ||
+        ARGS=$'\n'$(lk_quote_args_folded "$@")
+    LK_TTY_NO_FOLD=1 \
+        ${_LK_TTY_COMMAND:-lk_console_item} "Running:" "$ARGS"
+    "${COMMAND[@]}"
 }
 
 function lk_run_detail() {
     _LK_TTY_COMMAND=lk_console_detail \
+        _LK_TTY_INDENT=${_LK_TTY_INDENT:-4} \
         lk_run "$@"
 }
 

@@ -149,10 +149,10 @@ function find_all() {
     gnu_find -L . -xdev -iname "*$1*" "${@:2}"
 }
 
-lk_include prompt provision git wordpress linode misc
+lk_include git linode misc prompt provision wordpress ${LK_NODE_FQDN:+hosting}
 
 if lk_is_linux; then
-    lk_include linux
+    lk_include iptables linux
     ! lk_is_arch || lk_include arch
     ! lk_is_ubuntu || lk_include debian
     [[ $- != *i* ]] || {

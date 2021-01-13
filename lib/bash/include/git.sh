@@ -329,3 +329,5 @@ function lk_git_recheckout() {
         git checkout --force --no-overlay HEAD -- "$REPO_ROOT" &&
         lk_console_success "Checkout completed successfully"
 }
+
+lk_provide git

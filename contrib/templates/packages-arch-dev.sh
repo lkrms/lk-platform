@@ -10,8 +10,8 @@ http://sublimetext.mirror.linacreative.com/sublimehq-pub.gpg|\
 
 PAC_PACKAGES=()
 AUR_PACKAGES=()
+PAC_REJECT=()
 
-# won't be uninstalled if present
 PAC_KEEP=(
     offlineimap
     subversion
@@ -40,30 +40,22 @@ PAC_KEEP=(
     raidar
 )
 
-PAC_REJECT=(
-    # buggy and insecure
-    xfce4-screensaver
-)
-
-# hardware-related
 lk_is_virtual || {
     PAC_PACKAGES+=(
-        guvcview # webcam utility
-        linssid  # wireless scanner
-
-        # required to run GPU benchmarks, e.g. in Geekbench
-        clinfo
-        $(
-            GRAPHICS_CONTROLLERS="$(lspci | grep -E 'VGA|3D')" || return 0
-            ! grep -qi "Intel" <<<"$GRAPHICS_CONTROLLERS" ||
-                echo "intel-compute-runtime"
-            ! grep -qi "NVIDIA" <<<"$GRAPHICS_CONTROLLERS" ||
-                echo "opencl-nvidia"
-        )
+        guvcview # Webcam utility
+        linssid  # Wi-Fi scanner
 
         #
         ddcutil
-        i2c-tools # provides i2c-dev module (required by ddcutil)
+        i2c-tools
+    )
+    ! lk_system_has_intel_graphics || PAC_PACKAGES+=(
+        clinfo
+        intel-compute-runtime
+    )
+    ! lk_system_has_nvidia_graphics || PAC_PACKAGES+=(
+        clinfo
+        opencl-nvidia
     )
 }
 
@@ -72,7 +64,6 @@ AUR_PACKAGES+=(
     brother-hll3230cdw
 )
 
-# terminal-based
 PAC_PACKAGES+=(
     # shells
     asciinema
@@ -104,13 +95,14 @@ PAC_PACKAGES+=(
     acme.sh
     arch-install-scripts
     at
-    $(pacman -Sgq base-devel) # TODO: add lk_pacman_group_packages function
+    base-devel
     binwalk
     cloud-utils
     cronie
     expac
     hwinfo
     mlocate
+    stow
     sysfsutils
     ubuntu-keyring
 )
@@ -126,20 +118,22 @@ AUR_PACKAGES+=(
 # desktop
 PAC_PACKAGES+=(
     caprine
-    chromium
     copyq
     filezilla
     firefox-i18n-en-gb
     flameshot
     freerdp
     ghostwriter
+    gimp
     gnome-characters
+    gnome-font-viewer
     gucharmap
     inkscape
     keepassxc
     libreoffice-fresh-en-gb
     nextcloud-client
     nomacs
+    qalculate-gtk
     qpdfview
     remmina
     scribus
@@ -214,7 +208,6 @@ PAC_PACKAGES+=(
     xautomation
     xclip
     xdotool
-    xorg-xev
     xprintidle
 )
 

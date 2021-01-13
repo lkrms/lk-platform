@@ -333,3 +333,5 @@ function lk_plist_maybe_add() {
     lk_plist_exists "$1" ||
         lk_plist_add "$@"
 }
+
+lk_provide macos

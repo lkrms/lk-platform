@@ -64,3 +64,5 @@ function lk_iptables_delete_chain() {
         lk_elevate "$COMMAND" ${2:+-t "$2"} --delete-chain "$1"
     fi
 }
+
+lk_provide iptables

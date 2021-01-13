@@ -53,7 +53,7 @@ function exit_trap() {
 
     if [ -f "$LK_BASE/lib/bash/include/core.sh" ]; then
         . "$LK_BASE/lib/bash/include/core.sh"
-        lk_include provision whiptail macos
+        lk_include macos provision whiptail
         SUDOERS=$(cat "$LK_BASE/share/sudoers.d/default")
         ${CONTRIB_PACKAGES_FILE:+. "$LK_BASE/$CONTRIB_PACKAGES_FILE"}
     else
@@ -61,9 +61,9 @@ function exit_trap() {
         for FILE_PATH in \
             ${CONTRIB_PACKAGES_FILE:+"/$CONTRIB_PACKAGES_FILE"} \
             /lib/bash/include/core.sh \
+            /lib/bash/include/macos.sh \
             /lib/bash/include/provision.sh \
             /lib/bash/include/whiptail.sh \
-            /lib/bash/include/macos.sh \
             /share/sudoers.d/default; do
             FILE=$_DIR/${FILE_PATH##*/}
             URL=https://raw.githubusercontent.com/lkrms/lk-platform/$LK_PLATFORM_BRANCH$FILE_PATH

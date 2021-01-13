@@ -2,7 +2,7 @@
 
 # shellcheck disable=SC2016,SC2029,SC2086,SC2207
 
-lk_include linux
+lk_include git provision
 
 function linode-cli() {
     # Suppress "Unable to determine if a new linode-cli package is available in
@@ -497,3 +497,5 @@ Usage: $(lk_myself -f) DIR HOST..." || return
             return
     done
 }
+
+lk_provide linode

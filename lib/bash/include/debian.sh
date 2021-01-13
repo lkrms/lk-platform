@@ -144,3 +144,5 @@ function lk_apt_purge_removed() {
         lk_elevate apt-get -yq purge "${PURGE[@]}"
     }
 }
+
+lk_provide debian

@@ -59,3 +59,5 @@ function lk_enable_prompt() {
     PROMPT_COMMAND=lk_prompt_command
     trap lk_prompt_debug_trap DEBUG
 }
+
+lk_provide prompt

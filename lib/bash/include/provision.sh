@@ -1,11 +1,37 @@
 #!/bin/bash
 
-# shellcheck disable=SC2015,SC2030,SC2031,SC2086,SC2088,SC2206,SC2207
+# shellcheck disable=SC2015,SC2016,SC2030,SC2031,SC2034,SC2086,SC2120,SC2206,SC2207
+
+function lk_node_service_enabled() {
+    [ -n "${LK_NODE_SERVICES:-}" ] || return
+    [[ ,$LK_NODE_SERVICES, == *,$1,* ]] ||
+        [[ ,$(lk_node_expand_services), == *,$1,* ]]
+}
+
+function _lk_node_expand_service() {
+    local SERVICE REVERSE=1
+    [ "${1:-}" != -n ] || { REVERSE= && shift; }
+    if [[ ,$SERVICES, == *,$1,* ]]; then
+        SERVICES=$SERVICES$(printf ',%s' "${@:2}")
+    elif lk_is_true REVERSE; then
+        for SERVICE in "${@:2}"; do
+            [[ ,$SERVICES, == *,$SERVICE,* ]] || return 0
+        done
+        SERVICES=$SERVICES,$1
+    fi
+}
+
+function lk_node_expand_services() {
+    local IFS=, SERVICES=${1:-${LK_NODE_SERVICES:-}}
+    _lk_node_expand_service apache+php apache2 php-fpm
+    _lk_node_expand_service mysql mariadb
+    _lk_node_expand_service -n xfce4 desktop
+    lk_echo_args $SERVICES | sort -u | lk_implode_input ","
+}
 
 # lk_maybe_install [-v] [-m MODE] [-o OWNER] [-g GROUP] SOURCE DEST
 # lk_maybe_install -d [-v] [-m MODE] [-o OWNER] [-g GROUP] DEST
 function lk_maybe_install() {
-    # shellcheck disable=SC2034
     local DEST=${*: -1:1} LK_SUDO=${LK_SUDO:-} OWNER GROUP VERBOSE MODE i \
         ARGS=("$@") LK_ARG_ARRAY=ARGS
     ! i=$(lk_array_search "-o" ARGS) || OWNER=${ARGS[*]:$((i + 1)):1}
@@ -28,7 +54,6 @@ function lk_maybe_install() {
 function lk_dir_set_modes() {
     local DIR REGEX LOG_FILE i TYPE MODE ARGS CHANGES _CHANGES TOTAL=0 \
         _PRUNE _EXCLUDE MATCH=() DIR_MODE=() FILE_MODE=() PRUNE=() LK_USAGE
-    # shellcheck disable=SC2034
     LK_USAGE="\
 Usage: $(lk_myself -f) DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..."
     [ $# -ge 4 ] && ! ((($# - 1) % 3)) || lk_usage || return
@@ -332,7 +357,6 @@ function lk_ssh_is_reachable() {
 
 # lk_ssh_configure [JUMP_HOST[:JUMP_PORT] JUMP_USER [JUMP_KEY_FILE]]
 function lk_ssh_configure() {
-    # shellcheck disable=SC2034
     local JUMP_HOST=${1:-} JUMP_USER=${2:-} JUMP_KEY_FILE=${3:-} \
         SSH_PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX} \
         LK_FILE_TAKE_BACKUP='' LK_VERBOSE=0 \
@@ -651,7 +675,6 @@ function lk_node_is_host() {
         NODE_IP+=($(lk_node_public_ipv6)) &&
         [ ${#NODE_IP} -gt 0 ] ||
         lk_warn "public IP address not found" || return
-    # shellcheck disable=SC2034
     HOST_IP=($(lk_host_ns_resolve "$1")) ||
         lk_warn "unable to retrieve authoritative DNS records for $1" || return
     # True if at least one node IP matches a host IP
@@ -716,8 +739,6 @@ function lk_certbot_install() {
 }
 
 # lk_cpanel_get_ssl_cert SSH_HOST DOMAIN [TARGET_DIR]
-#
-# shellcheck disable=SC2034
 function lk_cpanel_get_ssl_cert() {
     local TARGET_DIR=${3:-~/ssl} SSL_JSON CERT KEY \
         LK_TTY_NO_FOLD=1 LK_FILE_TAKE_BACKUP=1
@@ -1002,3 +1023,5 @@ function lk_system_memory_free() {
         false
     fi
 }
+
+lk_provide provision
