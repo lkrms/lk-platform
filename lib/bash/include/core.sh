@@ -55,7 +55,7 @@ function lk_is_server() {
 
 function lk_is_virtual() {
     return "${_LK_IS_VIRTUAL:=$(lk_is_linux &&
-        grep -Eq "^flags$S*:.*${S}hypervisor($S|$)" /proc/cpuinfo &&
+        grep -Eq "^flags$S*:.*\\bhypervisor\\b" /proc/cpuinfo &&
         echo 0 || echo 1)}"
 }
 
@@ -2355,10 +2355,17 @@ function lk_random_hex() {
 
 # lk_random_password [LENGTH]
 function lk_random_password() {
-    local LENGTH=${1:-16} PASSWORD
-    PASSWORD=$(openssl rand -base64 \
-        $((BITS = LENGTH * 6, BITS / 8 + (BITS % 8 ? 1 : 0)))) &&
-        printf '%s' "${PASSWORD:0:$LENGTH}"
+    local LENGTH=${1:-16} PASSWORD=
+    LK_RANDOM_ITERATIONS=0
+    while [ ${#PASSWORD} -lt "$LENGTH" ]; do
+        ((++LK_RANDOM_ITERATIONS))
+        # Increase BYTES by 10% to compensate for removal of 'look-alike'
+        # characters, reducing chance of 2+ iterations from >50% to <2%
+        PASSWORD=$PASSWORD$(openssl rand -base64 \
+            $((BITS = LENGTH * 6, BYTES = BITS / 8 + (BITS % 8 ? 1 : 0), BYTES * 11 / 10)) |
+            sed -E 's/[lIO01]+//g') || return
+    done
+    printf '%s' "${PASSWORD:0:$LENGTH}"
 }
 
 function lk_base64() {

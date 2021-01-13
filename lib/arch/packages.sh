@@ -306,8 +306,10 @@ fi
 ####
 #
 
+PAC_REJECT=($(lk_echo_array PAC_REJECT | sort -u))
 PAC_REJECT_REGEX=$(lk_regex_implode ${PAC_REJECT[@]+"${PAC_REJECT[@]}"})
 
+PAC_REPOS=($(lk_echo_array PAC_REPOS | sort -u))
 [ ${#PAC_REPOS[@]} -eq 0 ] ||
     lk_pac_add_repo "${PAC_REPOS[@]}"
 
@@ -384,4 +386,21 @@ fi
 if [ ${#AUR_PACKAGES[@]} -gt 0 ]; then
     PAC_PACKAGES+=($(lk_pac_available_list "${AUR_PACKAGES[@]}"))
     AUR_PACKAGES=($(lk_pac_unavailable_list "${AUR_PACKAGES[@]}"))
+    [ ${#AUR_PACKAGES[@]} -eq 0 ] ||
+        PAC_PACKAGES+=($(lk_pac_groups base-devel))
 fi
+
+# Reduce PAC_KEEP to installed packages not present in PAC_PACKAGES
+if [ ${#PAC_KEEP[@]} -gt 0 ]; then
+    PAC_KEEP=($(comm -23 \
+        <(lk_echo_array PAC_KEEP | sort -u) \
+        <(lk_echo_array PAC_PACKAGES | sort -u)))
+    if [ ${#PAC_KEEP[@]} -gt 0 ]; then
+        PAC_KEEP=($(comm -12 \
+            <(lk_echo_array PAC_KEEP | sort -u) \
+            <(pacman -Qq | sort -u)))
+    fi
+fi
+
+# If any AUR_PACKAGES remain, lk_pac_unavailable_list has already sorted them
+PAC_PACKAGES=($(lk_echo_array PAC_PACKAGES | sort -u))

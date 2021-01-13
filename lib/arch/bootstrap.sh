@@ -8,18 +8,26 @@
 # 3. curl -L https://lkr.ms/bs >bs
 # 4. bash bs
 
+DEFAULT_CMDLINE="quiet loglevel=3 audit=0$(! grep -q \
+    "^flags[[:blank:]]*:.*\\bhypervisor\\b" /proc/cpuinfo >/dev/null 2>&1 ||
+    echo " console=tty0 console=ttyS0")"
 BOOTSTRAP_PING_HOST=${BOOTSTRAP_PING_HOST:-one.one.one.one}  # https://blog.cloudflare.com/dns-resolver-1-1-1-1/
 BOOTSTRAP_MOUNT_OPTIONS=${BOOTSTRAP_MOUNT_OPTIONS:-defaults} # On VMs with TRIM support, "discard" is added automatically
 BOOTSTRAP_USERNAME=${BOOTSTRAP_USERNAME:-arch}               #
+BOOTSTRAP_PASSWORD=${BOOTSTRAP_PASSWORD:-}                   #
+BOOTSTRAP_KEY=${BOOTSTRAP_KEY:-}                             #
 LK_NODE_TIMEZONE=${LK_NODE_TIMEZONE:-UTC}                    # See `timedatectl list-timezones`
+LK_NODE_SERVICES=${LK_NODE_SERVICES:-}                       #
 LK_NODE_LOCALES=${LK_NODE_LOCALES-en_AU.UTF-8 en_GB.UTF-8}   # "en_US.UTF-8" is added automatically
 LK_NODE_LANGUAGE=${LK_NODE_LANGUAGE-en_AU:en_GB:en}          #
+LK_GRUB_CMDLINE=${LK_GRUB_CMDLINE:-$DEFAULT_CMDLINE}         #
 LK_NTP_SERVER=${LK_NTP_SERVER-time.apple.com}                #
 LK_ARCH_MIRROR=${LK_ARCH_MIRROR:-}                           #
 LK_ARCH_REPOS=${LK_ARCH_REPOS:-}                             # REPO|SERVER|KEY_URL|KEY_ID|SIG_LEVEL,...
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
 export LK_BASE=${LK_BASE:-/opt/lk-platform}
+export -n BOOTSTRAP_PASSWORD BOOTSTRAP_KEY
 
 set -euo pipefail
 lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
@@ -40,6 +48,17 @@ Options:
   -u USERNAME       set the default user's login name (default: arch)
   -o PARTITION      add the operating system on PARTITION to the boot menu
                     (may be given multiple times)
+  -c CMDLINE        set the default kernel command-line
+                    (default: \"$DEFAULT_CMDLINE\")
+  -p PARAMETER      add PARAMETER to the default kernel command-line
+  -s SERVICE,...    enable each SERVICE
+  -x                install Xfce (alias for: -s xfce4)
+  -y                do not prompt for input
+
+Useful kernel parameters:
+  usbcore.autosuspend=5     wait 5 seconds to suspend (default: 2, never: -1)
+  libata.force=3.00:noncq   disable NCQ on ATA device 3.00
+  mce=dont_log_ce           do not log corrected machine check errors
 
 Block devices:
 $(lsblk --output NAME,RM,SIZE,RO,TYPE,FSTYPE,MOUNTPOINT --paths |
@@ -83,7 +102,7 @@ for FILE_PATH in \
         . "$FILE"
 done
 
-while getopts ":u:o:" OPT; do
+while getopts ":u:o:c:p:s:xy" OPT; do
     case "$OPT" in
     u)
         BOOTSTRAP_USERNAME=$OPTARG
@@ -92,6 +111,23 @@ while getopts ":u:o:" OPT; do
         lk_block_device_is part "$OPTARG" ||
             lk_warn "invalid partition: $OPTARG" || lk_usage
         OTHER_OS_PARTITIONS+=("$OPTARG")
+        ;;
+    c)
+        LK_GRUB_CMDLINE=$OPTARG
+        ;;
+    p)
+        LK_GRUB_CMDLINE=${LK_GRUB_CMDLINE:+$LK_GRUB_CMDLINE }$OPTARG
+        ;;
+    s)
+        [[ $OPTARG =~ ^[-a-z0-9+._]+(,[-a-z0-9+._]+)*$ ]] ||
+            lk_warn "invalid service: $OPTARG" || lk_usage
+        LK_NODE_SERVICES=${LK_NODE_SERVICES:+$LK_NODE_SERVICES,}$OPTARG
+        ;;
+    x)
+        LK_NODE_SERVICES=${LK_NODE_SERVICES:+$LK_NODE_SERVICES,}xfce4
+        ;;
+    y)
+        LK_NO_INPUT=1
         ;;
     \? | :)
         lk_usage
@@ -116,6 +152,32 @@ case $# in
     ;;
 esac
 LK_NODE_HOSTNAME=${*: -1:1}
+LK_NODE_SERVICES=$(IFS=, &&
+    lk_echo_args $LK_NODE_SERVICES | sort -u | lk_implode_input ",")
+
+PASSWORD_GENERATED=
+if [ -z "$BOOTSTRAP_PASSWORD" ] && lk_no_input; then
+    lk_console_item \
+        "Generating a random password for user" "$BOOTSTRAP_USERNAME"
+    BOOTSTRAP_PASSWORD=$(lk_random_password 7)
+    PASSWORD_GENERATED=1
+    lk_console_detail "Password:" "$BOOTSTRAP_PASSWORD"
+    lk_console_warning "The password above will be repeated when ${0##*/} exits"
+fi
+while [ -z "$BOOTSTRAP_PASSWORD" ]; do
+    BOOTSTRAP_PASSWORD=$(lk_console_read_secret \
+        "Password for $BOOTSTRAP_USERNAME:")
+    [ -n "$BOOTSTRAP_PASSWORD" ] ||
+        lk_warn "Password cannot be empty" || continue
+    CONFIRM_PASSWORD=$(lk_console_read_secret \
+        "Password for $BOOTSTRAP_USERNAME (again):")
+    [ "$BOOTSTRAP_PASSWORD" = "$CONFIRM_PASSWORD" ] || {
+        BOOTSTRAP_PASSWORD=
+        lk_warn "Passwords do not match"
+        continue
+    }
+    break
+done
 
 function exit_trap() {
     [ ! -d /mnt/boot ] || {
@@ -125,6 +187,10 @@ function exit_trap() {
         in_target install -m 00640 -g adm /dev/null "$FILE" &&
             cp -v --preserve=timestamps "$LOG_FILE" "/mnt/$FILE"
     }
+    ! lk_is_true PASSWORD_GENERATED ||
+        lk_console_log \
+            "The random password generated for user '$BOOTSTRAP_USERNAME' is" \
+            "$BOOTSTRAP_PASSWORD"
 }
 
 function in_target() {
@@ -153,7 +219,7 @@ if [ -n "$LK_ARCH_MIRROR" ]; then
     echo "Server=$LK_ARCH_MIRROR" >"/etc/pacman.d/mirrorlist"
 fi
 
-. "$_DIR/packages.sh" >&"$LOG_OUT_FD" 2>&"$LOG_ERR_FD"
+. "$_DIR/packages.sh"
 
 # Clean up after failed attempts
 if [ -d /mnt/boot ]; then
@@ -200,36 +266,6 @@ if [ -n "$INSTALL_DISK" ]; then
     wipefs -a "$BOOT_PARTITION"
     REPARTITIONED=1
 fi
-
-TARGET_PASSWORD="${TARGET_PASSWORD:-}"
-if [ -z "$TARGET_PASSWORD" ]; then
-    while :; do
-        TARGET_PASSWORD="$(lk_console_read_secret "Password for $BOOTSTRAP_USERNAME:")"
-        [ -n "$TARGET_PASSWORD" ] || lk_warn "Password cannot be empty" || continue
-        CONFIRM_PASSWORD="$(lk_console_read_secret "Password for $BOOTSTRAP_USERNAME (again):")"
-        [ "$TARGET_PASSWORD" = "$CONFIRM_PASSWORD" ] || lk_warn "Passwords do not match" || continue
-        break
-    done
-fi
-
-TARGET_SSH_KEY="${TARGET_SSH_KEY:-}"
-if [ -z "$TARGET_SSH_KEY" ]; then
-    TARGET_SSH_KEY="$(lk_console_read "Authorised SSH key for $BOOTSTRAP_USERNAME:")"
-    [ -n "$TARGET_SSH_KEY" ] || lk_console_warning "SSH will not be configured (no key provided)"
-fi
-
-GRUB_CMDLINE="${GRUB_CMDLINE:-}"
-if [ -z "$GRUB_CMDLINE" ]; then
-    lk_console_item \
-        "Kernel command-line argument examples:" \
-        "$(lk_echo_args \
-            "usbcore.autosuspend=5" \
-            "mce=dont_log_ce" \
-            "libata.force=3.00:noncq")"
-    GRUB_CMDLINE="$(lk_console_read "Custom kernel command-line arguments:")"
-fi
-
-export -n TARGET_PASSWORD TARGET_SSH_KEY
 
 ROOT_PARTITION_TYPE="$(_lk_lsblk FSTYPE "$ROOT_PARTITION")" || lk_die "no block device at $ROOT_PARTITION"
 BOOT_PARTITION_TYPE="$(_lk_lsblk FSTYPE "$BOOT_PARTITION")" || lk_die "no block device at $BOOT_PARTITION"
@@ -386,9 +422,9 @@ EOF
 
 lk_console_detail "Creating superuser:" "$BOOTSTRAP_USERNAME"
 in_target useradd -m "$BOOTSTRAP_USERNAME" -G adm,wheel -s /bin/bash
-echo -e "$TARGET_PASSWORD\n$TARGET_PASSWORD" | in_target passwd "$BOOTSTRAP_USERNAME"
-[ -z "$TARGET_SSH_KEY" ] || {
-    echo "$TARGET_SSH_KEY" | in_target sudo -H -u "$BOOTSTRAP_USERNAME" \
+echo -e "$BOOTSTRAP_PASSWORD\n$BOOTSTRAP_PASSWORD" | in_target passwd "$BOOTSTRAP_USERNAME"
+[ -z "$BOOTSTRAP_KEY" ] || {
+    echo "$BOOTSTRAP_KEY" | in_target sudo -H -u "$BOOTSTRAP_USERNAME" \
         bash -c 'cat >"$HOME/.ssh/authorized_keys"'
     sed -Ei -e "s/^#?(PasswordAuthentication|PermitRootLogin)\b.*\$/\1 no/" \
         "/mnt/etc/ssh/sshd_config"
@@ -417,8 +453,10 @@ lk_get_shell_var \
     LK_PATH_PREFIX \
     LK_NODE_HOSTNAME \
     LK_NODE_TIMEZONE \
+    LK_NODE_SERVICES \
     LK_NODE_LOCALES \
     LK_NODE_LANGUAGE \
+    LK_GRUB_CMDLINE \
     LK_NTP_SERVER \
     LK_ARCH_MIRROR \
     LK_ARCH_REPOS \
@@ -506,10 +544,9 @@ may cause efibootmgr to fail with 'Input/output error'"
 }
 lk_console_message "Installing boot loader"
 lk_file_keep_original "/mnt/etc/default/grub"
-! lk_is_virtual || CMDLINE_EXTRA="console=tty0 console=ttyS0"
 sed -Ei -e 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=saved/' \
     -e 's/^#?GRUB_SAVEDEFAULT=.*/GRUB_SAVEDEFAULT=true/' \
-    -e "s/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT=\"quiet loglevel=3 audit=0${CMDLINE_EXTRA:+ $CMDLINE_EXTRA}${GRUB_CMDLINE:+ $GRUB_CMDLINE}\"/" \
+    -e "s/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT=\"$LK_GRUB_CMDLINE\"/" \
     /mnt/etc/default/grub
 install -v -d -m 00755 "/mnt/usr/local/bin"
 install -v -m 00755 /dev/null "/mnt/usr/local/bin/update-grub"
