@@ -41,6 +41,15 @@ function lk_git_is_project_top_level() {
         lk_git_is_top_level "${1:-}"
 }
 
+function lk_git_is_clean() {
+    local NO_REFRESH=
+    [ "${1:-}" != -n ] || { NO_REFRESH=1 && shift; }
+    ({ [ -z "${1:-}" ] || cd "$1"; } &&
+        { lk_is_true NO_REFRESH ||
+            _lk_git update-index --refresh >/dev/null; } &&
+        git diff-index --quiet HEAD --)
+}
+
 function lk_git_remote_singleton() {
     local REMOTES
     REMOTES=($(git remote)) &&

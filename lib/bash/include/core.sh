@@ -2,10 +2,10 @@
 
 # shellcheck disable=SC1090,SC1091,SC2015,SC2016,SC2034,SC2046,SC2086,SC2094,SC2116,SC2120,SC2154,SC2207
 
-_LK_ENV=${_LK_ENV:-$(declare -x)}
+[ -n "${_LK_ENV:+1}" ] || _LK_ENV=$(declare -x)
 
-USER=${USER:-$(id -un)} &&
-    HOME=${HOME:-$(eval "echo ~$USER")} || return
+USER=${USER:-$(id -un)} || return
+HOME=${HOME:-$(eval "echo ~$USER")} || return
 
 function lk_command_exists() {
     type -P "$1" >/dev/null
@@ -76,8 +76,9 @@ function _lk_gnu_command() {
     local COMMAND PREFIX=
     ! lk_is_macos || {
         PREFIX=g
-        COMMAND=${HOMEBREW_PREFIX:-$(brew --prefix 2>/dev/null)} ||
-            COMMAND=/usr/local
+        HOMEBREW_PREFIX=${HOMEBREW_PREFIX-$(brew --prefix 2>/dev/null)} ||
+            HOMEBREW_PREFIX=
+        COMMAND=${HOMEBREW_PREFIX:-/usr/local}
     }
     case "$1" in
     diff)
@@ -495,32 +496,24 @@ function lk_get_quoted_var() {
 
 # lk_get_env [-n] [VAR...]
 function lk_get_env() {
-    local _LK_VAR_LIST
+    local _LK_VAR_LIST _LK_IGNORE_REGEX="^(__?(LK|lk)|PATH$)"
     unset _LK_VAR_LIST
     [ "${1:-}" != -n ] || { _LK_VAR_LIST= && shift; }
-    _LK_ENV=${_LK_ENV:-$(declare -x)}
+    [ -n "${_LK_ENV:+1}" ] || _LK_ENV=$(declare -x)
     (
-        unset IFS
-        _LK_IGNORE=(
-            BASH_SOURCE FUNCNAME PATH LK_VERBOSE
-            _LK_VAR_LIST _LK_ENV _LK_IGNORE _lk_i _lk_i0 _LK_VAR _LK_VARS
-            _LK_FD "LK_[A-Z0-9_]+_COLOUR2?" "__lk_regex_[a-zA-Z0-9_]+"
-            "LK_(BLACK|RED|GREEN|YELLOW|BLUE|MAGENTA|CYAN|WHITE|GREY|BOLD|DIM|RESET)"
-        )
-        _lk_i=${#_LK_IGNORE[@]}
-        _lk_i0=$_lk_i
-        for _LK_VAR in $(lk_var_list_all |
-            sed -E "/^($(lk_implode '|' _LK_IGNORE))\$/d"); do
-            unset "$_LK_VAR" 2>/dev/null || _LK_IGNORE[$((_lk_i++))]=$_LK_VAR
-        done
-        ! lk_verbose 3 ||
-            lk_console_log "Variables ignored in $(lk_myself -f):" \
-                $'\n'"$(lk_echo_args "${_LK_IGNORE[@]:$_lk_i0}")"
+        # Unset every variable that can be unset
+        unset $(lk_var_list_all |
+            sed -E "/$_LK_IGNORE_REGEX/d") 2>/dev/null || true
+        # Ignore the rest
+        _LK_IGNORE=$(lk_var_list_all |
+            sed -E "/$_LK_IGNORE_REGEX/d")
+        # Restore environment variables
         eval "$_LK_ENV"
-        _LK_VARS=("$@")
-        [ ${#_LK_VARS[@]} -gt 0 ] || lk_mapfile _LK_VARS <(lk_var_list_all |
-            sed -E "/^($(lk_implode '|' _LK_IGNORE))\$/d")
-        set -- ${_LK_VARS[@]+"${_LK_VARS[@]}"}
+        # Reduce the selection to variables not being ignored
+        set -- $(comm -13 \
+            <(sort -u <<<"$_LK_IGNORE") \
+            <({ [ $# -gt 0 ] && lk_echo_args "$@" || lk_var_list_all; } |
+                sed -E "/$_LK_IGNORE_REGEX/d" | sort -u))
         [ $# -eq 0 ] ||
             _LK_VAR_PREFIX_DEPTH=1 \
                 ${_LK_VAR_LIST-lk_get_quoted_var} \
@@ -840,17 +833,31 @@ function lk_echo_array() {
 
 # lk_quote_args [ARG...]
 #
-# Use `printf %q` to quote each ARG, and output the results on a single
-# space-delimited line.
+# Use `printf %q` to output each ARG on a single space-delimited line.
+#
+# Example:
+#
+#     $ lk_quote_args printf '%s\n' "Hello, world."
+#     printf %s\\n Hello\,\ world.
 function lk_quote_args() {
     [ $# -eq 0 ] || printf '%q' "$1"
     [ $# -le 1 ] || printf ' %q' "${@:2}"
     printf '\n'
 }
 
+# lk_quote_args_folded [ARG...]
+#
+# Same as lk_quote_args, but start each ARG on a new line.
+#
+# Example:
+#
+#     $ lk_quote_args_folded printf '%s\n' "Hello, world."
+#     printf \
+#         %s\\n \
+#         Hello\,\ world.
 function lk_quote_args_folded() {
     [ $# -eq 0 ] || printf '%q' "$1"
-    [ $# -le 1 ] || printf ' \\ \n    %q' "${@:2}"
+    [ $# -le 1 ] || printf ' \\\n    %q' "${@:2}"
     printf '\n'
 }
 

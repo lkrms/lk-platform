@@ -94,6 +94,8 @@ LOGIN_ITEMS+=(
     "/Applications/Flycut.app"
     "/Applications/Lightshot Screenshot.app"
     "/Applications/Magnet.app"
+    "/Applications/Mail.app"
+    "/Applications/Messages.app"
     "/Applications/Messenger.app"
     "/Applications/nextcloud.app"
     "/Applications/Skype.app"

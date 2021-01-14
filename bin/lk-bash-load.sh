@@ -45,7 +45,7 @@ function _lk_bash_load() {
     export LK_BASE
 }
 
-_LK_ENV=${_LK_ENV:-$(declare -x)}
+[ -n "${_LK_ENV:+1}" ] || _LK_ENV=$(declare -x)
 
 _lk_bash_load &&
     unset -f _lk_bash_load &&
