@@ -8,6 +8,18 @@
 # 3. curl -L https://lkr.ms/bs >bs
 # 4. bash bs
 
+set -euo pipefail
+lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
+
+LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
+readonly _DIR=/tmp/${LK_PATH_PREFIX}install
+mkdir -p "$_DIR"
+LOG_FILE=$_DIR/install.$(date +%s).log
+TRACE_FILE=${LOG_FILE%.log}.trace
+exec 4>>"$TRACE_FILE"
+BASH_XTRACEFD=4
+set -x
+
 DEFAULT_CMDLINE="quiet loglevel=3 audit=0$(! grep -q \
     "^flags[[:blank:]]*:.*\\bhypervisor\\b" /proc/cpuinfo >/dev/null 2>&1 ||
     echo " console=tty0 console=ttyS0")"
@@ -20,17 +32,13 @@ LK_NODE_TIMEZONE=${LK_NODE_TIMEZONE:-UTC}                    # See `timedatectl 
 LK_NODE_SERVICES=${LK_NODE_SERVICES:-}                       #
 LK_NODE_LOCALES=${LK_NODE_LOCALES-en_AU.UTF-8 en_GB.UTF-8}   # "en_US.UTF-8" is added automatically
 LK_NODE_LANGUAGE=${LK_NODE_LANGUAGE-en_AU:en_GB:en}          #
-LK_GRUB_CMDLINE=${LK_GRUB_CMDLINE:-$DEFAULT_CMDLINE}         #
+LK_GRUB_CMDLINE=${LK_GRUB_CMDLINE-$DEFAULT_CMDLINE}          #
 LK_NTP_SERVER=${LK_NTP_SERVER-time.apple.com}                #
 LK_ARCH_MIRROR=${LK_ARCH_MIRROR:-}                           #
 LK_ARCH_REPOS=${LK_ARCH_REPOS:-}                             # REPO|SERVER|KEY_URL|KEY_ID|SIG_LEVEL,...
-LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
 export LK_BASE=${LK_BASE:-/opt/lk-platform}
 export -n BOOTSTRAP_PASSWORD BOOTSTRAP_KEY
-
-set -euo pipefail
-lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
 
 shopt -s nullglob
 
@@ -81,9 +89,6 @@ CURL_OPTIONS=(
     --silent
 )
 
-_DIR=/tmp/${LK_PATH_PREFIX}install
-mkdir -p "$_DIR"
-
 echo "Downloading dependencies" >&2
 for FILE_PATH in \
     /lib/bash/include/core.sh \
@@ -93,8 +98,8 @@ for FILE_PATH in \
     /lib/arch/packages.sh; do
     FILE=$_DIR/${FILE_PATH##*/}
     if [ ! -e "$FILE" ]; then
-        FILE_PATH=$LK_PLATFORM_BRANCH$FILE_PATH
-        URL=https://raw.githubusercontent.com/lkrms/lk-platform/$FILE_PATH
+        FILE_PATH=lk-platform/$LK_PLATFORM_BRANCH$FILE_PATH
+        URL=https://raw.githubusercontent.com/lkrms/$FILE_PATH
         curl "${CURL_OPTIONS[@]}" --output "$FILE" "$URL" || {
             rm -f "$FILE"
             lk_die "unable to download from GitHub: $URL"
@@ -212,7 +217,6 @@ LOG_OUT_FD=$(lk_next_fd)
 eval "exec $LOG_OUT_FD>&1"
 LOG_ERR_FD=$(lk_next_fd)
 eval "exec $LOG_ERR_FD>&2"
-LOG_FILE=$_DIR/install.$(lk_timestamp).log
 exec > >(tee >(lk_log >>"$LOG_FILE")) 2>&1
 trap exit_trap EXIT
 
@@ -220,7 +224,7 @@ lk_console_log "Setting up live environment"
 configure_pacman
 if [ -n "$LK_ARCH_MIRROR" ]; then
     lk_systemctl_stop reflector || true
-    echo "Server=$LK_ARCH_MIRROR" >"/etc/pacman.d/mirrorlist"
+    echo "Server=$LK_ARCH_MIRROR" >/etc/pacman.d/mirrorlist
 fi
 
 . "$_DIR/packages.sh"

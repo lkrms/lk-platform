@@ -29,6 +29,15 @@ function exit_trap() {
 {
     export SUDO_PROMPT="[sudo] password for %p: "
 
+    CURL_OPTIONS=(
+        --fail
+        --header "Cache-Control: no-cache"
+        --location
+        --retry 8
+        --show-error
+        --silent
+    )
+
     _DIR=/tmp/${LK_PATH_PREFIX}install
     mkdir -p "$_DIR"
 
@@ -66,11 +75,14 @@ function exit_trap() {
             /lib/bash/include/whiptail.sh \
             /share/sudoers.d/default; do
             FILE=$_DIR/${FILE_PATH##*/}
-            URL=https://raw.githubusercontent.com/lkrms/lk-platform/$LK_PLATFORM_BRANCH$FILE_PATH
-            curl --retry 8 --fail --output "$FILE" "$URL" || {
-                rm -f "$FILE"
-                lk_die "unable to download from GitHub: $URL"
-            }
+            if [ ! -e "$FILE" ]; then
+                FILE_PATH=lk-platform/$LK_PLATFORM_BRANCH$FILE_PATH
+                URL=https://raw.githubusercontent.com/lkrms/$FILE_PATH
+                curl "${CURL_OPTIONS[@]}" --output "$FILE" "$URL" || {
+                    rm -f "$FILE"
+                    lk_die "unable to download from GitHub: $URL"
+                }
+            fi
             [ "${FILE: -3}" != .sh ] ||
                 . "$FILE"
         done
