@@ -364,8 +364,8 @@ PAC_UNOFFICIAL=($(comm -13 \
     <(lk_pac_available_list -o | sort -u) \
     <(lk_echo_array PAC_AVAILABLE | sort -u)))
 PAC_REPLACE=$(lk_echo_array PAC_UNOFFICIAL | awk \
-    -v"p=^$LK_PATH_PREFIX" \
-    -v"s=-${LK_PATH_PREFIX%-}\$" \
+    -v "p=^$LK_PATH_PREFIX" \
+    -v "s=-${LK_PATH_PREFIX%-}\$" \
     'BEGIN {
     a[1] = s; a[2] = p; a[3] = "-git$"
 }
@@ -400,7 +400,7 @@ if [ ${#PAC_KEEP[@]} -gt 0 ]; then
     if [ ${#PAC_KEEP[@]} -gt 0 ]; then
         PAC_KEEP=($(comm -12 \
             <(lk_echo_array PAC_KEEP | sort -u) \
-            <(pacman -Qq | sort -u)))
+            <(lk_pac_installed_list | sort -u)))
     fi
 fi
 

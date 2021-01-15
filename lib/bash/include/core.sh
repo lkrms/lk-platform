@@ -883,7 +883,7 @@ function lk_implode() {
 
 # lk_implode_input [GLUE]
 function lk_implode_input() {
-    awk -v"OFS=${1:-,}" 'NR > 1 { printf "%s", OFS } { printf "%s", $0 }'
+    awk -v "OFS=${1:-,}" 'NR > 1 { printf "%s", OFS } { printf "%s", $0 }'
 }
 
 # lk_in_array VALUE ARRAY [ARRAY...]
@@ -1701,7 +1701,7 @@ function lk_require_output() {
     [ "${1:-}" != -s ] || { SUPPRESS= && shift; }
     FD=$(lk_next_fd) && eval "exec $FD>&1" || return
     OUTPUT=$("$@" |
-        tee ${SUPPRESS-/dev/fd/"$FD"} ${SUPPRESS+/dev/null} && echo ".") &&
+        tee ${SUPPRESS-/dev/fd/"$FD"} ${SUPPRESS+/dev/null} && printf .) &&
         OUTPUT=${OUTPUT%.} || EXIT_STATUS=$?
     eval "exec $FD>&-" || EXIT_STATUS=${EXIT_STATUS:-$?}
     (exit "${EXIT_STATUS:-0}") &&
@@ -2063,7 +2063,7 @@ function lk_rm() {
 # lk_install -d [-v] [-m MODE] [-o OWNER] [-g GROUP] DEST
 function lk_install() {
     local DEST=${*: -1:1} OWNER GROUP MODE i \
-        ARGS=("$@") LK_ARG_ARRAY=ARGS LK_SUDO VERBOSE=
+        ARGS=("$@") LK_ARG_ARRAY=ARGS LK_SUDO=${LK_SUDO:-} VERBOSE=
     ! i=$(lk_array_search -o ARGS) || OWNER=${ARGS[*]:$((i + 1)):1}
     ! i=$(lk_array_search -g ARGS) || GROUP=${ARGS[*]:$((i + 1)):1}
     [ -z "${OWNER:-}${GROUP:-}" ] || LK_SUDO=1
@@ -2099,13 +2099,11 @@ Usage: $(lk_myself -f) [-f] TARGET LINK"
         lk_warn "target not found: $TARGET" || return
     ! lk_verbose || v=v
     ! lk_verbose 2 || vv=v
-    unset LK_SYMLINK_NO_CHANGE
+    LK_SYMLINK_NO_CHANGE=${LK_SYMLINK_NO_CHANGE:-1}
     if lk_maybe_sudo test -L "$LINK"; then
         CURRENT_TARGET=$(lk_maybe_sudo readlink -- "$LINK") || return
-        [ "$CURRENT_TARGET" != "$TARGET" ] || {
-            LK_SYMLINK_NO_CHANGE=1
+        [ "$CURRENT_TARGET" != "$TARGET" ] ||
             return 0
-        }
         lk_maybe_sudo rm -f"$vv" -- "$LINK" || return
     elif lk_maybe_sudo test -e "$LINK"; then
         if ! lk_is_true NO_ORIG; then
@@ -2118,7 +2116,8 @@ Usage: $(lk_myself -f) [-f] TARGET LINK"
         lk_maybe_sudo \
             mkdir -p"$v" -- "$LINK_DIR" || return
     fi
-    lk_maybe_sudo ln -s"$v" -- "$TARGET" "$LINK"
+    lk_maybe_sudo ln -s"$v" -- "$TARGET" "$LINK" &&
+        LK_SYMLINK_NO_CHANGE=0
 }
 
 # lk_keep_trying COMMAND [ARG...]
@@ -2590,7 +2589,7 @@ function lk_file_prepare_temp() {
                 lk_maybe_sudo chmod "$(lk_pad_zero 5 "$MODE")" -- "$TEMP"
         else
             lk_maybe_sudo cp -a"$vv" -- "$1" "$TEMP"
-        fi || return
+        fi >&2 || return
     echo "$TEMP"
 }
 
@@ -2621,27 +2620,56 @@ function lk_file_add_newline() {
     fi
 }
 
-# lk_file_replace [-b|-m] FILE CONTENT [IGNORE]
+# lk_file_replace [-b] [-m] [-i IGNORE] [-f SOURCE_FILE] FILE [CONTENT]
 #
-# If the content of FILE differs from CONTENT, optionally after removing lines
-# matching regular expression IGNORE, replace FILE with CONTENT. If -b is set,
-# back up FILE before replacing it. If -m is set, back up FILE to a separate
-# location before replacing it.
+# If FILE differs from input, CONTENT or SOURCE_FILE, replace FILE. If -b is
+# set, back up FILE before replacing it. If -m is set, use a separate location
+# when backing up (-b is implied). If -i is set, ignore lines matching the
+# regular expression when comparing.
 function lk_file_replace() {
-    local BACKUP=${LK_FILE_TAKE_BACKUP:-} MOVE=${LK_FILE_MOVE_BACKUP:-} \
-        PREVIOUS TEMP vv=
-    [ "${1:-}" != -b ] || { BACKUP=1 && shift; }
-    [ "${1:-}" != -m ] || { BACKUP=1 && MOVE=1 && shift; }
+    local OPTIND OPTARG OPT IGNORE='' SOURCE='' CONTENT PREVIOUS TEMP vv='' \
+        BACKUP=${LK_FILE_TAKE_BACKUP:-} MOVE=${LK_FILE_MOVE_BACKUP:-} LK_USAGE
+    LK_USAGE="\
+Usage: $(lk_myself -f) [-b] [-m] [-i IGNORE] [-f SOURCE_FILE] FILE [CONTENT]"
+    while getopts ":bmi:f:" OPT; do
+        case "$OPT" in
+        b)
+            BACKUP=1
+            ;;
+        m)
+            BACKUP=1
+            MOVE=1
+            ;;
+        i)
+            IGNORE=$OPTARG
+            ;;
+        f)
+            SOURCE=$OPTARG
+            lk_file_get_text "$SOURCE" CONTENT ||
+                return
+            ;;
+        \? | :)
+            lk_usage
+            return 1
+            ;;
+        esac
+    done
+    shift $((OPTIND - 1))
+    if [ $# -ge 2 ]; then
+        CONTENT=$2
+    elif [ -z "$SOURCE" ]; then
+        CONTENT=$(cat && printf .) || return
+        CONTENT=${CONTENT%.}
+    fi
     unset PREVIOUS
     ! lk_verbose 2 || vv=v
+    LK_FILE_REPLACE_NO_CHANGE=${LK_FILE_REPLACE_NO_CHANGE:-1}
     if lk_maybe_sudo test -e "$1"; then
         lk_maybe_sudo test -f "$1" || lk_warn "not a file: $1" || return
-        unset LK_FILE_REPLACE_NO_CHANGE
         ! diff -q \
-            <(lk_maybe_sudo cat "$1" | _lk_maybe_filter "${@:3:1}") \
-            <([ -z "$2" ] || echo "${2%$'\n'}" | _lk_maybe_filter "${@:3:1}") \
-            >/dev/null || {
-            LK_FILE_REPLACE_NO_CHANGE=1
+            <(lk_maybe_sudo cat "$1" | _lk_maybe_filter "$IGNORE") \
+            <([ -z "$CONTENT" ] || echo "${CONTENT%$'\n'}" |
+                _lk_maybe_filter "$IGNORE") >/dev/null || {
             ! lk_verbose 2 || lk_console_detail "Not changed:" "$1"
             return 0
         }
@@ -2651,8 +2679,9 @@ function lk_file_replace() {
             lk_file_get_text "$1" PREVIOUS || return
     fi
     TEMP=$(lk_file_prepare_temp "$1") &&
-        echo "${2%$'\n'}" | lk_maybe_sudo tee "$TEMP" >/dev/null &&
-        lk_maybe_sudo mv -f"$vv" "$TEMP" "$1" || return
+        echo "${CONTENT%$'\n'}" | lk_maybe_sudo tee "$TEMP" >/dev/null &&
+        lk_maybe_sudo mv -f"$vv" "$TEMP" "$1" &&
+        LK_FILE_REPLACE_NO_CHANGE=0 || return
     ! lk_verbose || {
         if lk_is_true LK_FILE_NO_DIFF; then
             lk_console_detail "Updated:" "$1"

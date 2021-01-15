@@ -2,6 +2,24 @@
 
 # shellcheck disable=SC1090,SC2016,SC2031,SC2034,SC2207
 
+function is_bootstrap() {
+    [ -n "${LK_BOOTSTRAP:-}" ]
+}
+
+if is_bootstrap; then
+    function systemctl_enable() {
+        [[ $1 == *.* ]] || set -- "$1.service"
+        [ ! -e "/usr/lib/systemd/system/$1" ] || {
+            lk_console_detail "Enabling service:" "$*"
+            lk_elevate systemctl enable "$@"
+        }
+    }
+else
+    function systemctl_enable() {
+        lk_systemctl_enable_now "$@"
+    }
+fi
+
 lk_bin_depth=1 include=provision,linux,arch . lk-bash-load.sh || exit
 
 shopt -s nullglob
@@ -12,7 +30,14 @@ lk_assert_is_arch
 lk_log_output
 
 {
+    lk_console_log "Provisioning Arch Linux"
+
     LK_SUDO=1
+
+    lk_console_message "Configuring sudo"
+    FILE=/etc/sudoers.d/${LK_PATH_PREFIX}default-arch
+    lk_install -m 00440 /dev/null "$FILE"
+    lk_file_replace -f "$LK_BASE/share/sudoers.d/default-arch" "$FILE"
 
     if lk_sudo_offer_nopasswd; then
         lk_console_message "Checking root account"
@@ -145,29 +170,40 @@ polkit.addRule(function (action, subject) {
     ###
 
     LK_CONF_OPTION_FILE=/etc/ssh/sshd_config
-    lk_ssh_set_option PasswordAuthentication "no"
+    lk_ssh_set_option PermitRootLogin "no"
+    [ ! -s ~/.ssh/authorized_keys ] ||
+        lk_ssh_set_option PasswordAuthentication "no"
     lk_ssh_set_option AcceptEnv "LANG LC_*"
-    lk_systemctl_enable_now sshd
+    systemctl_enable sshd
 
-    lk_systemctl_enable_now atd
+    if [ -n "${LK_NTP_SERVER:-}" ]; then
+        FILE=/etc/ntp.conf
+        lk_file_keep_original "$FILE"
+        _FILE=$(awk \
+            -v "NTP_SERVER=server $LK_NTP_SERVER iburst" \
+            -f "$LK_BASE/lib/awk/ntp-set-server.awk" \
+            "$FILE")
+        lk_file_replace "$FILE" "$_FILE"
+    fi
+    systemctl_enable ntpd
 
-    lk_systemctl_enable_now cronie
-
-    lk_systemctl_enable_now ntpd
-
-    lk_systemctl_enable_now cups
+    systemctl_enable atd
+    systemctl_enable cronie
+    systemctl_enable cups
 
     if ! lk_is_virtual; then
-        lk_console_message "Checking kernel parameters"
-        lk_file_replace /etc/sysctl.d/90-sysrq.conf "\
-# Enable Alt+SysRq shortcuts (e.g. for REISUB)
-kernel.sysrq = 1"
-        lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
-            sudo sysctl --system
+        lk_console_message "Configuring kernel parameters"
+        if lk_node_service_enabled desktop; then
+            unset LK_FILE_REPLACE_NO_CHANGE
+            lk_file_replace -f "$LK_BASE/share/sysctl.d/sysrq.conf" \
+                /etc/sysctl.d/90-sysrq.conf
+            lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
+                sudo sysctl --system
+        fi
 
         [ ! -f "/etc/bluetooth/main.conf" ] || {
             lk_conf_set_option AutoEnable "true" /etc/bluetooth/main.conf &&
-                lk_systemctl_enable_now bluetooth || exit
+                systemctl_enable bluetooth || exit
         }
 
         LK_CONF_OPTION_FILE=/etc/conf.d/libvirt-guests
@@ -183,17 +219,17 @@ kernel.sysrq = 1"
                 sudo tee "/etc/qemu/bridge.conf" >/dev/null || exit
         }
         lk_is_true MINIMAL || {
-            lk_systemctl_enable_now libvirtd
-            lk_systemctl_enable_now libvirt-guests
+            systemctl_enable libvirtd
+            systemctl_enable libvirt-guests
         }
 
         sudo usermod --append --groups docker "$USER"
-        lk_is_true MINIMAL || lk_systemctl_enable_now docker
+        lk_is_true MINIMAL || systemctl_enable docker
     fi
 
     sudo test -d "/var/lib/mysql/mysql" ||
         sudo mariadb-install-db --user="mysql" --basedir="/usr" --datadir="/var/lib/mysql"
-    lk_is_true MINIMAL || lk_systemctl_enable_now mariadb
+    lk_is_true MINIMAL || systemctl_enable mariadb
 
     LK_CONF_OPTION_FILE=/etc/php/php.ini
     for PHP_EXT in bcmath curl exif gd gettext iconv imap intl mysqli pdo_sqlite soap sqlite3 xmlrpc zip; do
@@ -278,13 +314,15 @@ kernel.sysrq = 1"
         lk_php_set_option "php_admin_flag[log_errors]" "On"
         lk_php_set_option "php_flag[display_errors]" "Off"
         lk_php_set_option "php_flag[display_startup_errors]" "Off"
-        OLD_LOGS=(/var/log/httpd/php-fpm-*.log)
-        if [ ${#OLD_LOGS[@]} -gt 0 ] && [ -z "$(ls -A /var/log/php-fpm)" ]; then
-            lk_systemctl_stop php-fpm
-            sudo mv -v "${OLD_LOGS[@]}" /var/log/php-fpm/
+        if ! is_bootstrap; then
+            OLD_LOGS=(/var/log/httpd/php-fpm-*.log)
+            if [ ${#OLD_LOGS[@]} -gt 0 ] && [ -z "$(ls -A /var/log/php-fpm)" ]; then
+                lk_systemctl_stop php-fpm
+                sudo mv -v "${OLD_LOGS[@]}" /var/log/php-fpm/
+            fi
         fi
     fi
-    lk_is_true MINIMAL || lk_systemctl_enable_now php-fpm
+    lk_is_true MINIMAL || systemctl_enable php-fpm
 
     LK_CONF_OPTION_FILE="/etc/httpd/conf/httpd.conf"
     sudo install -d -m 00755 -o "$USER" -g "$(id -gn)" "/srv/http"
@@ -304,7 +342,9 @@ kernel.sysrq = 1"
     lk_httpd_enable_option LoadModule "vhost_alias_module modules/mod_vhost_alias.so"
     sudo usermod --append --groups "http" "$USER"
     sudo usermod --append --groups "$(id -gn)" "http"
-    lk_is_true MINIMAL || lk_systemctl_enable_now httpd
+    lk_is_true MINIMAL || systemctl_enable httpd
+
+    lk_console_success "Provisioning complete"
 
     exit
 }

@@ -118,6 +118,31 @@ function lk_pac_official_repo_list() {
         grep -E '^(core|extra|community|multilib)$'
 }
 
+# lk_pac_installed PACKAGE...
+#
+# Return true if each PACKAGE is installed.
+function lk_pac_installed() {
+    local EXPLICIT=
+    [ "${1:-}" != -e ] || { EXPLICIT=1 && shift; }
+    [ $# -gt 0 ] || lk_warn "no package" || return
+    pacman -Qq ${EXPLICIT:+-e} "$@" >/dev/null 2>&1
+}
+
+# lk_pac_installed_list [PACKAGE...]
+#
+# Output each currently installed PACKAGE, or list all installed packages.
+function lk_pac_installed_list() {
+    local EXPLICIT=
+    [ "${1:-}" != -e ] || { EXPLICIT=1 && shift; }
+    [ $# -eq 0 ] || {
+        comm -12 \
+            <(lk_pac_installed_list ${EXPLICIT:+-e} | sort -u) \
+            <(lk_echo_args "$@" | sort -u)
+        return
+    }
+    pacman -Qq ${EXPLICIT:+-e} "$@"
+}
+
 function lk_pac_sync() {
     ! lk_is_root && ! lk_can_sudo pacman ||
         lk_is_false LK_PACMAN_SYNC ||
@@ -133,6 +158,9 @@ function lk_pac_groups() {
 }
 
 # lk_pac_available_list [-o] [PACKAGE...]
+#
+# Output the names of all packages available for installation. If -o is set,
+# only output packages from official repositories.
 function lk_pac_available_list() {
     local OFFICIAL=
     [ "${1:-}" != -o ] || { OFFICIAL=1 && shift; }
@@ -156,6 +184,24 @@ function lk_pac_unavailable_list() {
     comm -23 \
         <(lk_echo_args "$@" | sort -u) \
         <(lk_pac_available_list ${OFFICIAL:+-o} | sort -u)
+}
+
+# lk_pac_installed_explicit [PACKAGE...]
+#
+# Output each PACKAGE currently marked as "explicitly installed", or list all
+# explicitly installed packages.
+function lk_pac_installed_explicit() {
+    lk_pac_installed_list -e "$@"
+}
+
+# lk_pac_not_installed_explicit PACKAGE...
+#
+# Output each PACKAGE that isn't currently marked as "explicitly installed".
+function lk_pac_not_installed_explicit() {
+    [ $# -gt 0 ] || lk_warn "no package" || return
+    comm -13 \
+        <(lk_pac_installed_explicit "$@" | sort -u) \
+        <(lk_echo_args "$@" | sort -u)
 }
 
 lk_provide arch

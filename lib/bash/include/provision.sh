@@ -32,22 +32,7 @@ function lk_node_expand_services() {
 # lk_maybe_install [-v] [-m MODE] [-o OWNER] [-g GROUP] SOURCE DEST
 # lk_maybe_install -d [-v] [-m MODE] [-o OWNER] [-g GROUP] DEST
 function lk_maybe_install() {
-    local DEST=${*: -1:1} OWNER GROUP MODE i \
-        ARGS=("$@") LK_ARG_ARRAY=ARGS LK_SUDO VERBOSE=
-    ! i=$(lk_array_search -o ARGS) || OWNER=${ARGS[*]:$((i + 1)):1}
-    ! i=$(lk_array_search -g ARGS) || GROUP=${ARGS[*]:$((i + 1)):1}
-    [ -z "${OWNER:-}${GROUP:-}" ] || LK_SUDO=1
-    if lk_has_arg -d || lk_maybe_sudo test ! -e "$DEST"; then
-        lk_maybe_sudo install "$@"
-    else
-        ! lk_has_arg -v || VERBOSE=1
-        ! i=$(lk_array_search -m ARGS) || MODE=${ARGS[*]:$((i + 1)):1}
-        [ -z "${MODE:-}" ] ||
-            lk_maybe_sudo chmod ${VERBOSE:+-v} "$MODE" "$DEST" || return
-        [ -z "${OWNER:-}${GROUP:-}" ] ||
-            lk_elevate chown ${VERBOSE:+-v} \
-                "${OWNER:-}${GROUP:+:$GROUP}" "$DEST"
-    fi
+    lk_install "$@"
 }
 
 # lk_dir_set_modes DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]...
@@ -991,13 +976,13 @@ function lk_system_memory() {
     local POWER=${1:-3}
     if lk_is_linux; then
         lk_require_output \
-            awk -v"p=$((POWER - 1))" \
+            awk -v "p=$((POWER - 1))" \
             '/^MemTotal\W/{print int($2/1024^p)}' \
             /proc/meminfo
     elif lk_is_macos; then
         sysctl -n hw.memsize |
             lk_require_output \
-                awk -v"p=$POWER" '{print int($1/1024^p)}'
+                awk -v "p=$POWER" '{print int($1/1024^p)}'
     else
         false
     fi
@@ -1010,14 +995,14 @@ function lk_system_memory_free() {
     local POWER=${1:-3}
     if lk_is_linux; then
         lk_require_output \
-            awk -v"p=$((POWER - 1))" \
+            awk -v "p=$((POWER - 1))" \
             '/^MemAvailable\W/{print int($2/1024^p)}' \
             /proc/meminfo
     elif lk_is_macos; then
         vm_stat |
             lk_require_output \
-                awk -v"p=$POWER" \
-                -F"[^0-9]+" \
+                awk -v "p=$POWER" \
+                -F "[^0-9]+" \
                 'NR==1{b=$2;FS=":"} /^Pages free\W/{print int(b*$2/1024^p)}'
     else
         false

@@ -72,13 +72,13 @@ Block devices:
 $(lsblk --output NAME,RM,SIZE,RO,TYPE,FSTYPE,MOUNTPOINT --paths |
     sed 's/^/  /')"
 
-LK_FILE_TAKE_BACKUP=${LK_FILE_TAKE_BACKUP-1}
-
 ROOT_PART=
 BOOT_PART=
 INSTALL_DISK=
 OTHER_OS_PARTITIONS=()
 PAC_REPOS=()
+
+BOOTSTRAP_URL=${BOOTSTRAP_URL:-https://raw.githubusercontent.com/lkrms/lk-platform}
 
 CURL_OPTIONS=(
     --fail
@@ -89,23 +89,24 @@ CURL_OPTIONS=(
     --silent
 )
 
-echo $'\E[1m\E[36m==> \E[0m\E[1mDownloading dependencies\E[0m' >&2
+echo $'\E[1m\E[36m==> \E[0m\E[1mChecking dependencies\E[0m' >&2
 for FILE_PATH in \
     /lib/bash/include/core.sh \
     /lib/bash/include/arch.sh \
     /lib/bash/include/linux.sh \
     /lib/bash/include/provision.sh \
-    /lib/arch/packages.sh \
-    /share/sudoers.d/default; do
+    /lib/arch/packages.sh; do
     FILE=$_DIR/${FILE_PATH##*/}
+    URL=$BOOTSTRAP_URL/$LK_PLATFORM_BRANCH$FILE_PATH
+    MESSAGE=$'\E[1m\E[33m   -> \E[0m{}\E[0m\E[33m '"$URL"$'\E[0m'
     if [ ! -e "$FILE" ]; then
-        FILE_PATH=lk-platform/$LK_PLATFORM_BRANCH$FILE_PATH
-        URL=https://raw.githubusercontent.com/lkrms/$FILE_PATH
-        echo $'\E[1m\E[33m   -> \E[0m'"$URL"$'\E[0m' >&2
+        echo "${MESSAGE/{\}/Downloading:}" >&2
         curl "${CURL_OPTIONS[@]}" --output "$FILE" "$URL" || {
             rm -f "$FILE"
-            lk_die "unable to download from GitHub: $URL"
+            lk_die "unable to download: $URL"
         }
+    else
+        echo "${MESSAGE/{\}/Already downloaded:}" >&2
     fi
     [[ ! $FILE_PATH =~ /include/[a-z0-9_]+\.sh$ ]] ||
         . "$FILE"
@@ -192,11 +193,16 @@ lk_console_blank
 
 function exit_trap() {
     [ ! -d /mnt/boot ] || {
+        set +x
+        unset BASH_XTRACEFD
         exec >&"$STDOUT_FD" 2>&"$STDERR_FD" &&
-            eval "exec $STDOUT_FD>&- $STDERR_FD>&-"
-        local FILE=/var/log/${LK_PATH_PREFIX}install.log
-        in_target install -m 00640 -g adm /dev/null "$FILE" &&
-            cp -v --preserve=timestamps "$LOG_FILE" "/mnt/${FILE#/}"
+            eval "exec $STDOUT_FD>&- $STDERR_FD>&- 4>&-"
+        local LOG FILE
+        for LOG in "$LOG_FILE" "$TRACE_FILE"; do
+            FILE=/var/log/${LK_PATH_PREFIX}${LOG##*/}
+            in_target install -m 00640 -g adm /dev/null "$FILE" &&
+                cp -v --preserve=timestamps "$LOG" "/mnt/${FILE#/}" || break
+        done
     }
     ! lk_is_true PASSWORD_GENERATED ||
         lk_console_log \
@@ -228,7 +234,7 @@ trap exit_trap EXIT
 lk_console_log "Setting up live environment"
 configure_pacman
 if [ -n "$LK_ARCH_MIRROR" ]; then
-    lk_systemctl_stop reflector || true
+    lk_systemctl_disable_now reflector || true
     echo "Server=$LK_ARCH_MIRROR" >/etc/pacman.d/mirrorlist
 fi
 
@@ -246,7 +252,7 @@ if [ -d /mnt/boot ]; then
 fi
 
 lk_console_message "Checking network connection"
-ping -c 1 "$BOOTSTRAP_PING_HOST" || lk_die "no network"
+ping -c 1 "$BOOTSTRAP_PING_HOST" >&"$LOG_FD" || lk_die "no network"
 
 if [ -n "$LK_NTP_SERVER" ]; then
     lk_console_item "Synchronising system time with" "$LK_NTP_SERVER"
@@ -255,11 +261,7 @@ if [ -n "$LK_NTP_SERVER" ]; then
         lk_tty pacman -Sy --noconfirm ntp >&"$LOG_FD" ||
             lk_die "unable to install ntp"
     fi
-    # - `>&"$LOG_FD"`: log the full output
-    # - `tail -n1`: only show the last line (e.g. "ntpd: time slew +0.860030s")
-    # - `>&"$STDOUT_FD"`: don't log the last line twice
-    lk_run_detail ntpd -qgx "$LK_NTP_SERVER" |
-        tee >(tail -n1 >&"$STDOUT_FD") >&"$LOG_FD" ||
+    lk_run_detail ntpd -qgx "$LK_NTP_SERVER" >&"$LOG_FD" ||
         lk_die "unable to sync system time"
 fi
 
@@ -270,10 +272,10 @@ if [ -n "$INSTALL_DISK" ]; then
     lk_confirm "Repartition $INSTALL_DISK? ALL DATA WILL BE LOST." Y
     lk_console_item "Partitioning:" "$INSTALL_DISK"
     lk_run_detail parted --script "$INSTALL_DISK" \
-        mklabel gpt \
-        mkpart fat32 2048s 260MiB \
-        mkpart ext4 260MiB 100% \
-        set 1 boot on
+        "mklabel gpt" \
+        "mkpart fat32 2048s 260MiB" \
+        "mkpart ext4 260MiB 100%" \
+        "set 1 boot on"
     partprobe "$INSTALL_DISK"
     sleep 1
     PARTITIONS=($(_lk_lsblk TYPE,NAME --paths "$INSTALL_DISK" |
@@ -281,14 +283,15 @@ if [ -n "$INSTALL_DISK" ]; then
     [ ${#PARTITIONS[@]} -eq 2 ] &&
         ROOT_PART=${PARTITIONS[1]} &&
         BOOT_PART=${PARTITIONS[0]} || lk_die "invalid partition table"
-    wipefs -a "$ROOT_PART"
-    wipefs -a "$BOOT_PART"
+    lk_run_detail wipefs -a "$ROOT_PART" >&"$LOG_FD"
+    lk_run_detail wipefs -a "$BOOT_PART" >&"$LOG_FD"
     REPARTITIONED=1
 fi
 
-ROOT_TYPE=$(_lk_lsblk FSTYPE "$ROOT_PART") ||
+ROOT_FSTYPE=$(_lk_lsblk FSTYPE "$ROOT_PART") ||
     lk_die "not a partition: $ROOT_PART"
-BOOT_TYPE=($(_lk_lsblk FSTYPE,FSVER,PARTTYPE "$BOOT_PART")) ||
+SH="BOOT_TYPE=($(_lk_lsblk -q FSTYPE,FSVER,PARTTYPE "$BOOT_PART"))" &&
+    eval "$SH" ||
     lk_die "not a partition: $BOOT_PART"
 
 FORMAT_BOOT=1
@@ -305,16 +308,16 @@ else
         lk_die ""
 fi
 
-[ -z "$ROOT_TYPE" ] ||
-    lk_warn "Unexpected $ROOT_TYPE filesystem at $ROOT_PART" || true
+[ -z "$ROOT_FSTYPE" ] ||
+    lk_warn "Unexpected $ROOT_FSTYPE filesystem at $ROOT_PART" || true
 lk_is_true REPARTITIONED ||
     lk_confirm "OK to format $ROOT_PART as ext4?" Y ||
     lk_die ""
 
 lk_console_item "Formatting:" "${FORMAT_BOOT:+$BOOT_PART }$ROOT_PART"
 ! lk_is_true FORMAT_BOOT ||
-    lk_run_detail mkfs.fat -vn ESP -F 32 "$BOOT_PART"
-lk_run_detail mkfs.ext4 -vL root "$ROOT_PART"
+    lk_run_detail mkfs.fat -vn ESP -F 32 "$BOOT_PART" >&"$LOG_FD" 2>&1
+lk_run_detail mkfs.ext4 -vL root "$ROOT_PART" >&"$LOG_FD" 2>&1
 
 if lk_is_virtual; then
     ! lk_block_device_is_ssd "$ROOT_PART" || ROOT_EXTRA=,discard
@@ -350,8 +353,9 @@ genfstab -U /mnt >>"$FILE"
 
 lk_console_message "Configuring sudo"
 
-lk_run install -d -m 00700 /mnt/etc/skel/.ssh
-lk_run install -m 00600 /dev/null /mnt/etc/skel/.ssh/authorized_keys
+FILE=/mnt/etc/skel/.ssh/authorized_keys
+lk_run install -d -m 00700 "${FILE%/*}"
+lk_run install -m 00600 /dev/null "$FILE"
 
 lk_console_item "Creating administrator account:" "$BOOTSTRAP_USERNAME"
 lk_run_detail -1 in_target useradd \
@@ -361,7 +365,7 @@ lk_run_detail -1 in_target useradd \
     --key UMASK=026 \
     "$BOOTSTRAP_USERNAME"
 printf '%s\n' "$BOOTSTRAP_PASSWORD" "$BOOTSTRAP_PASSWORD" |
-    in_target passwd "$BOOTSTRAP_USERNAME"
+    in_target passwd "$BOOTSTRAP_USERNAME" 2>&"$LOG_FD"
 FILE=/mnt/etc/sudoers.d/nopasswd-$BOOTSTRAP_USERNAME
 install -m 00440 /dev/null "$FILE"
 echo "$BOOTSTRAP_USERNAME ALL=(ALL) NOPASSWD:ALL" >"$FILE"
@@ -373,9 +377,10 @@ fi
 
 lk_console_item "Installing lk-platform to" "$LK_BASE"
 in_target install -d -m 02775 -o "$BOOTSTRAP_USERNAME" -g adm "$LK_BASE"
-in_target -u "$BOOTSTRAP_USERNAME" \
-    git clone -b "$LK_PLATFORM_BRANCH" \
-    "https://github.com/lkrms/lk-platform.git" "$LK_BASE"
+(umask 002 &&
+    in_target -u "$BOOTSTRAP_USERNAME" \
+        git clone -b "$LK_PLATFORM_BRANCH" \
+        "https://github.com/lkrms/lk-platform.git" "$LK_BASE")
 FILE=/mnt/etc/default/lk-platform
 install -m 00644 /dev/null "$FILE"
 lk_get_shell_var \
@@ -393,8 +398,11 @@ lk_get_shell_var \
     LK_PLATFORM_BRANCH >"$FILE"
 in_target "$LK_BASE/bin/lk-platform-configure.sh" --no-log
 
-in_target -u "$BOOTSTRAP_USERNAME" \
-    "$LK_BASE/bin/lk-provision-arch.sh"
+PROVISIONED=
+LK_BOOTSTRAP=1 \
+    in_target -u "$BOOTSTRAP_USERNAME" \
+    "$LK_BASE/bin/lk-provision-arch.sh" && PROVISIONED=1 ||
+    lk_console_error "Provisioning failed"
 
 lk_console_message "Installing boot loader"
 i=0
@@ -421,6 +429,13 @@ while :; do
 done
 lk_is_true GRUB_INSTALLED ||
     lk_console_item "To install the boot loader manually:" \
-        "arch-chroot /mnt update-grub --install"
+        $'\n'"arch-chroot /mnt update-grub --install"
+
+lk_is_true PROVISIONED ||
+    lk_console_item "To provision the system manually:" \
+        $'\n'"$(printf \
+            'arch-chroot /mnt sudo -H -u %q %q/bin/lk-provision-arch.sh' \
+            "$BOOTSTRAP_USERNAME" \
+            "$LK_BASE")"
 
 lk_console_success "Bootstrap complete"

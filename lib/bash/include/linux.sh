@@ -87,7 +87,16 @@ function lk_systemctl_disable_now() {
 }
 
 function _lk_lsblk() {
-    lsblk --list --noheadings --output "$@"
+    if [ "${1:-}" = -q ]; then
+        local SH
+        shift
+        SH=$(lsblk --pairs --output "$@" |
+            sed -E \
+                -e "s/[^[:blank:]]+=\"([^\"]*)\"/\$'\1'/g" \
+                -e "s/^/lk_quote_args /") && eval "$SH"
+    else
+        lsblk --list --noheadings --output "$@"
+    fi
 }
 
 # lk_block_device_is TYPE DEVICE_PATH...

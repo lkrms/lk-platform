@@ -419,8 +419,8 @@
         shift
         [ -e "$FILE" ] ||
             install -m 00644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
-        lk_file_replace "$FILE" "$([ $# -eq 0 ] || printf "%s\n" "$@")" \
-            '^[[:blank:]]*($|#)'
+        lk_file_replace -i '^[[:blank:]]*($|#)' "$FILE" \
+            "$([ $# -eq 0 ] || printf "%s\n" "$@")"
     }
 
     LK_FILE_NO_DIFF=1
@@ -433,10 +433,8 @@
         # source LK_BASE/lib/bash/rc.sh at startup when Bash is running as a
         # non-login shell (e.g. in most desktop terminals on Linux)
         FILE=$h/.bashrc
-        [ -e "$FILE" ] || {
-            lk_console_detail "Creating" "$FILE"
+        [ -e "$FILE" ] ||
             install -m 00644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
-        }
         lk_file_replace "$FILE" "$("${RC_AWK[@]}" "$FILE")"
 
         # Create ~/.profile if no profile file exists, then check that ~/.bashrc
@@ -447,12 +445,10 @@
         [ ${#PROFILES[@]} -gt "0" ] || {
             FILE=$h/.profile
             PROFILES+=("$FILE")
-            lk_console_detail "Creating" "$FILE"
             install -m 00644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
         }
         grep -q "\\.bashrc" "${PROFILES[@]}" || {
             FILE=${PROFILES[0]}
-            lk_console_detail "Sourcing ~/.bashrc in" "$FILE"
             lk_file_get_text "$FILE" CONTENT &&
                 lk_file_replace "$FILE" "$CONTENT$_BASHRC"
         }
@@ -464,7 +460,6 @@
             [ -n "$_BYOBU" ]; then
             for FILE in "${PROFILES[@]}"; do
                 grep -q "byobu-launch" "$FILE" || {
-                    lk_console_detail "Adding byobu-launch to" "$FILE"
                     lk_file_get_text "$FILE" CONTENT &&
                         lk_file_replace "$FILE" "$CONTENT$_BYOBU"
                 }
