@@ -1653,6 +1653,7 @@ function lk_console_read() {
 # lk_console_read_secret PROMPT [READ_ARG...]
 function lk_console_read_secret() {
     lk_console_read "$1" "" -s "${@:2}"
+    lk_console_blank
 }
 
 # lk_confirm PROMPT [DEFAULT [READ_ARG...]]

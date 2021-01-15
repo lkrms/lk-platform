@@ -92,12 +92,14 @@ for FILE_PATH in \
     /lib/bash/include/provision.sh \
     /lib/arch/packages.sh; do
     FILE=$_DIR/${FILE_PATH##*/}
-    FILE_PATH=$LK_PLATFORM_BRANCH$FILE_PATH
-    URL=https://raw.githubusercontent.com/lkrms/lk-platform/$FILE_PATH
-    curl "${CURL_OPTIONS[@]}" --output "$FILE" "$URL" || {
-        rm -f "$FILE"
-        lk_die "unable to download from GitHub: $URL"
-    }
+    if [ ! -e "$FILE" ]; then
+        FILE_PATH=$LK_PLATFORM_BRANCH$FILE_PATH
+        URL=https://raw.githubusercontent.com/lkrms/lk-platform/$FILE_PATH
+        curl "${CURL_OPTIONS[@]}" --output "$FILE" "$URL" || {
+            rm -f "$FILE"
+            lk_die "unable to download from GitHub: $URL"
+        }
+    fi
     [[ $FILE == */packages.sh ]] ||
         . "$FILE"
 done
