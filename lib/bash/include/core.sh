@@ -1603,8 +1603,12 @@ $LK_BOLD${2:-${LK_TTY_INPUT_NAME:-/dev/stdin}}$LK_RESET"
 }
 
 function lk_run() {
-    local COMMAND=("$@") ARGS WIDTH
-    while [[ "${1:-}" =~ ^(lk_(elevate|maybe_sudo)|sudo)$ ]]; do
+    local COMMAND ARGS WIDTH SHIFT=
+    [[ ! ${1:-} =~ ^-([0-9]+)$ ]] || { SHIFT=${BASH_REMATCH[1]} && shift; }
+    COMMAND=("$@")
+    [ -z "$SHIFT" ] || shift "$SHIFT"
+    while [[ ${1:-} =~ ^(lk_(elevate|maybe_sudo)|sudo)$ ]] &&
+        [[ ${2:-} != -* ]]; do
         shift
     done
     ARGS=$(lk_quote_args "$@")
@@ -2051,6 +2055,27 @@ function lk_rm() {
         lk_maybe_sudo trash-put "$@"
     else
         lk_maybe_sudo rm "$@"
+    fi
+}
+
+# lk_install [-v] [-m MODE] [-o OWNER] [-g GROUP] SOURCE DEST
+# lk_install -d [-v] [-m MODE] [-o OWNER] [-g GROUP] DEST
+function lk_install() {
+    local DEST=${*: -1:1} OWNER GROUP MODE i \
+        ARGS=("$@") LK_ARG_ARRAY=ARGS LK_SUDO VERBOSE=
+    ! i=$(lk_array_search -o ARGS) || OWNER=${ARGS[*]:$((i + 1)):1}
+    ! i=$(lk_array_search -g ARGS) || GROUP=${ARGS[*]:$((i + 1)):1}
+    [ -z "${OWNER:-}${GROUP:-}" ] || LK_SUDO=1
+    if lk_has_arg -d || lk_maybe_sudo test ! -e "$DEST"; then
+        lk_maybe_sudo install "$@"
+    else
+        ! lk_has_arg -v || VERBOSE=1
+        ! i=$(lk_array_search -m ARGS) || MODE=${ARGS[*]:$((i + 1)):1}
+        [ -z "${MODE:-}" ] ||
+            lk_maybe_sudo chmod ${VERBOSE:+-v} "$MODE" "$DEST" || return
+        [ -z "${OWNER:-}${GROUP:-}" ] ||
+            lk_elevate chown ${VERBOSE:+-v} \
+                "${OWNER:-}${GROUP:+:$GROUP}" "$DEST"
     fi
 }
 

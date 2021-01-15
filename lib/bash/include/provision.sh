@@ -32,21 +32,21 @@ function lk_node_expand_services() {
 # lk_maybe_install [-v] [-m MODE] [-o OWNER] [-g GROUP] SOURCE DEST
 # lk_maybe_install -d [-v] [-m MODE] [-o OWNER] [-g GROUP] DEST
 function lk_maybe_install() {
-    local DEST=${*: -1:1} LK_SUDO=${LK_SUDO:-} OWNER GROUP VERBOSE MODE i \
-        ARGS=("$@") LK_ARG_ARRAY=ARGS
-    ! i=$(lk_array_search "-o" ARGS) || OWNER=${ARGS[*]:$((i + 1)):1}
-    ! i=$(lk_array_search "-g" ARGS) || GROUP=${ARGS[*]:$((i + 1)):1}
+    local DEST=${*: -1:1} OWNER GROUP MODE i \
+        ARGS=("$@") LK_ARG_ARRAY=ARGS LK_SUDO VERBOSE=
+    ! i=$(lk_array_search -o ARGS) || OWNER=${ARGS[*]:$((i + 1)):1}
+    ! i=$(lk_array_search -g ARGS) || GROUP=${ARGS[*]:$((i + 1)):1}
     [ -z "${OWNER:-}${GROUP:-}" ] || LK_SUDO=1
-    if lk_has_arg "-d" || lk_maybe_sudo test ! -e "$DEST"; then
+    if lk_has_arg -d || lk_maybe_sudo test ! -e "$DEST"; then
         lk_maybe_sudo install "$@"
     else
-        ! lk_has_arg "-v" || VERBOSE=1
-        ! i=$(lk_array_search "-m" ARGS) || MODE=${ARGS[*]:$((i + 1)):1}
+        ! lk_has_arg -v || VERBOSE=1
+        ! i=$(lk_array_search -m ARGS) || MODE=${ARGS[*]:$((i + 1)):1}
         [ -z "${MODE:-}" ] ||
-            lk_maybe_sudo chmod ${VERBOSE+-v} "$MODE" "$DEST" || return
+            lk_maybe_sudo chmod ${VERBOSE:+-v} "$MODE" "$DEST" || return
         [ -z "${OWNER:-}${GROUP:-}" ] ||
-            lk_elevate chown ${VERBOSE+-v} \
-                "${OWNER:-}${GROUP:+:$GROUP}" "$DEST" || return
+            lk_elevate chown ${VERBOSE:+-v} \
+                "${OWNER:-}${GROUP:+:$GROUP}" "$DEST"
     fi
 }
 

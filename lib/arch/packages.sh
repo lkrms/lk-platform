@@ -311,7 +311,7 @@ PAC_REJECT_REGEX=$(lk_regex_implode ${PAC_REJECT[@]+"${PAC_REJECT[@]}"})
 
 PAC_REPOS=($(lk_echo_array PAC_REPOS | sort -u))
 [ ${#PAC_REPOS[@]} -eq 0 ] ||
-    lk_pac_add_repo "${PAC_REPOS[@]}"
+    lk_arch_add_repo "${PAC_REPOS[@]}"
 
 lk_pac_sync
 

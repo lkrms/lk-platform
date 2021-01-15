@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2001,SC2015,SC2016,SC2034,SC2124,SC2206,SC2207
+# shellcheck disable=SC1090,SC2001,SC2015,SC2016,SC2034,SC2086,SC2124,SC2206,SC2207
 
 # To install Arch Linux using the script below:
 # 1. boot from an Arch Linux live CD
@@ -66,8 +66,8 @@ $(lsblk --output NAME,RM,SIZE,RO,TYPE,FSTYPE,MOUNTPOINT --paths |
 
 LK_FILE_TAKE_BACKUP=${LK_FILE_TAKE_BACKUP-1}
 
-ROOT_PARTITION=
-BOOT_PARTITION=
+ROOT_PART=
+BOOT_PART=
 INSTALL_DISK=
 OTHER_OS_PARTITIONS=()
 PAC_REPOS=()
@@ -139,8 +139,8 @@ case $# in
 3)
     lk_block_device_is part "${@:1:2}" ||
         lk_warn "invalid partitions: ${*:1:2}" || lk_usage
-    ROOT_PARTITION=$1
-    BOOT_PARTITION=$2
+    ROOT_PART=$1
+    BOOT_PART=$2
     ;;
 2)
     lk_block_device_is disk "$1" ||
@@ -162,7 +162,7 @@ if [ -z "$BOOTSTRAP_PASSWORD" ] && lk_no_input; then
     BOOTSTRAP_PASSWORD=$(lk_random_password 7)
     PASSWORD_GENERATED=1
     lk_console_detail "Password:" "$BOOTSTRAP_PASSWORD"
-    lk_console_warning "The password above will be repeated when ${0##*/} exits"
+    lk_console_log "The password above will be repeated when ${0##*/} exits"
 fi
 while [ -z "$BOOTSTRAP_PASSWORD" ]; do
     BOOTSTRAP_PASSWORD=$(lk_console_read_secret \
@@ -178,6 +178,8 @@ while [ -z "$BOOTSTRAP_PASSWORD" ]; do
     }
     break
 done
+
+lk_console_blank
 
 function exit_trap() {
     [ ! -d /mnt/boot ] || {
@@ -199,9 +201,9 @@ function in_target() {
 }
 
 function configure_pacman() {
-    lk_pac_configure
+    lk_arch_configure_pacman
     [ ${#PAC_REPOS[@]} -eq 0 ] ||
-        lk_pac_add_repo "${PAC_REPOS[@]}"
+        lk_arch_add_repo "${PAC_REPOS[@]}"
 }
 
 LOG_OUT_FD=$(lk_next_fd)
@@ -212,7 +214,7 @@ LOG_FILE=$_DIR/install.$(lk_timestamp).log
 exec > >(tee >(lk_log >>"$LOG_FILE")) 2>&1
 trap exit_trap EXIT
 
-lk_console_message "Setting up live environment"
+lk_console_log "Setting up live environment"
 configure_pacman
 if [ -n "$LK_ARCH_MIRROR" ]; then
     lk_systemctl_stop reflector || true
@@ -232,25 +234,27 @@ if [ -d /mnt/boot ]; then
     umount /mnt
 fi
 
-lk_console_detail "Checking network connection"
+lk_console_message "Checking network connection"
 ping -c 1 "$BOOTSTRAP_PING_HOST" || lk_die "no network"
 
 if [ -n "$LK_NTP_SERVER" ]; then
+    lk_console_item "Synchronising system time with" "$LK_NTP_SERVER"
     if ! lk_command_exists ntpd; then
-        lk_console_detail "Installing ntpd"
-        pacman -Sy --noconfirm ntp >&"$LOG_OUT_FD" 2>&"$LOG_ERR_FD" ||
-            lk_die "unable to install ntpd"
+        lk_console_detail "Installing ntp"
+        lk_tty pacman -Sy --noconfirm ntp ||
+            lk_die "unable to install ntp"
     fi
-    lk_console_detail "Synchronising system time with" "$LK_NTP_SERVER"
     ntpd -qgx "$LK_NTP_SERVER" ||
         lk_die "unable to sync system time"
 fi
 
+lk_console_blank
+lk_console_log "Checking disk partitions"
 REPARTITIONED=
 if [ -n "$INSTALL_DISK" ]; then
     lk_confirm "Repartition $INSTALL_DISK? ALL DATA WILL BE LOST." Y
-    lk_console_message "Partitioning $INSTALL_DISK"
-    parted --script "$INSTALL_DISK" \
+    lk_console_item "Partitioning:" "$INSTALL_DISK"
+    lk_run_detail parted --script "$INSTALL_DISK" \
         mklabel gpt \
         mkpart fat32 2048s 260MiB \
         mkpart ext4 260MiB 100% \
@@ -260,194 +264,100 @@ if [ -n "$INSTALL_DISK" ]; then
     PARTITIONS=($(_lk_lsblk TYPE,NAME --paths "$INSTALL_DISK" |
         awk '$1=="part"{print $2}'))
     [ ${#PARTITIONS[@]} -eq 2 ] &&
-        ROOT_PARTITION=${PARTITIONS[1]} &&
-        BOOT_PARTITION=${PARTITIONS[0]} || lk_die "invalid partition table"
-    wipefs -a "$ROOT_PARTITION"
-    wipefs -a "$BOOT_PARTITION"
+        ROOT_PART=${PARTITIONS[1]} &&
+        BOOT_PART=${PARTITIONS[0]} || lk_die "invalid partition table"
+    wipefs -a "$ROOT_PART"
+    wipefs -a "$BOOT_PART"
     REPARTITIONED=1
 fi
 
-ROOT_PARTITION_TYPE="$(_lk_lsblk FSTYPE "$ROOT_PARTITION")" || lk_die "no block device at $ROOT_PARTITION"
-BOOT_PARTITION_TYPE="$(_lk_lsblk FSTYPE "$BOOT_PARTITION")" || lk_die "no block device at $BOOT_PARTITION"
+ROOT_TYPE=$(_lk_lsblk FSTYPE "$ROOT_PART") ||
+    lk_die "not a partition: $ROOT_PART"
+BOOT_TYPE=($(_lk_lsblk FSTYPE,FSVER,PARTTYPE "$BOOT_PART")) ||
+    lk_die "not a partition: $BOOT_PART"
 
-KEEP_BOOT_PARTITION=0
-case "$BOOT_PARTITION_TYPE" in
-vfat)
-    ! lk_confirm "$BOOT_PARTITION already has a vfat filesystem. Leave it as-is?" || KEEP_BOOT_PARTITION=1
-    ;;&
-
-vfat | "")
-    if lk_is_false KEEP_BOOT_PARTITION; then
-        lk_is_true REPARTITIONED ||
-            lk_confirm "OK to format $BOOT_PARTITION as FAT32?"
-
-        lk_console_message "Formatting $BOOT_PARTITION"
-        mkfs.fat -vn ESP -F 32 "$BOOT_PARTITION"
-    fi
-    ;;
-
-*)
-    lk_die "unexpected filesystem at $BOOT_PARTITION: $BOOT_PARTITION_TYPE"
-    ;;
-
-esac
-
-[ -z "$ROOT_PARTITION_TYPE" ] ||
-    lk_console_warning "Unexpected filesystem at $ROOT_PARTITION: $ROOT_PARTITION_TYPE"
-
-lk_is_true REPARTITIONED ||
-    lk_confirm "OK to format $ROOT_PARTITION as ext4?" || exit
-
-lk_console_message "Formatting $ROOT_PARTITION"
-mkfs.ext4 -vL root "$ROOT_PARTITION"
-
-lk_console_message "Mounting partitions"
-if lk_is_virtual; then
-    ! lk_block_device_is_ssd "$ROOT_PARTITION" || ROOT_OPTION_EXTRA=",discard"
-    ! lk_block_device_is_ssd "$BOOT_PARTITION" || BOOT_OPTION_EXTRA=",discard"
+FORMAT_BOOT=1
+if [ "${BOOT_TYPE[0]}" = vfat ] &&
+    [ "${BOOT_TYPE[2]}" = c12a7328-f81f-11d2-ba4b-00a0c93ec93b ]; then
+    lk_console_message \
+        "ESP at $BOOT_PART already formatted as ${BOOT_TYPE[1]}; leaving as-is"
+    FORMAT_BOOT=
+else
+    [ -z "${BOOT_TYPE[0]}" ] ||
+        lk_warn "Unexpected ${BOOT_TYPE[0]} filesystem at $BOOT_PART" || true
+    lk_is_true REPARTITIONED ||
+        lk_confirm "OK to format ESP at $BOOT_PART as fat32?" Y ||
+        lk_die ""
 fi
-mount -o "$BOOTSTRAP_MOUNT_OPTIONS${ROOT_OPTION_EXTRA:-}" "$ROOT_PARTITION" /mnt &&
-    mkdir /mnt/boot &&
-    mount -o "$BOOTSTRAP_MOUNT_OPTIONS${BOOT_OPTION_EXTRA:-}" "$BOOT_PARTITION" /mnt/boot || exit
 
-lk_is_false KEEP_BOOT_PARTITION || {
-    lk_console_message "Checking for files from previous installations in boot filesystem"
+[ -z "$ROOT_TYPE" ] ||
+    lk_warn "Unexpected $ROOT_TYPE filesystem at $ROOT_PART" || true
+lk_is_true REPARTITIONED ||
+    lk_confirm "OK to format $ROOT_PART as ext4?" Y ||
+    lk_die ""
+
+lk_console_item "Formatting:" "${FORMAT_BOOT:+$BOOT_PART }$ROOT_PART"
+! lk_is_true FORMAT_BOOT ||
+    lk_run_detail mkfs.fat -vn ESP -F 32 "$BOOT_PART"
+lk_run_detail mkfs.ext4 -vL root "$ROOT_PART"
+
+if lk_is_virtual; then
+    ! lk_block_device_is_ssd "$ROOT_PART" || ROOT_EXTRA=,discard
+    ! lk_block_device_is_ssd "$BOOT_PART" || BOOT_EXTRA=,discard
+fi
+lk_run_detail mount \
+    -o "$BOOTSTRAP_MOUNT_OPTIONS${ROOT_EXTRA:-}" \
+    "$ROOT_PART" /mnt
+install -d -m 00755 /mnt/boot
+lk_run_detail mount \
+    -o "$BOOTSTRAP_MOUNT_OPTIONS${BOOT_EXTRA:-}" \
+    "$BOOT_PART" /mnt/boot
+
+if ! lk_is_true FORMAT_BOOT; then
+    lk_console_message "Removing files from previous installations in ESP"
     rm -Rfv /mnt/boot/syslinux /mnt/boot/intel-ucode.img
-}
+fi
 
-lk_console_message "Installing system"
-pacstrap /mnt "${PAC_PACKAGES[@]}" >&"$LOG_OUT_FD" 2>&"$LOG_ERR_FD"
+lk_console_blank
+lk_console_log "Installing system"
+lk_tty pacstrap /mnt "${PAC_PACKAGES[@]}"
 
-lk_console_message "Setting up installed system"
-
+lk_console_blank
+lk_console_log "Setting up installed system"
 LK_ARCH_CHROOT_DIR=/mnt
-
-lk_console_detail "Generating fstab"
-lk_file_keep_original "/mnt/etc/fstab"
-genfstab -U /mnt >>"/mnt/etc/fstab"
-
 configure_pacman
 
-if [ -n "$LK_NTP_SERVER" ]; then
-    lk_console_detail "Configuring NTP"
-    FILE="/mnt/etc/ntp.conf"
-    lk_file_keep_original "$FILE"
-    sed -Ei 's/^(server|pool)\b/#&/' "$FILE"
-    echo "server $LK_NTP_SERVER iburst" >>"$FILE"
+lk_console_message "Generating /etc/fstab"
+FILE=/mnt/etc/fstab
+lk_maybe_install -m 00644 /dev/null "$FILE"
+lk_file_keep_original "$FILE"
+genfstab -U /mnt >>"$FILE"
+
+lk_run install -d -m 00700 /mnt/etc/skel/.ssh
+lk_run install -m 00600 /mnt/etc/skel/.ssh/authorized_keys
+
+lk_console_item "Creating administrator account:" "$BOOTSTRAP_USERNAME"
+lk_run_detail -1 in_target useradd \
+    --groups adm,wheel \
+    --create-home \
+    --shell /bin/bash \
+    --key UMASK=026 \
+    "$BOOTSTRAP_USERNAME"
+printf '%s\n' "$BOOTSTRAP_PASSWORD" "$BOOTSTRAP_PASSWORD" |
+    in_target passwd "$BOOTSTRAP_USERNAME"
+if [ -n "$BOOTSTRAP_KEY" ]; then
+    echo "$BOOTSTRAP_KEY" |
+        in_target -u "$BOOTSTRAP_USERNAME" \
+            bash -c "cat >~/.ssh/authorized_keys"
 fi
 
-lk_console_detail "Setting the time zone"
-ln -sfv "/usr/share/zoneinfo/$LK_NODE_TIMEZONE" "/mnt/etc/localtime"
-
-lk_console_detail "Configuring hardware clock"
-in_target hwclock --systohc
-
-LOCALES=($LK_NODE_LOCALES en_US.UTF-8)
-lk_console_detail "Configuring locales"
-lk_file_keep_original "/mnt/etc/locale.gen"
-for _LOCALE in $(printf '%s\n' "${LOCALES[@]}" | sort -u); do
-    sed -Ei "s/^$S*#$S*($(lk_escape_ere "$_LOCALE")$S+)/\\1/" "/mnt/etc/locale.gen"
-done
-in_target locale-gen
-
-lk_file_keep_original "/mnt/etc/locale.conf"
-cat <<EOF >"/mnt/etc/locale.conf"
-LANG=${LOCALES[0]}${LK_NODE_LANGUAGE:+
-LANGUAGE=$LK_NODE_LANGUAGE}
-EOF
-
-lk_console_detail "Setting hostname"
-lk_file_keep_original "/mnt/etc/hostname"
-echo "$LK_NODE_HOSTNAME" >"/mnt/etc/hostname"
-
-lk_console_detail "Configuring hosts"
-lk_file_keep_original "/mnt/etc/hosts"
-cat <<EOF >>"/mnt/etc/hosts"
-127.0.0.1 localhost
-::1 localhost
-127.0.1.1 $LK_NODE_HOSTNAME.localdomain $LK_NODE_HOSTNAME
-EOF
-
-if [ ${#PAC_DESKTOP_PACKAGES[@]} -eq 0 ]; then
-    in_target systemctl set-default multi-user.target
-else
-    in_target systemctl set-default graphical.target
-
-    lk_console_detail "Enabling LightDM"
-    in_target systemctl enable lightdm.service
-
-    install -v -d -m 00755 "/mnt/etc/skel/.config/xfce4"
-    ln -sv "$LK_BASE/etc/xfce4/xinitrc" \
-        "/mnt/etc/skel/.config/xfce4/xinitrc"
-    in_target bash -c \
-        '! XTERM_PATH="$(type -P xfce4-terminal)" || ln -sv "$XTERM_PATH" "/usr/local/bin/xterm"'
-fi
-
-lk_console_detail "Setting default umask"
-cat <<"EOF" >"/mnt/etc/profile.d/Z90-${LK_PATH_PREFIX}umask.sh"
-#!/bin/sh
-
-if [ "$(id -u)" -ne 0 ]; then
-    umask 002
-else
-    umask 022
-fi
-EOF
-
-lk_console_detail "Sourcing $LK_BASE/lib/bash/rc.sh in ~/.bashrc for all users"
-cat <<EOF >>"/mnt/etc/skel/.bashrc"
-
-# Added by bootstrap.sh at $(lk_date_log)
-if [ -f '$LK_BASE/lib/bash/rc.sh' ]; then
-    . '$LK_BASE/lib/bash/rc.sh'
-fi
-EOF
-install -v -m 00600 "/mnt/etc/skel/.bashrc" "/mnt/root/.bashrc"
-
-lk_console_detail "Configuring SSH defaults for all users"
-install -v -d -m 00700 "/mnt/etc/skel/.ssh"
-install -v -m 00600 /dev/null "/mnt/etc/skel/.ssh/authorized_keys"
-install -v -m 00600 /dev/null "/mnt/etc/skel/.ssh/config"
-cat <<EOF >"/mnt/etc/skel/.ssh/config"
-Host                    *
-IdentitiesOnly          yes
-ForwardAgent            yes
-StrictHostKeyChecking   accept-new
-ControlMaster           auto
-ControlPath             /tmp/ssh_%h-%p-%r-%l
-ControlPersist          120
-SendEnv                 LANG LC_*
-ServerAliveInterval     30
-EOF
-
-lk_console_detail "Creating superuser:" "$BOOTSTRAP_USERNAME"
-in_target useradd -m "$BOOTSTRAP_USERNAME" -G adm,wheel -s /bin/bash
-echo -e "$BOOTSTRAP_PASSWORD\n$BOOTSTRAP_PASSWORD" | in_target passwd "$BOOTSTRAP_USERNAME"
-[ -z "$BOOTSTRAP_KEY" ] || {
-    echo "$BOOTSTRAP_KEY" | in_target sudo -H -u "$BOOTSTRAP_USERNAME" \
-        bash -c 'cat >"$HOME/.ssh/authorized_keys"'
-    sed -Ei -e "s/^#?(PasswordAuthentication|PermitRootLogin)\b.*\$/\1 no/" \
-        "/mnt/etc/ssh/sshd_config"
-    in_target systemctl enable sshd.service
-}
-
-lk_console_detail "Configuring sudo"
-FILE=/mnt/etc/sudoers.d/${LK_PATH_PREFIX}default-arch
-install -v -m 00440 /dev/null "$FILE"
-cat <<EOF >"$FILE"
-%wheel ALL=(ALL) ALL
-%wheel ALL=(ALL) NOPASSWD:/usr/bin/pacman
-EOF
-
-lk_console_detail "Disabling root password"
-in_target passwd -l root
-
-lk_console_detail "Installing lk-platform to" "$LK_BASE"
-in_target install -v -d -m 02775 -o "$BOOTSTRAP_USERNAME" -g "adm" \
-    "$LK_BASE"
-in_target sudo -H -u "$BOOTSTRAP_USERNAME" \
+lk_console_item "Installing lk-platform to" "$LK_BASE"
+in_target install -d -m 02775 -o "$BOOTSTRAP_USERNAME" -g adm "$LK_BASE"
+in_target -u "$BOOTSTRAP_USERNAME" \
     git clone -b "$LK_PLATFORM_BRANCH" \
     "https://github.com/lkrms/lk-platform.git" "$LK_BASE"
+FILE=/mnt/etc/default/lk-platform
+install -m 00644 /dev/null "$FILE"
 lk_get_shell_var \
     LK_BASE \
     LK_PATH_PREFIX \
@@ -460,115 +370,37 @@ lk_get_shell_var \
     LK_NTP_SERVER \
     LK_ARCH_MIRROR \
     LK_ARCH_REPOS \
-    LK_PLATFORM_BRANCH >"/mnt/etc/default/lk-platform"
+    LK_PLATFORM_BRANCH >"$FILE"
 in_target "$LK_BASE/bin/lk-platform-configure.sh" --no-log
 
-if lk_is_qemu; then
-    lk_console_detail "Enabling QEMU guest agent"
-    in_target systemctl enable qemu-ga.service
-fi
+in_target -u "$BOOTSTRAP_USERNAME" \
+    "$LK_BASE/bin/lk-provision-arch.sh"
 
-lk_console_detail "Enabling NetworkManager"
-in_target systemctl enable NetworkManager.service
-
-if ! lk_is_virtual; then
-    lk_console_detail "Configuring TLP"
-    in_target systemctl enable tlp.service
-    in_target systemctl enable NetworkManager-dispatcher.service
-    in_target systemctl mask systemd-rfkill.service
-    in_target systemctl mask systemd-rfkill.socket
-    cat <<EOF >"/mnt/etc/tlp.d/90-${LK_PATH_PREFIX}defaults.conf"
-# Increase performance (and energy consumption, of course)
-CPU_ENERGY_PERF_POLICY_ON_AC=performance
-CPU_ENERGY_PERF_POLICY_ON_BAT=balance_performance
-
-# Exclude RTL8153 (r8152) from autosuspend (common USB / USB-C NIC)
-USB_BLACKLIST="0bda:8153"
-
-# Allow phones to charge
-USB_BLACKLIST_PHONE=1
-EOF
-
-    if { lk_block_device_is_ssd "$ROOT_PARTITION" || lk_block_device_is_ssd "$BOOT_PARTITION"; }; then
-        lk_console_detail "Enabling fstrim (TRIM support detected)"
-        # replace the default timer
-        cat <<EOF >"/mnt/etc/systemd/system/fstrim.timer"
-[Unit]
-Description=Discard unused blocks 30 seconds after booting, then weekly
-
-[Timer]
-OnBootSec=30
-OnActiveSec=1w
-AccuracySec=1h
-
-[Install]
-WantedBy=timers.target
-EOF
-        in_target systemctl enable fstrim.timer
-    fi
-fi
-
-if [ ${#AUR_PACKAGES[@]} -gt 0 ]; then
-    lk_console_message "Installing AUR packages"
-    AUR_SCRIPT="{ $YAY_SCRIPT; } &&
-    yay -Sy --aur --needed --noconfirm ${AUR_PACKAGES[*]}"
-    in_target sudo -H -u "$BOOTSTRAP_USERNAME" \
-        bash -c "$AUR_SCRIPT" >&"$LOG_OUT_FD" 2>&"$LOG_ERR_FD"
-fi
-
-in_target bash -c \
-    '! VI_PATH="$(type -P vim)" || ln -sv "$VI_PATH" "/usr/local/bin/vi"'
-
-i=0
-for PARTITION in ${OTHER_OS_PARTITIONS[@]+"${OTHER_OS_PARTITIONS[@]}"}; do
-    MOUNT_DIR="/mnt/mnt/temp$i"
-    mkdir -p "$MOUNT_DIR" &&
-        mount "$PARTITION" "$MOUNT_DIR" || lk_console_warning "unable to mount partition $PARTITION"
-    ((++i))
-done
-
-! lk_is_true KEEP_BOOT_PARTITION || {
-    lk_console_warning "\
-If installing to a boot partition created by Windows, filesystem damage
-may cause efibootmgr to fail with 'Input/output error'"
-    ! lk_confirm "Run 'dosfsck -a $BOOT_PARTITION' before installing boot loader?" Y || {
-        lk_console_message "Running filesystem check on partition:" "$BOOT_PARTITION"
-        umount "$BOOT_PARTITION" &&
-            {
-                EXIT_STATUS=0
-                dosfsck -a "$BOOT_PARTITION" || EXIT_STATUS="$?"
-                lk_console_detail "dosfsck exit status:" "$EXIT_STATUS"
-            } &&
-            mount -o "$BOOTSTRAP_MOUNT_OPTIONS${BOOT_OPTION_EXTRA:-}" "$BOOT_PARTITION" /mnt/boot || exit
-    }
-}
 lk_console_message "Installing boot loader"
-lk_file_keep_original "/mnt/etc/default/grub"
-sed -Ei -e 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=saved/' \
-    -e 's/^#?GRUB_SAVEDEFAULT=.*/GRUB_SAVEDEFAULT=true/' \
-    -e "s/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT=\"$LK_GRUB_CMDLINE\"/" \
-    /mnt/etc/default/grub
-install -v -d -m 00755 "/mnt/usr/local/bin"
-install -v -m 00755 /dev/null "/mnt/usr/local/bin/update-grub"
-cat <<EOF >"/mnt/usr/local/bin/update-grub"
-#!/bin/bash
-
-set -euo pipefail
-
-[[ ! "\${1:-}" =~ ^(-i|--install)\$ ]] ||
-    grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
-grub-mkconfig -o /boot/grub/grub.cfg
-EOF
+i=0
+for PART in ${OTHER_OS_PARTITIONS[@]+"${OTHER_OS_PARTITIONS[@]}"}; do
+    DIR=/mnt/mnt/temp$i
+    ((i++)) || lk_console_detail "Mounting other operating systems"
+    install -d -m 00755 "$DIR" &&
+        mount "$PART" "$DIR" ||
+        lk_warn "unable to mount at $DIR: $PART" ||
+        true
+done
+lk_arch_configure_grub
+GRUB_INSTALLED=
+i=0
 while :; do
-    in_target update-grub --install &&
-        GRUB_INSTALLED=1 &&
-        break
-    lk_console_message "Boot loader installation failed (exit status $?)"
+    ((++i))
+    in_target update-grub --install && GRUB_INSTALLED=1 && break
+    lk_console_error "Boot loader installation failed"
+    ! lk_no_input || { [ "$i" -lt 2 ] &&
+        { lk_console_detail "Trying again in 5 seconds" &&
+            sleep 5 &&
+            continue; } || break; }
     lk_confirm "Try again?" Y || break
 done
+lk_is_true GRUB_INSTALLED ||
+    lk_console_item "To install the boot loader manually:" \
+        "arch-chroot /mnt update-grub --install"
 
-if ! lk_is_true GRUB_INSTALLED; then
-    lk_console_message "To install the boot loader manually:" \
-        'arch-chroot /mnt update-grub --install'
-fi
 lk_console_success "Bootstrap complete"

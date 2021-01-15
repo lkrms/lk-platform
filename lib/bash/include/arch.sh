@@ -23,17 +23,17 @@ function lk_arch_path() {
     echo "${LK_ARCH_CHROOT_DIR:+${LK_ARCH_CHROOT_DIR%/}}$1"
 }
 
-function lk_pac_configure() {
+function lk_arch_configure_pacman() {
     local FILE LK_SUDO=1
     FILE=$(lk_arch_path /etc/pacman.conf)
-    lk_console_item "Checking" "$FILE"
+    lk_console_item "Checking pacman options in" "$FILE"
     lk_file_keep_original "$FILE" &&
         # Leading and trailing whitespace in pacman.conf is ignored
         lk_file_replace "$FILE" \
             "$(sed -E "s/^$S*#$S*(Color|TotalDownload)$S*\$/\1/" "$FILE")"
 }
 
-# lk_pac_add_repo REPO...
+# lk_arch_add_repo REPO...
 #
 # Add each REPO to /etc/pacman.conf unless it has already been added. REPO is a
 # pipe-separated list of values in this order (trailing pipes are optional):
@@ -44,12 +44,12 @@ function lk_pac_configure() {
 # - SIG_LEVEL (optional)
 #
 # Examples (line breaks added for legibility):
-# - lk_pac_add_repo "aur|file:///srv/repo/aur|||Optional TrustAll"
-# - lk_pac_add_repo "sublime-text|
+# - lk_arch_add_repo "aur|file:///srv/repo/aur|||Optional TrustAll"
+# - lk_arch_add_repo "sublime-text|
 #   https://download.sublimetext.com/arch/stable/\$arch|
 #   https://download.sublimetext.com/sublimehq-pub.gpg|
 #   8A8F901A"
-function lk_pac_add_repo() {
+function lk_arch_add_repo() {
     local IFS='|' FILE SH i r REPO SERVER KEY_URL KEY_ID SIG_LEVEL _FILE \
         LK_SUDO=1
     [ $# -gt 0 ] || lk_warn "no repo" || return
@@ -91,6 +91,32 @@ Server = $SERVER"
     done
 }
 
+function lk_arch_configure_grub() {
+    local FILE _FILE LK_GRUB_CMDLINE LK_SUDO=1
+    LK_GRUB_CMDLINE=${LK_GRUB_CMDLINE+"$(lk_escape_ere_replace "$(lk_double_quote "$LK_GRUB_CMDLINE")")"}
+    LK_GRUB_CMDLINE=${LK_GRUB_CMDLINE:-\\1}
+    FILE=$(lk_arch_path /etc/default/grub)
+    _FILE=$(sed -E \
+        -e 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=saved/' \
+        -e 's/^#?GRUB_SAVEDEFAULT=.*/GRUB_SAVEDEFAULT=true/' \
+        -e "s/^GRUB_CMDLINE_LINUX_DEFAULT=(.*)/GRUB_CMDLINE_LINUX_DEFAULT=$LK_GRUB_CMDLINE/" \
+        "$FILE") &&
+        lk_file_keep_original "$FILE" &&
+        lk_file_replace "$FILE" "$_FILE" || lk_warn "unable to update $FILE" || return
+    FILE=$(lk_arch_path /usr/local/bin/update-grub)
+    _FILE="\
+#!/bin/bash
+
+set -euo pipefail
+
+[[ ! \${1:-} =~ ^(-i|--install)\$ ]] ||
+    grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
+grub-mkconfig -o /boot/grub/grub.cfg"
+    lk_maybe_install -d -m 00755 "${FILE%/*}" &&
+        lk_maybe_install -m 00755 /dev/null "$FILE" &&
+        lk_file_replace "$FILE" "$_FILE" || lk_warn "unable to update $FILE" || return
+}
+
 function lk_pac_official_repo_list() {
     pacman-conf --repo-list |
         grep -E '^(core|extra|community|multilib)$'
@@ -100,8 +126,8 @@ function lk_pac_sync() {
     ! lk_is_root && ! lk_can_sudo pacman ||
         lk_is_false LK_PACMAN_SYNC ||
         { lk_console_message "Refreshing package databases" &&
-            lk_run_detail lk_elevate pacman -Syy >/dev/null &&
-            lk_run_detail lk_elevate pacman -Fyy >/dev/null &&
+            lk_run_detail lk_elevate pacman -Sy >/dev/null &&
+            lk_run_detail lk_elevate pacman -Fy >/dev/null &&
             LK_PACMAN_SYNC=0; }
 }
 
