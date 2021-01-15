@@ -66,7 +66,7 @@ function exit_trap() {
         SUDOERS=$(cat "$LK_BASE/share/sudoers.d/default")
         ${CONTRIB_PACKAGES_FILE:+. "$LK_BASE/$CONTRIB_PACKAGES_FILE"}
     else
-        echo "Downloading dependencies" >&2
+        echo $'\E[1m\E[36m==> \E[0m\E[1mDownloading dependencies\E[0m' >&2
         for FILE_PATH in \
             ${CONTRIB_PACKAGES_FILE:+"/$CONTRIB_PACKAGES_FILE"} \
             /lib/bash/include/core.sh \
@@ -78,6 +78,7 @@ function exit_trap() {
             if [ ! -e "$FILE" ]; then
                 FILE_PATH=lk-platform/$LK_PLATFORM_BRANCH$FILE_PATH
                 URL=https://raw.githubusercontent.com/lkrms/$FILE_PATH
+                echo $'\E[1m\E[33m   -> \E[0m'"$URL"$'\E[0m' >&2
                 curl "${CURL_OPTIONS[@]}" --output "$FILE" "$URL" || {
                     rm -f "$FILE"
                     lk_die "unable to download from GitHub: $URL"

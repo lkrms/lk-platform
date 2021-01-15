@@ -309,7 +309,9 @@ fi
 PAC_REJECT=($(lk_echo_array PAC_REJECT | sort -u))
 PAC_REJECT_REGEX=$(lk_regex_implode ${PAC_REJECT[@]+"${PAC_REJECT[@]}"})
 
+IFS=$'\n'
 PAC_REPOS=($(lk_echo_array PAC_REPOS | sort -u))
+unset IFS
 [ ${#PAC_REPOS[@]} -eq 0 ] ||
     lk_arch_add_repo "${PAC_REPOS[@]}"
 

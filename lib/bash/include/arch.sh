@@ -3,16 +3,12 @@
 # shellcheck disable=SC2016,SC2034,SC2206,SC2120,SC2086
 
 function lk_arch_chroot() {
-    local ARGS
     [ "${1:-}" != -u ] || {
         [ $# -ge 3 ] || lk_warn "invalid arguments" || return
-        ARGS=(-u "$2")
-        shift 2
+        set -- sudo -H "$@"
     }
     if [ -n "${LK_ARCH_CHROOT_DIR:-}" ]; then
-        arch-chroot ${ARGS[@]+"${ARGS[@]}"} "$LK_ARCH_CHROOT_DIR" "$@"
-    elif [ -n "${ARGS+1}" ]; then
-        sudo "${ARGS[@]}" "$@"
+        arch-chroot "$LK_ARCH_CHROOT_DIR" "$@"
     else
         lk_elevate "$@"
     fi
@@ -73,7 +69,7 @@ function lk_arch_add_repo() {
         KEY_URL=${r[2]:-}
         KEY_ID=${r[3]:-}
         SIG_LEVEL=${r[4]:-}
-        lk_console_detail "Adding $REPO:" "$SERVER"
+        lk_console_detail "Adding '$REPO':" "$SERVER"
         if [ -n "$KEY_URL" ]; then
             lk_arch_chroot bash -c "$SH" bash "$KEY_URL"
         elif [ -n "$KEY_ID" ]; then

@@ -89,23 +89,25 @@ CURL_OPTIONS=(
     --silent
 )
 
-echo "Downloading dependencies" >&2
+echo $'\E[1m\E[36m==> \E[0m\E[1mDownloading dependencies\E[0m' >&2
 for FILE_PATH in \
     /lib/bash/include/core.sh \
     /lib/bash/include/arch.sh \
     /lib/bash/include/linux.sh \
     /lib/bash/include/provision.sh \
-    /lib/arch/packages.sh; do
+    /lib/arch/packages.sh \
+    /share/sudoers.d/default; do
     FILE=$_DIR/${FILE_PATH##*/}
     if [ ! -e "$FILE" ]; then
         FILE_PATH=lk-platform/$LK_PLATFORM_BRANCH$FILE_PATH
         URL=https://raw.githubusercontent.com/lkrms/$FILE_PATH
+        echo $'\E[1m\E[33m   -> \E[0m'"$URL"$'\E[0m' >&2
         curl "${CURL_OPTIONS[@]}" --output "$FILE" "$URL" || {
             rm -f "$FILE"
             lk_die "unable to download from GitHub: $URL"
         }
     fi
-    [[ $FILE == */packages.sh ]] ||
+    [[ ! $FILE_PATH =~ /include/[a-z0-9_]+\.sh$ ]] ||
         . "$FILE"
 done
 
@@ -190,11 +192,11 @@ lk_console_blank
 
 function exit_trap() {
     [ ! -d /mnt/boot ] || {
-        exec >&"$LOG_OUT_FD" 2>&"$LOG_ERR_FD" &&
-            eval "exec $LOG_OUT_FD>&- $LOG_ERR_FD>&-"
+        exec >&"$STDOUT_FD" 2>&"$STDERR_FD" &&
+            eval "exec $STDOUT_FD>&- $STDERR_FD>&-"
         local FILE=/var/log/${LK_PATH_PREFIX}install.log
         in_target install -m 00640 -g adm /dev/null "$FILE" &&
-            cp -v --preserve=timestamps "$LOG_FILE" "/mnt/$FILE"
+            cp -v --preserve=timestamps "$LOG_FILE" "/mnt/${FILE#/}"
     }
     ! lk_is_true PASSWORD_GENERATED ||
         lk_console_log \
@@ -204,6 +206,7 @@ function exit_trap() {
 
 function in_target() {
     [ -d /mnt/boot ] || lk_die "no target mounted"
+    [ "${1:-}" != -u ] || set -- sudo -H "$@"
     arch-chroot /mnt "$@"
 }
 
@@ -213,11 +216,13 @@ function configure_pacman() {
         lk_arch_add_repo "${PAC_REPOS[@]}"
 }
 
-LOG_OUT_FD=$(lk_next_fd)
-eval "exec $LOG_OUT_FD>&1"
-LOG_ERR_FD=$(lk_next_fd)
-eval "exec $LOG_ERR_FD>&2"
-exec > >(tee >(lk_log >>"$LOG_FILE")) 2>&1
+STDOUT_FD=$(lk_next_fd)
+eval "exec $STDOUT_FD>&1"
+STDERR_FD=$(lk_next_fd)
+eval "exec $STDERR_FD>&2"
+LOG_FD=$(lk_next_fd)
+eval "exec $LOG_FD>>\"$LOG_FILE\""
+exec > >(tee >(lk_log >&"$LOG_FD")) 2>&1
 trap exit_trap EXIT
 
 lk_console_log "Setting up live environment"
@@ -247,10 +252,14 @@ if [ -n "$LK_NTP_SERVER" ]; then
     lk_console_item "Synchronising system time with" "$LK_NTP_SERVER"
     if ! lk_command_exists ntpd; then
         lk_console_detail "Installing ntp"
-        lk_tty pacman -Sy --noconfirm ntp ||
+        lk_tty pacman -Sy --noconfirm ntp >&"$LOG_FD" ||
             lk_die "unable to install ntp"
     fi
-    ntpd -qgx "$LK_NTP_SERVER" ||
+    # - `>&"$LOG_FD"`: log the full output
+    # - `tail -n1`: only show the last line (e.g. "ntpd: time slew +0.860030s")
+    # - `>&"$STDOUT_FD"`: don't log the last line twice
+    lk_run_detail ntpd -qgx "$LK_NTP_SERVER" |
+        tee >(tail -n1 >&"$STDOUT_FD") >&"$LOG_FD" ||
         lk_die "unable to sync system time"
 fi
 
@@ -339,8 +348,10 @@ lk_maybe_install -m 00644 /dev/null "$FILE"
 lk_file_keep_original "$FILE"
 genfstab -U /mnt >>"$FILE"
 
+lk_console_message "Configuring sudo"
+
 lk_run install -d -m 00700 /mnt/etc/skel/.ssh
-lk_run install -m 00600 /mnt/etc/skel/.ssh/authorized_keys
+lk_run install -m 00600 /dev/null /mnt/etc/skel/.ssh/authorized_keys
 
 lk_console_item "Creating administrator account:" "$BOOTSTRAP_USERNAME"
 lk_run_detail -1 in_target useradd \
@@ -351,6 +362,9 @@ lk_run_detail -1 in_target useradd \
     "$BOOTSTRAP_USERNAME"
 printf '%s\n' "$BOOTSTRAP_PASSWORD" "$BOOTSTRAP_PASSWORD" |
     in_target passwd "$BOOTSTRAP_USERNAME"
+FILE=/mnt/etc/sudoers.d/nopasswd-$BOOTSTRAP_USERNAME
+install -m 00440 /dev/null "$FILE"
+echo "$BOOTSTRAP_USERNAME ALL=(ALL) NOPASSWD:ALL" >"$FILE"
 if [ -n "$BOOTSTRAP_KEY" ]; then
     echo "$BOOTSTRAP_KEY" |
         in_target -u "$BOOTSTRAP_USERNAME" \
