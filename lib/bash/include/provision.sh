@@ -131,7 +131,7 @@ function lk_sudo_offer_nopasswd() {
         lk_can_sudo install || return
         lk_confirm \
             "Allow user '$USER' to run sudo without entering a password?" Y ||
-            return
+            return 0
         lk_sudo_add_nopasswd "$USER" &&
             lk_console_message \
                 "User '$USER' may now run any command as any user"

@@ -134,6 +134,17 @@ function lk_system_has_nvidia_graphics() {
     lk_system_list_graphics | grep -i NVIDIA >/dev/null
 }
 
+function lk_user_lock_passwd() {
+    local STATUS
+    [ -n "${1:-}" ] || lk_warn "no user" || return
+    lk_user_exists "$1" || lk_warn "user does not exist: $1" || return
+    STATUS=$(lk_elevate passwd -S "$1" | cut -d' ' -f2) || return
+    [ "$STATUS" = L ] || {
+        lk_console_detail "Locking user password:" "$1"
+        lk_elevate passwd -l "$1"
+    }
+}
+
 # shellcheck disable=SC2034,SC2207
 function lk_get_standard_users() {
     local IFS ADM_USERS USERS
