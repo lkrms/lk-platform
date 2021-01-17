@@ -2432,32 +2432,32 @@ fi
 
 if ! lk_is_macos || lk_gnu_check stat; then
     function lk_file_modified() {
-        lk_maybe_sudo gnu_stat --printf '%Y' -- "$1"
+        lk_maybe_sudo gnu_stat -c '%Y' -- "$@"
     }
     function lk_file_owner() {
-        lk_maybe_sudo gnu_stat --printf '%U' -- "$1"
+        lk_maybe_sudo gnu_stat -c '%U' -- "$@"
     }
     function lk_file_group() {
-        lk_maybe_sudo gnu_stat --printf '%G' -- "$1"
+        lk_maybe_sudo gnu_stat -c '%G' -- "$@"
     }
     function lk_file_mode() {
-        lk_maybe_sudo gnu_stat --printf '%04a' -- "$1"
+        lk_maybe_sudo gnu_stat -c '%04a' -- "$@"
     }
 else
     function lk_file_modified() {
-        lk_maybe_sudo stat -t '%s' -f '%Sm' -- "$1"
+        lk_maybe_sudo stat -t '%s' -f '%Sm' -- "$@"
     }
     function lk_file_owner() {
-        lk_maybe_sudo stat -f '%Su' -- "$1"
+        lk_maybe_sudo stat -f '%Su' -- "$@"
     }
     function lk_file_group() {
-        lk_maybe_sudo stat -f '%Sg' -- "$1"
+        lk_maybe_sudo stat -f '%Sg' -- "$@"
     }
     function lk_file_mode() {
         # Output octal (O) file mode (p) twice, first for the suid, sgid, and
         # sticky bits (M), then with zero-padding (03) for the user, group, and
         # other bits (L)
-        lk_maybe_sudo stat -f '%OMp%03OLp' -- "$1"
+        lk_maybe_sudo stat -f '%OMp%03OLp' -- "$@"
     }
 fi
 

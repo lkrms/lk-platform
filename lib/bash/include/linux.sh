@@ -181,6 +181,15 @@ function lk_icon_install() {
             --ignore-theme-index "$TARGET_DIR" || true
 }
 
+function lk_in_chroot() {
+    local INODES
+    # As per systemd's running_in_chroot check, return true if "/proc/1/root"
+    # and "/" resolve to different inodes
+    INODES=$(lk_elevate stat -Lc "%d %i" /proc/1/root / |
+        awk '{print $1}' | sort -u | wc -l) &&
+        [ "$INODES" -gt 1 ]
+}
+
 function lk_is_portable() {
     # 8  = Portable
     # 9  = Laptop

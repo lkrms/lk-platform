@@ -2,6 +2,10 @@
 
 # shellcheck disable=SC1090,SC2016,SC2031,SC2034,SC2207
 
+lk_bin_depth=1 include=provision,linux,arch . lk-bash-load.sh || exit
+
+! lk_in_chroot || LK_BOOTSTRAP=1
+
 function is_bootstrap() {
     [ -n "${LK_BOOTSTRAP:-}" ]
 }
@@ -19,8 +23,6 @@ else
         lk_systemctl_enable_now "$@"
     }
 fi
-
-lk_bin_depth=1 include=provision,linux,arch . lk-bash-load.sh || exit
 
 shopt -s nullglob
 
