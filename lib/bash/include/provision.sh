@@ -29,6 +29,21 @@ function lk_node_expand_services() {
     lk_echo_args $SERVICES | sort -u | lk_implode_input ","
 }
 
+# lk_symlink_bin TARGET ALIAS
+function lk_symlink_bin() {
+    local TARGET LINK vv=''
+    [ $# -eq 2 ] || lk_usage "\
+Usage: $(lk_myself -f) TARGET ALIAS"
+    ! lk_verbose 2 || vv=v
+    LINK=/usr/local/bin/$2
+    if ! command -pv "$2" >/dev/null &&
+        TARGET=$(type -P "$1"); then
+        lk_symlink "$TARGET" "$LINK"
+    elif [ -L "$LINK" ] && [ ! -x "$LINK" ]; then
+        lk_maybe_sudo rm -f"$vv" -- "$LINK" || return
+    fi
+}
+
 # lk_maybe_install [-v] [-m MODE] [-o OWNER] [-g GROUP] SOURCE DEST
 # lk_maybe_install -d [-v] [-m MODE] [-o OWNER] [-g GROUP] DEST
 function lk_maybe_install() {

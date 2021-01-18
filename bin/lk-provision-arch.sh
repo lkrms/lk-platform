@@ -1,11 +1,10 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2016,SC2031,SC2034,SC2207
+# shellcheck disable=SC1090,SC2015,SC2016,SC2031,SC2034,SC2206,SC2207
 
 lk_bin_depth=1 include=provision,linux,arch . lk-bash-load.sh || exit
 
 ! lk_in_chroot || LK_BOOTSTRAP=1
-_LK_MEMORY=$(lk_system_memory)
 
 function is_bootstrap() {
     [ -n "${LK_BOOTSTRAP:-}" ]
@@ -27,7 +26,8 @@ else
 fi
 
 function memory_at_least() {
-    [ "$_LK_MEMORY" -ge "$1" ]
+    _LK_SYSTEM_MEMORY=${_LK_SYSTEM_MEMORY:-$(lk_system_memory)}
+    [ "$_LK_SYSTEM_MEMORY" -ge "$1" ]
 }
 
 shopt -s nullglob
@@ -42,15 +42,52 @@ lk_log_output
 {
     lk_console_log "Provisioning Arch Linux"
     ! is_bootstrap || lk_console_detail "Bootstrap environment detected"
-    lk_console_detail "System memory:" "${_LK_MEMORY}G"
+    MEMORY=$(lk_system_memory 2)
+    lk_console_detail "System memory:" "${MEMORY}M"
 
     LK_SUDO=1
 
-    if [ -z "${LK_NODE_HOSTNAME:-}" ] && ! is_bootstrap; then
-        LK_NODE_HOSTNAME=$(lk_hostname) &&
-            export LK_NODE_HOSTNAME ||
-            unset LK_NODE_HOSTNAME
+    # Try to detect missing settings
+    if ! is_bootstrap; then
+        [ -n "${LK_NODE_TIMEZONE:-}" ] || ! _TZ=$(lk_system_timezone) ||
+            export LK_NODE_TIMEZONE=$_TZ
+        [ -n "${LK_NODE_HOSTNAME:-}" ] || ! _HN=$(lk_hostname) ||
+            export LK_NODE_HOSTNAME=$_HN
     fi
+
+    if [ -n "${LK_NODE_TIMEZONE:-}" ]; then
+        lk_console_message "Checking system time zone"
+        FILE=/usr/share/zoneinfo/$LK_NODE_TIMEZONE
+        lk_symlink "$FILE" /etc/localtime
+    fi
+
+    [ -e /etc/adjtime ] ||
+        lk_run sudo hwclock --systohc
+
+    lk_console_detail "Configuring locales"
+    LOCALES=($LK_NODE_LOCALES en_US.UTF-8)
+    _LOCALES=$(lk_echo_array LOCALES |
+        lk_escape_input_ere |
+        lk_implode_input "|")
+    [ ${#LOCALES[@]} -lt 2 ] || _LOCALES="($_LOCALES)"
+    FILE=/etc/locale.gen
+    # 1. Comment all locales out
+    # 2. Uncomment configured locales
+    _FILE=$(sed -E \
+        -e "s/^$S*#?/#/" \
+        -e "s/^#($_LOCALES.*)/\\1/" \
+        "$FILE")
+    lk_file_keep_original "$FILE"
+    unset LK_FILE_REPLACE_NO_CHANGE
+    lk_file_replace -i "^$S*(#|\$)" "$FILE" "$_FILE"
+    ! is_bootstrap && lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
+        sudo locale-gen
+
+    FILE=/etc/locale.conf
+    lk_install -m 00644 /dev/null "$FILE"
+    lk_file_replace -i "^(#|$S*\$)" "$FILE" "\
+LANG=${LOCALES[0]}${LK_NODE_LANGUAGE:+
+LANGUAGE=$LK_NODE_LANGUAGE}"
 
     if [ -n "${LK_NODE_HOSTNAME:-}" ]; then
         lk_console_message "Checking system hostname"
@@ -140,6 +177,9 @@ $LK_NODE_HOSTNAME" &&
 
     systemctl_enable lightdm "LightDM"
     systemctl_enable cups "CUPS"
+
+    ! lk_is_qemu ||
+        systemctl_enable qemu-guest-agent "QEMU Guest Agent"
 
     export LK_PACKAGES_FILE=${1:-${LK_PACKAGES_FILE:-}}
     if [ -n "$LK_PACKAGES_FILE" ]; then
@@ -237,11 +277,8 @@ $LK_NODE_HOSTNAME" &&
                 /opt/opcache-gui
     }
 
-    if ! lk_command_exists code &&
-        TARGET=$(type -P codium); then
-        LK_VERBOSE=${LK_VERBOSE-1} \
-            lk_symlink "$TARGET" /usr/local/bin/code
-    fi
+    lk_symlink_bin codium code
+    lk_symlink_bin vim vi
 
     lk_console_message "Checking services"
     systemctl_enable atd "at"

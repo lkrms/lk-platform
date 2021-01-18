@@ -179,6 +179,19 @@ function lk_block_device_is_ssd() {
         [ "$COUNT" -eq $# ]
 }
 
+function lk_system_timezone() {
+    local ZONE
+    if [ -L /etc/localtime ] &&
+        ZONE=$(readlink /etc/localtime 2>/dev/null) &&
+        [[ $ZONE =~ /zoneinfo/(.*) ]]; then
+        echo "${BASH_REMATCH[1]}"
+    else
+        # Work around limited support for `timedatectl show`
+        timedatectl status |
+            sed -En 's/^[^:]*zone: ([^ ]+).*/\1/Ip'
+    fi
+}
+
 function lk_system_list_graphics() {
     local EXIT_STATUS
     LK_SYSTEM_GRAPHICS=${LK_SYSTEM_GRAPHICS-$(lspci | grep -E "VGA|3D")} || {

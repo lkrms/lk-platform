@@ -535,6 +535,10 @@ function lk_escape_ere() {
     lk_escape "$1" '$' '(' ')' '*' '+' '.' '/' '?' '[' "\\" ']' '^' '{' '|' '}'
 }
 
+function lk_escape_input_ere() {
+    sed -E 's/[]$()*+./?\^{|}[]/\\&/g'
+}
+
 function lk_escape_ere_replace() {
     lk_escape "$1" '&' '/' "\\"
 }
