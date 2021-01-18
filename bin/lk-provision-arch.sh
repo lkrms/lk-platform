@@ -64,30 +64,8 @@ lk_log_output
     [ -e /etc/adjtime ] ||
         lk_run sudo hwclock --systohc
 
-    lk_console_detail "Configuring locales"
-    LOCALES=($LK_NODE_LOCALES en_US.UTF-8)
-    _LOCALES=$(lk_echo_array LOCALES |
-        lk_escape_input_ere |
-        lk_implode_input "|")
-    [ ${#LOCALES[@]} -lt 2 ] || _LOCALES="($_LOCALES)"
-    FILE=/etc/locale.gen
-    # 1. Comment all locales out
-    # 2. Uncomment configured locales
-    _FILE=$(sed -E \
-        -e "s/^$S*#?/#/" \
-        -e "s/^#($_LOCALES.*)/\\1/" \
-        "$FILE")
-    lk_file_keep_original "$FILE"
-    unset LK_FILE_REPLACE_NO_CHANGE
-    lk_file_replace -i "^$S*(#|\$)" "$FILE" "$_FILE"
-    ! is_bootstrap && lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
-        sudo locale-gen
-
-    FILE=/etc/locale.conf
-    lk_install -m 00644 /dev/null "$FILE"
-    lk_file_replace -i "^(#|$S*\$)" "$FILE" "\
-LANG=${LOCALES[0]}${LK_NODE_LANGUAGE:+
-LANGUAGE=$LK_NODE_LANGUAGE}"
+    lk_console_message "Checking locales"
+    lk_configure_locales
 
     if [ -n "${LK_NODE_HOSTNAME:-}" ]; then
         lk_console_message "Checking system hostname"

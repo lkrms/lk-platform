@@ -308,7 +308,7 @@ function lk_fc_charset() {
     MATCH=$(fc-match "$1" family charset) && [ -n "$MATCH" ] &&
         FAMILY=$(cut -d: -f1 <<<"$MATCH") ||
         lk_warn "match not found" || return
-    lk_console_item "Loading glyphs from" "$FAMILY"
+    lk_console_detail "Loading glyphs from" "$FAMILY"
     SH=$(cut -d: -f2 <<<"$MATCH" |
         cut -d= -f2 |
         sed 's/ /\n/g' |

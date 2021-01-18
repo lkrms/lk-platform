@@ -342,7 +342,7 @@ lk_tty pacstrap /mnt "${PAC_PACKAGES[@]}"
 
 lk_console_blank
 lk_console_log "Setting up installed system"
-LK_ARCH_CHROOT_DIR=/mnt
+_LK_ARCH_ROOT=/mnt
 configure_pacman
 
 lk_console_message "Generating /etc/fstab"
@@ -350,6 +350,16 @@ FILE=/mnt/etc/fstab
 lk_maybe_install -m 00644 /dev/null "$FILE"
 lk_file_keep_original "$FILE"
 genfstab -U /mnt >>"$FILE"
+
+lk_console_message "Setting system time zone"
+FILE=/usr/share/zoneinfo/$LK_NODE_TIMEZONE
+LK_VERBOSE=1 \
+    lk_symlink "$FILE" /mnt/etc/localtime
+
+lk_console_message "Setting locales"
+_LK_PROVISION_ROOT=/mnt
+lk_configure_locales
+lk_run_detail -1 in_target locale-gen
 
 FILE=/mnt/etc/skel/.ssh/authorized_keys
 lk_run install -d -m 00700 "${FILE%/*}"

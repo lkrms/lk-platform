@@ -50,6 +50,35 @@ function lk_maybe_install() {
     lk_install "$@"
 }
 
+function lk_configure_locales() {
+    local LK_SUDO=1 LOCALES _LOCALES FILE _FILE
+    lk_is_linux || lk_warn "platform not supported" || return
+    LOCALES=(${LK_NODE_LOCALES:-} en_US.UTF-8)
+    _LOCALES=$(lk_echo_array LOCALES |
+        lk_escape_input_ere |
+        lk_implode_input "|")
+    [ ${#LOCALES[@]} -lt 2 ] || _LOCALES="($_LOCALES)"
+    FILE=${_LK_PROVISION_ROOT:-}/etc/locale.gen
+    # 1. Comment all locales out
+    # 2. Uncomment configured locales
+    _FILE=$(sed -E \
+        -e "s/^$S*#?/#/" \
+        -e "s/^#($_LOCALES.*)/\\1/" \
+        "$FILE") || return
+    unset LK_FILE_REPLACE_NO_CHANGE
+    lk_file_keep_original "$FILE" &&
+        lk_file_replace -i "^$S*(#|\$)" "$FILE" "$_FILE" || return
+    lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
+        [ -n "${_LK_PROVISION_ROOT:-}" ] ||
+        lk_elevate locale-gen || return
+
+    FILE=${_LK_PROVISION_ROOT:-}/etc/locale.conf
+    lk_install -m 00644 /dev/null "$FILE"
+    lk_file_replace -i "^(#|$S*\$)" "$FILE" "\
+LANG=${LOCALES[0]}${LK_NODE_LANGUAGE:+
+LANGUAGE=$LK_NODE_LANGUAGE}"
+}
+
 # lk_dir_set_modes DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]...
 function lk_dir_set_modes() {
     local DIR REGEX LOG_FILE i TYPE MODE ARGS CHANGES _CHANGES TOTAL=0 \
@@ -130,7 +159,7 @@ function lk_sudo_add_nopasswd() {
     [ -n "${1:-}" ] || lk_warn "no user" || return
     lk_user_exists "$1" || lk_warn "user does not exist: $1" || return
     FILE=/etc/sudoers.d/nopasswd-$1
-    lk_maybe_install -m 00440 /dev/null "$FILE" &&
+    lk_install -m 00440 /dev/null "$FILE" &&
         lk_file_replace "$FILE" "$1 ALL=(ALL) NOPASSWD:ALL"
 }
 
@@ -288,14 +317,14 @@ Usage: $(lk_myself -f) [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" |
     [ ! "$KEY_FILE" = - ] || {
         KEY=${KEY:-$(cat)}
         KEY_FILE=$h/.ssh/${SSH_PREFIX}keys/$NAME
-        lk_maybe_install -m 00600 /dev/null "$KEY_FILE" &&
+        lk_install -m 00600 /dev/null "$KEY_FILE" &&
             lk_file_replace "$KEY_FILE" "$KEY" || return
         ssh-keygen -l -f "$KEY_FILE" >/dev/null 2>&1 || {
             # `ssh-keygen -l -f FILE` exits without error if FILE contains an
             # OpenSSH public key
             lk_console_log "Reading $KEY_FILE to create public key file"
             KEY=$(unset DISPLAY && ssh-keygen -y -f "$KEY_FILE") &&
-                lk_maybe_install -m 00600 /dev/null "$KEY_FILE.pub" &&
+                lk_install -m 00600 /dev/null "$KEY_FILE.pub" &&
                 lk_file_replace "$KEY_FILE.pub" "$KEY" || return
         }
     }
@@ -344,7 +373,7 @@ ProxyJump       $SSH_PREFIX${JUMP_HOST_NAME#$SSH_PREFIX}}
 EOF
     )
     CONF_FILE=$h/.ssh/${SSH_PREFIX}config.d/${LK_SSH_PRIORITY:-60}-$NAME
-    lk_maybe_install -m 00600 /dev/null "$CONF_FILE" &&
+    lk_install -m 00600 /dev/null "$CONF_FILE" &&
         lk_file_replace "$CONF_FILE" "$CONF" || return
 }
 
@@ -751,8 +780,8 @@ CA bundle and private key for DOMAIN from SSH_HOST to TARGET_DIR
     TARGET_DIR=${TARGET_DIR%/}
     [ -e "$TARGET_DIR" ] ||
         install -d -m 00750 "$TARGET_DIR" &&
-        lk_maybe_install -m 00640 /dev/null "$TARGET_DIR/$2.cert" &&
-        lk_maybe_install -m 00640 /dev/null "$TARGET_DIR/$2.key" || return
+        lk_install -m 00640 /dev/null "$TARGET_DIR/$2.cert" &&
+        lk_install -m 00640 /dev/null "$TARGET_DIR/$2.key" || return
     lk_console_message "Retrieving SSL certificate"
     lk_console_detail "Host:" "$1"
     lk_console_detail "Domain:" "$2"
@@ -817,8 +846,8 @@ Usage: $(lk_myself -f) [-p] FILE SETTING CHECK_REGEX [REPLACE_REGEX...]" || retu
     CHECK_REGEX=$3
     ! _lk_option_check || return 0
     lk_maybe_sudo test -e "$FILE" ||
-        { lk_maybe_install -d -m 00755 "${FILE%/*}" &&
-            lk_maybe_install -m 00644 /dev/null "$FILE"; } || return
+        { lk_install -d -m 00755 "${FILE%/*}" &&
+            lk_install -m 00644 /dev/null "$FILE"; } || return
     lk_maybe_sudo test -f "$FILE" || lk_warn "file not found: $FILE" || return
     lk_file_get_text "$FILE" _FILE || return
     [ "${PRESERVE+1}" = 1 ] ||

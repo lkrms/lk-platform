@@ -7,8 +7,8 @@ function lk_arch_chroot() {
         [ $# -ge 3 ] || lk_warn "invalid arguments" || return
         set -- sudo -C 5 -H "$@"
     }
-    if [ -n "${LK_ARCH_CHROOT_DIR:-}" ]; then
-        arch-chroot "$LK_ARCH_CHROOT_DIR" "$@"
+    if [ -n "${_LK_ARCH_ROOT:-}" ]; then
+        arch-chroot "$_LK_ARCH_ROOT" "$@"
     else
         lk_elevate "$@"
     fi
@@ -16,7 +16,7 @@ function lk_arch_chroot() {
 
 function lk_arch_path() {
     [[ ${1:-} == /* ]] || lk_warn "path not absolute: ${1:-}" || return
-    echo "${LK_ARCH_CHROOT_DIR:+${LK_ARCH_CHROOT_DIR%/}}$1"
+    echo "${_LK_ARCH_ROOT:+${_LK_ARCH_ROOT%/}}$1"
 }
 
 function lk_arch_configure_pacman() {
