@@ -202,8 +202,7 @@ $LK_NODE_HOSTNAME" &&
     fi
     . "$LK_BASE/lib/arch/packages.sh"
 
-    is_bootstrap ||
-        "$LK_BASE/bin/lk-platform-configure.sh" --no-log
+    lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" --no-log
 
     PAC_TO_REMOVE=($(comm -12 \
         <(pacman -Qq | sort -u) \

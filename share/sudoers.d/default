@@ -1,5 +1,6 @@
 Defaults always_set_home
-Defaults env_keep += "LK_* *_PROXY *_proxy"
+Defaults closefrom_override
+Defaults env_keep += "BASH_XTRACEFD LK_* _LK_* SHELLOPTS *_PROXY *_proxy"
 Defaults !mail_badpass
 Defaults !mail_no_user
 Defaults !secure_path

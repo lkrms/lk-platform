@@ -496,7 +496,7 @@ function lk_get_quoted_var() {
 
 # lk_get_env [-n] [VAR...]
 function lk_get_env() {
-    local _LK_VAR_LIST _LK_IGNORE_REGEX="^(__?(LK|lk)|PATH$)"
+    local _LK_VAR_LIST _LK_IGNORE_REGEX="^(__?(LK|lk)|(PATH|BASH_XTRACEFD)$)"
     unset _LK_VAR_LIST
     [ "${1:-}" != -n ] || { _LK_VAR_LIST= && shift; }
     [ -n "${_LK_ENV:+1}" ] || _LK_ENV=$(declare -x)
@@ -1607,14 +1607,23 @@ $LK_BOLD${2:-${LK_TTY_INPUT_NAME:-/dev/stdin}}$LK_RESET"
 }
 
 function lk_run() {
-    local COMMAND ARGS WIDTH SHIFT=
+    local COMMAND TRACE SH ARGS WIDTH SHIFT=
     [[ ! ${1:-} =~ ^-([0-9]+)$ ]] || { SHIFT=${BASH_REMATCH[1]} && shift; }
     COMMAND=("$@")
     [ -z "$SHIFT" ] || shift "$SHIFT"
-    while [[ ${1:-} =~ ^(lk_(elevate|maybe_sudo)|sudo)$ ]] &&
+    while [[ ${1:-} =~ ^(lk_(elevate|maybe_(sudo|trace))|sudo)$ ]] &&
         [[ ${2:-} != -* ]]; do
+        case "$1" in
+        lk_maybe_trace)
+            TRACE=1
+            ;;
+        esac
         shift
     done
+    ! lk_is_true TRACE || {
+        SH="set -- $(lk_maybe_trace -o "$@")" &&
+            eval "$SH"
+    } || return
     ARGS=$(lk_quote_args "$@")
     WIDTH=${LK_TTY_WIDTH:-$(lk_tty_columns)}
     [ ${#ARGS} -le $((WIDTH - ${_LK_TTY_INDENT:-2} - 11)) ] ||
@@ -1628,6 +1637,21 @@ function lk_run_detail() {
     _LK_TTY_COMMAND=lk_console_detail \
         _LK_TTY_INDENT=${_LK_TTY_INDENT:-4} \
         lk_run "$@"
+}
+
+function lk_maybe_trace() {
+    local OUTPUT COMMAND
+    [ "${1:-}" != -o ] || { OUTPUT=1 && shift; }
+    [ $# -gt 0 ] || lk_warn "no command" || return
+    COMMAND=("$@")
+    [[ $- != *x* ]] ||
+        COMMAND=(env
+            ${BASH_XTRACEFD:+BASH_XTRACEFD=$BASH_XTRACEFD}
+            SHELLOPTS=xtrace
+            "$@")
+    ! lk_is_true OUTPUT ||
+        COMMAND=(lk_quote_args "${COMMAND[@]}")
+    "${COMMAND[@]}"
 }
 
 function _lk_console_get_prompt() {

@@ -212,7 +212,7 @@ function exit_trap() {
 
 function in_target() {
     [ -d /mnt/boot ] || lk_die "no target mounted"
-    [ "${1:-}" != -u ] || set -- sudo -H "$@"
+    [ "${1:-}" != -u ] || set -- sudo -C 5 -H "$@"
     arch-chroot /mnt "$@"
 }
 
@@ -373,6 +373,8 @@ if [ -n "$BOOTSTRAP_KEY" ]; then
             bash -c "cat >~/.ssh/authorized_keys"
 fi
 
+export LK_BOOTSTRAP=1
+
 lk_console_item "Installing lk-platform to" "$LK_BASE"
 in_target install -d -m 02775 -o "$BOOTSTRAP_USERNAME" -g adm "$LK_BASE"
 (umask 002 &&
@@ -394,11 +396,10 @@ lk_get_shell_var \
     LK_ARCH_MIRROR \
     LK_ARCH_REPOS \
     LK_PLATFORM_BRANCH >"$FILE"
-in_target "$LK_BASE/bin/lk-platform-configure.sh" --no-log
 
 PROVISIONED=
-LK_BOOTSTRAP=1 \
-    in_target -u "$BOOTSTRAP_USERNAME" \
+in_target -u "$BOOTSTRAP_USERNAME" \
+    env BASH_XTRACEFD=$BASH_XTRACEFD SHELLOPTS=xtrace \
     "$LK_BASE/bin/lk-provision-arch.sh" && PROVISIONED=1 ||
     lk_console_error "Provisioning failed"
 

@@ -5,7 +5,7 @@
 function lk_arch_chroot() {
     [ "${1:-}" != -u ] || {
         [ $# -ge 3 ] || lk_warn "invalid arguments" || return
-        set -- sudo -H "$@"
+        set -- sudo -C 5 -H "$@"
     }
     if [ -n "${LK_ARCH_CHROOT_DIR:-}" ]; then
         arch-chroot "$LK_ARCH_CHROOT_DIR" "$@"
