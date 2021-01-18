@@ -351,8 +351,6 @@ lk_maybe_install -m 00644 /dev/null "$FILE"
 lk_file_keep_original "$FILE"
 genfstab -U /mnt >>"$FILE"
 
-lk_console_message "Configuring sudo"
-
 FILE=/mnt/etc/skel/.ssh/authorized_keys
 lk_run install -d -m 00700 "${FILE%/*}"
 lk_run install -m 00600 /dev/null "$FILE"

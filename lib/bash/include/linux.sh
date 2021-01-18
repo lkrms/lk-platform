@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2207
+# shellcheck disable=SC2016,SC2153,SC2207
 
 function lk_atop_ps_mem() {
     local TEMP
@@ -10,80 +10,143 @@ function lk_atop_ps_mem() {
             -v "TEMP=$TEMP"
 }
 
+function _lk_systemctl_args() {
+    local OPTIND OPTARG OPT PARAMS=0 LK_USAGE COMMAND=(systemctl) _USER NAME
+    [ -z "${_LK_PARAMS+1}" ] || PARAMS=${#_LK_PARAMS[@]}
+    LK_USAGE="\
+Usage: $(lk_myself -f 1) [-u] [-n NAME] \
+${_LK_PARAMS[*]+${_LK_PARAMS[*]} }\
+SERVICE"
+    while getopts ":un:" OPT; do
+        case "$OPT" in
+        u)
+            COMMAND=(systemctl --user)
+            _USER=
+            ;;
+        n)
+            NAME=$OPTARG
+            ;;
+        \? | :)
+            lk_usage
+            return 1
+            ;;
+        esac
+    done
+    shift $((OPTIND - 1 + PARAMS))
+    [ $# -eq 1 ] || lk_usage || return
+    [[ $1 == *.* ]] || {
+        set -- "$1.service"
+        echo 'set -- "${@:1:$#-1}" "${*: -1}.service"'
+    }
+    NAME=${NAME:-$1}
+    printf 'local LK_USAGE=%q COMMAND=(%s) _USER%s NAME=%q _NAME=%q\nshift %s' \
+        "$LK_USAGE" \
+        "${COMMAND[*]}" \
+        "${_USER+=}" \
+        "$NAME" \
+        "$NAME$([ "$NAME" = "$1" ] || echo " ($1)")" \
+        $((OPTIND - 1))
+}
+
 function lk_systemctl_get_property() {
-    local VALUE
-    VALUE=$(systemctl show --property "$1" "${@:2}") &&
+    local SH VALUE
+    SH=$(_LK_PARAMS=(PROPERTY) &&
+        _lk_systemctl_args "$@") && eval "$SH" || return
+    VALUE=$("${COMMAND[@]}" show --property "$1" "$2") &&
         [ -n "$VALUE" ] &&
         echo "${VALUE#$1=}"
 }
 
 function lk_systemctl_property_is() {
-    local VALUE
-    VALUE=$(lk_systemctl_get_property "$1" "${@:3}") &&
-        [ "$VALUE" = "$2" ]
+    local SH VALUE
+    SH=$(_LK_PARAMS=(PROPERTY VALUE) &&
+        _lk_systemctl_args "$@") && eval "$SH" || return
+    VALUE=$("${COMMAND[@]}" show --property "$1" "$3") &&
+        [ -n "$VALUE" ] &&
+        [ "${VALUE#$1=}" = "$2" ]
 }
 
 function lk_systemctl_enabled() {
-    systemctl is-enabled --quiet "$@"
+    local SH
+    SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
+    "${COMMAND[@]}" is-enabled --quiet "$1"
 }
 
 function lk_systemctl_running() {
-    systemctl is-active --quiet "$@"
+    local SH
+    SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
+    "${COMMAND[@]}" is-active --quiet "$1"
 }
 
 function lk_systemctl_failed() {
-    systemctl is-failed --quiet "$@"
+    local SH
+    SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
+    "${COMMAND[@]}" is-failed --quiet "$1"
 }
 
 function lk_systemctl_exists() {
-    lk_systemctl_property_is LoadState loaded "$@" ||
-        lk_warn "unknown service: $*"
+    local SH
+    SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
+    lk_systemctl_property_is ${_USER+-u} LoadState loaded "$1" ||
+        lk_warn "unknown service: $_NAME"
 }
 
 function lk_systemctl_start() {
-    lk_systemctl_running "$@" || {
-        lk_console_detail "Starting service:" "$*"
-        lk_elevate systemctl start "$@" ||
-            lk_warn "could not start service: $*"
+    local SH
+    SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
+    lk_systemctl_running ${_USER+-u} "$1" || {
+        lk_console_detail "Starting service:" "$NAME"
+        ${_USER-lk_elevate} "${COMMAND[@]}" start "$1" ||
+            lk_warn "could not start service: $_NAME"
     }
 }
 
 function lk_systemctl_stop() {
-    ! lk_systemctl_running "$@" || {
-        lk_console_detail "Stopping service:" "$*"
-        lk_elevate systemctl stop "$@" ||
-            lk_warn "could not stop service: $*"
+    local SH
+    SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
+    ! lk_systemctl_running ${_USER+-u} "$1" || {
+        lk_console_detail "Stopping service:" "$NAME"
+        ${_USER-lk_elevate} "${COMMAND[@]}" stop "$1" ||
+            lk_warn "could not stop service: $_NAME"
     }
 }
 
 function lk_systemctl_enable() {
-    lk_systemctl_exists "$@" || return
-    lk_systemctl_enabled "$@" || {
-        lk_console_detail "Enabling service:" "$*"
-        lk_elevate systemctl enable "$@" ||
-            lk_warn "could not enable service: $*" || return
+    local SH
+    SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
+    lk_systemctl_exists ${_USER+-u} "$1" || return
+    lk_systemctl_enabled ${_USER+-u} "$1" || {
+        lk_console_detail "Enabling service:" "$NAME"
+        ${_USER-lk_elevate} "${COMMAND[@]}" enable "$1" ||
+            lk_warn "could not enable service: $_NAME"
     }
 }
 
 function lk_systemctl_enable_now() {
-    lk_systemctl_enable "$@" || return
-    ! lk_systemctl_failed "$@" ||
-        lk_warn "not starting failed service: $*" || return
-    lk_systemctl_start "$@"
+    local SH
+    SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
+    lk_systemctl_enable ${_USER+-u} "$1" || return
+    ! lk_systemctl_failed ${_USER+-u} "$1" ||
+        lk_warn "not starting failed service: $_NAME" || return
+    lk_systemctl_start ${_USER+-u} "$1"
 }
 
 function lk_systemctl_disable() {
-    lk_systemctl_exists "$@" || return
-    ! lk_systemctl_enabled "$@" || {
-        lk_console_detail "Disabling service:" "$*"
-        lk_elevate systemctl disable "$@" ||
-            lk_warn "could not disable service: $*"
+    local SH
+    SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
+    lk_systemctl_exists ${_USER+-u} "$1" || return
+    ! lk_systemctl_enabled ${_USER+-u} "$1" || {
+        lk_console_detail "Disabling service:" "$NAME"
+        ${_USER-lk_elevate} "${COMMAND[@]}" disable "$1" ||
+            lk_warn "could not disable service: $_NAME"
     }
 }
 
 function lk_systemctl_disable_now() {
-    lk_systemctl_disable "$@" &&
-        lk_systemctl_stop "$@" || return
+    local SH
+    SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
+    lk_systemctl_disable ${_USER+-u} "$1" &&
+        lk_systemctl_stop ${_USER+-u} "$1" || return
 }
 
 function _lk_lsblk() {
@@ -182,12 +245,14 @@ function lk_icon_install() {
 }
 
 function lk_in_chroot() {
-    local INODES
     # As per systemd's running_in_chroot check, return true if "/proc/1/root"
     # and "/" resolve to different inodes
-    INODES=$(lk_elevate stat -Lc "%d %i" /proc/1/root / |
-        awk '{print $1}' | sort -u | wc -l) &&
-        [ "$INODES" -gt 1 ]
+    return "${_LK_IN_CHROOT:=$(INODES=$(lk_elevate \
+        stat -Lc "%d %i" /proc/1/root / |
+        awk '{print $1}' |
+        sort -u |
+        wc -l) && [ "$INODES" -gt 1 ] &&
+        echo 0 || echo 1)}"
 }
 
 function lk_is_portable() {
