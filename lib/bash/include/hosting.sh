@@ -137,50 +137,14 @@ function lk_hosting_configure_site() {
     lk_hosting_set_site_settings "$DOMAIN"
 }
 
-# lk_hosting_configure_repo REMOTE_URL DIR [BRANCH [NAME]]
-function lk_hosting_configure_repo() {
-    local REMOTE_URL DIR BRANCH NAME
-    [ $# -ge 2 ] || lk_warn "invalid arguments" || return
-    REMOTE_URL=$1
-    DIR=$2
-    BRANCH=${3:-}
-    NAME=${4:-$1}
-    lk_elevate install -d -m 02775 -o root -g adm "$DIR" || return
-    if [ -z "$(ls -A "$DIR")" ]; then
-        lk_console_item "Installing $NAME to" "$DIR"
-        (
-            umask 002 &&
-                lk_elevate git clone \
-                    ${BRANCH:+-b "$BRANCH"} "$REMOTE_URL" "$DIR"
-        )
-    else
-        lk_console_item "Updating $NAME in" "$DIR"
-        (
-            umask 002 &&
-                cd "$DIR" || exit
-            REMOTES=$(git remote) &&
-                [ "$REMOTES" = origin ] &&
-                _REMOTE_URL=$(git remote get-url origin 2>/dev/null) &&
-                [ "$_REMOTE_URL" = "$REMOTE_URL" ] || {
-                lk_console_detail "Resetting remotes"
-                for REMOTE in $REMOTES; do
-                    lk_elevate git remote remove "$REMOTE" || exit
-                done
-                lk_elevate git remote add origin "$REMOTE_URL" || exit
-            }
-            LK_SUDO=1 \
-                lk_git_update_repo_to origin "$BRANCH"
-        )
-    fi
-}
-
 function lk_hosting_configure_modsecurity() {
     lk_apt_install libapache2-mod-security2 &&
-        lk_hosting_configure_repo \
+        lk_git_provision_repo -s \
+            -o root:adm \
+            -b "${LK_OWASP_CRS_BRANCH:-v3.3/master}" \
+            -n "OWASP ModSecurity Core Rule Set" \
             https://github.com/coreruleset/coreruleset.git \
-            /opt/coreruleset \
-            "${LK_OWASP_CRS_BRANCH:-v3.3/master}" \
-            "OWASP ModSecurity Core Rule Set" || return
+            /opt/coreruleset || return
 }
 
 # lk_hosting_configure_backup

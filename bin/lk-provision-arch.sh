@@ -15,7 +15,7 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
     lk_die "unable to locate LK_BASE"
 export LK_BASE
 
-include=provision,linux,arch . "$LK_BASE/lib/bash/common.sh"
+include=arch,git,linux,provision . "$LK_BASE/lib/bash/common.sh"
 
 ! lk_in_chroot || LK_BOOTSTRAP=1
 
@@ -79,6 +79,10 @@ lk_log_output
             export LK_NODE_TIMEZONE=$_TZ
         [ -n "${LK_NODE_HOSTNAME:-}" ] || ! _HN=$(lk_hostname) ||
             export LK_NODE_HOSTNAME=$_HN
+        [ -n "${LK_NODE_LOCALES+1}" ] ||
+            LK_NODE_LOCALES="en_AU.UTF-8 en_GB.UTF-8"
+        [ -n "${LK_NODE_LANGUAGE+1}" ] ||
+            LK_NODE_LANGUAGE=en_AU:en_GB:en
     fi
 
     if [ -n "${LK_NODE_TIMEZONE:-}" ]; then
@@ -136,19 +140,19 @@ $LK_NODE_HOSTNAME" &&
     lk_console_message "Checking root account"
     lk_user_lock_passwd root
 
-    lk_console_message "Configuring sudo"
+    lk_console_message "Checking sudo"
     FILE=/etc/sudoers.d/${LK_PATH_PREFIX}default-arch
     lk_install -m 00440 /dev/null "$FILE"
     lk_file_replace -f "$LK_BASE/share/sudoers.d/default-arch" "$FILE"
 
     if [ -d /etc/polkit-1/rules.d ]; then
-        lk_console_message "Configuring polkit rules"
+        lk_console_message "Checking polkit rules"
         lk_file_replace \
             -f "$LK_BASE/share/polkit-1/rules.d/default-arch.rules" \
             /etc/polkit-1/rules.d/49-wheel.rules
     fi
 
-    lk_console_message "Configuring kernel parameters"
+    lk_console_message "Checking kernel parameters"
     unset LK_FILE_REPLACE_NO_CHANGE
     for FILE in default.conf $(lk_is_virtual || lk_echo_args sysrq.conf); do
         TARGET=/etc/sysctl.d/90-${FILE/default/${LK_PATH_PREFIX}default}
@@ -159,7 +163,7 @@ $LK_NODE_HOSTNAME" &&
         sudo sysctl --system
 
     if [ -n "${LK_NTP_SERVER:-}" ]; then
-        lk_console_message "Configuring NTP"
+        lk_console_message "Checking NTP"
         FILE=/etc/ntp.conf
         lk_file_keep_original "$FILE"
         _FILE=$(awk \
@@ -169,7 +173,7 @@ $LK_NODE_HOSTNAME" &&
         lk_file_replace "$FILE" "$_FILE"
     fi
 
-    lk_console_message "Configuring SSH server"
+    lk_console_message "Checking SSH server"
     LK_CONF_OPTION_FILE=/etc/ssh/sshd_config
     lk_ssh_set_option PermitRootLogin "no"
     [ ! -s ~/.ssh/authorized_keys ] ||
@@ -237,7 +241,7 @@ $LK_NODE_HOSTNAME" &&
     }
     PAC_REJECT=($(comm -12 \
         <(lk_echo_array PAC_REJECT | sort -u) \
-        <(lk_pac_installed | sort -u)))
+        <(lk_pac_installed_list | sort -u)))
     [ ${#PAC_REJECT[@]} -eq 0 ] || {
         REMOVE_MESSAGE+=("blacklisted")
         PAC_REMOVE+=("${PAC_REJECT[@]}")
@@ -264,13 +268,13 @@ $LK_NODE_HOSTNAME" &&
         systemctl_enable mariadb "MariaDB"
     fi
 
-    [[ ${LK_PACKAGES_FILE##*/} != dev.sh ]] ||
-        [ -e /opt/opcache-gui ] || {
-        lk_console_message "Installing opcache-gui"
-        sudo install -d -m 00755 -o "$USER" -g "$(id -gn)" /opt/opcache-gui &&
-            git clone https://github.com/lkrms/opcache-gui.git \
-                /opt/opcache-gui
-    }
+    if lk_pac_installed php-fpm; then
+        lk_git_provision_repo -s \
+            -o "$USER:adm" \
+            -n "opcache-gui" \
+            https://github.com/lkrms/opcache-gui.git \
+            /opt/opcache-gui
+    fi
 
     if ! lk_is_virtual; then
 

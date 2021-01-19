@@ -332,16 +332,14 @@ PAC_GROUPS=($(comm -12 \
     <(lk_echo_array PAC_PACKAGES | sort -u) \
     <(lk_pac_groups | sort -u)))
 if [ ${#PAC_GROUPS[@]} -gt 0 ]; then
-    lk_console_message \
-        "Resolving ${#PAC_GROUPS[@]} package $(lk_maybe_plural \
-            ${#PAC_GROUPS[@]} group groups)"
+    lk_console_message "Resolving package groups"
     PAC_PACKAGES=($(comm -13 \
         <(lk_echo_array PAC_GROUPS | sort -u) \
         <(lk_echo_array PAC_PACKAGES | sort -u)))
     for PAC_GROUP in "${PAC_GROUPS[@]}"; do
         GROUP_PACKAGES=($(lk_pac_groups "$PAC_GROUP"))
         PAC_PACKAGES+=(${GROUP_PACKAGES[@]+"${GROUP_PACKAGES[@]}"})
-        lk_console_detail \
+        ! lk_verbose || lk_console_detail \
             "$PAC_GROUP:" "${#GROUP_PACKAGES[@]} $(lk_maybe_plural \
                 ${#GROUP_PACKAGES[@]} package packages)"
     done

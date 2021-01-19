@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2015,SC2034,SC2207
+# shellcheck disable=SC2015,SC2034,SC2086,SC2120,SC2164,SC2207
 
 function _lk_git() {
     if [ -n "${LK_GIT_USER:-}" ]; then
@@ -10,50 +10,50 @@ function _lk_git() {
     fi
 }
 
+function lk_git_cd() {
+    [ $# -eq 0 ] || cd "$1"
+}
+
 function lk_git_is_quiet() {
     [ -n "${LK_GIT_QUIET:-}" ]
 }
 
 function lk_git_is_work_tree() {
     local RESULT
-    RESULT=$({ [ -z "${1:-}" ] || cd "$1"; } &&
+    RESULT=$(lk_git_cd "$@" &&
         git rev-parse --is-inside-work-tree 2>/dev/null) &&
         lk_is_true RESULT
 }
 
 function lk_git_is_submodule() {
     local RESULT
-    RESULT=$({ [ -z "${1:-}" ] || cd "$1"; } &&
+    RESULT=$(lk_git_cd "$@" &&
         git rev-parse --show-superproject-working-tree) &&
         [ -n "$RESULT" ]
 }
 
 function lk_git_is_top_level() {
     local RESULT
-    RESULT=$({ [ -z "${1:-}" ] || cd "$1"; } &&
-        git rev-parse --show-prefix) &&
+    RESULT=$(lk_git_cd "$@" && git rev-parse --show-prefix) &&
         [ -z "$RESULT" ]
 }
 
 function lk_git_is_project_top_level() {
-    lk_git_is_work_tree "${1:-}" &&
-        ! lk_git_is_submodule "${1:-}" &&
-        lk_git_is_top_level "${1:-}"
+    (lk_git_cd "$@" &&
+        lk_git_is_work_tree && ! lk_git_is_submodule && lk_git_is_top_level)
 }
 
 function lk_git_is_clean() {
-    local NO_REFRESH=
+    local NO_REFRESH
     [ "${1:-}" != -n ] || { NO_REFRESH=1 && shift; }
-    ({ [ -z "${1:-}" ] || cd "$1"; } &&
-        { lk_is_true NO_REFRESH ||
-            _lk_git update-index --refresh >/dev/null; } &&
-        git diff-index --quiet HEAD --)
+    (lk_git_cd "$@" &&
+        { lk_is_true NO_REFRESH || _lk_git update-index --refresh; } &&
+        git diff-index --quiet HEAD --) >/dev/null
 }
 
 function lk_git_remote_singleton() {
     local REMOTES
-    REMOTES=($(git remote)) &&
-        [ ${#REMOTES[@]} -eq 1 ] || return
+    REMOTES=($(git remote)) && [ ${#REMOTES[@]} -eq 1 ] || return
     echo "${REMOTES[0]}"
 }
 
@@ -63,15 +63,14 @@ function lk_git_remote_singleton() {
 function lk_git_remote_head() {
     local REMOTE HEAD
     REMOTE=${1:-$(lk_git_remote_singleton)} || lk_warn "no remote" || return
-    HEAD=$(git rev-parse --abbrev-ref "$REMOTE/HEAD" -- 2>/dev/null) &&
+    HEAD=$(git rev-parse --abbrev-ref "$REMOTE/HEAD" 2>/dev/null) &&
         [ "$HEAD" != "$REMOTE/HEAD" ] &&
         echo "${HEAD#$REMOTE/}"
 }
 
 function lk_git_branch_current() {
     local BRANCH
-    BRANCH=$(git rev-parse --abbrev-ref HEAD) &&
-        [ "$BRANCH" != HEAD ] &&
+    BRANCH=$(git rev-parse --abbrev-ref HEAD) && [ "$BRANCH" != HEAD ] &&
         echo "$BRANCH"
 }
 
@@ -113,15 +112,86 @@ function lk_git_branch_push() {
 # Output downstream ("push") remote for BRANCH or the current branch.
 function lk_git_branch_push_remote() {
     local PUSH
-    PUSH=$(lk_git_branch_push "$@") &&
-        [[ $PUSH =~ ^([^/]+)/[^/]+$ ]] &&
+    PUSH=$(lk_git_branch_push "$@") && [[ $PUSH =~ ^([^/]+)/[^/]+$ ]] &&
         echo "${BASH_REMATCH[1]}"
+}
+
+# lk_git_provision_repo [OPTIONS] REMOTE_URL DIR
+function lk_git_provision_repo() {
+    local OPTIND OPTARG OPT SHARE OWNER GROUP BRANCH NAME LK_USAGE \
+        LK_SUDO=1 LK_GIT_USER
+    LK_USAGE="\
+Usage: $(lk_myself -f) [OPTIONS] REMOTE_URL DIR
+
+Options:
+  -s                            make repository group-shareable
+  -o OWNER|OWNER:GROUP|:GROUP   set ownership
+  -b BRANCH                     check out BRANCH
+  -n NAME                       use NAME instead of REMOTE_URL in messages"
+    while getopts ":so:b:n:" OPT; do
+        case "$OPT" in
+        s)
+            SHARE=
+            ;;
+        o)
+            [ -n "$OPTARG" ] &&
+                [[ $OPTARG =~ ^([-a-z0-9_]+\$?)?(:([-a-z0-9_]+\$?))?$ ]] ||
+                lk_warn "invalid owner: $OPTARG" || lk_usage || return
+            OWNER=${BASH_REMATCH[1]}
+            GROUP=${BASH_REMATCH[3]}
+            LK_GIT_USER=$OWNER
+            ;;
+        b)
+            BRANCH=$OPTARG
+            ;;
+        n)
+            NAME=$OPTARG
+            ;;
+        \? | :)
+            lk_usage
+            return 1
+            ;;
+        esac
+    done
+    shift $((OPTIND - 1))
+    [ $# -eq 2 ] || lk_usage || return
+    lk_install -d -m ${SHARE+02775} ${SHARE-00755} \
+        ${OWNER:+-o "$OWNER"} ${GROUP:+-g "$GROUP"} "$2" || return
+    if [ -z "$(ls -A "$2")" ]; then
+        lk_console_item "Installing $NAME to" "$2"
+        (
+            umask ${SHARE+002} ${SHARE-022} &&
+                _lk_git clone \
+                    ${BRANCH:+-b "$BRANCH"} "$1" "$2"
+        )
+    else
+        lk_console_item "Updating $NAME in" "$2"
+        (
+            OWNER=${OWNER:-}${GROUP:+:${GROUP:-}}
+            if [ -n "$OWNER" ]; then
+                lk_maybe_sudo chown -R "$OWNER" "$2" || exit
+            fi
+            umask ${SHARE+002} ${SHARE-022} &&
+                cd "$2" || exit
+            REMOTE=$(git remote) &&
+                [ "$REMOTE" = origin ] &&
+                REMOTE_URL=$(git remote get-url origin 2>/dev/null) &&
+                [ "$REMOTE_URL" = "$1" ] || {
+                lk_console_detail "Resetting remotes"
+                for REMOTE_NAME in $REMOTE; do
+                    _lk_git remote remove "$REMOTE_NAME" || exit
+                done
+                _lk_git remote add origin "$1" || exit
+            }
+            lk_git_update_repo_to origin "${BRANCH:-}"
+        )
+    fi
 }
 
 # lk_git_update_repo_to REMOTE [BRANCH]
 function lk_git_update_repo_to() {
     local REMOTE BRANCH UPSTREAM _BRANCH BEHIND _UPSTREAM
-    [ $# -eq 2 ] || lk_usage "\
+    [ $# -ge 1 ] || lk_usage "\
 Usage: $(lk_myself -f) REMOTE [BRANCH]" || return
     REMOTE=$1
     _lk_git fetch --quiet --prune --prune-tags "$REMOTE" ||
@@ -153,7 +223,8 @@ Usage: $(lk_myself -f) REMOTE [BRANCH]" || return
         fi
         [ "$_BRANCH" = "$BRANCH" ] || {
             lk_console_detail \
-                "Switching ${_BRANCH:+from $LK_BOLD$_BRANCH$LK_RESET }to $LK_BOLD$BRANCH$LK_RESET"
+                "Switching ${_BRANCH:+from $LK_BOLD$_BRANCH$LK_RESET }to \
+$LK_BOLD$BRANCH$LK_RESET"
             LK_GIT_REPO_UPDATED=1
             _lk_git checkout "$BRANCH" || return
         }
@@ -165,7 +236,8 @@ Usage: $(lk_myself -f) REMOTE [BRANCH]" || return
         }
     else
         lk_console_detail \
-            "Switching ${_BRANCH:+from $LK_BOLD$_BRANCH$LK_RESET }to $REMOTE/$LK_BOLD$BRANCH$LK_RESET"
+            "Switching ${_BRANCH:+from $LK_BOLD$_BRANCH$LK_RESET }to \
+$REMOTE/$LK_BOLD$BRANCH$LK_RESET"
         LK_GIT_REPO_UPDATED=1
         _lk_git checkout -b "$BRANCH" --track "$UPSTREAM"
     fi
@@ -213,8 +285,8 @@ the working tree's top-level directory. If -p is set, process multiple
 repositories simultaneously." || return
     if [ ${#REPOS[@]} -gt 0 ]; then
         lk_test_many lk_git_is_top_level "${REPOS[@]}" ||
-            lk_warn "each element of LK_GIT_REPOS must be the top-level directory \
-of a working tree" || return
+            lk_warn "each element of LK_GIT_REPOS must be the top-level \
+directory of a working tree" || return
         lk_resolve_files REPOS
     else
         lk_git_is_quiet || lk_console_message "Finding repositories"
@@ -329,11 +401,12 @@ function lk_git_config_remote_push_all() {
 function lk_git_recheckout() {
     local REPO_ROOT COMMIT
     lk_console_message "Preparing to delete the index and check out HEAD again"
-    REPO_ROOT="$(git rev-parse --show-toplevel)" &&
-        COMMIT="$(git rev-list -1 --oneline HEAD)" || return
+    REPO_ROOT=$(git rev-parse --show-toplevel) &&
+        COMMIT=$(git rev-list -1 --oneline HEAD) || return
     lk_console_detail "Repository:" "$REPO_ROOT"
     lk_console_detail "HEAD refers to:" "$COMMIT"
-    lk_confirm "Uncommitted changes will be permanently deleted. Proceed?" N || return
+    lk_confirm \
+        "Uncommitted changes will be permanently deleted. Proceed?" N || return
     rm -fv "$REPO_ROOT/.git/index" &&
         git checkout --force --no-overlay HEAD -- "$REPO_ROOT" &&
         lk_console_success "Checkout completed successfully"
