@@ -1,0 +1,42 @@
+#!/bin/bash
+
+# shellcheck disable=SC1091,SC2164
+
+LK_TTY_NO_COLOUR=1 \
+    include=git . lk-bash-load.sh || exit
+
+HOOK=$0
+[ "${HOOK#/}" != "$HOOK" ] || HOOK=$PWD/$HOOK
+LOG_FILE=/tmp/${HOOK//"/"/__}.log
+printf '\n====> %s invoked\nArguments:\n%s\nEnvironment:\n%s\n' "$HOOK" \
+    "$(lk_echo_args "$@" | sed 's/^/  /')" \
+    "$(printenv | sed 's/^/  /')" |
+    lk_log >>"$LOG_FILE"
+exec > >(tee >(lk_log >>"$LOG_FILE")) 2>&1
+
+SOURCE=${PWD%/.git}
+DEST=/opt/${SOURCE##*/}
+[ -d "$DEST/.git" ] || lk_warn "repo not found at $DEST" || exit 0
+SOURCE_BRANCH=$(lk_git_branch_current)
+cd "$DEST"
+unset "${!GIT_@}"
+BRANCH=$(lk_git_branch_current)
+[ "$BRANCH" = "$SOURCE_BRANCH" ] ||
+    lk_warn "repo at $DEST not on branch $SOURCE_BRANCH" || exit 0
+
+lk_console_log "Updating repo at" "$DEST"
+if git remote | grep -Fx local >/dev/null; then
+    URL=$(git remote get-url local)
+    [ "$URL" = "$SOURCE" ] ||
+        lk_run_detail git remote set-url local "$SOURCE"
+else
+    lk_run_detail git remote add local "$SOURCE"
+fi
+
+lk_run_detail git fetch --force local
+lk_run_detail git merge --ff-only "local/$BRANCH" || {
+    lk_git_is_clean || lk_die "uncommitted changes at $DEST"
+    lk_run_detail git reset --hard "local/$BRANCH"
+}
+
+lk_console_log "Done"

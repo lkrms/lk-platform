@@ -2751,58 +2751,81 @@ trap lk_err_trap ERR
 
 _LK_INCLUDES=(core)
 
-case "${TERM:-dumb}" in
-dumb | unknown)
-    LK_BLACK=$'\E[30m'
-    LK_RED=$'\E[31m'
-    LK_GREEN=$'\E[32m'
-    LK_YELLOW=$'\E[33m'
-    LK_BLUE=$'\E[34m'
-    LK_MAGENTA=$'\E[35m'
-    LK_CYAN=$'\E[36m'
-    LK_WHITE=$'\E[37m'
-    LK_GREY=
-    LK_BLACK_BG=$'\E[40m'
-    LK_RED_BG=$'\E[41m'
-    LK_GREEN_BG=$'\E[42m'
-    LK_YELLOW_BG=$'\E[43m'
-    LK_BLUE_BG=$'\E[44m'
-    LK_MAGENTA_BG=$'\E[45m'
-    LK_CYAN_BG=$'\E[46m'
-    LK_WHITE_BG=$'\E[47m'
-    LK_GREY_BG=
-    LK_BOLD=$'\E[1m'
-    LK_DIM=$'\E[2m'
-    LK_RESET=$'\E[0m'
-    unset TERM
-    ;;
-xterm-256color)
-    LK_BLACK=$'\E[30m'
-    LK_RED=$'\E[31m'
-    LK_GREEN=$'\E[32m'
-    LK_YELLOW=$'\E[33m'
-    LK_BLUE=$'\E[34m'
-    LK_MAGENTA=$'\E[35m'
-    LK_CYAN=$'\E[36m'
-    LK_WHITE=$'\E[37m'
-    LK_GREY=$'\E[90m'
-    LK_BLACK_BG=$'\E[40m'
-    LK_RED_BG=$'\E[41m'
-    LK_GREEN_BG=$'\E[42m'
-    LK_YELLOW_BG=$'\E[43m'
-    LK_BLUE_BG=$'\E[44m'
-    LK_MAGENTA_BG=$'\E[45m'
-    LK_CYAN_BG=$'\E[46m'
-    LK_WHITE_BG=$'\E[47m'
-    LK_GREY_BG=$'\E[100m'
-    LK_BOLD=$'\E[1m'
-    LK_DIM=$'\E[2m'
-    LK_RESET=$'\E(B\E[m'
-    ;;
-*)
-    eval "$(lk_get_colours)"
-    ;;
-esac
+LK_BLACK=
+LK_RED=
+LK_GREEN=
+LK_YELLOW=
+LK_BLUE=
+LK_MAGENTA=
+LK_CYAN=
+LK_WHITE=
+LK_GREY=
+LK_BLACK_BG=
+LK_RED_BG=
+LK_GREEN_BG=
+LK_YELLOW_BG=
+LK_BLUE_BG=
+LK_MAGENTA_BG=
+LK_CYAN_BG=
+LK_WHITE_BG=
+LK_GREY_BG=
+LK_BOLD=
+LK_DIM=
+LK_RESET=
+
+lk_is_true LK_TTY_NO_COLOUR ||
+    case "${TERM:-dumb}" in
+    dumb | unknown)
+        LK_BLACK=$'\E[30m'
+        LK_RED=$'\E[31m'
+        LK_GREEN=$'\E[32m'
+        LK_YELLOW=$'\E[33m'
+        LK_BLUE=$'\E[34m'
+        LK_MAGENTA=$'\E[35m'
+        LK_CYAN=$'\E[36m'
+        LK_WHITE=$'\E[37m'
+        LK_GREY=
+        LK_BLACK_BG=$'\E[40m'
+        LK_RED_BG=$'\E[41m'
+        LK_GREEN_BG=$'\E[42m'
+        LK_YELLOW_BG=$'\E[43m'
+        LK_BLUE_BG=$'\E[44m'
+        LK_MAGENTA_BG=$'\E[45m'
+        LK_CYAN_BG=$'\E[46m'
+        LK_WHITE_BG=$'\E[47m'
+        LK_GREY_BG=
+        LK_BOLD=$'\E[1m'
+        LK_DIM=$'\E[2m'
+        LK_RESET=$'\E[0m'
+        unset TERM
+        ;;
+    xterm-256color)
+        LK_BLACK=$'\E[30m'
+        LK_RED=$'\E[31m'
+        LK_GREEN=$'\E[32m'
+        LK_YELLOW=$'\E[33m'
+        LK_BLUE=$'\E[34m'
+        LK_MAGENTA=$'\E[35m'
+        LK_CYAN=$'\E[36m'
+        LK_WHITE=$'\E[37m'
+        LK_GREY=$'\E[90m'
+        LK_BLACK_BG=$'\E[40m'
+        LK_RED_BG=$'\E[41m'
+        LK_GREEN_BG=$'\E[42m'
+        LK_YELLOW_BG=$'\E[43m'
+        LK_BLUE_BG=$'\E[44m'
+        LK_MAGENTA_BG=$'\E[45m'
+        LK_CYAN_BG=$'\E[46m'
+        LK_WHITE_BG=$'\E[47m'
+        LK_GREY_BG=$'\E[100m'
+        LK_BOLD=$'\E[1m'
+        LK_DIM=$'\E[2m'
+        LK_RESET=$'\E(B\E[m'
+        ;;
+    *)
+        eval "$(lk_get_colours)"
+        ;;
+    esac
 
 LK_TTY_COLOUR=$LK_CYAN
 LK_SUCCESS_COLOUR=$LK_GREEN
