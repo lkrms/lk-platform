@@ -75,7 +75,8 @@ function lk_systemctl_enabled() {
 function lk_systemctl_running() {
     local SH
     SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
-    "${COMMAND[@]}" is-active --quiet "$1"
+    "${COMMAND[@]}" is-active --quiet "$1" ||
+        lk_systemctl_property_is ${_USER+-u} ActiveStatus activating "$1"
 }
 
 function lk_systemctl_failed() {
