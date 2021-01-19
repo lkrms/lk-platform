@@ -3,7 +3,9 @@
 # shellcheck disable=SC1090,SC2015,SC2016,SC2034,SC2207
 
 [ "$EUID" -eq 0 ] || {
-    sudo -H -E "$0" --elevated "$@"
+    [ -z "${BASH_XTRACEFD:-}" ] && unset ARGS ||
+        ARGS=(-C $((i = BASH_XTRACEFD, (${_LK_FD:=2} > i ? _LK_FD : i) + 1)))
+    sudo ${ARGS[@]+"${ARGS[@]}"} -H -E "$0" --elevated "$@"
     exit
 }
 
