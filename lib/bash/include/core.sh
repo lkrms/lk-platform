@@ -2,6 +2,7 @@
 
 # shellcheck disable=SC1090,SC1091,SC2015,SC2016,SC2034,SC2046,SC2086,SC2094,SC2116,SC2120,SC2154,SC2207
 
+export -n BASH_XTRACEFD SHELLOPTS
 [ -n "${_LK_ENV:+1}" ] || _LK_ENV=$(declare -x)
 
 USER=${USER:-$(id -un)} || return

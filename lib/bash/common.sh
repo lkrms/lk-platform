@@ -2,6 +2,7 @@
 
 # shellcheck disable=SC1090,SC2015,SC2120,SC2128,SC2207
 
+export -n BASH_XTRACEFD SHELLOPTS
 [ -n "${_LK_ENV:+1}" ] || _LK_ENV=$(declare -x)
 
 lk_die() { s=$? && echo "$BASH_SOURCE: $1" >&2 && (exit $s) && false || exit; }
