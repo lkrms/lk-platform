@@ -10,13 +10,17 @@
 
 set -euo pipefail
 lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
+lk_log() { local l && while IFS= read -r l || [ -n "$l" ]; do
+    printf '%(%Y-%m-%d %H:%M:%S %z)T %s\n' -1 "$l"
+done; }
 
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
 readonly _DIR=/tmp/${LK_PATH_PREFIX}install
 mkdir -p "$_DIR"
 LOG_FILE=$_DIR/install.$(date +%s).log
+OUT_FILE=${LOG_FILE%.log}.out
 TRACE_FILE=${LOG_FILE%.log}.trace
-exec 4>>"$TRACE_FILE"
+exec 4> >(lk_log >"$TRACE_FILE")
 BASH_XTRACEFD=4
 set -x
 
@@ -95,7 +99,8 @@ for FILE_PATH in \
     /lib/bash/include/arch.sh \
     /lib/bash/include/linux.sh \
     /lib/bash/include/provision.sh \
-    /lib/arch/packages.sh; do
+    /lib/arch/packages.sh \
+    /share/sudoers.d/default; do
     FILE=$_DIR/${FILE_PATH##*/}
     URL=$BOOTSTRAP_URL/$LK_PLATFORM_BRANCH$FILE_PATH
     MESSAGE=$'\E[1m\E[33m   -> \E[0m{}\E[0m\E[33m '"$URL"$'\E[0m'
@@ -196,9 +201,9 @@ function exit_trap() {
         set +x
         unset BASH_XTRACEFD
         exec >&"$STDOUT_FD" 2>&"$STDERR_FD" &&
-            eval "exec $STDOUT_FD>&- $STDERR_FD>&- 4>&-"
+            eval "exec 4>&- $STDOUT_FD>&- $STDERR_FD>&- $LOG_FD>&- $OUT_FD>&- $ERR_FD>&-"
         local LOG FILE
-        for LOG in "$LOG_FILE" "$TRACE_FILE"; do
+        for LOG in "$LOG_FILE" "$OUT_FILE" "$TRACE_FILE"; do
             FILE=/var/log/${LK_PATH_PREFIX}${LOG##*/}
             in_target install -m 00640 -g adm /dev/null "$FILE" &&
                 cp -v --preserve=timestamps "$LOG" "/mnt/${FILE#/}" || break
@@ -208,6 +213,12 @@ function exit_trap() {
         lk_console_log \
             "The random password generated for user '$BOOTSTRAP_USERNAME' is" \
             "$BOOTSTRAP_PASSWORD"
+}
+
+function no_log() {
+    "$@" \
+        > >(tee "/dev/fd/$STDOUT_FD" >&"$OUT_FD") \
+        2> >(tee >(tee "/dev/fd/$LOG_FD" >&"$ERR_FD") >&"$STDERR_FD")
 }
 
 function in_target() {
@@ -222,13 +233,26 @@ function configure_pacman() {
         lk_arch_add_repo "${PAC_REPOS[@]}"
 }
 
+FIFO_FILE=$(lk_mktemp_dir)/fifo
+mkfifo "$FIFO_FILE"
+lk_strip_non_printing <"$FIFO_FILE" >"$OUT_FILE" &
+lk_delete_on_exit "${FIFO_FILE%/*}"
+
 STDOUT_FD=$(lk_next_fd)
 eval "exec $STDOUT_FD>&1"
 STDERR_FD=$(lk_next_fd)
 eval "exec $STDERR_FD>&2"
 LOG_FD=$(lk_next_fd)
-eval "exec $LOG_FD>>\"$LOG_FILE\""
-exec > >(tee >(lk_log >&"$LOG_FD")) 2>&1
+eval "exec $LOG_FD> >(lk_log >\"\$LOG_FILE\")"
+OUT_FD=$(lk_next_fd)
+eval "exec $OUT_FD> >(lk_log \"..\" >\"\$FIFO_FILE\")"
+ERR_FD=$(lk_next_fd)
+eval "exec $ERR_FD> >(lk_log \"!!\" >\"\$FIFO_FILE\")"
+exec > >(tee "/dev/fd/$LOG_FD" >&"$OUT_FD")
+exec 2> >(tee "/dev/fd/$LOG_FD" >&"$ERR_FD")
+exec 3> >(tee "/dev/fd/$STDOUT_FD" >&1)
+export _LK_FD=3
+
 trap exit_trap EXIT
 
 lk_console_log "Setting up live environment"
@@ -252,16 +276,16 @@ if [ -d /mnt/boot ]; then
 fi
 
 lk_console_message "Checking network connection"
-ping -c 1 "$BOOTSTRAP_PING_HOST" >&"$LOG_FD" || lk_die "no network"
+ping -c 1 "$BOOTSTRAP_PING_HOST" || lk_die "no network"
 
 if [ -n "$LK_NTP_SERVER" ]; then
     lk_console_item "Synchronising system time with" "$LK_NTP_SERVER"
     if ! lk_command_exists ntpd; then
         lk_console_detail "Installing ntp"
-        lk_tty pacman -Sy --noconfirm ntp >&"$LOG_FD" ||
+        no_log lk_tty pacman -Sy --noconfirm ntp ||
             lk_die "unable to install ntp"
     fi
-    lk_run_detail ntpd -qgx "$LK_NTP_SERVER" >&"$LOG_FD" ||
+    lk_run_detail ntpd -qgx "$LK_NTP_SERVER" ||
         lk_die "unable to sync system time"
 fi
 
@@ -283,8 +307,8 @@ if [ -n "$INSTALL_DISK" ]; then
     [ ${#PARTITIONS[@]} -eq 2 ] &&
         ROOT_PART=${PARTITIONS[1]} &&
         BOOT_PART=${PARTITIONS[0]} || lk_die "invalid partition table"
-    lk_run_detail wipefs -a "$ROOT_PART" >&"$LOG_FD"
-    lk_run_detail wipefs -a "$BOOT_PART" >&"$LOG_FD"
+    lk_run_detail wipefs -a "$ROOT_PART"
+    lk_run_detail wipefs -a "$BOOT_PART"
     REPARTITIONED=1
 fi
 
@@ -316,8 +340,8 @@ lk_is_true REPARTITIONED ||
 
 lk_console_item "Formatting:" "${FORMAT_BOOT:+$BOOT_PART }$ROOT_PART"
 ! lk_is_true FORMAT_BOOT ||
-    lk_run_detail mkfs.fat -vn ESP -F 32 "$BOOT_PART" >&"$LOG_FD" 2>&1
-lk_run_detail mkfs.ext4 -vL root "$ROOT_PART" >&"$LOG_FD" 2>&1
+    lk_run_detail mkfs.fat -vn ESP -F 32 "$BOOT_PART"
+lk_run_detail mkfs.ext4 -vL root "$ROOT_PART"
 
 if lk_is_virtual; then
     ! lk_block_device_is_ssd "$ROOT_PART" || ROOT_EXTRA=,discard
@@ -338,7 +362,7 @@ fi
 
 lk_console_blank
 lk_console_log "Installing system"
-lk_tty pacstrap /mnt "${PAC_PACKAGES[@]}"
+no_log lk_tty pacstrap /mnt "${PAC_PACKAGES[@]}"
 
 lk_console_blank
 lk_console_log "Setting up installed system"
@@ -361,6 +385,11 @@ _LK_PROVISION_ROOT=/mnt
 lk_configure_locales
 lk_run_detail -1 in_target locale-gen
 
+lk_console_message "Configuring sudo"
+FILE=/mnt/etc/sudoers.d/${LK_PATH_PREFIX}default
+install -m 00440 /dev/null "$FILE"
+lk_file_replace -f "$_DIR/default" "$FILE"
+
 FILE=/mnt/etc/skel/.ssh/authorized_keys
 lk_run install -d -m 00700 "${FILE%/*}"
 lk_run install -m 00600 /dev/null "$FILE"
@@ -373,7 +402,7 @@ lk_run_detail -1 in_target useradd \
     --key UMASK=026 \
     "$BOOTSTRAP_USERNAME"
 printf '%s\n' "$BOOTSTRAP_PASSWORD" "$BOOTSTRAP_PASSWORD" |
-    in_target passwd "$BOOTSTRAP_USERNAME" 2>&"$LOG_FD"
+    in_target passwd "$BOOTSTRAP_USERNAME"
 FILE=/mnt/etc/sudoers.d/nopasswd-$BOOTSTRAP_USERNAME
 install -m 00440 /dev/null "$FILE"
 echo "$BOOTSTRAP_USERNAME ALL=(ALL) NOPASSWD:ALL" >"$FILE"
@@ -409,7 +438,7 @@ lk_get_shell_var \
 
 PROVISIONED=
 in_target -u "$BOOTSTRAP_USERNAME" \
-    env BASH_XTRACEFD=$BASH_XTRACEFD SHELLOPTS=xtrace \
+    env BASH_XTRACEFD=$BASH_XTRACEFD SHELLOPTS=xtrace LK_NO_LOG=1 \
     "$LK_BASE/bin/lk-provision-arch.sh" && PROVISIONED=1 ||
     lk_console_error "Provisioning failed"
 

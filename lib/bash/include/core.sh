@@ -242,13 +242,6 @@ function lk_mktemp_dir() {
     _lk_mktemp -d
 }
 
-function lk_mktemp_fifo() {
-    local FIFO_PATH
-    FIFO_PATH=$(lk_mktemp_dir)/fifo &&
-        mkfifo "$FIFO_PATH" &&
-        echo "$FIFO_PATH"
-}
-
 function lk_command_first_existing() {
     local COMMAND
     while [ $# -gt 0 ]; do
@@ -1085,7 +1078,7 @@ function lk_lock_drop() {
 function lk_log() {
     local LINE
     while IFS= read -r LINE || [ -n "$LINE" ]; do
-        printf '%s %s\n' "$(lk_date_log)" "$LINE"
+        printf '%s%s %s\n' "${1:-}" "$(lk_date_log)" "$LINE"
     done
 }
 
