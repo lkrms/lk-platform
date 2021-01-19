@@ -122,25 +122,29 @@ function lk_pac_official_repo_list() {
 #
 # Return true if each PACKAGE is installed.
 function lk_pac_installed() {
-    local EXPLICIT=
-    [ "${1:-}" != -e ] || { EXPLICIT=1 && shift; }
+    local E='' D=''
+    [ "${1:-}" != -e ] || E=-e
+    [ "${1:-}" != -d ] || D=-d
+    [ -z "$E$D" ] || shift
     [ $# -gt 0 ] || lk_warn "no package" || return
-    pacman -Qq ${EXPLICIT:+-e} "$@" >/dev/null 2>&1
+    pacman -Qq $E $D "$@" >/dev/null 2>&1
 }
 
 # lk_pac_installed_list [PACKAGE...]
 #
 # Output each currently installed PACKAGE, or list all installed packages.
 function lk_pac_installed_list() {
-    local EXPLICIT=
-    [ "${1:-}" != -e ] || { EXPLICIT=1 && shift; }
+    local E='' D=''
+    [ "${1:-}" != -e ] || E=-e
+    [ "${1:-}" != -d ] || D=-d
+    [ -z "$E$D" ] || shift
     [ $# -eq 0 ] || {
         comm -12 \
-            <(lk_pac_installed_list ${EXPLICIT:+-e} | sort -u) \
+            <(lk_pac_installed_list $E $D | sort -u) \
             <(lk_echo_args "$@" | sort -u)
         return
     }
-    pacman -Qq ${EXPLICIT:+-e} "$@"
+    pacman -Qq $E $D "$@"
 }
 
 function lk_pac_sync() {
@@ -148,7 +152,6 @@ function lk_pac_sync() {
         lk_is_false LK_PACMAN_SYNC ||
         { lk_console_message "Refreshing package databases" &&
             lk_run_detail lk_elevate pacman -Sy >/dev/null &&
-            lk_run_detail lk_elevate pacman -Fy >/dev/null &&
             LK_PACMAN_SYNC=0; }
 }
 
@@ -194,14 +197,12 @@ function lk_pac_installed_explicit() {
     lk_pac_installed_list -e "$@"
 }
 
-# lk_pac_not_installed_explicit PACKAGE...
+# lk_pac_installed_not_explicit [PACKAGE...]
 #
-# Output each PACKAGE that isn't currently marked as "explicitly installed".
-function lk_pac_not_installed_explicit() {
-    [ $# -gt 0 ] || lk_warn "no package" || return
-    comm -13 \
-        <(lk_pac_installed_explicit "$@" | sort -u) \
-        <(lk_echo_args "$@" | sort -u)
+# Output each installed PACKAGE that isn't currently marked as "explicitly
+# installed", or list all packages installed as dependencies.
+function lk_pac_installed_not_explicit() {
+    lk_pac_installed_list -d "$@"
 }
 
 lk_provide arch

@@ -227,12 +227,6 @@ function in_target() {
     arch-chroot /mnt "$@"
 }
 
-function configure_pacman() {
-    lk_arch_configure_pacman
-    [ ${#PAC_REPOS[@]} -eq 0 ] ||
-        lk_arch_add_repo "${PAC_REPOS[@]}"
-}
-
 FIFO_FILE=$(lk_mktemp_dir)/fifo
 mkfifo "$FIFO_FILE"
 lk_strip_non_printing <"$FIFO_FILE" >"$OUT_FILE" &
@@ -256,7 +250,7 @@ export _LK_FD=3
 trap exit_trap EXIT
 
 lk_console_log "Setting up live environment"
-configure_pacman
+lk_arch_configure_pacman
 if [ -n "$LK_ARCH_MIRROR" ]; then
     lk_systemctl_disable_now reflector || true
     echo "Server=$LK_ARCH_MIRROR" >/etc/pacman.d/mirrorlist
@@ -367,7 +361,6 @@ no_log lk_tty pacstrap /mnt "${PAC_PACKAGES[@]}"
 lk_console_blank
 lk_console_log "Setting up installed system"
 _LK_ARCH_ROOT=/mnt
-configure_pacman
 
 lk_console_message "Generating /etc/fstab"
 FILE=/mnt/etc/fstab
@@ -390,11 +383,10 @@ FILE=/mnt/etc/sudoers.d/${LK_PATH_PREFIX}default
 install -m 00440 /dev/null "$FILE"
 lk_file_replace -f "$_DIR/default" "$FILE"
 
-FILE=/mnt/etc/skel/.ssh/authorized_keys
-lk_run install -d -m 00700 "${FILE%/*}"
-lk_run install -m 00600 /dev/null "$FILE"
-
 lk_console_item "Creating administrator account:" "$BOOTSTRAP_USERNAME"
+FILE=/mnt/etc/skel/.ssh/authorized_keys
+lk_run_detail install -d -m 00700 "${FILE%/*}"
+lk_run_detail install -m 00600 /dev/null "$FILE"
 lk_run_detail -1 in_target useradd \
     --groups adm,wheel \
     --create-home \

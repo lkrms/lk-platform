@@ -501,7 +501,7 @@ function lk_get_env() {
         _LK_IGNORE=$(lk_var_list_all |
             sed -E "/$_LK_IGNORE_REGEX/d")
         # Restore environment variables
-        eval "$_LK_ENV"
+        eval "$_LK_ENV" 2>/dev/null
         # Reduce the selection to variables not being ignored
         set -- $(comm -13 \
             <(sort -u <<<"$_LK_IGNORE") \

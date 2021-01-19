@@ -114,6 +114,8 @@
 
     lk_log_output
 
+    lk_console_log "Configuring lk-platform"
+
     if [ "${LK_INST##*/}" != lk-platform ] &&
         [[ "${LK_INST##*/}" =~ ^([a-zA-Z0-9]{2,3}-)platform$ ]]; then
         ORIGINAL_PATH_PREFIX=${BASH_REMATCH[1]}

@@ -50,6 +50,19 @@ lk_assert_is_arch
 
 lk_sudo_offer_nopasswd || lk_die "unable to run commands as root"
 
+LK_PACKAGES_FILE=${1:-${LK_PACKAGES_FILE:-}}
+if [ -n "$LK_PACKAGES_FILE" ]; then
+    if [ ! -f "$LK_PACKAGES_FILE" ]; then
+        FILE=${LK_PACKAGES_FILE##*/}
+        FILE=${FILE#packages-arch-}
+        FILE=${FILE%.sh}
+        FILE=$LK_BASE/share/packages/arch/$FILE.sh
+        [ -f "$FILE" ] || lk_die "file not found: $LK_PACKAGES_FILE"
+        LK_PACKAGES_FILE=$FILE
+    fi
+    export LK_PACKAGES_FILE
+fi
+
 lk_log_output
 
 {
@@ -74,8 +87,10 @@ lk_log_output
         lk_symlink "$FILE" /etc/localtime
     fi
 
-    [ -e /etc/adjtime ] ||
-        lk_run sudo hwclock --systohc
+    if [ ! -e /etc/adjtime ]; then
+        lk_console_message "Setting hardware clock"
+        lk_run_detail sudo hwclock --systohc
+    fi
 
     lk_console_message "Checking locales"
     lk_configure_locales
@@ -172,99 +187,65 @@ $LK_NODE_HOSTNAME" &&
     ! lk_is_qemu ||
         systemctl_enable qemu-guest-agent "QEMU Guest Agent"
 
-    export LK_PACKAGES_FILE=${1:-${LK_PACKAGES_FILE:-}}
-    if [ -n "$LK_PACKAGES_FILE" ]; then
-        if [ ! -f "$LK_PACKAGES_FILE" ]; then
-            case "$LK_PACKAGES_FILE" in
-            /*/*)
-                CONTRIB_PACKAGES_FILE=${LK_PACKAGES_FILE:1}
-                ;;
-            */*)
-                CONTRIB_PACKAGES_FILE=$LK_PACKAGES_FILE
-                ;;
-            *)
-                lk_die "$1: file not found"
-                ;;
-            esac
-            LK_PACKAGES_FILE=$LK_BASE/$CONTRIB_PACKAGES_FILE
-        fi
-        LK_PACKAGES_FILE=$(realpath "$LK_PACKAGES_FILE")
-        . "$LK_PACKAGES_FILE"
-    fi
-    . "$LK_BASE/lib/arch/packages.sh"
-
+    lk_console_blank
     lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" --no-log
 
-    PAC_TO_REMOVE=($(comm -12 \
-        <(pacman -Qq | sort -u) \
-        <(lk_echo_array PAC_REJECT | sort -u)))
-    [ ${#PAC_TO_REMOVE[@]} -eq 0 ] || {
-        lk_console_message "Removing packages"
-        lk_tty sudo pacman -R --noconfirm "${PAC_TO_REMOVE[@]}"
-    }
+    lk_console_blank
+    lk_console_log "Checking packages"
+    lk_arch_configure_pacman
+    [ -z "$LK_PACKAGES_FILE" ] ||
+        . "$LK_PACKAGES_FILE"
+    . "$LK_BASE/lib/arch/packages.sh"
 
     lk_console_message "Checking install reasons"
-    PAC_EXPLICIT=($(lk_echo_array PAC_PACKAGES AUR_PACKAGES PAC_KEEP | sort -u))
-    PAC_TO_MARK_ASDEPS=($(comm -23 \
-        <(pacman -Qeq | sort -u) \
-        <(lk_echo_array PAC_EXPLICIT)))
-    PAC_TO_MARK_EXPLICIT=($(comm -12 \
-        <(pacman -Qdq | sort -u) \
-        <(lk_echo_array PAC_EXPLICIT)))
-    [ ${#PAC_TO_MARK_ASDEPS[@]} -eq 0 ] ||
-        lk_tty sudo pacman -D --asdeps "${PAC_TO_MARK_ASDEPS[@]}"
-    [ ${#PAC_TO_MARK_EXPLICIT[@]} -eq 0 ] ||
-        lk_tty sudo pacman -D --asexplicit "${PAC_TO_MARK_EXPLICIT[@]}"
+    PAC_EXPLICIT=$(lk_echo_array PAC_PACKAGES AUR_PACKAGES PAC_KEEP | sort -u)
+    PAC_MARK_EXPLICIT=($(comm -12 \
+        <(lk_echo_array PAC_EXPLICIT) \
+        <(lk_pac_installed_not_explicit | sort -u)))
+    PAC_UNMARK_EXPLICIT=($(comm -13 \
+        <(lk_echo_array PAC_EXPLICIT) \
+        <(lk_pac_installed_explicit | sort -u)))
+    [ ${#PAC_MARK_EXPLICIT[@]} -eq 0 ] ||
+        lk_tty sudo pacman -D --asexplicit "${PAC_MARK_EXPLICIT[@]}"
+    [ ${#PAC_UNMARK_EXPLICIT[@]} -eq 0 ] ||
+        lk_tty sudo pacman -D --asdeps "${PAC_UNMARK_EXPLICIT[@]}"
+    [ ${#PAC_KEEP[@]} -eq 0 ] ||
+        lk_echo_array PAC_KEEP |
+        lk_console_detail_list \
+            "Not installed as dependency because of PAC_KEEP:" package packages
 
-    ! PAC_TO_PURGE=($(pacman -Qdttq)) ||
-        [ ${#PAC_TO_PURGE[@]} -eq 0 ] || {
-        lk_echo_array PAC_TO_PURGE |
-            lk_console_list \
-                "Installed but no longer required:" package packages
-        ! lk_confirm "Remove the above?" N ||
-            lk_tty sudo pacman -Rs --noconfirm "${PAC_TO_PURGE[@]}"
+    PAC_INSTALL=($(comm -23 \
+        <(lk_echo_array PAC_PACKAGES | sort -u) \
+        <(lk_pac_installed_list | sort -u)))
+    [ ${#PAC_INSTALL[@]} -eq 0 ] ||
+        lk_echo_array PAC_INSTALL |
+        lk_console_list "Installing:" package packages
+    PAC_UPGRADE=($(pacman -Sup --print-format %n))
+    [ ${#PAC_UPGRADE[@]} -eq 0 ] ||
+        lk_echo_array PAC_UPGRADE |
+        lk_console_list "Upgrading:" package packages
+    [ ${#PAC_INSTALL[@]}${#PAC_UPGRADE[@]} = 00 ] ||
+        lk_tty sudo pacman -Su ${PAC_INSTALL[@]+"${PAC_INSTALL[@]}"}
+
+    REMOVE_MESSAGE=()
+    ! PAC_REMOVE=($(pacman -Qdttq)) || [ ${#PAC_REMOVE[@]} -eq 0 ] || {
+        lk_echo_array PAC_REMOVE |
+            lk_console_list "Orphaned:" package packages
+        lk_confirm "Remove the above?" N &&
+            REMOVE_MESSAGE+=("orphaned") ||
+            PAC_REMOVE=()
     }
-
-    lk_console_message "Upgrading installed packages"
-    lk_tty sudo pacman -Syu
-
-    PAC_TO_INSTALL=($(comm -13 \
-        <(pacman -Qeq | sort -u) \
-        <(lk_echo_array PAC_PACKAGES | sort -u)))
-    [ ${#PAC_TO_INSTALL[@]} -eq 0 ] || {
-        lk_console_message "Installing new packages from repo"
-        lk_tty sudo pacman -S "${PAC_TO_INSTALL[@]}"
+    PAC_REJECT=($(comm -12 \
+        <(lk_echo_array PAC_REJECT | sort -u) \
+        <(lk_pac_installed | sort -u)))
+    [ ${#PAC_REJECT[@]} -eq 0 ] || {
+        REMOVE_MESSAGE+=("blacklisted")
+        PAC_REMOVE+=("${PAC_REJECT[@]}")
     }
-
-    if [ ${#AUR_PACKAGES[@]} -gt 0 ]; then
-        lk_command_exists yay || {
-            lk_console_message "Installing yay to manage AUR packages"
-            eval "$YAY_SCRIPT"
-        }
-        AUR_TO_INSTALL=($(comm -13 \
-            <(pacman -Qeq | sort -u) \
-            <(lk_echo_array AUR_PACKAGES | sort -u)))
-        [ ${#AUR_TO_INSTALL[@]} -eq 0 ] || {
-            lk_console_message "Installing new packages from AUR"
-            lk_tty yay -Sy --aur "${AUR_TO_INSTALL[@]}"
-        }
-        lk_console_message "Upgrading installed AUR packages"
-        lk_tty yay -Syu --aur
-    fi
-
-    PAC_KEPT=($(comm -12 \
-        <(pacman -Qeq | sort -u) \
-        <(lk_echo_array PAC_KEEP | sort -u)))
-    [ ${#PAC_KEPT[@]} -eq 0 ] ||
-        lk_echo_array PAC_KEPT |
-        lk_console_list "Retained because of PAC_KEEP:" package packages
-
-    [[ ${LK_PACKAGES_FILE##*/} != *-dev* ]] ||
-        [ -e /opt/opcache-gui ] || {
-        lk_console_message "Installing opcache-gui"
-        sudo install -d -m 00755 -o "$USER" -g "$(id -gn)" /opt/opcache-gui &&
-            git clone https://github.com/lkrms/opcache-gui.git \
-                /opt/opcache-gui
+    [ ${#PAC_REMOVE[@]} -eq 0 ] || {
+        lk_console_message \
+            "Removing $(lk_implode " and " REMOVE_MESSAGE) packages"
+        lk_tty sudo pacman -Rs --noconfirm "${PAC_REMOVE[@]}"
     }
 
     lk_symlink_bin codium code
@@ -273,6 +254,23 @@ $LK_NODE_HOSTNAME" &&
     lk_console_message "Checking services"
     systemctl_enable atd "at"
     systemctl_enable cronie "cron"
+
+    if lk_pac_installed mariadb; then
+        sudo test -d /var/lib/mysql/mysql ||
+            sudo mariadb-install-db \
+                --user=mysql \
+                --basedir=/usr \
+                --datadir=/var/lib/mysql
+        systemctl_enable mariadb "MariaDB"
+    fi
+
+    [[ ${LK_PACKAGES_FILE##*/} != dev.sh ]] ||
+        [ -e /opt/opcache-gui ] || {
+        lk_console_message "Installing opcache-gui"
+        sudo install -d -m 00755 -o "$USER" -g "$(id -gn)" /opt/opcache-gui &&
+            git clone https://github.com/lkrms/opcache-gui.git \
+                /opt/opcache-gui
+    }
 
     if ! lk_is_virtual; then
 
@@ -306,15 +304,6 @@ $LK_NODE_HOSTNAME" &&
 
         fi
 
-    fi
-
-    if lk_node_service_enabled mariadb; then
-        sudo test -d /var/lib/mysql/mysql ||
-            sudo mariadb-install-db \
-                --user=mysql \
-                --basedir=/usr \
-                --datadir=/var/lib/mysql
-        systemctl_enable mariadb
     fi
 
     if lk_node_service_enabled desktop; then
