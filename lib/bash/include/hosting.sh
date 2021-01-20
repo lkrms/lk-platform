@@ -25,8 +25,8 @@ Usage: $(lk_myself -f) LOGIN" || return
     lk_console_detail "Home directory:" "$_HOME"
     [ $# -lt 2 ] || {
         local LK_SUDO=1 FILE=$_HOME/.ssh/authorized_keys
-        lk_maybe_install -d -m 00700 -o "$1" -g "$_GROUP" "${FILE%/*}"
-        lk_maybe_install -m 00600 -o "$1" -g "$_GROUP" /dev/null "$FILE"
+        lk_install -d -m 00700 -o "$1" -g "$_GROUP" "${FILE%/*}"
+        lk_install -m 00600 -o "$1" -g "$_GROUP" "$FILE"
         lk_file_replace "$FILE" "$(lk_echo_args "${@:2}")"
     }
     lk_sudo_add_nopasswd "$1"
@@ -80,8 +80,8 @@ function lk_hosting_set_site_settings() {
     [ $# -gt 0 ] || lk_warn "no domain" || return
     lk_is_fqdn "$1" || lk_warn "invalid domain: $1" || return
     FILE=$LK_BASE/etc/sites/$1.conf
-    lk_maybe_install -d -m 02770 -g adm "$LK_BASE/etc/sites" &&
-        lk_maybe_install -m 00660 -g adm /dev/null "$FILE" &&
+    lk_install -d -m 02770 -g adm "$LK_BASE/etc/sites" &&
+        lk_install -m 00660 -g adm "$FILE" &&
         lk_file_replace "$FILE" "$(lk_get_shell_var "${!SITE_@}")"
 }
 
@@ -116,19 +116,15 @@ function lk_hosting_configure_site() {
     fi
     lk_console_detail "Checking files and directories in" "$_HOME"
     GROUP=$(id -gn "$_USER") &&
-        lk_maybe_install -d -m 00750 \
-            -o "$_USER" -g "$GROUP" "$_HOME"/{,public_html,ssl} &&
-        lk_maybe_install -d -m 02750 \
-            -o root -g "$GROUP" "$_HOME/log" || return
+        lk_install -d -m 00750 -o "$_USER" -g "$GROUP" \
+            "$_HOME"/{,public_html,ssl} &&
+        lk_install -d -m 02750 -o root -g "$GROUP" \
+            "$_HOME/log" || return
     if lk_apt_installed apache2; then
-        lk_maybe_install -m 00640 \
-            -o root -g "$GROUP" /dev/null "$_HOME/log/error.log"
-        lk_maybe_install -m 00640 \
-            -o root -g "$GROUP" /dev/null "$_HOME/log/access.log"
-        lk_maybe_install -m 00640 \
-            -o "$_USER" -g "$GROUP" /dev/null "$_HOME/ssl/$DOMAIN.cert"
-        lk_maybe_install -m 00640 \
-            -o "$_USER" -g "$GROUP" /dev/null "$_HOME/ssl/$DOMAIN.key"
+        lk_install -m 00640 -o root -g "$GROUP" "$_HOME/log/error.log"
+        lk_install -m 00640 -o root -g "$GROUP" "$_HOME/log/access.log"
+        lk_install -m 00640 -o "$_USER" -g "$GROUP" "$_HOME/ssl/$DOMAIN.cert"
+        lk_install -m 00640 -o "$_USER" -g "$GROUP" "$_HOME/ssl/$DOMAIN.key"
         lk_user_in_group "$GROUP" www-data || {
             lk_console_detail "Adding user 'www-data' to group:" "$GROUP"
             lk_elevate usermod --append --groups "$GROUP" www-data || return

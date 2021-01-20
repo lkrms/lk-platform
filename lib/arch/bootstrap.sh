@@ -364,7 +364,7 @@ _LK_ARCH_ROOT=/mnt
 
 lk_console_message "Generating /etc/fstab"
 FILE=/mnt/etc/fstab
-lk_maybe_install -m 00644 /dev/null "$FILE"
+lk_install -m 00644 "$FILE"
 lk_file_keep_original "$FILE"
 genfstab -U /mnt >>"$FILE"
 

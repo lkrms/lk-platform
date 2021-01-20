@@ -114,8 +114,8 @@ lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
 grub-mkconfig -o /boot/grub/grub.cfg
 EOF
     )
-    lk_maybe_install -d -m 00755 "${FILE%/*}" &&
-        lk_maybe_install -m 00755 /dev/null "$FILE" &&
+    lk_install -d -m 00755 "${FILE%/*}" &&
+        lk_install -m 00755 "$FILE" &&
         lk_file_replace "$FILE" "$_FILE" || lk_warn "unable to update $FILE" || return
 }
 

@@ -103,7 +103,7 @@ lk_log_output
     if [ -n "${LK_NODE_HOSTNAME:-}" ]; then
         lk_console_message "Checking system hostname"
         FILE=/etc/hostname
-        lk_install -m 00644 /dev/null "$FILE"
+        lk_install -m 00644 "$FILE"
         lk_file_replace "$FILE" "$LK_NODE_HOSTNAME"
 
         lk_console_message "Checking hosts file"
@@ -143,7 +143,7 @@ $LK_NODE_HOSTNAME" &&
 
     lk_console_message "Checking sudo"
     FILE=/etc/sudoers.d/${LK_PATH_PREFIX}default-arch
-    lk_install -m 00440 /dev/null "$FILE"
+    lk_install -m 00440 "$FILE"
     lk_file_replace -f "$LK_BASE/share/sudoers.d/default-arch" "$FILE"
 
     if [ -d /etc/polkit-1/rules.d ]; then

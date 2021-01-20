@@ -2046,13 +2046,19 @@ function lk_elevate() {
 
 function lk_elevate_if_error() {
     local EXIT_STATUS=0
-    "$@" || {
+    LK_SUDO=0 "$@" || {
         EXIT_STATUS=$?
-        [ "$EUID" -eq 0 ] || ! lk_can_sudo "$1" ||
-            {
-                EXIT_STATUS=0
-                sudo -H "$@" || EXIT_STATUS=$?
-            }
+        [ "$EUID" -ne 0 ] || return "$EXIT_STATUS"
+        if [ "$(type -t "$1")" != function ]; then
+            ! lk_can_sudo "$1" ||
+                {
+                    EXIT_STATUS=0
+                    sudo -H "$@" || EXIT_STATUS=$?
+                }
+        else
+            EXIT_STATUS=0
+            LK_SUDO=1 "$@" || EXIT_STATUS=$?
+        fi
     }
     return "$EXIT_STATUS"
 }
@@ -2081,24 +2087,73 @@ function lk_rm() {
     fi
 }
 
-# lk_install [-v] [-m MODE] [-o OWNER] [-g GROUP] SOURCE DEST
-# lk_install -d [-v] [-m MODE] [-o OWNER] [-g GROUP] DEST
+# - lk_install [-m MODE] [-o OWNER] [-g GROUP] [-v] FILE...
+# - lk_install -d [-m MODE] [-o OWNER] [-g GROUP] [-v] DIRECTORY...
+#
+# Create or set permissions and ownership on each FILE or DIRECTORY.
 function lk_install() {
-    local DEST=${*: -1:1} OWNER GROUP MODE i \
-        ARGS=("$@") LK_ARG_ARRAY=ARGS LK_SUDO=${LK_SUDO:-} VERBOSE=
-    ! i=$(lk_array_search -o ARGS) || OWNER=${ARGS[*]:$((i + 1)):1}
-    ! i=$(lk_array_search -g ARGS) || GROUP=${ARGS[*]:$((i + 1)):1}
+    local OPTIND OPTARG OPT LK_USAGE LK_SUDO=${LK_SUDO:-} \
+        DIR MODE OWNER GROUP VERBOSE DEST STAT REGEX ARGS=()
+    LK_USAGE="\
+Usage: $(lk_myself -f) [-m MODE] [-o OWNER] [-g GROUP] [-v] FILE...
+   or: $(lk_myself -f) -d [-m MODE] [-o OWNER] [-g GROUP] [-v] DIRECTORY..."
+    while getopts ":dm:o:g:v" OPT; do
+        case "$OPT" in
+        d)
+            DIR=1
+            ARGS+=(-d)
+            ;;
+        m)
+            MODE=$OPTARG
+            ARGS+=(-m "$MODE")
+            ;;
+        o)
+            OWNER=$OPTARG
+            ARGS+=(-o "$OWNER")
+            ;;
+        g)
+            GROUP=$OPTARG
+            ARGS+=(-g "$GROUP")
+            ;;
+        v)
+            VERBOSE=1
+            ARGS+=(-v)
+            ;;
+        \? | :)
+            lk_usage
+            return 1
+            ;;
+        esac
+    done
+    shift $((OPTIND - 1))
+    [ $# -gt 0 ] || lk_usage || return
     [ -z "${OWNER:-}${GROUP:-}" ] || LK_SUDO=1
-    if lk_has_arg -d || lk_maybe_sudo test ! -e "$DEST"; then
-        lk_maybe_sudo install "$@"
+    if lk_is_true DIR; then
+        lk_maybe_sudo install ${ARGS[@]+"${ARGS[@]}"} "$@"
     else
-        ! lk_has_arg -v || VERBOSE=1
-        ! i=$(lk_array_search -m ARGS) || MODE=${ARGS[*]:$((i + 1)):1}
-        [ -z "${MODE:-}" ] ||
-            lk_maybe_sudo chmod ${VERBOSE:+-v} "$MODE" "$DEST" || return
-        [ -z "${OWNER:-}${GROUP:-}" ] ||
-            lk_elevate chown ${VERBOSE:+-v} \
-                "${OWNER:-}${GROUP:+:$GROUP}" "$DEST"
+        for DEST in "$@"; do
+            if lk_elevate_if_error \
+                lk_maybe_sudo test ! -e "$DEST" 2>/dev/null; then
+                lk_maybe_sudo install ${ARGS[@]+"${ARGS[@]}"} /dev/null "$DEST"
+            else
+                STAT=$(lk_elevate_if_error \
+                    lk_file_security "$DEST" 2>/dev/null) || return
+                [ -z "${MODE:-}" ] ||
+                    { [[ $MODE =~ ^0*([0-7]+)$ ]] &&
+                        REGEX=" 0*${BASH_REMATCH[1]}\$" &&
+                        [[ $STAT =~ $REGEX ]]; } ||
+                    lk_maybe_sudo chmod \
+                        ${VERBOSE:+-v} "$MODE" "$DEST" ||
+                    return
+                [ -z "${OWNER:-}${GROUP:-}" ] ||
+                    { REGEX='[-a-z0-9_]+\$?' &&
+                        REGEX="^${OWNER:-$REGEX}:${GROUP:-$REGEX} " &&
+                        [[ $STAT =~ $REGEX ]]; } ||
+                    lk_elevate chown \
+                        ${VERBOSE:+-v} "${OWNER:-}${GROUP:+:$GROUP}" "$DEST" ||
+                    return
+            fi
+        done
     fi
 }
 
@@ -2465,6 +2520,9 @@ if ! lk_is_macos || lk_gnu_check stat; then
     function lk_file_mode() {
         lk_maybe_sudo gnu_stat -c '%04a' -- "$@"
     }
+    function lk_file_security() {
+        lk_maybe_sudo gnu_stat -c '%U:%G %04a' -- "$@"
+    }
 else
     function lk_file_modified() {
         lk_maybe_sudo stat -t '%s' -f '%Sm' -- "$@"
@@ -2480,6 +2538,9 @@ else
         # sticky bits (M), then with zero-padding (03) for the user, group, and
         # other bits (L)
         lk_maybe_sudo stat -f '%OMp%03OLp' -- "$@"
+    }
+    function lk_file_security() {
+        lk_maybe_sudo stat -f '%Su:%Sg %OMp%03OLp' -- "$@"
     }
 fi
 

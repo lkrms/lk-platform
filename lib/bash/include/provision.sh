@@ -44,12 +44,6 @@ Usage: $(lk_myself -f) TARGET ALIAS"
     fi
 }
 
-# lk_maybe_install [-v] [-m MODE] [-o OWNER] [-g GROUP] SOURCE DEST
-# lk_maybe_install -d [-v] [-m MODE] [-o OWNER] [-g GROUP] DEST
-function lk_maybe_install() {
-    lk_install "$@"
-}
-
 function lk_configure_locales() {
     local LK_SUDO=1 LOCALES _LOCALES FILE _FILE
     lk_is_linux || lk_warn "platform not supported" || return
@@ -73,7 +67,7 @@ function lk_configure_locales() {
         lk_elevate locale-gen || return
 
     FILE=${_LK_PROVISION_ROOT:-}/etc/locale.conf
-    lk_install -m 00644 /dev/null "$FILE"
+    lk_install -m 00644 "$FILE"
     lk_file_replace -i "^(#|$S*\$)" "$FILE" "\
 LANG=${LOCALES[0]}${LK_NODE_LANGUAGE:+
 LANGUAGE=$LK_NODE_LANGUAGE}"
@@ -161,7 +155,7 @@ function lk_sudo_add_nopasswd() {
     [ -n "${1:-}" ] || lk_warn "no user" || return
     lk_user_exists "$1" || lk_warn "user does not exist: $1" || return
     FILE=/etc/sudoers.d/nopasswd-$1
-    lk_install -m 00440 /dev/null "$FILE" &&
+    lk_install -m 00440 "$FILE" &&
         lk_file_replace "$FILE" "$1 ALL=(ALL) NOPASSWD:ALL"
 }
 
@@ -319,14 +313,14 @@ Usage: $(lk_myself -f) [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" |
     [ ! "$KEY_FILE" = - ] || {
         KEY=${KEY:-$(cat)}
         KEY_FILE=$h/.ssh/${SSH_PREFIX}keys/$NAME
-        lk_install -m 00600 /dev/null "$KEY_FILE" &&
+        lk_install -m 00600 "$KEY_FILE" &&
             lk_file_replace "$KEY_FILE" "$KEY" || return
         ssh-keygen -l -f "$KEY_FILE" >/dev/null 2>&1 || {
             # `ssh-keygen -l -f FILE` exits without error if FILE contains an
             # OpenSSH public key
             lk_console_log "Reading $KEY_FILE to create public key file"
             KEY=$(unset DISPLAY && ssh-keygen -y -f "$KEY_FILE") &&
-                lk_install -m 00600 /dev/null "$KEY_FILE.pub" &&
+                lk_install -m 00600 "$KEY_FILE.pub" &&
                 lk_file_replace "$KEY_FILE.pub" "$KEY" || return
         }
     }
@@ -375,7 +369,7 @@ ProxyJump       $SSH_PREFIX${JUMP_HOST_NAME#$SSH_PREFIX}}
 EOF
     )
     CONF_FILE=$h/.ssh/${SSH_PREFIX}config.d/${LK_SSH_PRIORITY:-60}-$NAME
-    lk_install -m 00600 /dev/null "$CONF_FILE" &&
+    lk_install -m 00600 "$CONF_FILE" &&
         lk_file_replace "$CONF_FILE" "$CONF" || return
 }
 
@@ -782,8 +776,8 @@ CA bundle and private key for DOMAIN from SSH_HOST to TARGET_DIR
     TARGET_DIR=${TARGET_DIR%/}
     [ -e "$TARGET_DIR" ] ||
         install -d -m 00750 "$TARGET_DIR" &&
-        lk_install -m 00640 /dev/null "$TARGET_DIR/$2.cert" &&
-        lk_install -m 00640 /dev/null "$TARGET_DIR/$2.key" || return
+        lk_install -m 00640 "$TARGET_DIR/$2.cert" &&
+        lk_install -m 00640 "$TARGET_DIR/$2.key" || return
     lk_console_message "Retrieving SSL certificate"
     lk_console_detail "Host:" "$1"
     lk_console_detail "Domain:" "$2"
@@ -849,7 +843,7 @@ Usage: $(lk_myself -f) [-p] FILE SETTING CHECK_REGEX [REPLACE_REGEX...]" || retu
     ! _lk_option_check || return 0
     lk_maybe_sudo test -e "$FILE" ||
         { lk_install -d -m 00755 "${FILE%/*}" &&
-            lk_install -m 00644 /dev/null "$FILE"; } || return
+            lk_install -m 00644 "$FILE"; } || return
     lk_maybe_sudo test -f "$FILE" || lk_warn "file not found: $FILE" || return
     lk_file_get_text "$FILE" _FILE || return
     [ "${PRESERVE+1}" = 1 ] ||
