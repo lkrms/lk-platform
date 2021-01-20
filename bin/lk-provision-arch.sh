@@ -255,7 +255,8 @@ $LK_NODE_HOSTNAME" &&
     lk_symlink_bin codium code
     lk_symlink_bin vim vi
 
-    lk_console_message "Checking services"
+    lk_console_blank
+    lk_console_log "Checking installed packages and services"
     systemctl_enable atd "at"
     systemctl_enable cronie "cron"
 

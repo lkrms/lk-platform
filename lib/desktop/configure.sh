@@ -3,7 +3,7 @@
 if lk_is_linux; then
 
     if systemctl is-enabled --quiet "libvirtd.service"; then
-        lk_console_message "Configuring libvirt"
+        lk_console_message "Checking libvirt"
         if ! virsh net-list --name | grep -Fx "default" >/dev/null; then
             lk_console_detail "Activating default network"
             virsh net-start default || true
@@ -32,7 +32,7 @@ EOF
     fi
 
     if lk_command_exists autorandr; then
-        lk_console_message "Configuring autorandr hooks"
+        lk_console_message "Checking autorandr hooks"
         lk_symlink "$LK_BASE/lib/autorandr/postsave" \
             "/etc/xdg/autorandr/postsave"
         lk_symlink "$LK_BASE/lib/autorandr/postswitch" \

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2015,SC2016,SC2034,SC2207
+# shellcheck disable=SC1090,SC2015,SC2016,SC2034,SC2086,SC2207
 
 [ "$EUID" -eq 0 ] || {
     [ -z "${BASH_XTRACEFD:-}" ] && unset ARGS ||
@@ -168,7 +168,7 @@
             _BYOBURC='[[ $OSTYPE != darwin* ]] || ! type -P gdf >/dev/null || df() { gdf "$@"; }'
     fi
 
-    lk_console_message "Checking sudo configuration"
+    lk_console_message "Checking sudo"
     FILE=/etc/sudoers.d/${LK_PATH_PREFIX}default
     [ ! -e "${FILE}s" ] || [ -e "$FILE" ] ||
         mv -fv "${FILE}s" "$FILE"
@@ -203,7 +203,7 @@
     # For other commands, warn and continue
     install_gnu_commands || true
 
-    lk_console_item "Checking lk-platform configuration:" "$CONF_FILE"
+    lk_console_message "Checking lk-platform settings"
     [ -e "$CONF_FILE" ] || {
         install -d -m 00755 "${CONF_FILE%/*}" &&
             install -m 00644 /dev/null "$CONF_FILE"
@@ -300,7 +300,7 @@
         }
         UMASK=$(umask)
         umask 002
-        lk_console_item "Checking repository:" "$LK_BASE"
+        lk_console_message "Checking repository ($LK_BASE)"
         cd "$LK_BASE"
         REPO_OWNER=$(lk_file_owner "$LK_BASE")
         CONFIG_COMMANDS=()
@@ -308,13 +308,11 @@
             check_repo_config "core.sharedRepository" "0664"
         check_repo_config "merge.ff" "only"
         check_repo_config "pull.ff" "only"
-        if [ ${#CONFIG_COMMANDS[@]} -gt 0 ]; then
-            lk_console_detail "Running:" \
-                "$(lk_echo_args "${CONFIG_COMMANDS[@]/#/git }")"
-            for COMMAND in "${CONFIG_COMMANDS[@]}"; do
-                _git $COMMAND
-            done
-        fi
+        for COMMAND in ${CONFIG_COMMANDS[@]+"${CONFIG_COMMANDS[@]}"}; do
+            LK_TTY_NO_FOLD=1 \
+                lk_console_detail "Running:" "$(lk_quote_args git $COMMAND)"
+            _git $COMMAND
+        done
         REMOTE=$(lk_git_branch_upstream_remote) ||
             lk_die "no upstream remote for current branch"
         BRANCH=$(lk_git_branch_current) ||
@@ -388,9 +386,7 @@
     lk_remove_missing LK_HOMES
     lk_resolve_files LK_HOMES
     [ ${#LK_HOMES[@]} -gt 0 ] || lk_die "No home directories found"
-    lk_echo_array LK_HOMES |
-        lk_console_list "Checking startup scripts and SSH config files in:" \
-            directory directories
+    lk_console_message "Checking startup scripts and SSH config files"
 
     # Prepare awk to update ~/.bashrc
     LK_BASE_QUOTED=$(printf '%q' "$LK_BASE")
