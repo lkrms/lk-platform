@@ -100,14 +100,20 @@ function lk_arch_configure_grub() {
         lk_file_keep_original "$FILE" &&
         lk_file_replace "$FILE" "$_FILE" || lk_warn "unable to update $FILE" || return
     FILE=$(lk_arch_path /usr/local/bin/update-grub)
-    _FILE="\
+    _FILE=$(
+        cat <<"EOF"
 #!/bin/bash
 
 set -euo pipefail
+lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
 
-[[ ! \${1:-} =~ ^(-i|--install)\$ ]] ||
+[ "$EUID" -eq 0 ] || lk_die "not running as root"
+
+[[ ! ${1:-} =~ ^(-i|--install)$ ]] ||
     grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
-grub-mkconfig -o /boot/grub/grub.cfg"
+grub-mkconfig -o /boot/grub/grub.cfg
+EOF
+    )
     lk_maybe_install -d -m 00755 "${FILE%/*}" &&
         lk_maybe_install -m 00755 /dev/null "$FILE" &&
         lk_file_replace "$FILE" "$_FILE" || lk_warn "unable to update $FILE" || return

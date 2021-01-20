@@ -191,6 +191,14 @@ $LK_NODE_HOSTNAME" &&
     ! lk_is_qemu ||
         systemctl_enable qemu-guest-agent "QEMU Guest Agent"
 
+    if lk_pac_installed grub; then
+        lk_console_message "Checking boot loader"
+        unset LK_FILE_REPLACE_NO_CHANGE
+        lk_arch_configure_grub
+        lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
+            sudo update-grub --install
+    fi
+
     lk_console_blank
     lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" --no-log
 
