@@ -34,7 +34,8 @@ if is_bootstrap; then
     lk_console_blank
 else
     function systemctl_enable() {
-        lk_systemctl_enable_now ${2:+-n "$2"} "$1"
+        ! lk_systemctl_exists "$1" ||
+            lk_systemctl_enable_now ${2:+-n "$2"} "$1"
     }
 fi
 

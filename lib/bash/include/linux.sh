@@ -88,8 +88,7 @@ function lk_systemctl_failed() {
 function lk_systemctl_exists() {
     local SH
     SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
-    lk_systemctl_property_is ${_USER+-u} LoadState loaded "$1" ||
-        lk_warn "unknown service: $_NAME"
+    lk_systemctl_property_is ${_USER+-u} LoadState loaded "$1"
 }
 
 function lk_systemctl_start() {
@@ -115,7 +114,8 @@ function lk_systemctl_stop() {
 function lk_systemctl_enable() {
     local SH
     SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
-    lk_systemctl_exists ${_USER+-u} "$1" || return
+    lk_systemctl_exists ${_USER+-u} "$1" ||
+        lk_warn "unknown service: $_NAME" || return
     lk_systemctl_enabled ${_USER+-u} "$1" || {
         lk_console_detail "Enabling service:" "$NAME"
         ${_USER-lk_elevate} "${COMMAND[@]}" enable "$1" ||
@@ -135,7 +135,8 @@ function lk_systemctl_enable_now() {
 function lk_systemctl_disable() {
     local SH
     SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
-    lk_systemctl_exists ${_USER+-u} "$1" || return
+    lk_systemctl_exists ${_USER+-u} "$1" ||
+        lk_warn "unknown service: $_NAME" || return
     ! lk_systemctl_enabled ${_USER+-u} "$1" || {
         lk_console_detail "Disabling service:" "$NAME"
         ${_USER-lk_elevate} "${COMMAND[@]}" disable "$1" ||
