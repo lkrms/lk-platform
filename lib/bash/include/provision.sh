@@ -146,7 +146,9 @@ Usage: $(lk_myself -f) DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..
         ((TOTAL += CHANGES)) || true
     done
     ! lk_verbose && ! ((TOTAL)) ||
-        lk_console_message \
+        $(lk_verbose &&
+            echo "lk_console_message" ||
+            echo "lk_console_detail") \
             "$TOTAL file $(lk_maybe_plural \
                 "$TOTAL" mode modes) updated$(lk_verbose ||
                     echo " in $(lk_pretty_path "$DIR")")"

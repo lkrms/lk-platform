@@ -254,7 +254,7 @@
     function restart_script() {
         lk_lock_drop LOCK_FILE LOCK_FD
         lk_console_message "Restarting ${0##*/}"
-        "$0" --no-log "$@"
+        lk_maybe_trace "$0" --no-log "$@"
         exit
     }
 
@@ -344,7 +344,6 @@
             ! lk_is_true REPO_MERGED ||
                 restart_script "$@"
         fi
-        lk_console_detail "Resetting file permissions"
         DIR_MODE=0755
         FILE_MODE=0644
         PRIVILEGED_DIR_MODE=0700
