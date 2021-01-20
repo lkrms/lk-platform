@@ -157,7 +157,7 @@ function lk_pac_sync() {
     ! lk_is_root && ! lk_can_sudo pacman ||
         lk_is_false LK_PACMAN_SYNC ||
         { lk_console_message "Refreshing package databases" &&
-            lk_run_detail lk_elevate pacman -Sy >/dev/null &&
+            lk_elevate pacman -Sy >/dev/null &&
             LK_PACMAN_SYNC=0; }
 }
 
