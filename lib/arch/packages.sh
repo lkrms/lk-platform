@@ -164,7 +164,6 @@ if lk_node_service_enabled desktop; then
         gtk-engine-murrine # GTK 2 support
         gtk-theme-elementary
         materia-gtk-theme
-        moka-icon-theme
         papirus-icon-theme
         sound-theme-elementary
 
@@ -206,6 +205,9 @@ if lk_node_service_enabled desktop; then
         autorandr-git
         networkmanager-dispatcher-ntpd
         xrandr-invert-colors
+
+        #
+        moka-icon-theme-git
     )
 fi
 
@@ -336,14 +338,18 @@ if [ ${#PAC_GROUPS[@]} -gt 0 ]; then
     PAC_PACKAGES=($(comm -13 \
         <(lk_echo_array PAC_GROUPS | sort -u) \
         <(lk_echo_array PAC_PACKAGES | sort -u)))
-    for PAC_GROUP in "${PAC_GROUPS[@]}"; do
-        GROUP_PACKAGES=($(lk_pac_groups "$PAC_GROUP"))
-        PAC_PACKAGES+=(${GROUP_PACKAGES[@]+"${GROUP_PACKAGES[@]}"})
-        ! lk_verbose || lk_console_detail \
-            "$PAC_GROUP:" "${#GROUP_PACKAGES[@]} $(lk_maybe_plural \
-                ${#GROUP_PACKAGES[@]} package packages)"
-    done
+    PAC_PACKAGES+=($(comm -12 \
+        <(lk_pac_groups "${PAC_GROUPS[@]}" | sort -u) \
+        <(lk_pac_available_list -o | sort -u)))
 fi
+
+# Check for PAC_PACKAGES removed from official repos
+PAC_MOVED=$(lk_pac_unavailable_list -o "${PAC_PACKAGES[@]}")
+[ -z "$PAC_MOVED" ] || {
+    lk_console_warning "Removed from repo:" "$PAC_MOVED"
+    AUR_PACKAGES+=($PAC_MOVED)
+    PAC_PACKAGES=($(lk_pac_available_list -o "${PAC_PACKAGES[@]}"))
+}
 
 if [ -n "$PAC_REJECT_REGEX" ]; then
     PAC_PACKAGES=($(lk_echo_array PAC_PACKAGES | sed "/^${PAC_REJECT_REGEX}\$/d"))

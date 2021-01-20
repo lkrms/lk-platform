@@ -79,7 +79,6 @@ PAC_PACKAGES+=(
     wimlib
 
     # networking
-    networkmanager-l2tp
     openconnect
 
     # monitoring
@@ -110,6 +109,7 @@ PAC_PACKAGES+=(
 AUR_PACKAGES+=(
     aha
     asciicast2gif
+    networkmanager-l2tp
     pacman-cleanup-hook
     powershell-bin
     vpn-slice
@@ -246,7 +246,6 @@ PAC_PACKAGES+=(
     dbeaver-plugin-sshj
     eslint
     geckodriver
-    nodejs-less
     python-pylint
     qcachegrind
     sublime-merge
@@ -310,6 +309,7 @@ PAC_PACKAGES+=(
 
 AUR_PACKAGES+=(
     demjson
+    nodejs-less
     robo3t-bin
     trickle
     vscodium-bin
