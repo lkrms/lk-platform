@@ -7,7 +7,7 @@
 # Return true if each PACKAGE is installed.
 function lk_dpkg_installed() {
     local STATUS
-    [ $# -gt 0 ] || lk_warn "no package name" || return
+    [ $# -gt 0 ] || lk_warn "no package" || return
     STATUS=$(dpkg-query \
         --show --showformat '${db:Status-Status}\n' "$@" 2>/dev/null |
         grep -Fx --count "installed") &&
@@ -58,7 +58,7 @@ function lk_apt_marked_manual_list() {
 #
 # Output each PACKAGE that isn't currently marked as "manually installed".
 function lk_apt_not_marked_manual_list() {
-    [ $# -gt 0 ] || return
+    [ $# -gt 0 ] || lk_warn "no package" || return
     comm -13 \
         <(lk_apt_marked_manual_list "$@" | sort -u) \
         <(lk_echo_args "$@" | sort -u)
@@ -76,10 +76,20 @@ function lk_apt_update() {
 #
 # Output each PACKAGE that doesn't appear in APT's package index.
 function lk_apt_unavailable_list() {
-    [ $# -gt 0 ] || return
+    [ $# -gt 0 ] || lk_warn "no package" || return
     comm -13 \
         <(lk_apt_available_list | sort -u) \
         <(lk_echo_args "$@" | sort -u)
+}
+
+# lk_apt_installed PACKAGE...
+#
+# Return true if each PACKAGE is marked as "manually installed".
+function lk_apt_installed() {
+    local NOT_INSTALLED
+    [ $# -gt 0 ] || lk_warn "no package" || return
+    NOT_INSTALLED=$(lk_apt_not_marked_manual_list "$@" | wc -l) &&
+        [ "$NOT_INSTALLED" -eq 0 ]
 }
 
 # lk_apt_install PACKAGE...
@@ -87,7 +97,7 @@ function lk_apt_unavailable_list() {
 # Install each PACKAGE.
 function lk_apt_install() {
     local INSTALL
-    [ $# -gt 0 ] || return
+    [ $# -gt 0 ] || lk_warn "no package" || return
     INSTALL=($(lk_apt_not_marked_manual_list "$@")) || return
     [ ${#INSTALL[@]} -eq 0 ] || {
         lk_echo_array INSTALL |
@@ -101,7 +111,7 @@ function lk_apt_install() {
 # Remove each installed PACKAGE and any unused dependencies.
 function lk_apt_remove() {
     local REMOVE
-    [ $# -gt 0 ] || return
+    [ $# -gt 0 ] || lk_warn "no package" || return
     REMOVE=($(lk_dpkg_installed_list "$@")) || return
     [ ${#REMOVE[@]} -eq 0 ] || {
         lk_echo_array REMOVE |
@@ -134,3 +144,5 @@ function lk_apt_purge_removed() {
         lk_elevate apt-get -yq purge "${PURGE[@]}"
     }
 }
+
+lk_provide debian

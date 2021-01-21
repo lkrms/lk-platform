@@ -5,7 +5,7 @@
 function lk_bash_function_names() {
     cat ${1+"$1"} |
         shfmt -tojson |
-        jq -r '..|select(type=="object" and .Type == "FuncDecl").Name.Value'
+        jq -r '..|select(type=="object" and .Type=="FuncDecl").Name.Value'
 }
 
 function lk_bash_command_literals() {
@@ -17,7 +17,11 @@ function lk_bash_command_literals() {
 function lk_bash_array_literals() {
     cat ${1+"$1"} |
         shfmt -tojson |
-        jq -r '..|select(type=="object" and .Array!=null).Array.Elems[].Value.Parts[]|select(.Type=="Lit").Value'
+        jq -r "\
+..|select(type==\"object\" and .Array!=null).Array.Elems[].Value.Parts[]|(
+    select(.Type==\"Lit\" or .Type==\"SglQuoted\"),
+    select(.Type==\"DblQuoted\" and (.Parts|length)==1 and .Parts[0].Type==\"Lit\").Parts[0]
+).Value"
 }
 
 # lk_bash_udf_defaults [STACKSCRIPT]
@@ -46,3 +50,5 @@ function lk_bash_udf_defaults() {
                 -e "s/^.*<($XML_PREFIX_REGEX:)?UDF name=\"([^\"]+)\".*/    \2=\${\2:-} \\\\/"
     ) && echo "${OUTPUT% \\}"
 }
+
+lk_provide bash

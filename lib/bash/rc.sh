@@ -2,7 +2,8 @@
 
 # shellcheck disable=SC1090,SC2015,SC2030,SC2031,SC2207
 
-_LK_ENV=${_LK_ENV:-$(declare -x)}
+export -n BASH_XTRACEFD SHELLOPTS
+[ -n "${_LK_ENV:+1}" ] || _LK_ENV=$(declare -x)
 
 unset LK_PROMPT_DISPLAYED LK_BASE
 
@@ -149,10 +150,10 @@ function find_all() {
     gnu_find -L . -xdev -iname "*$1*" "${@:2}"
 }
 
-lk_include prompt provision git wordpress linode misc
+lk_include git linode misc prompt provision wordpress ${LK_NODE_FQDN:+hosting}
 
 if lk_is_linux; then
-    lk_include linux
+    lk_include iptables linux
     ! lk_is_arch || lk_include arch
     ! lk_is_ubuntu || lk_include debian
     [[ $- != *i* ]] || {

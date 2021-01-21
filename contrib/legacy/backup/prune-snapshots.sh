@@ -59,6 +59,10 @@ function lk_log() {
     done
 }
 
+function lk_maybe_plural() {
+    [ "$1" -eq 1 ] && echo "$2" || echo "$3"
+}
+
 function lk_echo_args() {
     [ $# -eq 0 ] ||
         printf '%s\n' "$@"
@@ -130,11 +134,12 @@ function lk_mapfile() {
     done <"$2"
 }
 
-LK_BOLD=$(tput bold) || LK_BOLD=
-LK_GREEN=$(tput setaf 2) || LK_GREEN=
-LK_CYAN=$(tput setaf 6) || LK_CYAN=
-LK_YELLOW=$(tput setaf 3) || LK_YELLOW=
-LK_RESET=$(tput sgr0) || LK_RESET=
+LK_BOLD=$'\E[1m'
+LK_RED=$'\E[31m'
+LK_GREEN=$'\E[32m'
+LK_YELLOW=$'\E[33m'
+LK_CYAN=$'\E[36m'
+LK_RESET=$'\E[0m'
 
 ##
 
@@ -184,10 +189,32 @@ function get_usage() {
         awk 'NR > 1 { print $3 "M", $5 }'
 }
 
-PRUNE_HOURLY_AFTER=${LK_SNAPSHOT_PRUNE_HOURLY_AFTER-24}
-PRUNE_DAILY_AFTER=${LK_SNAPSHOT_PRUNE_DAILY_AFTER:-7}
-PRUNE_FAILED_AFTER_DAYS=${LK_SNAPSHOT_PRUNE_FAILED_AFTER_DAYS-28}
-PRUNE_WEEKLY_AFTER=${LK_SNAPSHOT_PRUNE_WEEKLY_AFTER-52}
+function print_max_age() {
+    case "$1" in
+    "")
+        lk_console_detail "$2 snapshots" \
+            "do not expire"
+        ;;
+    0)
+        lk_console_detail "$2 snapshots" \
+            "expire immediately"
+        ;;
+    *)
+        lk_console_detail "$2 snapshots" \
+            "expire after $1 $(lk_maybe_plural "$1" "$3" "$4")"
+        ;;
+    esac
+}
+
+HOURLY_MAX_AGE=${LK_SNAPSHOT_HOURLY_MAX_AGE-24}
+DAILY_MAX_AGE=${LK_SNAPSHOT_DAILY_MAX_AGE-7}
+WEEKLY_MAX_AGE=${LK_SNAPSHOT_WEEKLY_MAX_AGE-52}
+FAILED_MAX_AGE=${LK_SNAPSHOT_FAILED_MAX_AGE-28}
+
+[ "${HOURLY_MAX_AGE:--1}" -gt -1 ] || HOURLY_MAX_AGE=
+[ "${DAILY_MAX_AGE:--1}" -gt -1 ] || DAILY_MAX_AGE=
+[ "${WEEKLY_MAX_AGE:--1}" -gt -1 ] || WEEKLY_MAX_AGE=
+[ "${FAILED_MAX_AGE:--1}" -gt -1 ] || FAILED_MAX_AGE=
 
 [ $# -ge 1 ] || {
     echo "\
@@ -231,6 +258,11 @@ fi
 {
     USAGE_START=($(get_usage "$BACKUP_ROOT"))
     lk_console_log "Pruning backups at $BACKUP_ROOT on $FQDN (storage used: ${USAGE_START[0]}/${USAGE_START[1]})"
+    lk_console_message "Settings:"
+    print_max_age "$HOURLY_MAX_AGE" Hourly hour hours
+    print_max_age "$DAILY_MAX_AGE" Daily day days
+    print_max_age "$WEEKLY_MAX_AGE" Weekly week weeks
+    print_max_age "$FAILED_MAX_AGE" Failed day days
     lk_mapfile SOURCE_NAMES <(find "$BACKUP_ROOT/snapshot" -mindepth 1 -maxdepth 1 \
         -type d -printf '%f\n' | sort)
     for SOURCE_NAME in ${SOURCE_NAMES[@]+"${SOURCE_NAMES[@]}"}; do
@@ -255,9 +287,9 @@ fi
             lk_console_detail \
                 "Partially pruned:" "$SNAPSHOTS_PRUNING_COUNT"
 
-        if [ -n "$PRUNE_FAILED_AFTER_DAYS" ]; then
+        if [ -n "$FAILED_MAX_AGE" ]; then
             PRUNE_FAILED_BEFORE_DATE=$(date \
-                -d "$LATEST_CLEAN $PRUNE_FAILED_AFTER_DAYS days ago" +"%F")
+                -d "$LATEST_CLEAN $FAILED_MAX_AGE days ago" +"%F")
             # Add a strict -regex test to keep failed snapshots with
             # non-standard names
             find_snapshots SNAPSHOTS_FAILED \
@@ -266,7 +298,7 @@ fi
                 -exec sh -c 'test "${1##*/}" \< "$2"' sh \
                 '{}' "$PRUNE_FAILED_BEFORE_DATE" \;
             [ "$SNAPSHOTS_FAILED_COUNT" -eq 0 ] ||
-                lk_console_detail "Failed >$PRUNE_FAILED_AFTER_DAYS days ago:" \
+                lk_console_detail "Failed >$FAILED_MAX_AGE days ago:" \
                     "$SNAPSHOTS_FAILED_COUNT"
         fi
 
@@ -275,34 +307,43 @@ fi
             "${SNAPSHOTS_CLEAN[0]}"
         )
 
-        if [ -n "$PRUNE_HOURLY_AFTER" ]; then
-            # Keep one snapshot per hour for the last PRUNE_HOURLY_AFTER hours
-            LATEST_CLEAN_HOUR=$(snapshot_hour "${SNAPSHOTS_CLEAN[0]}")
-            HOUR=$LATEST_CLEAN_HOUR
-            for i in $(seq 0 "$PRUNE_HOURLY_AFTER"); do
-                [ "$i" -eq 0 ] ||
-                    HOUR=$(date -d "$LATEST_CLEAN_HOUR $i hours ago" +"%F %T")
-                SNAPSHOT=$(first_snapshot_in_hour "$HOUR") || continue
+        # Keep one snapshot per hour for the last HOURLY_MAX_AGE hours
+        # (indefinitely if HOURLY_MAX_AGE is empty)
+        LATEST_CLEAN_HOUR=$(snapshot_hour "${SNAPSHOTS_CLEAN[0]}")
+        OLDEST_CLEAN_HOUR=$(snapshot_hour \
+            "${SNAPSHOTS_CLEAN[$((SNAPSHOTS_CLEAN_COUNT - 1))]}")
+        HOUR=$LATEST_CLEAN_HOUR
+        HOURS=0
+        while { [ "$OLDEST_CLEAN_HOUR" \< "$HOUR" ] ||
+            [ "$OLDEST_CLEAN_HOUR" = "$HOUR" ]; } &&
+            { [ -z "$HOURLY_MAX_AGE" ] ||
+                [ $((HOURS++)) -le "$HOURLY_MAX_AGE" ]; }; do
+            ! SNAPSHOT=$(first_snapshot_in_hour "$HOUR") ||
                 KEEP[${#KEEP[@]}]=$SNAPSHOT
-            done
-        fi
-
-        # Keep one snapshot per day for the last PRUNE_DAILY_AFTER days
-        DAY=$LATEST_CLEAN
-        for i in $(seq 0 "$PRUNE_DAILY_AFTER"); do
-            [ "$i" -eq 0 ] || DAY=$(date -d "$LATEST_CLEAN $i days ago" +"%F")
-            SNAPSHOT=$(first_snapshot_on_date "$DAY") || continue
-            KEEP[${#KEEP[@]}]=$SNAPSHOT
+            HOUR=$(date -d "$LATEST_CLEAN_HOUR $HOURS hours ago" +"%F %T")
         done
 
-        # Keep one snapshot per week for the last PRUNE_WEEKLY_AFTER weeks
-        # (indefinitely if PRUNE_WEEKLY_AFTER is the empty string)
+        # Keep one snapshot per day for the last DAILY_MAX_AGE days
+        # (indefinitely if DAILY_MAX_AGE is empty)
+        DAY=$LATEST_CLEAN
+        DAYS=0
+        while { [ "$OLDEST_CLEAN" \< "$DAY" ] ||
+            [ "$OLDEST_CLEAN" = "$DAY" ]; } &&
+            { [ -z "$DAILY_MAX_AGE" ] ||
+                [ $((DAYS++)) -le "$DAILY_MAX_AGE" ]; }; do
+            ! SNAPSHOT=$(first_snapshot_on_date "$DAY") ||
+                KEEP[${#KEEP[@]}]=$SNAPSHOT
+            DAY=$(date -d "$LATEST_CLEAN $DAYS days ago" +"%F")
+        done
+
+        # Keep one snapshot per week for the last WEEKLY_MAX_AGE weeks
+        # (indefinitely if WEEKLY_MAX_AGE is empty)
         SUNDAY=$(date -d "$(date -d "$LATEST_CLEAN" +"%F %u days ago")" +"%F")
         WEEKS=0
         while { [ "$OLDEST_CLEAN" \< "$SUNDAY" ] ||
             [ "$OLDEST_CLEAN" = "$SUNDAY" ]; } &&
-            { [ -z "$PRUNE_WEEKLY_AFTER" ] ||
-                [ $((WEEKS++)) -le "$PRUNE_WEEKLY_AFTER" ]; }; do
+            { [ -z "$WEEKLY_MAX_AGE" ] ||
+                [ $((WEEKS++)) -le "$WEEKLY_MAX_AGE" ]; }; do
             DAY=$SUNDAY
             for i in $(seq 0 6); do
                 [ "$i" -eq 0 ] || DAY=$(date -d "$SUNDAY $i days ago" +"%F")

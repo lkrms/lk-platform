@@ -2,7 +2,7 @@
 
 # shellcheck disable=SC2016,SC2029,SC2086,SC2207
 
-lk_include linux
+lk_include git provision
 
 function linode-cli() {
     # Suppress "Unable to determine if a new linode-cli package is available in
@@ -422,7 +422,7 @@ Example:
         ARGS+=(--authorized_keys "$KEY")
     done
     lk_console_item "Running:" \
-        $'>>>\n'"  linode-cli$(printf ' \\ \n    %q' "${ARGS[@]##ssh-??? * }")"$'\n<<<'
+        $'\n'"$(lk_quote_args_folded linode-cli "${ARGS[@]##ssh-??? * }")"
     lk_confirm "Proceed?" Y || return
     lk_console_message "Creating Linode"
     FILE=/tmp/$(lk_myself -f)-$1-$(lk_date %s).json
@@ -497,3 +497,5 @@ Usage: $(lk_myself -f) DIR HOST..." || return
             return
     done
 }
+
+lk_provide linode

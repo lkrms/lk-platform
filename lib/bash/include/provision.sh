@@ -1,34 +1,82 @@
 #!/bin/bash
 
-# shellcheck disable=SC2015,SC2030,SC2031,SC2086,SC2088,SC2206,SC2207
+# shellcheck disable=SC2015,SC2016,SC2030,SC2031,SC2034,SC2086,SC2120,SC2206,SC2207
 
-# lk_maybe_install [-v] [-m MODE] [-o OWNER] [-g GROUP] SOURCE DEST
-# lk_maybe_install -d [-v] [-m MODE] [-o OWNER] [-g GROUP] DEST
-function lk_maybe_install() {
-    # shellcheck disable=SC2034
-    local DEST=${*: -1:1} LK_SUDO=${LK_SUDO:-} OWNER GROUP VERBOSE MODE i \
-        ARGS=("$@") LK_ARG_ARRAY=ARGS
-    ! i=$(lk_array_search "-o" ARGS) || OWNER=${ARGS[*]:$((i + 1)):1}
-    ! i=$(lk_array_search "-g" ARGS) || GROUP=${ARGS[*]:$((i + 1)):1}
-    [ -z "${OWNER:-}${GROUP:-}" ] || LK_SUDO=1
-    if lk_has_arg "-d" || lk_maybe_sudo test ! -e "$DEST"; then
-        lk_maybe_sudo install "$@"
-    else
-        ! lk_has_arg "-v" || VERBOSE=1
-        ! i=$(lk_array_search "-m" ARGS) || MODE=${ARGS[*]:$((i + 1)):1}
-        [ -z "${MODE:-}" ] ||
-            lk_maybe_sudo chmod ${VERBOSE+-v} "$MODE" "$DEST" || return
-        [ -z "${OWNER:-}${GROUP:-}" ] ||
-            lk_elevate chown ${VERBOSE+-v} \
-                "${OWNER:-}${GROUP:+:$GROUP}" "$DEST" || return
+function lk_node_service_enabled() {
+    [ -n "${LK_NODE_SERVICES:-}" ] || return
+    [[ ,$LK_NODE_SERVICES, == *,$1,* ]] ||
+        [[ ,$(lk_node_expand_services), == *,$1,* ]]
+}
+
+function _lk_node_expand_service() {
+    local SERVICE REVERSE=1
+    [ "${1:-}" != -n ] || { REVERSE= && shift; }
+    if [[ ,$SERVICES, == *,$1,* ]]; then
+        SERVICES=$SERVICES$(printf ',%s' "${@:2}")
+    elif lk_is_true REVERSE; then
+        for SERVICE in "${@:2}"; do
+            [[ ,$SERVICES, == *,$SERVICE,* ]] || return 0
+        done
+        SERVICES=$SERVICES,$1
     fi
+}
+
+function lk_node_expand_services() {
+    local IFS=, SERVICES=${1:-${LK_NODE_SERVICES:-}}
+    _lk_node_expand_service apache+php apache2 php-fpm
+    _lk_node_expand_service mysql mariadb
+    _lk_node_expand_service -n xfce4 desktop
+    lk_echo_args $SERVICES | sort -u | lk_implode_input ","
+}
+
+# lk_symlink_bin TARGET ALIAS
+function lk_symlink_bin() {
+    local TARGET LINK vv=''
+    [ $# -eq 2 ] || lk_usage "\
+Usage: $(lk_myself -f) TARGET ALIAS"
+    ! lk_verbose 2 || vv=v
+    LINK=/usr/local/bin/$2
+    if ! command -pv "$2" >/dev/null &&
+        TARGET=$(type -P "$1"); then
+        lk_symlink "$TARGET" "$LINK"
+    elif [ -L "$LINK" ] && [ ! -x "$LINK" ]; then
+        lk_maybe_sudo rm -f"$vv" -- "$LINK" || return
+    fi
+}
+
+function lk_configure_locales() {
+    local LK_SUDO=1 LOCALES _LOCALES FILE _FILE
+    lk_is_linux || lk_warn "platform not supported" || return
+    LOCALES=(${LK_NODE_LOCALES:-} en_US.UTF-8)
+    _LOCALES=$(lk_echo_array LOCALES |
+        lk_escape_input_ere |
+        lk_implode_input "|")
+    [ ${#LOCALES[@]} -lt 2 ] || _LOCALES="($_LOCALES)"
+    FILE=${_LK_PROVISION_ROOT:-}/etc/locale.gen
+    # 1. Comment all locales out
+    # 2. Uncomment configured locales
+    _FILE=$(sed -E \
+        -e "s/^$S*#?/#/" \
+        -e "s/^#($_LOCALES.*)/\\1/" \
+        "$FILE") || return
+    unset LK_FILE_REPLACE_NO_CHANGE
+    lk_file_keep_original "$FILE" &&
+        lk_file_replace -i "^$S*(#|\$)" "$FILE" "$_FILE" || return
+    lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
+        [ -n "${_LK_PROVISION_ROOT:-}" ] ||
+        lk_elevate locale-gen || return
+
+    FILE=${_LK_PROVISION_ROOT:-}/etc/locale.conf
+    lk_install -m 00644 "$FILE"
+    lk_file_replace -i "^(#|$S*\$)" "$FILE" "\
+LANG=${LOCALES[0]}${LK_NODE_LANGUAGE:+
+LANGUAGE=$LK_NODE_LANGUAGE}"
 }
 
 # lk_dir_set_modes DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]...
 function lk_dir_set_modes() {
     local DIR REGEX LOG_FILE i TYPE MODE ARGS CHANGES _CHANGES TOTAL=0 \
         _PRUNE _EXCLUDE MATCH=() DIR_MODE=() FILE_MODE=() PRUNE=() LK_USAGE
-    # shellcheck disable=SC2034
     LK_USAGE="\
 Usage: $(lk_myself -f) DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..."
     [ $# -ge 4 ] && ! ((($# - 1) % 3)) || lk_usage || return
@@ -92,12 +140,23 @@ Usage: $(lk_myself -f) DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..
         ((TOTAL += CHANGES)) || true
     done
     ! lk_verbose && ! ((TOTAL)) ||
-        lk_console_message \
+        $(lk_verbose &&
+            echo "lk_console_message" ||
+            echo "lk_console_detail") \
             "$TOTAL file $(lk_maybe_plural \
                 "$TOTAL" mode modes) updated$(lk_verbose ||
                     echo " in $(lk_pretty_path "$DIR")")"
     ! ((TOTAL)) ||
         lk_console_detail "Changes logged to:" "$LOG_FILE"
+}
+
+function lk_sudo_add_nopasswd() {
+    local LK_SUDO=1 FILE
+    [ -n "${1:-}" ] || lk_warn "no user" || return
+    lk_user_exists "$1" || lk_warn "user does not exist: $1" || return
+    FILE=/etc/sudoers.d/nopasswd-$1
+    lk_install -m 00440 "$FILE" &&
+        lk_file_replace "$FILE" "$1 ALL=(ALL) NOPASSWD:ALL"
 }
 
 # lk_sudo_offer_nopasswd
@@ -110,10 +169,12 @@ function lk_sudo_offer_nopasswd() {
     FILE=/etc/sudoers.d/nopasswd-$USER
     sudo -n test -e "$FILE" 2>/dev/null || {
         lk_can_sudo install || return
-        lk_confirm "Allow user '$USER' to run sudo without entering a password?" Y || return
-        sudo install -m 00440 /dev/null "$FILE" &&
-            sudo tee "$FILE" >/dev/null <<<"$USER ALL=(ALL) NOPASSWD:ALL" &&
-            lk_console_message "User '$USER' may now run any command as any user" || return
+        lk_confirm \
+            "Allow user '$USER' to run sudo without entering a password?" Y ||
+            return 0
+        lk_sudo_add_nopasswd "$USER" &&
+            lk_console_message \
+                "User '$USER' may now run any command as any user"
     }
 }
 
@@ -210,25 +271,30 @@ function lk_ssh_get_public_key() {
     fi
 }
 
-# lk_ssh_add_host NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]
+# lk_ssh_add_host [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]
 #
-# Create or update ~/.ssh/lk-config.d/60-NAME to apply HOST, PORT, USER,
-# KEY_FILE and JUMP_HOST_NAME to HostName, Port, User, IdentityFile and
-# ProxyJump for SSH host NAME.
+# Configure access to the given SSH host by creating or updating
+# ~/.ssh/{PREFIX}config.d/60-NAME. If -t is set, test reachability first.
 #
 # Notes:
-# - KEY_FILE can be relative to ~/.ssh or ~/.ssh/lk-keys
+# - KEY_FILE can be relative to ~/.ssh or ~/.ssh/{PREFIX}keys
 # - If KEY_FILE is -, the key will be read from standard input and written to
-#   ~/.ssh/lk-keys/NAME
+#   ~/.ssh/{PREFIX}keys/NAME
 # - LK_SSH_PREFIX is removed from the start of NAME and JUMP_HOST_NAME to ensure
 #   it's not added twice
 function lk_ssh_add_host() {
-    local NAME=$1 HOST=$2 SSH_USER=$3 KEY_FILE=${4:-} JUMP_HOST_NAME=${5:-} \
+    local NAME HOST SSH_USER KEY_FILE JUMP_HOST_NAME PORT='' \
         h=${LK_SSH_HOME:-~} SSH_PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX} \
         LK_FILE_TAKE_BACKUP='' LK_VERBOSE=0 \
-        KEY CONF CONF_FILE
+        KEY JUMP_ARGS JUMP_PORT CONF CONF_FILE TEST=
+    [ "${1:-}" != -t ] || { TEST=1 && shift; }
+    NAME=$1
+    HOST=$2
+    SSH_USER=$3
+    KEY_FILE=${4:-}
+    JUMP_HOST_NAME=${5:-}
     [ $# -ge 3 ] || lk_usage "\
-Usage: $(lk_myself -f) NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
+Usage: $(lk_myself -f) [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
         return
     NAME=${NAME#$SSH_PREFIX}
     [ "${KEY_FILE:--}" = - ] ||
@@ -247,22 +313,50 @@ Usage: $(lk_myself -f) NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
     [ ! "$KEY_FILE" = - ] || {
         KEY=${KEY:-$(cat)}
         KEY_FILE=$h/.ssh/${SSH_PREFIX}keys/$NAME
-        lk_maybe_install -m 00600 /dev/null "$KEY_FILE" &&
+        lk_install -m 00600 "$KEY_FILE" &&
             lk_file_replace "$KEY_FILE" "$KEY" || return
         ssh-keygen -l -f "$KEY_FILE" >/dev/null 2>&1 || {
             # `ssh-keygen -l -f FILE` exits without error if FILE contains an
             # OpenSSH public key
             lk_console_log "Reading $KEY_FILE to create public key file"
             KEY=$(unset DISPLAY && ssh-keygen -y -f "$KEY_FILE") &&
-                lk_maybe_install -m 00600 /dev/null "$KEY_FILE.pub" &&
+                lk_install -m 00600 "$KEY_FILE.pub" &&
                 lk_file_replace "$KEY_FILE.pub" "$KEY" || return
         }
     }
+    [[ ! $HOST =~ (.*):([0-9]+)$ ]] || {
+        HOST=${BASH_REMATCH[1]}
+        PORT=${BASH_REMATCH[2]}
+    }
+    JUMP_HOST_NAME=${JUMP_HOST_NAME:+$SSH_PREFIX${JUMP_HOST_NAME#$SSH_PREFIX}}
+    ! lk_is_true TEST || {
+        if [ -z "$JUMP_HOST_NAME" ]; then
+            lk_ssh_is_reachable "$HOST" "${PORT:-22}"
+        else
+            JUMP_ARGS=(
+                -o ConnectTimeout=5
+                -o ControlMaster=auto
+                -o ControlPath="/tmp/.$(lk_myself -f)_%h-%p-%r-%l"
+                -o ControlPersist=120
+            )
+            ssh -O check "${JUMP_ARGS[@]}" "$JUMP_HOST_NAME" 2>/dev/null ||
+                ssh -fN "${JUMP_ARGS[@]}" "$JUMP_HOST_NAME" ||
+                lk_warn "could not connect to jump host: $JUMP_HOST_NAME" ||
+                return
+            JUMP_PORT=9999
+            while :; do
+                JUMP_PORT=$(lk_tcp_next_port $((JUMP_PORT + 1))) || return
+                [ "$JUMP_PORT" -le 10999 ] ||
+                    lk_warn "could not establish tunnel to $HOST:${PORT:-22}" ||
+                    return
+                ! ssh -O forward -L "$JUMP_PORT:$HOST:${PORT:-22}" \
+                    "${JUMP_ARGS[@]}" "$JUMP_HOST_NAME" >/dev/null 2>&1 ||
+                    break
+            done
+            lk_ssh_is_reachable localhost "$JUMP_PORT"
+        fi || lk_warn "host not reachable: $HOST:${PORT:-22}" || return
+    }
     CONF=$(
-        [[ ! $HOST =~ (.*):([0-9]+)$ ]] || {
-            HOST=${BASH_REMATCH[1]}
-            PORT=${BASH_REMATCH[2]}
-        }
         h=${h//\//\\\/}
         KEY_FILE=${KEY_FILE//$h/"~"}
         cat <<EOF
@@ -275,13 +369,19 @@ ProxyJump       $SSH_PREFIX${JUMP_HOST_NAME#$SSH_PREFIX}}
 EOF
     )
     CONF_FILE=$h/.ssh/${SSH_PREFIX}config.d/${LK_SSH_PRIORITY:-60}-$NAME
-    lk_maybe_install -m 00600 /dev/null "$CONF_FILE" &&
+    lk_install -m 00600 "$CONF_FILE" &&
         lk_file_replace "$CONF_FILE" "$CONF" || return
+}
+
+# lk_ssh_is_reachable HOST PORT [TIMEOUT_SECONDS]
+function lk_ssh_is_reachable() {
+    { echo QUIT | gnu_nc -w "${3:-5}" "$1" "$2" | head -n1 |
+        grep -E "^SSH-[^[:blank:]-]+-[^[:blank:]-]+" >/dev/null; } \
+        2>/dev/null
 }
 
 # lk_ssh_configure [JUMP_HOST[:JUMP_PORT] JUMP_USER [JUMP_KEY_FILE]]
 function lk_ssh_configure() {
-    # shellcheck disable=SC2034
     local JUMP_HOST=${1:-} JUMP_USER=${2:-} JUMP_KEY_FILE=${3:-} \
         SSH_PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX} \
         LK_FILE_TAKE_BACKUP='' LK_VERBOSE=0 \
@@ -600,13 +700,40 @@ function lk_node_is_host() {
         NODE_IP+=($(lk_node_public_ipv6)) &&
         [ ${#NODE_IP} -gt 0 ] ||
         lk_warn "public IP address not found" || return
-    # shellcheck disable=SC2034
     HOST_IP=($(lk_host_ns_resolve "$1")) ||
         lk_warn "unable to retrieve authoritative DNS records for $1" || return
     # True if at least one node IP matches a host IP
     [ "$(comm -12 \
         <(lk_echo_array HOST_IP) \
         <(lk_echo_array NODE_IP) | wc -l)" -gt 0 ]
+}
+
+if lk_is_macos; then
+    function lk_tcp_listening_ports() {
+        netstat -nap tcp | sed "/${S}LISTEN$S*\$/!d" |
+            awk '{print $4}' |
+            sed -E 's/.*\.([0-9]+)$/\1/' |
+            sort -nu
+    }
+else
+    function lk_tcp_listening_ports() {
+        ss -nHO --listening --tcp |
+            awk '{print $4}' |
+            sed -E 's/.*:([0-9]+)$/\1/' |
+            sort -nu
+    }
+fi
+
+# lk_tcp_next_port [FIRST_PORT]
+function lk_tcp_next_port() {
+    lk_tcp_listening_ports |
+        awk -v "p=${1:-10000}" \
+            'p>$1{next} p==$1{p++;next} {exit} END{print p}'
+}
+
+# lk_tcp_is_reachable HOST PORT [TIMEOUT_SECONDS]
+function lk_tcp_is_reachable() {
+    gnu_nc -z -w "${3:-5}" "$1" "$2" >/dev/null 2>&1
 }
 
 function lk_certbot_install() {
@@ -637,8 +764,6 @@ function lk_certbot_install() {
 }
 
 # lk_cpanel_get_ssl_cert SSH_HOST DOMAIN [TARGET_DIR]
-#
-# shellcheck disable=SC2034
 function lk_cpanel_get_ssl_cert() {
     local TARGET_DIR=${3:-~/ssl} SSL_JSON CERT KEY \
         LK_TTY_NO_FOLD=1 LK_FILE_TAKE_BACKUP=1
@@ -651,8 +776,8 @@ CA bundle and private key for DOMAIN from SSH_HOST to TARGET_DIR
     TARGET_DIR=${TARGET_DIR%/}
     [ -e "$TARGET_DIR" ] ||
         install -d -m 00750 "$TARGET_DIR" &&
-        lk_maybe_install -m 00640 /dev/null "$TARGET_DIR/$2.cert" &&
-        lk_maybe_install -m 00640 /dev/null "$TARGET_DIR/$2.key" || return
+        lk_install -m 00640 "$TARGET_DIR/$2.cert" &&
+        lk_install -m 00640 "$TARGET_DIR/$2.key" || return
     lk_console_message "Retrieving SSL certificate"
     lk_console_detail "Host:" "$1"
     lk_console_detail "Domain:" "$2"
@@ -717,8 +842,8 @@ Usage: $(lk_myself -f) [-p] FILE SETTING CHECK_REGEX [REPLACE_REGEX...]" || retu
     CHECK_REGEX=$3
     ! _lk_option_check || return 0
     lk_maybe_sudo test -e "$FILE" ||
-        { lk_maybe_install -d -m 00755 "${FILE%/*}" &&
-            lk_maybe_install -m 00644 /dev/null "$FILE"; } || return
+        { lk_install -d -m 00755 "${FILE%/*}" &&
+            lk_install -m 00644 "$FILE"; } || return
     lk_maybe_sudo test -f "$FILE" || lk_warn "file not found: $FILE" || return
     lk_file_get_text "$FILE" _FILE || return
     [ "${PRESERVE+1}" = 1 ] ||
@@ -879,3 +1004,49 @@ function lk_crontab_apply() {
 function lk_crontab_remove_command() {
     _lk_crontab "$(lk_regex_expand_whitespace "$(lk_escape_ere "${1:-}")")" ""
 }
+
+# lk_system_memory [POWER]
+#
+# Output total installed memory in units of 1024 ^ POWER bytes, where:
+# - 0 = bytes
+# - 1 = KiB
+# - 2 = MiB
+# - 3 = GiB (default)
+function lk_system_memory() {
+    local POWER=${1:-3}
+    if lk_is_linux; then
+        lk_require_output \
+            awk -v "p=$((POWER - 1))" \
+            '/^MemTotal\W/{print int($2/1024^p)}' \
+            /proc/meminfo
+    elif lk_is_macos; then
+        sysctl -n hw.memsize |
+            lk_require_output \
+                awk -v "p=$POWER" '{print int($1/1024^p)}'
+    else
+        false
+    fi
+}
+
+# lk_system_memory_free [POWER]
+#
+# Output available memory in units of 1024 ^ POWER bytes (see lk_system_memory).
+function lk_system_memory_free() {
+    local POWER=${1:-3}
+    if lk_is_linux; then
+        lk_require_output \
+            awk -v "p=$((POWER - 1))" \
+            '/^MemAvailable\W/{print int($2/1024^p)}' \
+            /proc/meminfo
+    elif lk_is_macos; then
+        vm_stat |
+            lk_require_output \
+                awk -v "p=$POWER" \
+                -F "[^0-9]+" \
+                'NR==1{b=$2;FS=":"} /^Pages free\W/{print int(b*$2/1024^p)}'
+    else
+        false
+    fi
+}
+
+lk_provide provision

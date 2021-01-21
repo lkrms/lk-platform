@@ -29,6 +29,11 @@
 # <UDF name="LK_EMAIL_BLACKHOLE" label="Email black hole (system-wide, STAGING ONLY)" example="/dev/null" default="" />
 # <UDF name="LK_AUTO_REBOOT" label="Reboot automatically after unattended upgrades" oneof="Y,N" />
 # <UDF name="LK_AUTO_REBOOT_TIME" label="Preferred automatic reboot time" oneof="02:00,03:00,04:00,05:00,06:00,07:00,08:00,09:00,10:00,11:00,12:00,13:00,14:00,15:00,16:00,17:00,18:00,19:00,20:00,21:00,22:00,23:00,00:00,01:00,now" default="02:00" />
+# <UDF name="LK_AUTO_BACKUP_SCHEDULE" label="Automatic backup schedule (format: 0-59 0-23 1-31 1-12|jan-dec 0-7|sun-sat)" example="0 1 * * *" default="" />
+# <UDF name="LK_SNAPSHOT_HOURLY_MAX_AGE" label="Backup: hourly snapshot max age (hours, -1 = no maximum)" example="72" default="24" />
+# <UDF name="LK_SNAPSHOT_DAILY_MAX_AGE" label="Backup: daily snapshot max age (days, -1 = no maximum)" example="14" default="7" />
+# <UDF name="LK_SNAPSHOT_WEEKLY_MAX_AGE" label="Backup: weekly snapshot max age (weeks, -1 = no maximum)" example="-1" default="52" />
+# <UDF name="LK_SNAPSHOT_FAILED_MAX_AGE" label="Backup: failed snapshot max age (days, -1 = no maximum)" default="28" />
 # <UDF name="LK_PATH_PREFIX" label="Prefix for files installed by lk-platform" default="lk-" />
 # <UDF name="LK_SCRIPT_DEBUG" label="Create trace output from provisioning script" oneof="Y,N" default="Y" />
 # <UDF name="LK_SHUTDOWN_ACTION" label="Reboot or power down after provisioning" oneof="reboot,poweroff" default="reboot" />
@@ -71,6 +76,11 @@ export -n \
     LK_EMAIL_BLACKHOLE=${LK_EMAIL_BLACKHOLE:-} \
     LK_AUTO_REBOOT=${LK_AUTO_REBOOT:-} \
     LK_AUTO_REBOOT_TIME=${LK_AUTO_REBOOT_TIME:-02:00} \
+    LK_AUTO_BACKUP_SCHEDULE=${LK_AUTO_BACKUP_SCHEDULE:-} \
+    LK_SNAPSHOT_HOURLY_MAX_AGE=${LK_SNAPSHOT_HOURLY_MAX_AGE:-24} \
+    LK_SNAPSHOT_DAILY_MAX_AGE=${LK_SNAPSHOT_DAILY_MAX_AGE:-7} \
+    LK_SNAPSHOT_WEEKLY_MAX_AGE=${LK_SNAPSHOT_WEEKLY_MAX_AGE:-52} \
+    LK_SNAPSHOT_FAILED_MAX_AGE=${LK_SNAPSHOT_FAILED_MAX_AGE:-28} \
     LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-} \
     LK_SCRIPT_DEBUG=${LK_SCRIPT_DEBUG:-Y} \
     LK_SHUTDOWN_ACTION=${LK_SHUTDOWN_ACTION:-reboot} \
@@ -205,6 +215,11 @@ FIELD_ERRORS=$(
     [ ! "$LK_AUTO_REBOOT" = Y ] || REQUIRED=1
     valid LK_AUTO_REBOOT_TIME "^(([01][0-9]|2[0-3]):[0-5][0-9]|now)\$"
     REQUIRED=0
+    # TODO: validate LK_AUTO_BACKUP_SCHEDULE
+    valid LK_SNAPSHOT_HOURLY_MAX_AGE "^(-1|[0-9]+)\$"
+    valid LK_SNAPSHOT_DAILY_MAX_AGE "^(-1|[0-9]+)\$"
+    valid LK_SNAPSHOT_WEEKLY_MAX_AGE "^(-1|[0-9]+)\$"
+    valid LK_SNAPSHOT_FAILED_MAX_AGE "^(-1|[0-9]+)\$"
     valid LK_PATH_PREFIX "^[a-zA-Z0-9]{2,3}-\$"
     one_of LK_SCRIPT_DEBUG Y N
     one_of LK_SHUTDOWN_ACTION reboot poweroff
@@ -440,6 +455,11 @@ LK_SSH_JUMP_KEY=${LK_SSH_JUMP_KEY:+jump} \
     LK_EMAIL_BLACKHOLE \
     LK_AUTO_REBOOT \
     LK_AUTO_REBOOT_TIME \
+    LK_AUTO_BACKUP_SCHEDULE \
+    LK_SNAPSHOT_HOURLY_MAX_AGE \
+    LK_SNAPSHOT_DAILY_MAX_AGE \
+    LK_SNAPSHOT_WEEKLY_MAX_AGE \
+    LK_SNAPSHOT_FAILED_MAX_AGE \
     LK_SCRIPT_DEBUG \
     LK_PLATFORM_BRANCH >/etc/default/lk-platform
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2001,SC2015,SC2034,SC2207
+# shellcheck disable=SC1090,SC2015,SC2034,SC2207
 
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
@@ -29,8 +29,17 @@ function exit_trap() {
 {
     export SUDO_PROMPT="[sudo] password for %p: "
 
-    SCRIPT_DIR=/tmp/${LK_PATH_PREFIX}install
-    mkdir -p "$SCRIPT_DIR"
+    CURL_OPTIONS=(
+        --fail
+        --header "Cache-Control: no-cache"
+        --location
+        --retry 8
+        --show-error
+        --silent
+    )
+
+    _DIR=/tmp/${LK_PATH_PREFIX}install
+    mkdir -p "$_DIR"
 
     export LK_PACKAGES_FILE=${1:-}
     if [ -n "$LK_PACKAGES_FILE" ] && [ ! -f "$LK_PACKAGES_FILE" ]; then
@@ -53,28 +62,32 @@ function exit_trap() {
 
     if [ -f "$LK_BASE/lib/bash/include/core.sh" ]; then
         . "$LK_BASE/lib/bash/include/core.sh"
-        lk_include provision whiptail macos
+        lk_include macos provision whiptail
         SUDOERS=$(cat "$LK_BASE/share/sudoers.d/default")
         ${CONTRIB_PACKAGES_FILE:+. "$LK_BASE/$CONTRIB_PACKAGES_FILE"}
     else
-        echo "Downloading dependencies to: $SCRIPT_DIR" >&2
+        echo $'\E[1m\E[36m==> \E[0m\E[1mDownloading dependencies\E[0m' >&2
         for FILE_PATH in \
             ${CONTRIB_PACKAGES_FILE:+"/$CONTRIB_PACKAGES_FILE"} \
             /lib/bash/include/core.sh \
+            /lib/bash/include/macos.sh \
             /lib/bash/include/provision.sh \
             /lib/bash/include/whiptail.sh \
-            /lib/bash/include/macos.sh \
             /share/sudoers.d/default; do
-            FILE=$SCRIPT_DIR/${FILE_PATH##*/}
-            URL=https://raw.githubusercontent.com/lkrms/lk-platform/$LK_PLATFORM_BRANCH$FILE_PATH
-            curl --retry 8 --fail --output "$FILE" "$URL" || {
-                rm -f "$FILE"
-                lk_die "unable to download from GitHub: $URL"
-            }
+            FILE=$_DIR/${FILE_PATH##*/}
+            if [ ! -e "$FILE" ]; then
+                FILE_PATH=lk-platform/$LK_PLATFORM_BRANCH$FILE_PATH
+                URL=https://raw.githubusercontent.com/lkrms/$FILE_PATH
+                echo $'\E[1m\E[33m   -> \E[0m'"$URL"$'\E[0m' >&2
+                curl "${CURL_OPTIONS[@]}" --output "$FILE" "$URL" || {
+                    rm -f "$FILE"
+                    lk_die "unable to download from GitHub: $URL"
+                }
+            fi
             [ "${FILE: -3}" != .sh ] ||
                 . "$FILE"
         done
-        SUDOERS=$(cat "$SCRIPT_DIR/default")
+        SUDOERS=$(cat "$_DIR/default")
     fi
 
     LK_FILE_TAKE_BACKUP=${LK_FILE_TAKE_BACKUP-1}
@@ -90,22 +103,19 @@ function exit_trap() {
         lk_console_item "Dumping user defaults to domain files in" \
             ~/".${LK_PATH_PREFIX}defaults"
         lk_macos_defaults_dump
-        lk_macos_defaults_dump -currentHost
     fi
 
     # This doubles as an early Full Disk Access check/reminder
     STATUS=$(sudo systemsetup -getremotelogin)
     if [[ ! "$STATUS" =~ ${S}On$ ]]; then
         lk_console_message "Enabling Remote Login (SSH)"
-        lk_console_detail "Running:" "systemsetup -setremotelogin on"
-        sudo systemsetup -setremotelogin on
+        lk_run_detail sudo systemsetup -setremotelogin on
     fi
 
     STATUS=$(sudo systemsetup -getcomputersleep)
     if [[ ! "$STATUS" =~ ${S}Never$ ]]; then
         lk_console_message "Disabling computer sleep"
-        lk_console_detail "Running:" "systemsetup -setcomputersleep off"
-        sudo systemsetup -setcomputersleep off
+        lk_run_detail sudo systemsetup -setcomputersleep off
     fi
 
     lk_sudo_offer_nopasswd || true
@@ -132,10 +142,10 @@ function exit_trap() {
 
     lk_console_message "Configuring default umask"
     if ! USER_UMASK=$(defaults read \
-        /var/db/com.apple.xpc.launchd/config/user.plist Umask 2>/dev/null) ||
+        /var/db/com.apple.xpc.launchd/config/user.plist \
+        Umask 2>/dev/null) ||
         [ "$USER_UMASK" -ne 2 ]; then
-        lk_console_detail "Running:" "launchctl config user umask 002"
-        sudo launchctl config user umask 002 >/dev/null
+        lk_run_detail sudo launchctl config user umask 002 >/dev/null
     fi
     FILE=/etc/profile
     if [ -r "$FILE" ] && ! grep -q umask "$FILE"; then
@@ -152,14 +162,13 @@ EOF
     fi
     umask 002
 
+    lk_console_message "Configuring default PATH"
     if ! USER_PATH=$(defaults read \
         /var/db/com.apple.xpc.launchd/config/user.plist \
         PathEnvironmentVariable 2>/dev/null) ||
         [[ ! "$USER_PATH" =~ (:|^)/usr/local/bin(:|$) ]]; then
         USER_PATH=/usr/local/bin:${USER_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}
-        lk_console_message "Setting default PATH"
-        lk_console_detail "Running:" "launchctl config user path $USER_PATH"
-        sudo launchctl config user path "$USER_PATH" >/dev/null
+        lk_run_detail sudo launchctl config user path "$USER_PATH" >/dev/null
     fi
 
     # disable sleep when charging
@@ -189,7 +198,7 @@ EOF
     fi
 
     if [ ! -e "$LK_BASE" ] || [ -z "$(ls -A "$LK_BASE")" ]; then
-        lk_console_item "Installing lk-platform to:" "$LK_BASE"
+        lk_console_item "Installing lk-platform to" "$LK_BASE"
         sudo install -d -m 02775 -o "$USER" -g admin "$LK_BASE"
         lk_keep_trying lk_tty caffeinate -i \
             git clone -b "$LK_PLATFORM_BRANCH" \
@@ -239,7 +248,7 @@ EOF
     NEW_HOMEBREW=0
     if ! lk_command_exists brew; then
         lk_console_message "Installing Homebrew"
-        FILE=$SCRIPT_DIR/homebrew-install.sh
+        FILE=$_DIR/homebrew-install.sh
         URL=https://raw.githubusercontent.com/Homebrew/install/master/install.sh
         if [ ! -e "$FILE" ]; then
             curl --retry 8 --fail --output "$FILE" "$URL" || {
@@ -362,7 +371,7 @@ EOF
         HOMEBREW_FORMULAE_JSON=$(lk_keep_trying caffeinate -i \
             brew info --formula --json=v2 "${HOMEBREW_FORMULAE[@]}") &&
             HOMEBREW_FORMULAE=(
-                $(jq -r .formulae[].full_name <<<"$HOMEBREW_FORMULAE_JSON")
+                $(jq -r ".formulae[].full_name" <<<"$HOMEBREW_FORMULAE_JSON")
             )
     }
 
@@ -374,7 +383,7 @@ EOF
         for FORMULA in "${INSTALL_FORMULAE[@]}"; do
             FORMULA_DESC="$(jq <<<"$HOMEBREW_FORMULAE_JSON" -r \
                 --arg formula "$FORMULA" "\
-.[] | select(.full_name == \$formula) |
+.formulae[] | select(.full_name == \$formula) |
     \"\\(.full_name)@\\(.versions.stable): \\(
         if .desc != null then \": \" + .desc else \"\" end
     )\"")"
@@ -534,33 +543,38 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
 
     lk_macos_xcode_maybe_accept_license
 
-    INSTALLED_FORMULAE=($(comm -12 \
+    # `brew deps` is buggy AF, so find dependencies recursively via `brew info`
+    lk_console_message "Checking for orphaned packages"
+    ALL_FORMULAE=($(comm -12 \
         <(lk_brew_formulae | sort -u) \
-        <(lk_echo_array HOMEBREW_FORMULAE | sort -u)))
-    INSTALLED_CASKS=($(comm -12 \
+        <(lk_echo_array HOMEBREW_FORMULAE HOMEBREW_KEEP_FORMULAE | sort -u)))
+    ALL_CASKS=($(comm -12 \
         <(lk_brew_casks | sort -u) \
-        <(lk_echo_array HOMEBREW_CASKS | sort -u)))
-    INSTALLED_CASKS_JSON=$(
-        [ ${#INSTALLED_CASKS[@]} -eq 0 ] ||
-            lk_keep_trying caffeinate -i \
-                brew info --cask --json=v2 "${INSTALLED_CASKS[@]}"
-    )
-
-    ALL_FORMULAE=($({
-        lk_echo_array INSTALLED_FORMULAE &&
-            { [ -z "$INSTALLED_CASKS_JSON" ] ||
-                jq -r '.casks[].depends_on.formula[]?' \
-                    <<<"$INSTALLED_CASKS_JSON"; } &&
-            { [ ${#INSTALLED_FORMULAE[@]} -eq 0 ] ||
-                brew deps --union --full-name \
-                    "${INSTALLED_FORMULAE[@]}" 2>/dev/null; }
-    } | sort -u))
-    ALL_CASKS=($({
-        lk_echo_array INSTALLED_CASKS &&
-            { [ -z "$INSTALLED_CASKS_JSON" ] ||
-                # TODO: recurse?
-                jq -r '.casks[].depends_on.cask[]?' <<<"$INSTALLED_CASKS_JSON"; }
-    } | sort -u))
+        <(lk_echo_array HOMEBREW_CASKS HOMEBREW_KEEP_CASKS | sort -u)))
+    LAST_FORMULAE=()
+    LAST_CASKS=()
+    while :; do
+        NEW_FORMULAE=($(comm -23 \
+            <(lk_echo_array ALL_FORMULAE) \
+            <(lk_echo_array LAST_FORMULAE)))
+        NEW_CASKS=($(comm -23 \
+            <(lk_echo_array ALL_CASKS) \
+            <(lk_echo_array LAST_CASKS)))
+        [ ${#NEW_FORMULAE[@]}+${#NEW_CASKS[@]} != 0+0 ] || break
+        LAST_FORMULAE=(${ALL_FORMULAE[@]+"${ALL_FORMULAE[@]}"})
+        LAST_CASKS=(${ALL_CASKS[@]+"${ALL_CASKS[@]}"})
+        NEW_JSON=$({
+            [ ${#NEW_FORMULAE[@]} -eq 0 ] ||
+                brew info --json=v2 --formula "${NEW_FORMULAE[@]}"
+            [ ${#NEW_CASKS[@]} -eq 0 ] ||
+                brew info --json=v2 --cask "${NEW_CASKS[@]}"
+        } | jq --slurp '{"formulae":[.[].formulae[]],"casks":[.[].casks[]]}')
+        ALL_FORMULAE=($({ lk_echo_array ALL_FORMULAE && jq -r "\
+.formulae[].dependencies[]?,\
+.casks[].depends_on.formula[]?" <<<"$NEW_JSON"; } | sort -u))
+        ALL_CASKS=($({ lk_echo_array ALL_CASKS && jq -r "\
+.casks[].depends_on.cask[]?" <<<"$NEW_JSON"; } | sort -u))
+    done
 
     PURGE_FORMULAE=($(comm -23 \
         <(lk_brew_formulae | sort -u) \
@@ -569,7 +583,8 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
         lk_echo_array PURGE_FORMULAE |
             lk_console_list "Installed but no longer required:" formula formulae
         ! lk_confirm "Remove the above?" N ||
-            brew uninstall --formula "${PURGE_FORMULAE[@]}"
+            brew uninstall --formula \
+                --force --ignore-dependencies "${PURGE_FORMULAE[@]}"
     }
 
     PURGE_CASKS=($(comm -23 \
@@ -580,6 +595,17 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
             lk_console_list "Installed but no longer required:" cask casks
         ! lk_confirm "Remove the above?" N ||
             brew uninstall --cask "${PURGE_CASKS[@]}"
+    }
+
+    lk_remove_missing LOGIN_ITEMS
+    ADD_LOGIN_ITEMS=($(comm -13 \
+        <("$LK_BASE/lib/macos/login-items-list.js" | tail -n+2 |
+            cut -f2 | sort -u) \
+        <(lk_echo_array LOGIN_ITEMS | sort -u)))
+    [ ${#ADD_LOGIN_ITEMS[@]} -eq 0 ] || {
+        lk_echo_array ADD_LOGIN_ITEMS |
+            lk_console_list "Adding to Login Items:" app apps
+        "$LK_BASE/lib/macos/login-items-add.js" "${ADD_LOGIN_ITEMS[@]}"
     }
 
     lk_console_success "Provisioning complete"

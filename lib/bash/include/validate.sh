@@ -72,3 +72,5 @@ function lk_validate_many_of() {
         _lk_validate_list lk_validate_one_of "$@" "${OPTIONS[@]}"
     fi
 }
+
+lk_provide validate

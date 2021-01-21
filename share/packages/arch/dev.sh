@@ -1,19 +1,21 @@
 #!/bin/bash
 # shellcheck disable=SC2034,SC2207
 
-CUSTOM_REPOS=(
+PAC_REPOS=(
     "sublime-text|\
 http://sublimetext.mirror.linacreative.com/arch/stable/\$arch|\
 http://sublimetext.mirror.linacreative.com/sublimehq-pub.gpg|\
 8A8F901A"
 )
 
-PACMAN_PACKAGES=()
+PAC_PACKAGES=()
 AUR_PACKAGES=()
+PAC_REJECT=()
 
-# won't be uninstalled if present
 PAC_KEEP=(
+    offlineimap
     subversion
+    zoom
 
     #
     aurutils
@@ -38,30 +40,22 @@ PAC_KEEP=(
     raidar
 )
 
-PAC_REMOVE=(
-    # buggy and insecure
-    xfce4-screensaver
-)
-
-# hardware-related
 lk_is_virtual || {
-    PACMAN_PACKAGES+=(
-        guvcview # webcam utility
-        linssid  # wireless scanner
-
-        # required to run GPU benchmarks, e.g. in Geekbench
-        clinfo
-        $(
-            GRAPHICS_CONTROLLERS="$(lspci | grep -E 'VGA|3D')" || return 0
-            ! grep -qi "Intel" <<<"$GRAPHICS_CONTROLLERS" ||
-                echo "intel-compute-runtime"
-            ! grep -qi "NVIDIA" <<<"$GRAPHICS_CONTROLLERS" ||
-                echo "opencl-nvidia"
-        )
+    PAC_PACKAGES+=(
+        guvcview # Webcam utility
+        linssid  # Wi-Fi scanner
 
         #
         ddcutil
-        i2c-tools # provides i2c-dev module (required by ddcutil)
+        i2c-tools
+    )
+    ! lk_system_has_intel_graphics || PAC_PACKAGES+=(
+        clinfo
+        intel-compute-runtime
+    )
+    ! lk_system_has_nvidia_graphics || PAC_PACKAGES+=(
+        clinfo
+        opencl-nvidia
     )
 }
 
@@ -70,8 +64,7 @@ AUR_PACKAGES+=(
     brother-hll3230cdw
 )
 
-# terminal-based
-PACMAN_PACKAGES+=(
+PAC_PACKAGES+=(
     # shells
     asciinema
     dash
@@ -80,13 +73,12 @@ PACMAN_PACKAGES+=(
 
     # utilities
     cdrtools #
-    cpio     # libguestfs doesn't work without it
+    cpio     # for libguestfs
+    ext4magic
     unison
     wimlib
-    yq
 
     # networking
-    networkmanager-l2tp
     openconnect
 
     # monitoring
@@ -102,13 +94,14 @@ PACMAN_PACKAGES+=(
     acme.sh
     arch-install-scripts
     at
-    $(pacman -Sgq base-devel) # TODO: add lk_pacman_group_packages function
+    base-devel
     binwalk
     cloud-utils
     cronie
     expac
     hwinfo
     mlocate
+    stow
     sysfsutils
     ubuntu-keyring
 )
@@ -116,28 +109,31 @@ PACMAN_PACKAGES+=(
 AUR_PACKAGES+=(
     aha
     asciicast2gif
+    networkmanager-l2tp
     pacman-cleanup-hook
     powershell-bin
     vpn-slice
 )
 
 # desktop
-PACMAN_PACKAGES+=(
+PAC_PACKAGES+=(
     caprine
-    chromium
     copyq
     filezilla
     firefox-i18n-en-gb
     flameshot
     freerdp
     ghostwriter
+    gimp
     gnome-characters
+    gnome-font-viewer
     gucharmap
     inkscape
     keepassxc
     libreoffice-fresh-en-gb
     nextcloud-client
     nomacs
+    qalculate-gtk
     qpdfview
     remmina
     scribus
@@ -198,6 +194,7 @@ PACMAN_PACKAGES+=(
     # system
     dconf-editor
     displaycal
+    fontconfig-docs
     gparted
     guake
     libsecret   # secret-tool
@@ -211,7 +208,6 @@ PACMAN_PACKAGES+=(
     xautomation
     xclip
     xdotool
-    xorg-xev
     xprintidle
 )
 
@@ -242,7 +238,7 @@ AUR_PACKAGES+=(
 )
 
 # development
-PACMAN_PACKAGES+=(
+PAC_PACKAGES+=(
     autopep8
     bash-language-server
     cloc
@@ -250,7 +246,6 @@ PACMAN_PACKAGES+=(
     dbeaver-plugin-sshj
     eslint
     geckodriver
-    nodejs-less
     python-pylint
     qcachegrind
     sublime-merge
@@ -314,6 +309,7 @@ PACMAN_PACKAGES+=(
 
 AUR_PACKAGES+=(
     demjson
+    nodejs-less
     robo3t-bin
     trickle
     vscodium-bin
@@ -327,14 +323,14 @@ AUR_PACKAGES+=(
 )
 
 # development services
-PACMAN_PACKAGES+=(
+PAC_PACKAGES+=(
     apache
     mariadb
     php-fpm
 )
 
 # VMs and containers
-PACMAN_PACKAGES+=(
+PAC_PACKAGES+=(
     # KVM/QEMU
     dnsmasq
     ebtables

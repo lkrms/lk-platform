@@ -10,8 +10,8 @@ lk_die() { s=$? && echo "$_FILE: $1" >&2 && (exit $s) && false || exit; }
     "import os,sys;print(os.path.realpath(sys.argv[1]))" "$1"; }; }; } \
     >/dev/null || lk_die "command not found: realpath"
 _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
-    LK_BASE=$(realpath "$_DIR$(eval "printf '/..%.s' {1..$_DEPTH}")") &&
-    [ "$LK_BASE" != / ] && [ -d "$LK_BASE/lib/bash" ] ||
+    LK_BASE=$(realpath "$_DIR$(eval printf '/..%.s' $(seq 1 "$_DEPTH"))") &&
+    [ -d "$LK_BASE/lib/bash" ] ||
     lk_die "unable to locate LK_BASE"
 export LK_BASE
 
@@ -161,10 +161,7 @@ function run_rsync() {
         SRC=${SOURCE%/}/
         DEST=$LK_SNAPSHOT_FS_ROOT/
     }
-    lk_console_item "Running rsync:" \
-        $'>>>\n'"  rsync$(printf ' \\ \n    %q' \
-            "${RSYNC_ARGS[@]}" "$SRC" "$DEST")"$'\n<<<'
-    rsync "${RSYNC_ARGS[@]}" "$SRC" "$DEST" \
+    lk_run rsync "${RSYNC_ARGS[@]}" "$SRC" "$DEST" \
         > >(lk_log_bypass_stdout tee -a "$RSYNC_OUT_FILE") \
         2> >(lk_log_bypass_stdout tee -a "$RSYNC_ERR_FILE")
 }

@@ -39,6 +39,9 @@ lk_path_add_to_front() {
     fi
 }
 
+OLD_PATH=$PATH
+PATH=$(lk_path_add_to_front /usr/local/bin)
+
 ! type brew >/dev/null 2>&1 ||
     ! BREW_SH=$(brew shellenv 2>/dev/null |
         grep -E 'HOMEBREW_(PREFIX|CELLAR|REPOSITORY)=') || {
@@ -56,10 +59,9 @@ EOF
         echo 'export INFOPATH="$HOMEBREW_PREFIX/share/info:${INFOPATH:-}"'
 }
 
-OLD_PATH=$PATH
 ADD_TO_PATH=${LK_ADD_TO_PATH:+$LK_ADD_TO_PATH:}${LK_INST:-$LK_BASE}/bin
 ADD_TO_PATH_FIRST="\
-${HOME:+$HOME/.homebrew/bin:$HOME/.local/bin:}\
+${HOME:+$HOME/.local/bin:}\
 ${HOMEBREW_PREFIX:+$HOMEBREW_PREFIX/bin:$HOMEBREW_PREFIX/sbin:}\
 ${LK_ADD_TO_PATH_FIRST:+$LK_ADD_TO_PATH_FIRST:}"
 IFS=':'
@@ -73,8 +75,11 @@ unset IFS
 [ "$PATH" = "$OLD_PATH" ] || {
     echo "export PATH=\"$(lk_esc "$PATH")\""
 }
+UNSET="\
+${LK_ADD_TO_PATH+ LK_ADD_TO_PATH}\
+${LK_ADD_TO_PATH_FIRST+ LK_ADD_TO_PATH_FIRST}"
 cat <<EOF
-unset LK_ADD_TO_PATH LK_ADD_TO_PATH_FIRST
-export SUDO_PROMPT="[sudo] password for %p: "
-export WP_CLI_CONFIG_PATH=\${LK_INST:-\$LK_BASE}/etc/wp-cli.yml
+${UNSET:+unset$UNSET
+}export SUDO_PROMPT="[sudo] password for %p: "
+export WP_CLI_CONFIG_PATH=\${LK_INST:-\$LK_BASE}/share/wp-cli/config.yml
 EOF

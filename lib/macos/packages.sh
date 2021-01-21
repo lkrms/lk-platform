@@ -10,7 +10,7 @@ HOMEBREW_TAPS=(
     ${HOMEBREW_TAPS[@]+"${HOMEBREW_TAPS[@]}"}
 )
 
-# prerequisites
+# Prerequisites
 HOMEBREW_FORMULAE=(
     # GNU packages
     coreutils
@@ -25,7 +25,7 @@ HOMEBREW_FORMULAE=(
     gnu-tar
     wget
 
-    # basics
+    # Basics
     bash-completion
     byobu
     glances
@@ -47,7 +47,9 @@ HOMEBREW_FORMULAE=(
 )
 
 HOMEBREW_CASKS=(
+    dozer
     iterm2
+    mysides
 
     #
     ${HOMEBREW_CASKS[@]+"${HOMEBREW_CASKS[@]}"}
@@ -60,4 +62,22 @@ MAS_APPS=(
 
     #
     ${MAS_APPS[@]+"${MAS_APPS[@]}"}
+)
+
+HOMEBREW_KEEP_FORMULAE=(
+    ocaml
+
+    #
+    ${HOMEBREW_KEEP_FORMULAE[@]+"${HOMEBREW_KEEP_FORMULAE[@]}"}
+)
+
+HOMEBREW_KEEP_CASKS=(
+    zoom
+
+    #
+    ${HOMEBREW_KEEP_CASKS[@]+"${HOMEBREW_KEEP_CASKS[@]}"}
+)
+
+LOGIN_ITEMS=(
+    ${LOGIN_ITEMS[@]+"${LOGIN_ITEMS[@]}"}
 )

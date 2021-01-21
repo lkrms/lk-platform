@@ -1,14 +1,17 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2120,SC2128,SC2207
+# shellcheck disable=SC1090,SC2015,SC2120,SC2128,SC2207
 
-_LK_ENV=${_LK_ENV:-$(declare -x)}
+export -n BASH_XTRACEFD SHELLOPTS
+[ -n "${_LK_ENV:+1}" ] || _LK_ENV=$(declare -x)
 
 lk_die() { s=$? && echo "$BASH_SOURCE: $1" >&2 && (exit $s) && false || exit; }
 [ -n "${LK_INST:-${LK_BASE:-}}" ] || lk_die "LK_BASE not set"
 [ ! "${LK_INST:+1}${LK_BASE:+2}" = 2 ] || export LK_BASE
 
 . "${LK_INST:-$LK_BASE}/lib/bash/include/core.sh"
+
+set -E
 
 # 1. Source each SETTINGS file in order, allowing later files to override values
 #    set earlier
@@ -62,32 +65,21 @@ function lk_die() {
     exit "$EXIT_STATUS"
 }
 
-function lk_exit_trap() {
-    local EXIT_STATUS=$? i
-    [ "$EXIT_STATUS" -eq 0 ] ||
-        [[ ${FUNCNAME[1]:-} =~ ^_?lk_(die|usage|elevate)$ ]] ||
-        lk_console_error \
-            "$(_lk_caller "${_LK_ERR_TRAP_CONTEXT:-}"): unhandled error"
-    for i in ${_LK_EXIT_DELETE[@]+"${_LK_EXIT_DELETE[@]}"}; do
-        lk_elevate_if_error rm -Rf -- "$i" || true
-    done
+function lk_is_dry_run() {
+    [ -n "${LK_DRY_RUN:-}" ]
 }
 
-function lk_err_trap() {
-    _LK_ERR_TRAP_CONTEXT=$(caller 0) || _LK_ERR_TRAP_CONTEXT=
-}
-
-function lk_delete_on_exit() {
-    [ -n "${_LK_EXIT_DELETE+1}" ] || _LK_EXIT_DELETE=()
-    _LK_EXIT_DELETE+=("$@")
-}
-
-function lk_usage() {
-    local EXIT_STATUS=$? MESSAGE=${1:-${LK_USAGE:-}}
-    [ -z "$MESSAGE" ] || MESSAGE=$(_lk_usage_format "$MESSAGE")
-    LK_TTY_NO_FOLD=1 \
-        lk_console_log "${MESSAGE:-$(_lk_caller): invalid arguments}"
-    exit "$EXIT_STATUS"
+# lk_maybe [-p] COMMAND [ARG...]
+function lk_maybe() {
+    local PRINT=
+    [ "${1:-}" != -p ] || { PRINT=1 && shift; }
+    if lk_is_dry_run; then
+        ! lk_is_true PRINT && ! lk_verbose ||
+            lk_console_item \
+                "[DRY RUN] Not running:" $'\n'"$(lk_quote_args "$@")"
+    else
+        "$@"
+    fi
 }
 
 function _lk_getopt_maybe_add_long() {
@@ -163,7 +155,7 @@ function lk_getopt() {
     LK_GETOPT=$(lk_quote OPTS)
 }
 
-if ! lk_is_true LK_NO_SOURCE_FILE; then
+if lk_is_script_running; then
     function _lk_elevate() {
         if [ $# -gt 0 ]; then
             sudo -H "$@"
@@ -192,18 +184,9 @@ if ! lk_is_true LK_NO_SOURCE_FILE; then
     }
 fi
 
-SH=$(
-    [[ ,${LK_SKIP:-}, == *,env,* ]] || {
-        printf '%s=%q\n' \
-            LK_PATH_PREFIX "${LK_PATH_PREFIX-lk-}"
-        . "${LK_INST:-$LK_BASE}/lib/bash/env.sh"
-    }
-
-    [[ ,${LK_SKIP:-}, == *,trap,* ]] || {
-        printf 'trap %q %s\n' \
-            lk_exit_trap EXIT \
-            lk_err_trap ERR
-        echo "set -E"
-    }
-) && eval "$SH"
+SH=$([[ ,${LK_SKIP:-}, == *,env,* ]] || {
+    printf '%s=%q\n' \
+        LK_PATH_PREFIX "${LK_PATH_PREFIX-lk-}"
+    . "${LK_INST:-$LK_BASE}/lib/bash/env.sh"
+}) && eval "$SH"
 unset SH

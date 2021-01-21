@@ -2,7 +2,7 @@
 
 # shellcheck disable=SC2002,SC2015,SC2016,SC2029,SC2034,SC2120,SC2207
 
-lk_include provision mysql
+lk_include mysql provision
 
 function lk_wp() {
     wp --skip-plugins --skip-themes "$@"
@@ -567,3 +567,5 @@ function lk_wp_set_permissions() {
         ".*/\\.git/objects/([0-9a-f]{2}|pack)/.*" \
         0555 0444
 }
+
+lk_provide wordpress

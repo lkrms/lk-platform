@@ -253,3 +253,5 @@ Proceed?" Y || return
         lk_console_error -r "Restore operation failed" || return
     lk_console_success "Database restored successfully"
 }
+
+lk_provide mysql

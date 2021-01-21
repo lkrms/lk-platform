@@ -1,9 +1,11 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2015,SC2016,SC2034,SC2207
+# shellcheck disable=SC1090,SC2015,SC2016,SC2034,SC2086,SC2207
 
 [ "$EUID" -eq 0 ] || {
-    sudo -H -E "$0" --elevated "$@"
+    [ -z "${BASH_XTRACEFD:-}" ] && unset ARGS ||
+        ARGS=(-C $((i = BASH_XTRACEFD, (${_LK_FD:=2} > i ? _LK_FD : i) + 1)))
+    sudo ${ARGS[@]+"${ARGS[@]}"} -H -E "$0" --elevated "$@"
     exit
 }
 
@@ -27,11 +29,13 @@
         LK_PATH_PREFIX
         LK_NODE_HOSTNAME
         LK_NODE_FQDN
+        LK_NODE_IPV4_ADDRESS
         LK_NODE_TIMEZONE
         LK_NODE_SERVICES
         LK_NODE_PACKAGES
         LK_NODE_LOCALES
         LK_NODE_LANGUAGE
+        LK_GRUB_CMDLINE
         LK_NTP_SERVER
         LK_ADMIN_EMAIL
         LK_TRUSTED_IP_ADDRESSES
@@ -50,8 +54,13 @@
         LK_EMAIL_BLACKHOLE
         LK_AUTO_REBOOT
         LK_AUTO_REBOOT_TIME
-        LK_ARCH_CUSTOM_REPOS
+        LK_AUTO_BACKUP_SCHEDULE
+        LK_SNAPSHOT_HOURLY_MAX_AGE
+        LK_SNAPSHOT_DAILY_MAX_AGE
+        LK_SNAPSHOT_WEEKLY_MAX_AGE
+        LK_SNAPSHOT_FAILED_MAX_AGE
         LK_ARCH_MIRROR
+        LK_ARCH_REPOS
         LK_SCRIPT_DEBUG
         LK_PLATFORM_BRANCH
         LK_PACKAGES_FILE
@@ -105,6 +114,8 @@
 
     lk_log_output
 
+    lk_console_log "Configuring lk-platform"
+
     if [ "${LK_INST##*/}" != lk-platform ] &&
         [[ "${LK_INST##*/}" =~ ^([a-zA-Z0-9]{2,3}-)platform$ ]]; then
         ORIGINAL_PATH_PREFIX=${BASH_REMATCH[1]}
@@ -137,7 +148,7 @@
     [ -n "$LK_PATH_PREFIX" ] || lk_die "LK_PATH_PREFIX not set"
     [ -z "${LK_BASE:-}" ] ||
         [ "$LK_BASE" = "$LK_INST" ] ||
-        [ "$LK_BASE" = "$OLD_LK_INST" ] ||
+        [ "$LK_BASE" = "${OLD_LK_INST:-}" ] ||
         [ ! -d "$LK_BASE" ] ||
         {
             lk_console_item "Existing installation found at" "$LK_BASE"
@@ -147,13 +158,17 @@
 
     lk_is_arch && _IS_ARCH=1 || _IS_ARCH=
     _BASHRC='[ -z "${BASH_VERSION:-}" ] || [ ! -f ~/.bashrc ] || . ~/.bashrc'
-    BYOBU_PATH=$(type -P byobu-launch) &&
+    _BYOBU=
+    _BYOBURC=
+    if BYOBU_PATH=$(type -P byobu-launch); then
         _BYOBU=$(printf '%s_byobu_sourced=1 . %q 2>/dev/null || true' \
             "$(! lk_is_macos || echo '[ ! "$SSH_CONNECTION" ] || ')" \
-            "$BYOBU_PATH") ||
-        _BYOBU=
+            "$BYOBU_PATH")
+        ! lk_is_macos ||
+            _BYOBURC='[[ $OSTYPE != darwin* ]] || ! type -P gdf >/dev/null || df() { gdf "$@"; }'
+    fi
 
-    lk_console_message "Checking sudo configuration"
+    lk_console_message "Checking sudo"
     FILE=/etc/sudoers.d/${LK_PATH_PREFIX}default
     [ ! -e "${FILE}s" ] || [ -e "$FILE" ] ||
         mv -fv "${FILE}s" "$FILE"
@@ -184,11 +199,11 @@
     }
     # Exit if required commands fail to install
     install_gnu_commands \
-        awk chmod chown cp date df diff find getopt realpath sed stat xargs
+        awk chmod chown cp date df diff find getopt nc realpath sed stat xargs
     # For other commands, warn and continue
     install_gnu_commands || true
 
-    lk_console_item "Checking lk-platform configuration:" "$CONF_FILE"
+    lk_console_message "Checking lk-platform settings"
     [ -e "$CONF_FILE" ] || {
         install -d -m 00755 "${CONF_FILE%/*}" &&
             install -m 00644 /dev/null "$CONF_FILE"
@@ -239,7 +254,7 @@
     function restart_script() {
         lk_lock_drop LOCK_FILE LOCK_FD
         lk_console_message "Restarting ${0##*/}"
-        "$0" --no-log "$@"
+        lk_maybe_trace "$0" --no-log "$@"
         exit
     }
 
@@ -285,7 +300,7 @@
         }
         UMASK=$(umask)
         umask 002
-        lk_console_item "Checking repository:" "$LK_BASE"
+        lk_console_message "Checking repository ($LK_BASE)"
         cd "$LK_BASE"
         REPO_OWNER=$(lk_file_owner "$LK_BASE")
         CONFIG_COMMANDS=()
@@ -293,13 +308,11 @@
             check_repo_config "core.sharedRepository" "0664"
         check_repo_config "merge.ff" "only"
         check_repo_config "pull.ff" "only"
-        if [ ${#CONFIG_COMMANDS[@]} -gt 0 ]; then
-            lk_console_detail "Running:" \
-                "$(lk_echo_args "${CONFIG_COMMANDS[@]/#/git }")"
-            for COMMAND in "${CONFIG_COMMANDS[@]}"; do
-                _git $COMMAND
-            done
-        fi
+        for COMMAND in ${CONFIG_COMMANDS[@]+"${CONFIG_COMMANDS[@]}"}; do
+            LK_TTY_NO_FOLD=1 \
+                lk_console_detail "Running:" "$(lk_quote_args git $COMMAND)"
+            _git $COMMAND
+        done
         REMOTE=$(lk_git_branch_upstream_remote) ||
             lk_die "no upstream remote for current branch"
         BRANCH=$(lk_git_branch_current) ||
@@ -331,7 +344,6 @@
             ! lk_is_true REPO_MERGED ||
                 restart_script "$@"
         fi
-        lk_console_detail "Resetting file permissions"
         DIR_MODE=0755
         FILE_MODE=0644
         PRIVILEGED_DIR_MODE=0700
@@ -373,9 +385,7 @@
     lk_remove_missing LK_HOMES
     lk_resolve_files LK_HOMES
     [ ${#LK_HOMES[@]} -gt 0 ] || lk_die "No home directories found"
-    lk_echo_array LK_HOMES |
-        lk_console_list "Checking startup scripts and SSH config files in:" \
-            directory directories
+    lk_console_message "Checking startup scripts and SSH config files"
 
     # Prepare awk to update ~/.bashrc
     LK_BASE_QUOTED=$(printf '%q' "$LK_BASE")
@@ -409,8 +419,8 @@
         shift
         [ -e "$FILE" ] ||
             install -m 00644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
-        lk_file_replace "$FILE" "$([ $# -eq 0 ] || printf "%s\n" "$@")" \
-            '^[[:blank:]]*($|#)'
+        lk_file_replace -i '^[[:blank:]]*($|#)' "$FILE" \
+            "$([ $# -eq 0 ] || printf "%s\n" "$@")"
     }
 
     LK_FILE_NO_DIFF=1
@@ -423,10 +433,8 @@
         # source LK_BASE/lib/bash/rc.sh at startup when Bash is running as a
         # non-login shell (e.g. in most desktop terminals on Linux)
         FILE=$h/.bashrc
-        [ -f "$FILE" ] || {
-            lk_console_detail "Creating" "$FILE"
+        [ -e "$FILE" ] ||
             install -m 00644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
-        }
         lk_file_replace "$FILE" "$("${RC_AWK[@]}" "$FILE")"
 
         # Create ~/.profile if no profile file exists, then check that ~/.bashrc
@@ -437,12 +445,10 @@
         [ ${#PROFILES[@]} -gt "0" ] || {
             FILE=$h/.profile
             PROFILES+=("$FILE")
-            lk_console_detail "Creating" "$FILE"
             install -m 00644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
         }
         grep -q "\\.bashrc" "${PROFILES[@]}" || {
             FILE=${PROFILES[0]}
-            lk_console_detail "Sourcing ~/.bashrc in" "$FILE"
             lk_file_get_text "$FILE" CONTENT &&
                 lk_file_replace "$FILE" "$CONTENT$_BASHRC"
         }
@@ -454,11 +460,22 @@
             [ -n "$_BYOBU" ]; then
             for FILE in "${PROFILES[@]}"; do
                 grep -q "byobu-launch" "$FILE" || {
-                    lk_console_detail "Adding byobu-launch to" "$FILE"
                     lk_file_get_text "$FILE" CONTENT &&
                         lk_file_replace "$FILE" "$CONTENT$_BYOBU"
                 }
             done
+            FILE=$h/.byoburc
+            if [ -n "$_BYOBURC" ] &&
+                ! grep -q '\bdf()' "$FILE" 2>/dev/null; then
+                lk_console_detail "Adding df wrapper to" "$FILE"
+                if [ ! -e "$FILE" ]; then
+                    install -m 00644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
+                    CONTENT=$'#!/bin/bash\n\n'
+                else
+                    lk_file_get_text "$FILE" CONTENT
+                fi
+                lk_file_replace "$FILE" "$CONTENT$_BYOBURC"
+            fi
 
             [ -d "$DIR" ] ||
                 install -d -m 00755 -o "$OWNER" -g "$GROUP" "$DIR"

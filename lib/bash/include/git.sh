@@ -1,6 +1,18 @@
 #!/bin/bash
 
-# shellcheck disable=SC2015
+# shellcheck disable=SC2015,SC2034,SC2086,SC2120,SC2164,SC2207
+
+function _lk_git() {
+    if [ -n "${LK_GIT_USER:-}" ]; then
+        sudo -H -u "$LK_GIT_USER" git "$@"
+    else
+        lk_maybe_sudo git "$@"
+    fi
+}
+
+function lk_git_cd() {
+    [ $# -eq 0 ] || cd "$1"
+}
 
 function lk_git_is_quiet() {
     [ -n "${LK_GIT_QUIET:-}" ]
@@ -8,35 +20,57 @@ function lk_git_is_quiet() {
 
 function lk_git_is_work_tree() {
     local RESULT
-    RESULT=$({ [ -z "${1:-}" ] || cd "$1"; } &&
+    RESULT=$(lk_git_cd "$@" &&
         git rev-parse --is-inside-work-tree 2>/dev/null) &&
         lk_is_true RESULT
 }
 
 function lk_git_is_submodule() {
     local RESULT
-    RESULT=$({ [ -z "${1:-}" ] || cd "$1"; } &&
+    RESULT=$(lk_git_cd "$@" &&
         git rev-parse --show-superproject-working-tree) &&
         [ -n "$RESULT" ]
 }
 
 function lk_git_is_top_level() {
     local RESULT
-    RESULT=$({ [ -z "${1:-}" ] || cd "$1"; } &&
-        git rev-parse --show-prefix) &&
+    RESULT=$(lk_git_cd "$@" && git rev-parse --show-prefix) &&
         [ -z "$RESULT" ]
 }
 
 function lk_git_is_project_top_level() {
-    lk_git_is_work_tree "${1:-}" &&
-        ! lk_git_is_submodule "${1:-}" &&
-        lk_git_is_top_level "${1:-}"
+    (lk_git_cd "$@" &&
+        lk_git_is_work_tree && ! lk_git_is_submodule && lk_git_is_top_level)
+}
+
+function lk_git_is_clean() {
+    local NO_REFRESH
+    [ "${1:-}" != -n ] || { NO_REFRESH=1 && shift; }
+    (lk_git_cd "$@" &&
+        { lk_is_true NO_REFRESH || _lk_git update-index --refresh; } &&
+        git diff-index --quiet HEAD --) >/dev/null
+}
+
+function lk_git_remote_singleton() {
+    local REMOTES
+    REMOTES=($(git remote)) && [ ${#REMOTES[@]} -eq 1 ] || return
+    echo "${REMOTES[0]}"
+}
+
+# lk_git_remote_head [REMOTE]
+#
+# Output the default branch configured on REMOTE (if known).
+function lk_git_remote_head() {
+    local REMOTE HEAD
+    REMOTE=${1:-$(lk_git_remote_singleton)} || lk_warn "no remote" || return
+    HEAD=$(git rev-parse --abbrev-ref "$REMOTE/HEAD" 2>/dev/null) &&
+        [ "$HEAD" != "$REMOTE/HEAD" ] &&
+        echo "${HEAD#$REMOTE/}"
 }
 
 function lk_git_branch_current() {
     local BRANCH
-    BRANCH=$(git rev-parse --abbrev-ref HEAD) &&
-        [ "$BRANCH" != HEAD ] &&
+    BRANCH=$(git rev-parse --abbrev-ref HEAD) && [ "$BRANCH" != HEAD ] &&
         echo "$BRANCH"
 }
 
@@ -78,9 +112,162 @@ function lk_git_branch_push() {
 # Output downstream ("push") remote for BRANCH or the current branch.
 function lk_git_branch_push_remote() {
     local PUSH
-    PUSH=$(lk_git_branch_push "$@") &&
-        [[ $PUSH =~ ^([^/]+)/[^/]+$ ]] &&
+    PUSH=$(lk_git_branch_push "$@") && [[ $PUSH =~ ^([^/]+)/[^/]+$ ]] &&
         echo "${BASH_REMATCH[1]}"
+}
+
+# lk_git_provision_repo [OPTIONS] REMOTE_URL DIR
+function lk_git_provision_repo() {
+    local OPTIND OPTARG OPT SHARE OWNER GROUP BRANCH NAME LK_USAGE \
+        LK_SUDO=1 LK_GIT_USER
+    LK_USAGE="\
+Usage: $(lk_myself -f) [OPTIONS] REMOTE_URL DIR
+
+Options:
+  -s                            make repository group-shareable
+  -o OWNER|OWNER:GROUP|:GROUP   set ownership
+  -b BRANCH                     check out BRANCH
+  -n NAME                       use NAME instead of REMOTE_URL in messages"
+    while getopts ":so:b:n:" OPT; do
+        case "$OPT" in
+        s)
+            SHARE=
+            ;;
+        o)
+            [ -n "$OPTARG" ] &&
+                [[ $OPTARG =~ ^([-a-z0-9_]+\$?)?(:([-a-z0-9_]+\$?))?$ ]] ||
+                lk_warn "invalid owner: $OPTARG" || lk_usage || return
+            OWNER=${BASH_REMATCH[1]}
+            GROUP=${BASH_REMATCH[3]}
+            LK_GIT_USER=$OWNER
+            ;;
+        b)
+            BRANCH=$OPTARG
+            ;;
+        n)
+            NAME=$OPTARG
+            ;;
+        \? | :)
+            lk_usage
+            return 1
+            ;;
+        esac
+    done
+    shift $((OPTIND - 1))
+    [ $# -eq 2 ] || lk_usage || return
+    lk_install -d -m ${SHARE+02775} ${SHARE-00755} \
+        ${OWNER:+-o "$OWNER"} ${GROUP:+-g "$GROUP"} "$2" || return
+    if [ -z "$(ls -A "$2")" ]; then
+        lk_console_item "Installing $NAME to" "$2"
+        (
+            umask ${SHARE+002} ${SHARE-022} &&
+                _lk_git clone \
+                    ${BRANCH:+-b "$BRANCH"} "$1" "$2"
+        )
+    else
+        lk_console_item "Updating $NAME in" "$2"
+        (
+            OWNER=${OWNER:-}${GROUP:+:${GROUP:-}}
+            if [ -n "$OWNER" ]; then
+                lk_maybe_sudo chown -R "$OWNER" "$2" || exit
+            fi
+            umask ${SHARE+002} ${SHARE-022} &&
+                cd "$2" || exit
+            REMOTE=$(git remote) &&
+                [ "$REMOTE" = origin ] &&
+                REMOTE_URL=$(git remote get-url origin 2>/dev/null) &&
+                [ "$REMOTE_URL" = "$1" ] || {
+                lk_console_detail "Resetting remotes"
+                for REMOTE_NAME in $REMOTE; do
+                    _lk_git remote remove "$REMOTE_NAME" || exit
+                done
+                _lk_git remote add origin "$1" || exit
+            }
+            lk_git_update_repo_to origin "${BRANCH:-}"
+        )
+    fi
+}
+
+# lk_git_fast_forward_branch BRANCH UPSTREAM
+function lk_git_fast_forward_branch() {
+    local BEHIND _BRANCH
+    BEHIND=$(git rev-list --count "$1..$2") || return
+    if [ "$BEHIND" -gt 0 ]; then
+        git merge-base --is-ancestor "$1" "$2" ||
+            lk_console_warning -r "Local branch $1 has diverged from $2" ||
+            return
+        _BRANCH=$(lk_git_branch_current) || return
+        lk_console_detail \
+            "Updating $1 ($BEHIND $(lk_maybe_plural \
+                "$BEHIND" commit commits) behind)"
+        LK_GIT_REPO_UPDATED=1
+        if [ "$_BRANCH" = "$1" ]; then
+            _lk_git merge --ff-only "$2"
+        else
+            # Fast-forward local BRANCH (e.g. 'develop') to UPSTREAM
+            # ('origin/develop') without checking it out
+            _lk_git fetch . "$2:$1"
+        fi
+    fi
+}
+
+# lk_git_update_repo
+#
+# Fetch from all remotes and fast-forward each branch with a remote-tracking
+# branch it has not diverged from.
+function lk_git_update_repo() {
+    local ERRORS=0 REMOTE BRANCH UPSTREAM
+    REMOTE=$1
+    for REMOTE in $(git remote); do
+        _lk_git fetch --quiet --prune --prune-tags "$REMOTE" ||
+            lk_console_warning -r "Unable to fetch from remote:" "$REMOTE" ||
+            ((++ERRORS))
+    done
+    for BRANCH in $(lk_git_branch_list_local); do
+        UPSTREAM=$(lk_git_branch_upstream "$BRANCH") ||
+            lk_console_warning -r "No upstream for branch:" "$BRANCH" || {
+            ((++ERRORS))
+            continue
+        }
+        lk_git_fast_forward_branch "$BRANCH" "$UPSTREAM" ||
+            ((++ERRORS))
+    done
+    [ "$ERRORS" -eq 0 ]
+}
+
+# lk_git_update_repo_to REMOTE [BRANCH]
+function lk_git_update_repo_to() {
+    local REMOTE BRANCH UPSTREAM _BRANCH BEHIND _UPSTREAM
+    [ $# -ge 1 ] || lk_usage "\
+Usage: $(lk_myself -f) REMOTE [BRANCH]" || return
+    REMOTE=$1
+    _lk_git fetch --quiet --prune --prune-tags "$REMOTE" ||
+        lk_warn "unable to fetch from remote: $REMOTE" ||
+        return
+    BRANCH=${2:-$(lk_git_remote_head "$REMOTE")} ||
+        lk_warn "no default branch for remote: $REMOTE" || return
+    UPSTREAM=$REMOTE/$BRANCH
+    _BRANCH=$(lk_git_branch_current) || _BRANCH=
+    unset LK_GIT_REPO_UPDATED
+    if lk_git_branch_list_local |
+        grep -Fx "$BRANCH" >/dev/null; then
+        lk_git_fast_forward_branch "$BRANCH" "$UPSTREAM" || return
+        [ "$_BRANCH" = "$BRANCH" ] || {
+            lk_console_detail "Switching ${_BRANCH:+from $_BRANCH }to $BRANCH"
+            LK_GIT_REPO_UPDATED=1
+            _lk_git checkout "$BRANCH" || return
+        }
+        _UPSTREAM=$(lk_git_branch_upstream) || _UPSTREAM=
+        [ "$_UPSTREAM" = "$UPSTREAM" ] || {
+            lk_console_detail "Updating remote-tracking branch for $BRANCH"
+            _lk_git branch --set-upstream-to "$UPSTREAM"
+        }
+    else
+        lk_console_detail \
+            "Switching ${_BRANCH:+from $_BRANCH }to $REMOTE/$BRANCH"
+        LK_GIT_REPO_UPDATED=1
+        _lk_git checkout -b "$BRANCH" --track "$UPSTREAM"
+    fi
 }
 
 # lk_git_get_repos ARRAY [DIR...]
@@ -106,8 +293,35 @@ function lk_git_get_repos() {
     )
 }
 
+function _lk_git_do_with_repo() {
+    local SH EXIT_STATUS=0
+    SH=$(lk_get_outputs_of "${REPO_COMMAND[@]}") ||
+        EXIT_STATUS=$?
+    eval "$SH" || return
+    lk_git_is_quiet && [ "$EXIT_STATUS" -eq 0 ] || echo "$(
+        unset _LK_FD
+        LK_TTY_NO_FOLD=1
+        {
+            lk_git_is_quiet &&
+                lk_console_item "Command failed in" "$REPO" ||
+                lk_console_item "Processed:" "$REPO"
+            [ "$EXIT_STATUS" -eq 0 ] ||
+                lk_console_error "Exit status:" "$EXIT_STATUS"
+            [ -z "$_STDOUT" ] ||
+                LK_TTY_COLOUR2=$LK_GREEN \
+                    lk_console_detail "Output:" $'\n'"$_STDOUT"
+            [ -z "$_STDERR" ] ||
+                LK_TTY_COLOUR2=$([ "$EXIT_STATUS" -eq 0 ] &&
+                    echo "$LK_YELLOW" ||
+                    echo "$LK_RED") \
+                    lk_console_detail "Error output:" $'\n'"$_STDERR"
+        } 2>&1
+    )"
+    return "$EXIT_STATUS"
+}
+
 function lk_git_with_repos() {
-    local PARALLEL GIT_SSH_COMMAND REPO_COMMAND FD REPO ERROR_COUNT=0 \
+    local PARALLEL GIT_SSH_COMMAND REPO_COMMAND FD REPO ERROR_COUNT=0 NOUN \
         REPOS=(${LK_GIT_REPOS[@]+"${LK_GIT_REPOS[@]}"})
     [ "${1:-}" != -p ] || {
         ! lk_bash_at_least 4 3 || {
@@ -120,55 +334,37 @@ function lk_git_with_repos() {
     [ $# -gt 0 ] || lk_usage "\
 Usage: $(lk_myself -f) [-p] COMMAND [ARG...]
 
-For each Git repository in the directory hierarchy rooted at \".\", run COMMAND in
-the working tree's top-level directory. If -p is set, process multiple
-repositories simultaneously." || return
+For each Git repository found in the current directory, run COMMAND in the
+working tree's top-level directory. If -p is set, process multiple repositories
+simultaneously (Bash 4.3+ only)." || return
     if [ ${#REPOS[@]} -gt 0 ]; then
         lk_test_many lk_git_is_top_level "${REPOS[@]}" ||
-            lk_warn "each element of LK_GIT_REPOS must be the top-level directory \
-of a working tree" || return
+            lk_warn "each element of LK_GIT_REPOS must be the top-level \
+directory of a working tree" || return
         lk_resolve_files REPOS
     else
-        lk_git_is_quiet || lk_console_message "Finding repositories"
         lk_git_get_repos REPOS
         [ ${#REPOS[@]} -gt 0 ] || lk_warn "no repos found" || return
     fi
     lk_git_is_quiet || {
-        lk_console_detail "Command:" $'\n'"${REPO_COMMAND[*]}"
         lk_echo_array REPOS | lk_pretty_path |
-            lk_console_detail_list "Repositories:" repo repos
+            lk_console_list "Repositories:" repo repos
+        lk_console_item "Command to run:" \
+            $'\n'"$(lk_quote_args "${REPO_COMMAND[@]}")"
         lk_confirm "Proceed?" Y || return
     }
+    [ ${#REPOS[@]} -gt 1 ] || unset PARALLEL
+    NOUN="${#REPOS[@]} $(lk_maybe_plural ${#REPOS[@]} repo repos)"
     if lk_is_true PARALLEL; then
+        lk_git_is_quiet ||
+            lk_console_message "Processing $NOUN in parallel"
         FD=$(lk_next_fd) &&
             eval "exec $FD>&2 2>/dev/null" || return
         for REPO in "${REPOS[@]}"; do
             (
                 exec 2>&"$FD" &&
-                    cd "$REPO" || exit
-                EXIT_STATUS=0
-                SH=$(lk_get_outputs_of "${REPO_COMMAND[@]}") ||
-                    EXIT_STATUS=$?
-                eval "$SH" || exit
-                lk_git_is_quiet && [ "$EXIT_STATUS" -eq 0 ] || echo "$(
-                    unset _LK_FD
-                    LK_TTY_NO_FOLD=1
-                    {
-                        lk_console_item "Processed:" "$REPO"
-                        [ "$EXIT_STATUS" -eq 0 ] ||
-                            lk_console_error \
-                                "Exit status:" "$EXIT_STATUS"
-                        [ -z "$_STDOUT" ] ||
-                            LK_TTY_COLOUR2=$LK_GREEN \
-                                lk_console_detail "Output:" \
-                                $'\n'"$_STDOUT"
-                        [ -z "$_STDERR" ] ||
-                            LK_TTY_COLOUR2=$LK_RED \
-                                lk_console_detail "Error output:" \
-                                $'\n'"$_STDERR"
-                    } 2>&1
-                )" >&"$FD"
-                exit "$EXIT_STATUS"
+                    cd "$REPO" &&
+                    _lk_git_do_with_repo >&"$FD"
             ) &
         done
         eval "exec 2>&$FD $FD>&-"
@@ -176,20 +372,19 @@ of a working tree" || return
             wait -n 2>/dev/null || ((++ERROR_COUNT))
         done
     else
+        lk_git_is_quiet ||
+            lk_console_message "Processing $NOUN"
         for REPO in "${REPOS[@]}"; do
-            lk_git_is_quiet || lk_console_item "Processing" "$REPO"
             (cd "$REPO" &&
-                "${REPO_COMMAND[@]}") || ((++ERROR_COUNT))
+                _lk_git_do_with_repo) || ((++ERROR_COUNT))
         done
     fi
     lk_git_is_quiet || {
         [ "$ERROR_COUNT" -eq 0 ] &&
-            LK_TTY_NO_FOLD=1 lk_console_success "${REPO_COMMAND[*]}" \
-                "executed without error in ${#REPOS[@]} $(lk_maybe_plural \
-                    ${#REPOS[@]} repository repositories)" ||
-            LK_TTY_NO_FOLD=1 lk_console_error "${REPO_COMMAND[*]}" \
-                "failed in $ERROR_COUNT of ${#REPOS[@]} $(lk_maybe_plural \
-                    ${#REPOS[@]} repository repositories)"
+            LK_TTY_NO_FOLD=1 \
+                lk_console_success "Command succeeded in $NOUN" ||
+            LK_TTY_NO_FOLD=1 \
+                lk_console_error "Command failed in $ERROR_COUNT of $NOUN"
     }
     [ "$ERROR_COUNT" -eq 0 ]
 }
@@ -241,12 +436,15 @@ function lk_git_config_remote_push_all() {
 function lk_git_recheckout() {
     local REPO_ROOT COMMIT
     lk_console_message "Preparing to delete the index and check out HEAD again"
-    REPO_ROOT="$(git rev-parse --show-toplevel)" &&
-        COMMIT="$(git rev-list -1 --oneline HEAD)" || return
+    REPO_ROOT=$(git rev-parse --show-toplevel) &&
+        COMMIT=$(git rev-list -1 --oneline HEAD) || return
     lk_console_detail "Repository:" "$REPO_ROOT"
     lk_console_detail "HEAD refers to:" "$COMMIT"
-    lk_confirm "Uncommitted changes will be permanently deleted. Proceed?" N || return
+    lk_confirm \
+        "Uncommitted changes will be permanently deleted. Proceed?" N || return
     rm -fv "$REPO_ROOT/.git/index" &&
         git checkout --force --no-overlay HEAD -- "$REPO_ROOT" &&
         lk_console_success "Checkout completed successfully"
 }
+
+lk_provide git

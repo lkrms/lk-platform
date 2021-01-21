@@ -182,7 +182,7 @@ local)
     [ -z "$NEW_KEY_FILE" ] && lk_ssh_host_exists "$NEW_HOST_NAME" || {
         lk_console_detail \
             "Adding host:" "$NEW_HOST_NAME ($NEW_USER@$NEW_HOST)"
-        lk_ssh_add_host \
+        lk_ssh_add_host -t \
             "$NEW_HOST_NAME" \
             "$NEW_HOST" \
             "$NEW_USER" \
@@ -207,7 +207,7 @@ new)
         [ -n "$OLD_KEY" ] &&
             KEY_FILE=- ||
             KEY_FILE=${LK_SSH_JUMP_HOST:+jump}
-        lk_ssh_add_host \
+        lk_ssh_add_host -t \
             "$OLD_HOST_NAME" \
             "$OLD_HOST" \
             "$OLD_USER" \

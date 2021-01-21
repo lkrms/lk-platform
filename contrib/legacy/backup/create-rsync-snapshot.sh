@@ -290,11 +290,12 @@ function lk_mail_send() {
     fi
 }
 
-LK_BOLD=$(tput bold) || LK_BOLD=
-LK_RED=$(tput setaf 1) || LK_RED=
-LK_CYAN=$(tput setaf 6) || LK_CYAN=
-LK_YELLOW=$(tput setaf 3) || LK_YELLOW=
-LK_RESET=$(tput sgr0) || LK_RESET=
+LK_BOLD=$'\E[1m'
+LK_RED=$'\E[31m'
+LK_GREEN=$'\E[32m'
+LK_YELLOW=$'\E[33m'
+LK_CYAN=$'\E[36m'
+LK_RESET=$'\E[0m'
 
 ##
 

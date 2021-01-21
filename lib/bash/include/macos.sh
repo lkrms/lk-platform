@@ -1,5 +1,6 @@
 #!/bin/bash
-# shellcheck disable=SC2207
+
+# shellcheck disable=SC2015,SC2207
 
 function lk_macos_version() {
     local VERSION
@@ -13,6 +14,9 @@ function lk_macos_version_name() {
     local VERSION
     VERSION=${1:-$(lk_macos_version)} || return
     case "$VERSION" in
+    11.*)
+        echo "big_sur"
+        ;;
     10.15)
         echo "catalina"
         ;;
@@ -82,8 +86,7 @@ function lk_macos_xcode_maybe_accept_license() {
     if [ -e /Applications/Xcode.app ] &&
         ! xcodebuild -license check >/dev/null 2>&1; then
         lk_console_message "Accepting Xcode license"
-        lk_console_detail "Running:" "xcodebuild -license accept"
-        sudo xcodebuild -license accept
+        lk_run_detail lk_elevate xcodebuild -license accept
     fi
 }
 
@@ -238,7 +241,7 @@ function lk_macos_defaults_dump() {
         for DOMAIN in "${DOMAINS[@]}"; do
             FILE=$DIR${HOST:+/$HOST}/$DOMAIN
             ${_LK_MACOS_DEFAULTS_DUMP_SUDO:+sudo} \
-                defaults ${HOST:+"-$HOST"} read "$DOMAIN" >"$FILE" ||
+                defaults ${HOST:+"-$HOST"} export "$DOMAIN" - >"$FILE" ||
                 rm -f "$FILE"
         done
     done
@@ -251,7 +254,7 @@ function lk_macos_defaults_dump() {
     }
     DIR=$(lk_pretty_path "$DIR")
     lk_console_log \
-        "Output of \"defaults [-currentHost] read \$DOMAIN\" dumped to:" \
+        "Output of \"defaults [-currentHost] export \$DOMAIN\" dumped to:" \
         "$(for d in "$DIR" ${_LK_MACOS_DEFAULTS_DUMP_SUDO:+"$DIR-system"}; do
             lk_echo_args \
                 "$d" "$d/currentHost"
@@ -330,3 +333,5 @@ function lk_plist_maybe_add() {
     lk_plist_exists "$1" ||
         lk_plist_add "$@"
 }
+
+lk_provide macos

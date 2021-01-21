@@ -4,20 +4,23 @@ HOMEBREW_TAPS=()
 HOMEBREW_FORMULAE=()
 HOMEBREW_CASKS=()
 MAS_APPS=()
+HOMEBREW_KEEP_FORMULAE=()
+HOMEBREW_KEEP_CASKS=()
+LOGIN_ITEMS=()
 
-# terminal-based
+# Terminal-based
 HOMEBREW_FORMULAE+=(
-    # utilities
+    # Utilities
     exiftool
     imagemagick
     unison
 
-    # networking
+    # Networking
     openconnect
     vpn-slice
 )
 
-# desktop
+# Desktop
 HOMEBREW_TAPS+=(
     federico-terzi/espanso
 )
@@ -32,7 +35,7 @@ HOMEBREW_FORMULAE+=(
     poppler
     pstoedit
 
-    # multimedia - video
+    # Multimedia (video)
     youtube-dl
 )
 
@@ -56,12 +59,12 @@ HOMEBREW_CASKS+=(
     # PDF
     basictex
 
-    # multimedia - video
+    # Multimedia (video)
     vlc
 
-    # system
+    # System
     geekbench
-    lingon-x
+    #lingon-x
 )
 
 MAS_APPS+=(
@@ -82,7 +85,19 @@ MAS_APPS+=(
     585829637 # Todoist
 )
 
-# hardware-related
+# Hardware-related
 HOMEBREW_CASKS+=(
     sonos
+)
+
+LOGIN_ITEMS+=(
+    "/Applications/Flycut.app"
+    "/Applications/Lightshot Screenshot.app"
+    "/Applications/Magnet.app"
+    "/Applications/Mail.app"
+    "/Applications/Messages.app"
+    "/Applications/Messenger.app"
+    "/Applications/nextcloud.app"
+    "/Applications/Skype.app"
+    "/Applications/Todoist.app"
 )
