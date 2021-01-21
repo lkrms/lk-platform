@@ -248,8 +248,6 @@ PAC_PACKAGES+=(
     geckodriver
     python-pylint
     qcachegrind
-    sublime-merge
-    sublime-text
     tidy
     ttf-font-awesome
     ttf-ionicons
@@ -311,6 +309,8 @@ AUR_PACKAGES+=(
     demjson
     nodejs-less
     robo3t-bin
+    sublime-merge
+    sublime-text
     trickle
     vscodium-bin
 

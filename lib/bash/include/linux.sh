@@ -223,12 +223,17 @@ function lk_user_lock_passwd() {
     }
 }
 
-# shellcheck disable=SC2034,SC2207
+# lk_get_users_in_group GROUP...
+function lk_get_users_in_group() {
+    getent group "$@" 2>/dev/null |
+        cut -d: -f4 |
+        sed 's/,/\n/' |
+        sort -u || true
+}
+
 function lk_get_standard_users() {
-    local IFS ADM_USERS USERS
-    IFS=,
-    ADM_USERS=($(getent group adm | cut -d: -f4))
-    IFS=$'\n'
+    local ADM_USERS USERS
+    ADM_USERS=($(lk_get_users_in_group adm sudo wheel))
     USERS=($(getent passwd |
         awk -F: '$3 >= 1000 && $3 < 65534 { print $1 }'))
     # lk_linode_hosting_ssh_add_all relies on this being a standalone function,
