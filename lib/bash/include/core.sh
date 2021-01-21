@@ -1011,7 +1011,7 @@ function lk_get_outputs_of() {
         "$@" >"$_LK_STDOUT" 2>"$_LK_STDERR" || EXIT_STATUS=$?
         for i in _LK_STDOUT _LK_STDERR; do
             _lk_var_prefix
-            printf '%s=%q\n' "${i#_LK}" "$(cat "${!i}")"
+            printf '%s=%q\n' "${i#_LK}" "$(cat "${!i}" | lk_strip_non_printing)"
             rm -f -- "${!i}" || true
         done
         exit "${EXIT_STATUS:-0}"

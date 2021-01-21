@@ -188,6 +188,53 @@ Options:
     fi
 }
 
+# lk_git_fast_forward_branch BRANCH UPSTREAM
+function lk_git_fast_forward_branch() {
+    local BEHIND _BRANCH
+    BEHIND=$(git rev-list --count "$1..$2") || return
+    if [ "$BEHIND" -gt 0 ]; then
+        git merge-base --is-ancestor "$1" "$2" ||
+            lk_console_warning -r "Local branch $1 has diverged from $2" ||
+            return
+        _BRANCH=$(lk_git_branch_current) || return
+        lk_console_detail \
+            "Updating $1 ($BEHIND $(lk_maybe_plural \
+                "$BEHIND" commit commits) behind)"
+        LK_GIT_REPO_UPDATED=1
+        if [ "$_BRANCH" = "$1" ]; then
+            _lk_git merge --ff-only "$2"
+        else
+            # Fast-forward local BRANCH (e.g. 'develop') to UPSTREAM
+            # ('origin/develop') without checking it out
+            _lk_git fetch . "$2:$1"
+        fi
+    fi
+}
+
+# lk_git_update_repo
+#
+# Fetch from all remotes and fast-forward each branch with a remote-tracking
+# branch it has not diverged from.
+function lk_git_update_repo() {
+    local ERRORS=0 REMOTE BRANCH UPSTREAM
+    REMOTE=$1
+    for REMOTE in $(git remote); do
+        _lk_git fetch --quiet --prune --prune-tags "$REMOTE" ||
+            lk_console_warning -r "Unable to fetch from remote:" "$REMOTE" ||
+            ((++ERRORS))
+    done
+    for BRANCH in $(lk_git_branch_list_local); do
+        UPSTREAM=$(lk_git_branch_upstream "$BRANCH") ||
+            lk_console_warning -r "No upstream for branch:" "$BRANCH" || {
+            ((++ERRORS))
+            continue
+        }
+        lk_git_fast_forward_branch "$BRANCH" "$UPSTREAM" ||
+            ((++ERRORS))
+    done
+    [ "$ERRORS" -eq 0 ]
+}
+
 # lk_git_update_repo_to REMOTE [BRANCH]
 function lk_git_update_repo_to() {
     local REMOTE BRANCH UPSTREAM _BRANCH BEHIND _UPSTREAM
@@ -204,40 +251,20 @@ Usage: $(lk_myself -f) REMOTE [BRANCH]" || return
     unset LK_GIT_REPO_UPDATED
     if lk_git_branch_list_local |
         grep -Fx "$BRANCH" >/dev/null; then
-        BEHIND=$(git rev-list --count "$BRANCH..$UPSTREAM")
-        if [ "$BEHIND" -gt 0 ]; then
-            git merge-base --is-ancestor "$BRANCH" "$UPSTREAM" ||
-                lk_warn "local branch $BRANCH has diverged from $UPSTREAM" ||
-                return
-            lk_console_detail \
-                "Updating $LK_BOLD$BRANCH$LK_RESET ($BEHIND $(lk_maybe_plural \
-                    "$BEHIND" commit commits) behind)"
-            LK_GIT_REPO_UPDATED=1
-            if [ "$_BRANCH" = "$BRANCH" ]; then
-                _lk_git merge --ff-only "$UPSTREAM"
-            else
-                # Fast-forward local BRANCH (e.g. 'develop') to UPSTREAM
-                # ('origin/develop') without checking it out
-                _lk_git fetch . "$UPSTREAM:$BRANCH"
-            fi || return
-        fi
+        lk_git_fast_forward_branch "$BRANCH" "$UPSTREAM" || return
         [ "$_BRANCH" = "$BRANCH" ] || {
-            lk_console_detail \
-                "Switching ${_BRANCH:+from $LK_BOLD$_BRANCH$LK_RESET }to \
-$LK_BOLD$BRANCH$LK_RESET"
+            lk_console_detail "Switching ${_BRANCH:+from $_BRANCH }to $BRANCH"
             LK_GIT_REPO_UPDATED=1
             _lk_git checkout "$BRANCH" || return
         }
         _UPSTREAM=$(lk_git_branch_upstream) || _UPSTREAM=
         [ "$_UPSTREAM" = "$UPSTREAM" ] || {
-            lk_console_detail \
-                "Updating remote-tracking branch for $LK_BOLD$BRANCH$LK_RESET"
+            lk_console_detail "Updating remote-tracking branch for $BRANCH"
             _lk_git branch --set-upstream-to "$UPSTREAM"
         }
     else
         lk_console_detail \
-            "Switching ${_BRANCH:+from $LK_BOLD$_BRANCH$LK_RESET }to \
-$REMOTE/$LK_BOLD$BRANCH$LK_RESET"
+            "Switching ${_BRANCH:+from $_BRANCH }to $REMOTE/$BRANCH"
         LK_GIT_REPO_UPDATED=1
         _lk_git checkout -b "$BRANCH" --track "$UPSTREAM"
     fi
@@ -266,8 +293,35 @@ function lk_git_get_repos() {
     )
 }
 
+function _lk_git_do_with_repo() {
+    local SH EXIT_STATUS=0
+    SH=$(lk_get_outputs_of "${REPO_COMMAND[@]}") ||
+        EXIT_STATUS=$?
+    eval "$SH" || return
+    lk_git_is_quiet && [ "$EXIT_STATUS" -eq 0 ] || echo "$(
+        unset _LK_FD
+        LK_TTY_NO_FOLD=1
+        {
+            lk_git_is_quiet &&
+                lk_console_item "Command failed in" "$REPO" ||
+                lk_console_item "Processed:" "$REPO"
+            [ "$EXIT_STATUS" -eq 0 ] ||
+                lk_console_error "Exit status:" "$EXIT_STATUS"
+            [ -z "$_STDOUT" ] ||
+                LK_TTY_COLOUR2=$LK_GREEN \
+                    lk_console_detail "Output:" $'\n'"$_STDOUT"
+            [ -z "$_STDERR" ] ||
+                LK_TTY_COLOUR2=$([ "$EXIT_STATUS" -eq 0 ] &&
+                    echo "$LK_YELLOW" ||
+                    echo "$LK_RED") \
+                    lk_console_detail "Error output:" $'\n'"$_STDERR"
+        } 2>&1
+    )"
+    return "$EXIT_STATUS"
+}
+
 function lk_git_with_repos() {
-    local PARALLEL GIT_SSH_COMMAND REPO_COMMAND FD REPO ERROR_COUNT=0 \
+    local PARALLEL GIT_SSH_COMMAND REPO_COMMAND FD REPO ERROR_COUNT=0 NOUN \
         REPOS=(${LK_GIT_REPOS[@]+"${LK_GIT_REPOS[@]}"})
     [ "${1:-}" != -p ] || {
         ! lk_bash_at_least 4 3 || {
@@ -280,55 +334,37 @@ function lk_git_with_repos() {
     [ $# -gt 0 ] || lk_usage "\
 Usage: $(lk_myself -f) [-p] COMMAND [ARG...]
 
-For each Git repository in the directory hierarchy rooted at \".\", run COMMAND in
-the working tree's top-level directory. If -p is set, process multiple
-repositories simultaneously." || return
+For each Git repository found in the current directory, run COMMAND in the
+working tree's top-level directory. If -p is set, process multiple repositories
+simultaneously (Bash 4.3+ only)." || return
     if [ ${#REPOS[@]} -gt 0 ]; then
         lk_test_many lk_git_is_top_level "${REPOS[@]}" ||
             lk_warn "each element of LK_GIT_REPOS must be the top-level \
 directory of a working tree" || return
         lk_resolve_files REPOS
     else
-        lk_git_is_quiet || lk_console_message "Finding repositories"
         lk_git_get_repos REPOS
         [ ${#REPOS[@]} -gt 0 ] || lk_warn "no repos found" || return
     fi
     lk_git_is_quiet || {
-        lk_console_detail "Command:" $'\n'"${REPO_COMMAND[*]}"
         lk_echo_array REPOS | lk_pretty_path |
-            lk_console_detail_list "Repositories:" repo repos
+            lk_console_list "Repositories:" repo repos
+        lk_console_item "Command to run:" \
+            $'\n'"$(lk_quote_args "${REPO_COMMAND[@]}")"
         lk_confirm "Proceed?" Y || return
     }
+    [ ${#REPOS[@]} -gt 1 ] || unset PARALLEL
+    NOUN="${#REPOS[@]} $(lk_maybe_plural ${#REPOS[@]} repo repos)"
     if lk_is_true PARALLEL; then
+        lk_git_is_quiet ||
+            lk_console_message "Processing $NOUN in parallel"
         FD=$(lk_next_fd) &&
             eval "exec $FD>&2 2>/dev/null" || return
         for REPO in "${REPOS[@]}"; do
             (
                 exec 2>&"$FD" &&
-                    cd "$REPO" || exit
-                EXIT_STATUS=0
-                SH=$(lk_get_outputs_of "${REPO_COMMAND[@]}") ||
-                    EXIT_STATUS=$?
-                eval "$SH" || exit
-                lk_git_is_quiet && [ "$EXIT_STATUS" -eq 0 ] || echo "$(
-                    unset _LK_FD
-                    LK_TTY_NO_FOLD=1
-                    {
-                        lk_console_item "Processed:" "$REPO"
-                        [ "$EXIT_STATUS" -eq 0 ] ||
-                            lk_console_error \
-                                "Exit status:" "$EXIT_STATUS"
-                        [ -z "$_STDOUT" ] ||
-                            LK_TTY_COLOUR2=$LK_GREEN \
-                                lk_console_detail "Output:" \
-                                $'\n'"$_STDOUT"
-                        [ -z "$_STDERR" ] ||
-                            LK_TTY_COLOUR2=$LK_RED \
-                                lk_console_detail "Error output:" \
-                                $'\n'"$_STDERR"
-                    } 2>&1
-                )" >&"$FD"
-                exit "$EXIT_STATUS"
+                    cd "$REPO" &&
+                    _lk_git_do_with_repo >&"$FD"
             ) &
         done
         eval "exec 2>&$FD $FD>&-"
@@ -336,20 +372,19 @@ directory of a working tree" || return
             wait -n 2>/dev/null || ((++ERROR_COUNT))
         done
     else
+        lk_git_is_quiet ||
+            lk_console_message "Processing $NOUN"
         for REPO in "${REPOS[@]}"; do
-            lk_git_is_quiet || lk_console_item "Processing" "$REPO"
             (cd "$REPO" &&
-                "${REPO_COMMAND[@]}") || ((++ERROR_COUNT))
+                _lk_git_do_with_repo) || ((++ERROR_COUNT))
         done
     fi
     lk_git_is_quiet || {
         [ "$ERROR_COUNT" -eq 0 ] &&
-            LK_TTY_NO_FOLD=1 lk_console_success "${REPO_COMMAND[*]}" \
-                "executed without error in ${#REPOS[@]} $(lk_maybe_plural \
-                    ${#REPOS[@]} repository repositories)" ||
-            LK_TTY_NO_FOLD=1 lk_console_error "${REPO_COMMAND[*]}" \
-                "failed in $ERROR_COUNT of ${#REPOS[@]} $(lk_maybe_plural \
-                    ${#REPOS[@]} repository repositories)"
+            LK_TTY_NO_FOLD=1 \
+                lk_console_success "Command succeeded in $NOUN" ||
+            LK_TTY_NO_FOLD=1 \
+                lk_console_error "Command failed in $ERROR_COUNT of $NOUN"
     }
     [ "$ERROR_COUNT" -eq 0 ]
 }
