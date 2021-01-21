@@ -2472,7 +2472,8 @@ function lk_random_password() {
         # characters, reducing chance of 2+ iterations from >50% to <2%
         PASSWORD=$PASSWORD$(openssl rand -base64 \
             $((BITS = LENGTH * 6, BYTES = BITS / 8 + (BITS % 8 ? 1 : 0), BYTES * 11 / 10)) |
-            sed -E 's/[lIO01]+//g') || return
+            sed -E 's/[lIO01\n]+//g') || return
+        PASSWORD=${PASSWORD//$'\n'/}
     done
     printf '%s' "${PASSWORD:0:$LENGTH}"
 }
