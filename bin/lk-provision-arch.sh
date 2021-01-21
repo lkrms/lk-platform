@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2015,SC2016,SC2031,SC2034,SC2206,SC2207
+# shellcheck disable=SC1090,SC2015,SC2016,SC2031,SC2034,SC2206,SC2207,SC2046,SC2086
 
 set -euo pipefail
 _DEPTH=1
@@ -38,6 +38,10 @@ else
             lk_systemctl_enable_now ${2:+-n "$2"} "$1"
     }
 fi
+
+function is_desktop() {
+    lk_node_service_enabled desktop
+}
 
 function memory_at_least() {
     _LK_SYSTEM_MEMORY=${_LK_SYSTEM_MEMORY:-$(lk_system_memory)}
@@ -131,7 +135,7 @@ $LK_NODE_HOSTNAME" &&
     fi
 
     lk_console_message "Checking systemd default target"
-    lk_node_service_enabled desktop &&
+    is_desktop &&
         DEFAULT_TARGET=graphical.target ||
         DEFAULT_TARGET=multi-user.target
     CURRENT_DEFAULT_TARGET=$(${LK_BOOTSTRAP:+sudo} systemctl get-default)
@@ -148,9 +152,11 @@ $LK_NODE_HOSTNAME" &&
 
     if [ -d /etc/polkit-1/rules.d ]; then
         lk_console_message "Checking polkit rules"
+        FILE=/etc/polkit-1/rules.d/49-wheel.rules
+        lk_install -m 00640 "$FILE"
         lk_file_replace \
             -f "$LK_BASE/share/polkit-1/rules.d/default-arch.rules" \
-            /etc/polkit-1/rules.d/49-wheel.rules
+            "$FILE"
     fi
 
     lk_console_message "Checking kernel parameters"
@@ -158,6 +164,7 @@ $LK_NODE_HOSTNAME" &&
     for FILE in default.conf $(lk_is_virtual || lk_echo_args sysrq.conf); do
         TARGET=/etc/sysctl.d/90-${FILE/default/${LK_PATH_PREFIX}default}
         FILE=$LK_BASE/share/sysctl.d/$FILE
+        lk_install -m 00644 "$TARGET"
         lk_file_replace -f "$FILE" "$TARGET"
     done
     lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
@@ -222,11 +229,10 @@ $LK_NODE_HOSTNAME" &&
         lk_tty sudo pacman -D --asexplicit "${PAC_MARK_EXPLICIT[@]}"
     [ ${#PAC_UNMARK_EXPLICIT[@]} -eq 0 ] ||
         lk_tty sudo pacman -D --asdeps "${PAC_UNMARK_EXPLICIT[@]}"
+
     [ ${#PAC_KEEP[@]} -eq 0 ] ||
         lk_echo_array PAC_KEEP |
-        lk_console_detail_list \
-            "Not installed as dependency because of PAC_KEEP:" package packages
-
+        lk_console_list "Not uninstalling:" package packages
     PAC_INSTALL=($(comm -23 \
         <(lk_echo_array PAC_PACKAGES | sort -u) \
         <(lk_pac_installed_list | sort -u)))
@@ -278,102 +284,69 @@ $LK_NODE_HOSTNAME" &&
         systemctl_enable mariadb "MariaDB"
     fi
 
-    if lk_pac_installed php-fpm; then
-        lk_git_provision_repo -s \
-            -o "$USER:adm" \
-            -n "opcache-gui" \
-            https://github.com/lkrms/opcache-gui.git \
-            /opt/opcache-gui
-    fi
-
-    if ! lk_is_virtual; then
-
-        if lk_node_service_enabled desktop; then
-
-            [ ! -f "/etc/bluetooth/main.conf" ] || {
-                lk_conf_set_option AutoEnable "true" /etc/bluetooth/main.conf &&
-                    systemctl_enable bluetooth || exit
-            }
-
-            LK_CONF_OPTION_FILE=/etc/conf.d/libvirt-guests
-            lk_conf_set_option URIS \
-                '"default$(for i in /run/user/*/libvirt/libvirt-sock; do [ ! -e "$i" ] || printf " qemu:///session?socket=%s" "$i"; done)"'
-            lk_conf_set_option ON_BOOT "ignore"
-            lk_conf_set_option ON_SHUTDOWN "shutdown"
-            lk_conf_set_option SHUTDOWN_TIMEOUT "300"
-            sudo usermod --append --groups libvirt,kvm "$USER"
-            [ -e "/etc/qemu/bridge.conf" ] || {
-                sudo install -d -m 00755 "/etc/qemu" &&
-                    echo "allow all" |
-                    sudo tee "/etc/qemu/bridge.conf" >/dev/null || exit
-            }
-            ! memory_at_least 7 || {
-                systemctl_enable libvirtd
-                systemctl_enable libvirt-guests
-            }
-
-            sudo usermod --append --groups docker "$USER"
-            ! memory_at_least 7 ||
-                systemctl_enable docker
-
-        fi
-
-    fi
-
-    if lk_node_service_enabled desktop; then
-
+    if lk_pac_installed php; then
         LK_CONF_OPTION_FILE=/etc/php/php.ini
-        for PHP_EXT in bcmath curl exif gd gettext iconv imap intl mysqli pdo_sqlite soap sqlite3 xmlrpc zip; do
-            lk_php_enable_option "extension" "$PHP_EXT"
+        PHP_EXT=(
+            bcmath
+            curl
+            exif
+            gd
+            gettext
+            iconv
+            imap
+            intl
+            mysqli
+            pdo_sqlite
+            soap
+            sqlite3
+            xmlrpc
+            zip
+        )
+        for EXT in ${PHP_EXT[@]+"${PHP_EXT[@]}"}; do
+            lk_php_enable_option extension "$EXT"
         done
-        lk_php_enable_option "zend_extension" "opcache"
-        sudo install -d -m 00700 -o "http" -g "http" "/var/cache/php/opcache"
-        lk_php_set_option "max_execution_time" "0"
-        lk_php_set_option "memory_limit" "128M"
-        lk_php_set_option "error_reporting" "E_ALL"
-        lk_php_set_option "display_errors" "On"
-        lk_php_set_option "display_startup_errors" "On"
-        lk_php_set_option "log_errors" "Off"
-        lk_php_set_option "opcache.enable" "Off"
-        lk_php_set_option "opcache.file_cache" "/var/cache/php/opcache"
-        [ ! -f "/etc/php/conf.d/imagick.ini" ] ||
-            LK_CONF_OPTION_FILE="/etc/php/conf.d/imagick.ini" \
-                lk_php_enable_option "extension" "imagick"
-        [ ! -f "/etc/php/conf.d/memcache.ini" ] ||
-            LK_CONF_OPTION_FILE="/etc/php/conf.d/memcache.ini" \
-                lk_php_enable_option "extension" "memcache.so"
-        [ ! -f "/etc/php/conf.d/memcached.ini" ] ||
-            LK_CONF_OPTION_FILE="/etc/php/conf.d/memcached.ini" \
-                lk_php_enable_option "extension" "memcached.so"
-        [ ! -f "/etc/php/conf.d/xdebug.ini" ] || {
-            [ ! -d "$HOME/.tmp/cachegrind" ] ||
-                rmdir -v "$HOME/.tmp/cachegrind" || true
-            [ ! -d "$HOME/.tmp/trace" ] ||
-                rmdir -v "$HOME/.tmp/trace" || true
-            install -d -m 00777 "$HOME/.xdebug"
-            LK_CONF_OPTION_FILE="/etc/php/conf.d/xdebug.ini"
-            grep -q '^xdebug\.mode=' "$LK_CONF_OPTION_FILE" ||
-                [ ! -e "$LK_CONF_OPTION_FILE.orig" ] || {
-                lk_file_backup "$LK_CONF_OPTION_FILE" &&
-                    sudo mv -fv "$LK_CONF_OPTION_FILE.orig" "$LK_CONF_OPTION_FILE"
-            }
-            lk_php_enable_option "zend_extension" "xdebug.so"
-            # Alternatives: profile, trace
-            lk_php_set_option "xdebug.mode" "debug"
-            lk_php_set_option "xdebug.start_with_request" "trigger"
-            lk_php_set_option "xdebug.output_dir" "$HOME/.xdebug"
-            lk_php_set_option "xdebug.profiler_output_name" "callgrind.out.%H.%R.%u"
-            lk_php_set_option "xdebug.collect_return" "On"
-            lk_php_set_option "xdebug.trace_output_name" "trace.%H.%R.%u"
-        }
-        if [ -f /etc/php/php-fpm.d/www.conf ]; then
-            # Reverse a previous change that broke logrotate
-            sudo install -d -m 00755 -o root -g root /var/log/httpd
-            sudo install -d -m 00775 -o root -g http /var/log/php-fpm
-            FILE=/etc/logrotate.d/php-fpm
-            [ -e "$FILE" ] ||
-                sudo install -m 00644 /dev/null "$FILE"
-            lk_file_replace "$FILE" "\
+        STANDALONE_PHP_EXT=(
+            imagick
+            memcache.so
+            memcached.so
+        )
+        for EXT in ${STANDALONE_PHP_EXT[@]+"${STANDALONE_PHP_EXT[@]}"}; do
+            FILE=/etc/php/conf.d/${EXT%.*}.ini
+            [ -f "$FILE" ] || continue
+            lk_php_enable_option extension "$EXT" "$FILE"
+        done
+        if is_desktop; then
+            lk_php_set_option error_reporting E_ALL
+            lk_php_set_option display_errors On
+            lk_php_set_option display_startup_errors On
+            lk_php_set_option log_errors Off
+
+            LK_CONF_OPTION_FILE=/etc/php/conf.d/xdebug.ini
+            lk_install -d -m 00777 ~/.xdebug
+            lk_php_set_option xdebug.output_dir ~/.xdebug
+            # Alternative values: profile, trace
+            lk_php_set_option xdebug.mode debug
+            lk_php_set_option xdebug.start_with_request trigger
+            lk_php_set_option xdebug.profiler_output_name callgrind.out.%H.%R.%u
+            lk_php_set_option xdebug.collect_return On
+            lk_php_set_option xdebug.trace_output_name trace.%H.%R.%u
+            lk_php_enable_option zend_extension xdebug.so
+        fi
+    fi
+
+    if lk_pac_installed php-fpm apache; then
+        lk_install -d -m 00700 -o http -g http /var/cache/php/opcache
+        lk_php_set_option opcache.file_cache /var/cache/php/opcache
+        lk_php_set_option opcache.validate_permission On
+        lk_php_enable_option zend_extension opcache
+        if is_desktop; then
+            lk_php_set_option max_execution_time 0
+            lk_php_set_option opcache.enable Off
+        fi
+        lk_install -d -m 00775 -o root -g http /var/log/php-fpm
+        FILE=/etc/logrotate.d/php-fpm
+        lk_install -m 00644 "$FILE"
+        lk_file_replace "$FILE" <<"EOF"
 /var/log/php-fpm/*.access.log {
     missingok
     sharedscripts
@@ -389,54 +362,106 @@ $LK_NODE_HOSTNAME" &&
         /usr/bin/systemctl kill --kill-who=main --signal=SIGUSR1 php-fpm.service 2>/dev/null || true
     endscript
     su http http
-}"
-            LK_CONF_OPTION_FILE=/etc/php/php-fpm.d/www.conf
-            lk_php_set_option "pm" "static"
-            lk_php_set_option "pm.max_children" "4"
-            lk_php_set_option "pm.max_requests" "0"
-            lk_php_set_option "request_terminate_timeout" "0"
-            lk_php_set_option "pm.status_path" "/php-fpm-status"
-            lk_php_set_option "ping.path" "/php-fpm-ping"
-            lk_php_set_option "access.log" '/var/log/php-fpm/php-fpm-$pool.access.log'
-            lk_php_set_option "access.format" '"%{REMOTE_ADDR}e - %u %t \"%m %r%Q%q\" %s %f %{mili}d %{kilo}M %C%%"'
-            lk_php_set_option "catch_workers_output" "yes"
-            lk_php_set_option "php_admin_value[memory_limit]" "128M"
-            lk_php_set_option "php_admin_value[error_log]" '/var/log/php-fpm/php-fpm-$pool.error.log'
-            lk_php_set_option "php_admin_flag[log_errors]" "On"
-            lk_php_set_option "php_flag[display_errors]" "Off"
-            lk_php_set_option "php_flag[display_startup_errors]" "Off"
-            if ! is_bootstrap; then
-                OLD_LOGS=(/var/log/httpd/php-fpm-*.log)
-                if [ ${#OLD_LOGS[@]} -gt 0 ] && [ -z "$(ls -A /var/log/php-fpm)" ]; then
-                    lk_systemctl_stop php-fpm
-                    sudo mv -v "${OLD_LOGS[@]}" /var/log/php-fpm/
-                fi
-            fi
+}
+EOF
+        LK_CONF_OPTION_FILE=/etc/php/php-fpm.d/www.conf
+        lk_php_set_option pm static
+        lk_php_set_option pm.status_path /php-fpm-status
+        lk_php_set_option ping.path /php-fpm-ping
+        lk_php_set_option access.log '/var/log/php-fpm/php-fpm-$pool.access.log'
+        lk_php_set_option access.format '"%{REMOTE_ADDR}e - %u %t \"%m %r%Q%q\" %s %f %{mili}d %{kilo}M %C%%"'
+        lk_php_set_option catch_workers_output yes
+        lk_php_set_option 'php_admin_value[error_log]' '/var/log/php-fpm/php-fpm-$pool.error.log'
+        lk_php_set_option 'php_admin_flag[log_errors]' On
+        lk_php_set_option 'php_flag[display_errors]' Off
+        lk_php_set_option 'php_flag[display_startup_errors]' Off
+        if is_desktop; then
+            lk_php_set_option pm.max_children 5
+            lk_php_set_option pm.max_requests 0
+            lk_php_set_option request_terminate_timeout 0
+        else
+            lk_php_set_option pm.max_children 50
+            lk_php_set_option pm.max_requests 10000
+            lk_php_set_option request_terminate_timeout 300
         fi
         ! memory_at_least 7 ||
             systemctl_enable php-fpm
 
-        LK_CONF_OPTION_FILE="/etc/httpd/conf/httpd.conf"
-        sudo install -d -m 00755 -o "$USER" -g "$(id -gn)" "/srv/http"
-        mkdir -p "/srv/http/localhost/html" "/srv/http/127.0.0.1"
-        [ -e "/srv/http/127.0.0.1/html" ] ||
-            ln -sfT "../localhost/html" "/srv/http/127.0.0.1/html"
-        lk_symlink "$LK_BASE/etc/httpd/dev-defaults.conf" "/etc/httpd/conf/extra/httpd-dev-defaults.conf"
-        lk_httpd_enable_option Include "conf/extra/httpd-dev-defaults.conf"
+        LK_CONF_OPTION_FILE=/etc/httpd/conf/httpd.conf
+        GROUP=$(id -gn)
+        lk_install -d -m 00755 -o "$USER" -g "$GROUP" /srv/http/{,localhost/{,html},127.0.0.1}
+        [ -e /srv/http/127.0.0.1/html ] ||
+            ln -sfT ../localhost/html /srv/http/127.0.0.1/html
         lk_httpd_enable_option LoadModule "alias_module modules/mod_alias.so"
         lk_httpd_enable_option LoadModule "dir_module modules/mod_dir.so"
         lk_httpd_enable_option LoadModule "headers_module modules/mod_headers.so"
         lk_httpd_enable_option LoadModule "info_module modules/mod_info.so"
-        lk_httpd_enable_option LoadModule "proxy_fcgi_module modules/mod_proxy_fcgi.so"
-        lk_httpd_enable_option LoadModule "proxy_module modules/mod_proxy.so"
         lk_httpd_enable_option LoadModule "rewrite_module modules/mod_rewrite.so"
         lk_httpd_enable_option LoadModule "status_module modules/mod_status.so"
         lk_httpd_enable_option LoadModule "vhost_alias_module modules/mod_vhost_alias.so"
-        sudo usermod --append --groups "http" "$USER"
-        sudo usermod --append --groups "$(id -gn)" "http"
+        if is_desktop; then
+            FILE=/etc/httpd/conf/extra/httpd-dev-defaults.conf
+            lk_install -m 00644 "$FILE"
+            lk_file_replace -f "$LK_BASE/share/apache2/default-dev-arch.conf" \
+                "$FILE"
+            lk_httpd_enable_option Include conf/extra/httpd-dev-defaults.conf
+            lk_httpd_enable_option LoadModule "proxy_fcgi_module modules/mod_proxy_fcgi.so"
+            lk_httpd_enable_option LoadModule "proxy_module modules/mod_proxy.so"
+            lk_user_in_group http ||
+                sudo usermod --append --groups http "$USER"
+            lk_user_in_group "$GROUP" http ||
+                sudo usermod --append --groups "$GROUP" http
+        fi
         ! memory_at_least 7 ||
             systemctl_enable httpd
 
+        lk_git_provision_repo -s \
+            -o "$USER:adm" \
+            -n "opcache-gui" \
+            https://github.com/lkrms/opcache-gui.git \
+            /opt/opcache-gui
+    fi
+
+    if [ -f /etc/bluetooth/main.conf ]; then
+        lk_conf_set_option AutoEnable true /etc/bluetooth/main.conf
+        systemctl_enable bluetooth
+    fi
+
+    if lk_pac_installed libvirt; then
+        ! is_desktop ||
+            { lk_user_in_group libvirt && lk_user_in_group kvm; } ||
+            sudo usermod --append --groups libvirt,kvm "$USER"
+        LIBVIRT_USERS=$(lk_get_users_in_group libvirt)
+        LIBVIRT_USERS=$([ -z "$LIBVIRT_USERS" ] || id -u $LIBVIRT_USERS)
+        LK_CONF_OPTION_FILE=/etc/conf.d/libvirt-guests
+        lk_conf_set_option URIS \
+            "'default${LIBVIRT_USERS:+$(printf \
+                ' qemu:///session?socket=/run/user/%s/libvirt/libvirt-sock' \
+                $LIBVIRT_USERS)}'"
+        if is_desktop; then
+            lk_conf_set_option ON_BOOT ignore
+            lk_conf_set_option SHUTDOWN_TIMEOUT 120
+            FILE=/etc/qemu/bridge.conf
+            lk_install -d -m 00755 "${FILE%/*}"
+            lk_install -m 00644 "$FILE"
+            lk_file_replace "$FILE" "allow all"
+        else
+            lk_conf_set_option ON_BOOT start
+            lk_conf_set_option SHUTDOWN_TIMEOUT 300
+        fi
+        lk_conf_set_option ON_SHUTDOWN shutdown
+        lk_conf_set_option SYNC_TIME 1
+        ! memory_at_least 7 || {
+            systemctl_enable libvirtd
+            systemctl_enable libvirt-guests
+        }
+    fi
+
+    if lk_pac_installed docker; then
+        lk_user_in_group docker ||
+            sudo usermod --append --groups docker "$USER"
+        ! memory_at_least 7 ||
+            systemctl_enable docker
     fi
 
     lk_console_success "Provisioning complete"

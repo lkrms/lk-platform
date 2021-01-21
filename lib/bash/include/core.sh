@@ -1751,9 +1751,21 @@ function lk_clip() {
         lk_console_item "${MESSAGE:-Copied} to clipboard:" \
             $'\n'"$LK_GREEN$OUTPUT$LK_RESET" "$LK_MAGENTA"
     else
-        lk_console_error "Unable to copy output to clipboard"
+        lk_console_error "Unable to copy input to clipboard"
         echo -n "$OUTPUT"
     fi
+}
+
+# lk_paste
+#
+# Paste the user's clipboard to output, if possible.
+function lk_paste() {
+    local COMMAND
+    COMMAND=$(lk_command_first_existing \
+        "xclip -selection clipboard -out" \
+        pbpaste) &&
+        $COMMAND ||
+        lk_console_error "Unable to paste clipboard to output"
 }
 
 # lk_file_add_suffix FILENAME SUFFIX
@@ -2239,7 +2251,7 @@ function lk_user_groups() {
 
 # lk_user_in_group GROUP [USER]
 function lk_user_in_group() {
-    lk_user_groups "${@:2}" | grep -Fx "$1" >/dev/null
+    lk_user_groups ${2+"$2"} | grep -Fx "$1" >/dev/null
 }
 
 function lk_test_many() {
