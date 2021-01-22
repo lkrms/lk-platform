@@ -321,16 +321,18 @@ $LK_NODE_HOSTNAME" &&
             lk_php_set_option display_startup_errors On
             lk_php_set_option log_errors Off
 
-            LK_CONF_OPTION_FILE=/etc/php/conf.d/xdebug.ini
-            lk_install -d -m 00777 ~/.xdebug
-            lk_php_set_option xdebug.output_dir ~/.xdebug
-            # Alternative values: profile, trace
-            lk_php_set_option xdebug.mode debug
-            lk_php_set_option xdebug.start_with_request trigger
-            lk_php_set_option xdebug.profiler_output_name callgrind.out.%H.%R.%u
-            lk_php_set_option xdebug.collect_return On
-            lk_php_set_option xdebug.trace_output_name trace.%H.%R.%u
-            lk_php_enable_option zend_extension xdebug.so
+            (
+                LK_CONF_OPTION_FILE=/etc/php/conf.d/xdebug.ini
+                lk_install -d -m 00777 ~/.xdebug
+                lk_php_set_option xdebug.output_dir ~/.xdebug
+                # Alternative values: profile, trace
+                lk_php_set_option xdebug.mode debug
+                lk_php_set_option xdebug.start_with_request trigger
+                lk_php_set_option xdebug.profiler_output_name callgrind.out.%H.%R.%u
+                lk_php_set_option xdebug.collect_return On
+                lk_php_set_option xdebug.trace_output_name trace.%H.%R.%u
+                lk_php_enable_option zend_extension xdebug.so
+            )
         fi
     fi
 
