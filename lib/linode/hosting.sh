@@ -27,6 +27,7 @@
 # <UDF name="LK_MEMCACHED_MEMORY_LIMIT" label="Memcached size" oneof="64,128,256,512,768,1024" default="256" />
 # <UDF name="LK_SMTP_RELAY" label="SMTP relay (system-wide)" example="[mail.clientname.com.au]:587" default="" />
 # <UDF name="LK_EMAIL_BLACKHOLE" label="Email black hole (system-wide, STAGING ONLY)" example="/dev/null" default="" />
+# <UDF name="LK_UPGRADE_EMAIL" label="Email address for unattended upgrade notifications" example="unattended-upgrades@linode.linacreative.com" />
 # <UDF name="LK_AUTO_REBOOT" label="Reboot automatically after unattended upgrades" oneof="Y,N" />
 # <UDF name="LK_AUTO_REBOOT_TIME" label="Preferred automatic reboot time" oneof="02:00,03:00,04:00,05:00,06:00,07:00,08:00,09:00,10:00,11:00,12:00,13:00,14:00,15:00,16:00,17:00,18:00,19:00,20:00,21:00,22:00,23:00,00:00,01:00,now" default="02:00" />
 # <UDF name="LK_AUTO_BACKUP_SCHEDULE" label="Automatic backup schedule (format: 0-59 0-23 1-31 1-12|jan-dec 0-7|sun-sat)" example="0 1 * * *" default="" />
@@ -74,6 +75,7 @@ export -n \
     LK_MEMCACHED_MEMORY_LIMIT=${LK_MEMCACHED_MEMORY_LIMIT:-256} \
     LK_SMTP_RELAY=${LK_SMTP_RELAY:-} \
     LK_EMAIL_BLACKHOLE=${LK_EMAIL_BLACKHOLE:-} \
+    LK_UPGRADE_EMAIL=${LK_UPGRADE_EMAIL:-} \
     LK_AUTO_REBOOT=${LK_AUTO_REBOOT:-} \
     LK_AUTO_REBOOT_TIME=${LK_AUTO_REBOOT_TIME:-02:00} \
     LK_AUTO_BACKUP_SCHEDULE=${LK_AUTO_BACKUP_SCHEDULE:-} \
@@ -176,6 +178,7 @@ FIELD_ERRORS=$(
         not_null LK_NODE_TIMEZONE
     fi
     valid LK_ADMIN_EMAIL "^$EMAIL_ADDRESS_REGEX\$"
+    valid LK_UPGRADE_EMAIL "^$EMAIL_ADDRESS_REGEX\$"
     one_of LK_AUTO_REBOOT Y N
 
     # optional fields
@@ -453,6 +456,7 @@ LK_SSH_JUMP_KEY=${LK_SSH_JUMP_KEY:+jump} \
     LK_MEMCACHED_MEMORY_LIMIT \
     LK_SMTP_RELAY \
     LK_EMAIL_BLACKHOLE \
+    LK_UPGRADE_EMAIL \
     LK_AUTO_REBOOT \
     LK_AUTO_REBOOT_TIME \
     LK_AUTO_BACKUP_SCHEDULE \
@@ -544,7 +548,7 @@ lk_console_detail "Enabling unattended upgrades (security packages only)"
 APT_OPTIONS+=(
     "APT::Periodic::Update-Package-Lists" "1"
     "APT::Periodic::Unattended-Upgrade" "1"
-    "Unattended-Upgrade::Mail" "root"
+    "Unattended-Upgrade::Mail" "$LK_UPGRADE_EMAIL"
     "Unattended-Upgrade::Remove-Unused-Kernel-Packages" "true"
 )
 if [ "$LK_AUTO_REBOOT" = Y ]; then
@@ -1041,7 +1045,7 @@ cat <<EOF >"/etc/apt/listchanges.conf"
 [apt]
 frontend=pager
 which=both
-email_address=root
+email_address=$LK_UPGRADE_EMAIL
 email_format=html
 confirm=false
 headers=true
