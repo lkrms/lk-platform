@@ -2,53 +2,19 @@
 
 # shellcheck disable=SC2034
 
-PAC_REPOS=(
-    "sublime-text|\
-http://sublimetext.mirror/arch/stable/\$arch|\
-http://sublimetext.mirror/sublimehq-pub.gpg|\
-8A8F901A"
-)
-
+PAC_REPOS=()
 PAC_PACKAGES=()
 AUR_PACKAGES=()
 PAC_REJECT=()
 
 PAC_KEEP=(
-    offlineimap
-    subversion
     zoom
-
-    #
-    aurutils
-    vifm
-
-    #
-    azure-cli
-    azure-functions-core-tools-bin
-    storageexplorer
-
-    #
-    sfdx-cli
-
-    #
-    mongodb-bin
-    mongodb-tools-bin
-
-    #
-    woeusb
-
-    #
-    raidar
 )
 
 lk_is_virtual || {
     PAC_PACKAGES+=(
         guvcview # Webcam utility
         linssid  # Wi-Fi scanner
-
-        #
-        ddcutil
-        i2c-tools
     )
     ! lk_system_has_intel_graphics || PAC_PACKAGES+=(
         clinfo
@@ -66,18 +32,8 @@ AUR_PACKAGES+=(
 )
 
 PAC_PACKAGES+=(
-    # shells
-    asciinema
-    dash
-    ksh
-    zsh
-
     # utilities
-    cdrtools #
-    cpio     # for libguestfs
-    ext4magic
     unison
-    wimlib
 
     # networking
     openconnect
@@ -92,27 +48,13 @@ PAC_PACKAGES+=(
     nload   # shows bandwidth by interface
 
     # system
-    acme.sh
-    arch-install-scripts
-    at
-    base-devel
-    binwalk
-    cloud-utils
-    cronie
-    expac
     hwinfo
-    mlocate
-    stow
     sysfsutils
-    ubuntu-keyring
 )
 
 AUR_PACKAGES+=(
-    aha
-    asciicast2gif
     networkmanager-l2tp
     pacman-cleanup-hook
-    powershell-bin
     vpn-slice
 )
 
@@ -128,7 +70,6 @@ PAC_PACKAGES+=(
     gimp
     gnome-font-viewer
     gucharmap
-    inkscape
     keepassxc
     libreoffice-fresh-en-gb
     nextcloud-client
@@ -136,13 +77,11 @@ PAC_PACKAGES+=(
     qalculate-gtk
     qpdfview
     remmina
-    scribus
     simplescreenrecorder
     speedcrunch
     system-config-printer
     thunderbird
     thunderbird-i18n-en-gb
-    transmission-cli
     transmission-gtk
 
     # PDF
@@ -171,30 +110,21 @@ PAC_PACKAGES+=(
     gst-plugins-bad
 
     # multimedia - audio
-    abcde
     audacity
-    python-eyed3
-    sox
 
     # multimedia - video
     ffmpeg
     handbrake
     handbrake-cli
-    mkvtoolnix-cli
-    mkvtoolnix-gui
     mpv
-    openshot
     youtube-dl
 
     # system
     dconf-editor
-    displaycal
-    fontconfig-docs
     gparted
     guake
     libsecret   # secret-tool
     libva-utils # vainfo
-    syslinux
     vdpauinfo
 
     # automation
@@ -210,7 +140,6 @@ AUR_PACKAGES+=(
     emote
     espanso
     masterpdfeditor-free
-    pencil
     skypeforlinux-stable-bin
     spotify
     stretchly
@@ -234,107 +163,38 @@ AUR_PACKAGES+=(
 
 # development
 PAC_PACKAGES+=(
-    autopep8
-    bash-language-server
-    cloc
-    dbeaver
-    dbeaver-plugin-sshj
-    eslint
-    geckodriver
-    python-pylint
-    qcachegrind
-    tidy
-    ttf-font-awesome
-    ttf-ionicons
-    uglify-js
-
-    # email
-    msmtp     # SMTP client
-    msmtp-mta # sendmail alias for msmtp
-    s-nail    # mail and mailx commands
-
-    #
-    git-filter-repo
     meld
 
     #
-    jdk11-openjdk
     jre11-openjdk
 
     #
     nodejs
     npm
-    yarn
 
     #
-    composer
     php
     php-gd
     php-imagick
     php-imap
     php-intl
-    php-memcache
-    php-memcached
     php-sqlite
-    xdebug
 
     #
-    mysql-python
     python
-    python-acme # Let's Encrypt CLI
     python-dateutil
     python-pip
     python-requests
     python-virtualenv
-    python2
 
     #
-    shellcheck
     shfmt
 
     #
     lua
     lua-penlight
-
-    # platforms
-    aws-cli
 )
 
 AUR_PACKAGES+=(
     demjson
-    nodejs-less
-    robo3t-bin
-    sublime-merge
-    sublime-text
-    trickle
-    vscodium-bin
-
-    #
-    git-cola
-
-    # platforms
-    linode-cli
-    wp-cli
-)
-
-# development services
-PAC_PACKAGES+=(
-    apache
-    mariadb
-    php-fpm
-)
-
-# VMs and containers
-PAC_PACKAGES+=(
-    # KVM/QEMU
-    dnsmasq
-    ebtables
-    edk2-ovmf # UEFI firmware
-    libguestfs
-    libvirt
-    qemu
-    virt-manager
-
-    #
-    docker
 )

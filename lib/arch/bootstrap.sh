@@ -15,7 +15,7 @@ lk_log() { local l && while IFS= read -r l || [ -n "$l" ]; do
 done; }
 
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
-readonly _DIR=/tmp/${LK_PATH_PREFIX}install
+_DIR=/tmp/${LK_PATH_PREFIX}install
 mkdir -p "$_DIR"
 LOG_FILE=$_DIR/install.$(date +%s).log
 OUT_FILE=${LOG_FILE%.log}.out
@@ -82,8 +82,6 @@ INSTALL_DISK=
 OTHER_OS_PARTITIONS=()
 PAC_REPOS=()
 
-BOOTSTRAP_URL=${BOOTSTRAP_URL:-https://raw.githubusercontent.com/lkrms/lk-platform}
-
 CURL_OPTIONS=(
     --fail
     --header "Cache-Control: no-cache"
@@ -94,6 +92,7 @@ CURL_OPTIONS=(
 )
 
 echo $'\E[1m\E[36m==> \E[0m\E[1mChecking dependencies\E[0m' >&2
+REPO_URL=https://raw.githubusercontent.com/lkrms/lk-platform
 for FILE_PATH in \
     /lib/bash/include/core.sh \
     /lib/bash/include/arch.sh \
@@ -102,7 +101,7 @@ for FILE_PATH in \
     /lib/arch/packages.sh \
     /share/sudoers.d/default; do
     FILE=$_DIR/${FILE_PATH##*/}
-    URL=$BOOTSTRAP_URL/$LK_PLATFORM_BRANCH$FILE_PATH
+    URL=$REPO_URL/$LK_PLATFORM_BRANCH$FILE_PATH
     MESSAGE=$'\E[1m\E[33m   -> \E[0m{}\E[0m\E[33m '"$URL"$'\E[0m'
     if [ ! -e "$FILE" ]; then
         echo "${MESSAGE/{\}/Downloading:}" >&2

@@ -25,17 +25,25 @@ function is_bootstrap() {
 
 if is_bootstrap; then
     function systemctl_enable() {
-        [[ $1 == *.* ]] || set -- "$1.service"
+        [[ $1 == *.* ]] || set -- "$1.service" "${@:2}"
         [ ! -e "/usr/lib/systemd/system/$1" ] || {
             lk_console_detail "Enabling service:" "${2:-$1}"
             sudo systemctl enable "$1"
         }
+    }
+    function systemctl_mask() {
+        [[ $1 == *.* ]] || set -- "$1.service" "${@:2}"
+        lk_console_detail "Masking service:" "${2:-$1}"
+        sudo systemctl mask "$1"
     }
     lk_console_blank
 else
     function systemctl_enable() {
         ! lk_systemctl_exists "$1" ||
             lk_systemctl_enable_now ${2:+-n "$2"} "$1"
+    }
+    function systemctl_mask() {
+        lk_systemctl_mask ${2:+-n "$2"} "$1"
     }
 fi
 
@@ -142,6 +150,11 @@ $LK_NODE_HOSTNAME" &&
     [ "$CURRENT_DEFAULT_TARGET" = "$DEFAULT_TARGET" ] ||
         lk_run_detail sudo systemctl set-default "$DEFAULT_TARGET"
 
+    SYSTEMCTL_ENABLE=(
+        NetworkManager "Network Manager"
+    )
+    FILE_DELETE=()
+
     lk_console_message "Checking root account"
     lk_user_lock_passwd root
 
@@ -149,6 +162,11 @@ $LK_NODE_HOSTNAME" &&
     FILE=/etc/sudoers.d/${LK_PATH_PREFIX}default-arch
     lk_install -m 00440 "$FILE"
     lk_file_replace -f "$LK_BASE/share/sudoers.d/default-arch" "$FILE"
+
+    lk_console_message "Checking default umask"
+    FILE=/etc/profile.d/Z90-${LK_PATH_PREFIX}umask.sh
+    lk_install -m 00644 "$FILE"
+    lk_file_replace -f "$LK_BASE/share/profile.d/umask.sh" "$FILE"
 
     if [ -d /etc/polkit-1/rules.d ]; then
         lk_console_message "Checking polkit rules"
@@ -170,6 +188,20 @@ $LK_NODE_HOSTNAME" &&
     lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
         sudo sysctl --system
 
+    if lk_pac_installed tlp; then
+        lk_console_message "Checking TLP"
+        FILE=/etc/tlp.d/90-${LK_PATH_PREFIX}default.conf
+        lk_install -m 00644 "$FILE"
+        lk_file_replace -f "$LK_BASE/share/tlp.d/default.conf" "$FILE"
+        systemctl_mask systemd-rfkill.service
+        systemctl_mask systemd-rfkill.socket
+        SYSTEMCTL_ENABLE+=(
+            NetworkManager-dispatcher "Network Manager dispatcher"
+            tlp "TLP"
+        )
+        FILE_DELETE+=(/etc/tlp.d/90-${LK_PATH_PREFIX}defaults.conf)
+    fi
+
     if [ -n "${LK_NTP_SERVER:-}" ]; then
         lk_console_message "Checking NTP"
         FILE=/etc/ntp.conf
@@ -180,6 +212,9 @@ $LK_NODE_HOSTNAME" &&
             "$FILE")
         lk_file_replace "$FILE" "$_FILE"
     fi
+    SYSTEMCTL_ENABLE+=(
+        ntpd "NTP"
+    )
 
     lk_console_message "Checking SSH server"
     LK_CONF_OPTION_FILE=/etc/ssh/sshd_config
@@ -187,17 +222,17 @@ $LK_NODE_HOSTNAME" &&
     [ ! -s ~/.ssh/authorized_keys ] ||
         lk_ssh_set_option PasswordAuthentication "no"
     lk_ssh_set_option AcceptEnv "LANG LC_*"
+    SYSTEMCTL_ENABLE+=(
+        sshd "SSH server"
+    )
 
-    lk_console_message "Checking essential services"
-    systemctl_enable NetworkManager "Network Manager"
-    systemctl_enable ntpd "NTP"
-    systemctl_enable sshd "SSH server"
-
+    lk_console_message "Checking services"
+    for i in $(seq 0 2 $((${#SYSTEMCTL_ENABLE[@]} - 1))); do
+        systemctl_enable "${SYSTEMCTL_ENABLE[@]:$i:2}"
+    done
+    systemctl_enable qemu-guest-agent "QEMU Guest Agent"
     systemctl_enable lightdm "LightDM"
     systemctl_enable cups "CUPS"
-
-    ! lk_is_qemu ||
-        systemctl_enable qemu-guest-agent "QEMU Guest Agent"
 
     if lk_pac_installed grub; then
         lk_console_message "Checking boot loader"
@@ -323,6 +358,7 @@ $LK_NODE_HOSTNAME" &&
 
             (
                 LK_CONF_OPTION_FILE=/etc/php/conf.d/xdebug.ini
+                [ -f "$LK_CONF_OPTION_FILE" ] || exit 0
                 lk_install -d -m 00777 ~/.xdebug
                 lk_php_set_option xdebug.output_dir ~/.xdebug
                 # Alternative values: profile, trace
@@ -386,8 +422,7 @@ EOF
             lk_php_set_option pm.max_requests 10000
             lk_php_set_option request_terminate_timeout 300
         fi
-        ! memory_at_least 7 ||
-            systemctl_enable php-fpm
+        systemctl_enable php-fpm "PHP-FPM"
 
         LK_CONF_OPTION_FILE=/etc/httpd/conf/httpd.conf
         GROUP=$(id -gn)
@@ -402,20 +437,22 @@ EOF
         lk_httpd_enable_option LoadModule "status_module modules/mod_status.so"
         lk_httpd_enable_option LoadModule "vhost_alias_module modules/mod_vhost_alias.so"
         if is_desktop; then
-            FILE=/etc/httpd/conf/extra/httpd-dev-defaults.conf
+            FILE=/etc/httpd/conf/extra/${LK_PATH_PREFIX}default-dev-arch.conf
             lk_install -m 00644 "$FILE"
-            lk_file_replace -f "$LK_BASE/share/apache2/default-dev-arch.conf" \
+            lk_file_replace \
+                -f "$LK_BASE/share/apache2/default-dev-arch.conf" \
                 "$FILE"
-            lk_httpd_enable_option Include conf/extra/httpd-dev-defaults.conf
-            lk_httpd_enable_option LoadModule "proxy_fcgi_module modules/mod_proxy_fcgi.so"
+            lk_httpd_enable_option Include "${FILE#/etc/httpd/}"
             lk_httpd_enable_option LoadModule "proxy_module modules/mod_proxy.so"
+            lk_httpd_enable_option LoadModule "proxy_fcgi_module modules/mod_proxy_fcgi.so"
             lk_user_in_group http ||
                 sudo usermod --append --groups http "$USER"
             lk_user_in_group "$GROUP" http ||
                 sudo usermod --append --groups "$GROUP" http
+            lk_httpd_remove_option Include conf/extra/httpd-dev-defaults.conf
+            FILE_DELETE+=(/etc/httpd/conf/extra/httpd-dev-defaults.conf)
         fi
-        ! memory_at_least 7 ||
-            systemctl_enable httpd
+        systemctl_enable httpd "Apache"
 
         lk_git_provision_repo -s \
             -o "$USER:adm" \
@@ -424,9 +461,9 @@ EOF
             /opt/opcache-gui
     fi
 
-    if [ -f /etc/bluetooth/main.conf ]; then
+    if lk_pac_installed bluez; then
         lk_conf_set_option AutoEnable true /etc/bluetooth/main.conf
-        systemctl_enable bluetooth
+        systemctl_enable bluetooth "Bluetooth"
     fi
 
     if lk_pac_installed libvirt; then
@@ -454,8 +491,8 @@ EOF
         lk_conf_set_option ON_SHUTDOWN shutdown
         lk_conf_set_option SYNC_TIME 1
         ! memory_at_least 7 || {
-            systemctl_enable libvirtd
-            systemctl_enable libvirt-guests
+            systemctl_enable libvirtd "libvirt"
+            systemctl_enable libvirt-guests "libvirt-guests"
         }
     fi
 
@@ -463,8 +500,12 @@ EOF
         lk_user_in_group docker ||
             sudo usermod --append --groups docker "$USER"
         ! memory_at_least 7 ||
-            systemctl_enable docker
+            systemctl_enable docker "Docker"
     fi
+
+    lk_remove_missing FILE_DELETE
+    [ ${#FILE_DELETE[@]} -eq 0 ] ||
+        sudo rm -fv "${FILE_DELETE[@]}"
 
     lk_console_success "Provisioning complete"
 

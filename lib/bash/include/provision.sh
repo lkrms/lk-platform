@@ -830,7 +830,7 @@ function _lk_option_check() {
 # If -p is set, pass each REPLACE_REGEX to sed as-is, otherwise pass
 # "0,/REPLACE_REGEX/{s/REGEX/SETTING/}" (after escaping SETTING).
 function lk_option_set() {
-    local FILE SETTING CHECK_REGEX REPLACE_WITH PRESERVE
+    local FILE SETTING CHECK_REGEX REPLACE_WITH PRESERVE _FILE
     [ "${1:-}" != -p ] || {
         PRESERVE=
         shift
@@ -932,6 +932,15 @@ function lk_httpd_enable_option() {
         "$1 $2" \
         "^$S*$OPTION$S+$VALUE$S*\$" \
         "0,/^$S*#$S*$OPTION$S+$VALUE$S*\$/{s/^($S*)#$S*$OPTION$S+$VALUE$S*\$/\\1$REPLACE_WITH/}"
+}
+
+# lk_httpd_remove_option OPTION VALUE [FILE]
+function lk_httpd_remove_option() {
+    local OPTION VALUE FILE=${3:-$LK_CONF_OPTION_FILE} _FILE
+    OPTION=$(lk_regex_case_insensitive "$(lk_escape_ere "$1")")
+    VALUE=$(lk_regex_expand_whitespace "$(lk_escape_ere "$2")")
+    _FILE=$(sed -E "/^$S*$OPTION$S+$VALUE$S*\$/d" "$FILE") &&
+        lk_file_replace "$FILE" "$_FILE"
 }
 
 # _lk_crontab REMOVE_REGEX ADD_COMMAND

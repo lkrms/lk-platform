@@ -46,7 +46,7 @@ lk_log_output
             git merge ||
             return
 
-        ./bin/lk-platform-configure.sh --set LK_PLATFORM_BRANCH="$1" &&
+        ./bin/lk-platform-configure.sh "${@:2}" --set LK_PLATFORM_BRANCH="$1" &&
             . /opt/lk-platform/lib/bash/rc.sh &&
             lk_include hosting &&
             lk_hosting_configure_backup
@@ -61,6 +61,12 @@ lk_log_output
 
     }
 
+    ARGS=()
+    while [ "${1:-}" = --set ]; do
+        ARGS+=("${@:1:2}")
+        shift 2
+    done
+
     FAILED=()
     i=0
     while [ $# -gt 0 ]; do
@@ -71,7 +77,8 @@ lk_log_output
         ssh "$1" "sudo -H bash -c$(printf ' %q' \
             "$(declare -f update-server); update-server \"\$@\"" \
             bash \
-            "${UPDATE_SERVER_BRANCH:-master}")" || {
+            "${UPDATE_SERVER_BRANCH:-master}" \
+            ${ARGS[@]+"${ARGS[@]}"})" || {
             FAILED+=("$1")
             lk_console_error "Update failed (exit status $?):" "$1"
             [ $# -gt 1 ] && lk_confirm "Continue?" Y || break

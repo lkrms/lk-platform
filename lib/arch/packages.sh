@@ -42,6 +42,7 @@ PAC_PACKAGES=(
     mediainfo
     pv
     rsync
+    trash-cli
 
     # Shell
     bash-completion

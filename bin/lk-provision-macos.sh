@@ -66,7 +66,8 @@ function exit_trap() {
         SUDOERS=$(cat "$LK_BASE/share/sudoers.d/default")
         ${CONTRIB_PACKAGES_FILE:+. "$LK_BASE/$CONTRIB_PACKAGES_FILE"}
     else
-        echo $'\E[1m\E[36m==> \E[0m\E[1mDownloading dependencies\E[0m' >&2
+        echo $'\E[1m\E[36m==> \E[0m\E[1mChecking dependencies\E[0m' >&2
+        REPO_URL=https://raw.githubusercontent.com/lkrms/lk-platform
         for FILE_PATH in \
             ${CONTRIB_PACKAGES_FILE:+"/$CONTRIB_PACKAGES_FILE"} \
             /lib/bash/include/core.sh \
@@ -75,16 +76,18 @@ function exit_trap() {
             /lib/bash/include/whiptail.sh \
             /share/sudoers.d/default; do
             FILE=$_DIR/${FILE_PATH##*/}
+            URL=$REPO_URL/$LK_PLATFORM_BRANCH$FILE_PATH
+            MESSAGE=$'\E[1m\E[33m   -> \E[0m{}\E[0m\E[33m '"$URL"$'\E[0m'
             if [ ! -e "$FILE" ]; then
-                FILE_PATH=lk-platform/$LK_PLATFORM_BRANCH$FILE_PATH
-                URL=https://raw.githubusercontent.com/lkrms/$FILE_PATH
-                echo $'\E[1m\E[33m   -> \E[0m'"$URL"$'\E[0m' >&2
+                echo "${MESSAGE/{\}/Downloading:}" >&2
                 curl "${CURL_OPTIONS[@]}" --output "$FILE" "$URL" || {
                     rm -f "$FILE"
-                    lk_die "unable to download from GitHub: $URL"
+                    lk_die "unable to download: $URL"
                 }
+            else
+                echo "${MESSAGE/{\}/Already downloaded:}" >&2
             fi
-            [ "${FILE: -3}" != .sh ] ||
+            [[ ! $FILE_PATH =~ /include/[a-z0-9_]+\.sh$ ]] ||
                 . "$FILE"
         done
         SUDOERS=$(cat "$_DIR/default")

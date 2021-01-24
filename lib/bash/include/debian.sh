@@ -102,7 +102,9 @@ function lk_apt_install() {
     [ ${#INSTALL[@]} -eq 0 ] || {
         lk_echo_array INSTALL |
             lk_console_list "Installing:" "APT package" "APT packages"
-        lk_elevate apt-get -yq install "${INSTALL[@]}"
+        lk_elevate apt-get -yq \
+            --no-install-recommends --no-install-suggests \
+            install "${INSTALL[@]}"
     }
 }
 

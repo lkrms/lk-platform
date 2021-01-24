@@ -91,10 +91,17 @@ function lk_systemctl_exists() {
     lk_systemctl_property_is ${_USER+-u} LoadState loaded "$1"
 }
 
+function lk_systemctl_masked() {
+    local SH
+    SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
+    lk_systemctl_property_is ${_USER+-u} LoadState masked "$1"
+}
+
 function lk_systemctl_start() {
     local SH
     SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
-    lk_systemctl_running ${_USER+-u} "$1" || {
+    lk_systemctl_running ${_USER+-u} "$1" ||
+        lk_systemctl_property_is ${_USER+-u} Type dbus "$1" || {
         lk_console_detail "Starting service:" "$NAME"
         ${_USER-lk_elevate} "${COMMAND[@]}" start "$1" ||
             lk_warn "could not start service: $_NAME"
@@ -148,7 +155,17 @@ function lk_systemctl_disable_now() {
     local SH
     SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
     lk_systemctl_disable ${_USER+-u} "$1" &&
-        lk_systemctl_stop ${_USER+-u} "$1" || return
+        lk_systemctl_stop ${_USER+-u} "$1"
+}
+
+function lk_systemctl_mask() {
+    local SH
+    SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
+    lk_systemctl_stop ${_USER+-u} "$1" || return
+    lk_systemctl_masked ${_USER+-u} "$1" || {
+        lk_console_detail "Masking service:" "$NAME"
+        ${_USER-lk_elevate} "${COMMAND[@]}" mask "$1"
+    }
 }
 
 function _lk_lsblk() {

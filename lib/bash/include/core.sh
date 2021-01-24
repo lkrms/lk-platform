@@ -2296,7 +2296,7 @@ function lk_remove_false() {
 #
 # Remove paths to missing files from ARRAY.
 function lk_remove_missing() {
-    lk_remove_false '[ -e "{}" ]' "$1"
+    lk_remove_false 'lk_maybe_sudo test -e "{}"' "$1"
 }
 
 # lk_resolve_files ARRAY
