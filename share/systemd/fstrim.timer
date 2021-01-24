@@ -1,0 +1,10 @@
+[Unit]
+Description=Discard unused blocks 10 minutes after booting, then weekly
+
+[Timer]
+OnBootSec=600
+OnActiveSec=1w
+AccuracySec=1h
+
+[Install]
+WantedBy=timers.target

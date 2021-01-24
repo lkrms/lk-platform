@@ -202,6 +202,17 @@ $LK_NODE_HOSTNAME" &&
         FILE_DELETE+=(/etc/tlp.d/90-${LK_PATH_PREFIX}defaults.conf)
     fi
 
+    ROOT_DEVICE=$(findmnt --list --noheadings --target / --output SOURCE)
+    if lk_block_device_is_ssd "$ROOT_DEVICE"; then
+        lk_console_message "Checking fstrim"
+        FILE=/etc/systemd/system/fstrim.timer
+        lk_install -m 00644 "$FILE"
+        lk_file_replace -f "$LK_BASE/share/systemd/fstrim.timer" "$FILE"
+        SYSTEMCTL_ENABLE+=(
+            fstrim.timer "fstrim"
+        )
+    fi
+
     if [ -n "${LK_NTP_SERVER:-}" ]; then
         lk_console_message "Checking NTP"
         FILE=/etc/ntp.conf
@@ -304,6 +315,7 @@ $LK_NODE_HOSTNAME" &&
 
     lk_symlink_bin codium code
     lk_symlink_bin vim vi
+    lk_symlink_bin xfce4-terminal xterm
 
     lk_console_blank
     lk_console_log "Checking installed packages and services"
@@ -501,6 +513,15 @@ EOF
             sudo usermod --append --groups docker "$USER"
         ! memory_at_least 7 ||
             systemctl_enable docker "Docker"
+    fi
+
+    if lk_pac_installed xfce4-session; then
+        lk_symlink "$LK_BASE/lib/xfce4/startxfce4" /usr/local/bin/startxfce4
+        SH=$(sudo bash -c 'shopt -s nullglob &&
+        a=({/etc/skel*,/home/*}/.config/xfce4/xinitrc) &&
+        { [ ${#a[@]} -eq 0 ] || printf "%q\n" "${a[@]}"; }')
+        [ -z "$SH" ] ||
+            eval "FILE_DELETE+=($SH)"
     fi
 
     lk_remove_missing FILE_DELETE

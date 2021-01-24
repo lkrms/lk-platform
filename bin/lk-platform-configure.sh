@@ -301,7 +301,7 @@
         }
         UMASK=$(umask)
         umask 002
-        lk_console_message "Checking repository ($LK_BASE)"
+        lk_console_message "Checking repository"
         cd "$LK_BASE"
         REPO_OWNER=$(lk_file_owner "$LK_BASE")
         CONFIG_COMMANDS=()
