@@ -420,7 +420,7 @@
         shift
         [ -e "$FILE" ] ||
             install -m 00644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
-        lk_file_replace -i '^[[:blank:]]*($|#)' "$FILE" \
+        lk_file_replace -li '^[[:blank:]]*($|#)' "$FILE" \
             "$([ $# -eq 0 ] || printf "%s\n" "$@")"
     }
 
@@ -436,7 +436,7 @@
         FILE=$h/.bashrc
         [ -e "$FILE" ] ||
             install -m 00644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
-        lk_file_replace "$FILE" "$("${RC_AWK[@]}" "$FILE")"
+        lk_file_replace -l "$FILE" "$("${RC_AWK[@]}" "$FILE")"
 
         # Create ~/.profile if no profile file exists, then check that ~/.bashrc
         # is sourced at startup when Bash is running as a login shell (e.g. in a
@@ -451,7 +451,7 @@
         grep -q "\\.bashrc" "${PROFILES[@]}" || {
             FILE=${PROFILES[0]}
             lk_file_get_text "$FILE" CONTENT &&
-                lk_file_replace "$FILE" "$CONTENT$_BASHRC"
+                lk_file_replace -l "$FILE" "$CONTENT$_BASHRC"
         }
 
         install -d -m 00755 -o "$OWNER" -g "$GROUP" "$h/.lk-platform"
@@ -462,7 +462,7 @@
             for FILE in "${PROFILES[@]}"; do
                 grep -q "byobu-launch" "$FILE" || {
                     lk_file_get_text "$FILE" CONTENT &&
-                        lk_file_replace "$FILE" "$CONTENT$_BYOBU"
+                        lk_file_replace -l "$FILE" "$CONTENT$_BYOBU"
                 }
             done
             FILE=$h/.byoburc
@@ -475,7 +475,7 @@
                 else
                     lk_file_get_text "$FILE" CONTENT
                 fi
-                lk_file_replace "$FILE" "$CONTENT$_BYOBURC"
+                lk_file_replace -l "$FILE" "$CONTENT$_BYOBURC"
             fi
 
             [ -d "$DIR" ] ||

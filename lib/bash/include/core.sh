@@ -2716,18 +2716,20 @@ function lk_file_add_newline() {
     fi
 }
 
-# lk_file_replace [-b] [-m] [-i IGNORE] [-f SOURCE_FILE] FILE [CONTENT]
+# lk_file_replace [-b] [-m] [-l] [-i IGNORE] [-f SOURCE_FILE] FILE [CONTENT]
 #
 # If FILE differs from input, CONTENT or SOURCE_FILE, replace FILE. If -b is
 # set, back up FILE before replacing it. If -m is set, use a separate location
-# when backing up (-b is implied). If -i is set, ignore lines matching the
-# regular expression when comparing.
+# when backing up (-b is implied). If -l is set and FILE is a symbolic link,
+# replace the linked file instead of FILE. If -i is set, ignore lines matching
+# the regular expression when comparing.
 function lk_file_replace() {
-    local OPTIND OPTARG OPT IGNORE='' SOURCE='' CONTENT PREVIOUS TEMP vv='' \
-        BACKUP=${LK_FILE_TAKE_BACKUP:-} MOVE=${LK_FILE_MOVE_BACKUP:-} LK_USAGE
+    local OPTIND OPTARG OPT LK_USAGE LINK IGNORE='' SOURCE='' \
+        BACKUP=${LK_FILE_TAKE_BACKUP:-} MOVE=${LK_FILE_MOVE_BACKUP:-} \
+        CONTENT PREVIOUS TEMP vv=''
     LK_USAGE="\
-Usage: $(lk_myself -f) [-b] [-m] [-i IGNORE] [-f SOURCE_FILE] FILE [CONTENT]"
-    while getopts ":bmi:f:" OPT; do
+Usage: $(lk_myself -f) [-b|-m] [-l] [-i IGNORE] [-f SOURCE_FILE] FILE [CONTENT]"
+    while getopts ":bmli:f:" OPT; do
         case "$OPT" in
         b)
             BACKUP=1
@@ -2735,6 +2737,9 @@ Usage: $(lk_myself -f) [-b] [-m] [-i IGNORE] [-f SOURCE_FILE] FILE [CONTENT]"
         m)
             BACKUP=1
             MOVE=1
+            ;;
+        l)
+            LINK=1
             ;;
         i)
             IGNORE=$OPTARG
@@ -2761,6 +2766,10 @@ Usage: $(lk_myself -f) [-b] [-m] [-i IGNORE] [-f SOURCE_FILE] FILE [CONTENT]"
     ! lk_verbose 2 || vv=v
     LK_FILE_REPLACE_NO_CHANGE=${LK_FILE_REPLACE_NO_CHANGE:-1}
     if lk_maybe_sudo test -e "$1"; then
+        ! lk_is_true LINK || {
+            TEMP=$(realpath "$1") || return
+            set -- "$TEMP"
+        }
         lk_maybe_sudo test -f "$1" || lk_warn "not a file: $1" || return
         lk_maybe_sudo test -L "$1" || ! diff -q \
             <(lk_maybe_sudo cat "$1" | _lk_maybe_filter "$IGNORE") \

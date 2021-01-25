@@ -421,7 +421,7 @@ function lk_ssh_configure() {
             install -m 00600 -o "$OWNER" -g "$GROUP" \
                 /dev/null "$h/.ssh/config" ||
             return
-        lk_file_replace "$h/.ssh/config" "$("${AWK[@]}" "$h/.ssh/config")"
+        lk_file_replace -l "$h/.ssh/config" "$("${AWK[@]}" "$h/.ssh/config")"
         # Add defaults for all lk-* hosts to ~/.ssh/lk-config.d/90-defaults
         CONF=$(
             cat <<EOF
@@ -436,7 +436,7 @@ SendEnv                 LANG LC_*
 ServerAliveInterval     30
 EOF
         )
-        lk_file_replace "$h/.ssh/${SSH_PREFIX}config.d/90-defaults" "$CONF"
+        lk_file_replace  "$h/.ssh/${SSH_PREFIX}config.d/90-defaults" "$CONF"
         # Add jump proxy configuration
         [ $# -lt 2 ] ||
             LK_SSH_HOME=$h LK_SSH_PRIORITY=40 \
@@ -856,14 +856,14 @@ Usage: $(lk_myself -f) [-p] FILE SETTING CHECK_REGEX [REPLACE_REGEX...]" || retu
             _FILE=${_FILE%$'\n.'} || return
         ! _lk_option_check "$_FILE" || {
             lk_file_keep_original "$FILE" &&
-                lk_file_replace "$FILE" "$_FILE" || return
+                lk_file_replace -l "$FILE" "$_FILE" || return
             return 0
         }
     done
     # Get a clean copy of FILE in case of buggy regex
     lk_file_get_text "$FILE" _FILE &&
         lk_file_keep_original "$FILE" &&
-        lk_file_replace "$FILE" "$_FILE$SETTING"
+        lk_file_replace -l "$FILE" "$_FILE$SETTING"
 }
 
 # lk_conf_set_option OPTION VALUE [FILE]
@@ -940,7 +940,7 @@ function lk_httpd_remove_option() {
     OPTION=$(lk_regex_case_insensitive "$(lk_escape_ere "$1")")
     VALUE=$(lk_regex_expand_whitespace "$(lk_escape_ere "$2")")
     _FILE=$(sed -E "/^$S*$OPTION$S+$VALUE$S*\$/d" "$FILE") &&
-        lk_file_replace "$FILE" "$_FILE"
+        lk_file_replace -l "$FILE" "$_FILE"
 }
 
 # _lk_crontab REMOVE_REGEX ADD_COMMAND
