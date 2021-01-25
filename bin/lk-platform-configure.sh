@@ -518,7 +518,7 @@
     fi
 
     if lk_is_desktop; then
-        . "$LK_BASE/lib/desktop/configure.sh"
+        . "$LK_BASE/lib/platform/configure-desktop.sh"
     fi
 
     lk_lock_drop LOCK_FILE LOCK_FD

@@ -2684,7 +2684,7 @@ function lk_file_prepare_temp() {
             MODE=$(lk_file_mode "$1") &&
                 lk_maybe_sudo chmod "$(lk_pad_zero 5 "$MODE")" -- "$TEMP"
         else
-            lk_maybe_sudo cp -a"$vv" -- "$1" "$TEMP"
+            lk_maybe_sudo cp -aL"$vv" -- "$1" "$TEMP"
         fi >&2 || return
     echo "$TEMP"
 }
@@ -2762,7 +2762,7 @@ Usage: $(lk_myself -f) [-b] [-m] [-i IGNORE] [-f SOURCE_FILE] FILE [CONTENT]"
     LK_FILE_REPLACE_NO_CHANGE=${LK_FILE_REPLACE_NO_CHANGE:-1}
     if lk_maybe_sudo test -e "$1"; then
         lk_maybe_sudo test -f "$1" || lk_warn "not a file: $1" || return
-        ! diff -q \
+        lk_maybe_sudo test -L "$1" || ! diff -q \
             <(lk_maybe_sudo cat "$1" | _lk_maybe_filter "$IGNORE") \
             <([ -z "$CONTENT" ] || echo "${CONTENT%$'\n'}" |
                 _lk_maybe_filter "$IGNORE") >/dev/null || {
