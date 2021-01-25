@@ -41,6 +41,7 @@ LK_NTP_SERVER=${LK_NTP_SERVER-time.apple.com}                #
 LK_ARCH_MIRROR=${LK_ARCH_MIRROR:-}                           #
 LK_ARCH_REPOS=${LK_ARCH_REPOS:-}                             # REPO|SERVER|KEY_URL|KEY_ID|SIG_LEVEL,...
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
+LK_PACKAGES_FILE=${LK_PACKAGES_FILE:-}
 export LK_BASE=${LK_BASE:-/opt/lk-platform}
 export -n BOOTSTRAP_PASSWORD BOOTSTRAP_KEY
 
@@ -116,7 +117,7 @@ for FILE_PATH in \
         . "$FILE"
 done
 
-while getopts ":u:o:c:p:s:xy" OPT; do
+while getopts ":u:o:c:p:s:xk:y" OPT; do
     case "$OPT" in
     u)
         BOOTSTRAP_USERNAME=$OPTARG
@@ -139,6 +140,9 @@ while getopts ":u:o:c:p:s:xy" OPT; do
         ;;
     x)
         LK_NODE_SERVICES=${LK_NODE_SERVICES:+$LK_NODE_SERVICES,}xfce4
+        ;;
+    k)
+        LK_PACKAGES_FILE=$OPTARG
         ;;
     y)
         LK_NO_INPUT=1
@@ -425,7 +429,8 @@ lk_get_shell_var \
     LK_NTP_SERVER \
     LK_ARCH_MIRROR \
     LK_ARCH_REPOS \
-    LK_PLATFORM_BRANCH >"$FILE"
+    LK_PLATFORM_BRANCH \
+    LK_PACKAGES_FILE >"$FILE"
 
 PROVISIONED=
 in_target -u "$BOOTSTRAP_USERNAME" \
