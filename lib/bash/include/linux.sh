@@ -118,6 +118,18 @@ function lk_systemctl_stop() {
     }
 }
 
+function lk_systemctl_restart() {
+    local SH
+    SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
+    if ! lk_systemctl_running ${_USER+-u} "$1"; then
+        lk_systemctl_start ${_USER+-u} "$1"
+    else
+        lk_console_detail "Restarting service:" "$NAME"
+        ${_USER-lk_elevate} "${COMMAND[@]}" restart "$1" ||
+            lk_warn "could not restart service: $_NAME"
+    fi
+}
+
 function lk_systemctl_enable() {
     local SH
     SH=$(_lk_systemctl_args "$@") && eval "$SH" || return

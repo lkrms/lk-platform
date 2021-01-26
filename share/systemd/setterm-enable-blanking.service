@@ -1,0 +1,16 @@
+[Unit]
+Description=Enable display power management on the console
+Documentation=man:setterm
+Documentation=https://github.com/lkrms/lk-platform
+After=multi-user.target
+ConditionPathExists=/dev/tty0
+
+[Service]
+Type=oneshot
+Environment=TERM=linux
+ExecStart=/usr/bin/setterm --blank 60 --powerdown 60
+StandardOutput=tty
+TTYPath=/dev/console
+
+[Install]
+WantedBy=multi-user.target

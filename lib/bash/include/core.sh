@@ -1643,6 +1643,8 @@ function lk_maybe_trace() {
             ${BASH_XTRACEFD:+BASH_XTRACEFD=$BASH_XTRACEFD}
             SHELLOPTS=xtrace
             "$@")
+    ! lk_will_sudo ||
+        COMMAND=(sudo -C 5 -H "${COMMAND[@]}")
     ! lk_is_true OUTPUT ||
         COMMAND=(lk_quote_args "${COMMAND[@]}")
     "${COMMAND[@]}"
@@ -1712,23 +1714,24 @@ function lk_verbose() {
     [ "${LK_VERBOSE:-0}" -ge "${1:-1}" ]
 }
 
-# lk_require_output -s COMMAND [ARG...]
+# lk_require_output [-q|-s] COMMAND [ARG...]
 #
 # Run COMMAND and return true if its exit status is zero and output other than
-# newline characters was written. If -s is set, suppress output if COMMAND
-# fails.
+# newline characters was written. If -q is set, suppress output. If -s is set,
+# suppress output if COMMAND fails.
 function lk_require_output() {
-    local SUPPRESS FD OUTPUT EXIT_STATUS=
-    unset SUPPRESS
+    local SUPPRESS QUIET FD OUTPUT EXIT_STATUS=
+    [ "${1:-}" != -q ] || { SUPPRESS= && QUIET= && shift; }
     [ "${1:-}" != -s ] || { SUPPRESS= && shift; }
     FD=$(lk_next_fd) && eval "exec $FD>&1" || return
     OUTPUT=$("$@" |
-        tee ${SUPPRESS-/dev/fd/"$FD"} ${SUPPRESS+/dev/null} && printf .) &&
+        tee ${SUPPRESS-"/dev/fd/$FD"} ${SUPPRESS+/dev/null} && printf .) &&
         OUTPUT=${OUTPUT%.} || EXIT_STATUS=$?
     eval "exec $FD>&-" || EXIT_STATUS=${EXIT_STATUS:-$?}
     (exit "${EXIT_STATUS:-0}") &&
         [ -n "$(echo "$OUTPUT")" ] &&
-        { [ -z "${SUPPRESS+1}" ] || printf '%s' "$OUTPUT"; }
+        { [ -z "${SUPPRESS+1}" ] || [ -n "${QUIET+1}" ] ||
+            printf '%s' "$OUTPUT"; }
 }
 
 # lk_clip
@@ -2030,8 +2033,12 @@ function lk_can_sudo() {
     }
 }
 
-function lk_will_sudo() {
+function lk_will_elevate() {
     lk_is_root || lk_is_true LK_SUDO
+}
+
+function lk_will_sudo() {
+    ! lk_is_root && lk_is_true LK_SUDO
 }
 
 # lk_maybe_sudo COMMAND [ARG...]
@@ -2644,13 +2651,13 @@ function lk_file_backup() {
                 OWNER_HOME=$(lk_expand_path "~$OWNER") &&
                 OWNER_HOME=$(realpath "$OWNER_HOME"); } 2>/dev/null ||
                 OWNER_HOME=
-            if lk_will_sudo && [ "${FILE#$OWNER_HOME}" = "$FILE" ]; then
+            if lk_will_elevate && [ "${FILE#$OWNER_HOME}" = "$FILE" ]; then
                 lk_maybe_sudo install -d \
                     -m "$([ -g "$LK_BASE" ] && echo 02775 || echo 00755)" \
                     "${LK_INST:-$LK_BASE}/var" || return
                 DEST=${LK_INST:-$LK_BASE}/var/backup
                 unset OWNER
-            elif lk_will_sudo; then
+            elif lk_will_elevate; then
                 DEST=$OWNER_HOME/.lk-platform/backup
                 GROUP=$(id -gn "$OWNER") &&
                     lk_maybe_sudo install -d -m 00755 \

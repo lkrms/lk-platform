@@ -547,7 +547,7 @@ function lk_wp_set_permissions() {
     local SITE_ROOT OWNER LOG_FILE CHANGES
     SITE_ROOT=${1:-$(lk_wp_get_site_root)} &&
         SITE_ROOT=$(realpath "$SITE_ROOT") || return
-    if lk_will_sudo; then
+    if lk_will_elevate; then
         OWNER=$(lk_file_owner "$SITE_ROOT/..") &&
             LOG_FILE=$(lk_mktemp_file) || return
         lk_console_item "Setting file ownership in" "$SITE_ROOT"

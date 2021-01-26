@@ -26,7 +26,8 @@ function is_bootstrap() {
 if is_bootstrap; then
     function systemctl_enable() {
         [[ $1 == *.* ]] || set -- "$1.service" "${@:2}"
-        [ ! -e "/usr/lib/systemd/system/$1" ] || {
+        [ ! -e "/usr/lib/systemd/system/$1" ] &&
+            [ ! -e "/etc/systemd/system/$1" ] || {
             lk_console_detail "Enabling service:" "${2:-$1}"
             sudo systemctl enable "$1"
         }
@@ -39,13 +40,53 @@ if is_bootstrap; then
     lk_console_blank
 else
     function systemctl_enable() {
-        ! lk_systemctl_exists "$1" ||
+        ! lk_systemctl_exists "$1" || {
+            lk_systemctl_running "$1" || SERVICE_STARTED+=("$1")
             lk_systemctl_enable_now ${2:+-n "$2"} "$1"
+        }
     }
     function systemctl_mask() {
         lk_systemctl_mask ${2:+-n "$2"} "$1"
     }
 fi
+
+function service_apply() {
+    local i EXIT_STATUS=0
+    lk_console_message "Checking services"
+    is_bootstrap || ! lk_is_true DAEMON_RELOAD ||
+        lk_run_detail sudo systemctl daemon-reload || EXIT_STATUS=$?
+    [ ${#SERVICE_ENABLE[@]} -eq 0 ] ||
+        for i in $(seq 0 2 $((${#SERVICE_ENABLE[@]} - 1))); do
+            systemctl_enable "${SERVICE_ENABLE[@]:$i:2}" || EXIT_STATUS=$?
+        done
+    is_bootstrap || [ ${#SERVICE_RESTART[@]} -eq 0 ] || {
+        SERVICE_RESTART=($(comm -23 \
+            <(lk_echo_array SERVICE_RESTART | sort -u) \
+            <(lk_echo_array SERVICE_STARTED | sort -u))) && {
+            [ ${#SERVICE_RESTART[@]} -eq 0 ] || {
+                lk_console_message "Restarting services with changed settings"
+                for SERVICE in "${SERVICE_RESTART[@]}"; do
+                    lk_systemctl_restart "$SERVICE" || EXIT_STATUS=$?
+                done
+            } || EXIT_STATUS=$?
+        }
+    }
+    DAEMON_RELOAD=
+    SERVICE_ENABLE=()
+    SERVICE_RESTART=()
+    SERVICE_STARTED=()
+    return "$EXIT_STATUS"
+}
+
+function file_delete() {
+    local FILES=("$@")
+    LK_FILE_REPLACE_NO_CHANGE=${LK_FILE_REPLACE_NO_CHANGE:-1}
+    lk_remove_missing FILES
+    [ ${#FILES[@]} -eq 0 ] || {
+        LK_FILE_REPLACE_NO_CHANGE=0
+        sudo rm -fv "${FILES[@]}"
+    }
+}
 
 function is_desktop() {
     lk_node_service_enabled desktop
@@ -85,6 +126,12 @@ lk_log_output
     lk_console_detail "System memory:" "${MEMORY}M"
 
     LK_SUDO=1
+
+    EXIT_STATUS=0
+    SERVICE_STARTED=()
+    SERVICE_ENABLE=()
+    SERVICE_RESTART=()
+    DAEMON_RELOAD=
 
     # Try to detect missing settings
     if ! is_bootstrap; then
@@ -150,10 +197,9 @@ $LK_NODE_HOSTNAME" &&
     [ "$CURRENT_DEFAULT_TARGET" = "$DEFAULT_TARGET" ] ||
         lk_run_detail sudo systemctl set-default "$DEFAULT_TARGET"
 
-    SYSTEMCTL_ENABLE=(
+    SERVICE_ENABLE+=(
         NetworkManager "Network Manager"
     )
-    FILE_DELETE=()
 
     lk_console_message "Checking root account"
     lk_user_lock_passwd root
@@ -190,31 +236,53 @@ $LK_NODE_HOSTNAME" &&
 
     if lk_pac_installed tlp; then
         lk_console_message "Checking TLP"
+        unset LK_FILE_REPLACE_NO_CHANGE
         FILE=/etc/tlp.d/90-${LK_PATH_PREFIX}default.conf
         lk_install -m 00644 "$FILE"
         lk_file_replace -f "$LK_BASE/share/tlp.d/default.conf" "$FILE"
         systemctl_mask systemd-rfkill.service
         systemctl_mask systemd-rfkill.socket
-        SYSTEMCTL_ENABLE+=(
+        file_delete "/etc/tlp.d/90-${LK_PATH_PREFIX}defaults.conf"
+        SERVICE_ENABLE+=(
             NetworkManager-dispatcher "Network Manager dispatcher"
             tlp "TLP"
         )
-        FILE_DELETE+=(/etc/tlp.d/90-${LK_PATH_PREFIX}defaults.conf)
+        lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
+            SERVICE_RESTART+=(tlp)
     fi
+
+    lk_console_message "Checking console display power management"
+    unset LK_FILE_REPLACE_NO_CHANGE
+    FILE=/etc/systemd/system/setterm-enable-blanking.service
+    lk_install -m 00644 "$FILE"
+    lk_file_replace \
+        -f "$LK_BASE/share/systemd/setterm-enable-blanking.service" \
+        "$FILE"
+    SERVICE_ENABLE+=(
+        setterm-enable-blanking "setterm blanking"
+    )
+    lk_is_true LK_FILE_REPLACE_NO_CHANGE || {
+        DAEMON_RELOAD=1
+        SERVICE_RESTART+=(setterm-enable-blanking)
+    }
 
     ROOT_DEVICE=$(findmnt --list --noheadings --target / --output SOURCE)
     if lk_block_device_is_ssd "$ROOT_DEVICE"; then
         lk_console_message "Checking fstrim"
+        unset LK_FILE_REPLACE_NO_CHANGE
         FILE=/etc/systemd/system/fstrim.timer
         lk_install -m 00644 "$FILE"
         lk_file_replace -f "$LK_BASE/share/systemd/fstrim.timer" "$FILE"
-        SYSTEMCTL_ENABLE+=(
+        SERVICE_ENABLE+=(
             fstrim.timer "fstrim"
         )
+        lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
+            DAEMON_RELOAD=1
     fi
 
     if [ -n "${LK_NTP_SERVER:-}" ]; then
         lk_console_message "Checking NTP"
+        unset LK_FILE_REPLACE_NO_CHANGE
         FILE=/etc/ntp.conf
         lk_file_keep_original "$FILE"
         _FILE=$(awk \
@@ -222,30 +290,35 @@ $LK_NODE_HOSTNAME" &&
             -f "$LK_BASE/lib/awk/ntp-set-server.awk" \
             "$FILE")
         lk_file_replace "$FILE" "$_FILE"
+        lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
+            SERVICE_RESTART+=(ntpd)
     fi
-    SYSTEMCTL_ENABLE+=(
+    SERVICE_ENABLE+=(
         ntpd "NTP"
     )
 
     lk_console_message "Checking SSH server"
+    unset LK_FILE_REPLACE_NO_CHANGE
     LK_CONF_OPTION_FILE=/etc/ssh/sshd_config
     lk_ssh_set_option PermitRootLogin "no"
     [ ! -s ~/.ssh/authorized_keys ] ||
         lk_ssh_set_option PasswordAuthentication "no"
     lk_ssh_set_option AcceptEnv "LANG LC_*"
-    SYSTEMCTL_ENABLE+=(
+    SERVICE_ENABLE+=(
         sshd "SSH server"
     )
+    lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
+        SERVICE_RESTART+=(sshd)
 
-    lk_console_message "Checking services"
-    for i in $(seq 0 2 $((${#SYSTEMCTL_ENABLE[@]} - 1))); do
-        systemctl_enable "${SYSTEMCTL_ENABLE[@]:$i:2}"
-    done
-    systemctl_enable qemu-guest-agent "QEMU Guest Agent"
-    systemctl_enable lightdm "LightDM"
-    systemctl_enable cups "CUPS"
+    SERVICE_ENABLE+=(
+        qemu-guest-agent "QEMU Guest Agent"
+        lightdm "LightDM"
+        cups "CUPS"
+    )
 
-    if lk_pac_installed grub; then
+    service_apply
+
+    if ! is_bootstrap && lk_pac_installed grub; then
         lk_console_message "Checking boot loader"
         unset LK_FILE_REPLACE_NO_CHANGE
         lk_arch_configure_grub
@@ -319,8 +392,10 @@ $LK_NODE_HOSTNAME" &&
 
     lk_console_blank
     lk_console_log "Checking installed packages and services"
-    systemctl_enable atd "at"
-    systemctl_enable cronie "cron"
+    SERVICE_ENABLE+=(
+        atd "at"
+        cronie "cron"
+    )
 
     if lk_pac_installed mariadb; then
         sudo test -d /var/lib/mysql/mysql ||
@@ -328,10 +403,13 @@ $LK_NODE_HOSTNAME" &&
                 --user=mysql \
                 --basedir=/usr \
                 --datadir=/var/lib/mysql
-        systemctl_enable mariadb "MariaDB"
+        SERVICE_ENABLE+=(
+            mariadb "MariaDB"
+        )
     fi
 
     if lk_pac_installed php; then
+        unset LK_FILE_REPLACE_NO_CHANGE
         LK_CONF_OPTION_FILE=/etc/php/php.ini
         PHP_EXT=(
             bcmath
@@ -434,8 +512,13 @@ EOF
             lk_php_set_option pm.max_requests 10000
             lk_php_set_option request_terminate_timeout 300
         fi
-        systemctl_enable php-fpm "PHP-FPM"
+        SERVICE_ENABLE+=(
+            php-fpm "PHP-FPM"
+        )
+        lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
+            SERVICE_RESTART+=(php-fpm)
 
+        unset LK_FILE_REPLACE_NO_CHANGE
         LK_CONF_OPTION_FILE=/etc/httpd/conf/httpd.conf
         GROUP=$(id -gn)
         lk_install -d -m 00755 -o "$USER" -g "$GROUP" /srv/http/{,localhost/{,html},127.0.0.1}
@@ -462,9 +545,13 @@ EOF
             lk_user_in_group "$GROUP" http ||
                 sudo usermod --append --groups "$GROUP" http
             lk_httpd_remove_option Include conf/extra/httpd-dev-defaults.conf
-            FILE_DELETE+=(/etc/httpd/conf/extra/httpd-dev-defaults.conf)
+            file_delete /etc/httpd/conf/extra/httpd-dev-defaults.conf
         fi
-        systemctl_enable httpd "Apache"
+        SERVICE_ENABLE+=(
+            httpd "Apache"
+        )
+        lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
+            SERVICE_RESTART+=(httpd)
 
         lk_git_provision_repo -s \
             -o "$USER:adm" \
@@ -474,8 +561,13 @@ EOF
     fi
 
     if lk_pac_installed bluez; then
+        unset LK_FILE_REPLACE_NO_CHANGE
         lk_conf_set_option AutoEnable true /etc/bluetooth/main.conf
-        systemctl_enable bluetooth "Bluetooth"
+        SERVICE_ENABLE+=(
+            bluetooth "Bluetooth"
+        )
+        lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
+            SERVICE_RESTART+=(bluetooth)
     fi
 
     if lk_pac_installed libvirt; then
@@ -502,17 +594,18 @@ EOF
         fi
         lk_conf_set_option ON_SHUTDOWN shutdown
         lk_conf_set_option SYNC_TIME 1
-        ! memory_at_least 7 || {
-            systemctl_enable libvirtd "libvirt"
-            systemctl_enable libvirt-guests "libvirt-guests"
-        }
+        ! memory_at_least 7 || SERVICE_ENABLE+=(
+            libvirtd "libvirt"
+            libvirt-guests "libvirt-guests"
+        )
     fi
 
     if lk_pac_installed docker; then
         lk_user_in_group docker ||
             sudo usermod --append --groups docker "$USER"
-        ! memory_at_least 7 ||
-            systemctl_enable docker "Docker"
+        ! memory_at_least 7 || SERVICE_ENABLE+=(
+            docker "Docker"
+        )
     fi
 
     if lk_pac_installed xfce4-session; then
@@ -521,14 +614,14 @@ EOF
         a=({/etc/skel*,/home/*}/.config/xfce4/xinitrc) &&
         { [ ${#a[@]} -eq 0 ] || printf "%q\n" "${a[@]}"; }')
         [ -z "$SH" ] ||
-            eval "FILE_DELETE+=($SH)"
+            eval "file_delete $SH"
     fi
 
-    lk_remove_missing FILE_DELETE
-    [ ${#FILE_DELETE[@]} -eq 0 ] ||
-        sudo rm -fv "${FILE_DELETE[@]}"
+    service_apply || EXIT_STATUS=$?
 
-    lk_console_success "Provisioning complete"
+    (exit "$EXIT_STATUS") &&
+        lk_console_success "Provisioning complete" ||
+        lk_console_error -r "Provisioning completed with errors"
 
     exit
 }

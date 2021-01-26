@@ -32,6 +32,10 @@ BOOTSTRAP_MOUNT_OPTIONS=${BOOTSTRAP_MOUNT_OPTIONS:-defaults} # On VMs with TRIM 
 BOOTSTRAP_USERNAME=${BOOTSTRAP_USERNAME:-arch}               #
 BOOTSTRAP_PASSWORD=${BOOTSTRAP_PASSWORD:-}                   #
 BOOTSTRAP_KEY=${BOOTSTRAP_KEY:-}                             #
+LK_NODE_IPV4_ADDRESS=${LK_NODE_IPV4_ADDRESS:-}               #
+LK_NODE_IPV4_GATEWAY=${LK_NODE_IPV4_GATEWAY:-}               #
+LK_NODE_IPV4_DNS_SERVER=${LK_NODE_IPV4_DNS_SERVER:-}         #
+LK_NODE_IPV4_DNS_SEARCH=${LK_NODE_IPV4_DNS_SEARCH:-}         #
 LK_NODE_TIMEZONE=${LK_NODE_TIMEZONE:-UTC}                    # See `timedatectl list-timezones`
 LK_NODE_SERVICES=${LK_NODE_SERVICES:-}                       #
 LK_NODE_LOCALES=${LK_NODE_LOCALES-en_AU.UTF-8 en_GB.UTF-8}   # "en_US.UTF-8" is added automatically
@@ -54,8 +58,8 @@ shopt -s nullglob
 [[ $- != *s* ]] || lk_die "cannot run from standard input"
 
 LK_USAGE="\
-Usage: ${0##*/} [OPTIONS] ROOT_PART BOOT_PART HOSTNAME
-   or: ${0##*/} [OPTIONS] INSTALL_DISK HOSTNAME
+Usage: ${0##*/} [OPTIONS] ROOT_PART BOOT_PART HOSTNAME[.DOMAIN]
+   or: ${0##*/} [OPTIONS] INSTALL_DISK HOSTNAME[.DOMAIN]
 
 Options:
   -u USERNAME       set the default user's login name (default: arch)
@@ -169,7 +173,10 @@ case $# in
     lk_usage
     ;;
 esac
-LK_NODE_HOSTNAME=${*: -1:1}
+LK_NODE_FQDN=${*: -1:1}
+LK_NODE_HOSTNAME=${LK_NODE_FQDN%%.*}
+[ "$LK_NODE_FQDN" != "$LK_NODE_HOSTNAME" ] ||
+    LK_NODE_FQDN=
 LK_NODE_SERVICES=$(IFS=, &&
     lk_echo_args $LK_NODE_SERVICES | sort -u | lk_implode_input ",")
 
@@ -421,6 +428,11 @@ lk_get_shell_var \
     LK_BASE \
     LK_PATH_PREFIX \
     LK_NODE_HOSTNAME \
+    LK_NODE_FQDN \
+    LK_NODE_IPV4_ADDRESS \
+    LK_NODE_IPV4_GATEWAY \
+    LK_NODE_IPV4_DNS_SERVER \
+    LK_NODE_IPV4_DNS_SEARCH \
     LK_NODE_TIMEZONE \
     LK_NODE_SERVICES \
     LK_NODE_LOCALES \
