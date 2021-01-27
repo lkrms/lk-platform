@@ -88,6 +88,20 @@ function file_delete() {
     }
 }
 
+function link_rename() {
+    local VERBOSE
+    . "$LK_BASE/lib/bash/include/core.sh"
+    ! lk_verbose || VERBOSE=1
+    lk_run_detail ip ${VERBOSE+-d} link set "$1" down &&
+        lk_run_detail udevadm trigger ${VERBOSE+-v} -c remove "/sys$3" &&
+        lk_run_detail udevadm settle || return
+    lk_run_detail udevadm trigger ${VERBOSE+-v} -c add "/sys$3" &&
+        lk_run_detail udevadm settle || return
+    lk_run_detail ip ${VERBOSE+-d} link set "$2" up ||
+        lk_warn "could not bring interface up: $2" ||
+        lk_run_detail ip ${VERBOSE+-d} link set "$1" up
+}
+
 function is_desktop() {
     lk_node_service_enabled desktop
 }
@@ -159,6 +173,47 @@ lk_log_output
     lk_console_message "Checking locales"
     lk_configure_locales
 
+    ETHERNET=()
+    if lk_require_output -q lk_system_list_ethernet_links -u; then
+        lk_console_message "Checking Ethernet interfaces"
+        ETHERNET=($(lk_system_list_ethernet_links))
+        ETHERNET=($(lk_system_sort_links "${ETHERNET[@]}"))
+        UDEV_RULES=()
+        IF_RENAME=()
+        for i in "${!ETHERNET[@]}"; do
+            IF=${ETHERNET[$i]}
+            IF_PATH=/sys/class/net/$IF
+            IF_ADDRESS=$(<"$IF_PATH/address")
+            DEV_PATH=$(udevadm info -q path "$IF_PATH")
+            IF_NAME=ether$i
+            UDEV_RULES[${#UDEV_RULES[@]}]=$(printf \
+                'SUBSYSTEM=="net", ACTION=="add", ATTR{address}=="%s", NAME="%s"\n' \
+                "$IF_ADDRESS" "$IF_NAME")
+            [ "$IF" = "$IF_NAME" ] || {
+                IF_RENAME+=("$IF" "$IF_NAME" "$DEV_PATH")
+                ETHERNET[$i]=$IF_NAME
+            }
+        done
+        FILE=/etc/udev/rules.d/10-${LK_PATH_PREFIX}local.rules
+        _FILE=$(lk_echo_array UDEV_RULES)
+        lk_install -m 00644 "$FILE"
+        lk_file_replace "$FILE" "$_FILE"
+        if ! is_bootstrap && [ ${#IF_RENAME[@]} -gt 0 ]; then
+            lk_run_detail sudo udevadm control -R
+            for i in $(seq 0 3 $((${#IF_RENAME[@]} - 1))); do
+                lk_maybe_trace \
+                    ${LK_VERBOSE:+LK_VERBOSE="$LK_VERBOSE"} \
+                    bash -c "$(declare -f link_rename); link_rename \"\$@\"" \
+                    bash \
+                    "${IF_RENAME[@]:$i:3}"
+            done
+        fi
+    fi
+
+    SERVICE_ENABLE+=(
+        NetworkManager "Network Manager"
+    )
+
     if [ -n "${LK_NODE_HOSTNAME:-}" ]; then
         lk_console_message "Checking system hostname"
         FILE=/etc/hostname
@@ -197,10 +252,6 @@ $LK_NODE_HOSTNAME" &&
     [ "$CURRENT_DEFAULT_TARGET" = "$DEFAULT_TARGET" ] ||
         lk_run_detail sudo systemctl set-default "$DEFAULT_TARGET"
 
-    SERVICE_ENABLE+=(
-        NetworkManager "Network Manager"
-    )
-
     lk_console_message "Checking root account"
     lk_user_lock_passwd root
 
@@ -224,7 +275,7 @@ $LK_NODE_HOSTNAME" &&
     fi
 
     lk_console_message "Checking kernel parameters"
-    unset LK_FILE_REPLACE_NO_CHANGE
+    LK_FILE_REPLACE_NO_CHANGE=1
     for FILE in default.conf $(lk_is_virtual || lk_echo_args sysrq.conf); do
         TARGET=/etc/sysctl.d/90-${FILE/default/${LK_PATH_PREFIX}default}
         FILE=$LK_BASE/share/sysctl.d/$FILE
@@ -236,7 +287,7 @@ $LK_NODE_HOSTNAME" &&
 
     if lk_pac_installed tlp; then
         lk_console_message "Checking TLP"
-        unset LK_FILE_REPLACE_NO_CHANGE
+        LK_FILE_REPLACE_NO_CHANGE=1
         FILE=/etc/tlp.d/90-${LK_PATH_PREFIX}default.conf
         lk_install -m 00644 "$FILE"
         lk_file_replace -f "$LK_BASE/share/tlp.d/default.conf" "$FILE"
@@ -252,7 +303,7 @@ $LK_NODE_HOSTNAME" &&
     fi
 
     lk_console_message "Checking console display power management"
-    unset LK_FILE_REPLACE_NO_CHANGE
+    LK_FILE_REPLACE_NO_CHANGE=1
     FILE=/etc/systemd/system/setterm-enable-blanking.service
     lk_install -m 00644 "$FILE"
     lk_file_replace \
@@ -269,7 +320,7 @@ $LK_NODE_HOSTNAME" &&
     ROOT_DEVICE=$(findmnt --list --noheadings --target / --output SOURCE)
     if lk_block_device_is_ssd "$ROOT_DEVICE"; then
         lk_console_message "Checking fstrim"
-        unset LK_FILE_REPLACE_NO_CHANGE
+        LK_FILE_REPLACE_NO_CHANGE=1
         FILE=/etc/systemd/system/fstrim.timer
         lk_install -m 00644 "$FILE"
         lk_file_replace -f "$LK_BASE/share/systemd/fstrim.timer" "$FILE"
@@ -282,7 +333,7 @@ $LK_NODE_HOSTNAME" &&
 
     if [ -n "${LK_NTP_SERVER:-}" ]; then
         lk_console_message "Checking NTP"
-        unset LK_FILE_REPLACE_NO_CHANGE
+        LK_FILE_REPLACE_NO_CHANGE=1
         FILE=/etc/ntp.conf
         lk_file_keep_original "$FILE"
         _FILE=$(awk \
@@ -298,7 +349,7 @@ $LK_NODE_HOSTNAME" &&
     )
 
     lk_console_message "Checking SSH server"
-    unset LK_FILE_REPLACE_NO_CHANGE
+    LK_FILE_REPLACE_NO_CHANGE=1
     LK_CONF_OPTION_FILE=/etc/ssh/sshd_config
     lk_ssh_set_option PermitRootLogin "no"
     [ ! -s ~/.ssh/authorized_keys ] ||
@@ -320,7 +371,7 @@ $LK_NODE_HOSTNAME" &&
 
     if ! is_bootstrap && lk_pac_installed grub; then
         lk_console_message "Checking boot loader"
-        unset LK_FILE_REPLACE_NO_CHANGE
+        LK_FILE_REPLACE_NO_CHANGE=1
         lk_arch_configure_grub
         lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
             sudo update-grub --install
@@ -409,7 +460,7 @@ $LK_NODE_HOSTNAME" &&
     fi
 
     if lk_pac_installed php; then
-        unset LK_FILE_REPLACE_NO_CHANGE
+        LK_FILE_REPLACE_NO_CHANGE=1
         LK_CONF_OPTION_FILE=/etc/php/php.ini
         PHP_EXT=(
             bcmath
@@ -518,7 +569,7 @@ EOF
         lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
             SERVICE_RESTART+=(php-fpm)
 
-        unset LK_FILE_REPLACE_NO_CHANGE
+        LK_FILE_REPLACE_NO_CHANGE=1
         LK_CONF_OPTION_FILE=/etc/httpd/conf/httpd.conf
         GROUP=$(id -gn)
         lk_install -d -m 00755 -o "$USER" -g "$GROUP" /srv/http/{,localhost/{,html},127.0.0.1}
@@ -561,7 +612,7 @@ EOF
     fi
 
     if lk_pac_installed bluez; then
-        unset LK_FILE_REPLACE_NO_CHANGE
+        LK_FILE_REPLACE_NO_CHANGE=1
         lk_conf_set_option AutoEnable true /etc/bluetooth/main.conf
         SERVICE_ENABLE+=(
             bluetooth "Bluetooth"

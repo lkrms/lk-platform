@@ -135,17 +135,21 @@ function lk_systemctl_enable() {
     SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
     lk_systemctl_exists ${_USER+-u} "$1" ||
         lk_warn "unknown service: $_NAME" || return
+    LK_SYSTEMCTL_ENABLE_NO_CHANGE=${LK_SYSTEMCTL_ENABLE_NO_CHANGE:-1}
     lk_systemctl_enabled ${_USER+-u} "$1" || {
         lk_console_detail "Enabling service:" "$NAME"
-        ${_USER-lk_elevate} "${COMMAND[@]}" enable "$1" ||
+        ${_USER-lk_elevate} "${COMMAND[@]}" enable "$1" &&
+            LK_SYSTEMCTL_ENABLE_NO_CHANGE=0 ||
             lk_warn "could not enable service: $_NAME"
     }
 }
 
 function lk_systemctl_enable_now() {
-    local SH
+    local SH LK_SYSTEMCTL_ENABLE_NO_CHANGE
     SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
     lk_systemctl_enable ${_USER+-u} "$1" || return
+    ! lk_is_true LK_SYSTEMCTL_ENABLE_NO_CHANGE ||
+        ! lk_systemctl_property_is ${_USER+-u} Type oneshot "$1" || return 0
     ! lk_systemctl_failed ${_USER+-u} "$1" ||
         lk_warn "not starting failed service: $_NAME" || return
     lk_systemctl_start ${_USER+-u} "$1"
@@ -221,6 +225,47 @@ function lk_system_timezone() {
         timedatectl status |
             sed -En 's/^[^:]*zone: ([^ ]+).*/\1/Ip'
     fi
+}
+
+function lk_system_list_physical_links() {
+    local WIFI ETH UP WIFI_ARGS UP_ARGS
+    WIFI_ARGS=(-execdir test -d "{}/wireless" -o -L "{}/phy80211" \;)
+    UP_ARGS=(-execdir grep -Fxq up "{}/operstate" \;)
+    [ "${1:-}" != -w ] || { WIFI= && shift; }
+    [ "${1:-}" != -e ] || { WIFI= && ETH= && shift; }
+    [ "${1:-}" != -u ] || { UP= && shift; }
+    find /sys/class/net \
+        -type l \
+        ! -lname '*virtual*' \
+        ${ETH+!} \
+        ${WIFI+"${WIFI_ARGS[@]}"} \
+        ${UP+"${UP_ARGS[@]}"} \
+        -printf '%f\n'
+}
+
+function lk_system_list_ethernet_links() {
+    lk_system_list_physical_links -e "$@"
+}
+
+function lk_system_list_wifi_links() {
+    lk_system_list_physical_links -w "$@"
+}
+
+function lk_system_sort_links() {
+    local IF
+    for IF in "$@"; do
+        (
+            unset UDEV_ID_NET_NAME_ONBOARD
+            IF_PATH=/sys/class/net/$IF
+            ! SH=$(udevadm info -q property -P UDEV_ "$IF_PATH") ||
+                eval "$SH"
+            SORT=${UDEV_ID_NET_NAME_ONBOARD:+1}
+            printf '%s\t%s\t%s\n' \
+                "$IF" \
+                "${SORT:-2}" \
+                "${UDEV_ID_NET_NAME_ONBOARD:-}"
+        )
+    done | LC_ALL=C sort -V -k2 -k3 -k1 | cut -f1
 }
 
 function lk_system_list_graphics() {
