@@ -259,7 +259,7 @@ function lk_ssh_get_public_key() {
         [ -f "$1" ] || lk_warn "file not found: $1" || return
         KEY=$(cat <"$1") || return
     fi
-    if ssh-keygen -l -f <(cat <<<"$KEY") >/dev/null 2>&1; then
+    if ssh-keygen -l -f <(cat <<<"$KEY") &>/dev/null; then
         echo "$KEY"
     else
         # ssh-keygen doesn't allow fingerprinting from a file descriptor
@@ -315,7 +315,7 @@ Usage: $(lk_myself -f) [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" |
         KEY_FILE=$h/.ssh/${SSH_PREFIX}keys/$NAME
         lk_install -m 00600 "$KEY_FILE" &&
             lk_file_replace "$KEY_FILE" "$KEY" || return
-        ssh-keygen -l -f "$KEY_FILE" >/dev/null 2>&1 || {
+        ssh-keygen -l -f "$KEY_FILE" &>/dev/null || {
             # `ssh-keygen -l -f FILE` exits without error if FILE contains an
             # OpenSSH public key
             lk_console_log "Reading $KEY_FILE to create public key file"
@@ -350,7 +350,7 @@ Usage: $(lk_myself -f) [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" |
                     lk_warn "could not establish tunnel to $HOST:${PORT:-22}" ||
                     return
                 ! ssh -O forward -L "$JUMP_PORT:$HOST:${PORT:-22}" \
-                    "${JUMP_ARGS[@]}" "$JUMP_HOST_NAME" >/dev/null 2>&1 ||
+                    "${JUMP_ARGS[@]}" "$JUMP_HOST_NAME" &>/dev/null ||
                     break
             done
             lk_ssh_is_reachable localhost "$JUMP_PORT"
@@ -436,7 +436,7 @@ SendEnv                 LANG LC_*
 ServerAliveInterval     30
 EOF
         )
-        lk_file_replace  "$h/.ssh/${SSH_PREFIX}config.d/90-defaults" "$CONF"
+        lk_file_replace "$h/.ssh/${SSH_PREFIX}config.d/90-defaults" "$CONF"
         # Add jump proxy configuration
         [ $# -lt 2 ] ||
             LK_SSH_HOME=$h LK_SSH_PRIORITY=40 \
@@ -733,7 +733,7 @@ function lk_tcp_next_port() {
 
 # lk_tcp_is_reachable HOST PORT [TIMEOUT_SECONDS]
 function lk_tcp_is_reachable() {
-    gnu_nc -z -w "${3:-5}" "$1" "$2" >/dev/null 2>&1
+    gnu_nc -z -w "${3:-5}" "$1" "$2" &>/dev/null
 }
 
 function lk_certbot_install() {
@@ -818,7 +818,7 @@ function _lk_option_check() {
     { { [ $# -gt 0 ] &&
         echo -n "$1" ||
         lk_maybe_sudo cat "$FILE"; } |
-        grep -E "$CHECK_REGEX"; } >/dev/null 2>&1
+        grep -E "$CHECK_REGEX"; } &>/dev/null
 }
 
 # lk_option_set [-p] FILE SETTING CHECK_REGEX [REPLACE_REGEX...]

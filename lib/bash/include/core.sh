@@ -41,7 +41,7 @@ function lk_ubuntu_at_least() {
 
 function lk_is_wsl() {
     return "${_LK_IS_WSL:=$(lk_is_linux &&
-        grep -qi microsoft /proc/version >/dev/null 2>&1 &&
+        grep -qi microsoft /proc/version &>/dev/null &&
         echo 0 || echo 1)}"
 }
 
@@ -1757,7 +1757,7 @@ function lk_clip() {
     if COMMAND=$(lk_command_first_existing \
         "xclip -selection clipboard" \
         pbcopy) &&
-        echo -n "$OUTPUT" | $COMMAND >/dev/null 2>&1; then
+        echo -n "$OUTPUT" | $COMMAND &>/dev/null; then
         LINES=$(wc -l <<<"$OUTPUT")
         [ "$LINES" -le "$DISPLAY_LINES" ] || {
             OUTPUT=$(head -n$((DISPLAY_LINES - 1)) <<<"$OUTPUT" &&
@@ -2039,7 +2039,7 @@ function lk_can_sudo() {
     } && {
         # 3. The current user is allowed to execute COMMAND as USERNAME (attempt
         #    with prompting disabled first)
-        sudo -n ${USERNAME:+-u "$USERNAME"} -l "$COMMAND" >/dev/null 2>&1 || {
+        sudo -n ${USERNAME:+-u "$USERNAME"} -l "$COMMAND" &>/dev/null || {
             ! lk_no_input &&
                 sudo ${USERNAME:+-u "$USERNAME"} -l "$COMMAND" >/dev/null
         }
@@ -2257,7 +2257,7 @@ function lk_keep_trying() {
 }
 
 function lk_user_exists() {
-    id "$1" >/dev/null 2>&1 || return
+    id "$1" &>/dev/null || return
 }
 
 # lk_user_groups [USER]
@@ -2418,7 +2418,7 @@ function lk_filter() {
 }
 
 function lk_is_declared() {
-    declare -p "$1" >/dev/null 2>&1
+    declare -p "$1" &>/dev/null
 }
 
 function lk_is_readonly() {
@@ -2510,7 +2510,7 @@ function lk_random_password() {
 
 function lk_base64() {
     if lk_command_exists openssl &&
-        openssl base64 >/dev/null 2>&1 </dev/null; then
+        openssl base64 &>/dev/null </dev/null; then
         # OpenSSL's implementation is ubiquitous and well-behaved
         openssl base64
     elif lk_command_exists base64 &&

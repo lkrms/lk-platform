@@ -133,7 +133,7 @@ function lk_pac_installed() {
     [ "${1:-}" != -d ] || D=-d
     [ -z "$E$D" ] || shift
     [ $# -gt 0 ] || lk_warn "no package" || return
-    pacman -Qq $E $D "$@" >/dev/null 2>&1
+    pacman -Qq $E $D "$@" &>/dev/null
 }
 
 # lk_pac_installed_list [PACKAGE...]

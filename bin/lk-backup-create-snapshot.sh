@@ -228,7 +228,7 @@ while :; do
     case "$OPT" in
     -g | --group)
         # TODO: add macOS-friendly test
-        getent group "$1" >/dev/null 2>&1 ||
+        getent group "$1" &>/dev/null ||
             lk_die "group not found: $1"
         SNAPSHOT_GROUP=$1
         shift

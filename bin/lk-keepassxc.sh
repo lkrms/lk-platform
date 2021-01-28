@@ -96,7 +96,7 @@ if lk_is_true REGISTER; then
         }
         LABEL=com.linacreative.platform.keepassxc
         PLIST=$HOME/Library/LaunchAgents/$LABEL.plist
-        launchctl unload "$PLIST" >/dev/null 2>&1 || true
+        launchctl unload "$PLIST" &>/dev/null || true
         plist Disabled -bool false
         plist Label -string "$LABEL"
         plist ProcessType -string "Interactive"
@@ -119,7 +119,7 @@ if lk_is_true DAEMON; then
         --pw-stdin "${DATABASES[@]}"
 else
     nohup "$KEEPASSXC" \
-        --pw-stdin "${DATABASES[@]}" >/dev/null 2>&1 &
+        --pw-stdin "${DATABASES[@]}" &>/dev/null &
     disown
 fi < <(for PASSWORD in "${PASSWORDS[@]}"; do
     sleep 5

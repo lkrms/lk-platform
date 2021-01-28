@@ -122,7 +122,7 @@ function exit_trap() {
 
     lk_sudo_offer_nopasswd || true
 
-    scutil --get HostName >/dev/null 2>&1 ||
+    scutil --get HostName &>/dev/null ||
         [ -z "${LK_NODE_HOSTNAME:=$(
             lk_console_read "Hostname for this system:"
         )}" ] ||

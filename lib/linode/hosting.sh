@@ -1185,7 +1185,7 @@ lk_keep_trying apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -yq install "${PA
 if [ -n "$LK_HOST_DOMAIN" ]; then
     COPY_SKEL=0
     PHP_FPM_POOL_USER="www-data"
-    id "$LK_HOST_ACCOUNT" >/dev/null 2>&1 || {
+    id "$LK_HOST_ACCOUNT" &>/dev/null || {
         lk_console_message "Creating user account '$LK_HOST_ACCOUNT'"
         useradd --no-create-home --home-dir "/srv/www/$LK_HOST_ACCOUNT" --shell "/bin/bash" "$LK_HOST_ACCOUNT"
         COPY_SKEL=1
@@ -1542,7 +1542,7 @@ EOF
     sharedscripts
     postrotate
         test ! -x /usr/lib/php/php$PHPVER-fpm-reopenlogs || /usr/lib/php/php$PHPVER-fpm-reopenlogs
-        ! invoke-rc.d apache2 status >/dev/null 2>&1 || invoke-rc.d apache2 reload >/dev/null 2>&1
+        ! invoke-rc.d apache2 status &>/dev/null || invoke-rc.d apache2 reload &>/dev/null
     endscript
 }
 EOF
