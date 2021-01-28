@@ -215,13 +215,13 @@
     }
 
     # Use the opening "Environment:" log entry created by hosting.sh as a last
-    # resort when looking for old settings
+    # resort when looking for settings
     function install_env() {
-        if [ "${INSTALL_ENV+1}" != 1 ]; then
+        if [ -z "${INSTALL_ENV+1}" ]; then
             INSTALL_ENV=$(
-                FILE=/var/log/${LK_PATH_PREFIX}install.log
-                [ ! -f "$FILE" ] ||
-                    awk -f "$LK_BASE/lib/awk/get-install-env.awk" <"$FILE"
+                FILE=$(lk_first_existing \
+                    /var/log/{"$LK_PATH_PREFIX",lk-}install.log) || exit 0
+                awk -f "$LK_BASE/lib/awk/get-install-env.awk" "$FILE"
             ) || return
         fi
         awk -F= \
@@ -231,8 +231,9 @@
 
     for i in "${SETTINGS[@]}"; do
         SH=$(printf \
-            '%s=${%s-${%s-${%s-$(install_env "(LK_(DEFAULT_)?)?%s")}}}' \
-            "$i" "$i" "LK_DEFAULT_${i#LK_}" "${i#LK_}" "${i#LK_}") &&
+            '%s=${%s-${%s-${%s-${%s-$(install_env "(LK_(NODE_|DEFAULT_)?)?%s")}}}}' \
+            "$i" "$i" "LK_NODE_${i#LK_}" "LK_DEFAULT_${i#LK_}" "${i#LK_}" \
+            "${i#LK_}") &&
             eval "$SH"
     done
 

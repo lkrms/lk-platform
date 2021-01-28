@@ -21,57 +21,66 @@ function lk_is_linux() {
 }
 
 function lk_is_arch() {
-    return "${_LK_IS_ARCH:=$(lk_is_linux &&
-        [ -f /etc/arch-release ] &&
-        echo 0 || echo 1)}"
+    lk_is_linux && [ -f /etc/arch-release ]
 }
 
 function lk_is_ubuntu() {
-    return "${_LK_IS_UBUNTU:=$(lk_is_linux &&
-        [ -r /etc/os-release ] && . /etc/os-release && [ "$NAME" = Ubuntu ] &&
-        echo 0 || echo 1)}"
+    lk_is_linux && [ -r /etc/os-release ] &&
+        (. /etc/os-release && [ "$NAME" = Ubuntu ])
 }
 
 function lk_ubuntu_at_least() {
-    local VERSION
-    lk_is_ubuntu &&
-        VERSION=$(. /etc/os-release && echo "$VERSION_ID") &&
-        lk_version_at_least "$VERSION" "$1"
+    lk_is_linux && [ -r /etc/os-release ] &&
+        (. /etc/os-release && [ "$NAME" = Ubuntu ] &&
+            lk_version_at_least "$VERSION_ID" "$1")
 }
 
 function lk_is_wsl() {
-    return "${_LK_IS_WSL:=$(lk_is_linux &&
-        grep -qi microsoft /proc/version &>/dev/null &&
-        echo 0 || echo 1)}"
+    lk_is_linux && grep -qi Microsoft /proc/version &>/dev/null
 }
 
 function lk_is_desktop() {
-    return "${_LK_IS_DESKTOP:=$({ lk_is_macos || lk_command_exists X; } &&
-        echo 0 || echo 1)}"
-}
-
-function lk_is_server() {
-    ! lk_is_desktop
+    lk_node_service_enabled desktop
 }
 
 function lk_is_virtual() {
-    return "${_LK_IS_VIRTUAL:=$(lk_is_linux &&
-        grep -Eq "^flags$S*:.*\\bhypervisor\\b" /proc/cpuinfo &&
-        echo 0 || echo 1)}"
+    lk_is_linux &&
+        grep -Eq "^flags$S*:.*\\bhypervisor\\b" /proc/cpuinfo
 }
 
 function lk_is_qemu() {
-    return "${_LK_IS_QEMU:=$(lk_is_virtual &&
-        shopt -s nullglob &&
-        FILES=(/sys/devices/virtual/dmi/id/*_vendor) &&
-        [ ${#FILES[@]} -gt 0 ] && grep -iq qemu "${FILES[@]}" &&
-        echo 0 || echo 1)}"
+    lk_is_virtual &&
+        (shopt -s nullglob &&
+            FILES=(/sys/devices/virtual/dmi/id/*_vendor) &&
+            [ ${#FILES[@]} -gt 0 ] &&
+            grep -iq qemu "${FILES[@]}")
+}
+
+# lk_first_existing [FILE...]
+function lk_first_existing() {
+    while [ $# -gt 0 ]; do
+        ! lk_maybe_sudo test -e "$1" || break
+        shift
+    done
+    [ $# -gt 0 ] && echo "$1"
 }
 
 _LK_GNU_COMMANDS=(
-    awk chgrp chmod chown cp date df diff du find getopt grep ln mktemp mv nc
-    realpath sed sort stat tar xargs
+    awk
+    chgrp chmod chown cp
+    date df diff du
+    find
+    getopt grep
+    ln
+    mktemp mv
+    nc
+    realpath
+    sed sort stat
+    tar
+    xargs
 )
+
+#### Reviewed: 2021-01-28
 
 function _lk_gnu_command() {
     local COMMAND PREFIX=
