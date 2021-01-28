@@ -817,15 +817,15 @@ function _lk_array_action() {
 
 # lk_echo_args [-z] [ARG...]
 function lk_echo_args() {
-    local DELIM=${_LK_NUL_DELIM:+'\0'}
+    local DELIM=${LK_Z:+'\0'}
     [ "${1:-}" != -z ] || { DELIM='\0' && shift; }
     printf "%s${DELIM:-\\n}" "$@"
 }
 
 # lk_echo_array [-z] [ARRAY...]
 function lk_echo_array() {
-    local _LK_NUL_DELIM=${_LK_NUL_DELIM-}
-    [ "${1:-}" != -z ] || { _LK_NUL_DELIM=1 && shift; }
+    local LK_Z=${LK_Z-}
+    [ "${1:-}" != -z ] || { LK_Z=1 && shift; }
     _lk_array_action lk_echo_args "$@"
 }
 
@@ -922,9 +922,9 @@ function lk_array_search() {
 # final argument. If -z is set, use NUL instead of newline as the input
 # delimiter.
 function lk_xargs() {
-    local _LK_NUL_DELIM=${_LK_NUL_DELIM-} _LK_NUL_READ=(-d '') _LK_LINE
-    [ "${1:-}" != -z ] || { _LK_NUL_DELIM=1 && shift; }
-    while IFS= read -r ${_LK_NUL_DELIM:+"${_LK_NUL_READ[@]}"} _LK_LINE ||
+    local LK_Z=${LK_Z-} _LK_NUL_READ=(-d '') _LK_LINE
+    [ "${1:-}" != -z ] || { LK_Z=1 && shift; }
+    while IFS= read -r ${LK_Z:+"${_LK_NUL_READ[@]}"} _LK_LINE ||
         [ -n "$_LK_LINE" ]; do
         "$@" "$_LK_LINE" || return
     done
@@ -956,10 +956,10 @@ function lk_xargs() {
 #         # process $1
 #     }
 function _lk_maybe_xargs() {
-    local _LK_NUL_DELIM=${_LK_NUL_DELIM-} COMMAND
+    local LK_Z=${LK_Z-} COMMAND
     # Check for -z and no value arguments, i.e. NUL-delimited input
     [ "${2:-}" != -z ] || (($# - $1 - 2)) ||
-        { _LK_NUL_DELIM=1 && set -- "$1" "${@:3}"; }
+        { LK_Z=1 && set -- "$1" "${@:3}"; }
     # Return false ASAP if there's exactly one value for the caller to process
     (($# - $1 - 2)) || return
     COMMAND=("$(lk_myself -f 1)" "${@:2:$1}")
@@ -982,13 +982,13 @@ function _lk_maybe_xargs() {
 #
 # Read lines from FILE or input into array variable ARRAY.
 function lk_mapfile() {
-    local _LK_NUL_DELIM=${_LK_NUL_DELIM-} _LK_NUL_READ=(-d '') _LK_LINE _lk_i=0
-    [ "${1:-}" != -z ] || { _LK_NUL_DELIM=1 && shift; }
+    local LK_Z=${LK_Z-} _LK_NUL_READ=(-d '') _LK_LINE _lk_i=0
+    [ "${1:-}" != -z ] || { LK_Z=1 && shift; }
     lk_is_identifier "$1" || lk_warn "not a valid identifier: $1" || return
     [ -z "${2:-}" ] ||
         [ -e "$2" ] || lk_warn "file not found: $2" || return
     eval "$1=()"
-    while IFS= read -r ${_LK_NUL_DELIM:+"${_LK_NUL_READ[@]}"} _LK_LINE ||
+    while IFS= read -r ${LK_Z:+"${_LK_NUL_READ[@]}"} _LK_LINE ||
         [ -n "$_LK_LINE" ]; do
         eval "$1[$((_lk_i++))]=\$_LK_LINE"
     done < <(cat ${2+"$2"})
@@ -1503,10 +1503,10 @@ function lk_console_item() {
 
 # lk_console_list [-z] MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]
 function lk_console_list() {
-    local _LK_NUL_DELIM=${_LK_NUL_DELIM-} \
+    local LK_Z=${LK_Z-} \
         MESSAGE SINGLE PLURAL COLOUR LK_TTY_PREFIX=${LK_TTY_PREFIX-==> } \
         ITEMS INDENT=-2 LIST SPACES SH
-    [ "${1:-}" != -z ] || { _LK_NUL_DELIM=1 && shift; }
+    [ "${1:-}" != -z ] || { LK_Z=1 && shift; }
     MESSAGE=$1
     shift
     [ $# -le 1 ] || {
@@ -2336,14 +2336,14 @@ function lk_resolve_files() {
 # The globstar shell option must be enabled with `shopt -s globstar` for **
 # globs to be expanded.
 function lk_expand_path() {
-    local _LK_NUL_DELIM=${_LK_NUL_DELIM-} EXIT_STATUS _PATH SHOPT DELIM q g ARR
-    [ "${1:-}" != -z ] || { _LK_NUL_DELIM=1 && shift; }
+    local LK_Z=${LK_Z-} EXIT_STATUS _PATH SHOPT DELIM q g ARR
+    [ "${1:-}" != -z ] || { LK_Z=1 && shift; }
     ! _lk_maybe_xargs 0 "$@" || return "$EXIT_STATUS"
     [ -n "${1:-}" ] || lk_warn "no path" || return
     _PATH=$1
     SHOPT=$(shopt -p nullglob) || true
     shopt -s nullglob
-    DELIM=${_LK_NUL_DELIM:+'\0'}
+    DELIM=${LK_Z:+'\0'}
     # If the path is double- or single-quoted, remove enclosing quotes and
     # unescape
     if [[ $_PATH =~ ^\"(.*)\"$ ]]; then
@@ -2392,12 +2392,12 @@ function lk_expand_paths() {
 
 # lk_pretty_path [-z] [PATH...]
 function lk_pretty_path() {
-    local _LK_NUL_DELIM=${_LK_NUL_DELIM-} _LK_NUL_READ=(-d '') DELIM
-    [ "${1:-}" != -z ] || { _LK_NUL_DELIM=1 && shift; }
-    DELIM=${_LK_NUL_DELIM:+'\0'}
+    local LK_Z=${LK_Z-} _LK_NUL_READ=(-d '') DELIM
+    [ "${1:-}" != -z ] || { LK_Z=1 && shift; }
+    DELIM=${LK_Z:+'\0'}
     # Piping to `while` creates a subshell, so we don't need to declare locals
     { [ $# -gt 0 ] && lk_echo_args "$@" || cat; } |
-        while IFS= read -r ${_LK_NUL_DELIM:+"${_LK_NUL_READ[@]}"} _PATH; do
+        while IFS= read -r ${LK_Z:+"${_LK_NUL_READ[@]}"} _PATH; do
             __PATH=$_PATH
             [ "$_PATH" = "${_PATH#~}" ] || __PATH="~${_PATH#~}"
             [ "$PWD" = / ] || [ "$PWD" = "$_PATH" ] || [[ $PWD = ~ ]] ||
@@ -2407,13 +2407,13 @@ function lk_pretty_path() {
 }
 
 function lk_filter() {
-    local _LK_NUL_DELIM=${_LK_NUL_DELIM-} EXIT_STATUS TEST DELIM
-    [ "${1:-}" != -z ] || { _LK_NUL_DELIM=1 && shift; }
+    local LK_Z=${LK_Z-} EXIT_STATUS TEST DELIM
+    [ "${1:-}" != -z ] || { LK_Z=1 && shift; }
     ! _lk_maybe_xargs 1 "$@" || return "$EXIT_STATUS"
     TEST=$1
     [ -n "$TEST" ] || lk_warn "no test command" || return
     shift
-    DELIM=${_LK_NUL_DELIM:+'\0'}
+    DELIM=${LK_Z:+'\0'}
     ! eval "$TEST \"\$1\"" || printf "%s${DELIM:-\\n}" "$1"
 }
 
