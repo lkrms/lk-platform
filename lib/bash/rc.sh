@@ -3,7 +3,7 @@
 # shellcheck disable=SC1090,SC2015,SC2030,SC2031,SC2207
 
 export -n BASH_XTRACEFD SHELLOPTS
-[ -n "${_LK_ENV:+1}" ] || _LK_ENV=$(declare -x)
+[ -n "${_LK_ENV+1}" ] || _LK_ENV=$(declare -x)
 
 unset LK_PROMPT_DISPLAYED LK_BASE
 

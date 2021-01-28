@@ -12,10 +12,6 @@ function lk_assert_command_exists() {
     lk_command_exists "$1" || lk_die "command not found: $1"
 }
 
-function lk_assert_is_declared() {
-    lk_is_declared "$1" || lk_die "not declared: $1"
-}
-
 function lk_assert_is_linux() {
     lk_is_linux || lk_die "not running on Linux"
 }
@@ -34,14 +30,6 @@ function lk_assert_is_macos() {
 
 function lk_assert_not_wsl() {
     ! lk_is_wsl || lk_die "cannot run on Windows"
-}
-
-function lk_assert_is_desktop() {
-    lk_is_desktop || lk_die "desktop environment required"
-}
-
-function lk_assert_is_server() {
-    lk_is_server || lk_die "server environment required"
 }
 
 lk_provide assert

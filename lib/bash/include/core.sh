@@ -3,7 +3,7 @@
 # shellcheck disable=SC1090,SC1091,SC2015,SC2016,SC2034,SC2046,SC2086,SC2094,SC2116,SC2120,SC2154,SC2207
 
 export -n BASH_XTRACEFD SHELLOPTS
-[ -n "${_LK_ENV:+1}" ] || _LK_ENV=$(declare -x)
+[ -n "${_LK_ENV+1}" ] || _LK_ENV=$(declare -x)
 
 USER=${USER:-$(id -un)} || return
 HOME=${HOME:-$(eval "echo ~$USER")} || return
@@ -493,7 +493,7 @@ function lk_get_env() {
     local _LK_VAR_LIST _LK_IGNORE_REGEX="^(__?(LK|lk)|(PATH|BASH_XTRACEFD)$)"
     unset _LK_VAR_LIST
     [ "${1:-}" != -n ] || { _LK_VAR_LIST= && shift; }
-    [ -n "${_LK_ENV:+1}" ] || _LK_ENV=$(declare -x)
+    [ -n "${_LK_ENV+1}" ] || _LK_ENV=$(declare -x)
     (
         # Unset every variable that can be unset
         unset $(lk_var_list_all |
