@@ -1587,7 +1587,7 @@ function lk_console_file() {
 # input. If FILE1 is the only argument, compare with FILE1.orig if it exists,
 # otherwise pass FILE1 to lk_console_file.
 function lk_console_diff() {
-    local FILE1=$1 FILE2=${2:-} f MESSAGE
+    local FILE1=$1 FILE2=${2:-} f MESSAGE DIFF_VER
     [ -n "$FILE1$FILE2" ] || lk_warn "invalid arguments" || return
     for f in FILE1 FILE2; do
         [ -n "${!f}" ] || {
@@ -1612,8 +1612,10 @@ function lk_console_diff() {
 ${1:-${LK_TTY_INPUT_NAME:-/dev/stdin}} -> \
 $LK_BOLD${2:-${LK_TTY_INPUT_NAME:-/dev/stdin}}$LK_RESET"
     MESSAGE=${3-$MESSAGE}
+    DIFF_VER=$(lk_diff_version 2>/dev/null) &&
+        lk_version_at_least "$DIFF_VER" 3.4 || unset DIFF_VER
     lk_console_dump \
-        "$(! lk_maybe_sudo gnu_diff --unified --color=always \
+        "$(! lk_maybe_sudo gnu_diff --unified ${DIFF_VER+--color=always} \
             "$FILE1" "$FILE2" ||
             echo "${LK_CYAN}Files are identical$LK_RESET")" \
         "$MESSAGE" \
@@ -1932,6 +1934,11 @@ function lk_wget_uris() {
 function lk_curl_version() {
     curl --version | awk 'NR == 1 { print $2 }' ||
         lk_warn "unable to determine curl version" || return
+}
+
+function lk_diff_version() {
+    gnu_diff --version | awk 'NR == 1 { print $NF }' ||
+        lk_warn "unable to determine diff version" || return
 }
 
 # lk_download [-s] [URI[|FILENAME]...]

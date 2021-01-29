@@ -83,7 +83,7 @@ function lk_bak_find() {
 }
 
 function lk_bak_diff() {
-    local BACKUP FILE FILE2 \
+    local BACKUP FILE FILE2 DIFF_VER \
         REGEX=".*(-[0-9]+\\.bak|\\.lk-bak-[0-9]{8}T[0-9]{6}Z)"
     [ "$EUID" -eq 0 ] || ! lk_can_sudo bash || {
         sudo -H env \
@@ -91,6 +91,8 @@ function lk_bak_diff() {
             bash -c "$(declare -f lk_bak_diff); lk_bak_diff \"\$@\"" "bash" "$@"
         return
     }
+    DIFF_VER=$(lk_diff_version 2>/dev/null) &&
+        lk_version_at_least "$DIFF_VER" 3.4 || unset DIFF_VER
     while IFS= read -rd '' BACKUP; do
         [[ $BACKUP =~ ${_LK_DIFF_REGEX:-$REGEX} ]] || continue
         FILE=${BACKUP%${BASH_REMATCH[1]}}
@@ -99,7 +101,8 @@ function lk_bak_diff() {
             FILE=${FILE2//"__"/\/}
             [ "$FILE" != "$FILE2" ] && [ -e "$FILE" ] || continue
         }
-        diff --unified --color --report-identical-files "$BACKUP" "$FILE" ||
+        gnu_diff --unified ${DIFF_VER+--color=always} \
+            --report-identical-files "$BACKUP" "$FILE" ||
             true
     done < <(gnu_find / -xdev -regextype posix-egrep \
         ! \( -type d -path /srv/backup/snapshot -prune \) \

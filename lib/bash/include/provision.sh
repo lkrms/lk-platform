@@ -983,10 +983,12 @@ function _lk_crontab() {
         }
     else
         [ "$NEW_CRONTAB" = "$CRONTAB" ] || {
-            local VERB=${HAD_CRONTAB-Creating}${HAD_CRONTAB+Updating}
+            local VERB=${HAD_CRONTAB-Creating}${HAD_CRONTAB+Updating} DIFF_VER
+            DIFF_VER=$(lk_diff_version 2>/dev/null) &&
+                lk_version_at_least "$DIFF_VER" 3.4 || unset DIFF_VER
             LK_TTY_COLOUR2='' \
                 lk_console_item "$VERB crontab for user '$(lk_me)'" \
-                "$(gnu_diff --color=always \
+                "$(gnu_diff --unified ${DIFF_VER+--color=always} \
                     <([ -z "$CRONTAB" ] || cat <<<"$CRONTAB") \
                     <(cat <<<"$NEW_CRONTAB"))"
             lk_maybe_sudo crontab - <<<"$NEW_CRONTAB"

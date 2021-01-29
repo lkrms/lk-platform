@@ -219,7 +219,7 @@ function lk_git_update_repo() {
     local ERRORS=0 REMOTE BRANCH UPSTREAM
     REMOTE=$1
     for REMOTE in $(git remote); do
-        _lk_git fetch --quiet --prune --prune-tags "$REMOTE" ||
+        _lk_git fetch --quiet --prune "$REMOTE" ||
             lk_console_warning -r "Unable to fetch from remote:" "$REMOTE" ||
             ((++ERRORS))
     done
@@ -241,7 +241,7 @@ function lk_git_update_repo_to() {
     [ $# -ge 1 ] || lk_usage "\
 Usage: $(lk_myself -f) REMOTE [BRANCH]" || return
     REMOTE=$1
-    _lk_git fetch --quiet --prune --prune-tags "$REMOTE" ||
+    _lk_git fetch --quiet --prune "$REMOTE" ||
         lk_warn "unable to fetch from remote: $REMOTE" ||
         return
     BRANCH=${2:-$(lk_git_remote_head "$REMOTE")} ||

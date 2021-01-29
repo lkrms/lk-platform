@@ -278,7 +278,7 @@
         function update_repo() {
             local _BRANCH=${1:-$BRANCH} UPSTREAM BEHIND
             UPSTREAM=$REMOTE/$_BRANCH
-            _git fetch --quiet --prune --prune-tags "$REMOTE" ||
+            _git fetch --quiet --prune "$REMOTE" ||
                 lk_warn "unable to check remote '$REMOTE' for updates" ||
                 return
             if lk_git_branch_list_local |
