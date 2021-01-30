@@ -32,7 +32,7 @@ set -E
     fi
     # lk_var lists all LK_* variables that aren't environment variables
     ENV=$(lk_get_env -n | sed '/^LK_/!d' | sort)
-    lk_var() { comm -23 \
+    function lk_var() { comm -23 \
         <(printf '%s\n' "${!LK_@}" | sort) \
         <(cat <<<"$ENV") | sed '/^LK_ARGV$/d'; }
     (

@@ -147,4 +147,43 @@ function lk_apt_purge_removed() {
     }
 }
 
+function lk_apt_upgrade_all() {
+    local SH
+    lk_apt_update &&
+        SH=$(apt-get -qq --fix-broken --just-print \
+            -o APT::Get::Show-User-Simulation-Note=false \
+            dist-upgrade | awk \
+            'function sh(op, arr, _i, _j) {
+    printf "local %s=(", op
+    for (_i in arr)
+        printf (_j++ ? " %s" : "%s"), arr[_i]
+    printf ")\n"
+}
+$1 == "Inst" {
+    inst[++i] = $2
+}
+$1 == "Conf" {
+    conf[++c] = $2
+}
+$1 == "Remv" {
+    remv[++r] = $2
+}
+END {
+    sh("INST", inst)
+    sh("CONF", conf)
+    sh("REMV", remv)
+    printf "local CHANGES=%s", i + c + r
+}') && eval "$SH" || return
+    [ "$CHANGES" -gt 0 ] || return 0
+    lk_console_message "Upgrading APT packages"
+    [ ${#INST[@]} -eq 0 ] || lk_console_detail "Upgrade:" $'\n'"${INST[*]}"
+    CONF=($(comm -23 \
+        <(lk_echo_array CONF | sort -u) \
+        <(lk_echo_array INST | sort -u)))
+    [ ${#CONF[@]} -eq 0 ] || lk_console_detail "Configure:" $'\n'"${CONF[*]}"
+    [ ${#REMV[@]} -eq 0 ] || lk_console_detail "Remove:" $'\n'"${REMV[*]}"
+    lk_elevate apt-get -yq --fix-broken dist-upgrade || return
+    lk_apt_purge_removed
+}
+
 lk_provide debian

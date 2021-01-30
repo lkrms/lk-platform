@@ -30,7 +30,7 @@ SH=$(
         ~/".{{LK_PATH_PREFIX}}settings"
     )
     ENV=$(lk_get_env -n | sed '/^LK_/!d' | sort)
-    lk_var() { comm -23 \
+    function lk_var() { comm -23 \
         <(printf '%s\n' "${!LK_@}" | sort) \
         <(cat <<<"$ENV") | sed '/^LK_ARGV$/d'; }
     (
@@ -153,7 +153,8 @@ function find_all() {
     gnu_find -L . -xdev -iname "*$1*" "${@:2}"
 }
 
-lk_include git linode misc prompt provision wordpress ${LK_NODE_FQDN:+hosting}
+[ ! -d /srv/www ] || lk_include hosting
+lk_include bash git linode misc provision wordpress
 
 if lk_is_linux; then
     lk_include iptables linux
@@ -193,7 +194,10 @@ SH=$(. "$LK_BASE/lib/bash/env.sh") &&
         return
     done) && eval "$SH"; }
 
-    lk_is_false LK_PROMPT || lk_enable_prompt
+    lk_is_false LK_PROMPT || {
+        lk_include prompt
+        lk_enable_prompt
+    }
 
     ! lk_command_exists dircolors || { SH=$(
         COMMAND=(dircolors -b)
