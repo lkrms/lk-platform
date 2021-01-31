@@ -387,6 +387,7 @@ function lk_ssh_configure() {
         LK_FILE_TAKE_BACKUP='' LK_VERBOSE=0 \
         KEY PATTERN CONF AWK OWNER GROUP \
         HOMES=(${LK_HOMES[@]+"${LK_HOMES[@]}"}) h
+    unset KEY
     [ $# -eq 0 ] || [ $# -ge 2 ] || lk_warn "invalid arguments" || return
     [ ${#HOMES[@]} -gt 0 ] || HOMES=(~)
     [ ${#HOMES[@]} -le 1 ] ||
@@ -831,6 +832,7 @@ function _lk_option_check() {
 # "0,/REPLACE_REGEX/{s/REGEX/SETTING/}" (after escaping SETTING).
 function lk_option_set() {
     local FILE SETTING CHECK_REGEX REPLACE_WITH PRESERVE _FILE
+    unset PRESERVE
     [ "${1:-}" != -p ] || {
         PRESERVE=
         shift
@@ -947,6 +949,7 @@ function lk_httpd_remove_option() {
 function _lk_crontab() {
     local REGEX=${1:+".*$1.*"} ADD_COMMAND=${2:-} TYPE=${2:+a}${1:+r} \
         CRONTAB HAD_CRONTAB NEW_CRONTAB
+    unset HAD_CRONTAB
     lk_command_exists crontab || lk_warn "crontab required" || return
     CRONTAB=$(lk_maybe_sudo crontab -l 2>/dev/null) &&
         HAD_CRONTAB= ||

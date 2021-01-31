@@ -12,6 +12,18 @@ function lk_bash_function_names() {
         jq -r '..|select(type=="object" and .Type=="FuncDecl").Name.Value'
 }
 
+function lk_bash_local_variable_names() {
+    cat ${1+"$1"} |
+        shfmt -tojson |
+        jq -r '..|select(type=="object" and .Type=="DeclClause" and .Variant.Value=="local").Args[].Name.Value'
+}
+
+function lk_bash_unset_local_variable_names() {
+    cat ${1+"$1"} |
+        shfmt -tojson |
+        jq -r '..|select(type=="object" and .Type=="DeclClause" and .Variant.Value=="local").Args[]|select(.Naked).Name.Value'
+}
+
 function lk_bash_command_literals() {
     cat ${1+"$1"} |
         shfmt -tojson |
@@ -32,7 +44,7 @@ function lk_bash_array_literals() {
 function lk_bash_find_scripts() {
     local DIR
     [ "${1:-}" != -d ] || { DIR=$(cd "$2" && pwd -P) && shift 2 || return; }
-    find "${DIR:-.}" \
+    gnu_find "${DIR:-.}" \
         ! \( \( \( -type d -name .git \) -o ! -readable \) -prune \) \
         -type f \
         \( -name '*.sh' -o -exec \
@@ -112,6 +124,7 @@ SCRIPT or any SOURCE. If -g is set, store results in global array variables:
 # lk_bash_audit_tree [-g] [DIR]
 function lk_bash_audit_tree() {
     local GLOBALS DIR SH FILES
+    unset GLOBALS
     [ "${1:-}" != -g ] || { GLOBALS=1 && shift; }
     DIR=${1:+$(cd "$1" && pwd -P)} || return
     SH=$(lk_bash_find_scripts ${DIR:+-d "$DIR"} -print0 | {

@@ -120,6 +120,7 @@ function lk_git_branch_push_remote() {
 function lk_git_provision_repo() {
     local OPTIND OPTARG OPT SHARE OWNER GROUP BRANCH NAME LK_USAGE \
         LK_SUDO=1 LK_GIT_USER
+    unset SHARE
     LK_USAGE="\
 Usage: $(lk_myself -f) [OPTIONS] REMOTE_URL DIR
 

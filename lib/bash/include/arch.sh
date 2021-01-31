@@ -88,14 +88,15 @@ Server = $SERVER"
 }
 
 function lk_arch_configure_grub() {
-    local FILE _FILE LK_GRUB_CMDLINE LK_SUDO=1
-    LK_GRUB_CMDLINE=${LK_GRUB_CMDLINE+"$(lk_escape_ere_replace "$(lk_double_quote "$LK_GRUB_CMDLINE")")"}
-    LK_GRUB_CMDLINE=${LK_GRUB_CMDLINE:-\\1}
+    local CMDLINE FILE _FILE LK_SUDO=1
+    CMDLINE=${LK_GRUB_CMDLINE+"$(lk_escape_ere_replace \
+        "$(lk_double_quote "$LK_GRUB_CMDLINE")")"}
+    CMDLINE=${CMDLINE:-\\1}
     FILE=$(lk_arch_path /etc/default/grub)
     _FILE=$(sed -E \
         -e 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=saved/' \
         -e 's/^#?GRUB_SAVEDEFAULT=.*/GRUB_SAVEDEFAULT=true/' \
-        -e "s/^GRUB_CMDLINE_LINUX_DEFAULT=(.*)/GRUB_CMDLINE_LINUX_DEFAULT=$LK_GRUB_CMDLINE/" \
+        -e "s/^GRUB_CMDLINE_LINUX_DEFAULT=(.*)/GRUB_CMDLINE_LINUX_DEFAULT=$CMDLINE/" \
         "$FILE") &&
         lk_file_keep_original "$FILE" &&
         lk_file_replace "$FILE" "$_FILE" || lk_warn "unable to update $FILE" || return

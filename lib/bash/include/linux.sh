@@ -12,6 +12,7 @@ function lk_atop_ps_mem() {
 
 function _lk_systemctl_args() {
     local OPTIND OPTARG OPT PARAMS=0 LK_USAGE COMMAND=(systemctl) _USER NAME
+    unset _USER
     [ -z "${_LK_PARAMS+1}" ] || PARAMS=${#_LK_PARAMS[@]}
     LK_USAGE="\
 Usage: $(lk_myself -f 1) [-u] [-n NAME] \
@@ -42,12 +43,14 @@ SERVICE"
         echo 'set -- "${@:1:$#-1}" "${*: -1}.service"'
     }
     NAME=${NAME:-$1}
-    printf 'local LK_USAGE=%q COMMAND=(%s) _USER%s NAME=%q _NAME=%q\nshift %s' \
+    printf 'local LK_USAGE=%q COMMAND=(%s) _USER%s NAME=%q _NAME=%q\n' \
         "$LK_USAGE" \
         "${COMMAND[*]}" \
         "${_USER+=}" \
         "$NAME" \
-        "$NAME$([ "$NAME" = "$1" ] || echo " ($1)")" \
+        "$NAME$([ "$NAME" = "$1" ] || echo " ($1)")"
+    [ -n "${_USER+1}" ] || printf 'unset _USER\n'
+    printf 'shift %s\n' \
         $((OPTIND - 1))
 }
 
@@ -231,6 +234,7 @@ function lk_system_timezone() {
 
 function lk_system_list_physical_links() {
     local WIFI ETH UP WIFI_ARGS UP_ARGS
+    unset WIFI ETH UP
     WIFI_ARGS=(-execdir test -d "{}/wireless" -o -L "{}/phy80211" \;)
     UP_ARGS=(-execdir grep -Fxq 1 "{}/carrier" \;)
     [ "${1:-}" != -w ] || { WIFI= && shift; }
@@ -322,6 +326,7 @@ function lk_nm_device_connection_uuid() {
 # lk_nm_file_get_ipv4_section [ADDRESS [GATEWAY [DNS_SERVER [DNS_SEARCH]]]]
 function lk_nm_file_get_ipv4_section() {
     local ADDRESS=${1:-} GATEWAY=${2:-} DNS DNS_SEARCH MANUAL IFS=$'; \t\n'
+    unset MANUAL
     DNS=(${3:-})
     DNS_SEARCH=(${4:-})
     [ -z "$ADDRESS" ] || MANUAL=

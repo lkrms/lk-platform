@@ -1745,6 +1745,9 @@ function lk_verbose() {
 # suppress output if COMMAND fails.
 function lk_require_output() {
     local SUPPRESS QUIET FD OUTPUT EXIT_STATUS=
+    # Until Bash 4.0, local variables were "created with the empty string for a
+    # value rather than no value"
+    unset SUPPRESS QUIET
     [ "${1:-}" != -q ] || { SUPPRESS= && QUIET= && shift; }
     [ "${1:-}" != -s ] || { SUPPRESS= && shift; }
     FD=$(lk_next_fd) && eval "exec $FD>&1" || return
