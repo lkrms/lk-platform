@@ -718,7 +718,7 @@ if lk_is_macos; then
     }
 else
     function lk_tcp_listening_ports() {
-        ss -nHO --listening --tcp |
+        ss -nH --listening --tcp |
             awk '{print $4}' |
             sed -E 's/.*:([0-9]+)$/\1/' |
             sort -nu
