@@ -62,7 +62,7 @@ function lk_configure_locales() {
     unset LK_FILE_REPLACE_NO_CHANGE
     lk_file_keep_original "$FILE" &&
         lk_file_replace -i "^$S*(#|\$)" "$FILE" "$_FILE" || return
-    lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
+    ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
         [ -n "${_LK_PROVISION_ROOT:-}" ] ||
         lk_elevate locale-gen || return
 

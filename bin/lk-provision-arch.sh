@@ -40,10 +40,14 @@ if is_bootstrap; then
     lk_console_blank
 else
     function systemctl_enable() {
-        ! lk_systemctl_exists "$1" || {
+        local NO_START_REGEX='\<NetworkManager-dispatcher\>'
+        lk_systemctl_exists "$1" || return 0
+        if [[ $1 =~ $NO_START_REGEX ]]; then
+            lk_systemctl_enable ${2:+-n "$2"} "$1"
+        else
             lk_systemctl_running "$1" || SERVICE_STARTED+=("$1")
             lk_systemctl_enable_now ${2:+-n "$2"} "$1"
-        }
+        fi
     }
     function systemctl_mask() {
         lk_systemctl_mask ${2:+-n "$2"} "$1"
@@ -89,26 +93,42 @@ function file_delete() {
 }
 
 function link_rename() {
-    local VERBOSE
     . "$LK_BASE/lib/bash/include/core.sh"
-    ! lk_verbose || VERBOSE=1
-    lk_run_detail ip ${VERBOSE+-d} link set "$1" down &&
-        lk_run_detail udevadm trigger ${VERBOSE+-v} -c remove "/sys$3" &&
-        lk_run_detail udevadm settle || return
-    lk_run_detail udevadm trigger ${VERBOSE+-v} -c add "/sys$3" &&
-        lk_run_detail udevadm settle || return
-    lk_run_detail ip ${VERBOSE+-d} link set "$2" up ||
-        lk_warn "could not bring interface up: $2" ||
-        lk_run_detail ip ${VERBOSE+-d} link set "$1" up
+    lk_run_detail udevadm control -R
+    while [ $# -ge 2 ]; do
+        lk_run_detail ip link set "$1" down &&
+            lk_run_detail ip link set "$1" name "$2" &&
+            lk_run_detail ip link set "$2" up ||
+            return
+        shift 2
+    done
 }
 
-function is_desktop() {
-    lk_node_service_enabled desktop
+function link_reset() {
+    . "$LK_BASE/lib/bash/include/core.sh"
+    local BRIDGE DEV ACTIVE_UUID UUID
+    [ "${1:-}" != -b ] || { BRIDGE=$2 && shift 2; }
+    lk_run_detail nmcli connection reload
+    for DEV in "$@"; do
+        ! ACTIVE_UUID=$(lk_nm_active_connection_uuid "$DEV") ||
+            { UUID=$(lk_nm_connection_uuid "$DEV") &&
+                [ "$ACTIVE_UUID" = "$UUID" ]; } ||
+            lk_run_detail nmcli connection down "$ACTIVE_UUID" || return
+    done
+    if [ -n "${BRIDGE:-}" ]; then
+        lk_run_detail nmcli connection up "$BRIDGE" || return
+    fi
+    for DEV in "$@"; do
+        grep -Fxq 1 "/sys/class/net/$DEV/carrier" 2>/dev/null ||
+            lk_console_warning \
+                "Not bringing connection up (no carrier):" "$DEV" ||
+            continue
+        lk_run_detail nmcli connection up "$DEV" || return
+    done
 }
 
 function memory_at_least() {
-    _LK_SYSTEM_MEMORY=${_LK_SYSTEM_MEMORY:-$(lk_system_memory)}
-    [ "$_LK_SYSTEM_MEMORY" -ge "$1" ]
+    [ "${_LK_SYSTEM_MEMORY:=$(lk_system_memory)}" -ge "$1" ]
 }
 
 shopt -s nullglob
@@ -132,6 +152,7 @@ if [ -n "$LK_PACKAGES_FILE" ]; then
 fi
 
 lk_log_output
+lk_start_trace
 
 {
     lk_console_log "Provisioning Arch Linux"
@@ -140,6 +161,8 @@ lk_log_output
     lk_console_detail "System memory:" "${MEMORY}M"
 
     LK_SUDO=1
+    LK_FILE_TAKE_BACKUP=${LK_FILE_TAKE_BACKUP-$(is_bootstrap || echo 1)}
+    LK_FILE_MOVE_BACKUP=1
 
     EXIT_STATUS=0
     SERVICE_STARTED=()
@@ -176,37 +199,117 @@ lk_log_output
     ETHERNET=()
     if lk_require_output -q lk_system_list_ethernet_links -u; then
         lk_console_message "Checking Ethernet interfaces"
-        ETHERNET=($(lk_system_list_ethernet_links))
-        ETHERNET=($(lk_system_sort_links "${ETHERNET[@]}"))
+        unset LK_FILE_REPLACE_NO_CHANGE
+        NM_DIR=/etc/NetworkManager/system-connections
+        NM_EXT=.nmconnection
+        NM_IGNORE="^$S*(#|\$|uuid=)"
+        BRIDGE=${LK_BRIDGE_INTERFACE:-}
+        BRIDGE_FILE=${BRIDGE:+$NM_DIR/$BRIDGE$NM_EXT}
+        IPV4=(
+            "${LK_IPV4_ADDRESS:-}"
+            "${LK_IPV4_GATEWAY:-}"
+            "${LK_IPV4_DNS_SERVER:-}"
+            "${LK_IPV4_DNS_SEARCH:-}"
+        )
+        ETHERNET_NOW=($(lk_system_list_ethernet_links))
+        ETHERNET_NOW=($(lk_system_sort_links "${ETHERNET_NOW[@]}"))
         UDEV_RULES=()
         IF_RENAME=()
-        for i in "${!ETHERNET[@]}"; do
-            IF=${ETHERNET[$i]}
+        # Reverse the order to minimise *.nmconnection renaming collisions
+        for i in $(lk_echo_args "${!ETHERNET_NOW[@]}" | tac); do
+            IF=${ETHERNET_NOW[$i]}
             IF_PATH=/sys/class/net/$IF
             IF_ADDRESS=$(<"$IF_PATH/address")
-            DEV_PATH=$(udevadm info -q path "$IF_PATH")
-            IF_NAME=ether$i
-            UDEV_RULES[${#UDEV_RULES[@]}]=$(printf \
+            IF_NAME=en$i
+            ETHERNET[$i]=$IF_NAME
+            FILE=$NM_DIR/$IF_NAME$NM_EXT
+            UDEV_RULES[$i]=$(printf \
                 'SUBSYSTEM=="net", ACTION=="add", ATTR{address}=="%s", NAME="%s"\n' \
                 "$IF_ADDRESS" "$IF_NAME")
-            [ "$IF" = "$IF_NAME" ] || {
-                IF_RENAME+=("$IF" "$IF_NAME" "$DEV_PATH")
-                ETHERNET[$i]=$IF_NAME
+            if [ "$IF" != "$IF_NAME" ]; then
+                # If this interface has a connection profile, try to rename it
+                PREV_FILE=$NM_DIR/$IF$NM_EXT
+                ! sudo test -e "$PREV_FILE" -a ! -e "$FILE" || {
+                    LK_FILE_REPLACE_NO_CHANGE=0
+                    lk_run_detail sudo mv -n "$PREV_FILE" "$FILE"
+                }
+                IF_RENAME+=("$IF" "$IF_NAME")
+            fi
+            # Install a connection profile for this interface and/or the bridge
+            # interface
+            lk_install -m 00600 "$FILE"
+            case "$i${BRIDGE:+b}" in
+            0)
+                lk_file_replace -i "$NM_IGNORE" "$FILE" \
+                    < <(lk_nm_file_get_ethernet \
+                        "$IF_NAME" "$IF_ADDRESS" "" "${IPV4[@]}")
+                ;;
+            0b)
+                lk_install -m 00600 "$BRIDGE_FILE"
+                lk_file_replace -i "$NM_IGNORE" "$BRIDGE_FILE" \
+                    < <(lk_nm_file_get_bridge \
+                        "$BRIDGE" "$IF_ADDRESS" "${IPV4[@]}")
+                lk_file_replace -i "$NM_IGNORE" "$FILE" \
+                    < <(lk_nm_file_get_ethernet \
+                        "$IF_NAME" "$IF_ADDRESS" "$BRIDGE")
+                ;;
+            *)
+                # Don't change existing settings for interfaces above en0
+                sudo test -s "$FILE" || {
+                    lk_file_replace -i "$NM_IGNORE" "$FILE" \
+                        < <(lk_nm_file_get_ethernet \
+                            "$IF_NAME" "$IF_ADDRESS")
+                }
+                ;;
+            esac
+            # Delete any other connections using the MAC address of this
+            # interface
+            eval "NM_FILES=($(
+                sudo find "$NM_DIR" -maxdepth 1 -type f -name "*$NM_EXT" \
+                    ! -name "$IF_NAME$NM_EXT" \
+                    ${BRIDGE:+! -name "$BRIDGE$NM_EXT"} \
+                    -execdir grep -Eiq "\\<mac-address$S*=$S*$IF_ADDRESS$S*\$" \
+                    '{}' \; -print0 |
+                    while IFS= read -rd '' LINE; do
+                        printf '%q\n' "$LINE"
+                    done
+            ))"
+            [ ${#NM_FILES[@]} -eq 0 ] || {
+                LK_FILE_REPLACE_NO_CHANGE=0
+                lk_file_backup "${NM_FILES[@]}" &&
+                    lk_run_detail sudo rm "${NM_FILES[@]}"
             }
         done
         FILE=/etc/udev/rules.d/10-${LK_PATH_PREFIX}local.rules
         _FILE=$(lk_echo_array UDEV_RULES)
         lk_install -m 00644 "$FILE"
         lk_file_replace "$FILE" "$_FILE"
-        if ! is_bootstrap && [ ${#IF_RENAME[@]} -gt 0 ]; then
-            lk_run_detail sudo udevadm control -R
-            for i in $(seq 0 3 $((${#IF_RENAME[@]} - 1))); do
-                lk_maybe_trace \
-                    ${LK_VERBOSE:+LK_VERBOSE="$LK_VERBOSE"} \
-                    bash -c "$(declare -f link_rename); link_rename \"\$@\"" \
+        if ! is_bootstrap &&
+            lk_is_false LK_FILE_REPLACE_NO_CHANGE &&
+            { ! lk_arch_reboot_required ||
+                lk_warn "reboot required to apply changes"; }; then
+            lk_systemctl_start NetworkManager
+            if [ ${#IF_RENAME[@]} -gt 0 ]; then
+                lk_maybe_trace bash -c \
+                    "$(declare -f link_rename); link_rename \"\$@\"" \
                     bash \
-                    "${IF_RENAME[@]:$i:3}"
-            done
+                    "${IF_RENAME[@]}" ||
+                    lk_die "interface rename failed"
+                lk_console_detail "Waiting for renamed interfaces to settle"
+                while :; do
+                    sleep 2
+                    ! lk_system_list_ethernet_links -u |
+                        grep -Fx -f <(lk_echo_array ETHERNET) >/dev/null ||
+                        break
+                done
+            fi
+            lk_maybe_trace bash -c \
+                "$(declare -f lk_nm_is_running \
+                    lk_nm_active_connection_uuid lk_nm_connection_uuid \
+                    link_reset); link_reset \"\$@\"" \
+                bash \
+                ${BRIDGE:+-b "$BRIDGE"} "${ETHERNET[@]}" ||
+                lk_die "interface reset failed"
         fi
     fi
 
@@ -225,7 +328,7 @@ lk_log_output
         _FILE=$(HOSTS="# Generated by ${0##*/} at $(lk_date_log)
 127.0.0.1 localhost
 ::1 localhost
-${LK_NODE_IPV4_ADDRESS:-127.0.1.1} \
+${LK_IPV4_ADDRESS:-127.0.1.1} \
 ${LK_NODE_FQDN:-$LK_NODE_HOSTNAME.localdomain} \
 $LK_NODE_HOSTNAME" &&
             awk \
@@ -245,7 +348,7 @@ $LK_NODE_HOSTNAME" &&
     fi
 
     lk_console_message "Checking systemd default target"
-    is_desktop &&
+    lk_is_desktop &&
         DEFAULT_TARGET=graphical.target ||
         DEFAULT_TARGET=multi-user.target
     CURRENT_DEFAULT_TARGET=$(${LK_BOOTSTRAP:+sudo} systemctl get-default)
@@ -275,19 +378,19 @@ $LK_NODE_HOSTNAME" &&
     fi
 
     lk_console_message "Checking kernel parameters"
-    LK_FILE_REPLACE_NO_CHANGE=1
+    unset LK_FILE_REPLACE_NO_CHANGE
     for FILE in default.conf $(lk_is_virtual || lk_echo_args sysrq.conf); do
         TARGET=/etc/sysctl.d/90-${FILE/default/${LK_PATH_PREFIX}default}
         FILE=$LK_BASE/share/sysctl.d/$FILE
         lk_install -m 00644 "$TARGET"
         lk_file_replace -f "$FILE" "$TARGET"
     done
-    lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
+    ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
         sudo sysctl --system
 
     if lk_pac_installed tlp; then
         lk_console_message "Checking TLP"
-        LK_FILE_REPLACE_NO_CHANGE=1
+        unset LK_FILE_REPLACE_NO_CHANGE
         FILE=/etc/tlp.d/90-${LK_PATH_PREFIX}default.conf
         lk_install -m 00644 "$FILE"
         lk_file_replace -f "$LK_BASE/share/tlp.d/default.conf" "$FILE"
@@ -298,12 +401,12 @@ $LK_NODE_HOSTNAME" &&
             NetworkManager-dispatcher "Network Manager dispatcher"
             tlp "TLP"
         )
-        lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
             SERVICE_RESTART+=(tlp)
     fi
 
     lk_console_message "Checking console display power management"
-    LK_FILE_REPLACE_NO_CHANGE=1
+    unset LK_FILE_REPLACE_NO_CHANGE
     FILE=/etc/systemd/system/setterm-enable-blanking.service
     lk_install -m 00644 "$FILE"
     lk_file_replace \
@@ -312,7 +415,7 @@ $LK_NODE_HOSTNAME" &&
     SERVICE_ENABLE+=(
         setterm-enable-blanking "setterm blanking"
     )
-    lk_is_true LK_FILE_REPLACE_NO_CHANGE || {
+    ! lk_is_false LK_FILE_REPLACE_NO_CHANGE || {
         DAEMON_RELOAD=1
         SERVICE_RESTART+=(setterm-enable-blanking)
     }
@@ -320,20 +423,20 @@ $LK_NODE_HOSTNAME" &&
     ROOT_DEVICE=$(findmnt --list --noheadings --target / --output SOURCE)
     if lk_block_device_is_ssd "$ROOT_DEVICE"; then
         lk_console_message "Checking fstrim"
-        LK_FILE_REPLACE_NO_CHANGE=1
+        unset LK_FILE_REPLACE_NO_CHANGE
         FILE=/etc/systemd/system/fstrim.timer
         lk_install -m 00644 "$FILE"
         lk_file_replace -f "$LK_BASE/share/systemd/fstrim.timer" "$FILE"
         SERVICE_ENABLE+=(
             fstrim.timer "fstrim"
         )
-        lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
             DAEMON_RELOAD=1
     fi
 
     if [ -n "${LK_NTP_SERVER:-}" ]; then
         lk_console_message "Checking NTP"
-        LK_FILE_REPLACE_NO_CHANGE=1
+        unset LK_FILE_REPLACE_NO_CHANGE
         FILE=/etc/ntp.conf
         lk_file_keep_original "$FILE"
         _FILE=$(awk \
@@ -341,7 +444,7 @@ $LK_NODE_HOSTNAME" &&
             -f "$LK_BASE/lib/awk/ntp-set-server.awk" \
             "$FILE")
         lk_file_replace "$FILE" "$_FILE"
-        lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
             SERVICE_RESTART+=(ntpd)
     fi
     SERVICE_ENABLE+=(
@@ -349,7 +452,7 @@ $LK_NODE_HOSTNAME" &&
     )
 
     lk_console_message "Checking SSH server"
-    LK_FILE_REPLACE_NO_CHANGE=1
+    unset LK_FILE_REPLACE_NO_CHANGE
     LK_CONF_OPTION_FILE=/etc/ssh/sshd_config
     lk_ssh_set_option PermitRootLogin "no"
     [ ! -s ~/.ssh/authorized_keys ] ||
@@ -358,7 +461,7 @@ $LK_NODE_HOSTNAME" &&
     SERVICE_ENABLE+=(
         sshd "SSH server"
     )
-    lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
+    ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
         SERVICE_RESTART+=(sshd)
 
     SERVICE_ENABLE+=(
@@ -371,9 +474,9 @@ $LK_NODE_HOSTNAME" &&
 
     if ! is_bootstrap && lk_pac_installed grub; then
         lk_console_message "Checking boot loader"
-        LK_FILE_REPLACE_NO_CHANGE=1
+        unset LK_FILE_REPLACE_NO_CHANGE
         lk_arch_configure_grub
-        lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
             sudo update-grub --install
     fi
 
@@ -460,7 +563,7 @@ $LK_NODE_HOSTNAME" &&
     fi
 
     if lk_pac_installed php; then
-        LK_FILE_REPLACE_NO_CHANGE=1
+        unset LK_FILE_REPLACE_NO_CHANGE
         LK_CONF_OPTION_FILE=/etc/php/php.ini
         PHP_EXT=(
             bcmath
@@ -491,7 +594,7 @@ $LK_NODE_HOSTNAME" &&
             [ -f "$FILE" ] || continue
             lk_php_enable_option extension "$EXT" "$FILE"
         done
-        if is_desktop; then
+        if lk_is_desktop; then
             lk_php_set_option error_reporting E_ALL
             lk_php_set_option display_errors On
             lk_php_set_option display_startup_errors On
@@ -518,7 +621,7 @@ $LK_NODE_HOSTNAME" &&
         lk_php_set_option opcache.file_cache /var/cache/php/opcache
         lk_php_set_option opcache.validate_permission On
         lk_php_enable_option zend_extension opcache
-        if is_desktop; then
+        if lk_is_desktop; then
             lk_php_set_option max_execution_time 0
             lk_php_set_option opcache.enable Off
         fi
@@ -554,7 +657,7 @@ EOF
         lk_php_set_option 'php_admin_flag[log_errors]' On
         lk_php_set_option 'php_flag[display_errors]' Off
         lk_php_set_option 'php_flag[display_startup_errors]' Off
-        if is_desktop; then
+        if lk_is_desktop; then
             lk_php_set_option pm.max_children 5
             lk_php_set_option pm.max_requests 0
             lk_php_set_option request_terminate_timeout 0
@@ -566,10 +669,10 @@ EOF
         SERVICE_ENABLE+=(
             php-fpm "PHP-FPM"
         )
-        lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
             SERVICE_RESTART+=(php-fpm)
 
-        LK_FILE_REPLACE_NO_CHANGE=1
+        unset LK_FILE_REPLACE_NO_CHANGE
         LK_CONF_OPTION_FILE=/etc/httpd/conf/httpd.conf
         GROUP=$(id -gn)
         lk_install -d -m 00755 -o "$USER" -g "$GROUP" /srv/http/{,localhost/{,html},127.0.0.1}
@@ -582,7 +685,7 @@ EOF
         lk_httpd_enable_option LoadModule "rewrite_module modules/mod_rewrite.so"
         lk_httpd_enable_option LoadModule "status_module modules/mod_status.so"
         lk_httpd_enable_option LoadModule "vhost_alias_module modules/mod_vhost_alias.so"
-        if is_desktop; then
+        if lk_is_desktop; then
             FILE=/etc/httpd/conf/extra/${LK_PATH_PREFIX}default-dev-arch.conf
             lk_install -m 00644 "$FILE"
             lk_file_replace \
@@ -601,7 +704,7 @@ EOF
         SERVICE_ENABLE+=(
             httpd "Apache"
         )
-        lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
             SERVICE_RESTART+=(httpd)
 
         lk_git_provision_repo -s \
@@ -612,17 +715,17 @@ EOF
     fi
 
     if lk_pac_installed bluez; then
-        LK_FILE_REPLACE_NO_CHANGE=1
+        unset LK_FILE_REPLACE_NO_CHANGE
         lk_conf_set_option AutoEnable true /etc/bluetooth/main.conf
         SERVICE_ENABLE+=(
             bluetooth "Bluetooth"
         )
-        lk_is_true LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
             SERVICE_RESTART+=(bluetooth)
     fi
 
     if lk_pac_installed libvirt; then
-        ! is_desktop ||
+        ! lk_is_desktop ||
             { lk_user_in_group libvirt && lk_user_in_group kvm; } ||
             sudo usermod --append --groups libvirt,kvm "$USER"
         LIBVIRT_USERS=$(lk_get_users_in_group libvirt)
@@ -632,7 +735,7 @@ EOF
             "'default${LIBVIRT_USERS:+$(printf \
                 ' qemu:///session?socket=/run/user/%s/libvirt/libvirt-sock' \
                 $LIBVIRT_USERS)}'"
-        if is_desktop; then
+        if lk_is_desktop; then
             lk_conf_set_option ON_BOOT ignore
             lk_conf_set_option SHUTDOWN_TIMEOUT 120
             FILE=/etc/qemu/bridge.conf

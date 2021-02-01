@@ -211,4 +211,10 @@ function lk_pac_installed_not_explicit() {
     lk_pac_installed_list -d "$@"
 }
 
+function lk_arch_reboot_required() {
+    local DIR
+    DIR=/usr/lib/modules/$(uname -r) &&
+        ! [ -d "$DIR" ]
+}
+
 lk_provide arch

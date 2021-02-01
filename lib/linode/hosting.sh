@@ -822,6 +822,7 @@ PACKAGES=(
     lsof
     man-db
     manpages
+    moreutils
     nano
     netcat-openbsd
     psmisc

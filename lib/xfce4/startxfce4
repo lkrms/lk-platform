@@ -81,6 +81,6 @@ xfconf-query -c xfce4-session \
 xfconf-query -c xfce4-power-manager \
     -p /xfce4-power-manager/presentation-mode -n -t bool -s false
 xfconf-query -c xfce4-notifyd \
-    -p /do-not-disturb -n -t bool -s true
+    -p /do-not-disturb -n -t bool -s false
 
 exec /usr/bin/startxfce4 "$@"

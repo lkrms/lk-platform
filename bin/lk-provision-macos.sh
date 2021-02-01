@@ -16,7 +16,7 @@ lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
 function exit_trap() {
     local _LOG_FILE=$_LK_LOG_FILE LOG_FILE
     if lk_log_close &&
-        LOG_FILE=$(lk_log_create_file) &&
+        LOG_FILE=$(lk_log_create) &&
         [ "$LOG_FILE" != "$_LOG_FILE" ]; then
         lk_console_log "Moving:" "$_LOG_FILE -> $LOG_FILE"
         cat "$_LOG_FILE" >>"$LOG_FILE" &&
@@ -95,8 +95,7 @@ function exit_trap() {
 
     LK_FILE_TAKE_BACKUP=${LK_FILE_TAKE_BACKUP-1}
 
-    LK_LOG_FILE_MODE=0600 \
-        lk_log_output ~/"${LK_PATH_PREFIX}install.log"
+    lk_log_output ~/"${LK_PATH_PREFIX}install.log"
     trap exit_trap EXIT
 
     lk_console_log "Provisioning macOS"

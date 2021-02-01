@@ -32,10 +32,11 @@ BOOTSTRAP_MOUNT_OPTIONS=${BOOTSTRAP_MOUNT_OPTIONS:-defaults} # On VMs with TRIM 
 BOOTSTRAP_USERNAME=${BOOTSTRAP_USERNAME:-arch}               #
 BOOTSTRAP_PASSWORD=${BOOTSTRAP_PASSWORD:-}                   #
 BOOTSTRAP_KEY=${BOOTSTRAP_KEY:-}                             #
-LK_NODE_IPV4_ADDRESS=${LK_NODE_IPV4_ADDRESS:-}               #
-LK_NODE_IPV4_GATEWAY=${LK_NODE_IPV4_GATEWAY:-}               #
-LK_NODE_IPV4_DNS_SERVER=${LK_NODE_IPV4_DNS_SERVER:-}         #
-LK_NODE_IPV4_DNS_SEARCH=${LK_NODE_IPV4_DNS_SEARCH:-}         #
+LK_IPV4_ADDRESS=${LK_IPV4_ADDRESS:-}                         #
+LK_IPV4_GATEWAY=${LK_IPV4_GATEWAY:-}                         #
+LK_IPV4_DNS_SERVER=${LK_IPV4_DNS_SERVER:-}                   #
+LK_IPV4_DNS_SEARCH=${LK_IPV4_DNS_SEARCH:-}                   #
+LK_BRIDGE_INTERFACE=${LK_BRIDGE_INTERFACE:-}                 #
 LK_NODE_TIMEZONE=${LK_NODE_TIMEZONE:-UTC}                    # See `timedatectl list-timezones`
 LK_NODE_SERVICES=${LK_NODE_SERVICES:-}                       #
 LK_NODE_LOCALES=${LK_NODE_LOCALES-en_AU.UTF-8 en_GB.UTF-8}   # "en_US.UTF-8" is added automatically
@@ -429,10 +430,11 @@ lk_get_shell_var \
     LK_PATH_PREFIX \
     LK_NODE_HOSTNAME \
     LK_NODE_FQDN \
-    LK_NODE_IPV4_ADDRESS \
-    LK_NODE_IPV4_GATEWAY \
-    LK_NODE_IPV4_DNS_SERVER \
-    LK_NODE_IPV4_DNS_SEARCH \
+    LK_IPV4_ADDRESS \
+    LK_IPV4_GATEWAY \
+    LK_IPV4_DNS_SERVER \
+    LK_IPV4_DNS_SEARCH \
+    LK_BRIDGE_INTERFACE \
     LK_NODE_TIMEZONE \
     LK_NODE_SERVICES \
     LK_NODE_LOCALES \

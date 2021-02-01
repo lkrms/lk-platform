@@ -1077,48 +1077,61 @@ function lk_lock_drop() {
 }
 
 function lk_log() {
-    local LINE
-    while IFS= read -r LINE || [ -n "$LINE" ]; do
-        printf '%s%s %s\n' "${1:-}" "$(lk_date_log)" "$LINE"
-    done
+    local PREFIX=${1:-}
+    if lk_command_exists ts; then
+        PREFIX=${PREFIX//"%"/"%%"}
+        ts "$PREFIX%Y-%m-%d %H:%M:%.S %z"
+    else
+        local LINE
+        while IFS= read -r LINE; do
+            printf '%s%s %s\n' \
+                "${1:-}" "$(lk_date "%Y-%m-%d %H:%M:%S %z")" "$LINE"
+        done
+    fi
 }
 
-function lk_log_create_file() {
-    local OWNER=$UID LOG_DIRS=() LOG_DIR LOG_PATH
+# lk_log_create [-e EXT] [DIR...]
+function lk_log_create() {
+    local OWNER=$UID GROUP EXT LOG_DIRS=() LOG_DIR LOG_PATH
+    GROUP=$(id -g) || return
+    [ "${1:-}" != -e ] || { EXT=$2 && shift 2; }
     [ ! -d "${LK_INST:-$LK_BASE}" ] ||
         [ -z "$(ls -A "${LK_INST:-$LK_BASE}")" ] ||
         LOG_DIRS=("${LK_INST:-$LK_BASE}/var/log")
     LOG_DIRS+=("$@")
     for LOG_DIR in ${LOG_DIRS[@]+"${LOG_DIRS[@]}"}; do
-        # Find the first LOG_DIR where the user can write to LOG_DIR/LOG_FILE,
+        # Find the first LOG_DIR in which the user can write to LOG_FILE,
         # installing LOG_DIR (world-writable) and LOG_FILE (owner-only) if
         # needed, running commands via sudo only if they fail without it
-        [ -d "$LOG_DIR" ] ||
-            lk_elevate_if_error install -d \
-                -m "$(lk_pad_zero 5 "${LK_LOG_DIR_MODE:-0777}")" \
-                "$LOG_DIR" 2>/dev/null ||
-            continue
-        LOG_PATH=$LOG_DIR/${LK_LOG_BASENAME:-${0##*/}}-$UID.log
+        [ -d "$LOG_DIR" ] || lk_elevate_if_error \
+            lk_install -d -m 00777 "$LOG_DIR" 2>/dev/null || continue
+        LOG_PATH=$LOG_DIR/${LK_LOG_BASENAME:-${0##*/}}-$UID.${EXT:-log}
         if [ -f "$LOG_PATH" ]; then
             [ -w "$LOG_PATH" ] || {
-                lk_elevate_if_error chmod \
-                    "$(lk_pad_zero 5 "${LK_LOG_FILE_MODE:-0600}")" \
-                    "$LOG_PATH" || continue
+                lk_elevate_if_error chmod 00600 "$LOG_PATH" || continue
                 [ -w "$LOG_PATH" ] ||
-                    lk_elevate chown \
-                        "$OWNER" \
-                        "$LOG_PATH" || continue
-            } 2>/dev/null
+                    lk_elevate chown "$OWNER:$GROUP" "$LOG_PATH" || continue
+            }
         else
-            lk_elevate_if_error install \
-                -m "$(lk_pad_zero 5 "${LK_LOG_FILE_MODE:-0600}")" \
-                -o "$OWNER" \
-                /dev/null "$LOG_PATH" 2>/dev/null || continue
-        fi
+            lk_elevate_if_error \
+                lk_install -m 00600 -o "$OWNER" -g "$GROUP" "$LOG_PATH" ||
+                continue
+        fi 2>/dev/null
         echo "$LOG_PATH"
         return 0
     done
-    return 1
+    false
+}
+
+function lk_start_trace() {
+    local TRACE_PATH
+    # Don't interfere with an existing trace
+    [[ $- != *x* ]] || return 0
+    TRACE_PATH=$(lk_log_create -e "$(lk_date_ymdhms).trace" ~ /tmp) &&
+        exec 4> >(lk_log >"$TRACE_PATH") &&
+        BASH_XTRACEFD=4 ||
+        lk_warn "unable to open trace file" || return
+    set -x
 }
 
 # lk_log_output [TEMP_LOG_FILE]
@@ -1128,7 +1141,7 @@ function lk_log_output() {
         ! lk_log_is_open || return 0
     [[ $- != *x* ]] || [ -n "${BASH_XTRACEFD:-}" ] || return 0
     if [ $# -ge 1 ]; then
-        if LOG_PATH=$(lk_log_create_file); then
+        if LOG_PATH=$(lk_log_create); then
             # If TEMP_LOG_FILE exists, move its contents to the end of LOG_PATH
             [ ! -e "$1" ] || {
                 cat "$1" >>"$LOG_PATH" &&
@@ -1138,7 +1151,7 @@ function lk_log_output() {
             LOG_PATH=$1
         fi
     else
-        LOG_PATH=$(lk_log_create_file ~ /tmp) ||
+        LOG_PATH=$(lk_log_create ~ /tmp) ||
             lk_warn "unable to open log file" || return
     fi
     # Log invocation details, including script path if running from a source
@@ -2151,12 +2164,10 @@ Usage: $(lk_myself -f) [-m MODE] [-o OWNER] [-g GROUP] [-v] FILE...
         lk_maybe_sudo install ${ARGS[@]+"${ARGS[@]}"} "$@"
     else
         for DEST in "$@"; do
-            if lk_elevate_if_error \
-                lk_maybe_sudo test ! -e "$DEST" 2>/dev/null; then
+            if lk_maybe_sudo test ! -e "$DEST" 2>/dev/null; then
                 lk_maybe_sudo install ${ARGS[@]+"${ARGS[@]}"} /dev/null "$DEST"
             else
-                STAT=$(lk_elevate_if_error \
-                    lk_file_security "$DEST" 2>/dev/null) || return
+                STAT=$(lk_file_security "$DEST" 2>/dev/null) || return
                 [ -z "${MODE:-}" ] ||
                     { [[ $MODE =~ ^0*([0-7]+)$ ]] &&
                         REGEX=" 0*${BASH_REMATCH[1]}\$" &&
@@ -2631,9 +2642,9 @@ function lk_file_get_backup_suffix() {
     echo ".lk-bak-$(lk_date "%Y%m%dT%H%M%SZ" ${1+"$1"})"
 }
 
-# lk_file_backup -m FILE
+# lk_file_backup [-m] FILE...
 #
-# Copy FILE to FILE.lk-bak-TIMESTAMP, where TIMESTAMP is the file's last
+# Copy each FILE to FILE.lk-bak-TIMESTAMP, where TIMESTAMP is the file's last
 # modified time in UTC (e.g. 20201202T095515Z). If -m is set, copy FILE to
 # LK_BASE/var/backup if elevated, or ~/.lk-platform/backup if not elevated.
 function lk_file_backup() {
@@ -2642,40 +2653,43 @@ function lk_file_backup() {
     [ "${1:-}" != -m ] || { MOVE=1 && shift; }
     ! lk_verbose 2 || vv=v
     export TZ
-    if lk_maybe_sudo test -e "$1"; then
-        lk_maybe_sudo test -f "$1" || lk_warn "not a file: $1" || return
-        lk_maybe_sudo test -s "$1" || return 0
-        ! lk_is_true MOVE || {
-            FILE=$(lk_maybe_sudo realpath "$1") || return
-            { OWNER=$(lk_file_owner "$FILE") &&
-                OWNER_HOME=$(lk_expand_path "~$OWNER") &&
-                OWNER_HOME=$(realpath "$OWNER_HOME"); } 2>/dev/null ||
-                OWNER_HOME=
-            if lk_will_elevate && [ "${FILE#$OWNER_HOME}" = "$FILE" ]; then
-                lk_maybe_sudo install -d \
-                    -m "$([ -g "$LK_BASE" ] && echo 02775 || echo 00755)" \
-                    "${LK_INST:-$LK_BASE}/var" || return
-                DEST=${LK_INST:-$LK_BASE}/var/backup
-                unset OWNER
-            elif lk_will_elevate; then
-                DEST=$OWNER_HOME/.lk-platform/backup
-                GROUP=$(id -gn "$OWNER") &&
-                    lk_maybe_sudo install -d -m 00755 \
-                        -o "$OWNER" -g "$GROUP" "$OWNER_HOME/.lk-platform" ||
-                    return
-            else
-                DEST=~/.lk-platform/backup
-                unset OWNER
-            fi
-            lk_maybe_sudo install -d -m 00700 \
-                ${OWNER:+-o "$OWNER" -g "$GROUP"} "$DEST" || return
-            s=/
-            DEST=$DEST/${FILE//"$s"/__}
-        }
-        MODIFIED=$(lk_file_modified "$1") &&
-            SUFFIX=$(lk_file_get_backup_suffix "$MODIFIED") &&
-            lk_maybe_sudo cp -naL"$vv" "$1" "${DEST:-$1}$SUFFIX"
-    fi
+    while [ $# -gt 0 ]; do
+        if lk_maybe_sudo test -e "$1"; then
+            lk_maybe_sudo test -f "$1" || lk_warn "not a file: $1" || return
+            lk_maybe_sudo test -s "$1" || return 0
+            ! lk_is_true MOVE || {
+                FILE=$(lk_maybe_sudo realpath "$1") || return
+                { OWNER=$(lk_file_owner "$FILE") &&
+                    OWNER_HOME=$(lk_expand_path "~$OWNER") &&
+                    OWNER_HOME=$(realpath "$OWNER_HOME"); } 2>/dev/null ||
+                    OWNER_HOME=
+                if lk_will_elevate && [ "${FILE#$OWNER_HOME}" = "$FILE" ]; then
+                    lk_install -d \
+                        -m "$([ -g "$LK_BASE" ] && echo 02775 || echo 00755)" \
+                        "${LK_INST:-$LK_BASE}/var" || return
+                    DEST=${LK_INST:-$LK_BASE}/var/backup
+                    unset OWNER
+                elif lk_will_elevate; then
+                    DEST=$OWNER_HOME/.lk-platform/backup
+                    GROUP=$(id -gn "$OWNER") &&
+                        lk_install -d -m 00755 \
+                            -o "$OWNER" -g "$GROUP" "$OWNER_HOME/.lk-platform" ||
+                        return
+                else
+                    DEST=~/.lk-platform/backup
+                    unset OWNER
+                fi
+                lk_install -d -m 00700 \
+                    ${OWNER:+-o "$OWNER" -g "$GROUP"} "$DEST" || return
+                s=/
+                DEST=$DEST/${FILE//"$s"/__}
+            }
+            MODIFIED=$(lk_file_modified "$1") &&
+                SUFFIX=$(lk_file_get_backup_suffix "$MODIFIED") &&
+                lk_maybe_sudo cp -naL"$vv" "$1" "${DEST:-$1}$SUFFIX"
+        fi
+        shift
+    done
 }
 
 # lk_file_prepare_temp [-n] FILE

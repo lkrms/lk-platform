@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2016,SC2153,SC2207
+# shellcheck disable=SC2015,SC2016,SC2034,SC2153,SC2206,SC2207
 
 function lk_atop_ps_mem() {
     local TEMP
@@ -33,7 +33,10 @@ SERVICE"
         esac
     done
     shift $((OPTIND - 1 + PARAMS))
-    [ $# -eq 1 ] || lk_usage || return
+    [ $# -eq 1 ] || { [ $# -gt 1 ] &&
+        [[ ${_LK_PARAMS[*]+${_LK_PARAMS[*]: -1}} =~ \.\.\.$ ]]; } ||
+        lk_usage || return
+    set -- "${*: -1}"
     [[ $1 == *.* ]] || {
         set -- "$1.service"
         echo 'set -- "${@:1:$#-1}" "${*: -1}.service"'
@@ -58,12 +61,13 @@ function lk_systemctl_get_property() {
 }
 
 function lk_systemctl_property_is() {
-    local SH VALUE
-    SH=$(_LK_PARAMS=(PROPERTY VALUE) &&
+    local SH ONE_OF VALUE
+    SH=$(_LK_PARAMS=(PROPERTY "VALUE...") &&
         _lk_systemctl_args "$@") && eval "$SH" || return
-    VALUE=$("${COMMAND[@]}" show --property "$1" "$3") &&
+    ONE_OF=("${@:2:$#-2}")
+    VALUE=$("${COMMAND[@]}" show --property "$1" "${*: -1}") &&
         [ -n "$VALUE" ] &&
-        [ "${VALUE#$1=}" = "$2" ]
+        lk_in_array "${VALUE#$1=}" ONE_OF
 }
 
 function lk_systemctl_enabled() {
@@ -75,8 +79,7 @@ function lk_systemctl_enabled() {
 function lk_systemctl_running() {
     local SH
     SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
-    "${COMMAND[@]}" is-active --quiet "$1" ||
-        lk_systemctl_property_is ${_USER+-u} ActiveState activating "$1"
+    lk_systemctl_property_is ${_USER+-u} ActiveState active activating "$1"
 }
 
 function lk_systemctl_failed() {
@@ -100,8 +103,7 @@ function lk_systemctl_masked() {
 function lk_systemctl_start() {
     local SH
     SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
-    lk_systemctl_running ${_USER+-u} "$1" ||
-        lk_systemctl_property_is ${_USER+-u} Type dbus "$1" || {
+    lk_systemctl_running ${_USER+-u} "$1" || {
         lk_console_detail "Starting service:" "$NAME"
         ${_USER-lk_elevate} "${COMMAND[@]}" start "$1" ||
             lk_warn "could not start service: $_NAME"
@@ -230,7 +232,7 @@ function lk_system_timezone() {
 function lk_system_list_physical_links() {
     local WIFI ETH UP WIFI_ARGS UP_ARGS
     WIFI_ARGS=(-execdir test -d "{}/wireless" -o -L "{}/phy80211" \;)
-    UP_ARGS=(-execdir grep -Fxq up "{}/operstate" \;)
+    UP_ARGS=(-execdir grep -Fxq 1 "{}/carrier" \;)
     [ "${1:-}" != -w ] || { WIFI= && shift; }
     [ "${1:-}" != -e ] || { WIFI= && ETH= && shift; }
     [ "${1:-}" != -u ] || { UP= && shift; }
@@ -257,7 +259,7 @@ function lk_system_sort_links() {
         (
             unset UDEV_ID_NET_NAME_ONBOARD
             IF_PATH=/sys/class/net/$IF
-            ! SH=$(udevadm info -q property -P UDEV_ "$IF_PATH") ||
+            ! SH=$(udevadm info -q property -x -P UDEV_ "$IF_PATH") ||
                 eval "$SH"
             SORT=${UDEV_ID_NET_NAME_ONBOARD:+1}
             printf '%s\t%s\t%s\n' \
@@ -284,6 +286,95 @@ function lk_system_has_intel_graphics() {
 
 function lk_system_has_nvidia_graphics() {
     lk_system_list_graphics | grep -i NVIDIA >/dev/null
+}
+
+function lk_nm_is_running() {
+    return "${_LK_NM_IS_RUNNING:=$(r=$(nmcli -g running general status \
+        2>/dev/null) && [ "$r" = running ] && echo 0 || echo 1)}"
+}
+
+# lk_nm_active_connection_uuid DEVICE
+function lk_nm_active_connection_uuid() {
+    [ $# -gt 0 ] || lk_warn "no device" || return
+    lk_nm_is_running &&
+        nmcli -g device,uuid connection show --active |
+        lk_require_output awk -F: -v "i=$1" '$1==i{print$2}'
+}
+
+# lk_nm_connection_uuid CONNECTION
+function lk_nm_connection_uuid() {
+    [ $# -gt 0 ] || lk_warn "no connection" || return
+    lk_nm_is_running &&
+        nmcli -g name,uuid connection show |
+        lk_require_output awk -F: -v "i=$1" '$1==i{print$2}'
+}
+
+# lk_nm_device_connection_uuid DEVICE
+function lk_nm_device_connection_uuid() {
+    [ $# -gt 0 ] || lk_warn "no device" || return
+    lk_nm_is_running &&
+        nmcli -g uuid connection show |
+        gnu_xargs -r nmcli -g connection.interface-name,connection.uuid \
+            connection show |
+            lk_require_output awk -v "i=$1" '$0==i{f=1;next}f{print;f=0}'
+}
+
+# lk_nm_file_get_ipv4_section [ADDRESS [GATEWAY [DNS_SERVER [DNS_SEARCH]]]]
+function lk_nm_file_get_ipv4_section() {
+    local ADDRESS=${1:-} GATEWAY=${2:-} DNS DNS_SEARCH MANUAL IFS=$'; \t\n'
+    DNS=(${3:-})
+    DNS_SEARCH=(${4:-})
+    [ -z "$ADDRESS" ] || MANUAL=
+    cat <<EOF
+
+[ipv4]${ADDRESS:+
+address1=$ADDRESS${GATEWAY:+,$GATEWAY}}${DNS[*]+
+dns=${DNS[*]};}${DNS_SEARCH[*]+
+dns-search=${DNS_SEARCH[*]};}
+method=${MANUAL+manual}${MANUAL-auto}
+EOF
+}
+
+# lk_nm_file_get_ethernet DEV MAC [BRIDGE_DEV [IPV4_ARG...]]
+function lk_nm_file_get_ethernet() {
+    local NAME=$1 MAC=$2 MASTER=${3:-} UUID
+    # Maintain UUID if possible
+    UUID=$(lk_nm_connection_uuid "$NAME" 2>/dev/null) ||
+        UUID=${UUID:-$(uuidgen)} || return
+    cat <<EOF
+[connection]
+id=$NAME
+uuid=$UUID
+type=ethernet
+interface-name=$NAME${MASTER:+
+master=$MASTER
+slave-type=bridge}
+
+[ethernet]
+mac-address=$(lk_upper "$MAC")
+EOF
+    [ $# -lt 4 ] ||
+        lk_nm_file_get_ipv4_section "${@:4}"
+}
+
+# lk_nm_file_get_bridge DEV MAC [IPV4_ARG...]
+function lk_nm_file_get_bridge() {
+    local NAME=$1 MAC=$2 UUID
+    UUID=$(lk_nm_connection_uuid "$NAME" 2>/dev/null) ||
+        UUID=${UUID:-$(uuidgen)} || return
+    cat <<EOF
+[connection]
+id=$NAME
+uuid=$UUID
+type=bridge
+interface-name=$NAME
+
+[bridge]
+mac-address=$(lk_upper "$MAC")
+stp=false
+EOF
+    [ $# -lt 3 ] ||
+        lk_nm_file_get_ipv4_section "${@:3}"
 }
 
 function lk_user_lock_passwd() {

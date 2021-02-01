@@ -19,6 +19,10 @@ PAC_KEEP=(
     zoom
 
     #
+    displaycal
+    xiccd
+
+    #
     aurutils
     vifm
 
@@ -188,7 +192,6 @@ PAC_PACKAGES+=(
 
     # system
     dconf-editor
-    displaycal
     fontconfig-docs
     gparted
     guake

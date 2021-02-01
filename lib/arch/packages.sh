@@ -40,6 +40,7 @@ PAC_PACKAGES=(
     diffutils
     file
     mediainfo
+    moreutils
     pv
     rsync
     trash-cli
@@ -288,9 +289,6 @@ else
         PAC_PACKAGES+=(
             blueman
             pulseaudio-bluetooth
-        )
-        AUR_PACKAGES+=(
-            xiccd
         )
     fi
 
