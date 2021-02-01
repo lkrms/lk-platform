@@ -117,7 +117,8 @@ function _lk_gnu_command() {
 function _lk_gnu_define() {
     local COMMAND
     for COMMAND in "${_LK_GNU_COMMANDS[@]}"; do
-        eval "function gnu_$COMMAND() { $(_lk_gnu_command "$COMMAND") \"\$@\"; }"
+        eval "function gnu_$COMMAND() { lk_maybe_sudo $(_lk_gnu_command \
+            "$COMMAND") \"\$@\"; }"
     done
 }
 
@@ -2086,12 +2087,18 @@ function lk_maybe_sudo() {
 
 # lk_elevate COMMAND [ARG...]
 #
-# Run the given command line with sudo unless the current user is root.
+# Run the given command with sudo unless the current user is root. If COMMAND is
+# not found in PATH and is a function, run it with LK_SUDO=1.
 function lk_elevate() {
     if [ "$EUID" -eq 0 ]; then
         "$@"
     else
-        sudo -H "$@"
+        if ! lk_command_exists "$1" &&
+            [ "$(type -t "$1")" = function ]; then
+            LK_SUDO=1 "$@"
+        else
+            sudo -H "$@"
+        fi
     fi
 }
 

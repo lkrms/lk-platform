@@ -158,7 +158,12 @@ function lk_getopt() {
 if lk_is_script_running; then
     function _lk_elevate() {
         if [ $# -gt 0 ]; then
-            sudo -H "$@"
+            if ! lk_command_exists "$1" &&
+                [ "$(type -t "$1")" = function ]; then
+                LK_SUDO=1 "$@"
+            else
+                sudo -H "$@"
+            fi
         else
             sudo -H "$0" "${LK_ARGV[@]}"
             exit
