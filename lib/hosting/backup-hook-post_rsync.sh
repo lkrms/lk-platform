@@ -37,7 +37,7 @@ fi
 LK_BACKUP_TIMESTAMP='' \
     "$LK_BASE/bin/lk-mysql-dump.sh" \
     --no-log \
-    --dest "$LK_SNAPSHOT_DB_ROOT" \
+    --dest "$LK_SNAPSHOT_DB" \
     ${SNAPSHOT_GROUP:+--group "$SNAPSHOT_GROUP"} \
     "${MYSQL_DUMP_ARGS[@]}" || return
 lk_console_message \

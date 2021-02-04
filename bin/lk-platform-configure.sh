@@ -220,7 +220,8 @@
         if [ -z "${INSTALL_ENV+1}" ]; then
             INSTALL_ENV=$(
                 FILE=$(lk_first_existing \
-                    /var/log/{"$LK_PATH_PREFIX",lk-}install.log) || exit 0
+                    /var/log/{"$LK_PATH_PREFIX",lk-platform-}install.log) ||
+                    exit 0
                 awk -f "$LK_BASE/lib/awk/get-install-env.awk" "$FILE"
             ) || return
         fi

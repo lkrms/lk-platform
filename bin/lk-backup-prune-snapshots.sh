@@ -15,31 +15,24 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
     lk_die "unable to locate LK_BASE"
 export LK_BASE
 
-include='' . "$LK_BASE/lib/bash/common.sh"
+include=backup . "$LK_BASE/lib/bash/common.sh"
 
 function find_snapshots() {
-    lk_mapfile "$1" <(
-        find "$SNAPSHOT_ROOT" \
-            -mindepth 1 -maxdepth 1 -type d \
-            -regex ".*/${BACKUP_TIMESTAMP_FINDUTILS_REGEX}[^/]*" \
-            "${@:2}" \
-            -printf '%f\n' | sort -r
-    )
-    eval "$1_COUNT=\${#$1[@]}"
+    lk_backup_snapshot_list "$1" "$SNAPSHOT_ROOT" "${@:2}"
 }
 
 function snapshot_date() {
-    echo "${1:0:10}"
+    lk_backup_snapshot_date "$1"
+}
+
+function snapshot_hour() {
+    lk_backup_snapshot_hour "$1"
 }
 
 function first_snapshot_on_date() {
     lk_echo_array SNAPSHOTS_CLEAN |
         grep "^$1" |
         tail -n1
-}
-
-function snapshot_hour() {
-    echo "${1:0:10} ${1:11:2}:00:00"
 }
 
 function first_snapshot_in_hour() {
@@ -150,8 +143,8 @@ lk_log_output
         SNAPSHOT_ROOT=$BACKUP_ROOT/snapshot/$SOURCE_NAME
 
         find_snapshots SNAPSHOTS_CLEAN \
-            -exec test -e '{}/.finished' \; \
-            ! -exec test -e '{}/.pruning' \;
+            -execdir test -e '{}/.finished' \; \
+            ! -execdir test -e '{}/.pruning' \;
         [ "$SNAPSHOTS_CLEAN_COUNT" -gt 0 ] ||
             lk_console_warning -r "Skipping $SOURCE_NAME (no clean snapshots)" ||
             continue
@@ -162,7 +155,7 @@ lk_log_output
             "$SNAPSHOTS_CLEAN_COUNT ($([ "$LATEST_CLEAN" = "$OLDEST_CLEAN" ] ||
                 echo "$OLDEST_CLEAN to ")$LATEST_CLEAN)"
 
-        find_snapshots SNAPSHOTS_PRUNING -exec test -e '{}/.pruning' \;
+        find_snapshots SNAPSHOTS_PRUNING -execdir test -e '{}/.pruning' \;
         [ "$SNAPSHOTS_PRUNING_COUNT" -eq 0 ] ||
             lk_console_detail \
                 "Partially pruned:" "$SNAPSHOTS_PRUNING_COUNT"
@@ -173,9 +166,9 @@ lk_log_output
             # Add a strict -regex test to keep failed snapshots with
             # non-standard names
             find_snapshots SNAPSHOTS_FAILED \
-                -exec test ! -e '{}/.finished' \; \
+                -execdir test ! -e '{}/.finished' \; \
                 -regex ".*/$BACKUP_TIMESTAMP_FINDUTILS_REGEX" \
-                -exec sh -c 'test "${1##*/}" \< "$2"' sh \
+                -execdir sh -c 'test "${1##*/}" \< "$2"' sh \
                 '{}' "$PRUNE_FAILED_BEFORE_DATE" \;
             [ "$SNAPSHOTS_FAILED_COUNT" -eq 0 ] ||
                 lk_console_detail "Failed >$FAILED_MAX_AGE days ago:" \

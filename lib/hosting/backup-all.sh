@@ -44,21 +44,21 @@ lk_log_output
         <(getent passwd | cut -d: -f6 | sort -u) \
         <(find "${BASE_DIRS[@]}" -mindepth 1 -maxdepth 1 -type d | sort |
             sed -E '/^\/(proc|sys|dev|run|tmp)$/d'))
-    [ ${#SOURCES[@]} -gt 0 ] ||
-        lk_die "nothing to back up"
-    lk_echo_array SOURCES |
+    [ ${#SOURCES[@]} -eq 0 ] ||
+        lk_echo_array SOURCES |
         lk_console_list "Backing up:" account accounts
 
     RSYNC_FILTER_ARGS=()
     EXIT_STATUS=0
     i=0
-    for SOURCE in "${SOURCES[@]}"; do
+    for SOURCE in ${SOURCES[@]+"${SOURCES[@]}"}; do
         RSYNC_FILTER_ARGS+=(--filter "- $SOURCE")
         OWNER=$(lk_file_owner "$SOURCE")
         GROUP=$(id -gn "$OWNER")
         MESSAGE="Backup $((++i)) of ${#SOURCES[@]} "
         lk_log_bypass "$LK_BASE/bin/lk-backup-create-snapshot.sh" \
             --group "$GROUP" \
+            --filter "$LK_BASE/lib/hosting/backup-filter-rsync" \
             --hook post_rsync:"$LK_BASE/lib/hosting/backup-hook-post_rsync.sh" \
             "${SOURCE##*/}" "$SOURCE" "$BACKUP_ROOT" \
             -- \
@@ -79,13 +79,13 @@ lk_log_output
 
     lk_console_message "Backing up system files"
     lk_log_bypass "$LK_BASE/bin/lk-backup-create-snapshot.sh" \
-        --filter "$LK_BASE/lib/hosting/backup-filter-rsync" \
+        --filter "$LK_BASE/lib/hosting/backup-filter-system_rsync" \
         --hook post_rsync:"$LK_BASE/lib/hosting/backup-hook-post_rsync.sh" \
         "root" "/" "$BACKUP_ROOT" \
         -- \
         --owner \
         --group \
-        "${RSYNC_FILTER_ARGS[@]}" &&
+        ${RSYNC_FILTER_ARGS[@]+"${RSYNC_FILTER_ARGS[@]}"} &&
         lk_console_success "System backup completed successfully" || {
         EXIT_STATUS=$?
         lk_console_error \
