@@ -1,6 +1,8 @@
 + /etc
 
+- /root/.cache
 + /root
+- /home/*/.cache
 + /home
 
 + /opt
