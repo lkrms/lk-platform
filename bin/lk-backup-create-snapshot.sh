@@ -21,8 +21,7 @@ function exit_trap() {
     local EXIT_STATUS=$? MESSAGE TAR SUBJECT
     eval "exec $FIFO_FD>&- $LOCK_FD>&-" &&
         rm -Rf "${FIFO_FILE%/*}" "$LOCK_FILE" || true
-    lk_log_close
-    lk_log_output
+    lk_log_close -r
     [ -z "$LK_BACKUP_MAIL" ] ||
         { [ "$EXIT_STATUS" -eq 0 ] &&
             [ "$RSYNC_EXIT_VALUE" -eq 0 ] &&
@@ -340,6 +339,10 @@ done
 
 LK_SECONDARY_LOG_FILE=$SNAPSHOT_LOG_FILE \
     lk_log_output
+
+# Don't pollute RSYNC_ERR_FILE with lk_run output
+exec 3>&2
+_LK_FD=3
 
 RSYNC_EXIT_VALUE=0
 RSYNC_RESULT=

@@ -1200,11 +1200,19 @@ function lk_log_is_open() {
         lk_is_fd_open "$_LK_LOG_ERR_FD"
 }
 
+# lk_log_close [-r]
+#
+# Close output redirections opened by lk_log_output. If -r is set, reopen them
+# for further logging (useful when closing a secondary log file).
 function lk_log_close() {
     lk_log_is_open || lk_warn "no output log to close" || return
-    exec >&"$_LK_LOG_OUT_FD" 2>&"$_LK_LOG_ERR_FD" &&
+    exec >&"$_LK_LOG_OUT_FD" 2>&"$_LK_LOG_ERR_FD" || return
+    if [ "${1:-}" = -r ]; then
+        exec > >(tee >(lk_log >>"$_LK_LOG_FILE")) 2>&1
+    else
         eval "exec $_LK_LOG_OUT_FD>&- $_LK_LOG_ERR_FD>&-" &&
-        unset _LK_LOG_FILE
+            unset _LK_LOG_FILE
+    fi
 }
 
 function lk_log_bypass() {
