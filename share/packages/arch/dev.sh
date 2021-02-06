@@ -301,6 +301,8 @@ PAC_PACKAGES+=(
 
     # platforms
     aws-cli
+    python-boto
+    s3cmd
 )
 
 AUR_PACKAGES+=(

@@ -578,7 +578,6 @@ $LK_NODE_HOSTNAME" &&
             pdo_sqlite
             soap
             sqlite3
-            xmlrpc
             zip
         )
         for EXT in ${PHP_EXT[@]+"${PHP_EXT[@]}"}; do
