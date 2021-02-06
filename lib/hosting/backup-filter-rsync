@@ -1,3 +1,4 @@
 - /.cache
 - /log
 - /public_html/wp-content/updraft
+- /staging
