@@ -79,7 +79,7 @@ function lk_bak_find() {
     lk_elevate gnu_find / -xdev -regextype posix-egrep \
         ! \( -type d -path /srv/backup/snapshot -prune \) \
         -regex "${_LK_DIFF_REGEX:-$REGEX}" \
-        "$@"
+        ${@+\( "$@" \)}
 }
 
 function lk_bak_diff() {
@@ -106,7 +106,7 @@ function lk_bak_diff() {
             true
     done < <(gnu_find / -xdev -regextype posix-egrep \
         ! \( -type d -path /srv/backup/snapshot -prune \) \
-        -regex "${_LK_DIFF_REGEX:-$REGEX}" -print0 | sort -z)
+        -regex "${_LK_DIFF_REGEX:-$REGEX}" ${@+\( "$@" \)} -print0 | sort -z)
 }
 
 function lk_orig_find() {
