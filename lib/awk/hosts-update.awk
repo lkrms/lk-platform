@@ -11,13 +11,13 @@ function is_blank() {
 }
 
 function print_hosts() {
-    if (!hosts_printed) {
+    if (!printed) {
         if (last_blank < last_printed)
             print ""
         print HOSTS
+        printed = 1
+        just_printed = 1
     }
-    hosts_printed = 1
-    hosts_just_printed = 1
     skip = 0
 }
 
@@ -45,10 +45,10 @@ is_blank() {
 }
 
 {
-    if (hosts_just_printed && !is_blank())
+    if (just_printed && !is_blank())
         print ""
     print
-    hosts_just_printed = 0
+    just_printed = 0
     last_printed = NR
 }
 

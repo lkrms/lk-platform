@@ -29,13 +29,14 @@ function lk_node_expand_services() {
     lk_echo_args $SERVICES | sort -u | lk_implode_input ","
 }
 
-# lk_symlink_bin TARGET ALIAS
+# lk_symlink_bin TARGET [ALIAS]
 function lk_symlink_bin() {
     local TARGET LINK vv=''
-    [ $# -eq 2 ] || lk_usage "\
-Usage: $(lk_myself -f) TARGET ALIAS"
+    [ $# -ge 1 ] || lk_usage "\
+Usage: $(lk_myself -f) TARGET [ALIAS]"
     ! lk_verbose 2 || vv=v
-    LINK=/usr/local/bin/$2
+    set -- "$1" "${2:-${1##*/}}"
+    LINK=${LK_BIN_PATH:-/usr/local/bin}/$2
     if ! command -pv "$2" >/dev/null &&
         TARGET=$(type -P "$1"); then
         lk_symlink "$TARGET" "$LINK"
@@ -822,23 +823,49 @@ function _lk_option_check() {
         grep -E "$CHECK_REGEX"; } &>/dev/null
 }
 
-# lk_option_set [-p] FILE SETTING CHECK_REGEX [REPLACE_REGEX...]
+function _lk_option_do_replace() {
+    [ -z "${SECTION:-}" ] || { __FILE=$(awk \
+        -v "SECTION=$SECTION" \
+        -v "ENTRIES=$__FILE" \
+        -f "$LK_BASE/lib/awk/section-replace.awk" \
+        "$FILE" && printf .) && __FILE=${__FILE%.}; } || return
+    lk_file_keep_original "$FILE" &&
+        lk_file_replace -l "$FILE" "$__FILE"
+}
+
+# lk_option_set [-s SECTION] [-p] FILE SETTING CHECK_REGEX [REPLACE_REGEX...]
 #
 # If CHECK_REGEX doesn't match any lines in FILE, replace each REPLACE_REGEX
 # match with SETTING until there's a match for CHECK_REGEX. If there is still no
 # match, append SETTING to FILE.
 #
-# If -p is set, pass each REPLACE_REGEX to sed as-is, otherwise pass
-# "0,/REPLACE_REGEX/{s/REGEX/SETTING/}" (after escaping SETTING).
+# If -s is set, ignore lines before and after SECTION, where each section starts
+# with the line "[SECTION_NAME]".
+#
+# If -p is set, pass each REPLACE_REGEX to sed as-is, otherwise escape SETTING
+# and pass "0,/REPLACE_REGEX/{s/REGEX/SETTING/}".
 function lk_option_set() {
-    local FILE SETTING CHECK_REGEX REPLACE_WITH PRESERVE _FILE
-    unset PRESERVE
-    [ "${1:-}" != -p ] || {
-        PRESERVE=
-        shift
-    }
-    [ $# -ge 3 ] || lk_usage "\
-Usage: $(lk_myself -f) [-p] FILE SETTING CHECK_REGEX [REPLACE_REGEX...]" || return
+    local OPTIND OPTARG OPT LK_USAGE FILE SETTING CHECK_REGEX REPLACE_WITH \
+        PRESERVE SECTION _FILE __FILE
+    unset PRESERVE __FILE
+    LK_USAGE="\
+Usage: $(lk_myself -f) [-s SECTION] [-p] FILE SETTING CHECK_REGEX [REPLACE_REGEX...]"
+    while getopts ":s:p" OPT; do
+        case "$OPT" in
+        s)
+            SECTION=$OPTARG
+            ;;
+        p)
+            PRESERVE=
+            ;;
+        \? | :)
+            lk_usage
+            return 1
+            ;;
+        esac
+    done
+    shift $((OPTIND - 1))
+    [ $# -ge 3 ] || lk_usage || return
     FILE=$1
     SETTING=$2
     CHECK_REGEX=$3
@@ -847,25 +874,29 @@ Usage: $(lk_myself -f) [-p] FILE SETTING CHECK_REGEX [REPLACE_REGEX...]" || retu
         { lk_install -d -m 00755 "${FILE%/*}" &&
             lk_install -m 00644 "$FILE"; } || return
     lk_maybe_sudo test -f "$FILE" || lk_warn "file not found: $FILE" || return
-    lk_file_get_text "$FILE" _FILE || return
+    if [ -z "${SECTION:-}" ]; then
+        lk_file_get_text "$FILE" _FILE
+    else
+        _FILE=$(awk \
+            -v "SECTION=$SECTION" \
+            -f "$LK_BASE/lib/awk/section-get.awk" \
+            "$FILE")$'\n'
+    fi || return
     [ "${PRESERVE+1}" = 1 ] ||
         REPLACE_WITH=$(lk_escape_ere_replace "$SETTING")
     shift 3
     for REGEX in "$@"; do
-        _FILE=$(gnu_sed -E \
+        __FILE=$(gnu_sed -E \
             ${PRESERVE+"$REGEX"} \
-            ${PRESERVE-"0,/$REGEX/{s/$REGEX/$REPLACE_WITH/}"} <<<"$_FILE"$'\n.') &&
-            _FILE=${_FILE%$'\n.'} || return
-        ! _lk_option_check "$_FILE" || {
-            lk_file_keep_original "$FILE" &&
-                lk_file_replace -l "$FILE" "$_FILE" || return
-            return 0
+            ${PRESERVE-"0,/$REGEX/{s/$REGEX/$REPLACE_WITH/}"} \
+            <<<"${__FILE-$_FILE}.") && __FILE=${__FILE%.} || return
+        ! _lk_option_check "$__FILE" || {
+            _lk_option_do_replace && return 0 || return
         }
     done
-    # Get a clean copy of FILE in case of buggy regex
-    lk_file_get_text "$FILE" _FILE &&
-        lk_file_keep_original "$FILE" &&
-        lk_file_replace -l "$FILE" "$_FILE$SETTING"
+    # Use a clean copy of FILE in case of buggy regex
+    __FILE=$_FILE$SETTING
+    _lk_option_do_replace
 }
 
 # lk_conf_set_option OPTION VALUE [FILE]

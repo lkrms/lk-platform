@@ -62,9 +62,9 @@ PAC_PACKAGES=(
     # System
     dmidecode
     glances
-    ncdu
     htop
     lsof
+    ncdu
     pcp
     ps_mem
     sysstat
@@ -121,6 +121,9 @@ PAC_KEEP=(
 )
 
 AUR_PACKAGES=(
+    # System
+    rdfind
+
     #
     ${AUR_PACKAGES[@]+"${AUR_PACKAGES[@]}"}
 )

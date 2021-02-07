@@ -762,12 +762,12 @@ EOF
     fi
 
     if lk_pac_installed xfce4-session; then
-        lk_symlink "$LK_BASE/lib/xfce4/startxfce4" /usr/local/bin/startxfce4
+        lk_symlink_bin "$LK_BASE/lib/xfce4/startxfce4"
         SH=$(sudo bash -c 'shopt -s nullglob &&
         a=({/etc/skel*,/home/*}/.config/xfce4/xinitrc) &&
-        { [ ${#a[@]} -eq 0 ] || printf "%q\n" "${a[@]}"; }')
+        { [ ${#a[@]} -eq 0 ] || printf " %q" "${a[@]}"; }')
         [ -z "$SH" ] ||
-            eval "file_delete $SH"
+            eval "file_delete$SH"
     fi
 
     service_apply || EXIT_STATUS=$?

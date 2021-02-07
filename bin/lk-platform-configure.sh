@@ -84,7 +84,6 @@
 
     include=provision,git . "$LK_INST/lib/bash/common.sh"
 
-    LK_BIN_PATH=${LK_BIN_PATH:-/usr/local/bin}
     LK_FILE_TAKE_BACKUP=${LK_FILE_TAKE_BACKUP-1}
     LK_FILE_MOVE_BACKUP=1
     LK_VERBOSE=${LK_VERBOSE-1}
@@ -187,18 +186,15 @@
     #       xargs -0 grep -Eho '\bgnu_[a-zA-Z0-9.]+' | sort -u
     lk_console_message "Checking GNU utilities"
     function install_gnu_commands() {
-        local COMMAND GCOMMAND COMMAND_PATH COMMANDS=("$@") EXIT_STATUS=0
-        [ $# -gt 0 ] ||
-            COMMANDS=(${_LK_GNU_COMMANDS[@]+"${_LK_GNU_COMMANDS[@]}"})
-        for COMMAND in ${COMMANDS[@]+"${COMMANDS[@]}"}; do
+        local COMMAND GCOMMAND EXIT_STATUS=0
+        [ $# -gt 0 ] || set -- ${_LK_GNU_COMMANDS[@]+"${_LK_GNU_COMMANDS[@]}"}
+        for COMMAND in "$@"; do
             GCOMMAND=$(_lk_gnu_command "$COMMAND")
-            COMMAND_PATH=$(type -P "$GCOMMAND") || {
+            lk_symlink_bin "$GCOMMAND" "gnu_$COMMAND" || {
                 EXIT_STATUS=$?
                 lk_console_warning "GNU $COMMAND not found:" "$GCOMMAND"
                 continue
             }
-            lk_symlink "$COMMAND_PATH" "$LK_BIN_PATH/gnu_$COMMAND" ||
-                EXIT_STATUS=$?
         done
         return "$EXIT_STATUS"
     }
@@ -375,8 +371,7 @@
     fi
 
     lk_console_message "Checking symbolic links"
-    lk_symlink \
-        "$LK_BASE/bin/lk-bash-load.sh" "$LK_BIN_PATH/lk-bash-load.sh"
+    lk_symlink_bin "$LK_BASE/bin/lk-bash-load.sh"
 
     LK_HOMES=(
         /etc/skel{,".${LK_PATH_PREFIX%-}"}

@@ -284,8 +284,9 @@ PAC_PACKAGES+=(
     #
     mysql-python
     python
-    python-acme # Let's Encrypt CLI
-    python-dateutil
+    python-acme     # Let's Encrypt CLI
+    python-dateutil #
+    python-magic    # for s3cmd
     python-pip
     python-requests
     python-virtualenv
