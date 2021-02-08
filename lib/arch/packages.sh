@@ -397,7 +397,7 @@ if [ ${#AUR_PACKAGES[@]} -gt 0 ]; then
     if [ ${#AUR_PACKAGES[@]} -gt 0 ]; then
         PAC_BASE_DEVEL=($(lk_pac_groups base-devel))
         PAC_PACKAGES+=("${PAC_BASE_DEVEL[@]}")
-        PAC_KEEP+=(aurutils vifm)
+        PAC_KEEP+=(aurutils devtools vifm)
     fi
 fi
 

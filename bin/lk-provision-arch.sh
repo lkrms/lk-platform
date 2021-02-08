@@ -498,36 +498,37 @@ $LK_NODE_HOSTNAME" &&
         lk_console_message "Checking AUR packages"
         PAC_INSTALL=($(lk_pac_not_installed_list \
             ${PAC_BASE_DEVEL[@]+"${PAC_BASE_DEVEL[@]}"} \
-            vifm))
+            devtools vifm))
         [ ${#PAC_INSTALL[@]} -eq 0 ] || {
             lk_console_detail "Installing aurutils dependencies"
             lk_tty sudo pacman -S --noconfirm "${PAC_INSTALL[@]}"
         }
-
-        if ! lk_command_exists aur; then
-            lk_console_detail "Installing aurutils"
-            DIR=$(lk_mktemp_dir)
-            git clone https://aur.archlinux.org/aurutils.git "$DIR"
-            (cd "$DIR" &&
-                lk_tty makepkg --syncdeps --install --noconfirm)
-            lk_delete_on_exit "$DIR"
-        fi
 
         DIR=/srv/repo/aur
         FILE=$DIR/aur.db.tar.xz
         lk_console_detail "Checking pacman repo at" "$DIR"
         lk_install -d -m 00755 -o "$USER" -g "$GROUP" "$DIR"
         [ -e "$FILE" ] ||
-            repo-add "$FILE"
-        PACKAGES=("$DIR"/*.pkg.tar.*)
-        [ ${#PACKAGES[@]} -eq 0 ] ||
-            repo-add -n "$FILE" "${PACKAGES[@]}"
+            lk_tty repo-add "$FILE"
+
         lk_arch_add_repo "aur|file://$DIR|||Optional TrustAll"
         LK_CONF_OPTION_FILE=/etc/pacman.conf
         lk_conf_enable_row -s options "CacheDir = /var/cache/pacman/pkg/"
         lk_conf_enable_row -s options "CacheDir = $DIR/"
         LK_CONF_DELIM=" = " \
             lk_conf_set_option -s options CleanMethod KeepCurrent
+
+        if ! lk_command_exists aur ||
+            ! lk_pac_repo_available_list aur |
+            grep -Fx aurutils >/dev/null; then
+            lk_console_detail "Installing aurutils"
+            PKGDEST=$DIR lk_makepkg -a aurutils --force
+            lk_files_exist "${LK_MAKEPKG_LIST[@]}" ||
+                lk_die "not found: ${LK_MAKEPKG_LIST[*]}"
+            lk_tty repo-add --remove "$FILE" "${LK_MAKEPKG_LIST[@]}"
+            lk_pac_sync -f
+            lk_tty sudo pacman -S --noconfirm aur/aurutils
+        fi
     fi
 
     lk_console_message "Checking install reasons"

@@ -170,7 +170,7 @@ function lk_pac_not_installed_list() {
 
 function lk_pac_sync() {
     ! lk_is_root && ! lk_can_sudo pacman ||
-        lk_is_false LK_PACMAN_SYNC ||
+        { lk_is_false LK_PACMAN_SYNC && [ "${1:-}" != -f ]; } ||
         { lk_console_message "Refreshing package databases" &&
             lk_elevate pacman -Sy >/dev/null &&
             LK_PACMAN_SYNC=0; }
@@ -179,6 +179,12 @@ function lk_pac_sync() {
 function lk_pac_groups() {
     lk_pac_sync &&
         pacman -Sgq "$@"
+}
+
+# lk_pac_repo_available_list [REPO...]
+function lk_pac_repo_available_list() {
+    lk_pac_sync &&
+        pacman -Slq "$@"
 }
 
 # lk_pac_available_list [-o] [PACKAGE...]
@@ -196,7 +202,7 @@ function lk_pac_available_list() {
     else
         local IFS=$'\n' REPOS
         REPOS=${OFFICIAL:+$(lk_pac_official_repo_list)} &&
-            pacman -Slq $REPOS
+            lk_pac_repo_available_list $REPOS
     fi
 }
 
@@ -205,6 +211,7 @@ function lk_pac_unavailable_list() {
     local OFFICIAL=
     [ "${1:-}" != -o ] || { OFFICIAL=1 && shift; }
     [ $# -gt 0 ] || lk_warn "no package" || return
+    lk_pac_sync || return
     comm -23 \
         <(lk_echo_args "$@" | sort -u) \
         <(lk_pac_available_list ${OFFICIAL:+-o} | sort -u)
@@ -224,6 +231,27 @@ function lk_pac_installed_explicit() {
 # installed", or list all packages installed as dependencies.
 function lk_pac_installed_not_explicit() {
     lk_pac_installed_list -d "$@"
+}
+
+# lk_makepkg [-a AUR_PACKAGE] [MAKEPKG_ARG...]
+function lk_makepkg() {
+    local AUR_PACKAGE AUR_URL BUILD_DIR SH LIST
+    [ "${1:-}" != -a ] || { AUR_PACKAGE=$2 && shift 2; }
+    LK_MAKEPKG_LIST=()
+    if [ -n "${AUR_PACKAGE:-}" ]; then
+        AUR_URL=https://aur.archlinux.org/$AUR_PACKAGE.git
+        BUILD_DIR=$(lk_mktemp_dir) &&
+            git clone "$AUR_URL" "$BUILD_DIR" &&
+            SH=$({ cd "$BUILD_DIR" && lk_makepkg "$@"; } >&2 &&
+                declare -p LK_MAKEPKG_LIST) &&
+            eval "$SH" &&
+            lk_delete_on_exit "$BUILD_DIR"
+    else
+        lk_pac_sync &&
+            lk_tty makepkg --syncdeps --rmdeps --clean --noconfirm "$@" &&
+            LIST=$(lk_require_output makepkg --packagelist) &&
+            lk_mapfile LK_MAKEPKG_LIST <<<"$LIST"
+    fi
 }
 
 function lk_arch_reboot_required() {

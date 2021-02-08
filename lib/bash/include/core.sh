@@ -2506,7 +2506,7 @@ if lk_is_macos; then
     }
 else
     function lk_tty() {
-        script -qfc "$(lk_quote_args "$@")" /dev/null
+        script -eqfc "$(lk_quote_args "$@")" /dev/null
     }
 fi
 
