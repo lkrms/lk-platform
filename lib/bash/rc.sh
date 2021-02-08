@@ -38,7 +38,7 @@ SH=$(
         [ ${#VAR[@]} -eq 0 ] || unset "${VAR[@]}"
         for FILE in "${SETTINGS[@]}"; do
             FILE=$(lk_expand_template <<<"$FILE" 2>/dev/null) || continue
-            [ ! -r "$FILE" ] || . "$FILE"
+            [ ! -f "$FILE" ] || [ ! -r "$FILE" ] || . "$FILE"
         done
         VAR=($(lk_var))
         [ ${#VAR[@]} -eq 0 ] || lk_get_quoted_var "${VAR[@]}"
