@@ -157,6 +157,7 @@ lk_start_trace
 {
     lk_console_log "Provisioning Arch Linux"
     ! is_bootstrap || lk_console_detail "Bootstrap environment detected"
+    GROUP=$(id -gn)
     MEMORY=$(lk_system_memory 2)
     lk_console_detail "System memory:" "${MEMORY}M"
 
@@ -490,6 +491,45 @@ $LK_NODE_HOSTNAME" &&
         . "$LK_PACKAGES_FILE"
     . "$LK_BASE/lib/arch/packages.sh"
 
+    if [ ${#AUR_PACKAGES} -gt 0 ] &&
+        { lk_command_exists aur ||
+            lk_confirm \
+                "OK to install aurutils for AUR package management?" Y; }; then
+        lk_console_message "Checking AUR packages"
+        PAC_INSTALL=($(lk_pac_not_installed_list \
+            ${PAC_BASE_DEVEL[@]+"${PAC_BASE_DEVEL[@]}"} \
+            vifm))
+        [ ${#PAC_INSTALL[@]} -eq 0 ] || {
+            lk_console_detail "Installing aurutils dependencies"
+            lk_tty sudo pacman -S --noconfirm "${PAC_INSTALL[@]}"
+        }
+
+        if ! lk_command_exists aur; then
+            lk_console_detail "Installing aurutils"
+            DIR=$(lk_mktemp_dir)
+            git clone https://aur.archlinux.org/aurutils.git "$DIR"
+            (cd "$DIR" &&
+                lk_tty makepkg --syncdeps --install --noconfirm)
+            lk_delete_on_exit "$DIR"
+        fi
+
+        DIR=/srv/repo/aur
+        FILE=$DIR/aur.db.tar.xz
+        lk_console_detail "Checking pacman repo at" "$DIR"
+        lk_install -d -m 00755 -o "$USER" -g "$GROUP" "$DIR"
+        [ -e "$FILE" ] ||
+            repo-add "$FILE"
+        PACKAGES=("$DIR"/*.pkg.tar.*)
+        [ ${#PACKAGES[@]} -eq 0 ] ||
+            repo-add -n "$FILE" "${PACKAGES[@]}"
+        lk_arch_add_repo "aur|file://$DIR|||Optional TrustAll"
+        LK_CONF_OPTION_FILE=/etc/pacman.conf
+        lk_conf_enable_row -s options "CacheDir = /var/cache/pacman/pkg/"
+        lk_conf_enable_row -s options "CacheDir = $DIR/"
+        LK_CONF_DELIM=" = " \
+            lk_conf_set_option -s options CleanMethod KeepCurrent
+    fi
+
     lk_console_message "Checking install reasons"
     PAC_EXPLICIT=$(lk_echo_array PAC_PACKAGES AUR_PACKAGES PAC_KEEP | sort -u)
     PAC_MARK_EXPLICIT=($(comm -12 \
@@ -673,7 +713,6 @@ EOF
 
         unset LK_FILE_REPLACE_NO_CHANGE
         LK_CONF_OPTION_FILE=/etc/httpd/conf/httpd.conf
-        GROUP=$(id -gn)
         lk_install -d -m 00755 -o "$USER" -g "$GROUP" /srv/http/{,localhost/{,html},127.0.0.1}
         [ -e /srv/http/127.0.0.1/html ] ||
             ln -sfT ../localhost/html /srv/http/127.0.0.1/html

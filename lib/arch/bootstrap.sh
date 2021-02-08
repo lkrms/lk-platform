@@ -71,6 +71,7 @@ Options:
   -p PARAMETER      add PARAMETER to the default kernel command-line
   -s SERVICE,...    enable each SERVICE
   -x                install Xfce (alias for: -s xfce4)
+  -k FILE           set LK_PACKAGES_FILE
   -y                do not prompt for input
 
 Useful kernel parameters:
@@ -97,7 +98,7 @@ CURL_OPTIONS=(
     --silent
 )
 
-echo $'\E[1m\E[36m==> \E[0m\E[1mChecking dependencies\E[0m' >&2
+echo $'\E[1m\E[36m==> \E[0m\E[1mChecking prerequisites\E[0m' >&2
 REPO_URL=https://raw.githubusercontent.com/lkrms/lk-platform
 for FILE_PATH in \
     /lib/bash/include/core.sh \

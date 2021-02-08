@@ -7,7 +7,7 @@ LK_TTY_NO_COLOUR=1 \
 
 HOOK=$0
 [ "${HOOK#/}" != "$HOOK" ] || HOOK=$PWD/$HOOK
-LOG_FILE=/tmp/${HOOK//"/"/__}.log
+LOG_FILE=/tmp/$(lk_replace / __ "$HOOK").log
 printf '\n====> %s invoked\nArguments:\n%s\nEnvironment:\n%s\n' "$HOOK" \
     "$(lk_echo_args "$@" | sed 's/^/  /')" \
     "$(printenv | sed 's/^/  /')" |

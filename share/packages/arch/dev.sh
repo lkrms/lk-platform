@@ -23,10 +23,6 @@ PAC_KEEP=(
     xiccd
 
     #
-    aurutils
-    vifm
-
-    #
     azure-cli
     azure-functions-core-tools-bin
     storageexplorer

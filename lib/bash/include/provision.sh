@@ -899,22 +899,30 @@ Usage: $(lk_myself -f) [-s SECTION] [-p] FILE SETTING CHECK_REGEX [REPLACE_REGEX
     _lk_option_do_replace
 }
 
-# lk_conf_set_option OPTION VALUE [FILE]
+# lk_conf_set_option [-s SECTION] OPTION VALUE [FILE]
 function lk_conf_set_option() {
-    local OPTION VALUE FILE=${3:-$LK_CONF_OPTION_FILE}
+    local SECTION OPTION VALUE FILE
+    unset SECTION
+    [ "${1:-}" != -s ] || { SECTION=$2 && shift 2 || return; }
     OPTION=$(lk_escape_ere "$1")
     VALUE=$(lk_escape_ere "$2")
-    lk_option_set "$FILE" \
-        "$1=$2" \
+    FILE=${3:-$LK_CONF_OPTION_FILE}
+    lk_option_set ${SECTION+-s "$SECTION"} \
+        "$FILE" \
+        "$1${LK_CONF_DELIM-=}$2" \
         "^$S*$OPTION$S*=$S*$VALUE$S*\$" \
         "^$S*$OPTION$S*=.*" "^$S*#$S*$OPTION$S*=.*"
 }
 
-# lk_conf_enable_row ROW [FILE]
+# lk_conf_enable_row [-s SECTION] ROW [FILE]
 function lk_conf_enable_row() {
-    local ROW FILE=${2:-$LK_CONF_OPTION_FILE}
+    local SECTION ROW FILE
+    unset SECTION
+    [ "${1:-}" != -s ] || { SECTION=$2 && shift 2 || return; }
     ROW=$(lk_regex_expand_whitespace "$(lk_escape_ere "$1")")
-    lk_option_set "$FILE" \
+    FILE=${2:-$LK_CONF_OPTION_FILE}
+    lk_option_set ${SECTION+-s "$SECTION"} \
+        "$FILE" \
         "$1" \
         "^$ROW\$" \
         "^$S*$ROW$S*\$" "^$S*#$S*$ROW$S*\$"

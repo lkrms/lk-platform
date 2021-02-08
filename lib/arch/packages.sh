@@ -394,8 +394,11 @@ fi
 if [ ${#AUR_PACKAGES[@]} -gt 0 ]; then
     PAC_PACKAGES+=($(lk_pac_available_list "${AUR_PACKAGES[@]}"))
     AUR_PACKAGES=($(lk_pac_unavailable_list "${AUR_PACKAGES[@]}"))
-    [ ${#AUR_PACKAGES[@]} -eq 0 ] ||
-        PAC_PACKAGES+=($(lk_pac_groups base-devel))
+    if [ ${#AUR_PACKAGES[@]} -gt 0 ]; then
+        PAC_BASE_DEVEL=($(lk_pac_groups base-devel))
+        PAC_PACKAGES+=("${PAC_BASE_DEVEL[@]}")
+        PAC_KEEP+=(aurutils vifm)
+    fi
 fi
 
 # Reduce PAC_KEEP to installed packages not present in PAC_PACKAGES

@@ -34,6 +34,7 @@ HOMEBREW_FORMULAE=(
     lftp
     mas
     media-info
+    moreutils
     ncdu
     newt
     nmap

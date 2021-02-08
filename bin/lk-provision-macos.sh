@@ -66,7 +66,7 @@ function exit_trap() {
         SUDOERS=$(cat "$LK_BASE/share/sudoers.d/default")
         ${CONTRIB_PACKAGES_FILE:+. "$LK_BASE/$CONTRIB_PACKAGES_FILE"}
     else
-        echo $'\E[1m\E[36m==> \E[0m\E[1mChecking dependencies\E[0m' >&2
+        echo $'\E[1m\E[36m==> \E[0m\E[1mChecking prerequisites\E[0m' >&2
         REPO_URL=https://raw.githubusercontent.com/lkrms/lk-platform
         for FILE_PATH in \
             ${CONTRIB_PACKAGES_FILE:+"/$CONTRIB_PACKAGES_FILE"} \

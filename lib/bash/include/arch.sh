@@ -151,7 +151,21 @@ function lk_pac_installed_list() {
             <(lk_echo_args "$@" | sort -u)
         return
     }
-    pacman -Qq $E $D "$@"
+    pacman -Qq $E $D
+}
+
+# lk_pac_not_installed_list PACKAGE...
+#
+# Output each PACKAGE that isn't currently installed.
+function lk_pac_not_installed_list() {
+    local E='' D=''
+    [ "${1:-}" != -e ] || E=-e
+    [ "${1:-}" != -d ] || D=-d
+    [ -z "$E$D" ] || shift
+    [ $# -gt 0 ] || lk_warn "no package" || return
+    comm -13 \
+        <(lk_pac_installed_list $E $D "$@" | sort -u) \
+        <(lk_echo_args "$@" | sort -u)
 }
 
 function lk_pac_sync() {
