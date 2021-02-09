@@ -118,7 +118,7 @@ function load_MEM(_kb, _hkb) {
         f_slabmem = f_cachedrt = f_slabreclaim = f_vmwballoon = f_shmem = \
         f_shmrss = f_shmswp = f_hugepagesz = f_tothugepage = f_freehugepage = \
         f_zfsarcsize = 0
-    if (NF >= 22) {
+    if (NF >= 21) {
         _kb             = $7 / 1024
         _hkb            = $19 / 1024
         f_pagesize      = $7            # page size for this machine (in bytes)
@@ -179,7 +179,7 @@ function load_PRM() {
     f_pid = f_pagesize = f_vmem = f_rmem = f_vexec = f_vgrow = f_rgrow = \
         f_minflt = f_majflt = f_vlibs = f_vdata = f_vstack = f_vswap = \
         f_tgid = f_pmem = f_vlock = 0
-    if (between_brackets() && NF >= 25) {
+    if (between_brackets() && NF >= 24) {
         f_pid           = $7            # PID
         f_name          = bb            # name (between brackets)
         f_state         = $9            # state
@@ -228,6 +228,7 @@ $1 == "SWP" {
     if (load_SWP()) {
         swap_size = f_totswap
         swap_free = f_freeswap
+        swap_used = swap_size - swap_free
     }
 }
 
@@ -282,9 +283,8 @@ $1 == "SEP" {
         readable_max_kib(pss_grand_total, max_pss_grand_total[0], 1)
     print readable_kib(mem_available, 10), "available", \
         "(" readable_percent_kib(mem_used, mem_physical) (swap_size ?
-            "; swap: " readable_percent_kib(swap_used, swap_size) ", " \
-            int(swap_si / interval) "/s in, " \
-            int(swap_so / interval) "/s out" : "; no swap") ")"
+            "; swap: " readable_percent_kib(swap_used, swap_size) (run < 2 ?
+            "" : ", " swap_si " in, " swap_so " out") : "; no swap") ")"
     print sprintf("%10.1f%%", 100 * cpu_load[3] / cpu_count), "load average", \
         sprintf("(%.2f, %.2f, %.2f; cpus: %s)", \
             cpu_load[1], cpu_load[2], cpu_load[3], cpu_count)
