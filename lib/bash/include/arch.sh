@@ -2,6 +2,8 @@
 
 # shellcheck disable=SC2016,SC2034,SC2206,SC2120,SC2086
 
+lk_include linux
+
 function lk_arch_chroot() {
     [ "${1:-}" != -u ] || {
         [ $# -ge 3 ] || lk_warn "invalid arguments" || return
@@ -233,10 +235,19 @@ function lk_pac_installed_not_explicit() {
     lk_pac_installed_list -d "$@"
 }
 
+function lk_makepkg_setup() {
+    local FULL_NAME
+    PACKAGER=$USER@$(lk_hostname) || PACKAGER=$USER@localhost
+    ! FULL_NAME=$(lk_full_name) || [ -z "$FULL_NAME" ] ||
+        PACKAGER="$FULL_NAME <$PACKAGER>"
+    export PACKAGER
+}
+
 # lk_makepkg [-a AUR_PACKAGE] [MAKEPKG_ARG...]
 function lk_makepkg() {
     local AUR_PACKAGE AUR_URL BUILD_DIR SH LIST
     [ "${1:-}" != -a ] || { AUR_PACKAGE=$2 && shift 2; }
+    lk_makepkg_setup
     LK_MAKEPKG_LIST=()
     if [ -n "${AUR_PACKAGE:-}" ]; then
         AUR_URL=https://aur.archlinux.org/$AUR_PACKAGE.git

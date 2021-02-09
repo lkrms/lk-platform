@@ -394,23 +394,21 @@ fi
 if [ ${#AUR_PACKAGES[@]} -gt 0 ]; then
     PAC_PACKAGES+=($(lk_pac_available_list "${AUR_PACKAGES[@]}"))
     AUR_PACKAGES=($(lk_pac_unavailable_list "${AUR_PACKAGES[@]}"))
-    if [ ${#AUR_PACKAGES[@]} -gt 0 ]; then
+    if [ ${#AUR_PACKAGES[@]} -gt 0 ] ||
+        { pacman-conf --repo=aur |
+            awk -F"$S*=$S*" '$1=="Server"{print$2}' |
+            grep -E '^file://'; } &>/dev/null; then
         PAC_BASE_DEVEL=($(lk_pac_groups base-devel))
         PAC_PACKAGES+=("${PAC_BASE_DEVEL[@]}")
         PAC_KEEP+=(aurutils devtools vifm)
     fi
 fi
 
-# Reduce PAC_KEEP to installed packages not present in PAC_PACKAGES
+# Reduce PAC_KEEP to packages not present in PAC_PACKAGES
 if [ ${#PAC_KEEP[@]} -gt 0 ]; then
     PAC_KEEP=($(comm -23 \
         <(lk_echo_array PAC_KEEP | sort -u) \
         <(lk_echo_array PAC_PACKAGES | sort -u)))
-    if [ ${#PAC_KEEP[@]} -gt 0 ]; then
-        PAC_KEEP=($(comm -12 \
-            <(lk_echo_array PAC_KEEP | sort -u) \
-            <(lk_pac_installed_list | sort -u)))
-    fi
 fi
 
 # If any AUR_PACKAGES remain, lk_pac_unavailable_list has already sorted them

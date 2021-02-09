@@ -490,8 +490,13 @@ $LK_NODE_HOSTNAME" &&
     [ -z "$LK_PACKAGES_FILE" ] ||
         . "$LK_PACKAGES_FILE"
     . "$LK_BASE/lib/arch/packages.sh"
+    if [ ${#PAC_KEEP[@]} -gt 0 ]; then
+        PAC_KEEP=($(comm -12 \
+            <(lk_echo_array PAC_KEEP | sort -u) \
+            <(lk_pac_installed_list | sort -u)))
+    fi
 
-    if [ ${#AUR_PACKAGES} -gt 0 ] &&
+    if [ ${#AUR_PACKAGES[@]} -gt 0 ] &&
         { lk_command_exists aur ||
             lk_confirm \
                 "OK to install aurutils for AUR package management?" Y; }; then

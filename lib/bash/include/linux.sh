@@ -3,10 +3,13 @@
 # shellcheck disable=SC2015,SC2016,SC2034,SC2153,SC2206,SC2207
 
 function lk_atop_ps_mem() {
-    local TEMP
-    TEMP=$(mktemp) &&
-        lk_elevate atop -R -PPRM "$@" |
+    local LOW TEMP
+    LOW=$(awk '$1=="low"{l+=$2}END{print l}' /proc/zoneinfo) &&
+        TEMP=$(lk_mktemp_file) || return
+    lk_delete_on_exit "$TEMP"
+    lk_elevate atop -R -PCPL,MEM,SWP,PAG,PRM "$@" |
         awk -f "${LK_INST:-$LK_BASE}/lib/awk/atop-ps-mem.awk" \
+            -v "LOW=$LOW" \
             -v "TEMP=$TEMP"
 }
 
