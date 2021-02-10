@@ -102,8 +102,8 @@ echo $'\E[1m\E[36m==> \E[0m\E[1mChecking prerequisites\E[0m' >&2
 REPO_URL=https://raw.githubusercontent.com/lkrms/lk-platform
 for FILE_PATH in \
     /lib/bash/include/core.sh \
-    /lib/bash/include/arch.sh \
     /lib/bash/include/linux.sh \
+    /lib/bash/include/arch.sh \
     /lib/bash/include/provision.sh \
     /lib/arch/packages.sh \
     /share/sudoers.d/default; do

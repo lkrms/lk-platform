@@ -237,9 +237,9 @@ function lk_pac_installed_not_explicit() {
 
 function lk_makepkg_setup() {
     local NAME EMAIL
-    NAME=$(lk_full_name) || NAME=$USER
+    NAME=$(lk_full_name) && [ -n "$NAME" ] || NAME=$USER
     EMAIL=$USER@$(lk_fqdn) || EMAIL=$USER@localhost
-    export PACKAGER="$NAME <$EMAIL>"
+    export PACKAGER="$NAME <${EMAIL%.localdomain}>"
 }
 
 # lk_makepkg [-a AUR_PACKAGE] [MAKEPKG_ARG...]
@@ -266,7 +266,8 @@ function lk_makepkg() {
 
 function lk_aur_can_chroot() {
     [ -f /etc/aurutils/pacman-aur.conf ] &&
-        lk_pac_installed devtools
+        lk_pac_installed devtools &&
+        ! lk_in_chroot
 }
 
 function lk_aur_outdated() {

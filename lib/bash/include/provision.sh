@@ -36,13 +36,16 @@ function lk_symlink_bin() {
 Usage: $(lk_myself -f) TARGET [ALIAS]"
     ! lk_verbose 2 || vv=v
     set -- "$1" "${2:-${1##*/}}"
+    TARGET=$1
     LINK=${LK_BIN_PATH:-/usr/local/bin}/$2
-    if ! command -pv "$2" >/dev/null &&
-        TARGET=$(type -P "$1"); then
-        lk_symlink "$TARGET" "$LINK"
-    elif [ -L "$LINK" ] && [ ! -x "$LINK" ]; then
-        lk_maybe_sudo rm -f"$vv" -- "$LINK" || return
-    fi
+    { [[ $TARGET == /* ]] ||
+        TARGET=$(PATH=/usr/bin:/bin type -P "$TARGET"); } &&
+        lk_symlink "$TARGET" "$LINK" || {
+        { [ ! -L "$LINK" ] || [ -x "$LINK" ] ||
+            lk_maybe_sudo rm -f"$vv" -- "$LINK" || true; } &&
+            # Only exit false if TARGET is absolute
+            [[ $1 != /* ]]
+    }
 }
 
 function lk_configure_locales() {
