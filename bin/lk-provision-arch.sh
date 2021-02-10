@@ -554,6 +554,13 @@ $LK_NODE_HOSTNAME" &&
             lk_conf_enable_row auto-key-retrieve "$FILE"
         fi
         LK_SUDO=1
+
+        if [ ${#AUR_PACKAGES[@]} -gt 0 ]; then
+            lk_aur_sync "${AUR_PACKAGES[@]}"
+            lk_pac_sync -f
+            PAC_PACKAGES+=("${AUR_PACKAGES[@]}")
+            AUR_PACKAGES=()
+        fi
     fi
 
     if [ ${#PAC_KEEP[@]} -gt 0 ]; then

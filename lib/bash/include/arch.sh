@@ -275,41 +275,37 @@ function lk_aur_outdated() {
 }
 
 function lk_aur_sync() {
-    local OUTDATED CHROOT PKG DEPS DEP SYNCED=() FAILED=()
-    lk_makepkg_setup
+    local OUTDATED CHROOT PKG SYNCED=() FAILED=()
     [ $# -gt 0 ] || {
+        lk_console_message "Checking for updates to AUR packages"
         OUTDATED=($(lk_aur_outdated)) || return
         set -- ${OUTDATED[@]+"${OUTDATED[@]}"}
     }
+    [ $# -gt 0 ] || return 0
     unset CHROOT
     ! lk_aur_can_chroot || CHROOT=
+    lk_echo_args "$@" |
+        lk_console_list "Syncing from AUR:" package packages
+    lk_makepkg_setup
     for PKG in "$@"; do
-        ! lk_in_array "$PKG" SYNCED &&
-            ! lk_in_array "$PKG" FAILED || continue
-        DEPS=($(aur depends "$PKG")) || return
-        for DEP in "${DEPS[@]}"; do
-            ! lk_in_array "$DEP" SYNCED || continue
-            ! lk_in_array "$DEP" FAILED ||
-                lk_warn "$PKG dependency $DEP failed earlier; skipping" ||
-                continue 2
-            aur sync \
-                --database aur \
-                --no-view \
-                ${CHROOT+--chroot} \
-                ${_LK_AUR_ARGS[@]+"${_LK_AUR_ARGS[@]}"} \
-                "$DEP" && SYNCED+=("$DEP") || FAILED+=("$DEP")
-        done
+        aur sync --database aur --no-view \
+            ${CHROOT+--chroot} \
+            ${CHROOT+--makepkg-conf=/etc/makepkg.conf} \
+            ${_LK_AUR_ARGS[@]+"${_LK_AUR_ARGS[@]}"} "$PKG" &&
+            SYNCED+=("$PKG") ||
+            FAILED+=("$PKG")
     done
     [ ${#SYNCED[@]} -eq 0 ] || lk_echo_array SYNCED |
-        lk_console_detail_list "Synced from AUR:" package packages
+        lk_console_list "Synced from AUR:" package packages \
+            "$LK_SUCCESS_COLOUR"
     [ ${#FAILED[@]} -eq 0 ] || lk_echo_array FAILED |
-        lk_console_detail_list "Failed to sync:" package packages \
+        lk_console_list "Failed to sync:" package packages \
             "$LK_ERROR_COLOUR"
     [ ${#FAILED[@]} -eq 0 ]
 }
 
 function lk_aur_rebuild() {
-    local _LK_AUR_ARGS=(--rebuild)
+    local _LK_AUR_ARGS=(--rebuild --force)
     [ $# -gt 0 ] || return
     lk_aur_sync "$@"
 }
