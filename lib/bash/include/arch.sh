@@ -236,11 +236,10 @@ function lk_pac_installed_not_explicit() {
 }
 
 function lk_makepkg_setup() {
-    local FULL_NAME
-    PACKAGER=$USER@$(lk_hostname) || PACKAGER=$USER@localhost
-    ! FULL_NAME=$(lk_full_name) || [ -z "$FULL_NAME" ] ||
-        PACKAGER="$FULL_NAME <$PACKAGER>"
-    export PACKAGER
+    local NAME EMAIL
+    NAME=$(lk_full_name) || NAME=$USER
+    EMAIL=$USER@$(lk_hostname) || EMAIL=$USER@localhost
+    export PACKAGER="$NAME <$EMAIL>"
 }
 
 # lk_makepkg [-a AUR_PACKAGE] [MAKEPKG_ARG...]
@@ -254,7 +253,7 @@ function lk_makepkg() {
         BUILD_DIR=$(lk_mktemp_dir) &&
             git clone "$AUR_URL" "$BUILD_DIR" &&
             SH=$({ cd "$BUILD_DIR" && lk_makepkg "$@"; } >&2 &&
-                declare -p LK_MAKEPKG_LIST) &&
+                echo "LK_MAKEPKG_LIST=($(lk_quote LK_MAKEPKG_LIST))") &&
             eval "$SH" &&
             lk_delete_on_exit "$BUILD_DIR"
     else

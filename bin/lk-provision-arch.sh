@@ -490,11 +490,6 @@ $LK_NODE_HOSTNAME" &&
     [ -z "$LK_PACKAGES_FILE" ] ||
         . "$LK_PACKAGES_FILE"
     . "$LK_BASE/lib/arch/packages.sh"
-    if [ ${#PAC_KEEP[@]} -gt 0 ]; then
-        PAC_KEEP=($(comm -12 \
-            <(lk_echo_array PAC_KEEP | sort -u) \
-            <(lk_pac_installed_list | sort -u)))
-    fi
 
     if [ ${#AUR_PACKAGES[@]} -gt 0 ] &&
         { lk_command_exists aur ||
@@ -534,6 +529,12 @@ $LK_NODE_HOSTNAME" &&
             lk_pac_sync -f
             lk_tty sudo pacman -S --noconfirm aur/aurutils
         fi
+    fi
+
+    if [ ${#PAC_KEEP[@]} -gt 0 ]; then
+        PAC_KEEP=($(comm -12 \
+            <(lk_echo_array PAC_KEEP | sort -u) \
+            <(lk_pac_installed_list | sort -u)))
     fi
 
     lk_console_message "Checking install reasons"
