@@ -24,6 +24,8 @@ exec 4> >(lk_log >"$TRACE_FILE")
 BASH_XTRACEFD=4
 set -x
 
+shopt -s nullglob
+
 DEFAULT_CMDLINE="quiet loglevel=3 audit=0$(! grep -q \
     "^flags[[:blank:]]*:.*\\bhypervisor\\b" /proc/cpuinfo &>/dev/null ||
     echo " console=tty0 console=ttyS0")"
@@ -32,6 +34,7 @@ BOOTSTRAP_MOUNT_OPTIONS=${BOOTSTRAP_MOUNT_OPTIONS:-defaults} # On VMs with TRIM 
 BOOTSTRAP_USERNAME=${BOOTSTRAP_USERNAME:-arch}               #
 BOOTSTRAP_PASSWORD=${BOOTSTRAP_PASSWORD:-}                   #
 BOOTSTRAP_KEY=${BOOTSTRAP_KEY:-}                             #
+BOOTSTRAP_FULL_NAME=${BOOTSTRAP_FULL_NAME:-Arch Linux}       #
 LK_IPV4_ADDRESS=${LK_IPV4_ADDRESS:-}                         #
 LK_IPV4_GATEWAY=${LK_IPV4_GATEWAY:-}                         #
 LK_IPV4_DNS_SERVER=${LK_IPV4_DNS_SERVER:-}                   #
@@ -49,8 +52,6 @@ LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
 LK_PACKAGES_FILE=${LK_PACKAGES_FILE:-}
 export LK_BASE=${LK_BASE:-/opt/lk-platform}
 export -n BOOTSTRAP_PASSWORD BOOTSTRAP_KEY
-
-shopt -s nullglob
 
 [ -d /sys/firmware/efi/efivars ] || lk_die "not booted in UEFI mode"
 [ "$EUID" -eq 0 ] || lk_die "not running as root"
@@ -183,28 +184,30 @@ LK_NODE_SERVICES=$(IFS=, &&
     lk_echo_args $LK_NODE_SERVICES | sort -u | lk_implode_input ",")
 
 PASSWORD_GENERATED=
-if [ -z "$BOOTSTRAP_PASSWORD" ] && lk_no_input; then
-    lk_console_item \
-        "Generating a random password for user" "$BOOTSTRAP_USERNAME"
-    BOOTSTRAP_PASSWORD=$(lk_random_password 7)
-    PASSWORD_GENERATED=1
-    lk_console_detail "Password:" "$BOOTSTRAP_PASSWORD"
-    lk_console_log "The password above will be repeated when ${0##*/} exits"
+if [ -z "$BOOTSTRAP_KEY" ]; then
+    if [ -z "$BOOTSTRAP_PASSWORD" ] && lk_no_input; then
+        lk_console_item \
+            "Generating a random password for user" "$BOOTSTRAP_USERNAME"
+        BOOTSTRAP_PASSWORD=$(lk_random_password 7)
+        PASSWORD_GENERATED=1
+        lk_console_detail "Password:" "$BOOTSTRAP_PASSWORD"
+        lk_console_log "The password above will be repeated when ${0##*/} exits"
+    fi
+    while [ -z "$BOOTSTRAP_PASSWORD" ]; do
+        BOOTSTRAP_PASSWORD=$(lk_console_read_secret \
+            "Password for $BOOTSTRAP_USERNAME:")
+        [ -n "$BOOTSTRAP_PASSWORD" ] ||
+            lk_warn "Password cannot be empty" || continue
+        CONFIRM_PASSWORD=$(lk_console_read_secret \
+            "Password for $BOOTSTRAP_USERNAME (again):")
+        [ "$BOOTSTRAP_PASSWORD" = "$CONFIRM_PASSWORD" ] || {
+            BOOTSTRAP_PASSWORD=
+            lk_warn "Passwords do not match"
+            continue
+        }
+        break
+    done
 fi
-while [ -z "$BOOTSTRAP_PASSWORD" ]; do
-    BOOTSTRAP_PASSWORD=$(lk_console_read_secret \
-        "Password for $BOOTSTRAP_USERNAME:")
-    [ -n "$BOOTSTRAP_PASSWORD" ] ||
-        lk_warn "Password cannot be empty" || continue
-    CONFIRM_PASSWORD=$(lk_console_read_secret \
-        "Password for $BOOTSTRAP_USERNAME (again):")
-    [ "$BOOTSTRAP_PASSWORD" = "$CONFIRM_PASSWORD" ] || {
-        BOOTSTRAP_PASSWORD=
-        lk_warn "Passwords do not match"
-        continue
-    }
-    break
-done
 
 lk_console_blank
 
@@ -225,6 +228,16 @@ function exit_trap() {
         lk_console_log \
             "The random password generated for user '$BOOTSTRAP_USERNAME' is" \
             "$BOOTSTRAP_PASSWORD"
+}
+
+function no_output() {
+    exec > >(tee "/dev/fd/$LOG_FD" >&"$OUT_FD")
+    exec 2> >(tee "/dev/fd/$LOG_FD" >&"$ERR_FD")
+}
+
+function show_output() {
+    exec > >(tee >(tee "/dev/fd/$LOG_FD" >&"$OUT_FD") >&"$STDOUT_FD")
+    exec 2> >(tee >(tee "/dev/fd/$LOG_FD" >&"$ERR_FD") >&"$STDERR_FD")
 }
 
 function no_log() {
@@ -254,10 +267,9 @@ OUT_FD=$(lk_next_fd)
 eval "exec $OUT_FD> >(lk_log \"..\" >\"\$FIFO_FILE\")"
 ERR_FD=$(lk_next_fd)
 eval "exec $ERR_FD> >(lk_log \"!!\" >\"\$FIFO_FILE\")"
-exec > >(tee "/dev/fd/$LOG_FD" >&"$OUT_FD")
-exec 2> >(tee "/dev/fd/$LOG_FD" >&"$ERR_FD")
-exec 3> >(tee "/dev/fd/$STDOUT_FD" >&1)
+exec 3> >(tee >(tee "/dev/fd/$LOG_FD" >&"$OUT_FD") >&"$STDOUT_FD")
 export _LK_FD=3
+no_output
 
 trap exit_trap EXIT
 
@@ -405,16 +417,17 @@ lk_run_detail -1 in_target useradd \
     --shell /bin/bash \
     --key UMASK=026 \
     "$BOOTSTRAP_USERNAME"
-printf '%s\n' "$BOOTSTRAP_PASSWORD" "$BOOTSTRAP_PASSWORD" |
+[ -z "$BOOTSTRAP_PASSWORD" ] ||
+    printf '%s\n' "$BOOTSTRAP_PASSWORD" "$BOOTSTRAP_PASSWORD" |
     in_target passwd "$BOOTSTRAP_USERNAME"
 FILE=/mnt/etc/sudoers.d/nopasswd-$BOOTSTRAP_USERNAME
 install -m 00440 /dev/null "$FILE"
 echo "$BOOTSTRAP_USERNAME ALL=(ALL) NOPASSWD:ALL" >"$FILE"
-if [ -n "$BOOTSTRAP_KEY" ]; then
-    echo "$BOOTSTRAP_KEY" |
-        in_target -u "$BOOTSTRAP_USERNAME" \
-            bash -c "cat >~/.ssh/authorized_keys"
-fi
+[ -z "$BOOTSTRAP_KEY" ] ||
+    echo "$BOOTSTRAP_KEY" | in_target -u "$BOOTSTRAP_USERNAME" \
+        bash -c "cat >~/.ssh/authorized_keys"
+[ -z "$BOOTSTRAP_FULL_NAME" ] ||
+    in_target chfn -f "$BOOTSTRAP_FULL_NAME" "$BOOTSTRAP_USERNAME"
 
 export LK_BOOTSTRAP=1
 
@@ -447,11 +460,13 @@ lk_get_shell_var \
     LK_PLATFORM_BRANCH \
     LK_PACKAGES_FILE >"$FILE"
 
+show_output
 PROVISIONED=
 in_target -u "$BOOTSTRAP_USERNAME" \
     env BASH_XTRACEFD=$BASH_XTRACEFD SHELLOPTS=xtrace LK_NO_LOG=1 \
-    "$LK_BASE/bin/lk-provision-arch.sh" && PROVISIONED=1 ||
+    "$LK_BASE/bin/lk-provision-arch.sh" --yes && PROVISIONED=1 ||
     lk_console_error "Provisioning failed"
+no_output
 
 lk_console_message "Installing boot loader"
 i=0

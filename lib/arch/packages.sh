@@ -401,8 +401,8 @@ if [ ${#AUR_PACKAGES[@]} -gt 0 ] ||
         awk -F"$S*=$S*" '$1=="Server"{print$2}' |
         grep -E '^file://'; } &>/dev/null; then
     PAC_BASE_DEVEL=($(lk_pac_groups base-devel))
-    PAC_PACKAGES+=("${PAC_BASE_DEVEL[@]}")
-    PAC_KEEP+=(aurutils devtools vifm)
+    PAC_PACKAGES+=("${PAC_BASE_DEVEL[@]}" devtools pacutils vifm)
+    PAC_KEEP+=(aurutils)
 fi
 
 # Reduce PAC_KEEP to packages not present in PAC_PACKAGES
