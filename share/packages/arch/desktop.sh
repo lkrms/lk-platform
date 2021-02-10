@@ -36,6 +36,7 @@ PAC_PACKAGES+=(
     unison
 
     # networking
+    networkmanager-l2tp
     openconnect
 
     # monitoring
@@ -53,7 +54,6 @@ PAC_PACKAGES+=(
 )
 
 AUR_PACKAGES+=(
-    networkmanager-l2tp
     pacman-cleanup-hook
     vpn-slice
 )

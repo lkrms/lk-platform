@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2016,SC2034,SC2206,SC2120,SC2086
+# shellcheck disable=SC2015,SC2016,SC2034,SC2120,SC2206,SC2207
 
 lk_include linux
 
@@ -238,7 +238,7 @@ function lk_pac_installed_not_explicit() {
 function lk_makepkg_setup() {
     local NAME EMAIL
     NAME=$(lk_full_name) || NAME=$USER
-    EMAIL=$USER@$(lk_hostname) || EMAIL=$USER@localhost
+    EMAIL=$USER@$(lk_fqdn) || EMAIL=$USER@localhost
     export PACKAGER="$NAME <$EMAIL>"
 }
 
@@ -262,6 +262,56 @@ function lk_makepkg() {
             LIST=$(lk_require_output makepkg --packagelist) &&
             lk_mapfile LK_MAKEPKG_LIST <<<"$LIST"
     fi
+}
+
+function lk_aur_can_chroot() {
+    [ -f /etc/aurutils/pacman-aur.conf ] &&
+        lk_pac_installed devtools
+}
+
+function lk_aur_outdated() {
+    aur repo --database aur --list |
+        aur vercmp -q
+}
+
+function lk_aur_sync() {
+    local OUTDATED CHROOT PKG DEPS DEP SYNCED=() FAILED=()
+    lk_makepkg_setup
+    [ $# -gt 0 ] || {
+        OUTDATED=($(lk_aur_outdated)) || return
+        set -- ${OUTDATED[@]+"${OUTDATED[@]}"}
+    }
+    unset CHROOT
+    ! lk_aur_can_chroot || CHROOT=
+    for PKG in "$@"; do
+        ! lk_in_array "$PKG" SYNCED &&
+            ! lk_in_array "$PKG" FAILED || continue
+        DEPS=($(aur depends "$PKG")) || return
+        for DEP in "${DEPS[@]}"; do
+            ! lk_in_array "$DEP" SYNCED || continue
+            ! lk_in_array "$DEP" FAILED ||
+                lk_warn "$PKG dependency $DEP failed earlier; skipping" ||
+                continue 2
+            aur sync \
+                --database aur \
+                --no-view \
+                ${CHROOT+--chroot} \
+                ${_LK_AUR_ARGS[@]+"${_LK_AUR_ARGS[@]}"} \
+                "$DEP" && SYNCED+=("$DEP") || FAILED+=("$DEP")
+        done
+    done
+    [ ${#SYNCED[@]} -eq 0 ] || lk_echo_array SYNCED |
+        lk_console_detail_list "Synced from AUR:" package packages
+    [ ${#FAILED[@]} -eq 0 ] || lk_echo_array FAILED |
+        lk_console_detail_list "Failed to sync:" package packages \
+            "$LK_ERROR_COLOUR"
+    [ ${#FAILED[@]} -eq 0 ]
+}
+
+function lk_aur_rebuild() {
+    local _LK_AUR_ARGS=(--rebuild)
+    [ $# -gt 0 ] || return
+    lk_aur_sync "$@"
 }
 
 function lk_arch_reboot_required() {

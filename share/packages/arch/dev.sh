@@ -80,6 +80,7 @@ PAC_PACKAGES+=(
     wimlib
 
     # networking
+    networkmanager-l2tp
     openconnect
 
     # monitoring
@@ -110,7 +111,6 @@ PAC_PACKAGES+=(
 AUR_PACKAGES+=(
     aha
     asciicast2gif
-    networkmanager-l2tp
     pacman-cleanup-hook
     powershell-bin
     vpn-slice
