@@ -10,6 +10,18 @@ BEGIN {
     u[6] = "E"
     u[7] = "Z"
     u[8] = "Y"
+    low = 0
+    while (getline l < "/proc/zoneinfo" > 0) {
+        split(l, e)
+        if (e[1] == "low")
+            low += e[2]
+    }
+    close("/proc/zoneinfo")
+
+    MIN_PERCENT = MIN_PERCENT ? MIN_PERCENT : 3
+    MIN_PAST_PERCENT = MIN_PAST_PERCENT ? MIN_PAST_PERCENT : 10
+    NO_PERCENT = NO_PERCENT ? NO_PERCENT : 0
+    NO_OTHERS = NO_OTHERS ? NO_OTHERS : 0
 }
 
 function _readable_unit(val, unit, _) {
@@ -35,8 +47,15 @@ function min(val1, val2) {
     return val1 < val2 ? val1 : val2;
 }
 
-function set_max(arr, i, val) {
-    arr[i] = (arr[i] > val) ? arr[i] : val
+function max(val1, val2) {
+    return val1 > val2 ? val1 : val2;
+}
+
+function set_max(arr, time_arr, i, val) {
+    if (val > arr[i]) {
+        arr[i] = val
+        time_arr[i] = f_epoch
+    }
 }
 
 function quote(str, _q, _q_count, _arr, _i, _out) {
@@ -58,15 +77,19 @@ function readable_kib(kib, width, _i) {
     return sprintf("%" width ".1f%s", kib, u[_i])
 }
 
+function readable_percent(val, total, _percent) {
+    if (mem_physical && !NO_PERCENT) {
+        _percent = total ? int(100 * val / total) : 0
+        return sprintf("%3d%% ", _percent)
+    } else {
+        return ""
+    }
+}
+
 function readable_max_kib(kib, max, suppress_kib, _kib, _max) {
     _kib = readable_kib(kib)
     _max = readable_kib(max)
     return (suppress_kib ? "" : _kib) (_kib == _max ? "" : " [^" _max "]")
-}
-
-function readable_percent_kib(kib, total) {
-    if (total)
-        return readable_kib(total) " total, " int(100 * kib / total) "% used"
 }
 
 function readable_max(val, max, suppress_val) {
@@ -95,7 +118,7 @@ function load() {
 }
 
 function load_low_watermark() {
-    mem_low_watermark = LOW * f_pagesize / 1024
+    mem_low_watermark = low * f_pagesize / 1024
 }
 
 function load_CPL() {
@@ -245,50 +268,81 @@ $1 == "PRM" {
     if (load_PRM() && f_pmem) {
         pss[f_name] += f_pmem
         count[f_name] += 1
-        set_max(maxpss, f_name, f_pmem)
+        set_max(maxpss, maxpss_time, f_name, f_pmem)
+        pss_grand_total += f_pmem
     }
 }
 
 $1 == "SEP" {
     run += 1
-    pss_grand_total = 0
+    show_percent = mem_physical && !NO_PERCENT
+    set_max(max_pss_grand_total, max_pss_grand_total_time, 0, pss_grand_total)
+    others_pss = others_pss_max = others_pss_count = others_count = 0
+    sort = "sort -h" (show_percent ? " -k2" : "")
     for (program in pss) {
         pss_total = pss[program]
         pss_count = count[program]
         pss_max = maxpss[program]
+        pss_percent = int(100 * pss_total / mem_physical)
         pss_average = pss_total / pss_count
-        pss_grand_total += pss_total
-        set_max(max_pss_total, program, pss_total)
-        set_max(max_pss_count, program, pss_count)
-        set_max(max_pss_max, program, pss_max)
-        set_max(max_pss_average, program, pss_average)
-        print readable_kib(pss_total, 10),
+        set_max(max_pss_total, max_pss_total_time, program, pss_total)
+        set_max(max_pss_count, max_pss_count_time, program, pss_count)
+        set_max(max_pss_max, max_pss_max_time, program, pss_max)
+        set_max(max_pss_percent, max_pss_percent_time, program, pss_percent)
+        set_max(max_pss_average, max_pss_average_time, program, pss_average)
+        if (pss_percent < MIN_PERCENT &&
+            max_pss_percent[program] < MIN_PAST_PERCENT) {
+            others_pss += pss_total
+            others_pss_max = max(pss_total, others_pss_max)
+            others_pss_count += pss_count
+            others_count += 1
+            continue
+        }
+        print readable_percent(pss_total, mem_physical) \
+            readable_kib(pss_total, 10),
             program readable_max_kib(pss_total, max_pss_total[program], 1),
             "(" (pss_count + max_pss_count[program] == 2 ? "" :
                     readable_max(pss_count, max_pss_count[program]) ", ") \
                 "avg " readable_max_kib(pss_average, max_pss_average[program]) \
                 ", max " readable_max_kib(pss_max, max_pss_max[program]) ")" \
-                > TEMP
+            | sort
         delete pss[program]
         delete count[program]
         delete maxpss[program]
     }
-    close(TEMP)
-    system("sort -h " quote(TEMP))
-    set_max(max_pss_grand_total, 0, pss_grand_total)
-    print "-----------"
-    print readable_kib(pss_grand_total, 10), "total memory used",
-        (run < 2 ? "at " : "in " readable_seconds(interval) " interval to ") \
-        interval_time \
+    if (others_pss && !NO_OTHERS) {
+        print readable_percent(others_pss, mem_physical) \
+            readable_kib(others_pss, 10),
+            "<" others_count " others>", "(" others_pss_count \
+                ", avg " readable_kib(others_pss / others_pss_count) \
+                ", max " readable_kib(others_pss_max) ")" \
+            | sort
+    }
+    if (run > 1)
+        print ""
+    print interval_time
+    print "===========" (show_percent ? "=====" : "")
+    close(sort)
+    print "-----------" (show_percent ? "-----" : "")
+    used_percent = int(100 * pss_grand_total / mem_physical)
+    print readable_percent(pss_grand_total, mem_physical) \
+        readable_kib(pss_grand_total, 10), "total memory used",
         readable_max_kib(pss_grand_total, max_pss_grand_total[0], 1)
-    print readable_kib(mem_available, 10), "available", \
-        "(" readable_percent_kib(mem_used, mem_physical) (swap_size ?
-            "; swap: " readable_percent_kib(swap_used, swap_size) (run < 2 ?
-            "" : ", " swap_si " in, " swap_so " out") : "; no swap") ")"
-    print sprintf("%10.1f%%", 100 * cpu_load[3] / cpu_count), "load average", \
-        sprintf("(%.2f, %.2f, %.2f; cpus: %s)", \
+    available_percent = int(100 * mem_available / mem_physical)
+    print readable_percent(mem_available, mem_physical) \
+        readable_kib(mem_available, 10), "available", \
+        "(" readable_kib(mem_physical) " total" (!swap_size ? "" :
+            "; swap: " readable_kib(swap_size) " total, " \
+                int(100 * swap_used / swap_size) "% used, " \
+                swap_si " in + " swap_so " out in last " \
+                readable_seconds(interval)) ")"
+    load_percent = 100 * cpu_load[1] / cpu_count
+    print readable_percent(cpu_load[1], cpu_count) \
+        sprintf("%11.2f", cpu_load[1]), "load average", \
+        sprintf("(%.2f, %.2f, %.2f, %d cores)", \
             cpu_load[1], cpu_load[2], cpu_load[3], cpu_count)
-    print "==========="
+    print "===========" (show_percent ? "=====" : "")
+    pss_grand_total = 0
     interval = 0
     interval_time = ""
 }
