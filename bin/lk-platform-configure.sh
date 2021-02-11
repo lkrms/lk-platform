@@ -273,33 +273,8 @@
                 CONFIG_COMMANDS+=("$(printf 'config %q %q' "$1" "$2")")
         }
         function update_repo() {
-            local _BRANCH=${1:-$BRANCH} UPSTREAM BEHIND
-            UPSTREAM=$REMOTE/$_BRANCH
-            _git fetch --quiet --prune "$REMOTE" ||
-                lk_warn "unable to check remote '$REMOTE' for updates" ||
-                return
-            if lk_git_branch_list_local |
-                grep -Fx "$_BRANCH" >/dev/null; then
-                BEHIND=$(git rev-list --count "$_BRANCH..$UPSTREAM")
-                if [ "$BEHIND" -gt 0 ]; then
-                    git merge-base --is-ancestor "$_BRANCH" "$UPSTREAM" ||
-                        lk_warn "local branch $_BRANCH has diverged" ||
-                        return
-                    lk_console_detail \
-                        "Updating lk-platform ($_BRANCH branch is $BEHIND $(
-                            lk_maybe_plural "$BEHIND" "commit" "commits"
-                        ) behind)"
-                    REPO_MERGED=1
-                    if [ "$_BRANCH" = "$BRANCH" ]; then
-                        _git merge --ff-only
-                    else
-                        # Fast-forward local _BRANCH (e.g. 'develop') to
-                        # UPSTREAM (e.g. 'origin/develop') without checking
-                        # it out
-                        _git fetch . "$UPSTREAM:$_BRANCH"
-                    fi
-                fi
-            fi
+            local BRANCH=${1:-$BRANCH} LK_GIT_USER=$REPO_OWNER
+            lk_git_update_repo_to -f "$REMOTE" "$BRANCH"
         }
         UMASK=$(umask)
         umask 002
@@ -330,9 +305,6 @@
             if lk_confirm "Switch to $LK_PLATFORM_BRANCH?" Y; then
                 lk_console_detail "Switching to" "$LK_PLATFORM_BRANCH"
                 update_repo "$LK_PLATFORM_BRANCH"
-                _git checkout "$LK_PLATFORM_BRANCH"
-                lk_git_branch_upstream >/dev/null ||
-                    _git branch -u "$REMOTE/$LK_PLATFORM_BRANCH"
                 restart_script "$@"
             else
                 LK_PLATFORM_BRANCH=$BRANCH
@@ -342,9 +314,8 @@
             FETCH_TIME=0
         if [ $(($(lk_timestamp) - FETCH_TIME)) -gt 300 ]; then
             lk_console_detail "Checking for changes"
-            unset REPO_MERGED
             update_repo
-            ! lk_is_true REPO_MERGED ||
+            ! lk_is_true LK_GIT_REPO_UPDATED ||
                 restart_script "$@"
         fi
         DIR_MODE=0755

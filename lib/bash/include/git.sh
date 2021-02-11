@@ -116,6 +116,10 @@ function lk_git_branch_push_remote() {
         echo "${BASH_REMATCH[1]}"
 }
 
+function lk_git_ref() {
+    git rev-parse --short HEAD
+}
+
 # lk_git_provision_repo [OPTIONS] REMOTE_URL DIR
 function lk_git_provision_repo() {
     local OPTIND OPTARG OPT SHARE OWNER GROUP BRANCH NAME LK_USAGE \
@@ -189,25 +193,30 @@ Options:
     fi
 }
 
-# lk_git_fast_forward_branch BRANCH UPSTREAM
+# lk_git_fast_forward_branch [-f] BRANCH UPSTREAM
 function lk_git_fast_forward_branch() {
-    local BEHIND _BRANCH
+    local FORCE BEHIND TAG _BRANCH
+    unset FORCE
+    [ "${1:-}" != -f ] || { FORCE= && shift; }
     BEHIND=$(git rev-list --count "$1..$2") || return
     if [ "$BEHIND" -gt 0 ]; then
-        git merge-base --is-ancestor "$1" "$2" ||
+        git merge-base --is-ancestor "$1" "$2" && unset FORCE ||
+            { [ -n "${FORCE+1}" ] && lk_git_is_clean &&
+                TAG=diverged-$1-$(lk_git_ref) && _lk_git tag -f "$TAG" &&
+                lk_console_warning "Tag added:" "$TAG"; } ||
             lk_console_warning -r "Local branch $1 has diverged from $2" ||
             return
         _BRANCH=$(lk_git_branch_current) || return
         lk_console_detail \
-            "Updating $1 ($BEHIND $(lk_maybe_plural \
-                "$BEHIND" commit commits) behind)"
+            "${FORCE-Updating}${FORCE+Resetting} $1 ($BEHIND $(lk_maybe_plural \
+                "$BEHIND" commit commits) behind${FORCE+, diverged})"
         LK_GIT_REPO_UPDATED=1
         if [ "$_BRANCH" = "$1" ]; then
-            _lk_git merge --ff-only "$2"
+            _lk_git ${FORCE-merge --ff-only}${FORCE+reset --hard} "$2"
         else
             # Fast-forward local BRANCH (e.g. 'develop') to UPSTREAM
             # ('origin/develop') without checking it out
-            _lk_git fetch . "$2:$1"
+            _lk_git ${FORCE-fetch . "$2:$1"}${FORCE+branch -f "$1" "$2"}
         fi
     fi
 }
@@ -236,11 +245,13 @@ function lk_git_update_repo() {
     [ "$ERRORS" -eq 0 ]
 }
 
-# lk_git_update_repo_to REMOTE [BRANCH]
+# lk_git_update_repo_to [-f] REMOTE [BRANCH]
 function lk_git_update_repo_to() {
-    local REMOTE BRANCH UPSTREAM _BRANCH BEHIND _UPSTREAM
+    local FORCE REMOTE BRANCH UPSTREAM _BRANCH BEHIND _UPSTREAM
+    unset FORCE
+    [ "${1:-}" != -f ] || { FORCE= && shift; }
     [ $# -ge 1 ] || lk_usage "\
-Usage: $(lk_myself -f) REMOTE [BRANCH]" || return
+Usage: $(lk_myself -f) [-f] REMOTE [BRANCH]" || return
     REMOTE=$1
     _lk_git fetch --quiet --prune "$REMOTE" ||
         lk_warn "unable to fetch from remote: $REMOTE" ||
@@ -252,7 +263,7 @@ Usage: $(lk_myself -f) REMOTE [BRANCH]" || return
     unset LK_GIT_REPO_UPDATED
     if lk_git_branch_list_local |
         grep -Fx "$BRANCH" >/dev/null; then
-        lk_git_fast_forward_branch "$BRANCH" "$UPSTREAM" || return
+        lk_git_fast_forward_branch ${FORCE+-f} "$BRANCH" "$UPSTREAM" || return
         [ "$_BRANCH" = "$BRANCH" ] || {
             lk_console_detail "Switching ${_BRANCH:+from $_BRANCH }to $BRANCH"
             LK_GIT_REPO_UPDATED=1
