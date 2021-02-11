@@ -316,7 +316,7 @@ ${LOCAL_DB_USER:+1}${LOCAL_DB_PASSWORD:+1}" = 111 ]; then
         DEFAULT_IDENTIFIER=${BASH_REMATCH[1]}_${BASH_REMATCH[2]}
     elif [[ $SITE_ROOT =~ ^/srv/(www|httpd?)/(([^./]+)\.local(host)?|local\.([^./]+)(\.[^./]+)+)/(public_)?html$ ]]; then
         DEFAULT_IDENTIFIER=${BASH_REMATCH[3]}${BASH_REMATCH[5]}
-    elif [[ ! $SITE_ROOT =~ ^/srv/(www|httpd?)(/.*)?$ ]] && [ "${SITE_ROOT#$HOME}" != "$SITE_ROOT" ]; then
+    elif [[ ! $SITE_ROOT =~ ^/srv/(www|httpd?)(/.*)?$ ]] && [ "${SITE_ROOT#~}" != "$SITE_ROOT" ]; then
         DEFAULT_IDENTIFIER=${SITE_ROOT##*/}
     elif [ -e "$SITE_ROOT" ]; then
         DEFAULT_IDENTIFIER=$(lk_file_owner "$SITE_ROOT") || return
@@ -422,7 +422,7 @@ function lk_wp_sync_files_from_remote() {
     )
     [ -n "${1:-}" ] || lk_warn "no ssh host" || return
     LOCAL_PATH="${3:-$(lk_wp_get_site_root 2>/dev/null)}" ||
-        LOCAL_PATH="$HOME/public_html"
+        LOCAL_PATH=~/public_html
     lk_console_message "Preparing to sync WordPress files"
     REMOTE_PATH="${REMOTE_PATH%/}"
     LOCAL_PATH="${LOCAL_PATH%/}"

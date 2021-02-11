@@ -10,7 +10,7 @@ eval "set -- $LK_GETOPT"
 [ -f "$1" ] || lk_die "file not found: $1"
 
 ARGS=(-I"$LK_BASE/etc/X11/xkb")
-for DIR in "/etc/X11/xkb" "$HOME/.xkb"; do
+for DIR in /etc/X11/xkb ~/.xkb; do
     [ ! -d "$DIR" ] || ARGS+=(-I"$DIR")
 done
 

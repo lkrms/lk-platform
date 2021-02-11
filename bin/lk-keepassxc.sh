@@ -95,7 +95,7 @@ if lk_is_true REGISTER; then
             defaults write "$PLIST" "$@"
         }
         LABEL=com.linacreative.platform.keepassxc
-        PLIST=$HOME/Library/LaunchAgents/$LABEL.plist
+        PLIST=~/Library/LaunchAgents/$LABEL.plist
         launchctl unload "$PLIST" &>/dev/null || true
         plist Disabled -bool false
         plist Label -string "$LABEL"

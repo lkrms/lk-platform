@@ -210,9 +210,6 @@ if lk_node_service_enabled desktop; then
         autorandr-git
         networkmanager-dispatcher-ntpd
         xrandr-invert-colors
-
-        #
-        moka-icon-theme-git
     )
 fi
 

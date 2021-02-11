@@ -110,7 +110,6 @@ PAC_PACKAGES+=(
 
 AUR_PACKAGES+=(
     aha
-    asciicast2gif
     pacman-cleanup-hook
     powershell-bin
     vpn-slice

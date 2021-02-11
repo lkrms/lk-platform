@@ -32,7 +32,7 @@ SH=$(
     ENV=$(lk_get_env -n | sed '/^LK_/!d' | sort)
     function lk_var() { comm -23 \
         <(printf '%s\n' "${!LK_@}" | sort) \
-        <(cat <<<"$ENV") | sed '/^LK_ARGV$/d'; }
+        <(cat <<<"$ENV"); }
     (
         VAR=($(lk_var))
         [ ${#VAR[@]} -eq 0 ] || unset "${VAR[@]}"

@@ -415,7 +415,7 @@ function lk_full_name() {
 }
 
 function lk_icon_install() {
-    local TARGET_DIR="${2:-$HOME/.local/share/icons/hicolor}" SIZE SIZES=(
+    local TARGET_DIR=${2:-~/.local/share/icons/hicolor} SIZE SIZES=(
         16x16 22x22 24x24 32x32 36x36 48x48 64x64 72x72 96x96
         128x128 160x160 192x192 256x256 384x384 512x512
         1024x1024
