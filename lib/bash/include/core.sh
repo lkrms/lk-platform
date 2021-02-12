@@ -312,7 +312,7 @@ _lk_from_cache regex || {
         local _O _H _P _S _U _A _Q _F _1 _2 _4 _6 SH i=0 _LK_REGEX=() REGEX
 
         SH=$(_lk_regex_sh DOMAIN_PART_REGEX "[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?") && eval "$SH"
-        SH=$(_lk_regex_sh DOMAIN_NAME_REGEX "($DOMAIN_PART_REGEX(\\.|\$)){2,}") && eval "$SH"
+        SH=$(_lk_regex_sh DOMAIN_NAME_REGEX "$DOMAIN_PART_REGEX(\\.$DOMAIN_PART_REGEX)+") && eval "$SH"
         SH=$(_lk_regex_sh EMAIL_ADDRESS_REGEX "[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@$DOMAIN_NAME_REGEX") && eval "$SH"
 
         _O="(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])"
@@ -324,7 +324,9 @@ _lk_from_cache regex || {
         SH=$(_lk_regex_sh IPV6_REGEX "(($_H:){7}(:|$_H)|($_H:){6}(:|:$_H)|($_H:){5}(:|(:$_H){1,2})|($_H:){4}(:|(:$_H){1,3})|($_H:){3}(:|(:$_H){1,4})|($_H:){2}(:|(:$_H){1,5})|$_H:(:|(:$_H){1,6})|:(:|(:$_H){1,7}))") && eval "$SH"
         SH=$(_lk_regex_sh IPV6_OPT_PREFIX_REGEX "$IPV6_REGEX($_P)?") && eval "$SH"
 
+        SH=$(_lk_regex_sh IP_REGEX "($IPV4_REGEX|$IPV6_REGEX)") && eval "$SH"
         SH=$(_lk_regex_sh IP_OPT_PREFIX_REGEX "($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX)") && eval "$SH"
+        SH=$(_lk_regex_sh HOST_NAME_REGEX "($DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)") && eval "$SH"
         SH=$(_lk_regex_sh HOST_REGEX "($IPV4_REGEX|$IPV6_REGEX|$DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)") && eval "$SH"
         SH=$(_lk_regex_sh HOST_OPT_PREFIX_REGEX "($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX|$DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)") && eval "$SH"
 
@@ -406,7 +408,8 @@ done; return "$EXIT_STATUS"; }\n' _lk_get_regex "${SH//$'\n'/$'\n        '}"
 # expressions or for each REGEX_NAME.
 function lk_get_regex() {
     [ $# -gt 0 ] || set -- "${_LK_REGEX[@]}"
-    _lk_get_regex "$@"
+    _LK_VAR_PREFIX_DEPTH=1 \
+        _lk_get_regex "$@"
 }
 
 # lk_bash_at_least MAJOR [MINOR]

@@ -477,6 +477,25 @@ function lk_filter_ipv6() {
     sed -E "\\#^$IPV6_OPT_PREFIX_REGEX\$#!d"
 }
 
+# lk_hosts_file_add IP NAME...
+function lk_hosts_file_add() {
+    local LK_SUDO=1 FILE=/etc/hosts BLOCK_ID SH REGEX HOSTS _FILE
+    BLOCK_ID=$(lk_myself 1) &&
+        SH=$(lk_get_regex IP_REGEX HOST_NAME_REGEX) &&
+        eval "$SH" || return
+    REGEX="^$S*(#$S*)?$IP_REGEX($S+$HOST_NAME_REGEX)+$S+##$S*$BLOCK_ID$S*##"
+    HOSTS=$({ sed -E "/$REGEX/!d" "$FILE" &&
+        printf '%s %s\t## %s ##\n' "$1" "${*:2}" "$BLOCK_ID"; } |
+        sort -u) || return
+    _FILE=$(awk \
+        -v "HOSTS=$HOSTS" \
+        -v "FIRST=##$S*$BLOCK_ID$S*##" \
+        -f "$LK_BASE/lib/awk/hosts-update.awk" \
+        "$FILE") &&
+        lk_file_keep_original "$FILE" &&
+        lk_file_replace "$FILE" "$_FILE"
+}
+
 function _lk_node_ip() {
     local i PRIVATE=("${@:2}") IP
     IP=$(if lk_command_exists ip; then
@@ -709,8 +728,8 @@ function lk_node_is_host() {
         lk_warn "unable to retrieve authoritative DNS records for $1" || return
     # True if at least one node IP matches a host IP
     [ "$(comm -12 \
-        <(lk_echo_array HOST_IP) \
-        <(lk_echo_array NODE_IP) | wc -l)" -gt 0 ]
+        <(lk_echo_array HOST_IP | sort -u) \
+        <(lk_echo_array NODE_IP | sort -u) | wc -l)" -gt 0 ]
 }
 
 if lk_is_macos; then

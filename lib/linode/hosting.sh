@@ -143,7 +143,7 @@ FIELD_ERRORS=$(
     }
 
     DOMAIN_PART_REGEX="[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
-    DOMAIN_NAME_REGEX="($DOMAIN_PART_REGEX(\\.|\$)){2,}"
+    DOMAIN_NAME_REGEX="$DOMAIN_PART_REGEX(\\.$DOMAIN_PART_REGEX)+"
     EMAIL_ADDRESS_REGEX="[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@$DOMAIN_NAME_REGEX"
     LINUX_USERNAME_REGEX="[a-z_]([-a-z0-9_]{0,31}|[-a-z0-9_]{0,30}\\\$)"
     MYSQL_USERNAME_REGEX="[a-zA-Z0-9_]+"

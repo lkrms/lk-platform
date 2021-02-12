@@ -112,8 +112,11 @@ function lk_wp_json_encode() {
 # - LK_WP_FLUSH: flush rewrite rules, caches and transients after renaming
 #   (default: 1)
 function lk_wp_rename_site() {
-    local NEW_URL=${1:-} OLD_URL=${LK_WP_OLD_URL:-} PLUGIN_WARNING \
+    local NEW_URL OLD_URL=${LK_WP_OLD_URL:-} PLUGIN_WARNING \
         SITE_ROOT OLD_SITE_URL NEW_SITE_URL REPLACE i SEARCH HASH HASHES=
+    [ $# -eq 1 ] || lk_usage "\
+Usage: $(lk_myself -f) NEW_URL" || return
+    NEW_URL=$1
     lk_is_uri "$NEW_URL" ||
         lk_warn "not a valid URL: $NEW_URL" || return
     [ -n "$OLD_URL" ] ||
@@ -217,7 +220,9 @@ function lk_wp_db_dump_remote() {
         DB_NAME=${DB_NAME:-} DB_USER=${DB_USER:-} \
         DB_PASSWORD=${DB_PASSWORD:-} DB_HOST=${DB_HOST:-} \
         OUTPUT_FILE
-    [ -n "${1:-}" ] || lk_warn "no ssh host" || return
+    [ $# -ge 1 ] || lk_usage "\
+Usage: $(lk_myself -f) SSH_HOST [REMOTE_PATH]" || return
+    [ -n "$1" ] || lk_warn "no ssh host" || return
     REMOTE_PATH=${REMOTE_PATH%/}
     lk_console_message "Preparing to dump remote WordPress database"
     [ -n "$DB_NAME" ] &&
@@ -245,7 +250,8 @@ function lk_wp_db_dump_remote() {
 function lk_wp_db_dump() {
     local SITE_ROOT OUTPUT_FILE \
         DB_NAME DB_USER DB_PASSWORD DB_HOST
-    SITE_ROOT=${1:-$(lk_wp_get_site_root)} || return
+    SITE_ROOT=${1:-$(lk_wp_get_site_root)} || lk_usage "\
+Usage: $(lk_myself -f) [SITE_ROOT]" || return
     [ ! -t 1 ] || {
         OUTPUT_FILE=$(lk_replace ~/ "" "$SITE_ROOT")
         OUTPUT_FILE=localhost-${OUTPUT_FILE//\//_}-$(lk_date_ymdhms).sql.gz
@@ -340,7 +346,8 @@ ${LOCAL_DB_USER:+1}${LOCAL_DB_PASSWORD:+1}" = 111 ]; then
 function lk_wp_db_restore_local() {
     local SITE_ROOT SH SQL _SQL COMMAND \
         LOCAL_DB_NAME LOCAL_DB_USER LOCAL_DB_PASSWORD LOCAL_DB_HOST
-    [ -f "$1" ] || lk_warn "file not found: $1" || return
+    [ -f "$1" ] || lk_usage "\
+Usage: $(lk_myself -f) SQL_PATH [DB_NAME [DB_USER]]" || return
     SITE_ROOT=$(lk_wp_get_site_root) || return
     lk_console_message "Preparing to restore WordPress database"
     lk_wp_is_quiet || {
@@ -400,13 +407,15 @@ Proceed?" Y || return
     lk_console_success "Database restored successfully"
 }
 
-# lk_wp_sync_files_from_remote ssh_host [remote_path [local_path]]
+# lk_wp_sync_files_from_remote SSH_HOST [REMOTE_PATH [LOCAL_PATH]]
 function lk_wp_sync_files_from_remote() {
     local REMOTE_PATH="${2:-public_html}" LOCAL_PATH \
         ARGS=(-vrlptH -x --delete
             ${RSYNC_ARGS[@]+"${RSYNC_ARGS[@]}"}
             ${LK_RSYNC_ARGS:+"$LK_RSYNC_ARGS"}) \
         KEEP_LOCAL EXCLUDE EXIT_STATUS=0
+    [ $# -ge 1 ] || lk_usage "\
+Usage: $(lk_myself -f) SSH_HOST [REMOTE_PATH [LOCAL_PATH]]" || return
     # files that already exist on the local system will be added to --exclude
     KEEP_LOCAL=(
         "wp-config.php"
@@ -420,7 +429,6 @@ function lk_wp_sync_files_from_remote() {
         /wp-content/{backup,cache,upgrade,updraft}/
         ${LK_WP_SYNC_EXCLUDE[@]+"${LK_WP_SYNC_EXCLUDE[@]}"}
     )
-    [ -n "${1:-}" ] || lk_warn "no ssh host" || return
     LOCAL_PATH="${3:-$(lk_wp_get_site_root 2>/dev/null)}" ||
         LOCAL_PATH=~/public_html
     lk_console_message "Preparing to sync WordPress files"

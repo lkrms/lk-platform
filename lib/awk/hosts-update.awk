@@ -53,6 +53,5 @@ is_blank() {
 }
 
 END {
-    HOSTS = HOSTS "\n"
     print_hosts()
 }

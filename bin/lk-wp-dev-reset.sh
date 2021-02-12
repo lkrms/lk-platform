@@ -60,16 +60,22 @@ fi
 IP=$(LK_DIG_SERVER=1.1.1.1 lk_hosts_get_records A,AAAA "$SITE_DOMAIN")
 if [ -n "$IP" ] && ! lk_node_is_host "$SITE_HOST"; then
     NEW_SITE_ADDR=$(lk_console_read "New site address:" "" \
-        -i "http://${SITE_DOMAIN%%.*}.localhost")
-    [ -z "$NEW_SITE_ADDR" ] || [ "$NEW_SITE_ADDR" = "$SITE_ADDR" ] || {
+        -i "http://${SITE_DOMAIN%%.*}.hosting")
+    if [ -n "$NEW_SITE_ADDR" ] && [ "$NEW_SITE_ADDR" != "$SITE_ADDR" ]; then
         LK_WP_QUIET=1 LK_WP_REPLACE=1 LK_WP_REAPPLY=0 LK_WP_FLUSH=0 \
             LK_WP_REPLACE_COMMAND=wp \
-            lk_wp_rename_site "$NEW_SITE_ADDR" && STALE=1
-    }
+            lk_wp_rename_site "$NEW_SITE_ADDR"
+        STALE=1
+    fi
 fi
 
 lk_is_false STALE ||
     get_state
+
+HOSTS=("$SITE_HOST")
+EXTRA_HOST=www.${SITE_HOST#www.}
+[ "$EXTRA_HOST" = "$SITE_HOST" ] ||
+    HOSTS+=("$EXTRA_HOST")
 
 ADMIN_EMAIL="admin@$SITE_DOMAIN"
 lk_console_detail "Site address:" "$SITE_ADDR"
@@ -96,6 +102,7 @@ if lk_wp plugin is-active woocommerce; then
             "Test mode will be enabled for known WooCommerce gateways:"
     lk_console_detail "WooCommerce webhooks will be disabled"
 fi
+lk_console_detail "/etc/hosts will be updated with:" "${HOSTS[*]}"
 lk_console_warning "Plugin code will be allowed to run where necessary"
 
 lk_confirm "Proceed?" Y || lk_die ""
@@ -172,6 +179,8 @@ if lk_wp plugin is-active woocommerce; then
         }
     fi
 fi
+
+lk_hosts_file_add 127.0.0.1 "${HOSTS[@]}"
 
 lk_wp_reapply_config
 lk_wp_flush
