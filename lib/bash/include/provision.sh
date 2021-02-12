@@ -484,16 +484,23 @@ function lk_hosts_file_add() {
         SH=$(lk_get_regex IP_REGEX HOST_NAME_REGEX) &&
         eval "$SH" || return
     REGEX="^$S*(#$S*)?$IP_REGEX($S+$HOST_NAME_REGEX)+$S+##$S*$BLOCK_ID$S*##"
-    HOSTS=$({ sed -E "/$REGEX/!d" "$FILE" &&
+    _FILE=$(HOSTS=$({ sed -E "/$REGEX/!d" "$FILE" &&
         printf '%s %s\t## %s ##\n' "$1" "${*:2}" "$BLOCK_ID"; } |
-        sort -u) || return
-    _FILE=$(awk \
-        -v "HOSTS=$HOSTS" \
-        -v "FIRST=##$S*$BLOCK_ID$S*##" \
-        -f "$LK_BASE/lib/awk/hosts-update.awk" \
-        "$FILE") &&
+        sort -u) &&
+        awk \
+            -v "HOSTS=$HOSTS" \
+            -v "FIRST=##$S*$BLOCK_ID$S*##" \
+            -f "$LK_BASE/lib/awk/hosts-update.awk" \
+            "$FILE") || return
+    if lk_can_sudo install; then
         lk_file_keep_original "$FILE" &&
-        lk_file_replace "$FILE" "$_FILE"
+            lk_file_replace "$FILE" "$_FILE"
+    else
+        lk_console_item "You do not have permission to edit" "$FILE"
+        FILE=$(lk_mktemp_file) &&
+            echo "$_FILE" >"$FILE" &&
+            lk_console_detail "Updated hosts file written to:" "$FILE"
+    fi
 }
 
 function _lk_node_ip() {

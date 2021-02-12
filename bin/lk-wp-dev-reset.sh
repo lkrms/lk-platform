@@ -77,6 +77,7 @@ EXTRA_HOST=www.${SITE_HOST#www.}
 [ "$EXTRA_HOST" = "$SITE_HOST" ] ||
     HOSTS+=("$EXTRA_HOST")
 
+lk_console_message "Preparing to reset for local development"
 ADMIN_EMAIL="admin@$SITE_DOMAIN"
 lk_console_detail "Site address:" "$SITE_ADDR"
 lk_console_detail "Domain:" "$SITE_DOMAIN"
@@ -89,7 +90,6 @@ lk_console_detail "Installed at:" "$SITE_ROOT"
             "plugin" "plugins (${#ACTIVE_PLUGINS[@]})"
     ):"
 
-lk_console_message "Preparing to reset for local development"
 lk_console_detail "Salts in wp-config.php will be refreshed"
 lk_console_detail "Admin email address will be updated to:" "$ADMIN_EMAIL"
 lk_console_detail "User addresses will be updated to:" "user_<ID>@$SITE_DOMAIN"
@@ -180,9 +180,9 @@ if lk_wp plugin is-active woocommerce; then
     fi
 fi
 
-lk_hosts_file_add 127.0.0.1 "${HOSTS[@]}"
-
 lk_wp_reapply_config
 lk_wp_flush
+
+lk_hosts_file_add 127.0.0.1 "${HOSTS[@]}"
 
 lk_console_success "WordPress successfully reset for local development"
