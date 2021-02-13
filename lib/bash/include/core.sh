@@ -2290,7 +2290,7 @@ Usage: $(lk_myself -f) [-f] TARGET LINK"
         fi
     elif lk_maybe_sudo test ! -d "$LINK_DIR"; then
         lk_maybe_sudo \
-            mkdir -p"$v" -- "$LINK_DIR" || return
+            install -d"$v" -- "$LINK_DIR" || return
     fi
     lk_maybe_sudo ln -s"$v" -- "$TARGET" "$LINK" &&
         LK_SYMLINK_NO_CHANGE=0
@@ -2362,6 +2362,26 @@ function lk_files_exist() {
 
 function lk_dirs_exist() {
     lk_test_many "test -d" "$@"
+}
+
+# lk_dir_parents [-u UNTIL] DIR...
+function lk_dir_parents() {
+    local UNTIL=/
+    [ "${1:-}" != -u ] || {
+        UNTIL=$(realpath "$2") || return
+        shift 2
+    }
+    realpath "$@" | awk -v "u=$UNTIL" 'BEGIN {
+    l = length(u) + 1
+}
+substr($0 "/", 1, l) == u "/" {
+    split(substr($0, l), a, "/")
+    d = u
+    for(i in a) {
+        d = d (a[i] ? "/" a[i] : "")
+        print d
+    }
+}' | lk_filter 'test -d'
 }
 
 # lk_remove_false TEST ARRAY

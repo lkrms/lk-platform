@@ -422,7 +422,7 @@ function lk_icon_install() {
     )
     [ -f "$1" ] || lk_warn "file not found: $1" || return
     for SIZE in "${SIZES[@]}"; do
-        lk_maybe_sudo mkdir -pv "$TARGET_DIR/$SIZE/apps" &&
+        lk_maybe_sudo install -d "$TARGET_DIR/$SIZE/apps" &&
             lk_maybe_sudo convert "$1" -resize "$SIZE" \
                 "$TARGET_DIR/$SIZE/apps/${1##*/}" || return
     done
