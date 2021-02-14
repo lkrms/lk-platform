@@ -797,6 +797,22 @@ EOF
             /opt/opcache-gui
     fi
 
+    if lk_pac_installed lighttpd; then
+        unset LK_FILE_REPLACE_NO_CHANGE
+        lk_install -d -m 00755 /etc/lighttpd/conf.d
+        FILE=/etc/lighttpd/lighttpd.conf
+        lk_conf_enable_row \
+            "include_shell \"for f in /etc/lighttpd/conf.d/*.conf;do \
+[ -f \\\"\$f\\\" ]||continue;\
+printf 'include \\\"%s\\\"\\n' \\\"\${f#/etc/lighttpd/}\\\";\
+done\"" "$FILE"
+        SERVICE_ENABLE+=(
+            lighttpd "Lighttpd"
+        )
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+            SERVICE_RESTART+=(lighttpd)
+    fi
+
     if lk_pac_installed bluez; then
         unset LK_FILE_REPLACE_NO_CHANGE
         lk_conf_set_option AutoEnable true /etc/bluetooth/main.conf

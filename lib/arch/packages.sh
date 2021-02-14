@@ -128,6 +128,10 @@ AUR_PACKAGES=(
     ${AUR_PACKAGES[@]+"${AUR_PACKAGES[@]}"}
 )
 
+if lk_node_service_enabled lighttpd; then
+    PAC_PACKAGES+=(lighttpd)
+fi
+
 if lk_node_service_enabled desktop; then
     PAC_PACKAGES+=(
         xf86-video-vesa
