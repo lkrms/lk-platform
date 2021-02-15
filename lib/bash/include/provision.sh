@@ -845,6 +845,43 @@ function lk_ssl_verify_cert() {
     lk_console_log "SSL certificate and private key verified"
 }
 
+# lk_ssl_get_self_signed_cert DOMAIN...
+function lk_ssl_get_self_signed_cert() {
+    [ $# -gt 0 ] || lk_warn "no domain" || return
+    [ $# -gt 1 ] || set -- "${1#www.}" "www.${1#www.}"
+    lk_console_item "Generating a self-signed SSL certificate for:" \
+        $'\n'"$(lk_echo_args "$@")"
+    lk_no_input || {
+        local FILES=("$1".{key,csr,cert})
+        lk_remove_missing FILES || return
+        [ ${#FILES[@]} -eq 0 ] || {
+            lk_echo_array FILES | lk_console_detail_list \
+                "Existing files will be overwritten:" file files
+            lk_confirm "Proceed?" Y || return
+        }
+    }
+    OPENSSL_CONF=$(cat /etc/ssl/openssl.cnf) || return
+    OPENSSL_EXT_CONF=$(printf '\n%s' \
+        "[ san ]" \
+        "subjectAltName = DNS:$1, DNS:www.$1")
+    openssl genrsa \
+        -out "$1.key" \
+        2048 || return
+    openssl req -new \
+        -key "$1.key" \
+        -subj "/CN=$1" \
+        -reqexts san \
+        -config <(cat <<<"$OPENSSL_CONF$OPENSSL_EXT_CONF") \
+        -out "$1.csr" || return
+    openssl x509 -req -days 365 \
+        -in "$1.csr" \
+        -extensions san \
+        -extfile <(cat <<<"$OPENSSL_EXT_CONF") \
+        -signkey "$1.key" \
+        -out "$1.cert" || return
+    rm -f "$1.csr"
+}
+
 function _lk_option_check() {
     { { [ $# -gt 0 ] &&
         echo -n "$1" ||

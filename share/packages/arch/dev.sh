@@ -14,6 +14,7 @@ AUR_PACKAGES=()
 PAC_REJECT=()
 
 PAC_KEEP=(
+    ant
     offlineimap
     subversion
     zoom
