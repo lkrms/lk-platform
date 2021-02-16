@@ -377,7 +377,8 @@ $LK_NODE_HOSTNAME" &&
     if [ -d /etc/polkit-1/rules.d ]; then
         lk_console_message "Checking polkit rules"
         FILE=/etc/polkit-1/rules.d/49-wheel.rules
-        lk_install -m 00640 "$FILE"
+        # polkit fails with "error compiling script" unless file mode is 644
+        lk_install -m 00644 "$FILE"
         lk_file_replace \
             -f "$LK_BASE/share/polkit-1/rules.d/default-arch.rules" \
             "$FILE"
@@ -678,6 +679,8 @@ $LK_NODE_HOSTNAME" &&
             [ -f "$FILE" ] || continue
             lk_php_enable_option extension "$EXT" "$FILE"
         done
+        lk_php_set_option \
+            imagick.skip_version_check 1 /etc/php/conf.d/imagick.ini
         if lk_is_desktop; then
             lk_php_set_option error_reporting E_ALL
             lk_php_set_option display_errors On

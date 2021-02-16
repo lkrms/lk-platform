@@ -2,6 +2,16 @@
 
 # shellcheck disable=SC2207
 
+for MYSQL_SERVICE in mariadb mysql mysqld; do
+    ! lk_systemctl_running "$MYSQL_SERVICE" || break
+    MYSQL_SERVICE=
+done
+
+[ -n "$MYSQL_SERVICE" ] || {
+    lk_console_message "Skipping database backup (no running MySQL service)"
+    return 0
+}
+
 [ "$EXIT_STATUS" -eq 0 ] || lk_console_warning \
     "WARNING: because rsync failed to complete, database backups may only be \
 useful for diagnostic purposes"
