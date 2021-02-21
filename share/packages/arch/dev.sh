@@ -15,6 +15,7 @@ PAC_REJECT=()
 
 PAC_KEEP=(
     ant
+    apachedirectorystudio
     offlineimap
     subversion
     zoom
