@@ -94,7 +94,7 @@ function lk_git_branch_upstream() {
 function lk_git_branch_upstream_remote() {
     local UPSTREAM
     UPSTREAM=$(lk_git_branch_upstream "$@") &&
-        [[ $UPSTREAM =~ ^([^/]+)/[^/]+$ ]] &&
+        [[ $UPSTREAM =~ ^([^/]+)/([^/]+(/[^/]+)*)$ ]] &&
         echo "${BASH_REMATCH[1]}"
 }
 
@@ -114,7 +114,7 @@ function lk_git_branch_push() {
 function lk_git_branch_push_remote() {
     local PUSH
     PUSH=$(lk_git_branch_push "$@") &&
-        [[ $PUSH =~ ^([^/]+)/[^/]+$ ]] &&
+        [[ $PUSH =~ ^([^/]+)/([^/]+(/[^/]+)*)$ ]] &&
         echo "${BASH_REMATCH[1]}"
 }
 
@@ -225,7 +225,8 @@ function lk_git_fast_forward_branch() {
 # lk_git_push_branch BRANCH DOWNSTREAM
 function lk_git_push_branch() {
     local REMOTE REMOTE_BRANCH AHEAD _PATH LOG
-    [[ $2 =~ ^([^/]+)/([^/]+)$ ]] || lk_warn "invalid downstream: $2" || return
+    [[ $2 =~ ^([^/]+)/([^/]+(/[^/]+)*)$ ]] ||
+        lk_warn "invalid downstream: $2" || return
     REMOTE=${BASH_REMATCH[1]}
     REMOTE_BRANCH=${BASH_REMATCH[2]}
     AHEAD=$(git rev-list --count "$2..$1") &&
@@ -394,6 +395,7 @@ function lk_git_with_repos() {
     local OPTIND OPTARG OPT LK_USAGE PARALLEL GIT_SSH_COMMAND STDOUT PROMPT=1 \
         REPO_COMMAND NOUN FD REPO ERROR_COUNT=0 \
         REPOS=(${LK_GIT_REPOS[@]+"${LK_GIT_REPOS[@]}"})
+    LK_GIT_REPO_ERROR_COUNT=${#REPOS[@]}
     LK_USAGE="\
 Usage: $(lk_myself -f) [-p|-t] [-y] COMMAND [ARG...]
 
@@ -476,6 +478,7 @@ directory of a working tree" || return
             LK_TTY_NO_FOLD=1 \
                 lk_console_error "Command failed in $ERROR_COUNT of $NOUN"
     }
+    LK_GIT_REPO_ERROR_COUNT=$ERROR_COUNT
     [ "$ERROR_COUNT" -eq 0 ]
 }
 
@@ -487,17 +490,29 @@ function lk_git_audit_repo() {
 }
 
 function lk_git_audit_repos() {
-    local EXIT_STATUS=0 LK_GIT_QUIET=1 \
+    local FETCH_ERRORS=0 AUDIT_ERRORS=0 LK_GIT_QUIET=${LK_GIT_QUIET-1} NOUN \
         LK_GIT_REPOS=(${LK_GIT_REPOS[@]+"${LK_GIT_REPOS[@]}"})
     [ $# -eq 0 ] || LK_GIT_REPOS=("$@")
     [ ${#LK_GIT_REPOS[@]} -gt 0 ] || lk_git_get_repos LK_GIT_REPOS
     [ ${#LK_GIT_REPOS[@]} -gt 0 ] || lk_warn "no repos found" || return
-    lk_echo_array LK_GIT_REPOS | lk_console_list \
-        "Fetching from all remotes in ${#LK_GIT_REPOS[@]} $(lk_maybe_plural \
-            ${#LK_GIT_REPOS[@]} repo repos):"
-    lk_git_with_repos -py lk_git_fetch_all || EXIT_STATUS=$?
-    lk_git_with_repos -ty lk_git_audit_repo -s || return
-    return "$EXIT_STATUS"
+    NOUN="${#LK_GIT_REPOS[@]} $(lk_maybe_plural ${#LK_GIT_REPOS[@]} repo repos)"
+    lk_echo_array LK_GIT_REPOS |
+        lk_console_list "Fetching from all remotes in $NOUN:"
+    lk_git_with_repos -py lk_git_fetch_all ||
+        FETCH_ERRORS=$LK_GIT_REPO_ERROR_COUNT
+    lk_git_with_repos -ty lk_git_audit_repo -s ||
+        AUDIT_ERRORS=$LK_GIT_REPO_ERROR_COUNT
+    [ "$FETCH_ERRORS" -eq 0 ] &&
+        LK_TTY_NO_FOLD=1 \
+            lk_console_success "Fetch succeeded in $NOUN" ||
+        LK_TTY_NO_FOLD=1 \
+            lk_console_error "Fetch failed in $FETCH_ERRORS of $NOUN"
+    [ "$AUDIT_ERRORS" -eq 0 ] &&
+        LK_TTY_NO_FOLD=1 \
+            lk_console_success "Update succeeded in $NOUN" ||
+        LK_TTY_NO_FOLD=1 \
+            lk_console_error "Update failed in $AUDIT_ERRORS of $NOUN"
+    [[ $((FETCH_ERRORS + AUDIT_ERRORS)) -eq 0 ]]
 }
 
 # lk_git_ancestors REF...
