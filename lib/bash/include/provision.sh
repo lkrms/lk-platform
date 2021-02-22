@@ -150,7 +150,8 @@ Usage: $(lk_myself -f) DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..
             "$TOTAL file $(lk_maybe_plural \
                 "$TOTAL" mode modes) updated$(lk_verbose ||
                     echo " in $(lk_pretty_path "$DIR")")"
-    ! ((TOTAL)) ||
+    ! ((TOTAL)) &&
+        lk_delete_on_exit "$LOG_FILE" ||
         lk_console_detail "Changes logged to:" "$LOG_FILE"
 }
 
@@ -992,6 +993,14 @@ function lk_conf_enable_row() {
         "$1" \
         "^$ROW\$" \
         "^$S*$ROW$S*\$" "^$S*#$S*$ROW$S*\$"
+}
+
+# lk_conf_remove_row ROW [FILE]
+function lk_conf_remove_row() {
+    local ROW FILE=${2:-$LK_CONF_OPTION_FILE} _FILE
+    ROW=$(lk_regex_expand_whitespace "$(lk_escape_ere "$1")")
+    _FILE=$(sed -E "/^$S*$ROW$S*\$/d" "$FILE") &&
+        lk_file_replace -l "$FILE" "$_FILE"
 }
 
 # lk_php_set_option OPTION VALUE [FILE]

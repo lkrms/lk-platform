@@ -802,13 +802,28 @@ EOF
 
     if lk_pac_installed lighttpd; then
         unset LK_FILE_REPLACE_NO_CHANGE
-        lk_install -d -m 00755 /etc/lighttpd/conf.d
-        FILE=/etc/lighttpd/lighttpd.conf
+        DIR=/etc/lighttpd/conf.d
+        lk_install -d -m 00755 "$DIR"
+        LK_CONF_OPTION_FILE=/etc/lighttpd/lighttpd.conf
+        lk_conf_remove_row 'var.log_root = "/var/log/lighttpd"'
         lk_conf_enable_row \
             "include_shell \"for f in /etc/lighttpd/conf.d/*.conf;do \
 [ -f \\\"\$f\\\" ]||continue;\
 printf 'include \\\"%s\\\"\\n' \\\"\${f#/etc/lighttpd/}\\\";\
-done\"" "$FILE"
+done\""
+        FILE=$DIR/00-${LK_PATH_PREFIX}default.conf
+        lk_install -m 00644 "$FILE"
+        lk_file_replace -f "$LK_BASE/share/lighttpd/default-arch.conf" "$FILE"
+        lk_symlink \
+            "$LK_BASE/share/lighttpd/simple-vhost.sh" "$DIR/simple-vhost.sh"
+        for FILE in 40-access_log.conf 40-mime.conf 60-status.conf; do
+            _FILE=/usr/share/doc/lighttpd/config/conf.d/${FILE#*-}
+            [ -f "$_FILE" ] || lk_warn "file not found: $_FILE" || continue
+            FILE=$DIR/$FILE
+            lk_install -m 00644 "$FILE"
+            lk_file_replace "$FILE" < <(sed -E \
+                "s/^($S*mimetype.assign$S*)\+?=($S*\($S*)/\1:=\2/" "$_FILE")
+        done
         SERVICE_ENABLE+=(
             lighttpd "Lighttpd"
         )
