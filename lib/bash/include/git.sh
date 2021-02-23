@@ -294,11 +294,14 @@ function lk_git_update_repo() {
 }
 
 function lk_git_update_remote() {
-    local ERRORS=0 BRANCH DOWNSTREAM
+    local QUIET ERRORS=0 BRANCH DOWNSTREAM
+    [ "${1:-}" != -q ] || { QUIET=1 && shift; }
     for BRANCH in $(lk_git_branch_list_local); do
-        DOWNSTREAM=$(lk_git_branch_push "$BRANCH") ||
-            lk_console_warning -r "No push destination for branch:" "$BRANCH" ||
+        DOWNSTREAM=$(lk_git_branch_push "$BRANCH") || {
+            [ -n "${QUIET:-}" ] ||
+                lk_console_warning "No push destination for branch:" "$BRANCH"
             continue
+        }
         lk_git_push_branch "$BRANCH" "$DOWNSTREAM" ||
             ((++ERRORS))
     done
@@ -496,7 +499,7 @@ function lk_git_audit_repo() {
     local SKIP_FETCH
     [ "${1:-}" != -s ] || { SKIP_FETCH=1 && shift; }
     lk_git_update_repo ${SKIP_FETCH:+-s} &&
-        lk_git_update_remote
+        lk_git_update_remote -q
 }
 
 function lk_git_audit_repos() {

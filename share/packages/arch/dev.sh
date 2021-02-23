@@ -274,9 +274,10 @@ PAC_PACKAGES+=(
     php-imap
     php-intl
     php-memcache
-    php-memcached
-    php-sqlite
-    xdebug
+    php-memcached #
+    php-sqlite    #
+    php7          # for phpdoc-phar
+    xdebug        #
 
     #
     mysql-python
