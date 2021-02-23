@@ -79,6 +79,16 @@ function lk_git_branch_list_local() {
         git for-each-ref --format="%(refname:short)" refs/heads
 }
 
+# lk_git_branch_list_remote [REMOTE]
+function lk_git_branch_list_remote() {
+    local REMOTE _REMOTE
+    REMOTE=${1:-$(lk_git_remote_singleton)} || lk_warn "no remote" || return
+    _REMOTE=$(lk_escape_ere "$REMOTE")
+    git for-each-ref --format="%(refname:short)" "refs/remotes/$REMOTE" |
+        lk_require_output \
+            sed -E -e "/^$_REMOTE\/HEAD\$/d" -e "s/^$_REMOTE\///"
+}
+
 # lk_git_branch_upstream [BRANCH]
 #
 # Output upstream ("pull") <REMOTE>/<REMOTE_BRANCH> for BRANCH or the current

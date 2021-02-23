@@ -306,6 +306,7 @@ PAC_PACKAGES+=(
 AUR_PACKAGES+=(
     demjson
     nodejs-less
+    phpdoc-phar
     robo3t-bin
     sublime-merge
     sublime-text
