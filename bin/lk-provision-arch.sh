@@ -814,8 +814,9 @@ done\""
         FILE=$DIR/00-${LK_PATH_PREFIX}default.conf
         lk_install -m 00644 "$FILE"
         lk_file_replace -f "$LK_BASE/share/lighttpd/default-arch.conf" "$FILE"
-        lk_symlink \
-            "$LK_BASE/share/lighttpd/simple-vhost.sh" "$DIR/simple-vhost.sh"
+        for FILE in reverse-proxy.sh simple-vhost.sh; do
+            lk_symlink "$LK_BASE/share/lighttpd/$FILE" "$DIR/$FILE"
+        done
         for FILE in 40-access_log.conf 40-mime.conf 60-status.conf; do
             _FILE=/usr/share/doc/lighttpd/config/conf.d/${FILE#*-}
             [ -f "$_FILE" ] || lk_warn "file not found: $_FILE" || continue
