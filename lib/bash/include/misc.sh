@@ -74,6 +74,47 @@ function lk_mediainfo_check() {
     }
 }
 
+function lk_vscode_state_get_db() {
+    local DB=/User/globalStorage/state.vscdb PATHS
+    PATHS=(~/{.config,"Library/Application Support"}/{VSCodium,Code})
+    PATHS=("${PATHS[@]/%/$DB}")
+    lk_first_existing "${PATHS[@]}"
+}
+
+function lk_vscode_state_get_item() {
+    local KEY DB
+    [ $# -ge 1 ] || lk_warn "no key" || return
+    KEY=${1//"'"/"''"}
+    DB=$(lk_vscode_state_get_db) &&
+        sqlite3 -line "$DB" \
+            "select value from ItemTable where key='$KEY'" |
+        awk -F"$S*=$S*" '$1=="value"{print$2}'
+}
+
+function lk_vscode_state_set_item() {
+    local KEY VALUE DB
+    [ $# -ge 2 ] || lk_warn "invalid arguments" || return
+    KEY=${1//"'"/"''"}
+    VALUE=${2//"'"/"''"}
+    DB=$(lk_vscode_state_get_db) &&
+        sqlite3 "$DB" \
+            "replace into ItemTable (key, value) values ('$KEY', '$VALUE')"
+}
+
+function lk_vscode_extension_disable() {
+    local KEY=extensionsIdentifiers/disabled JSON DISABLED
+    [ -n "${1:-}" ] || lk_warn "no extension" || return
+    JSON=$(lk_vscode_state_get_item "$KEY") &&
+        DISABLED=$(jq --arg id "$1" \
+            '[.[]|select(.id==$id)]|length' <<<"$JSON") ||
+        return
+    [ "$DISABLED" -gt 0 ] || {
+        lk_console_detail "Disabling VS Code extension:" "$1"
+        JSON=$(jq -c --arg id "$1" '.+[{"id":$id}]' <<<"$JSON") &&
+            lk_vscode_state_set_item "$KEY" "$JSON"
+    }
+}
+
 function lk_readynas_poweroff() {
     local NAS_HOSTNAME=$1 NAS_USER=$2 PASSWORD URL
     PASSWORD="${3-$(lk_secret "$NAS_USER@$NAS_HOSTNAME" \
