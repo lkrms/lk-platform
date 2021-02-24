@@ -442,6 +442,33 @@ function lk_in_chroot() {
         echo 0 || echo 1)}"
 }
 
+function lk_fs_ext4_check() {
+    local IFS=$'\n' SOURCES SOURCE
+    SOURCES=($(findmnt --types ext4,ext3,ext2 --noheadings --output SOURCE)) &&
+        [ ${#SOURCES[@]} -gt 0 ] ||
+        lk_warn "no ext4, ext3, or ext2 filesystems found" || return
+    [ $# -gt 0 ] || set -- \
+        "Filesystem volume name" \
+        "Last mounted on" \
+        "Default mount options" \
+        "Filesystem state" \
+        "Filesystem created" \
+        "Last mount time" \
+        "Last write time" \
+        "Mount count" \
+        "Maximum mount count" \
+        "Last checked" \
+        "Check interval" \
+        "Lifetime writes"
+    for SOURCE in "${SOURCES[@]}"; do
+        lk_console_item "Checking:" "$SOURCE"
+        lk_elevate tune2fs -l "$SOURCE" |
+            sed -En "s/^($(lk_regex_implode "$@")):$S*/\1\t/p" |
+            IFS=$'\t' lk_tty_detail_pairs || return
+        lk_console_blank
+    done
+}
+
 function lk_is_portable() {
     # 8  = Portable
     # 9  = Laptop

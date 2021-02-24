@@ -232,7 +232,7 @@ lk_start_trace
             ETHERNET[$i]=$IF_NAME
             FILE=$NM_DIR/$IF_NAME$NM_EXT
             UDEV_RULES[$i]=$(printf \
-                'SUBSYSTEM=="net", ACTION=="add", ATTR{address}=="%s", NAME="%s"\n' \
+                'SUBSYSTEM=="net", DEVPATH!="*/virtual/*", ACTION=="add", ATTR{address}=="%s", NAME="%s"\n' \
                 "$IF_ADDRESS" "$IF_NAME")
             if [ "$IF" != "$IF_NAME" ]; then
                 # If this interface has a connection profile, try to rename it
@@ -430,7 +430,7 @@ $LK_NODE_HOSTNAME" &&
         SERVICE_RESTART+=(setterm-enable-blanking)
     }
 
-    ROOT_DEVICE=$(findmnt --list --noheadings --target / --output SOURCE)
+    ROOT_DEVICE=$(findmnt --noheadings --target / --output SOURCE)
     if lk_block_device_is_ssd "$ROOT_DEVICE"; then
         lk_console_message "Checking fstrim"
         unset LK_FILE_REPLACE_NO_CHANGE
@@ -805,6 +805,18 @@ EOF
 
     if lk_pac_installed lighttpd; then
         unset LK_FILE_REPLACE_NO_CHANGE
+        FILE=/etc/systemd/system/lighttpd.service.d/override.conf
+        lk_install -d -m 00755 "${FILE%/*}"
+        lk_install -m 00644 "$FILE"
+        lk_file_replace "$FILE" <<EOF
+# If a reverse proxy with a hostname is enabled, lighttpd will go down with
+# "Temporary failure in name resolution" if started too early
+[Unit]
+After=network-online.target
+Wants=network-online.target
+EOF
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+            DAEMON_RELOAD=1
         DIR=/etc/lighttpd/conf.d
         lk_install -d -m 00755 "$DIR"
         LK_CONF_OPTION_FILE=/etc/lighttpd/lighttpd.conf

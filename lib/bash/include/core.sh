@@ -1477,6 +1477,30 @@ function lk_console_message() {
     esac
 }
 
+# lk_tty_pairs [COLOUR]
+function lk_tty_pairs() {
+    local LK_TTY_NO_FOLD=1 LEN=0 KEY VALUE KEYS=() VALUES=() i
+    while read -r KEY VALUE; do
+        [ ${#KEY} -le "$LEN" ] || LEN=${#KEY}
+        KEYS[${#KEYS[@]}]=$KEY
+        VALUES[${#VALUES[@]}]=$VALUE
+    done
+    for i in "${!KEYS[@]}"; do
+        KEY=${KEYS[$i]}
+        lk_console_item \
+            "$KEY:$(eval "printf ' %.s' {1..$((LEN - ${#KEY} + 1))}")" \
+            "${VALUES[$i]}" \
+            "$@"
+    done
+}
+
+# lk_tty_detail_pairs [COLOUR]
+function lk_tty_detail_pairs() {
+    local LK_TTY_PREFIX=${LK_TTY_PREFIX-   -> } \
+        LK_TTY_MESSAGE_COLOUR=${LK_TTY_MESSAGE_COLOUR-}
+    lk_tty_pairs "${1-$LK_YELLOW}"
+}
+
 # lk_console_detail MESSAGE [MESSAGE2 [COLOUR]]
 function lk_console_detail() {
     local LK_TTY_PREFIX=${LK_TTY_PREFIX-   -> } \
