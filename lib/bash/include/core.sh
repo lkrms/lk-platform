@@ -2711,7 +2711,7 @@ function lk_file_get_text() {
     lk_is_identifier "$2" || lk_warn "not a valid identifier: $2" || return
     eval "$2=\$(cat \"\$1\" && printf .)" &&
         eval "$2=\${$2%.}" &&
-        { [ -z "${!2}" ] ||
+        { [ -z "${!2:+1}" ] ||
             eval "$2=\${$2%\$'\\n'}\$'\\n'"; }
 }
 
@@ -2883,7 +2883,7 @@ Usage: $(lk_myself -f) [-b|-m] [-l] [-i IGNORE] [-f SOURCE_FILE] FILE [CONTENT]"
         lk_maybe_sudo test -f "$1" || lk_warn "not a file: $1" || return
         lk_maybe_sudo test -L "$1" || ! diff -q \
             <(lk_maybe_sudo cat "$1" | _lk_maybe_filter "$IGNORE") \
-            <([ -z "$CONTENT" ] || echo "${CONTENT%$'\n'}" |
+            <([ -z "${CONTENT:+1}" ] || echo "${CONTENT%$'\n'}" |
                 _lk_maybe_filter "$IGNORE") >/dev/null || {
             ! lk_verbose 2 || lk_console_detail "Not changed:" "$1"
             return 0

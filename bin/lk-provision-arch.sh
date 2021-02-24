@@ -39,6 +39,9 @@ if is_bootstrap; then
         lk_console_detail "Masking service:" "${2:-$1}"
         sudo systemctl mask "$1"
     }
+    function lk_systemctl_stop() {
+        true
+    }
     lk_console_blank
 else
     function systemctl_enable() {
@@ -830,6 +833,24 @@ done\""
         )
         ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
             SERVICE_RESTART+=(lighttpd)
+    fi
+
+    if lk_pac_installed squid; then
+        unset LK_FILE_REPLACE_NO_CHANGE
+        FILE=/etc/squid/squid.conf
+        grep -Eq "^$S*cache_dir$S+" "$FILE" ||
+            lk_squid_set_option cache_dir "aufs /var/cache/squid 20000 16 256"
+        lk_user_in_group proxy ||
+            sudo usermod --append --groups proxy "$USER"
+        SERVICE_ENABLE+=(
+            squid "Squid proxy server"
+        )
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE || {
+            lk_systemctl_stop squid &&
+                sudo squid -zN &>/dev/null || lk_die \
+                "error creating Squid swap directories and cache_dir structures"
+            SERVICE_RESTART+=(squid)
+        }
     fi
 
     if lk_pac_installed bluez; then

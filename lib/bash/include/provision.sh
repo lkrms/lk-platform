@@ -961,8 +961,9 @@ Usage: $(lk_myself -f) [-s SECTION] [-p] FILE SETTING CHECK_REGEX [REPLACE_REGEX
             _lk_option_do_replace && return 0 || return
         }
     done
-    # Use a clean copy of FILE in case of buggy regex
-    __FILE=$_FILE$SETTING
+    # Use a clean copy of FILE in case of buggy regex, and add a newline to work
+    # around slow expansion of ${CONTENT%$'\n'}
+    __FILE=$_FILE$SETTING$'\n'
     _lk_option_do_replace
 }
 
@@ -1027,7 +1028,7 @@ function lk_php_enable_option() {
 
 # lk_httpd_set_option OPTION VALUE [FILE]
 function lk_httpd_set_option() {
-    local OPTION VALUE FILE=${3:-$LK_CONF_OPTION_FILE}
+    local OPTION VALUE REPLACE_WITH FILE=${3:-$LK_CONF_OPTION_FILE}
     OPTION=$(lk_regex_case_insensitive "$(lk_escape_ere "$1")")
     VALUE=$(lk_regex_expand_whitespace "$(lk_escape_ere "$2")")
     REPLACE_WITH=$(lk_escape_ere_replace "$1 $2")
@@ -1040,7 +1041,7 @@ function lk_httpd_set_option() {
 
 # lk_httpd_enable_option OPTION VALUE [FILE]
 function lk_httpd_enable_option() {
-    local OPTION VALUE FILE=${3:-$LK_CONF_OPTION_FILE}
+    local OPTION VALUE REPLACE_WITH FILE=${3:-$LK_CONF_OPTION_FILE}
     OPTION=$(lk_regex_case_insensitive "$(lk_escape_ere "$1")")
     VALUE=$(lk_regex_expand_whitespace "$(lk_escape_ere "$2")")
     REPLACE_WITH=$(lk_escape_ere_replace "$1 $2")
@@ -1057,6 +1058,21 @@ function lk_httpd_remove_option() {
     VALUE=$(lk_regex_expand_whitespace "$(lk_escape_ere "$2")")
     _FILE=$(sed -E "/^$S*$OPTION$S+$VALUE$S*\$/d" "$FILE") &&
         lk_file_replace -l "$FILE" "$_FILE"
+}
+
+# lk_squid_set_option OPTION VALUE [FILE]
+function lk_squid_set_option() {
+    local OPTION VALUE REPLACE_WITH REGEX FILE=${3:-$LK_CONF_OPTION_FILE}
+    OPTION=$(lk_escape_ere "$1")
+    VALUE=$(lk_regex_expand_whitespace "$(lk_escape_ere "$2")")
+    REPLACE_WITH=$(lk_escape_ere_replace "$1 $2")
+    REGEX="$OPTION($S+([^#[:space:]]|#$NS)$NS*)*($S+#$S+.*)?"
+    lk_option_set -p "$FILE" \
+        "$1 $2" \
+        "^$S*$OPTION$S+$VALUE($S*\$|$S+#$S+)" \
+        "0,/^$S*$REGEX\$/{s/^($S*)$REGEX\$/\\1$REPLACE_WITH\\4/}" \
+        "0,/^$S*#$REGEX\$/{s/^($S*)#$REGEX\$/\\1$REPLACE_WITH\\4/}" \
+        "0,/^$S*# $REGEX\$/{s/^($S*)# $REGEX\$/\\1$REPLACE_WITH\\4/}"
 }
 
 # _lk_crontab REMOVE_REGEX ADD_COMMAND
