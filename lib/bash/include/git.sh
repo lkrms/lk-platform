@@ -89,6 +89,12 @@ function lk_git_branch_list_remote() {
             sed -E -e "/^$_REMOTE\/HEAD\$/d" -e "s/^$_REMOTE\///"
 }
 
+# lk_git_stash_list
+function lk_git_stash_list() {
+    lk_require_output \
+        git stash list --format="%gd"
+}
+
 # lk_git_branch_upstream [BRANCH]
 #
 # Output upstream ("pull") <REMOTE>/<REMOTE_BRANCH> for BRANCH or the current
