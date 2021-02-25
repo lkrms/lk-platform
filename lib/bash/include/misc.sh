@@ -105,6 +105,7 @@ function lk_vscode_extension_disable() {
     local KEY=extensionsIdentifiers/disabled JSON DISABLED
     [ -n "${1:-}" ] || lk_warn "no extension" || return
     JSON=$(lk_vscode_state_get_item "$KEY") &&
+        JSON=${JSON:-"[]"} &&
         DISABLED=$(jq --arg id "$1" \
             '[.[]|select(.id==$id)]|length' <<<"$JSON") ||
         return

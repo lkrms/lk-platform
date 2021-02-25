@@ -288,10 +288,14 @@ EOF
         gnu-tar    #
         wget       #
         jq         # for parsing `brew info` output
-        mas        # for managing Mac App Store apps
         newt       # for `whiptail`
         python-yq  # for plist parsing with `xq`
     )
+    ! MACOS_VERSION=$(lk_macos_version) ||
+        ! lk_version_at_least "$MACOS_VERSION" 10.15 ||
+        INSTALL+=(
+            mas # for managing Mac App Store apps
+        )
     INSTALL=($(comm -13 \
         <(lk_brew_formulae | sort -u) \
         <(lk_echo_array INSTALL | sort -u)))
@@ -430,7 +434,7 @@ EOF
 
     INSTALL_APPS=()
     UPGRADE_APPS=()
-    if [ ${#MAS_APPS[@]} -gt "0" ]; then
+    if [ ${#MAS_APPS[@]} -gt "0" ] && lk_command_exists mas; then
         lk_console_message "Checking Mac App Store apps"
         while ! APPLE_ID=$(mas account 2>/dev/null); do
             APPLE_ID=
