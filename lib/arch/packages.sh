@@ -136,6 +136,17 @@ if lk_node_service_enabled squid; then
     PAC_PACKAGES+=(squid)
 fi
 
+if lk_node_service_enabled libvirt; then
+    PAC_PACKAGES+=(
+        libvirt
+        qemu
+        ebtables
+        dnsmasq
+        edk2-ovmf
+        libguestfs
+    )
+fi
+
 if lk_node_service_enabled desktop; then
     PAC_PACKAGES+=(
         xf86-video-vesa

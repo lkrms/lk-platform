@@ -876,8 +876,7 @@ done\""
     fi
 
     if lk_pac_installed libvirt; then
-        ! lk_is_desktop ||
-            { lk_user_in_group libvirt && lk_user_in_group kvm; } ||
+        lk_user_in_group libvirt && lk_user_in_group kvm ||
             sudo usermod --append --groups libvirt,kvm "$USER"
         LIBVIRT_USERS=$(lk_get_users_in_group libvirt)
         LIBVIRT_USERS=$([ -z "$LIBVIRT_USERS" ] || id -u $LIBVIRT_USERS)
