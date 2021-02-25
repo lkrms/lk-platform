@@ -484,12 +484,14 @@ APT_GET_ARGS=(
 REPOS=()
 ADD_APT_REPOSITORY_ARGS=(-yn)
 EXCLUDE_PACKAGES=()
+GET_PIP_URL=https://bootstrap.pypa.io/get-pip.py
 CERTBOT_REPO=ppa:certbot/certbot
 case "$DISTRIB_RELEASE" in
 16.04)
     REPOS+=("$CERTBOT_REPO")
     ADD_APT_REPOSITORY_ARGS=(-y)
     EXCLUDE_PACKAGES+=(php-apcu-bc php-yaml)
+    GET_PIP_URL=https://bootstrap.pypa.io/3.5/get-pip.py
     PHPVER=7.0
     ;;
 18.04)
@@ -800,7 +802,6 @@ PACKAGES=(
     ntp
 
     #
-    apt-utils
     bash-completion
     byobu
     ca-certificates
@@ -811,7 +812,6 @@ PACKAGES=(
     dnsutils
     git
     htop
-    info
     iptables
     iptables-persistent
     iputils-ping
@@ -820,13 +820,12 @@ PACKAGES=(
     less
     logrotate
     lsof
-    man-db
-    manpages
     moreutils
     nano
     netcat-openbsd
     psmisc
     pv
+    rdfind
     rsync
     tcpdump
     telnet
@@ -1065,7 +1064,7 @@ fi
 
 # TODO: verify downloads
 lk_console_message "Installing pip, ps_mem, Glances, awscli"
-lk_keep_trying curl --fail --output /root/get-pip.py "https://bootstrap.pypa.io/get-pip.py"
+lk_keep_trying curl --fail --output /root/get-pip.py "$GET_PIP_URL"
 python3 /root/get-pip.py
 lk_keep_trying pip install ps_mem glances awscli
 
@@ -1168,6 +1167,8 @@ esac
 PACKAGES=($(printf '%s\n' "${PACKAGES[@]}" | sort -u))
 [ ${#EXCLUDE_PACKAGES[@]} -eq 0 ] ||
     PACKAGES=($(printf '%s\n' "${PACKAGES[@]}" | grep -Fxv "$(printf '%s\n' "${EXCLUDE_PACKAGES[@]}")"))
+
+lk_file_keep_original "/etc/apt/sources.list"
 
 if [ ${#REPOS[@]} -gt 0 ]; then
     lk_console_item "Adding APT repositories:" "$(printf '%s\n' "${REPOS[@]}")"
