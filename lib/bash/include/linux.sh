@@ -290,8 +290,8 @@ function lk_system_has_nvidia_graphics() {
 }
 
 function lk_nm_is_running() {
-    return "${_LK_NM_IS_RUNNING:=$(r=$(nmcli -g running general status \
-        2>/dev/null) && [ "$r" = running ] && echo 0 || echo 1)}"
+    { nmcli -g running general status |
+        grep -Fx running; } &>/dev/null
 }
 
 # lk_nm_active_connection_uuid DEVICE
@@ -320,8 +320,8 @@ function lk_nm_device_connection_uuid() {
             lk_require_output awk -v "i=$1" '$0==i{f=1;next}f{print;f=0}'
 }
 
-# lk_nm_file_get_ipv4_section [ADDRESS [GATEWAY [DNS_SERVER [DNS_SEARCH]]]]
-function lk_nm_file_get_ipv4_section() {
+# lk_nm_file_get_ipv4_ipv6 [ADDRESS [GATEWAY [DNS_SERVER [DNS_SEARCH]]]]
+function lk_nm_file_get_ipv4_ipv6() {
     local ADDRESS=${1:-} GATEWAY=${2:-} DNS DNS_SEARCH MANUAL IFS=$'; \t\n'
     unset MANUAL
     DNS=(${3:-})
@@ -333,7 +333,13 @@ function lk_nm_file_get_ipv4_section() {
 address1=$ADDRESS${GATEWAY:+,$GATEWAY}}${DNS[*]+
 dns=${DNS[*]};}${DNS_SEARCH[*]+
 dns-search=${DNS_SEARCH[*]};}
-method=${MANUAL+manual}${MANUAL-auto}
+method=${MANUAL-auto}${MANUAL+manual
+
+[ipv6]
+addr-gen-mode=stable-privacy${DNS_SEARCH[*]+
+dns-search=${DNS_SEARCH[*]};}
+ip6-privacy=0
+method=auto}
 EOF
 }
 
@@ -356,7 +362,7 @@ slave-type=bridge}
 mac-address=$(lk_upper "$MAC")
 EOF
     [ $# -lt 4 ] ||
-        lk_nm_file_get_ipv4_section "${@:4}"
+        lk_nm_file_get_ipv4_ipv6 "${@:4}"
 }
 
 # lk_nm_file_get_bridge DEV MAC [IPV4_ARG...]
@@ -376,7 +382,7 @@ mac-address=$(lk_upper "$MAC")
 stp=false
 EOF
     [ $# -lt 3 ] ||
-        lk_nm_file_get_ipv4_section "${@:3}"
+        lk_nm_file_get_ipv4_ipv6 "${@:3}"
 }
 
 function lk_user_lock_passwd() {

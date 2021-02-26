@@ -78,6 +78,8 @@ PAC_PACKAGES+=(
     cdrtools #
     cpio     # for libguestfs
     ext4magic
+    fatresize
+    partclone
     unison
     wimlib
 

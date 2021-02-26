@@ -294,6 +294,7 @@ else
 
         #
         fwupd
+        udisks2
     )
 
     if lk_node_service_enabled desktop; then
