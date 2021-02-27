@@ -13,9 +13,15 @@ HOST_NAME_REGEX="[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([-a-zA-Z0-
     exit 1
 }
 
+STREAM_RESPONSE=2
+if [[ $2 =~ ^(127\.0\.0\.1|localhost)$ ]]; then
+    STREAM_RESPONSE=0
+fi
+
 printf 'server.modules += ("mod_proxy")
 $HTTP["host"] == "%s" {
     proxy.server = ( "" => ( "%s" => ( "host" => "%s", "port" => 80 ) ) )
     proxy.replace-http-host = 1
     proxy.header = ( "map-urlpath" => ( "/" => "%s" ) )
-}' "$1" "$2" "$2" "${3:-/}"
+    server.stream-response-body = %d
+}' "$1" "$2" "$2" "${3:-/}" "$STREAM_RESPONSE"
