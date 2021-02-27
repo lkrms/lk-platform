@@ -32,9 +32,6 @@ AUR_PACKAGES+=(
 )
 
 PAC_PACKAGES+=(
-    # utilities
-    unison
-
     # networking
     networkmanager-l2tp
     openconnect
@@ -186,9 +183,6 @@ PAC_PACKAGES+=(
     python-pip
     python-requests
     python-virtualenv
-
-    #
-    shfmt
 
     #
     lua

@@ -80,7 +80,6 @@ PAC_PACKAGES+=(
     ext4magic
     fatresize
     partclone
-    unison
     wimlib
 
     # networking
@@ -294,7 +293,6 @@ PAC_PACKAGES+=(
 
     #
     shellcheck
-    shfmt
 
     #
     lua

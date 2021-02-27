@@ -44,11 +44,13 @@ PAC_PACKAGES=(
     pv
     rsync
     trash-cli
+    unison
 
     # Shell
     bash-completion
     byobu
     libnewt # whiptail
+    shfmt
 
     # Documentation
     man-db
