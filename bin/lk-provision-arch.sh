@@ -491,7 +491,8 @@ $LK_NODE_HOSTNAME" &&
     fi
 
     lk_console_blank
-    lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" --no-log
+    lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" --no-log \
+        ${LK_PACKAGES_FILE:+--set LK_PACKAGES_FILE="$LK_PACKAGES_FILE"}
 
     lk_console_blank
     lk_console_log "Checking packages"

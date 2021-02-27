@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2015,SC2034,SC2207
+# shellcheck disable=SC2031
 
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
@@ -41,35 +41,33 @@ function exit_trap() {
     _DIR=/tmp/${LK_PATH_PREFIX}install
     mkdir -p "$_DIR"
 
-    export LK_PACKAGES_FILE=${1:-}
-    if [ -n "$LK_PACKAGES_FILE" ] && [ ! -f "$LK_PACKAGES_FILE" ]; then
-        case "$LK_PACKAGES_FILE" in
-        $LK_BASE/*/*)
-            CONTRIB_PACKAGES_FILE=${LK_PACKAGES_FILE:${#LK_BASE}}
-            ;;
-        /*/*)
-            CONTRIB_PACKAGES_FILE=${LK_PACKAGES_FILE:1}
-            ;;
-        */*)
-            CONTRIB_PACKAGES_FILE=$LK_PACKAGES_FILE
-            ;;
-        *)
-            lk_die "$1: file not found"
-            ;;
-        esac
-        LK_PACKAGES_FILE=$LK_BASE/$CONTRIB_PACKAGES_FILE
+    SH=$([ ! -f /etc/default/lk-platform ] || { . /etc/default/lk-platform &&
+        declare -p LK_PACKAGES_FILE; } 2>/dev/null) &&
+        eval "$SH"
+    LK_PACKAGES_FILE=${1:-${LK_PACKAGES_FILE:-}}
+    PACKAGES_REL=
+    if [ -n "$LK_PACKAGES_FILE" ]; then
+        if [ ! -f "$LK_PACKAGES_FILE" ]; then
+            FILE=${LK_PACKAGES_FILE##*/}
+            FILE=${FILE#packages-macos-}
+            FILE=${FILE%.sh}
+            FILE=$LK_BASE/share/packages/macos/$FILE.sh
+            [ -f "$FILE" ] || PACKAGES_REL=${FILE#$LK_BASE/}
+            LK_PACKAGES_FILE=$FILE
+        fi
+        export LK_PACKAGES_FILE
     fi
 
     if [ -f "$LK_BASE/lib/bash/include/core.sh" ]; then
         . "$LK_BASE/lib/bash/include/core.sh"
         lk_include macos provision whiptail
         SUDOERS=$(cat "$LK_BASE/share/sudoers.d/default")
-        ${CONTRIB_PACKAGES_FILE:+. "$LK_BASE/$CONTRIB_PACKAGES_FILE"}
+        ${PACKAGES_REL:+. "$LK_BASE/$PACKAGES_REL"}
     else
         echo $'\E[1m\E[36m==> \E[0m\E[1mChecking prerequisites\E[0m' >&2
         REPO_URL=https://raw.githubusercontent.com/lkrms/lk-platform
         for FILE_PATH in \
-            ${CONTRIB_PACKAGES_FILE:+"/$CONTRIB_PACKAGES_FILE"} \
+            ${PACKAGES_REL:+"/$PACKAGES_REL"} \
             /lib/bash/include/core.sh \
             /lib/bash/include/macos.sh \
             /lib/bash/include/provision.sh \
@@ -216,13 +214,10 @@ EOF
             LK_PACKAGES_FILE |
             sudo tee /etc/default/lk-platform >/dev/null
         lk_console_detail_file /etc/default/lk-platform
-    elif [ -n "$LK_PACKAGES_FILE" ]; then
-        sudo sed -i '' '/^LK_PACKAGES_FILE=/d' /etc/default/lk-platform
     fi
 
-    [ -n "$LK_PACKAGES_FILE" ] ||
-        [ ! -f /etc/default/lk-platform ] || . /etc/default/lk-platform
-    [ -z "$LK_PACKAGES_FILE" ] || . "$LK_PACKAGES_FILE"
+    [ -z "$LK_PACKAGES_FILE" ] ||
+        . "$LK_PACKAGES_FILE"
     . "$LK_BASE/lib/macos/packages.sh"
 
     function lk_brew_check_taps() {
@@ -336,9 +331,8 @@ EOF
         echo "[ ! -f ~/.bashrc ] || . ~/.bashrc" >>~/.bash_profile
     fi
 
-    [ -z "$LK_PACKAGES_FILE" ] ||
-        LK_PACKAGES_FILE=$(realpath "$LK_PACKAGES_FILE")
-    LK_SUDO=1 lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" --no-log
+    LK_SUDO=1 lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" --no-log \
+        ${LK_PACKAGES_FILE:+--set LK_PACKAGES_FILE="$LK_PACKAGES_FILE"}
 
     lk_console_message "Checking Homebrew packages"
     UPGRADE_FORMULAE=()
