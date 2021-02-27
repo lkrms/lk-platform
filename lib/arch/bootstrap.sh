@@ -15,7 +15,7 @@ lk_log() { local l && while IFS= read -r l || [ -n "$l" ]; do
 done; }
 
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
-readonly _DIR=/tmp/${LK_PATH_PREFIX}install
+_DIR=/tmp/${LK_PATH_PREFIX}install
 mkdir -p "$_DIR"
 LOG_FILE=$_DIR/install.$(date +%s).log
 OUT_FILE=${LOG_FILE%.log}.out
@@ -24,14 +24,22 @@ exec 4> >(lk_log >"$TRACE_FILE")
 BASH_XTRACEFD=4
 set -x
 
+shopt -s nullglob
+
 DEFAULT_CMDLINE="quiet loglevel=3 audit=0$(! grep -q \
-    "^flags[[:blank:]]*:.*\\bhypervisor\\b" /proc/cpuinfo >/dev/null 2>&1 ||
+    "^flags[[:blank:]]*:.*\\bhypervisor\\b" /proc/cpuinfo &>/dev/null ||
     echo " console=tty0 console=ttyS0")"
 BOOTSTRAP_PING_HOST=${BOOTSTRAP_PING_HOST:-one.one.one.one}  # https://blog.cloudflare.com/dns-resolver-1-1-1-1/
 BOOTSTRAP_MOUNT_OPTIONS=${BOOTSTRAP_MOUNT_OPTIONS:-defaults} # On VMs with TRIM support, "discard" is added automatically
 BOOTSTRAP_USERNAME=${BOOTSTRAP_USERNAME:-arch}               #
 BOOTSTRAP_PASSWORD=${BOOTSTRAP_PASSWORD:-}                   #
 BOOTSTRAP_KEY=${BOOTSTRAP_KEY:-}                             #
+BOOTSTRAP_FULL_NAME=${BOOTSTRAP_FULL_NAME:-Arch Linux}       #
+LK_IPV4_ADDRESS=${LK_IPV4_ADDRESS:-}                         #
+LK_IPV4_GATEWAY=${LK_IPV4_GATEWAY:-}                         #
+LK_IPV4_DNS_SERVER=${LK_IPV4_DNS_SERVER:-}                   #
+LK_IPV4_DNS_SEARCH=${LK_IPV4_DNS_SEARCH:-}                   #
+LK_BRIDGE_INTERFACE=${LK_BRIDGE_INTERFACE:-}                 #
 LK_NODE_TIMEZONE=${LK_NODE_TIMEZONE:-UTC}                    # See `timedatectl list-timezones`
 LK_NODE_SERVICES=${LK_NODE_SERVICES:-}                       #
 LK_NODE_LOCALES=${LK_NODE_LOCALES-en_AU.UTF-8 en_GB.UTF-8}   # "en_US.UTF-8" is added automatically
@@ -41,10 +49,9 @@ LK_NTP_SERVER=${LK_NTP_SERVER-time.apple.com}                #
 LK_ARCH_MIRROR=${LK_ARCH_MIRROR:-}                           #
 LK_ARCH_REPOS=${LK_ARCH_REPOS:-}                             # REPO|SERVER|KEY_URL|KEY_ID|SIG_LEVEL,...
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
+LK_PACKAGES_FILE=${LK_PACKAGES_FILE:-}
 export LK_BASE=${LK_BASE:-/opt/lk-platform}
 export -n BOOTSTRAP_PASSWORD BOOTSTRAP_KEY
-
-shopt -s nullglob
 
 [ -d /sys/firmware/efi/efivars ] || lk_die "not booted in UEFI mode"
 [ "$EUID" -eq 0 ] || lk_die "not running as root"
@@ -53,8 +60,8 @@ shopt -s nullglob
 [[ $- != *s* ]] || lk_die "cannot run from standard input"
 
 LK_USAGE="\
-Usage: ${0##*/} [OPTIONS] ROOT_PART BOOT_PART HOSTNAME
-   or: ${0##*/} [OPTIONS] INSTALL_DISK HOSTNAME
+Usage: ${0##*/} [OPTIONS] ROOT_PART BOOT_PART HOSTNAME[.DOMAIN]
+   or: ${0##*/} [OPTIONS] INSTALL_DISK HOSTNAME[.DOMAIN]
 
 Options:
   -u USERNAME       set the default user's login name (default: arch)
@@ -65,6 +72,7 @@ Options:
   -p PARAMETER      add PARAMETER to the default kernel command-line
   -s SERVICE,...    enable each SERVICE
   -x                install Xfce (alias for: -s xfce4)
+  -k FILE           set LK_PACKAGES_FILE
   -y                do not prompt for input
 
 Useful kernel parameters:
@@ -82,8 +90,6 @@ INSTALL_DISK=
 OTHER_OS_PARTITIONS=()
 PAC_REPOS=()
 
-BOOTSTRAP_URL=${BOOTSTRAP_URL:-https://raw.githubusercontent.com/lkrms/lk-platform}
-
 CURL_OPTIONS=(
     --fail
     --header "Cache-Control: no-cache"
@@ -93,16 +99,17 @@ CURL_OPTIONS=(
     --silent
 )
 
-echo $'\E[1m\E[36m==> \E[0m\E[1mChecking dependencies\E[0m' >&2
+echo $'\E[1m\E[36m==> \E[0m\E[1mChecking prerequisites\E[0m' >&2
+REPO_URL=https://raw.githubusercontent.com/lkrms/lk-platform
 for FILE_PATH in \
     /lib/bash/include/core.sh \
-    /lib/bash/include/arch.sh \
     /lib/bash/include/linux.sh \
+    /lib/bash/include/arch.sh \
     /lib/bash/include/provision.sh \
     /lib/arch/packages.sh \
     /share/sudoers.d/default; do
     FILE=$_DIR/${FILE_PATH##*/}
-    URL=$BOOTSTRAP_URL/$LK_PLATFORM_BRANCH$FILE_PATH
+    URL=$REPO_URL/$LK_PLATFORM_BRANCH$FILE_PATH
     MESSAGE=$'\E[1m\E[33m   -> \E[0m{}\E[0m\E[33m '"$URL"$'\E[0m'
     if [ ! -e "$FILE" ]; then
         echo "${MESSAGE/{\}/Downloading:}" >&2
@@ -117,7 +124,7 @@ for FILE_PATH in \
         . "$FILE"
 done
 
-while getopts ":u:o:c:p:s:xy" OPT; do
+while getopts ":u:o:c:p:s:xk:y" OPT; do
     case "$OPT" in
     u)
         BOOTSTRAP_USERNAME=$OPTARG
@@ -140,6 +147,9 @@ while getopts ":u:o:c:p:s:xy" OPT; do
         ;;
     x)
         LK_NODE_SERVICES=${LK_NODE_SERVICES:+$LK_NODE_SERVICES,}xfce4
+        ;;
+    k)
+        LK_PACKAGES_FILE=$OPTARG
         ;;
     y)
         LK_NO_INPUT=1
@@ -166,33 +176,38 @@ case $# in
     lk_usage
     ;;
 esac
-LK_NODE_HOSTNAME=${*: -1:1}
+LK_NODE_FQDN=${*: -1:1}
+LK_NODE_HOSTNAME=${LK_NODE_FQDN%%.*}
+[ "$LK_NODE_FQDN" != "$LK_NODE_HOSTNAME" ] ||
+    LK_NODE_FQDN=
 LK_NODE_SERVICES=$(IFS=, &&
     lk_echo_args $LK_NODE_SERVICES | sort -u | lk_implode_input ",")
 
 PASSWORD_GENERATED=
-if [ -z "$BOOTSTRAP_PASSWORD" ] && lk_no_input; then
-    lk_console_item \
-        "Generating a random password for user" "$BOOTSTRAP_USERNAME"
-    BOOTSTRAP_PASSWORD=$(lk_random_password 7)
-    PASSWORD_GENERATED=1
-    lk_console_detail "Password:" "$BOOTSTRAP_PASSWORD"
-    lk_console_log "The password above will be repeated when ${0##*/} exits"
+if [ -z "$BOOTSTRAP_KEY" ]; then
+    if [ -z "$BOOTSTRAP_PASSWORD" ] && lk_no_input; then
+        lk_console_item \
+            "Generating a random password for user" "$BOOTSTRAP_USERNAME"
+        BOOTSTRAP_PASSWORD=$(lk_random_password 7)
+        PASSWORD_GENERATED=1
+        lk_console_detail "Password:" "$BOOTSTRAP_PASSWORD"
+        lk_console_log "The password above will be repeated when ${0##*/} exits"
+    fi
+    while [ -z "$BOOTSTRAP_PASSWORD" ]; do
+        BOOTSTRAP_PASSWORD=$(lk_console_read_secret \
+            "Password for $BOOTSTRAP_USERNAME:")
+        [ -n "$BOOTSTRAP_PASSWORD" ] ||
+            lk_warn "Password cannot be empty" || continue
+        CONFIRM_PASSWORD=$(lk_console_read_secret \
+            "Password for $BOOTSTRAP_USERNAME (again):")
+        [ "$BOOTSTRAP_PASSWORD" = "$CONFIRM_PASSWORD" ] || {
+            BOOTSTRAP_PASSWORD=
+            lk_warn "Passwords do not match"
+            continue
+        }
+        break
+    done
 fi
-while [ -z "$BOOTSTRAP_PASSWORD" ]; do
-    BOOTSTRAP_PASSWORD=$(lk_console_read_secret \
-        "Password for $BOOTSTRAP_USERNAME:")
-    [ -n "$BOOTSTRAP_PASSWORD" ] ||
-        lk_warn "Password cannot be empty" || continue
-    CONFIRM_PASSWORD=$(lk_console_read_secret \
-        "Password for $BOOTSTRAP_USERNAME (again):")
-    [ "$BOOTSTRAP_PASSWORD" = "$CONFIRM_PASSWORD" ] || {
-        BOOTSTRAP_PASSWORD=
-        lk_warn "Passwords do not match"
-        continue
-    }
-    break
-done
 
 lk_console_blank
 
@@ -213,6 +228,16 @@ function exit_trap() {
         lk_console_log \
             "The random password generated for user '$BOOTSTRAP_USERNAME' is" \
             "$BOOTSTRAP_PASSWORD"
+}
+
+function no_output() {
+    exec > >(tee "/dev/fd/$LOG_FD" >&"$OUT_FD")
+    exec 2> >(tee "/dev/fd/$LOG_FD" >&"$ERR_FD")
+}
+
+function show_output() {
+    exec > >(tee >(tee "/dev/fd/$LOG_FD" >&"$OUT_FD") >&"$STDOUT_FD")
+    exec 2> >(tee >(tee "/dev/fd/$LOG_FD" >&"$ERR_FD") >&"$STDERR_FD")
 }
 
 function no_log() {
@@ -242,10 +267,9 @@ OUT_FD=$(lk_next_fd)
 eval "exec $OUT_FD> >(lk_log \"..\" >\"\$FIFO_FILE\")"
 ERR_FD=$(lk_next_fd)
 eval "exec $ERR_FD> >(lk_log \"!!\" >\"\$FIFO_FILE\")"
-exec > >(tee "/dev/fd/$LOG_FD" >&"$OUT_FD")
-exec 2> >(tee "/dev/fd/$LOG_FD" >&"$ERR_FD")
-exec 3> >(tee "/dev/fd/$STDOUT_FD" >&1)
+exec 3> >(tee >(tee "/dev/fd/$LOG_FD" >&"$OUT_FD") >&"$STDOUT_FD")
 export _LK_FD=3
+no_output
 
 trap exit_trap EXIT
 
@@ -393,16 +417,17 @@ lk_run_detail -1 in_target useradd \
     --shell /bin/bash \
     --key UMASK=026 \
     "$BOOTSTRAP_USERNAME"
-printf '%s\n' "$BOOTSTRAP_PASSWORD" "$BOOTSTRAP_PASSWORD" |
+[ -z "$BOOTSTRAP_PASSWORD" ] ||
+    printf '%s\n' "$BOOTSTRAP_PASSWORD" "$BOOTSTRAP_PASSWORD" |
     in_target passwd "$BOOTSTRAP_USERNAME"
 FILE=/mnt/etc/sudoers.d/nopasswd-$BOOTSTRAP_USERNAME
 install -m 00440 /dev/null "$FILE"
 echo "$BOOTSTRAP_USERNAME ALL=(ALL) NOPASSWD:ALL" >"$FILE"
-if [ -n "$BOOTSTRAP_KEY" ]; then
-    echo "$BOOTSTRAP_KEY" |
-        in_target -u "$BOOTSTRAP_USERNAME" \
-            bash -c "cat >~/.ssh/authorized_keys"
-fi
+[ -z "$BOOTSTRAP_KEY" ] ||
+    echo "$BOOTSTRAP_KEY" | in_target -u "$BOOTSTRAP_USERNAME" \
+        bash -c "cat >~/.ssh/authorized_keys"
+[ -z "$BOOTSTRAP_FULL_NAME" ] ||
+    in_target chfn -f "$BOOTSTRAP_FULL_NAME" "$BOOTSTRAP_USERNAME"
 
 export LK_BOOTSTRAP=1
 
@@ -418,6 +443,12 @@ lk_get_shell_var \
     LK_BASE \
     LK_PATH_PREFIX \
     LK_NODE_HOSTNAME \
+    LK_NODE_FQDN \
+    LK_IPV4_ADDRESS \
+    LK_IPV4_GATEWAY \
+    LK_IPV4_DNS_SERVER \
+    LK_IPV4_DNS_SEARCH \
+    LK_BRIDGE_INTERFACE \
     LK_NODE_TIMEZONE \
     LK_NODE_SERVICES \
     LK_NODE_LOCALES \
@@ -426,13 +457,16 @@ lk_get_shell_var \
     LK_NTP_SERVER \
     LK_ARCH_MIRROR \
     LK_ARCH_REPOS \
-    LK_PLATFORM_BRANCH >"$FILE"
+    LK_PLATFORM_BRANCH \
+    LK_PACKAGES_FILE >"$FILE"
 
+show_output
 PROVISIONED=
 in_target -u "$BOOTSTRAP_USERNAME" \
     env BASH_XTRACEFD=$BASH_XTRACEFD SHELLOPTS=xtrace LK_NO_LOG=1 \
-    "$LK_BASE/bin/lk-provision-arch.sh" && PROVISIONED=1 ||
+    "$LK_BASE/bin/lk-provision-arch.sh" --yes && PROVISIONED=1 ||
     lk_console_error "Provisioning failed"
+no_output
 
 lk_console_message "Installing boot loader"
 i=0

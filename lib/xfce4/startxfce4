@@ -2,36 +2,47 @@
 
 # shellcheck disable=SC1090,SC2015,SC2030,SC2031
 
-[ ! -f /etc/default/lk-platform ] || . /etc/default/lk-platform
+lk_double_quote() {
+    set -- "$(echo "$1." | sed -Ee 's/\\/\\\\/g' -e 's/[$`"]/\\&/g')"
+    echo "\"${1%.}\""
+}
+
+[ ! -f /etc/default/lk-platform ] ||
+    . /etc/default/lk-platform
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
 [ ! -f ~/".${LK_PATH_PREFIX}settings" ] ||
     . ~/".${LK_PATH_PREFIX}settings"
-lk_esc() { echo "$1" | sed -Ee 's/\\/\\\\/g' -e 's/[$`"]/\\&/g'; }
 
 [ -n "${LK_BASE:-}" ] || { SH=$(
     _FILE=$0
+    if [ -L "$_FILE" ]; then
+        LN=$(readlink "$_FILE") || exit
+        [ "${LN#/}" != "$LN" ] &&
+            _FILE=$LN ||
+            _FILE=${_FILE%/*}/$LN
+    fi
     [ "${_FILE%/*}" != "$_FILE" ] || _FILE=./$_FILE
     if [ ! -L "$_FILE" ] &&
         LK_BASE=$(cd "${_FILE%/*}/../.." && pwd -P) &&
         [ -d "$LK_BASE/lib/bash" ]; then
-        echo "LK_BASE=\"$(lk_esc "$LK_BASE")\""
+        echo "LK_BASE=$(lk_double_quote "$LK_BASE")"
     else
         echo "$_FILE: LK_BASE not set" >&2
     fi
 ) && eval "$SH"; }
+export LK_BASE
 
-if [ -n "${LK_BASE:-}" ]; then
-
-    export LK_BASE
-
+[ -z "${LK_BASE:-}" ] || {
     SH=$(. "$LK_BASE/lib/bash/env.sh") &&
         eval "$SH"
-
-    ! type autorandr >/dev/null 2>&1 ||
-        autorandr -c --default default --force ||
-        AUTORANDR_PROFILE_FOLDER=~/.config/autorandr/default \
-            "$LK_BASE/lib/autorandr/postswitch" || true
-
+    ! type autorandr >/dev/null 2>&1 || {
+        autorandr --change --default default --force ||
+            AUTORANDR_PROFILE_FOLDER=~/.config/autorandr/default \
+                "$LK_BASE/lib/autorandr/postswitch" || true
+        FILE=~/.config/autostart/autorandr.desktop
+        [ -e "$FILE" ] || { mkdir -p "${FILE%/*}" &&
+            printf '%s\n' '[Desktop Entry]' 'Hidden=true' >"$FILE" || true; }
+    }
     export \
         QT_AUTO_SCREEN_SCALE_FACTOR=0 \
         QT_SCALE_FACTOR=1
@@ -40,25 +51,18 @@ if [ -n "${LK_BASE:-}" ]; then
         grep -Eo '[0-9]+' | head -n1) &&
         export QT_FONT_DPI ||
         unset QT_FONT_DPI
-
-fi
-
-unset SH
+}
 
 xset -b
 xset s "${LK_DIM_AFTER:=240}" "${LK_DIM_TIME:=60}"
 export \
     XSECURELOCK_DIM_TIME_MS=${XSECURELOCK_DIM_TIME_MS:-750} \
     XSECURELOCK_WAIT_TIME_MS=${XSECURELOCK_WAIT_TIME_MS:-$((LK_DIM_TIME * 1000))}
-unset LK_DIM_AFTER LK_DIM_TIME
 
-if XSECURELOCK_FONT="${XSECURELOCK_FONT:-$(
-    xfconf-query -c xsettings -p /Gtk/MonospaceFontName
-)}"; then
-    export XSECURELOCK_FONT
-else
+XSECURELOCK_FONT="${XSECURELOCK_FONT:-$(xfconf-query -c xsettings \
+    -p /Gtk/MonospaceFontName)}" &&
+    export XSECURELOCK_FONT ||
     unset XSECURELOCK_FONT
-fi
 
 # To avoid locking the user out whenever presentation mode is enabled, ensure
 # XSECURELOCK_AUTH_TIMEOUT >= fail_interval in faillock.conf
@@ -73,4 +77,10 @@ xss-lock -n /usr/lib/xsecurelock/dimmer -l -- xsecurelock &
 xfconf-query -c xfce4-session \
     -p /general/LockCommand -n -t string -s "xset s activate"
 
-. /etc/xdg/xfce4/xinitrc
+# Disable presentation mode and do not disturb on startup
+xfconf-query -c xfce4-power-manager \
+    -p /xfce4-power-manager/presentation-mode -n -t bool -s false
+xfconf-query -c xfce4-notifyd \
+    -p /do-not-disturb -n -t bool -s false
+
+exec /usr/bin/startxfce4 "$@"

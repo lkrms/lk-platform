@@ -29,7 +29,11 @@
         LK_PATH_PREFIX
         LK_NODE_HOSTNAME
         LK_NODE_FQDN
-        LK_NODE_IPV4_ADDRESS
+        LK_IPV4_ADDRESS
+        LK_IPV4_GATEWAY
+        LK_IPV4_DNS_SERVER
+        LK_IPV4_DNS_SEARCH
+        LK_BRIDGE_INTERFACE
         LK_NODE_TIMEZONE
         LK_NODE_SERVICES
         LK_NODE_PACKAGES
@@ -52,6 +56,7 @@
         LK_MEMCACHED_MEMORY_LIMIT
         LK_SMTP_RELAY
         LK_EMAIL_BLACKHOLE
+        LK_UPGRADE_EMAIL
         LK_AUTO_REBOOT
         LK_AUTO_REBOOT_TIME
         LK_AUTO_BACKUP_SCHEDULE
@@ -79,7 +84,6 @@
 
     include=provision,git . "$LK_INST/lib/bash/common.sh"
 
-    LK_BIN_PATH=${LK_BIN_PATH:-/usr/local/bin}
     LK_FILE_TAKE_BACKUP=${LK_FILE_TAKE_BACKUP-1}
     LK_FILE_MOVE_BACKUP=1
     LK_VERBOSE=${LK_VERBOSE-1}
@@ -182,18 +186,15 @@
     #       xargs -0 grep -Eho '\bgnu_[a-zA-Z0-9.]+' | sort -u
     lk_console_message "Checking GNU utilities"
     function install_gnu_commands() {
-        local COMMAND GCOMMAND COMMAND_PATH COMMANDS=("$@") EXIT_STATUS=0
-        [ $# -gt 0 ] ||
-            COMMANDS=(${_LK_GNU_COMMANDS[@]+"${_LK_GNU_COMMANDS[@]}"})
-        for COMMAND in ${COMMANDS[@]+"${COMMANDS[@]}"}; do
+        local COMMAND GCOMMAND EXIT_STATUS=0
+        [ $# -gt 0 ] || set -- ${_LK_GNU_COMMANDS[@]+"${_LK_GNU_COMMANDS[@]}"}
+        for COMMAND in "$@"; do
             GCOMMAND=$(_lk_gnu_command "$COMMAND")
-            COMMAND_PATH=$(type -P "$GCOMMAND") || {
+            lk_symlink_bin "$GCOMMAND" "gnu_$COMMAND" || {
                 EXIT_STATUS=$?
                 lk_console_warning "GNU $COMMAND not found:" "$GCOMMAND"
                 continue
             }
-            lk_symlink "$COMMAND_PATH" "$LK_BIN_PATH/gnu_$COMMAND" ||
-                EXIT_STATUS=$?
         done
         return "$EXIT_STATUS"
     }
@@ -210,13 +211,14 @@
     }
 
     # Use the opening "Environment:" log entry created by hosting.sh as a last
-    # resort when looking for old settings
+    # resort when looking for settings
     function install_env() {
-        if [ "${INSTALL_ENV+1}" != 1 ]; then
+        if [ -z "${INSTALL_ENV+1}" ]; then
             INSTALL_ENV=$(
-                FILE=/var/log/${LK_PATH_PREFIX}install.log
-                [ ! -f "$FILE" ] ||
-                    awk -f "$LK_BASE/lib/awk/get-install-env.awk" <"$FILE"
+                FILE=$(lk_first_existing \
+                    /var/log/{"$LK_PATH_PREFIX",lk-platform-}install.log) ||
+                    exit 0
+                awk -f "$LK_BASE/lib/awk/get-install-env.awk" "$FILE"
             ) || return
         fi
         awk -F= \
@@ -226,8 +228,9 @@
 
     for i in "${SETTINGS[@]}"; do
         SH=$(printf \
-            '%s=${%s-${%s-${%s-$(install_env "(LK_(DEFAULT_)?)?%s")}}}' \
-            "$i" "$i" "LK_DEFAULT_${i#LK_}" "${i#LK_}" "${i#LK_}") &&
+            '%s=${%s-${%s-${%s-${%s-$(install_env "(LK_(NODE_|DEFAULT_)?)?%s")}}}}' \
+            "$i" "$i" "LK_NODE_${i#LK_}" "LK_DEFAULT_${i#LK_}" "${i#LK_}" \
+            "${i#LK_}") &&
             eval "$SH"
     done
 
@@ -270,37 +273,12 @@
                 CONFIG_COMMANDS+=("$(printf 'config %q %q' "$1" "$2")")
         }
         function update_repo() {
-            local _BRANCH=${1:-$BRANCH} UPSTREAM BEHIND
-            UPSTREAM=$REMOTE/$_BRANCH
-            _git fetch --quiet --prune --prune-tags "$REMOTE" ||
-                lk_warn "unable to check remote '$REMOTE' for updates" ||
-                return
-            if lk_git_branch_list_local |
-                grep -Fx "$_BRANCH" >/dev/null; then
-                BEHIND=$(git rev-list --count "$_BRANCH..$UPSTREAM")
-                if [ "$BEHIND" -gt 0 ]; then
-                    git merge-base --is-ancestor "$_BRANCH" "$UPSTREAM" ||
-                        lk_warn "local branch $_BRANCH has diverged" ||
-                        return
-                    lk_console_detail \
-                        "Updating lk-platform ($_BRANCH branch is $BEHIND $(
-                            lk_maybe_plural "$BEHIND" "commit" "commits"
-                        ) behind)"
-                    REPO_MERGED=1
-                    if [ "$_BRANCH" = "$BRANCH" ]; then
-                        _git merge --ff-only
-                    else
-                        # Fast-forward local _BRANCH (e.g. 'develop') to
-                        # UPSTREAM (e.g. 'origin/develop') without checking
-                        # it out
-                        _git fetch . "$UPSTREAM:$_BRANCH"
-                    fi
-                fi
-            fi
+            local BRANCH=${1:-$BRANCH} LK_GIT_USER=$REPO_OWNER
+            lk_git_update_repo_to -f "$REMOTE" "$BRANCH"
         }
         UMASK=$(umask)
         umask 002
-        lk_console_message "Checking repository ($LK_BASE)"
+        lk_console_message "Checking repository"
         cd "$LK_BASE"
         REPO_OWNER=$(lk_file_owner "$LK_BASE")
         CONFIG_COMMANDS=()
@@ -327,9 +305,6 @@
             if lk_confirm "Switch to $LK_PLATFORM_BRANCH?" Y; then
                 lk_console_detail "Switching to" "$LK_PLATFORM_BRANCH"
                 update_repo "$LK_PLATFORM_BRANCH"
-                _git checkout "$LK_PLATFORM_BRANCH"
-                lk_git_branch_upstream >/dev/null ||
-                    _git branch -u "$REMOTE/$LK_PLATFORM_BRANCH"
                 restart_script "$@"
             else
                 LK_PLATFORM_BRANCH=$BRANCH
@@ -339,9 +314,8 @@
             FETCH_TIME=0
         if [ $(($(lk_timestamp) - FETCH_TIME)) -gt 300 ]; then
             lk_console_detail "Checking for changes"
-            unset REPO_MERGED
             update_repo
-            ! lk_is_true REPO_MERGED ||
+            ! lk_is_true LK_GIT_REPO_UPDATED ||
                 restart_script "$@"
         fi
         DIR_MODE=0755
@@ -368,8 +342,7 @@
     fi
 
     lk_console_message "Checking symbolic links"
-    lk_symlink \
-        "$LK_BASE/bin/lk-bash-load.sh" "$LK_BIN_PATH/lk-bash-load.sh"
+    lk_symlink_bin "$LK_BASE/bin/lk-bash-load.sh"
 
     LK_HOMES=(
         /etc/skel{,".${LK_PATH_PREFIX%-}"}
@@ -419,7 +392,7 @@
         shift
         [ -e "$FILE" ] ||
             install -m 00644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
-        lk_file_replace -i '^[[:blank:]]*($|#)' "$FILE" \
+        lk_file_replace -li '^[[:blank:]]*($|#)' "$FILE" \
             "$([ $# -eq 0 ] || printf "%s\n" "$@")"
     }
 
@@ -435,7 +408,7 @@
         FILE=$h/.bashrc
         [ -e "$FILE" ] ||
             install -m 00644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
-        lk_file_replace "$FILE" "$("${RC_AWK[@]}" "$FILE")"
+        lk_file_replace -l "$FILE" "$("${RC_AWK[@]}" "$FILE")"
 
         # Create ~/.profile if no profile file exists, then check that ~/.bashrc
         # is sourced at startup when Bash is running as a login shell (e.g. in a
@@ -450,7 +423,7 @@
         grep -q "\\.bashrc" "${PROFILES[@]}" || {
             FILE=${PROFILES[0]}
             lk_file_get_text "$FILE" CONTENT &&
-                lk_file_replace "$FILE" "$CONTENT$_BASHRC"
+                lk_file_replace -l "$FILE" "$CONTENT$_BASHRC"
         }
 
         install -d -m 00755 -o "$OWNER" -g "$GROUP" "$h/.lk-platform"
@@ -461,7 +434,7 @@
             for FILE in "${PROFILES[@]}"; do
                 grep -q "byobu-launch" "$FILE" || {
                     lk_file_get_text "$FILE" CONTENT &&
-                        lk_file_replace "$FILE" "$CONTENT$_BYOBU"
+                        lk_file_replace -l "$FILE" "$CONTENT$_BYOBU"
                 }
             done
             FILE=$h/.byoburc
@@ -474,7 +447,7 @@
                 else
                     lk_file_get_text "$FILE" CONTENT
                 fi
-                lk_file_replace "$FILE" "$CONTENT$_BYOBURC"
+                lk_file_replace -l "$FILE" "$CONTENT$_BYOBURC"
             fi
 
             [ -d "$DIR" ] ||
@@ -517,7 +490,7 @@
     fi
 
     if lk_is_desktop; then
-        . "$LK_BASE/lib/desktop/configure.sh"
+        . "$LK_BASE/lib/platform/configure-desktop.sh"
     fi
 
     lk_lock_drop LOCK_FILE LOCK_FD

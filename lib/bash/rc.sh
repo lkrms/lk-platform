@@ -3,7 +3,7 @@
 # shellcheck disable=SC1090,SC2015,SC2030,SC2031,SC2207
 
 export -n BASH_XTRACEFD SHELLOPTS
-[ -n "${_LK_ENV:+1}" ] || _LK_ENV=$(declare -x)
+[ -n "${_LK_ENV+1}" ] || _LK_ENV=$(declare -x)
 
 unset LK_PROMPT_DISPLAYED LK_BASE
 
@@ -30,15 +30,15 @@ SH=$(
         ~/".{{LK_PATH_PREFIX}}settings"
     )
     ENV=$(lk_get_env -n | sed '/^LK_/!d' | sort)
-    lk_var() { comm -23 \
+    function lk_var() { comm -23 \
         <(printf '%s\n' "${!LK_@}" | sort) \
-        <(cat <<<"$ENV") | sed '/^LK_ARGV$/d'; }
+        <(cat <<<"$ENV"); }
     (
         VAR=($(lk_var))
         [ ${#VAR[@]} -eq 0 ] || unset "${VAR[@]}"
         for FILE in "${SETTINGS[@]}"; do
             FILE=$(lk_expand_template <<<"$FILE" 2>/dev/null) || continue
-            [ ! -r "$FILE" ] || . "$FILE"
+            [ ! -f "$FILE" ] || [ ! -r "$FILE" ] || . "$FILE"
         done
         VAR=($(lk_var))
         [ ${#VAR[@]} -eq 0 ] || lk_get_quoted_var "${VAR[@]}"
@@ -79,11 +79,11 @@ function lk_bak_find() {
     lk_elevate gnu_find / -xdev -regextype posix-egrep \
         ! \( -type d -path /srv/backup/snapshot -prune \) \
         -regex "${_LK_DIFF_REGEX:-$REGEX}" \
-        "$@"
+        ${@+\( "$@" \)}
 }
 
 function lk_bak_diff() {
-    local BACKUP FILE FILE2 \
+    local BACKUP FILE FILE2 DIFF_VER \
         REGEX=".*(-[0-9]+\\.bak|\\.lk-bak-[0-9]{8}T[0-9]{6}Z)"
     [ "$EUID" -eq 0 ] || ! lk_can_sudo bash || {
         sudo -H env \
@@ -91,6 +91,8 @@ function lk_bak_diff() {
             bash -c "$(declare -f lk_bak_diff); lk_bak_diff \"\$@\"" "bash" "$@"
         return
     }
+    DIFF_VER=$(lk_diff_version 2>/dev/null) &&
+        lk_version_at_least "$DIFF_VER" 3.4 || unset DIFF_VER
     while IFS= read -rd '' BACKUP; do
         [[ $BACKUP =~ ${_LK_DIFF_REGEX:-$REGEX} ]] || continue
         FILE=${BACKUP%${BASH_REMATCH[1]}}
@@ -99,11 +101,12 @@ function lk_bak_diff() {
             FILE=${FILE2//"__"/\/}
             [ "$FILE" != "$FILE2" ] && [ -e "$FILE" ] || continue
         }
-        diff --unified --color --report-identical-files "$BACKUP" "$FILE" ||
+        gnu_diff --unified ${DIFF_VER+--color=always} \
+            --report-identical-files "$BACKUP" "$FILE" ||
             true
     done < <(gnu_find / -xdev -regextype posix-egrep \
         ! \( -type d -path /srv/backup/snapshot -prune \) \
-        -regex "${_LK_DIFF_REGEX:-$REGEX}" -print0 | sort -z)
+        -regex "${_LK_DIFF_REGEX:-$REGEX}" ${@+\( "$@" \)} -print0 | sort -z)
 }
 
 function lk_orig_find() {
@@ -150,7 +153,8 @@ function find_all() {
     gnu_find -L . -xdev -iname "*$1*" "${@:2}"
 }
 
-lk_include git linode misc prompt provision wordpress ${LK_NODE_FQDN:+hosting}
+[ ! -d /srv/www ] || lk_include hosting
+lk_include bash git linode misc provision wordpress
 
 if lk_is_linux; then
     lk_include iptables linux
@@ -190,7 +194,10 @@ SH=$(. "$LK_BASE/lib/bash/env.sh") &&
         return
     done) && eval "$SH"; }
 
-    lk_is_false LK_PROMPT || lk_enable_prompt
+    lk_is_false LK_PROMPT || {
+        lk_include prompt
+        lk_enable_prompt
+    }
 
     ! lk_command_exists dircolors || { SH=$(
         COMMAND=(dircolors -b)

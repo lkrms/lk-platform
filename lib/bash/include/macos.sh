@@ -84,7 +84,7 @@ function lk_macos_install_command_line_tools() {
 
 function lk_macos_xcode_maybe_accept_license() {
     if [ -e /Applications/Xcode.app ] &&
-        ! xcodebuild -license check >/dev/null 2>&1; then
+        ! xcodebuild -license check &>/dev/null; then
         lk_console_message "Accepting Xcode license"
         lk_run_detail lk_elevate xcodebuild -license accept
     fi
@@ -115,10 +115,10 @@ function lk_macos_kb_reset_shortcuts() {
     [ $# -eq 1 ] || return
     [ "$1" != NSGlobalDomain ] || PLIST=.GlobalPreferences
     defaults delete "$1" \
-        NSUserKeyEquivalents >/dev/null 2>&1 || true
+        NSUserKeyEquivalents &>/dev/null || true
     [ ! -e ~/"Library/Preferences/$PLIST.plist" ] ||
         defaults delete ~/"Library/Preferences/$PLIST.plist" \
-            NSUserKeyEquivalents >/dev/null 2>&1 || true
+            NSUserKeyEquivalents &>/dev/null || true
 }
 
 function lk_macos_unmount() {
@@ -325,7 +325,7 @@ function lk_plist_get() {
 
 # lk_plist_exists ENTRY
 function lk_plist_exists() {
-    lk_plist_get "$1" >/dev/null 2>&1
+    lk_plist_get "$1" &>/dev/null
 }
 
 # lk_plist_maybe_add ENTRY TYPE [VALUE]

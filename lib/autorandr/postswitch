@@ -20,8 +20,8 @@ fi
 
 for XKB_FILE in \
     "$AUTORANDR_PROFILE_FOLDER/xkb" \
-    "$HOME/.config/autorandr/xkb" \
-    "/etc/xdg/autorandr/xkb"; do
+    ~/.config/autorandr/xkb \
+    /etc/xdg/autorandr/xkb; do
     [ ! -f "$XKB_FILE" ] || break
     XKB_FILE=
 done
@@ -32,6 +32,6 @@ done
     displaycal-apply-profiles
 
 ! killall devilspie2 -u "$USER" || {
-    nohup devilspie2 >/dev/null &
+    nohup devilspie2 &>/dev/null &
     disown
 }

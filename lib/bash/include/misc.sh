@@ -29,7 +29,7 @@ function lk_openconnect() {
         --user "$VPN_USER"
         "$VPN_HOST"
     )
-    LOG_FILE=$(LK_LOG_BASENAME=openconnect lk_log_create_file) || return
+    LOG_FILE=$(LK_LOG_BASENAME=openconnect lk_log_create) || return
     echo "$VPN_PASSWD" | lk_elevate "${COMMAND[@]}" >>"$LOG_FILE" 2>&1
 }
 
@@ -71,6 +71,48 @@ function lk_mediainfo_check() {
         lk_console_detail \
             "Names of files where mediainfo output was empty saved in array:" \
             $'\nLK_MEDIAINFO_EMPTY_FILES'
+    }
+}
+
+function lk_vscode_state_get_db() {
+    local DB=/User/globalStorage/state.vscdb PATHS
+    PATHS=(~/{.config,"Library/Application Support"}/{VSCodium,Code})
+    PATHS=("${PATHS[@]/%/$DB}")
+    lk_first_existing "${PATHS[@]}"
+}
+
+function lk_vscode_state_get_item() {
+    local KEY DB
+    [ $# -ge 1 ] || lk_warn "no key" || return
+    KEY=${1//"'"/"''"}
+    DB=$(lk_vscode_state_get_db) &&
+        sqlite3 -line "$DB" \
+            "select value from ItemTable where key='$KEY'" |
+        awk -F"$S*=$S*" '$1=="value"{print$2}'
+}
+
+function lk_vscode_state_set_item() {
+    local KEY VALUE DB
+    [ $# -ge 2 ] || lk_warn "invalid arguments" || return
+    KEY=${1//"'"/"''"}
+    VALUE=${2//"'"/"''"}
+    DB=$(lk_vscode_state_get_db) &&
+        sqlite3 "$DB" \
+            "replace into ItemTable (key, value) values ('$KEY', '$VALUE')"
+}
+
+function lk_vscode_extension_disable() {
+    local KEY=extensionsIdentifiers/disabled JSON DISABLED
+    [ -n "${1:-}" ] || lk_warn "no extension" || return
+    JSON=$(lk_vscode_state_get_item "$KEY") &&
+        JSON=${JSON:-"[]"} &&
+        DISABLED=$(jq --arg id "$1" \
+            '[.[]|select(.id==$id)]|length' <<<"$JSON") ||
+        return
+    [ "$DISABLED" -gt 0 ] || {
+        lk_console_detail "Disabling VS Code extension:" "$1"
+        JSON=$(jq -c --arg id "$1" '.+[{"id":$id}]' <<<"$JSON") &&
+            lk_vscode_state_set_item "$KEY" "$JSON"
     }
 }
 

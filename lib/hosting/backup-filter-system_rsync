@@ -1,0 +1,17 @@
++ /etc
+
+- /root/.cache
++ /root
+- /home/*/.cache
++ /home
+
++ /opt
+
+- /srv/backup
++ /srv
+
++ /var/log
++ /var/spool
+- /var/*
+
+- /*

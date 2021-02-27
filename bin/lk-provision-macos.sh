@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2015,SC2034,SC2207
+# shellcheck disable=SC2031
 
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
@@ -16,7 +16,7 @@ lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
 function exit_trap() {
     local _LOG_FILE=$_LK_LOG_FILE LOG_FILE
     if lk_log_close &&
-        LOG_FILE=$(lk_log_create_file) &&
+        LOG_FILE=$(lk_log_create) &&
         [ "$LOG_FILE" != "$_LOG_FILE" ]; then
         lk_console_log "Moving:" "$_LOG_FILE -> $LOG_FILE"
         cat "$_LOG_FILE" >>"$LOG_FILE" &&
@@ -41,50 +41,51 @@ function exit_trap() {
     _DIR=/tmp/${LK_PATH_PREFIX}install
     mkdir -p "$_DIR"
 
-    export LK_PACKAGES_FILE=${1:-}
-    if [ -n "$LK_PACKAGES_FILE" ] && [ ! -f "$LK_PACKAGES_FILE" ]; then
-        case "$LK_PACKAGES_FILE" in
-        $LK_BASE/*/*)
-            CONTRIB_PACKAGES_FILE=${LK_PACKAGES_FILE:${#LK_BASE}}
-            ;;
-        /*/*)
-            CONTRIB_PACKAGES_FILE=${LK_PACKAGES_FILE:1}
-            ;;
-        */*)
-            CONTRIB_PACKAGES_FILE=$LK_PACKAGES_FILE
-            ;;
-        *)
-            lk_die "$1: file not found"
-            ;;
-        esac
-        LK_PACKAGES_FILE=$LK_BASE/$CONTRIB_PACKAGES_FILE
+    SH=$([ ! -f /etc/default/lk-platform ] || { . /etc/default/lk-platform &&
+        declare -p LK_PACKAGES_FILE; } 2>/dev/null) &&
+        eval "$SH"
+    LK_PACKAGES_FILE=${1:-${LK_PACKAGES_FILE:-}}
+    PACKAGES_REL=
+    if [ -n "$LK_PACKAGES_FILE" ]; then
+        if [ ! -f "$LK_PACKAGES_FILE" ]; then
+            FILE=${LK_PACKAGES_FILE##*/}
+            FILE=${FILE#packages-macos-}
+            FILE=${FILE%.sh}
+            FILE=$LK_BASE/share/packages/macos/$FILE.sh
+            [ -f "$FILE" ] || PACKAGES_REL=${FILE#$LK_BASE/}
+            LK_PACKAGES_FILE=$FILE
+        fi
+        export LK_PACKAGES_FILE
     fi
 
     if [ -f "$LK_BASE/lib/bash/include/core.sh" ]; then
         . "$LK_BASE/lib/bash/include/core.sh"
         lk_include macos provision whiptail
         SUDOERS=$(cat "$LK_BASE/share/sudoers.d/default")
-        ${CONTRIB_PACKAGES_FILE:+. "$LK_BASE/$CONTRIB_PACKAGES_FILE"}
+        ${PACKAGES_REL:+. "$LK_BASE/$PACKAGES_REL"}
     else
-        echo $'\E[1m\E[36m==> \E[0m\E[1mDownloading dependencies\E[0m' >&2
+        echo $'\E[1m\E[36m==> \E[0m\E[1mChecking prerequisites\E[0m' >&2
+        REPO_URL=https://raw.githubusercontent.com/lkrms/lk-platform
         for FILE_PATH in \
-            ${CONTRIB_PACKAGES_FILE:+"/$CONTRIB_PACKAGES_FILE"} \
+            ${PACKAGES_REL:+"/$PACKAGES_REL"} \
             /lib/bash/include/core.sh \
             /lib/bash/include/macos.sh \
             /lib/bash/include/provision.sh \
             /lib/bash/include/whiptail.sh \
             /share/sudoers.d/default; do
             FILE=$_DIR/${FILE_PATH##*/}
+            URL=$REPO_URL/$LK_PLATFORM_BRANCH$FILE_PATH
+            MESSAGE=$'\E[1m\E[33m   -> \E[0m{}\E[0m\E[33m '"$URL"$'\E[0m'
             if [ ! -e "$FILE" ]; then
-                FILE_PATH=lk-platform/$LK_PLATFORM_BRANCH$FILE_PATH
-                URL=https://raw.githubusercontent.com/lkrms/$FILE_PATH
-                echo $'\E[1m\E[33m   -> \E[0m'"$URL"$'\E[0m' >&2
+                echo "${MESSAGE/{\}/Downloading:}" >&2
                 curl "${CURL_OPTIONS[@]}" --output "$FILE" "$URL" || {
                     rm -f "$FILE"
-                    lk_die "unable to download from GitHub: $URL"
+                    lk_die "unable to download: $URL"
                 }
+            else
+                echo "${MESSAGE/{\}/Already downloaded:}" >&2
             fi
-            [ "${FILE: -3}" != .sh ] ||
+            [[ ! $FILE_PATH =~ /include/[a-z0-9_]+\.sh$ ]] ||
                 . "$FILE"
         done
         SUDOERS=$(cat "$_DIR/default")
@@ -92,8 +93,7 @@ function exit_trap() {
 
     LK_FILE_TAKE_BACKUP=${LK_FILE_TAKE_BACKUP-1}
 
-    LK_LOG_FILE_MODE=0600 \
-        lk_log_output ~/"${LK_PATH_PREFIX}install.log"
+    lk_log_output ~/"${LK_PATH_PREFIX}install.log"
     trap exit_trap EXIT
 
     lk_console_log "Provisioning macOS"
@@ -120,7 +120,7 @@ function exit_trap() {
 
     lk_sudo_offer_nopasswd || true
 
-    scutil --get HostName >/dev/null 2>&1 ||
+    scutil --get HostName &>/dev/null ||
         [ -z "${LK_NODE_HOSTNAME:=$(
             lk_console_read "Hostname for this system:"
         )}" ] ||
@@ -214,13 +214,10 @@ EOF
             LK_PACKAGES_FILE |
             sudo tee /etc/default/lk-platform >/dev/null
         lk_console_detail_file /etc/default/lk-platform
-    elif [ -n "$LK_PACKAGES_FILE" ]; then
-        sudo sed -i '' '/^LK_PACKAGES_FILE=/d' /etc/default/lk-platform
     fi
 
-    [ -n "$LK_PACKAGES_FILE" ] ||
-        [ ! -f /etc/default/lk-platform ] || . /etc/default/lk-platform
-    [ -z "$LK_PACKAGES_FILE" ] || . "$LK_PACKAGES_FILE"
+    [ -z "$LK_PACKAGES_FILE" ] ||
+        . "$LK_PACKAGES_FILE"
     . "$LK_BASE/lib/macos/packages.sh"
 
     function lk_brew_check_taps() {
@@ -286,10 +283,14 @@ EOF
         gnu-tar    #
         wget       #
         jq         # for parsing `brew info` output
-        mas        # for managing Mac App Store apps
         newt       # for `whiptail`
         python-yq  # for plist parsing with `xq`
     )
+    ! MACOS_VERSION=$(lk_macos_version) ||
+        ! lk_version_at_least "$MACOS_VERSION" 10.15 ||
+        INSTALL+=(
+            mas # for managing Mac App Store apps
+        )
     INSTALL=($(comm -13 \
         <(lk_brew_formulae | sort -u) \
         <(lk_echo_array INSTALL | sort -u)))
@@ -330,9 +331,8 @@ EOF
         echo "[ ! -f ~/.bashrc ] || . ~/.bashrc" >>~/.bash_profile
     fi
 
-    [ -z "$LK_PACKAGES_FILE" ] ||
-        LK_PACKAGES_FILE=$(realpath "$LK_PACKAGES_FILE")
-    "$LK_BASE/bin/lk-platform-configure.sh" --no-log
+    LK_SUDO=1 lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" --no-log \
+        ${LK_PACKAGES_FILE:+--set LK_PACKAGES_FILE="$LK_PACKAGES_FILE"}
 
     lk_console_message "Checking Homebrew packages"
     UPGRADE_FORMULAE=()
@@ -428,7 +428,7 @@ EOF
 
     INSTALL_APPS=()
     UPGRADE_APPS=()
-    if [ ${#MAS_APPS[@]} -gt "0" ]; then
+    if [ ${#MAS_APPS[@]} -gt "0" ] && lk_command_exists mas; then
         lk_console_message "Checking Mac App Store apps"
         while ! APPLE_ID=$(mas account 2>/dev/null); do
             APPLE_ID=

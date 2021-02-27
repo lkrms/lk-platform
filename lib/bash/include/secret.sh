@@ -49,7 +49,7 @@ function lk_secret() {
 # lk_remove_secret VALUE [SERVICE]
 function lk_remove_secret() {
     [ -n "${1:-}" ] || lk_warn "no value" || return
-    lk_secret_get "$@" >/dev/null 2>&1 ||
+    lk_secret_get "$@" &>/dev/null ||
         lk_warn "password not found" || return 0
     lk_secret_forget "$@" || return
     lk_console_message "Password removed successfully"

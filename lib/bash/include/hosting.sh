@@ -82,7 +82,7 @@ function lk_hosting_set_site_settings() {
     FILE=$LK_BASE/etc/sites/$1.conf
     lk_install -d -m 02770 -g adm "$LK_BASE/etc/sites" &&
         lk_install -m 00660 -g adm "$FILE" &&
-        lk_file_replace "$FILE" "$(lk_get_shell_var "${!SITE_@}")"
+        lk_file_replace -l "$FILE" "$(lk_get_shell_var "${!SITE_@}")"
 }
 
 # lk_hosting_configure_site DOMAIN HOME USER

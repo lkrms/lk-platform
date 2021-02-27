@@ -27,6 +27,7 @@
 # <UDF name="LK_MEMCACHED_MEMORY_LIMIT" label="Memcached size" oneof="64,128,256,512,768,1024" default="256" />
 # <UDF name="LK_SMTP_RELAY" label="SMTP relay (system-wide)" example="[mail.clientname.com.au]:587" default="" />
 # <UDF name="LK_EMAIL_BLACKHOLE" label="Email black hole (system-wide, STAGING ONLY)" example="/dev/null" default="" />
+# <UDF name="LK_UPGRADE_EMAIL" label="Email address for unattended upgrade notifications" example="unattended-upgrades@linode.linacreative.com" />
 # <UDF name="LK_AUTO_REBOOT" label="Reboot automatically after unattended upgrades" oneof="Y,N" />
 # <UDF name="LK_AUTO_REBOOT_TIME" label="Preferred automatic reboot time" oneof="02:00,03:00,04:00,05:00,06:00,07:00,08:00,09:00,10:00,11:00,12:00,13:00,14:00,15:00,16:00,17:00,18:00,19:00,20:00,21:00,22:00,23:00,00:00,01:00,now" default="02:00" />
 # <UDF name="LK_AUTO_BACKUP_SCHEDULE" label="Automatic backup schedule (format: 0-59 0-23 1-31 1-12|jan-dec 0-7|sun-sat)" example="0 1 * * *" default="" />
@@ -74,6 +75,7 @@ export -n \
     LK_MEMCACHED_MEMORY_LIMIT=${LK_MEMCACHED_MEMORY_LIMIT:-256} \
     LK_SMTP_RELAY=${LK_SMTP_RELAY:-} \
     LK_EMAIL_BLACKHOLE=${LK_EMAIL_BLACKHOLE:-} \
+    LK_UPGRADE_EMAIL=${LK_UPGRADE_EMAIL:-} \
     LK_AUTO_REBOOT=${LK_AUTO_REBOOT:-} \
     LK_AUTO_REBOOT_TIME=${LK_AUTO_REBOOT_TIME:-02:00} \
     LK_AUTO_BACKUP_SCHEDULE=${LK_AUTO_BACKUP_SCHEDULE:-} \
@@ -141,7 +143,7 @@ FIELD_ERRORS=$(
     }
 
     DOMAIN_PART_REGEX="[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
-    DOMAIN_NAME_REGEX="($DOMAIN_PART_REGEX(\\.|\$)){2,}"
+    DOMAIN_NAME_REGEX="$DOMAIN_PART_REGEX(\\.$DOMAIN_PART_REGEX)+"
     EMAIL_ADDRESS_REGEX="[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@$DOMAIN_NAME_REGEX"
     LINUX_USERNAME_REGEX="[a-z_]([-a-z0-9_]{0,31}|[-a-z0-9_]{0,30}\\\$)"
     MYSQL_USERNAME_REGEX="[a-zA-Z0-9_]+"
@@ -176,6 +178,7 @@ FIELD_ERRORS=$(
         not_null LK_NODE_TIMEZONE
     fi
     valid LK_ADMIN_EMAIL "^$EMAIL_ADDRESS_REGEX\$"
+    valid LK_UPGRADE_EMAIL "^$EMAIL_ADDRESS_REGEX\$"
     one_of LK_AUTO_REBOOT Y N
 
     # optional fields
@@ -453,6 +456,7 @@ LK_SSH_JUMP_KEY=${LK_SSH_JUMP_KEY:+jump} \
     LK_MEMCACHED_MEMORY_LIMIT \
     LK_SMTP_RELAY \
     LK_EMAIL_BLACKHOLE \
+    LK_UPGRADE_EMAIL \
     LK_AUTO_REBOOT \
     LK_AUTO_REBOOT_TIME \
     LK_AUTO_BACKUP_SCHEDULE \
@@ -480,12 +484,14 @@ APT_GET_ARGS=(
 REPOS=()
 ADD_APT_REPOSITORY_ARGS=(-yn)
 EXCLUDE_PACKAGES=()
+GET_PIP_URL=https://bootstrap.pypa.io/get-pip.py
 CERTBOT_REPO=ppa:certbot/certbot
 case "$DISTRIB_RELEASE" in
 16.04)
     REPOS+=("$CERTBOT_REPO")
     ADD_APT_REPOSITORY_ARGS=(-y)
     EXCLUDE_PACKAGES+=(php-apcu-bc php-yaml)
+    GET_PIP_URL=https://bootstrap.pypa.io/3.5/get-pip.py
     PHPVER=7.0
     ;;
 18.04)
@@ -544,7 +550,7 @@ lk_console_detail "Enabling unattended upgrades (security packages only)"
 APT_OPTIONS+=(
     "APT::Periodic::Update-Package-Lists" "1"
     "APT::Periodic::Unattended-Upgrade" "1"
-    "Unattended-Upgrade::Mail" "root"
+    "Unattended-Upgrade::Mail" "$LK_UPGRADE_EMAIL"
     "Unattended-Upgrade::Remove-Unused-Kernel-Packages" "true"
 )
 if [ "$LK_AUTO_REBOOT" = Y ]; then
@@ -796,7 +802,6 @@ PACKAGES=(
     ntp
 
     #
-    apt-utils
     bash-completion
     byobu
     ca-certificates
@@ -807,7 +812,6 @@ PACKAGES=(
     dnsutils
     git
     htop
-    info
     iptables
     iptables-persistent
     iputils-ping
@@ -816,12 +820,12 @@ PACKAGES=(
     less
     logrotate
     lsof
-    man-db
-    manpages
+    moreutils
     nano
     netcat-openbsd
     psmisc
     pv
+    rdfind
     rsync
     tcpdump
     telnet
@@ -1041,7 +1045,7 @@ cat <<EOF >"/etc/apt/listchanges.conf"
 [apt]
 frontend=pager
 which=both
-email_address=root
+email_address=$LK_UPGRADE_EMAIL
 email_format=html
 confirm=false
 headers=true
@@ -1060,7 +1064,7 @@ fi
 
 # TODO: verify downloads
 lk_console_message "Installing pip, ps_mem, Glances, awscli"
-lk_keep_trying curl --fail --output /root/get-pip.py "https://bootstrap.pypa.io/get-pip.py"
+lk_keep_trying curl --fail --output /root/get-pip.py "$GET_PIP_URL"
 python3 /root/get-pip.py
 lk_keep_trying pip install ps_mem glances awscli
 
@@ -1164,6 +1168,8 @@ PACKAGES=($(printf '%s\n' "${PACKAGES[@]}" | sort -u))
 [ ${#EXCLUDE_PACKAGES[@]} -eq 0 ] ||
     PACKAGES=($(printf '%s\n' "${PACKAGES[@]}" | grep -Fxv "$(printf '%s\n' "${EXCLUDE_PACKAGES[@]}")"))
 
+lk_file_keep_original "/etc/apt/sources.list"
+
 if [ ${#REPOS[@]} -gt 0 ]; then
     lk_console_item "Adding APT repositories:" "$(printf '%s\n' "${REPOS[@]}")"
     for REPO in "${REPOS[@]}"; do
@@ -1180,7 +1186,7 @@ lk_keep_trying apt-get ${APT_GET_ARGS[@]+"${APT_GET_ARGS[@]}"} -yq install "${PA
 if [ -n "$LK_HOST_DOMAIN" ]; then
     COPY_SKEL=0
     PHP_FPM_POOL_USER="www-data"
-    id "$LK_HOST_ACCOUNT" >/dev/null 2>&1 || {
+    id "$LK_HOST_ACCOUNT" &>/dev/null || {
         lk_console_message "Creating user account '$LK_HOST_ACCOUNT'"
         useradd --no-create-home --home-dir "/srv/www/$LK_HOST_ACCOUNT" --shell "/bin/bash" "$LK_HOST_ACCOUNT"
         COPY_SKEL=1
@@ -1537,7 +1543,7 @@ EOF
     sharedscripts
     postrotate
         test ! -x /usr/lib/php/php$PHPVER-fpm-reopenlogs || /usr/lib/php/php$PHPVER-fpm-reopenlogs
-        ! invoke-rc.d apache2 status >/dev/null 2>&1 || invoke-rc.d apache2 reload >/dev/null 2>&1
+        ! invoke-rc.d apache2 status &>/dev/null || invoke-rc.d apache2 reload &>/dev/null
     endscript
 }
 EOF

@@ -4,6 +4,8 @@
 
 lk_bin_depth=1 include=linux . lk-bash-load.sh || exit
 
+shopt -s nullglob
+
 LK_USAGE="\
 Usage: ${0##*/} [DPI]"
 
@@ -130,7 +132,7 @@ WHISKER_SETTINGS=(
 )
 
 REGEX="^($S*$|menu-(width|height)=)"
-for FILE in "$HOME/.config/xfce4/panel"/whiskermenu*.rc; do
+for FILE in ~/.config/xfce4/panel/whiskermenu*.rc; do
     NEW_SETTINGS=$(
         lk_echo_array WHISKER_SETTINGS
         sed -E '/^(menu-(width|height)|(item|category)-icon-size)=/d' "$FILE"

@@ -40,13 +40,17 @@ PAC_PACKAGES=(
     diffutils
     file
     mediainfo
+    moreutils
     pv
     rsync
+    trash-cli
+    unison
 
     # Shell
     bash-completion
     byobu
     libnewt # whiptail
+    shfmt
 
     # Documentation
     man-db
@@ -60,9 +64,9 @@ PAC_PACKAGES=(
     # System
     dmidecode
     glances
-    ncdu
     htop
     lsof
+    ncdu
     pcp
     ps_mem
     sysstat
@@ -119,9 +123,31 @@ PAC_KEEP=(
 )
 
 AUR_PACKAGES=(
+    # System
+    rdfind
+
     #
     ${AUR_PACKAGES[@]+"${AUR_PACKAGES[@]}"}
 )
+
+if lk_node_service_enabled lighttpd; then
+    PAC_PACKAGES+=(lighttpd)
+fi
+
+if lk_node_service_enabled squid; then
+    PAC_PACKAGES+=(squid)
+fi
+
+if lk_node_service_enabled libvirt; then
+    PAC_PACKAGES+=(
+        libvirt
+        qemu
+        ebtables
+        dnsmasq
+        edk2-ovmf
+        libguestfs
+    )
+fi
 
 if lk_node_service_enabled desktop; then
     PAC_PACKAGES+=(
@@ -205,9 +231,6 @@ if lk_node_service_enabled desktop; then
         autorandr-git
         networkmanager-dispatcher-ntpd
         xrandr-invert-colors
-
-        #
-        moka-icon-theme-git
     )
 fi
 
@@ -273,6 +296,7 @@ else
 
         #
         fwupd
+        udisks2
     )
 
     if lk_node_service_enabled desktop; then
@@ -287,9 +311,6 @@ else
         PAC_PACKAGES+=(
             blueman
             pulseaudio-bluetooth
-        )
-        AUR_PACKAGES+=(
-            xiccd
         )
     fi
 
@@ -392,20 +413,22 @@ fi
 if [ ${#AUR_PACKAGES[@]} -gt 0 ]; then
     PAC_PACKAGES+=($(lk_pac_available_list "${AUR_PACKAGES[@]}"))
     AUR_PACKAGES=($(lk_pac_unavailable_list "${AUR_PACKAGES[@]}"))
-    [ ${#AUR_PACKAGES[@]} -eq 0 ] ||
-        PAC_PACKAGES+=($(lk_pac_groups base-devel))
 fi
 
-# Reduce PAC_KEEP to installed packages not present in PAC_PACKAGES
+if [ ${#AUR_PACKAGES[@]} -gt 0 ] ||
+    { pacman-conf --repo=aur |
+        awk -F"$S*=$S*" '$1=="Server"{print$2}' |
+        grep -E '^file://'; } &>/dev/null; then
+    PAC_BASE_DEVEL=($(lk_pac_groups base-devel))
+    PAC_PACKAGES+=("${PAC_BASE_DEVEL[@]}" devtools pacutils vifm)
+    PAC_KEEP+=(aurutils)
+fi
+
+# Reduce PAC_KEEP to packages not present in PAC_PACKAGES
 if [ ${#PAC_KEEP[@]} -gt 0 ]; then
     PAC_KEEP=($(comm -23 \
         <(lk_echo_array PAC_KEEP | sort -u) \
         <(lk_echo_array PAC_PACKAGES | sort -u)))
-    if [ ${#PAC_KEEP[@]} -gt 0 ]; then
-        PAC_KEEP=($(comm -12 \
-            <(lk_echo_array PAC_KEEP | sort -u) \
-            <(lk_pac_installed_list | sort -u)))
-    fi
 fi
 
 # If any AUR_PACKAGES remain, lk_pac_unavailable_list has already sorted them

@@ -2,12 +2,14 @@
 
 # shellcheck disable=SC2016
 
-lk_esc() {
-    echo "$1" | sed -Ee 's/\\/\\\\/g' -e 's/[$`"]/\\&/g'
+lk_double_quote() {
+    set -- "$(echo "$1." | sed -Ee 's/\\/\\\\/g' -e 's/[$`"]/\\&/g')"
+    echo "\"${1%.}\""
 }
 
 lk_esc_ere() {
-    echo "$1" | sed -Ee 's/\\/\\\\/g' -e 's/[]$()*+./?[^{|}]/\\&/g'
+    set -- "$(echo "$1," | sed -Ee 's/\\/\\\\/g' -e 's/[]$()*+./?[^{|}]/\\&/g')"
+    printf '%s' "${1%,}"
 }
 
 lk_in_path() {
@@ -73,7 +75,7 @@ for DIR in $ADD_TO_PATH_FIRST; do
 done
 unset IFS
 [ "$PATH" = "$OLD_PATH" ] || {
-    echo "export PATH=\"$(lk_esc "$PATH")\""
+    echo "export PATH=$(lk_double_quote "$PATH")"
 }
 UNSET="\
 ${LK_ADD_TO_PATH+ LK_ADD_TO_PATH}\

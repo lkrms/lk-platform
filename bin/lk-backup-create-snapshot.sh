@@ -15,14 +15,13 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
     lk_die "unable to locate LK_BASE"
 export LK_BASE
 
-include=mysql,mail . "$LK_BASE/lib/bash/common.sh"
+include=backup,mail,mysql . "$LK_BASE/lib/bash/common.sh"
 
 function exit_trap() {
     local EXIT_STATUS=$? MESSAGE TAR SUBJECT
     eval "exec $FIFO_FD>&- $LOCK_FD>&-" &&
         rm -Rf "${FIFO_FILE%/*}" "$LOCK_FILE" || true
-    lk_log_close
-    lk_log_output
+    lk_log_close -r
     [ -z "$LK_BACKUP_MAIL" ] ||
         { [ "$EXIT_STATUS" -eq 0 ] &&
             [ "$RSYNC_EXIT_VALUE" -eq 0 ] &&
@@ -138,18 +137,18 @@ function assert_stage_valid() {
 
 function mark_stage_complete() {
     is_stage_complete "$1" ||
-        touch "$LK_SNAPSHOT_ROOT/.$1"
+        touch "$LK_SNAPSHOT/.$1"
 }
 
 function is_stage_complete() {
     assert_stage_valid "$1"
-    [ -e "$LK_SNAPSHOT_ROOT/.$1" ]
+    [ -e "$LK_SNAPSHOT/.$1" ]
 }
 
 function get_stage() {
     local STAGE
     for STAGE in $(tac < <(lk_echo_array SNAPSHOT_STAGES)) starting; do
-        [ ! -e "$LK_SNAPSHOT_ROOT/.$STAGE" ] || break
+        [ ! -e "$LK_SNAPSHOT/.$STAGE" ] || break
     done
     echo "${STAGE//-/ }"
 }
@@ -159,7 +158,7 @@ function run_rsync() {
     local SRC=${1:-} DEST=${2:-}
     [ $# -eq 2 ] || {
         SRC=${SOURCE%/}/
-        DEST=$LK_SNAPSHOT_FS_ROOT/
+        DEST=$LK_SNAPSHOT_FS/
     }
     lk_run rsync "${RSYNC_ARGS[@]}" "$SRC" "$DEST" \
         > >(lk_log_bypass_stdout tee -a "$RSYNC_OUT_FILE") \
@@ -228,7 +227,7 @@ while :; do
     case "$OPT" in
     -g | --group)
         # TODO: add macOS-friendly test
-        getent group "$1" >/dev/null 2>&1 ||
+        getent group "$1" &>/dev/null ||
             lk_die "group not found: $1"
         SNAPSHOT_GROUP=$1
         shift
@@ -296,20 +295,26 @@ HN=$(lk_hostname) || HN=localhost
 FQDN=$(lk_fqdn) || FQDN=$HN.localdomain
 SENDER_NAME="${LK_PATH_PREFIX}backup on $HN"
 LK_SNAPSHOT_TIMESTAMP=${LK_BACKUP_TIMESTAMP:-$(date +"%Y-%m-%d-%H%M%S")}
-LK_SNAPSHOT_ROOT=$BACKUP_ROOT/snapshot/$SOURCE_NAME/$LK_SNAPSHOT_TIMESTAMP
-LK_SNAPSHOT_FS_ROOT=$LK_SNAPSHOT_ROOT/fs
-LK_SNAPSHOT_DB_ROOT=$LK_SNAPSHOT_ROOT/db
+LK_SNAPSHOT_ROOT=$BACKUP_ROOT/snapshot/$SOURCE_NAME
+LK_SNAPSHOT=$LK_SNAPSHOT_ROOT/$LK_SNAPSHOT_TIMESTAMP
+LK_SNAPSHOT_FS=$LK_SNAPSHOT/fs
+LK_SNAPSHOT_DB=$LK_SNAPSHOT/db
 LK_BACKUP_MAIL=${LK_BACKUP_MAIL-root}
 LK_BACKUP_MAIL_FROM=${LK_BACKUP_MAIL_FROM-"$SENDER_NAME <$USER@$FQDN>"}
 LK_BACKUP_MAIL_ERROR_ONLY=${LK_BACKUP_MAIL_ERROR_ONLY-Y}
 
 SOURCE_LATEST=$BACKUP_ROOT/latest/$SOURCE_NAME
-SNAPSHOT_LOG_FILE=$LK_SNAPSHOT_ROOT/log/snapshot.log
-RSYNC_OUT_FILE=$LK_SNAPSHOT_ROOT/log/rsync.log
-RSYNC_ERR_FILE=$LK_SNAPSHOT_ROOT/log/rsync.err.log
+SNAPSHOT_LOG_FILE=$LK_SNAPSHOT/log/snapshot.log
+RSYNC_OUT_FILE=$LK_SNAPSHOT/log/rsync.log
+RSYNC_ERR_FILE=$LK_SNAPSHOT/log/rsync.err.log
+
+[ -d "$SOURCE_LATEST" ] ||
+    [ ! -d "$LK_SNAPSHOT_ROOT" ] ||
+    SOURCE_LATEST=$LK_SNAPSHOT_ROOT/$(lk_backup_snapshot_latest "$LK_SNAPSHOT_ROOT") ||
+    SOURCE_LATEST=
 
 ! is_stage_complete finished ||
-    lk_die "already finalised: $LK_SNAPSHOT_ROOT"
+    lk_die "already finalised: $LK_SNAPSHOT"
 
 umask 022
 SOURCE_MODE=00700
@@ -324,9 +329,9 @@ LOG_MODE=00600
 install -d -m 00755 "$BACKUP_ROOT"
 install -d -m 00751 "$BACKUP_ROOT"/{latest,snapshot}
 install -d -m "$SOURCE_MODE" ${SNAPSHOT_GROUP:+-g "$SNAPSHOT_GROUP"} \
-    "$BACKUP_ROOT/snapshot/$SOURCE_NAME"
+    "$LK_SNAPSHOT_ROOT"
 install -d -m "$SNAPSHOT_MODE" ${SNAPSHOT_GROUP:+-g "$SNAPSHOT_GROUP"} \
-    "$BACKUP_ROOT/snapshot/$SOURCE_NAME/$LK_SNAPSHOT_TIMESTAMP"/{,db,log}
+    "$LK_SNAPSHOT"/{,db,log}
 for f in SNAPSHOT_LOG_FILE RSYNC_OUT_FILE RSYNC_ERR_FILE; do
     [ -e "${!f}" ] ||
         install -m "$LOG_MODE" /dev/null "${!f}"
@@ -334,6 +339,10 @@ done
 
 LK_SECONDARY_LOG_FILE=$SNAPSHOT_LOG_FILE \
     lk_log_output
+
+# Don't pollute RSYNC_ERR_FILE with lk_run output
+exec 3>&2
+_LK_FD=3
 
 RSYNC_EXIT_VALUE=0
 RSYNC_RESULT=
@@ -349,30 +358,31 @@ trap exit_trap EXIT
     lk_console_detail "Snapshot:" "$LK_SNAPSHOT_TIMESTAMP"
     lk_console_detail "Status:" "$(get_stage)"
 
-    if [ -d "$SOURCE_LATEST/fs" ] && ! is_stage_complete previous-copy-finished; then
+    if [ -d "$SOURCE_LATEST/fs" ] &&
+        ! is_stage_complete previous-copy-finished; then
         LATEST=$(realpath "$SOURCE_LATEST/fs")
-        [ "$LATEST" != "$(realpath "$LK_SNAPSHOT_FS_ROOT")" ] ||
+        [ "$LATEST" != "$(realpath "$LK_SNAPSHOT_FS")" ] ||
             lk_die "latest and pending snapshots cannot be the same"
         lk_console_message "Duplicating previous snapshot using hard links"
         ! is_stage_complete previous-copy-started || {
             lk_console_detail "Deleting incomplete replica from previous run"
-            rm -Rf "$LK_SNAPSHOT_FS_ROOT"
+            rm -Rf "$LK_SNAPSHOT_FS"
         }
-        [ ! -e "$LK_SNAPSHOT_FS_ROOT" ] ||
-            lk_die "directory already exists: $LK_SNAPSHOT_FS_ROOT"
+        [ ! -e "$LK_SNAPSHOT_FS" ] ||
+            lk_die "directory already exists: $LK_SNAPSHOT_FS"
         lk_console_detail "Snapshot:" "$LATEST"
-        lk_console_detail "Replica:" "$LK_SNAPSHOT_FS_ROOT"
+        lk_console_detail "Replica:" "$LK_SNAPSHOT_FS"
         mark_stage_complete previous-copy-started
         # Prevent unwelcome set-group-ID propagation
-        install -d -m 00700 "$LK_SNAPSHOT_FS_ROOT"
-        gnu_cp -alT "$LATEST" "$LK_SNAPSHOT_FS_ROOT"
+        install -d -m 00700 "$LK_SNAPSHOT_FS"
+        gnu_cp -alT "$LATEST" "$LK_SNAPSHOT_FS"
         mark_stage_complete previous-copy-finished
         lk_console_log "Copy complete"
     else
         mark_stage_complete previous-copy-finished
     fi
 
-    lk_console_item "Creating snapshot at" "$LK_SNAPSHOT_ROOT"
+    lk_console_item "Creating snapshot at" "$LK_SNAPSHOT"
     lk_console_detail "Log files:" "$(lk_echo_args \
         "$SNAPSHOT_LOG_FILE" "$RSYNC_OUT_FILE" "$RSYNC_ERR_FILE")"
     RSYNC_ARGS=(-vrlpt --delete --stats "$@")
@@ -419,7 +429,7 @@ trap exit_trap EXIT
 
     [ "${DRY_RUN:-0}" -ne 0 ] || [ "$EXIT_STATUS" -ne 0 ] || {
         lk_console_message "Updating latest snapshot symlink for $SOURCE_NAME"
-        ln -sfnv "$LK_SNAPSHOT_ROOT" "$SOURCE_LATEST"
+        ln -sfnv "$LK_SNAPSHOT" "$BACKUP_ROOT/latest/$SOURCE_NAME"
         mark_stage_complete finished
     }
 

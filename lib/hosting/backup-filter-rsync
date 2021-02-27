@@ -1,15 +1,4 @@
-+ /etc
-
-+ /root
-+ /home
-
-+ /opt
-
-- /srv/backup
-+ /srv
-
-+ /var/log
-+ /var/spool
-- /var/*
-
-- /*
+- /.cache
+- /log
+- /public_html/wp-content/updraft
+- /staging

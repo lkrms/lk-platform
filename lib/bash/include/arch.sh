@@ -1,6 +1,8 @@
 #!/bin/bash
 
-# shellcheck disable=SC2016,SC2034,SC2206,SC2120,SC2086
+# shellcheck disable=SC2015,SC2016,SC2034,SC2120,SC2206,SC2207
+
+lk_include linux
 
 function lk_arch_chroot() {
     [ "${1:-}" != -u ] || {
@@ -53,7 +55,7 @@ function lk_arch_add_repo() {
     [ -f "$FILE" ] ||
         lk_warn "$FILE: file not found" || return
     SH=$(
-        _add_key() { KEY_FILE=$(mktemp) &&
+        function _add_key() { KEY_FILE=$(mktemp) &&
             curl --fail --location --output "$KEY_FILE" "$1" &&
             pacman-key --add "$KEY_FILE"; }
         declare -f _add_key
@@ -88,14 +90,15 @@ Server = $SERVER"
 }
 
 function lk_arch_configure_grub() {
-    local FILE _FILE LK_GRUB_CMDLINE LK_SUDO=1
-    LK_GRUB_CMDLINE=${LK_GRUB_CMDLINE+"$(lk_escape_ere_replace "$(lk_double_quote "$LK_GRUB_CMDLINE")")"}
-    LK_GRUB_CMDLINE=${LK_GRUB_CMDLINE:-\\1}
+    local CMDLINE FILE _FILE LK_SUDO=1
+    CMDLINE=${LK_GRUB_CMDLINE+"$(lk_escape_ere_replace \
+        "$(lk_double_quote "$LK_GRUB_CMDLINE")")"}
+    CMDLINE=${CMDLINE:-\\1}
     FILE=$(lk_arch_path /etc/default/grub)
     _FILE=$(sed -E \
         -e 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=saved/' \
         -e 's/^#?GRUB_SAVEDEFAULT=.*/GRUB_SAVEDEFAULT=true/' \
-        -e "s/^GRUB_CMDLINE_LINUX_DEFAULT=(.*)/GRUB_CMDLINE_LINUX_DEFAULT=$LK_GRUB_CMDLINE/" \
+        -e "s/^GRUB_CMDLINE_LINUX_DEFAULT=(.*)/GRUB_CMDLINE_LINUX_DEFAULT=$CMDLINE/" \
         "$FILE") &&
         lk_file_keep_original "$FILE" &&
         lk_file_replace "$FILE" "$_FILE" || lk_warn "unable to update $FILE" || return
@@ -133,7 +136,7 @@ function lk_pac_installed() {
     [ "${1:-}" != -d ] || D=-d
     [ -z "$E$D" ] || shift
     [ $# -gt 0 ] || lk_warn "no package" || return
-    pacman -Qq $E $D "$@" >/dev/null 2>&1
+    pacman -Qq $E $D "$@" &>/dev/null
 }
 
 # lk_pac_installed_list [PACKAGE...]
@@ -150,12 +153,26 @@ function lk_pac_installed_list() {
             <(lk_echo_args "$@" | sort -u)
         return
     }
-    pacman -Qq $E $D "$@"
+    pacman -Qq $E $D
+}
+
+# lk_pac_not_installed_list PACKAGE...
+#
+# Output each PACKAGE that isn't currently installed.
+function lk_pac_not_installed_list() {
+    local E='' D=''
+    [ "${1:-}" != -e ] || E=-e
+    [ "${1:-}" != -d ] || D=-d
+    [ -z "$E$D" ] || shift
+    [ $# -gt 0 ] || lk_warn "no package" || return
+    comm -13 \
+        <(lk_pac_installed_list $E $D "$@" | sort -u) \
+        <(lk_echo_args "$@" | sort -u)
 }
 
 function lk_pac_sync() {
     ! lk_is_root && ! lk_can_sudo pacman ||
-        lk_is_false LK_PACMAN_SYNC ||
+        { lk_is_false LK_PACMAN_SYNC && [ "${1:-}" != -f ]; } ||
         { lk_console_message "Refreshing package databases" &&
             lk_elevate pacman -Sy >/dev/null &&
             LK_PACMAN_SYNC=0; }
@@ -164,6 +181,12 @@ function lk_pac_sync() {
 function lk_pac_groups() {
     lk_pac_sync &&
         pacman -Sgq "$@"
+}
+
+# lk_pac_repo_available_list [REPO...]
+function lk_pac_repo_available_list() {
+    lk_pac_sync &&
+        pacman -Slq "$@"
 }
 
 # lk_pac_available_list [-o] [PACKAGE...]
@@ -181,7 +204,7 @@ function lk_pac_available_list() {
     else
         local IFS=$'\n' REPOS
         REPOS=${OFFICIAL:+$(lk_pac_official_repo_list)} &&
-            pacman -Slq $REPOS
+            lk_pac_repo_available_list $REPOS
     fi
 }
 
@@ -190,6 +213,7 @@ function lk_pac_unavailable_list() {
     local OFFICIAL=
     [ "${1:-}" != -o ] || { OFFICIAL=1 && shift; }
     [ $# -gt 0 ] || lk_warn "no package" || return
+    lk_pac_sync || return
     comm -23 \
         <(lk_echo_args "$@" | sort -u) \
         <(lk_pac_available_list ${OFFICIAL:+-o} | sort -u)
@@ -209,6 +233,88 @@ function lk_pac_installed_explicit() {
 # installed", or list all packages installed as dependencies.
 function lk_pac_installed_not_explicit() {
     lk_pac_installed_list -d "$@"
+}
+
+function lk_makepkg_setup() {
+    local NAME EMAIL
+    NAME=$(lk_full_name) && [ -n "$NAME" ] || NAME=$USER
+    EMAIL=$USER@$(lk_fqdn) || EMAIL=$USER@localhost
+    export PACKAGER="$NAME <${EMAIL%.localdomain}>"
+}
+
+# lk_makepkg [-a AUR_PACKAGE] [MAKEPKG_ARG...]
+function lk_makepkg() {
+    local AUR_PACKAGE AUR_URL BUILD_DIR SH LIST
+    [ "${1:-}" != -a ] || { AUR_PACKAGE=$2 && shift 2; }
+    lk_makepkg_setup
+    LK_MAKEPKG_LIST=()
+    if [ -n "${AUR_PACKAGE:-}" ]; then
+        AUR_URL=https://aur.archlinux.org/$AUR_PACKAGE.git
+        BUILD_DIR=$(lk_mktemp_dir) &&
+            git clone "$AUR_URL" "$BUILD_DIR" &&
+            SH=$({ cd "$BUILD_DIR" && lk_makepkg "$@"; } >&2 &&
+                echo "LK_MAKEPKG_LIST=($(lk_quote LK_MAKEPKG_LIST))") &&
+            eval "$SH" &&
+            lk_delete_on_exit "$BUILD_DIR"
+    else
+        lk_pac_sync &&
+            lk_tty makepkg --syncdeps --rmdeps --clean --noconfirm "$@" &&
+            LIST=$(lk_require_output makepkg --packagelist) &&
+            lk_mapfile LK_MAKEPKG_LIST <<<"$LIST"
+    fi
+}
+
+function lk_aur_can_chroot() {
+    [ -f /etc/aurutils/pacman-aur.conf ] &&
+        lk_pac_installed devtools &&
+        ! lk_in_chroot
+}
+
+function lk_aur_outdated() {
+    aur repo --database aur --list |
+        aur vercmp -q
+}
+
+function lk_aur_sync() {
+    local OUTDATED CHROOT PKG SYNCED=() FAILED=()
+    [ $# -gt 0 ] || {
+        lk_console_message "Checking for updates to AUR packages"
+        OUTDATED=($(lk_aur_outdated)) || return
+        set -- ${OUTDATED[@]+"${OUTDATED[@]}"}
+    }
+    [ $# -gt 0 ] || return 0
+    unset CHROOT
+    ! lk_aur_can_chroot || CHROOT=
+    lk_echo_args "$@" |
+        lk_console_list "Syncing from AUR:" package packages
+    lk_makepkg_setup
+    for PKG in "$@"; do
+        aur sync --database aur --no-view --noconfirm \
+            ${CHROOT+--chroot} \
+            ${CHROOT+--makepkg-conf=/etc/makepkg.conf} \
+            ${_LK_AUR_ARGS[@]+"${_LK_AUR_ARGS[@]}"} "$PKG" &&
+            SYNCED+=("$PKG") ||
+            FAILED+=("$PKG")
+    done
+    [ ${#SYNCED[@]} -eq 0 ] || lk_echo_array SYNCED |
+        lk_console_list "Synced from AUR:" package packages \
+            "$LK_SUCCESS_COLOUR"
+    [ ${#FAILED[@]} -eq 0 ] || lk_echo_array FAILED |
+        lk_console_list "Failed to sync:" package packages \
+            "$LK_ERROR_COLOUR"
+    [ ${#FAILED[@]} -eq 0 ]
+}
+
+function lk_aur_rebuild() {
+    local _LK_AUR_ARGS=(--rebuild --force)
+    [ $# -gt 0 ] || return
+    lk_aur_sync "$@"
+}
+
+function lk_arch_reboot_required() {
+    local DIR
+    DIR=/usr/lib/modules/$(uname -r) &&
+        ! [ -d "$DIR" ]
 }
 
 lk_provide arch

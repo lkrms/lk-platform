@@ -154,6 +154,7 @@ HOMEBREW_FORMULAE+=(
 HOMEBREW_CASKS+=(
     android-studio
     dbeaver-community
+    font-jetbrains-mono
     sequel-pro
     sourcetree
     sublime-merge

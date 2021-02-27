@@ -106,6 +106,7 @@ function lk_mysql_dump() {
         DB_HOST=${4-${DB_HOST-${LK_MYSQL_HOST:-localhost}}} \
         LK_MYSQL_ELEVATE LK_MY_CNF OUTPUT_FILE OUTPUT_FD \
         INNODB_ONLY DUMP_ARGS ARG_COLOUR EXIT_STATUS=0
+    unset ARG_COLOUR
     [ $# -ge 1 ] || lk_usage "\
 Usage: $(lk_myself -f) DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
         return

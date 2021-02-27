@@ -42,7 +42,7 @@ function lk_iptables_maybe_append() {
 function lk_iptables_has_chain() {
     eval "$(_lk_iptables_which "$@")"
     [ -n "${1:-}" ] || lk_warn "no chain" || return
-    lk_elevate "$COMMAND" ${2:+-t "$2"} --numeric --list "$1" >/dev/null 2>&1
+    lk_elevate "$COMMAND" ${2:+-t "$2"} --numeric --list "$1" &>/dev/null
 }
 
 # lk_iptables_flush_chain [-4|-6] CHAIN [TABLE]

@@ -32,8 +32,8 @@ HOMEBREW_FORMULAE=(
     htop
     jq
     lftp
-    mas
     media-info
+    moreutils
     ncdu
     newt
     nmap

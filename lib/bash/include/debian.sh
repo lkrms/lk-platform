@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2207
+# shellcheck disable=SC1091,SC2016,SC2034,SC2207
 
 # lk_dpkg_installed PACKAGE...
 #
@@ -102,7 +102,9 @@ function lk_apt_install() {
     [ ${#INSTALL[@]} -eq 0 ] || {
         lk_echo_array INSTALL |
             lk_console_list "Installing:" "APT package" "APT packages"
-        lk_elevate apt-get -yq install "${INSTALL[@]}"
+        lk_elevate apt-get -yq \
+            --no-install-recommends --no-install-suggests \
+            install "${INSTALL[@]}"
     }
 }
 
@@ -143,6 +145,121 @@ function lk_apt_purge_removed() {
             lk_console_list "Purging:" "APT package" "APT packages"
         lk_elevate apt-get -yq purge "${PURGE[@]}"
     }
+}
+
+function lk_apt_upgrade_all() {
+    local SH
+    lk_apt_update &&
+        SH=$(apt-get -qq --fix-broken --just-print \
+            -o APT::Get::Show-User-Simulation-Note=false \
+            dist-upgrade | awk \
+            'function sh(op, arr, _i, _j) {
+    printf "local %s=(", op
+    for (_i in arr)
+        printf (_j++ ? " %s" : "%s"), arr[_i]
+    printf ")\n"
+}
+$1 == "Inst" {
+    inst[++i] = $2
+}
+$1 == "Conf" {
+    conf[++c] = $2
+}
+$1 == "Remv" {
+    remv[++r] = $2
+}
+END {
+    sh("INST", inst)
+    sh("CONF", conf)
+    sh("REMV", remv)
+    printf "local CHANGES=%s", i + c + r
+}') && eval "$SH" || return
+    [ "$CHANGES" -gt 0 ] || return 0
+    lk_console_message "Upgrading APT packages"
+    [ ${#INST[@]} -eq 0 ] || lk_console_detail "Upgrade:" $'\n'"${INST[*]}"
+    CONF=($(comm -23 \
+        <(lk_echo_array CONF | sort -u) \
+        <(lk_echo_array INST | sort -u)))
+    [ ${#CONF[@]} -eq 0 ] || lk_console_detail "Configure:" $'\n'"${CONF[*]}"
+    [ ${#REMV[@]} -eq 0 ] || lk_console_detail "Remove:" $'\n'"${REMV[*]}"
+    lk_elevate apt-get -yq --fix-broken dist-upgrade || return
+    lk_apt_purge_removed
+}
+
+# lk_apt_sources_get_clean [-l LIST]
+function lk_apt_sources_get_clean() {
+    local LIST=/etc/apt/sources.list CODENAME SH \
+        SUITES=("$NS+") COMPONENTS=("$NS+")
+    [ "${1:-}" != -l ] || LIST=$2
+    [ "$LIST" != - ] || unset LIST
+    if lk_is_ubuntu; then
+        CODENAME=$(. /etc/lsb-release && echo "$DISTRIB_CODENAME") || return
+        SUITES=("$CODENAME"{,-{updates,security,backports}})
+        COMPONENTS=(main restricted universe multiverse)
+    fi
+    SH=$(lk_get_regex URI_REGEX_REQ_SCHEME_HOST) && eval "$SH"
+    grep -E "^deb$S+$URI_REGEX_REQ_SCHEME_HOST$S+\
+($(lk_implode '|' SUITES))\
+($S+($(lk_implode '|' COMPONENTS)))+$S*(#.*|\$)" ${LIST:+"$LIST"} |
+        sed -E "s/$S*(#.*)?\$//" |
+        awk '{for(i=4;i<=NF;i++)print$1,$2,$3,$i}'
+}
+
+function _lk_apt_sources_get_mirror() {
+    local _MIRROR
+    [[ $1 =~ (-security|/updates)$ ]] &&
+        _MIRROR=$SECURITY_MIRROR ||
+        _MIRROR=$MIRROR
+    lk_require_output awk \
+        -v "s=$1" \
+        -v "r=-security/?\$" \
+        -v "m=$_MIRROR" \
+        '!$2{next}$3==s{print$2;m="";exit}$2!~r&&$3!~r{m=$2;next}END{if(m)print m}'
+}
+
+# - lk_apt_sources_get_missing [-l LIST] COMPONENT
+# - lk_apt_sources_get_missing [-l LIST] SUITE COMPONENT [SUITE COMPONENT]...
+function lk_apt_sources_get_missing() {
+    local LC_ALL=C LIST SOURCES COMPONENTS \
+        MIRROR=${LK_APT_DEFAULT_MIRROR:-} \
+        SECURITY_MIRROR=${LK_APT_DEFAULT_SECURITY_MIRROR:-}
+    export LC_ALL
+    unset LIST
+    [ "${1:-}" != -l ] || { LIST=$2 && shift 2; }
+    [ $# -gt 0 ] || lk_warn "invalid arguments" || return
+    # If there are no existing sources with a valid URI (unlikely), use these
+    if lk_is_ubuntu; then
+        MIRROR=${MIRROR:-http://archive.ubuntu.com/ubuntu}
+        SECURITY_MIRROR=${SECURITY_MIRROR:-http://security.ubuntu.com/ubuntu}
+    else
+        MIRROR=${MIRROR:-http://deb.debian.org/debian}
+        SECURITY_MIRROR=${SECURITY_MIRROR:-http://deb.debian.org/debian-security}
+    fi
+    SOURCES=$(lk_apt_sources_get_clean ${LIST:+-l "$LIST"}) || return
+    COMPONENTS=$(if [ $# -eq 1 ]; then
+        SUITE=$(cut -d' ' -f3 <<<"$SOURCES" | sort -u) || exit
+        for s in $SUITE; do
+            printf '%s %s\n' "$s" "$1"
+        done
+    else
+        while [ $# -ge 2 ]; do
+            for c in $2; do
+                printf '%s %s\n' "$1" "$c"
+            done
+            shift 2
+        done
+    fi) || return
+    comm -13 \
+        <(cut -d' ' -f3-4 <<<"$SOURCES" | sort -u) \
+        <(sort -u <<<"$COMPONENTS") |
+        while read -r SUITE COMPONENT; do
+            SUITE_MIRROR=$(_lk_apt_sources_get_mirror "$SUITE" <<<"$SOURCES") ||
+                lk_warn "no mirror found for suite: $SUITE" || continue
+            printf 'deb %s %s %s\n' \
+                "$SUITE_MIRROR" \
+                "$SUITE" \
+                "$COMPONENT"
+        done
 }
 
 lk_provide debian

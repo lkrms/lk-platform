@@ -1,2 +1,5 @@
 %wheel ALL=(ALL) ALL
 %wheel ALL=(ALL) NOPASSWD:/usr/bin/pacman
+
+# Required by `aur build --chroot`
+Defaults env_keep += "GPGKEY PACKAGER"

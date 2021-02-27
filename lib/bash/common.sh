@@ -3,7 +3,7 @@
 # shellcheck disable=SC1090,SC2015,SC2120,SC2128,SC2207
 
 export -n BASH_XTRACEFD SHELLOPTS
-[ -n "${_LK_ENV:+1}" ] || _LK_ENV=$(declare -x)
+[ -n "${_LK_ENV+1}" ] || _LK_ENV=$(declare -x)
 
 lk_die() { s=$? && echo "$BASH_SOURCE: $1" >&2 && (exit $s) && false || exit; }
 [ -n "${LK_INST:-${LK_BASE:-}}" ] || lk_die "LK_BASE not set"
@@ -32,15 +32,15 @@ set -E
     fi
     # lk_var lists all LK_* variables that aren't environment variables
     ENV=$(lk_get_env -n | sed '/^LK_/!d' | sort)
-    lk_var() { comm -23 \
+    function lk_var() { comm -23 \
         <(printf '%s\n' "${!LK_@}" | sort) \
-        <(cat <<<"$ENV") | sed '/^LK_ARGV$/d'; }
+        <(cat <<<"$ENV"); }
     (
         VAR=($(lk_var))
         [ ${#VAR[@]} -eq 0 ] || unset "${VAR[@]}"
         for FILE in "${SETTINGS[@]}"; do
             FILE=$(lk_expand_template <<<"$FILE" 2>/dev/null) || continue
-            [ ! -r "$FILE" ] || . "$FILE"
+            [ ! -f "$FILE" ] || [ ! -r "$FILE" ] || . "$FILE"
         done
         VAR=($(lk_var))
         [ ${#VAR[@]} -eq 0 ] || lk_get_quoted_var "${VAR[@]}"
@@ -158,7 +158,12 @@ function lk_getopt() {
 if lk_is_script_running; then
     function _lk_elevate() {
         if [ $# -gt 0 ]; then
-            sudo -H "$@"
+            if ! lk_command_exists "$1" &&
+                [ "$(type -t "$1")" = function ]; then
+                LK_SUDO=1 "$@"
+            else
+                sudo -H "$@"
+            fi
         else
             sudo -H "$0" "${LK_ARGV[@]}"
             exit
