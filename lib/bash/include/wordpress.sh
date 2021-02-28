@@ -483,51 +483,41 @@ function lk_wp_reapply_config() {
 }
 
 function _lk_wp_get_cron_path() {
-    local WP_CRON_PATH
-    lk_command_exists crontab || lk_warn "crontab required" || return
-    WP_CRON_PATH="$(lk_wp_get_site_root)/wp-cron.php" || return
-    [ -f "$WP_CRON_PATH" ] || lk_warn "file not found: $WP_CRON_PATH" || return
-    echo "$WP_CRON_PATH"
+    local CRON_PATH
+    CRON_PATH=$(lk_wp_get_site_root)/wp-cron.php || return
+    [ -f "$CRON_PATH" ] || lk_warn "file not found: $CRON_PATH" || return
+    echo "$CRON_PATH"
 }
 
-# lk_wp_enable_system_cron [interval_minutes]
+# lk_wp_enable_system_cron [INTERVAL]
 function lk_wp_enable_system_cron() {
-    local INTERVAL="${1:-5}" WP_CRON_PATH CRON_COMMAND CRONTAB
-    WP_CRON_PATH="$(_lk_wp_get_cron_path)" || return
-    lk_console_item "Scheduling with crontab:" "$WP_CRON_PATH"
-    lk_console_detail "Setting DISABLE_WP_CRON in wp-config.php"
-    lk_wp config set DISABLE_WP_CRON true --type=constant --raw --quiet || return
-    CRON_COMMAND="$(type -P php) $WP_CRON_PATH"
-    [ "$INTERVAL" -lt 60 ] &&
-        CRON_COMMAND="*/$INTERVAL * * * * $CRON_COMMAND" ||
-        CRON_COMMAND="$((RANDOM % 60)) * * * * $CRON_COMMAND"
-    lk_console_detail "Adding cron job:" "$CRON_COMMAND"
-    CRONTAB="$(crontab -l 2>/dev/null |
-        sed -E "/ $(lk_escape_ere "$WP_CRON_PATH")\$/d")" || CRONTAB=
-    {
-        [ -z "$CRONTAB" ] || echo "$CRONTAB"
-        echo "$CRON_COMMAND"
-    } | crontab -
+    local INTERVAL=${1:-5} CRON_PATH COMMAND REGEX CRONTAB
+    CRON_PATH=$(_lk_wp_get_cron_path) &&
+        COMMAND="HTTP_CLIENT_IP=127.0.0.1 $(type -P php) $CRON_PATH" || return
+    lk_console_item "Scheduling with crontab:" "$CRON_PATH"
+    lk_wp config get DISABLE_WP_CRON --type=constant 2>/dev/null |
+        grep -Fx 1 >/dev/null ||
+        lk_wp config set DISABLE_WP_CRON true --type=constant --raw ||
+        return
+    REGEX="$S$(lk_regex_expand_whitespace "$(lk_escape_ere "$CRON_PATH")")($S|\$)"
+    [ $# -eq 0 ] && CRONTAB=$(lk_crontab_get "^$S*[^#[:blank:]].*$REGEX" |
+        head -n1 | awk -v "c=$COMMAND" '{print$1,$2,$3,$4,$5,c}') ||
+        { [ "$INTERVAL" -lt 60 ] &&
+            CRONTAB="*/$INTERVAL * * * * $COMMAND" ||
+            CRONTAB="42 * * * * $COMMAND"; }
+    lk_crontab_apply "$REGEX" "$CRONTAB"
 }
 
 # lk_wp_disable_cron
 function lk_wp_disable_cron() {
-    local WP_CRON_PATH CRON_COMMAND CRONTAB
-    WP_CRON_PATH="$(_lk_wp_get_cron_path)" || return
-    lk_console_item "Disabling:" "$WP_CRON_PATH"
-    lk_console_detail "Setting DISABLE_WP_CRON in wp-config.php"
-    lk_wp config set DISABLE_WP_CRON true --type=constant --raw --quiet || return
-    if CRON_COMMAND="$({ crontab -l 2>/dev/null || true; } |
-        grep -E " $(lk_escape_ere "$WP_CRON_PATH")\$")"; then
-        lk_console_detail "Removing from crontab:" "$CRON_COMMAND"
-        CRONTAB="$(crontab -l 2>/dev/null |
-            grep -Ev " $(lk_escape_ere "$WP_CRON_PATH")\$")" || CRONTAB=
-        if [ -n "$CRONTAB" ]; then
-            crontab - <<<"$CRONTAB"
-        else
-            crontab -r 2>/dev/null || true
-        fi
-    fi
+    local CRON_PATH
+    CRON_PATH=$(_lk_wp_get_cron_path) || return
+    lk_console_item "Disabling:" "$CRON_PATH"
+    lk_wp config get DISABLE_WP_CRON --type=constant 2>/dev/null |
+        grep -Fx 1 >/dev/null ||
+        lk_wp config set DISABLE_WP_CRON true --type=constant --raw ||
+        return
+    lk_crontab_remove_command "$CRON_PATH"
 }
 
 function lk_wp_get_maintenance_php() {

@@ -456,15 +456,17 @@ Example:
 
 # lk_linode_hosting_get_meta DIR HOST...
 function lk_linode_hosting_get_meta() {
-    local DIR=${1:-} HOST SSH_HOST FILE COMMIT \
-        PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX}
+    local DIR=${1:-} _DIR HOST SSH_HOST FILE COMMIT FILES _FILES _FILE \
+        PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX} s=/
     [ $# -ge 2 ] || lk_usage "\
 Usage: $(lk_myself -f) DIR HOST..." || return
     [ -d "$DIR" ] || lk_warn "not a directory: $DIR" || return
     DIR=${DIR%/}
     for HOST in "${@:2}"; do
+        _DIR=$DIR/$HOST
+        lk_install -d -m 00755 "$_DIR" || return
         SSH_HOST=$PREFIX${HOST#$PREFIX}
-        FILE=$DIR/StackScript-$HOST
+        FILE=$_DIR/StackScript-$HOST
         [ -e "$FILE" ] || {
             ssh "$SSH_HOST" \
                 "sudo bash -c 'cp -pv /root/StackScript . && chown \$SUDO_USER: StackScript'" &&
@@ -479,14 +481,25 @@ Usage: $(lk_myself -f) DIR HOST..." || return
                     touch -r "$FILE" "$FILE-patched" || return
             }
         }
-        FILE=$DIR/install.log-$HOST
+        FILE=$_DIR/install.log-$HOST
         [ -e "$FILE" ] ||
             scp -p "$SSH_HOST:/var/log/${PREFIX}install.log" "$FILE" || return
-        FILE=$DIR/install.out-$HOST
+        FILE=$_DIR/install.out-$HOST
         [ -e "$FILE" ] ||
             scp -p "$SSH_HOST:/var/log/${PREFIX}install.out" "$FILE" || return
+        FILES=$(ssh "$SSH_HOST" ls -d \
+            /etc/default/lk-platform \
+            /etc/memcached.conf \
+            "/etc/mysql/mariadb.conf.d/*$PREFIX*.cnf" \
+            "/etc/php/*/fpm/pool.d/*.conf" 2>/dev/null) || [ $? -ne 255 ]
+        lk_mapfile _FILES <<<"$FILES"
+        for _FILE in ${_FILES[@]+"${_FILES[@]}"}; do
+            FILE=${_FILE#/}
+            FILE=$_DIR/${FILE//"$s"/__}
+            scp -p "$SSH_HOST:$_FILE" "$FILE" || return
+        done
         awk -f "${LK_INST:-$LK_BASE}/lib/awk/get-install-env.awk" \
-            "$DIR/install.log-$HOST" |
+            "$_DIR/install.log-$HOST" |
             sed -E \
                 -e '/^(DEBCONF_NONINTERACTIVE_SEEN|DEBIAN_FRONTEND|HOME|LINODE_.*|PATH|PWD|SHLVL|TERM|_)=/d' \
                 -e "s/^((LK_)?NODE_(HOSTNAME|FQDN)=)/\\1test-/" \
@@ -494,8 +507,10 @@ Usage: $(lk_myself -f) DIR HOST..." || return
                 -e "s/^(CALL_HOME_MX=).*/\\1/" |
             while IFS='=' read -r VAR VALUE; do
                 printf '%s=%q\n' "$VAR" "$VALUE"
-            done >"$DIR/StackScript-env-$HOST" &&
-            touch -r "$DIR/install.log-$HOST" "$DIR/StackScript-env-$HOST" ||
+            done >"$_DIR/StackScript-env-$HOST" &&
+            touch -r "$_DIR/install.log-$HOST" \
+                "$_DIR/StackScript-env-$HOST" \
+                "$_DIR" ||
             return
     done
 }
