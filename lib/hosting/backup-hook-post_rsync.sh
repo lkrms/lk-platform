@@ -25,10 +25,12 @@ if [ "$SOURCE_NAME" = root ]; then
         [[ ! $FILE =~ .*/([^/]+)-[0-9]{4}(-[0-9]{2}){2}-[0-9]{6}\.sql(\.[[:alnum:]]+){,2}$ ]] ||
             MYSQL_DUMP_ARGS+=("${BASH_REMATCH[1]}")
     done
+    [ ${#MYSQL_DUMP_ARGS[@]} -gt 1 ] || MYSQL_DUMP_ARGS=(--all)
 else
     OWNER=$(lk_file_owner "$SOURCE") &&
         lk_mysql_mapfile MYSQL_DUMP_ARGS -h"${LK_MYSQL_HOST:-localhost}" \
-            <<<"SHOW DATABASES LIKE '$(lk_mysql_escape_like "$OWNER")%'" || return
+            <<<"SHOW DATABASES LIKE '$(lk_mysql_escape_like "$OWNER")%'" ||
+        return
 
     if [ ${#MYSQL_DUMP_ARGS[@]} -gt 0 ]; then
         lk_echo_array MYSQL_DUMP_ARGS |

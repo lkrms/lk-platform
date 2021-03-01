@@ -4,18 +4,23 @@
 
 lk_bash_at_least 4 2 || return 0
 
+function __lkc_arg() {
+    COMPREPLY=($(compgen \
+        -W "$(_parse_help "$1") $* --help --no-log --yes" -- "$cur"))
+    [[ ${COMPREPLY-} == *= ]] && compopt -o nospace
+}
+
 function _lkc_keepassxc() {
     local cur prev words cword
     _init_completion || return
     if [[ $cur == -* ]]; then
-        COMPREPLY=($(compgen -W "$(_parse_help "$1")" -- "$cur"))
-        [[ ${COMPREPLY-} == *= ]] && compopt -o nospace
+        __lkc_arg "$@"
     else
         _filedir kdbx
     fi
 } && complete -F _lkc_keepassxc lk-keepassxc.sh
 
-function _lkc_mysql_db() {
+function __lkc_mysql_db() {
     mysql --batch --skip-column-names <<<"SHOW DATABASES" 2>/dev/null
 }
 
@@ -34,11 +39,10 @@ function _lkc_mysql_dump() {
     *)
         case "$cur" in
         -*)
-            COMPREPLY=($(compgen -W "$(_parse_help "$1") --yes" -- "$cur"))
-            [[ ${COMPREPLY-} == *= ]] && compopt -o nospace
+            __lkc_arg "$@"
             ;;
         *)
-            COMPREPLY=($(compgen -W "$(_lkc_mysql_db)" -- "$cur"))
+            COMPREPLY=($(compgen -W "$(__lkc_mysql_db)" -- "$cur"))
             ;;
         esac
         ;;
@@ -50,7 +54,7 @@ function _lkc_wp_migrate() {
         URL_PREFIX
     _init_completion -s || return
     case "$prev" in
-    -s | -d | -e | --source | --dest | --exclude)
+    -s | -d | --source | --dest)
         _filedir
         ;;
     --maintenance)
@@ -70,8 +74,7 @@ function _lkc_wp_migrate() {
     *)
         case "$cur" in
         -*)
-            COMPREPLY=($(compgen -W "$(_parse_help "$1") --yes" -- "$cur"))
-            [[ ${COMPREPLY-} == *= ]] && compopt -o nospace
+            __lkc_arg "$@"
             ;;
         *)
             _known_hosts_real -a -- "$cur"
@@ -80,3 +83,14 @@ function _lkc_wp_migrate() {
         ;;
     esac
 } && complete -F _lkc_wp_migrate lk-wp-migrate.sh
+
+function _lkc_wp() {
+    local cur prev words cword \
+        IFS=$'\n' COMP
+    _init_completion || return
+    COMP=($(wp --skip-plugins --skip-themes \
+        cli completions --line="${COMP_LINE:3}" --point=$((COMP_POINT - 3))))
+    COMPREPLY=($(grep -Ev '^(<file>[[:blank:]]*)?$' <<<"${COMP[*]}"))
+    [ ${#COMP[@]} -eq ${#COMPREPLY[@]} ] && [ ${#COMP[@]} -gt 0 ] ||
+        _filedir
+} && complete -o nospace -F _lkc_wp lk_wp

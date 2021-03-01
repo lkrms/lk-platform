@@ -8,7 +8,8 @@ DB_USER=
 DB_PASSWORD=
 DB_HOST=${LK_MYSQL_HOST:-localhost}
 
-EXCLUDE_MODE=0
+ALL=0
+EXCLUDE=0
 DEST=$PWD
 DEST_GROUP=
 TIMESTAMP=${LK_BACKUP_TIMESTAMP:-}
@@ -17,16 +18,15 @@ DB_INCLUDE=()
 DB_EXCLUDE=()
 
 LK_USAGE="\
-Usage: ${0##*/} [OPTION...]
-   or: ${0##*/} [OPTION...] DB_NAME...
+Usage: ${0##*/} [OPTION...] DB_NAME...
    or: ${0##*/} [OPTION...] --exclude DB_NAME...
+   or: ${0##*/} [OPTION...] --all
 
-Use mysqldump to back up one or more MySQL/MariaDB databases. If no DB_NAME is
-specified, include all databases. If --exclude is set, include all databases
-except each DB_NAME.
+Use mysqldump to back up one or more MySQL databases.
 
 Options:
-  -x, --exclude             dump all databases except each DB_NAME
+  -a, --all                 dump all databases
+  -x, --exclude             dump all databases except DB_NAME...
   -d, --dest=DIR            create each backup file in DIR
                             (default: current directory)
   -t, --timestamp=VALUE     use VALUE as backup file timestamp
@@ -35,16 +35,21 @@ Options:
   -s, --no-timestamp        don't add backup file timestamp
   -g, --group GROUP         create backup files with group GROUP"
 
-lk_getopt "xd:t:sg:" \
-    "exclude,dest:,timestamp:,no-timestamp,group:"
+lk_getopt "axd:t:sg:" \
+    "all,exclude,dest:,timestamp:,no-timestamp,group:"
 eval "set -- $LK_GETOPT"
 
 while :; do
     OPT=$1
     shift
     case "$OPT" in
+    -a | --all)
+        ALL=1
+        EXCLUDE=0
+        ;;
     -x | --exclude)
-        EXCLUDE_MODE=1
+        EXCLUDE=1
+        ALL=0
         ;;
     -d | --dest)
         [ -d "$1" ] || lk_warn "directory not found: $1" || lk_usage
@@ -75,18 +80,12 @@ while :; do
     esac
 done
 
-! INVALID_DB_NAME=$(grep -E '[[:blank:]]$' <(printf '%s\n' "$@")) ||
-    lk_warn "invalid DB_NAME $(
-        lk_maybe_plural \
-            "$(wc -l <<<"$INVALID_DB_NAME")" \
-            argument arguments
-        false
-    ): \"${INVALID_DB_NAME//$'\n'/$'", "'}\"" ||
-    lk_usage
-
-lk_is_true EXCLUDE_MODE &&
-    DB_EXCLUDE+=("$@") ||
-    DB_INCLUDE+=("$@")
+! lk_is_true ALL || [ $# -eq 0 ] || lk_usage
+lk_is_true ALL || {
+    [ $# -gt 0 ] || lk_usage
+    ! grep -E '[[:blank:]]$' <(printf '%s\n' "$@") >/dev/null ||
+        lk_warn "invalid arguments" || lk_usage
+}
 
 EXIT_STATUS=0
 
@@ -97,31 +96,32 @@ lk_log_output
 
 lk_console_message "Preparing database backup"
 lk_console_detail "Retrieving list of databases on" "$DB_HOST"
-lk_mysql_mapfile DB_ALL -h"$DB_HOST" <<<"SHOW DATABASES"
+lk_mysql_mapfile DB_ALL -h"$DB_HOST" <<<"SHOW DATABASES" || lk_die ""
 lk_console_detail "${#DB_ALL[@]} $(lk_maybe_plural \
     ${#DB_ALL[@]} database databases) found"
 
-if [ ${#DB_INCLUDE[@]} -gt 0 ]; then
-    DB_MISSING=()
-    for i in "${!DB_INCLUDE[@]}"; do
-        lk_in_array "${DB_INCLUDE[$i]}" DB_ALL || {
-            DB_MISSING+=("${DB_INCLUDE[$i]}")
-            unset "DB_INCLUDE[$i]"
-        }
-    done
-    [ ${#DB_MISSING[@]} -eq 0 ] || {
-        EXIT_STATUS=1
-        lk_console_warning "${#DB_MISSING[@]} requested $(
-            lk_maybe_plural ${#DB_MISSING[@]} database databases
-        ) not available on this host:" "$(lk_echo_array DB_MISSING)"
-    }
+if lk_is_true ALL; then
+    DB_INCLUDE=(${DB_ALL[@]+"${DB_ALL[@]}"})
+    DB_EXCLUDE=(information_schema performance_schema sys)
+elif lk_is_true EXCLUDE; then
+    DB_EXCLUDE=("$@")
 else
-    DB_INCLUDE=("${DB_ALL[@]}")
-    DB_EXCLUDE+=(
-        information_schema
-        performance_schema
-        sys
-    )
+    DB_INCLUDE=("$@")
+    if [ ${#DB_INCLUDE[@]} -gt 0 ]; then
+        DB_MISSING=()
+        for i in "${!DB_INCLUDE[@]}"; do
+            lk_in_array "${DB_INCLUDE[$i]}" DB_ALL || {
+                DB_MISSING+=("${DB_INCLUDE[$i]}")
+                unset "DB_INCLUDE[$i]"
+            }
+        done
+        [ ${#DB_MISSING[@]} -eq 0 ] || {
+            EXIT_STATUS=1
+            lk_console_warning "${#DB_MISSING[@]} requested $(
+                lk_maybe_plural ${#DB_MISSING[@]} database databases
+            ) not available on this host:" "$(lk_echo_array DB_MISSING)"
+        }
+    fi
 fi
 
 if [ ${#DB_EXCLUDE[@]} -gt 0 ]; then
@@ -143,7 +143,7 @@ fi
 lk_echo_array DB_INCLUDE |
     lk_console_detail_list "Ready to dump:" database databases
 
-lk_confirm "Proceed?" Y || lk_die
+lk_confirm "Proceed?" Y || lk_die ""
 
 LOCK_FILE=/tmp/${0##*/}-${DEST//\//_}.lock
 LOCK_FD=$(lk_next_fd)
@@ -180,4 +180,4 @@ done
 eval "exec $LOCK_FD>&-"
 rm -f "$LOCK_FILE"
 
-(exit "$EXIT_STATUS") || lk_die
+(exit "$EXIT_STATUS") || lk_die ""
