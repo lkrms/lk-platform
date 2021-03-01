@@ -1,0 +1,16 @@
+# Even if slow_query_log is disabled, the Slow_queries status variable is
+# incremented whenever a query takes longer than long_query_time seconds to
+# execute. To monitor it:
+#
+#     SHOW STATUS LIKE 'Slow_queries';
+#
+[mysqld]
+slow_query_log = 1
+log_queries_not_using_indexes = 1
+log_output = TABLE
+
+# (default: 10.0)
+long_query_time = 5.0
+
+# 1 = log every slow query, 5 = log every 5th slow query, etc. (default: 1)
+log_slow_rate_limit = 1

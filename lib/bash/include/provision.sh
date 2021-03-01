@@ -1080,7 +1080,7 @@ function _lk_crontab() {
     local REGEX=${1:+".*$1.*"} ADD_COMMAND=${2:-} TYPE=${2:+a}${1:+r} \
         CRONTAB HAD_CRONTAB NEW_CRONTAB
     unset HAD_CRONTAB
-    lk_command_exists crontab || lk_warn "crontab required" || return
+    lk_command_exists crontab || lk_warn "command not found: crontab" || return
     CRONTAB=$(lk_maybe_sudo crontab -l 2>/dev/null) &&
         HAD_CRONTAB= ||
         CRONTAB=
@@ -1146,7 +1146,14 @@ function lk_crontab_apply() {
 
 # lk_crontab_remove_command COMMAND
 function lk_crontab_remove_command() {
-    _lk_crontab "$(lk_regex_expand_whitespace "$(lk_escape_ere "${1:-}")")" ""
+    [ -n "${1:-}" ] || lk_warn "no command" || return
+    _lk_crontab "^$S*[^#[:blank:]].*$S$(lk_regex_expand_whitespace \
+        "$(lk_escape_ere "$1")")($S|\$)" ""
+}
+
+# lk_crontab_get REGEX
+function lk_crontab_get() {
+    lk_maybe_sudo crontab -l 2>/dev/null | grep -E "${1:-}"
 }
 
 # lk_system_memory [POWER]

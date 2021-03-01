@@ -95,7 +95,7 @@ lk_log_output
             "$i" server servers) failed to update:" $'\n'"$(lk_echo_array FAILED)"
     else
         lk_console_success \
-            "$i $(lk_maybe_plural $i server servers) updated successfully"
+            "$i $(lk_maybe_plural "$i" server servers) updated successfully"
     fi
 
     exit
