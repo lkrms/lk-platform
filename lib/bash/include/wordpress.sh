@@ -493,7 +493,7 @@ function _lk_wp_get_cron_path() {
 function lk_wp_enable_system_cron() {
     local INTERVAL=${1:-5} CRON_PATH COMMAND REGEX CRONTAB
     CRON_PATH=$(_lk_wp_get_cron_path) &&
-        COMMAND="HTTP_CLIENT_IP=127.0.0.1 $(type -P php) $CRON_PATH" || return
+        COMMAND="HTTP_CLIENT_IP=127.0.1.1 $(type -P php) $CRON_PATH" || return
     lk_console_item "Scheduling with crontab:" "$CRON_PATH"
     lk_wp config get DISABLE_WP_CRON --type=constant 2>/dev/null |
         grep -Fx 1 >/dev/null ||
