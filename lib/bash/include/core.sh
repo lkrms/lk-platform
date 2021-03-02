@@ -1155,7 +1155,7 @@ function lk_log() {
 # lk_log_create [-e EXT] [DIR...]
 function lk_log_create() {
     local OWNER=$UID GROUP EXT LOG_CMD LOG_DIRS=() LOG_DIR LOG_PATH
-    GROUP=$(id -g) || return
+    GROUP=$(id -gn) || return
     [ "${1:-}" != -e ] || { EXT=$2 && shift 2; }
     LOG_CMD=${_LK_LOG_CMDLINE[0]:-$0}
     [ ! -d "${LK_INST:-$LK_BASE}" ] ||
@@ -2224,7 +2224,7 @@ function lk_rm() {
 #
 # Create or set permissions and ownership on each FILE or DIRECTORY.
 function lk_install() {
-    local OPTIND OPTARG OPT LK_USAGE LK_SUDO=${LK_SUDO:-} \
+    local OPTIND OPTARG OPT LK_USAGE _USER LK_SUDO=${LK_SUDO:-} \
         DIR MODE OWNER GROUP VERBOSE DEST STAT REGEX ARGS=()
     LK_USAGE="\
 Usage: $(lk_myself -f) [-m MODE] [-o OWNER] [-g GROUP] [-v] FILE...
@@ -2240,10 +2240,15 @@ Usage: $(lk_myself -f) [-m MODE] [-o OWNER] [-g GROUP] [-v] FILE...
             ARGS+=(-m "$MODE")
             ;;
         o)
-            OWNER=$OPTARG
+            OWNER=$(id -un "$OPTARG") &&
+                _USER=$(id -un) || return
             ARGS+=(-o "$OWNER")
+            [ "$OWNER" != "$_USER" ] ||
+                unset OWNER
             ;;
         g)
+            [[ ! $OPTARG =~ ^[0-9]+$ ]] ||
+                lk_warn "invalid group: $OPTARG" || return
             GROUP=$OPTARG
             ARGS+=(-g "$GROUP")
             ;;
@@ -2259,7 +2264,9 @@ Usage: $(lk_myself -f) [-m MODE] [-o OWNER] [-g GROUP] [-v] FILE...
     done
     shift $((OPTIND - 1))
     [ $# -gt 0 ] || lk_usage || return
-    [ -z "${OWNER:-}${GROUP:-}" ] || LK_SUDO=1
+    [ -z "${OWNER:-}" ] &&
+        { [ -z "${GROUP:-}" ] || lk_user_in_group "$GROUP"; } ||
+        LK_SUDO=1
     if lk_is_true DIR; then
         lk_maybe_sudo install ${ARGS[@]+"${ARGS[@]}"} "$@"
     else
