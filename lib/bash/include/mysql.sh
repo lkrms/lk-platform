@@ -75,12 +75,16 @@ function lk_mysql_list() {
 }
 
 function lk_mysql_mapfile() {
-    local _lk_i=0 _LK_LINE
+    local _LK_OUT _lk_i=0 _LK_LINE
     lk_is_identifier "$1" || lk_warn "not a valid identifier: $1" || return
+    _LK_OUT=$(lk_mktemp_file) &&
+        lk_delete_on_exit "$_LK_OUT" &&
+        lk_mysql_list "${@:2}" | lk_mysql_batch_unescape >"$_LK_OUT" || return
     eval "$1=()"
     while IFS= read -r _LK_LINE; do
         eval "$1[$((_lk_i++))]=\$_LK_LINE"
-    done < <(lk_mysql_list "${@:2}" | lk_mysql_batch_unescape)
+    done <"$_LK_OUT"
+    rm -f -- "$_LK_OUT"
 }
 
 function _lk_mysqldump() {

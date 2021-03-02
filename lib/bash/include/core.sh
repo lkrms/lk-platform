@@ -656,9 +656,13 @@ function lk_regex_case_insensitive() {
 #     $ lk_regex_expand_whitespace "message = 'Here\'s a message'"
 #     message[[:blank:]]+=[[:blank:]]+'Here\'s a message'
 function lk_regex_expand_whitespace() {
+    local NOT_SPECIAL="[^'\"[:blank:]]*[^\\]" \
+        ESCAPED_WHITESPACE="(\\\\[[:blank:]])*" \
+        QUOTED_SINGLE="(''|'([^']|\\\\')*[^\\]')" \
+        QUOTED_DOUBLE="(\"\"|\"([^\"]|\\\\\")*[^\\]\")"
     sed -E "\
 :start
-s/^(([^'\"[:blank:]]*|(''|'([^']|\\\\')*[^\\]')|(\"\"|\"([^\"]|\\\\\")*[^\\]\"))*)$S+/\\1[[:blank:]]+/
+s/^(($NOT_SPECIAL|$ESCAPED_WHITESPACE|$QUOTED_SINGLE|$QUOTED_DOUBLE)*)$S+/\\1[[:blank:]]+/
 t start" <<<"$1"
 }
 
@@ -1138,21 +1142,22 @@ function lk_log() {
     local PREFIX=${1:-}
     if lk_command_exists ts; then
         PREFIX=${PREFIX//"%"/"%%"}
-        LC_ALL=C ts "$PREFIX%Y-%m-%d %H:%M:%.S %z"
+        LC_ALL=C exec ts "$PREFIX%Y-%m-%d %H:%M:%.S %z"
     else
         local LINE
         while IFS= read -r LINE; do
             printf '%s%s %s\n' \
-                "${1:-}" "$(lk_date "%Y-%m-%d %H:%M:%S %z")" "$LINE"
+                "$PREFIX" "$(lk_date "%Y-%m-%d %H:%M:%S %z")" "$LINE"
         done
     fi
 }
 
 # lk_log_create [-e EXT] [DIR...]
 function lk_log_create() {
-    local OWNER=$UID GROUP EXT LOG_DIRS=() LOG_DIR LOG_PATH
-    GROUP=$(id -g) || return
+    local OWNER=$UID GROUP EXT LOG_CMD LOG_DIRS=() LOG_DIR LOG_PATH
+    GROUP=$(id -gn) || return
     [ "${1:-}" != -e ] || { EXT=$2 && shift 2; }
+    LOG_CMD=${_LK_LOG_CMDLINE[0]:-$0}
     [ ! -d "${LK_INST:-$LK_BASE}" ] ||
         [ -z "$(ls -A "${LK_INST:-$LK_BASE}")" ] ||
         LOG_DIRS=("${LK_INST:-$LK_BASE}/var/log")
@@ -1163,7 +1168,7 @@ function lk_log_create() {
         # needed, running commands via sudo only if they fail without it
         [ -d "$LOG_DIR" ] || lk_elevate_if_error \
             lk_install -d -m 00777 "$LOG_DIR" 2>/dev/null || continue
-        LOG_PATH=$LOG_DIR/${LK_LOG_BASENAME:-${0##*/}}-$UID.${EXT:-log}
+        LOG_PATH=$LOG_DIR/${LK_LOG_BASENAME:-${LOG_CMD##*/}}-$UID.${EXT:-log}
         if [ -f "$LOG_PATH" ]; then
             [ -w "$LOG_PATH" ] || {
                 lk_elevate_if_error chmod 00600 "$LOG_PATH" || continue
@@ -1200,10 +1205,17 @@ function lk_start_trace() {
 
 # lk_log_output [TEMP_LOG_FILE]
 function lk_log_output() {
-    local LOG_PATH DIR HEADER=() IFS
+    local LOG_CMD ARGC LOG_PATH DIR HEADER=() IFS
     ! lk_is_true LK_NO_LOG &&
-        ! lk_log_is_open || return 0
+        ! lk_log_is_open &&
+        lk_is_script_running || return 0
     [[ $- != *x* ]] || [ -n "${BASH_XTRACEFD:-}" ] || return 0
+    [ -n "${_LK_LOG_CMDLINE+1}" ] ||
+        local _LK_LOG_CMDLINE=("$0" ${LK_ARGV[@]+"${LK_ARGV[@]}"})
+    LOG_CMD=$(type -P "${_LK_LOG_CMDLINE[0]}") ||
+        lk_warn "command not found: ${_LK_LOG_CMDLINE[0]}" || return
+    _LK_LOG_CMDLINE[0]=$LOG_CMD
+    ARGC=$((${#_LK_LOG_CMDLINE[@]} - 1))
     if [ $# -ge 1 ]; then
         if LOG_PATH=$(lk_log_create); then
             # If TEMP_LOG_FILE exists, move its contents to the end of LOG_PATH
@@ -1218,30 +1230,25 @@ function lk_log_output() {
         LOG_PATH=$(lk_log_create ~ /tmp) ||
             lk_warn "unable to open log file" || return
     fi
-    # Log invocation details, including script path if running from a source
-    # file, to separate this from any previous runs
-    { [ ${#BASH_SOURCE[@]} -eq 0 ] ||
-        [[ ! $0 =~ ^((.*)/)?([^/]+)$ ]] ||
-        ! DIR=$(cd "${BASH_REMATCH[2]:-.}" && pwd -P) ||
-        HEADER+=("${DIR%/}/"); } 2>/dev/null
-    HEADER+=("${0##*/} invoked")
-    [ ${#LK_ARGV[@]} -eq 0 ] && HEADER+=("$LK_RESET") || HEADER+=("$(
-        printf " with %s %s:$LK_RESET" \
-            ${#LK_ARGV[@]} \
-            "$(lk_maybe_plural \
-                ${#LK_ARGV[@]} "argument" "arguments")"
-        printf "\\n $LK_BOLD->$LK_RESET %q" "${LK_ARGV[@]}"
+    HEADER+=("${_LK_LOG_CMDLINE[0]} invoked")
+    [ "$ARGC" -eq 0 ] && HEADER+=("$LK_RESET") || HEADER+=("$(
+        printf ' with %s %s:%s' "$ARGC" \
+            "$(lk_maybe_plural "$ARGC" argument arguments)" \
+            "$LK_RESET"
+        for ARG in "${_LK_LOG_CMDLINE[@]:1}"; do
+            printf '\n %s->%s %q' "$LK_BOLD" "$LK_RESET" "$ARG"
+        done
     )")
     IFS=
     echo "$LK_BOLD====> ${HEADER[*]}" | lk_log >>"$LOG_PATH" &&
         _LK_LOG_OUT_FD=$(lk_next_fd) && eval "exec $_LK_LOG_OUT_FD>&1" &&
-        _LK_LOG_ERR_FD=$(lk_next_fd) && eval "exec $_LK_LOG_ERR_FD>&2" &&
-        exec > >(tee >(lk_log | { if [ -n "${LK_SECONDARY_LOG_FILE:-}" ]; then
-            tee -a "$LK_SECONDARY_LOG_FILE"
-        else
-            cat
-        fi >>"$LOG_PATH"; })) 2>&1 ||
-        return
+        _LK_LOG_ERR_FD=$(lk_next_fd) && eval "exec $_LK_LOG_ERR_FD>&2" || return
+    if [ -n "${LK_SECONDARY_LOG_FILE:-}" ]; then
+        exec > >(tee >(lk_log |
+            tee -a "$LK_SECONDARY_LOG_FILE" >>"$LOG_PATH")) 2>&1
+    else
+        exec > >(tee >(lk_log >>"$LOG_PATH")) 2>&1
+    fi || return
     ! lk_verbose ||
         lk_echoc "Output is being logged to $LK_BOLD$LOG_PATH$LK_RESET" \
             "$LK_GREY" >&"$_LK_LOG_ERR_FD"
@@ -2217,7 +2224,7 @@ function lk_rm() {
 #
 # Create or set permissions and ownership on each FILE or DIRECTORY.
 function lk_install() {
-    local OPTIND OPTARG OPT LK_USAGE LK_SUDO=${LK_SUDO:-} \
+    local OPTIND OPTARG OPT LK_USAGE _USER LK_SUDO=${LK_SUDO:-} \
         DIR MODE OWNER GROUP VERBOSE DEST STAT REGEX ARGS=()
     LK_USAGE="\
 Usage: $(lk_myself -f) [-m MODE] [-o OWNER] [-g GROUP] [-v] FILE...
@@ -2233,10 +2240,15 @@ Usage: $(lk_myself -f) [-m MODE] [-o OWNER] [-g GROUP] [-v] FILE...
             ARGS+=(-m "$MODE")
             ;;
         o)
-            OWNER=$OPTARG
+            OWNER=$(id -un "$OPTARG") &&
+                _USER=$(id -un) || return
             ARGS+=(-o "$OWNER")
+            [ "$OWNER" != "$_USER" ] ||
+                unset OWNER
             ;;
         g)
+            [[ ! $OPTARG =~ ^[0-9]+$ ]] ||
+                lk_warn "invalid group: $OPTARG" || return
             GROUP=$OPTARG
             ARGS+=(-g "$GROUP")
             ;;
@@ -2252,7 +2264,9 @@ Usage: $(lk_myself -f) [-m MODE] [-o OWNER] [-g GROUP] [-v] FILE...
     done
     shift $((OPTIND - 1))
     [ $# -gt 0 ] || lk_usage || return
-    [ -z "${OWNER:-}${GROUP:-}" ] || LK_SUDO=1
+    [ -z "${OWNER:-}" ] &&
+        { [ -z "${GROUP:-}" ] || lk_user_in_group "$GROUP"; } ||
+        LK_SUDO=1
     if lk_is_true DIR; then
         lk_maybe_sudo install ${ARGS[@]+"${ARGS[@]}"} "$@"
     else
