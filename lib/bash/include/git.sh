@@ -4,9 +4,12 @@
 
 function _lk_git() {
     if [ -n "${LK_GIT_USER:-}" ]; then
-        sudo -H -u "$LK_GIT_USER" git "$@"
+        sudo -Hu "$LK_GIT_USER" \
+            ${LK_GIT_ENV[@]+env "${LK_GIT_ENV[@]}"} \
+            git "$@"
     else
-        lk_maybe_sudo git "$@"
+        lk_maybe_sudo ${LK_GIT_ENV[@]+env "${LK_GIT_ENV[@]}"} \
+            git "$@"
     fi
 }
 

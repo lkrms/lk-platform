@@ -264,7 +264,9 @@
     if [ -d "$LK_BASE/.git" ]; then
         # shellcheck disable=SC2086
         function _git() {
-            sudo -Hu "$REPO_OWNER" git "$@"
+            sudo -Hu "$REPO_OWNER" \
+                ${LK_GIT_ENV[@]+env "${LK_GIT_ENV[@]}"} \
+                git "$@"
         }
         function check_repo_config() {
             local VALUE
@@ -281,6 +283,10 @@
         lk_console_message "Checking repository"
         cd "$LK_BASE"
         REPO_OWNER=$(lk_file_owner "$LK_BASE")
+        [ -z "${SSH_AUTH_SOCK:-}" ] ||
+            ! SOCK_OWNER=$(lk_file_owner "$SSH_AUTH_SOCK" 2>/dev/null) ||
+            [ "$SOCK_OWNER" != "$REPO_OWNER" ] ||
+            LK_GIT_ENV=(SSH_AUTH_SOCK="$SSH_AUTH_SOCK")
         CONFIG_COMMANDS=()
         [ ! -g "$LK_BASE" ] ||
             check_repo_config "core.sharedRepository" "0664"

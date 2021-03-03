@@ -498,7 +498,7 @@ lk_is_true GRUB_INSTALLED ||
 lk_is_true PROVISIONED ||
     lk_console_item "To provision the system manually:" \
         $'\n'"$(printf \
-            'arch-chroot /mnt sudo -H -u %q %q/bin/lk-provision-arch.sh' \
+            'arch-chroot /mnt sudo -Hu %q %q/bin/lk-provision-arch.sh' \
             "$BOOTSTRAP_USERNAME" \
             "$LK_BASE")"
 
