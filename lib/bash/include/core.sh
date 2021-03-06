@@ -1232,7 +1232,7 @@ function lk_log_output() {
     [ -n "${_LK_LOG_CMDLINE+1}" ] ||
         local _LK_LOG_CMDLINE=("$0" ${LK_ARGV[@]+"${LK_ARGV[@]}"})
     LOG_CMD=$(type -P "${_LK_LOG_CMDLINE[0]}") ||
-        lk_warn "command not found: ${_LK_LOG_CMDLINE[0]}" || return
+        LOG_CMD=${_LK_LOG_CMDLINE[0]##*/}
     _LK_LOG_CMDLINE[0]=$LOG_CMD
     ARGC=$((${#_LK_LOG_CMDLINE[@]} - 1))
     if [ $# -ge 1 ]; then
