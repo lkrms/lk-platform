@@ -184,6 +184,9 @@ EOF
     if ! path_maybe_add "${PATH_DIRS[@]}"; then
         lk_run_detail sudo launchctl config user path "$USER_PATH" >/dev/null
     fi
+    USER_PATH=$PATH
+    path_maybe_add "${PATH_DIRS[@]}" ||
+        PATH=$USER_PATH
 
     # disable sleep when charging
     sudo pmset -c sleep 0
