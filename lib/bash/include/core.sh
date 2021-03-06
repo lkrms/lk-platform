@@ -22,6 +22,10 @@ function lk_is_macos() {
     [[ $OSTYPE == darwin* ]]
 }
 
+function lk_is_apple_silicon() {
+    lk_is_macos && [[ $MACHTYPE == arm64-* ]]
+}
+
 function lk_is_linux() {
     [[ $OSTYPE == linux-gnu ]]
 }
@@ -98,7 +102,6 @@ _LK_GNU_COMMANDS=(
     getopt grep
     ln
     mktemp mv
-    nc
     realpath
     sed sort stat
     tar
@@ -146,9 +149,6 @@ function _lk_gnu_command() {
         ;;
     awk)
         COMMAND=gawk
-        ;;
-    nc)
-        COMMAND=netcat
         ;;
     getopt)
         ! lk_is_macos &&

@@ -380,7 +380,7 @@ EOF
 
 # lk_ssh_is_reachable HOST PORT [TIMEOUT_SECONDS]
 function lk_ssh_is_reachable() {
-    { echo QUIT | gnu_nc -w "${3:-5}" "$1" "$2" | head -n1 |
+    { echo QUIT | nc -w "${3:-5}" "$1" "$2" | head -n1 |
         grep -E "^SSH-[^[:blank:]-]+-[^[:blank:]-]+" >/dev/null; } \
         2>/dev/null
 }
@@ -765,7 +765,7 @@ function lk_tcp_next_port() {
 
 # lk_tcp_is_reachable HOST PORT [TIMEOUT_SECONDS]
 function lk_tcp_is_reachable() {
-    gnu_nc -z -w "${3:-5}" "$1" "$2" &>/dev/null
+    nc -z -w "${3:-5}" "$1" "$2" &>/dev/null
 }
 
 function lk_certbot_install() {

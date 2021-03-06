@@ -162,12 +162,26 @@ EOF
     fi
     umask 002
 
+    function path_maybe_add() {
+        local EXIT_STATUS=0
+        while [ $# -gt 0 ]; do
+            [[ :$USER_PATH: == *:$1:* ]] || {
+                USER_PATH=$1:${USER_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}
+                EXIT_STATUS=1
+            }
+            shift
+        done
+        return "$EXIT_STATUS"
+    }
+    ! lk_is_apple_silicon &&
+        PATH_DIRS=() ||
+        PATH_DIRS=(/opt/homebrew/bin)
+    PATH_DIRS+=(/usr/local/bin)
     lk_console_message "Configuring default PATH"
-    if ! USER_PATH=$(defaults read \
+    USER_PATH=$(defaults read \
         /var/db/com.apple.xpc.launchd/config/user.plist \
-        PathEnvironmentVariable 2>/dev/null) ||
-        [[ ! "$USER_PATH" =~ (:|^)/usr/local/bin(:|$) ]]; then
-        USER_PATH=/usr/local/bin:${USER_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}
+        PathEnvironmentVariable 2>/dev/null) || USER_PATH=
+    if ! path_maybe_add "${PATH_DIRS[@]}"; then
         lk_run_detail sudo launchctl config user path "$USER_PATH" >/dev/null
     fi
 
@@ -278,7 +292,6 @@ EOF
         gnu-getopt #
         grep       #
         inetutils  #
-        netcat     #
         gnu-sed    #
         gnu-tar    #
         wget       #
