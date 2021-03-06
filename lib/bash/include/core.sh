@@ -7,6 +7,13 @@ export -n BASH_XTRACEFD SHELLOPTS
 
 USER=${USER:-$(id -un)} || return
 
+# lk_bash_at_least MAJOR [MINOR]
+function lk_bash_at_least() {
+    [ "${BASH_VERSINFO[0]}" -eq "$1" ] &&
+        [ "${BASH_VERSINFO[1]}" -ge "${2:-0}" ] ||
+        [ "${BASH_VERSINFO[0]}" -gt "$1" ]
+}
+
 function lk_command_exists() {
     type -P "$1" >/dev/null
 }
@@ -64,6 +71,25 @@ function lk_first_existing() {
     [ $# -gt 0 ] && echo "$1"
 }
 
+if lk_bash_at_least 4 0; then
+    function lk_eval_input() {
+        . /dev/stdin
+    }
+else
+    # On Bash 3.2, output is "lost when a redirection is acting on the shell's
+    # output file descriptor", which seems to be why these don't work
+    # consistently:
+    # - . /dev/stdin
+    # - . <(cat /dev/stdin)
+    function lk_eval_input() {
+        local FILE
+        FILE=$(mktemp) &&
+            cat >"$FILE" &&
+            . "$FILE" || return
+        rm -f -- "$FILE" || true
+    }
+fi
+
 _LK_GNU_COMMANDS=(
     awk
     chgrp chmod chown cp
@@ -100,7 +126,7 @@ function _lk_to_cache() {
     if [ -n "$_LK_CACHE" ]; then
         cat >"$FILE" && . "$FILE"
     else
-        . /dev/stdin
+        lk_eval_input
     fi
 }
 
@@ -410,13 +436,6 @@ function lk_get_regex() {
     [ $# -gt 0 ] || set -- "${_LK_REGEX[@]}"
     _LK_VAR_PREFIX_DEPTH=1 \
         _lk_get_regex "$@"
-}
-
-# lk_bash_at_least MAJOR [MINOR]
-function lk_bash_at_least() {
-    [ "${BASH_VERSINFO[0]}" -eq "$1" ] &&
-        [ "${BASH_VERSINFO[1]}" -ge "${2:-0}" ] ||
-        [ "${BASH_VERSINFO[0]}" -gt "$1" ]
 }
 
 if lk_bash_at_least 4 2; then
@@ -1133,7 +1152,7 @@ function lk_lock_drop() {
     _lk_lock_check_args "$@" || return "$EXIT_STATUS"
     if [ "${!1:+1}${!2:+1}" = 11 ]; then
         eval "exec ${!2}>&-" &&
-            rm -f "${!1}"
+            rm -f -- "${!1}"
     fi
     unset "${@:1:2}"
 }
