@@ -630,9 +630,9 @@ $LK_NODE_HOSTNAME" &&
         lk_tty sudo pacman -Rs --noconfirm "${PAC_REMOVE[@]}"
     }
 
-    lk_symlink_bin codium code
-    lk_symlink_bin vim vi
-    lk_symlink_bin xfce4-terminal xterm
+    lk_symlink_bin codium code || true
+    lk_symlink_bin vim vi || true
+    lk_symlink_bin xfce4-terminal xterm || true
 
     lk_console_blank
     lk_console_log "Checking installed packages and services"
