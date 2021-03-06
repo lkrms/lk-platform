@@ -20,7 +20,6 @@ HOMEBREW_FORMULAE=(
     gnu-getopt
     grep
     inetutils
-    netcat
     gnu-sed
     gnu-tar
     wget

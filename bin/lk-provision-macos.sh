@@ -217,8 +217,7 @@ EOF
     if [ ! -e "$LK_BASE" ] || [ -z "$(ls -A "$LK_BASE")" ]; then
         lk_console_item "Installing lk-platform to" "$LK_BASE"
         sudo install -d -m 02775 -o "$USER" -g admin "$LK_BASE"
-        lk_keep_trying lk_tty caffeinate -i \
-            git clone -b "$LK_PLATFORM_BRANCH" \
+        lk_tty caffeinate -i git clone -b "$LK_PLATFORM_BRANCH" \
             https://github.com/lkrms/lk-platform.git "$LK_BASE"
         lk_file_keep_original /etc/default/lk-platform
         [ -e /etc/default ] ||
@@ -245,8 +244,7 @@ EOF
         [ ${#TAP[@]} -eq 0 ] || {
             for TAP in "${TAP[@]}"; do
                 lk_console_detail "Tapping" "$TAP"
-                lk_keep_trying lk_tty caffeinate -i brew tap --quiet "$TAP" ||
-                    return
+                lk_tty caffeinate -i brew tap --quiet "$TAP" || return
             done
         }
     }
@@ -270,7 +268,7 @@ EOF
                 lk_die "unable to download: $URL"
             }
         fi
-        CI=1 lk_keep_trying lk_tty caffeinate -i bash "$FILE" ||
+        CI=1 lk_tty caffeinate -i bash "$FILE" ||
             lk_die "Homebrew installer failed"
         SH=$(. "$LK_BASE/lib/bash/env.sh") &&
             eval "$SH"
@@ -284,7 +282,7 @@ EOF
             eval "$SH"
         lk_brew_check_taps
         lk_console_detail "Updating formulae"
-        lk_keep_trying lk_tty caffeinate -i brew update --quiet
+        lk_tty caffeinate -i brew update --quiet
     fi
 
     INSTALL=(
@@ -307,12 +305,13 @@ EOF
         INSTALL+=(
             mas # for managing Mac App Store apps
         )
+    HOMEBREW_FORMULAE=($(lk_echo_array HOMEBREW_FORMULAE INSTALL | sort -u))
     INSTALL=($(comm -13 \
         <(lk_brew_formulae | sort -u) \
         <(lk_echo_array INSTALL | sort -u)))
     [ ${#INSTALL[@]} -eq 0 ] || {
         lk_console_message "Installing lk-platform dependencies"
-        lk_keep_trying lk_tty caffeinate -i brew install --formula "${INSTALL[@]}"
+        lk_tty caffeinate -i brew install --formula "${INSTALL[@]}"
     }
 
     lk_console_message "Applying user defaults"
@@ -383,13 +382,9 @@ EOF
     }
 
     # Resolve formulae to their full names, e.g. python -> python@3.8
-    [ ${#HOMEBREW_FORMULAE[@]} -eq 0 ] || {
-        HOMEBREW_FORMULAE_JSON=$(lk_keep_trying caffeinate -i \
-            brew info --formula --json=v2 "${HOMEBREW_FORMULAE[@]}") &&
-            HOMEBREW_FORMULAE=(
-                $(jq -r ".formulae[].full_name" <<<"$HOMEBREW_FORMULAE_JSON")
-            )
-    }
+    HOMEBREW_FORMULAE_JSON=$(brew info --formula --json=v2 \
+        "${HOMEBREW_FORMULAE[@]}") && HOMEBREW_FORMULAE=($(jq -r \
+            ".formulae[].full_name" <<<"$HOMEBREW_FORMULAE_JSON"))
 
     INSTALL_FORMULAE=($(comm -13 \
         <(lk_brew_formulae | sort -u) \
@@ -420,8 +415,7 @@ EOF
         <(lk_echo_array HOMEBREW_CASKS |
             sort -u)))
     if [ ${#INSTALL_CASKS[@]} -gt 0 ]; then
-        HOMEBREW_CASKS_JSON=$(lk_keep_trying caffeinate -i \
-            brew info --cask --json=v2 "${INSTALL_CASKS[@]}")
+        HOMEBREW_CASKS_JSON=$(brew info --cask --json=v2 "${INSTALL_CASKS[@]}")
         CASKS=()
         for CASK in "${INSTALL_CASKS[@]}"; do
             CASK_DESC="$(jq <<<"$HOMEBREW_CASKS_JSON" -r \
@@ -520,27 +514,27 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
 
     [ ${#UPGRADE_FORMULAE[@]} -eq 0 ] || {
         lk_console_message "Upgrading formulae"
-        lk_keep_trying lk_tty caffeinate -i \
+        lk_tty caffeinate -i \
             brew upgrade --formula "${UPGRADE_FORMULAE[@]}"
     }
 
     [ ${#UPGRADE_CASKS[@]} -eq 0 ] || {
         lk_console_message "Upgrading casks"
-        lk_keep_trying lk_tty caffeinate -i \
+        lk_tty caffeinate -i \
             brew upgrade --cask "${UPGRADE_CASKS[@]}"
     }
 
     [ ${#INSTALL_FORMULAE[@]} -eq 0 ] || {
         lk_echo_array INSTALL_FORMULAE |
             lk_console_list "Installing new formulae:"
-        lk_keep_trying lk_tty caffeinate -i \
+        lk_tty caffeinate -i \
             brew install --formula "${INSTALL_FORMULAE[@]}"
     }
 
     [ ${#INSTALL_CASKS[@]} -eq 0 ] || {
         lk_echo_array INSTALL_CASKS |
             lk_console_list "Installing new casks:"
-        lk_keep_trying lk_tty caffeinate -i \
+        lk_tty caffeinate -i \
             brew install --cask "${INSTALL_CASKS[@]}"
     }
 
