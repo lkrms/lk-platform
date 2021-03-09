@@ -72,7 +72,7 @@ function lk_macos_install_command_line_tools() {
     lk_console_message "Installing command line tools"
     lk_console_detail "Searching for the latest Command Line Tools for Xcode"
     touch "$TRIGGER" &&
-        ITEM_NAME=$(lk_keep_trying caffeinate -i softwareupdate --list |
+        ITEM_NAME=$(caffeinate -i softwareupdate --list |
             grep -E "^$S*\*.*Command Line Tools" |
             grep -Eiv "\W(beta|seed)\W" |
             sed -E "s/^$S*\*$S*(Label:$S*)?//" |
@@ -82,7 +82,7 @@ function lk_macos_install_command_line_tools() {
         return
     lk_console_detail "Installing Command Line Tools with:" \
         "softwareupdate --install \"$ITEM_NAME\""
-    lk_keep_trying lk_elevate caffeinate -i \
+    lk_elevate caffeinate -i \
         softwareupdate --install "$ITEM_NAME" >/dev/null || return
     lk_macos_command_line_tools_installed || return
     rm -f "$TRIGGER" || true

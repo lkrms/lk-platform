@@ -179,6 +179,11 @@ EOF
     BREW_CMD=(brew)
     BREW_ARCH=("")
     if lk_is_apple_silicon; then
+        [ -f /Library/Apple/System/Library/LaunchDaemons/com.apple.oahd.plist ] || {
+            lk_console_message "Installing Rosetta 2"
+            lk_run_detail sudo \
+                softwareupdate --install-rosetta --agree-to-license
+        }
         PATH_ADD+=(/opt/homebrew/bin)
         BREW_CMD=(/opt/homebrew/bin/brew /usr/local/bin/brew)
         BREW_ARCH=("" x86_64)
