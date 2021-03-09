@@ -46,7 +46,7 @@ HOMEBREW_FORMULAE=(
 )
 
 HOMEBREW_CASKS=(
-    dozer
+    #dozer
     iterm2
     mysides
 

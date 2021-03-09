@@ -43,6 +43,7 @@ lk_path_add_to_front() {
 
 OLD_PATH=$PATH
 PATH=$(lk_path_add_to_front /usr/local/bin)
+PATH=$(lk_path_add_to_front /opt/homebrew/bin)
 
 ! type brew >/dev/null 2>&1 ||
     ! BREW_SH=$(brew shellenv 2>/dev/null |

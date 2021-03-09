@@ -900,7 +900,8 @@ function _lk_array_action() {
 function lk_echo_args() {
     local DELIM=${LK_Z:+'\0'}
     [ "${1:-}" != -z ] || { DELIM='\0' && shift; }
-    printf "%s${DELIM:-\\n}" "$@"
+    [ $# -eq 0 ] ||
+        printf "%s${DELIM:-\\n}" "$@"
 }
 
 # lk_echo_array [-z] [ARRAY...]
@@ -908,6 +909,14 @@ function lk_echo_array() {
     local LK_Z=${LK_Z-}
     [ "${1:-}" != -z ] || { LK_Z=1 && shift; }
     _lk_array_action lk_echo_args "$@"
+}
+
+# lk_array_merge NEW_ARRAY [ARRAY...]
+function lk_array_merge() {
+    [ $# -ge 2 ] || return
+    eval "$1=($(for i in "${@:2}"; do
+        printf '${%s[@]+"${%s[@]}"}\n' "$i" "$i"
+    done))"
 }
 
 # lk_quote_args [ARG...]

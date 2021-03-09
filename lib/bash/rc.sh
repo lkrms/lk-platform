@@ -171,7 +171,9 @@ elif lk_is_macos; then
     }
     export BASH_SILENCE_DEPRECATION_WARNING=1
 fi
-alias cwd='pwd | lk_clip'
+[[ $- != *i* ]] || {
+    alias cwd='pwd | lk_clip'
+}
 
 LK_PATH_PREFIX=${LK_PATH_PREFIX-lk-}
 SH=$(. "$LK_BASE/lib/bash/env.sh") &&
