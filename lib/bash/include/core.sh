@@ -2787,6 +2787,7 @@ function lk_file_keep_original() {
     ! lk_verbose || v=v
     while [ $# -gt 0 ]; do
         ! lk_maybe_sudo test -s "$1" ||
+            lk_maybe_sudo test -e "$1.orig" ||
             lk_maybe_sudo cp -naL"$v" "$1" "$1.orig" || return
         shift
     done
