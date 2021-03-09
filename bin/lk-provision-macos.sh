@@ -394,9 +394,8 @@ EOF
         eval "UPGRADE_FORMULAE_$i=(\${UPGRADE_FORMULAE[@]+\"\${UPGRADE_FORMULAE[@]}\"})"
     }
     lk_brew_loop check_updates
-    IFS=$'\n'
-    UPGRADE_FORMULAE_TEXT=($(lk_echo_array "${!UPGRADE_FORMULAE_TEXT_@}" | sort -u))
-    unset IFS
+    lk_mapfile UPGRADE_FORMULAE_TEXT \
+        <(lk_echo_array "${!UPGRADE_FORMULAE_TEXT_@}" | sort -u)
     [ ${#UPGRADE_FORMULAE_TEXT[@]} -eq 0 ] || {
         lk_echo_array UPGRADE_FORMULAE_TEXT |
             lk_console_detail_list "$(
@@ -422,15 +421,19 @@ EOF
     fi
 
     function get_arch_formulae() {
+        local JQ="\
+def is_native:
+    (.versions.bottle | not) or 
+        ([.bottle[].files | keys[] | select(match(\"^arm64_\"))] | length > 0);"
         # Exclude formulae with no arm64 bottle on Apple Silicon unless
         # using `arch --x86_64`
         if [ -z "${BREW_ARCH[$i]}" ]; then
             HOMEBREW_FORMULAE=($(jq -r \
-                '.formulae[]|select([.bottle[].files|keys[]|select(match("^arm64_"))]|length>0).full_name' \
+                "$JQ"'.formulae[]|select(is_native).full_name' \
                 <<<"$HOMEBREW_FORMULAE_JSON"))
         else
             HOMEBREW_FORMULAE=($(jq -r \
-                '.formulae[]|select([.bottle[].files|keys[]|select(match("^arm64_"))]|length==0).full_name' \
+                "$JQ"'.formulae[]|select(is_native|not).full_name' \
                 <<<"$HOMEBREW_FORMULAE_JSON"))
         fi
     }
