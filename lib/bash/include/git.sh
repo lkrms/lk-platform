@@ -60,6 +60,23 @@ function lk_git_remote_singleton() {
     echo "${REMOTES[0]}"
 }
 
+# lk_git_remote_from_url URL
+function lk_git_remote_from_url() {
+    local REGEX='^remote\.(.+)\.url$' REMOTE
+    REMOTE=$(git config --name-only --get-regexp "$REGEX" "$1") &&
+        [[ $REMOTE =~ $REGEX ]] &&
+        echo "${BASH_REMATCH[1]}"
+}
+
+# lk_git_list_push_remotes REMOTE
+function lk_git_list_push_remotes() {
+    local URLS
+    { { git config --get-all "remote.$1.pushurl" ||
+        git config --get "remote.$1.url"; } |
+        lk_xargs lk_git_remote_from_url || true; } |
+        lk_require_output cat
+}
+
 # lk_git_remote_head [REMOTE]
 #
 # Output the default branch configured on REMOTE (if known).
@@ -243,7 +260,7 @@ function lk_git_fast_forward_branch() {
 
 # lk_git_push_branch BRANCH DOWNSTREAM
 function lk_git_push_branch() {
-    local REMOTE REMOTE_BRANCH AHEAD _PATH LOG
+    local REMOTE REMOTE_BRANCH AHEAD _PATH LOG STALE
     [[ $2 =~ ^([^/]+)/([^/]+(/[^/]+)*)$ ]] ||
         lk_warn "invalid downstream: $2" || return
     REMOTE=${BASH_REMATCH[1]}
@@ -268,17 +285,26 @@ push $LK_BOLD$1$LK_RESET to $LK_BOLD$2$LK_RESET?" Y ||
     lk_console_detail \
         "Pushing to $2 ($AHEAD $(lk_maybe_plural \
             "$AHEAD" commit commits) ahead)"
-    LK_GIT_REPO_UPDATED=1
-    _lk_git push --tags "$REMOTE" "$1:$REMOTE_BRANCH"
+    _lk_git push --tags "$REMOTE" "$1:$REMOTE_BRANCH" &&
+        LK_GIT_REPO_UPDATED=1 || return
+    # Fetch from other remotes configured to receive this push
+    ! STALE=($(lk_git_list_push_remotes "$REMOTE" |
+        grep -Fxv "$REMOTE")) ||
+        lk_git_fetch -q "${STALE[@]}"
 }
 
-function lk_git_fetch_all() {
-    local ERRORS=0 REMOTE
-    for REMOTE in $(git remote); do
-        _lk_git fetch --quiet --prune "$REMOTE" ||
-            lk_console_warning -r \
-                "Unable to fetch from remote:" "$REMOTE" ||
+# lk_git_fetch [-q] [REMOTE...]
+function lk_git_fetch() {
+    local IFS QUIET ERRORS=0 REMOTES REMOTE
+    [ "${1:-}" != -q ] || { QUIET=1 && shift; }
+    REMOTES=$*
+    [ $# -gt 0 ] || REMOTES=$(git remote) || return
+    for REMOTE in $REMOTES; do
+        _lk_git fetch --quiet --prune "$REMOTE" || {
+            [ -n "${QUIET:-}" ] || lk_console_warning \
+                "Unable to fetch from remote:" "$REMOTE"
             ((++ERRORS))
+        }
     done
     [ "$ERRORS" -eq 0 ]
 }
@@ -290,8 +316,10 @@ function lk_git_fetch_all() {
 function lk_git_update_repo() {
     local FETCH=1 ERRORS=0 REMOTE BRANCH UPSTREAM
     [ "${1:-}" != -s ] || { FETCH= && shift; }
-    [ -z "$FETCH" ] ||
-        lk_git_fetch_all || ((++ERRORS))
+    [ -z "$FETCH" ] || {
+        lk_console_message "Fetching from all remotes"
+        lk_git_fetch || ((++ERRORS))
+    }
     for BRANCH in $(lk_git_branch_list_local); do
         UPSTREAM=$(lk_git_branch_upstream "$BRANCH") ||
             lk_console_warning -r "No upstream for branch:" "$BRANCH" ||
@@ -303,16 +331,33 @@ function lk_git_update_repo() {
 }
 
 function lk_git_update_remote() {
-    local QUIET ERRORS=0 BRANCH DOWNSTREAM
+    local QUIET ERRORS=0 BRANCHES REMOTES BRANCH _PUSH PUSH=() REMOTE RBRANCHES
     [ "${1:-}" != -q ] || { QUIET=1 && shift; }
-    for BRANCH in $(lk_git_branch_list_local); do
-        DOWNSTREAM=$(lk_git_branch_push "$BRANCH") || {
+    BRANCHES=$(lk_git_branch_list_local) &&
+        REMOTES=$(git remote) || return
+    for BRANCH in $BRANCHES; do
+        _PUSH=$(lk_git_branch_push "$BRANCH") || {
             [ -n "${QUIET:-}" ] ||
                 lk_console_warning "No push destination for branch:" "$BRANCH"
             continue
         }
-        lk_git_push_branch "$BRANCH" "$DOWNSTREAM" ||
+        PUSH[${#PUSH[@]}]=$(lk_quote_args "$BRANCH" "$_PUSH")
+        lk_git_push_branch "$BRANCH" "$_PUSH" ||
             ((++ERRORS))
+    done
+    for REMOTE in $REMOTES; do
+        RBRANCHES=$(lk_git_branch_list_remote "$REMOTE") &&
+            RBRANCHES=$(comm -12 \
+                <(echo "$BRANCHES" | sort) \
+                <(echo "$RBRANCHES" | sort)) &&
+            [ -n "$RBRANCHES" ] || continue
+        for BRANCH in $RBRANCHES; do
+            _PUSH=$(lk_quote_args "$BRANCH" "$REMOTE/$BRANCH")
+            ! lk_in_array "$_PUSH" PUSH || continue
+            PUSH[${#PUSH[@]}]=$_PUSH
+            lk_git_push_branch "$BRANCH" "$REMOTE/$BRANCH" ||
+                ((++ERRORS))
+        done
     done
     [ "$ERRORS" -eq 0 ]
 }
@@ -520,7 +565,7 @@ function lk_git_audit_repos() {
     NOUN="${#LK_GIT_REPOS[@]} $(lk_maybe_plural ${#LK_GIT_REPOS[@]} repo repos)"
     lk_echo_array LK_GIT_REPOS |
         lk_console_list "Fetching from all remotes in $NOUN:"
-    lk_git_with_repos -py lk_git_fetch_all ||
+    lk_git_with_repos -py lk_git_fetch ||
         FETCH_ERRORS=$LK_GIT_REPO_ERROR_COUNT
     lk_git_with_repos -ty lk_git_audit_repo -s ||
         AUDIT_ERRORS=$LK_GIT_REPO_ERROR_COUNT

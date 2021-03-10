@@ -1012,12 +1012,13 @@ function lk_array_search() {
 # final argument. If -z is set, use NUL instead of newline as the input
 # delimiter.
 function lk_xargs() {
-    local LK_Z=${LK_Z-} _LK_NUL_READ=(-d '') _LK_LINE
+    local LK_Z=${LK_Z-} _LK_NUL_READ=(-d '') _LK_LINE _LK_STATUS=0
     [ "${1:-}" != -z ] || { LK_Z=1 && shift; }
     while IFS= read -r ${LK_Z:+"${_LK_NUL_READ[@]}"} _LK_LINE ||
         [ -n "$_LK_LINE" ]; do
-        "$@" "$_LK_LINE" || return
+        "$@" "$_LK_LINE" || _LK_STATUS=$?
     done
+    return "$_LK_STATUS"
 }
 
 # _lk_maybe_xargs FIXED_ARGS [ARG...]
