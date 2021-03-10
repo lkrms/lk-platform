@@ -164,7 +164,7 @@ function lk_hosting_configure_backup() {
             [[ ! $AUTO_REBOOT_TIME =~ ^0*([0-9]+):0*([0-9]+)$ ]] ||
             BACKUP_SCHEDULE="${BASH_REMATCH[2]} $(((BASH_REMATCH[1] + 23) % 24)) * * *"
         BACKUP_SCHEDULE=${BACKUP_SCHEDULE:-"0 1 * * *"}
-        INHIBIT_PATH=$(type -P systemd-inhibit) &&
+        INHIBIT_PATH=$(command -pv systemd-inhibit) &&
             lk_crontab_apply "$REGEX" "$(printf \
                 '%s %s >%q 2>&1 || echo "Scheduled backup failed"' \
                 "$BACKUP_SCHEDULE" \

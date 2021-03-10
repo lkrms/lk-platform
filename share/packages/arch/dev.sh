@@ -278,8 +278,14 @@ PAC_PACKAGES+=(
     xdebug
 
     #
-    php7     # for phpdoc-phar
-    php7-xsl #
+    php7           # for wp-cli
+    php7-gd        #
+    php7-imap      #
+    php7-intl      #
+    php7-memcache  #
+    php7-memcached #
+    php7-sqlite    #
+    php7-xsl       # for phpdoc-phar
 
     #
     mysql-python

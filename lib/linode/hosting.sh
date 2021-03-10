@@ -1277,6 +1277,7 @@ if lk_dpkg_installed apache2; then
         macro
         proxy
         proxy_fcgi
+        remoteip
         rewrite
         socache_shmcb # dependency of "ssl"
         ssl

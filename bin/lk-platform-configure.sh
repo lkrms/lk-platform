@@ -164,7 +164,7 @@
     _BASHRC='[ -z "${BASH_VERSION:-}" ] || [ ! -f ~/.bashrc ] || . ~/.bashrc'
     _BYOBU=
     _BYOBURC=
-    if BYOBU_PATH=$(type -P byobu-launch); then
+    if BYOBU_PATH=$(command -pv byobu-launch); then
         _BYOBU=$(printf '%s_byobu_sourced=1 . %q 2>/dev/null || true' \
             "$(! lk_is_macos || echo '[ ! "$SSH_CONNECTION" ] || ')" \
             "$BYOBU_PATH")

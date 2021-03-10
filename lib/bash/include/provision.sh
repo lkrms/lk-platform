@@ -42,6 +42,9 @@ Usage: $(lk_myself -f) TARGET [ALIAS]"
     # Don't search in BIN_PATH if the target and symlink have the same basename
     [ "${TARGET##*/}" != "${LINK##*/}" ] ||
         _PATH=${_PATH//":$BIN_PATH:"/:}
+    # Don't search in ~ unless BIN_PATH is in ~
+    [ "${BIN_PATH#~}" != "$BIN_PATH" ] ||
+        _PATH=$(sed -E "s/:$(lk_escape_ere ~)[^:]*:/:/g" <<<"$_PATH")
     _PATH=${_PATH:1:${#_PATH}-2}
     { [[ $TARGET == /* ]] ||
         TARGET=$(PATH=$_PATH type -P "$TARGET"); } &&
