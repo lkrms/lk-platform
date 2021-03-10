@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2016
-
 # lk_iptables_both FUNCTION [ARG...]
 #
 # Run the IPv4 and IPv6 invocations of the given lk_iptables command.

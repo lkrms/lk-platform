@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2015,SC2034,SC2086,SC2120,SC2164,SC2207
+# shellcheck disable=SC2046,SC2086,SC2120,SC2164
 
 function _lk_git() {
     if [ -n "${LK_GIT_USER:-}" ]; then

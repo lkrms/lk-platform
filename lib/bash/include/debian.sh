@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC1091,SC2016,SC2034,SC2207
-
 # lk_dpkg_installed PACKAGE...
 #
 # Return true if each PACKAGE is installed.

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2002,SC2015,SC2120,SC2207
+# shellcheck disable=SC2002,SC2120
 
 function lk_bash_is_builtin() {
     [ "$(type -t "$1")" = builtin ]

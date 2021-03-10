@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2001,SC2015,SC2016,SC2034,SC2086,SC2124,SC2206,SC2207
+# shellcheck disable=SC2001,SC2086,SC2124,SC2206
 
 # To install Arch Linux using the script below:
 # 1. boot from an Arch Linux live CD

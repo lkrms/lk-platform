@@ -1,5 +1,4 @@
 #!/bin/bash
-# shellcheck disable=SC1090,SC2015,SC2034
 
 # Adapt the following for scripts that depend on lk-platform's library of Bash
 # functions.

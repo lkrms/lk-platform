@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2034
-
 PAC_REPOS=()
 PAC_PACKAGES=()
 AUR_PACKAGES=()

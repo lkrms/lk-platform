@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2034
-
 PAC_REPOS=(
     "sublime-text|\
 http://sublimetext.mirror/arch/stable/\$arch|\

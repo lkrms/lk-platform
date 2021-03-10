@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2034
-
 lk_bin_depth=1 include=linux . lk-bash-load.sh || exit
 
 shopt -s nullglob

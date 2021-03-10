@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2015,SC2016,SC2029,SC2034,SC2207
+# shellcheck disable=SC2029
 
 lk_bin_depth=1 include=wordpress . lk-bash-load.sh || exit
 

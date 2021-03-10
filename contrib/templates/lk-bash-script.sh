@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2015,SC2034
-
 # To use this template for lk-platform scripts, choose Option 1 or Option 2
 # below, and set _DEPTH to the number of directories between LK_BASE and the
 # script (recommended reading: https://mywiki.wooledge.org/BashFAQ/028)

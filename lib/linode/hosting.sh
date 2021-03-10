@@ -1,5 +1,6 @@
 #!/bin/bash
-# shellcheck disable=SC1090,SC1091,SC2001,SC2086,SC2206,SC2207,SC2088
+
+# shellcheck disable=SC2001,SC2086,SC2206,SC2088
 #
 # <UDF name="LK_NODE_HOSTNAME" label="Short hostname" example="web01-dev-syd" />
 # <UDF name="LK_NODE_FQDN" label="Host FQDN" example="web01-dev-syd.linode.linacreative.com" />
@@ -427,7 +428,6 @@ if [ -z "$(ls -A "$LK_BASE")" ]; then
     )
 fi
 
-# shellcheck disable=SC2034
 TERM='' \
     LK_SKIP=env,settings include=provision,hosting . "$LK_BASE/lib/bash/common.sh"
 

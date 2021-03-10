@@ -1,4 +1,5 @@
 #!/bin/bash
+
 # shellcheck disable=SC2206
 
 function lk_prompt_debug_trap() {

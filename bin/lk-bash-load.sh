@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2015,SC2128
-
 # Scenario 1: bootstrapping lk-platform scripts
 #
 # If a platform script can safely assume lk-bash-load.sh will be found in PATH,

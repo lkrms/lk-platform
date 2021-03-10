@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2015,SC2016,SC2034,SC2206,SC2207
+# shellcheck disable=SC2206
 
 # References:
 # - https://wiki.archlinux.org/index.php/Installation_guide

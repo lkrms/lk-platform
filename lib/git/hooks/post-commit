@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1091,SC2164
+# shellcheck disable=SC2164
 
 LK_TTY_NO_COLOUR=1 \
     include=git . lk-bash-load.sh || exit

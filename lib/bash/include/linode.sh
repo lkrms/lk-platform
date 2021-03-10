@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2016,SC2029,SC2086,SC2207
+# shellcheck disable=SC2029,SC2086
 
 lk_include git provision
 

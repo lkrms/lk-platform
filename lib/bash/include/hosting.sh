@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2015,SC2046,SC2207
+# shellcheck disable=SC2046
 
 lk_include debian git provision
 

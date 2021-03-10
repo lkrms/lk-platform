@@ -1,7 +1,5 @@
 #!/bin/sh
 
-# shellcheck disable=SC2016
-
 lk_double_quote() {
     set -- "$(echo "$1." | sed -Ee 's/\\/\\\\/g' -e 's/[$`"]/\\&/g')"
     echo "\"${1%.}\""

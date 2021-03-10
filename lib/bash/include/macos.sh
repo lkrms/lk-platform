@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2015,SC2207
-
 ! lk_is_apple_silicon || {
     function lk_macos_x86_64() { arch --x86_64 "$@"; }
     function brew() { /opt/homebrew/bin/brew "$@"; }

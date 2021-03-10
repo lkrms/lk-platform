@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2015,SC2016,SC2030,SC2031,SC2034,SC2086,SC2120,SC2206,SC2207
+# shellcheck disable=SC2030,SC2031,SC2086,SC2120,SC2206
 
 function lk_node_service_enabled() {
     [ -n "${LK_NODE_SERVICES:-}" ] || return

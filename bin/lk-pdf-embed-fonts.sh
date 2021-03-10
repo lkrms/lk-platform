@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC1091,SC2015
-
 include=provision . lk-bash-load.sh || exit
 
 lk_assert_command_exists gs
