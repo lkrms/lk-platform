@@ -436,7 +436,7 @@ in_target install -d -m 02775 -o "$BOOTSTRAP_USERNAME" -g adm "$LK_BASE"
 (umask 002 &&
     in_target -u "$BOOTSTRAP_USERNAME" \
         git clone -b "$LK_PLATFORM_BRANCH" \
-        "https://github.com/lkrms/lk-platform.git" "$LK_BASE")
+        https://github.com/lkrms/lk-platform.git "$LK_BASE")
 FILE=/mnt/etc/default/lk-platform
 install -m 00644 /dev/null "$FILE"
 lk_get_shell_var \

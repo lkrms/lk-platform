@@ -381,9 +381,11 @@ EOF
         echo "[ ! -f ~/.bashrc ] || . ~/.bashrc" >>~/.bash_profile
     fi
 
+    lk_console_blank
     LK_SUDO=1 lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" --no-log \
         ${LK_PACKAGES_FILE:+--set LK_PACKAGES_FILE="$LK_PACKAGES_FILE"}
 
+    lk_console_blank
     lk_console_message "Checking Homebrew packages"
     UPGRADE_CASKS=()
     function check_updates() {
@@ -698,10 +700,10 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
     }
 
     lk_remove_missing LOGIN_ITEMS
-    ADD_LOGIN_ITEMS=($(comm -13 \
+    lk_mapfile ADD_LOGIN_ITEMS <(comm -13 \
         <("$LK_BASE/lib/macos/login-items-list.js" | tail -n+2 |
             cut -f2 | sort -u) \
-        <(lk_echo_array LOGIN_ITEMS | sort -u)))
+        <(lk_echo_array LOGIN_ITEMS | sort -u))
     [ ${#ADD_LOGIN_ITEMS[@]} -eq 0 ] || {
         lk_echo_array ADD_LOGIN_ITEMS |
             lk_console_list "Adding to Login Items:" app apps
