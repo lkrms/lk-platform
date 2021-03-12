@@ -139,7 +139,9 @@ function _lk_gnu_command() {
         PREFIX=g
         HOMEBREW_PREFIX=${HOMEBREW_PREFIX-$(brew --prefix 2>/dev/null)} ||
             HOMEBREW_PREFIX=
-        COMMAND=${HOMEBREW_PREFIX:-/usr/local}
+        COMMAND=${HOMEBREW_PREFIX:-$(lk_is_apple_silicon &&
+            echo /opt/homebrew ||
+            echo /usr/local)}
     }
     case "$1" in
     diff)

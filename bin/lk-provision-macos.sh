@@ -437,11 +437,16 @@ def is_native:
         if [ -z "${BREW_ARCH[$i]}" ]; then
             HOMEBREW_FORMULAE=($(jq -r \
                 "$JQ"'.formulae[]|select(is_native).full_name' \
-                <<<"$HOMEBREW_FORMULAE_JSON"))
+                <<<"$HOMEBREW_FORMULAE_JSON" | grep -Ev "^$(lk_regex_implode \
+                    ${FORCE_IBREW[@]+"${FORCE_IBREW[@]}"})\$")) || true
         else
-            HOMEBREW_FORMULAE=($(jq -r \
-                "$JQ"'.formulae[]|select(is_native|not).full_name' \
-                <<<"$HOMEBREW_FORMULAE_JSON"))
+            HOMEBREW_FORMULAE=($({ [ ${#FORCE_IBREW[@]} -eq 0 ] || jq -r \
+                "$JQ"'.formulae[]|select(is_native).full_name' \
+                <<<"$HOMEBREW_FORMULAE_JSON" | grep -E "^$(lk_regex_implode \
+                    ${FORCE_IBREW[@]+"${FORCE_IBREW[@]}"})\$" || true; } &&
+                jq -r \
+                    "$JQ"'.formulae[]|select(is_native|not).full_name' \
+                    <<<"$HOMEBREW_FORMULAE_JSON"))
         fi
     }
     function check_installed() {
