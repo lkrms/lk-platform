@@ -361,7 +361,7 @@ Usage: $(lk_myself -f) FQDN DOMAIN [ACCOUNT [DATA_JSON [LINODE_ARG...]]]
 
 Create a new Linode at FQDN and configure it to serve DOMAIN from user ACCOUNT.
 
-SSH public keys are added from:
+\\SSH public keys are added from:
 - array variable LK_LINODE_SSH_KEYS
 - file LK_LINODE_SSH_KEYS_FILE
 - ~/.ssh/authorized_keys (if both LK_LINODE_SSH_KEYS and LK_LINODE_SSH_KEYS_FILE

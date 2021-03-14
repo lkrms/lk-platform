@@ -350,17 +350,20 @@
     lk_console_message "Checking symbolic links"
     lk_symlink_bin "$LK_BASE/bin/lk-bash-load.sh"
 
-    LK_HOMES=(
-        /etc/skel{,".${LK_PATH_PREFIX%-}"}
-        ${SUDO_USER:+"$(lk_expand_path "~$SUDO_USER")"}
-        "$@"
-    )
-    # If invoked by root, include all standard home directories
-    lk_is_true ELEVATED || LK_HOMES+=(
-        /{home,Users}/*
-        /srv/www/*
-        ~root
-    )
+    if lk_is_true ELEVATED; then
+        LK_HOMES=(${SUDO_USER:+"$(lk_expand_path "~$SUDO_USER")"})
+    else
+        # If invoked by root, include all standard home directories
+        lk_mapfile LK_HOMES <(comm -12 \
+            <(lk_echo_args /home/* /srv/www/* /Users/* ~root |
+                lk_filter 'test -d' | sort -u) \
+            <(if ! lk_is_macos; then
+                getent passwd | cut -d: -f6
+            else
+                dscl . list /Users NFSHomeDirectory | awk '{print $2}'
+            fi | sort -u))
+    fi
+    LK_HOMES+=(/etc/skel{,".${LK_PATH_PREFIX%-}"})
     lk_remove_missing LK_HOMES
     lk_resolve_files LK_HOMES
     [ ${#LK_HOMES[@]} -gt 0 ] || lk_die "No home directories found"

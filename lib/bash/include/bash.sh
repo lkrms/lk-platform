@@ -95,7 +95,7 @@ SCRIPT or any SOURCE. If -g is set, store results in global array variables:
     PACKAGES=()
     for COMMAND in "${COMMANDS[@]}"; do
         [[ ! $COMMAND =~ ^(lk_|\./) ]] || continue
-        _PATH=$(which "$COMMAND" 2>/dev/null) &&
+        _PATH=$(command -pv "$COMMAND") &&
             _PATH=$(realpath "$_PATH") &&
             COMMAND_FILES[${#COMMAND_FILES[@]}]=$_PATH$(
                 [ "${COMMAND##*/}" = "${_PATH##*/}" ] || echo " ($COMMAND)"

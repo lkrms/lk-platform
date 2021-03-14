@@ -249,7 +249,7 @@ function lk_ssh_get_host_key_files() {
     KEY_FILE=$(ssh -G "$1" |
         awk '/^identityfile / { print $2 }' |
         lk_expand_path |
-        lk_filter "test -f") &&
+        lk_filter 'test -f') &&
         [ -n "$KEY_FILE" ] &&
         echo "$KEY_FILE"
 }

@@ -275,8 +275,9 @@ function _lk_usage_format() {
     BOLD=$(lk_escape_ere_replace "$LK_BOLD")
     RESET=$(lk_escape_ere_replace "$LK_RESET")
     sed -E \
-        -e "s/^($S*(([uU]sage|[oO]r):$S+)?)($CMD)($S|\$)/\1$BOLD\4$RESET\5/" \
-        -e "s/^\w.*:\$/$BOLD&$RESET/" <<<"$1"
+        -e "s/^($S*([uU]sage|[oO]r):$S+)($CMD)($S|\$)/\1$BOLD\3$RESET\4/" \
+        -e "s/^[a-zA-Z0-9 ]+:\$/$BOLD&$RESET/" \
+        -e "s/^\\\\($NS)/\\1/" <<<"$1"
 }
 
 function lk_usage() {
@@ -2562,6 +2563,11 @@ function lk_pretty_path() {
                 [ "$_PATH" = "${_PATH#$PWD}" ] || __PATH=.${_PATH#$PWD}
             printf "%s${DELIM:-\\n}" "$__PATH"
         done
+}
+
+function lk_basename() {
+    { [ $# -gt 0 ] && lk_echo_args "$@" || cat; } |
+        sed -E 's/.*\/([^/]+)\/*$/\1/'
 }
 
 function lk_filter() {
