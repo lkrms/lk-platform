@@ -188,13 +188,16 @@ SH=$(. "$LK_BASE/lib/bash/env.sh") &&
     HISTFILESIZE=
     HISTTIMEFORMAT="%b %_d %Y %H:%M:%S %z "
 
-    lk_is_false LK_COMPLETION || { SH=$(for FILE in \
-        /usr/share/bash-completion/bash_completion \
-        ${HOMEBREW_PREFIX:+"$HOMEBREW_PREFIX/etc/profile.d/bash_completion.sh"}; do
-        [ -r "$FILE" ] || continue
-        printf '. %q\n' "$FILE" "$LK_BASE/lib/bash/completion.sh"
-        return
-    done) && eval "$SH"; }
+    lk_is_false LK_COMPLETION || { SH=$(
+        lk_bash_at_least 4 && VER=2 || VER=
+        for FILE in \
+            /usr/share/bash-completion/bash_completion \
+            ${HOMEBREW_PREFIX:+"$HOMEBREW_PREFIX/Cellar/bash-completion${VER:+@$VER}"/*/etc/profile.d/bash_completion.sh}; do
+            [ -r "$FILE" ] || continue
+            printf '. %q\n' "$FILE" "$LK_BASE/lib/bash/completion.sh"
+            return
+        done
+    ) && eval "$SH"; }
 
     lk_is_false LK_PROMPT || {
         lk_include prompt
