@@ -548,3 +548,7 @@ function lk_xfce4_xfconf_dump() {
 }
 
 lk_provide linux
+
+true || {
+    systemctl
+}

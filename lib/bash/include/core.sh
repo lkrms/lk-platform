@@ -3105,3 +3105,7 @@ LK_WARNING_COLOUR=$LK_YELLOW
 LK_ERROR_COLOUR=$LK_RED
 
 _LK_INCLUDES=(core)
+
+true || {
+    env
+}
