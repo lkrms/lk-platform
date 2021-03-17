@@ -82,7 +82,7 @@ PAC_PACKAGES+=(
 
     # networking
     networkmanager-l2tp
-    openconnect
+    networkmanager-openconnect
 
     # monitoring
     atop

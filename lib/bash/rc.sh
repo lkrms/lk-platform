@@ -41,7 +41,7 @@ SH=$(
             [ ! -f "$FILE" ] || [ ! -r "$FILE" ] || . "$FILE"
         done
         VAR=($(lk_var))
-        [ ${#VAR[@]} -eq 0 ] || lk_get_quoted_var "${VAR[@]}"
+        [ ${#VAR[@]} -eq 0 ] || declare -p "${VAR[@]}"
     )
 ) && eval "$SH"
 

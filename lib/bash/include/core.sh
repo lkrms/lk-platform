@@ -328,8 +328,12 @@ function lk_regex_implode() {
 }
 
 function _lk_var_prefix() {
-    [[ "${FUNCNAME[$((${_LK_VAR_PREFIX_DEPTH:-0} + 2))]:-}" =~ ^(source|main)?$ ]] ||
-        printf 'local '
+    case "${FUNCNAME[$((${_LK_VAR_PREFIX_DEPTH:-0} + 2))]:-}" in
+    '' | source | main)
+        return
+        ;;
+    esac
+    printf 'local '
 }
 
 _lk_from_cache regex || {
@@ -667,11 +671,12 @@ function lk_regex_case_insensitive() {
     echo "$REGEX"
 }
 
-# lk_regex_expand_whitespace STRING
+# lk_regex_expand_whitespace [-o] STRING
 #
 # Replace each unquoted sequence of one or more whitespace characters in STRING
-# with "[[:blank:]]+". Escaped delimiters within double- and single-quoted
-# sequences are recognised.
+# with "[[:blank:]]+". If -o is set, make whitespace optional with
+# "[[:blank:]]*". Escaped delimiters within double- and single-quoted sequences
+# are recognised.
 #
 # Example:
 #
@@ -681,10 +686,12 @@ function lk_regex_expand_whitespace() {
     local NOT_SPECIAL="[^'\"[:blank:]]*[^\\]" \
         ESCAPED_WHITESPACE="(\\\\[[:blank:]])*" \
         QUOTED_SINGLE="(''|'([^']|\\\\')*[^\\]')" \
-        QUOTED_DOUBLE="(\"\"|\"([^\"]|\\\\\")*[^\\]\")"
+        QUOTED_DOUBLE="(\"\"|\"([^\"]|\\\\\")*[^\\]\")" \
+        QUANTIFIER="+"
+    [ "${1:-}" != -o ] || { QUANTIFIER="*" && shift; }
     sed -E "\
 :start
-s/^(($NOT_SPECIAL|$ESCAPED_WHITESPACE|$QUOTED_SINGLE|$QUOTED_DOUBLE)*)$S+/\\1[[:blank:]]+/
+s/^(($NOT_SPECIAL|$ESCAPED_WHITESPACE|$QUOTED_SINGLE|$QUOTED_DOUBLE)*)$S+/\\1[[:blank:]]$QUANTIFIER/
 t start" <<<"$1"
 }
 
@@ -1575,8 +1582,7 @@ function lk_console_detail_diff() {
 }
 
 function _lk_tty_log() {
-    local COLOUR=$1 \
-        LK_TTY_PREFIX=${LK_TTY_PREFIX- :: } \
+    local STATUS=$? COLOUR=$1 \
         LK_TTY_COLOUR2=${LK_TTY_COLOUR2-} \
         LK_TTY_MESSAGE_COLOUR
     shift
@@ -1589,6 +1595,7 @@ function _lk_tty_log() {
         [ "${2#$'\n'}" = "$2" ] || printf '\n'
         echo "$BOLD${2#$'\n'}$RESET"
     )}${3:+ ${*:3}}" "$COLOUR"
+    return "$STATUS"
 }
 
 # lk_console_log [-r] MESSAGE [MESSAGE2...]
@@ -1596,9 +1603,8 @@ function _lk_tty_log() {
 # Output the given message to the console. If -r is set, return the most recent
 # command's exit status.
 function lk_console_log() {
-    local STATUS=$?
-    _lk_tty_log "$LK_TTY_COLOUR" "$@"
-    return "$STATUS"
+    LK_TTY_PREFIX=${LK_TTY_PREFIX-" :: "} \
+        _lk_tty_log "$LK_TTY_COLOUR" "$@"
 }
 
 # lk_console_success [-r] MESSAGE [MESSAGE2...]
@@ -1606,9 +1612,9 @@ function lk_console_log() {
 # Output the given success message to the console. If -r is set, return the most
 # recent command's exit status.
 function lk_console_success() {
-    local STATUS=$?
-    _lk_tty_log "$LK_SUCCESS_COLOUR" "$@"
-    return "$STATUS"
+    # ✔ (\u2714)
+    LK_TTY_PREFIX=${LK_TTY_PREFIX-$'  \xe2\x9c\x94 '} \
+        _lk_tty_log "$LK_SUCCESS_COLOUR" "$@"
 }
 
 # lk_console_warning [-r] MESSAGE [MESSAGE2...]
@@ -1616,9 +1622,9 @@ function lk_console_success() {
 # Output the given warning to the console. If -r is set, return the most recent
 # command's exit status.
 function lk_console_warning() {
-    local STATUS=$?
-    _lk_tty_log "$LK_WARNING_COLOUR" "$@"
-    return "$STATUS"
+    # ✘ (\u2718)
+    LK_TTY_PREFIX=${LK_TTY_PREFIX-$'  \xe2\x9c\x98 '} \
+        _lk_tty_log "$LK_WARNING_COLOUR" "$@"
 }
 
 # lk_console_error [-r] MESSAGE [MESSAGE2...]
@@ -1626,9 +1632,9 @@ function lk_console_warning() {
 # Output the given error message to the console. If -r is set, return the most
 # recent command's exit status.
 function lk_console_error() {
-    local STATUS=$?
-    _lk_tty_log "$LK_ERROR_COLOUR" "$@"
-    return "$STATUS"
+    # ✘ (\u2718)
+    LK_TTY_PREFIX=${LK_TTY_PREFIX-$'  \xe2\x9c\x98 '} \
+        _lk_tty_log "$LK_ERROR_COLOUR" "$@"
 }
 
 # lk_console_item MESSAGE ITEM [COLOUR]
