@@ -54,6 +54,21 @@ function lk_git_is_clean() {
         git diff-index --quiet HEAD --) >/dev/null
 }
 
+function lk_git_remote_skipped() {
+    {
+        git config "remote.$1.skipDefaultUpdate" || true
+        git config "remote.$1.skipFetchAll" || true
+    } | grep -Fx true >/dev/null
+}
+
+function lk_git_remote_skip() {
+    [ -n "${1:-}" ] || lk_usage "\
+Usage: $(lk_myself -f) REMOTE" || return
+    lk_confirm "Exclude remote '$1' from fetch and push?" Y || return
+    git config --type=bool "remote.$1.skipDefaultUpdate" 1
+    git config --type=bool "remote.$1.skipFetchAll" 1
+}
+
 function lk_git_remote_singleton() {
     local REMOTES
     REMOTES=($(git remote)) && [ ${#REMOTES[@]} -eq 1 ] || return
@@ -300,6 +315,7 @@ function lk_git_fetch() {
     REMOTES=$*
     [ $# -gt 0 ] || REMOTES=$(git remote) || return
     for REMOTE in $REMOTES; do
+        [ $# -gt 0 ] || ! lk_git_remote_skipped "$REMOTE" || continue
         _lk_git fetch --quiet --prune "$REMOTE" || {
             [ -n "${QUIET:-}" ] || lk_console_warning \
                 "Unable to fetch from remote:" "$REMOTE"
@@ -346,6 +362,7 @@ function lk_git_update_remote() {
             ((++ERRORS))
     done
     for REMOTE in $REMOTES; do
+        ! lk_git_remote_skipped "$REMOTE" || continue
         RBRANCHES=$(lk_git_branch_list_remote "$REMOTE") &&
             RBRANCHES=$(comm -12 \
                 <(echo "$BRANCHES" | sort) \
@@ -550,10 +567,10 @@ directory of a working tree" || return
 }
 
 function lk_git_audit_repo() {
-    local SKIP_FETCH
+    local SKIP_FETCH ERRORS=0
     [ "${1:-}" != -s ] || { SKIP_FETCH=1 && shift; }
-    lk_git_update_repo ${SKIP_FETCH:+-s} &&
-        lk_git_update_remote -q
+    lk_git_update_repo ${SKIP_FETCH:+-s} || ((++ERRORS))
+    lk_git_update_remote -q && [ "$ERRORS" -eq 0 ]
 }
 
 function lk_git_audit_repos() {
