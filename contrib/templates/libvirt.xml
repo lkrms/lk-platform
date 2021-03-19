@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<lk:lk xmlns:lk="http://linacreative.com/xmlns/libvirt/domain/1.0">
+  <lk:ip>
+    <!-- one or more required -->
+    <lk:address>192.168.122.208</lk:address>
+    <!-- optional -->
+    <lk:forward>
+      <lk:protocol>tcp</lk:protocol>
+      <lk:port>80</lk:port>
+      <lk:port>443</lk:port>
+      <lk:from-host>9208</lk:from-host>
+      <lk:to-guest>22</lk:to-guest>
+    </lk:forward>
+    <lk:forward>
+      <lk:protocol>udp</lk:protocol>
+      <lk:port>53</lk:port>
+    </lk:forward>
+    <!-- optional -->
+    <lk:isolate>
+      <!-- optional -->
+      <lk:allow>
+        <lk:gateway />
+        <lk:gateway-lan />
+        <lk:host>10.1.1.1</lk:host>
+        <lk:from-url>
+          <lk:url>https://api.github.com/meta</lk:url>
+          <lk:filter>.web[],.api[],.git[]</lk:filter>
+        </lk:from-url>
+        <!-- Bitbucket -->
+        <lk:from-url>
+          <lk:url>https://ip-ranges.atlassian.com</lk:url>
+          <lk:filter>.items[].cidr</lk:filter>
+        </lk:from-url>
+      </lk:allow>
+    </lk:isolate>
+  </lk:ip>
+</lk:lk>

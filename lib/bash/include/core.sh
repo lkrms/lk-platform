@@ -1523,28 +1523,36 @@ function lk_console_message() {
     esac
 }
 
-# lk_tty_pairs [COLOUR]
+# lk_tty_pairs [-d DELIM] [COLOUR]
 function lk_tty_pairs() {
-    local LK_TTY_NO_FOLD=1 LEN=0 KEY VALUE KEYS=() VALUES=() i
-    while read -r KEY VALUE; do
+    local LK_TTY_NO_FOLD=1 DELIM LEN=0 KEY VALUE KEYS=() VALUES=() GAP SPACES i
+    unset DELIM
+    [ "${1:-}" != -d ] || { DELIM=$2 && shift 2; }
+    while read -r ${DELIM+-d "$DELIM"} KEY VALUE; do
         [ ${#KEY} -le "$LEN" ] || LEN=${#KEY}
         KEYS[${#KEYS[@]}]=$KEY
         VALUES[${#VALUES[@]}]=$VALUE
     done
+    # Align to the nearest tab
+    [ -n "${LK_TTY_PREFIX:-}" ] && GAP=${#LK_TTY_PREFIX} || GAP=0
+    ((GAP = ((GAP + LEN + 2) % 4), GAP = (GAP > 0 ? 4 - GAP : 0))) || true
     for i in "${!KEYS[@]}"; do
         KEY=${KEYS[$i]}
+        ((SPACES = LEN - ${#KEY} + GAP)) || true
         lk_console_item \
-            "$KEY:$(eval "printf ' %.s' {1..$((LEN - ${#KEY} + 1))}")" \
+            "$KEY:$( ! ((SPACES)) || eval "printf ' %.s' {1..$SPACES}")" \
             "${VALUES[$i]}" \
             "$@"
     done
 }
 
-# lk_tty_detail_pairs [COLOUR]
+# lk_tty_detail_pairs [-d DELIM] [COLOUR]
 function lk_tty_detail_pairs() {
-    local LK_TTY_PREFIX=${LK_TTY_PREFIX-   -> } \
+    local DELIM LK_TTY_PREFIX=${LK_TTY_PREFIX-   -> } \
         LK_TTY_MESSAGE_COLOUR=${LK_TTY_MESSAGE_COLOUR-}
-    lk_tty_pairs "${1-$LK_YELLOW}"
+    unset DELIM
+    [ "${1:-}" != -d ] || { DELIM=$2 && shift 2; }
+    lk_tty_pairs ${DELIM+-d "$DELIM"} "${1-$LK_YELLOW}"
 }
 
 # lk_console_detail MESSAGE [MESSAGE2 [COLOUR]]
@@ -2147,6 +2155,20 @@ function lk_download() {
     ) || return
 }
 
+function lk_curl() {
+    local CURL_OPTIONS=(${LK_CURL_OPTIONS[@]+"${LK_CURL_OPTIONS[@]}"})
+    [ ${#CURL_OPTIONS[@]} -gt 0 ] || CURL_OPTIONS=(
+        --fail
+        --header "Cache-Control: no-cache"
+        --header "Pragma: no-cache"
+        --location
+        --retry 8
+        --show-error
+        --silent
+    )
+    curl ${CURL_OPTIONS[@]+"${CURL_OPTIONS[@]}"} "$@"
+}
+
 # lk_can_sudo COMMAND [USERNAME]
 #
 # Return true if the current user is allowed to execute COMMAND via sudo.
@@ -2603,6 +2625,10 @@ function lk_version_at_least() {
         [ "$MIN" = "$2" ]
 }
 
+function lk_jq() {
+    jq -L "$LK_BASE/lib/jq" "${@:1:$#-1}" 'include "core";'"${*: -1}"
+}
+
 # lk_jq_get_array ARRAY [FILTER]
 #
 # Apply FILTER (default: ".[]") to the input and populate ARRAY with the
@@ -2616,22 +2642,25 @@ function lk_jq_get_array() {
 
 # lk_jq_get_shell_var [--arg NAME VALUE]... VAR FILTER [VAR FILTER]...
 function lk_jq_get_shell_var() {
-    local JQ JQ_ARGS=()
+    local JQ ARGS=()
     while [ "${1:-}" = --arg ]; do
         [ $# -ge 5 ] || lk_warn "invalid arguments" || return
-        JQ_ARGS+=("${@:1:3}")
+        ARGS+=("${@:1:3}")
         shift 3
     done
     [ $# -gt 0 ] && ! (($# % 2)) || lk_warn "invalid arguments" || return
-    JQ="\
-def to_sh:
-  to_entries[] |
-    \"$(_lk_var_prefix)\(.key | ascii_upcase)=\(.value | @sh)\";
-{
-  $(printf '"%s": %s' "$1" "$2" && { [ $# -eq 2 ] ||
-        printf ',\n  "%s": %s' "${@:3}"; })
-} | to_sh"
-    jq -r ${JQ_ARGS[@]+"${JQ_ARGS[@]}"} "$JQ"
+    JQ=$(printf '"%s":(%s),' "$@")
+    JQ='{'${JQ%,}'} | to_sh($_lk_var_prefix)'
+    lk_jq -r \
+        ${ARGS[@]+"${ARGS[@]}"} \
+        --arg _lk_var_prefix "$(_lk_var_prefix)" \
+        "$JQ"
+}
+
+function lk_json_from_xml_schema() {
+    [ $# -gt 0 ] && [ $# -le 2 ] && lk_files_exist "$@" || lk_usage "\
+Usage: $(lk_myself -f) XSD_FILE [XML_FILE]" || return
+    "$LK_BASE/lib/python/json_from_xml_schema.py" "$@"
 }
 
 if lk_is_macos; then

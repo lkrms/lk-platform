@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xs:schema
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  targetNamespace="http://linacreative.com/xmlns/libvirt/domain/1.0"
+  xmlns:lk="http://linacreative.com/xmlns/libvirt/domain/1.0"
+  elementFormDefault="qualified">
+  <xs:simpleType name="host">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])(/(3[0-2]|[12][0-9]|[1-9]))?|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))(/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9]))?|[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)*)" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="ip">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7})))" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="protocol">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="tcp" />
+      <xs:enumeration value="udp" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="urlType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="jq" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:element name="lk">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="ip">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="address" type="lk:ip" maxOccurs="unbounded" />
+              <xs:element name="forward" minOccurs="0" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="protocol" type="lk:protocol" />
+                    <xs:choice maxOccurs="unbounded">
+                      <xs:element name="port" type="xs:int" />
+                      <xs:sequence>
+                        <xs:element name="from-host" type="xs:int" />
+                        <xs:element name="to-guest" type="xs:int" />
+                      </xs:sequence>
+                    </xs:choice>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+              <xs:element name="isolate" minOccurs="0">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="allow" minOccurs="0">
+                      <xs:complexType>
+                        <xs:sequence>
+                          <xs:element name="gateway" minOccurs="0" />
+                          <xs:element name="gateway-lan" minOccurs="0" />
+                          <xs:element name="host" type="lk:host" minOccurs="0" maxOccurs="unbounded" />
+                          <xs:element name="from-url" minOccurs="0" maxOccurs="unbounded">
+                            <xs:complexType>
+                              <xs:sequence>
+                                <xs:element name="url" type="xs:anyURI" />
+                                <xs:element name="filter" type="xs:string" />
+                              </xs:sequence>
+                              <xs:attribute name="type" type="lk:urlType" default="jq" />
+                            </xs:complexType>
+                          </xs:element>
+                        </xs:sequence>
+                      </xs:complexType>
+                    </xs:element>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

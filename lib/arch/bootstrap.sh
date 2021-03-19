@@ -93,6 +93,7 @@ PAC_REPOS=()
 CURL_OPTIONS=(
     --fail
     --header "Cache-Control: no-cache"
+    --header "Pragma: no-cache"
     --location
     --retry 8
     --show-error

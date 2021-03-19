@@ -296,6 +296,7 @@ PAC_PACKAGES+=(
     python-pip
     python-requests
     python-virtualenv
+    python-xmlschema
     python2
 
     #
