@@ -23,7 +23,7 @@ function lk_is_macos() {
 }
 
 function lk_is_apple_silicon() {
-    lk_is_macos && [[ $MACHTYPE == arm64-* ]]
+    lk_is_macos && [[ $MACHTYPE =~ ^(arm|aarch)64- ]]
 }
 
 function lk_is_linux() {

@@ -394,9 +394,10 @@ EOF
         [ "${BREW_NEW[$i]}" -eq 0 ] || return 0
         [ "$i" -eq 0 ] || local OUTDATED
         OUTDATED=$(brew outdated --json=v2) &&
-            UPGRADE_FORMULAE=($(jq -r ".formulae[].name" <<<"$OUTDATED")) &&
+            UPGRADE_FORMULAE=($(jq -r \
+                ".formulae[]|select(.pinned|not).name" <<<"$OUTDATED")) &&
             lk_mapfile "UPGRADE_FORMULAE_TEXT_$i" <(jq <<<"$OUTDATED" -r "\
-.formulae[] |
+.formulae[] | select(.pinned | not) |
     .name + \" (\" + (.installed_versions | join(\" \")) + \" -> \" +
         .current_version + \")\"") || return
         eval "UPGRADE_FORMULAE_$i=(\${UPGRADE_FORMULAE[@]+\"\${UPGRADE_FORMULAE[@]}\"})"
@@ -414,10 +415,11 @@ EOF
     }
 
     if [ "${BREW_NEW[0]}" -eq 0 ]; then
-        UPGRADE_CASKS=($(jq -r ".casks[].name" <<<"$OUTDATED"))
+        UPGRADE_CASKS=($(jq -r \
+            ".casks[]|select(.pinned|not).name" <<<"$OUTDATED"))
         [ ${#UPGRADE_CASKS[@]} -eq 0 ] || {
             jq <<<"$OUTDATED" -r "\
-.casks[] |
+.casks[] | select(.pinned | not) |
     .name + \" (\" + .installed_versions + \" -> \" +
         .current_version + \")\"" |
                 lk_console_detail_list "$(
