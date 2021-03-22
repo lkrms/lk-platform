@@ -1451,11 +1451,21 @@ function lk_tty_columns() {
     echo "${_COLUMNS:-80}"
 }
 
+function _lk_tty_message_length() {
+    echo "${MESSAGE_LENGTH:=$(lk_tty_length "$PREFIX$MESSAGE")}"
+}
+
+function _lk_tty_message2_length() {
+    echo "${MESSAGE2_LENGTH:=$(lk_tty_length "$PREFIX$MESSAGE $MESSAGE2")}"
+}
+
 # lk_console_message MESSAGE [[MESSAGE2] COLOUR]
 function lk_console_message() {
-    local MESSAGE=$1 MESSAGE2 COLOUR PREFIX=${LK_TTY_PREFIX-==> } \
-        WIDTH INDENT=0 SPACES LENGTH \
-        MESSAGE_HAS_NEWLINE MESSAGE2_HAS_NEWLINE OUTPUT
+    local IFS MESSAGE=$1 MESSAGE_HAS_NEWLINE MESSAGE_LENGTH \
+        MESSAGE2 MESSAGE2_HAS_NEWLINE MESSAGE2_LENGTH \
+        COLOUR WIDTH PREFIX=${LK_TTY_PREFIX-==> } SPACES INDENT=0 OUTPUT
+    # Save ourselves from word-splitting hell
+    unset IFS
     shift
     [ $# -le 1 ] || {
         MESSAGE2=$1
@@ -1463,14 +1473,21 @@ function lk_console_message() {
     }
     COLOUR=${1-$LK_TTY_COLOUR}
     WIDTH=${LK_TTY_WIDTH:-$(lk_tty_columns)}
+    [ "${LK_TTY_NO_BREAK:-0}" -ne 1 ] ||
+        local LK_TTY_NO_FOLD=1
     # If MESSAGE breaks over multiple lines (or will after wrapping), align
     # second and subsequent lines with the first
-    ! lk_has_newline MESSAGE || MESSAGE_HAS_NEWLINE=1
-    if lk_is_true MESSAGE_HAS_NEWLINE || { ! lk_is_true LK_TTY_NO_FOLD &&
-        [ "$(lk_tty_length "$PREFIX$MESSAGE")" -gt "$WIDTH" ]; }; then
+    [[ ! $MESSAGE == *$'\n'* ]] || {
+        MESSAGE_HAS_NEWLINE=1
+        # LK_TTY_NO_BREAK only makes sense when MESSAGE prints on one line
+        local LK_TTY_NO_BREAK=0
+    }
+    if [ "${MESSAGE_HAS_NEWLINE:-0}" -eq 1 ] ||
+        { [ "${LK_TTY_NO_FOLD:-0}" -ne 1 ] &&
+            [ "$(_lk_tty_message_length)" -gt "$WIDTH" ]; }; then
         SPACES=$'\n'"$(lk_repeat " " ${#PREFIX})"
         # Don't fold if MESSAGE is pre-formatted
-        lk_is_true MESSAGE_HAS_NEWLINE ||
+        [ "${MESSAGE_HAS_NEWLINE:-0}" -eq 1 ] ||
             MESSAGE=$(lk_fold "$MESSAGE" $((WIDTH - ${#PREFIX})))
         MESSAGE=${MESSAGE//$'\n'/$SPACES}
         MESSAGE_HAS_NEWLINE=1
@@ -1479,11 +1496,11 @@ function lk_console_message() {
     [ -z "${MESSAGE2:-}" ] || {
         # If MESSAGE and MESSAGE2 are both one-liners, print them on one line
         # with a space between
-        ! lk_has_newline MESSAGE2 || MESSAGE2_HAS_NEWLINE=1
-        if ! lk_is_true MESSAGE2_HAS_NEWLINE &&
-            ! lk_is_true MESSAGE_HAS_NEWLINE &&
-            { lk_is_true LK_TTY_NO_FOLD ||
-                [ "$((LENGTH = $(lk_tty_length "$PREFIX$MESSAGE $MESSAGE2")))" -le "$WIDTH" ]; }; then
+        [[ ! $MESSAGE2 == *$'\n'* ]] || MESSAGE2_HAS_NEWLINE=1
+        if [ ${MESSAGE2_HAS_NEWLINE:-0} -eq 0 ] &&
+            [ ${MESSAGE_HAS_NEWLINE:-0} -eq 0 ] &&
+            { [ "${LK_TTY_NO_FOLD:-0}" -eq 1 ] ||
+                [ "$(_lk_tty_message2_length)" -le "$WIDTH" ]; }; then
             MESSAGE2=" $MESSAGE2"
         else
             # Otherwise:
@@ -1491,44 +1508,54 @@ function lk_console_message() {
             #   keep INDENT=2 (increase MESSAGE2's left padding)
             # - If only MESSAGE2 spans multiple lines, set INDENT=-2 (decrease
             #   the left padding of MESSAGE2)
-            if { lk_is_true MESSAGE2_HAS_NEWLINE || [ -n "${LENGTH:-}" ]; } &&
-                ! lk_is_true MESSAGE_HAS_NEWLINE; then
-                INDENT=-2
+            # - If LK_TTY_NO_BREAK is set, align MESSAGE2 under the first line
+            if [ "${LK_TTY_NO_BREAK:-0}" -ne 1 ]; then
+                if { [ ${MESSAGE2_HAS_NEWLINE:-0} -eq 1 ] ||
+                    [ -n "${MESSAGE2_LENGTH:-}" ]; } &&
+                    [ "${MESSAGE_HAS_NEWLINE:-0}" -eq 0 ]; then
+                    INDENT=-2
+                fi
+                INDENT=${_LK_TTY_INDENT:-$((${#PREFIX} + INDENT))}
+            else
+                INDENT=${_LK_TTY_INDENT:-$(($(_lk_tty_message_length) + 1))}
             fi
-            INDENT=${_LK_TTY_INDENT:-$((${#PREFIX} + INDENT))}
             SPACES=$'\n'$(lk_repeat " " "$INDENT")
-            lk_is_true MESSAGE2_HAS_NEWLINE ||
+            [ ${MESSAGE2_HAS_NEWLINE:-0} -eq 1 ] ||
                 MESSAGE2=$(lk_fold "$MESSAGE2" $((WIDTH - INDENT)))
             # If a leading newline was added to force MESSAGE2 onto its own
             # line, remove it
             MESSAGE2=${MESSAGE2#$'\n'}
-            MESSAGE2=$SPACES${MESSAGE2//$'\n'/$SPACES}
+            MESSAGE2=${MESSAGE2//$'\n'/$SPACES}
+            [ "${LK_TTY_NO_BREAK:-0}" -eq 1 ] &&
+                MESSAGE2=" $MESSAGE2" ||
+                MESSAGE2=$SPACES$MESSAGE2
         fi
     }
     OUTPUT=$(
         lk_echoc -n "$PREFIX" \
-            "${LK_TTY_PREFIX_COLOUR-$(lk_maybe_bold "$COLOUR")$COLOUR}"
+            "${LK_TTY_PREFIX_COLOUR-$([[ $COLOUR == *$LK_BOLD* ]] ||
+                echo "$LK_BOLD")$COLOUR}"
         lk_echoc -n "$MESSAGE" \
-            "${LK_TTY_MESSAGE_COLOUR-$(lk_maybe_bold "$MESSAGE")}"
+            "${LK_TTY_MESSAGE_COLOUR-$([[ $MESSAGE == *$LK_BOLD* ]] ||
+                echo "$LK_BOLD")}"
         [ -z "${MESSAGE2:-}" ] ||
             lk_echoc -n "$MESSAGE2" "${LK_TTY_COLOUR2-$COLOUR}"
     )
     case "${FUNCNAME[1]:-}" in
     lk_console_list)
-        lk_get_quoted_var WIDTH MESSAGE_HAS_NEWLINE OUTPUT
+        declare -p WIDTH MESSAGE_HAS_NEWLINE OUTPUT 2>/dev/null || true
         ;;
     *)
         echo "$OUTPUT" >&"${_LK_FD:-2}"
         ;;
     esac
-}
+} #### Reviewed: 2021-03-22
 
 # lk_tty_pairs [-d DELIM] [COLOUR]
 function lk_tty_pairs() {
-    local LK_TTY_NO_FOLD=1 DELIM LEN=0 KEY VALUE KEYS=() VALUES=() GAP SPACES i
-    unset DELIM
-    [ "${1:-}" != -d ] || { DELIM=$2 && shift 2; }
-    while read -r ${DELIM+-d "$DELIM"} KEY VALUE; do
+    local LK_TTY_NO_FOLD=1 ARGS LEN=0 KEY VALUE KEYS=() VALUES=() GAP SPACES i
+    [ "${1:-}" != -d ] || { ARGS=(-d "$2") && shift 2; }
+    while read -r ${ARGS[@]+"${ARGS[@]}"} KEY VALUE; do
         [ ${#KEY} -le "$LEN" ] || LEN=${#KEY}
         KEYS[${#KEYS[@]}]=$KEY
         VALUES[${#VALUES[@]}]=$VALUE
@@ -1539,21 +1566,20 @@ function lk_tty_pairs() {
     for i in "${!KEYS[@]}"; do
         KEY=${KEYS[$i]}
         ((SPACES = LEN - ${#KEY} + GAP)) || true
-        lk_console_item \
+        LK_TTY_NO_BREAK=1 lk_console_item \
             "$KEY:$( ! ((SPACES)) || eval "printf ' %.s' {1..$SPACES}")" \
             "${VALUES[$i]}" \
             "$@"
     done
-}
+} #### Reviewed: 2021-03-22
 
 # lk_tty_detail_pairs [-d DELIM] [COLOUR]
 function lk_tty_detail_pairs() {
-    local DELIM LK_TTY_PREFIX=${LK_TTY_PREFIX-   -> } \
+    local ARGS LK_TTY_PREFIX=${LK_TTY_PREFIX-   -> } \
         LK_TTY_MESSAGE_COLOUR=${LK_TTY_MESSAGE_COLOUR-}
-    unset DELIM
-    [ "${1:-}" != -d ] || { DELIM=$2 && shift 2; }
-    lk_tty_pairs ${DELIM+-d "$DELIM"} "${1-$LK_YELLOW}"
-}
+    [ "${1:-}" != -d ] || { ARGS=(-d "$2") && shift 2; }
+    lk_tty_pairs ${ARGS[@]+"${ARGS[@]}"} "${1-$LK_YELLOW}"
+} #### Reviewed: 2021-03-22
 
 # lk_console_detail MESSAGE [MESSAGE2 [COLOUR]]
 function lk_console_detail() {
@@ -1668,7 +1694,7 @@ function lk_console_list() {
         lk_mapfile ITEMS || lk_warn "unable to read items from input" || return
     SH=$(lk_console_message "$MESSAGE" "$COLOUR") &&
         eval "$SH" || return
-    ! lk_is_true MESSAGE_HAS_NEWLINE ||
+    [ "${MESSAGE_HAS_NEWLINE:-0}" -eq 0 ] ||
         INDENT=2
     LIST="$(lk_echo_array ITEMS |
         COLUMNS=$((WIDTH - ${#LK_TTY_PREFIX} - INDENT)) column -s $'\n' |
@@ -1686,7 +1712,7 @@ function lk_console_list() {
                 lk_maybe_plural ${#ITEMS[@]} "$SINGLE" "$PLURAL"
             ))"
     )" >&"${_LK_FD:-2}"
-}
+} #### Reviewed: 2021-03-22
 
 # lk_console_dump CONTENT [MESSAGE [MESSAGE_END [COLOUR [CONTENT_COLOUR]]]]
 function lk_console_dump() {
