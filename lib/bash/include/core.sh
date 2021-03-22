@@ -222,7 +222,7 @@ function lk_myself() {
     if ! lk_is_true FUNC && lk_is_script_running; then
         echo "${0##*/}"
     else
-        echo "${FUNCNAME[$((1 + ${1:-0}))]:-${0##*/}}"
+        echo "${FUNCNAME[$((1 + ${1:-0} + ${_LK_STACK_DEPTH:-0}))]:-${0##*/}}"
     fi
     return "$EXIT_STATUS"
 }
@@ -328,7 +328,7 @@ function lk_regex_implode() {
 }
 
 function _lk_var_prefix() {
-    case "${FUNCNAME[$((${_LK_VAR_PREFIX_DEPTH:-0} + 2))]:-}" in
+    case "${FUNCNAME[$((${_LK_STACK_DEPTH:-0} + 2))]:-}" in
     '' | source | main)
         return
         ;;
@@ -441,7 +441,7 @@ done; return "$EXIT_STATUS"; }\n' _lk_get_regex "${SH//$'\n'/$'\n        '}"
 # expressions or for each REGEX_NAME.
 function lk_get_regex() {
     [ $# -gt 0 ] || set -- "${_LK_REGEX[@]}"
-    _LK_VAR_PREFIX_DEPTH=1 \
+    _LK_STACK_DEPTH=1 \
         _lk_get_regex "$@"
 }
 
@@ -593,7 +593,7 @@ function lk_get_env() {
             <({ [ $# -gt 0 ] && lk_echo_args "$@" || lk_var_list_all; } |
                 sed -E "/$_LK_IGNORE_REGEX/d" | sort -u))
         [ $# -eq 0 ] ||
-            _LK_VAR_PREFIX_DEPTH=1 \
+            _LK_STACK_DEPTH=1 \
                 ${_LK_VAR_LIST-lk_get_quoted_var} \
                 ${_LK_VAR_LIST+lk_echo_args} \
                 "$@"

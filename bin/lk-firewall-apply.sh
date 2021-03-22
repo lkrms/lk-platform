@@ -65,7 +65,7 @@ if [ -n "${ACCEPT_OUTPUT_CHAIN:-}" ]; then
         OUTPUT_ALLOW_IPV6=($(echo "$OUTPUT_ALLOW_RESOLVED" | lk_filter_ipv6))
     fi
     lk_console_detail "Flushing iptables chain:" "$ACCEPT_OUTPUT_CHAIN"
-    lk_iptables_both lk_iptables_flush_chain "$ACCEPT_OUTPUT_CHAIN"
+    lk_iptables_flush_chain -b "$ACCEPT_OUTPUT_CHAIN"
     [ ${#OUTPUT_ALLOW_IPV4[@]} -eq 0 ] ||
         lk_console_detail "Adding" "${#OUTPUT_ALLOW_IPV4[@]} IP $(lk_maybe_plural ${#OUTPUT_ALLOW_IPV4[@]} rule rules)"
     for IPV4 in ${OUTPUT_ALLOW_IPV4[@]+"${OUTPUT_ALLOW_IPV4[@]}"}; do

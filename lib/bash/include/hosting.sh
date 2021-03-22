@@ -66,7 +66,7 @@ function lk_hosting_get_site_settings() {
         unset "${!SITE_@}"
         FILE=$LK_BASE/etc/sites/$1.conf
         [ ! -e "$FILE" ] || . "$FILE" || exit
-        _LK_VAR_PREFIX_DEPTH=1 \
+        _LK_STACK_DEPTH=1 \
             lk_get_quoted_var $({ printf 'SITE_%s\n' \
                 ROOT ENABLE DISABLE_WWW DISABLE_HTTPS \
                 PHP_FPM_USER PHP_FPM_TIMEOUT PHP_VERSION &&
