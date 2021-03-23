@@ -573,17 +573,25 @@ function lk_git_audit_repo() {
     lk_git_update_remote -q && [ "$ERRORS" -eq 0 ]
 }
 
+# lk_git_audit_repos [-s] [REPO...]
 function lk_git_audit_repos() {
-    local FETCH_ERRORS=0 AUDIT_ERRORS=0 LK_GIT_QUIET=${LK_GIT_QUIET-1} NOUN \
+    local SKIP_FETCH FETCH_ERRORS=0 AUDIT_ERRORS=0 NOUN \
+        LK_GIT_QUIET=${LK_GIT_QUIET-1} \
         LK_GIT_REPOS=(${LK_GIT_REPOS[@]+"${LK_GIT_REPOS[@]}"})
+    [ "${1:-}" != -s ] || { SKIP_FETCH=1 && shift; }
     [ $# -eq 0 ] || LK_GIT_REPOS=("$@")
     [ ${#LK_GIT_REPOS[@]} -gt 0 ] || lk_git_get_repos LK_GIT_REPOS
     [ ${#LK_GIT_REPOS[@]} -gt 0 ] || lk_warn "no repos found" || return
     NOUN="${#LK_GIT_REPOS[@]} $(lk_maybe_plural ${#LK_GIT_REPOS[@]} repo repos)"
-    lk_echo_array LK_GIT_REPOS |
-        lk_console_list "Fetching from all remotes in $NOUN:"
-    lk_git_with_repos -py lk_git_fetch ||
-        FETCH_ERRORS=$LK_GIT_REPO_ERROR_COUNT
+    if ! lk_is_true SKIP_FETCH; then
+        lk_echo_array LK_GIT_REPOS |
+            lk_console_list "Fetching from all remotes in $NOUN:"
+        lk_git_with_repos -py lk_git_fetch ||
+            FETCH_ERRORS=$LK_GIT_REPO_ERROR_COUNT
+    else
+        lk_echo_array LK_GIT_REPOS |
+            lk_console_list "Auditing all remotes in $NOUN:"
+    fi
     lk_git_with_repos -ty lk_git_audit_repo -s ||
         AUDIT_ERRORS=$LK_GIT_REPO_ERROR_COUNT
     [ "$FETCH_ERRORS" -eq 0 ] &&
