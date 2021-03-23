@@ -49,6 +49,10 @@
               <xs:element name="isolate" minOccurs="0">
                 <xs:complexType>
                   <xs:sequence>
+                    <xs:choice minOccurs="0">
+                      <xs:element name="no-log" />
+                      <xs:element name="no-reject" />
+                    </xs:choice>
                     <xs:element name="allow" minOccurs="0">
                       <xs:complexType>
                         <xs:sequence>

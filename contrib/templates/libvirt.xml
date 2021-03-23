@@ -17,6 +17,11 @@
     </lk:forward>
     <!-- optional -->
     <lk:isolate>
+      <!--
+        Use one of the following if required:
+        <lk:no-log />
+        <lk:no-reject />
+      -->
       <!-- optional -->
       <lk:allow>
         <lk:gateway />
