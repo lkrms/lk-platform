@@ -2733,16 +2733,19 @@ function lk_random_password() {
     printf '%s' "${PASSWORD:0:$LENGTH}"
 }
 
+# lk_base64 [-d]
 function lk_base64() {
+    local DECODE
+    [ "${1:-}" != -d ] || DECODE=1
     if lk_command_exists openssl &&
         openssl base64 &>/dev/null </dev/null; then
         # OpenSSL's implementation is ubiquitous and well-behaved
-        openssl base64
+        openssl base64 ${DECODE:+-d}
     elif lk_command_exists base64 &&
         base64 --version 2>/dev/null </dev/null | grep -i gnu >/dev/null; then
         # base64 on BSD and some legacy systems (e.g. RAIDiator 4.x) doesn't
         # wrap lines by default
-        base64
+        base64 ${DECODE:+--decode}
     else
         false
     fi
