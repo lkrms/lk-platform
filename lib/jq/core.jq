@@ -18,3 +18,6 @@ def to_sh(prefix):
 
 def to_sh:
   to_sh("");
+
+def counts:
+  . as $a | unique | map([., . as $v | [$a[] | select(. == $v)] | length]);

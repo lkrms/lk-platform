@@ -359,9 +359,9 @@ _lk_from_cache regex || {
 
         SH=$(_lk_regex_sh IP_REGEX "($IPV4_REGEX|$IPV6_REGEX)") && eval "$SH"
         SH=$(_lk_regex_sh IP_OPT_PREFIX_REGEX "($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX)") && eval "$SH"
-        SH=$(_lk_regex_sh HOST_NAME_REGEX "($DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)") && eval "$SH"
-        SH=$(_lk_regex_sh HOST_REGEX "($IPV4_REGEX|$IPV6_REGEX|$DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)") && eval "$SH"
-        SH=$(_lk_regex_sh HOST_OPT_PREFIX_REGEX "($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX|$DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)") && eval "$SH"
+        SH=$(_lk_regex_sh HOST_NAME_REGEX "($DOMAIN_PART_REGEX(\\.$DOMAIN_PART_REGEX)*)") && eval "$SH"
+        SH=$(_lk_regex_sh HOST_REGEX "($IPV4_REGEX|$IPV6_REGEX|$HOST_NAME_REGEX)") && eval "$SH"
+        SH=$(_lk_regex_sh HOST_OPT_PREFIX_REGEX "($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX|$HOST_NAME_REGEX)") && eval "$SH"
 
         # https://en.wikipedia.org/wiki/Uniform_Resource_Identifier
         _S="[a-zA-Z][-a-zA-Z0-9+.]*"                               # scheme
@@ -1098,6 +1098,48 @@ function lk_mapfile() {
 function lk_has_arg() {
     lk_in_array "$1" "${LK_ARG_ARRAY:-LK_ARGV}"
 }
+
+function lk_pass() {
+    local STATUS=$?
+    "$@" || true
+    return $STATUS
+} #### Reviewed: 2021-03-25
+
+function _lk_cache_dir() {
+    echo "${_LK_OUTPUT_CACHE:=$(
+        TMPDIR=${TMPDIR:-/tmp}
+        DIR=${TMPDIR%/}/_lk_output_cache_${EUID}_$$
+        install -d -m 00700 "$DIR" && echo "$DIR"
+    )}"
+} #### Reviewed: 2021-03-25
+
+# lk_cache [-t TTL] COMMAND [ARG...]
+#
+# Print output from a previous run if possible, otherwise execute the command
+# line and cache its output in a transient per-process cache. If -t is set, use
+# cached output for up to TTL seconds (default: 300). If TTL is 0, use cached
+# output indefinitely.
+function lk_cache() {
+    local TTL=300 FILE AGE s=/
+    [ "${1:-}" != -t ] || { TTL=$2 && shift 2; }
+    FILE=$(_lk_cache_dir)/${BASH_SOURCE[1]//"$s"/__} &&
+        { [ ! -f "${FILE}_dirty" ] || rm -f "$FILE"*; } || return
+    FILE+=_${FUNCNAME[1]}_$(lk_hash "$@") || return
+    if [ -f "$FILE" ] &&
+        { [ "$TTL" -eq 0 ] ||
+            { AGE=$(lk_file_age "$FILE") &&
+                [ "$AGE" -lt "$TTL" ]; }; }; then
+        cat "$FILE"
+    else
+        "$@" | tee "$FILE" || lk_pass rm -f "$FILE"
+    fi
+} #### Reviewed: 2021-03-25
+
+function lk_cache_mark_dirty() {
+    local FILE s=/
+    FILE=$(_lk_cache_dir)/${BASH_SOURCE[1]//"$s"/__}_dirty || return
+    touch "$FILE"
+} #### Reviewed: 2021-03-25
 
 # lk_get_outputs_of COMMAND [ARG...]
 #
@@ -2705,9 +2747,13 @@ function lk_hash() {
     local COMMAND
     COMMAND=$(lk_command_first_existing \
         xxh128sum xxh64sum xxh32sum xxhsum sha256sum shasum md5sum md5) ||
-        lk_warn "hash command not found" || return
-    printf '%s\n' "$@" | "$COMMAND" | awk '{print $1}'
-}
+        lk_warn "command not found: md5" || return
+    if [ $# -gt 0 ]; then
+        printf '%s\0' "$@" | "$COMMAND"
+    else
+        "$COMMAND"
+    fi | awk '{print $1}'
+} #### Reviewed: 2021-03-25
 
 # lk_random_hex BYTES
 function lk_random_hex() {
