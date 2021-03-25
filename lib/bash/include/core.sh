@@ -2519,15 +2519,19 @@ function lk_test_many() {
 }
 
 function lk_paths_exist() {
-    lk_test_many "test -e" "$@"
+    lk_test_many "lk_maybe_sudo test -e" "$@"
 }
 
 function lk_files_exist() {
-    lk_test_many "test -f" "$@"
+    lk_test_many "lk_maybe_sudo test -f" "$@"
 }
 
 function lk_dirs_exist() {
-    lk_test_many "test -d" "$@"
+    lk_test_many "lk_maybe_sudo test -d" "$@"
+}
+
+function lk_files_not_empty() {
+    lk_test_many "lk_maybe_sudo test -s" "$@"
 }
 
 # lk_dir_parents [-u UNTIL] DIR...
@@ -3029,6 +3033,7 @@ Usage: $(lk_myself -f) [-b|-m] [-l] [-i IGNORE] [-f SOURCE_FILE] FILE [CONTENT]"
         case "$OPT" in
         b)
             BACKUP=1
+            MOVE=
             ;;
         m)
             BACKUP=1
