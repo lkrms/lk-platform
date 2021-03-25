@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2034
-
 PAC_REPOS=(
     "sublime-text|\
 http://sublimetext.mirror/arch/stable/\$arch|\
@@ -84,7 +82,7 @@ PAC_PACKAGES+=(
 
     # networking
     networkmanager-l2tp
-    openconnect
+    networkmanager-openconnect
 
     # monitoring
     atop
@@ -275,10 +273,19 @@ PAC_PACKAGES+=(
     php-imap
     php-intl
     php-memcache
-    php-memcached #
-    php-sqlite    #
-    php7          # for phpdoc-phar
-    xdebug        #
+    php-memcached
+    php-sqlite
+    xdebug
+
+    #
+    php7           # for wp-cli
+    php7-gd        #
+    php7-imap      #
+    php7-intl      #
+    php7-memcache  #
+    php7-memcached #
+    php7-sqlite    #
+    php7-xsl       # for phpdoc-phar
 
     #
     mysql-python
@@ -289,6 +296,7 @@ PAC_PACKAGES+=(
     python-pip
     python-requests
     python-virtualenv
+    python-xmlschema
     python2
 
     #

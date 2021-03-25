@@ -1,7 +1,5 @@
 #!/bin/sh
 
-# shellcheck disable=SC2016
-
 lk_double_quote() {
     set -- "$(echo "$1." | sed -Ee 's/\\/\\\\/g' -e 's/[$`"]/\\&/g')"
     echo "\"${1%.}\""
@@ -43,6 +41,7 @@ lk_path_add_to_front() {
 
 OLD_PATH=$PATH
 PATH=$(lk_path_add_to_front /usr/local/bin)
+PATH=$(lk_path_add_to_front /opt/homebrew/bin)
 
 ! type brew >/dev/null 2>&1 ||
     ! BREW_SH=$(brew shellenv 2>/dev/null |

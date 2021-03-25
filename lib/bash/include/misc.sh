@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2015
-
 lk_include secret
 
 # lk_openconnect USER HOST [ROUTE...]

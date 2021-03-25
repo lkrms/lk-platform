@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2015,SC2120,SC2128,SC2207
+# shellcheck disable=SC2120
 
 export -n BASH_XTRACEFD SHELLOPTS
 [ -n "${_LK_ENV+1}" ] || _LK_ENV=$(declare -x)
@@ -47,7 +47,6 @@ set -E
     )
 ) && eval "$SH"; }
 
-# shellcheck disable=SC2154
 lk_include assert ${include:+${include//,/ }}
 
 # lk_die [MESSAGE]
@@ -88,7 +87,6 @@ function _lk_getopt_maybe_add_long() {
         LONG=${LONG:+$LONG,}$1
 }
 
-# shellcheck disable=SC2034
 function lk_getopt() {
     local SHORT=${1:-} LONG=${2:-} ARGC=$# _OPTS HAS_ARG OPT OPTS=()
     _lk_getopt_maybe_add_long help LK_USAGE

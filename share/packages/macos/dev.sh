@@ -6,6 +6,7 @@ HOMEBREW_CASKS=()
 MAS_APPS=()
 HOMEBREW_KEEP_FORMULAE=()
 HOMEBREW_KEEP_CASKS=()
+FORCE_IBREW=()
 LOGIN_ITEMS=()
 
 # Terminal-based
@@ -25,6 +26,9 @@ HOMEBREW_FORMULAE+=(
 
     # System
     #acme.sh
+)
+FORCE_IBREW+=(
+    unison
 )
 
 # Desktop
@@ -171,7 +175,7 @@ MAS_APPS+=(
 )
 
 # VMs and containers
-HOMEBREW_CASKS+=(
+HOMEBREW_KEEP_CASKS+=(
     virtualbox
     virtualbox-extension-pack
 )

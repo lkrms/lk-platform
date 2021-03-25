@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2034
-
 PAC_REPOS=()
 PAC_PACKAGES=()
 AUR_PACKAGES=()
@@ -34,7 +32,7 @@ AUR_PACKAGES+=(
 PAC_PACKAGES+=(
     # networking
     networkmanager-l2tp
-    openconnect
+    networkmanager-openconnect
 
     # monitoring
     atop

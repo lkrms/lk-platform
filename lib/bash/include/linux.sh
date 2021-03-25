@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2015,SC2016,SC2034,SC2153,SC2206,SC2207
+# shellcheck disable=SC2153,SC2206
 
 function lk_atop_ps_mem() {
     lk_elevate atop -R -PCPL,MEM,SWP,PAG,PRM "$@" |
@@ -539,7 +539,6 @@ function lk_fc_glyphs() {
 
 function lk_xfce4_xfconf_dump() {
     local CHANNELS
-    # shellcheck disable=SC2207
     CHANNELS=($(xfconf-query -l | tail -n+2 | sort -f))
     for CHANNEL in "${CHANNELS[@]}"; do
         while read -r PROPERTY VALUE; do
@@ -549,3 +548,7 @@ function lk_xfce4_xfconf_dump() {
 }
 
 lk_provide linux
+
+true || {
+    systemctl
+}

@@ -20,7 +20,6 @@ HOMEBREW_FORMULAE=(
     gnu-getopt
     grep
     inetutils
-    netcat
     gnu-sed
     gnu-tar
     wget
@@ -47,7 +46,7 @@ HOMEBREW_FORMULAE=(
 )
 
 HOMEBREW_CASKS=(
-    dozer
+    #dozer
     iterm2
     mysides
 
@@ -65,6 +64,7 @@ MAS_APPS=(
 )
 
 HOMEBREW_KEEP_FORMULAE=(
+    bash-completion@2
     ocaml
 
     #
@@ -76,6 +76,10 @@ HOMEBREW_KEEP_CASKS=(
 
     #
     ${HOMEBREW_KEEP_CASKS[@]+"${HOMEBREW_KEEP_CASKS[@]}"}
+)
+
+FORCE_IBREW=(
+    ${FORCE_IBREW[@]+"${FORCE_IBREW[@]}"}
 )
 
 LOGIN_ITEMS=(

@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2207
-
 for MYSQL_SERVICE in mariadb mysql mysqld; do
     ! lk_systemctl_running "$MYSQL_SERVICE" || break
     MYSQL_SERVICE=

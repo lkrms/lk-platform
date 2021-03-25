@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1091,SC2015,SC2029,SC2034
+# shellcheck disable=SC2029
 
 include='' . lk-bash-load.sh || exit
 

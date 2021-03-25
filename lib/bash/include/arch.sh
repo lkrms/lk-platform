@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2015,SC2016,SC2034,SC2120,SC2206,SC2207
+# shellcheck disable=SC2120,SC2206
 
 lk_include linux
 

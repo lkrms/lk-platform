@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2002,SC2015,SC2016,SC2029,SC2034,SC2120,SC2207
+# shellcheck disable=SC2002,SC2029,SC2120
 
 lk_include mysql provision
 
@@ -407,19 +407,16 @@ Proceed?" Y || return
     lk_console_success "Database restored successfully"
 }
 
-# lk_wp_sync_files_from_remote SSH_HOST [REMOTE_PATH [LOCAL_PATH]]
+# lk_wp_sync_files_from_remote SSH_HOST [REMOTE_PATH [LOCAL_PATH [RSYNC_ARG...]]]
 function lk_wp_sync_files_from_remote() {
-    local REMOTE_PATH="${2:-public_html}" LOCAL_PATH \
-        ARGS=(-vrlptH -x --delete
-            ${RSYNC_ARGS[@]+"${RSYNC_ARGS[@]}"}
-            ${LK_RSYNC_ARGS:+"$LK_RSYNC_ARGS"}) \
-        KEEP_LOCAL EXCLUDE EXIT_STATUS=0
+    local REMOTE_PATH=${2:-public_html} LOCAL_PATH KEEP_LOCAL EXCLUDE STATUS=0 \
+        ARGS=(-vrlptH -x --delete "${@:4}")
     [ $# -ge 1 ] || lk_usage "\
-Usage: $(lk_myself -f) SSH_HOST [REMOTE_PATH [LOCAL_PATH]]" || return
+Usage: $(lk_myself -f) SSH_HOST [REMOTE_PATH [LOCAL_PATH [RSYNC_ARG...]]]" || return
     # files that already exist on the local system will be added to --exclude
     KEEP_LOCAL=(
-        "wp-config.php"
-        ".git"
+        wp-config.php
+        .git
         ${LK_WP_SYNC_KEEP_LOCAL[@]+"${LK_WP_SYNC_KEEP_LOCAL[@]}"}
     )
     EXCLUDE=(
@@ -427,13 +424,14 @@ Usage: $(lk_myself -f) SSH_HOST [REMOTE_PATH [LOCAL_PATH]]" || return
         "php_error*.log"
         {"error*",debug}"?log"
         /wp-content/{backup,cache,upgrade,updraft}/
+        /wp-content/uploads/{backup,cache}/
         ${LK_WP_SYNC_EXCLUDE[@]+"${LK_WP_SYNC_EXCLUDE[@]}"}
     )
-    LOCAL_PATH="${3:-$(lk_wp_get_site_root 2>/dev/null)}" ||
+    LOCAL_PATH=${3:-$(lk_wp_get_site_root 2>/dev/null)} ||
         LOCAL_PATH=~/public_html
     lk_console_message "Preparing to sync WordPress files"
-    REMOTE_PATH="${REMOTE_PATH%/}"
-    LOCAL_PATH="${LOCAL_PATH%/}"
+    REMOTE_PATH=${REMOTE_PATH%/}
+    LOCAL_PATH=${LOCAL_PATH%/}
     lk_wp_is_quiet || {
         lk_console_detail "Source:" "$1:$REMOTE_PATH"
         lk_console_detail "Destination:" "$LOCAL_PATH"
@@ -450,11 +448,11 @@ Usage: $(lk_myself -f) SSH_HOST [REMOTE_PATH [LOCAL_PATH]]" || return
     lk_confirm "LOCAL CHANGES WILL BE PERMANENTLY LOST. Proceed?" Y ||
         return
     [ -d "$LOCAL_PATH" ] || mkdir -p "$LOCAL_PATH" || return
-    rsync "${ARGS[@]}" || EXIT_STATUS="$?"
-    [ "$EXIT_STATUS" -eq 0 ] &&
+    rsync "${ARGS[@]}" || STATUS=$?
+    [ "$STATUS" -eq 0 ] &&
         lk_console_success "File sync completed successfully" ||
         lk_console_error "File sync failed"
-    return "$EXIT_STATUS"
+    return "$STATUS"
 }
 
 # lk_wp_reapply_config

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2015,SC2016,SC2029,SC2034,SC2207
+# shellcheck disable=SC2029
 
 lk_bin_depth=1 include=wordpress . lk-bash-load.sh || exit
 
@@ -176,9 +176,9 @@ fi
 }
 
 # Migrate files
-RSYNC_ARGS=(${EXCLUDE[@]+"${EXCLUDE[@]/#/--exclude=}"} "$@")
 LK_NO_INPUT=1 \
-    lk_wp_sync_files_from_remote "$SSH_HOST" "$REMOTE_PATH" "$LOCAL_PATH"
+    lk_wp_sync_files_from_remote "$SSH_HOST" "$REMOTE_PATH" "$LOCAL_PATH" \
+    ${EXCLUDE[@]+"${EXCLUDE[@]/#/--exclude=}"} "$@"
 
 # Migrate database
 DB_FILE=~/.lk-platform/cache/db/$SSH_HOST-${REMOTE_PATH//\//_}-$(lk_date_ymdhms).sql.gz

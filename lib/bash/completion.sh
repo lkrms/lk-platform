@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2016,SC2034,SC2206,SC2207
+# shellcheck disable=SC2206
 
 lk_bash_at_least 4 2 || return 0
 

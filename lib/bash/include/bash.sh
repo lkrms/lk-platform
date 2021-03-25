@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2002,SC2015,SC2120,SC2207
+# shellcheck disable=SC2002,SC2120
 
 function lk_bash_is_builtin() {
     [ "$(type -t "$1")" = builtin ]
@@ -27,7 +27,9 @@ function lk_bash_unset_local_variable_names() {
 function lk_bash_command_literals() {
     cat ${1+"$1"} |
         shfmt -tojson |
-        jq -r '..|select(type=="object").Args[0].Parts[0]|select(.Type=="Lit").Value'
+        jq -r \
+            --arg regex '^lk_(elevate(_if_error)?|keep_trying|log_bypass(_std(out|err))?|maybe(_(elevate|sudo|trace))?|require_output|run(_detail)?|tty)$' \
+            '..|select(type=="object")|((.Args[0].Parts[0]|select(.Type=="Lit").Value),(select(.Args[]?.Parts[]?|select(type=="object" and .Type=="Lit" and (.Value|test($regex)))|length>0)|[.Args[].Parts[]|(if .Type=="Lit" then (if .Value|test($regex) then "" else .Value end) else null end)]|first|select(.!=null)))'
 }
 
 function lk_bash_array_literals() {
@@ -95,7 +97,7 @@ SCRIPT or any SOURCE. If -g is set, store results in global array variables:
     PACKAGES=()
     for COMMAND in "${COMMANDS[@]}"; do
         [[ ! $COMMAND =~ ^(lk_|\./) ]] || continue
-        _PATH=$(which "$COMMAND" 2>/dev/null) &&
+        _PATH=$(type -P "$COMMAND") &&
             _PATH=$(realpath "$_PATH") &&
             COMMAND_FILES[${#COMMAND_FILES[@]}]=$_PATH$(
                 [ "${COMMAND##*/}" = "${_PATH##*/}" ] || echo " ($COMMAND)"

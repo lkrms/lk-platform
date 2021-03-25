@@ -1,68 +1,139 @@
 #!/bin/bash
 
-# shellcheck disable=SC2016
+function lk_iptables() {
+    local STATUS=0
+    [ "$EUID" -eq 0 ] || {
+        lk_elevate bash -c "$(
+            declare -f lk_iptables
+            lk_quote_args lk_iptables "$@"
+        )"
+        return
+    }
+    iptables "$@" || STATUS=$?
+    ip6tables "$@" || return
+    return "$STATUS"
+} #### Reviewed: 2021-03-22
 
-# lk_iptables_both FUNCTION [ARG...]
-#
-# Run the IPv4 and IPv6 invocations of the given lk_iptables command.
-function lk_iptables_both() {
-    local EXIT_STATUS=0
-    [[ $1 =~ ^lk_iptables_ ]] && [ "$1" != lk_iptables_both ] ||
-        lk_warn "$1 is not a valid lk_iptables function" || return
-    "$1" -4 "${@:2}" || EXIT_STATUS=$?
-    "$1" -6 "${@:2}" || EXIT_STATUS=$?
-    return "$EXIT_STATUS"
-}
+# _lk_iptables_args MIN_PARAMS USAGE [ARG...]
+function _lk_iptables_args() {
+    local OPTIND OPTARG OPT PARAMS=$1 LK_USAGE COMMAND=(iptables) \
+    _LK_STACK_DEPTH=1
+    [ -z "${LK_IPTABLES_46:-}" ] ||
+        set -- "-${LK_IPTABLES_46#-}" "$@"
+    LK_USAGE="\
+Usage: $(lk_myself -f) [-4|-6|-b]${2:+ $2}"
+    shift 2
+    while getopts ":46b" OPT; do
+        case "$OPT" in
+        4)
+            COMMAND=(iptables)
+            ;;
+        6)
+            COMMAND=(ip6tables)
+            ;;
+        b)
+            COMMAND=(lk_iptables)
+            ;;
+        \? | :)
+            lk_usage
+            return 1
+            ;;
+        esac
+    done
+    shift $((OPTIND - 1))
+    [ $# -ge "$PARAMS" ] || lk_usage || return
+    ! lk_verbose ||
+        COMMAND+=(-v)
+    printf 'local LK_USAGE=%q COMMAND=(%s)\n' \
+        "$LK_USAGE" \
+        "${COMMAND[*]}"
+    printf 'shift %s\n' \
+        $((OPTIND - 1))
+} #### Reviewed: 2021-03-22
 
-function _lk_iptables_which() {
-    local COMMAND=iptables
-    [ "${1:-}" != -4 ] || shift
-    [ "${1:-}" != -6 ] || { COMMAND=ip6tables && shift; }
-    printf 'local %s=%q\n' COMMAND "$COMMAND"
-    printf 'set --'
-    printf ' %q' "$@"
-}
-
-# lk_iptables_maybe_insert [-4|-6] CHAIN [-t TABLE] RULE_SPEC
+# lk_iptables_maybe_insert CHAIN [-t TABLE] RULE_SPEC
 function lk_iptables_maybe_insert() {
-    eval "$(_lk_iptables_which "$@")"
-    local IPTABLES_COMMAND=${_LK_IPTABLES_COMMAND:--I}
-    lk_elevate bash -c \
-        '$1 -C "${@:3}" 2>/dev/null || $1 $2 "${@:3}"' \
-        bash "$COMMAND" "$IPTABLES_COMMAND" "$@"
-}
+    local SH
+    SH=$(_lk_iptables_args 2 "CHAIN [-t TABLE] RULE_SPEC" "$@") &&
+        eval "$SH" || return
+    lk_elevate bash -c "$(
+        function _maybe_insert() {
+            "$1" -C "${@:3}" &>/dev/null || "$@"
+        }
+        declare -f lk_iptables _maybe_insert
+        lk_quote_args _maybe_insert \
+            "${COMMAND[@]}" "${_LK_IPTABLES_SUBCOMMAND:--I}" "$@"
+    )"
+} #### Reviewed: 2021-03-22
 
-# lk_iptables_maybe_append [-4|-6] CHAIN [-t TABLE] RULE_SPEC
+# lk_iptables_maybe_append CHAIN [-t TABLE] RULE_SPEC
 function lk_iptables_maybe_append() {
-    _LK_IPTABLES_COMMAND=-A \
+    local SH
+    SH=$(_lk_iptables_args 2 "CHAIN [-t TABLE] RULE_SPEC" "$@") &&
+        eval "$SH" || return
+    _LK_IPTABLES_SUBCOMMAND=-A \
         lk_iptables_maybe_insert "$@"
-}
+} #### Reviewed: 2021-03-22
 
-# lk_iptables_has_chain [-4|-6] CHAIN [TABLE]
+# lk_iptables_has_chain CHAIN [TABLE]
 function lk_iptables_has_chain() {
-    eval "$(_lk_iptables_which "$@")"
-    [ -n "${1:-}" ] || lk_warn "no chain" || return
-    lk_elevate "$COMMAND" ${2:+-t "$2"} --numeric --list "$1" &>/dev/null
-}
+    local SH
+    SH=$(_lk_iptables_args 1 "CHAIN [TABLE]" "$@") && eval "$SH" || return
+    lk_elevate "${COMMAND[@]}" ${2:+-t "$2"} --numeric --list "$1" &>/dev/null
+} #### Reviewed: 2021-03-22
 
-# lk_iptables_flush_chain [-4|-6] CHAIN [TABLE]
+# lk_iptables_flush_chain CHAIN [TABLE]
 function lk_iptables_flush_chain() {
-    eval "$(_lk_iptables_which "$@")"
-    [ -n "${1:-}" ] || lk_warn "no chain" || return
+    local SH
+    SH=$(_lk_iptables_args 1 "CHAIN [TABLE]" "$@") && eval "$SH" || return
     if lk_iptables_has_chain "$@"; then
-        lk_elevate "$COMMAND" ${2:+-t "$2"} --flush "$1"
+        lk_elevate "${COMMAND[@]}" ${2:+-t "$2"} --flush "$1"
     else
-        lk_elevate "$COMMAND" ${2:+-t "$2"} --new-chain "$1"
+        lk_elevate "${COMMAND[@]}" ${2:+-t "$2"} --new-chain "$1"
     fi
-}
+} #### Reviewed: 2021-03-22
 
-# lk_iptables_delete_chain [-4|-6] CHAIN [TABLE]
+# lk_iptables_delete_chain CHAIN [TABLE]
 function lk_iptables_delete_chain() {
-    eval "$(_lk_iptables_which "$@")"
-    [ -n "${1:-}" ] || lk_warn "no chain" || return
+    local SH
+    SH=$(_lk_iptables_args 1 "CHAIN [TABLE]" "$@") && eval "$SH" || return
     if lk_iptables_has_chain "$@"; then
-        lk_elevate "$COMMAND" ${2:+-t "$2"} --delete-chain "$1"
+        lk_elevate "${COMMAND[@]}" ${2:+-t "$2"} --delete-chain "$1"
     fi
-}
+} #### Reviewed: 2021-03-22
+
+# lk_iptables_insert CHAIN [-t TABLE] RULE_SPEC
+function lk_iptables_insert() {
+    local SH
+    SH=$(_lk_iptables_args 2 "CHAIN [-t TABLE] RULE_SPEC" "$@") &&
+        eval "$SH" || return
+    lk_elevate "${COMMAND[@]}" -I "$@"
+} #### Reviewed: 2021-03-22
+
+# lk_iptables_append CHAIN [-t TABLE] RULE_SPEC
+function lk_iptables_append() {
+    local SH
+    SH=$(_lk_iptables_args 2 "CHAIN [-t TABLE] RULE_SPEC" "$@") &&
+        eval "$SH" || return
+    lk_elevate "${COMMAND[@]}" -A "$@"
+} #### Reviewed: 2021-03-22
+
+# lk_iptables_delete CHAIN [-t TABLE] RULE_SPEC
+function lk_iptables_delete() {
+    local SH
+    SH=$(_lk_iptables_args 2 "CHAIN [-t TABLE] RULE_SPEC" "$@") &&
+        eval "$SH" || return
+    lk_elevate "${COMMAND[@]}" -D "$@"
+} #### Reviewed: 2021-03-22
+
+# lk_iptables_delete_all CHAIN [-t TABLE] RULE_SPEC
+function lk_iptables_delete_all() {
+    local SH
+    SH=$(_lk_iptables_args 2 "CHAIN [-t TABLE] RULE_SPEC" "$@") &&
+        eval "$SH" || return
+    while lk_elevate "${COMMAND[@]}" -C "$@" &>/dev/null; do
+        lk_elevate "${COMMAND[@]}" -D "$@" || break
+    done
+} #### Reviewed: 2021-03-22
 
 lk_provide iptables

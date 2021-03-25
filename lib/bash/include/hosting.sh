@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2015,SC2046,SC2207
+# shellcheck disable=SC2046
 
 lk_include debian git provision
 
@@ -66,7 +66,7 @@ function lk_hosting_get_site_settings() {
         unset "${!SITE_@}"
         FILE=$LK_BASE/etc/sites/$1.conf
         [ ! -e "$FILE" ] || . "$FILE" || exit
-        _LK_VAR_PREFIX_DEPTH=1 \
+        _LK_STACK_DEPTH=1 \
             lk_get_quoted_var $({ printf 'SITE_%s\n' \
                 ROOT ENABLE DISABLE_WWW DISABLE_HTTPS \
                 PHP_FPM_USER PHP_FPM_TIMEOUT PHP_VERSION &&
@@ -164,7 +164,7 @@ function lk_hosting_configure_backup() {
             [[ ! $AUTO_REBOOT_TIME =~ ^0*([0-9]+):0*([0-9]+)$ ]] ||
             BACKUP_SCHEDULE="${BASH_REMATCH[2]} $(((BASH_REMATCH[1] + 23) % 24)) * * *"
         BACKUP_SCHEDULE=${BACKUP_SCHEDULE:-"0 1 * * *"}
-        INHIBIT_PATH=$(type -P systemd-inhibit) &&
+        INHIBIT_PATH=$(command -pv systemd-inhibit) &&
             lk_crontab_apply "$REGEX" "$(printf \
                 '%s %s >%q 2>&1 || echo "Scheduled backup failed"' \
                 "$BACKUP_SCHEDULE" \

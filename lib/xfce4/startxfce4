@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# shellcheck disable=SC1090,SC2015,SC2030,SC2031
+# shellcheck disable=SC2030,SC2031
 
 lk_double_quote() {
     set -- "$(echo "$1." | sed -Ee 's/\\/\\\\/g' -e 's/[$`"]/\\&/g')"

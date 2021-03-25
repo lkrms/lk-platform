@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2015,SC2153,SC2206
+# shellcheck disable=SC2153,SC2206
 
 set -euo pipefail
 _DEPTH=2

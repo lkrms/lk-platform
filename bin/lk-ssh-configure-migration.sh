@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1083,SC1087,SC2001,SC2015,SC2034
+# shellcheck disable=SC1083,SC1087,SC2001
 
 if [[ ! ${1:-} =~ ^(--new|--old)$ ]]; then
 

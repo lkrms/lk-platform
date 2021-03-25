@@ -1,11 +1,18 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC1091,SC2015,SC2016,SC2034,SC2046,SC2086,SC2094,SC2116,SC2120,SC2154,SC2207
+# shellcheck disable=SC2046,SC2086,SC2094,SC2116,SC2120
 
 export -n BASH_XTRACEFD SHELLOPTS
 [ -n "${_LK_ENV+1}" ] || _LK_ENV=$(declare -x)
 
 USER=${USER:-$(id -un)} || return
+
+# lk_bash_at_least MAJOR [MINOR]
+function lk_bash_at_least() {
+    [ "${BASH_VERSINFO[0]}" -eq "$1" ] &&
+        [ "${BASH_VERSINFO[1]}" -ge "${2:-0}" ] ||
+        [ "${BASH_VERSINFO[0]}" -gt "$1" ]
+}
 
 function lk_command_exists() {
     type -P "$1" >/dev/null
@@ -13,6 +20,10 @@ function lk_command_exists() {
 
 function lk_is_macos() {
     [[ $OSTYPE == darwin* ]]
+}
+
+function lk_is_apple_silicon() {
+    lk_is_macos && [[ $MACHTYPE =~ ^(arm|aarch)64- ]]
 }
 
 function lk_is_linux() {
@@ -64,6 +75,25 @@ function lk_first_existing() {
     [ $# -gt 0 ] && echo "$1"
 }
 
+if lk_bash_at_least 4 0; then
+    function lk_eval_input() {
+        . /dev/stdin
+    }
+else
+    # On Bash 3.2, output is "lost when a redirection is acting on the shell's
+    # output file descriptor", which seems to be why these don't work
+    # consistently:
+    # - . /dev/stdin
+    # - . <(cat /dev/stdin)
+    function lk_eval_input() {
+        local FILE
+        FILE=$(mktemp) &&
+            cat >"$FILE" &&
+            . "$FILE" || return
+        rm -f -- "$FILE" || true
+    }
+fi
+
 _LK_GNU_COMMANDS=(
     awk
     chgrp chmod chown cp
@@ -72,7 +102,6 @@ _LK_GNU_COMMANDS=(
     getopt grep
     ln
     mktemp mv
-    nc
     realpath
     sed sort stat
     tar
@@ -100,7 +129,7 @@ function _lk_to_cache() {
     if [ -n "$_LK_CACHE" ]; then
         cat >"$FILE" && . "$FILE"
     else
-        . /dev/stdin
+        lk_eval_input
     fi
 }
 
@@ -110,7 +139,9 @@ function _lk_gnu_command() {
         PREFIX=g
         HOMEBREW_PREFIX=${HOMEBREW_PREFIX-$(brew --prefix 2>/dev/null)} ||
             HOMEBREW_PREFIX=
-        COMMAND=${HOMEBREW_PREFIX:-/usr/local}
+        COMMAND=${HOMEBREW_PREFIX:-$(lk_is_apple_silicon &&
+            echo /opt/homebrew ||
+            echo /usr/local)}
     }
     case "$1" in
     diff)
@@ -120,9 +151,6 @@ function _lk_gnu_command() {
         ;;
     awk)
         COMMAND=gawk
-        ;;
-    nc)
-        COMMAND=netcat
         ;;
     getopt)
         ! lk_is_macos &&
@@ -194,7 +222,7 @@ function lk_myself() {
     if ! lk_is_true FUNC && lk_is_script_running; then
         echo "${0##*/}"
     else
-        echo "${FUNCNAME[$((1 + ${1:-0}))]:-${0##*/}}"
+        echo "${FUNCNAME[$((1 + ${1:-0} + ${_LK_STACK_DEPTH:-0}))]:-${0##*/}}"
     fi
     return "$EXIT_STATUS"
 }
@@ -247,8 +275,9 @@ function _lk_usage_format() {
     BOLD=$(lk_escape_ere_replace "$LK_BOLD")
     RESET=$(lk_escape_ere_replace "$LK_RESET")
     sed -E \
-        -e "s/^($S*(([uU]sage|[oO]r):$S+)?)($CMD)($S|\$)/\1$BOLD\4$RESET\5/" \
-        -e "s/^\w.*:\$/$BOLD&$RESET/" <<<"$1"
+        -e "s/^($S*([uU]sage|[oO]r):$S+)($CMD)($S|\$)/\1$BOLD\3$RESET\4/" \
+        -e "s/^[a-zA-Z0-9 ]+:\$/$BOLD&$RESET/" \
+        -e "s/^\\\\($NS)/\\1/" <<<"$1"
 }
 
 function lk_usage() {
@@ -299,8 +328,12 @@ function lk_regex_implode() {
 }
 
 function _lk_var_prefix() {
-    [[ "${FUNCNAME[$((${_LK_VAR_PREFIX_DEPTH:-0} + 2))]:-}" =~ ^(source|main)?$ ]] ||
-        printf 'local '
+    case "${FUNCNAME[$((${_LK_STACK_DEPTH:-0} + 2))]:-}" in
+    '' | source | main)
+        return
+        ;;
+    esac
+    printf 'local '
 }
 
 _lk_from_cache regex || {
@@ -326,9 +359,9 @@ _lk_from_cache regex || {
 
         SH=$(_lk_regex_sh IP_REGEX "($IPV4_REGEX|$IPV6_REGEX)") && eval "$SH"
         SH=$(_lk_regex_sh IP_OPT_PREFIX_REGEX "($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX)") && eval "$SH"
-        SH=$(_lk_regex_sh HOST_NAME_REGEX "($DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)") && eval "$SH"
-        SH=$(_lk_regex_sh HOST_REGEX "($IPV4_REGEX|$IPV6_REGEX|$DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)") && eval "$SH"
-        SH=$(_lk_regex_sh HOST_OPT_PREFIX_REGEX "($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX|$DOMAIN_PART_REGEX|$DOMAIN_NAME_REGEX)") && eval "$SH"
+        SH=$(_lk_regex_sh HOST_NAME_REGEX "($DOMAIN_PART_REGEX(\\.$DOMAIN_PART_REGEX)*)") && eval "$SH"
+        SH=$(_lk_regex_sh HOST_REGEX "($IPV4_REGEX|$IPV6_REGEX|$HOST_NAME_REGEX)") && eval "$SH"
+        SH=$(_lk_regex_sh HOST_OPT_PREFIX_REGEX "($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX|$HOST_NAME_REGEX)") && eval "$SH"
 
         # https://en.wikipedia.org/wiki/Uniform_Resource_Identifier
         _S="[a-zA-Z][-a-zA-Z0-9+.]*"                               # scheme
@@ -408,15 +441,8 @@ done; return "$EXIT_STATUS"; }\n' _lk_get_regex "${SH//$'\n'/$'\n        '}"
 # expressions or for each REGEX_NAME.
 function lk_get_regex() {
     [ $# -gt 0 ] || set -- "${_LK_REGEX[@]}"
-    _LK_VAR_PREFIX_DEPTH=1 \
+    _LK_STACK_DEPTH=1 \
         _lk_get_regex "$@"
-}
-
-# lk_bash_at_least MAJOR [MINOR]
-function lk_bash_at_least() {
-    [ "${BASH_VERSINFO[0]}" -eq "$1" ] &&
-        [ "${BASH_VERSINFO[1]}" -ge "${2:-0}" ] ||
-        [ "${BASH_VERSINFO[0]}" -gt "$1" ]
 }
 
 if lk_bash_at_least 4 2; then
@@ -567,7 +593,7 @@ function lk_get_env() {
             <({ [ $# -gt 0 ] && lk_echo_args "$@" || lk_var_list_all; } |
                 sed -E "/$_LK_IGNORE_REGEX/d" | sort -u))
         [ $# -eq 0 ] ||
-            _LK_VAR_PREFIX_DEPTH=1 \
+            _LK_STACK_DEPTH=1 \
                 ${_LK_VAR_LIST-lk_get_quoted_var} \
                 ${_LK_VAR_LIST+lk_echo_args} \
                 "$@"
@@ -645,11 +671,12 @@ function lk_regex_case_insensitive() {
     echo "$REGEX"
 }
 
-# lk_regex_expand_whitespace STRING
+# lk_regex_expand_whitespace [-o] STRING
 #
 # Replace each unquoted sequence of one or more whitespace characters in STRING
-# with "[[:blank:]]+". Escaped delimiters within double- and single-quoted
-# sequences are recognised.
+# with "[[:blank:]]+". If -o is set, make whitespace optional with
+# "[[:blank:]]*". Escaped delimiters within double- and single-quoted sequences
+# are recognised.
 #
 # Example:
 #
@@ -659,10 +686,12 @@ function lk_regex_expand_whitespace() {
     local NOT_SPECIAL="[^'\"[:blank:]]*[^\\]" \
         ESCAPED_WHITESPACE="(\\\\[[:blank:]])*" \
         QUOTED_SINGLE="(''|'([^']|\\\\')*[^\\]')" \
-        QUOTED_DOUBLE="(\"\"|\"([^\"]|\\\\\")*[^\\]\")"
+        QUOTED_DOUBLE="(\"\"|\"([^\"]|\\\\\")*[^\\]\")" \
+        QUANTIFIER="+"
+    [ "${1:-}" != -o ] || { QUANTIFIER="*" && shift; }
     sed -E "\
 :start
-s/^(($NOT_SPECIAL|$ESCAPED_WHITESPACE|$QUOTED_SINGLE|$QUOTED_DOUBLE)*)$S+/\\1[[:blank:]]+/
+s/^(($NOT_SPECIAL|$ESCAPED_WHITESPACE|$QUOTED_SINGLE|$QUOTED_DOUBLE)*)$S+/\\1[[:blank:]]$QUANTIFIER/
 t start" <<<"$1"
 }
 
@@ -881,7 +910,8 @@ function _lk_array_action() {
 function lk_echo_args() {
     local DELIM=${LK_Z:+'\0'}
     [ "${1:-}" != -z ] || { DELIM='\0' && shift; }
-    printf "%s${DELIM:-\\n}" "$@"
+    [ $# -eq 0 ] ||
+        printf "%s${DELIM:-\\n}" "$@"
 }
 
 # lk_echo_array [-z] [ARRAY...]
@@ -889,6 +919,14 @@ function lk_echo_array() {
     local LK_Z=${LK_Z-}
     [ "${1:-}" != -z ] || { LK_Z=1 && shift; }
     _lk_array_action lk_echo_args "$@"
+}
+
+# lk_array_merge NEW_ARRAY [ARRAY...]
+function lk_array_merge() {
+    [ $# -ge 2 ] || return
+    eval "$1=($(for i in "${@:2}"; do
+        printf '${%s[@]+"${%s[@]}"}\n' "$i" "$i"
+    done))"
 }
 
 # lk_quote_args [ARG...]
@@ -984,12 +1022,13 @@ function lk_array_search() {
 # final argument. If -z is set, use NUL instead of newline as the input
 # delimiter.
 function lk_xargs() {
-    local LK_Z=${LK_Z-} _LK_NUL_READ=(-d '') _LK_LINE
+    local LK_Z=${LK_Z-} _LK_NUL_READ=(-d '') _LK_LINE _LK_STATUS=0
     [ "${1:-}" != -z ] || { LK_Z=1 && shift; }
     while IFS= read -r ${LK_Z:+"${_LK_NUL_READ[@]}"} _LK_LINE ||
         [ -n "$_LK_LINE" ]; do
-        "$@" "$_LK_LINE" || return
+        "$@" "$_LK_LINE" || _LK_STATUS=$?
     done
+    return "$_LK_STATUS"
 }
 
 # _lk_maybe_xargs FIXED_ARGS [ARG...]
@@ -1059,6 +1098,48 @@ function lk_mapfile() {
 function lk_has_arg() {
     lk_in_array "$1" "${LK_ARG_ARRAY:-LK_ARGV}"
 }
+
+function lk_pass() {
+    local STATUS=$?
+    "$@" || true
+    return $STATUS
+} #### Reviewed: 2021-03-25
+
+function _lk_cache_dir() {
+    echo "${_LK_OUTPUT_CACHE:=$(
+        TMPDIR=${TMPDIR:-/tmp}
+        DIR=${TMPDIR%/}/_lk_output_cache_${EUID}_$$
+        install -d -m 00700 "$DIR" && echo "$DIR"
+    )}"
+} #### Reviewed: 2021-03-25
+
+# lk_cache [-t TTL] COMMAND [ARG...]
+#
+# Print output from a previous run if possible, otherwise execute the command
+# line and cache its output in a transient per-process cache. If -t is set, use
+# cached output for up to TTL seconds (default: 300). If TTL is 0, use cached
+# output indefinitely.
+function lk_cache() {
+    local TTL=300 FILE AGE s=/
+    [ "${1:-}" != -t ] || { TTL=$2 && shift 2; }
+    FILE=$(_lk_cache_dir)/${BASH_SOURCE[1]//"$s"/__} &&
+        { [ ! -f "${FILE}_dirty" ] || rm -f "$FILE"*; } || return
+    FILE+=_${FUNCNAME[1]}_$(lk_hash "$@") || return
+    if [ -f "$FILE" ] &&
+        { [ "$TTL" -eq 0 ] ||
+            { AGE=$(lk_file_age "$FILE") &&
+                [ "$AGE" -lt "$TTL" ]; }; }; then
+        cat "$FILE"
+    else
+        "$@" | tee "$FILE" || lk_pass rm -f "$FILE"
+    fi
+} #### Reviewed: 2021-03-25
+
+function lk_cache_mark_dirty() {
+    local FILE s=/
+    FILE=$(_lk_cache_dir)/${BASH_SOURCE[1]//"$s"/__}_dirty || return
+    touch "$FILE"
+} #### Reviewed: 2021-03-25
 
 # lk_get_outputs_of COMMAND [ARG...]
 #
@@ -1133,7 +1214,7 @@ function lk_lock_drop() {
     _lk_lock_check_args "$@" || return "$EXIT_STATUS"
     if [ "${!1:+1}${!2:+1}" = 11 ]; then
         eval "exec ${!2}>&-" &&
-            rm -f "${!1}"
+            rm -f -- "${!1}"
     fi
     unset "${@:1:2}"
 }
@@ -1213,7 +1294,7 @@ function lk_log_output() {
     [ -n "${_LK_LOG_CMDLINE+1}" ] ||
         local _LK_LOG_CMDLINE=("$0" ${LK_ARGV[@]+"${LK_ARGV[@]}"})
     LOG_CMD=$(type -P "${_LK_LOG_CMDLINE[0]}") ||
-        lk_warn "command not found: ${_LK_LOG_CMDLINE[0]}" || return
+        LOG_CMD=${_LK_LOG_CMDLINE[0]##*/}
     _LK_LOG_CMDLINE[0]=$LOG_CMD
     ARGC=$((${#_LK_LOG_CMDLINE[@]} - 1))
     if [ $# -ge 1 ]; then
@@ -1412,11 +1493,21 @@ function lk_tty_columns() {
     echo "${_COLUMNS:-80}"
 }
 
+function _lk_tty_message_length() {
+    echo "${MESSAGE_LENGTH:=$(lk_tty_length "$PREFIX$MESSAGE")}"
+}
+
+function _lk_tty_message2_length() {
+    echo "${MESSAGE2_LENGTH:=$(lk_tty_length "$PREFIX$MESSAGE $MESSAGE2")}"
+}
+
 # lk_console_message MESSAGE [[MESSAGE2] COLOUR]
 function lk_console_message() {
-    local MESSAGE=$1 MESSAGE2 COLOUR PREFIX=${LK_TTY_PREFIX-==> } \
-        WIDTH INDENT=0 SPACES LENGTH \
-        MESSAGE_HAS_NEWLINE MESSAGE2_HAS_NEWLINE OUTPUT
+    local IFS MESSAGE=$1 MESSAGE_HAS_NEWLINE MESSAGE_LENGTH \
+        MESSAGE2 MESSAGE2_HAS_NEWLINE MESSAGE2_LENGTH \
+        COLOUR WIDTH PREFIX=${LK_TTY_PREFIX-==> } SPACES INDENT=0 OUTPUT
+    # Save ourselves from word-splitting hell
+    unset IFS
     shift
     [ $# -le 1 ] || {
         MESSAGE2=$1
@@ -1424,14 +1515,21 @@ function lk_console_message() {
     }
     COLOUR=${1-$LK_TTY_COLOUR}
     WIDTH=${LK_TTY_WIDTH:-$(lk_tty_columns)}
+    [ "${LK_TTY_NO_BREAK:-0}" -ne 1 ] ||
+        local LK_TTY_NO_FOLD=1
     # If MESSAGE breaks over multiple lines (or will after wrapping), align
     # second and subsequent lines with the first
-    ! lk_has_newline MESSAGE || MESSAGE_HAS_NEWLINE=1
-    if lk_is_true MESSAGE_HAS_NEWLINE || { ! lk_is_true LK_TTY_NO_FOLD &&
-        [ "$(lk_tty_length "$PREFIX$MESSAGE")" -gt "$WIDTH" ]; }; then
+    [[ ! $MESSAGE == *$'\n'* ]] || {
+        MESSAGE_HAS_NEWLINE=1
+        # LK_TTY_NO_BREAK only makes sense when MESSAGE prints on one line
+        local LK_TTY_NO_BREAK=0
+    }
+    if [ "${MESSAGE_HAS_NEWLINE:-0}" -eq 1 ] ||
+        { [ "${LK_TTY_NO_FOLD:-0}" -ne 1 ] &&
+            [ "$(_lk_tty_message_length)" -gt "$WIDTH" ]; }; then
         SPACES=$'\n'"$(lk_repeat " " ${#PREFIX})"
         # Don't fold if MESSAGE is pre-formatted
-        lk_is_true MESSAGE_HAS_NEWLINE ||
+        [ "${MESSAGE_HAS_NEWLINE:-0}" -eq 1 ] ||
             MESSAGE=$(lk_fold "$MESSAGE" $((WIDTH - ${#PREFIX})))
         MESSAGE=${MESSAGE//$'\n'/$SPACES}
         MESSAGE_HAS_NEWLINE=1
@@ -1440,11 +1538,11 @@ function lk_console_message() {
     [ -z "${MESSAGE2:-}" ] || {
         # If MESSAGE and MESSAGE2 are both one-liners, print them on one line
         # with a space between
-        ! lk_has_newline MESSAGE2 || MESSAGE2_HAS_NEWLINE=1
-        if ! lk_is_true MESSAGE2_HAS_NEWLINE &&
-            ! lk_is_true MESSAGE_HAS_NEWLINE &&
-            { lk_is_true LK_TTY_NO_FOLD ||
-                [ "$((LENGTH = $(lk_tty_length "$PREFIX$MESSAGE $MESSAGE2")))" -le "$WIDTH" ]; }; then
+        [[ ! $MESSAGE2 == *$'\n'* ]] || MESSAGE2_HAS_NEWLINE=1
+        if [ ${MESSAGE2_HAS_NEWLINE:-0} -eq 0 ] &&
+            [ ${MESSAGE_HAS_NEWLINE:-0} -eq 0 ] &&
+            { [ "${LK_TTY_NO_FOLD:-0}" -eq 1 ] ||
+                [ "$(_lk_tty_message2_length)" -le "$WIDTH" ]; }; then
             MESSAGE2=" $MESSAGE2"
         else
             # Otherwise:
@@ -1452,61 +1550,78 @@ function lk_console_message() {
             #   keep INDENT=2 (increase MESSAGE2's left padding)
             # - If only MESSAGE2 spans multiple lines, set INDENT=-2 (decrease
             #   the left padding of MESSAGE2)
-            if { lk_is_true MESSAGE2_HAS_NEWLINE || [ -n "${LENGTH:-}" ]; } &&
-                ! lk_is_true MESSAGE_HAS_NEWLINE; then
-                INDENT=-2
+            # - If LK_TTY_NO_BREAK is set, align MESSAGE2 under the first line
+            if [ "${LK_TTY_NO_BREAK:-0}" -ne 1 ]; then
+                if { [ ${MESSAGE2_HAS_NEWLINE:-0} -eq 1 ] ||
+                    [ -n "${MESSAGE2_LENGTH:-}" ]; } &&
+                    [ "${MESSAGE_HAS_NEWLINE:-0}" -eq 0 ]; then
+                    INDENT=-2
+                fi
+                INDENT=${_LK_TTY_INDENT:-$((${#PREFIX} + INDENT))}
+            else
+                INDENT=${_LK_TTY_INDENT:-$(($(_lk_tty_message_length) + 1))}
             fi
-            INDENT=${_LK_TTY_INDENT:-$((${#PREFIX} + INDENT))}
             SPACES=$'\n'$(lk_repeat " " "$INDENT")
-            lk_is_true MESSAGE2_HAS_NEWLINE ||
+            [ ${MESSAGE2_HAS_NEWLINE:-0} -eq 1 ] ||
                 MESSAGE2=$(lk_fold "$MESSAGE2" $((WIDTH - INDENT)))
             # If a leading newline was added to force MESSAGE2 onto its own
             # line, remove it
             MESSAGE2=${MESSAGE2#$'\n'}
-            MESSAGE2=$SPACES${MESSAGE2//$'\n'/$SPACES}
+            MESSAGE2=${MESSAGE2//$'\n'/$SPACES}
+            [ "${LK_TTY_NO_BREAK:-0}" -eq 1 ] &&
+                MESSAGE2=" $MESSAGE2" ||
+                MESSAGE2=$SPACES$MESSAGE2
         fi
     }
     OUTPUT=$(
         lk_echoc -n "$PREFIX" \
-            "${LK_TTY_PREFIX_COLOUR-$(lk_maybe_bold "$COLOUR")$COLOUR}"
+            "${LK_TTY_PREFIX_COLOUR-$([[ $COLOUR == *$LK_BOLD* ]] ||
+                echo "$LK_BOLD")$COLOUR}"
         lk_echoc -n "$MESSAGE" \
-            "${LK_TTY_MESSAGE_COLOUR-$(lk_maybe_bold "$MESSAGE")}"
+            "${LK_TTY_MESSAGE_COLOUR-$([[ $MESSAGE == *$LK_BOLD* ]] ||
+                echo "$LK_BOLD")}"
         [ -z "${MESSAGE2:-}" ] ||
             lk_echoc -n "$MESSAGE2" "${LK_TTY_COLOUR2-$COLOUR}"
     )
     case "${FUNCNAME[1]:-}" in
     lk_console_list)
-        lk_get_quoted_var WIDTH MESSAGE_HAS_NEWLINE OUTPUT
+        declare -p WIDTH MESSAGE_HAS_NEWLINE OUTPUT 2>/dev/null || true
         ;;
     *)
         echo "$OUTPUT" >&"${_LK_FD:-2}"
         ;;
     esac
-}
+} #### Reviewed: 2021-03-22
 
-# lk_tty_pairs [COLOUR]
+# lk_tty_pairs [-d DELIM] [COLOUR]
 function lk_tty_pairs() {
-    local LK_TTY_NO_FOLD=1 LEN=0 KEY VALUE KEYS=() VALUES=() i
-    while read -r KEY VALUE; do
+    local LK_TTY_NO_FOLD=1 ARGS LEN=0 KEY VALUE KEYS=() VALUES=() GAP SPACES i
+    [ "${1:-}" != -d ] || { ARGS=(-d "$2") && shift 2; }
+    while read -r ${ARGS[@]+"${ARGS[@]}"} KEY VALUE; do
         [ ${#KEY} -le "$LEN" ] || LEN=${#KEY}
         KEYS[${#KEYS[@]}]=$KEY
         VALUES[${#VALUES[@]}]=$VALUE
     done
+    # Align to the nearest tab
+    [ -n "${LK_TTY_PREFIX:-}" ] && GAP=${#LK_TTY_PREFIX} || GAP=0
+    ((GAP = ((GAP + LEN + 2) % 4), GAP = (GAP > 0 ? 4 - GAP : 0))) || true
     for i in "${!KEYS[@]}"; do
         KEY=${KEYS[$i]}
-        lk_console_item \
-            "$KEY:$(eval "printf ' %.s' {1..$((LEN - ${#KEY} + 1))}")" \
+        ((SPACES = LEN - ${#KEY} + GAP)) || true
+        LK_TTY_NO_BREAK=1 lk_console_item \
+            "$KEY:$( ! ((SPACES)) || eval "printf ' %.s' {1..$SPACES}")" \
             "${VALUES[$i]}" \
             "$@"
     done
-}
+} #### Reviewed: 2021-03-22
 
-# lk_tty_detail_pairs [COLOUR]
+# lk_tty_detail_pairs [-d DELIM] [COLOUR]
 function lk_tty_detail_pairs() {
-    local LK_TTY_PREFIX=${LK_TTY_PREFIX-   -> } \
+    local ARGS LK_TTY_PREFIX=${LK_TTY_PREFIX-   -> } \
         LK_TTY_MESSAGE_COLOUR=${LK_TTY_MESSAGE_COLOUR-}
-    lk_tty_pairs "${1-$LK_YELLOW}"
-}
+    [ "${1:-}" != -d ] || { ARGS=(-d "$2") && shift 2; }
+    lk_tty_pairs ${ARGS[@]+"${ARGS[@]}"} "${1-$LK_YELLOW}"
+} #### Reviewed: 2021-03-22
 
 # lk_console_detail MESSAGE [MESSAGE2 [COLOUR]]
 function lk_console_detail() {
@@ -1543,8 +1658,7 @@ function lk_console_detail_diff() {
 }
 
 function _lk_tty_log() {
-    local COLOUR=$1 \
-        LK_TTY_PREFIX=${LK_TTY_PREFIX- :: } \
+    local STATUS=$? COLOUR=$1 \
         LK_TTY_COLOUR2=${LK_TTY_COLOUR2-} \
         LK_TTY_MESSAGE_COLOUR
     shift
@@ -1557,6 +1671,7 @@ function _lk_tty_log() {
         [ "${2#$'\n'}" = "$2" ] || printf '\n'
         echo "$BOLD${2#$'\n'}$RESET"
     )}${3:+ ${*:3}}" "$COLOUR"
+    return "$STATUS"
 }
 
 # lk_console_log [-r] MESSAGE [MESSAGE2...]
@@ -1564,9 +1679,8 @@ function _lk_tty_log() {
 # Output the given message to the console. If -r is set, return the most recent
 # command's exit status.
 function lk_console_log() {
-    local STATUS=$?
-    _lk_tty_log "$LK_TTY_COLOUR" "$@"
-    return "$STATUS"
+    LK_TTY_PREFIX=${LK_TTY_PREFIX-" :: "} \
+        _lk_tty_log "$LK_TTY_COLOUR" "$@"
 }
 
 # lk_console_success [-r] MESSAGE [MESSAGE2...]
@@ -1574,9 +1688,9 @@ function lk_console_log() {
 # Output the given success message to the console. If -r is set, return the most
 # recent command's exit status.
 function lk_console_success() {
-    local STATUS=$?
-    _lk_tty_log "$LK_SUCCESS_COLOUR" "$@"
-    return "$STATUS"
+    # ✔ (\u2714)
+    LK_TTY_PREFIX=${LK_TTY_PREFIX-$'  \xe2\x9c\x94 '} \
+        _lk_tty_log "$LK_SUCCESS_COLOUR" "$@"
 }
 
 # lk_console_warning [-r] MESSAGE [MESSAGE2...]
@@ -1584,9 +1698,9 @@ function lk_console_success() {
 # Output the given warning to the console. If -r is set, return the most recent
 # command's exit status.
 function lk_console_warning() {
-    local STATUS=$?
-    _lk_tty_log "$LK_WARNING_COLOUR" "$@"
-    return "$STATUS"
+    # ✘ (\u2718)
+    LK_TTY_PREFIX=${LK_TTY_PREFIX-$'  \xe2\x9c\x98 '} \
+        _lk_tty_log "$LK_WARNING_COLOUR" "$@"
 }
 
 # lk_console_error [-r] MESSAGE [MESSAGE2...]
@@ -1594,9 +1708,9 @@ function lk_console_warning() {
 # Output the given error message to the console. If -r is set, return the most
 # recent command's exit status.
 function lk_console_error() {
-    local STATUS=$?
-    _lk_tty_log "$LK_ERROR_COLOUR" "$@"
-    return "$STATUS"
+    # ✘ (\u2718)
+    LK_TTY_PREFIX=${LK_TTY_PREFIX-$'  \xe2\x9c\x98 '} \
+        _lk_tty_log "$LK_ERROR_COLOUR" "$@"
 }
 
 # lk_console_item MESSAGE ITEM [COLOUR]
@@ -1622,7 +1736,7 @@ function lk_console_list() {
         lk_mapfile ITEMS || lk_warn "unable to read items from input" || return
     SH=$(lk_console_message "$MESSAGE" "$COLOUR") &&
         eval "$SH" || return
-    ! lk_is_true MESSAGE_HAS_NEWLINE ||
+    [ "${MESSAGE_HAS_NEWLINE:-0}" -eq 0 ] ||
         INDENT=2
     LIST="$(lk_echo_array ITEMS |
         COLUMNS=$((WIDTH - ${#LK_TTY_PREFIX} - INDENT)) column -s $'\n' |
@@ -1640,7 +1754,7 @@ function lk_console_list() {
                 lk_maybe_plural ${#ITEMS[@]} "$SINGLE" "$PLURAL"
             ))"
     )" >&"${_LK_FD:-2}"
-}
+} #### Reviewed: 2021-03-22
 
 # lk_console_dump CONTENT [MESSAGE [MESSAGE_END [COLOUR [CONTENT_COLOUR]]]]
 function lk_console_dump() {
@@ -2109,6 +2223,20 @@ function lk_download() {
     ) || return
 }
 
+function lk_curl() {
+    local CURL_OPTIONS=(${LK_CURL_OPTIONS[@]+"${LK_CURL_OPTIONS[@]}"})
+    [ ${#CURL_OPTIONS[@]} -gt 0 ] || CURL_OPTIONS=(
+        --fail
+        --header "Cache-Control: no-cache"
+        --header "Pragma: no-cache"
+        --location
+        --retry 8
+        --show-error
+        --silent
+    )
+    curl ${CURL_OPTIONS[@]+"${CURL_OPTIONS[@]}"} "$@"
+}
+
 # lk_can_sudo COMMAND [USERNAME]
 #
 # Return true if the current user is allowed to execute COMMAND via sudo.
@@ -2533,6 +2661,11 @@ function lk_pretty_path() {
         done
 }
 
+function lk_basename() {
+    { [ $# -gt 0 ] && lk_echo_args "$@" || cat; } |
+        sed -E 's/.*\/([^/]+)\/*$/\1/'
+}
+
 function lk_filter() {
     local LK_Z=${LK_Z-} EXIT_STATUS TEST DELIM
     [ "${1:-}" != -z ] || { LK_Z=1 && shift; }
@@ -2560,6 +2693,10 @@ function lk_version_at_least() {
         [ "$MIN" = "$2" ]
 }
 
+function lk_jq() {
+    jq -L "$LK_BASE/lib/jq" "${@:1:$#-1}" 'include "core";'"${*: -1}"
+}
+
 # lk_jq_get_array ARRAY [FILTER]
 #
 # Apply FILTER (default: ".[]") to the input and populate ARRAY with the
@@ -2573,22 +2710,25 @@ function lk_jq_get_array() {
 
 # lk_jq_get_shell_var [--arg NAME VALUE]... VAR FILTER [VAR FILTER]...
 function lk_jq_get_shell_var() {
-    local JQ JQ_ARGS=()
+    local JQ ARGS=()
     while [ "${1:-}" = --arg ]; do
         [ $# -ge 5 ] || lk_warn "invalid arguments" || return
-        JQ_ARGS+=("${@:1:3}")
+        ARGS+=("${@:1:3}")
         shift 3
     done
     [ $# -gt 0 ] && ! (($# % 2)) || lk_warn "invalid arguments" || return
-    JQ="\
-def to_sh:
-  to_entries[] |
-    \"$(_lk_var_prefix)\(.key | ascii_upcase)=\(.value | @sh)\";
-{
-  $(printf '"%s": %s' "$1" "$2" && { [ $# -eq 2 ] ||
-        printf ',\n  "%s": %s' "${@:3}"; })
-} | to_sh"
-    jq -r ${JQ_ARGS[@]+"${JQ_ARGS[@]}"} "$JQ"
+    JQ=$(printf '"%s":(%s),' "$@")
+    JQ='{'${JQ%,}'} | to_sh($_lk_var_prefix)'
+    lk_jq -r \
+        ${ARGS[@]+"${ARGS[@]}"} \
+        --arg _lk_var_prefix "$(_lk_var_prefix)" \
+        "$JQ"
+}
+
+function lk_json_from_xml_schema() {
+    [ $# -gt 0 ] && [ $# -le 2 ] && lk_files_exist "$@" || lk_usage "\
+Usage: $(lk_myself -f) XSD_FILE [XML_FILE]" || return
+    "$LK_BASE/lib/python/json_from_xml_schema.py" "$@"
 }
 
 if lk_is_macos; then
@@ -2607,9 +2747,13 @@ function lk_hash() {
     local COMMAND
     COMMAND=$(lk_command_first_existing \
         xxh128sum xxh64sum xxh32sum xxhsum sha256sum shasum md5sum md5) ||
-        lk_warn "hash command not found" || return
-    printf '%s\n' "$@" | "$COMMAND" | awk '{print $1}'
-}
+        lk_warn "command not found: md5" || return
+    if [ $# -gt 0 ]; then
+        printf '%s\0' "$@" | "$COMMAND"
+    else
+        "$COMMAND"
+    fi | awk '{print $1}'
+} #### Reviewed: 2021-03-25
 
 # lk_random_hex BYTES
 function lk_random_hex() {
@@ -2635,16 +2779,19 @@ function lk_random_password() {
     printf '%s' "${PASSWORD:0:$LENGTH}"
 }
 
+# lk_base64 [-d]
 function lk_base64() {
+    local DECODE
+    [ "${1:-}" != -d ] || DECODE=1
     if lk_command_exists openssl &&
         openssl base64 &>/dev/null </dev/null; then
         # OpenSSL's implementation is ubiquitous and well-behaved
-        openssl base64
+        openssl base64 ${DECODE:+-d}
     elif lk_command_exists base64 &&
         base64 --version 2>/dev/null </dev/null | grep -i gnu >/dev/null; then
         # base64 on BSD and some legacy systems (e.g. RAIDiator 4.x) doesn't
         # wrap lines by default
-        base64
+        base64 ${DECODE:+--decode}
     else
         false
     fi
@@ -2759,6 +2906,7 @@ function lk_file_keep_original() {
     ! lk_verbose || v=v
     while [ $# -gt 0 ]; do
         ! lk_maybe_sudo test -s "$1" ||
+            lk_maybe_sudo test -e "$1.orig" ||
             lk_maybe_sudo cp -naL"$v" "$1" "$1.orig" || return
         shift
     done
@@ -3067,3 +3215,7 @@ LK_WARNING_COLOUR=$LK_YELLOW
 LK_ERROR_COLOUR=$LK_RED
 
 _LK_INCLUDES=(core)
+
+true || {
+    env
+}

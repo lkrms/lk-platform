@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2001,SC2015,SC2016,SC2034,SC2086,SC2124,SC2206,SC2207
+# shellcheck disable=SC2001,SC2086,SC2124,SC2206
 
 # To install Arch Linux using the script below:
 # 1. boot from an Arch Linux live CD
@@ -93,6 +93,7 @@ PAC_REPOS=()
 CURL_OPTIONS=(
     --fail
     --header "Cache-Control: no-cache"
+    --header "Pragma: no-cache"
     --location
     --retry 8
     --show-error
@@ -436,7 +437,7 @@ in_target install -d -m 02775 -o "$BOOTSTRAP_USERNAME" -g adm "$LK_BASE"
 (umask 002 &&
     in_target -u "$BOOTSTRAP_USERNAME" \
         git clone -b "$LK_PLATFORM_BRANCH" \
-        "https://github.com/lkrms/lk-platform.git" "$LK_BASE")
+        https://github.com/lkrms/lk-platform.git "$LK_BASE")
 FILE=/mnt/etc/default/lk-platform
 install -m 00644 /dev/null "$FILE"
 lk_get_shell_var \
@@ -498,7 +499,7 @@ lk_is_true GRUB_INSTALLED ||
 lk_is_true PROVISIONED ||
     lk_console_item "To provision the system manually:" \
         $'\n'"$(printf \
-            'arch-chroot /mnt sudo -H -u %q %q/bin/lk-provision-arch.sh' \
+            'arch-chroot /mnt sudo -Hu %q %q/bin/lk-provision-arch.sh' \
             "$BOOTSTRAP_USERNAME" \
             "$LK_BASE")"
 

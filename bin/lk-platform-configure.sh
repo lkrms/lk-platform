@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1090,SC2015,SC2016,SC2034,SC2086,SC2207
+# shellcheck disable=SC2086
 
 [ "$EUID" -eq 0 ] || {
     [ -z "${BASH_XTRACEFD:-}" ] && unset ARGS ||
@@ -164,7 +164,7 @@
     _BASHRC='[ -z "${BASH_VERSION:-}" ] || [ ! -f ~/.bashrc ] || . ~/.bashrc'
     _BYOBU=
     _BYOBURC=
-    if BYOBU_PATH=$(type -P byobu-launch); then
+    if BYOBU_PATH=$(command -pv byobu-launch); then
         _BYOBU=$(printf '%s_byobu_sourced=1 . %q 2>/dev/null || true' \
             "$(! lk_is_macos || echo '[ ! "$SSH_CONNECTION" ] || ')" \
             "$BYOBU_PATH")
@@ -200,7 +200,7 @@
     }
     # Exit if required commands fail to install
     install_gnu_commands \
-        awk chmod chown cp date df diff find getopt nc realpath sed stat xargs
+        awk chmod chown cp date df diff find getopt realpath sed stat xargs
     # For other commands, warn and continue
     install_gnu_commands || true
 
@@ -264,7 +264,9 @@
     if [ -d "$LK_BASE/.git" ]; then
         # shellcheck disable=SC2086
         function _git() {
-            sudo -Hu "$REPO_OWNER" git "$@"
+            sudo -Hu "$REPO_OWNER" \
+                ${LK_GIT_ENV[@]+env "${LK_GIT_ENV[@]}"} \
+                git "$@"
         }
         function check_repo_config() {
             local VALUE
@@ -281,6 +283,10 @@
         lk_console_message "Checking repository"
         cd "$LK_BASE"
         REPO_OWNER=$(lk_file_owner "$LK_BASE")
+        [ -z "${SSH_AUTH_SOCK:-}" ] ||
+            ! SOCK_OWNER=$(lk_file_owner "$SSH_AUTH_SOCK" 2>/dev/null) ||
+            [ "$SOCK_OWNER" != "$REPO_OWNER" ] ||
+            LK_GIT_ENV=(SSH_AUTH_SOCK="$SSH_AUTH_SOCK")
         CONFIG_COMMANDS=()
         [ ! -g "$LK_BASE" ] ||
             check_repo_config "core.sharedRepository" "0664"
@@ -344,17 +350,20 @@
     lk_console_message "Checking symbolic links"
     lk_symlink_bin "$LK_BASE/bin/lk-bash-load.sh"
 
-    LK_HOMES=(
-        /etc/skel{,".${LK_PATH_PREFIX%-}"}
-        ${SUDO_USER:+"$(lk_expand_path "~$SUDO_USER")"}
-        "$@"
-    )
-    # If invoked by root, include all standard home directories
-    lk_is_true ELEVATED || LK_HOMES+=(
-        /{home,Users}/*
-        /srv/www/*
-        ~root
-    )
+    if lk_is_true ELEVATED; then
+        LK_HOMES=(${SUDO_USER:+"$(lk_expand_path "~$SUDO_USER")"})
+    else
+        # If invoked by root, include all standard home directories
+        lk_mapfile LK_HOMES <(comm -12 \
+            <(lk_echo_args /home/* /srv/www/* /Users/* ~root |
+                lk_filter 'test -d' | sort -u) \
+            <(if ! lk_is_macos; then
+                getent passwd | cut -d: -f6
+            else
+                dscl . list /Users NFSHomeDirectory | awk '{print $2}'
+            fi | sort -u))
+    fi
+    LK_HOMES+=(/etc/skel{,".${LK_PATH_PREFIX%-}"})
     lk_remove_missing LK_HOMES
     lk_resolve_files LK_HOMES
     [ ${#LK_HOMES[@]} -gt 0 ] || lk_die "No home directories found"
