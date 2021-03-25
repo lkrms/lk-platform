@@ -857,7 +857,7 @@ function lk_ssl_verify_cert() {
 # lk_ssl_get_self_signed_cert DOMAIN...
 function lk_ssl_get_self_signed_cert() {
     lk_test_many "lk_is_fqdn" "$@" || lk_warn "invalid domain(s): $*" || return
-    lk_console_item "Generating a self-signed SSL certificate for:" \
+    lk_console_detail "Generating a self-signed SSL certificate for:" \
         $'\n'"$(lk_echo_args "$@")"
     lk_no_input || {
         local FILES=("$1".{key,csr,cert})
