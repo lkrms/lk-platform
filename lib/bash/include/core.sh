@@ -184,7 +184,7 @@ function lk_gnu_check() {
         lk_command_exists "$(_lk_gnu_command "$1")" || return
         shift
     done
-}
+} #### Reviewed: 2021-03-26
 
 function lk_include() {
     local i FILE
@@ -446,40 +446,44 @@ function lk_get_regex() {
 }
 
 if lk_bash_at_least 4 2; then
+    # lk_date FORMAT [TIMESTAMP]
     function lk_date() {
         # Take advantage of printf support for strftime in Bash 4.2+
         printf "%($1)T\n" "${2:--1}"
     }
 else
-    if ! lk_is_macos || lk_gnu_check date; then
+    if ! lk_is_macos; then
+        # lk_date FORMAT [TIMESTAMP]
         function lk_date() {
             gnu_date ${2:+-d "@$2"} +"$1"
         }
     else
+        # lk_date FORMAT [TIMESTAMP]
         function lk_date() {
             date ${2:+-jf '%s' "$2"} +"$1"
         }
     fi
-fi
+fi #### Reviewed: 2021-03-26
 
-# lk_date_log
-#
-# Output the current time in a format suitable for log files.
+# lk_date_log [TIMESTAMP]
 function lk_date_log() {
-    lk_date "%Y-%m-%d %H:%M:%S %z"
-}
+    lk_date "%Y-%m-%d %H:%M:%S %z" "$@"
+} #### Reviewed: 2021-03-26
 
+# lk_date_ymdhms [TIMESTAMP]
 function lk_date_ymdhms() {
-    lk_date "%Y%m%d%H%M%S"
-}
+    lk_date "%Y%m%d%H%M%S" "$@"
+} #### Reviewed: 2021-03-26
 
+# lk_date_ymd [TIMESTAMP]
 function lk_date_ymd() {
-    lk_date "%Y%m%d"
-}
+    lk_date "%Y%m%d" "$@"
+} #### Reviewed: 2021-03-26
 
+# lk_timestamp
 function lk_timestamp() {
     lk_date "%s"
-}
+} #### Reviewed: 2021-03-26
 
 if lk_bash_at_least 4 1; then
     function lk_pause() {
@@ -1231,7 +1235,7 @@ function lk_log() {
                 "$PREFIX" "$(lk_date "%Y-%m-%d %H:%M:%S %z")" "$LINE"
         done
     fi
-}
+} #### Reviewed: 2021-03-26
 
 # lk_log_create [-e EXT] [DIR...]
 function lk_log_create() {
@@ -3016,20 +3020,26 @@ function lk_file_add_newline() {
     fi
 }
 
-# lk_file_replace [-b] [-m] [-l] [-i IGNORE] [-f SOURCE_FILE] FILE [CONTENT]
-#
-# If FILE differs from input, CONTENT or SOURCE_FILE, replace FILE. If -b is
-# set, back up FILE before replacing it. If -m is set, use a separate location
-# when backing up (-b is implied). If -l is set and FILE is a symbolic link,
-# replace the linked file instead of FILE. If -i is set, ignore lines matching
-# the regular expression when comparing.
+# lk_file_replace [OPTIONS] TARGET [CONTENT]
 function lk_file_replace() {
-    local OPTIND OPTARG OPT LK_USAGE LINK IGNORE='' SOURCE='' \
-        BACKUP=${LK_FILE_TAKE_BACKUP:-} MOVE=${LK_FILE_MOVE_BACKUP:-} \
-        CONTENT PREVIOUS TEMP vv=''
+    local OPTIND OPTARG OPT LK_USAGE IFS SOURCE= IGNORE= FILTER= ASK= \
+        LINK BACKUP=${LK_FILE_TAKE_BACKUP:-} MOVE=${LK_FILE_MOVE_BACKUP:-} \
+        CONTENT PREVIOUS TEMP vv=
+    unset IFS PREVIOUS
     LK_USAGE="\
-Usage: $(lk_myself -f) [-b|-m] [-l] [-i IGNORE] [-f SOURCE_FILE] FILE [CONTENT]"
-    while getopts ":bmli:f:" OPT; do
+Usage: $(lk_myself -f) [OPTIONS] TARGET [CONTENT]
+
+If TARGET differs from input or CONTENT, replace TARGET.
+
+Options:
+  -f SOURCE     read CONTENT from SOURCE
+  -i PATTERN    ignore lines matching the regular expression when comparing
+  -s SCRIPT     filter lines through \`sed -E SCRIPT\` when comparing
+  -l            if TARGET is a symbolic link, replace the linked file
+  -b            back up TARGET before replacing it
+  -m            use a separate location when backing up (-b is implied)
+  -p            prompt before replacing TARGET"
+    while getopts ":f:i:s:lbmp" OPT; do
         case "$OPT" in
         b)
             BACKUP=1
@@ -3045,10 +3055,16 @@ Usage: $(lk_myself -f) [-b|-m] [-l] [-i IGNORE] [-f SOURCE_FILE] FILE [CONTENT]"
         i)
             IGNORE=$OPTARG
             ;;
+        s)
+            FILTER=$OPTARG
+            ;;
         f)
             SOURCE=$OPTARG
             lk_file_get_text "$SOURCE" CONTENT ||
                 return
+            ;;
+        p)
+            ASK=1
             ;;
         \? | :)
             lk_usage
@@ -3057,13 +3073,13 @@ Usage: $(lk_myself -f) [-b|-m] [-l] [-i IGNORE] [-f SOURCE_FILE] FILE [CONTENT]"
         esac
     done
     shift $((OPTIND - 1))
+    [ $# -gt 0 ] || lk_usage || return
     if [ $# -ge 2 ]; then
         CONTENT=$2
     elif [ -z "$SOURCE" ]; then
         CONTENT=$(cat && printf .) || return
         CONTENT=${CONTENT%.}
     fi
-    unset PREVIOUS
     ! lk_verbose 2 || vv=v
     LK_FILE_REPLACE_NO_CHANGE=${LK_FILE_REPLACE_NO_CHANGE:-1}
     if lk_maybe_sudo test -e "$1"; then
@@ -3073,23 +3089,29 @@ Usage: $(lk_myself -f) [-b|-m] [-l] [-i IGNORE] [-f SOURCE_FILE] FILE [CONTENT]"
         }
         lk_maybe_sudo test -f "$1" || lk_warn "not a file: $1" || return
         lk_maybe_sudo test -L "$1" || ! diff -q \
-            <(lk_maybe_sudo cat "$1" | _lk_maybe_filter "$IGNORE") \
-            <([ -z "${CONTENT:+1}" ] || echo "${CONTENT%$'\n'}" |
-                _lk_maybe_filter "$IGNORE") >/dev/null || {
+            <(TARGET=$1 _lk_maybe_filter "$IGNORE" "$FILTER" \
+                lk_maybe_sudo cat '$TARGET') \
+            <([ -z "${CONTENT:+1}" ] || _lk_maybe_filter "$IGNORE" "$FILTER" \
+                echo '${CONTENT%$'"'\\n'"'}') >/dev/null || {
             ! lk_verbose 2 || lk_console_detail "Not changed:" "$1"
             return 0
         }
         ! lk_is_true BACKUP ||
             lk_file_backup ${MOVE:+-m} "$1" || return
-        ! lk_verbose || lk_is_true LK_FILE_NO_DIFF ||
+        ! lk_is_true ASK &&
+            { ! lk_verbose || lk_is_true LK_FILE_NO_DIFF; } ||
             lk_file_get_text "$1" PREVIOUS || return
     fi
     TEMP=$(lk_file_prepare_temp "$1") &&
         echo "${CONTENT%$'\n'}" | lk_maybe_sudo tee "$TEMP" >/dev/null &&
+        { ! lk_is_true ASK || {
+            lk_console_diff "$1" "$TEMP"
+            lk_confirm "Replace $1 as above?" Y
+        }; } &&
         lk_maybe_sudo mv -f"$vv" "$TEMP" "$1" &&
         LK_FILE_REPLACE_NO_CHANGE=0 || return
     ! lk_verbose || {
-        if lk_is_true LK_FILE_NO_DIFF; then
+        if lk_is_true LK_FILE_NO_DIFF || lk_is_true ASK; then
             lk_console_detail "Updated:" "$1"
         elif [ -n "${PREVIOUS+1}" ]; then
             echo -n "$PREVIOUS" | lk_console_detail_diff "" "$1"
@@ -3097,15 +3119,26 @@ Usage: $(lk_myself -f) [-b|-m] [-l] [-i IGNORE] [-f SOURCE_FILE] FILE [CONTENT]"
             lk_console_detail_file "$1"
         fi
     }
-}
+} #### Reviewed: 2021-03-26
 
+# _lk_maybe_filter DELETE_PATTERN SED_SCRIPT QUOTED_COMMAND...
 function _lk_maybe_filter() {
-    if [ -n "${1:-}" ]; then
-        grep -Ev "$1" || true
-    else
-        cat
-    fi
-}
+    case "${1:+g}${2:+s}" in
+    g)
+        eval "${*:3}" | grep -Ev "$1" || [ ${PIPESTATUS[1]} -eq 1 ]
+        ;;
+    s)
+        eval "${*:3}" | sed -E "$2"
+        ;;
+    gs)
+        { eval "${*:3}" | grep -Ev "$1" || [ ${PIPESTATUS[1]} -eq 1 ]; } |
+            sed -E "$2"
+        ;;
+    *)
+        eval "${*:3}"
+        ;;
+    esac
+} #### Reviewed: 2021-03-26
 
 function lk_exit_trap() {
     local EXIT_STATUS=$? DELETE_ARRAY="_LK_EXIT_DELETE_${BASH_SUBSHELL}[@]" i
