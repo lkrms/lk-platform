@@ -422,8 +422,8 @@ Example:
 
 # lk_linode_hosting_get_meta DIR HOST...
 function lk_linode_hosting_get_meta() {
-    local DIR=${1:-} _DIR HOST SSH_HOST FILE COMMIT FILES _FILES _FILE \
-        PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX} s=/
+    local DIR=${1:-} _DIR HOST SSH_HOST FILE COMMIT LOG_FILE \
+        FILES _FILES _FILE PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX} s=/
     [ $# -ge 2 ] || lk_usage "\
 Usage: $(lk_myself -f) DIR HOST..." || return
     [ -d "$DIR" ] || lk_warn "not a directory: $DIR" || return
@@ -450,9 +450,19 @@ Usage: $(lk_myself -f) DIR HOST..." || return
         FILE=$_DIR/install.log-$HOST
         [ -e "$FILE" ] ||
             scp -p "$SSH_HOST:/var/log/${PREFIX}install.log" "$FILE" || return
+        LOG_FILE=$FILE
         FILE=$_DIR/install.out-$HOST
         [ -e "$FILE" ] ||
-            scp -p "$SSH_HOST:/var/log/${PREFIX}install.out" "$FILE" || return
+            scp -p "$SSH_HOST:/var/log/${PREFIX}install.out" "$FILE" || {
+            _FILE=/opt/lk-platform/var/log/lk-provision-hosting.sh-0.log
+            ssh "$SSH_HOST" \
+                "sudo bash -c 'cp -pv $_FILE . && chown \$SUDO_USER: ${_FILE##*/}'" &&
+                scp -p "$SSH_HOST:${_FILE##*/}" "$FILE.tmp" &&
+                awk '!skip{print}/Shutdown scheduled for/{skip=1}' \
+                    "$FILE.tmp" >"$FILE" &&
+                touch -r "$LOG_FILE" "$FILE" &&
+                rm -f "$FILE.tmp"
+        } || return
         FILES=$(ssh "$SSH_HOST" ls -d \
             /etc/default/lk-platform \
             /etc/memcached.conf \
