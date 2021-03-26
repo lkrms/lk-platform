@@ -189,14 +189,27 @@ SH=$(. "$LK_BASE/lib/bash/env.sh") &&
     HISTTIMEFORMAT="%b %_d %Y %H:%M:%S %z "
 
     lk_is_false LK_COMPLETION || { SH=$(
-        lk_bash_at_least 4 && VER=2 || VER=
-        for FILE in \
-            /usr/share/bash-completion/bash_completion \
-            ${HOMEBREW_PREFIX:+"$HOMEBREW_PREFIX/Cellar/bash-completion${VER:+@$VER}"/*/etc/profile.d/bash_completion.sh}; do
-            [ -r "$FILE" ] || continue
-            printf '. %q\n' "$FILE" "$LK_BASE/lib/bash/completion.sh"
+        if [ -r /usr/share/bash-completion/bash_completion ]; then
+            COMMAND=/usr/share/bash-completion/bash_completion
+        elif [ -z "${HOMEBREW_PREFIX:-}" ]; then
             return
-        done
+        else
+            shopt -s nullglob
+            VERSION=
+            ! lk_bash_at_least 4 ||
+                VERSION="@2"
+            COMMAND=$(printf '%s\n' \
+                "$HOMEBREW_PREFIX/Cellar/bash-completion$VERSION"/*/etc/profile.d/bash_completion.sh |
+                sort -V | tail -n1)
+            [ -n "$COMMAND" ] || return 0
+            [ -n "$VERSION" ] || {
+                COMMAND=${COMMAND/profile.d\/bash_completion.sh/bash_completion}
+                printf '%s=%q ' \
+                    BASH_COMPLETION "$COMMAND" \
+                    BASH_COMPLETION_DIR "$COMMAND.d"
+            }
+        fi
+        printf '. %q\n' "$COMMAND" "$LK_BASE/lib/bash/completion.sh"
     ) && eval "$SH"; }
 
     lk_is_false LK_PROMPT || {

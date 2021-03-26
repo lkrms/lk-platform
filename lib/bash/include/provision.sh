@@ -797,6 +797,7 @@ function lk_certbot_install() {
         --agree-tos \
         --email "$EMAIL" \
         --no-eff-email \
+        --no-redirect \
         --"${LK_CERTBOT_PLUGIN:-apache}" \
         ${LK_CERTBOT_OPTIONS[@]:+"${LK_CERTBOT_OPTIONS[@]}"} \
         --domains "$(lk_implode_args "," "$@")"
@@ -855,13 +856,12 @@ function lk_ssl_verify_cert() {
 
 # lk_ssl_get_self_signed_cert DOMAIN...
 function lk_ssl_get_self_signed_cert() {
-    [ $# -gt 0 ] || lk_warn "no domain" || return
-    [ $# -gt 1 ] || set -- "${1#www.}" "www.${1#www.}"
-    lk_console_item "Generating a self-signed SSL certificate for:" \
+    lk_test_many "lk_is_fqdn" "$@" || lk_warn "invalid domain(s): $*" || return
+    lk_console_detail "Generating a self-signed SSL certificate for:" \
         $'\n'"$(lk_echo_args "$@")"
     lk_no_input || {
         local FILES=("$1".{key,csr,cert})
-        lk_remove_missing FILES || return
+        lk_remove_false '[ -s "{}" ]' FILES || return
         [ ${#FILES[@]} -eq 0 ] || {
             lk_echo_array FILES | lk_console_detail_list \
                 "Existing files will be overwritten:" file files
@@ -871,7 +871,7 @@ function lk_ssl_get_self_signed_cert() {
     OPENSSL_CONF=$(cat /etc/ssl/openssl.cnf) || return
     OPENSSL_EXT_CONF=$(printf '\n%s' \
         "[ san ]" \
-        "subjectAltName = DNS:$1, DNS:www.$1")
+        "subjectAltName = $(printf 'DNS:%s\n' "$@" | lk_implode_input ", ")")
     openssl genrsa \
         -out "$1.key" \
         2048 || return
