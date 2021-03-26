@@ -3092,7 +3092,7 @@ Options:
             <(TARGET=$1 _lk_maybe_filter "$IGNORE" "$FILTER" \
                 lk_maybe_sudo cat '$TARGET') \
             <([ -z "${CONTENT:+1}" ] || _lk_maybe_filter "$IGNORE" "$FILTER" \
-                echo '${CONTENT%$'"'\\n'"'}') >/dev/null || {
+                echo '"${CONTENT%$'"'\\n'"'}"') >/dev/null || {
             ! lk_verbose 2 || lk_console_detail "Not changed:" "$1"
             return 0
         }
