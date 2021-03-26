@@ -131,16 +131,21 @@ function lk_apt_purge() {
         lk_apt_remove "$@"
 }
 
+function lk_apt_autoremove() {
+    lk_console_message "Removing unused dependencies"
+    lk_elevate apt-get -yq autoremove
+}
+
 function lk_apt_purge_removed() {
     local PURGE
-    lk_console_message "Removing unused dependencies"
-    lk_elevate apt-get -yq autoremove &&
-        PURGE=($(dpkg-query --show --showformat \
-            '${db:Status-Status}\t${binary:Package}\n' |
-            awk '$1 == "config-files" { print $2 }')) || return
+    PURGE=($(dpkg-query --show --showformat \
+        '${db:Status-Status}\t${binary:Package}\n' |
+        awk '$1 == "config-files" { print $2 }')) || return
     [ ${#PURGE[@]} -eq 0 ] || {
         lk_echo_array PURGE |
-            lk_console_list "Purging:" "APT package" "APT packages"
+            lk_console_list "Purging previously removed packages:" \
+                "APT package" "APT packages"
+        lk_confirm "Proceed?" Y || return
         lk_elevate apt-get -yq purge "${PURGE[@]}"
     }
 }
@@ -181,7 +186,7 @@ END {
     [ ${#CONF[@]} -eq 0 ] || lk_console_detail "Configure:" $'\n'"${CONF[*]}"
     [ ${#REMV[@]} -eq 0 ] || lk_console_detail "Remove:" $'\n'"${REMV[*]}"
     lk_elevate apt-get -yq --fix-broken dist-upgrade || return
-    lk_apt_purge_removed
+    lk_apt_autoremove
 }
 
 # lk_apt_sources_get_clean [-l LIST]
