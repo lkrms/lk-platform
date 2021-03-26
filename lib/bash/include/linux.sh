@@ -388,7 +388,7 @@ EOF
 function lk_user_lock_passwd() {
     local STATUS
     [ -n "${1:-}" ] || lk_warn "no user" || return
-    lk_user_exists "$1" || lk_warn "user does not exist: $1" || return
+    lk_user_exists "$1" || lk_warn "user not found: $1" || return
     STATUS=$(lk_elevate passwd -S "$1" | cut -d' ' -f2) || return
     [ "$STATUS" = L ] || {
         lk_console_detail "Locking user password:" "$1"

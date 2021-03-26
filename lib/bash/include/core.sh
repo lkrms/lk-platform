@@ -2902,7 +2902,7 @@ fi
 function lk_file_get_text() {
     lk_maybe_sudo test -e "$1" || lk_warn "file not found: $1" || return
     lk_is_identifier "$2" || lk_warn "not a valid identifier: $2" || return
-    eval "$2=\$(cat \"\$1\" && printf .)" &&
+    eval "$2=\$(lk_maybe_sudo cat \"\$1\" && printf .)" &&
         eval "$2=\${$2%.}" &&
         { [ -z "${!2:+1}" ] ||
             eval "$2=\${$2%\$'\\n'}\$'\\n'"; }

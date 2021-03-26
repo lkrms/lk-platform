@@ -165,7 +165,7 @@ Usage: $(lk_myself -f) DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..
 function lk_sudo_add_nopasswd() {
     local LK_SUDO=1 FILE
     [ -n "${1:-}" ] || lk_warn "no user" || return
-    lk_user_exists "$1" || lk_warn "user does not exist: $1" || return
+    lk_user_exists "$1" || lk_warn "user not found: $1" || return
     FILE=/etc/sudoers.d/nopasswd-$1
     lk_install -m 00440 "$FILE" &&
         lk_file_replace "$FILE" "$1 ALL=(ALL) NOPASSWD:ALL"
