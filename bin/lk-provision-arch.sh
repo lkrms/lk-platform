@@ -942,7 +942,7 @@ done\""
 
     (exit "$EXIT_STATUS") &&
         lk_console_success "Provisioning complete" ||
-        lk_console_error -r "Provisioning completed with errors"
+        lk_console_error -r "Provisioning completed with errors" || lk_die ""
 
     exit
 }
