@@ -385,11 +385,20 @@ EOF
         lk_nm_file_get_ipv4_ipv6 "${@:3}"
 }
 
+# lk_user_passwd_status USER
+#
+# Print L (locked password), NP (has no password) or P (has a usable password)
+# for the given user.
+function lk_user_passwd_status() {
+    [ -n "${1:-}" ] || lk_warn "no user" || return
+    lk_user_exists "$1" || lk_warn "user not found: $1" || return
+    lk_elevate passwd -S "$1" | awk '{print$2}'
+}
+
+# lk_user_lock_passwd USER
 function lk_user_lock_passwd() {
     local STATUS
-    [ -n "${1:-}" ] || lk_warn "no user" || return
-    lk_user_exists "$1" || lk_warn "user does not exist: $1" || return
-    STATUS=$(lk_elevate passwd -S "$1" | cut -d' ' -f2) || return
+    STATUS=$(lk_user_passwd_status "$@") || return
     [ "$STATUS" = L ] || {
         lk_console_detail "Locking user password:" "$1"
         lk_elevate passwd -l "$1"

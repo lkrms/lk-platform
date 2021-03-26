@@ -320,11 +320,12 @@ function lk_linode_hosting_update_stackscript() {
 }
 
 function lk_linode_provision_hosting() {
-    local IFS=$'\n' NODE_FQDN NODE_HOSTNAME HOST_DOMAIN HOST_ACCOUNT \
+    local IFS=$'\n' REBUILD NODE_FQDN NODE_HOSTNAME HOST_DOMAIN HOST_ACCOUNT \
         ROOT_PASS AUTHORIZED_KEYS STACKSCRIPT STACKSCRIPT_DATA \
-        ARGS KEY FILE LINODES EXIT_STATUS LINODE SH
+        ARGS VERBS KEY FILE LINODES EXIT_STATUS LINODE SH
+    [ "${1:-}" != -r ] || { REBUILD=$2 && shift 2; }
     [ $# -ge 2 ] || lk_usage "\
-Usage: $(lk_myself -f) FQDN DOMAIN [ACCOUNT [DATA_JSON [LINODE_ARG...]]]
+Usage: $(lk_myself -f) [-r LINODE_ID] FQDN DOMAIN [ACCOUNT [DATA_JSON [LINODE_ARG...]]]
 
 Create a new Linode at FQDN and configure it to serve DOMAIN from user ACCOUNT.
 
@@ -358,6 +359,29 @@ Example:
     unset IFS
     STACKSCRIPT=$(lk_linode_hosting_get_stackscript "${@:5}") ||
         lk_warn "hosting.sh StackScript not found" || return
+    ARGS=(linodes create)
+    VERBS=(Creating created)
+    [ -z "${REBUILD:-}" ] || {
+        ARGS=(linodes rebuild)
+        VERBS=(Rebuilding rebuilt)
+        lk_linode_flush_cache
+        LINODE=$(lk_linode_linodes "${@:5}" |
+            jq -e --arg id "$REBUILD" \
+                '[.[]|select((.id|tostring==$id) or .label==$id)]|if length==1 then .[0] else empty end') ||
+            lk_warn "Linode not found: $REBUILD" || return
+        SH=$(lk_linode_get_shell_var <<<"$LINODE") &&
+            eval "$SH" || return
+        lk_console_item "Rebuilding:" \
+            "$LINODE_LABEL ($(lk_implode ", " LINODE_TAGS))"
+        lk_console_detail "Linode ID:" "$LINODE_ID"
+        lk_console_detail "Linode type:" "$LINODE_TYPE"
+        lk_console_detail "CPU count:" "$LINODE_VPCUS"
+        lk_console_detail "Memory:" "$LINODE_MEMORY"
+        lk_console_detail "Storage:" "$((LINODE_DISK / 1024))G"
+        lk_console_detail "IP addresses:" $'\n'"$(lk_echo_args \
+            $LINODE_IPV4_PUBLIC $LINODE_IPV6 $LINODE_IPV4_PRIVATE)"
+        lk_confirm "Destroy the existing Linode and start over?" N || return
+    }
     STACKSCRIPT_DATA=$(jq -n \
         --arg nodeHostname "$NODE_HOSTNAME" \
         --arg nodeFqdn "$NODE_FQDN" \
@@ -374,31 +398,34 @@ Example:
     "LK_AUTO_REBOOT": $autoReboot
 }'"${4:+ + $4}")
     ROOT_PASS=$(lk_random_password 64)
-    ARGS=(
-        linodes
-        create
+    ARGS+=(
         --json
         --root_pass "$ROOT_PASS"
         --stackscript_id "$STACKSCRIPT"
         --stackscript_data "$STACKSCRIPT_DATA"
+    )
+    [ -n "${REBUILD:-}" ] || ARGS+=(
         --label "$NODE_HOSTNAME"
         --tags "${HOST_ACCOUNT:-$NODE_HOSTNAME}"
         --private_ip true
-        "${@:5}"
     )
     for KEY in "${AUTHORIZED_KEYS[@]}"; do
         ARGS+=(--authorized_keys "$KEY")
     done
+    ARGS+=(
+        "${@:5}"
+        ${REBUILD:+"$LINODE_ID"}
+    )
     lk_console_item "Running:" \
         $'\n'"$(lk_quote_args_folded linode-cli "${ARGS[@]##ssh-??? * }")"
     lk_confirm "Proceed?" Y || return
-    lk_console_message "Creating Linode"
+    lk_console_message "${VERBS[0]} Linode"
     FILE=/tmp/$(lk_myself -f)-$1-$(lk_date %s).json
     LINODES=$(linode-cli "${ARGS[@]}" | tee "$FILE") ||
         lk_pass rm -f "$FILE" || return
     lk_linode_flush_cache
     LINODE=$(jq -c '.[0]' <<<"$LINODES")
-    lk_console_message "Linode created successfully"
+    lk_console_message "Linode ${VERBS[1]} successfully"
     lk_console_detail "Root password:" "$ROOT_PASS"
     lk_console_detail "Response written to:" "$FILE"
     SH=$(lk_linode_get_shell_var <<<"$LINODE") &&
@@ -407,6 +434,7 @@ Example:
     lk_console_detail "Linode type:" "$LINODE_TYPE"
     lk_console_detail "CPU count:" "$LINODE_VPCUS"
     lk_console_detail "Memory:" "$LINODE_MEMORY"
+    lk_console_detail "Storage:" "$((LINODE_DISK / 1024))G"
     lk_console_detail "Image:" "$LINODE_IMAGE"
     lk_console_detail "IP addresses:" $'\n'"$(lk_echo_args \
         $LINODE_IPV4_PUBLIC $LINODE_IPV6 $LINODE_IPV4_PRIVATE)"
@@ -422,8 +450,8 @@ Example:
 
 # lk_linode_hosting_get_meta DIR HOST...
 function lk_linode_hosting_get_meta() {
-    local DIR=${1:-} _DIR HOST SSH_HOST FILE COMMIT FILES _FILES _FILE \
-        PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX} s=/
+    local DIR=${1:-} _DIR HOST SSH_HOST FILE COMMIT LOG_FILE \
+        FILES _FILES _FILE PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX} s=/
     [ $# -ge 2 ] || lk_usage "\
 Usage: $(lk_myself -f) DIR HOST..." || return
     [ -d "$DIR" ] || lk_warn "not a directory: $DIR" || return
@@ -450,9 +478,19 @@ Usage: $(lk_myself -f) DIR HOST..." || return
         FILE=$_DIR/install.log-$HOST
         [ -e "$FILE" ] ||
             scp -p "$SSH_HOST:/var/log/${PREFIX}install.log" "$FILE" || return
+        LOG_FILE=$FILE
         FILE=$_DIR/install.out-$HOST
         [ -e "$FILE" ] ||
-            scp -p "$SSH_HOST:/var/log/${PREFIX}install.out" "$FILE" || return
+            scp -p "$SSH_HOST:/var/log/${PREFIX}install.out" "$FILE" || {
+            _FILE=/opt/lk-platform/var/log/lk-provision-hosting.sh-0.log
+            ssh "$SSH_HOST" \
+                "sudo bash -c 'cp -pv $_FILE . && chown \$SUDO_USER: ${_FILE##*/}'" &&
+                scp -p "$SSH_HOST:${_FILE##*/}" "$FILE.tmp" &&
+                awk '!skip{print}/Shutdown scheduled for/{skip=1}' \
+                    "$FILE.tmp" >"$FILE" &&
+                touch -r "$LOG_FILE" "$FILE" &&
+                rm -f "$FILE.tmp"
+        } || return
         FILES=$(ssh "$SSH_HOST" ls -d \
             /etc/default/lk-platform \
             /etc/memcached.conf \
