@@ -3104,7 +3104,7 @@ Options:
     fi
     TEMP=$(lk_file_prepare_temp "$1") &&
         echo "${CONTENT%$'\n'}" | lk_maybe_sudo tee "$TEMP" >/dev/null &&
-        { ! lk_is_true ASK || {
+        { ! lk_is_true ASK || ! lk_maybe_sudo test -s "$1" || {
             lk_console_diff "$1" "$TEMP"
             lk_confirm "Replace $1 as above?" Y
         }; } &&

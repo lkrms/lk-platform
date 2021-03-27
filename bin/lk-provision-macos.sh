@@ -94,6 +94,10 @@ function exit_trap() {
         SUDOERS=$(cat "$_DIR/default")
     fi
 
+    SH=$(lk_provision_getopt)
+    eval "$SH"
+    shift "$LK_SHIFT"
+
     LK_FILE_TAKE_BACKUP=${LK_FILE_TAKE_BACKUP-1}
 
     lk_log_output ~/"${LK_PATH_PREFIX}install.log"

@@ -122,6 +122,7 @@ Maintenance mode may have been disabled early by another process"
 MAINTENANCE_PHP='<?php $upgrading = time(); ?>'
 REMOTE_PATH=${REMOTE_PATH%/}
 LOCAL_PATH=${LOCAL_PATH%/}
+STATUS=0
 
 LK_WP_QUIET=1
 
@@ -206,8 +207,8 @@ fi
     LK_WP_QUIET=1 LK_WP_REPLACE=1 LK_WP_REAPPLY=0 LK_WP_FLUSH=0 \
         LK_WP_REPLACE_COMMAND=wp \
         lk_wp_rename_site "$RENAME"
-lk_wp_reapply_config
-lk_wp_flush
+lk_wp_reapply_config || STATUS=$?
+lk_wp_flush || STATUS=$?
 
 if lk_is_true SSL; then
     SITE_ADDR=$(lk_wp_get_site_address) &&
@@ -230,4 +231,6 @@ rm "$LOCAL_PATH/.maintenance" ||
 Error deleting $LOCAL_PATH/.maintenance
 Maintenance mode may have been disabled early by another process"
 
-lk_console_success "Migration completed successfully"
+(exit "$STATUS") &&
+    lk_console_success "Migration completed successfully" ||
+    lk_console_error -r "Migration completed with errors" || lk_die ""

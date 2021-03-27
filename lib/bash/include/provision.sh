@@ -2,11 +2,14 @@
 
 # shellcheck disable=SC2030,SC2031,SC2086,SC2120,SC2206
 
+# lk_node_service_enabled SERVICE
+#
+# Return true if SERVICE or an equivalent appears in LK_NODE_SERVICES.
 function lk_node_service_enabled() {
     [ -n "${LK_NODE_SERVICES:-}" ] || return
     [[ ,$LK_NODE_SERVICES, == *,$1,* ]] ||
         [[ ,$(lk_node_expand_services), == *,$1,* ]]
-}
+} #### Reviewed: 2021-03-27
 
 function _lk_node_expand_service() {
     local SERVICE REVERSE=1
@@ -19,15 +22,44 @@ function _lk_node_expand_service() {
         done
         SERVICES=$SERVICES,$1
     fi
-}
+} #### Reviewed: 2021-03-27
 
+# lk_node_expand_services [SERVICE,...]
+#
+# Add alternative names to the service list (all enabled services by default).
 function lk_node_expand_services() {
-    local IFS=, SERVICES=${1:-${LK_NODE_SERVICES:-}}
+    local IFS=, SERVICES=${1-${LK_NODE_SERVICES:-}}
     _lk_node_expand_service apache+php apache2 php-fpm
     _lk_node_expand_service mysql mariadb
     _lk_node_expand_service -n xfce4 desktop
     lk_echo_args $SERVICES | sort -u | lk_implode_input ","
-}
+} #### Reviewed: 2021-03-27
+
+# lk_provision_getopt
+#
+# For each lk-platform setting on the command line, output Bash-compatible code
+# that:
+# - applies them to the caller's scope
+# - exports them for lk-platform-configure.sh to persist
+# - sets LK_SHIFT to the number of arguments processed
+function lk_provision_getopt() {
+    local PREFIX ARGS=() VARS=() SHIFT=0 EXPORT_VAR=_LK_PLATFORM_CONFIGURE_ARGS
+    PREFIX=$(_lk_var_prefix)
+    set -- ${LK_ARGV[@]+"${LK_ARGV[@]}"}
+    while [[ ${1:-} =~ ^(-s|--set)$ ]]; do
+        [[ ${2:-} =~ ^(LK_[a-zA-Z0-9_]*[a-zA-Z0-9])=(.*) ]] ||
+            lk_warn "invalid argument: $2" || return
+        ARGS+=("${@:1:2}")
+        VARS+=("${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}")
+        ((SHIFT += 2))
+        shift 2
+    done
+    VARS+=(LK_SHIFT "$SHIFT")
+    VARS+=("$EXPORT_VAR" "$(lk_quote_args ${ARGS[@]+"${ARGS[@]}"})")
+    printf "$PREFIX"'%s=%q\n' "${VARS[@]}"
+    printf 'export %s\n' "$EXPORT_VAR"
+    printf "$PREFIX"'%s=(%s)\n' LK_ARGV "$(lk_quote_args "$@")"
+} #### Reviewed: 2021-03-27
 
 # lk_symlink_bin TARGET [ALIAS]
 function lk_symlink_bin() {

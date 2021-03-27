@@ -460,13 +460,13 @@ Usage: $(lk_myself -f) SSH_HOST [REMOTE_PATH [LOCAL_PATH [RSYNC_ARG...]]]" || re
 # Regenerate configuration files and rebuild indexes. Recommended after
 # migrating WordPress.
 function lk_wp_reapply_config() {
-    local FILE
+    local FILE STATUS=0
     if lk_wp plugin is-active wp-rocket; then
         lk_console_detail "Regenerating WP Rocket files"
         wp cli has-command "rocket regenerate" ||
             lk_wp_package_install wp-media/wp-rocket-cli || return
         for FILE in htaccess advanced-cache config; do
-            wp rocket regenerate --file="$FILE"
+            wp rocket regenerate --file="$FILE" || STATUS=$?
         done
     fi
     if lk_wp plugin is-active email-log; then
@@ -476,8 +476,9 @@ function lk_wp_reapply_config() {
     fi
     if wp cli has-command "yoast index"; then
         lk_console_detail "Building Yoast index"
-        wp yoast index
+        wp yoast index || STATUS=$?
     fi
+    return "$STATUS"
 }
 
 # lk_wp_enable_system_cron [INTERVAL]
