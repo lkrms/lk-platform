@@ -19,6 +19,10 @@ shopt -s nullglob
 
 include=arch,git,linux,provision . "$LK_BASE/lib/bash/common.sh"
 
+SH=$(lk_provision_getopt)
+eval "$SH"
+shift "$LK_SHIFT"
+
 ! lk_in_chroot || LK_BOOTSTRAP=1
 
 function is_bootstrap() {

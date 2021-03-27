@@ -9,6 +9,9 @@
     exit
 }
 
+[ -z "${_LK_PLATFORM_CONFIGURE_ARGS:-}" ] ||
+    eval "set -- $_LK_PLATFORM_CONFIGURE_ARGS \"\$@\""
+
 {
     set -euo pipefail
     _FILE=${BASH_SOURCE[0]}
@@ -64,6 +67,10 @@
         LK_SNAPSHOT_DAILY_MAX_AGE
         LK_SNAPSHOT_WEEKLY_MAX_AGE
         LK_SNAPSHOT_FAILED_MAX_AGE
+        LK_SITE_ENABLE
+        LK_SITE_DISABLE_WWW
+        LK_SITE_DISABLE_HTTPS
+        LK_SITE_ENABLE_STAGING
         LK_ARCH_MIRROR
         LK_ARCH_REPOS
         LK_SCRIPT_DEBUG
@@ -79,7 +86,7 @@
     # Don't allow environment variables to override values set in config files
     export -n "${!LK_@}"
 
-    # Don't allow common.sh to override ORIGINAL_PATH_PREFIX (see below)
+    # Don't use the default prefix ("lk-") if LK_PATH_PREFIX is not configured
     LK_PATH_PREFIX=${LK_PATH_PREFIX-}
 
     include=provision,git . "$LK_INST/lib/bash/common.sh"
@@ -99,7 +106,7 @@
         shift
         case "$OPT" in
         -s | --set)
-            [[ $1 =~ ^([a-zA-Z_][a-zA-Z0-9_]*)=(.*) ]] ||
+            [[ $1 =~ ^(LK_[a-zA-Z0-9_]*[a-zA-Z0-9])=(.*) ]] ||
                 lk_die "invalid argument: $1"
             NEW_SETTINGS+=("${BASH_REMATCH[1]}")
             eval "${BASH_REMATCH[1]}=\${BASH_REMATCH[2]}"
