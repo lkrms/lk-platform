@@ -314,6 +314,7 @@ PAC_PACKAGES+=(
 
 AUR_PACKAGES+=(
     demjson
+    lua-posix
     nodejs-less
     phpdoc-phar
     robo3t-bin
