@@ -584,17 +584,17 @@ function lk_get_env() {
     [ -n "${_LK_ENV+1}" ] || _LK_ENV=$(declare -x)
     (
         # Unset every variable that can be unset
-        unset $(lk_var_list_all |
+        unset $(lk_var_list |
             sed -E "/$_LK_IGNORE_REGEX/d") 2>/dev/null || true
         # Ignore the rest
-        _LK_IGNORE=$(lk_var_list_all |
+        _LK_IGNORE=$(lk_var_list |
             sed -E "/$_LK_IGNORE_REGEX/d")
         # Restore environment variables
         eval "$_LK_ENV" 2>/dev/null
         # Reduce the selection to variables not being ignored
         set -- $(comm -13 \
             <(sort -u <<<"$_LK_IGNORE") \
-            <({ [ $# -gt 0 ] && lk_echo_args "$@" || lk_var_list_all; } |
+            <({ [ $# -gt 0 ] && lk_echo_args "$@" || lk_var_list; } |
                 sed -E "/$_LK_IGNORE_REGEX/d" | sort -u))
         [ $# -eq 0 ] ||
             _LK_STACK_DEPTH=1 \
@@ -719,7 +719,7 @@ function lk_has_newline() {
     [ "${!1/$'\n'/}" != "${!1}" ]
 }
 
-function lk_var_list_all() {
+function lk_var_list() {
     eval "printf '%s\n'$(printf ' "${!%s@}"' {a..z} {A..Z} _)"
 }
 
@@ -2942,10 +2942,11 @@ function lk_file_backup() {
             lk_maybe_sudo test -s "$1" || return 0
             ! lk_is_true MOVE || {
                 FILE=$(lk_maybe_sudo realpath "$1") || return
-                { OWNER=$(lk_file_owner "$FILE") &&
-                    OWNER_HOME=$(lk_expand_path "~$OWNER") &&
-                    OWNER_HOME=$(realpath "$OWNER_HOME"); } 2>/dev/null ||
-                    OWNER_HOME=
+                {
+                    OWNER=$(lk_file_owner "$FILE") &&
+                        OWNER_HOME=$(lk_expand_path "~$OWNER") &&
+                        OWNER_HOME=$(lk_maybe_sudo realpath "$OWNER_HOME")
+                } 2>/dev/null || OWNER_HOME=
                 if lk_will_elevate && [ "${FILE#$OWNER_HOME}" = "$FILE" ]; then
                     lk_install -d \
                         -m "$([ -g "$LK_BASE" ] && echo 02775 || echo 00755)" \
