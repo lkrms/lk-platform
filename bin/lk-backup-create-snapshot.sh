@@ -30,6 +30,7 @@ function exit_trap() {
         MESSAGE=
         { [ ! -s "$RSYNC_OUT_FILE" ] && [ ! -s "$RSYNC_ERR_FILE" ]; } ||
             ! TAR=$(lk_mktemp_file) ||
+            ! lk_delete_on_exit "$TAR" ||
             ! tar -C "${RSYNC_OUT_FILE%/*}" -czf "$TAR" \
                 "${RSYNC_OUT_FILE##*/}" \
                 "${RSYNC_ERR_FILE##*/}" || {

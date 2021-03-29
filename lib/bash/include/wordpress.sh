@@ -552,7 +552,9 @@ function lk_wp_set_permissions() {
         CHANGES=$(lk_maybe_sudo gnu_chown -Rhc "$OWNER" "$SITE_ROOT" |
             tee -a "$LOG_FILE" | wc -l) || return
         lk_console_detail "Changes:" "$CHANGES"
-        lk_console_log "Changes have been logged to" "$LOG_FILE"
+        ! ((CHANGES)) &&
+            lk_delete_on_exit "$LOG_FILE" ||
+            lk_console_detail "Changes logged to:" "$LOG_FILE"
     else
         lk_console_warning "Unable to set owner (not running as root)"
     fi

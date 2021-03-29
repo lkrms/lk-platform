@@ -308,6 +308,7 @@ function lk_ssh_get_public_key() {
     else
         # ssh-keygen doesn't allow fingerprinting from a file descriptor
         KEY_FILE=$(lk_mktemp_file) &&
+            lk_delete_on_exit "$KEY_FILE" &&
             cat <<<"$KEY" >"$KEY_FILE" || return
         ssh-keygen -y -f "$KEY_FILE" || EXIT_STATUS=$?
         rm -f "$KEY_FILE" || true

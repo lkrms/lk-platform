@@ -55,9 +55,13 @@ function lk_arch_add_repo() {
     [ -f "$FILE" ] ||
         lk_warn "$FILE: file not found" || return
     SH=$(
-        function _add_key() { KEY_FILE=$(mktemp) &&
+        function _add_key() { KEY_FILE=$(mktemp) && {
+            STATUS=0
             curl --fail --location --output "$KEY_FILE" "$1" &&
-            pacman-key --add "$KEY_FILE"; }
+                pacman-key --add "$KEY_FILE" || STATUS=$?
+            rm -f "$KEY_FILE" || true
+            return "$STATUS"
+        }; }
         declare -f _add_key
         echo '_add_key "$1"'
     )
@@ -251,11 +255,11 @@ function lk_makepkg() {
     if [ -n "${AUR_PACKAGE:-}" ]; then
         AUR_URL=https://aur.archlinux.org/$AUR_PACKAGE.git
         BUILD_DIR=$(lk_mktemp_dir) &&
+            lk_delete_on_exit "$BUILD_DIR" &&
             git clone "$AUR_URL" "$BUILD_DIR" &&
             SH=$({ cd "$BUILD_DIR" && lk_makepkg "$@"; } >&2 &&
                 echo "LK_MAKEPKG_LIST=($(lk_quote LK_MAKEPKG_LIST))") &&
-            eval "$SH" &&
-            lk_delete_on_exit "$BUILD_DIR"
+            eval "$SH"
     else
         lk_pac_sync &&
             lk_tty makepkg --syncdeps --rmdeps --clean --noconfirm "$@" &&

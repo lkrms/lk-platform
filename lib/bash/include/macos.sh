@@ -158,7 +158,8 @@ function lk_macos_install_dmg() {
         lk_warn "nothing to install" || EXIT_STATUS=$?
     [ "$EXIT_STATUS" -ne 0 ] ||
         lk_macos_install_pkg "${INSTALL[0]}" || EXIT_STATUS=$?
-    lk_macos_unmount "${MOUNT_POINTS[@]}" >/dev/null || EXIT_STATUS=$?
+    lk_macos_unmount "${MOUNT_POINTS[@]}" >/dev/null || return
+    rm -Rf "$MOUNT_ROOT" || true
     return "$EXIT_STATUS"
 }
 

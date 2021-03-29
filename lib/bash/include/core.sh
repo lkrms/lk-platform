@@ -86,11 +86,13 @@ else
     # - . /dev/stdin
     # - . <(cat /dev/stdin)
     function lk_eval_input() {
-        local FILE
-        FILE=$(mktemp) &&
+        local FILE STATUS=0
+        FILE=$(mktemp) && {
             cat >"$FILE" &&
-            . "$FILE" || return
-        rm -f -- "$FILE" || true
+                . "$FILE" || STATUS=$?
+            rm -f -- "$FILE" || true
+            return "$STATUS"
+        }
     }
 fi
 
@@ -1153,7 +1155,8 @@ function lk_get_outputs_of() {
     local SH EXIT_STATUS
     SH=$(
         _LK_STDOUT=$(lk_mktemp_file) &&
-            _LK_STDERR=$(lk_mktemp_file) || exit
+            _LK_STDERR=$(lk_mktemp_file) &&
+            lk_delete_on_exit "$_LK_STDOUT" "$_LK_STDERR" || exit
         unset _LK_FD
         "$@" >"$_LK_STDOUT" 2>"$_LK_STDERR" || EXIT_STATUS=$?
         for i in _LK_STDOUT _LK_STDERR; do
@@ -2121,6 +2124,7 @@ function lk_wget_uris() {
     local TEMP_FILE
     # --convert-links is disabled if wget uses standard output
     TEMP_FILE=$(lk_mktemp_file) &&
+        lk_delete_on_exit "$TEMP_FILE" &&
         wget --quiet --convert-links --output-document "$TEMP_FILE" "$1" ||
         return
     lk_get_uris "$TEMP_FILE"
@@ -3013,6 +3017,7 @@ function lk_file_add_newline() {
             ! lk_is_true BACKUP ||
                 lk_file_backup ${MOVE:+-m} "$1" || return
             TEMP=$(lk_file_prepare_temp "$1") &&
+                lk_delete_on_exit "$TEMP" &&
                 echo | lk_maybe_sudo tee -a "$TEMP" >/dev/null &&
                 lk_maybe_sudo mv -f"$vv" "$TEMP" "$1" || return
             ! lk_verbose ||
@@ -3160,7 +3165,10 @@ function lk_err_trap() {
 function lk_delete_on_exit() {
     local ARRAY=_LK_EXIT_DELETE_$BASH_SUBSHELL
     [ -n "${!ARRAY+1}" ] || eval "$ARRAY=()"
-    eval "${ARRAY}[\${#${ARRAY}[@]}]=\$1"
+    while [ $# -gt 0 ]; do
+        eval "${ARRAY}[\${#${ARRAY}[@]}]=\$1"
+        shift
+    done
 }
 
 set -o pipefail

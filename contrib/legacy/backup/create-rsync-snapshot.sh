@@ -329,6 +329,7 @@ function exit_trap() {
                 "$HN-$SOURCE_NAME-$LK_SNAPSHOT_TIMESTAMP-rsync.log.tgz" \
                 application/gzip &&
                 MESSAGE="the attached log files and " || true
+            rm -f "$TAR" || true
         }
         [ "$EXIT_STATUS" -eq 0 ] && {
             [ "$RSYNC_EXIT_VALUE" -eq 0 ] && {
