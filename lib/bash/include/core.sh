@@ -3097,18 +3097,18 @@ Options:
             ! lk_verbose 2 || lk_console_detail "Not changed:" "$1"
             return 0
         }
+        ! lk_is_true ASK || ! lk_maybe_sudo test -s "$1" || {
+            lk_console_diff "$1" "" <<<"${CONTENT%$'\n'}" &&
+                lk_confirm "Replace $1 as above?" Y || return
+        }
+        ! lk_verbose || lk_is_true LK_FILE_NO_DIFF ||
+            lk_file_get_text "$1" PREVIOUS || return
         ! lk_is_true BACKUP ||
             lk_file_backup ${MOVE:+-m} "$1" || return
-        ! lk_is_true ASK &&
-            { ! lk_verbose || lk_is_true LK_FILE_NO_DIFF; } ||
-            lk_file_get_text "$1" PREVIOUS || return
     fi
     TEMP=$(lk_file_prepare_temp "$1") &&
+        lk_delete_on_exit "$TEMP" &&
         echo "${CONTENT%$'\n'}" | lk_maybe_sudo tee "$TEMP" >/dev/null &&
-        { ! lk_is_true ASK || ! lk_maybe_sudo test -s "$1" || {
-            lk_console_diff "$1" "$TEMP"
-            lk_confirm "Replace $1 as above?" Y
-        }; } &&
         lk_maybe_sudo mv -f"$vv" "$TEMP" "$1" &&
         LK_FILE_REPLACE_NO_CHANGE=0 || return
     ! lk_verbose || {
