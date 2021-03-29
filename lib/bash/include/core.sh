@@ -3088,6 +3088,7 @@ Options:
     fi
     ! lk_verbose 2 || vv=v
     LK_FILE_REPLACE_NO_CHANGE=${LK_FILE_REPLACE_NO_CHANGE:-1}
+    LK_FILE_REPLACE_DECLINED=0
     if lk_maybe_sudo test -e "$1"; then
         ! lk_is_true LINK || {
             TEMP=$(realpath "$1") || return
@@ -3103,8 +3104,11 @@ Options:
             return 0
         }
         ! lk_is_true ASK || ! lk_maybe_sudo test -s "$1" || {
-            lk_console_diff "$1" "" <<<"${CONTENT%$'\n'}" &&
-                lk_confirm "Replace $1 as above?" Y || return
+            lk_console_diff "$1" "" <<<"${CONTENT%$'\n'}" || return
+            lk_confirm "Replace $1 as above?" Y || {
+                LK_FILE_REPLACE_DECLINED=1
+                return 1
+            }
         }
         ! lk_verbose || lk_is_true LK_FILE_NO_DIFF ||
             lk_file_get_text "$1" PREVIOUS || return
