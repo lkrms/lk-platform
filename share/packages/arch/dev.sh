@@ -188,7 +188,7 @@ PAC_PACKAGES+=(
 
     # system
     dconf-editor
-    fontconfig-docs
+    fontconfig
     gparted
     guake
     libsecret   # secret-tool
