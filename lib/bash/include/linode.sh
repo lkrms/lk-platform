@@ -494,6 +494,7 @@ Usage: $(lk_myself -f) DIR HOST..." || return
         FILES=$(ssh "$SSH_HOST" ls -d \
             /etc/default/lk-platform \
             /etc/memcached.conf \
+            "/etc/apache2/sites-available/*.conf" \
             "/etc/mysql/mariadb.conf.d/*$PREFIX*.cnf" \
             "/etc/php/*/fpm/pool.d/*.conf" 2>/dev/null) || [ $? -ne 255 ]
         lk_mapfile _FILES <<<"$FILES"
