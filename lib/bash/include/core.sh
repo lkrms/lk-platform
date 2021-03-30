@@ -3097,9 +3097,9 @@ Options:
         lk_maybe_sudo test -f "$1" || lk_warn "not a file: $1" || return
         lk_maybe_sudo test -L "$1" || ! diff -q \
             <(TARGET=$1 _lk_maybe_filter "$IGNORE" "$FILTER" \
-                lk_maybe_sudo cat '$TARGET') \
+                lk_maybe_sudo cat "\"\$TARGET\"") \
             <([ -z "${CONTENT:+1}" ] || _lk_maybe_filter "$IGNORE" "$FILTER" \
-                echo '"${CONTENT%$'"'\\n'"'}"') >/dev/null || {
+                echo "\"\${CONTENT%\$'\\n'}\"") >/dev/null || {
             ! lk_verbose 2 || lk_console_detail "Not changed:" "$1"
             return 0
         }
