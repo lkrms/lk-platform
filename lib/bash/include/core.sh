@@ -3030,7 +3030,7 @@ function lk_file_add_newline() {
 function lk_file_replace() {
     local OPTIND OPTARG OPT LK_USAGE IFS SOURCE= IGNORE= FILTER= ASK= \
         LINK BACKUP=${LK_FILE_TAKE_BACKUP:-} MOVE=${LK_FILE_MOVE_BACKUP:-} \
-        CONTENT PREVIOUS TEMP vv=
+        NEW=1 VERB=Created CONTENT PREVIOUS TEMP vv=
     unset IFS PREVIOUS
     LK_USAGE="\
 Usage: $(lk_myself -f) [OPTIONS] TARGET [CONTENT]
@@ -3095,6 +3095,7 @@ Options:
             set -- "$TEMP"
         }
         lk_maybe_sudo test -f "$1" || lk_warn "not a file: $1" || return
+        ! lk_maybe_sudo test -s "$1" || unset NEW VERB
         lk_maybe_sudo test -L "$1" || ! diff -q \
             <(TARGET=$1 _lk_maybe_filter "$IGNORE" "$FILTER" \
                 lk_maybe_sudo cat "\"\$TARGET\"") \
@@ -3103,7 +3104,7 @@ Options:
             ! lk_verbose 2 || lk_console_detail "Not changed:" "$1"
             return 0
         }
-        ! lk_is_true ASK || ! lk_maybe_sudo test -s "$1" || {
+        ! lk_is_true ASK || lk_is_true NEW || {
             lk_console_diff "$1" "" <<<"${CONTENT%$'\n'}" || return
             lk_confirm "Replace $1 as above?" Y || {
                 LK_FILE_REPLACE_DECLINED=1
@@ -3122,7 +3123,7 @@ Options:
         LK_FILE_REPLACE_NO_CHANGE=0 || return
     ! lk_verbose || {
         if lk_is_true LK_FILE_NO_DIFF || lk_is_true ASK; then
-            lk_console_detail "Updated:" "$1"
+            lk_console_detail "${VERB:-Updated}:" "$1"
         elif [ -n "${PREVIOUS+1}" ]; then
             echo -n "$PREVIOUS" | lk_console_detail_diff "" "$1"
         else
