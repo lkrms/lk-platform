@@ -127,6 +127,7 @@ STATUS=0
 LK_WP_QUIET=1
 
 lk_log_output
+lk_start_trace
 
 lk_console_message "Preparing WordPress migration"
 lk_console_detail "[remote] Source:" "$SSH_HOST:$REMOTE_PATH"

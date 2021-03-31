@@ -17,6 +17,9 @@ export LK_BASE
 
 include=mysql . "$LK_BASE/lib/bash/common.sh"
 
+lk_log_output
+lk_start_trace
+
 USERNAME="${SUDO_USER:-$USER}"
 
 LK_USAGE="\
@@ -44,11 +47,11 @@ eval "set -- $LK_GETOPT"
 # 3. SUDO_USER is not "root"
 #
 # Otherwise, assume the invoking user has root access to MySQL
-REGEX="^[a-zA-Z0-9_]+\$"
+REGEX="^[-a-zA-Z0-9_]+\$"
 if lk_is_root && [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
     [[ "$USERNAME" =~ $REGEX ]] ||
         lk_die "$USERNAME: not a valid database identifier"
-    REGEX="^$USERNAME(_[a-zA-Z0-9_]*)?\$"
+    REGEX="^$USERNAME(_[-a-zA-Z0-9_]*)?\$"
 fi
 
 [[ "$1" =~ $REGEX ]] || lk_usage

@@ -374,12 +374,13 @@ Usage: $(lk_myself -f) SQL_PATH [DB_NAME [DB_USER]]" || return
 All data in local database '$LOCAL_DB_NAME' will be permanently destroyed.
 Proceed?" Y || return
     [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] || {
-        COMMAND=(lk_elevate "${LK_INST:-$LK_BASE}/bin/lk-mysql-grant.sh"
+        COMMAND=(LK_SUDO=1
+            lk_maybe_trace "${LK_INST:-$LK_BASE}/bin/lk-mysql-grant.sh"
             "$LOCAL_DB_NAME" "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD")
-        [[ $USER =~ ^[a-zA-Z0-9_]+$ ]] &&
-            [[ $LOCAL_DB_NAME =~ ^$USER(_[a-zA-Z0-9_]*)?$ ]] ||
+        [[ $USER =~ ^[-a-zA-Z0-9_]+$ ]] &&
+            [[ $LOCAL_DB_NAME =~ ^$USER(_[-a-zA-Z0-9_]*)?$ ]] ||
             unset "COMMAND[0]"
-        "${COMMAND[@]}" || return
+        eval "$(lk_quote_args "${COMMAND[@]}")" || return
     }
     lk_console_message "Restoring WordPress database to local system"
     lk_console_detail "Checking wp-config.php"

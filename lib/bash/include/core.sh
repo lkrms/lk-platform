@@ -277,7 +277,7 @@ function _lk_usage_format() {
     BOLD=$(lk_escape_ere_replace "$LK_BOLD")
     RESET=$(lk_escape_ere_replace "$LK_RESET")
     sed -E \
-        -e "s/^($S*([uU]sage|[oO]r):$S+)($CMD)($S|\$)/\1$BOLD\3$RESET\4/" \
+        -e "s/^($S*([uU]sage|[oO]r):$S+(sudo )?)($CMD)($S|\$)/\1$BOLD\4$RESET\5/" \
         -e "s/^[a-zA-Z0-9 ]+:\$/$BOLD&$RESET/" \
         -e "s/^\\\\($NS)/\\1/" <<<"$1"
 }
@@ -1883,7 +1883,7 @@ function lk_maybe_trace() {
             SHELLOPTS=xtrace
             "$@")
     ! lk_will_sudo ||
-        COMMAND=(sudo -C 5 -H "${COMMAND[@]}")
+        COMMAND=(sudo -C 5 -H "${COMMAND[@]:1}")
     ! lk_is_true OUTPUT ||
         COMMAND=(lk_quote_args "${COMMAND[@]}")
     "${COMMAND[@]}"
