@@ -653,7 +653,7 @@ function lk_hosts_get_records() {
     shift
     [[ $TYPE =~ ^[a-zA-Z]+(,[a-zA-Z]+)*$ ]] ||
         lk_warn "invalid type(s): $TYPE" || return
-    lk_test_many "lk_is_host" "$@" || lk_warn "invalid host(s): $*" || return
+    lk_test_many lk_is_host "$@" || lk_warn "invalid host(s): $*" || return
     IFS=,
     TYPES=($TYPE)
     for TYPE in "${TYPES[@]}"; do
@@ -814,33 +814,55 @@ function lk_tcp_is_reachable() {
     nc -z -w "${3:-5}" "$1" "$2" &>/dev/null
 }
 
+# lk_certbot_install [-w WEBROOT_PATH] DOMAIN... [-- CERTBOT_ARG...]
 function lk_certbot_install() {
-    local EMAIL=${LK_LETSENCRYPT_EMAIL-${LK_ADMIN_EMAIL:-}} DOMAIN DOMAINS_OK
-    lk_test_many "lk_is_fqdn" "$@" || lk_warn "invalid domain(s): $*" || return
-    [ -n "$EMAIL" ] || lk_warn "email address not set" || return
+    local WEBROOT WEBROOT_PATH ERRORS=0 \
+        EMAIL=${LK_LETSENCRYPT_EMAIL-${LK_ADMIN_EMAIL:-}} DOMAIN DOMAINS=()
+    unset WEBROOT
+    [ "${1:-}" != -w ] || { WEBROOT= && WEBROOT_PATH=$2 && shift 2; }
+    while [ $# -gt 0 ]; do
+        [ "$1" != -- ] || {
+            shift
+            break
+        }
+        DOMAINS+=("$1")
+        shift
+    done
+    [ ${#DOMAINS[@]} -gt 0 ] || lk_usage "\
+Usage: ${FUNCNAME[0]} [-w WEBROOT_PATH] DOMAIN... [-- CERTBOT_ARG...]" || return
+    lk_test_many lk_is_fqdn "${DOMAINS[@]}" ||
+        lk_warn "invalid domain(s): ${DOMAINS[*]}" || return
+    [ -z "${WEBROOT+1}" ] || lk_elevate test -d "$WEBROOT_PATH" ||
+        lk_warn "directory not found: $WEBROOT_PATH" || return
+    [ -n "$EMAIL" ] || lk_warn "no email address in environment" || return
     lk_is_email "$EMAIL" || lk_warn "invalid email address: $EMAIL" || return
-    for DOMAIN in "$@"; do
+    for DOMAIN in "${DOMAINS[@]}"; do
         lk_node_is_host "$DOMAIN" &&
             lk_console_log "Domain resolves to this system:" "$DOMAIN" ||
             lk_console_warning -r \
                 "Domain does not resolve to this system:" "$DOMAIN" ||
-            DOMAINS_OK=0
+            ((++ERRORS))
     done
-    ! lk_is_false DOMAINS_OK ||
+    [ "$ERRORS" -eq 0 ] ||
         lk_is_true LK_LETSENCRYPT_IGNORE_DNS ||
         lk_confirm "Ignore domain resolution errors?" N || return
-    lk_elevate certbot run \
+    lk_run_detail lk_elevate certbot \
+        ${WEBROOT-run} \
+        ${WEBROOT+certonly} \
         --non-interactive \
         --keep-until-expiring \
         --expand \
         --agree-tos \
         --email "$EMAIL" \
         --no-eff-email \
-        --no-redirect \
-        --"${LK_CERTBOT_PLUGIN:-apache}" \
+        ${WEBROOT---no-redirect} \
+        ${WEBROOT---"${LK_CERTBOT_PLUGIN:-apache}"} \
+        ${WEBROOT+--webroot} \
+        ${WEBROOT+--webroot-path "$WEBROOT_PATH"} \
+        --domains "$(lk_implode_args "," "${DOMAINS[@]}")" \
         ${LK_CERTBOT_OPTIONS[@]:+"${LK_CERTBOT_OPTIONS[@]}"} \
-        --domains "$(lk_implode_args "," "$@")"
-}
+        "$@"
+} #### Reviewed: 2021-03-31
 
 # lk_cpanel_get_ssl_cert SSH_HOST DOMAIN [TARGET_DIR]
 function lk_cpanel_get_ssl_cert() {
@@ -895,7 +917,7 @@ function lk_ssl_verify_cert() {
 
 # lk_ssl_get_self_signed_cert DOMAIN...
 function lk_ssl_get_self_signed_cert() {
-    lk_test_many "lk_is_fqdn" "$@" || lk_warn "invalid domain(s): $*" || return
+    lk_test_many lk_is_fqdn "$@" || lk_warn "invalid domain(s): $*" || return
     lk_console_detail "Generating a self-signed SSL certificate for:" \
         $'\n'"$(lk_echo_args "$@")"
     lk_no_input || {
