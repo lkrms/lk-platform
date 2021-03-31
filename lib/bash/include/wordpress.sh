@@ -133,7 +133,9 @@ Usage: $(lk_myself -f) NEW_URL" || return
     lk_console_detail \
         "WordPress address:" "$OLD_SITE_URL -> $LK_BOLD$NEW_SITE_URL$LK_RESET"
     lk_wp_is_quiet || lk_confirm "Proceed?" Y || return
-    lk_wp option update home "$NEW_URL" &&
+    { ! lk_wp config has WP_HOME || lk_wp config delete WP_HOME; } &&
+        { ! lk_wp config has WP_SITEURL || lk_wp config delete WP_SITEURL; } &&
+        lk_wp option update home "$NEW_URL" &&
         lk_wp option update siteurl "$NEW_SITE_URL" || return
     if lk_is_true LK_WP_REPLACE || { [ -z "${LK_WP_REPLACE+1}" ] &&
         lk_confirm "Replace the previous URL in all tables?" Y; }; then
