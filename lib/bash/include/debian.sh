@@ -220,12 +220,12 @@ function lk_apt_reinstall_damaged() {
                     "$MISSING_COUNT" file files):" \
                 "APT package" "APT packages"
         lk_confirm "Proceed?" Y || return
-        AUTO=($(apt-mark showauto |
-            grep -Fxf <(lk_echo_array REINSTALL))) || true
+        AUTO=($(apt-mark showauto | grep -Fxf <(lk_echo_array REINSTALL) ||
+            [ ${PIPESTATUS[1]} -eq 1 ])) || return
+        unset IFS
         [ ${#AUTO[@]} -eq 0 ] ||
-            lk_echo_array AUTO |
-            lk_console_detail_list "Marked as 'automatically installed':" \
-                "APT package" "APT packages"
+            lk_console_log "Packages marked as 'automatically installed':" \
+                "${AUTO[*]}"
         lk_elevate apt-get -yq \
             --no-install-recommends --no-install-suggests --reinstall \
             install "${REINSTALL[@]}" &&
