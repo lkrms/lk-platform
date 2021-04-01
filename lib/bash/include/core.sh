@@ -1294,6 +1294,7 @@ function lk_start_trace() {
 # lk_log_output [TEMP_LOG_FILE]
 function lk_log_output() {
     local LOG_CMD ARGC LOG_PATH DIR HEADER=() IFS
+    unset IFS
     ! lk_is_true LK_NO_LOG &&
         ! lk_log_is_open &&
         lk_is_script_running || return 0
@@ -1901,7 +1902,8 @@ function _lk_console_get_prompt() {
 
 # lk_console_read PROMPT [DEFAULT [READ_ARG...]]
 function lk_console_read() {
-    local PROMPT=("$1") DEFAULT=${2:-} VALUE
+    local PROMPT=("$1") DEFAULT=${2:-} VALUE IFS
+    unset IFS
     if lk_no_input && [ $# -ge 2 ]; then
         echo "$DEFAULT"
         return 0
@@ -1921,7 +1923,8 @@ function lk_console_read_secret() {
 
 # lk_confirm PROMPT [DEFAULT [READ_ARG...]]
 function lk_confirm() {
-    local PROMPT=("$1") DEFAULT=${2:-} VALUE
+    local PROMPT=("$1") DEFAULT=${2:-} VALUE IFS
+    unset IFS
     if lk_is_true DEFAULT; then
         PROMPT+=("[Y/n]")
         DEFAULT=Y
