@@ -189,6 +189,51 @@ END {
     lk_apt_autoremove
 }
 
+function lk_apt_reinstall_damaged() {
+    local _DPKG _REAL _MISSING FILE_COUNT DIRS MISSING_COUNT REINSTALL AUTO
+    lk_console_message "Checking APT package files"
+    _DPKG=$(lk_mktemp_file) &&
+        _REAL=$(lk_mktemp_file) &&
+        _MISSING=$(lk_mktemp_file) &&
+        lk_delete_on_exit "$_DPKG" "$_REAL" "$_MISSING" || return
+    find /var/lib/dpkg/info -name "*.md5sums" -print0 |
+        xargs -0 sed -E "s/^$NS+$S+(.*)/\/\1/" | sort -u >"$_DPKG" &&
+        FILE_COUNT=$(wc -l <"$_DPKG") &&
+        DIRS=$(sed -E 's/(.*)\/[^/]+$/\1/' "$_DPKG" | sort -u |
+            awk -f "$LK_BASE/lib/awk/paths-get-unique-roots.awk" | sort -u) ||
+        return
+    ! lk_verbose ||
+        lk_console_detail "Files managed by dpkg:" "$FILE_COUNT"
+    local IFS=$'\n'
+    lk_elevate find -L $DIRS -type f -print | sort -u >"$_REAL"
+    comm -23 "$_DPKG" "$_REAL" >"$_MISSING" &&
+        MISSING_COUNT=$(wc -l <"$_MISSING") || return
+    ! lk_verbose ||
+        lk_console_detail "Missing files:" "$MISSING_COUNT"
+    [ "$MISSING_COUNT" -eq 0 ] || {
+        REINSTALL=($(xargs dpkg -S <"$_MISSING" | cut -d: -f1 | sort -u)) &&
+            [ ${#REINSTALL[@]} -gt 0 ] ||
+            lk_warn "unable to find packages for missing files" || return
+        lk_echo_array REINSTALL |
+            lk_console_detail_list \
+                "Reinstalling to restore $MISSING_COUNT $(lk_maybe_plural \
+                    "$MISSING_COUNT" file files):" \
+                "APT package" "APT packages"
+        lk_confirm "Proceed?" Y || return
+        AUTO=($(apt-mark showauto |
+            grep -Fxf <(lk_echo_array REINSTALL))) || true
+        [ ${#AUTO[@]} -eq 0 ] ||
+            lk_echo_array AUTO |
+            lk_console_detail_list "Marked as 'automatically installed':" \
+                "APT package" "APT packages"
+        lk_elevate apt-get -yq \
+            --no-install-recommends --no-install-suggests --reinstall \
+            install "${REINSTALL[@]}" &&
+            { [ ${#AUTO[@]} -eq 0 ] ||
+                lk_elevate apt-mark auto "${AUTO[@]}"; }
+    }
+}
+
 # lk_apt_sources_get_clean [-l LIST]
 function lk_apt_sources_get_clean() {
     local LIST=/etc/apt/sources.list CODENAME SH \
