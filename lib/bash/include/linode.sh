@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2029,SC2086
-
 lk_include git provision
 
 function linode-cli() {

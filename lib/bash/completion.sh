@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2206
-
 lk_bash_at_least 4 2 || return 0
 
 function __lkc_arg() {

@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2153,SC2206
-
 set -euo pipefail
 _DEPTH=2
 _FILE=${BASH_SOURCE[0]}
@@ -15,7 +13,7 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
     lk_die "unable to locate LK_BASE"
 export LK_BASE
 
-include='' . "$LK_BASE/lib/bash/common.sh"
+include= . "$LK_BASE/lib/bash/common.sh"
 
 lk_elevate
 

@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2001,SC2153
-
 set -eu
 
 lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }

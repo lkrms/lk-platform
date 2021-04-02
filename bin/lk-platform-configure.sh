@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2086
-
 [ "$EUID" -eq 0 ] || {
     [ -z "${BASH_XTRACEFD:-}" ] && unset ARGS ||
         ARGS=(-C $((i = BASH_XTRACEFD, (${_LK_FD:=2} > i ? _LK_FD : i) + 1)))
@@ -269,7 +267,6 @@
     }
 
     if [ -d "$LK_BASE/.git" ]; then
-        # shellcheck disable=SC2086
         function _git() {
             sudo -Hu "$REPO_OWNER" \
                 ${LK_GIT_ENV[@]+env "${LK_GIT_ENV[@]}"} \

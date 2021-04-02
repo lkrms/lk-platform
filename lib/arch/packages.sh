@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2206
-
 # References:
 # - https://wiki.archlinux.org/index.php/Installation_guide
 # - https://gitlab.archlinux.org/archlinux/archiso/-/raw/master/configs/releng/packages.x86_64
@@ -43,6 +41,7 @@ PAC_PACKAGES=(
     moreutils
     pv
     rsync
+    time
     trash-cli
     unison
 

@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2153
-
 set -euo pipefail
 _DEPTH=1
 _FILE=${BASH_SOURCE[0]}

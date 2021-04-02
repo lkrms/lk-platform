@@ -1,8 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2029
-
-include='' . lk-bash-load.sh || exit
+include= . lk-bash-load.sh || exit
 
 lk_log_output
 

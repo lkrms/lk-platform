@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2030,SC2031,SC2086,SC2120,SC2206
+# shellcheck disable=SC2030
 
 # lk_node_service_enabled SERVICE
 #

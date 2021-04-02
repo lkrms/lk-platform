@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2153,SC2206
-
 function lk_atop_ps_mem() {
     lk_elevate atop -R -PCPL,MEM,SWP,PAG,PRM "$@" |
         awk -f "${LK_INST:-$LK_BASE}/lib/awk/atop-ps-mem.awk"

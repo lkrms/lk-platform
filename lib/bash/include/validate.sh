@@ -18,7 +18,6 @@ function _lk_validate_fail() {
 function _lk_validate_list() {
     local FN=$1 VAR=$2 VAL=${!2:-} IFS=, NULL VALID SELECTED i
     shift
-    # shellcheck disable=SC2206
     SELECTED=($VAL)
     unset IFS
     for i in ${SELECTED[@]+"${SELECTED[@]}"}; do

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-include='' . lk-bash-load.sh || exit
+include= . lk-bash-load.sh || exit
 
 lk_assert_command_exists gs
 

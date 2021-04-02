@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2029,SC2120
-
 function lk_mysql_is_quiet() {
     [ -n "${LK_MYSQL_QUIET:-}" ]
 }

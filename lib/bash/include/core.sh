@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2046,SC2086,SC2094,SC2116,SC2120
+# shellcheck disable=SC2094,SC2116
 
 export -n BASH_XTRACEFD SHELLOPTS
 [ -n "${_LK_ENV+1}" ] || _LK_ENV=$(declare -x)

@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2120,SC2206
-
 lk_include linux
 
 function lk_arch_chroot() {

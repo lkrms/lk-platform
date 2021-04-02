@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2046
-
 lk_include debian git provision
 
 # lk_hosting_add_administrator LOGIN [AUTHORIZED_KEY...]

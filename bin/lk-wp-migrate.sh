@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2029
-
 lk_bin_depth=1 include=wordpress . lk-bash-load.sh || exit
 
 REMOTE_PATH=public_html
