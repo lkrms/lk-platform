@@ -6,18 +6,29 @@ function lk_atop_ps_mem() {
 }
 
 function _lk_systemctl_args() {
-    local OPTIND OPTARG OPT PARAMS=0 LK_USAGE COMMAND=(systemctl) _USER NAME
-    unset _USER
+    local OPTIND OPTARG OPT PARAMS=0 LK_USAGE ARGS=() _USER _MACHINE NAME \
+    _LK_STACK_DEPTH=1 COMMAND=(systemctl)
+    unset _USER _MACHINE
     [ -z "${_LK_PARAMS+1}" ] || PARAMS=${#_LK_PARAMS[@]}
     LK_USAGE="\
-Usage: $(lk_myself -f 1) [-u] [-n NAME] \
+Usage: $(lk_myself -f) [-u] [-m MACHINE] [-n NAME] \
 ${_LK_PARAMS[*]+${_LK_PARAMS[*]} }\
 SERVICE"
-    while getopts ":un:" OPT; do
+    while getopts ":um:n:" OPT; do
         case "$OPT" in
         u)
-            COMMAND=(systemctl --user)
-            _USER=
+            [ -n "${_USER+1}" ] || {
+                COMMAND+=(--user)
+                _USER=
+                ARGS+=(-u)
+            }
+            ;;
+        m)
+            [ -n "${_MACHINE+1}" ] || {
+                COMMAND+=(--machine "$OPTARG")
+                _MACHINE=
+                ARGS+=(-m "$OPTARG")
+            }
             ;;
         n)
             NAME=$OPTARG
@@ -38,13 +49,16 @@ SERVICE"
         echo 'set -- "${@:1:$#-1}" "${*: -1}.service"'
     }
     NAME=${NAME:-$1}
-    printf 'local LK_USAGE=%q COMMAND=(%s) _USER%s NAME=%q _NAME=%q\n' \
+    printf 'local LK_USAGE=%q COMMAND=(%s) ARGS=(%s) _USER%s _MACHINE%s NAME=%q _NAME=%q\n' \
         "$LK_USAGE" \
-        "${COMMAND[*]}" \
+        "$(lk_quote COMMAND)" \
+        "$(lk_quote ARGS)" \
         "${_USER+=}" \
+        "${_MACHINE+=}" \
         "$NAME" \
         "$NAME$([ "$NAME" = "$1" ] || echo " ($1)")"
     [ -n "${_USER+1}" ] || printf 'unset _USER\n'
+    [ -n "${_MACHINE+1}" ] || printf 'unset _MACHINE\n'
     printf 'shift %s\n' \
         $((OPTIND - 1))
 }
@@ -77,7 +91,8 @@ function lk_systemctl_enabled() {
 function lk_systemctl_running() {
     local SH
     SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
-    lk_systemctl_property_is ${_USER+-u} ActiveState active activating "$1"
+    lk_systemctl_property_is ${ARGS[@]+"${ARGS[@]}"} \
+        ActiveState active activating "$1"
 }
 
 function lk_systemctl_failed() {
@@ -89,19 +104,19 @@ function lk_systemctl_failed() {
 function lk_systemctl_exists() {
     local SH
     SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
-    lk_systemctl_property_is ${_USER+-u} LoadState loaded "$1"
+    lk_systemctl_property_is ${ARGS[@]+"${ARGS[@]}"} LoadState loaded "$1"
 }
 
 function lk_systemctl_masked() {
     local SH
     SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
-    lk_systemctl_property_is ${_USER+-u} LoadState masked "$1"
+    lk_systemctl_property_is ${ARGS[@]+"${ARGS[@]}"} LoadState masked "$1"
 }
 
 function lk_systemctl_start() {
     local SH
     SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
-    lk_systemctl_running ${_USER+-u} "$1" || {
+    lk_systemctl_running ${ARGS[@]+"${ARGS[@]}"} "$1" || {
         lk_console_detail "Starting service:" "$NAME"
         ${_USER-lk_elevate} "${COMMAND[@]}" start "$1" ||
             lk_warn "could not start service: $_NAME"
@@ -111,7 +126,7 @@ function lk_systemctl_start() {
 function lk_systemctl_stop() {
     local SH
     SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
-    ! lk_systemctl_running ${_USER+-u} "$1" || {
+    ! lk_systemctl_running ${ARGS[@]+"${ARGS[@]}"} "$1" || {
         lk_console_detail "Stopping service:" "$NAME"
         ${_USER-lk_elevate} "${COMMAND[@]}" stop "$1" ||
             lk_warn "could not stop service: $_NAME"
@@ -121,8 +136,8 @@ function lk_systemctl_stop() {
 function lk_systemctl_restart() {
     local SH
     SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
-    if ! lk_systemctl_running ${_USER+-u} "$1"; then
-        lk_systemctl_start ${_USER+-u} "$1"
+    if ! lk_systemctl_running ${ARGS[@]+"${ARGS[@]}"} "$1"; then
+        lk_systemctl_start ${ARGS[@]+"${ARGS[@]}"} "$1"
     else
         lk_console_detail "Restarting service:" "$NAME"
         ${_USER-lk_elevate} "${COMMAND[@]}" restart "$1" ||
@@ -133,10 +148,10 @@ function lk_systemctl_restart() {
 function lk_systemctl_enable() {
     local SH
     SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
-    lk_systemctl_exists ${_USER+-u} "$1" ||
+    lk_systemctl_exists ${ARGS[@]+"${ARGS[@]}"} "$1" ||
         lk_warn "unknown service: $_NAME" || return
     LK_SYSTEMCTL_ENABLE_NO_CHANGE=${LK_SYSTEMCTL_ENABLE_NO_CHANGE:-1}
-    lk_systemctl_enabled ${_USER+-u} "$1" || {
+    lk_systemctl_enabled ${ARGS[@]+"${ARGS[@]}"} "$1" || {
         lk_console_detail "Enabling service:" "$NAME"
         ${_USER-lk_elevate} "${COMMAND[@]}" enable "$1" &&
             LK_SYSTEMCTL_ENABLE_NO_CHANGE=0 ||
@@ -147,20 +162,20 @@ function lk_systemctl_enable() {
 function lk_systemctl_enable_now() {
     local SH LK_SYSTEMCTL_ENABLE_NO_CHANGE
     SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
-    lk_systemctl_enable ${_USER+-u} "$1" || return
+    lk_systemctl_enable ${ARGS[@]+"${ARGS[@]}"} "$1" || return
     ! lk_is_true LK_SYSTEMCTL_ENABLE_NO_CHANGE ||
-        ! lk_systemctl_property_is ${_USER+-u} Type oneshot "$1" || return 0
-    ! lk_systemctl_failed ${_USER+-u} "$1" ||
+        ! lk_systemctl_property_is ${ARGS[@]+"${ARGS[@]}"} Type oneshot "$1" || return 0
+    ! lk_systemctl_failed ${ARGS[@]+"${ARGS[@]}"} "$1" ||
         lk_warn "not starting failed service: $_NAME" || return
-    lk_systemctl_start ${_USER+-u} "$1"
+    lk_systemctl_start ${ARGS[@]+"${ARGS[@]}"} "$1"
 }
 
 function lk_systemctl_disable() {
     local SH
     SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
-    lk_systemctl_exists ${_USER+-u} "$1" ||
+    lk_systemctl_exists ${ARGS[@]+"${ARGS[@]}"} "$1" ||
         lk_warn "unknown service: $_NAME" || return
-    ! lk_systemctl_enabled ${_USER+-u} "$1" || {
+    ! lk_systemctl_enabled ${ARGS[@]+"${ARGS[@]}"} "$1" || {
         lk_console_detail "Disabling service:" "$NAME"
         ${_USER-lk_elevate} "${COMMAND[@]}" disable "$1" ||
             lk_warn "could not disable service: $_NAME"
@@ -170,15 +185,15 @@ function lk_systemctl_disable() {
 function lk_systemctl_disable_now() {
     local SH
     SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
-    lk_systemctl_disable ${_USER+-u} "$1" &&
-        lk_systemctl_stop ${_USER+-u} "$1"
+    lk_systemctl_disable ${ARGS[@]+"${ARGS[@]}"} "$1" &&
+        lk_systemctl_stop ${ARGS[@]+"${ARGS[@]}"} "$1"
 }
 
 function lk_systemctl_mask() {
     local SH
     SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
-    lk_systemctl_stop ${_USER+-u} "$1" || return
-    lk_systemctl_masked ${_USER+-u} "$1" || {
+    lk_systemctl_stop ${ARGS[@]+"${ARGS[@]}"} "$1" || return
+    lk_systemctl_masked ${ARGS[@]+"${ARGS[@]}"} "$1" || {
         lk_console_detail "Masking service:" "$NAME"
         ${_USER-lk_elevate} "${COMMAND[@]}" mask "$1"
     }
