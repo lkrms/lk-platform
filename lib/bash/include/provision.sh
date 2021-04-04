@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2030,SC2031,SC2086,SC2120,SC2206
+# shellcheck disable=SC2030
 
 # lk_node_service_enabled SERVICE
 #
@@ -308,6 +308,7 @@ function lk_ssh_get_public_key() {
     else
         # ssh-keygen doesn't allow fingerprinting from a file descriptor
         KEY_FILE=$(lk_mktemp_file) &&
+            lk_delete_on_exit "$KEY_FILE" &&
             cat <<<"$KEY" >"$KEY_FILE" || return
         ssh-keygen -y -f "$KEY_FILE" || EXIT_STATUS=$?
         rm -f "$KEY_FILE" || true
@@ -652,7 +653,7 @@ function lk_hosts_get_records() {
     shift
     [[ $TYPE =~ ^[a-zA-Z]+(,[a-zA-Z]+)*$ ]] ||
         lk_warn "invalid type(s): $TYPE" || return
-    lk_test_many "lk_is_host" "$@" || lk_warn "invalid host(s): $*" || return
+    lk_test_many lk_is_host "$@" || lk_warn "invalid host(s): $*" || return
     IFS=,
     TYPES=($TYPE)
     for TYPE in "${TYPES[@]}"; do
@@ -684,51 +685,55 @@ function lk_hosts_resolve() {
     lk_echo_array IP_ADDRESSES | sort -u
 }
 
+# lk_host_first_answer TYPE[,TYPE...] DOMAIN
+#
+# Print DNS records of each TYPE for DOMAIN, or for the closest parent of DOMAIN
+# with at least one matching record.
 function lk_host_first_answer() {
     local DOMAIN=$2 ANSWER
     lk_is_fqdn "$2" || lk_warn "invalid domain: $2" || return
-    ANSWER=$(lk_hosts_get_records A,AAAA "$2") && [ -n "$ANSWER" ] ||
+    lk_require_output -q lk_hosts_get_records A,AAAA "$2" ||
         lk_warn "lookup failed: $2" || return
     while :; do
         ANSWER=$(lk_hosts_get_records "$1" "$DOMAIN") || return
-        [ -n "$ANSWER" ] || {
-            DOMAIN=${DOMAIN#*.}
-            lk_is_fqdn "$DOMAIN" || lk_warn "$1 lookup failed: $2" || return
-            continue
+        [ -z "$ANSWER" ] || {
+            echo "$ANSWER"
+            break
         }
-        echo "$ANSWER"
-        return 0
+        DOMAIN=${DOMAIN#*.}
+        lk_is_fqdn "$DOMAIN" || lk_warn "$1 lookup failed: $2" || return
     done
-}
+} #### Reviewed: 2021-03-30
 
 function lk_host_soa() {
-    local ANSWER DOMAIN NAMESERVERS NAMESERVER SOA
+    local ANSWER APEX NAMESERVERS NAMESERVER SOA
     ANSWER=$(lk_host_first_answer NS "$1") || return
-    ! lk_verbose || lk_console_detail "Looking up SOA for domain:" "$1"
-    DOMAIN=$(awk '{ print substr($1, 1, length($1) - 1) }' <<<"$ANSWER" |
-        sort -u)
-    [ "$(wc -l <<<"$DOMAIN")" -eq 1 ] ||
+    ! lk_verbose ||
+        lk_console_detail "Looking up SOA for domain:" "$1"
+    APEX=$(awk '{sub("\\.$", "", $1); print $1}' <<<"$ANSWER" | sort -u)
+    wc -l <<<"$APEX" | grep -Fxq 1 ||
         lk_warn "invalid response to NS lookup" || return
-    NAMESERVERS=($(awk '{ print substr($5, 1, length($5) - 1) }' <<<"$ANSWER"))
+    NAMESERVERS=($(awk '{sub("\\.$", "", $5); print $5}' <<<"$ANSWER" | sort))
     ! lk_verbose || {
-        lk_console_detail "Domain apex:" "$DOMAIN"
-        lk_console_detail "Name servers:" "${NAMESERVERS[*]}"
+        lk_console_detail "Domain apex:" "$APEX"
+        lk_console_detail "Name servers:" "$(lk_implode ", " NAMESERVERS)"
     }
     for NAMESERVER in "${NAMESERVERS[@]}"; do
-        SOA=$(
+        if SOA=$(
             LK_DIG_SERVER=$NAMESERVER
             LK_DIG_OPTIONS=(+norecurse)
-            lk_hosts_get_records SOA "$DOMAIN"
-        ) && [ -n "$SOA" ] || continue
-        ! lk_verbose ||
-            lk_console_detail "SOA from $NAMESERVER for $DOMAIN:" \
-                "$(cut -d' ' -f5- <<<"$SOA")"
-        echo "$SOA"
-        return 0
+            lk_require_output lk_hosts_get_records SOA "$APEX"
+        ); then
+            ! lk_verbose ||
+                lk_console_detail "SOA from $NAMESERVER for $APEX:" $'\n'"$SOA"
+            echo "$SOA"
+            break
+        else
+            unset SOA
+        fi
     done
-    lk_warn "SOA lookup failed: $1"
-    return 1
-}
+    [ -n "${SOA:-}" ] || lk_warn "SOA lookup failed: $1"
+} #### Reviewed: 2021-03-30
 
 function lk_host_ns_resolve() {
     local NAMESERVER IP CNAME LK_DIG_SERVER LK_DIG_OPTIONS \
@@ -736,8 +741,7 @@ function lk_host_ns_resolve() {
     [ "$_LK_CNAME_DEPTH" -lt 7 ] || lk_warn "too much recursion" || return
     ((++_LK_CNAME_DEPTH))
     NAMESERVER=$(lk_host_soa "$1" |
-        awk '{ print substr($5, 1, length($5) - 1) }') ||
-        return
+        awk '{sub("\\.$", "", $5); print $5}') || return
     LK_DIG_SERVER=$NAMESERVER
     LK_DIG_OPTIONS=(+norecurse)
     ! lk_verbose || {
@@ -753,31 +757,34 @@ function lk_host_ns_resolve() {
         CNAME=($(lk_hosts_get_records +VALUE CNAME "$1")) || return
         if [ ${#CNAME[@]} -eq 1 ]; then
             ! lk_verbose ||
-                lk_console_detail "CNAME record from $NAMESERVER for $1:" \
+                lk_console_detail "CNAME value from $NAMESERVER for $1:" \
                     "${CNAME[0]}"
             lk_host_ns_resolve "${CNAME[0]%.}" || return
-            return 0
+            return
         fi
     fi
     [ ${#IP[@]} -gt 0 ] || lk_warn "could not resolve $1: $NAMESERVER" || return
-    ! lk_verbose || lk_console_detail "A and AAAA records from $NAMESERVER for $1:" \
-        "$(lk_echo_array IP)"
+    ! lk_verbose ||
+        lk_console_detail "A and AAAA values from $NAMESERVER for $1:" \
+            "$(lk_echo_array IP)"
     lk_echo_array IP
-}
+} #### Reviewed: 2021-03-30
 
+# lk_node_is_host DOMAIN
+#
+# Return true if at least one public IP address matches an authoritative A or
+# AAAA record for DOMAIN.
 function lk_node_is_host() {
     local NODE_IP HOST_IP
-    NODE_IP=($(lk_node_public_ipv4)) &&
-        NODE_IP+=($(lk_node_public_ipv6)) &&
+    NODE_IP=($(lk_node_public_ipv4 && lk_node_public_ipv6)) &&
         [ ${#NODE_IP} -gt 0 ] ||
         lk_warn "public IP address not found" || return
     HOST_IP=($(lk_host_ns_resolve "$1")) ||
         lk_warn "unable to retrieve authoritative DNS records for $1" || return
-    # True if at least one node IP matches a host IP
-    [ "$(comm -12 \
+    lk_require_output -q comm -12 \
         <(lk_echo_array HOST_IP | sort -u) \
-        <(lk_echo_array NODE_IP | sort -u) | wc -l)" -gt 0 ]
-}
+        <(lk_echo_array NODE_IP | sort -u)
+} #### Reviewed: 2021-03-30
 
 if lk_is_macos; then
     function lk_tcp_listening_ports() {
@@ -807,33 +814,55 @@ function lk_tcp_is_reachable() {
     nc -z -w "${3:-5}" "$1" "$2" &>/dev/null
 }
 
+# lk_certbot_install [-w WEBROOT_PATH] DOMAIN... [-- CERTBOT_ARG...]
 function lk_certbot_install() {
-    local EMAIL=${LK_LETSENCRYPT_EMAIL-${LK_ADMIN_EMAIL:-}} DOMAIN DOMAINS_OK
-    lk_test_many "lk_is_fqdn" "$@" || lk_warn "invalid domain(s): $*" || return
-    [ -n "$EMAIL" ] || lk_warn "email address not set" || return
+    local WEBROOT WEBROOT_PATH ERRORS=0 \
+        EMAIL=${LK_LETSENCRYPT_EMAIL-${LK_ADMIN_EMAIL:-}} DOMAIN DOMAINS=()
+    unset WEBROOT
+    [ "${1:-}" != -w ] || { WEBROOT= && WEBROOT_PATH=$2 && shift 2; }
+    while [ $# -gt 0 ]; do
+        [ "$1" != -- ] || {
+            shift
+            break
+        }
+        DOMAINS+=("$1")
+        shift
+    done
+    [ ${#DOMAINS[@]} -gt 0 ] || lk_usage "\
+Usage: ${FUNCNAME[0]} [-w WEBROOT_PATH] DOMAIN... [-- CERTBOT_ARG...]" || return
+    lk_test_many lk_is_fqdn "${DOMAINS[@]}" ||
+        lk_warn "invalid domain(s): ${DOMAINS[*]}" || return
+    [ -z "${WEBROOT+1}" ] || lk_elevate test -d "$WEBROOT_PATH" ||
+        lk_warn "directory not found: $WEBROOT_PATH" || return
+    [ -n "$EMAIL" ] || lk_warn "no email address in environment" || return
     lk_is_email "$EMAIL" || lk_warn "invalid email address: $EMAIL" || return
-    for DOMAIN in "$@"; do
+    for DOMAIN in "${DOMAINS[@]}"; do
         lk_node_is_host "$DOMAIN" &&
             lk_console_log "Domain resolves to this system:" "$DOMAIN" ||
             lk_console_warning -r \
                 "Domain does not resolve to this system:" "$DOMAIN" ||
-            DOMAINS_OK=0
+            ((++ERRORS))
     done
-    ! lk_is_false DOMAINS_OK ||
+    [ "$ERRORS" -eq 0 ] ||
         lk_is_true LK_LETSENCRYPT_IGNORE_DNS ||
         lk_confirm "Ignore domain resolution errors?" N || return
-    lk_elevate certbot run \
+    lk_run_detail lk_elevate certbot \
+        ${WEBROOT-run} \
+        ${WEBROOT+certonly} \
         --non-interactive \
         --keep-until-expiring \
         --expand \
         --agree-tos \
         --email "$EMAIL" \
         --no-eff-email \
-        --no-redirect \
-        --"${LK_CERTBOT_PLUGIN:-apache}" \
+        ${WEBROOT---no-redirect} \
+        ${WEBROOT---"${LK_CERTBOT_PLUGIN:-apache}"} \
+        ${WEBROOT+--webroot} \
+        ${WEBROOT+--webroot-path "$WEBROOT_PATH"} \
+        --domains "$(lk_implode_args "," "${DOMAINS[@]}")" \
         ${LK_CERTBOT_OPTIONS[@]:+"${LK_CERTBOT_OPTIONS[@]}"} \
-        --domains "$(lk_implode_args "," "$@")"
-}
+        "$@"
+} #### Reviewed: 2021-03-31
 
 # lk_cpanel_get_ssl_cert SSH_HOST DOMAIN [TARGET_DIR]
 function lk_cpanel_get_ssl_cert() {
@@ -888,7 +917,7 @@ function lk_ssl_verify_cert() {
 
 # lk_ssl_get_self_signed_cert DOMAIN...
 function lk_ssl_get_self_signed_cert() {
-    lk_test_many "lk_is_fqdn" "$@" || lk_warn "invalid domain(s): $*" || return
+    lk_test_many lk_is_fqdn "$@" || lk_warn "invalid domain(s): $*" || return
     lk_console_detail "Generating a self-signed SSL certificate for:" \
         $'\n'"$(lk_echo_args "$@")"
     lk_no_input || {

@@ -30,4 +30,4 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} ||
     . "/etc/default/lk-platform" && [ -d "${LK_BASE:-}" ]; } ||
     lk_die "LK_BASE not set"
 
-include='' . "$LK_BASE/lib/bash/common.sh"
+include= . "$LK_BASE/lib/bash/common.sh"

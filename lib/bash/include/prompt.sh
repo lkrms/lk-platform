@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2206
-
 function lk_prompt_debug_trap() {
     local IFS
     [ "${LK_PROMPT_DISPLAYED:-0}" -eq 0 ] ||

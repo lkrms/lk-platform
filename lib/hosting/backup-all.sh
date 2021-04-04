@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2153,SC2206
-
 set -euo pipefail
 _DEPTH=2
 _FILE=${BASH_SOURCE[0]}
@@ -15,13 +13,14 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
     lk_die "unable to locate LK_BASE"
 export LK_BASE
 
-include='' . "$LK_BASE/lib/bash/common.sh"
+include= . "$LK_BASE/lib/bash/common.sh"
 
 lk_elevate
 
 export TZ=UTC
 
 lk_log_output
+lk_start_trace
 
 {
     BACKUP_ROOT=${LK_BACKUP_ROOT:-/srv/backup}
@@ -56,7 +55,8 @@ lk_log_output
         OWNER=$(lk_file_owner "$SOURCE")
         GROUP=$(id -gn "$OWNER")
         MESSAGE="Backup $((++i)) of ${#SOURCES[@]} "
-        lk_log_bypass "$LK_BASE/bin/lk-backup-create-snapshot.sh" \
+        lk_log_bypass \
+            lk_maybe_trace "$LK_BASE/bin/lk-backup-create-snapshot.sh" \
             --group "$GROUP" \
             --filter "$LK_BASE/lib/hosting/backup-filter-rsync" \
             --hook post_rsync:"$LK_BASE/lib/hosting/backup-hook-post_rsync.sh" \
@@ -78,7 +78,8 @@ lk_log_output
     done
 
     lk_console_message "Backing up system files"
-    lk_log_bypass "$LK_BASE/bin/lk-backup-create-snapshot.sh" \
+    lk_log_bypass \
+        lk_maybe_trace "$LK_BASE/bin/lk-backup-create-snapshot.sh" \
         --filter "$LK_BASE/lib/hosting/backup-filter-system_rsync" \
         --hook post_rsync:"$LK_BASE/lib/hosting/backup-hook-post_rsync.sh" \
         "root" "/" "$BACKUP_ROOT" \
@@ -92,7 +93,7 @@ lk_log_output
             "System backup failed to complete (exit status $EXIT_STATUS)"
     }
 
-    "$LK_BASE/bin/lk-backup-prune-snapshots.sh" "$BACKUP_ROOT" ||
+    lk_maybe_trace "$LK_BASE/bin/lk-backup-prune-snapshots.sh" "$BACKUP_ROOT" ||
         EXIT_STATUS=$?
 
     exit "$EXIT_STATUS"

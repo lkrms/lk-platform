@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2086
-
 [ "$EUID" -eq 0 ] || {
     [ -z "${BASH_XTRACEFD:-}" ] && unset ARGS ||
         ARGS=(-C $((i = BASH_XTRACEFD, (${_LK_FD:=2} > i ? _LK_FD : i) + 1)))
@@ -269,7 +267,6 @@
     }
 
     if [ -d "$LK_BASE/.git" ]; then
-        # shellcheck disable=SC2086
         function _git() {
             sudo -Hu "$REPO_OWNER" \
                 ${LK_GIT_ENV[@]+env "${LK_GIT_ENV[@]}"} \
@@ -337,20 +334,22 @@
         [ ! -g "$LK_BASE" ] || {
             DIR_MODE=2775
             FILE_MODE=0664
-            PRIVILEGED_DIR_MODE=0750
+            PRIVILEGED_DIR_MODE=2770
         }
         LK_VERBOSE='' \
             lk_dir_set_modes "$LK_BASE" \
             "" \
             "+$DIR_MODE" "+$FILE_MODE" \
-            "\\./etc/" \
+            "\\./(etc|var)/" \
             "$DIR_MODE" "" \
+            "\\./(etc/sites|var/run(/dirty)?)/" \
+            "$PRIVILEGED_DIR_MODE" "" \
             "\\./var/(log|backup)/" \
             "" "" \
             "\\./\\.git/objects/([0-9a-f]{2}|pack)/.*" \
             0555 0444
         install -d -m 00777 "$LK_BASE/var/log"
-        install -d -m "0$PRIVILEGED_DIR_MODE" "$LK_BASE/var/backup"
+        install -d -m 00700 "$LK_BASE/var/backup"
         umask "$UMASK"
     fi
 

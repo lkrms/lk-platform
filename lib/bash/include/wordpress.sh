@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2002,SC2029,SC2120
+# shellcheck disable=SC2002
 
 lk_include mysql provision
 
@@ -133,7 +133,9 @@ Usage: $(lk_myself -f) NEW_URL" || return
     lk_console_detail \
         "WordPress address:" "$OLD_SITE_URL -> $LK_BOLD$NEW_SITE_URL$LK_RESET"
     lk_wp_is_quiet || lk_confirm "Proceed?" Y || return
-    lk_wp option update home "$NEW_URL" &&
+    { ! lk_wp config has WP_HOME || lk_wp config delete WP_HOME; } &&
+        { ! lk_wp config has WP_SITEURL || lk_wp config delete WP_SITEURL; } &&
+        lk_wp option update home "$NEW_URL" &&
         lk_wp option update siteurl "$NEW_SITE_URL" || return
     if lk_is_true LK_WP_REPLACE || { [ -z "${LK_WP_REPLACE+1}" ] &&
         lk_confirm "Replace the previous URL in all tables?" Y; }; then
@@ -374,12 +376,13 @@ Usage: $(lk_myself -f) SQL_PATH [DB_NAME [DB_USER]]" || return
 All data in local database '$LOCAL_DB_NAME' will be permanently destroyed.
 Proceed?" Y || return
     [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] || {
-        COMMAND=(lk_elevate "${LK_INST:-$LK_BASE}/bin/lk-mysql-grant.sh"
+        COMMAND=(LK_SUDO=1
+            lk_maybe_trace "${LK_INST:-$LK_BASE}/bin/lk-mysql-grant.sh"
             "$LOCAL_DB_NAME" "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD")
-        [[ $USER =~ ^[a-zA-Z0-9_]+$ ]] &&
-            [[ $LOCAL_DB_NAME =~ ^$USER(_[a-zA-Z0-9_]*)?$ ]] ||
+        [[ $USER =~ ^[-a-zA-Z0-9_]+$ ]] &&
+            [[ $LOCAL_DB_NAME =~ ^$USER(_[-a-zA-Z0-9_]*)?$ ]] ||
             unset "COMMAND[0]"
-        "${COMMAND[@]}" || return
+        eval "$(lk_quote_args "${COMMAND[@]}")" || return
     }
     lk_console_message "Restoring WordPress database to local system"
     lk_console_detail "Checking wp-config.php"
@@ -552,7 +555,9 @@ function lk_wp_set_permissions() {
         CHANGES=$(lk_maybe_sudo gnu_chown -Rhc "$OWNER" "$SITE_ROOT" |
             tee -a "$LOG_FILE" | wc -l) || return
         lk_console_detail "Changes:" "$CHANGES"
-        lk_console_log "Changes have been logged to" "$LOG_FILE"
+        ! ((CHANGES)) &&
+            lk_delete_on_exit "$LOG_FILE" ||
+            lk_console_detail "Changes logged to:" "$LOG_FILE"
     else
         lk_console_warning "Unable to set owner (not running as root)"
     fi

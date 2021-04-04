@@ -188,7 +188,7 @@ PAC_PACKAGES+=(
 
     # system
     dconf-editor
-    fontconfig-docs
+    fontconfig
     gparted
     guake
     libsecret   # secret-tool
@@ -314,6 +314,7 @@ PAC_PACKAGES+=(
 
 AUR_PACKAGES+=(
     demjson
+    lua-posix
     nodejs-less
     phpdoc-phar
     robo3t-bin

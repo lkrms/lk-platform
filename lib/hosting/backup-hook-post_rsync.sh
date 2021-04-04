@@ -45,7 +45,7 @@ fi
 # 2. prevent overwriting if there are multiple attempts to create the same
 #    snapshot (e.g. after an rsync failure)
 LK_BACKUP_TIMESTAMP='' \
-    "$LK_BASE/bin/lk-mysql-dump.sh" \
+    lk_maybe_trace "$LK_BASE/bin/lk-mysql-dump.sh" \
     --no-log \
     --dest "$LK_SNAPSHOT_DB" \
     ${SNAPSHOT_GROUP:+--group "$SNAPSHOT_GROUP"} \

@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2120
-
 export -n BASH_XTRACEFD SHELLOPTS
 [ -n "${_LK_ENV+1}" ] || _LK_ENV=$(declare -x)
 

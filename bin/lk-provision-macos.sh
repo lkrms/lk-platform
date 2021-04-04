@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2031,SC2153
-
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
 export LK_BASE=${LK_BASE:-/opt/lk-platform}

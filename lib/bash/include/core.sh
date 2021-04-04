@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2046,SC2086,SC2094,SC2116,SC2120
+# shellcheck disable=SC2094,SC2116
 
 export -n BASH_XTRACEFD SHELLOPTS
 [ -n "${_LK_ENV+1}" ] || _LK_ENV=$(declare -x)
@@ -86,11 +86,13 @@ else
     # - . /dev/stdin
     # - . <(cat /dev/stdin)
     function lk_eval_input() {
-        local FILE
-        FILE=$(mktemp) &&
+        local FILE STATUS=0
+        FILE=$(mktemp) && {
             cat >"$FILE" &&
-            . "$FILE" || return
-        rm -f -- "$FILE" || true
+                . "$FILE" || STATUS=$?
+            rm -f -- "$FILE" || true
+            return "$STATUS"
+        }
     }
 fi
 
@@ -275,7 +277,7 @@ function _lk_usage_format() {
     BOLD=$(lk_escape_ere_replace "$LK_BOLD")
     RESET=$(lk_escape_ere_replace "$LK_RESET")
     sed -E \
-        -e "s/^($S*([uU]sage|[oO]r):$S+)($CMD)($S|\$)/\1$BOLD\3$RESET\4/" \
+        -e "s/^($S*([uU]sage|[oO]r):$S+(sudo )?)($CMD)($S|\$)/\1$BOLD\4$RESET\5/" \
         -e "s/^[a-zA-Z0-9 ]+:\$/$BOLD&$RESET/" \
         -e "s/^\\\\($NS)/\\1/" <<<"$1"
 }
@@ -584,17 +586,17 @@ function lk_get_env() {
     [ -n "${_LK_ENV+1}" ] || _LK_ENV=$(declare -x)
     (
         # Unset every variable that can be unset
-        unset $(lk_var_list_all |
+        unset $(lk_var_list |
             sed -E "/$_LK_IGNORE_REGEX/d") 2>/dev/null || true
         # Ignore the rest
-        _LK_IGNORE=$(lk_var_list_all |
+        _LK_IGNORE=$(lk_var_list |
             sed -E "/$_LK_IGNORE_REGEX/d")
         # Restore environment variables
         eval "$_LK_ENV" 2>/dev/null
         # Reduce the selection to variables not being ignored
         set -- $(comm -13 \
             <(sort -u <<<"$_LK_IGNORE") \
-            <({ [ $# -gt 0 ] && lk_echo_args "$@" || lk_var_list_all; } |
+            <({ [ $# -gt 0 ] && lk_echo_args "$@" || lk_var_list; } |
                 sed -E "/$_LK_IGNORE_REGEX/d" | sort -u))
         [ $# -eq 0 ] ||
             _LK_STACK_DEPTH=1 \
@@ -719,7 +721,7 @@ function lk_has_newline() {
     [ "${!1/$'\n'/}" != "${!1}" ]
 }
 
-function lk_var_list_all() {
+function lk_var_list() {
     eval "printf '%s\n'$(printf ' "${!%s@}"' {a..z} {A..Z} _)"
 }
 
@@ -1153,7 +1155,8 @@ function lk_get_outputs_of() {
     local SH EXIT_STATUS
     SH=$(
         _LK_STDOUT=$(lk_mktemp_file) &&
-            _LK_STDERR=$(lk_mktemp_file) || exit
+            _LK_STDERR=$(lk_mktemp_file) &&
+            lk_delete_on_exit "$_LK_STDOUT" "$_LK_STDERR" || exit
         unset _LK_FD
         "$@" >"$_LK_STDOUT" 2>"$_LK_STDERR" || EXIT_STATUS=$?
         for i in _LK_STDOUT _LK_STDERR; do
@@ -1291,6 +1294,7 @@ function lk_start_trace() {
 # lk_log_output [TEMP_LOG_FILE]
 function lk_log_output() {
     local LOG_CMD ARGC LOG_PATH DIR HEADER=() IFS
+    unset IFS
     ! lk_is_true LK_NO_LOG &&
         ! lk_log_is_open &&
         lk_is_script_running || return 0
@@ -1880,7 +1884,7 @@ function lk_maybe_trace() {
             SHELLOPTS=xtrace
             "$@")
     ! lk_will_sudo ||
-        COMMAND=(sudo -C 5 -H "${COMMAND[@]}")
+        COMMAND=(sudo -C 5 -H "${COMMAND[@]:1}")
     ! lk_is_true OUTPUT ||
         COMMAND=(lk_quote_args "${COMMAND[@]}")
     "${COMMAND[@]}"
@@ -1898,7 +1902,8 @@ function _lk_console_get_prompt() {
 
 # lk_console_read PROMPT [DEFAULT [READ_ARG...]]
 function lk_console_read() {
-    local PROMPT=("$1") DEFAULT=${2:-} VALUE
+    local PROMPT=("$1") DEFAULT=${2:-} VALUE IFS
+    unset IFS
     if lk_no_input && [ $# -ge 2 ]; then
         echo "$DEFAULT"
         return 0
@@ -1918,7 +1923,8 @@ function lk_console_read_secret() {
 
 # lk_confirm PROMPT [DEFAULT [READ_ARG...]]
 function lk_confirm() {
-    local PROMPT=("$1") DEFAULT=${2:-} VALUE
+    local PROMPT=("$1") DEFAULT=${2:-} VALUE IFS
+    unset IFS
     if lk_is_true DEFAULT; then
         PROMPT+=("[Y/n]")
         DEFAULT=Y
@@ -2121,6 +2127,7 @@ function lk_wget_uris() {
     local TEMP_FILE
     # --convert-links is disabled if wget uses standard output
     TEMP_FILE=$(lk_mktemp_file) &&
+        lk_delete_on_exit "$TEMP_FILE" &&
         wget --quiet --convert-links --output-document "$TEMP_FILE" "$1" ||
         return
     lk_get_uris "$TEMP_FILE"
@@ -2942,10 +2949,11 @@ function lk_file_backup() {
             lk_maybe_sudo test -s "$1" || return 0
             ! lk_is_true MOVE || {
                 FILE=$(lk_maybe_sudo realpath "$1") || return
-                { OWNER=$(lk_file_owner "$FILE") &&
-                    OWNER_HOME=$(lk_expand_path "~$OWNER") &&
-                    OWNER_HOME=$(realpath "$OWNER_HOME"); } 2>/dev/null ||
-                    OWNER_HOME=
+                {
+                    OWNER=$(lk_file_owner "$FILE") &&
+                        OWNER_HOME=$(lk_expand_path "~$OWNER") &&
+                        OWNER_HOME=$(lk_maybe_sudo realpath "$OWNER_HOME")
+                } 2>/dev/null || OWNER_HOME=
                 if lk_will_elevate && [ "${FILE#$OWNER_HOME}" = "$FILE" ]; then
                     lk_install -d \
                         -m "$([ -g "$LK_BASE" ] && echo 02775 || echo 00755)" \
@@ -3012,6 +3020,7 @@ function lk_file_add_newline() {
             ! lk_is_true BACKUP ||
                 lk_file_backup ${MOVE:+-m} "$1" || return
             TEMP=$(lk_file_prepare_temp "$1") &&
+                lk_delete_on_exit "$TEMP" &&
                 echo | lk_maybe_sudo tee -a "$TEMP" >/dev/null &&
                 lk_maybe_sudo mv -f"$vv" "$TEMP" "$1" || return
             ! lk_verbose ||
@@ -3024,7 +3033,7 @@ function lk_file_add_newline() {
 function lk_file_replace() {
     local OPTIND OPTARG OPT LK_USAGE IFS SOURCE= IGNORE= FILTER= ASK= \
         LINK BACKUP=${LK_FILE_TAKE_BACKUP:-} MOVE=${LK_FILE_MOVE_BACKUP:-} \
-        CONTENT PREVIOUS TEMP vv=
+        NEW=1 VERB=Created CONTENT PREVIOUS TEMP vv=
     unset IFS PREVIOUS
     LK_USAGE="\
 Usage: $(lk_myself -f) [OPTIONS] TARGET [CONTENT]
@@ -3082,37 +3091,42 @@ Options:
     fi
     ! lk_verbose 2 || vv=v
     LK_FILE_REPLACE_NO_CHANGE=${LK_FILE_REPLACE_NO_CHANGE:-1}
+    LK_FILE_REPLACE_DECLINED=0
     if lk_maybe_sudo test -e "$1"; then
         ! lk_is_true LINK || {
             TEMP=$(realpath "$1") || return
             set -- "$TEMP"
         }
         lk_maybe_sudo test -f "$1" || lk_warn "not a file: $1" || return
+        ! lk_maybe_sudo test -s "$1" || unset NEW VERB
         lk_maybe_sudo test -L "$1" || ! diff -q \
             <(TARGET=$1 _lk_maybe_filter "$IGNORE" "$FILTER" \
-                lk_maybe_sudo cat '$TARGET') \
+                lk_maybe_sudo cat "\"\$TARGET\"") \
             <([ -z "${CONTENT:+1}" ] || _lk_maybe_filter "$IGNORE" "$FILTER" \
-                echo '"${CONTENT%$'"'\\n'"'}"') >/dev/null || {
+                echo "\"\${CONTENT%\$'\\n'}\"") >/dev/null || {
             ! lk_verbose 2 || lk_console_detail "Not changed:" "$1"
             return 0
         }
+        ! lk_is_true ASK || lk_is_true NEW || {
+            lk_console_diff "$1" "" <<<"${CONTENT%$'\n'}" || return
+            lk_confirm "Replace $1 as above?" Y || {
+                LK_FILE_REPLACE_DECLINED=1
+                return 1
+            }
+        }
+        ! lk_verbose || lk_is_true LK_FILE_NO_DIFF ||
+            lk_file_get_text "$1" PREVIOUS || return
         ! lk_is_true BACKUP ||
             lk_file_backup ${MOVE:+-m} "$1" || return
-        ! lk_is_true ASK &&
-            { ! lk_verbose || lk_is_true LK_FILE_NO_DIFF; } ||
-            lk_file_get_text "$1" PREVIOUS || return
     fi
     TEMP=$(lk_file_prepare_temp "$1") &&
+        lk_delete_on_exit "$TEMP" &&
         echo "${CONTENT%$'\n'}" | lk_maybe_sudo tee "$TEMP" >/dev/null &&
-        { ! lk_is_true ASK || ! lk_maybe_sudo test -s "$1" || {
-            lk_console_diff "$1" "$TEMP"
-            lk_confirm "Replace $1 as above?" Y
-        }; } &&
         lk_maybe_sudo mv -f"$vv" "$TEMP" "$1" &&
         LK_FILE_REPLACE_NO_CHANGE=0 || return
     ! lk_verbose || {
         if lk_is_true LK_FILE_NO_DIFF || lk_is_true ASK; then
-            lk_console_detail "Updated:" "$1"
+            lk_console_detail "${VERB:-Updated}:" "$1"
         elif [ -n "${PREVIOUS+1}" ]; then
             echo -n "$PREVIOUS" | lk_console_detail_diff "" "$1"
         else
@@ -3159,7 +3173,10 @@ function lk_err_trap() {
 function lk_delete_on_exit() {
     local ARRAY=_LK_EXIT_DELETE_$BASH_SUBSHELL
     [ -n "${!ARRAY+1}" ] || eval "$ARRAY=()"
-    eval "${ARRAY}[\${#${ARRAY}[@]}]=\$1"
+    while [ $# -gt 0 ]; do
+        eval "${ARRAY}[\${#${ARRAY}[@]}]=\$1"
+        shift
+    done
 }
 
 set -o pipefail

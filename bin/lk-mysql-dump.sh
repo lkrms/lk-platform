@@ -92,6 +92,7 @@ LK_MYSQL_QUIET=1
 LK_TTY_NO_FOLD=1
 
 lk_log_output
+lk_start_trace
 
 lk_console_message "Preparing database backup"
 lk_console_detail "Retrieving list of databases on" "$DB_HOST"

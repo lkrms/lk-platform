@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2001,SC2046,SC2120
-
 set -eu
 
 lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
@@ -329,6 +327,7 @@ function exit_trap() {
                 "$HN-$SOURCE_NAME-$LK_SNAPSHOT_TIMESTAMP-rsync.log.tgz" \
                 application/gzip &&
                 MESSAGE="the attached log files and " || true
+            rm -f "$TAR" || true
         }
         [ "$EXIT_STATUS" -eq 0 ] && {
             [ "$RSYNC_EXIT_VALUE" -eq 0 ] && {

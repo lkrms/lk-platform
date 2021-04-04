@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2031,SC2206,SC2046,SC2086
-
 set -euo pipefail
 _DEPTH=1
 _FILE=${BASH_SOURCE[0]}

@@ -189,4 +189,5 @@ PAC_PACKAGES+=(
 
 AUR_PACKAGES+=(
     demjson
+    lua-posix
 )

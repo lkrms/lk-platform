@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2029
-
 lk_bin_depth=1 include=wordpress . lk-bash-load.sh || exit
 
 REMOTE_PATH=public_html
@@ -127,6 +125,7 @@ STATUS=0
 LK_WP_QUIET=1
 
 lk_log_output
+lk_start_trace
 
 lk_console_message "Preparing WordPress migration"
 lk_console_detail "[remote] Source:" "$SSH_HOST:$REMOTE_PATH"
