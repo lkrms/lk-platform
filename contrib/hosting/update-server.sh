@@ -5,6 +5,7 @@ include= . lk-bash-load.sh || exit
 lk_log_output
 
 {
+    # update-server BRANCH [--set SETTING]...
     function update-server() {
 
         function update-wp() {
@@ -44,7 +45,8 @@ lk_log_output
             git merge ||
             return
 
-        ./bin/lk-platform-configure.sh "${@:2}" --set LK_PLATFORM_BRANCH="$1" &&
+        ./bin/lk-platform-configure.sh "${@:2}" \
+            --set LK_PLATFORM_BRANCH="$1" &&
             . /opt/lk-platform/lib/bash/rc.sh &&
             lk_include hosting &&
             lk_hosting_configure_backup
@@ -53,8 +55,10 @@ lk_log_output
         for WP in /srv/www/{*,*/*}/public_html/wp-config.php; do
             WP=${WP%/wp-config.php}
             OWNER=$(lk_file_owner "$WP") || return
-            sudo -Hu "$OWNER" \
-                bash -c "$(declare -f update-wp); update-wp \"\$@\"" bash "$WP"
+            runuser -u "$OWNER" bash -c "$(
+                declare -f update-wp
+                lk_quote_args update-wp "$WP"
+            )"
         done
 
     }
@@ -65,6 +69,13 @@ lk_log_output
         shift 2
     done
 
+    COMMAND=(sudo -H bash -c "$(lk_quote_args "$(
+        declare -f update-server
+        lk_quote_args update-server \
+            "${UPDATE_SERVER_BRANCH:-master}" \
+            ${ARGS[@]+"${ARGS[@]}"}
+    )")")
+
     FAILED=()
     i=0
     while [ $# -gt 0 ]; do
@@ -72,13 +83,9 @@ lk_log_output
         ! ((i++)) || lk_console_blank
         lk_console_item "Updating" "$1"
 
-        ssh "$1" "sudo -H bash -c$(printf ' %q' \
-            "$(declare -f update-server); update-server \"\$@\"" \
-            bash \
-            "${UPDATE_SERVER_BRANCH:-master}" \
-            ${ARGS[@]+"${ARGS[@]}"})" || {
-            FAILED+=("$1")
+        ssh "$1" "${COMMAND[@]}" || {
             lk_console_error "Update failed (exit status $?):" "$1"
+            FAILED+=("$1")
             [ $# -gt 1 ] && lk_confirm "Continue?" Y || break
         }
 
@@ -90,7 +97,9 @@ lk_log_output
 
     if [ ${#FAILED[@]} -gt 0 ]; then
         lk_console_error "${#FAILED[@]} of $i $(lk_maybe_plural \
-            "$i" server servers) failed to update:" $'\n'"$(lk_echo_array FAILED)"
+            "$i" server servers) failed to update:" \
+            $'\n'"$(lk_echo_array FAILED)"
+        lk_die ""
     else
         lk_console_success \
             "$i $(lk_maybe_plural "$i" server servers) updated successfully"
