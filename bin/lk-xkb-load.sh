@@ -14,5 +14,5 @@ for DIR in /etc/X11/xkb ~/.xkb; do
     [ ! -d "$DIR" ] || ARGS+=(-I"$DIR")
 done
 
-lk_console_item "Updating keymap from file:" "$1"
-xkbcomp "${ARGS[@]}" "$1" "$DISPLAY"
+lk_console_item "Updating keymap from" "$1"
+xkbcomp "${ARGS[@]}" "$1" "$DISPLAY" 2>/dev/null

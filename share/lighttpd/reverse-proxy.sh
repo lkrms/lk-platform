@@ -18,10 +18,12 @@ if [[ $2 =~ ^(127\.0\.0\.1|localhost)$ ]]; then
     STREAM_RESPONSE=0
 fi
 
-printf 'server.modules += ("mod_proxy")
-$HTTP["host"] == "%s" {
+printf 'server.modules += ("%s")\n' mod_proxy mod_accesslog
+printf '$HTTP["host"] == "%s" {
     proxy.server = ( "" => ( "%s" => ( "host" => "%s", "port" => 80 ) ) )
     proxy.replace-http-host = 1
     proxy.header = ( "map-urlpath" => ( "/" => "%s" ) )
     server.stream-response-body = %d
-}' "$1" "$2" "$2" "${3:-/}" "$STREAM_RESPONSE"
+    accesslog.format = "%s"
+}\n' "$1" "$2" "$2" "${3:-/}" "$STREAM_RESPONSE" \
+    '%h %V %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\"'" $2:80"
