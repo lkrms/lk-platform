@@ -2,7 +2,7 @@
 
 include= . lk-bash-load.sh || exit
 
-lk_log_output
+lk_log_start
 
 {
     # update-server BRANCH [--set SETTING]...

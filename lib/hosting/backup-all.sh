@@ -19,7 +19,7 @@ lk_elevate
 
 export TZ=UTC
 
-lk_log_output
+lk_log_start
 lk_start_trace
 
 {

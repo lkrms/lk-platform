@@ -281,11 +281,11 @@ esac
 SOURCE_NAME=${SOURCE_NAME//\//_}
 BACKUP_ROOT=$(realpath "$BACKUP_ROOT")
 LOCK_FILE=/tmp/${0##*/}-${BACKUP_ROOT//\//_}-$SOURCE_NAME.lock
-LOCK_FD=$(lk_next_fd)
+LOCK_FD=$(lk_fd_next)
 eval "exec $LOCK_FD>\"\$LOCK_FILE\""
 flock -n "$LOCK_FD" || lk_die "unable to acquire a lock on $LOCK_FILE"
 FIFO_FILE=$(lk_mktemp_dir)/fifo
-FIFO_FD=$(lk_next_fd)
+FIFO_FD=$(lk_fd_next)
 mkfifo "$FIFO_FILE"
 eval "exec $FIFO_FD<>\"\$FIFO_FILE\""
 
@@ -337,7 +337,7 @@ for f in SNAPSHOT_LOG_FILE RSYNC_OUT_FILE RSYNC_ERR_FILE; do
 done
 
 LK_SECONDARY_LOG_FILE=$SNAPSHOT_LOG_FILE \
-    lk_log_output
+    lk_log_start
 
 # Don't pollute RSYNC_ERR_FILE with lk_run output
 exec 3>&2

@@ -534,7 +534,7 @@ directory of a working tree" || return
     if lk_is_true PARALLEL; then
         lk_git_is_quiet ||
             lk_console_log "Processing $NOUN in parallel"
-        FD=$(lk_next_fd) &&
+        FD=$(lk_fd_next) &&
             eval "exec $FD>&2 2>/dev/null" || return
         for REPO in "${REPOS[@]}"; do
             (

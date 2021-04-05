@@ -91,7 +91,7 @@ EXIT_STATUS=0
 LK_MYSQL_QUIET=1
 LK_TTY_NO_FOLD=1
 
-lk_log_output
+lk_log_start
 lk_start_trace
 
 lk_console_message "Preparing database backup"
@@ -146,7 +146,7 @@ lk_echo_array DB_INCLUDE |
 lk_confirm "Proceed?" Y || lk_die ""
 
 LOCK_FILE=/tmp/${0##*/}-${DEST//\//_}.lock
-LOCK_FD=$(lk_next_fd)
+LOCK_FD=$(lk_fd_next)
 eval "exec $LOCK_FD>\"\$LOCK_FILE\""
 flock -n "$LOCK_FD" || lk_die "unable to acquire a lock on $LOCK_FILE"
 

@@ -17,7 +17,7 @@ include=iptables,provision . "$LK_BASE/lib/bash/common.sh"
 
 lk_elevate
 
-lk_log_output
+lk_log_start
 lk_start_trace
 
 [ -r "$LK_BASE/etc/firewall.conf" ] ||

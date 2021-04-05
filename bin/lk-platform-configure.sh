@@ -121,7 +121,7 @@
 
     lk_lock LOCK_FILE LOCK_FD
 
-    lk_log_output
+    lk_log_start
 
     lk_console_log "Configuring lk-platform"
 

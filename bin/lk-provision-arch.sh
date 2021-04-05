@@ -159,7 +159,8 @@ if [ -n "$LK_PACKAGES_FILE" ]; then
     export LK_PACKAGES_FILE
 fi
 
-lk_log_output
+lk_log_start
+lk_log_tty_off
 lk_start_trace
 
 {
@@ -506,6 +507,7 @@ $LK_NODE_HOSTNAME" &&
     if lk_command_exists aur ||
         { [ ${#AUR_PACKAGES[@]} -gt 0 ] && lk_confirm \
             "OK to install aurutils for AUR package management?" Y; }; then
+        lk_log_tty_on
         lk_console_message "Checking AUR packages"
         PAC_INSTALL=($(lk_pac_not_installed_list \
             ${PAC_BASE_DEVEL[@]+"${PAC_BASE_DEVEL[@]}"} \
@@ -571,6 +573,7 @@ $LK_NODE_HOSTNAME" &&
             PAC_PACKAGES+=(aurutils "${AUR_PACKAGES[@]}")
             AUR_PACKAGES=()
         fi
+        lk_log_tty_off
     fi
 
     if [ ${#PAC_KEEP[@]} -gt 0 ]; then
@@ -588,9 +591,11 @@ $LK_NODE_HOSTNAME" &&
         <(lk_echo_array PAC_EXPLICIT) \
         <(lk_pac_installed_explicit | sort -u)))
     [ ${#PAC_MARK_EXPLICIT[@]} -eq 0 ] ||
-        lk_tty sudo pacman -D --asexplicit "${PAC_MARK_EXPLICIT[@]}"
+        lk_log_bypass lk_tty sudo \
+            pacman -D --asexplicit "${PAC_MARK_EXPLICIT[@]}"
     [ ${#PAC_UNMARK_EXPLICIT[@]} -eq 0 ] ||
-        lk_tty sudo pacman -D --asdeps "${PAC_UNMARK_EXPLICIT[@]}"
+        lk_log_bypass lk_tty sudo \
+            pacman -D --asdeps "${PAC_UNMARK_EXPLICIT[@]}"
 
     [ ${#PAC_KEEP[@]} -eq 0 ] ||
         lk_echo_array PAC_KEEP |
@@ -608,7 +613,7 @@ $LK_NODE_HOSTNAME" &&
     unset NOCONFIRM
     ! lk_no_input || NOCONFIRM=1
     [ ${#PAC_INSTALL[@]}${#PAC_UPGRADE[@]} = 00 ] ||
-        lk_tty sudo pacman -Su ${NOCONFIRM+--noconfirm} \
+        lk_log_bypass lk_tty sudo pacman -Su ${NOCONFIRM+--noconfirm} \
             ${PAC_INSTALL[@]+"${PAC_INSTALL[@]}"}
 
     REMOVE_MESSAGE=()
@@ -629,7 +634,7 @@ $LK_NODE_HOSTNAME" &&
     [ ${#PAC_REMOVE[@]} -eq 0 ] || {
         lk_console_message \
             "Removing $(lk_implode " and " REMOVE_MESSAGE) packages"
-        lk_tty sudo pacman -Rs --noconfirm "${PAC_REMOVE[@]}"
+        lk_log_bypass lk_tty sudo pacman -Rs --noconfirm "${PAC_REMOVE[@]}"
     }
 
     lk_symlink_bin codium code || true

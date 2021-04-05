@@ -217,8 +217,9 @@ function exit_trap() {
         set +x
         unset BASH_XTRACEFD
         exec >&"$TTY_OUT_FD" 2>&"$TTY_ERR_FD" &&
-            eval "exec$(printf ' %s>&-' 4 "$TTY_OUT_FD" "$TTY_ERR_FD" \
-                "$LOG_FD" "$LOG_OUT_FD" "$LOG_ERR_FD")"
+            eval "exec$(printf ' %s>&-' 4 \
+                "$TTY_OUT_FD" "$TTY_ERR_FD" \
+                "$LOG_OUT_FD" "$LOG_ERR_FD" "$LOG_FD")"
         local LOG FILE
         for LOG in "$LOG_FILE" "$OUT_FILE" "$TRACE_FILE"; do
             FILE=/var/log/${LK_PATH_PREFIX}${LOG##*/}
@@ -259,18 +260,20 @@ mkfifo "$FIFO_FILE"
 lk_strip_non_printing <"$FIFO_FILE" >"$OUT_FILE" &
 lk_delete_on_exit "${FIFO_FILE%/*}"
 
-TTY_OUT_FD=$(lk_next_fd)
+TTY_OUT_FD=$(lk_fd_next)
 eval "exec $TTY_OUT_FD>&1"
-TTY_ERR_FD=$(lk_next_fd)
+TTY_ERR_FD=$(lk_fd_next)
 eval "exec $TTY_ERR_FD>&2"
-LOG_FD=$(lk_next_fd)
-eval "exec $LOG_FD> >(lk_log >\"\$LOG_FILE\")"
-LOG_OUT_FD=$(lk_next_fd)
+LOG_OUT_FD=$(lk_fd_next)
 eval "exec $LOG_OUT_FD> >(lk_log \"..\" >\"\$FIFO_FILE\")"
-LOG_ERR_FD=$(lk_next_fd)
+LOG_ERR_FD=$(lk_fd_next)
 eval "exec $LOG_ERR_FD> >(lk_log \"!!\" >\"\$FIFO_FILE\")"
+LOG_FD=$(lk_fd_next)
+eval "exec $LOG_FD> >(lk_log >\"\$LOG_FILE\")"
 exec 3> >(tee >(tee "/dev/fd/$LOG_FD" >&"$LOG_OUT_FD") >&"$TTY_OUT_FD")
-export _LK_FD=3
+export _LK_FD=3 \
+    _LK_TTY_OUT_FD=$TTY_OUT_FD _LK_TTY_ERR_FD=$TTY_ERR_FD \
+    _LK_LOG_OUT_FD=$LOG_OUT_FD _LK_LOG_ERR_FD=$LOG_ERR_FD _LK_LOG_FD=$LOG_FD
 tty_off
 
 trap exit_trap EXIT
