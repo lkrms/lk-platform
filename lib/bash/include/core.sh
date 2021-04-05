@@ -1884,7 +1884,9 @@ function lk_maybe_trace() {
             SHELLOPTS=xtrace
             "$@")
     ! lk_will_sudo ||
-        COMMAND=(sudo -C 5 -H "${COMMAND[@]:1}")
+        COMMAND=(sudo -C 5 -H "${COMMAND[@]}")
+    # Remove "env" from sudo command
+    [[ $- != *x* ]] || ! lk_will_sudo || unset "COMMAND[4]"
     ! lk_is_true OUTPUT ||
         COMMAND=(lk_quote_args "${COMMAND[@]}")
     "${COMMAND[@]}"
