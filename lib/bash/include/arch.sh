@@ -5,10 +5,10 @@ lk_include linux
 function lk_arch_chroot() {
     [ "${1:-}" != -u ] || {
         [ $# -ge 3 ] || lk_warn "invalid arguments" || return
-        set -- sudo -C 5 -H "$@"
+        set -- runuser "${@:1:2}" -- "${@:3}"
     }
     if [ -n "${_LK_ARCH_ROOT:-}" ]; then
-        arch-chroot "$_LK_ARCH_ROOT" "$@"
+        lk_elevate arch-chroot "$_LK_ARCH_ROOT" "$@"
     else
         lk_elevate "$@"
     fi
