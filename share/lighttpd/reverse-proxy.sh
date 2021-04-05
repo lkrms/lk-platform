@@ -9,7 +9,7 @@ HOST_NAME_REGEX="[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([-a-zA-Z0-
     [[ $1 =~ ^$HOST_NAME_REGEX$ ]] &&
     [[ $2 =~ ^$HOST_NAME_REGEX$ ]] &&
     [[ ${3:-} =~ ^(|/([^/]+/)*)$ ]] || {
-    echo "Usage: ${0##*/} HOST TARGET_HOST [/TARGET_PATH/]" >&2
+    echo "Usage: ${0##*/} HOST TARGET_HOST [/TARGET_PATH/ [/IGNORE_PATH...]]" >&2
     exit 1
 }
 
@@ -18,10 +18,18 @@ if [[ $2 =~ ^(127\.0\.0\.1|localhost)$ ]]; then
     STREAM_RESPONSE=0
 fi
 
-printf 'server.modules += ("mod_proxy")
-$HTTP["host"] == "%s" {
+MAP_URLPATH=$(
+    for IGNORE_PATH in "${@:4}"; do
+        printf '"%s" => "%s", ' "$IGNORE_PATH" "$IGNORE_PATH"
+    done
+    printf '"/" => "%s"' "${3:-/}"
+)
+
+printf '$HTTP["host"] == "%s" {
     proxy.server = ( "" => ( "%s" => ( "host" => "%s", "port" => 80 ) ) )
-    proxy.replace-http-host = 1
-    proxy.header = ( "map-urlpath" => ( "/" => "%s" ) )
+    proxy.header = ( "map-urlpath" => ( %s ), "https-remap" => "enable" )
+    setenv.set-request-header = reverse_proxy_header_policy
     server.stream-response-body = %d
-}' "$1" "$2" "$2" "${3:-/}" "$STREAM_RESPONSE"
+    accesslog.format = "%s"
+}\n' "$1" "$2" "$2" "$MAP_URLPATH" "$STREAM_RESPONSE" \
+    '%h %V %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\"'" $2:80"

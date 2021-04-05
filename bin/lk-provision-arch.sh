@@ -900,10 +900,7 @@ done\""
         LIBVIRT_USERS=$(lk_get_users_in_group libvirt)
         LIBVIRT_USERS=$([ -z "$LIBVIRT_USERS" ] || id -u $LIBVIRT_USERS)
         LK_CONF_OPTION_FILE=/etc/conf.d/libvirt-guests
-        lk_conf_set_option URIS \
-            "'default${LIBVIRT_USERS:+$(printf \
-                ' qemu:///session?socket=/run/user/%s/libvirt/libvirt-sock' \
-                $LIBVIRT_USERS)}'"
+        lk_conf_set_option URIS default
         if lk_is_desktop; then
             lk_conf_set_option ON_BOOT ignore
             lk_conf_set_option SHUTDOWN_TIMEOUT 120
