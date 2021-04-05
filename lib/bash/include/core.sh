@@ -3164,7 +3164,7 @@ function lk_exit_trap() {
         lk_console_error \
             "$(_lk_caller "${_LK_ERR_TRAP_CONTEXT:-}"): unhandled error"
     for i in ${!DELETE_ARRAY+"${!DELETE_ARRAY}"}; do
-        lk_elevate_if_error rm -Rf -- "$i" || true
+        lk_elevate_if_error rm -Rf -- "$i" 2>/dev/null || true
     done
 }
 
