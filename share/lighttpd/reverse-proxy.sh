@@ -25,11 +25,10 @@ MAP_URLPATH=$(
     printf '"/" => "%s"' "${3:-/}"
 )
 
-printf 'server.modules += ("%s")\n' mod_proxy mod_accesslog
 printf '$HTTP["host"] == "%s" {
     proxy.server = ( "" => ( "%s" => ( "host" => "%s", "port" => 80 ) ) )
-    proxy.replace-http-host = 1
-    proxy.header = ( "map-urlpath" => ( %s ) )
+    proxy.header = ( "map-urlpath" => ( %s ), "https-remap" => "enable" )
+    setenv.set-request-header = reverse_proxy_header_policy
     server.stream-response-body = %d
     accesslog.format = "%s"
 }\n' "$1" "$2" "$2" "$MAP_URLPATH" "$STREAM_RESPONSE" \
