@@ -55,7 +55,7 @@ lk_log_output
         for WP in /srv/www/{*,*/*}/public_html/wp-config.php; do
             WP=${WP%/wp-config.php}
             OWNER=$(lk_file_owner "$WP") || return
-            runuser -u "$OWNER" bash -c "$(
+            runuser -u "$OWNER" -- bash -c "$(
                 declare -f update-wp
                 lk_quote_args update-wp "$WP"
             )"
