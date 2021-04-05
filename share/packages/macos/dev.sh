@@ -133,6 +133,7 @@ HOMEBREW_FORMULAE+=(
 
     #
     node
+    nvm
     yarn
 
     #

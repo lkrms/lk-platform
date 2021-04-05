@@ -316,6 +316,7 @@ AUR_PACKAGES+=(
     demjson
     lua-posix
     nodejs-less
+    nvm
     phpdoc-phar
     robo3t-bin
     sublime-merge
