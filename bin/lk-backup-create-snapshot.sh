@@ -15,6 +15,9 @@ export LK_BASE
 
 include=backup,mail,mysql . "$LK_BASE/lib/bash/common.sh"
 
+! lk_is_linux ||
+    lk_include linux
+
 function exit_trap() {
     local EXIT_STATUS=$? MESSAGE TAR SUBJECT
     eval "exec $FIFO_FD>&- $LOCK_FD>&-" &&
