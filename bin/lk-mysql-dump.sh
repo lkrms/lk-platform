@@ -14,7 +14,7 @@ DEST_GROUP=
 TIMESTAMP=${LK_BACKUP_TIMESTAMP:-}
 NO_TIMESTAMP=0
 DB_INCLUDE=()
-DB_EXCLUDE=()
+DB_EXCLUDE=(information_schema performance_schema sys)
 
 LK_USAGE="\
 Usage: ${0##*/} [OPTION...] DB_NAME...
@@ -102,9 +102,9 @@ lk_console_detail "${#DB_ALL[@]} $(lk_maybe_plural \
 
 if lk_is_true ALL; then
     DB_INCLUDE=(${DB_ALL[@]+"${DB_ALL[@]}"})
-    DB_EXCLUDE=(information_schema performance_schema sys)
 elif lk_is_true EXCLUDE; then
-    DB_EXCLUDE=("$@")
+    DB_INCLUDE=(${DB_ALL[@]+"${DB_ALL[@]}"})
+    DB_EXCLUDE+=("$@")
 else
     DB_INCLUDE=("$@")
     if [ ${#DB_INCLUDE[@]} -gt 0 ]; then
