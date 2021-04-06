@@ -1962,7 +1962,9 @@ Usage: ${FUNCNAME[0]} FILE1 FILE2" || return
                 lk_tty_columns
             )} - 2 * (_LK_TTY_INDENT + 2)))} "$@" &&
             lk_maybe_sudo diff -q "$@" >/dev/null
-    elif lk_command_exists git; then
+    elif lk_command_exists git &&
+        # `git diff` can't handle process substitution, i.e. named pipes / FIFOs
+        ! { lk_fifos_exist "$@" || [ $? -eq 2 ]; }; then
         lk_maybe_sudo git diff --no-index --no-prefix --no-ext-diff \
             --word-diff=color --word-diff-regex=. -U3 "$@"
     else
@@ -2661,15 +2663,28 @@ function lk_user_in_group() {
     lk_user_groups ${2+"$2"} | grep -Fx "$1" >/dev/null
 }
 
+# lk_test_many TEST [VALUE...]
+#
+# Return true if every VALUE passes TEST, otherwise:
+# - return 1 if there are no VALUE arguments;
+# - return 2 if at least one VALUE passes TEST; or
+# - return 3 if no VALUE passes TEST
 function lk_test_many() {
-    local TEST=$1
+    local TEST=${1:-} PASSED=0 FAILED=0
     [ -n "$TEST" ] || lk_warn "no test command" || return
     shift
-    [ $# -gt 0 ] || return
-    while [ $# -gt 0 ]; do
-        eval "$TEST \"\$1\"" || return
+    [ $# -gt 0 ] || return 1
+    while [ $# -gt 0 ] && ((PASSED + FAILED < 2)); do
+        eval "$TEST \"\$1\"" &&
+            PASSED=1 ||
+            FAILED=1
         shift
     done
+    [ $# -eq 0 ] && [ "$FAILED" -eq 0 ] || {
+        [ "$PASSED" -eq 0 ] &&
+            return 3 ||
+            return 2
+    }
 }
 
 function lk_paths_exist() {
@@ -2682,6 +2697,10 @@ function lk_files_exist() {
 
 function lk_dirs_exist() {
     lk_test_many "lk_maybe_sudo test -d" "$@"
+}
+
+function lk_fifos_exist() {
+    lk_test_many "lk_maybe_sudo test -p" "$@"
 }
 
 function lk_files_not_empty() {
