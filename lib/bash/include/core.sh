@@ -1353,7 +1353,7 @@ function lk_log_start() {
         _LK_LOG_FD=$(lk_fd_next) && { if [ -z "${_LK_LOG2_FD:-}" ]; then
             eval "exec $_LK_LOG_FD"'> >(lk_log >>"$LOG_FILE")'
         else
-            eval "exec $_LK_LOG_FD"'> >(lk_log >(tee -a "$LOG_FILE" >&"$_LK_LOG2_FD"))'
+            eval "exec $_LK_LOG_FD"'> >(lk_log > >(tee -a "$LOG_FILE" >&"$_LK_LOG2_FD"))'
         fi; } || return
     export _LK_FD _LK_{{TTY,LOG}_{OUT,ERR},LOG}_FD
     lk_log_tty_on
@@ -1436,13 +1436,20 @@ function lk_log_to_tty_stderr() {
     fi
 }
 
-# lk_log_bypass [-[t]o|-[t]e] COMMAND [ARG...]
+function _lk_log_bypass() {
+    (
+        unset "${!_LK_LOG_@}"
+        "$@"
+    )
+}
+
+# lk_log_bypass [-o|-e|-t|-to|-te] COMMAND [ARG...]
 #
-# Run the given command with stdout and stderr redirected to bypass output
-# logging initiated by lk_log_start. If -o is set, only redirect stdout. If -e
-# is set, only redirect stderr. If -t is set, run the command with stdout and
-# stderr redirected to bypass the console, and maintain output logging. If -to
-# or -te are set, only redirect stdout or stderr respectively.
+# Run the given command with stdout and stderr redirected to the console,
+# bypassing output log files. If -o or -e is set, only redirect stdout or stderr
+# respectively. If -t is set, run the command with stdout and stderr redirected
+# to output log files, bypassing the console. If -to or -te are set, only
+# redirect stdout or stderr to output logs.
 function lk_log_bypass() {
     local ARG=${1:-}
     [[ ! $ARG =~ ^-t?[oe]$ ]] || shift
@@ -1452,26 +1459,24 @@ function lk_log_bypass() {
     }
     case "$ARG" in
     -to)
-        "$@" > >(tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD")
+        _lk_log_bypass "$@" > >(tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD")
         ;;
     -te)
-        "$@" 2> >(tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD")
+        _lk_log_bypass "$@" 2> >(tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD")
         ;;
     -t)
-        "$@" \
+        _lk_log_bypass "$@" \
             > >(tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
             2> >(tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD")
         ;;
     -o)
-        "$@" > >(tee "/dev/fd/$_LK_LOG_OUT_FD" >&"$_LK_TTY_OUT_FD")
+        _lk_log_bypass "$@" >&"$_LK_TTY_OUT_FD"
         ;;
     -e)
-        "$@" \
-            2> >(tee "/dev/fd/$_LK_LOG_ERR_FD" \
-                >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}")
+        _lk_log_bypass "$@" 2>&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}"
         ;;
     *)
-        "$@" \
+        _lk_log_bypass "$@" \
             > >(tee "/dev/fd/$_LK_LOG_OUT_FD" >&"$_LK_TTY_OUT_FD") \
             2> >(tee "/dev/fd/$_LK_LOG_ERR_FD" \
                 >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}")
