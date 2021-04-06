@@ -125,6 +125,9 @@ AUR_PACKAGES=(
     # System
     rdfind
 
+    # Utilities
+    icdiff
+
     #
     ${AUR_PACKAGES[@]+"${AUR_PACKAGES[@]}"}
 )

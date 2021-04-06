@@ -29,6 +29,7 @@ HOMEBREW_FORMULAE=(
     byobu
     glances
     htop
+    icdiff
     jq
     lftp
     media-info

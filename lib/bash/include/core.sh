@@ -1918,7 +1918,7 @@ function lk_console_file() {
 # input. If FILE1 is the only argument, compare with FILE1.orig if it exists,
 # otherwise pass FILE1 to lk_console_file.
 function lk_console_diff() {
-    local FILE1=$1 FILE2=${2:-} f MESSAGE DIFF_VER
+    local FILE1=$1 FILE2=${2:-} f MESSAGE
     [ -n "$FILE1$FILE2" ] || lk_warn "invalid arguments" || return
     for f in FILE1 FILE2; do
         [ -n "${!f}" ] || {
@@ -1933,26 +1933,44 @@ function lk_console_diff() {
                     "${4-${LK_TTY_MESSAGE_COLOUR-$LK_MAGENTA}}"
                 return
             fi
-            eval "$f=/dev/stdin"
+            eval "$f=\$(lk_mktemp_file)" &&
+                lk_delete_on_exit "${!f}" &&
+                cat >"${!f}" || return
             continue
         }
         lk_maybe_sudo test -r "${!f}" ||
             lk_warn "file not found: ${!f}" || return
     done
     MESSAGE="\
-${1:-${LK_TTY_INPUT_NAME:-/dev/stdin}} -> \
-$LK_BOLD${2:-${LK_TTY_INPUT_NAME:-/dev/stdin}}$LK_RESET"
-    MESSAGE=${3-$MESSAGE}
-    DIFF_VER=$(lk_diff_version 2>/dev/null) &&
-        lk_version_at_least "$DIFF_VER" 3.4 || unset DIFF_VER
+${1:-${LK_TTY_INPUT_NAME:-/dev/stdin}}$LK_BOLD -> \
+${2:-${LK_TTY_INPUT_NAME:-/dev/stdin}}$LK_RESET"
     lk_console_dump \
-        "$(! lk_maybe_sudo gnu_diff --unified ${DIFF_VER+--color=always} \
-            "$FILE1" "$FILE2" ||
-            echo "${LK_CYAN}Files are identical$LK_RESET")" \
+        "$(_LK_TTY_INDENT=${_LK_TTY_INDENT:-0} \
+            lk_pretty_diff "$FILE1" "$FILE2")" \
+        "${3-$MESSAGE}" \
         "$MESSAGE" \
-        "" \
         "${4-${LK_TTY_MESSAGE_COLOUR-$LK_MAGENTA}}" \
         "${LK_TTY_COLOUR2-}"
+}
+
+function lk_pretty_diff() {
+    [ $# -eq 2 ] || lk_usage "\
+Usage: ${FUNCNAME[0]} FILE1 FILE2" || return
+    if lk_command_exists icdiff; then
+        lk_maybe_sudo icdiff -U2 \
+            ${_LK_TTY_INDENT:+--cols=$((${LK_TTY_WIDTH:-$(
+                lk_tty_columns
+            )} - 2 * (_LK_TTY_INDENT + 2)))} "$@" &&
+            lk_maybe_sudo diff -q "$@" >/dev/null
+    elif lk_command_exists git; then
+        lk_maybe_sudo git diff --no-index --no-prefix --no-ext-diff \
+            --word-diff=color --word-diff-regex=. -U3 "$@"
+    else
+        local DIFF_VER
+        DIFF_VER=$(lk_diff_version 2>/dev/null) &&
+            lk_version_at_least "$DIFF_VER" 3.4 || unset DIFF_VER
+        lk_maybe_sudo gnu_diff ${DIFF_VER+--color=always} -U3 "$@"
+    fi && echo "${LK_BLUE}Files are identical$LK_RESET"
 }
 
 function lk_run() {
@@ -2363,6 +2381,14 @@ function lk_curl() {
         --silent
     )
     curl ${CURL_OPTIONS[@]+"${CURL_OPTIONS[@]}"} "$@"
+}
+
+function lk_maybe_drop() {
+    if ! lk_is_root; then
+        "$@"
+    else
+        runuser -u nobody -- "$@"
+    fi
 }
 
 # lk_can_sudo COMMAND [USERNAME]
