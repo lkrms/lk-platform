@@ -1954,19 +1954,26 @@ ${2:-${LK_TTY_INPUT_NAME:-/dev/stdin}}$LK_RESET"
 }
 
 function lk_pretty_diff() {
+    local i FILE
     [ $# -eq 2 ] || lk_usage "\
 Usage: ${FUNCNAME[0]} FILE1 FILE2" || return
+    for i in 1 2; do
+        if [ -p "${!i}" ]; then
+            FILE=$(lk_mktemp_file) &&
+                lk_delete_on_exit "$FILE" &&
+                cp "${!i}" "$FILE" || return
+            set -- "${@:1:i-1}" "$FILE" "${@:i+1}"
+        fi
+    done
     if lk_command_exists icdiff; then
         lk_maybe_sudo icdiff -U2 \
             ${_LK_TTY_INDENT:+--cols=$((${LK_TTY_WIDTH:-$(
                 lk_tty_columns
             )} - 2 * (_LK_TTY_INDENT + 2)))} "$@" &&
             lk_maybe_sudo diff -q "$@" >/dev/null
-    elif lk_command_exists git &&
-        # `git diff` can't handle process substitution, i.e. named pipes / FIFOs
-        ! { lk_fifos_exist "$@" || [ $? -eq 2 ]; }; then
-        lk_maybe_sudo git diff --no-index --no-prefix --no-ext-diff \
-            --word-diff=color --word-diff-regex=. -U3 "$@"
+    elif lk_command_exists git; then
+        lk_maybe_sudo \
+            git diff --no-index --no-prefix --no-ext-diff --color -U3 "$@"
     else
         local DIFF_VER
         DIFF_VER=$(lk_diff_version 2>/dev/null) &&
