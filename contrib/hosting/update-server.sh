@@ -2,7 +2,7 @@
 
 include= . lk-bash-load.sh || exit
 
-lk_log_output
+lk_log_start
 
 {
     # update-server BRANCH [--set SETTING]...
@@ -13,7 +13,8 @@ lk_log_output
             cd "$1" &&
                 . /opt/lk-platform/lib/bash/rc.sh || return
             lk_console_item "Checking WordPress at" "$1"
-            if CRONTAB=$(crontab -l 2>/dev/null | grep -F "$1/wp-cron.php") &&
+            if CRONTAB=$(crontab -l 2>/dev/null | grep -F "$(printf \
+                'wp --path=%q cron event run --due-now' "$1")") &&
                 DISABLE_WP_CRON=$(lk_wp \
                     config get DISABLE_WP_CRON --type=constant) &&
                 lk_is_true DISABLE_WP_CRON; then
@@ -55,7 +56,7 @@ lk_log_output
         for WP in /srv/www/{*,*/*}/public_html/wp-config.php; do
             WP=${WP%/wp-config.php}
             OWNER=$(lk_file_owner "$WP") || return
-            runuser -u "$OWNER" bash -c "$(
+            runuser -u "$OWNER" -- bash -c "$(
                 declare -f update-wp
                 lk_quote_args update-wp "$WP"
             )"

@@ -15,7 +15,7 @@ export LK_BASE
 
 include=mysql . "$LK_BASE/lib/bash/common.sh"
 
-lk_log_output
+lk_log_start
 lk_start_trace
 
 USERNAME="${SUDO_USER:-$USER}"

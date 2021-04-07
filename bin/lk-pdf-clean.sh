@@ -7,7 +7,7 @@ lk_assert_command_exists mutool
 lk_test_many lk_is_pdf "$@" || lk_usage "\
 Usage: ${0##*/} PDF..."
 
-lk_log_output
+lk_log_start
 
 lk_console_message "Cleaning $# $(lk_maybe_plural $# file files)"
 

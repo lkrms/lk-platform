@@ -216,8 +216,10 @@ function exit_trap() {
     [ ! -d /mnt/boot ] || {
         set +x
         unset BASH_XTRACEFD
-        exec >&"$STDOUT_FD" 2>&"$STDERR_FD" &&
-            eval "exec 4>&- $STDOUT_FD>&- $STDERR_FD>&- $LOG_FD>&- $OUT_FD>&- $ERR_FD>&-"
+        exec >&"$TTY_OUT_FD" 2>&"$TTY_ERR_FD" &&
+            eval "exec$(printf ' %s>&-' 4 \
+                "$TTY_OUT_FD" "$TTY_ERR_FD" \
+                "$LOG_OUT_FD" "$LOG_ERR_FD" "$LOG_FD")"
         local LOG FILE
         for LOG in "$LOG_FILE" "$OUT_FILE" "$TRACE_FILE"; do
             FILE=/var/log/${LK_PATH_PREFIX}${LOG##*/}
@@ -231,25 +233,25 @@ function exit_trap() {
             "$BOOTSTRAP_PASSWORD"
 }
 
-function no_output() {
-    exec > >(tee "/dev/fd/$LOG_FD" >&"$OUT_FD")
-    exec 2> >(tee "/dev/fd/$LOG_FD" >&"$ERR_FD")
+function tty_off() {
+    exec > >(tee "/dev/fd/$LOG_FD" >&"$LOG_OUT_FD")
+    exec 2> >(tee "/dev/fd/$LOG_FD" >&"$LOG_ERR_FD")
 }
 
-function show_output() {
-    exec > >(tee >(tee "/dev/fd/$LOG_FD" >&"$OUT_FD") >&"$STDOUT_FD")
-    exec 2> >(tee >(tee "/dev/fd/$LOG_FD" >&"$ERR_FD") >&"$STDERR_FD")
+function tty_on() {
+    exec > >(tee >(tee "/dev/fd/$LOG_FD" >&"$LOG_OUT_FD") >&"$TTY_OUT_FD")
+    exec 2> >(tee >(tee "/dev/fd/$LOG_FD" >&"$LOG_ERR_FD") >&"$TTY_ERR_FD")
 }
 
-function no_log() {
+function bypass_log() {
     "$@" \
-        > >(tee "/dev/fd/$STDOUT_FD" >&"$OUT_FD") \
-        2> >(tee >(tee "/dev/fd/$LOG_FD" >&"$ERR_FD") >&"$STDERR_FD")
+        > >(tee "/dev/fd/$TTY_OUT_FD" >&"$LOG_OUT_FD") \
+        2> >(tee >(tee "/dev/fd/$LOG_FD" >&"$LOG_ERR_FD") >&"$TTY_ERR_FD")
 }
 
 function in_target() {
     [ -d /mnt/boot ] || lk_die "no target mounted"
-    [ "${1:-}" != -u ] || set -- sudo -C 5 -H "$@"
+    [ "${1:-}" != -u ] || set -- runuser "${@:1:2}" -- "${@:3}"
     arch-chroot /mnt "$@"
 }
 
@@ -258,19 +260,21 @@ mkfifo "$FIFO_FILE"
 lk_strip_non_printing <"$FIFO_FILE" >"$OUT_FILE" &
 lk_delete_on_exit "${FIFO_FILE%/*}"
 
-STDOUT_FD=$(lk_next_fd)
-eval "exec $STDOUT_FD>&1"
-STDERR_FD=$(lk_next_fd)
-eval "exec $STDERR_FD>&2"
-LOG_FD=$(lk_next_fd)
+TTY_OUT_FD=$(lk_fd_next)
+eval "exec $TTY_OUT_FD>&1"
+TTY_ERR_FD=$(lk_fd_next)
+eval "exec $TTY_ERR_FD>&2"
+LOG_OUT_FD=$(lk_fd_next)
+eval "exec $LOG_OUT_FD> >(lk_log \"..\" >\"\$FIFO_FILE\")"
+LOG_ERR_FD=$(lk_fd_next)
+eval "exec $LOG_ERR_FD> >(lk_log \"!!\" >\"\$FIFO_FILE\")"
+LOG_FD=$(lk_fd_next)
 eval "exec $LOG_FD> >(lk_log >\"\$LOG_FILE\")"
-OUT_FD=$(lk_next_fd)
-eval "exec $OUT_FD> >(lk_log \"..\" >\"\$FIFO_FILE\")"
-ERR_FD=$(lk_next_fd)
-eval "exec $ERR_FD> >(lk_log \"!!\" >\"\$FIFO_FILE\")"
-exec 3> >(tee >(tee "/dev/fd/$LOG_FD" >&"$OUT_FD") >&"$STDOUT_FD")
-export _LK_FD=3
-no_output
+exec 3> >(tee >(tee "/dev/fd/$LOG_FD" >&"$LOG_OUT_FD") >&"$TTY_OUT_FD")
+export _LK_FD=3 \
+    _LK_TTY_OUT_FD=$TTY_OUT_FD _LK_TTY_ERR_FD=$TTY_ERR_FD \
+    _LK_LOG_OUT_FD=$LOG_OUT_FD _LK_LOG_ERR_FD=$LOG_ERR_FD _LK_LOG_FD=$LOG_FD
+tty_off
 
 trap exit_trap EXIT
 
@@ -301,7 +305,7 @@ if [ -n "$LK_NTP_SERVER" ]; then
     lk_console_item "Synchronising system time with" "$LK_NTP_SERVER"
     if ! lk_command_exists ntpd; then
         lk_console_detail "Installing ntp"
-        no_log lk_tty pacman -Sy --noconfirm ntp ||
+        bypass_log lk_tty pacman -Sy --noconfirm ntp ||
             lk_die "unable to install ntp"
     fi
     lk_run_detail ntpd -qgx "$LK_NTP_SERVER" ||
@@ -381,7 +385,7 @@ fi
 
 lk_console_blank
 lk_console_log "Installing system"
-no_log lk_tty pacstrap /mnt "${PAC_PACKAGES[@]}"
+bypass_log lk_tty pacstrap /mnt "${PAC_PACKAGES[@]}"
 
 lk_console_blank
 lk_console_log "Setting up installed system"
@@ -461,13 +465,11 @@ lk_get_shell_var \
     LK_PLATFORM_BRANCH \
     LK_PACKAGES_FILE >"$FILE"
 
-show_output
 PROVISIONED=
 in_target -u "$BOOTSTRAP_USERNAME" \
     env BASH_XTRACEFD=$BASH_XTRACEFD SHELLOPTS=xtrace LK_NO_LOG=1 \
     "$LK_BASE/bin/lk-provision-arch.sh" --yes && PROVISIONED=1 ||
     lk_console_error "Provisioning failed"
-no_output
 
 lk_console_message "Installing boot loader"
 i=0
@@ -499,7 +501,7 @@ lk_is_true GRUB_INSTALLED ||
 lk_is_true PROVISIONED ||
     lk_console_item "To provision the system manually:" \
         $'\n'"$(printf \
-            'arch-chroot /mnt sudo -Hu %q %q/bin/lk-provision-arch.sh' \
+            'arch-chroot /mnt runuser -u %q -- %q/bin/lk-provision-arch.sh' \
             "$BOOTSTRAP_USERNAME" \
             "$LK_BASE")"
 

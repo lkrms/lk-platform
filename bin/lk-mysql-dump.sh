@@ -14,7 +14,7 @@ DEST_GROUP=
 TIMESTAMP=${LK_BACKUP_TIMESTAMP:-}
 NO_TIMESTAMP=0
 DB_INCLUDE=()
-DB_EXCLUDE=()
+DB_EXCLUDE=(information_schema performance_schema sys)
 
 LK_USAGE="\
 Usage: ${0##*/} [OPTION...] DB_NAME...
@@ -91,7 +91,7 @@ EXIT_STATUS=0
 LK_MYSQL_QUIET=1
 LK_TTY_NO_FOLD=1
 
-lk_log_output
+lk_log_start
 lk_start_trace
 
 lk_console_message "Preparing database backup"
@@ -102,9 +102,9 @@ lk_console_detail "${#DB_ALL[@]} $(lk_maybe_plural \
 
 if lk_is_true ALL; then
     DB_INCLUDE=(${DB_ALL[@]+"${DB_ALL[@]}"})
-    DB_EXCLUDE=(information_schema performance_schema sys)
 elif lk_is_true EXCLUDE; then
-    DB_EXCLUDE=("$@")
+    DB_INCLUDE=(${DB_ALL[@]+"${DB_ALL[@]}"})
+    DB_EXCLUDE+=("$@")
 else
     DB_INCLUDE=("$@")
     if [ ${#DB_INCLUDE[@]} -gt 0 ]; then
@@ -146,7 +146,7 @@ lk_echo_array DB_INCLUDE |
 lk_confirm "Proceed?" Y || lk_die ""
 
 LOCK_FILE=/tmp/${0##*/}-${DEST//\//_}.lock
-LOCK_FD=$(lk_next_fd)
+LOCK_FD=$(lk_fd_next)
 eval "exec $LOCK_FD>\"\$LOCK_FILE\""
 flock -n "$LOCK_FD" || lk_die "unable to acquire a lock on $LOCK_FILE"
 

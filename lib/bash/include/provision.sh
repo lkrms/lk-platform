@@ -1146,11 +1146,10 @@ function lk_squid_set_option() {
 # _lk_crontab REMOVE_REGEX ADD_COMMAND
 function _lk_crontab() {
     local REGEX=${1:+".*$1.*"} ADD_COMMAND=${2:-} TYPE=${2:+a}${1:+r} \
-        CRONTAB HAD_CRONTAB NEW_CRONTAB
-    unset HAD_CRONTAB
+        CRONTAB NEW= NEW_CRONTAB
     lk_command_exists crontab || lk_warn "command not found: crontab" || return
     CRONTAB=$(lk_maybe_sudo crontab -l 2>/dev/null) &&
-        HAD_CRONTAB= ||
+        unset NEW ||
         CRONTAB=
     [ "$TYPE" != ar ] ||
         [[ $ADD_COMMAND =~ $REGEX ]] ||
@@ -1178,20 +1177,17 @@ function _lk_crontab() {
         ;;
     esac || return
     if [ -z "$NEW_CRONTAB" ]; then
-        [ -z "${HAD_CRONTAB+1}" ] || {
+        [ -n "${NEW+1}" ] || {
             lk_console_message "Removing empty crontab for user '$(lk_me)'"
             lk_maybe_sudo crontab -r
         }
     else
         [ "$NEW_CRONTAB" = "$CRONTAB" ] || {
-            local VERB=${HAD_CRONTAB-Creating}${HAD_CRONTAB+Updating} DIFF_VER
-            DIFF_VER=$(lk_diff_version 2>/dev/null) &&
-                lk_version_at_least "$DIFF_VER" 3.4 || unset DIFF_VER
-            LK_TTY_COLOUR2='' \
-                lk_console_item "$VERB crontab for user '$(lk_me)'" \
-                "$(gnu_diff --unified ${DIFF_VER+--color=always} \
-                    <([ -z "$CRONTAB" ] || cat <<<"$CRONTAB") \
-                    <(cat <<<"$NEW_CRONTAB"))"
+            local VERB=
+            lk_console_diff \
+                <([ -z "$CRONTAB" ] || cat <<<"$CRONTAB") \
+                <(cat <<<"$NEW_CRONTAB") \
+                "${NEW+Creating}${NEW-Updating} crontab for user '$(lk_me)'"
             lk_maybe_sudo crontab - <<<"$NEW_CRONTAB"
         }
     fi

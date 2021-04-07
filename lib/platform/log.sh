@@ -25,6 +25,6 @@ Usage: ${0##*/} COMMAND [ARG...]"
 export -n LK_LOG_BASENAME
 
 _LK_LOG_CMDLINE=("$@")
-lk_log_output
+lk_log_start
 
 exec "$@"

@@ -490,7 +490,7 @@ case "$DISTRIB_RELEASE" in
 16.04)
     REPOS+=("$CERTBOT_REPO")
     ADD_APT_REPOSITORY_ARGS=(-y)
-    EXCLUDE_PACKAGES+=(php-apcu-bc php-yaml)
+    EXCLUDE_PACKAGES+=(icdiff php-apcu-bc php-yaml)
     GET_PIP_URL=https://bootstrap.pypa.io/3.5/get-pip.py
     PHPVER=7.0
     ;;
@@ -812,6 +812,7 @@ PACKAGES=(
     dnsutils
     git
     htop
+    icdiff
     iptables
     iptables-persistent
     iputils-ping

@@ -115,7 +115,7 @@ BACKUP_ROOT=$1
 
 BACKUP_ROOT=$(realpath "$BACKUP_ROOT")
 LOCK_FILE=/tmp/${0##*/}-${BACKUP_ROOT//\//_}.lock
-LOCK_FD=$(lk_next_fd)
+LOCK_FD=$(lk_fd_next)
 eval "exec $LOCK_FD>\"\$LOCK_FILE\""
 flock -n "$LOCK_FD" || lk_die "unable to acquire a lock on $LOCK_FILE"
 
@@ -124,7 +124,7 @@ HN=$(lk_hostname) || HN=localhost
 FQDN=$(lk_fqdn) || FQDN=$HN.localdomain
 eval "$(lk_get_regex BACKUP_TIMESTAMP_FINDUTILS_REGEX)"
 
-lk_log_output
+lk_log_start
 
 {
     USAGE_START=($(get_usage "$BACKUP_ROOT"))

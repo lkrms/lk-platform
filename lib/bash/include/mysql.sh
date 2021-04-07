@@ -128,7 +128,7 @@ Usage: $(lk_myself -f) DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
     [ ! -t 1 ] || {
         OUTPUT_FILE=~/.lk-platform/cache/db/$DB_HOST-$DB_NAME-$(lk_date_ymdhms).sql.gz
         install -d -m 00700 "${OUTPUT_FILE%/*}" &&
-            OUTPUT_FD=$(lk_next_fd) &&
+            OUTPUT_FD=$(lk_fd_next) &&
             eval "exec $OUTPUT_FD>&1 >\"\$OUTPUT_FILE\"" || return
     }
     INNODB_ONLY=$(lk_mysql_innodb_only "$DB_NAME") || return
@@ -196,7 +196,7 @@ Usage: $(lk_myself -f) SSH_HOST DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
     [ ! -t 1 ] || {
         OUTPUT_FILE=~/.lk-platform/cache/db/$SSH_HOST-$DB_NAME-$(lk_date_ymdhms).sql.gz
         install -d -m 00700 "${OUTPUT_FILE%/*}" &&
-            OUTPUT_FD=$(lk_next_fd) &&
+            OUTPUT_FD=$(lk_fd_next) &&
             eval "exec $OUTPUT_FD>&1 >\"\$OUTPUT_FILE\"" || return
     }
     lk_console_message "Dumping remote database"

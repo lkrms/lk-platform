@@ -124,7 +124,7 @@ STATUS=0
 
 LK_WP_QUIET=1
 
-lk_log_output
+lk_log_start
 lk_start_trace
 
 lk_console_message "Preparing WordPress migration"
