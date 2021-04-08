@@ -5,6 +5,11 @@
 export -n BASH_XTRACEFD SHELLOPTS
 [ -n "${_LK_ENV+1}" ] || _LK_ENV=$(declare -x)
 
+LK_ARG0=$0
+LK_ARGV=("$@")
+LK_CMDLINE=("$0" "$@")
+readonly S="[[:blank:]]" 2>/dev/null || true
+readonly NS="[^[:blank:]]" 2>/dev/null || true
 USER=${USER:-$(id -un)} || return
 
 # lk_bash_at_least MAJOR [MINOR]
@@ -1226,21 +1231,24 @@ function lk_lock_drop() {
     unset "${@:1:2}"
 }
 
+function tee() {
+    lk_ignore_SIGINT && command tee "$@"
+}
+
 function lk_log() {
     local PREFIX=${1:-}
+    lk_ignore_SIGINT || return
     if lk_command_exists ts; then
         PREFIX=${PREFIX//"%"/"%%"}
         LC_ALL=C exec ts "$PREFIX%Y-%m-%d %H:%M:%.S %z"
     else
-        (
-            set +x
-            while IFS= read -r LINE; do
-                printf '%s%s %s\n' \
-                    "$PREFIX" "$(lk_date "%Y-%m-%d %H:%M:%S %z")" "$LINE"
-            done
-        )
+        set +x
+        while IFS= read -r LINE; do
+            printf '%s%s %s\n' \
+                "$PREFIX" "$(lk_date "%Y-%m-%d %H:%M:%S %z")" "$LINE"
+        done
     fi
-} #### Reviewed: 2021-03-26
+} #### Reviewed: 2021-04-08
 
 # lk_log_create_file [-e EXT] [DIR...]
 function lk_log_create_file() {
@@ -1340,12 +1348,14 @@ function lk_log_start() {
     FIFO=$(lk_mktemp_dir)/fifo &&
         lk_delete_on_exit "${FIFO%/*}" &&
         mkfifo "$FIFO" || return
-    lk_strip_non_printing <"$FIFO" >>"$OUT_FILE" &
+    lk_ignore_SIGINT && lk_strip_non_printing <"$FIFO" >>"$OUT_FILE" &
     unset _LK_LOG2_FD
     [ -z "${LK_SECONDARY_LOG_FILE:-}" ] || { _LK_LOG2_FD=$(lk_fd_next) &&
         eval "exec $_LK_LOG2_FD"'>>"$LK_SECONDARY_LOG_FILE"'; } || return
-    _LK_TTY_OUT_FD=$(lk_fd_next) && eval "exec $_LK_TTY_OUT_FD>&1" &&
-        _LK_TTY_ERR_FD=$(lk_fd_next) && eval "exec $_LK_TTY_ERR_FD>&2" &&
+    _LK_TTY_OUT_FD=$(lk_fd_next) &&
+        eval "exec $_LK_TTY_OUT_FD>&1" &&
+        _LK_TTY_ERR_FD=$(lk_fd_next) &&
+        eval "exec $_LK_TTY_ERR_FD>&2" &&
         _LK_LOG_OUT_FD=$(lk_fd_next) &&
         eval "exec $_LK_LOG_OUT_FD"'> >(lk_log ".." >"$FIFO")' &&
         _LK_LOG_ERR_FD=$(lk_fd_next) &&
@@ -1969,7 +1979,7 @@ ${1:-${LK_TTY_INPUT_NAME:-/dev/stdin}}$LK_BOLD -> \
 ${2:-${LK_TTY_INPUT_NAME:-/dev/stdin}}$LK_RESET"
     lk_console_dump \
         "$(_LK_TTY_INDENT=${_LK_TTY_INDENT:-0} \
-            lk_pretty_diff "$FILE1" "$FILE2")" \
+            lk_pretty_diff "$FILE1" "$FILE2" || true)" \
         "${3-$MESSAGE}" \
         "$MESSAGE" \
         "${4-${LK_TTY_MESSAGE_COLOUR-$LK_MAGENTA}}" \
@@ -1984,7 +1994,7 @@ Usage: ${FUNCNAME[0]} FILE1 FILE2" || return
         if [ -p "${!i}" ]; then
             FILE=$(lk_mktemp_file) &&
                 lk_delete_on_exit "$FILE" &&
-                cp "${!i}" "$FILE" || return
+                cat "${!i}" >"$FILE" || return
             set -- "${@:1:i-1}" "$FILE" "${@:i+1}"
         fi
     done
@@ -2340,6 +2350,7 @@ function lk_download() {
         lk_version_at_least "$CURL_VERSION" 7.26.0 ||
             lk_warn "curl too old to output filename_effective" || return
         DOWNLOAD_DIR=$(lk_mktemp_dir) &&
+            lk_delete_on_exit "$DOWNLOAD_DIR" &&
             pushd "$DOWNLOAD_DIR" >/dev/null || return
         CURL_COMMAND+=(
             --remote-name
@@ -2809,9 +2820,9 @@ function lk_expand_path() {
     # If the path is double- or single-quoted, remove enclosing quotes and
     # unescape
     if [[ $_PATH =~ ^\"(.*)\"$ ]]; then
-        _PATH=${BASH_REMATCH[1]//\\\"/\"}
+        _PATH=${BASH_REMATCH[1]//"\\\""/"\""}
     elif [[ $_PATH =~ ^\'(.*)\'$ ]]; then
-        _PATH=${BASH_REMATCH[1]//\\\'/\'}
+        _PATH=${BASH_REMATCH[1]//"\\'"/"'"}
     fi
     # Perform tilde expansion
     if [[ $_PATH =~ ^(~[-a-z0-9\$_]*)(/.*)?$ ]]; then
@@ -3346,41 +3357,149 @@ function _lk_maybe_filter() {
     esac
 } #### Reviewed: 2021-03-26
 
-function lk_exit_trap() {
-    local EXIT_STATUS=$? DELETE_ARRAY="_LK_EXIT_DELETE_${BASH_SUBSHELL}[@]" i
-    [ "$EXIT_STATUS" -eq 0 ] ||
+# lk_get_stack_trace [STACK_DEPTH]
+function lk_get_stack_trace() {
+    local i=$((${1:-0} + ${_LK_STACK_DEPTH:-0})) \
+        DEPTH=$((${#FUNCNAME[@]} - 1)) WIDTH FUNC FILE LINE
+    WIDTH=${#DEPTH}
+    while ((i++ < DEPTH)); do
+        FUNC=${FUNCNAME[i]-"{main}"}
+        FILE=${BASH_SOURCE[i]-"{main}"}
+        LINE=${BASH_LINENO[i - 1]-0}
+        printf "%${WIDTH}d. %s %s (%s:%s)\n" \
+            "$((DEPTH - i + 1))" \
+            "$([ "$i" -gt 1 ] && echo at || echo in)" \
+            "$LK_BOLD$FUNC$LK_RESET" "$FILE$LK_DIM" "$LINE$LK_RESET"
+    done
+}
+
+function lk_keep_alive() {
+    if [ -z "${_LK_KEEP_ALIVE:-}" ]; then
+        local OUT_FILE OUT_FD TTY_OUT_FD TTY_ERR_FD
+        OUT_FILE=$(lk_mktemp_file) &&
+            lk_delete_on_exit "$OUT_FILE" &&
+            OUT_FD=$(lk_fd_next) &&
+            eval "exec $OUT_FD"'>"$OUT_FILE"' || return
+        if lk_log_is_open; then
+            TTY_OUT_FD=$_LK_TTY_OUT_FD
+            TTY_ERR_FD=$_LK_TTY_ERR_FD
+            _LK_TTY_OUT_FD=$OUT_FD
+            _LK_TTY_ERR_FD=$OUT_FD
+            ${_LK_LOG_TTY_LAST:-lk_log_tty_on} &&
+                exec </dev/null
+        else
+            TTY_OUT_FD=$(lk_fd_next) && eval "exec $TTY_OUT_FD>&1" &&
+                TTY_ERR_FD=$(lk_fd_next) && eval "exec $TTY_ERR_FD>&2" &&
+                exec >&"$OUT_FD" 2>&1 </dev/null
+        fi || return
+        tail -fn+1 "$OUT_FILE" >&"$TTY_OUT_FD" 2>&"$TTY_ERR_FD" &
+        lk_kill_on_exit $!
+        _LK_KEEP_ALIVE=1
+    fi
+    trap "" SIGHUP SIGINT SIGTERM
+}
+
+function lk_ignore_SIGINT() {
+    trap "" SIGINT
+}
+
+function lk_propagate_SIGINT() {
+    local PGID
+    PGID=$(($(ps -o pgid= $$))) &&
+        trap - SIGINT &&
+        kill -SIGINT -- -"$PGID"
+}
+
+# lk_trap_get SIGNAL
+function lk_trap_get() {
+    if [ $# -eq 1 ]; then
+        local SH
+        SH=$(trap -p "$1") && [ -z "$SH" ] || eval "lk_trap_get $SH"
+    elif [ $# -eq 4 ]; then
+        echo "$3"
+    else
+        lk_usage "\
+Usage: ${FUNCNAME[0]} SIGNAL"
+    fi
+}
+
+# lk_trap_add SIGNAL COMMAND
+function lk_trap_add() {
+    local CMD
+    [ $# -eq 2 ] || lk_usage "\
+Usage: ${FUNCNAME[0]} SIGNAL COMMAND" || return
+    set -- "$1" "$2"' "$LINENO ${FUNCNAME[0]-} ${BASH_SOURCE[0]-}"'
+    CMD=$(lk_trap_get "$1" |
+        sed -E "/^$(lk_escape_ere "$2")\$/d" && printf .) &&
+        trap -- "${CMD%.}$2" "$1"
+}
+
+function _lk_exit_trap() {
+    local STATUS=$?
+    [ "$STATUS" -eq 0 ] ||
         [[ ${FUNCNAME[1]:-} =~ ^_?lk_(die|usage|elevate)$ ]] ||
         { [[ $- == *i* ]] && [ "$BASH_SUBSHELL" -eq 0 ]; } ||
         lk_console_error \
-            "$(_lk_caller "${_LK_ERR_TRAP_CONTEXT:-}"): unhandled error"
-    for i in ${!DELETE_ARRAY+"${!DELETE_ARRAY}"}; do
-        lk_elevate_if_error rm -Rf -- "$i" 2>/dev/null || true
-    done
+            "$(_lk_caller "$1"): unhandled error" \
+            "$(lk_get_stack_trace $((1 - ${_LK_STACK_DEPTH:-0})))"
 }
 
-function lk_err_trap() {
-    _LK_ERR_TRAP_CONTEXT=$(caller 0) || _LK_ERR_TRAP_CONTEXT=
+function _lk_cleanup_trap() {
+    local COMMAND WARNING ARRAY LIST ITEM
+    COMMAND=(rm -Rf --)
+    WARNING=(eval 'lk_warn "error deleting $ITEM without root access"')
+    for ARRAY in _LK_EXIT_{DELETE_,KILL_}${1:-$BASH_SUBSHELL}; do
+        LIST="${ARRAY}[@]"
+        for ITEM in ${!LIST+"${!LIST}"}; do
+            "${COMMAND[@]}" "$ITEM" 2>/dev/null ||
+                lk_is_root ||
+                lk_pass ${WARNING[@]+"${WARNING[@]}"} ||
+                lk_elevate "${COMMAND[@]}" "$ITEM" 2>/dev/null ||
+                true
+        done
+        unset "$ARRAY"
+        COMMAND=(kill)
+        WARNING=()
+    done
+    # Because subshells don't receive individual EXIT signals on SIGINT, and
+    # SIGINT traps aren't inherited, clean up recursively on SIGINT
+    if [ -n "${1:-}" ] && (($1 > 0)); then
+        _lk_cleanup_trap $(($1 - 1)) "${@:2}"
+    fi
+}
+
+function _lk_cleanup_on_exit() {
+    local ARRAY=$1
+    shift
+    [ -n "${!ARRAY+1}" ] || {
+        lk_trap_add EXIT "_lk_cleanup_trap ''" &&
+            lk_trap_add SIGINT "_lk_cleanup_trap $BASH_SUBSHELL" &&
+            lk_trap_add SIGINT lk_propagate_SIGINT &&
+            eval "$ARRAY=()" || return
+    }
+    while [ $# -gt 0 ]; do
+        eval "${ARRAY}[\${#${ARRAY}[@]}]=\$1" &&
+            shift || return
+    done
 }
 
 function lk_delete_on_exit() {
+    _lk_cleanup_on_exit _LK_EXIT_DELETE_$BASH_SUBSHELL "$@"
+}
+
+function lk_remove_delete_on_exit() {
     local ARRAY=_LK_EXIT_DELETE_$BASH_SUBSHELL
-    [ -n "${!ARRAY+1}" ] || eval "$ARRAY=()"
-    while [ $# -gt 0 ]; do
-        eval "${ARRAY}[\${#${ARRAY}[@]}]=\$1"
-        shift
-    done
+    [ -n "${!ARRAY+1}" ] && lk_in_array "$1" "$ARRAY" || return
+    lk_remove_false "$(printf '[ "{}" != %q ]' "$1")" "$ARRAY"
+}
+
+function lk_kill_on_exit() {
+    _lk_cleanup_on_exit _LK_EXIT_KILL_$BASH_SUBSHELL "$@"
 }
 
 set -o pipefail
 
-trap lk_exit_trap EXIT
-trap lk_err_trap ERR
-
-LK_ARG0=$0
-LK_ARGV=("$@")
-LK_CMDLINE=("$0" "$@")
-readonly S="[[:blank:]]" 2>/dev/null || true
-readonly NS="[^[:blank:]]" 2>/dev/null || true
+lk_trap_add EXIT _lk_exit_trap
 
 LK_BLACK=
 LK_RED=

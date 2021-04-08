@@ -19,7 +19,7 @@ lk_assert_is_root
 
 IFS=$'\n'
 SESSION_USERS=($(pgrep -x libvirtd |
-    xargs ps --no-headers --format user |
+    xargs ps -o user= |
     sort -u |
     sed '/^root$/d'))
 
