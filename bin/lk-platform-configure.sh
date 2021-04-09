@@ -245,6 +245,7 @@
         # /etc/default/lk-platform
         [ -n "${!i:-}" ] ||
             grep -Eq "^$i=" "$CONF_FILE" ||
+            lk_in_array "$i" NEW_SETTINGS ||
             continue
         KNOWN_SETTINGS+=("$i")
     done

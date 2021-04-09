@@ -1287,7 +1287,7 @@ function lk_log_create_file() {
 function lk_start_trace() {
     local TRACE_PATH
     # Don't interfere with an existing trace
-    [[ $- != *x* ]] || return 0
+    [[ $- != *x* ]] && ! lk_is_false LK_SCRIPT_DEBUG || return 0
     TRACE_PATH=$(lk_log_create_file -e "$(lk_date_ymdhms).trace" ~ /tmp) &&
         exec 4> >(lk_log >"$TRACE_PATH") || return
     if lk_bash_at_least 4 1; then
@@ -1979,14 +1979,14 @@ ${1:-${LK_TTY_INPUT_NAME:-/dev/stdin}}$LK_BOLD -> \
 ${2:-${LK_TTY_INPUT_NAME:-/dev/stdin}}$LK_RESET"
     lk_console_dump \
         "$(_LK_TTY_INDENT=${_LK_TTY_INDENT:-0} \
-            lk_pretty_diff "$FILE1" "$FILE2" || true)" \
+            lk_diff "$FILE1" "$FILE2")" \
         "${3-$MESSAGE}" \
         "$MESSAGE" \
         "${4-${LK_TTY_MESSAGE_COLOUR-$LK_MAGENTA}}" \
         "${LK_TTY_COLOUR2-}"
 }
 
-function lk_pretty_diff() {
+function lk_diff() {
     local i FILE
     [ $# -eq 2 ] || lk_usage "\
 Usage: ${FUNCNAME[0]} FILE1 FILE2" || return
@@ -1999,11 +1999,10 @@ Usage: ${FUNCNAME[0]} FILE1 FILE2" || return
         fi
     done
     if lk_command_exists icdiff; then
-        lk_maybe_sudo icdiff -U2 \
+        ! lk_require_output lk_maybe_sudo icdiff -U2 \
             ${_LK_TTY_INDENT:+--cols=$((${LK_TTY_WIDTH:-$(
                 lk_tty_columns
-            )} - 2 * (_LK_TTY_INDENT + 2)))} "$@" &&
-            lk_maybe_sudo diff -q "$@" >/dev/null
+            )} - 2 * (_LK_TTY_INDENT + 2)))} "$@"
     elif lk_command_exists git; then
         lk_maybe_sudo \
             git diff --no-index --no-prefix --no-ext-diff --color -U3 "$@"
@@ -2012,7 +2011,7 @@ Usage: ${FUNCNAME[0]} FILE1 FILE2" || return
         DIFF_VER=$(lk_diff_version 2>/dev/null) &&
             lk_version_at_least "$DIFF_VER" 3.4 || unset DIFF_VER
         lk_maybe_sudo gnu_diff ${DIFF_VER+--color=always} -U3 "$@"
-    fi && echo "${LK_BLUE}Files are identical$LK_RESET"
+    fi && echo "${LK_BLUE}Files are identical$LK_RESET" || true
 }
 
 function lk_run() {
