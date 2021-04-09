@@ -145,10 +145,8 @@ lk_echo_array DB_INCLUDE |
 
 lk_confirm "Proceed?" Y || lk_die ""
 
-LOCK_FILE=/tmp/${0##*/}-${DEST//\//_}.lock
-LOCK_FD=$(lk_fd_next)
-eval "exec $LOCK_FD>\"\$LOCK_FILE\""
-flock -n "$LOCK_FD" || lk_die "unable to acquire a lock on $LOCK_FILE"
+LOCK_NAME=${0##*/}-${DEST//\//_}
+lk_lock LOCK_FILE LOCK_FD "$LOCK_NAME"
 
 DEST_MODE=00600
 [ -z "$DEST_GROUP" ] ||
@@ -176,8 +174,5 @@ for DB_NAME in "${DB_INCLUDE[@]}"; do
         lk_console_error "Database dump failed (exit status $EXIT_STATUS)"
     fi
 done
-
-eval "exec $LOCK_FD>&-"
-rm -f "$LOCK_FILE"
 
 (exit "$EXIT_STATUS") || lk_die ""

@@ -160,7 +160,7 @@ if [ -n "$LK_PACKAGES_FILE" ]; then
 fi
 
 lk_log_start
-lk_log_tty_off
+lk_log_tty_stdout_off
 lk_start_trace
 
 {
@@ -494,8 +494,11 @@ $LK_NODE_HOSTNAME" &&
     fi
 
     lk_console_blank
-    lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" --no-log \
+    LK_NO_LOG=1 \
+        lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" \
         ${LK_PACKAGES_FILE:+--set LK_PACKAGES_FILE="$LK_PACKAGES_FILE"}
+    [ ! -f /etc/default/lk-platform ] ||
+        . /etc/default/lk-platform
 
     lk_console_blank
     lk_console_log "Checking packages"
@@ -573,7 +576,7 @@ $LK_NODE_HOSTNAME" &&
             PAC_PACKAGES+=(aurutils "${AUR_PACKAGES[@]}")
             AUR_PACKAGES=()
         fi
-        lk_log_tty_off
+        lk_log_tty_stdout_off
     fi
 
     if [ ${#PAC_KEEP[@]} -gt 0 ]; then

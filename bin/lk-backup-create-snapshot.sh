@@ -20,8 +20,8 @@ include=backup,mail,mysql . "$LK_BASE/lib/bash/common.sh"
 
 function exit_trap() {
     local EXIT_STATUS=$? MESSAGE TAR SUBJECT
-    eval "exec $FIFO_FD>&- $LOCK_FD>&-" &&
-        rm -Rf "${FIFO_FILE%/*}" "$LOCK_FILE" || true
+    eval "exec $FIFO_FD>&-" &&
+        rm -Rf "${FIFO_FILE%/*}" || true
     lk_log_close -r
     [ -z "$LK_BACKUP_MAIL" ] ||
         { [ "$EXIT_STATUS" -eq 0 ] &&
@@ -283,10 +283,8 @@ esac
 
 SOURCE_NAME=${SOURCE_NAME//\//_}
 BACKUP_ROOT=$(realpath "$BACKUP_ROOT")
-LOCK_FILE=/tmp/${0##*/}-${BACKUP_ROOT//\//_}-$SOURCE_NAME.lock
-LOCK_FD=$(lk_fd_next)
-eval "exec $LOCK_FD>\"\$LOCK_FILE\""
-flock -n "$LOCK_FD" || lk_die "unable to acquire a lock on $LOCK_FILE"
+LOCK_NAME=${0##*/}-${BACKUP_ROOT//\//_}-$SOURCE_NAME
+lk_lock LOCK_FILE LOCK_FD "$LOCK_NAME"
 FIFO_FILE=$(lk_mktemp_dir)/fifo
 FIFO_FD=$(lk_fd_next)
 mkfifo "$FIFO_FILE"
@@ -350,7 +348,7 @@ RSYNC_EXIT_VALUE=0
 RSYNC_RESULT=
 RSYNC_STAGE_SUFFIX=
 
-trap exit_trap EXIT
+lk_trap_add EXIT exit_trap
 
 {
     lk_console_message "Backing up $SOURCE_NAME to $HN:$BACKUP_ROOT"

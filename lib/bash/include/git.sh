@@ -290,7 +290,7 @@ function lk_git_push_branch() {
         return
     LOG=$(git log --reverse \
         --oneline --decorate --color=always "$2..$1") || return
-    lk_console_dump \
+    lk_tty_dump \
         "$LOG" \
         "Not pushed:" \
         "($AHEAD $(lk_maybe_plural "$AHEAD" commit commits))"

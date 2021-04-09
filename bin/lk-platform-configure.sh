@@ -509,8 +509,6 @@
         . "$LK_BASE/lib/platform/configure-desktop.sh"
     fi
 
-    lk_lock_drop LOCK_FILE LOCK_FD
-
     lk_console_success "lk-platform successfully configured"
 
     exit

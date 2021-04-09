@@ -276,7 +276,7 @@ export _LK_FD=3 \
     _LK_LOG_OUT_FD=$LOG_OUT_FD _LK_LOG_ERR_FD=$LOG_ERR_FD _LK_LOG_FD=$LOG_FD
 tty_off
 
-trap exit_trap EXIT
+lk_trap_add EXIT exit_trap
 
 lk_console_log "Setting up live environment"
 lk_arch_configure_pacman

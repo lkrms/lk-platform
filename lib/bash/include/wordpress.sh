@@ -346,7 +346,7 @@ ${LOCAL_DB_USER:+1}${LOCAL_DB_PASSWORD:+1}" = 111 ]; then
 
 # lk_wp_db_restore_local SQL_PATH [DB_NAME [DB_USER]]
 function lk_wp_db_restore_local() {
-    local SITE_ROOT SH SQL _SQL COMMAND \
+    local SITE_ROOT SH SQL _SQL SUDO=1 \
         LOCAL_DB_NAME LOCAL_DB_USER LOCAL_DB_PASSWORD LOCAL_DB_HOST
     [ -f "$1" ] || lk_usage "\
 Usage: $(lk_myself -f) SQL_PATH [DB_NAME [DB_USER]]" || return
@@ -376,13 +376,12 @@ Usage: $(lk_myself -f) SQL_PATH [DB_NAME [DB_USER]]" || return
 All data in local database '$LOCAL_DB_NAME' will be permanently destroyed.
 Proceed?" Y || return
     [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] || {
-        COMMAND=(LK_SUDO=1
-            lk_maybe_trace "${LK_INST:-$LK_BASE}/bin/lk-mysql-grant.sh"
-            "$LOCAL_DB_NAME" "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD")
         [[ $USER =~ ^[-a-zA-Z0-9_]+$ ]] &&
             [[ $LOCAL_DB_NAME =~ ^$USER(_[-a-zA-Z0-9_]*)?$ ]] ||
-            unset "COMMAND[0]"
-        eval "$(lk_quote_args "${COMMAND[@]}")" || return
+            unset SUDO
+        ${SUDO+LK_SUDO=1} \
+            lk_maybe_trace "${LK_INST:-$LK_BASE}/bin/lk-mysql-grant.sh" \
+            "$LOCAL_DB_NAME" "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD" || return
     }
     lk_console_message "Restoring WordPress database to local system"
     lk_console_detail "Checking wp-config.php"

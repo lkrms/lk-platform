@@ -114,10 +114,8 @@ BACKUP_ROOT=$1
 }
 
 BACKUP_ROOT=$(realpath "$BACKUP_ROOT")
-LOCK_FILE=/tmp/${0##*/}-${BACKUP_ROOT//\//_}.lock
-LOCK_FD=$(lk_fd_next)
-eval "exec $LOCK_FD>\"\$LOCK_FILE\""
-flock -n "$LOCK_FD" || lk_die "unable to acquire a lock on $LOCK_FILE"
+LOCK_NAME=${0##*/}-${BACKUP_ROOT//\//_}
+lk_lock LOCK_FILE LOCK_FD "$LOCK_NAME"
 
 export TZ=UTC
 HN=$(lk_hostname) || HN=localhost
@@ -262,8 +260,6 @@ lk_log_start
             done
         }
     done
-    eval "exec $LOCK_FD>&-"
-    rm -f "$LOCK_FILE"
     USAGE_END=($(get_usage "$BACKUP_ROOT"))
     lk_console_success \
         "Pruning complete (storage used: ${USAGE_END[0]}/${USAGE_END[1]})"

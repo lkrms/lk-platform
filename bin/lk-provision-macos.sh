@@ -99,7 +99,7 @@ function exit_trap() {
     LK_FILE_TAKE_BACKUP=${LK_FILE_TAKE_BACKUP-1}
 
     lk_log_start ~/"${LK_PATH_PREFIX}install.log"
-    trap exit_trap EXIT
+    lk_trap_add EXIT exit_trap
 
     lk_console_log "Provisioning macOS"
 
@@ -385,8 +385,11 @@ EOF
     fi
 
     lk_console_blank
-    LK_SUDO=1 lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" --no-log \
+    LK_NO_LOG=1 LK_SUDO=1 \
+        lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" \
         ${LK_PACKAGES_FILE:+--set LK_PACKAGES_FILE="$LK_PACKAGES_FILE"}
+    [ ! -f /etc/default/lk-platform ] ||
+        . /etc/default/lk-platform
 
     lk_console_blank
     lk_console_message "Checking Homebrew packages"

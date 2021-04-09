@@ -164,7 +164,7 @@ HOMEBREW_CASKS+=(
     sourcetree
     sublime-merge
     sublime-text
-    vscodium
+    visual-studio-code
 
     #
     adoptopenjdk/openjdk/adoptopenjdk11
