@@ -1087,17 +1087,17 @@ function _lk_maybe_xargs() {
 #
 # Read lines from FILE or input into array variable ARRAY.
 function lk_mapfile() {
-    local LK_Z=${LK_Z-} _LK_NUL_READ=(-d '') _LK_LINE _lk_i=0
+    local LK_Z=${LK_Z-} __ARGS=(-d '') __LINE
     [ "${1:-}" != -z ] || { LK_Z=1 && shift; }
-    lk_is_identifier "$1" || lk_warn "not a valid identifier: $1" || return
-    [ -z "${2:-}" ] ||
-        [ -e "$2" ] || lk_warn "file not found: $2" || return
+    [ -n "${1:+1}" ] || lk_usage "\
+Usage: ${FUNCNAME[0]} [-z] ARRAY [FILE]" || return
+    [ -n "${2+1}" ] || set -- "$1" /dev/stdin
+    [ -r "$2" ] || lk_warn "file not found: $2" || return
     eval "$1=()"
-    while IFS= read -r ${LK_Z:+"${_LK_NUL_READ[@]}"} _LK_LINE ||
-        [ -n "$_LK_LINE" ]; do
-        eval "$1[$((_lk_i++))]=\$_LK_LINE"
-    done < <(cat ${2+"$2"})
-}
+    while IFS= read -r ${LK_Z:+"${__ARGS[@]}"} __LINE || [ -n "$__LINE" ]; do
+        eval "$1[\${#$1[@]}]=\$__LINE"
+    done <"$2"
+} #### Reviewed: 2021-04-11
 
 function lk_has_arg() {
     lk_in_array "$1" "${LK_ARG_ARRAY:-LK_ARGV}"
@@ -3033,38 +3033,33 @@ function lk_base64() {
     fi
 }
 
-if ! lk_is_macos || lk_gnu_check stat sed; then
-    function lk_sort_paths_by_date() {
-        gnu_stat --printf '%Y :%n\0' "$@" |
-            sort -zn |
-            gnu_sed -zE 's/^[0-9]+ ://' |
-            xargs -0 printf '%s\n'
-    }
-else
-    function lk_sort_paths_by_date() {
-        stat -t '%s' -f '%Sm :%N' "$@" |
-            sort -n |
-            sed -E 's/^[0-9]+ ://'
-    }
-fi
+function _lk_file_sort() {
+    sort "${@:--n}" | sed -E 's/^[0-9]+ ://'
+}
 
-if ! lk_is_macos || lk_gnu_check stat; then
+if ! lk_is_macos; then
+    function lk_file_sort_by_date() {
+        lk_maybe_sudo stat -c '%Y :%n' -- "$@" | _lk_file_sort
+    }
     function lk_file_modified() {
-        lk_maybe_sudo gnu_stat -c '%Y' -- "$@"
+        lk_maybe_sudo stat -c '%Y' -- "$@"
     }
     function lk_file_owner() {
-        lk_maybe_sudo gnu_stat -c '%U' -- "$@"
+        lk_maybe_sudo stat -c '%U' -- "$@"
     }
     function lk_file_group() {
-        lk_maybe_sudo gnu_stat -c '%G' -- "$@"
+        lk_maybe_sudo stat -c '%G' -- "$@"
     }
     function lk_file_mode() {
-        lk_maybe_sudo gnu_stat -c '%04a' -- "$@"
+        lk_maybe_sudo stat -c '%04a' -- "$@"
     }
     function lk_file_security() {
-        lk_maybe_sudo gnu_stat -c '%U:%G %04a' -- "$@"
+        lk_maybe_sudo stat -c '%U:%G %04a' -- "$@"
     }
 else
+    function lk_file_sort_by_date() {
+        lk_maybe_sudo stat -t '%s' -f '%Sm :%N' -- "$@" | _lk_file_sort
+    }
     function lk_file_modified() {
         lk_maybe_sudo stat -t '%s' -f '%Sm' -- "$@"
     }
