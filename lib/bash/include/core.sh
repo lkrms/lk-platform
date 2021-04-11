@@ -117,31 +117,8 @@ _LK_GNU_COMMANDS=(
 
 #### Reviewed: 2021-01-28
 
-_LK_CACHE=$(
-    b=${LK_INST:-${LK_BASE:-}}
-    s=/
-    [ -n "$b" ] &&
-        [ "$b/lib/bash/include/core.sh" -ef "${BASH_SOURCE[0]:-}" ] &&
-        echo ~/.lk-platform/cache/${b//"$s"/__}
-) && { [ -d "$_LK_CACHE" ] || install -d -m 00755 "$_LK_CACHE"; } || _LK_CACHE=
-
-function _lk_from_cache() {
-    local FILE=$_LK_CACHE/$1.sh
-    [ -n "$_LK_CACHE" ] && [ "$FILE" -nt "${BASH_SOURCE[0]}" ] &&
-        . "$FILE"
-}
-
-function _lk_to_cache() {
-    local FILE=$_LK_CACHE/$1.sh
-    if [ -n "$_LK_CACHE" ]; then
-        cat >"$FILE" && . "$FILE"
-    else
-        lk_eval_input
-    fi
-}
-
 function _lk_gnu_command() {
-    local COMMAND PREFIX=
+    local COMMAND= PREFIX=
     ! lk_is_macos || {
         PREFIX=g
         HOMEBREW_PREFIX=${HOMEBREW_PREFIX-$(brew --prefix 2>/dev/null)} ||
@@ -152,17 +129,13 @@ function _lk_gnu_command() {
     }
     case "$1" in
     diff)
-        ! lk_is_macos &&
-            COMMAND=$1 ||
-            COMMAND=$COMMAND/bin/$1
+        COMMAND=${COMMAND:+$COMMAND/bin/}$1
         ;;
     awk)
         COMMAND=gawk
         ;;
     getopt)
-        ! lk_is_macos &&
-            COMMAND=getopt ||
-            COMMAND=$COMMAND/opt/gnu-getopt/bin/getopt
+        COMMAND=${COMMAND:+$COMMAND/opt/gnu-getopt/bin/}$1
         ;;
     *)
         COMMAND=$PREFIX$1
@@ -174,17 +147,13 @@ function _lk_gnu_command() {
 # Define wrapper functions (e.g. `gnu_find`) to invoke the GNU version of
 # certain commands (e.g. `gfind`) on systems where standard utilities are not
 # compatible with their GNU counterparts, e.g. BSD/macOS
-_lk_from_cache gnu || {
-    function _lk_gnu_define() {
-        local COMMAND
-        for COMMAND in "${_LK_GNU_COMMANDS[@]}"; do
-            printf 'function gnu_%s() { lk_maybe_sudo %q "$@"; }\n' \
-                "$COMMAND" "$(_lk_gnu_command "$COMMAND")"
-        done
-    }
-    _lk_to_cache gnu < <(_lk_gnu_define)
-    unset -f _lk_gnu_define
-}
+lk_eval_input < <(
+    set +x
+    for COMMAND in "${_LK_GNU_COMMANDS[@]}"; do
+        printf 'function gnu_%s() { lk_maybe_sudo %q "$@"; }\n' \
+            "$COMMAND" "$(_lk_gnu_command "$COMMAND")"
+    done
+)
 
 function lk_gnu_check() {
     while [ $# -gt 0 ]; do
@@ -341,113 +310,137 @@ function _lk_var_prefix() {
     printf 'local '
 }
 
-_lk_from_cache regex || {
-    function _lk_regex_sh() {
-        printf 'local %s=%q\n' "$1" "$2"
-        printf '_LK_REGEX[$((i++))]=%s\n' "$1"
-    }
-    function _lk_regex() {
-        local _O _H _P _S _U _A _Q _F _1 _2 _4 _6 SH i=0 _LK_REGEX=() REGEX
-
-        SH=$(_lk_regex_sh DOMAIN_PART_REGEX "[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?") && eval "$SH"
-        SH=$(_lk_regex_sh DOMAIN_NAME_REGEX "$DOMAIN_PART_REGEX(\\.$DOMAIN_PART_REGEX)+") && eval "$SH"
-        SH=$(_lk_regex_sh EMAIL_ADDRESS_REGEX "[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@$DOMAIN_NAME_REGEX") && eval "$SH"
-
-        _O="(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])"
-        SH=$(_lk_regex_sh IPV4_REGEX "($_O\\.){3}$_O") && eval "$SH"
-        SH=$(_lk_regex_sh IPV4_OPT_PREFIX_REGEX "$IPV4_REGEX(/(3[0-2]|[12][0-9]|[1-9]))?") && eval "$SH"
-
-        _H="[0-9a-fA-F]{1,4}"
-        _P="/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9])"
-        SH=$(_lk_regex_sh IPV6_REGEX "(($_H:){7}(:|$_H)|($_H:){6}(:|:$_H)|($_H:){5}(:|(:$_H){1,2})|($_H:){4}(:|(:$_H){1,3})|($_H:){3}(:|(:$_H){1,4})|($_H:){2}(:|(:$_H){1,5})|$_H:(:|(:$_H){1,6})|:(:|(:$_H){1,7}))") && eval "$SH"
-        SH=$(_lk_regex_sh IPV6_OPT_PREFIX_REGEX "$IPV6_REGEX($_P)?") && eval "$SH"
-
-        SH=$(_lk_regex_sh IP_REGEX "($IPV4_REGEX|$IPV6_REGEX)") && eval "$SH"
-        SH=$(_lk_regex_sh IP_OPT_PREFIX_REGEX "($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX)") && eval "$SH"
-        SH=$(_lk_regex_sh HOST_NAME_REGEX "($DOMAIN_PART_REGEX(\\.$DOMAIN_PART_REGEX)*)") && eval "$SH"
-        SH=$(_lk_regex_sh HOST_REGEX "($IPV4_REGEX|$IPV6_REGEX|$HOST_NAME_REGEX)") && eval "$SH"
-        SH=$(_lk_regex_sh HOST_OPT_PREFIX_REGEX "($IPV4_OPT_PREFIX_REGEX|$IPV6_OPT_PREFIX_REGEX|$HOST_NAME_REGEX)") && eval "$SH"
-
-        # https://en.wikipedia.org/wiki/Uniform_Resource_Identifier
-        _S="[a-zA-Z][-a-zA-Z0-9+.]*"                               # scheme
-        _U="[-a-zA-Z0-9._~%!\$&'()*+,;=]+"                         # username
-        _P="[-a-zA-Z0-9._~%!\$&'()*+,;=]*"                         # password
-        _H="([-a-zA-Z0-9._~%!\$&'()*+,;=]+|\\[([0-9a-fA-F:]+)\\])" # host
-        _O="[0-9]+"                                                # port
-        _A="[-a-zA-Z0-9._~%!\$&'()*+,;=:@/]+"                      # path
-        _Q="[-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]+"                     # query
-        _F="[-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]*"                     # fragment
-        SH=$(_lk_regex_sh URI_REGEX "(($_S):)?(//(($_U)(:($_P))?@)?$_H(:($_O))?)?($_A)?(\\?($_Q))?(#($_F))?") && eval "$SH"
-        SH=$(_lk_regex_sh URI_REGEX_REQ_SCHEME_HOST "(($_S):)(//(($_U)(:($_P))?@)?$_H(:($_O))?)($_A)?(\\?($_Q))?(#($_F))?") && eval "$SH"
-
-        SH=$(_lk_regex_sh LINUX_USERNAME_REGEX "[a-z_]([-a-z0-9_]{0,31}|[-a-z0-9_]{0,30}\\\$)") && eval "$SH"
-        SH=$(_lk_regex_sh MYSQL_USERNAME_REGEX "[a-zA-Z0-9_]+") && eval "$SH"
-
-        # https://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-source
-        SH=$(_lk_regex_sh DPKG_SOURCE_REGEX "[a-z0-9][-a-z0-9+.]+") && eval "$SH"
-
-        SH=$(_lk_regex_sh IDENTIFIER_REGEX "[a-zA-Z_][a-zA-Z0-9_]*") && eval "$SH"
-        SH=$(_lk_regex_sh PHP_SETTING_NAME_REGEX "$IDENTIFIER_REGEX(\\.$IDENTIFIER_REGEX)*") && eval "$SH"
-        SH=$(_lk_regex_sh PHP_SETTING_REGEX "$PHP_SETTING_NAME_REGEX=.+") && eval "$SH"
-
-        SH=$(_lk_regex_sh READLINE_NON_PRINTING_REGEX $'\x01[^\x02]*\x02') && eval "$SH"
-        SH=$(_lk_regex_sh CONTROL_SEQUENCE_REGEX $'\x1b\\\x5b[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]') && eval "$SH"
-        SH=$(_lk_regex_sh ESCAPE_SEQUENCE_REGEX $'\x1b[\x20-\x2f]*[\x30-\x7e]') && eval "$SH"
-        SH=$(_lk_regex_sh NON_PRINTING_REGEX $'(\x01[^\x02]*\x02|\x1b(\\\x5b[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]|[\x20-\x2f]*[\x30-\x5a\\\x5c-\x7e]))') && eval "$SH"
-
-        # *_FILTER_REGEX expressions are:
-        # 1. anchored
-        # 2. not intended for validation
-        SH=$(_lk_regex_sh IPV4_PRIVATE_FILTER_REGEX "^(10\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|192\\.168\\.|127\\.)") && eval "$SH"
-
-        _1="[0-9]"
-        _2="$_1$_1"
-        _4="$_2$_2"
-        _6="$_2$_2$_2"
-        SH=$(_lk_regex_sh BACKUP_TIMESTAMP_FINDUTILS_REGEX "$_4-$_2-$_2-$_6") && eval "$SH"
-
-        # lk_is_identifier, lk_is_fqdn, etc.
-        while [ $# -ge 2 ]; do
-            printf 'function %s() { local %s=%q; [[ $1 =~ ^$%s$ ]]; }\n' \
-                "$1" "$2" "${!2}" "$2"
-            shift 2
-        done
-
-        # _lk_get_regex
-        SH=$(for REGEX in "${_LK_REGEX[@]}"; do
-            printf "%s) printf '%%s=%%q\\\\n' %q %q ;;\n" \
-                "$REGEX" "$REGEX" "${!REGEX}"
-        done)
-        printf 'function %s() { local EXIT_STATUS=0; while [ $# -gt 0 ]; do
-    _lk_var_prefix; case "$1" in
-        %s
-        *) lk_warn "regex not found: $1"; EXIT_STATUS=1 ;;
-    esac; shift
-done; return "$EXIT_STATUS"; }\n' _lk_get_regex "${SH//$'\n'/$'\n        '}"
-
-        # __lk_regex_* and _LK_REGEX variables
-        for REGEX in "${_LK_REGEX[@]}"; do
-            printf '__lk_regex_%s=%q\n' "$REGEX" "${!REGEX}"
-        done
-        printf '%s=(%s)\n' _LK_REGEX "${_LK_REGEX[*]}"
-    }
-    _lk_to_cache regex < <(_lk_regex \
-        lk_is_host HOST_REGEX \
-        lk_is_fqdn DOMAIN_NAME_REGEX \
-        lk_is_email EMAIL_ADDRESS_REGEX \
-        lk_is_uri URI_REGEX_REQ_SCHEME_HOST \
-        lk_is_identifier IDENTIFIER_REGEX)
-    unset -f _lk_regex_sh _lk_regex
+# lk_is_host VALUE
+# Return true if VALUE is a valid IP address, hostname or domain name.
+function lk_is_host() {
+    local HOST_REGEX="(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))|([a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)*))"
+    [[ $1 =~ ^$HOST_REGEX$ ]]
 }
 
-# lk_get_regex [REGEX_NAME...]
+# lk_is_fqdn VALUE
+# Return true if VALUE is a valid domain name.
+function lk_is_fqdn() {
+    local DOMAIN_NAME_REGEX="[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)+"
+    [[ $1 =~ ^$DOMAIN_NAME_REGEX$ ]]
+}
+
+# lk_is_email VALUE
+# Return true if VALUE is a valid email address.
+function lk_is_email() {
+    local EMAIL_ADDRESS_REGEX="[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)+"
+    [[ $1 =~ ^$EMAIL_ADDRESS_REGEX$ ]]
+}
+
+# lk_is_uri VALUE
+# Return true if VALUE is a valid URI with a scheme and host.
+function lk_is_uri() {
+    local URI_REGEX_REQ_SCHEME_HOST="(([a-zA-Z][-a-zA-Z0-9+.]*):)(//(([-a-zA-Z0-9._~%!\$&'()*+,;=]+)(:([-a-zA-Z0-9._~%!\$&'()*+,;=]*))?@)?([-a-zA-Z0-9._~%!\$&'()*+,;=]+|\\[([0-9a-fA-F:]+)\\])(:([0-9]+))?)([-a-zA-Z0-9._~%!\$&'()*+,;=:@/]+)?(\\?([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]+))?(#([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]*))?"
+    [[ $1 =~ ^$URI_REGEX_REQ_SCHEME_HOST$ ]]
+}
+
+# lk_is_identifier VALUE
+# Return true if VALUE is a valid Bash identifier.
+function lk_is_identifier() {
+    local IDENTIFIER_REGEX="[a-zA-Z_][a-zA-Z0-9_]*"
+    [[ $1 =~ ^$IDENTIFIER_REGEX$ ]]
+}
+
+# lk_get_regex [REGEX...]
 #
-# Output Bash-compatible variable assignments for all available regular
-# expressions or for each REGEX_NAME.
+# Print a Bash variable assignment for each REGEX. If no REGEX is specified,
+# print all available regular expressions.
 function lk_get_regex() {
-    [ $# -gt 0 ] || set -- "${_LK_REGEX[@]}"
-    _LK_STACK_DEPTH=1 \
-        _lk_get_regex "$@"
+    [ $# -gt 0 ] || set -- DOMAIN_PART_REGEX DOMAIN_NAME_REGEX EMAIL_ADDRESS_REGEX IPV4_REGEX IPV4_OPT_PREFIX_REGEX IPV6_REGEX IPV6_OPT_PREFIX_REGEX IP_REGEX IP_OPT_PREFIX_REGEX HOST_NAME_REGEX HOST_REGEX HOST_OPT_PREFIX_REGEX URI_REGEX URI_REGEX_REQ_SCHEME_HOST LINUX_USERNAME_REGEX MYSQL_USERNAME_REGEX DPKG_SOURCE_REGEX IDENTIFIER_REGEX PHP_SETTING_NAME_REGEX PHP_SETTING_REGEX READLINE_NON_PRINTING_REGEX CONTROL_SEQUENCE_REGEX ESCAPE_SEQUENCE_REGEX NON_PRINTING_REGEX IPV4_PRIVATE_FILTER_REGEX BACKUP_TIMESTAMP_FINDUTILS_REGEX
+    local STATUS=0
+    while [ $# -gt 0 ]; do
+        _lk_var_prefix
+        case "$1" in
+        DOMAIN_PART_REGEX)
+            printf '%s=%q\n' DOMAIN_PART_REGEX "[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
+            ;;
+        DOMAIN_NAME_REGEX)
+            printf '%s=%q\n' DOMAIN_NAME_REGEX "[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)+"
+            ;;
+        EMAIL_ADDRESS_REGEX)
+            printf '%s=%q\n' EMAIL_ADDRESS_REGEX "[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)+"
+            ;;
+        IPV4_REGEX)
+            printf '%s=%q\n' IPV4_REGEX "((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])"
+            ;;
+        IPV4_OPT_PREFIX_REGEX)
+            printf '%s=%q\n' IPV4_OPT_PREFIX_REGEX "((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])(/(3[0-2]|[12][0-9]|[1-9]))?"
+            ;;
+        IPV6_REGEX)
+            printf '%s=%q\n' IPV6_REGEX "(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))"
+            ;;
+        IPV6_OPT_PREFIX_REGEX)
+            printf '%s=%q\n' IPV6_OPT_PREFIX_REGEX "(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))(/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9]))?"
+            ;;
+        IP_REGEX)
+            printf '%s=%q\n' IP_REGEX "(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7})))"
+            ;;
+        IP_OPT_PREFIX_REGEX)
+            printf '%s=%q\n' IP_OPT_PREFIX_REGEX "(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])(/(3[0-2]|[12][0-9]|[1-9]))?|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))(/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9]))?)"
+            ;;
+        HOST_NAME_REGEX)
+            printf '%s=%q\n' HOST_NAME_REGEX "([a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)*)"
+            ;;
+        HOST_REGEX)
+            printf '%s=%q\n' HOST_REGEX "(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))|([a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)*))"
+            ;;
+        HOST_OPT_PREFIX_REGEX)
+            printf '%s=%q\n' HOST_OPT_PREFIX_REGEX "(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])(/(3[0-2]|[12][0-9]|[1-9]))?|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))(/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9]))?|([a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)*))"
+            ;;
+        URI_REGEX)
+            printf '%s=%q\n' URI_REGEX "(([a-zA-Z][-a-zA-Z0-9+.]*):)?(//(([-a-zA-Z0-9._~%!\$&'()*+,;=]+)(:([-a-zA-Z0-9._~%!\$&'()*+,;=]*))?@)?([-a-zA-Z0-9._~%!\$&'()*+,;=]+|\\[([0-9a-fA-F:]+)\\])(:([0-9]+))?)?([-a-zA-Z0-9._~%!\$&'()*+,;=:@/]+)?(\\?([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]+))?(#([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]*))?"
+            ;;
+        URI_REGEX_REQ_SCHEME_HOST)
+            printf '%s=%q\n' URI_REGEX_REQ_SCHEME_HOST "(([a-zA-Z][-a-zA-Z0-9+.]*):)(//(([-a-zA-Z0-9._~%!\$&'()*+,;=]+)(:([-a-zA-Z0-9._~%!\$&'()*+,;=]*))?@)?([-a-zA-Z0-9._~%!\$&'()*+,;=]+|\\[([0-9a-fA-F:]+)\\])(:([0-9]+))?)([-a-zA-Z0-9._~%!\$&'()*+,;=:@/]+)?(\\?([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]+))?(#([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]*))?"
+            ;;
+        LINUX_USERNAME_REGEX)
+            printf '%s=%q\n' LINUX_USERNAME_REGEX "[a-z_]([-a-z0-9_]{0,31}|[-a-z0-9_]{0,30}\\\$)"
+            ;;
+        MYSQL_USERNAME_REGEX)
+            printf '%s=%q\n' MYSQL_USERNAME_REGEX "[a-zA-Z0-9_]+"
+            ;;
+        DPKG_SOURCE_REGEX)
+            printf '%s=%q\n' DPKG_SOURCE_REGEX "[a-z0-9][-a-z0-9+.]+"
+            ;;
+        IDENTIFIER_REGEX)
+            printf '%s=%q\n' IDENTIFIER_REGEX "[a-zA-Z_][a-zA-Z0-9_]*"
+            ;;
+        PHP_SETTING_NAME_REGEX)
+            printf '%s=%q\n' PHP_SETTING_NAME_REGEX "[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*"
+            ;;
+        PHP_SETTING_REGEX)
+            printf '%s=%q\n' PHP_SETTING_REGEX "[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*=.+"
+            ;;
+        READLINE_NON_PRINTING_REGEX)
+            printf '%s=%q\n' READLINE_NON_PRINTING_REGEX "[^]*"
+            ;;
+        CONTROL_SEQUENCE_REGEX)
+            printf '%s=%q\n' CONTROL_SEQUENCE_REGEX "\\[[0-?]*[ -/]*[@-~]"
+            ;;
+        ESCAPE_SEQUENCE_REGEX)
+            printf '%s=%q\n' ESCAPE_SEQUENCE_REGEX "[ -/]*[0-~]"
+            ;;
+        NON_PRINTING_REGEX)
+            printf '%s=%q\n' NON_PRINTING_REGEX "([^]*|(\\[[0-?]*[ -/]*[@-~]|[ -/]*[0-Z\\\\-~]))"
+            ;;
+        IPV4_PRIVATE_FILTER_REGEX)
+            printf '%s=%q\n' IPV4_PRIVATE_FILTER_REGEX "^(10\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|192\\.168\\.|127\\.)"
+            ;;
+        BACKUP_TIMESTAMP_FINDUTILS_REGEX)
+            printf '%s=%q\n' BACKUP_TIMESTAMP_FINDUTILS_REGEX "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]"
+            ;;
+        *)
+            lk_warn "regex not found: $1"
+            STATUS=1
+            ;;
+        esac
+        shift
+    done
+    return "$STATUS"
 }
 
 if lk_bash_at_least 4 2; then
@@ -1564,8 +1557,8 @@ function lk_echoc() {
 
 function lk_readline_format() {
     local LC_ALL=C STRING=$1 REGEX
+    eval "$(lk_get_regex CONTROL_SEQUENCE_REGEX ESCAPE_SEQUENCE_REGEX)"
     for REGEX in CONTROL_SEQUENCE_REGEX ESCAPE_SEQUENCE_REGEX; do
-        REGEX=__lk_regex_$REGEX
         while [[ $STRING =~ ((.*)(^|[^$'\x01']))(${!REGEX})+(.*) ]]; do
             STRING=${BASH_REMATCH[1]}$'\x01'${BASH_REMATCH[4]}$'\x02'${BASH_REMATCH[$((${#BASH_REMATCH[@]} - 1))]}
         done
@@ -1574,16 +1567,17 @@ function lk_readline_format() {
 }
 
 function lk_strip_non_printing() {
-    local LC_ALL=C STRING REGEX=$__lk_regex_NON_PRINTING_REGEX
+    local LC_ALL=C STRING
+    eval "$(lk_get_regex NON_PRINTING_REGEX)"
     if [ $# -gt 0 ]; then
         STRING=$1
-        while [[ $STRING =~ (.*)$REGEX(.*) ]]; do
+        while [[ $STRING =~ (.*)$NON_PRINTING_REGEX(.*) ]]; do
             STRING=${BASH_REMATCH[1]}${BASH_REMATCH[$((${#BASH_REMATCH[@]} - 1))]}
         done
         echo "$STRING"
     else
         export LC_ALL
-        sed -E "s/$REGEX//g"
+        sed -E "s/$NON_PRINTING_REGEX//g"
     fi
 }
 
@@ -1592,14 +1586,15 @@ function lk_strip_non_printing() {
 # Wrap STRING to fit in WIDTH (default: 80) after accounting for non-printing
 # character sequences, breaking at whitespace only.
 function lk_fold() {
-    local LC_ALL=C STRING WIDTH=${2:-80} REGEX=$__lk_regex_NON_PRINTING_REGEX \
+    local LC_ALL=C STRING WIDTH=${2:-80} REGEX \
         PARTS=() CODES=() LINE_TEXT LINE i PART CODE _LINE_TEXT
+    eval "$(lk_get_regex NON_PRINTING_REGEX)"
     [ $# -gt 0 ] || lk_usage "\
 Usage: $(lk_myself -f) STRING [WIDTH]" || return
     STRING=$1
     ! lk_command_exists expand ||
         STRING=$(expand <<<"$STRING") || return
-    REGEX=$'^([^\x1b\x01]*)'"(($REGEX)+)(.*)"
+    REGEX=$'^([^\x1b\x01]*)'"(($NON_PRINTING_REGEX)+)(.*)"
     while [[ $STRING =~ $REGEX ]]; do
         PARTS+=("${BASH_REMATCH[1]}")
         CODES+=("${BASH_REMATCH[2]}")
