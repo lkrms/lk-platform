@@ -27,6 +27,16 @@ function lk_dpkg_installed_list() {
         awk '$1 == "installed" { print $2 }'
 }
 
+# lk_dpkg_not_installed_list PACKAGE...
+#
+# Output each PACKAGE that isn't currently installed.
+function lk_dpkg_not_installed_list() {
+    [ $# -gt 0 ] || lk_warn "no package" || return
+    comm -13 \
+        <(lk_dpkg_installed_list "$@" | sort -u) \
+        <(lk_echo_args "$@" | sort -u)
+}
+
 # lk_dpkg_installed_versions [PACKAGE...]
 #
 # Output ${Package}=${Version} for each currently installed PACKAGE, or for all
