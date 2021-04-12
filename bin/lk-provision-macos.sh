@@ -375,13 +375,14 @@ EOF
     lk_macos_defaults_maybe_write 3 com.apple.Spotlight useCount -int 3
 
     # source ~/.bashrc in ~/.bash_profile, creating both files if necessary
-    [ -f ~/.bashrc ] ||
+    [ -s ~/.bashrc ] ||
         echo "# ~/.bashrc for interactive bash shells" >~/.bashrc
-    [ -f ~/.bash_profile ] ||
+    [ -s ~/.bash_profile ] ||
         echo "# ~/.bash_profile for bash login shells" >~/.bash_profile
     if ! grep -q "\.bashrc" ~/.bash_profile; then
-        lk_file_add_newline ~/.bash_profile
-        echo "[ ! -f ~/.bashrc ] || . ~/.bashrc" >>~/.bash_profile
+        _FILE=$(<~/.bash_profile)
+        lk_file_replace ~/.bash_profile "$(echo "$_FILE" &&
+            echo "[ ! -f ~/.bashrc ] || . ~/.bashrc")"
     fi
 
     lk_console_blank

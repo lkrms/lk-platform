@@ -278,10 +278,9 @@ function _lk_apt_sources_get_mirror() {
 # - lk_apt_sources_get_missing [-l LIST] COMPONENT
 # - lk_apt_sources_get_missing [-l LIST] SUITE COMPONENT [SUITE COMPONENT]...
 function lk_apt_sources_get_missing() {
-    local LC_ALL=C LIST SOURCES COMPONENTS \
+    local LIST SOURCES COMPONENTS \
         MIRROR=${LK_APT_DEFAULT_MIRROR:-} \
         SECURITY_MIRROR=${LK_APT_DEFAULT_SECURITY_MIRROR:-}
-    export LC_ALL
     unset LIST
     [ "${1:-}" != -l ] || { LIST=$2 && shift 2; }
     [ $# -gt 0 ] || lk_warn "invalid arguments" || return

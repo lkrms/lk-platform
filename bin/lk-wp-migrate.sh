@@ -1,6 +1,7 @@
 #!/bin/bash
 
-lk_bin_depth=1 include=wordpress . lk-bash-load.sh || exit
+lk_bin_depth=1 . lk-bash-load.sh || exit
+lk_include wordpress
 
 REMOTE_PATH=public_html
 LOCAL_PATH=$(lk_wp_get_site_root 2>/dev/null) ||

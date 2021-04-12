@@ -2,7 +2,7 @@
 
 function lk_atop_ps_mem() {
     lk_elevate atop -R -PCPL,MEM,SWP,PAG,PRM "$@" |
-        awk -f "${LK_INST:-$LK_BASE}/lib/awk/atop-ps-mem.awk"
+        awk -f "$LK_BASE/lib/awk/atop-ps-mem.awk"
 }
 
 function _lk_systemctl_args() {
@@ -291,7 +291,7 @@ function lk_system_sort_links() {
                 "${SORT:-2}" \
                 "${UDEV_ID_NET_NAME_ONBOARD:-}"
         )
-    done | LC_ALL=C sort -V -k2 -k3 -k1 | cut -f1
+    done | sort -V -k2 -k3 -k1 | cut -f1
 }
 
 function lk_system_list_graphics() {

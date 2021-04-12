@@ -428,8 +428,8 @@ if [ -z "$(ls -A "$LK_BASE")" ]; then
     )
 fi
 
-TERM='' \
-    LK_SKIP=env,settings include=provision,hosting . "$LK_BASE/lib/bash/common.sh"
+TERM='' . "$LK_BASE/lib/bash/common.sh"
+lk_include hosting provision
 
 install -m 00644 /dev/null /etc/default/lk-platform
 LK_SSH_JUMP_KEY=${LK_SSH_JUMP_KEY:+jump} \

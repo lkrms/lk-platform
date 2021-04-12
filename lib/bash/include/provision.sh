@@ -447,7 +447,7 @@ function lk_ssh_configure() {
     PATTERN=${PATTERN//\\/\\\\}
     CONF="Include ~/.ssh/${SSH_PREFIX}config.d/*"
     AWK=(awk
-        -f "${LK_INST:-$LK_BASE}/lib/awk/update-ssh-config.awk"
+        -f "$LK_BASE/lib/awk/update-ssh-config.awk"
         -v "SSH_PATTERN=$PATTERN"
         -v "SSH_CONFIG=$CONF")
 
@@ -553,7 +553,7 @@ function _lk_node_ip() {
         ifconfig |
             sed -E 's/ (prefixlen |netmask (0xf*[8ce]?0*( |$)))/\/\2/'
     fi | awk \
-        -f "${LK_INST:-$LK_BASE}/lib/awk/parse-ifconfig.awk" \
+        -f "$LK_BASE/lib/awk/parse-ifconfig.awk" \
         -v "ADDRESS_FAMILY=$1" |
         sed -E 's/%[^/]+\//\//') || return
     {

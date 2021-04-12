@@ -227,8 +227,7 @@ function lk_mail_get_mime() {
     TEXT_PART_TYPE=(${_LK_MAIL_TEXT:+"text/plain"}
         ${_LK_MAIL_HTML:+"text/html"})
     lk_echo_array TEXT_PART |
-        LC_ALL=C \
-            grep -v "^[[:alnum:][:space:][:punct:][:cntrl:]]*\$" >/dev/null || {
+        grep -v "^[[:alnum:][:space:][:punct:][:cntrl:]]*\$" >/dev/null || {
         ENCODING=7bit
         CHARSET=us-ascii
     }
@@ -299,7 +298,7 @@ LK_RESET=$'\E[0m'
 
 function exit_trap() {
     local EXIT_STATUS=$? MESSAGE TAR SUBJECT
-    exec 4>&- &&
+    exec 8>&- &&
         rm -Rf "${FIFO_FILE%/*}" || true
     [ -z "${LOCK_FILE:-}" ] || {
         exec 9>&- &&
@@ -364,7 +363,7 @@ $(printf '%q' "$0" && { [ ${#ARGS[@]} -eq 0 ] || printf ' \\\n    %q' "${ARGS[@]
 
 Output:
 
-$(LC_ALL=C sed \
+$(sed \
             -e $'s/\x01[^\x02]*\x02//g' \
             -e $'s/\x1b\\\x5b[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]//g' \
             -e $'s/\x1b[\x20-\x2f]*[\x30-\x7e]//g' \
@@ -399,11 +398,11 @@ function run_custom_hook() {
             (
                 EXIT_STATUS=0
                 . "$SOURCE_SCRIPT" || EXIT_STATUS=$?
-                echo "# ." >&4
+                echo "# ." >&8
                 exit "$EXIT_STATUS"
             ) &
             LINES=()
-            while IFS= read -ru 4 LINE && [ "$LINE" != "# ." ]; do
+            while IFS= read -ru 8 LINE && [ "$LINE" != "# ." ]; do
                 LINES[$((i++))]=$LINE
             done
             wait "$!" ||
@@ -526,9 +525,9 @@ BACKUP_ROOT=$(lk_realpath "$BACKUP_ROOT")
 TMPDIR=${TMPDIR:-/tmp}
 FIFO_FILE=$(mktemp -d -- "${TMPDIR%/}/${0##*/}.XXXXXXXXXX")/fifo
 mkfifo "$FIFO_FILE"
-exec 4<>"$FIFO_FILE"
+exec 8<>"$FIFO_FILE"
 
-export TZ=UTC
+export LC_ALL=C TZ=UTC
 USER=${USER:-$(id -un)}
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
 HN=$(hostname -s) || HN=localhost

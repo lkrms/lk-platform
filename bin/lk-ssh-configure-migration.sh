@@ -4,7 +4,8 @@
 
 if [[ ! ${1:-} =~ ^(--new|--old)$ ]]; then
 
-    lk_bin_depth=1 include=provision . lk-bash-load.sh || exit
+    lk_bin_depth=1 . lk-bash-load.sh || exit
+    lk_include provision
 
     # TODO: implement NEW_PASSWORD
     NEW_USER=
@@ -95,7 +96,9 @@ if [ "$STAGE" = "local" ]; then
     NEW_HOST_NAME=${NEW_HOST_NAME:-${NEW_USER:-$NEW_HOST}}
     NEW_HOST_NAME=$SSH_PREFIX${NEW_HOST_NAME#$SSH_PREFIX}
 elif [ "$STAGE" = "new" ]; then
-    include=provision . lk-bash-load.sh || exit
+    . lk-bash-load.sh || exit
+    lk_include provision
+
     SSH_PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX}
     NEW_HOST_NAME={{NEW_HOST_NAME}}
     NEW_KEY={{NEW_KEY}}

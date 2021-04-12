@@ -13,7 +13,8 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
     lk_die "unable to locate LK_BASE"
 export LK_BASE
 
-include=backup . "$LK_BASE/lib/bash/common.sh"
+. "$LK_BASE/lib/bash/common.sh"
+lk_include backup
 
 function find_snapshots() {
     lk_backup_snapshot_list "$1" "$SNAPSHOT_ROOT" "${@:2}"

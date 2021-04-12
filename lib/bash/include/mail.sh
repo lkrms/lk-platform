@@ -87,8 +87,7 @@ function lk_mail_get_mime() {
     TEXT_PART_TYPE=(${_LK_MAIL_TEXT:+"text/plain"}
         ${_LK_MAIL_HTML:+"text/html"})
     lk_echo_array TEXT_PART |
-        LC_ALL=C \
-            grep -v "^[[:alnum:][:space:][:punct:][:cntrl:]]*\$" >/dev/null || {
+        grep -v "^[[:alnum:][:space:][:punct:][:cntrl:]]*\$" >/dev/null || {
         ENCODING=7bit
         CHARSET=us-ascii
     }

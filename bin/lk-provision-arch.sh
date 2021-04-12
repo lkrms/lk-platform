@@ -15,7 +15,8 @@ export LK_BASE
 
 shopt -s nullglob
 
-include=arch,git,linux,provision . "$LK_BASE/lib/bash/common.sh"
+. "$LK_BASE/lib/bash/common.sh"
+lk_include arch git linux provision
 
 SH=$(lk_provision_getopt)
 eval "$SH"

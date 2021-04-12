@@ -1,9 +1,6 @@
 #!/bin/bash
 
-export -n BASH_XTRACEFD SHELLOPTS
-[ -n "${_LK_ENV+1}" ] || _LK_ENV=$(declare -x)
-
-unset LK_PROMPT_DISPLAYED LK_BASE
+unset LK_PROMPT_DISPLAYED
 
 SH=$(
     set -u
@@ -14,19 +11,25 @@ SH=$(
     _DIR=$(cd "${_FILE%/*}" && pwd -P) &&
         printf 'export LK_BASE=%q\n' "${_DIR%/lib/bash}" ||
         die "LK_BASE not found"
-    LC_ALL=C
+    # Discard settings with the same name as LK_* variables in the environment
+    # and add any that remain to the global scope
     vars() { printf '%s\n' "${!LK_@}"; }
-    unset IFS
+    unset IFS LK_PATH_PREFIX
     VARS=$(vars)
     [ ! -r /etc/default/lk-platform ] ||
-        . /etc/default/lk-platform
-    [ ! -r ~/".${LK_PATH_PREFIX:-lk-}settings" ] ||
-        . ~/".${LK_PATH_PREFIX:-lk-}settings"
+        . /etc/default/lk-platform || exit
+    LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
+    [ ! -r ~/".${LK_PATH_PREFIX}settings" ] ||
+        . ~/".${LK_PATH_PREFIX}settings" || exit
     unset LK_BASE $VARS
     VARS=$(vars)
     [ -z "${VARS:+1}" ] ||
         declare -p $VARS
-) && eval "$SH" && . "$LK_BASE/lib/bash/include/core.sh" || return
+) && eval "$SH" || return
+SH=$(. "$LK_BASE/lib/bash/env.sh") && eval "$SH" || return
+unset SH
+
+. "$LK_BASE/lib/bash/include/core.sh" || return
 
 function lk_cat_log() {
     local FILES FILE
@@ -142,10 +145,6 @@ elif lk_is_macos; then
     export BASH_SILENCE_DEPRECATION_WARNING=1
 fi
 
-LK_PATH_PREFIX=${LK_PATH_PREFIX-lk-}
-SH=$(. "$LK_BASE/lib/bash/env.sh") &&
-    eval "$SH"
-
 [[ $- != *i* ]] || {
 
     shopt -s checkwinsize histappend
@@ -202,6 +201,6 @@ SH=$(. "$LK_BASE/lib/bash/env.sh") &&
         alias duh='du -h -d 1 | sort -h'
     fi
 
-}
+    unset SH
 
-unset SH
+}

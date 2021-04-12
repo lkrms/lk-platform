@@ -380,7 +380,7 @@ Proceed?" Y || return
             [[ $LOCAL_DB_NAME =~ ^$USER(_[-a-zA-Z0-9_]*)?$ ]] ||
             unset SUDO
         ${SUDO+LK_SUDO=1} \
-            lk_maybe_trace "${LK_INST:-$LK_BASE}/bin/lk-mysql-grant.sh" \
+            lk_maybe_trace "$LK_BASE/bin/lk-mysql-grant.sh" \
             "$LOCAL_DB_NAME" "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD" || return
     }
     lk_console_message "Restoring WordPress database to local system"

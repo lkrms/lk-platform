@@ -1,6 +1,6 @@
 #!/bin/bash
 
-include= . lk-bash-load.sh || exit
+. lk-bash-load.sh || exit
 
 lk_log_start
 

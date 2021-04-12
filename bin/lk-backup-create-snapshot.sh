@@ -13,14 +13,14 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
     lk_die "unable to locate LK_BASE"
 export LK_BASE
 
-include=backup,mail,mysql . "$LK_BASE/lib/bash/common.sh"
-
+. "$LK_BASE/lib/bash/common.sh"
+lk_include backup mail mysql
 ! lk_is_linux ||
     lk_include linux
 
 function exit_trap() {
     local EXIT_STATUS=$? MESSAGE TAR SUBJECT
-    eval "exec $FIFO_FD>&-" &&
+    exec 8>&- &&
         rm -Rf "${FIFO_FILE%/*}" || true
     lk_log_close -r
     [ -z "$LK_BACKUP_MAIL" ] ||
@@ -108,11 +108,11 @@ function run_custom_hook() {
             (
                 EXIT_STATUS=0
                 . "$SOURCE_SCRIPT" || EXIT_STATUS=$?
-                echo "# ." >&"$FIFO_FD"
+                echo "# ." >&8
                 exit "$EXIT_STATUS"
             ) &
             LINES=()
-            while IFS= read -ru "$FIFO_FD" LINE && [ "$LINE" != "# ." ]; do
+            while IFS= read -ru 8 LINE && [ "$LINE" != "# ." ]; do
                 LINES[$((i++))]=$LINE
             done
             wait "$!" ||
@@ -203,7 +203,7 @@ added in the reverse order.
   5. command-line
 
 Hook scripts are sourced in a Bash subshell. If they return zero, any output on
-file descriptor 4 is eval'd in the global scope of ${0##*/}.
+file descriptor 8 is eval'd in the global scope of ${0##*/}.
 
 Options:
   -g, --group GROUP             create snapshot directories with group GROUP
@@ -286,9 +286,8 @@ BACKUP_ROOT=$(realpath "$BACKUP_ROOT")
 LOCK_NAME=${0##*/}-${BACKUP_ROOT//\//_}-$SOURCE_NAME
 lk_lock LOCK_FILE LOCK_FD "$LOCK_NAME"
 FIFO_FILE=$(lk_mktemp_dir)/fifo
-FIFO_FD=$(lk_fd_next)
 mkfifo "$FIFO_FILE"
-eval "exec $FIFO_FD<>\"\$FIFO_FILE\""
+exec 8<>"$FIFO_FILE"
 
 export TZ=UTC
 HN=$(lk_hostname) || HN=localhost
@@ -339,10 +338,6 @@ done
 
 LK_SECONDARY_LOG_FILE=$SNAPSHOT_LOG_FILE \
     lk_log_start
-
-# Don't pollute RSYNC_ERR_FILE with lk_run output
-exec 3>&2
-_LK_FD=3
 
 RSYNC_EXIT_VALUE=0
 RSYNC_RESULT=

@@ -1,6 +1,7 @@
 #!/bin/bash
 
-lk_bin_depth=1 include=mysql . lk-bash-load.sh || exit
+lk_bin_depth=1 . lk-bash-load.sh || exit
+lk_include mysql
 
 DB_NAME=
 DB_USER=

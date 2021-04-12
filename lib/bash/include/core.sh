@@ -3,7 +3,7 @@
 # shellcheck disable=SC2094,SC2116
 
 export -n BASH_XTRACEFD SHELLOPTS
-[ -n "${_LK_ENV+1}" ] || _LK_ENV=$(declare -x)
+export LC_ALL=C
 
 LK_ARG0=$0
 LK_ARGV=("$@")
@@ -268,8 +268,8 @@ function lk_usage() {
 function _lk_mktemp() {
     local TMPDIR=${TMPDIR-/tmp} FUNC=${FUNCNAME[${_LK_STACK_DEPTH:-0} + 2]-}
     TMPDIR=${TMPDIR:+${TMPDIR%/}/}
-    mktemp "$@" -- "$TMPDIR${0##*/}${FUNC:+-$FUNC}.XXXXXXXXXX"
-} #### Reviewed: 2021-04-10
+    mktemp "$@" -- "$TMPDIR${0##*/}${FUNC:+-$FUNC}${_LK_MKTEMP_EXT:+.$_LK_MKTEMP_EXT}.XXXXXXXXXX"
+} #### Reviewed: 2021-04-14
 
 function lk_mktemp_file() {
     _lk_mktemp
@@ -576,11 +576,11 @@ function lk_get_quoted_var() {
 
 # lk_get_env [-n] [VAR...]
 function lk_get_env() {
-    local _LK_VAR_LIST _LK_IGNORE_REGEX="^(__?(LK|lk)|(PATH|BASH_XTRACEFD)$)"
+    local _LK_VAR_LIST _LK_IGNORE_REGEX="^(_(_|LK|lk)|(PATH|BASH_XTRACEFD)$)"
     unset _LK_VAR_LIST
     [ "${1:-}" != -n ] || { _LK_VAR_LIST= && shift; }
-    [ -n "${_LK_ENV+1}" ] || _LK_ENV=$(declare -x)
     (
+        [ -n "${_LK_ENV+1}" ] || _LK_ENV=$(declare -x)
         # Unset every variable that can be unset
         unset $(lk_var_list |
             sed -E "/$_LK_IGNORE_REGEX/d") 2>/dev/null || true
@@ -600,7 +600,7 @@ function lk_get_env() {
                 ${_LK_VAR_LIST+lk_echo_args} \
                 "$@"
     )
-}
+} #### Reviewed: 2021-04-12
 
 # lk_check_pid PID
 #
@@ -1087,17 +1087,24 @@ function _lk_maybe_xargs() {
 #
 # Read lines from FILE or input into array variable ARRAY.
 function lk_mapfile() {
-    local LK_Z=${LK_Z-} __ARGS=(-d '') __LINE
+    local LK_Z=${LK_Z-} __ARGS=(-d '')
     [ "${1:-}" != -z ] || { LK_Z=1 && shift; }
     [ -n "${1:+1}" ] || lk_usage "\
 Usage: ${FUNCNAME[0]} [-z] ARRAY [FILE]" || return
     [ -n "${2+1}" ] || set -- "$1" /dev/stdin
     [ -r "$2" ] || lk_warn "file not found: $2" || return
-    eval "$1=()"
-    while IFS= read -r ${LK_Z:+"${__ARGS[@]}"} __LINE || [ -n "$__LINE" ]; do
-        eval "$1[\${#$1[@]}]=\$__LINE"
-    done <"$2"
-} #### Reviewed: 2021-04-11
+    if lk_bash_at_least 4 4 ||
+        { [ -z "$LK_Z" ] && lk_bash_at_least 4 0; }; then
+        mapfile -t ${LK_Z:+"${__ARGS[@]}"} "$1" <"$2"
+    else
+        local __LINE
+        eval "$1=()" || return
+        while IFS= read -r ${LK_Z:+"${__ARGS[@]}"} __LINE ||
+            [ -n "$__LINE" ]; do
+            eval "$1[\${#$1[@]}]=\$__LINE"
+        done <"$2"
+    fi
+} #### Reviewed: 2021-04-13
 
 function lk_has_arg() {
     lk_in_array "$1" "${LK_ARG_ARRAY:-LK_ARGV}"
@@ -1243,8 +1250,9 @@ function pv() {
     lk_ignore_SIGINT && lk_log_bypass_stderr command pv
 }
 
-function tee() {
-    lk_ignore_SIGINT && command tee "$@"
+function lk_tee() {
+    lk_ignore_SIGINT &&
+        exec tee "$@"
 }
 
 function lk_log() {
@@ -1252,7 +1260,7 @@ function lk_log() {
     lk_ignore_SIGINT || return
     if lk_command_exists ts; then
         PREFIX=${PREFIX//"%"/"%%"}
-        LC_ALL=C exec ts "$PREFIX%Y-%m-%d %H:%M:%.S %z"
+        exec ts "$PREFIX%Y-%m-%d %H:%M:%.S %z"
     else
         set +x
         while IFS= read -r LINE; do
@@ -1300,7 +1308,8 @@ function lk_start_trace() {
     local TRACE_PATH
     # Don't interfere with an existing trace
     [[ $- != *x* ]] && ! lk_is_false LK_SCRIPT_DEBUG || return 0
-    TRACE_PATH=$(lk_log_create_file -e "$(lk_date_ymdhms).trace" ~ /tmp) &&
+    TRACE_PATH=${_LK_LOG_TRACE_PATH:-$(lk_log_create_file \
+        -e "$(lk_date_ymdhms).trace" /tmp ~)} &&
         exec 4> >(lk_log >"$TRACE_PATH") || return
     if lk_bash_at_least 4 1; then
         BASH_XTRACEFD=4
@@ -1375,18 +1384,18 @@ function lk_log_start() {
         _LK_LOG_FD=$(lk_fd_next) && { if [ -z "${_LK_LOG2_FD:-}" ]; then
             eval "exec $_LK_LOG_FD"'> >(lk_log >>"$LOG_FILE")'
         else
-            eval "exec $_LK_LOG_FD"'> >(lk_log > >(tee -a "$LOG_FILE" >&"$_LK_LOG2_FD"))'
+            eval "exec $_LK_LOG_FD"'> >(lk_log > >(lk_tee -a "$LOG_FILE" >&"$_LK_LOG2_FD"))'
         fi; } || return
     export _LK_FD _LK_{{TTY,LOG}_{OUT,ERR},LOG}_FD
     lk_log_tty_on
     [ "${_LK_FD:-2}" -ne 2 ] || {
-        exec 3> >(tee >(tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
+        exec 3> >(lk_tee >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
             >&"$_LK_TTY_OUT_FD")
         _LK_FD=3
     }
     lk_log_to_file_stdout <<<"$HEADER"
     ! lk_verbose 2 || lk_echoc \
-        "Output is being logged to $LK_BOLD$LOG_PATH$LK_RESET" "$LK_GREY" |
+        "Output is being logged to $LK_BOLD$LOG_FILE$LK_RESET" "$LK_GREY" |
         lk_log_to_tty_stdout
     _LK_LOG_FILE=$LOG_FILE
 }
@@ -1421,35 +1430,35 @@ function lk_log_close() {
 function lk_log_tty_off() {
     lk_log_is_open || return 0
     exec \
-        > >(tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
-        2> >(tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD")
-    _LK_LOG_TTY_LAST=${FUNCNAME[0]}
+        > >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
+        2> >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") &&
+        _LK_LOG_TTY_LAST=${FUNCNAME[0]}
 }
 
 function lk_log_tty_stdout_off() {
     lk_log_is_open || return 0
     exec \
-        > >(tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
-        2> >(tee >(tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}")
-    _LK_LOG_TTY_LAST=${FUNCNAME[0]}
+        > >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
+        2> >(lk_tee >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}") &&
+        _LK_LOG_TTY_LAST=${FUNCNAME[0]}
 }
 
 function lk_log_tty_on() {
     lk_log_is_open || return 0
     exec \
-        > >(tee >(tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") >&"$_LK_TTY_OUT_FD") \
-        2> >(tee >(tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}")
-    _LK_LOG_TTY_LAST=${FUNCNAME[0]}
+        > >(lk_tee >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") >&"$_LK_TTY_OUT_FD") \
+        2> >(lk_tee >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}") &&
+        _LK_LOG_TTY_LAST=${FUNCNAME[0]}
 }
 
 function lk_log_to_file_stdout() {
     lk_log_is_open || lk_warn "no output log" || return
-    cat > >(tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD")
+    cat > >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD")
 }
 
 function lk_log_to_file_stderr() {
     lk_log_is_open || lk_warn "no output log" || return
-    cat > >(tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD")
+    cat > >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD")
 }
 
 function lk_log_to_tty_stdout() {
@@ -1493,16 +1502,16 @@ function lk_log_bypass() {
     case "$ARG" in
     -to)
         _lk_log_bypass "$@" \
-            > >(tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD")
+            > >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD")
         ;;
     -te)
         _lk_log_bypass "$@" \
-            2> >(tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD")
+            2> >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD")
         ;;
     -t)
         _lk_log_bypass "$@" \
-            > >(tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
-            2> >(tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD")
+            > >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
+            2> >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD")
         ;;
     -o)
         _lk_log_bypass "$@" \
@@ -1514,8 +1523,8 @@ function lk_log_bypass() {
         ;;
     -n)
         _lk_log_bypass "$@" \
-            > >(tee >(tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") >&"$_LK_TTY_OUT_FD") \
-            2> >(tee >(tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}")
+            > >(lk_tee >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") >&"$_LK_TTY_OUT_FD") \
+            2> >(lk_tee >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}")
         ;;
     *)
         _lk_log_bypass "$@" \
@@ -1560,7 +1569,7 @@ function lk_echoc() {
 }
 
 function lk_readline_format() {
-    local LC_ALL=C STRING=$1 REGEX
+    local STRING=$1 REGEX
     eval "$(lk_get_regex CONTROL_SEQUENCE_REGEX ESCAPE_SEQUENCE_REGEX)"
     for REGEX in CONTROL_SEQUENCE_REGEX ESCAPE_SEQUENCE_REGEX; do
         while [[ $STRING =~ ((.*)(^|[^$'\x01']))(${!REGEX})+(.*) ]]; do
@@ -1571,7 +1580,7 @@ function lk_readline_format() {
 }
 
 function lk_strip_non_printing() {
-    local LC_ALL=C STRING
+    local STRING
     eval "$(lk_get_regex NON_PRINTING_REGEX)"
     if [ $# -gt 0 ]; then
         STRING=$1
@@ -1580,7 +1589,6 @@ function lk_strip_non_printing() {
         done
         echo "$STRING"
     else
-        export LC_ALL
         sed -E "s/$NON_PRINTING_REGEX//g"
     fi
 }
@@ -1590,7 +1598,7 @@ function lk_strip_non_printing() {
 # Wrap STRING to fit in WIDTH (default: 80) after accounting for non-printing
 # character sequences, breaking at whitespace only.
 function lk_fold() {
-    local LC_ALL=C STRING WIDTH=${2:-80} REGEX \
+    local STRING WIDTH=${2:-80} REGEX \
         PARTS=() CODES=() LINE_TEXT LINE i PART CODE _LINE_TEXT
     eval "$(lk_get_regex NON_PRINTING_REGEX)"
     [ $# -gt 0 ] || lk_usage "\
@@ -1702,7 +1710,7 @@ function lk_tty_print() {
         SPACES=$'\n'$(printf "%${#PREFIX}s")
         # Don't fold if MESSAGE is pre-formatted
         [ ${HAS_NEWLINE:-0} -eq 1 ] ||
-            MESSAGE=$(lk_fold "$MESSAGE" $((WIDTH - ${#PREFIX})))
+            MESSAGE=$(lk_fold "$MESSAGE" $(($(_lk_tty_width) - ${#PREFIX})))
         MESSAGE=${MESSAGE//$'\n'/$SPACES}
         HAS_NEWLINE=1
         INDENT=2
@@ -2934,7 +2942,7 @@ function lk_version_at_least() {
 }
 
 function lk_jq() {
-    jq -L "$LK_BASE/lib/jq" "${@:1:$#-1}" 'include "core";'"${*: -1}"
+    jq -L "${LK_INST:-$LK_BASE}/lib/jq" "${@:1:$#-1}" 'include "core";'"${*: -1}"
 }
 
 # lk_jq_get_array ARRAY [FILTER]
@@ -3176,7 +3184,9 @@ function lk_file_backup() {
                 } 2>/dev/null || OWNER_HOME=
                 if lk_will_elevate && [ "${FILE#$OWNER_HOME}" = "$FILE" ]; then
                     lk_install -d \
-                        -m "$([ -g "$LK_BASE" ] && echo 02775 || echo 00755)" \
+                        -m "$([ -g "${LK_INST:-$LK_BASE}" ] &&
+                            echo 02775 ||
+                            echo 00755)" \
                         "${LK_INST:-$LK_BASE}/var" || return
                     DEST=${LK_INST:-$LK_BASE}/var/backup
                     unset OWNER
@@ -3219,34 +3229,6 @@ function lk_file_prepare_temp() {
             lk_maybe_sudo cp -aL"$vv" -- "$1" "$TEMP"
         fi >&2 || return
     echo "$TEMP"
-}
-
-# lk_file_add_newline [-b|-m] FILE
-#
-# Add a newline to FILE if its last byte is not a newline. If -b is set, back up
-# FILE before changing it. If -m is set, back up FILE to a separate location
-# before changing it.
-function lk_file_add_newline() {
-    local BACKUP=${LK_FILE_TAKE_BACKUP:-} MOVE=${LK_FILE_MOVE_BACKUP:-} \
-        WC TEMP vv=
-    [ "${1:-}" != -b ] || { BACKUP=1 && shift; }
-    [ "${1:-}" != -m ] || { BACKUP=1 && MOVE=1 && shift; }
-    ! lk_verbose 2 || vv=v
-    if lk_maybe_sudo test -e "$1"; then
-        lk_maybe_sudo test -f "$1" || lk_warn "not a file: $1" || return
-        # If the last byte is a newline, `wc -l` will return 1
-        WC=$(lk_maybe_sudo tail -c1 "$1" | wc -l) || return
-        if lk_maybe_sudo test -s "$1" && [ "$WC" -eq 0 ]; then
-            ! lk_is_true BACKUP ||
-                lk_file_backup ${MOVE:+-m} "$1" || return
-            TEMP=$(lk_file_prepare_temp "$1") &&
-                lk_delete_on_exit "$TEMP" &&
-                echo | lk_maybe_sudo tee -a "$TEMP" >/dev/null &&
-                lk_maybe_sudo mv -f"$vv" "$TEMP" "$1" || return
-            ! lk_verbose ||
-                lk_console_detail "Added newline to end of file:" "$1"
-        fi
-    fi
 }
 
 # lk_file_replace [OPTIONS] TARGET [CONTENT]
@@ -3390,31 +3372,36 @@ function lk_get_stack_trace() {
     done
 }
 
-function lk_keep_alive() {
-    if [ -z "${_LK_KEEP_ALIVE:-}" ]; then
-        local OUT_FILE OUT_FD TTY_OUT_FD TTY_ERR_FD
-        OUT_FILE=$(lk_mktemp_file) &&
-            lk_delete_on_exit "$OUT_FILE" &&
-            OUT_FD=$(lk_fd_next) &&
-            eval "exec $OUT_FD"'>"$OUT_FILE"' || return
-        if lk_log_is_open; then
-            TTY_OUT_FD=$_LK_TTY_OUT_FD
-            TTY_ERR_FD=$_LK_TTY_ERR_FD
-            _LK_TTY_OUT_FD=$OUT_FD
-            _LK_TTY_ERR_FD=$OUT_FD
-            ${_LK_LOG_TTY_LAST:-lk_log_tty_on} &&
-                exec </dev/null
-        else
-            TTY_OUT_FD=$(lk_fd_next) && eval "exec $TTY_OUT_FD>&1" &&
-                TTY_ERR_FD=$(lk_fd_next) && eval "exec $TTY_ERR_FD>&2" &&
-                exec >&"$OUT_FD" 2>&1 </dev/null
-        fi || return
-        tail -fn+1 "$OUT_FILE" >&"$TTY_OUT_FD" 2>&"$TTY_ERR_FD" &
-        lk_kill_on_exit $!
-        _LK_KEEP_ALIVE=1
-    fi
+# lk_nohup COMMAND [ARG...]
+function lk_nohup() { (
+    _LK_CAN_FAIL=1
     trap "" SIGHUP SIGINT SIGTERM
-}
+    set -m
+    OUT_FILE=$(TMPDIR=$(lk_first_existing "$LK_BASE/var/log" ~ /tmp) &&
+        _LK_MKTEMP_EXT=nohup.out lk_mktemp_file) &&
+        OUT_FD=$(lk_fd_next) &&
+        eval "exec $OUT_FD"'>"$OUT_FILE"' || return
+    ! lk_verbose || lk_console_item "Redirecting output to" "$OUT_FILE"
+    if lk_log_is_open; then
+        TTY_OUT_FD=$_LK_TTY_OUT_FD &&
+            TTY_ERR_FD=$_LK_TTY_ERR_FD &&
+            _LK_TTY_OUT_FD=$OUT_FD &&
+            _LK_TTY_ERR_FD=$OUT_FD &&
+            ${_LK_LOG_TTY_LAST:-lk_log_tty_on} &&
+            exec </dev/null
+    else
+        TTY_OUT_FD=$(lk_fd_next) &&
+            eval "exec $TTY_OUT_FD>&1" &&
+            TTY_ERR_FD=$(lk_fd_next) &&
+            eval "exec $TTY_ERR_FD>&2" &&
+            exec >&"$OUT_FD" 2>&1 </dev/null
+    fi || return
+    (trap - SIGHUP SIGINT SIGTERM &&
+        exec tail -fn+1 "$OUT_FILE") >&"$TTY_OUT_FD" 2>&"$TTY_ERR_FD" &
+    lk_kill_on_exit $!
+    "$@" &
+    wait $! 2>/dev/null
+); }
 
 function lk_ignore_SIGINT() {
     trap "" SIGINT
@@ -3457,7 +3444,8 @@ function _lk_exit_trap() {
         [ "${_LK_CAN_FAIL:-0}" -eq 1 ] ||
         [[ ${FUNCNAME[1]:-} =~ ^_?lk_(die|usage|elevate)$ ]] ||
         { [[ $- == *i* ]] && [ "$BASH_SUBSHELL" -eq 0 ]; } ||
-        lk_console_error \
+        LK_TTY_NO_FOLD=1 \
+            lk_console_error \
             "$(_lk_caller "${_LK_ERR_TRAP_CALLER:-$1}"): unhandled error" \
             "$(lk_get_stack_trace $((1 - ${_LK_STACK_DEPTH:-0})))"
 }

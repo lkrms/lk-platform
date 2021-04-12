@@ -1,51 +1,38 @@
 #!/bin/bash
 
-export -n BASH_XTRACEFD SHELLOPTS
 [ -n "${_LK_ENV+1}" ] || _LK_ENV=$(declare -x)
 
-lk_die() { s=$? && echo "$BASH_SOURCE: $1" >&2 && (exit $s) && false || exit; }
-[ -n "${LK_INST:-${LK_BASE:-}}" ] || lk_die "LK_BASE not set"
-[ ! "${LK_INST:+1}${LK_BASE:+2}" = 2 ] || export LK_BASE
+[ -n "${LK_INST-}" ] || { SH=$(
+    set -u
+    die() { echo "${BASH_SOURCE:-$0}: $1" >&2 && false || exit; }
+    _FILE=$BASH_SOURCE && [ -f "$_FILE" ] && [ ! -L "$_FILE" ] ||
+        die "script must be sourced directly"
+    [[ $_FILE == */* ]] || _FILE=./$_FILE
+    _DIR=$(cd "${_FILE%/*}" && pwd -P) &&
+        printf 'export LK_BASE=%q\n' "${_DIR%/lib/bash}" ||
+        die "LK_BASE not found"
+    # Discard settings with the same name as LK_* variables in the environment
+    # and add any that remain to the global scope
+    vars() { printf '%s\n' "${!LK_@}"; }
+    unset IFS LK_PATH_PREFIX
+    VARS=$(vars)
+    [ ! -r /etc/default/lk-platform ] ||
+        . /etc/default/lk-platform || exit
+    LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
+    [ ! -r ~/".${LK_PATH_PREFIX}settings" ] ||
+        . ~/".${LK_PATH_PREFIX}settings" || exit
+    unset LK_BASE $VARS
+    VARS=$(vars)
+    [ -z "${VARS:+1}" ] ||
+        declare -p $VARS
+) && eval "$SH" || return; }
+SH=$(. "${LK_INST:-$LK_BASE}/lib/bash/env.sh") && eval "$SH" || return
+unset SH
 
-. "${LK_INST:-$LK_BASE}/lib/bash/include/core.sh"
-
+. "${LK_INST:-$LK_BASE}/lib/bash/include/core.sh" || return
 set -E
 
-# 1. Source each SETTINGS file in order, allowing later files to override values
-#    set earlier
-# 2. Discard settings with the same name as any LK_* variables found in the
-#    environment
-# 3. Copy remaining LK_* variables to the global scope (other variables are
-#    discarded)
-[[ ,${LK_SKIP:-}, == *,settings,* ]] || { SH=$(
-    if [ -n "${LK_SETTINGS_FILES+1}" ]; then
-        SETTINGS=("${LK_SETTINGS_FILES[@]}")
-    else
-        # Passed to lk_expand_template just before sourcing, to allow expansion
-        # of values set by earlier files
-        SETTINGS=(
-            /etc/default/lk-platform
-            ~/".{{LK_PATH_PREFIX}}settings"
-        )
-    fi
-    # lk_var lists all LK_* variables that aren't environment variables
-    ENV=$(lk_get_env -n | sed '/^LK_/!d' | sort)
-    function lk_var() { comm -23 \
-        <(printf '%s\n' "${!LK_@}" | sort) \
-        <(cat <<<"$ENV"); }
-    (
-        VAR=($(lk_var))
-        [ ${#VAR[@]} -eq 0 ] || unset "${VAR[@]}"
-        for FILE in "${SETTINGS[@]}"; do
-            FILE=$(lk_expand_template <<<"$FILE" 2>/dev/null) || continue
-            [ ! -f "$FILE" ] || [ ! -r "$FILE" ] || . "$FILE"
-        done
-        VAR=($(lk_var))
-        [ ${#VAR[@]} -eq 0 ] || lk_get_quoted_var "${VAR[@]}"
-    )
-) && eval "$SH"; }
-
-lk_include assert ${include:+${include//,/ }}
+lk_include assert
 
 # lk_die [MESSAGE]
 #
@@ -151,43 +138,38 @@ function lk_getopt() {
     LK_GETOPT=$(lk_quote OPTS)
 }
 
-if lk_is_script_running; then
-    function _lk_elevate() {
-        if [ $# -gt 0 ]; then
-            if ! lk_command_exists "$1" &&
-                [ "$(type -t "$1")" = function ]; then
-                LK_SUDO=1 "$@"
-            else
-                sudo -H "$@"
-            fi
-        else
-            sudo -H "$0" "${LK_ARGV[@]}"
-            exit
-        fi
-    }
-
-    function lk_elevate() {
-        if [ "$EUID" -eq 0 ]; then
-            if [ $# -gt 0 ]; then
-                "$@"
-            fi
-        else
-            _lk_elevate "$@"
-        fi
-    }
-
-    function lk_maybe_elevate() {
-        if [ "$EUID" -ne 0 ] && lk_can_sudo "${1-$0}"; then
-            _lk_elevate "$@"
-        elif [ $# -gt 0 ]; then
-            "$@"
-        fi
-    }
+if ! lk_is_script_running; then
+    return
 fi
 
-SH=$([[ ,${LK_SKIP:-}, == *,env,* ]] || {
-    printf '%s=%q\n' \
-        LK_PATH_PREFIX "${LK_PATH_PREFIX-lk-}"
-    . "${LK_INST:-$LK_BASE}/lib/bash/env.sh"
-}) && eval "$SH"
-unset SH
+function _lk_elevate() {
+    if [ $# -gt 0 ]; then
+        if ! lk_command_exists "$1" &&
+            [ "$(type -t "$1")" = function ]; then
+            LK_SUDO=1 "$@"
+        else
+            sudo -H "$@"
+        fi
+    else
+        sudo -H "$0" "${LK_ARGV[@]}"
+        exit
+    fi
+}
+
+function lk_elevate() {
+    if [ "$EUID" -eq 0 ]; then
+        if [ $# -gt 0 ]; then
+            "$@"
+        fi
+    else
+        _lk_elevate "$@"
+    fi
+}
+
+function lk_maybe_elevate() {
+    if [ "$EUID" -ne 0 ] && lk_can_sudo "${1-$0}"; then
+        _lk_elevate "$@"
+    elif [ $# -gt 0 ]; then
+        "$@"
+    fi
+}

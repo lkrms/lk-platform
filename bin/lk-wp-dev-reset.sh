@@ -1,6 +1,7 @@
 #!/bin/bash
 
-lk_bin_depth=1 include=wordpress,provision . lk-bash-load.sh || exit
+lk_bin_depth=1 . lk-bash-load.sh || exit
+lk_include provision wordpress
 
 DEACTIVATE_PLUGINS=(
     #
