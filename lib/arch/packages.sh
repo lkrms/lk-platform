@@ -144,7 +144,7 @@ if lk_node_service_enabled libvirt; then
     PAC_PACKAGES+=(
         libvirt
         qemu
-        ebtables
+        iptables-nft
         dnsmasq
         edk2-ovmf
         libguestfs
