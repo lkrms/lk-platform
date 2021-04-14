@@ -2983,11 +2983,11 @@ if lk_is_macos; then
     function lk_tty() {
         # "-t 0" is equivalent to "-f" on Linux (immediately flush output after
         # each write)
-        script -q -t 0 /dev/null "$@"
+        lk_maybe_sudo script -q -t 0 /dev/null "$@"
     }
 else
     function lk_tty() {
-        script -eqfc "$(lk_quote_args "$@")" /dev/null
+        lk_maybe_sudo script -eqfc "$(lk_quote_args "$@")" /dev/null
     }
 fi
 

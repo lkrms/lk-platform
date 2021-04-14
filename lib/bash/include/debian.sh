@@ -78,7 +78,7 @@ function lk_apt_not_marked_manual_list() {
 function lk_apt_update() {
     [ "${_LK_APT_DIRTY:-1}" -eq 0 ] || {
         lk_console_message "Updating APT package indexes"
-        lk_elevate apt-get -q update &&
+        lk_elevate lk_tty apt-get -q update &&
             _LK_APT_DIRTY=0
     }
 }
@@ -113,7 +113,7 @@ function lk_apt_install() {
     [ ${#INSTALL[@]} -eq 0 ] || {
         lk_echo_array INSTALL |
             lk_console_list "Installing:" "APT package" "APT packages"
-        lk_elevate apt-get -yq \
+        lk_elevate lk_tty apt-get -yq \
             --no-install-recommends --no-install-suggests \
             install "${INSTALL[@]}"
     }
@@ -130,7 +130,7 @@ function lk_apt_remove() {
         lk_echo_array REMOVE |
             lk_console_list "${_LK_APT_REMOVE_MESSAGE:-Removing}:" \
                 "APT package" "APT packages"
-        lk_elevate apt-get -yq \
+        lk_elevate lk_tty apt-get -yq \
             "${_LK_APT_REMOVE_COMMAND:-remove}" --auto-remove "${REMOVE[@]}"
     }
 }
@@ -146,7 +146,7 @@ function lk_apt_purge() {
 
 function lk_apt_autoremove() {
     lk_console_message "Removing unused dependencies"
-    lk_elevate apt-get -yq autoremove
+    lk_elevate lk_tty apt-get -yq autoremove
 }
 
 function lk_apt_purge_removed() {
@@ -159,7 +159,7 @@ function lk_apt_purge_removed() {
             lk_console_list "Purging previously removed packages:" \
                 "APT package" "APT packages"
         lk_confirm "Proceed?" Y || return
-        lk_elevate apt-get -yq purge "${PURGE[@]}"
+        lk_elevate lk_tty apt-get -yq purge "${PURGE[@]}"
     }
 }
 
@@ -198,7 +198,7 @@ END {
         <(lk_echo_array INST | sort -u)))
     [ ${#CONF[@]} -eq 0 ] || lk_console_detail "Configure:" $'\n'"${CONF[*]}"
     [ ${#REMV[@]} -eq 0 ] || lk_console_detail "Remove:" $'\n'"${REMV[*]}"
-    lk_elevate apt-get -yq --fix-broken dist-upgrade || return
+    lk_elevate lk_tty apt-get -yq --fix-broken dist-upgrade || return
     lk_apt_autoremove
 }
 
@@ -239,7 +239,7 @@ function lk_apt_reinstall_damaged() {
         [ ${#AUTO[@]} -eq 0 ] ||
             lk_console_log "Packages marked as 'automatically installed':" \
                 "${AUTO[*]}"
-        lk_elevate apt-get -yq \
+        lk_elevate lk_tty apt-get -yq \
             --no-install-recommends --no-install-suggests --reinstall \
             install "${REINSTALL[@]}" &&
             { [ ${#AUTO[@]} -eq 0 ] ||
