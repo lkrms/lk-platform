@@ -842,6 +842,9 @@ function _lk_get_colour() {
     while [ $# -ge 2 ]; do
         SEQ=$(tput $2) || SEQ=
         printf '%s%s=%q\n' "$PREFIX" "$1" "$SEQ"
+        [ "$1" != DIM ] ||
+            printf '%s%s=%q\n' "$PREFIX" UNDIM \
+                "$([ "$SEQ" != $'\E[2m' ] || echo $'\E[22m')"
         shift 2
     done
 }
@@ -871,6 +874,10 @@ function lk_get_colours() {
         GREY_BG "setab 8" \
         BOLD "bold" \
         DIM "dim" \
+        UL_ON "smul" \
+        UL_OFF "rmul" \
+        WRAP_OFF "rmam" \
+        WRAP_ON "smam" \
         RESET "sgr0"
 }
 
@@ -3508,81 +3515,94 @@ set -o pipefail
 lk_trap_add EXIT _lk_exit_trap
 lk_trap_add ERR _lk_err_trap
 
-LK_BLACK=
-LK_RED=
-LK_GREEN=
-LK_YELLOW=
-LK_BLUE=
-LK_MAGENTA=
-LK_CYAN=
-LK_WHITE=
-LK_GREY=
-LK_BLACK_BG=
-LK_RED_BG=
-LK_GREEN_BG=
-LK_YELLOW_BG=
-LK_BLUE_BG=
-LK_MAGENTA_BG=
-LK_CYAN_BG=
-LK_WHITE_BG=
-LK_GREY_BG=
-LK_BOLD=
-LK_DIM=
-LK_RESET=
-
-lk_is_true LK_TTY_NO_COLOUR ||
-    case "${TERM:-dumb}" in
-    dumb | unknown)
-        LK_BLACK=$'\E[30m'
-        LK_RED=$'\E[31m'
-        LK_GREEN=$'\E[32m'
-        LK_YELLOW=$'\E[33m'
-        LK_BLUE=$'\E[34m'
-        LK_MAGENTA=$'\E[35m'
-        LK_CYAN=$'\E[36m'
-        LK_WHITE=$'\E[37m'
-        LK_GREY=
-        LK_BLACK_BG=$'\E[40m'
-        LK_RED_BG=$'\E[41m'
-        LK_GREEN_BG=$'\E[42m'
-        LK_YELLOW_BG=$'\E[43m'
-        LK_BLUE_BG=$'\E[44m'
-        LK_MAGENTA_BG=$'\E[45m'
-        LK_CYAN_BG=$'\E[46m'
-        LK_WHITE_BG=$'\E[47m'
-        LK_GREY_BG=
-        LK_BOLD=$'\E[1m'
-        LK_DIM=$'\E[2m'
+if lk_is_true LK_TTY_NO_COLOUR; then
+    declare \
+        LK_BLACK= \
+        LK_RED= \
+        LK_GREEN= \
+        LK_YELLOW= \
+        LK_BLUE= \
+        LK_MAGENTA= \
+        LK_CYAN= \
+        LK_WHITE= \
+        LK_GREY= \
+        LK_BLACK_BG= \
+        LK_RED_BG= \
+        LK_GREEN_BG= \
+        LK_YELLOW_BG= \
+        LK_BLUE_BG= \
+        LK_MAGENTA_BG= \
+        LK_CYAN_BG= \
+        LK_WHITE_BG= \
+        LK_GREY_BG= \
+        LK_BOLD= \
+        LK_DIM= \
+        LK_UNDIM= \
+        LK_UL_ON= \
+        LK_UL_OFF= \
+        LK_WRAP_OFF= \
+        LK_WRAP_ON= \
+        LK_RESET=
+else
+    # See: `man 4 console_codes`
+    declare \
+        LK_BLACK=$'\E[30m' \
+        LK_RED=$'\E[31m' \
+        LK_GREEN=$'\E[32m' \
+        LK_YELLOW=$'\E[33m' \
+        LK_BLUE=$'\E[34m' \
+        LK_MAGENTA=$'\E[35m' \
+        LK_CYAN=$'\E[36m' \
+        LK_WHITE=$'\E[37m' \
+        LK_GREY=$'\E[38m' \
+        LK_BLACK_BG=$'\E[40m' \
+        LK_RED_BG=$'\E[41m' \
+        LK_GREEN_BG=$'\E[42m' \
+        LK_YELLOW_BG=$'\E[43m' \
+        LK_BLUE_BG=$'\E[44m' \
+        LK_MAGENTA_BG=$'\E[45m' \
+        LK_CYAN_BG=$'\E[46m' \
+        LK_WHITE_BG=$'\E[47m' \
+        LK_GREY_BG=$'\E[48m' \
+        LK_BOLD=$'\E[1m' \
+        LK_DIM=$'\E[2m' \
+        LK_UNDIM=$'\E[22m' \
+        LK_UL_ON=$'\E[4m' \
+        LK_UL_OFF=$'\E[24m' \
+        LK_WRAP_OFF= \
+        LK_WRAP_ON= \
         LK_RESET=$'\E[0m'
-        unset TERM
+
+    case "${TERM:-}" in
+    '' | dumb | unknown)
+        [ -z "${TERM+1}" ] ||
+            unset TERM
         ;;
-    xterm-256color)
-        LK_BLACK=$'\E[30m'
-        LK_RED=$'\E[31m'
-        LK_GREEN=$'\E[32m'
-        LK_YELLOW=$'\E[33m'
-        LK_BLUE=$'\E[34m'
-        LK_MAGENTA=$'\E[35m'
-        LK_CYAN=$'\E[36m'
-        LK_WHITE=$'\E[37m'
-        LK_GREY=$'\E[90m'
-        LK_BLACK_BG=$'\E[40m'
-        LK_RED_BG=$'\E[41m'
-        LK_GREEN_BG=$'\E[42m'
-        LK_YELLOW_BG=$'\E[43m'
-        LK_BLUE_BG=$'\E[44m'
-        LK_MAGENTA_BG=$'\E[45m'
-        LK_CYAN_BG=$'\E[46m'
-        LK_WHITE_BG=$'\E[47m'
-        LK_GREY_BG=$'\E[100m'
-        LK_BOLD=$'\E[1m'
-        LK_DIM=$'\E[2m'
-        LK_RESET=$'\E(B\E[m'
+    xterm-256color | xterm-16color)
+        declare \
+            LK_GREY=$'\E[90m' \
+            LK_GREY_BG=$'\E[100m' \
+            LK_WRAP_OFF=$'\E[?7l' \
+            LK_WRAP_ON=$'\E[?7h' \
+            LK_RESET=$'\E(B\E[m'
+        ;;
+    xterm)
+        declare \
+            LK_WRAP_OFF=$'\E[?7l' \
+            LK_WRAP_ON=$'\E[?7h' \
+            LK_RESET=$'\E(B\E[m'
+        ;;
+    rxvt | linux)
+        declare \
+            LK_WRAP_OFF=$'\E[?7l' \
+            LK_WRAP_ON=$'\E[?7h' \
+            LK_RESET=$'\E[m\017'
         ;;
     *)
         eval "$(lk_get_colours)"
         ;;
     esac
+fi
 
 _LK_TTY_COLOUR=$LK_CYAN
 _LK_SUCCESS_COLOUR=$LK_GREEN
