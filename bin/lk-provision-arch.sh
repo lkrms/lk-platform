@@ -802,7 +802,7 @@ EOF
             lk_php_set_option pm.max_requests 0
             lk_php_set_option request_terminate_timeout 0
         else
-            lk_php_set_option pm.max_children 50
+            lk_php_set_option pm.max_children 30
             lk_php_set_option pm.max_requests 10000
             lk_php_set_option request_terminate_timeout 300
         fi

@@ -1491,7 +1491,7 @@ listen.group = www-data
 ; ondemand can't handle sudden bursts: https://github.com/php/php-src/pull/1308
 pm = static
 ; tune based on memory consumed per process under load
-pm.max_children = 50
+pm.max_children = 30
 ; respawn occasionally in case of memory leaks
 pm.max_requests = 10000
 ; because \`max_execution_time\` only counts CPU time
