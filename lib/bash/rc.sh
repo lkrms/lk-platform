@@ -164,10 +164,10 @@ fi
             VERSION=
             ! lk_bash_at_least 4 ||
                 VERSION="@2"
-            COMMAND=$(printf '%s\n' \
-                "$HOMEBREW_PREFIX/Cellar/bash-completion$VERSION"/*/etc/profile.d/bash_completion.sh |
-                sort -V | tail -n1)
-            [ -n "$COMMAND" ] || return 0
+            DIR=$HOMEBREW_PREFIX/Cellar/bash-completion$VERSION
+            COMMANDS=("$DIR"/*/etc/profile.d/bash_completion.sh)
+            [ -n "${COMMANDS+1}" ] || return 0
+            COMMAND=${COMMANDS[0]}
             [ -n "$VERSION" ] || {
                 COMMAND=${COMMAND/profile.d\/bash_completion.sh/bash_completion}
                 printf '%s=%q ' \

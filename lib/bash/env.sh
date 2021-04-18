@@ -45,7 +45,7 @@ PATH=$(path_add_to_front /usr/local/bin)
 
 ! type brew >/dev/null 2>&1 ||
     ! BREW_SH=$(brew shellenv 2>/dev/null |
-        grep -E '^HOMEBREW_(PREFIX|CELLAR|REPOSITORY)=') || {
+        grep -E '\<HOMEBREW_(PREFIX|CELLAR|REPOSITORY)=') || {
     eval "$BREW_SH"
     cat <<EOF
 $BREW_SH
