@@ -434,7 +434,7 @@ echo "$BOOTSTRAP_USERNAME ALL=(ALL) NOPASSWD:ALL" >"$FILE"
 [ -z "$BOOTSTRAP_FULL_NAME" ] ||
     in_target chfn -f "$BOOTSTRAP_FULL_NAME" "$BOOTSTRAP_USERNAME"
 
-export LK_BOOTSTRAP=1
+export _LK_BOOTSTRAP=1
 
 lk_console_item "Installing lk-platform to" "$LK_BASE"
 in_target install -d -m 02775 -o "$BOOTSTRAP_USERNAME" -g adm "$LK_BASE"

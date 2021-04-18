@@ -121,15 +121,15 @@ fi
 function lk_console_message() {
     echo "\
 $LK_GREY[ $H ] \
-$LK_RESET$LK_BOLD${LK_TTY_COLOUR-$LK_CYAN}${LK_TTY_PREFIX-==> }\
-$LK_RESET${LK_TTY_MESSAGE_COLOUR-$LK_BOLD}\
+$LK_RESET$LK_BOLD${_LK_TTY_COLOUR-$LK_CYAN}${_LK_TTY_PREFIX-==> }\
+$LK_RESET${_LK_TTY_MESSAGE_COLOUR-$LK_BOLD}\
 $(sed "1b
-s/^/$H_SPACES${LK_TTY_SPACES-  }/" <<<"$1")$LK_RESET" >&2
+s/^/$H_SPACES${_LK_TTY_SPACES-  }/" <<<"$1")$LK_RESET" >&2
 }
 
 function lk_console_item() {
     lk_console_message "\
-$1$LK_RESET${LK_TTY_COLOUR2-${LK_TTY_COLOUR-$LK_CYAN}}$(
+$1$LK_RESET${_LK_TTY_COLOUR2-${_LK_TTY_COLOUR-$LK_CYAN}}$(
         [ "${2/$'\n'/}" = "$2" ] &&
             echo " $2" ||
             echo $'\n'"${2#$'\n'}"
@@ -137,19 +137,19 @@ $1$LK_RESET${LK_TTY_COLOUR2-${LK_TTY_COLOUR-$LK_CYAN}}$(
 }
 
 function lk_console_detail() {
-    local LK_TTY_PREFIX="   -> " LK_TTY_SPACES="    " \
-        LK_TTY_COLOUR=$LK_YELLOW LK_TTY_MESSAGE_COLOUR=
+    local _LK_TTY_PREFIX="   -> " _LK_TTY_SPACES="    " \
+        _LK_TTY_COLOUR=$LK_YELLOW _LK_TTY_MESSAGE_COLOUR=
     [ $# -le 1 ] &&
         lk_console_message "$1" ||
         lk_console_item "$1" "$2"
 }
 
 function lk_console_log() {
-    local LK_TTY_PREFIX=" :: " LK_TTY_SPACES="    " \
-        LK_TTY_COLOUR2=${LK_TTY_COLOUR2-$LK_BOLD}
+    local _LK_TTY_PREFIX=" :: " _LK_TTY_SPACES="    " \
+        _LK_TTY_COLOUR2=${_LK_TTY_COLOUR2-$LK_BOLD}
     [ $# -le 1 ] &&
-        lk_console_message "${LK_TTY_COLOUR-$LK_CYAN}$1" ||
-        lk_console_item "${LK_TTY_COLOUR-$LK_CYAN}$1" "$2"
+        lk_console_message "${_LK_TTY_COLOUR-$LK_CYAN}$1" ||
+        lk_console_item "${_LK_TTY_COLOUR-$LK_CYAN}$1" "$2"
 }
 
 function lk_ellipsis() {

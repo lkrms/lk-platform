@@ -96,7 +96,7 @@ function exit_trap() {
     eval "$SH"
     shift "$LK_SHIFT"
 
-    LK_FILE_TAKE_BACKUP=${LK_FILE_TAKE_BACKUP-1}
+    LK_FILE_BACKUP_TAKE=${LK_FILE_BACKUP_TAKE-1}
 
     lk_log_start ~/"${LK_PATH_PREFIX}install.log"
     lk_trap_add EXIT exit_trap

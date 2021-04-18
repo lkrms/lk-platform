@@ -72,7 +72,7 @@ Status: $(get_stage)
 
 Running as: $USER
 Command line:
-$(printf '%q' "$0" && { [ ${#LK_ARGV[@]} -eq 0 ] || printf ' \\\n    %q' "${LK_ARGV[@]}"; })
+$(printf '%q' "$0" && { [ ${#_LK_ARGV[@]} -eq 0 ] || printf ' \\\n    %q' "${_LK_ARGV[@]}"; })
 
 Output:
 
@@ -120,7 +120,7 @@ function run_custom_hook() {
             [ ${#LINES[@]} -eq 0 ] || {
                 SH=$(lk_echo_array LINES)
                 eval "$SH" ||
-                    LK_TTY_COLOUR2='' LK_TTY_NO_FOLD=1 \
+                    _LK_TTY_COLOUR2='' _LK_TTY_NO_FOLD=1 \
                         lk_console_error -r "\
 Shell commands emitted by hook script failed (exit status $?):" $'\n'"$SH" ||
                     lk_die ""

@@ -89,8 +89,8 @@ lk_is_true ALL || {
 
 EXIT_STATUS=0
 
-LK_MYSQL_QUIET=1
-LK_TTY_NO_FOLD=1
+_LK_MYSQL_QUIET=1
+_LK_TTY_NO_FOLD=1
 
 lk_log_start
 lk_start_trace

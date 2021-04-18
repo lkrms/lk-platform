@@ -76,8 +76,11 @@ function lk_apt_not_marked_manual_list() {
 #
 # Retrieve the latest APT package indexes.
 function lk_apt_update() {
-    lk_console_message "Updating APT package indexes"
-    lk_elevate apt-get -q update
+    [ "${_LK_APT_DIRTY:-1}" -eq 0 ] || {
+        lk_console_message "Updating APT package indexes"
+        lk_elevate apt-get -q update &&
+            _LK_APT_DIRTY=0
+    }
 }
 
 # lk_apt_unavailable_list PACKAGE...
@@ -125,10 +128,10 @@ function lk_apt_remove() {
     REMOVE=($(lk_dpkg_installed_list "$@")) || return
     [ ${#REMOVE[@]} -eq 0 ] || {
         lk_echo_array REMOVE |
-            lk_console_list "${LK_APT_REMOVE_MESSAGE:-Removing}:" \
+            lk_console_list "${_LK_APT_REMOVE_MESSAGE:-Removing}:" \
                 "APT package" "APT packages"
         lk_elevate apt-get -yq \
-            "${LK_APT_REMOVE_COMMAND:-remove}" --auto-remove "${REMOVE[@]}"
+            "${_LK_APT_REMOVE_COMMAND:-remove}" --auto-remove "${REMOVE[@]}"
     }
 }
 
@@ -136,8 +139,8 @@ function lk_apt_remove() {
 #
 # Purge each installed PACKAGE and any unused dependencies.
 function lk_apt_purge() {
-    LK_APT_REMOVE_COMMAND=purge \
-        LK_APT_REMOVE_MESSAGE=Purging \
+    _LK_APT_REMOVE_COMMAND=purge \
+        _LK_APT_REMOVE_MESSAGE=Purging \
         lk_apt_remove "$@"
 }
 

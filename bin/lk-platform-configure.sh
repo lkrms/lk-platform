@@ -21,7 +21,7 @@ SH=$(
         die "script must be invoked directly"
     [[ $_FILE == */* ]] || _FILE=./$_FILE
     _DIR=$(cd "${_FILE%/*}" && pwd -P) &&
-        printf 'export LK_INST=%q\n' "${_DIR%/bin}" ||
+        printf 'export _LK_INST=%q\n' "${_DIR%/bin}" ||
         die "base directory not found"
     # Values set in /etc/default/lk-platform override LK_* environment variables
     # with the same name
@@ -31,11 +31,10 @@ SH=$(
     unset $VARS
     [ ! -r /etc/default/lk-platform ] ||
         . /etc/default/lk-platform
-    unset LK_INST
     VARS=$(vars)
     [ -z "${VARS:+1}" ] ||
         declare -p $VARS
-) && eval "$SH" && . "$LK_INST/lib/bash/common.sh" || exit
+) && eval "$SH" && . "$_LK_INST/lib/bash/common.sh" || exit
 lk_include git provision
 
 shopt -s nullglob
@@ -93,8 +92,8 @@ SETTINGS=(
     LK_PACKAGES_FILE
 )
 
-LK_FILE_TAKE_BACKUP=${LK_FILE_TAKE_BACKUP-1}
-LK_FILE_MOVE_BACKUP=1
+LK_FILE_BACKUP_TAKE=${LK_FILE_BACKUP_TAKE-1}
+LK_FILE_BACKUP_MOVE=1
 LK_VERBOSE=${LK_VERBOSE-1}
 
 NEW_SETTINGS=()
@@ -130,19 +129,19 @@ lk_log_start
 {
     lk_console_log "Configuring lk-platform"
 
-    if [[ ${LK_INST##*/} =~ ^([a-zA-Z0-9]{2,3}-)platform$ ]] &&
+    if [[ ${_LK_INST##*/} =~ ^([a-zA-Z0-9]{2,3}-)platform$ ]] &&
         [ "${BASH_REMATCH[1]}" != lk- ]; then
         ORIGINAL_PATH_PREFIX=${BASH_REMATCH[1]}
-        OLD_LK_INST=$LK_INST
-        LK_INST=${LK_INST%/*}/lk-platform
+        OLD_LK_INST=$_LK_INST
+        _LK_INST=${_LK_INST%/*}/lk-platform
         lk_console_message "Renaming installation directory"
-        if [ -e "$LK_INST" ] && [ ! -L "$LK_INST" ]; then
-            BACKUP_DIR=$LK_INST$(lk_file_get_backup_suffix)
+        if [ -e "$_LK_INST" ] && [ ! -L "$_LK_INST" ]; then
+            BACKUP_DIR=$_LK_INST$(lk_file_get_backup_suffix)
             [ ! -e "$BACKUP_DIR" ] || lk_die "$BACKUP_DIR already exists"
-            mv -fv "$LK_INST" "$BACKUP_DIR"
+            mv -fv "$_LK_INST" "$BACKUP_DIR"
         fi
-        rm -fv "$LK_INST"
-        mv -v "$OLD_LK_INST" "$LK_INST"
+        rm -fv "$_LK_INST"
+        mv -v "$OLD_LK_INST" "$_LK_INST"
         lk_symlink lk-platform "$OLD_LK_INST"
     fi
 
@@ -161,14 +160,14 @@ lk_log_start
     }
     [ -n "$LK_PATH_PREFIX" ] || lk_die "LK_PATH_PREFIX not set"
     [ -z "${LK_BASE:-}" ] ||
-        [ "$LK_BASE" = "$LK_INST" ] ||
+        [ "$LK_BASE" = "$_LK_INST" ] ||
         [ "$LK_BASE" = "${OLD_LK_INST:-}" ] ||
         [ ! -d "$LK_BASE" ] ||
         {
             lk_console_item "Existing installation found at" "$LK_BASE"
             lk_confirm "Reconfigure system?" Y || lk_die ""
         }
-    export LK_BASE=$LK_INST
+    export LK_BASE=$_LK_INST
 
     lk_is_arch && _IS_ARCH=1 || _IS_ARCH=
     _BASHRC='[ -z "${BASH_VERSION:-}" ] || [ ! -f ~/.bashrc ] || . ~/.bashrc'
@@ -306,7 +305,7 @@ lk_log_start
         check_repo_config "merge.ff" "only"
         check_repo_config "pull.ff" "only"
         for COMMAND in ${CONFIG_COMMANDS[@]+"${CONFIG_COMMANDS[@]}"}; do
-            LK_TTY_NO_FOLD=1 \
+            _LK_TTY_NO_FOLD=1 \
                 lk_console_detail "Running:" "$(lk_quote_args git $COMMAND)"
             _git $COMMAND
         done
@@ -366,10 +365,10 @@ lk_log_start
     lk_symlink_bin "$LK_BASE/bin/lk-bash-load.sh"
 
     if lk_is_true ELEVATED; then
-        LK_HOMES=(${SUDO_USER:+"$(lk_expand_path "~$SUDO_USER")"})
+        _LK_HOMES=(${SUDO_USER:+"$(lk_expand_path "~$SUDO_USER")"})
     else
         # If invoked by root, include all standard home directories
-        lk_mapfile LK_HOMES <(comm -12 \
+        lk_mapfile _LK_HOMES <(comm -12 \
             <(lk_echo_args /home/* /srv/www/* /Users/* ~root |
                 lk_filter 'test -d' | sort -u) \
             <(if ! lk_is_macos; then
@@ -378,10 +377,10 @@ lk_log_start
                 dscl . list /Users NFSHomeDirectory | awk '{print $2}'
             fi | sort -u))
     fi
-    LK_HOMES+=(/etc/skel{,".${LK_PATH_PREFIX%-}"})
-    lk_remove_missing LK_HOMES
-    lk_resolve_files LK_HOMES
-    [ ${#LK_HOMES[@]} -gt 0 ] || lk_die "No home directories found"
+    _LK_HOMES+=(/etc/skel{,".${LK_PATH_PREFIX%-}"})
+    lk_remove_missing _LK_HOMES
+    lk_resolve_files _LK_HOMES
+    [ ${#_LK_HOMES[@]} -gt 0 ] || lk_die "No home directories found"
     lk_console_message "Checking startup scripts and SSH config files"
 
     # Prepare awk to update ~/.bashrc
@@ -421,7 +420,7 @@ lk_log_start
     }
 
     LK_FILE_NO_DIFF=1
-    for h in "${LK_HOMES[@]}"; do
+    for h in "${_LK_HOMES[@]}"; do
         [ ! -e "$h/.${LK_PATH_PREFIX}ignore" ] || continue
         OWNER=$(lk_file_owner "$h")
         GROUP=$(id -gn "$OWNER")
@@ -501,10 +500,10 @@ lk_log_start
         fi
     done
 
-    unset LK_FILE_TAKE_BACKUP
+    unset LK_FILE_BACKUP_TAKE
 
     # Leave ~root/.ssh alone
-    lk_remove_false "$(printf '[ "{}" != %q ]' "$(realpath ~root)")" LK_HOMES
+    lk_remove_false "$(printf '[ "{}" != %q ]' "$(realpath ~root)")" _LK_HOMES
     if [ -n "${LK_SSH_JUMP_HOST:-}" ]; then
         lk_ssh_configure "$LK_SSH_JUMP_HOST" \
             "${LK_SSH_JUMP_USER:-}" \

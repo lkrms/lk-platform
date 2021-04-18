@@ -277,8 +277,8 @@ function lk_log() {
 
 function lk_console_message() {
     echo "\
-${LK_TTY_PREFIX-==> }\
-${1//$'\n'/$'\n'"${LK_TTY_SPACES-  }"}" >&"${_LK_FD:-2}"
+${_LK_TTY_PREFIX-==> }\
+${1//$'\n'/$'\n'"${_LK_TTY_SPACES-  }"}" >&"${_LK_FD:-2}"
 }
 
 function lk_console_item() {
@@ -290,7 +290,7 @@ function lk_console_item() {
 }
 
 #function lk_console_detail() {
-#    local LK_TTY_PREFIX="   -> " LK_TTY_SPACES="    "
+#    local _LK_TTY_PREFIX="   -> " _LK_TTY_SPACES="    "
 #    [ $# -le 1 ] &&
 #        lk_console_message "$1" ||
 #        lk_console_item "$1" "$2"

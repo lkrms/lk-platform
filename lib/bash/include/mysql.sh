@@ -1,7 +1,7 @@
 #!/bin/bash
 
 function lk_mysql_is_quiet() {
-    [ -n "${LK_MYSQL_QUIET:-}" ]
+    [ -n "${_LK_MYSQL_QUIET:-}" ]
 }
 
 function lk_mysql_escape() {

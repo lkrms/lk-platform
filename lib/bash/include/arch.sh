@@ -300,10 +300,10 @@ function lk_aur_sync() {
     done
     [ ${#SYNCED[@]} -eq 0 ] || lk_echo_array SYNCED |
         lk_console_list "Synced from AUR:" package packages \
-            "$LK_SUCCESS_COLOUR"
+            "$_LK_SUCCESS_COLOUR"
     [ ${#FAILED[@]} -eq 0 ] || lk_echo_array FAILED |
         lk_console_list "Failed to sync:" package packages \
-            "$LK_ERROR_COLOUR"
+            "$_LK_ERROR_COLOUR"
     [ ${#FAILED[@]} -eq 0 ]
 }
 

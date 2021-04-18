@@ -22,10 +22,10 @@ SH=$(lk_provision_getopt)
 eval "$SH"
 shift "$LK_SHIFT"
 
-! lk_in_chroot || LK_BOOTSTRAP=1
+! lk_in_chroot || _LK_BOOTSTRAP=1
 
 function is_bootstrap() {
-    [ -n "${LK_BOOTSTRAP:-}" ]
+    [ -n "${_LK_BOOTSTRAP:-}" ]
 }
 
 if is_bootstrap; then
@@ -172,8 +172,8 @@ lk_start_trace
     lk_console_detail "System memory:" "${MEMORY}M"
 
     LK_SUDO=1
-    LK_FILE_TAKE_BACKUP=${LK_FILE_TAKE_BACKUP-$(is_bootstrap || echo 1)}
-    LK_FILE_MOVE_BACKUP=1
+    LK_FILE_BACKUP_TAKE=${LK_FILE_BACKUP_TAKE-$(is_bootstrap || echo 1)}
+    LK_FILE_BACKUP_MOVE=1
 
     EXIT_STATUS=0
     SERVICE_STARTED=()
@@ -364,7 +364,7 @@ $LK_NODE_HOSTNAME" &&
     lk_is_desktop &&
         DEFAULT_TARGET=graphical.target ||
         DEFAULT_TARGET=multi-user.target
-    CURRENT_DEFAULT_TARGET=$(${LK_BOOTSTRAP:+sudo} systemctl get-default)
+    CURRENT_DEFAULT_TARGET=$(${_LK_BOOTSTRAP:+sudo} systemctl get-default)
     [ "$CURRENT_DEFAULT_TARGET" = "$DEFAULT_TARGET" ] ||
         lk_run_detail sudo systemctl set-default "$DEFAULT_TARGET"
 
@@ -536,7 +536,7 @@ $LK_NODE_HOSTNAME" &&
         LK_CONF_OPTION_FILE=/etc/pacman.conf
         lk_conf_enable_row -s options "CacheDir = /var/cache/pacman/pkg/"
         lk_conf_enable_row -s options "CacheDir = $DIR/"
-        LK_CONF_DELIM=" = " \
+        _LK_CONF_DELIM=" = " \
             lk_conf_set_option -s options CleanMethod KeepCurrent
 
         if ! lk_command_exists aur ||

@@ -2,7 +2,7 @@
 
 [ -n "${_LK_ENV+1}" ] || _LK_ENV=$(declare -x)
 
-[ -n "${LK_INST-}" ] || { SH=$(
+[ -n "${_LK_INST-}" ] || { SH=$(
     set -u
     die() { echo "${BASH_SOURCE:-$0}: $1" >&2 && false || exit; }
     _FILE=$BASH_SOURCE && [ -f "$_FILE" ] && [ ! -L "$_FILE" ] ||
@@ -26,10 +26,10 @@
     [ -z "${VARS:+1}" ] ||
         declare -p $VARS
 ) && eval "$SH" || return; }
-SH=$(. "${LK_INST:-$LK_BASE}/lib/bash/env.sh") && eval "$SH" || return
+SH=$(. "${_LK_INST:-$LK_BASE}/lib/bash/env.sh") && eval "$SH" || return
 unset SH
 
-. "${LK_INST:-$LK_BASE}/lib/bash/include/core.sh" || return
+. "${_LK_INST:-$LK_BASE}/lib/bash/include/core.sh" || return
 set -E
 
 lk_include assert
@@ -82,7 +82,7 @@ function lk_getopt() {
     _OPTS=$(gnu_getopt --options "$SHORT" \
         --longoptions "$LONG" \
         --name "${0##*/}" \
-        -- ${LK_ARGV[@]+"${LK_ARGV[@]}"}) || lk_usage
+        -- ${_LK_ARGV[@]+"${_LK_ARGV[@]}"}) || lk_usage
     eval "set -- $_OPTS"
     while :; do
         case "$1" in
@@ -151,7 +151,7 @@ function _lk_elevate() {
             sudo -H "$@"
         fi
     else
-        sudo -H "$0" "${LK_ARGV[@]}"
+        sudo -H "$0" "${_LK_ARGV[@]}"
         exit
     fi
 }

@@ -61,7 +61,7 @@ EOF
 }
 
 IFS=':'
-for DIR in ${LK_ADD_TO_PATH:+$LK_ADD_TO_PATH} ${LK_INST:-$LK_BASE}/bin; do
+for DIR in ${LK_ADD_TO_PATH:+$LK_ADD_TO_PATH} ${_LK_INST:-$LK_BASE}/bin; do
     PATH=$(path_add "$DIR")
 done
 for DIR in ${HOME:+$HOME/.local/bin} \
@@ -77,5 +77,5 @@ ${LK_ADD_TO_PATH_FIRST+ LK_ADD_TO_PATH_FIRST}"
 cat <<EOF
 ${UNSET:+unset$UNSET
 }export SUDO_PROMPT="[sudo] password for %p: "
-export WP_CLI_CONFIG_PATH=\${LK_INST:-\$LK_BASE}/share/wp-cli/config.yml
+export WP_CLI_CONFIG_PATH=\${_LK_INST:-\$LK_BASE}/share/wp-cli/config.yml
 EOF

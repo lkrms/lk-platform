@@ -9,7 +9,7 @@ function lk_wp() {
 }
 
 function lk_wp_is_quiet() {
-    [ -n "${LK_WP_QUIET:-}" ]
+    [ -n "${_LK_WP_QUIET:-}" ]
 }
 
 function lk_wp_get_site_root() {
@@ -48,7 +48,7 @@ function _lk_wp_replace() {
     )
     SKIP_TABLES=("${SKIP_TABLES[@]/#/$TABLE_PREFIX}")
     lk_console_detail "Replacing:" "$1 -> $2"
-    "${LK_WP_REPLACE_COMMAND:-lk_wp}" search-replace "$1" "$2" --no-report \
+    "${_LK_WP_REPLACE_COMMAND:-lk_wp}" search-replace "$1" "$2" --no-report \
         --all-tables-with-prefix \
         --skip-tables="$(lk_implode "," SKIP_TABLES)" \
         --skip-columns="guid"
@@ -562,9 +562,9 @@ function lk_wp_set_permissions() {
     fi
     lk_dir_set_modes "$SITE_ROOT" \
         "" \
-        "${LK_DIR_MODE:-0750}" "${LK_FILE_MODE:-0640}" \
+        "${LK_WP_MODE_DIR:-0750}" "${LK_WP_MODE_FILE:-0640}" \
         ".*/wp-content/(cache|uploads|w3tc-config)" \
-        "${LK_WRITABLE_DIR_MODE:-2770}" "${LK_WRITABLE_FILE_MODE:-0660}" \
+        "${LK_WP_MODE_WRITABLE_DIR:-2770}" "${LK_WP_MODE_WRITABLE_FILE:-0660}" \
         ".*/\\.git/objects/([0-9a-f]{2}|pack)/.*" \
         0555 0444
 }
