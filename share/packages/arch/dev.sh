@@ -58,6 +58,10 @@ lk_is_virtual || {
         clinfo
         opencl-nvidia
     )
+    ! lk_system_has_amd_graphics || PAC_PACKAGES+=(
+        clinfo
+        opencl-mesa
+    )
 }
 
 AUR_PACKAGES+=(
@@ -343,8 +347,8 @@ PAC_PACKAGES+=(
 PAC_PACKAGES+=(
     # KVM/QEMU
     dnsmasq
-    ebtables
     edk2-ovmf # UEFI firmware
+    iptables-nft
     libguestfs
     libvirt
     qemu

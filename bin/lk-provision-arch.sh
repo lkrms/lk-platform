@@ -494,6 +494,28 @@ $LK_NODE_HOSTNAME" &&
             sudo update-grub --install
     fi
 
+    unset LK_FILE_REPLACE_NO_CHANGE
+    FILE=/etc/mkinitcpio.conf
+    if [ -f "$FILE" ] && lk_node_service_enabled desktop &&
+        lk_system_has_amd_graphics; then
+        lk_tty_print "Checking" "$FILE"
+        if ! grep -Eq '^MODULES=(.*\<amdgpu\>.*)' "$FILE"; then
+            TEMP_FILE=$(lk_mktemp_file)
+            lk_delete_on_exit "$TEMP_FILE"
+            (
+                unset MODULES
+                . "$FILE"
+                MODULES+=(amdgpu)
+                sed -E 's/^(MODULES=\().*(\))/\1'"$(lk_escape_ere_replace \
+                    "$(lk_quote MODULES)")"'\2/' "$FILE"
+            ) >"$TEMP_FILE"
+            lk_file_keep_original "$FILE"
+            lk_file_replace -f "$TEMP_FILE" "$FILE"
+            ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+                sudo mkinitcpio -P
+        fi
+    fi
+
     lk_console_blank
     LK_NO_LOG=1 \
         lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" \

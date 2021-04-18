@@ -312,6 +312,10 @@ function lk_system_has_nvidia_graphics() {
     lk_system_list_graphics | grep -i NVIDIA >/dev/null
 }
 
+function lk_system_has_amd_graphics() {
+    lk_system_list_graphics | grep -i AMD >/dev/null
+}
+
 function lk_nm_is_running() {
     { nmcli -g running general status |
         grep -Fx running; } &>/dev/null

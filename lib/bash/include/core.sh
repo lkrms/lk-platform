@@ -3455,21 +3455,17 @@ function _lk_err_trap() {
 }
 
 function _lk_cleanup_trap() {
-    local COMMAND WARNING ARRAY LIST ITEM
+    local COMMAND ARRAY LIST ITEM
     COMMAND=(rm -Rf --)
-    WARNING=(eval 'lk_warn "error deleting $ITEM without root access"')
     for ARRAY in _LK_EXIT_{DELETE_,KILL_}${1:-$BASH_SUBSHELL}; do
         LIST="${ARRAY}[@]"
         for ITEM in ${!LIST+"${!LIST}"}; do
-            "${COMMAND[@]}" "$ITEM" 2>/dev/null ||
+            { "${COMMAND[@]}" "$ITEM" ||
                 lk_is_root ||
-                lk_pass ${WARNING[@]+"${WARNING[@]}"} ||
-                lk_elevate "${COMMAND[@]}" "$ITEM" 2>/dev/null ||
-                true
+                lk_elevate "${COMMAND[@]}" "$ITEM" || true; } 2>/dev/null
         done
         unset "$ARRAY"
         COMMAND=(kill)
-        WARNING=()
     done
     # Because subshells don't receive individual EXIT signals on SIGINT, and
     # SIGINT traps aren't inherited, clean up recursively on SIGINT

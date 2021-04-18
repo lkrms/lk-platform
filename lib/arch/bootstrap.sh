@@ -380,7 +380,7 @@ lk_run_detail mount \
 
 if ! lk_is_true FORMAT_BOOT; then
     lk_console_message "Removing files from previous installations in ESP"
-    rm -Rfv /mnt/boot/syslinux /mnt/boot/intel-ucode.img
+    rm -Rfv /mnt/boot/{syslinux,intel-ucode.img,amd-ucode.img}
 fi
 
 lk_console_blank
