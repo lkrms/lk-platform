@@ -275,9 +275,7 @@ lk_log_start
 
     if [ -d "$LK_BASE/.git" ]; then
         function _git() {
-            runuser -u "$REPO_OWNER" -- \
-                ${LK_GIT_ENV[@]+env "${LK_GIT_ENV[@]}"} \
-                git "$@"
+            runuser -u "$REPO_OWNER" -- git "$@"
         }
         function check_repo_config() {
             local VALUE
@@ -286,7 +284,7 @@ lk_log_start
                 CONFIG_COMMANDS+=("$(printf 'config %q %q' "$1" "$2")")
         }
         function update_repo() {
-            local BRANCH=${1:-$BRANCH} LK_GIT_USER=$REPO_OWNER
+            local BRANCH=${1:-$BRANCH} _LK_GIT_USER=$REPO_OWNER
             lk_git_update_repo_to -f "$REMOTE" "$BRANCH"
         }
         UMASK=$(umask)
@@ -294,11 +292,11 @@ lk_log_start
         lk_console_message "Checking repository"
         cd "$LK_BASE"
         REPO_OWNER=$(lk_file_owner "$LK_BASE")
-        LK_GIT_ENV=()
+        _LK_GIT_ENV=()
         [ -z "${SSH_AUTH_SOCK:-}" ] ||
             ! SOCK_OWNER=$(lk_file_owner "$SSH_AUTH_SOCK" 2>/dev/null) ||
             [ "$SOCK_OWNER" != "$REPO_OWNER" ] ||
-            LK_GIT_ENV=(SSH_AUTH_SOCK="$SSH_AUTH_SOCK")
+            _LK_GIT_ENV=(SSH_AUTH_SOCK="$SSH_AUTH_SOCK")
         CONFIG_COMMANDS=()
         [ ! -g "$LK_BASE" ] ||
             check_repo_config "core.sharedRepository" "0664"
