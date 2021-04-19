@@ -7,7 +7,8 @@
 # Alternatively, for scripts that can safely assume lk-bash-load.sh will be
 # found in PATH:
 #
-#   lk_bin_depth=DEPTH [include=LIBRARY...] . lk-bash-load.sh || exit
+#   lk_bin_depth=DEPTH . lk-bash-load.sh || exit
+#   [lk_include LIBRARY...]
 #
 
 ##
@@ -36,7 +37,7 @@ done && pwd -P) || lk_die "symlinks in path are not supported"
 [ -d "$LK_BASE/lib/bash" ] || lk_die "unable to locate LK_BASE"
 export LK_BASE
 
-include= . "$LK_BASE/lib/bash/common.sh"
+. "$LK_BASE/lib/bash/common.sh"
 #
 ##
 
@@ -65,7 +66,7 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
     lk_die "unable to locate LK_BASE"
 export LK_BASE
 
-include= . "$LK_BASE/lib/bash/common.sh"
+. "$LK_BASE/lib/bash/common.sh"
 #
 ##
 

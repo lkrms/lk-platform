@@ -15,19 +15,16 @@ export LK_BASE
 
 shopt -s nullglob
 
-include=arch,git,linux,provision . "$LK_BASE/lib/bash/common.sh"
+. "$LK_BASE/lib/bash/common.sh"
+lk_include arch git linux provision
 
 SH=$(lk_provision_getopt)
 eval "$SH"
 shift "$LK_SHIFT"
 
-! lk_in_chroot || LK_BOOTSTRAP=1
+! lk_in_chroot || _LK_BOOTSTRAP=1
 
-function is_bootstrap() {
-    [ -n "${LK_BOOTSTRAP:-}" ]
-}
-
-if is_bootstrap; then
+if lk_is_bootstrap; then
     function systemctl_enable() {
         [[ $1 == *.* ]] || set -- "$1.service" "${@:2}"
         [ ! -e "/usr/lib/systemd/system/$1" ] &&
@@ -64,13 +61,13 @@ fi
 function service_apply() {
     local i EXIT_STATUS=0
     lk_console_message "Checking services"
-    is_bootstrap || ! lk_is_true DAEMON_RELOAD ||
+    lk_is_bootstrap || ! lk_is_true DAEMON_RELOAD ||
         lk_run_detail sudo systemctl daemon-reload || EXIT_STATUS=$?
     [ ${#SERVICE_ENABLE[@]} -eq 0 ] ||
         for i in $(seq 0 2 $((${#SERVICE_ENABLE[@]} - 1))); do
             systemctl_enable "${SERVICE_ENABLE[@]:$i:2}" || EXIT_STATUS=$?
         done
-    is_bootstrap || [ ${#SERVICE_RESTART[@]} -eq 0 ] || {
+    lk_is_bootstrap || [ ${#SERVICE_RESTART[@]} -eq 0 ] || {
         SERVICE_RESTART=($(comm -23 \
             <(lk_echo_array SERVICE_RESTART | sort -u) \
             <(lk_echo_array SERVICE_STARTED | sort -u))) && {
@@ -160,19 +157,19 @@ if [ -n "$LK_PACKAGES_FILE" ]; then
 fi
 
 lk_log_start
-lk_log_tty_off
+lk_log_tty_stdout_off
 lk_start_trace
 
 {
     lk_console_log "Provisioning Arch Linux"
-    ! is_bootstrap || lk_console_detail "Bootstrap environment detected"
+    ! lk_is_bootstrap || lk_console_detail "Bootstrap environment detected"
     GROUP=$(id -gn)
     MEMORY=$(lk_system_memory 2)
     lk_console_detail "System memory:" "${MEMORY}M"
 
     LK_SUDO=1
-    LK_FILE_TAKE_BACKUP=${LK_FILE_TAKE_BACKUP-$(is_bootstrap || echo 1)}
-    LK_FILE_MOVE_BACKUP=1
+    LK_FILE_BACKUP_TAKE=${LK_FILE_BACKUP_TAKE-$(lk_is_bootstrap || echo 1)}
+    LK_FILE_BACKUP_MOVE=1
 
     EXIT_STATUS=0
     SERVICE_STARTED=()
@@ -181,7 +178,7 @@ lk_start_trace
     DAEMON_RELOAD=
 
     # Try to detect missing settings
-    if ! is_bootstrap; then
+    if ! lk_is_bootstrap; then
         [ -n "${LK_NODE_TIMEZONE:-}" ] || ! _TZ=$(lk_system_timezone) ||
             export LK_NODE_TIMEZONE=$_TZ
         [ -n "${LK_NODE_HOSTNAME:-}" ] || ! _HN=$(lk_hostname) ||
@@ -295,7 +292,7 @@ lk_start_trace
         _FILE=$(lk_echo_array UDEV_RULES)
         lk_install -m 00644 "$FILE"
         lk_file_replace "$FILE" "$_FILE"
-        if ! is_bootstrap &&
+        if ! lk_is_bootstrap &&
             lk_is_false LK_FILE_REPLACE_NO_CHANGE &&
             { ! lk_arch_reboot_required ||
                 lk_warn "reboot required to apply changes"; }; then
@@ -363,7 +360,7 @@ $LK_NODE_HOSTNAME" &&
     lk_is_desktop &&
         DEFAULT_TARGET=graphical.target ||
         DEFAULT_TARGET=multi-user.target
-    CURRENT_DEFAULT_TARGET=$(${LK_BOOTSTRAP:+sudo} systemctl get-default)
+    CURRENT_DEFAULT_TARGET=$(${_LK_BOOTSTRAP:+sudo} systemctl get-default)
     [ "$CURRENT_DEFAULT_TARGET" = "$DEFAULT_TARGET" ] ||
         lk_run_detail sudo systemctl set-default "$DEFAULT_TARGET"
 
@@ -485,7 +482,7 @@ $LK_NODE_HOSTNAME" &&
 
     service_apply
 
-    if ! is_bootstrap && lk_pac_installed grub; then
+    if ! lk_is_bootstrap && lk_pac_installed grub; then
         lk_console_message "Checking boot loader"
         unset LK_FILE_REPLACE_NO_CHANGE
         lk_arch_configure_grub
@@ -493,9 +490,34 @@ $LK_NODE_HOSTNAME" &&
             sudo update-grub --install
     fi
 
+    unset LK_FILE_REPLACE_NO_CHANGE
+    FILE=/etc/mkinitcpio.conf
+    if [ -f "$FILE" ] && lk_node_service_enabled desktop &&
+        lk_system_has_amd_graphics; then
+        lk_tty_print "Checking" "$FILE"
+        if ! grep -Eq '^MODULES=(.*\<amdgpu\>.*)' "$FILE"; then
+            TEMP_FILE=$(lk_mktemp_file)
+            lk_delete_on_exit "$TEMP_FILE"
+            (
+                unset MODULES
+                . "$FILE"
+                MODULES+=(amdgpu)
+                sed -E 's/^(MODULES=\().*(\))/\1'"$(lk_escape_ere_replace \
+                    "$(lk_quote MODULES)")"'\2/' "$FILE"
+            ) >"$TEMP_FILE"
+            lk_file_keep_original "$FILE"
+            lk_file_replace -f "$TEMP_FILE" "$FILE"
+            ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+                sudo mkinitcpio -P
+        fi
+    fi
+
     lk_console_blank
-    lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" --no-log \
+    LK_NO_LOG=1 \
+        lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" \
         ${LK_PACKAGES_FILE:+--set LK_PACKAGES_FILE="$LK_PACKAGES_FILE"}
+    [ ! -f /etc/default/lk-platform ] ||
+        . /etc/default/lk-platform
 
     lk_console_blank
     lk_console_log "Checking packages"
@@ -532,7 +554,7 @@ $LK_NODE_HOSTNAME" &&
         LK_CONF_OPTION_FILE=/etc/pacman.conf
         lk_conf_enable_row -s options "CacheDir = /var/cache/pacman/pkg/"
         lk_conf_enable_row -s options "CacheDir = $DIR/"
-        LK_CONF_DELIM=" = " \
+        _LK_CONF_DELIM=" = " \
             lk_conf_set_option -s options CleanMethod KeepCurrent
 
         if ! lk_command_exists aur ||
@@ -573,7 +595,7 @@ $LK_NODE_HOSTNAME" &&
             PAC_PACKAGES+=(aurutils "${AUR_PACKAGES[@]}")
             AUR_PACKAGES=()
         fi
-        lk_log_tty_off
+        lk_log_tty_stdout_off
     fi
 
     if [ ${#PAC_KEEP[@]} -gt 0 ]; then
@@ -776,7 +798,7 @@ EOF
             lk_php_set_option pm.max_requests 0
             lk_php_set_option request_terminate_timeout 0
         else
-            lk_php_set_option pm.max_children 50
+            lk_php_set_option pm.max_children 30
             lk_php_set_option pm.max_requests 10000
             lk_php_set_option request_terminate_timeout 300
         fi

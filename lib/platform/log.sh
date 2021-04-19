@@ -13,7 +13,7 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
     lk_die "unable to locate LK_BASE"
 export LK_BASE
 
-include= . "$LK_BASE/lib/bash/common.sh"
+. "$LK_BASE/lib/bash/common.sh"
 
 [ $# -gt 0 ] &&
     { lk_command_exists "$1" || lk_warn "command not found: $1"; } ||
@@ -27,4 +27,4 @@ export -n LK_LOG_BASENAME
 _LK_LOG_CMDLINE=("$@")
 lk_log_start
 
-exec "$@"
+"$@"

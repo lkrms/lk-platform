@@ -1,6 +1,7 @@
 #!/bin/bash
 
-lk_bin_depth=1 include=wordpress,provision . lk-bash-load.sh || exit
+lk_bin_depth=1 . lk-bash-load.sh || exit
+lk_include provision wordpress
 
 DEACTIVATE_PLUGINS=(
     #
@@ -60,8 +61,8 @@ if [ -n "$IP" ] && ! lk_node_is_host "$SITE_HOST"; then
     NEW_SITE_ADDR=$(lk_console_read "New site address:" "" \
         -i "http://${SITE_DOMAIN%%.*}.hosting")
     if [ -n "$NEW_SITE_ADDR" ] && [ "$NEW_SITE_ADDR" != "$SITE_ADDR" ]; then
-        LK_WP_QUIET=1 LK_WP_REPLACE=1 LK_WP_REAPPLY=0 LK_WP_FLUSH=0 \
-            LK_WP_REPLACE_COMMAND=wp \
+        _LK_WP_QUIET=1 LK_WP_REPLACE=1 LK_WP_REAPPLY=0 LK_WP_FLUSH=0 \
+            _LK_WP_REPLACE_COMMAND=wp \
             lk_wp_rename_site "$NEW_SITE_ADDR"
         STALE=1
     fi

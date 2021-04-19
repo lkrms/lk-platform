@@ -22,6 +22,10 @@ lk_is_virtual || {
         clinfo
         opencl-nvidia
     )
+    ! lk_system_has_amd_graphics || PAC_PACKAGES+=(
+        clinfo
+        opencl-mesa
+    )
 }
 
 AUR_PACKAGES+=(

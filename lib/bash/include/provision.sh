@@ -45,7 +45,7 @@ function lk_node_expand_services() {
 function lk_provision_getopt() {
     local PREFIX ARGS=() VARS=() SHIFT=0 EXPORT_VAR=_LK_PLATFORM_CONFIGURE_ARGS
     PREFIX=$(_lk_var_prefix)
-    set -- ${LK_ARGV[@]+"${LK_ARGV[@]}"}
+    set -- ${_LK_ARGV[@]+"${_LK_ARGV[@]}"}
     while [[ ${1:-} =~ ^(-s|--set)$ ]]; do
         [[ ${2:-} =~ ^(LK_[a-zA-Z0-9_]*[a-zA-Z0-9])=(.*) ]] ||
             lk_warn "invalid argument: $2" || return
@@ -58,7 +58,7 @@ function lk_provision_getopt() {
     VARS+=("$EXPORT_VAR" "$(lk_quote_args ${ARGS[@]+"${ARGS[@]}"})")
     printf "$PREFIX"'%s=%q\n' "${VARS[@]}"
     printf 'export %s\n' "$EXPORT_VAR"
-    printf "$PREFIX"'%s=(%s)\n' LK_ARGV "$(lk_quote_args "$@")"
+    printf "$PREFIX"'%s=(%s)\n' _LK_ARGV "$(lk_quote_args "$@")"
 } #### Reviewed: 2021-03-27
 
 # lk_symlink_bin TARGET [ALIAS]
@@ -330,7 +330,7 @@ function lk_ssh_get_public_key() {
 function lk_ssh_add_host() {
     local NAME HOST SSH_USER KEY_FILE JUMP_HOST_NAME PORT='' \
         h=${LK_SSH_HOME:-~} SSH_PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX} \
-        LK_FILE_TAKE_BACKUP='' LK_VERBOSE=0 \
+        LK_FILE_BACKUP_TAKE='' LK_VERBOSE=0 \
         KEY JUMP_ARGS JUMP_PORT CONF CONF_FILE TEST=
     [ "${1:-}" != -t ] || { TEST=1 && shift; }
     NAME=$1
@@ -429,9 +429,9 @@ function lk_ssh_is_reachable() {
 function lk_ssh_configure() {
     local JUMP_HOST=${1:-} JUMP_USER=${2:-} JUMP_KEY_FILE=${3:-} \
         SSH_PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX} \
-        LK_FILE_TAKE_BACKUP='' LK_VERBOSE=0 \
+        LK_FILE_BACKUP_TAKE='' LK_VERBOSE=0 \
         KEY PATTERN CONF AWK OWNER GROUP \
-        HOMES=(${LK_HOMES[@]+"${LK_HOMES[@]}"}) h
+        HOMES=(${_LK_HOMES[@]+"${_LK_HOMES[@]}"}) h
     unset KEY
     [ $# -eq 0 ] || [ $# -ge 2 ] || lk_warn "invalid arguments" || return
     [ ${#HOMES[@]} -gt 0 ] || HOMES=(~)
@@ -447,7 +447,7 @@ function lk_ssh_configure() {
     PATTERN=${PATTERN//\\/\\\\}
     CONF="Include ~/.ssh/${SSH_PREFIX}config.d/*"
     AWK=(awk
-        -f "${LK_INST:-$LK_BASE}/lib/awk/update-ssh-config.awk"
+        -f "$LK_BASE/lib/awk/update-ssh-config.awk"
         -v "SSH_PATTERN=$PATTERN"
         -v "SSH_CONFIG=$CONF")
 
@@ -553,7 +553,7 @@ function _lk_node_ip() {
         ifconfig |
             sed -E 's/ (prefixlen |netmask (0xf*[8ce]?0*( |$)))/\/\2/'
     fi | awk \
-        -f "${LK_INST:-$LK_BASE}/lib/awk/parse-ifconfig.awk" \
+        -f "$LK_BASE/lib/awk/parse-ifconfig.awk" \
         -v "ADDRESS_FAMILY=$1" |
         sed -E 's/%[^/]+\//\//') || return
     {
@@ -867,7 +867,7 @@ Usage: ${FUNCNAME[0]} [-w WEBROOT_PATH] DOMAIN... [-- CERTBOT_ARG...]" || return
 # lk_cpanel_get_ssl_cert SSH_HOST DOMAIN [TARGET_DIR]
 function lk_cpanel_get_ssl_cert() {
     local TARGET_DIR=${3:-~/ssl} SSL_JSON CERT KEY \
-        LK_TTY_NO_FOLD=1 LK_FILE_TAKE_BACKUP=1
+        _LK_TTY_NO_FOLD=1 LK_FILE_BACKUP_TAKE=1
     [ $# -ge 2 ] && lk_is_fqdn "$2" || lk_usage "\
 Usage: $(lk_myself -f) SSH_HOST DOMAIN [TARGET_DIR]
 
@@ -1045,7 +1045,7 @@ function lk_conf_set_option() {
     FILE=${3:-$LK_CONF_OPTION_FILE}
     lk_option_set ${SECTION+-s "$SECTION"} \
         "$FILE" \
-        "$1${LK_CONF_DELIM-=}$2" \
+        "$1${_LK_CONF_DELIM-=}$2" \
         "^$S*$OPTION$S*=$S*$VALUE$S*\$" \
         "^$S*$OPTION$S*=.*" "^$S*#$S*$OPTION$S*=.*"
 }

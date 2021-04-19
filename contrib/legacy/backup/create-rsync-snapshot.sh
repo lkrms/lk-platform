@@ -78,15 +78,15 @@ function lk_echo_array() {
 
 function lk_console_message() {
     echo "\
-$LK_BOLD${LK_TTY_COLOUR-$LK_CYAN}${LK_TTY_PREFIX-==> }\
-$LK_RESET${LK_TTY_MESSAGE_COLOUR-$LK_BOLD}\
+$LK_BOLD${_LK_TTY_COLOUR-$LK_CYAN}${_LK_TTY_PREFIX-==> }\
+$LK_RESET${_LK_TTY_MESSAGE_COLOUR-$LK_BOLD}\
 $(sed "1b
-s/^/${LK_TTY_SPACES-  }/" <<<"$1")$LK_RESET" >&2
+s/^/${_LK_TTY_SPACES-  }/" <<<"$1")$LK_RESET" >&2
 }
 
 function lk_console_item() {
     lk_console_message "\
-$1$LK_RESET${LK_TTY_COLOUR2-${LK_TTY_COLOUR-$LK_CYAN}}$(
+$1$LK_RESET${_LK_TTY_COLOUR2-${_LK_TTY_COLOUR-$LK_CYAN}}$(
         [ "${2/$'\n'/}" = "$2" ] &&
             echo " $2" ||
             echo $'\n'"${2#$'\n'}"
@@ -94,8 +94,8 @@ $1$LK_RESET${LK_TTY_COLOUR2-${LK_TTY_COLOUR-$LK_CYAN}}$(
 }
 
 function lk_console_detail() {
-    local LK_TTY_PREFIX="   -> " LK_TTY_SPACES="    " \
-        LK_TTY_COLOUR=$LK_YELLOW LK_TTY_MESSAGE_COLOUR=
+    local _LK_TTY_PREFIX="   -> " _LK_TTY_SPACES="    " \
+        _LK_TTY_COLOUR=$LK_YELLOW _LK_TTY_MESSAGE_COLOUR=
     [ $# -le 1 ] &&
         lk_console_message "$1" ||
         lk_console_item "$1" "$2"
@@ -107,26 +107,26 @@ function lk_console_detail_list() {
 }
 
 function lk_console_log() {
-    local LK_TTY_PREFIX=" :: " LK_TTY_SPACES="    " \
-        LK_TTY_COLOUR2=${LK_TTY_COLOUR2-$LK_BOLD}
+    local _LK_TTY_PREFIX=" :: " _LK_TTY_SPACES="    " \
+        _LK_TTY_COLOUR2=${_LK_TTY_COLOUR2-$LK_BOLD}
     [ $# -le 1 ] &&
-        lk_console_message "${LK_TTY_COLOUR-$LK_CYAN}$1" ||
-        lk_console_item "${LK_TTY_COLOUR-$LK_CYAN}$1" "$2"
+        lk_console_message "${_LK_TTY_COLOUR-$LK_CYAN}$1" ||
+        lk_console_item "${_LK_TTY_COLOUR-$LK_CYAN}$1" "$2"
 }
 
 function lk_console_success() {
-    LK_TTY_COLOUR=$LK_GREEN lk_console_log "$@"
+    _LK_TTY_COLOUR=$LK_GREEN lk_console_log "$@"
 }
 
 function lk_console_warning() {
     local EXIT_STATUS=$?
-    LK_TTY_COLOUR=$LK_YELLOW lk_console_log "$@"
+    _LK_TTY_COLOUR=$LK_YELLOW lk_console_log "$@"
     return "$EXIT_STATUS"
 }
 
 function lk_console_error() {
     local EXIT_STATUS=$?
-    LK_TTY_COLOUR=$LK_RED lk_console_log "$@"
+    _LK_TTY_COLOUR=$LK_RED lk_console_log "$@"
     return "$EXIT_STATUS"
 }
 
@@ -227,8 +227,7 @@ function lk_mail_get_mime() {
     TEXT_PART_TYPE=(${_LK_MAIL_TEXT:+"text/plain"}
         ${_LK_MAIL_HTML:+"text/html"})
     lk_echo_array TEXT_PART |
-        LC_ALL=C \
-            grep -v "^[[:alnum:][:space:][:punct:][:cntrl:]]*\$" >/dev/null || {
+        grep -v "^[[:alnum:][:space:][:punct:][:cntrl:]]*\$" >/dev/null || {
         ENCODING=7bit
         CHARSET=us-ascii
     }
@@ -299,7 +298,7 @@ LK_RESET=$'\E[0m'
 
 function exit_trap() {
     local EXIT_STATUS=$? MESSAGE TAR SUBJECT
-    exec 4>&- &&
+    exec 8>&- &&
         rm -Rf "${FIFO_FILE%/*}" || true
     [ -z "${LOCK_FILE:-}" ] || {
         exec 9>&- &&
@@ -364,7 +363,7 @@ $(printf '%q' "$0" && { [ ${#ARGS[@]} -eq 0 ] || printf ' \\\n    %q' "${ARGS[@]
 
 Output:
 
-$(LC_ALL=C sed \
+$(sed \
             -e $'s/\x01[^\x02]*\x02//g' \
             -e $'s/\x1b\\\x5b[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]//g' \
             -e $'s/\x1b[\x20-\x2f]*[\x30-\x7e]//g' \
@@ -399,11 +398,11 @@ function run_custom_hook() {
             (
                 EXIT_STATUS=0
                 . "$SOURCE_SCRIPT" || EXIT_STATUS=$?
-                echo "# ." >&4
+                echo "# ." >&8
                 exit "$EXIT_STATUS"
             ) &
             LINES=()
-            while IFS= read -ru 4 LINE && [ "$LINE" != "# ." ]; do
+            while IFS= read -ru 8 LINE && [ "$LINE" != "# ." ]; do
                 LINES[$((i++))]=$LINE
             done
             wait "$!" ||
@@ -411,7 +410,7 @@ function run_custom_hook() {
             [ ${#LINES[@]} -eq 0 ] || {
                 SH=$(lk_echo_array LINES)
                 eval "$SH" ||
-                    LK_TTY_COLOUR2='' lk_console_error "\
+                    _LK_TTY_COLOUR2='' lk_console_error "\
 Shell commands emitted by hook script failed (exit status $?):" $'\n'"$SH" ||
                     lk_die ""
             }
@@ -526,9 +525,9 @@ BACKUP_ROOT=$(lk_realpath "$BACKUP_ROOT")
 TMPDIR=${TMPDIR:-/tmp}
 FIFO_FILE=$(mktemp -d -- "${TMPDIR%/}/${0##*/}.XXXXXXXXXX")/fifo
 mkfifo "$FIFO_FILE"
-exec 4<>"$FIFO_FILE"
+exec 8<>"$FIFO_FILE"
 
-export TZ=UTC
+export LC_ALL=C TZ=UTC
 USER=${USER:-$(id -un)}
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
 HN=$(hostname -s) || HN=localhost

@@ -6,7 +6,8 @@
 # the following can be used to set LK_BASE and load Bash libraries, where DEPTH
 # is the number of directories between LK_BASE and the script:
 #
-#     lk_bin_depth=DEPTH [include=LIBRARY...] . lk-bash-load.sh || exit
+#     lk_bin_depth=DEPTH . lk-bash-load.sh || exit
+#     [lk_include LIBRARY...]
 #
 # If lk_bin_depth is set, LK_BASE will be determined from the invoking script's
 # pathname, regardless of lk-bash-load.sh's location.
@@ -17,7 +18,8 @@
 # whenever the script is invoked (via symlink if needed), this is a convenient
 # method for using lk-platform's Bash functions elsewhere:
 #
-#     [include=LIBRARY...] . lk-bash-load.sh || exit
+#     . lk-bash-load.sh || exit
+#     [lk_include LIBRARY...]
 #
 
 set -euo pipefail
@@ -43,7 +45,6 @@ function _lk_bash_load() {
     export LK_BASE
 }
 
-export -n BASH_XTRACEFD SHELLOPTS
 [ -n "${_LK_ENV+1}" ] || _LK_ENV=$(declare -x)
 
 _lk_bash_load &&

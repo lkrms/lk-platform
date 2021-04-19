@@ -1,16 +1,14 @@
 #!/bin/sh
 
-lk_double_quote() {
-    set -- "$(echo "$1." | sed -Ee 's/\\/\\\\/g' -e 's/[$`"]/\\&/g')"
-    echo "\"${1%.}\""
+double_quote() {
+    echo "$1" | sed -Ee 's/[$`\"]/\\&/g' -e 's/^.*$/"&"/'
 }
 
-lk_esc_ere() {
-    set -- "$(echo "$1," | sed -Ee 's/\\/\\\\/g' -e 's/[]$()*+./?[^{|}]/\\&/g')"
-    printf '%s' "${1%,}"
+escape_ere() {
+    echo "$1" | sed -E 's/[]$()*+./?[\^{|}]/\\&/g'
 }
 
-lk_in_path() {
+in_path() {
     case ":$PATH:" in
     *:$1:*)
         return
@@ -21,18 +19,18 @@ lk_in_path() {
     esac
 }
 
-lk_path_add() {
-    if ! lk_in_path "$1" && [ -d "$1" ]; then
+path_add() {
+    if ! in_path "$1" && [ -d "$1" ]; then
         echo "$PATH:$1" | sed -Ee 's/:+/:/g' -e 's/(^:|:$)//g'
     else
         echo "$PATH"
     fi
 }
 
-lk_path_add_to_front() {
+path_add_to_front() {
     if [ -d "$1" ]; then
         echo "$1:$(echo "$PATH" |
-            sed -Ee "s/(:|^)$(lk_esc_ere "$1")(:|$)/\\1\\2/g" \
+            sed -Ee "s/(:|^)$(escape_ere "$1")(:|$)/\\1\\2/g" \
                 -e 's/:+/:/g' -e 's/(^:|:$)//g')"
     else
         echo "$PATH"
@@ -40,12 +38,14 @@ lk_path_add_to_front() {
 }
 
 OLD_PATH=$PATH
-PATH=$(lk_path_add_to_front /usr/local/bin)
-PATH=$(lk_path_add_to_front /opt/homebrew/bin)
+PATH=$(path_add_to_front /usr/local/bin)
+# shellcheck disable=SC2039
+[ /opt/homebrew/bin -ef /usr/local/bin ] ||
+    PATH=$(path_add_to_front /opt/homebrew/bin)
 
 ! type brew >/dev/null 2>&1 ||
     ! BREW_SH=$(brew shellenv 2>/dev/null |
-        grep -E 'HOMEBREW_(PREFIX|CELLAR|REPOSITORY)=') || {
+        grep -E '\<HOMEBREW_(PREFIX|CELLAR|REPOSITORY)=') || {
     eval "$BREW_SH"
     cat <<EOF
 $BREW_SH
@@ -54,33 +54,28 @@ export HOMEBREW_NO_AUTO_UPDATE=1
 export HOMEBREW_NO_INSTALL_CLEANUP=1
 export HOMEBREW_CASK_OPTS=--no-quarantine
 EOF
-    PATH=${MANPATH:-} lk_in_path "$HOMEBREW_PREFIX/share/man" ||
+    PATH=${MANPATH:-} in_path "$HOMEBREW_PREFIX/share/man" ||
         echo 'export MANPATH="$HOMEBREW_PREFIX/share/man${MANPATH+:$MANPATH}:"'
-    PATH=${INFOPATH:-} lk_in_path "$HOMEBREW_PREFIX/share/info" ||
+    PATH=${INFOPATH:-} in_path "$HOMEBREW_PREFIX/share/info" ||
         echo 'export INFOPATH="$HOMEBREW_PREFIX/share/info:${INFOPATH:-}"'
 }
 
-ADD_TO_PATH=${LK_ADD_TO_PATH:+$LK_ADD_TO_PATH:}${LK_INST:-$LK_BASE}/bin
-ADD_TO_PATH_FIRST="\
-${HOME:+$HOME/.local/bin:}\
-${HOMEBREW_PREFIX:+$HOMEBREW_PREFIX/bin:$HOMEBREW_PREFIX/sbin:}\
-${LK_ADD_TO_PATH_FIRST:+$LK_ADD_TO_PATH_FIRST:}"
 IFS=':'
-for DIR in $ADD_TO_PATH; do
-    PATH=$(lk_path_add "$DIR")
+for DIR in ${LK_ADD_TO_PATH:+$LK_ADD_TO_PATH} ${_LK_INST:-$LK_BASE}/bin; do
+    PATH=$(path_add "$DIR")
 done
-for DIR in $ADD_TO_PATH_FIRST; do
-    PATH=$(lk_path_add_to_front "$DIR")
+for DIR in ${HOME:+$HOME/.local/bin} \
+    ${HOMEBREW_PREFIX:+$HOMEBREW_PREFIX/bin:$HOMEBREW_PREFIX/sbin} \
+    ${LK_ADD_TO_PATH_FIRST:+$LK_ADD_TO_PATH_FIRST}; do
+    PATH=$(path_add_to_front "$DIR")
 done
-unset IFS
 [ "$PATH" = "$OLD_PATH" ] || {
-    echo "export PATH=$(lk_double_quote "$PATH")"
+    echo "export PATH=$(double_quote "$PATH")"
 }
-UNSET="\
-${LK_ADD_TO_PATH+ LK_ADD_TO_PATH}\
+UNSET="${LK_ADD_TO_PATH+ LK_ADD_TO_PATH}\
 ${LK_ADD_TO_PATH_FIRST+ LK_ADD_TO_PATH_FIRST}"
 cat <<EOF
 ${UNSET:+unset$UNSET
 }export SUDO_PROMPT="[sudo] password for %p: "
-export WP_CLI_CONFIG_PATH=\${LK_INST:-\$LK_BASE}/share/wp-cli/config.yml
+export WP_CLI_CONFIG_PATH=\${_LK_INST:-\$LK_BASE}/share/wp-cli/config.yml
 EOF

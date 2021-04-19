@@ -96,10 +96,10 @@ function exit_trap() {
     eval "$SH"
     shift "$LK_SHIFT"
 
-    LK_FILE_TAKE_BACKUP=${LK_FILE_TAKE_BACKUP-1}
+    LK_FILE_BACKUP_TAKE=${LK_FILE_BACKUP_TAKE-1}
 
     lk_log_start ~/"${LK_PATH_PREFIX}install.log"
-    trap exit_trap EXIT
+    lk_trap_add EXIT exit_trap
 
     lk_console_log "Provisioning macOS"
 
@@ -375,18 +375,22 @@ EOF
     lk_macos_defaults_maybe_write 3 com.apple.Spotlight useCount -int 3
 
     # source ~/.bashrc in ~/.bash_profile, creating both files if necessary
-    [ -f ~/.bashrc ] ||
+    [ -s ~/.bashrc ] ||
         echo "# ~/.bashrc for interactive bash shells" >~/.bashrc
-    [ -f ~/.bash_profile ] ||
+    [ -s ~/.bash_profile ] ||
         echo "# ~/.bash_profile for bash login shells" >~/.bash_profile
     if ! grep -q "\.bashrc" ~/.bash_profile; then
-        lk_file_add_newline ~/.bash_profile
-        echo "[ ! -f ~/.bashrc ] || . ~/.bashrc" >>~/.bash_profile
+        _FILE=$(<~/.bash_profile)
+        lk_file_replace ~/.bash_profile "$(echo "$_FILE" &&
+            echo "[ ! -f ~/.bashrc ] || . ~/.bashrc")"
     fi
 
     lk_console_blank
-    LK_SUDO=1 lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" --no-log \
+    LK_NO_LOG=1 LK_SUDO=1 \
+        lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" \
         ${LK_PACKAGES_FILE:+--set LK_PACKAGES_FILE="$LK_PACKAGES_FILE"}
+    [ ! -f /etc/default/lk-platform ] ||
+        . /etc/default/lk-platform
 
     lk_console_blank
     lk_console_message "Checking Homebrew packages"
@@ -488,7 +492,7 @@ def is_native:
                 "$FORMULA_DESC"
             )
         done
-        if INSTALL_FORMULAE=($(lk_log_bypass_stderr lk_whiptail_checklist \
+        if INSTALL_FORMULAE=($(lk_whiptail_checklist \
             "Installing new formulae" \
             "Selected Homebrew formulae will be installed:" \
             "${FORMULAE[@]}")) && [ ${#INSTALL_FORMULAE[@]} -gt 0 ]; then
@@ -517,7 +521,7 @@ def is_native:
                 "$CASK_DESC"
             )
         done
-        INSTALL_CASKS=($(lk_log_bypass_stderr lk_whiptail_checklist \
+        INSTALL_CASKS=($(lk_whiptail_checklist \
             "Installing new casks" \
             "Selected Homebrew casks will be installed:" \
             "${CASKS[@]}")) && [ ${#INSTALL_CASKS[@]} -gt 0 ] ||
@@ -585,7 +589,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
             done
             if [ ${#INSTALL_APPS[@]} -gt 0 ]; then
                 APP_IDS=("${INSTALL_APPS[@]}")
-                if INSTALL_APPS=($(lk_log_bypass_stderr lk_whiptail_checklist \
+                if INSTALL_APPS=($(lk_whiptail_checklist \
                     "Installing new apps" \
                     "Selected apps will be installed from the Mac App Store:" \
                     "${APPS[@]}")) && [ ${#INSTALL_APPS[@]} -gt 0 ]; then

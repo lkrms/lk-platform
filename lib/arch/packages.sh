@@ -66,6 +66,7 @@ PAC_PACKAGES=(
     htop
     lsof
     ncdu
+    nmon
     pcp
     ps_mem
     sysstat
@@ -74,6 +75,7 @@ PAC_PACKAGES=(
     bind # dig
     curl
     inetutils # hostname, telnet
+    iptables-nft
     lftp
     lynx
     ndisc6 # rdisc6 (IPv6 router discovery)
@@ -144,7 +146,6 @@ if lk_node_service_enabled libvirt; then
     PAC_PACKAGES+=(
         libvirt
         qemu
-        iptables-nft
         dnsmasq
         edk2-ovmf
         libguestfs
@@ -277,6 +278,7 @@ else
         linux-firmware
 
         #
+        cpupower
         hddtemp
         lm_sensors
         powertop
@@ -316,16 +318,21 @@ else
         )
     fi
 
-    grep -Eq "^vendor_id[[:blank:]:]+GenuineIntel$" /proc/cpuinfo &&
-        PAC_PACKAGES+=(intel-ucode) ||
-        ! grep -Eq "^vendor_id[[:blank:]:]+AuthenticAMD$" /proc/cpuinfo ||
+    if grep -Eq '\<GenuineIntel\>' /proc/cpuinfo; then
+        PAC_PACKAGES+=(intel-ucode)
+    elif grep -Eq '\<AuthenticAMD\>' /proc/cpuinfo; then
         PAC_PACKAGES+=(amd-ucode)
+        ! grep -Eq '\<Ryzen\>' /proc/cpuinfo ||
+            AUR_PACKAGES+=(ryzenadj-git)
+    fi
     ! grep -iq "^ThinkPad" /sys/class/dmi/id/product_family ||
         PAC_PACKAGES+=(tpacpi-bat)
     ! lk_system_has_intel_graphics ||
         PAC_PACKAGES+=(intel-media-driver libva-intel-driver)
     ! lk_system_has_nvidia_graphics ||
         PAC_PACKAGES+=(nvidia nvidia-utils)
+    ! lk_system_has_amd_graphics ||
+        PAC_PACKAGES+=(xf86-video-amdgpu libva-mesa-driver mesa-vdpau)
 fi
 
 ####

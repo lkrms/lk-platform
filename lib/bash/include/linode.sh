@@ -73,7 +73,7 @@ function lk_linode_ssh_add() {
         eval "LABEL=${1:-}"
         LABEL=${LABEL:-${LINODE_LABEL%%.*}}
         eval "USERNAME=${2:-}"
-        LK_TTY_NO_FOLD=1 \
+        _LK_TTY_NO_FOLD=1 \
             lk_console_detail "Adding SSH host:" \
             $'\n'"${LK_SSH_PREFIX-$LK_PATH_PREFIX}$LABEL ($(lk_implode_args \
                 " + " \
@@ -284,7 +284,7 @@ function lk_linode_hosting_get_stackscript() {
 
 # lk_linode_hosting_update_stackscript [REPO [REF [LINODE_ARG...]]]
 function lk_linode_hosting_update_stackscript() {
-    local REPO=${1:-${LK_INST:-$LK_BASE}} REF=${2:-HEAD} HASH BASED_ON \
+    local REPO=${1:-$LK_BASE} REF=${2:-HEAD} HASH BASED_ON \
         SCRIPT STACKSCRIPT ARGS MESSAGE OUTPUT
     cd "$REPO" || return
     HASH=$(git rev-parse --verify "$REF") &&
@@ -468,7 +468,7 @@ Usage: $(lk_myself -f) DIR HOST..." || return
                 bash \
                 "/opt/${PREFIX}platform")") ||
                 [ -z "$COMMIT" ] || {
-                awk -f "${LK_INST:-$LK_BASE}/lib/awk/patch-hosting-script.awk" \
+                awk -f "$LK_BASE/lib/awk/patch-hosting-script.awk" \
                     -v commit="$COMMIT" <"$FILE" >"$FILE-patched" &&
                     touch -r "$FILE" "$FILE-patched" || return
             }
@@ -501,7 +501,7 @@ Usage: $(lk_myself -f) DIR HOST..." || return
             FILE=$_DIR/${FILE//"$s"/__}
             scp -p "$SSH_HOST:$_FILE" "$FILE" || return
         done
-        awk -f "${LK_INST:-$LK_BASE}/lib/awk/get-install-env.awk" \
+        awk -f "$LK_BASE/lib/awk/get-install-env.awk" \
             "$_DIR/install.log-$HOST" |
             sed -E \
                 -e '/^(DEBCONF_NONINTERACTIVE_SEEN|DEBIAN_FRONTEND|HOME|LINODE_.*|PATH|PWD|SHLVL|TERM|_)=/d' \

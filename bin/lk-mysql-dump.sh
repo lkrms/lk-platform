@@ -1,6 +1,7 @@
 #!/bin/bash
 
-lk_bin_depth=1 include=mysql . lk-bash-load.sh || exit
+lk_bin_depth=1 . lk-bash-load.sh || exit
+lk_include mysql
 
 DB_NAME=
 DB_USER=
@@ -88,8 +89,8 @@ lk_is_true ALL || {
 
 EXIT_STATUS=0
 
-LK_MYSQL_QUIET=1
-LK_TTY_NO_FOLD=1
+_LK_MYSQL_QUIET=1
+_LK_TTY_NO_FOLD=1
 
 lk_log_start
 lk_start_trace
@@ -145,10 +146,8 @@ lk_echo_array DB_INCLUDE |
 
 lk_confirm "Proceed?" Y || lk_die ""
 
-LOCK_FILE=/tmp/${0##*/}-${DEST//\//_}.lock
-LOCK_FD=$(lk_fd_next)
-eval "exec $LOCK_FD>\"\$LOCK_FILE\""
-flock -n "$LOCK_FD" || lk_die "unable to acquire a lock on $LOCK_FILE"
+LOCK_NAME=${0##*/}-${DEST//\//_}
+lk_lock LOCK_FILE LOCK_FD "$LOCK_NAME"
 
 DEST_MODE=00600
 [ -z "$DEST_GROUP" ] ||
@@ -176,8 +175,5 @@ for DB_NAME in "${DB_INCLUDE[@]}"; do
         lk_console_error "Database dump failed (exit status $EXIT_STATUS)"
     fi
 done
-
-eval "exec $LOCK_FD>&-"
-rm -f "$LOCK_FILE"
 
 (exit "$EXIT_STATUS") || lk_die ""

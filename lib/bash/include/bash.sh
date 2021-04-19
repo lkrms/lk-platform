@@ -63,8 +63,7 @@ function lk_bash_find_scripts() {
 # - MISSING_COMMANDS
 # - PACKAGES
 function lk_bash_audit() {
-    local LC_ALL=C IFS=$'\n' FILE SCRIPT FUNCTIONS COMMAND _PATH
-    export LC_ALL
+    local IFS=$'\n' FILE SCRIPT FUNCTIONS COMMAND _PATH
     [ "${1:-}" != -g ] &&
         { local COMMANDS COMMAND_FILES MISSING_COMMANDS PACKAGES; } || shift
     lk_paths_exist "$@" || lk_usage "\

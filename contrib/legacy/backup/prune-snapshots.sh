@@ -72,15 +72,15 @@ function lk_echo_array() {
 
 function lk_console_message() {
     echo "\
-$LK_BOLD${LK_TTY_COLOUR-$LK_CYAN}${LK_TTY_PREFIX-==> }\
-$LK_RESET${LK_TTY_MESSAGE_COLOUR-$LK_BOLD}\
+$LK_BOLD${_LK_TTY_COLOUR-$LK_CYAN}${_LK_TTY_PREFIX-==> }\
+$LK_RESET${_LK_TTY_MESSAGE_COLOUR-$LK_BOLD}\
 $(sed "1b
-s/^/${LK_TTY_SPACES-  }/" <<<"$1")$LK_RESET" >&2
+s/^/${_LK_TTY_SPACES-  }/" <<<"$1")$LK_RESET" >&2
 }
 
 function lk_console_item() {
     lk_console_message "\
-$1$LK_RESET${LK_TTY_COLOUR2-${LK_TTY_COLOUR-$LK_CYAN}}$(
+$1$LK_RESET${_LK_TTY_COLOUR2-${_LK_TTY_COLOUR-$LK_CYAN}}$(
         [ "${2/$'\n'/}" = "$2" ] &&
             echo " $2" ||
             echo $'\n'"${2#$'\n'}"
@@ -88,8 +88,8 @@ $1$LK_RESET${LK_TTY_COLOUR2-${LK_TTY_COLOUR-$LK_CYAN}}$(
 }
 
 function lk_console_detail() {
-    local LK_TTY_PREFIX="   -> " LK_TTY_SPACES="    " \
-        LK_TTY_COLOUR=$LK_YELLOW LK_TTY_MESSAGE_COLOUR=
+    local _LK_TTY_PREFIX="   -> " _LK_TTY_SPACES="    " \
+        _LK_TTY_COLOUR=$LK_YELLOW _LK_TTY_MESSAGE_COLOUR=
     [ $# -le 1 ] &&
         lk_console_message "$1" ||
         lk_console_item "$1" "$2"
@@ -101,26 +101,26 @@ function lk_console_detail_list() {
 }
 
 function lk_console_log() {
-    local LK_TTY_PREFIX=" :: " LK_TTY_SPACES="    " \
-        LK_TTY_COLOUR2=${LK_TTY_COLOUR2-$LK_BOLD}
+    local _LK_TTY_PREFIX=" :: " _LK_TTY_SPACES="    " \
+        _LK_TTY_COLOUR2=${_LK_TTY_COLOUR2-$LK_BOLD}
     [ $# -le 1 ] &&
-        lk_console_message "${LK_TTY_COLOUR-$LK_CYAN}$1" ||
-        lk_console_item "${LK_TTY_COLOUR-$LK_CYAN}$1" "$2"
+        lk_console_message "${_LK_TTY_COLOUR-$LK_CYAN}$1" ||
+        lk_console_item "${_LK_TTY_COLOUR-$LK_CYAN}$1" "$2"
 }
 
 function lk_console_success() {
-    LK_TTY_COLOUR=$LK_GREEN lk_console_log "$@"
+    _LK_TTY_COLOUR=$LK_GREEN lk_console_log "$@"
 }
 
 function lk_console_warning() {
     local EXIT_STATUS=$?
-    LK_TTY_COLOUR=$LK_YELLOW lk_console_log "$@"
+    _LK_TTY_COLOUR=$LK_YELLOW lk_console_log "$@"
     return "$EXIT_STATUS"
 }
 
 function lk_console_error() {
     local EXIT_STATUS=$?
-    LK_TTY_COLOUR=$LK_RED lk_console_log "$@"
+    _LK_TTY_COLOUR=$LK_RED lk_console_log "$@"
     return "$EXIT_STATUS"
 }
 
@@ -235,7 +235,7 @@ BACKUP_ROOT=$(lk_realpath "$BACKUP_ROOT")
         flock -n 9 || lk_die "unable to acquire a lock on $LOCK_FILE"
 }
 
-export TZ=UTC
+export LC_ALL=C TZ=UTC
 HN=$(hostname -s) || HN=localhost
 FQDN=$(hostname -f) || FQDN=$HN.localdomain
 _2="[0-9][0-9]"

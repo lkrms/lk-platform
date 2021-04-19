@@ -9,7 +9,7 @@ function lk_wp() {
 }
 
 function lk_wp_is_quiet() {
-    [ -n "${LK_WP_QUIET:-}" ]
+    [ -n "${_LK_WP_QUIET:-}" ]
 }
 
 function lk_wp_get_site_root() {
@@ -48,7 +48,7 @@ function _lk_wp_replace() {
     )
     SKIP_TABLES=("${SKIP_TABLES[@]/#/$TABLE_PREFIX}")
     lk_console_detail "Replacing:" "$1 -> $2"
-    "${LK_WP_REPLACE_COMMAND:-lk_wp}" search-replace "$1" "$2" --no-report \
+    "${_LK_WP_REPLACE_COMMAND:-lk_wp}" search-replace "$1" "$2" --no-report \
         --all-tables-with-prefix \
         --skip-tables="$(lk_implode "," SKIP_TABLES)" \
         --skip-columns="guid"
@@ -346,7 +346,7 @@ ${LOCAL_DB_USER:+1}${LOCAL_DB_PASSWORD:+1}" = 111 ]; then
 
 # lk_wp_db_restore_local SQL_PATH [DB_NAME [DB_USER]]
 function lk_wp_db_restore_local() {
-    local SITE_ROOT SH SQL _SQL COMMAND \
+    local SITE_ROOT SH SQL _SQL SUDO=1 \
         LOCAL_DB_NAME LOCAL_DB_USER LOCAL_DB_PASSWORD LOCAL_DB_HOST
     [ -f "$1" ] || lk_usage "\
 Usage: $(lk_myself -f) SQL_PATH [DB_NAME [DB_USER]]" || return
@@ -376,13 +376,12 @@ Usage: $(lk_myself -f) SQL_PATH [DB_NAME [DB_USER]]" || return
 All data in local database '$LOCAL_DB_NAME' will be permanently destroyed.
 Proceed?" Y || return
     [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] || {
-        COMMAND=(LK_SUDO=1
-            lk_maybe_trace "${LK_INST:-$LK_BASE}/bin/lk-mysql-grant.sh"
-            "$LOCAL_DB_NAME" "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD")
         [[ $USER =~ ^[-a-zA-Z0-9_]+$ ]] &&
             [[ $LOCAL_DB_NAME =~ ^$USER(_[-a-zA-Z0-9_]*)?$ ]] ||
-            unset "COMMAND[0]"
-        eval "$(lk_quote_args "${COMMAND[@]}")" || return
+            unset SUDO
+        ${SUDO+LK_SUDO=1} \
+            lk_maybe_trace "$LK_BASE/bin/lk-mysql-grant.sh" \
+            "$LOCAL_DB_NAME" "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD" || return
     }
     lk_console_message "Restoring WordPress database to local system"
     lk_console_detail "Checking wp-config.php"
@@ -563,9 +562,9 @@ function lk_wp_set_permissions() {
     fi
     lk_dir_set_modes "$SITE_ROOT" \
         "" \
-        "${LK_DIR_MODE:-0750}" "${LK_FILE_MODE:-0640}" \
+        "${LK_WP_MODE_DIR:-0750}" "${LK_WP_MODE_FILE:-0640}" \
         ".*/wp-content/(cache|uploads|w3tc-config)" \
-        "${LK_WRITABLE_DIR_MODE:-2770}" "${LK_WRITABLE_FILE_MODE:-0660}" \
+        "${LK_WP_MODE_WRITABLE_DIR:-2770}" "${LK_WP_MODE_WRITABLE_FILE:-0660}" \
         ".*/\\.git/objects/([0-9a-f]{2}|pack)/.*" \
         0555 0444
 }

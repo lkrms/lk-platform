@@ -1,21 +1,21 @@
 # lk-platform
-Scripts and configuration files for servers and desktops
+Provisioning and automation for servers and desktops
 
-## Settings (subject to change)
+## Configuration
+Settings are loaded in the following order (later values override earlier ones):
+1. `/etc/default/lk-platform`
+2. `~/.${LK_PATH_PREFIX}settings`, e.g. `~/.lk-settings`
+3. Environment variables
 
-The following variables can be set in `/etc/default/lk-platform` or
-`~/.${LK_PATH_PREFIX}settings` to override defaults.
-
+### Settings
 - `LK_ACCEPT_OUTPUT_HOSTS`
 - `LK_ADD_TO_PATH`
 - `LK_ADD_TO_PATH_FIRST`
 - `LK_ADMIN_EMAIL`
-- `LK_APT_REMOVE_COMMAND`
-- `LK_APT_REMOVE_MESSAGE`
+- `LK_APT_DEFAULT_MIRROR`
+- `LK_APT_DEFAULT_SECURITY_MIRROR`
 - `LK_ARCH_MIRROR`
 - `LK_ARCH_REPOS`
-- `LK_ARGV`
-- `LK_ARG_ARRAY`
 - `LK_AUTO_BACKUP`
 - `LK_AUTO_BACKUP_SCHEDULE`
 - `LK_AUTO_REBOOT`
@@ -26,42 +26,36 @@ The following variables can be set in `/etc/default/lk-platform` or
 - `LK_BACKUP_MAIL_FROM`
 - `LK_BACKUP_ROOT`
 - `LK_BACKUP_TIMESTAMP`
-- `LK_BASE`
 - `LK_BIN_PATH`
-- `LK_BOOTSTRAP`
+- `LK_BRIDGE_INTERFACE`
 - `LK_CERTBOT_OPTIONS`
 - `LK_CERTBOT_PLUGIN`
-- `LK_CHECKLIST_DEFAULT`
 - `LK_CLIP_LINES`
 - `LK_COMPLETION`
-- `LK_DEBUG`
+- `LK_CURL_OPTIONS`
 - `LK_DEFAULTS_DIR`
 - `LK_DIG_OPTIONS`
 - `LK_DIG_SERVER`
 - `LK_DIM`
 - `LK_DIM_AFTER`
 - `LK_DIM_TIME`
-- `LK_DIR_MODE`
 - `LK_DRY_RUN`
 - `LK_EMAIL_BLACKHOLE`
-- `LK_ESCAPE`
-- `LK_FILE_MODE`
-- `LK_FILE_MOVE_BACKUP`
+- `LK_FILE_BACKUP_MOVE`
+- `LK_FILE_BACKUP_TAKE`
 - `LK_FILE_NO_DIFF`
-- `LK_FILE_REPLACE_NO_CHANGE`
-- `LK_FILE_TAKE_BACKUP`
 - `LK_FORCE_INPUT`
-- `LK_GIT_QUIET`
+- `LK_GIT_ENV`
 - `LK_GIT_REF`
 - `LK_GIT_REPOS`
 - `LK_GIT_USER`
 - `LK_GRUB_CMDLINE`
-- `LK_HOMES`
-- `LK_HOST_ACCOUNT`
-- `LK_HOST_DOMAIN`
-- `LK_HOST_SITE_ENABLE`
 - `LK_INNODB_BUFFER_SIZE`
-- `LK_INST`
+- `LK_IPTABLES_46`
+- `LK_IPV4_ADDRESS`
+- `LK_IPV4_DNS_SEARCH`
+- `LK_IPV4_DNS_SERVER`
+- `LK_IPV4_GATEWAY`
 - `LK_IP_KEEP_PREFIX`
 - `LK_IP_PUBLIC_ONLY`
 - `LK_KEEP_TRYING_MAX`
@@ -71,8 +65,6 @@ The following variables can be set in `/etc/default/lk-platform` or
 - `LK_LINODE_SSH_KEYS`
 - `LK_LINODE_SSH_KEYS_FILE`
 - `LK_LOG_BASENAME`
-- `LK_LOG_DIR_MODE`
-- `LK_LOG_FILE_MODE`
 - `LK_MAIL_FROM`
 - `LK_MEDIAINFO_FORMAT`
 - `LK_MEDIAINFO_LABEL`
@@ -82,14 +74,10 @@ The following variables can be set in `/etc/default/lk-platform` or
 - `LK_MYSQL_ELEVATE`
 - `LK_MYSQL_ELEVATE_USER`
 - `LK_MYSQL_HOST`
-- `LK_MYSQL_PASSWORD`
-- `LK_MYSQL_QUIET`
-- `LK_MYSQL_USERNAME`
 - `LK_MY_CNF`
 - `LK_MY_CNF_OPTIONS`
 - `LK_NODE_FQDN`
 - `LK_NODE_HOSTNAME`
-- `LK_NODE_IPV4_ADDRESS`
 - `LK_NODE_LANGUAGE`
 - `LK_NODE_LOCALES`
 - `LK_NODE_PACKAGES`
@@ -109,16 +97,13 @@ The following variables can be set in `/etc/default/lk-platform` or
 - `LK_PLATFORM_BRANCH`
 - `LK_PROMPT`
 - `LK_PROMPT_DISPLAYED`
-- `LK_PROMPT_LAST_COMMAND`
 - `LK_PROMPT_LAST_COMMAND_CLEAN`
 - `LK_RED`
 - `LK_REJECT_OUTPUT`
 - `LK_REQUIRED`
-- `LK_RSYNC_ARGS`
 - `LK_SCRIPT_DEBUG`
 - `LK_SECONDARY_LOG_FILE`
-- `LK_SETTINGS_FILES`
-- `LK_SKIP`
+- `LK_SHUTDOWN_DELAY`
 - `LK_SMTP_RELAY`
 - `LK_SNAPSHOT_DAILY_MAX_AGE`
 - `LK_SNAPSHOT_FAILED_MAX_AGE`
@@ -132,42 +117,29 @@ The following variables can be set in `/etc/default/lk-platform` or
 - `LK_SSH_PRIORITY`
 - `LK_SSH_TRUSTED_ONLY`
 - `LK_SUDO`
-- `LK_SYMLINK_NO_CHANGE`
 - `LK_SYSTEM_GRAPHICS`
 - `LK_TRUSTED_IP_ADDRESSES`
-- `LK_TTY_COLOUR`
-- `LK_TTY_COLOUR2`
-- `LK_TTY_INPUT_NAME`
-- `LK_TTY_MESSAGE_COLOUR`
-- `LK_TTY_NO_FOLD`
-- `LK_TTY_PREFIX`
-- `LK_TTY_PREFIX_COLOUR`
-- `LK_TTY_SPACES`
-- `LK_TTY_SUFFIX`
-- `LK_TTY_WIDTH`
-- `LK_USAGE`
-- `LK_VALIDATE_FIELD_NAME`
-- `LK_VALIDATE_STATUS`
+- `LK_TTY_NO_BREAK`
+- `LK_TTY_NO_COLOUR`
+- `LK_UPGRADE_EMAIL`
 - `LK_VERBOSE`
-- `LK_VERSION`
 - `LK_WP_FLUSH`
+- `LK_WP_MODE_DIR`
+- `LK_WP_MODE_FILE`
+- `LK_WP_MODE_WRITABLE_DIR`
+- `LK_WP_MODE_WRITABLE_FILE`
 - `LK_WP_OLD_URL`
-- `LK_WP_QUIET`
 - `LK_WP_REAPPLY`
 - `LK_WP_REPLACE`
-- `LK_WP_REPLACE_COMMAND`
 - `LK_WP_REPLACE_WITHOUT_SCHEME`
 - `LK_WP_SYNC_EXCLUDE`
 - `LK_WP_SYNC_KEEP_LOCAL`
-- `LK_WRITABLE_DIR_MODE`
-- `LK_WRITABLE_FILE_MODE`
 
-To re-generate the list above:
-
-```bash
-find . ! \( -type d -name .git -prune \) \
-    -type f ! -name README.md -print0 |
-    xargs -0 grep -Pho '((?<=\$\{)|(?<=lk_is_true )|(?<=lk_is_false ))LK_[a-zA-Z0-9_]+\b(?!\})' |
-    sort -u |
-    sed 's/.*/- `&`/'
-```
+> To generate the list above:
+>
+> ```bash
+> lk_bash_find_scripts -d "$LK_BASE" -print0 |
+>     xargs -0 grep -Pho '((?<=\$\{)|(?<=lk_is_true )|(?<=lk_is_false ))LK_[a-zA-Z0-9_]+\b(?!(\[[^]]+\])?\})' |
+>     sort -u |
+>     sed -Ee '/^LK_(.+_(UPDATED|NO_CHANGE)|BASE|USAGE|VERSION|Z|ADMIN_USERS|HOST_.+|MYSQL_(USERNAME|PASSWORD)|SHUTDOWN_ACTION)$/d' -e 's/.*/- `&`/'
+> ```

@@ -147,7 +147,7 @@ function lk_hosting_configure_backup() {
         AUTO_REBOOT=${LK_AUTO_REBOOT:-} \
         AUTO_REBOOT_TIME=${LK_AUTO_REBOOT_TIME:-} \
         REGEX INHIBIT_PATH
-    REGEX=$(lk_escape_ere "${LK_INST:-$LK_BASE}/lib/hosting/backup-all.sh")
+    REGEX=$(lk_escape_ere "$LK_BASE/lib/hosting/backup-all.sh")
     lk_console_message "Configuring automatic backups"
     if lk_is_false LK_AUTO_BACKUP; then
         lk_console_error \
@@ -170,7 +170,7 @@ function lk_hosting_configure_backup() {
                     --what=shutdown \
                     --mode=block \
                     --why="Allow scheduled backup to complete" \
-                    "${LK_INST:-$LK_BASE}/lib/hosting/backup-all.sh")" \
+                    "$LK_BASE/lib/hosting/backup-all.sh")" \
                 "/var/log/${LK_PATH_PREFIX:-lk-}last-backup.log")"
     fi
 }

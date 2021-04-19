@@ -276,7 +276,7 @@ export _LK_FD=3 \
     _LK_LOG_OUT_FD=$LOG_OUT_FD _LK_LOG_ERR_FD=$LOG_ERR_FD _LK_LOG_FD=$LOG_FD
 tty_off
 
-trap exit_trap EXIT
+lk_trap_add EXIT exit_trap
 
 lk_console_log "Setting up live environment"
 lk_arch_configure_pacman
@@ -380,7 +380,7 @@ lk_run_detail mount \
 
 if ! lk_is_true FORMAT_BOOT; then
     lk_console_message "Removing files from previous installations in ESP"
-    rm -Rfv /mnt/boot/syslinux /mnt/boot/intel-ucode.img
+    rm -Rfv /mnt/boot/{syslinux,intel-ucode.img,amd-ucode.img}
 fi
 
 lk_console_blank
@@ -434,7 +434,7 @@ echo "$BOOTSTRAP_USERNAME ALL=(ALL) NOPASSWD:ALL" >"$FILE"
 [ -z "$BOOTSTRAP_FULL_NAME" ] ||
     in_target chfn -f "$BOOTSTRAP_FULL_NAME" "$BOOTSTRAP_USERNAME"
 
-export LK_BOOTSTRAP=1
+export _LK_BOOTSTRAP=1
 
 lk_console_item "Installing lk-platform to" "$LK_BASE"
 in_target install -d -m 02775 -o "$BOOTSTRAP_USERNAME" -g adm "$LK_BASE"

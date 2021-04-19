@@ -1,6 +1,7 @@
 #!/bin/bash
 
-lk_bin_depth=1 include=wordpress . lk-bash-load.sh || exit
+lk_bin_depth=1 . lk-bash-load.sh || exit
+lk_include wordpress
 
 REMOTE_PATH=public_html
 LOCAL_PATH=$(lk_wp_get_site_root 2>/dev/null) ||
@@ -122,7 +123,7 @@ REMOTE_PATH=${REMOTE_PATH%/}
 LOCAL_PATH=${LOCAL_PATH%/}
 STATUS=0
 
-LK_WP_QUIET=1
+_LK_WP_QUIET=1
 
 lk_log_start
 lk_start_trace
@@ -203,8 +204,8 @@ if [ ${#DEACTIVATE[@]} -gt 0 ]; then
 fi
 
 [ -z "$RENAME" ] ||
-    LK_WP_QUIET=1 LK_WP_REPLACE=1 LK_WP_REAPPLY=0 LK_WP_FLUSH=0 \
-        LK_WP_REPLACE_COMMAND=wp \
+    LK_WP_REPLACE=1 LK_WP_REAPPLY=0 LK_WP_FLUSH=0 \
+        _LK_WP_QUIET=1 _LK_WP_REPLACE_COMMAND=wp \
         lk_wp_rename_site "$RENAME"
 lk_wp_reapply_config || STATUS=$?
 lk_wp_flush || STATUS=$?

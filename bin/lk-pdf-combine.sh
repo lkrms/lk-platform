@@ -1,6 +1,6 @@
 #!/bin/bash
 
-include= . lk-bash-load.sh || exit
+. lk-bash-load.sh || exit
 
 lk_assert_command_exists mutool
 
@@ -10,7 +10,7 @@ Usage: ${0##*/} PDF1 PDF2..."
 
 lk_log_start
 
-NEWEST=$(lk_sort_paths_by_date "$@" | tail -n1)
+NEWEST=$(lk_file_sort_by_date "$@" | tail -n1)
 FILE=$1
 TEMP=$(lk_file_prepare_temp -n "$FILE")
 lk_delete_on_exit "$TEMP"

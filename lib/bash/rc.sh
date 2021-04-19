@@ -1,65 +1,41 @@
 #!/bin/bash
 
-export -n BASH_XTRACEFD SHELLOPTS
-[ -n "${_LK_ENV+1}" ] || _LK_ENV=$(declare -x)
-
-unset LK_PROMPT_DISPLAYED LK_BASE
+unset LK_PROMPT_DISPLAYED
 
 SH=$(
-    BS=${BASH_SOURCE[0]}
-    [ "${BS%/*}" != "$BS" ] || BS=./$BS
-    if [ ! -L "$BS" ] &&
-        LK_BASE="$(cd "${BS%/*}/../.." && pwd -P)" &&
-        [ -d "$LK_BASE/lib/bash" ]; then
-        printf 'LK_BASE=%q' "$LK_BASE"
-    else
-        echo "$BS: LK_BASE not set" >&2
-    fi
-) && eval "$SH"
-[ -n "${LK_BASE:-}" ] || return
-export LK_BASE
+    set -u
+    die() { echo "${BASH_SOURCE:-$0}: $1" >&2 && false || exit; }
+    _FILE=$BASH_SOURCE && [ -f "$_FILE" ] && [ ! -L "$_FILE" ] ||
+        die "script must be sourced directly"
+    [[ $_FILE == */* ]] || _FILE=./$_FILE
+    _DIR=$(cd "${_FILE%/*}" && pwd -P) &&
+        printf 'export LK_BASE=%q\n' "${_DIR%/lib/bash}" ||
+        die "LK_BASE not found"
+    # Discard settings with the same name as LK_* variables in the environment
+    # and add any that remain to the global scope
+    vars() { printf '%s\n' "${!LK_@}"; }
+    unset IFS LK_PATH_PREFIX
+    VARS=$(vars)
+    [ ! -r /etc/default/lk-platform ] ||
+        . /etc/default/lk-platform || exit
+    LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
+    [ ! -r ~/".${LK_PATH_PREFIX}settings" ] ||
+        . ~/".${LK_PATH_PREFIX}settings" || exit
+    unset LK_BASE $VARS
+    VARS=$(vars)
+    [ -z "${VARS:+1}" ] ||
+        declare -p $VARS
+) && eval "$SH" || return
+SH=$(. "$LK_BASE/lib/bash/env.sh") && eval "$SH" || return
+unset SH
 
-. "$LK_BASE/lib/bash/include/core.sh"
-
-# see lib/bash/common.sh
-SH=$(
-    SETTINGS=(
-        /etc/default/lk-platform
-        ~/".{{LK_PATH_PREFIX}}settings"
-    )
-    ENV=$(lk_get_env -n | sed '/^LK_/!d' | sort)
-    function lk_var() { comm -23 \
-        <(printf '%s\n' "${!LK_@}" | sort) \
-        <(cat <<<"$ENV"); }
-    (
-        VAR=($(lk_var))
-        [ ${#VAR[@]} -eq 0 ] || unset "${VAR[@]}"
-        for FILE in "${SETTINGS[@]}"; do
-            FILE=$(lk_expand_template <<<"$FILE" 2>/dev/null) || continue
-            [ ! -f "$FILE" ] || [ ! -r "$FILE" ] || . "$FILE"
-        done
-        VAR=($(lk_var))
-        [ ${#VAR[@]} -eq 0 ] || declare -p "${VAR[@]}"
-    )
-) && eval "$SH"
-
-function clip() {
-    if lk_command_exists clip; then
-        unset -f clip
-    else
-        function clip() {
-            lk_clip
-        }
-    fi
-    clip "$@"
-}
+. "$LK_BASE/lib/bash/include/core.sh" || return
 
 function lk_cat_log() {
-    local IFS FILES FILE
+    local FILES FILE
     lk_files_exist "$@" || lk_usage "\
-Usage: $(lk_myself -f) LOG_FILE[.gz] [LOG_FILE...]" || return
-    IFS=$'\n'
-    FILES=($(lk_sort_paths_by_date "$@"))
+Usage: ${FUNCNAME[0]} LOG_FILE[.gz] [LOG_FILE...]" || return
+    lk_mapfile FILES <(lk_file_sort_by_date "$@")
     for FILE in "${FILES[@]}"; do
         case "$FILE" in
         *.gz)
@@ -164,24 +140,10 @@ if lk_is_linux; then
     lk_include iptables linux
     ! lk_is_arch || lk_include arch
     ! lk_is_ubuntu || lk_include debian
-    [[ $- != *i* ]] || {
-        alias duh='du -h --max-depth 1 | sort -h'
-        alias open='xdg-open'
-    }
 elif lk_is_macos; then
     lk_include macos
-    [[ $- != *i* ]] || {
-        alias duh='du -h -d 1 | sort -h'
-    }
     export BASH_SILENCE_DEPRECATION_WARNING=1
 fi
-[[ $- != *i* ]] || {
-    alias cwd='pwd | lk_clip'
-}
-
-LK_PATH_PREFIX=${LK_PATH_PREFIX-lk-}
-SH=$(. "$LK_BASE/lib/bash/env.sh") &&
-    eval "$SH"
 
 [[ $- != *i* ]] || {
 
@@ -202,10 +164,10 @@ SH=$(. "$LK_BASE/lib/bash/env.sh") &&
             VERSION=
             ! lk_bash_at_least 4 ||
                 VERSION="@2"
-            COMMAND=$(printf '%s\n' \
-                "$HOMEBREW_PREFIX/Cellar/bash-completion$VERSION"/*/etc/profile.d/bash_completion.sh |
-                sort -V | tail -n1)
-            [ -n "$COMMAND" ] || return 0
+            DIR=$HOMEBREW_PREFIX/Cellar/bash-completion$VERSION
+            COMMANDS=("$DIR"/*/etc/profile.d/bash_completion.sh)
+            [ -n "${COMMANDS+1}" ] || return 0
+            COMMAND=${COMMANDS[0]}
             [ -n "$VERSION" ] || {
                 COMMAND=${COMMAND/profile.d\/bash_completion.sh/bash_completion}
                 printf '%s=%q ' \
@@ -230,6 +192,15 @@ SH=$(. "$LK_BASE/lib/bash/env.sh") &&
             echo "${OUTPUT//=34;42:/=37;42:}"
     ) && eval "$SH"; }
 
-}
+    alias clip=lk_clip
+    alias unclip=lk_paste
+    if ! lk_is_macos; then
+        alias duh='du -h --max-depth 1 | sort -h'
+        alias open='xdg-open'
+    else
+        alias duh='du -h -d 1 | sort -h'
+    fi
 
-unset SH
+    unset SH
+
+}

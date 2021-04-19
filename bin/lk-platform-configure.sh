@@ -1,143 +1,147 @@
 #!/bin/bash
 
 [ "$EUID" -eq 0 ] || {
-    [ -z "${BASH_XTRACEFD:-}" ] && unset ARGS ||
-        ARGS=(-C $((i = BASH_XTRACEFD, (${_LK_FD:=2} > i ? _LK_FD : i) + 1)))
-    sudo ${ARGS[@]+"${ARGS[@]}"} -H -E "$0" --elevated "$@"
+    sudo -H -E \
+        -C "$(($(printf '%s\n' \
+            $((_LK_FD ? _LK_FD : 2)) $((BASH_XTRACEFD)) $((_LK_TRACE_FD)) \
+            $((_LK_TTY_OUT_FD)) $((_LK_TTY_ERR_FD)) \
+            $((_LK_LOG_OUT_FD)) $((_LK_LOG_ERR_FD)) \
+            $((_LK_LOG_FD)) | sort -n | tail -n1) + 1))" \
+        "$0" --elevated "$@"
     exit
 }
 
 [ -z "${_LK_PLATFORM_CONFIGURE_ARGS:-}" ] ||
     eval "set -- $_LK_PLATFORM_CONFIGURE_ARGS \"\$@\""
 
-{
-    set -euo pipefail
-    _FILE=${BASH_SOURCE[0]}
-    lk_die() { s=$? && echo "$_FILE: $1" >&2 && (exit $s) && false || exit; }
-    _DIR=${_FILE%/*}
-    [ "$_DIR" != "$_FILE" ] || _DIR=.
-    _DIR=$(cd "$_DIR" && pwd)
-    LK_INST=${_DIR%/*}
-    [ -d "$LK_INST/lib/bash" ] &&
-        LK_INST=$(cd "$LK_INST" && pwd -P) || lk_die "unable to locate LK_BASE"
+set -euo pipefail
+SH=$(
+    die() { echo "${BASH_SOURCE:-$0}: $1" >&2 && false || exit; }
+    _FILE=$BASH_SOURCE && [ -f "$_FILE" ] && [ ! -L "$_FILE" ] ||
+        die "script must be invoked directly"
+    [[ $_FILE == */* ]] || _FILE=./$_FILE
+    _DIR=$(cd "${_FILE%/*}" && pwd -P) &&
+        printf 'export _LK_INST=%q\n' "${_DIR%/bin}" ||
+        die "base directory not found"
+    # Values set in /etc/default/lk-platform override LK_* environment variables
+    # with the same name
+    vars() { printf '%s\n' "${!LK_@}"; }
+    unset IFS
+    VARS=$(vars)
+    unset $VARS
+    [ ! -r /etc/default/lk-platform ] ||
+        . /etc/default/lk-platform
+    VARS=$(vars)
+    [ -z "${VARS:+1}" ] ||
+        declare -p $VARS
+) && eval "$SH" && . "$_LK_INST/lib/bash/common.sh" || exit
+lk_include git provision
 
-    shopt -s nullglob
+shopt -s nullglob
 
-    CONF_FILE=/etc/default/lk-platform
+CONF_FILE=/etc/default/lk-platform
 
-    SETTINGS=(
-        LK_BASE
-        LK_PATH_PREFIX
-        LK_NODE_HOSTNAME
-        LK_NODE_FQDN
-        LK_IPV4_ADDRESS
-        LK_IPV4_GATEWAY
-        LK_IPV4_DNS_SERVER
-        LK_IPV4_DNS_SEARCH
-        LK_BRIDGE_INTERFACE
-        LK_NODE_TIMEZONE
-        LK_NODE_SERVICES
-        LK_NODE_PACKAGES
-        LK_NODE_LOCALES
-        LK_NODE_LANGUAGE
-        LK_GRUB_CMDLINE
-        LK_NTP_SERVER
-        LK_ADMIN_EMAIL
-        LK_TRUSTED_IP_ADDRESSES
-        LK_SSH_TRUSTED_ONLY
-        LK_SSH_JUMP_HOST
-        LK_SSH_JUMP_USER
-        LK_SSH_JUMP_KEY
-        LK_REJECT_OUTPUT
-        LK_ACCEPT_OUTPUT_HOSTS
-        LK_INNODB_BUFFER_SIZE
-        LK_OPCACHE_MEMORY_CONSUMPTION
-        LK_PHP_SETTINGS
-        LK_PHP_ADMIN_SETTINGS
-        LK_MEMCACHED_MEMORY_LIMIT
-        LK_SMTP_RELAY
-        LK_EMAIL_BLACKHOLE
-        LK_UPGRADE_EMAIL
-        LK_AUTO_REBOOT
-        LK_AUTO_REBOOT_TIME
-        LK_AUTO_BACKUP_SCHEDULE
-        LK_SNAPSHOT_HOURLY_MAX_AGE
-        LK_SNAPSHOT_DAILY_MAX_AGE
-        LK_SNAPSHOT_WEEKLY_MAX_AGE
-        LK_SNAPSHOT_FAILED_MAX_AGE
-        LK_SITE_ENABLE
-        LK_SITE_DISABLE_WWW
-        LK_SITE_DISABLE_HTTPS
-        LK_SITE_ENABLE_STAGING
-        LK_ARCH_MIRROR
-        LK_ARCH_REPOS
-        LK_SCRIPT_DEBUG
-        LK_PLATFORM_BRANCH
-        LK_PACKAGES_FILE
-    )
+SETTINGS=(
+    LK_BASE
+    LK_PATH_PREFIX
+    LK_NODE_HOSTNAME
+    LK_NODE_FQDN
+    LK_IPV4_ADDRESS
+    LK_IPV4_GATEWAY
+    LK_IPV4_DNS_SERVER
+    LK_IPV4_DNS_SEARCH
+    LK_BRIDGE_INTERFACE
+    LK_NODE_TIMEZONE
+    LK_NODE_SERVICES
+    LK_NODE_PACKAGES
+    LK_NODE_LOCALES
+    LK_NODE_LANGUAGE
+    LK_GRUB_CMDLINE
+    LK_NTP_SERVER
+    LK_ADMIN_EMAIL
+    LK_TRUSTED_IP_ADDRESSES
+    LK_SSH_TRUSTED_ONLY
+    LK_SSH_JUMP_HOST
+    LK_SSH_JUMP_USER
+    LK_SSH_JUMP_KEY
+    LK_REJECT_OUTPUT
+    LK_ACCEPT_OUTPUT_HOSTS
+    LK_INNODB_BUFFER_SIZE
+    LK_OPCACHE_MEMORY_CONSUMPTION
+    LK_PHP_SETTINGS
+    LK_PHP_ADMIN_SETTINGS
+    LK_MEMCACHED_MEMORY_LIMIT
+    LK_SMTP_RELAY
+    LK_EMAIL_BLACKHOLE
+    LK_UPGRADE_EMAIL
+    LK_AUTO_REBOOT
+    LK_AUTO_REBOOT_TIME
+    LK_AUTO_BACKUP_SCHEDULE
+    LK_SNAPSHOT_HOURLY_MAX_AGE
+    LK_SNAPSHOT_DAILY_MAX_AGE
+    LK_SNAPSHOT_WEEKLY_MAX_AGE
+    LK_SNAPSHOT_FAILED_MAX_AGE
+    LK_SITE_ENABLE
+    LK_SITE_DISABLE_WWW
+    LK_SITE_DISABLE_HTTPS
+    LK_SITE_ENABLE_STAGING
+    LK_ARCH_MIRROR
+    LK_ARCH_REPOS
+    LK_SCRIPT_DEBUG
+    LK_PLATFORM_BRANCH
+    LK_PACKAGES_FILE
+)
 
-    LK_SETTINGS_FILES=(
-        "$LK_INST/etc"/*.conf
-        "$CONF_FILE"
-    )
+LK_FILE_BACKUP_TAKE=${LK_FILE_BACKUP_TAKE-1}
+LK_FILE_BACKUP_MOVE=1
+LK_VERBOSE=${LK_VERBOSE-1}
 
-    # Don't allow environment variables to override values set in config files
-    export -n "${!LK_@}"
+NEW_SETTINGS=()
+unset ELEVATED
 
-    # Don't use the default prefix ("lk-") if LK_PATH_PREFIX is not configured
-    LK_PATH_PREFIX=${LK_PATH_PREFIX-}
+lk_getopt "s:" "elevated,set:"
+eval "set -- $LK_GETOPT"
 
-    include=provision,git . "$LK_INST/lib/bash/common.sh"
-
-    LK_FILE_TAKE_BACKUP=${LK_FILE_TAKE_BACKUP-1}
-    LK_FILE_MOVE_BACKUP=1
-    LK_VERBOSE=${LK_VERBOSE-1}
-
-    NEW_SETTINGS=()
-    unset ELEVATED
-
-    lk_getopt "s:" "elevated,set:"
-    eval "set -- $LK_GETOPT"
-
-    while :; do
-        OPT=$1
+while :; do
+    OPT=$1
+    shift
+    case "$OPT" in
+    -s | --set)
+        [[ $1 =~ ^(LK_[a-zA-Z0-9_]*[a-zA-Z0-9])=(.*) ]] ||
+            lk_die "invalid argument: $1"
+        NEW_SETTINGS+=("${BASH_REMATCH[1]}")
+        eval "${BASH_REMATCH[1]}=\${BASH_REMATCH[2]}"
         shift
-        case "$OPT" in
-        -s | --set)
-            [[ $1 =~ ^(LK_[a-zA-Z0-9_]*[a-zA-Z0-9])=(.*) ]] ||
-                lk_die "invalid argument: $1"
-            NEW_SETTINGS+=("${BASH_REMATCH[1]}")
-            eval "${BASH_REMATCH[1]}=\${BASH_REMATCH[2]}"
-            shift
-            ;;
-        --elevated)
-            ELEVATED=1
-            ;;
-        --)
-            break
-            ;;
-        esac
-    done
+        ;;
+    --elevated)
+        ELEVATED=1
+        ;;
+    --)
+        break
+        ;;
+    esac
+done
 
-    lk_lock LOCK_FILE LOCK_FD
+lk_lock
 
-    lk_log_start
+lk_log_start
 
+{
     lk_console_log "Configuring lk-platform"
 
-    if [ "${LK_INST##*/}" != lk-platform ] &&
-        [[ "${LK_INST##*/}" =~ ^([a-zA-Z0-9]{2,3}-)platform$ ]]; then
+    if [[ ${_LK_INST##*/} =~ ^([a-zA-Z0-9]{2,3}-)platform$ ]] &&
+        [ "${BASH_REMATCH[1]}" != lk- ]; then
         ORIGINAL_PATH_PREFIX=${BASH_REMATCH[1]}
-        OLD_LK_INST=$LK_INST
-        LK_INST=${LK_INST%/*}/lk-platform
+        OLD_LK_INST=$_LK_INST
+        _LK_INST=${_LK_INST%/*}/lk-platform
         lk_console_message "Renaming installation directory"
-        if [ -e "$LK_INST" ] && [ ! -L "$LK_INST" ]; then
-            BACKUP_DIR=$LK_INST$(lk_file_get_backup_suffix)
+        if [ -e "$_LK_INST" ] && [ ! -L "$_LK_INST" ]; then
+            BACKUP_DIR=$_LK_INST$(lk_file_get_backup_suffix)
             [ ! -e "$BACKUP_DIR" ] || lk_die "$BACKUP_DIR already exists"
-            mv -fv "$LK_INST" "$BACKUP_DIR"
+            mv -fv "$_LK_INST" "$BACKUP_DIR"
         fi
-        rm -fv "$LK_INST"
-        mv -v "$OLD_LK_INST" "$LK_INST"
+        rm -fv "$_LK_INST"
+        mv -v "$OLD_LK_INST" "$_LK_INST"
         lk_symlink lk-platform "$OLD_LK_INST"
     fi
 
@@ -156,23 +160,25 @@
     }
     [ -n "$LK_PATH_PREFIX" ] || lk_die "LK_PATH_PREFIX not set"
     [ -z "${LK_BASE:-}" ] ||
-        [ "$LK_BASE" = "$LK_INST" ] ||
+        [ "$LK_BASE" = "$_LK_INST" ] ||
         [ "$LK_BASE" = "${OLD_LK_INST:-}" ] ||
         [ ! -d "$LK_BASE" ] ||
         {
             lk_console_item "Existing installation found at" "$LK_BASE"
-            lk_confirm "Reconfigure system?" Y || lk_die
+            lk_confirm "Reconfigure system?" Y || lk_die ""
         }
-    export LK_BASE=$LK_INST
+    export LK_BASE=$_LK_INST
 
     lk_is_arch && _IS_ARCH=1 || _IS_ARCH=
     _BASHRC='[ -z "${BASH_VERSION:-}" ] || [ ! -f ~/.bashrc ] || . ~/.bashrc'
     _BYOBU=
     _BYOBURC=
     if BYOBU_PATH=$(command -pv byobu-launch); then
-        _BYOBU=$(printf '%s_byobu_sourced=1 . %q 2>/dev/null || true' \
-            "$(! lk_is_macos || echo '[ ! "$SSH_CONNECTION" ] || ')" \
-            "$BYOBU_PATH")
+        _BYOBU=$(
+            ! lk_is_macos ||
+                printf '[ ! "$SSH_CONNECTION" ] || '
+            printf '_byobu_sourced=1 . %q 2>/dev/null || true' "$BYOBU_PATH"
+        )
         ! lk_is_macos ||
             _BYOBURC='[[ $OSTYPE != darwin* ]] || ! type -P gdf >/dev/null || df() { gdf "$@"; }'
     fi
@@ -218,17 +224,17 @@
     # Use the opening "Environment:" log entry created by hosting.sh as a last
     # resort when looking for settings
     function install_env() {
-        if [ -z "${INSTALL_ENV+1}" ]; then
+        [ -n "${INSTALL_ENV+1}" ] ||
             INSTALL_ENV=$(
                 FILE=$(lk_first_existing \
                     /var/log/{"$LK_PATH_PREFIX",lk-platform-}install.log) ||
                     exit 0
                 awk -f "$LK_BASE/lib/awk/get-install-env.awk" "$FILE"
             ) || return
-        fi
+        [ -n "${INSTALL_ENV:+1}" ] || return 0
         awk -F= \
             -v "SETTING=$1" \
-            '$1 ~ "^" SETTING "$" { print $2 }' <<<"$INSTALL_ENV"
+            '$1 == SETTING { print $2 }' <<<"$INSTALL_ENV"
     }
 
     for i in "${SETTINGS[@]}"; do
@@ -245,6 +251,7 @@
         # /etc/default/lk-platform
         [ -n "${!i:-}" ] ||
             grep -Eq "^$i=" "$CONF_FILE" ||
+            lk_in_array "$i" NEW_SETTINGS ||
             continue
         KNOWN_SETTINGS+=("$i")
     done
@@ -260,7 +267,7 @@
         ${OTHER_SETTINGS[@]+"${OTHER_SETTINGS[@]}"})"
 
     function restart_script() {
-        lk_lock_drop LOCK_FILE LOCK_FD
+        lk_lock_drop
         lk_console_message "Restarting ${0##*/}"
         lk_maybe_trace "$0" --no-log "$@"
         exit
@@ -268,7 +275,7 @@
 
     if [ -d "$LK_BASE/.git" ]; then
         function _git() {
-            sudo -Hu "$REPO_OWNER" \
+            runuser -u "$REPO_OWNER" -- \
                 ${LK_GIT_ENV[@]+env "${LK_GIT_ENV[@]}"} \
                 git "$@"
         }
@@ -287,6 +294,7 @@
         lk_console_message "Checking repository"
         cd "$LK_BASE"
         REPO_OWNER=$(lk_file_owner "$LK_BASE")
+        LK_GIT_ENV=()
         [ -z "${SSH_AUTH_SOCK:-}" ] ||
             ! SOCK_OWNER=$(lk_file_owner "$SSH_AUTH_SOCK" 2>/dev/null) ||
             [ "$SOCK_OWNER" != "$REPO_OWNER" ] ||
@@ -297,7 +305,7 @@
         check_repo_config "merge.ff" "only"
         check_repo_config "pull.ff" "only"
         for COMMAND in ${CONFIG_COMMANDS[@]+"${CONFIG_COMMANDS[@]}"}; do
-            LK_TTY_NO_FOLD=1 \
+            _LK_TTY_NO_FOLD=1 \
                 lk_console_detail "Running:" "$(lk_quote_args git $COMMAND)"
             _git $COMMAND
         done
@@ -324,8 +332,8 @@
             FETCH_TIME=0
         if [ $(($(lk_timestamp) - FETCH_TIME)) -gt 300 ]; then
             lk_console_detail "Checking for changes"
-            update_repo
-            ! lk_is_true LK_GIT_REPO_UPDATED ||
+            ! update_repo ||
+                ! lk_is_true LK_GIT_REPO_UPDATED ||
                 restart_script "$@"
         fi
         DIR_MODE=0755
@@ -357,10 +365,10 @@
     lk_symlink_bin "$LK_BASE/bin/lk-bash-load.sh"
 
     if lk_is_true ELEVATED; then
-        LK_HOMES=(${SUDO_USER:+"$(lk_expand_path "~$SUDO_USER")"})
+        _LK_HOMES=(${SUDO_USER:+"$(lk_expand_path "~$SUDO_USER")"})
     else
         # If invoked by root, include all standard home directories
-        lk_mapfile LK_HOMES <(comm -12 \
+        lk_mapfile _LK_HOMES <(comm -12 \
             <(lk_echo_args /home/* /srv/www/* /Users/* ~root |
                 lk_filter 'test -d' | sort -u) \
             <(if ! lk_is_macos; then
@@ -369,10 +377,10 @@
                 dscl . list /Users NFSHomeDirectory | awk '{print $2}'
             fi | sort -u))
     fi
-    LK_HOMES+=(/etc/skel{,".${LK_PATH_PREFIX%-}"})
-    lk_remove_missing LK_HOMES
-    lk_resolve_files LK_HOMES
-    [ ${#LK_HOMES[@]} -gt 0 ] || lk_die "No home directories found"
+    _LK_HOMES+=(/etc/skel{,".${LK_PATH_PREFIX%-}"})
+    lk_remove_missing _LK_HOMES
+    lk_resolve_files _LK_HOMES
+    [ ${#_LK_HOMES[@]} -gt 0 ] || lk_die "No home directories found"
     lk_console_message "Checking startup scripts and SSH config files"
 
     # Prepare awk to update ~/.bashrc
@@ -412,7 +420,7 @@
     }
 
     LK_FILE_NO_DIFF=1
-    for h in "${LK_HOMES[@]}"; do
+    for h in "${_LK_HOMES[@]}"; do
         [ ! -e "$h/.${LK_PATH_PREFIX}ignore" ] || continue
         OWNER=$(lk_file_owner "$h")
         GROUP=$(id -gn "$OWNER")
@@ -492,10 +500,10 @@
         fi
     done
 
-    unset LK_FILE_TAKE_BACKUP
+    unset LK_FILE_BACKUP_TAKE
 
     # Leave ~root/.ssh alone
-    lk_remove_false "$(printf '[ "{}" != %q ]' "$(realpath ~root)")" LK_HOMES
+    lk_remove_false "$(printf '[ "{}" != %q ]' "$(realpath ~root)")" _LK_HOMES
     if [ -n "${LK_SSH_JUMP_HOST:-}" ]; then
         lk_ssh_configure "$LK_SSH_JUMP_HOST" \
             "${LK_SSH_JUMP_USER:-}" \
@@ -507,8 +515,6 @@
     if lk_is_desktop; then
         . "$LK_BASE/lib/platform/configure-desktop.sh"
     fi
-
-    lk_lock_drop LOCK_FILE LOCK_FD
 
     lk_console_success "lk-platform successfully configured"
 

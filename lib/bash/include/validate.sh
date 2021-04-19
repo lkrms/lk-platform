@@ -1,17 +1,17 @@
 #!/bin/bash
 
 function lk_validate_clear() {
-    LK_VALIDATE_STATUS=0
+    _LK_VALIDATE_STATUS=0
 }
 
 function lk_validate_status() {
-    return "${LK_VALIDATE_STATUS:-0}"
+    return "${_LK_VALIDATE_STATUS:-0}"
 }
 
 # shellcheck disable=SC2059
 function _lk_validate_fail() {
-    printf "$1" "${LK_VALIDATE_FIELD_NAME:-$2}" "${@:3}"
-    LK_VALIDATE_STATUS=1
+    printf "$1" "${_LK_VALIDATE_FIELD_NAME:-$2}" "${@:3}"
+    _LK_VALIDATE_STATUS=1
     false
 }
 

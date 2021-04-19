@@ -1,7 +1,7 @@
 #!/bin/bash
 
 function lk_mysql_is_quiet() {
-    [ -n "${LK_MYSQL_QUIET:-}" ]
+    [ -n "${_LK_MYSQL_QUIET:-}" ]
 }
 
 function lk_mysql_escape() {
@@ -26,6 +26,37 @@ function lk_mysql_batch_unescape() {
         sed -Ee 's/(^|[^\])\\n/\1\n/g' \
             -e 's/(^|[^\])\\t/\1\t/g' \
             -e 's/\\\\/\\/g'
+}
+
+# lk_mysql_bytes SIZE
+#
+# Convert SIZE to its equivalent in bytes, where SIZE is an integer optionally
+# followed by K, M, G, T, P or E (not case-sensitive).
+function lk_mysql_bytes() {
+    local POWER=0
+    [[ ${1:-} =~ ^0*([0-9]+)([kKmMgGtTpPeE]?)$ ]] ||
+        lk_warn "invalid size: ${1:-}" || return
+    case "${BASH_REMATCH[2]}" in
+    k | K)
+        POWER=1
+        ;;
+    m | M)
+        POWER=2
+        ;;
+    g | G)
+        POWER=3
+        ;;
+    t | T)
+        POWER=4
+        ;;
+    p | P)
+        POWER=5
+        ;;
+    e | E)
+        POWER=6
+        ;;
+    esac
+    echo $((BASH_REMATCH[1] * 1024 ** POWER))
 }
 
 # lk_mysql_get_cnf [DB_USER [DB_PASSWORD [DB_HOST]]]
@@ -160,7 +191,7 @@ Usage: $(lk_myself -f) DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
         "${DUMP_ARGS[@]}" \
         "$DB_NAME" |
         gzip |
-        lk_log_bypass_stderr pv ||
+        pv ||
         EXIT_STATUS=$?
     [ -z "${OUTPUT_FILE:-}" ] || eval "exec >&$OUTPUT_FD $OUTPUT_FD>&-"
     [ -z "${LK_MY_CNF:-}" ] || {
@@ -212,7 +243,7 @@ Usage: $(lk_myself -f) SSH_HOST DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
     --no-tablespaces \\
     \"\$1\" | gzip
 exit \${PIPESTATUS[0]}' bash $(printf '%q' "$DB_NAME")" |
-        lk_log_bypass_stderr pv ||
+        pv ||
         EXIT_STATUS=$?
     [ -z "${OUTPUT_FILE:-}" ] || eval "exec >&$OUTPUT_FD $OUTPUT_FD>&-"
     lk_console_message "Deleting mysqldump configuration file"
@@ -249,9 +280,9 @@ Proceed?" Y || return
     echo "$_SQL" | lk_mysql || return
     lk_console_detail "Restoring from" "$FILE"
     if [[ $FILE =~ \.gz(ip)?$ ]]; then
-        lk_log_bypass_stderr pv "$FILE" | gunzip
+        pv "$FILE" | gunzip
     else
-        lk_log_bypass_stderr pv "$FILE"
+        pv "$FILE"
     fi | lk_mysql "$DB_NAME" ||
         lk_console_error -r "Restore operation failed" || return
     lk_console_success "Database restored successfully"

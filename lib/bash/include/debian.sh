@@ -27,6 +27,16 @@ function lk_dpkg_installed_list() {
         awk '$1 == "installed" { print $2 }'
 }
 
+# lk_dpkg_not_installed_list PACKAGE...
+#
+# Output each PACKAGE that isn't currently installed.
+function lk_dpkg_not_installed_list() {
+    [ $# -gt 0 ] || lk_warn "no package" || return
+    comm -13 \
+        <(lk_dpkg_installed_list "$@" | sort -u) \
+        <(lk_echo_args "$@" | sort -u)
+}
+
 # lk_dpkg_installed_versions [PACKAGE...]
 #
 # Output ${Package}=${Version} for each currently installed PACKAGE, or for all
@@ -66,8 +76,11 @@ function lk_apt_not_marked_manual_list() {
 #
 # Retrieve the latest APT package indexes.
 function lk_apt_update() {
-    lk_console_message "Updating APT package indexes"
-    lk_elevate apt-get -q update
+    [ "${_LK_APT_DIRTY:-1}" -eq 0 ] || {
+        lk_console_message "Updating APT package indexes"
+        lk_elevate lk_tty apt-get -q update &&
+            _LK_APT_DIRTY=0
+    }
 }
 
 # lk_apt_unavailable_list PACKAGE...
@@ -100,7 +113,7 @@ function lk_apt_install() {
     [ ${#INSTALL[@]} -eq 0 ] || {
         lk_echo_array INSTALL |
             lk_console_list "Installing:" "APT package" "APT packages"
-        lk_elevate apt-get -yq \
+        lk_elevate lk_tty apt-get -yq \
             --no-install-recommends --no-install-suggests \
             install "${INSTALL[@]}"
     }
@@ -115,10 +128,10 @@ function lk_apt_remove() {
     REMOVE=($(lk_dpkg_installed_list "$@")) || return
     [ ${#REMOVE[@]} -eq 0 ] || {
         lk_echo_array REMOVE |
-            lk_console_list "${LK_APT_REMOVE_MESSAGE:-Removing}:" \
+            lk_console_list "${_LK_APT_REMOVE_MESSAGE:-Removing}:" \
                 "APT package" "APT packages"
-        lk_elevate apt-get -yq \
-            "${LK_APT_REMOVE_COMMAND:-remove}" --auto-remove "${REMOVE[@]}"
+        lk_elevate lk_tty apt-get -yq \
+            "${_LK_APT_REMOVE_COMMAND:-remove}" --auto-remove "${REMOVE[@]}"
     }
 }
 
@@ -126,14 +139,14 @@ function lk_apt_remove() {
 #
 # Purge each installed PACKAGE and any unused dependencies.
 function lk_apt_purge() {
-    LK_APT_REMOVE_COMMAND=purge \
-        LK_APT_REMOVE_MESSAGE=Purging \
+    _LK_APT_REMOVE_COMMAND=purge \
+        _LK_APT_REMOVE_MESSAGE=Purging \
         lk_apt_remove "$@"
 }
 
 function lk_apt_autoremove() {
     lk_console_message "Removing unused dependencies"
-    lk_elevate apt-get -yq autoremove
+    lk_elevate lk_tty apt-get -yq autoremove
 }
 
 function lk_apt_purge_removed() {
@@ -146,7 +159,7 @@ function lk_apt_purge_removed() {
             lk_console_list "Purging previously removed packages:" \
                 "APT package" "APT packages"
         lk_confirm "Proceed?" Y || return
-        lk_elevate apt-get -yq purge "${PURGE[@]}"
+        lk_elevate lk_tty apt-get -yq purge "${PURGE[@]}"
     }
 }
 
@@ -185,7 +198,7 @@ END {
         <(lk_echo_array INST | sort -u)))
     [ ${#CONF[@]} -eq 0 ] || lk_console_detail "Configure:" $'\n'"${CONF[*]}"
     [ ${#REMV[@]} -eq 0 ] || lk_console_detail "Remove:" $'\n'"${REMV[*]}"
-    lk_elevate apt-get -yq --fix-broken dist-upgrade || return
+    lk_elevate lk_tty apt-get -yq --fix-broken dist-upgrade || return
     lk_apt_autoremove
 }
 
@@ -226,7 +239,7 @@ function lk_apt_reinstall_damaged() {
         [ ${#AUTO[@]} -eq 0 ] ||
             lk_console_log "Packages marked as 'automatically installed':" \
                 "${AUTO[*]}"
-        lk_elevate apt-get -yq \
+        lk_elevate lk_tty apt-get -yq \
             --no-install-recommends --no-install-suggests --reinstall \
             install "${REINSTALL[@]}" &&
             { [ ${#AUTO[@]} -eq 0 ] ||
@@ -268,10 +281,9 @@ function _lk_apt_sources_get_mirror() {
 # - lk_apt_sources_get_missing [-l LIST] COMPONENT
 # - lk_apt_sources_get_missing [-l LIST] SUITE COMPONENT [SUITE COMPONENT]...
 function lk_apt_sources_get_missing() {
-    local LC_ALL=C LIST SOURCES COMPONENTS \
+    local LIST SOURCES COMPONENTS \
         MIRROR=${LK_APT_DEFAULT_MIRROR:-} \
         SECURITY_MIRROR=${LK_APT_DEFAULT_SECURITY_MIRROR:-}
-    export LC_ALL
     unset LIST
     [ "${1:-}" != -l ] || { LIST=$2 && shift 2; }
     [ $# -gt 0 ] || lk_warn "invalid arguments" || return

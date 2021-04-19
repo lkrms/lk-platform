@@ -293,6 +293,11 @@ function lk_plist_delete() {
     _lk_plist_buddy "Delete $(_lk_plist_quote "$1")"
 }
 
+# lk_plist_maybe_delete ENTRY
+function lk_plist_maybe_delete() {
+    lk_plist_delete "$1" 2>/dev/null || true
+}
+
 # lk_plist_add ENTRY TYPE [VALUE]
 #
 # TYPE must be one of:
@@ -315,12 +320,17 @@ function lk_plist_replace() {
     lk_plist_add "$@"
 }
 
+# lk_plist_merge_from_file ENTRY PLIST_FILE
+function lk_plist_merge_from_file() {
+    _lk_plist_buddy "Merge $(_lk_plist_quote "$2") $(_lk_plist_quote "$1")"
+}
+
 # lk_plist_replace_from_file ENTRY TYPE PLIST_FILE
 #
 # TYPE must match the top-level element of PLIST_FILE.
 function lk_plist_replace_from_file() {
     lk_plist_replace "${@:1:2}"
-    _lk_plist_buddy "Merge $(_lk_plist_quote "$3") $(_lk_plist_quote "$1")"
+    lk_plist_merge_from_file "$1" "$3"
 }
 
 # lk_plist_get ENTRY

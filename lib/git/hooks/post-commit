@@ -3,7 +3,8 @@
 # shellcheck disable=SC2164
 
 LK_TTY_NO_COLOUR=1 \
-    include=git . lk-bash-load.sh || exit
+    . lk-bash-load.sh || exit
+lk_include git
 
 HOOK=$0
 [ "${HOOK#/}" != "$HOOK" ] || HOOK=$PWD/$HOOK

@@ -277,8 +277,8 @@ function lk_log() {
 
 function lk_console_message() {
     echo "\
-${LK_TTY_PREFIX-==> }\
-${1//$'\n'/$'\n'"${LK_TTY_SPACES-  }"}" >&"${_LK_FD:-2}"
+${_LK_TTY_PREFIX-==> }\
+${1//$'\n'/$'\n'"${_LK_TTY_SPACES-  }"}" >&"${_LK_FD:-2}"
 }
 
 function lk_console_item() {
@@ -290,7 +290,7 @@ function lk_console_item() {
 }
 
 #function lk_console_detail() {
-#    local LK_TTY_PREFIX="   -> " LK_TTY_SPACES="    "
+#    local _LK_TTY_PREFIX="   -> " _LK_TTY_SPACES="    "
 #    [ $# -le 1 ] &&
 #        lk_console_message "$1" ||
 #        lk_console_item "$1" "$2"
@@ -428,8 +428,8 @@ if [ -z "$(ls -A "$LK_BASE")" ]; then
     )
 fi
 
-TERM='' \
-    LK_SKIP=env,settings include=provision,hosting . "$LK_BASE/lib/bash/common.sh"
+TERM='' . "$LK_BASE/lib/bash/common.sh"
+lk_include hosting provision
 
 install -m 00644 /dev/null /etc/default/lk-platform
 LK_SSH_JUMP_KEY=${LK_SSH_JUMP_KEY:+jump} \
@@ -1491,7 +1491,7 @@ listen.group = www-data
 ; ondemand can't handle sudden bursts: https://github.com/php/php-src/pull/1308
 pm = static
 ; tune based on memory consumed per process under load
-pm.max_children = 50
+pm.max_children = 30
 ; respawn occasionally in case of memory leaks
 pm.max_requests = 10000
 ; because \`max_execution_time\` only counts CPU time

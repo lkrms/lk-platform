@@ -18,7 +18,7 @@ function lk_git_cd() {
 }
 
 function lk_git_is_quiet() {
-    [ -n "${LK_GIT_QUIET:-}" ]
+    [ -n "${_LK_GIT_QUIET:-}" ]
 }
 
 function lk_git_is_work_tree() {
@@ -290,7 +290,7 @@ function lk_git_push_branch() {
         return
     LOG=$(git log --reverse \
         --oneline --decorate --color=always "$2..$1") || return
-    lk_console_dump \
+    lk_tty_dump \
         "$LOG" \
         "Not pushed:" \
         "($AHEAD $(lk_maybe_plural "$AHEAD" commit commits))"
@@ -447,7 +447,7 @@ function _lk_git_do_with_repo() {
         eval "$SH" || return
         lk_git_is_quiet && [ "$EXIT_STATUS" -eq 0 ] || echo "$(
             unset _LK_FD
-            LK_TTY_NO_FOLD=1
+            _LK_TTY_NO_FOLD=1
             {
                 lk_git_is_quiet &&
                     lk_console_item "Command failed in" "$REPO" ||
@@ -455,10 +455,10 @@ function _lk_git_do_with_repo() {
                 [ "$EXIT_STATUS" -eq 0 ] ||
                     lk_console_error "Exit status:" "$EXIT_STATUS"
                 [ -z "$_STDOUT" ] ||
-                    LK_TTY_COLOUR2=$LK_GREEN \
+                    _LK_TTY_COLOUR2=$LK_GREEN \
                         lk_console_detail "Output:" $'\n'"$_STDOUT"
                 [ -z "$_STDERR" ] ||
-                    LK_TTY_COLOUR2=$([ "$EXIT_STATUS" -eq 0 ] &&
+                    _LK_TTY_COLOUR2=$([ "$EXIT_STATUS" -eq 0 ] &&
                         echo "$LK_YELLOW" ||
                         echo "$LK_RED") \
                         lk_console_detail "Error output:" $'\n'"$_STDERR"
@@ -557,9 +557,9 @@ directory of a working tree" || return
     fi
     lk_git_is_quiet || {
         [ "$ERROR_COUNT" -eq 0 ] &&
-            LK_TTY_NO_FOLD=1 \
+            _LK_TTY_NO_FOLD=1 \
                 lk_console_success "Command succeeded in $NOUN" ||
-            LK_TTY_NO_FOLD=1 \
+            _LK_TTY_NO_FOLD=1 \
                 lk_console_error "Command failed in $ERROR_COUNT of $NOUN"
     }
     LK_GIT_REPO_ERROR_COUNT=$ERROR_COUNT
@@ -576,7 +576,7 @@ function lk_git_audit_repo() {
 # lk_git_audit_repos [-s] [REPO...]
 function lk_git_audit_repos() {
     local SKIP_FETCH FETCH_ERRORS=0 AUDIT_ERRORS=0 NOUN \
-        LK_GIT_QUIET=${LK_GIT_QUIET-1} \
+        _LK_GIT_QUIET=${_LK_GIT_QUIET-1} \
         LK_GIT_REPOS=(${LK_GIT_REPOS[@]+"${LK_GIT_REPOS[@]}"})
     [ "${1:-}" != -s ] || { SKIP_FETCH=1 && shift; }
     [ $# -eq 0 ] || LK_GIT_REPOS=("$@")
@@ -595,14 +595,14 @@ function lk_git_audit_repos() {
     lk_git_with_repos -ty lk_git_audit_repo -s ||
         AUDIT_ERRORS=$LK_GIT_REPO_ERROR_COUNT
     [ "$FETCH_ERRORS" -eq 0 ] &&
-        LK_TTY_NO_FOLD=1 \
+        _LK_TTY_NO_FOLD=1 \
             lk_console_success "Fetch succeeded in $NOUN" ||
-        LK_TTY_NO_FOLD=1 \
+        _LK_TTY_NO_FOLD=1 \
             lk_console_error "Fetch failed in $FETCH_ERRORS of $NOUN"
     [ "$AUDIT_ERRORS" -eq 0 ] &&
-        LK_TTY_NO_FOLD=1 \
+        _LK_TTY_NO_FOLD=1 \
             lk_console_success "Update succeeded in $NOUN" ||
-        LK_TTY_NO_FOLD=1 \
+        _LK_TTY_NO_FOLD=1 \
             lk_console_error "Update failed in $AUDIT_ERRORS of $NOUN"
     [[ $((FETCH_ERRORS + AUDIT_ERRORS)) -eq 0 ]]
 }

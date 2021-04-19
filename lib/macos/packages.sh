@@ -65,6 +65,7 @@ MAS_APPS=(
 )
 
 HOMEBREW_KEEP_FORMULAE=(
+    bash
     bash-completion@2
     ocaml
 

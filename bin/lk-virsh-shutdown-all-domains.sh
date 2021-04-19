@@ -13,7 +13,8 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
     lk_die "unable to locate LK_BASE"
 export LK_BASE
 
-include=linux . "$LK_BASE/lib/bash/common.sh"
+. "$LK_BASE/lib/bash/common.sh"
+lk_include linux
 
 unset _USER
 lk_is_root || {
