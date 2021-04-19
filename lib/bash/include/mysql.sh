@@ -28,6 +28,37 @@ function lk_mysql_batch_unescape() {
             -e 's/\\\\/\\/g'
 }
 
+# lk_mysql_bytes SIZE
+#
+# Convert SIZE to its equivalent in bytes, where SIZE is an integer optionally
+# followed by K, M, G, T, P or E (not case-sensitive).
+function lk_mysql_bytes() {
+    local POWER=0
+    [[ ${1:-} =~ ^0*([0-9]+)([kKmMgGtTpPeE]?)$ ]] ||
+        lk_warn "invalid size: ${1:-}" || return
+    case "${BASH_REMATCH[2]}" in
+    k | K)
+        POWER=1
+        ;;
+    m | M)
+        POWER=2
+        ;;
+    g | G)
+        POWER=3
+        ;;
+    t | T)
+        POWER=4
+        ;;
+    p | P)
+        POWER=5
+        ;;
+    e | E)
+        POWER=6
+        ;;
+    esac
+    echo $((BASH_REMATCH[1] * 1024 ** POWER))
+}
+
 # lk_mysql_get_cnf [DB_USER [DB_PASSWORD [DB_HOST]]]
 function lk_mysql_get_cnf() {
     cat <<EOF
