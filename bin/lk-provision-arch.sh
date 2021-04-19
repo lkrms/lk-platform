@@ -24,11 +24,7 @@ shift "$LK_SHIFT"
 
 ! lk_in_chroot || _LK_BOOTSTRAP=1
 
-function is_bootstrap() {
-    [ -n "${_LK_BOOTSTRAP:-}" ]
-}
-
-if is_bootstrap; then
+if lk_is_bootstrap; then
     function systemctl_enable() {
         [[ $1 == *.* ]] || set -- "$1.service" "${@:2}"
         [ ! -e "/usr/lib/systemd/system/$1" ] &&
@@ -65,13 +61,13 @@ fi
 function service_apply() {
     local i EXIT_STATUS=0
     lk_console_message "Checking services"
-    is_bootstrap || ! lk_is_true DAEMON_RELOAD ||
+    lk_is_bootstrap || ! lk_is_true DAEMON_RELOAD ||
         lk_run_detail sudo systemctl daemon-reload || EXIT_STATUS=$?
     [ ${#SERVICE_ENABLE[@]} -eq 0 ] ||
         for i in $(seq 0 2 $((${#SERVICE_ENABLE[@]} - 1))); do
             systemctl_enable "${SERVICE_ENABLE[@]:$i:2}" || EXIT_STATUS=$?
         done
-    is_bootstrap || [ ${#SERVICE_RESTART[@]} -eq 0 ] || {
+    lk_is_bootstrap || [ ${#SERVICE_RESTART[@]} -eq 0 ] || {
         SERVICE_RESTART=($(comm -23 \
             <(lk_echo_array SERVICE_RESTART | sort -u) \
             <(lk_echo_array SERVICE_STARTED | sort -u))) && {
@@ -166,13 +162,13 @@ lk_start_trace
 
 {
     lk_console_log "Provisioning Arch Linux"
-    ! is_bootstrap || lk_console_detail "Bootstrap environment detected"
+    ! lk_is_bootstrap || lk_console_detail "Bootstrap environment detected"
     GROUP=$(id -gn)
     MEMORY=$(lk_system_memory 2)
     lk_console_detail "System memory:" "${MEMORY}M"
 
     LK_SUDO=1
-    LK_FILE_BACKUP_TAKE=${LK_FILE_BACKUP_TAKE-$(is_bootstrap || echo 1)}
+    LK_FILE_BACKUP_TAKE=${LK_FILE_BACKUP_TAKE-$(lk_is_bootstrap || echo 1)}
     LK_FILE_BACKUP_MOVE=1
 
     EXIT_STATUS=0
@@ -182,7 +178,7 @@ lk_start_trace
     DAEMON_RELOAD=
 
     # Try to detect missing settings
-    if ! is_bootstrap; then
+    if ! lk_is_bootstrap; then
         [ -n "${LK_NODE_TIMEZONE:-}" ] || ! _TZ=$(lk_system_timezone) ||
             export LK_NODE_TIMEZONE=$_TZ
         [ -n "${LK_NODE_HOSTNAME:-}" ] || ! _HN=$(lk_hostname) ||
@@ -296,7 +292,7 @@ lk_start_trace
         _FILE=$(lk_echo_array UDEV_RULES)
         lk_install -m 00644 "$FILE"
         lk_file_replace "$FILE" "$_FILE"
-        if ! is_bootstrap &&
+        if ! lk_is_bootstrap &&
             lk_is_false LK_FILE_REPLACE_NO_CHANGE &&
             { ! lk_arch_reboot_required ||
                 lk_warn "reboot required to apply changes"; }; then
@@ -486,7 +482,7 @@ $LK_NODE_HOSTNAME" &&
 
     service_apply
 
-    if ! is_bootstrap && lk_pac_installed grub; then
+    if ! lk_is_bootstrap && lk_pac_installed grub; then
         lk_console_message "Checking boot loader"
         unset LK_FILE_REPLACE_NO_CHANGE
         lk_arch_configure_grub

@@ -80,6 +80,10 @@ function lk_first_existing() {
     [ $# -gt 0 ] && echo "$1"
 }
 
+function lk_is_bootstrap() {
+    [ -n "${_LK_BOOTSTRAP-}" ]
+}
+
 if lk_bash_at_least 4 0; then
     function lk_eval_input() {
         . /dev/stdin
