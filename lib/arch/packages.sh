@@ -332,7 +332,7 @@ else
     ! lk_system_has_nvidia_graphics ||
         PAC_PACKAGES+=(nvidia nvidia-utils)
     ! lk_system_has_amd_graphics ||
-        PAC_PACKAGES+=(xf86-video-amdgpu)
+        PAC_PACKAGES+=(xf86-video-amdgpu libva-mesa-driver mesa-vdpau)
 fi
 
 ####
