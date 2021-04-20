@@ -1,8 +1,21 @@
 #!/bin/bash
 
+set -o pipefail
+
+[ -z "${_LK_PLATFORM_CONFIGURE_ARGS:-}" ] || {
+    eval "set -- $_LK_PLATFORM_CONFIGURE_ARGS \"\$@\""
+    unset _LK_PLATFORM_CONFIGURE_ARGS
+}
+
 [ "$EUID" -eq 0 ] || {
+    # See: https://bugzilla.sudo.ws/show_bug.cgi?id=950
+    SUDO_MIN=3
+    ! VER=$(sudo -V | awk 'NR == 1 { print $NF }') ||
+        printf '%s\n' "$VER" 1.8.9 1.8.32 1.9.0 1.9.4p1 | sort -V |
+        awk -v "v=$VER" '$0 == v { l = NR } END { exit 1 - l % 2 }' ||
+        SUDO_MIN=4
     sudo -H -E \
-        -C "$(($(printf '%s\n' \
+        -C "$(($(printf '%s\n' $((SUDO_MIN - 1)) \
             $((_LK_FD ? _LK_FD : 2)) $((BASH_XTRACEFD)) $((_LK_TRACE_FD)) \
             $((_LK_TTY_OUT_FD)) $((_LK_TTY_ERR_FD)) \
             $((_LK_LOG_OUT_FD)) $((_LK_LOG_ERR_FD)) \
@@ -11,10 +24,7 @@
     exit
 }
 
-[ -z "${_LK_PLATFORM_CONFIGURE_ARGS:-}" ] ||
-    eval "set -- $_LK_PLATFORM_CONFIGURE_ARGS \"\$@\""
-
-set -euo pipefail
+set -eu
 SH=$(
     die() { echo "${BASH_SOURCE:-$0}: $1" >&2 && false || exit; }
     _FILE=$BASH_SOURCE && [ -f "$_FILE" ] && [ ! -L "$_FILE" ] ||
