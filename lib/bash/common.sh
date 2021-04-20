@@ -19,7 +19,7 @@
     [ ! -r /etc/default/lk-platform ] ||
         . /etc/default/lk-platform || exit
     LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
-    [ ! -r ~/".${LK_PATH_PREFIX}settings" ] ||
+    [ ! -f ~/".${LK_PATH_PREFIX}settings" ] ||
         . ~/".${LK_PATH_PREFIX}settings" || exit
     unset LK_BASE $VARS
     VARS=$(vars)
