@@ -15,7 +15,7 @@ printf '\n====> %s invoked\nArguments:\n%s\nEnvironment:\n%s\n' "$HOOK" \
     lk_log >>"$LOG_FILE"
 exec > >(tee >(lk_log >>"$LOG_FILE")) 2>&1
 
-SOURCE=${PWD%/.git}
+SOURCE=file://${PWD%/.git}
 DEST=/opt/${SOURCE##*/}
 [ -d "$DEST/.git" ] || lk_warn "repo not found at $DEST" || exit 0
 SOURCE_BRANCH=$(lk_git_branch_current)

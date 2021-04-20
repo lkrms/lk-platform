@@ -1,4 +1,8 @@
 - /.cache
+- /.trash
+- /.wp-cli
+- /backup
 - /log
-- /public_html/wp-content/updraft
+- /*/log
 - /staging
+- public_html/wp-content/updraft
