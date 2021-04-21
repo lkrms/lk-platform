@@ -66,9 +66,9 @@ PAC_PACKAGES=(
     htop
     lsof
     ncdu
-    nmon
     pcp
     ps_mem
+    s-tui
     sysstat
 
     # Network
