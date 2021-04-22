@@ -865,6 +865,15 @@ Usage: ${FUNCNAME[0]} [-w WEBROOT_PATH] DOMAIN... [-- CERTBOT_ARG...]" || return
         "$@"
 } #### Reviewed: 2021-03-31
 
+# lk_certbot_list_certificates [DOMAIN...]
+function lk_certbot_list_certificates() {
+    local ARGS IFS=,
+    [ $# -eq 0 ] ||
+        ARGS=(--domains "$*")
+    lk_elevate certbot certificates ${ARGS[@]+"${ARGS[@]}"} |
+        awk -f "$LK_BASE/lib/awk/certbot-parse-certificates.awk"
+} #### Reviewed: 2021-04-22
+
 # lk_cpanel_get_ssl_cert SSH_HOST DOMAIN [TARGET_DIR]
 function lk_cpanel_get_ssl_cert() {
     local TARGET_DIR=${3:-~/ssl} SSL_JSON CERT KEY \
