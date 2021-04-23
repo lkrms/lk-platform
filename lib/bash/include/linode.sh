@@ -502,12 +502,16 @@ Usage: $(lk_myself -f) DIR HOST..." || return
             scp -p "$SSH_HOST:$_FILE" "$FILE" || return
         done
         awk -f "$LK_BASE/lib/awk/get-install-env.awk" \
-            "$_DIR/install.log-$HOST" |
-            sed -E \
+            "$_DIR/install.log-$HOST" | { sed -E \
                 -e '/^(DEBCONF_NONINTERACTIVE_SEEN|DEBIAN_FRONTEND|HOME|LINODE_.*|PATH|PWD|SHLVL|TERM|_)=/d' \
-                -e "s/^((LK_)?NODE_(HOSTNAME|FQDN)=)/\\1test-/" \
-                -e "s/^((LK_)?ADMIN_EMAIL=).*/\\1nobody@localhost.localdomain/" \
-                -e "s/^(CALL_HOME_MX=).*/\\1/" |
+                -e 's/^((LK_)?NODE_(HOSTNAME|FQDN)=)/\1test-/' \
+                -e '/^(LK_)?ADMIN_EMAIL=/d' \
+                -e 's/^(CALL_HOME_MX=).*/\1/' &&
+                if grep -Eq '<(lk:)?UDF\>.*\<ADMIN_EMAIL\>' "$_DIR/StackScript-$HOST"; then
+                    printf ADMIN_EMAIL
+                else
+                    printf LK_ADMIN_EMAIL
+                fi && echo "=nobody@localhost.localdomain"; } |
             while IFS='=' read -r VAR VALUE; do
                 printf '%s=%q\n' "$VAR" "$VALUE"
             done >"$_DIR/StackScript-env-$HOST" &&

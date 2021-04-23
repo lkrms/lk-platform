@@ -57,14 +57,15 @@ function lk_iptables_maybe_insert() {
     SH=$(_lk_iptables_args 2 "CHAIN [-t TABLE] RULE_SPEC" "$@") &&
         eval "$SH" || return
     lk_elevate bash -c "$(
-        function _maybe_insert() {
-            "$1" -C "${@:3}" &>/dev/null || "$@"
+        function maybe_insert() {
+            "${COMMAND[@]}" -C "$@" &>/dev/null ||
+                "${COMMAND[@]}" "${_LK_IPTABLES_SUBCOMMAND:--I}" "$@"
         }
-        declare -f lk_iptables _maybe_insert
-        lk_quote_args _maybe_insert \
-            "${COMMAND[@]}" "${_LK_IPTABLES_SUBCOMMAND:--I}" "$@"
+        declare -f lk_iptables maybe_insert
+        declare -p COMMAND _LK_IPTABLES_SUBCOMMAND 2>/dev/null || true
+        lk_quote_args maybe_insert "$@"
     )"
-} #### Reviewed: 2021-03-22
+} #### Reviewed: 2021-04-23
 
 # lk_iptables_maybe_append CHAIN [-t TABLE] RULE_SPEC
 function lk_iptables_maybe_append() {

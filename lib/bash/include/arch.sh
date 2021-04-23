@@ -53,15 +53,15 @@ function lk_arch_add_repo() {
     [ -f "$FILE" ] ||
         lk_warn "$FILE: file not found" || return
     SH=$(
-        function _add_key() { KEY_FILE=$(mktemp) && {
+        function add_key() { KEY_FILE=$(mktemp) && {
             STATUS=0
             curl --fail --location --output "$KEY_FILE" "$1" &&
                 pacman-key --add "$KEY_FILE" || STATUS=$?
             rm -f "$KEY_FILE" || true
             return "$STATUS"
         }; }
-        declare -f _add_key
-        echo '_add_key "$1"'
+        declare -f add_key
+        echo 'add_key "$1"'
     )
     lk_console_item "Checking repositories in" "$FILE"
     for i in "$@"; do
