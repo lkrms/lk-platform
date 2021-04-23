@@ -2,6 +2,10 @@
 
 # shellcheck disable=SC2030
 
+function lk_is_bootstrap() {
+    [ -n "${_LK_BOOTSTRAP-}" ]
+}
+
 # lk_node_service_enabled SERVICE
 #
 # Return true if SERVICE or an equivalent appears in LK_NODE_SERVICES.
