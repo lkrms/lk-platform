@@ -14,6 +14,7 @@ HOMEBREW_FORMULAE+=(
     # Utilities
     exiftool
     imagemagick
+    s3cmd
     unison
 
     # Networking

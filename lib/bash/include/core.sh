@@ -80,10 +80,6 @@ function lk_first_existing() {
     [ $# -gt 0 ] && echo "$1"
 }
 
-function lk_is_bootstrap() {
-    [ -n "${_LK_BOOTSTRAP-}" ]
-}
-
 if lk_bash_at_least 4 0; then
     function lk_eval_input() {
         . /dev/stdin
@@ -1925,7 +1921,7 @@ function lk_console_list() {
     COLOUR=${1-$_LK_TTY_COLOUR}
     [ -t 0 ] && ITEMS=() && lk_warn "no input" ||
         lk_mapfile ITEMS || lk_warn "unable to read items from input" || return
-    SH=$(lk_tty_print "$MESSAGE" "$COLOUR") &&
+    SH=$(lk_tty_print "$MESSAGE" "" "$COLOUR") &&
         eval "$SH" || return
     [ "${HAS_NEWLINE:-0}" -eq 0 ] ||
         INDENT=2

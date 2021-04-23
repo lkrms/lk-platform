@@ -3,14 +3,20 @@
 # shellcheck disable=SC2164
 
 function _lk_git() {
-    if [ -n "${LK_GIT_USER:-}" ]; then
-        sudo -Hu "$LK_GIT_USER" \
-            ${LK_GIT_ENV[@]+env "${LK_GIT_ENV[@]}"} \
-            git "$@"
+    if [ "${1:-}" = -1 ]; then
+        set -- "${@:2}"
     else
-        lk_maybe_sudo ${LK_GIT_ENV[@]+env "${LK_GIT_ENV[@]}"} \
-            git "$@"
+        set -- git "$@"
     fi
+    set -- env \
+        GIT_SSH_COMMAND="ssh$(printf ' -o %s' \
+            ClearAllForwardings=yes \
+            ${_LK_GIT_SSH_OPTIONS[@]+"${_LK_GIT_SSH_OPTIONS[@]}"})" \
+        ${_LK_GIT_ENV[@]+"${_LK_GIT_ENV[@]}"} \
+        "$@"
+    [ -z "${_LK_GIT_USER:-}" ] ||
+        set -- runuser -u "$_LK_GIT_USER" -- "$@"
+    lk_maybe_sudo "$@"
 }
 
 function lk_git_cd() {
@@ -65,8 +71,8 @@ function lk_git_remote_skip() {
     [ -n "${1:-}" ] || lk_usage "\
 Usage: $(lk_myself -f) REMOTE" || return
     lk_confirm "Exclude remote '$1' from fetch and push?" Y || return
-    git config --type=bool "remote.$1.skipDefaultUpdate" 1
-    git config --type=bool "remote.$1.skipFetchAll" 1
+    _lk_git config --type=bool "remote.$1.skipDefaultUpdate" 1
+    _lk_git config --type=bool "remote.$1.skipFetchAll" 1
 }
 
 function lk_git_remote_singleton() {
@@ -176,7 +182,7 @@ function lk_git_ref() {
 # lk_git_provision_repo [OPTIONS] REMOTE_URL DIR
 function lk_git_provision_repo() {
     local OPTIND OPTARG OPT SHARE OWNER GROUP BRANCH NAME LK_USAGE \
-        LK_SUDO=1 LK_GIT_USER
+        LK_SUDO=1 _LK_GIT_USER
     unset SHARE
     LK_USAGE="\
 Usage: $(lk_myself -f) [OPTIONS] REMOTE_URL DIR
@@ -197,7 +203,7 @@ Options:
                 lk_warn "invalid owner: $OPTARG" || lk_usage || return
             OWNER=${BASH_REMATCH[1]}
             GROUP=${BASH_REMATCH[3]}
-            LK_GIT_USER=$OWNER
+            _LK_GIT_USER=$OWNER
             ;;
         b)
             BRANCH=$OPTARG
@@ -476,8 +482,8 @@ function _lk_git_do_with_repo() {
 }
 
 function lk_git_with_repos() {
-    local OPTIND OPTARG OPT LK_USAGE PARALLEL GIT_SSH_COMMAND STDOUT PROMPT=1 \
-        REPO_COMMAND NOUN FD REPO ERROR_COUNT=0 \
+    local OPTIND OPTARG OPT LK_USAGE PARALLEL STDOUT PROMPT=1 \
+        REPO_COMMAND NOUN FD REPO ERROR_COUNT=0 _LK_GIT_SSH_OPTIONS \
         REPOS=(${LK_GIT_REPOS[@]+"${LK_GIT_REPOS[@]}"})
     LK_GIT_REPO_ERROR_COUNT=${#REPOS[@]}
     LK_USAGE="\
@@ -492,14 +498,13 @@ on the standard output. If -y is set, proceed without prompting."
         p)
             ! lk_bash_at_least 4 3 || {
                 PARALLEL=1
-                export GIT_SSH_COMMAND="ssh -o ControlPath=none"
+                _LK_GIT_SSH_OPTIONS=(ControlPath=none)
             }
             unset STDOUT
             ;;
         t)
             STDOUT=1
-            unset PARALLEL
-            export -n GIT_SSH_COMMAND=
+            unset PARALLEL _LK_GIT_SSH_OPTIONS
             ;;
         y)
             unset PROMPT
@@ -639,15 +644,15 @@ function lk_git_config_remote_push_all() {
         [ -n "$REMOTE_URL" ] || lk_warn "remote URL not found" || return
     lk_console_item "Configuring" "remote.$UPSTREAM.pushUrl"
     lk_console_detail "Adding:" "$REMOTE_URL"
-    git config push.default current &&
-        git config remote.pushDefault "$UPSTREAM" &&
-        git config --replace-all "remote.$UPSTREAM.pushUrl" "$REMOTE_URL" &&
+    _lk_git config push.default current &&
+        _lk_git config remote.pushDefault "$UPSTREAM" &&
+        _lk_git config --replace-all "remote.$UPSTREAM.pushUrl" "$REMOTE_URL" &&
         for REMOTE in $(git remote | grep -Fxv "$UPSTREAM"); do
             REMOTE_URL=$(git config "remote.$REMOTE.url") &&
                 [ -n "$REMOTE_URL" ] ||
                 lk_warn "URL not found for remote $REMOTE" || continue
             lk_console_detail "Adding:" "$REMOTE_URL"
-            git config --add "remote.$UPSTREAM.pushUrl" "$REMOTE_URL"
+            _lk_git config --add "remote.$UPSTREAM.pushUrl" "$REMOTE_URL"
         done
 }
 
@@ -660,8 +665,8 @@ function lk_git_recheckout() {
     lk_console_detail "HEAD refers to:" "$COMMIT"
     lk_no_input || lk_confirm \
         "Uncommitted changes will be permanently deleted. Proceed?" N || return
-    rm -fv "$REPO_ROOT/.git/index" &&
-        git checkout --force --no-overlay HEAD -- "$REPO_ROOT" &&
+    _lk_git -1 rm -fv "$REPO_ROOT/.git/index" &&
+        _lk_git checkout --force --no-overlay HEAD -- "$REPO_ROOT" &&
         lk_console_success "Checkout completed successfully"
 }
 

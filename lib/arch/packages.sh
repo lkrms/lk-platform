@@ -4,7 +4,7 @@
 # - https://wiki.archlinux.org/index.php/Installation_guide
 # - https://gitlab.archlinux.org/archlinux/archiso/-/raw/master/configs/releng/packages.x86_64
 
-IFS=','
+IFS=,
 PAC_REPOS=(
     ${LK_ARCH_REPOS:-}
     ${PAC_REPOS[@]+"${PAC_REPOS[@]}"}
@@ -66,9 +66,9 @@ PAC_PACKAGES=(
     htop
     lsof
     ncdu
-    nmon
     pcp
     ps_mem
+    s-tui
     sysstat
 
     # Network

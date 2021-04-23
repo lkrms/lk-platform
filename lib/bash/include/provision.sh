@@ -2,6 +2,10 @@
 
 # shellcheck disable=SC2030
 
+function lk_is_bootstrap() {
+    [ -n "${_LK_BOOTSTRAP-}" ]
+}
+
 # lk_node_service_enabled SERVICE
 #
 # Return true if SERVICE or an equivalent appears in LK_NODE_SERVICES.
@@ -230,7 +234,8 @@ function lk_ssh_set_option() {
     lk_option_set "$FILE" \
         "$1 $2" \
         "^$S*$OPTION($S+|$S*=$S*)$VALUE$S*\$" \
-        "^$S*$OPTION($S+|$S*=).*" "^$S*#$S*$OPTION($S+|$S*=).*"
+        "^$S*$OPTION($S+|$S*=).*" \
+        "^$S*#"{,"$S","$S*"}"$OPTION($S+|$S*=).*"
 }
 
 function lk_ssh_list_hosts() {
@@ -864,6 +869,15 @@ Usage: ${FUNCNAME[0]} [-w WEBROOT_PATH] DOMAIN... [-- CERTBOT_ARG...]" || return
         "$@"
 } #### Reviewed: 2021-03-31
 
+# lk_certbot_list_certificates [DOMAIN...]
+function lk_certbot_list_certificates() {
+    local ARGS IFS=,
+    [ $# -eq 0 ] ||
+        ARGS=(--domains "$*")
+    lk_elevate certbot certificates ${ARGS[@]+"${ARGS[@]}"} |
+        awk -f "$LK_BASE/lib/awk/certbot-parse-certificates.awk"
+} #### Reviewed: 2021-04-22
+
 # lk_cpanel_get_ssl_cert SSH_HOST DOMAIN [TARGET_DIR]
 function lk_cpanel_get_ssl_cert() {
     local TARGET_DIR=${3:-~/ssl} SSL_JSON CERT KEY \
@@ -1047,7 +1061,8 @@ function lk_conf_set_option() {
         "$FILE" \
         "$1${_LK_CONF_DELIM-=}$2" \
         "^$S*$OPTION$S*=$S*$VALUE$S*\$" \
-        "^$S*$OPTION$S*=.*" "^$S*#$S*$OPTION$S*=.*"
+        "^$S*$OPTION$S*=.*" \
+        "^$S*#"{,"$S","$S*"}"$OPTION$S*=.*"
 }
 
 # lk_conf_enable_row [-s SECTION] ROW [FILE]
@@ -1061,7 +1076,8 @@ function lk_conf_enable_row() {
         "$FILE" \
         "$1" \
         "^$ROW\$" \
-        "^$S*$ROW$S*\$" "^$S*#$S*$ROW$S*\$"
+        "^$S*$ROW$S*\$" \
+        "^$S*#"{,"$S","$S*"}"$ROW$S*\$"
 }
 
 # lk_conf_remove_row ROW [FILE]
@@ -1080,7 +1096,8 @@ function lk_php_set_option() {
     lk_option_set "$FILE" \
         "$1=$2" \
         "^$S*$OPTION$S*=$S*$VALUE$S*\$" \
-        "^$S*$OPTION$S*=.*" "^$S*;$S*$OPTION$S*=.*"
+        "^$S*$OPTION$S*=.*" \
+        "^$S*;"{,"$S","$S*"}"$OPTION$S*=.*"
 }
 
 # lk_php_enable_option OPTION VALUE [FILE]
@@ -1091,7 +1108,7 @@ function lk_php_enable_option() {
     lk_option_set "$FILE" \
         "$1=$2" \
         "^$S*$OPTION$S*=$S*$VALUE$S*\$" \
-        "^$S*;$S*$OPTION$S*=$S*$VALUE$S*\$"
+        "^$S*;"{,"$S","$S*"}"$OPTION$S*=$S*$VALUE$S*\$"
 }
 
 # lk_httpd_set_option OPTION VALUE [FILE]
@@ -1104,7 +1121,7 @@ function lk_httpd_set_option() {
         "$1 $2" \
         "^$S*$OPTION$S+$VALUE$S*\$" \
         "0,/^$S*$OPTION$S+.*/{s/^($S*)$OPTION$S+.*/\\1$REPLACE_WITH/}" \
-        "0,/^$S*#$S*$OPTION$S+.*/{s/^($S*)#$S*$OPTION$S+.*/\\1$REPLACE_WITH/}"
+        "0,/^$S*#"{,"$S","$S*"}"$OPTION$S+.*/{s/^($S*)#$S*$OPTION$S+.*/\\1$REPLACE_WITH/}"
 }
 
 # lk_httpd_enable_option OPTION VALUE [FILE]
@@ -1116,7 +1133,7 @@ function lk_httpd_enable_option() {
     lk_option_set -p "$FILE" \
         "$1 $2" \
         "^$S*$OPTION$S+$VALUE$S*\$" \
-        "0,/^$S*#$S*$OPTION$S+$VALUE$S*\$/{s/^($S*)#$S*$OPTION$S+$VALUE$S*\$/\\1$REPLACE_WITH/}"
+        "0,/^$S*#"{,"$S","$S*"}"$OPTION$S+$VALUE$S*\$/{s/^($S*)#$S*$OPTION$S+$VALUE$S*\$/\\1$REPLACE_WITH/}"
 }
 
 # lk_httpd_remove_option OPTION VALUE [FILE]
@@ -1139,8 +1156,7 @@ function lk_squid_set_option() {
         "$1 $2" \
         "^$S*$OPTION$S+$VALUE($S*\$|$S+#$S+)" \
         "0,/^$S*$REGEX\$/{s/^($S*)$REGEX\$/\\1$REPLACE_WITH\\4/}" \
-        "0,/^$S*#$REGEX\$/{s/^($S*)#$REGEX\$/\\1$REPLACE_WITH\\4/}" \
-        "0,/^$S*# $REGEX\$/{s/^($S*)# $REGEX\$/\\1$REPLACE_WITH\\4/}"
+        "0,/^$S*#"{,"$S","$S*"}"$REGEX\$/{s/^($S*)#$REGEX\$/\\1$REPLACE_WITH\\4/}"
 }
 
 # _lk_crontab REMOVE_REGEX ADD_COMMAND
