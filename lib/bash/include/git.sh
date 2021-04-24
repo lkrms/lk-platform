@@ -14,9 +14,11 @@ function _lk_git() {
             ${_LK_GIT_SSH_OPTIONS[@]+"${_LK_GIT_SSH_OPTIONS[@]}"})" \
         ${_LK_GIT_ENV[@]+"${_LK_GIT_ENV[@]}"} \
         "$@"
-    [ -z "${_LK_GIT_USER:-}" ] ||
-        set -- runuser -u "$_LK_GIT_USER" -- "$@"
-    lk_maybe_sudo "$@"
+    if [ -n "${_LK_GIT_USER:-}" ]; then
+        lk_run_as "$_LK_GIT_USER" "$@"
+    else
+        lk_maybe_sudo "$@"
+    fi
 }
 
 function lk_git_cd() {

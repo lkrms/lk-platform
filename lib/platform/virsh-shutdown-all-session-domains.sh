@@ -28,7 +28,7 @@ i=0
 for _USER in ${SESSION_USERS[@]+"${SESSION_USERS[@]}"}; do
     ! ((i)) || lk_console_blank
     lk_console_item "Shutting down libvirt session domains for user:" "$_USER"
-    runuser -u "$_USER" -- "$LK_BASE/bin/lk-virsh-shutdown-all.sh" ||
+    lk_run_as "$_USER" "$LK_BASE/bin/lk-virsh-shutdown-all.sh" ||
         lk_warn "shutdown command failed" || STATUS=$?
     ((++i))
 done
