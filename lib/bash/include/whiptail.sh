@@ -1,7 +1,11 @@
 #!/bin/bash
 
+function _lk_whiptail() {
+    whiptail "$@" 3>&1 1>&2 2>&3
+}
+
 function lk_whiptail() {
-    lk_log_bypass_stderr whiptail "$@" 3>&1 1>&2 2>&3
+    lk_log_bypass_stderr _lk_whiptail "$@"
 }
 
 # lk_whiptail_checklist TITLE TEXT TAG ITEM [TAG ITEM...] [STATUS]
@@ -51,4 +55,4 @@ function lk_whiptail_checklist() {
 
 lk_provide whiptail
 
-#### Reviewed: 2021-04-12
+#### Reviewed: 2021-04-24
