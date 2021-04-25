@@ -90,6 +90,11 @@ HOMEBREW_CASKS+=(
     sonos
 )
 
+HOMEBREW_KEEP_CASKS+=(
+    logitech-g-hub
+    logitech-gaming-software
+)
+
 LOGIN_ITEMS+=(
     "/Applications/Flycut.app"
     "/Applications/Lightshot Screenshot.app"

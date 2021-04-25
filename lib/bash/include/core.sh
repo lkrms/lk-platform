@@ -2463,11 +2463,23 @@ function lk_curl() {
     curl ${CURL_OPTIONS[@]+"${CURL_OPTIONS[@]}"} "$@"
 }
 
+# lk_run_as USER COMMAND [ARG...]
+function lk_run_as() {
+    [ $# -ge 2 ] || lk_warn "invalid arguments" || return
+    if lk_is_linux; then
+        lk_maybe_sudo runuser -u "$1" -- "${@:2}"
+    else
+        sudo -u "$1" -- "${@:2}"
+    fi
+}
+
 function lk_maybe_drop() {
     if ! lk_is_root; then
         "$@"
-    else
+    elif lk_is_linux; then
         runuser -u nobody -- "$@"
+    else
+        sudo -u nobody -- "$@"
     fi
 }
 
@@ -3613,4 +3625,12 @@ _LK_INCLUDES=(core)
 
 true || {
     env
+    md5
+    md5sum
+    sha256sum
+    shasum
+    xxh32sum
+    xxh64sum
+    xxh128sum
+    xxhsum
 }

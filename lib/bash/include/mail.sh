@@ -140,3 +140,8 @@ Usage: $(lk_myself -f) SUBJECT TO [FROM [HEADERS...]]" || return
 }
 
 lk_provide mail
+
+true || {
+    msmtp
+    sendmail
+}

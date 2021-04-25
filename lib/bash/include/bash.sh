@@ -28,7 +28,7 @@ function lk_bash_command_literals() {
     cat ${1+"$1"} |
         shfmt -tojson |
         jq -r \
-            --arg regex '^lk_(elevate(_if_error)?|keep_trying|log_bypass(_std(out|err))?|maybe(_(elevate|sudo|trace))?|require_output|run(_detail)?|tty)$' \
+            --arg regex '^(lk_(elevate(_if_error)?|keep_trying|log_bypass(_std(out|err))?|maybe(_(elevate|sudo|trace))?|require_output|run(_detail)?|tty)|command|exec)$' \
             '..|select(type=="object")|((.Args[0].Parts[0]|select(.Type=="Lit").Value),(select(.Args[]?.Parts[]?|select(type=="object" and .Type=="Lit" and (.Value|test($regex)))|length>0)|[.Args[].Parts[]|(if .Type=="Lit" then (if .Value|test($regex) then "" else .Value end) else null end)]|first|select(.!=null)))'
 }
 
@@ -63,7 +63,7 @@ function lk_bash_find_scripts() {
 # - MISSING_COMMANDS
 # - PACKAGES
 function lk_bash_audit() {
-    local IFS=$'\n' FILE SCRIPT FUNCTIONS COMMAND _PATH
+    local IFS=$'\n' FILE SCRIPT _COMMANDS FUNCTIONS COMMAND _PATH
     [ "${1:-}" != -g ] &&
         { local COMMANDS COMMAND_FILES MISSING_COMMANDS PACKAGES; } || shift
     lk_paths_exist "$@" || lk_usage "\
@@ -77,19 +77,24 @@ SCRIPT or any SOURCE. If -g is set, store results in global array variables:
 - PACKAGES" || return
     FILE=${1##/dev/fd/*}
     SCRIPT=$(cat "$1") &&
-        COMMANDS=($(echo "$SCRIPT" | lk_bash_command_literals |
+        _COMMANDS=($(echo "$SCRIPT" | lk_bash_command_literals |
             lk_filter '! lk_bash_is_builtin')) &&
         FUNCTIONS=($(for s in <(echo "$SCRIPT") "${@:2}"; do
             lk_bash_function_names "$s"
         done)) || return
     COMMANDS=($(comm -23 \
-        <(lk_echo_array COMMANDS | sort -u) \
+        <(lk_echo_array _COMMANDS | sort -u) \
         <(lk_echo_array FUNCTIONS | sort -u)))
+    # Add functions that are also commands on the local system
+    COMMANDS+=($(type -P $(comm -12 \
+        <(lk_echo_array _COMMANDS | sort -u) \
+        <(lk_echo_array FUNCTIONS | sort -u) |
+        sed -E '/^_?lk_/d') | sed -E 's/.*\/([^/]+)$/\1/'))
     [ -n "${COMMANDS+1}" ] || {
         lk_console_message "No external commands used${FILE:+ in $1}"
         return 0
     }
-    lk_echo_array COMMANDS |
+    lk_echo_array COMMANDS | sort |
         lk_console_list "External commands used${FILE:+ in $1}:"
     COMMAND_FILES=()
     MISSING_COMMANDS=()

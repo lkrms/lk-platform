@@ -47,6 +47,17 @@ function lk_dpkg_installed_versions() {
         awk '$1 == "installed" { print $2 }'
 }
 
+# _lk_apt_flock COMMAND [ARG...]
+#
+# Use `flock /var/lib/apt/daily_lock` to wait for scheduled apt operations to
+# finish before running the given command.
+function _lk_apt_flock() {
+    local SH DIR
+    SH=$(apt-config shell DIR Dir::State/d) &&
+        eval "$SH" &&
+        lk_elevate lk_tty flock "${DIR%/}/daily_lock" "$@"
+}
+
 # lk_apt_available_list
 #
 # Output the names of all packages available for installation.
@@ -78,7 +89,7 @@ function lk_apt_not_marked_manual_list() {
 function lk_apt_update() {
     [ "${_LK_APT_DIRTY:-1}" -eq 0 ] || {
         lk_console_message "Updating APT package indexes"
-        lk_elevate lk_tty apt-get -q update &&
+        _lk_apt_flock apt-get -q update &&
             _LK_APT_DIRTY=0
     }
 }
@@ -113,7 +124,7 @@ function lk_apt_install() {
     [ ${#INSTALL[@]} -eq 0 ] || {
         lk_echo_array INSTALL |
             lk_console_list "Installing:" "APT package" "APT packages"
-        lk_elevate lk_tty apt-get -yq \
+        _lk_apt_flock apt-get -yq \
             --no-install-recommends --no-install-suggests \
             install "${INSTALL[@]}"
     }
@@ -130,7 +141,7 @@ function lk_apt_remove() {
         lk_echo_array REMOVE |
             lk_console_list "${_LK_APT_REMOVE_MESSAGE:-Removing}:" \
                 "APT package" "APT packages"
-        lk_elevate lk_tty apt-get -yq \
+        _lk_apt_flock apt-get -yq \
             "${_LK_APT_REMOVE_COMMAND:-remove}" --auto-remove "${REMOVE[@]}"
     }
 }
@@ -146,7 +157,7 @@ function lk_apt_purge() {
 
 function lk_apt_autoremove() {
     lk_console_message "Removing unused dependencies"
-    lk_elevate lk_tty apt-get -yq autoremove
+    _lk_apt_flock apt-get -yq autoremove
 }
 
 function lk_apt_purge_removed() {
@@ -159,7 +170,7 @@ function lk_apt_purge_removed() {
             lk_console_list "Purging previously removed packages:" \
                 "APT package" "APT packages"
         lk_confirm "Proceed?" Y || return
-        lk_elevate lk_tty apt-get -yq purge "${PURGE[@]}"
+        _lk_apt_flock apt-get -yq purge "${PURGE[@]}"
     }
 }
 
@@ -198,7 +209,7 @@ END {
         <(lk_echo_array INST | sort -u)))
     [ ${#CONF[@]} -eq 0 ] || lk_console_detail "Configure:" $'\n'"${CONF[*]}"
     [ ${#REMV[@]} -eq 0 ] || lk_console_detail "Remove:" $'\n'"${REMV[*]}"
-    lk_elevate lk_tty apt-get -yq --fix-broken dist-upgrade || return
+    _lk_apt_flock apt-get -yq --fix-broken dist-upgrade || return
     lk_apt_autoremove
 }
 
@@ -239,11 +250,11 @@ function lk_apt_reinstall_damaged() {
         [ ${#AUTO[@]} -eq 0 ] ||
             lk_console_log "Packages marked as 'automatically installed':" \
                 "${AUTO[*]}"
-        lk_elevate lk_tty apt-get -yq \
+        _lk_apt_flock apt-get -yq \
             --no-install-recommends --no-install-suggests --reinstall \
             install "${REINSTALL[@]}" &&
             { [ ${#AUTO[@]} -eq 0 ] ||
-                lk_elevate apt-mark auto "${AUTO[@]}"; }
+                _lk_apt_flock apt-mark auto "${AUTO[@]}"; }
     }
 }
 

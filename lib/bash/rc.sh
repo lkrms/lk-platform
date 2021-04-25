@@ -61,15 +61,15 @@ function lk_bak_diff() {
         REGEX=".*(-[0-9]+\\.bak|\\.lk-bak-[0-9]{8}T[0-9]{6}Z)"
     lk_is_root || ! lk_can_sudo bash || {
         lk_elevate bash -c "$(
-            function _bak_diff() {
+            function bak_diff() {
                 . "$1"
                 shift
                 lk_bak_diff "$@"
             }
-            declare -f _bak_diff
+            declare -f bak_diff
             lk_quote_args \
                 _LK_DIFF_REGEX=${_LK_DIFF_REGEX:-} \
-                _bak_diff \
+                bak_diff \
                 "$LK_BASE/lib/bash/rc.sh" \
                 "$@"
         )"
