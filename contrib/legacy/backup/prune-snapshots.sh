@@ -137,7 +137,7 @@ LK_RED=$'\E[31m'
 LK_GREEN=$'\E[32m'
 LK_YELLOW=$'\E[33m'
 LK_CYAN=$'\E[36m'
-LK_RESET=$'\E[0m'
+LK_RESET=$'\E[m\017'
 
 ##
 

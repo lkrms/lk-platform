@@ -1382,10 +1382,10 @@ function lk_strip_non_printing() {
 
 # lk_fold STRING [WIDTH]
 #
-# Wrap STRING to fit in WIDTH (default: 80) after accounting for non-printing
+# Wrap STRING to fit in WIDTH (default: 120) after accounting for non-printing
 # character sequences, breaking at whitespace only.
 function lk_fold() {
-    local STRING WIDTH=${2:-80} REGEX \
+    local STRING WIDTH=${2:-120} REGEX \
         PARTS=() CODES=() LINE_TEXT LINE i PART CODE _LINE_TEXT
     eval "$(lk_get_regex NON_PRINTING_REGEX)"
     [ $# -gt 0 ] || lk_usage "\
@@ -1454,8 +1454,9 @@ function lk_console_blank() {
 
 function lk_tty_columns() {
     local _COLUMNS
-    _COLUMNS=${COLUMNS:-${TERM:+$(TERM=$TERM tput cols)}} || _COLUMNS=
-    echo "${_COLUMNS:-80}"
+    _COLUMNS=${_LK_TTY_COLUMNS:-${COLUMNS:-${TERM:+$(TERM=$TERM tput cols)}}} ||
+        _COLUMNS=
+    echo "${_COLUMNS:-120}"
 }
 
 function _lk_tty_length() {
@@ -3552,7 +3553,7 @@ else
         LK_UL_OFF=$'\E[24m' \
         LK_WRAP_OFF= \
         LK_WRAP_ON= \
-        LK_RESET=$'\E[0m'
+        LK_RESET=$'\E[m\017'
 
     case "${TERM:-}" in
     '' | dumb | unknown)
@@ -3576,8 +3577,7 @@ else
     rxvt | linux)
         declare \
             LK_WRAP_OFF=$'\E[?7l' \
-            LK_WRAP_ON=$'\E[?7h' \
-            LK_RESET=$'\E[m\017'
+            LK_WRAP_ON=$'\E[?7h'
         ;;
     *)
         eval "$(lk_get_colours)"
