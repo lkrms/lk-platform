@@ -201,29 +201,66 @@ lk_log_start
         install -m 00440 /dev/null "$FILE"
     lk_file_replace "$FILE" "$(cat "$LK_BASE/share/sudoers.d/default")"
 
-    # To list gnu_* commands required by lk-platform:
-    #
-    #   find "$LK_BASE" ! \( -type d -name .git -prune \) -type f -print0 |
-    #       xargs -0 grep -Eho '\bgnu_[a-zA-Z0-9.]+' | sort -u
     lk_console_message "Checking GNU utilities"
     function install_gnu_commands() {
-        local COMMAND GCOMMAND EXIT_STATUS=0
-        [ $# -gt 0 ] || set -- ${_LK_GNU_COMMANDS[@]+"${_LK_GNU_COMMANDS[@]}"}
-        for COMMAND in "$@"; do
-            GCOMMAND=$(_lk_gnu_command "$COMMAND")
-            lk_symlink_bin "$GCOMMAND" "gnu_$COMMAND" || {
-                EXIT_STATUS=$?
-                lk_console_warning "GNU $COMMAND not found:" "$GCOMMAND"
-                continue
-            }
+        local GNU_COMMANDS i STATUS=0
+        if ! lk_is_macos; then
+            GNU_COMMANDS=(
+                gawk gnu_awk 1
+                chgrp gnu_chgrp 0
+                chmod gnu_chmod 1
+                chown gnu_chown 1
+                cp gnu_cp 1
+                date gnu_date 1
+                df gnu_df 1
+                diff gnu_diff 1
+                du gnu_du 0
+                find gnu_find 1
+                getopt gnu_getopt 1
+                grep gnu_grep 1
+                ln gnu_ln 0
+                mktemp gnu_mktemp 0
+                mv gnu_mv 0
+                realpath gnu_realpath 1
+                sed gnu_sed 1
+                sort gnu_sort 0
+                stat gnu_stat 1
+                tar gnu_tar 0
+                xargs gnu_xargs 1
+            )
+        else
+            GNU_COMMANDS=(
+                gawk gnu_awk 1
+                gchgrp gnu_chgrp 0
+                gchmod gnu_chmod 1
+                gchown gnu_chown 1
+                gcp gnu_cp 1
+                gdate gnu_date 1
+                gdf gnu_df 1
+                "${HOMEBREW_PREFIX:-$_LK_HOMEBREW_PREFIX}/bin/diff" gnu_diff 1
+                gdu gnu_du 0
+                gfind gnu_find 1
+                "${HOMEBREW_PREFIX:-$_LK_HOMEBREW_PREFIX}/opt/gnu-getopt/bin/getopt" gnu_getopt 1
+                ggrep gnu_grep 1
+                gln gnu_ln 0
+                gmktemp gnu_mktemp 0
+                gmv gnu_mv 0
+                grealpath gnu_realpath 1
+                gsed gnu_sed 1
+                gsort gnu_sort 0
+                gstat gnu_stat 1
+                gtar gnu_tar 0
+                gxargs gnu_xargs 1
+            )
+        fi
+        for ((i = 0; i < ${#GNU_COMMANDS[@]}; i += 3)); do
+            lk_symlink_bin "${GNU_COMMANDS[@]:i:2}" ||
+                [ "${GNU_COMMANDS[*]:i+2:1}" -eq 0 ] ||
+                STATUS=$?
         done
-        return "$EXIT_STATUS"
+        return "$STATUS"
     }
-    # Exit if required commands fail to install
-    install_gnu_commands \
-        awk chmod chown cp date df diff find getopt realpath sed stat xargs
-    # For other commands, warn and continue
-    install_gnu_commands || true
+    install_gnu_commands
 
     lk_console_message "Checking lk-platform settings"
     [ -e "$CONF_FILE" ] || {

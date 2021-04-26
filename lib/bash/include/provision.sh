@@ -6,6 +6,10 @@ function lk_is_bootstrap() {
     [ -n "${_LK_BOOTSTRAP-}" ]
 }
 
+function lk_is_desktop() {
+    lk_node_service_enabled desktop
+}
+
 # lk_node_service_enabled SERVICE
 #
 # Return true if SERVICE or an equivalent appears in LK_NODE_SERVICES.

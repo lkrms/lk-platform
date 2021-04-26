@@ -25,10 +25,38 @@ function lk_bash_unset_local_variable_names() {
 }
 
 function lk_bash_command_literals() {
+    local EXEC_COMMANDS=(
+        command
+        exec
+        lk_cache
+        lk_elevate
+        lk_elevate_if_error
+        lk_get_outputs_of
+        lk_keep_trying
+        lk_log_bypass
+        lk_log_bypass_stderr
+        lk_log_bypass_stdout
+        lk_log_bypass_tty
+        lk_log_bypass_tty_stderr
+        lk_log_bypass_tty_stdout
+        lk_log_no_bypass
+        lk_maybe_drop
+        lk_maybe_elevate
+        lk_maybe_sudo
+        lk_maybe_trace
+        lk_pass
+        lk_require_output
+        lk_run
+        lk_run_as
+        lk_run_detail
+        lk_tty
+        lk_xargs
+        xargs
+    )
     cat ${1+"$1"} |
         shfmt -tojson |
         jq -r \
-            --arg regex '^(lk_(elevate(_if_error)?|keep_trying|log_bypass(_std(out|err))?|maybe(_(elevate|sudo|trace))?|require_output|run(_detail)?|tty)|command|exec)$' \
+            --arg regex "^$(lk_regex_implode "$EXEC_COMMANDS")\$" \
             '..|select(type=="object")|((.Args[0].Parts[0]|select(.Type=="Lit").Value),(select(.Args[]?.Parts[]?|select(type=="object" and .Type=="Lit" and (.Value|test($regex)))|length>0)|[.Args[].Parts[]|(if .Type=="Lit" then (if .Value|test($regex) then "" else .Value end) else null end)]|first|select(.!=null)))'
 }
 
