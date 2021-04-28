@@ -964,6 +964,26 @@ done\""
             eval "file_delete$SH"
     fi
 
+    if { [ -n "${LK_SAMBA_WORKGROUP:-}" ] || lk_node_service_enabled samba; } &&
+        lk_pac_installed samba; then
+        unset LK_FILE_REPLACE_NO_CHANGE
+        FILE=/etc/samba/smb.conf
+        _FILE=$(LK_SAMBA_WORKGROUP=${LK_SAMBA_WORKGROUP:-WORKGROUP} \
+            lk_expand_template "$LK_BASE/share/samba/smb.template.conf")
+        lk_install -m 00644 "$FILE"
+        lk_file_replace -i "^(#|;|$S*\$)" "$FILE" "$_FILE"
+        SERVICE_ENABLE+=(
+            smb "Samba (SMB server)"
+            nmb "Samba (NMB server)"
+        )
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+            SERVICE_RESTART+=(smb nmb)
+        sudo pdbedit -L | cut -d: -f1 | grep -Fx "$USER" >/dev/null ||
+            lk_console_detail \
+                "User '$USER' not found in Samba user database. To fix, run:" \
+                $'\n'"sudo smbpasswd -a $USER"
+    fi
+
     service_apply || EXIT_STATUS=$?
 
     (exit "$EXIT_STATUS") &&
