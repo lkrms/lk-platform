@@ -270,16 +270,15 @@ EOF
     }
 
     function lk_brew_check_taps() {
-        local TAP
-        TAP=($(comm -13 \
+        local TAPS TAP
+        TAPS=($(comm -13 \
             <(brew tap | sort -u) \
             <(lk_echo_array HOMEBREW_TAPS | sort -u)))
-        [ ${#TAP[@]} -eq 0 ] || {
-            for TAP in "${TAP[@]}"; do
+        [ ${#TAPS[@]} -eq 0 ] ||
+            for TAP in "${TAPS[@]}"; do
                 lk_console_detail "Tapping" "$TAP"
                 lk_brew tap --quiet "$TAP" || return
             done
-        }
     }
 
     function lk_brew_formulae() {
@@ -298,7 +297,7 @@ EOF
             FILE=$_DIR/homebrew-install.sh
             URL=https://raw.githubusercontent.com/Homebrew/install/master/install.sh
             if [ ! -e "$FILE" ]; then
-                curl --retry 8 --fail --output "$FILE" "$URL" || {
+                curl "${CURL_OPTIONS[@]}" --output "$FILE" "$URL" || {
                     rm -f "$FILE"
                     lk_die "unable to download: $URL"
                 }
@@ -437,10 +436,10 @@ EOF
     fi
 
     function get_arch_formulae() {
-        local JQ="\
+        local COUNT JQ="\
 def is_native:
-    (.versions.bottle | not) or 
-        ([.bottle[].files | keys[] | select(match(\"^arm64_\"))] | length > 0);"
+    (.versions.bottle | not) or
+        ([.bottle[].files | keys[] | select(match(\"^(all\$|arm64_)\"))] | length > 0);"
         # Exclude formulae with no arm64 bottle on Apple Silicon unless
         # using `arch --x86_64`
         if [ -z "${BREW_ARCH[$i]}" ]; then
@@ -457,6 +456,10 @@ def is_native:
                     "$JQ"'.formulae[]|select(is_native|not).full_name' \
                     <<<"$HOMEBREW_FORMULAE_JSON"))
         fi
+        COUNT=${#HOMEBREW_FORMULAE[@]}
+        ! lk_verbose || [ -z "${FORMULAE_COUNT:-}" ] || lk_console_detail \
+            "$BREW_NAME formulae ($COUNT of $FORMULAE_COUNT):" \
+            $'\n'"${HOMEBREW_FORMULAE[*]}"
     }
     function check_installed() {
         ! lk_is_apple_silicon || {
@@ -476,7 +479,9 @@ def is_native:
     HOMEBREW_FORMULAE_JSON=$(brew info --formula --json=v2 \
         "${HOMEBREW_FORMULAE[@]}") && HOMEBREW_FORMULAE=($(jq -r \
             ".formulae[].full_name" <<<"$HOMEBREW_FORMULAE_JSON"))
+    FORMULAE_COUNT=${#HOMEBREW_FORMULAE[@]}
     lk_brew_loop check_installed
+    unset FORMULAE_COUNT
     INSTALL_FORMULAE=($(lk_echo_array "${!INSTALL_FORMULAE_@}" | sort -u))
     if [ ${#INSTALL_FORMULAE[@]} -gt 0 ]; then
         FORMULAE=()
