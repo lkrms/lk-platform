@@ -290,7 +290,7 @@ EOF
     }
 
     function install_homebrew() {
-        local FILE URL
+        local FILE URL HOMEBREW_BREW_GIT_REMOTE
         BREW_NEW[$i]=0
         if ! lk_command_exists "$BREW_PATH"; then
             lk_console_message "Installing $BREW_NAME"
@@ -316,6 +316,8 @@ EOF
         lk_brew_check_taps
         [ "${BREW_NEW[$i]}" -eq 1 ] || {
             lk_console_detail "Updating formulae"
+            ! ((i)) ||
+                export HOMEBREW_BREW_GIT_REMOTE=/opt/homebrew
             lk_brew update --quiet
         }
     }
@@ -654,8 +656,8 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
     # `brew deps` is buggy AF, so find dependencies recursively via `brew info`
     lk_console_message "Checking for orphaned packages"
     function check_orphans() {
-        local ALL_FORMULAE PURGE_FORMULAE \
-            LAST_FORMULAE=() NEW_FORMULAE=() LAST_CASKS=() NEW_CASKS=()
+        local ALL_FORMULAE ALL_JSON NEW_JSON PURGE_FORMULAE \
+            j=0 LAST_FORMULAE=() NEW_FORMULAE=() LAST_CASKS=() NEW_CASKS=()
         ! lk_is_apple_silicon || {
             local HOMEBREW_FORMULAE
             get_arch_formulae
@@ -667,24 +669,40 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
             ALL_CASKS=($(comm -12 \
                 <(lk_brew_casks | sort -u) \
                 <(lk_echo_array HOMEBREW_CASKS HOMEBREW_KEEP_CASKS | sort -u)))
+        ALL_JSON=$(brew info --json=v2 --installed)
         while :; do
+            ((++j))
             NEW_FORMULAE=($(comm -23 \
                 <(lk_echo_array ALL_FORMULAE) \
                 <(lk_echo_array LAST_FORMULAE)))
-            [ "$i" -gt 0 ] ||
+            ! lk_verbose || [ ${#NEW_FORMULAE[@]} -eq 0 ] ||
+                lk_console_detail \
+                    "$BREW_NAME formulae dependencies (iteration #$j):" \
+                    $'\n'"${NEW_FORMULAE[*]}"
+            [ "$i" -gt 0 ] || {
                 NEW_CASKS=($(comm -23 \
                     <(lk_echo_array ALL_CASKS) \
                     <(lk_echo_array LAST_CASKS)))
+                ! lk_verbose || [ ${#NEW_CASKS[@]} -eq 0 ] ||
+                    lk_console_detail \
+                        "$BREW_NAME cask dependencies (iteration #$j):" \
+                        $'\n'"${NEW_CASKS[*]}"
+            }
             [ ${#NEW_FORMULAE[@]}+${#NEW_CASKS[@]} != 0+0 ] || break
             LAST_FORMULAE=(${ALL_FORMULAE[@]+"${ALL_FORMULAE[@]}"})
             [ "$i" -gt 0 ] ||
                 LAST_CASKS=(${ALL_CASKS[@]+"${ALL_CASKS[@]}"})
-            NEW_JSON=$({
-                [ ${#NEW_FORMULAE[@]} -eq 0 ] ||
-                    brew info --json=v2 --formula "${NEW_FORMULAE[@]}"
-                [ "$i" -gt 0 ] || [ ${#NEW_CASKS[@]} -eq 0 ] ||
-                    brew info --json=v2 --cask "${NEW_CASKS[@]}"
-            } | jq --slurp '{"formulae":[.[].formulae[]],"casks":[.[].casks[]]}')
+            NEW_JSON=$({ [ ${#NEW_FORMULAE[@]} -eq 0 ] || jq '{
+    "casks": [],
+    "formulae": [ .formulae[] | select(.full_name | IN($ARGS.positional[])) ]
+}' --args "${NEW_FORMULAE[@]}" <<<"$ALL_JSON"; } &&
+                { [ "$i" -gt 0 ] || [ ${#NEW_CASKS[@]} -eq 0 ] || jq '{
+    "formulae": [],
+    "casks": [ .casks[] | select(.token | IN($ARGS.positional[])) ]
+}' --args "${NEW_CASKS[@]}" <<<"$ALL_JSON"; } | jq --slurp '{
+    "formulae": [ .[].formulae[] ],
+    "casks": [ .[].casks[] ]
+}')
             ALL_FORMULAE=($({ lk_echo_array ALL_FORMULAE && jq -r "\
 .formulae[].dependencies[]?,\
 .casks[].depends_on.formula[]?" <<<"$NEW_JSON"; } | sort -u))
