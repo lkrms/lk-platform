@@ -222,7 +222,7 @@ function lk_sudo_offer_nopasswd() {
     sudo -n test -e "$FILE" 2>/dev/null || {
         lk_can_sudo install || return
         lk_confirm \
-            "Allow user '$USER' to run sudo without entering a password?" Y ||
+            "Allow '$USER' to run commands as root with no password?" N ||
             return 0
         lk_sudo_add_nopasswd "$USER" &&
             lk_console_message \

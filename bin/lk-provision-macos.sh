@@ -40,7 +40,7 @@ function exit_trap() {
     _DIR=/tmp/${LK_PATH_PREFIX}install
     mkdir -p "$_DIR"
 
-    EXIT_STATUS=0
+    STATUS=0
 
     SH=$([ ! -f /etc/default/lk-platform ] || { . /etc/default/lk-platform &&
         declare -p LK_PACKAGES_FILE; } 2>/dev/null) &&
@@ -104,32 +104,40 @@ function exit_trap() {
     lk_console_log "Provisioning macOS"
 
     LK_DEFAULTS_DIR=~/.${LK_PATH_PREFIX}defaults/00000000000000
-    if [ ! -e "$LK_DEFAULTS_DIR" ]; then
+    if [ ! -e "$LK_DEFAULTS_DIR" ] &&
+        lk_confirm "Save current macOS settings to files?" N; then
         lk_console_item "Dumping user defaults to domain files in" \
             ~/".${LK_PATH_PREFIX}defaults"
         lk_macos_defaults_dump
     fi
 
-    # This doubles as an early Full Disk Access check/reminder
-    STATUS=$(sudo systemsetup -getremotelogin)
-    if [[ ! "$STATUS" =~ ${S}On$ ]]; then
-        lk_console_message "Enabling Remote Login (SSH)"
-        lk_run_detail sudo systemsetup -setremotelogin on
-    fi
+    sudo systemsetup -getremotelogin | grep -Ei '\<On$' >/dev/null || {
+        [[ ${PIPESTATUS[0]}${PIPESTATUS[1]} =~ ^01$ ]] || lk_die ""
+        ! lk_confirm \
+            "Enable SSH server for remote access to this computer?" N || {
+            lk_console_message "Enabling Remote Login (SSH)"
+            lk_run_detail sudo systemsetup -setremotelogin on
+        }
+    }
 
-    STATUS=$(sudo systemsetup -getcomputersleep)
-    if [[ ! "$STATUS" =~ ${S}Never$ ]]; then
-        lk_console_message "Disabling computer sleep"
-        lk_run_detail sudo systemsetup -setcomputersleep off
-    fi
+    sudo systemsetup -getcomputersleep | grep -Ei '\<Never$' >/dev/null || {
+        [[ ${PIPESTATUS[0]}${PIPESTATUS[1]} =~ ^01$ ]] || lk_die ""
+        ! lk_confirm \
+            "Prevent computer from sleeping when display is off?" N || {
+            lk_console_message "Disabling computer sleep"
+            lk_run_detail sudo systemsetup -setcomputersleep off
+        }
+    }
 
     lk_sudo_offer_nopasswd || true
 
-    scutil --get HostName &>/dev/null ||
-        [ -z "${LK_NODE_HOSTNAME:=$(
-            lk_console_read "Hostname for this system:"
-        )}" ] ||
-        lk_macos_set_hostname "$LK_NODE_HOSTNAME"
+    scutil --get HostName &>/dev/null || {
+        [ -n "${LK_NODE_HOSTNAME-}" ] ||
+            LK_NODE_HOSTNAME=$(lk_console_read "Hostname for this system:") ||
+            lk_die ""
+        [ -z "$LK_NODE_HOSTNAME" ] ||
+            lk_macos_set_hostname "$LK_NODE_HOSTNAME"
+    }
 
     CURRENT_SHELL=$(dscl . -read ~/ UserShell | sed 's/^UserShell: //')
     if [ "$CURRENT_SHELL" != /bin/bash ]; then
@@ -168,15 +176,15 @@ EOF
     umask 002
 
     function path_add() {
-        local EXIT_STATUS
+        local STATUS
         while [ $# -gt 0 ]; do
             [[ :$_PATH: == *:$1:* ]] || {
                 _PATH=$1:${_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}
-                EXIT_STATUS=1
+                STATUS=1
             }
             shift
         done
-        return "${EXIT_STATUS:-0}"
+        return "${STATUS:-0}"
     }
     PATH_ADD=(/usr/local/bin)
     BREW_CMD=(brew)
@@ -619,7 +627,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
             MESSAGE=${3//"$s"/$BREW_NAME}
             lk_echo_array ARR |
                 lk_console_list "$MESSAGE" formula formulae
-            lk_brew "$1" --formula "${ARR[@]}" || EXIT_STATUS=$?
+            lk_brew "$1" --formula "${ARR[@]}" || STATUS=$?
         }
     }
     lk_brew_loop commit_changes upgrade UPGRADE_FORMULAE \
@@ -629,26 +637,26 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
 
     [ ${#UPGRADE_CASKS[@]} -eq 0 ] || {
         lk_console_message "Upgrading casks"
-        lk_brew upgrade --cask "${UPGRADE_CASKS[@]}" || EXIT_STATUS=$?
+        lk_brew upgrade --cask "${UPGRADE_CASKS[@]}" || STATUS=$?
     }
 
     [ ${#INSTALL_CASKS[@]} -eq 0 ] || {
         lk_echo_array INSTALL_CASKS |
             lk_console_list "Installing new casks:"
-        lk_brew install --cask "${INSTALL_CASKS[@]}" || EXIT_STATUS=$?
+        lk_brew install --cask "${INSTALL_CASKS[@]}" || STATUS=$?
     }
 
     [ ${#UPGRADE_APPS[@]} -eq 0 ] || {
         lk_console_message "Upgrading apps"
         lk_tty caffeinate -i \
-            mas upgrade "${UPGRADE_APPS[@]}" || EXIT_STATUS=$?
+            mas upgrade "${UPGRADE_APPS[@]}" || STATUS=$?
     }
 
     [ ${#INSTALL_APPS[@]} -eq 0 ] || {
         lk_echo_array APP_NAMES |
             lk_console_list "Installing new apps:"
         lk_tty caffeinate -i \
-            mas install "${INSTALL_APPS[@]}" || EXIT_STATUS=$?
+            mas install "${INSTALL_APPS[@]}" || STATUS=$?
     }
 
     lk_macos_xcode_maybe_accept_license
@@ -749,5 +757,5 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
 
     lk_console_success "Provisioning complete"
 
-    exit "$EXIT_STATUS"
+    exit "$STATUS"
 }

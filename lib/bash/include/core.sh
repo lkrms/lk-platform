@@ -233,15 +233,23 @@ else
     if ! lk_is_macos; then
         # lk_date FORMAT [TIMESTAMP]
         function lk_date() {
-            gnu_date ${2:+-d "@$2"} +"$1"
+            if [ $# -lt 2 ]; then
+                gnu_date "+$1"
+            else
+                gnu_date -d "@$2" "+$1"
+            fi
         }
     else
         # lk_date FORMAT [TIMESTAMP]
         function lk_date() {
-            date ${2:+-jf '%s' "$2"} +"$1"
+            if [ $# -lt 2 ]; then
+                date "+$1"
+            else
+                date -jf '%s' "$2" "+$1"
+            fi
         }
     fi
-fi #### Reviewed: 2021-03-26
+fi #### Reviewed: 2021-04-30
 
 # lk_date_log [TIMESTAMP]
 function lk_date_log() {
