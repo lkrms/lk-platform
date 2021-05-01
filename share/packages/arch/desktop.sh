@@ -14,19 +14,32 @@ lk_is_virtual || {
         guvcview # Webcam utility
         linssid  # Wi-Fi scanner
     )
+    AUR_PACKAGES+=(
+        geekbench
+    )
     ! lk_system_has_intel_graphics || PAC_PACKAGES+=(
         clinfo
         intel-compute-runtime
+        vulkan-intel
+        vulkan-tools
     )
     ! lk_system_has_nvidia_graphics || PAC_PACKAGES+=(
         clinfo
         opencl-nvidia
+        vulkan-tools
     )
-    ! lk_system_has_amd_graphics || PAC_PACKAGES+=(
-        clinfo
-        libclc
-        opencl-mesa
-    )
+    ! lk_system_has_amd_graphics || {
+        PAC_PACKAGES+=(
+            clinfo
+            libclc
+            opencl-mesa
+            vulkan-radeon
+            vulkan-tools
+        )
+        AUR_PACKAGES+=(
+            rocm-opencl-runtime
+        )
+    }
 }
 
 AUR_PACKAGES+=(
