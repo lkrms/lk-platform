@@ -65,7 +65,11 @@ function exit_trap() {
         SUDOERS=$(cat "$LK_BASE/share/sudoers.d/default")
         ${PACKAGES_REL:+. "$LK_BASE/$PACKAGES_REL"}
     else
-        echo $'\E[1m\E[36m==> \E[m\017\E[1mChecking prerequisites\E[m\017' >&2
+        YELLOW=$'\E[33m'
+        CYAN=$'\E[36m'
+        BOLD=$'\E[1m'
+        RESET=$'\E[m\017'
+        echo "$BOLD$CYAN==> $RESET${BOLD}Checking prerequisites$RESET" >&2
         REPO_URL=https://raw.githubusercontent.com/lkrms/lk-platform
         for FILE_PATH in \
             ${PACKAGES_REL:+"/$PACKAGES_REL"} \
@@ -76,7 +80,7 @@ function exit_trap() {
             /share/sudoers.d/default; do
             FILE=$_DIR/${FILE_PATH##*/}
             URL=$REPO_URL/$LK_PLATFORM_BRANCH$FILE_PATH
-            MESSAGE=$'\E[1m\E[33m   -> \E[m\017{}\E[m\017\E[33m '"$URL"$'\E[m\017'
+            MESSAGE="$BOLD$YELLOW   -> $RESET{}$YELLOW $URL$RESET"
             if [ ! -e "$FILE" ]; then
                 echo "${MESSAGE/{\}/Downloading:}" >&2
                 curl "${CURL_OPTIONS[@]}" --output "$FILE" "$URL" || {

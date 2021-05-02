@@ -58,11 +58,13 @@ function _lk_apt_flock() {
         lk_elevate lk_tty flock "${DIR%/}/daily_lock" "$@"
 }
 
-# lk_apt_available_list
+# lk_apt_available_list [PACKAGE...]
 #
-# Output the names of all packages available for installation.
+# Output each PACKAGE available for installation, or list all available
+# packages.
 function lk_apt_available_list() {
-    apt-cache pkgnames
+    lk_apt_update >&2 &&
+        apt-cache pkgnames "$@"
 }
 
 # lk_apt_marked_manual_list [PACKAGE...]
@@ -124,9 +126,10 @@ function lk_apt_install() {
     [ ${#INSTALL[@]} -eq 0 ] || {
         lk_echo_array INSTALL |
             lk_console_list "Installing:" "APT package" "APT packages"
-        _lk_apt_flock apt-get -yq \
-            --no-install-recommends --no-install-suggests \
-            install "${INSTALL[@]}"
+        lk_apt_update &&
+            _lk_apt_flock apt-get -yq \
+                --no-install-recommends --no-install-suggests \
+                install "${INSTALL[@]}"
     }
 }
 
@@ -250,9 +253,10 @@ function lk_apt_reinstall_damaged() {
         [ ${#AUTO[@]} -eq 0 ] ||
             lk_console_log "Packages marked as 'automatically installed':" \
                 "${AUTO[*]}"
-        _lk_apt_flock apt-get -yq \
-            --no-install-recommends --no-install-suggests --reinstall \
-            install "${REINSTALL[@]}" &&
+        lk_apt_update &&
+            _lk_apt_flock apt-get -yq \
+                --no-install-recommends --no-install-suggests --reinstall \
+                install "${REINSTALL[@]}" &&
             { [ ${#AUTO[@]} -eq 0 ] ||
                 _lk_apt_flock apt-mark auto "${AUTO[@]}"; }
     }
