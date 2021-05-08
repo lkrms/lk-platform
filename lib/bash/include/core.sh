@@ -954,6 +954,7 @@ function lk_cache_mark_dirty() {
 function lk_get_outputs_of() {
     local SH EXIT_STATUS
     SH=$(
+        _LK_CAN_FAIL=1
         _LK_STDOUT=$(lk_mktemp_file) &&
             _LK_STDERR=$(lk_mktemp_file) &&
             lk_delete_on_exit "$_LK_STDOUT" "$_LK_STDERR" || exit
