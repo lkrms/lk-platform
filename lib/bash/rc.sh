@@ -1,6 +1,6 @@
 #!/bin/bash
 
-unset LK_PROMPT_DISPLAYED
+unset _LK_PROMPT_DISPLAYED
 
 SH=$(
     set -u
@@ -180,7 +180,7 @@ fi
 
     lk_is_false LK_PROMPT || {
         lk_include prompt
-        lk_enable_prompt
+        lk_prompt_enable
     }
 
     ! lk_command_exists dircolors || { SH=$(
