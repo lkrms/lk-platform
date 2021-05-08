@@ -393,6 +393,21 @@ function lk_get_env() {
     )
 } #### Reviewed: 2021-04-12
 
+# lk_path_edit REMOVE_REGEX [MOVE_REGEX [PATH]]
+function lk_path_edit() {
+    [ $# -gt 0 ] || lk_usage "\
+Usage: ${FUNCNAME[0]} REMOVE_REGEX [MOVE_REGEX [PATH]]" || return
+    awk \
+        -v "remove=$1" \
+        -v "move=${2-}" \
+        'function p(v) { printf "%s%s", s, v; s = ":" }
+BEGIN { RS = "[:\n]+" }
+remove && $0 ~ remove { next }
+move && $0 ~ move { a[i++] = $0; next }
+{ p($0) }
+END{ for (i in a) p(a[i]) }' <<<"${3-$PATH}"
+} #### Reviewed: 2021-05-10
+
 # lk_check_pid PID
 #
 # Return true if a signal could be sent to the given process by the current
