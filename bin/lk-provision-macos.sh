@@ -302,6 +302,8 @@ EOF
         [ ${#TAPS[@]} -eq 0 ] ||
             for TAP in "${TAPS[@]}"; do
                 lk_console_detail "Tapping" "$TAP"
+                ! ((i)) || [[ ! $TAP =~ ^[^/]+/[^/]+$ ]] ||
+                    TAP=file:///opt/homebrew/Library/Taps/${TAP%/*}/homebrew-${TAP#*/}
                 lk_brew tap --quiet "$TAP" || return
             done
     }
@@ -315,7 +317,11 @@ EOF
     }
 
     function install_homebrew() {
-        local FILE URL HOMEBREW_BREW_GIT_REMOTE
+        local FILE URL HOMEBREW_{BREW,CORE}_GIT_REMOTE
+        ! ((i)) || {
+            export HOMEBREW_BREW_GIT_REMOTE=file:///opt/homebrew
+            export HOMEBREW_CORE_GIT_REMOTE=file:///opt/homebrew/Library/Taps/homebrew/homebrew-core
+        }
         BREW_NEW[$i]=0
         if ! lk_command_exists "$BREW_PATH"; then
             lk_console_message "Installing $BREW_NAME"
@@ -330,7 +336,8 @@ EOF
             CI=1 lk_tty caffeinate -i \
                 ${BREW_ARCH[$i]:+arch "--${BREW_ARCH[$i]}"} bash "$FILE" ||
                 lk_die "$BREW_NAME installer failed"
-            lk_command_exists "$BREW_PATH" || lk_die "command not found: $BREW_PATH"
+            lk_command_exists "$BREW_PATH" ||
+                lk_die "command not found: $BREW_PATH"
             BREW_NEW[$i]=1
         fi
         lk_console_item "Found $BREW_NAME at:" "$("$BREW_PATH" --prefix)"
@@ -341,8 +348,6 @@ EOF
         lk_brew_check_taps
         [ "${BREW_NEW[$i]}" -eq 1 ] || {
             lk_console_detail "Updating formulae"
-            ! ((i)) ||
-                export HOMEBREW_BREW_GIT_REMOTE=/opt/homebrew
             lk_brew update --quiet
         }
     }
