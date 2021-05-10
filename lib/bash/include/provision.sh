@@ -153,6 +153,7 @@ function lk_settings_persist() {
         local IFS=$'\n'
         FILES=($(_lk_settings_writable_files)) || return
         set -- "$1" "${FILES[@]}"
+        unset IFS
     }
     _FILE=$(
         unset "${!LK_@}"
