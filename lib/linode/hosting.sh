@@ -431,7 +431,9 @@ fi
 TERM='' . "$LK_BASE/lib/bash/common.sh"
 lk_include hosting provision
 
-install -m 00644 /dev/null /etc/default/lk-platform
+FILE=$LK_BASE/etc/lk-platform/lk-platform.conf
+install -d -m 00775 -g adm "${FILE%/*}"
+install -m 00664 -g adm /dev/null "$FILE"
 LK_SSH_JUMP_KEY=${LK_SSH_JUMP_KEY:+jump} \
     lk_get_shell_var \
     LK_BASE \
@@ -465,7 +467,7 @@ LK_SSH_JUMP_KEY=${LK_SSH_JUMP_KEY:+jump} \
     LK_SNAPSHOT_WEEKLY_MAX_AGE \
     LK_SNAPSHOT_FAILED_MAX_AGE \
     LK_SCRIPT_DEBUG \
-    LK_PLATFORM_BRANCH >/etc/default/lk-platform
+    LK_PLATFORM_BRANCH >"$FILE"
 
 install -v -d -m 02775 -g adm "$LK_BASE/etc"
 install -m 00664 -g adm /dev/null "$LK_BASE/etc/packages.conf"

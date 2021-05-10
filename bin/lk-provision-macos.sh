@@ -42,27 +42,38 @@ function exit_trap() {
 
     STATUS=0
 
-    SH=$([ ! -f /etc/default/lk-platform ] || { . /etc/default/lk-platform &&
-        declare -p LK_PACKAGES_FILE; } 2>/dev/null) &&
-        eval "$SH"
-    LK_PACKAGES_FILE=${1:-${LK_PACKAGES_FILE:-}}
-    PACKAGES_REL=
-    if [ -n "$LK_PACKAGES_FILE" ]; then
-        if [ ! -f "$LK_PACKAGES_FILE" ]; then
-            FILE=${LK_PACKAGES_FILE##*/}
-            FILE=${FILE#packages-macos-}
-            FILE=${FILE%.sh}
-            FILE=$LK_BASE/share/packages/macos/$FILE.sh
-            [ -f "$FILE" ] || PACKAGES_REL=${FILE#$LK_BASE/}
-            LK_PACKAGES_FILE=$FILE
+    function load_settings() {
+        [ ! -f /etc/default/lk-platform ] ||
+            . /etc/default/lk-platform
+        [ ! -f "$LK_BASE/etc/lk-platform/lk-platform.conf" ] ||
+            . "$LK_BASE/etc/lk-platform/lk-platform.conf"
+        SETTINGS_SH=$(lk_settings_getopt)
+        eval "$SETTINGS_SH"
+        shift "$_LK_SHIFT"
+
+        LK_PACKAGES_FILE=${1:-${LK_PACKAGES_FILE:-}}
+        PACKAGES_REL=
+        if [ -n "$LK_PACKAGES_FILE" ]; then
+            if [ ! -f "$LK_PACKAGES_FILE" ]; then
+                FILE=${LK_PACKAGES_FILE##*/}
+                FILE=${FILE#packages-macos-}
+                FILE=${FILE%.sh}
+                FILE=$LK_BASE/share/packages/macos/$FILE.sh
+                [ -f "$FILE" ] || PACKAGES_REL=${FILE#$LK_BASE/}
+                LK_PACKAGES_FILE=$FILE
+            fi
+            SETTINGS_SH=$(
+                [ -z "${SETTINGS_SH:+1}" ] || cat <<<"$SETTINGS_SH"
+                printf '%s=%q\n' LK_PACKAGES_FILE "$LK_PACKAGES_FILE"
+            )
         fi
-        export LK_PACKAGES_FILE
-    fi
+    }
 
     if [ -f "$LK_BASE/lib/bash/include/core.sh" ]; then
         . "$LK_BASE/lib/bash/include/core.sh"
         lk_include macos provision whiptail
-        SUDOERS=$(cat "$LK_BASE/share/sudoers.d/default")
+        SUDOERS=$(<"$LK_BASE/share/sudoers.d/default")
+        load_settings "$@"
         ${PACKAGES_REL:+. "$LK_BASE/$PACKAGES_REL"}
     else
         YELLOW=$'\E[33m'
@@ -72,12 +83,17 @@ function exit_trap() {
         echo "$BOLD$CYAN==> $RESET${BOLD}Checking prerequisites$RESET" >&2
         REPO_URL=https://raw.githubusercontent.com/lkrms/lk-platform
         for FILE_PATH in \
-            ${PACKAGES_REL:+"/$PACKAGES_REL"} \
             /lib/bash/include/core.sh \
             /lib/bash/include/macos.sh \
             /lib/bash/include/provision.sh \
             /lib/bash/include/whiptail.sh \
-            /share/sudoers.d/default; do
+            /share/sudoers.d/default \
+            PACKAGES; do
+            [ "$FILE_PATH" != PACKAGES ] || {
+                load_settings "$@"
+                [ -n "$PACKAGES_REL" ] || break
+                FILE_PATH=/$PACKAGES_REL
+            }
             FILE=$_DIR/${FILE_PATH##*/}
             URL=$REPO_URL/$LK_PLATFORM_BRANCH$FILE_PATH
             MESSAGE="$BOLD$YELLOW   -> $RESET{}$YELLOW $URL$RESET"
@@ -93,12 +109,8 @@ function exit_trap() {
             [[ ! $FILE_PATH =~ /include/[a-z0-9_]+\.sh$ ]] ||
                 . "$FILE"
         done
-        SUDOERS=$(cat "$_DIR/default")
+        SUDOERS=$(<"$_DIR/default")
     fi
-
-    SH=$(lk_provision_getopt)
-    eval "$SH"
-    shift "$LK_SHIFT"
 
     LK_FILE_BACKUP_TAKE=${LK_FILE_BACKUP_TAKE-1}
 
@@ -246,18 +258,19 @@ EOF
         sudo install -d -m 02775 -o "$USER" -g admin "$LK_BASE"
         lk_tty caffeinate -i git clone -b "$LK_PLATFORM_BRANCH" \
             https://github.com/lkrms/lk-platform.git "$LK_BASE"
-        lk_file_keep_original /etc/default/lk-platform
-        [ -e /etc/default ] ||
-            sudo install -d -m 00755 -g wheel /etc/default
-        sudo install -m 00664 -g admin /dev/null /etc/default/lk-platform
+        sudo install -d -m 00775 -g admin "$LK_BASE/etc/lk-platform"
+        sudo install -m 00664 -g admin /dev/null \
+            "$LK_BASE/etc/lk-platform/lk-platform.conf"
         lk_get_shell_var \
             LK_BASE \
             LK_PATH_PREFIX \
             LK_PLATFORM_BRANCH \
             LK_PACKAGES_FILE |
-            sudo tee /etc/default/lk-platform >/dev/null
-        lk_console_detail_file /etc/default/lk-platform
+            sudo tee "$LK_BASE/etc/lk-platform/lk-platform.conf" >/dev/null
+        lk_console_detail_file "$LK_BASE/etc/lk-platform/lk-platform.conf"
     fi
+
+    LK_SUDO=1 lk_settings_persist "$SETTINGS_SH"
 
     [ -z "$LK_PACKAGES_FILE" ] ||
         . "$LK_PACKAGES_FILE"
@@ -400,10 +413,9 @@ EOF
 
     lk_console_blank
     LK_NO_LOG=1 LK_SUDO=1 \
-        lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" \
-        ${LK_PACKAGES_FILE:+--set LK_PACKAGES_FILE="$LK_PACKAGES_FILE"}
-    [ ! -f /etc/default/lk-platform ] ||
-        . /etc/default/lk-platform
+        lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh"
+    [ ! -f "$LK_BASE/etc/lk-platform/lk-platform.conf" ] ||
+        . "$LK_BASE/etc/lk-platform/lk-platform.conf"
 
     lk_console_blank
     lk_console_message "Checking Homebrew packages"

@@ -2,11 +2,6 @@
 
 set -o pipefail
 
-[ -z "${_LK_PLATFORM_CONFIGURE_ARGS:-}" ] || {
-    eval "set -- $_LK_PLATFORM_CONFIGURE_ARGS \"\$@\""
-    unset _LK_PLATFORM_CONFIGURE_ARGS
-}
-
 [ "$EUID" -eq 0 ] || {
     # See: https://bugzilla.sudo.ws/show_bug.cgi?id=950
     SUDO_MIN=3
@@ -20,7 +15,7 @@ set -o pipefail
             $((_LK_TTY_OUT_FD)) $((_LK_TTY_ERR_FD)) \
             $((_LK_LOG_OUT_FD)) $((_LK_LOG_ERR_FD)) \
             $((_LK_LOG_FD)) | sort -n | tail -n1) + 1))" \
-        "$0" --elevated "$@"
+        "$0" "$@" --elevated
     exit
 }
 
@@ -33,14 +28,16 @@ SH=$(
     _DIR=$(cd "${_FILE%/*}" && pwd -P) &&
         printf 'export _LK_INST=%q\n' "${_DIR%/bin}" ||
         die "base directory not found"
-    # Values set in /etc/default/lk-platform override LK_* environment variables
-    # with the same name
+    # Override LK_* environment variables with the same name as settings in
+    # $LK_BASE/etc/lk-platform/lk-platform.conf
     vars() { printf '%s\n' "${!LK_@}"; }
     unset IFS
     VARS=$(vars)
     unset $VARS
     [ ! -r /etc/default/lk-platform ] ||
         . /etc/default/lk-platform
+    [ ! -r "${_DIR%/bin}/etc/lk-platform/lk-platform.conf" ] ||
+        . "${_DIR%/bin}/etc/lk-platform/lk-platform.conf"
     VARS=$(vars)
     [ -z "${VARS:+1}" ] ||
         declare -p $VARS
@@ -49,7 +46,7 @@ lk_include git provision
 
 shopt -s nullglob
 
-CONF_FILE=/etc/default/lk-platform
+CONF_FILE=$_LK_INST/etc/lk-platform/lk-platform.conf
 
 SETTINGS=(
     LK_BASE
@@ -296,7 +293,7 @@ lk_log_start
     KNOWN_SETTINGS=()
     for i in "${SETTINGS[@]}"; do
         # Don't include null variables unless they already appear in
-        # /etc/default/lk-platform
+        # $LK_BASE/etc/lk-platform/lk-platform.conf
         [ -n "${!i:-}" ] ||
             grep -Eq "^$i=" "$CONF_FILE" ||
             lk_in_array "$i" NEW_SETTINGS ||

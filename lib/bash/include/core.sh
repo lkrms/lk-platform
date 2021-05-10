@@ -339,11 +339,14 @@ function lk_double_quote() {
     printf '"%s"\n' "${STRING%.}"
 }
 
+# lk_get_shell_var [VAR...]
+#
+# Output a shell variable assignment for each declared VAR.
 function lk_get_shell_var() {
     while [ $# -gt 0 ]; do
-        if [ -n "${!1:-}" ]; then
+        if [ -n "${!1:+1}" ]; then
             printf '%s=%s\n' "$1" "$(lk_double_quote "${!1}")"
-        else
+        elif [ -n "${!1+1}" ]; then
             printf '%s=\n' "$1"
         fi
         shift

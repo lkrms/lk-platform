@@ -18,10 +18,6 @@ shopt -s nullglob
 . "$LK_BASE/lib/bash/common.sh"
 lk_include arch git linux provision
 
-SH=$(lk_provision_getopt)
-eval "$SH"
-shift "$LK_SHIFT"
-
 ! lk_in_chroot || _LK_BOOTSTRAP=1
 
 if lk_is_bootstrap; then
@@ -138,6 +134,22 @@ function memory_at_least() {
 lk_assert_not_root
 lk_assert_is_arch
 
+# Try to detect missing settings
+if ! lk_is_bootstrap; then
+    [ -n "${LK_NODE_TIMEZONE:-}" ] || ! _TZ=$(lk_system_timezone) ||
+        set -- --set LK_NODE_TIMEZONE "$_TZ" "$@"
+    [ -n "${LK_NODE_HOSTNAME:-}" ] || ! _HN=$(lk_hostname) ||
+        set -- --set LK_NODE_HOSTNAME "$_HN" "$@"
+    [ -n "${LK_NODE_LOCALES+1}" ] ||
+        set -- --set LK_NODE_LOCALES "en_AU.UTF-8 en_GB.UTF-8" "$@"
+    [ -n "${LK_NODE_LANGUAGE+1}" ] ||
+        set -- --set LK_NODE_LANGUAGE "en_AU:en_GB:en" "$@"
+fi
+
+SETTINGS_SH=$(lk_settings_getopt)
+eval "$SETTINGS_SH"
+shift "$_LK_SHIFT"
+
 lk_getopt
 eval "set -- $LK_GETOPT"
 
@@ -153,7 +165,10 @@ if [ -n "$LK_PACKAGES_FILE" ]; then
         [ -f "$FILE" ] || lk_die "file not found: $LK_PACKAGES_FILE"
         LK_PACKAGES_FILE=$FILE
     fi
-    export LK_PACKAGES_FILE
+    SETTINGS_SH=$(
+        [ -z "${SETTINGS_SH:+1}" ] || cat <<<"$SETTINGS_SH"
+        printf '%s=%q\n' LK_PACKAGES_FILE "$LK_PACKAGES_FILE"
+    )
 fi
 
 lk_log_start
@@ -171,23 +186,13 @@ lk_start_trace
     LK_FILE_BACKUP_TAKE=${LK_FILE_BACKUP_TAKE-$(lk_is_bootstrap || echo 1)}
     LK_FILE_BACKUP_MOVE=1
 
+    lk_settings_persist "$SETTINGS_SH"
+
     EXIT_STATUS=0
     SERVICE_STARTED=()
     SERVICE_ENABLE=()
     SERVICE_RESTART=()
     DAEMON_RELOAD=
-
-    # Try to detect missing settings
-    if ! lk_is_bootstrap; then
-        [ -n "${LK_NODE_TIMEZONE:-}" ] || ! _TZ=$(lk_system_timezone) ||
-            export LK_NODE_TIMEZONE=$_TZ
-        [ -n "${LK_NODE_HOSTNAME:-}" ] || ! _HN=$(lk_hostname) ||
-            export LK_NODE_HOSTNAME=$_HN
-        [ -n "${LK_NODE_LOCALES+1}" ] ||
-            LK_NODE_LOCALES="en_AU.UTF-8 en_GB.UTF-8"
-        [ -n "${LK_NODE_LANGUAGE+1}" ] ||
-            LK_NODE_LANGUAGE=en_AU:en_GB:en
-    fi
 
     if [ -n "${LK_NODE_TIMEZONE:-}" ]; then
         lk_console_message "Checking system time zone"
@@ -516,8 +521,8 @@ $LK_NODE_HOSTNAME" &&
     LK_NO_LOG=1 \
         lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" \
         ${LK_PACKAGES_FILE:+--set LK_PACKAGES_FILE="$LK_PACKAGES_FILE"}
-    [ ! -f /etc/default/lk-platform ] ||
-        . /etc/default/lk-platform
+    [ ! -f "$LK_BASE/etc/lk-platform/lk-platform.conf" ] ||
+        . "$LK_BASE/etc/lk-platform/lk-platform.conf"
 
     lk_console_blank
     lk_console_log "Checking packages"

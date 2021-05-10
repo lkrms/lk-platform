@@ -447,8 +447,9 @@ in_target install -d -m 02775 -o "$BOOTSTRAP_USERNAME" -g adm "$LK_BASE"
     in_target -u "$BOOTSTRAP_USERNAME" \
         git clone -b "$LK_PLATFORM_BRANCH" \
         https://github.com/lkrms/lk-platform.git "$LK_BASE")
-FILE=/mnt/etc/default/lk-platform
-install -m 00644 /dev/null "$FILE"
+FILE=$LK_BASE/etc/lk-platform/lk-platform.conf
+in_target install -d -m 00775 -g adm "${FILE%/*}"
+in_target install -m 00664 -g adm /dev/null "$FILE"
 lk_get_shell_var \
     LK_BASE \
     LK_PATH_PREFIX \
@@ -469,7 +470,7 @@ lk_get_shell_var \
     LK_ARCH_MIRROR \
     LK_ARCH_REPOS \
     LK_PLATFORM_BRANCH \
-    LK_PACKAGES_FILE >"$FILE"
+    LK_PACKAGES_FILE >"/mnt$FILE"
 
 PROVISIONED=
 in_target -u "$BOOTSTRAP_USERNAME" \
