@@ -29,6 +29,7 @@ PAC_PACKAGES=(
 
     ### Services
     #
+    atop
     logrotate
     ntp
 
@@ -64,11 +65,14 @@ PAC_PACKAGES=(
     dmidecode
     glances
     htop
+    hwinfo
+    iotop
     lsof
     ncdu
     pcp
     ps_mem
     s-tui
+    sysfsutils
     sysstat
 
     # Network
@@ -88,9 +92,15 @@ PAC_PACKAGES=(
     wget
     whois
 
-    # 7z/zip
+    # Network monitoring
+    iftop   # traffic by service and host
+    nethogs # traffic by process ('nettop')
+    nload   # traffic by interface
+
+    # 7z/zip/wimextract
     p7zip
     unzip
+    wimlib
 
     # json/yml/xml
     jq
@@ -149,6 +159,8 @@ if lk_node_service_enabled libvirt; then
         dnsmasq
         edk2-ovmf
         libguestfs
+        cpio
+        virt-install
     )
 fi
 
@@ -301,6 +313,10 @@ else
         #
         fwupd
         udisks2
+    )
+
+    AUR_PACKAGES+=(
+        powercap
     )
 
     if lk_node_service_enabled desktop; then

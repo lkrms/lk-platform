@@ -51,19 +51,6 @@ PAC_PACKAGES+=(
     # networking
     networkmanager-l2tp
     networkmanager-openconnect
-
-    # monitoring
-    atop
-    iotop
-
-    # network monitoring
-    iftop   # shows network traffic by service and host
-    nethogs # groups bandwidth by process ('nettop')
-    nload   # shows bandwidth by interface
-
-    # system
-    hwinfo
-    sysfsutils
 )
 
 AUR_PACKAGES+=(
