@@ -186,7 +186,8 @@ lk_start_trace
     LK_FILE_BACKUP_TAKE=${LK_FILE_BACKUP_TAKE-$(lk_is_bootstrap || echo 1)}
     LK_FILE_BACKUP_MOVE=1
 
-    lk_settings_persist "$SETTINGS_SH"
+    LK_VERBOSE=1 \
+        lk_settings_persist "$SETTINGS_SH"
 
     EXIT_STATUS=0
     SERVICE_STARTED=()

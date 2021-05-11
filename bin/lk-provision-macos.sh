@@ -270,7 +270,8 @@ EOF
         lk_console_detail_file "$LK_BASE/etc/lk-platform/lk-platform.conf"
     fi
 
-    LK_SUDO=1 lk_settings_persist "$SETTINGS_SH"
+    LK_VERBOSE=1 LK_SUDO=1 \
+        lk_settings_persist "$SETTINGS_SH"
 
     [ -z "$LK_PACKAGES_FILE" ] ||
         . "$LK_PACKAGES_FILE"

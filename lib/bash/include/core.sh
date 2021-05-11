@@ -1065,13 +1065,15 @@ function pv() {
 }
 
 function lk_tee() {
-    lk_ignore_SIGINT &&
-        exec tee "$@"
+    local PRESERVE
+    [[ ! "$1" =~ ^-[0-9]+$ ]] || { PRESERVE=${1#-} && shift; }
+    lk_ignore_SIGINT && eval exec "$(_lk_log_close_fd ${PRESERVE-})" || return
+    exec tee "$@"
 }
 
 function lk_log() {
     local PREFIX=${1:-}
-    lk_ignore_SIGINT || return
+    lk_ignore_SIGINT && eval exec "$(_lk_log_close_fd)" || return
     if lk_command_exists ts; then
         PREFIX=${PREFIX//"%"/"%%"}
         exec ts "$PREFIX%Y-%m-%d %H:%M:%.S %z"
@@ -1136,9 +1138,19 @@ function lk_start_trace() {
     set -x
 }
 
+function _lk_log_close_fd() {
+    local IFS i SH=()
+    unset IFS
+    for i in _LK_FD _LK_{{TTY,LOG}_{OUT,ERR},LOG}_FD _LK_LOG2_FD; do
+        [ -z "${!i-}" ] || [ "${!i}" -lt 3 ] || [ "${!i}" -eq "${1:-0}" ] ||
+            SH[${#SH[@]}]="${!i}>&-"
+    done
+    echo "${SH[*]}"
+}
+
 # lk_log_start [TEMP_LOG_FILE]
 function lk_log_start() {
-    local ARG0 ARGC HEADER EXT _FILE FILE LOG_FILE OUT_FILE FIFO DIR
+    local ARG0 ARGC HEADER EXT _FILE FILE LOG_FILE OUT_FILE FIFO
     if lk_is_true LK_NO_LOG || lk_log_is_open || ! lk_is_script_running; then
         return
     elif [ -z "${_LK_LOG_CMDLINE+1}" ]; then
@@ -1186,7 +1198,8 @@ function lk_log_start() {
     lk_ignore_SIGINT && lk_strip_non_printing <"$FIFO" >>"$OUT_FILE" &
     unset _LK_LOG2_FD
     [ -z "${LK_SECONDARY_LOG_FILE:-}" ] || { _LK_LOG2_FD=$(lk_fd_next) &&
-        eval "exec $_LK_LOG2_FD"'>>"$LK_SECONDARY_LOG_FILE"'; } || return
+        eval "exec $_LK_LOG2_FD"'>>"$LK_SECONDARY_LOG_FILE"' &&
+        export _LK_LOG2_FD; } || return
     _LK_TTY_OUT_FD=$(lk_fd_next) &&
         eval "exec $_LK_TTY_OUT_FD>&1" &&
         _LK_TTY_ERR_FD=$(lk_fd_next) &&
@@ -1203,7 +1216,7 @@ function lk_log_start() {
     export _LK_FD _LK_{{TTY,LOG}_{OUT,ERR},LOG}_FD
     lk_log_tty_on
     [ "${_LK_FD:-2}" -ne 2 ] || {
-        exec 3> >(lk_tee >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
+        exec 3> >(lk_tee >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
             >&"$_LK_TTY_OUT_FD")
         _LK_FD=3
     }
@@ -1235,44 +1248,45 @@ function lk_log_close() {
     [ "${1:-}" = -r ] || {
         exec >&"$_LK_TTY_OUT_FD" 2>&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}" &&
             eval "exec$(printf ' %s>&-' \
+                "$_LK_FD" \
                 "$_LK_TTY_OUT_FD" "$_LK_TTY_ERR_FD" \
                 "$_LK_LOG_OUT_FD" "$_LK_LOG_ERR_FD" "$_LK_LOG_FD")" &&
-            unset _LK_{{TTY,LOG}_{OUT,ERR},LOG}_FD _LK_LOG_FILE
+            unset _LK_FD _LK_{{TTY,LOG}_{OUT,ERR},LOG}_FD _LK_LOG_FILE
     }
 }
 
 function lk_log_tty_off() {
     lk_log_is_open || return 0
     exec \
-        > >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
-        2> >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") &&
+        > >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
+        2> >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") &&
         _LK_LOG_TTY_LAST=${FUNCNAME[0]}
 }
 
 function lk_log_tty_stdout_off() {
     lk_log_is_open || return 0
     exec \
-        > >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
-        2> >(lk_tee >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}") &&
+        > >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
+        2> >(lk_tee >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}") &&
         _LK_LOG_TTY_LAST=${FUNCNAME[0]}
 }
 
 function lk_log_tty_on() {
     lk_log_is_open || return 0
     exec \
-        > >(lk_tee >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") >&"$_LK_TTY_OUT_FD") \
-        2> >(lk_tee >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}") &&
+        > >(lk_tee >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") >&"$_LK_TTY_OUT_FD") \
+        2> >(lk_tee >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}") &&
         _LK_LOG_TTY_LAST=${FUNCNAME[0]}
 }
 
 function lk_log_to_file_stdout() {
     lk_log_is_open || lk_warn "no output log" || return
-    cat > >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD")
+    cat > >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD")
 }
 
 function lk_log_to_file_stderr() {
     lk_log_is_open || lk_warn "no output log" || return
-    cat > >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD")
+    cat > >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD")
 }
 
 function lk_log_to_tty_stdout() {
@@ -1316,16 +1330,16 @@ function lk_log_bypass() {
     case "$ARG" in
     -to)
         _lk_log_bypass "$@" \
-            > >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD")
+            > >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD")
         ;;
     -te)
         _lk_log_bypass "$@" \
-            2> >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD")
+            2> >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD")
         ;;
     -t)
         _lk_log_bypass "$@" \
-            > >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
-            2> >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD")
+            > >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
+            2> >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD")
         ;;
     -o)
         _lk_log_bypass "$@" \
@@ -1337,8 +1351,8 @@ function lk_log_bypass() {
         ;;
     -n)
         _lk_log_bypass "$@" \
-            > >(lk_tee >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") >&"$_LK_TTY_OUT_FD") \
-            2> >(lk_tee >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}")
+            > >(lk_tee >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") >&"$_LK_TTY_OUT_FD") \
+            2> >(lk_tee >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}")
         ;;
     *)
         _lk_log_bypass "$@" \
