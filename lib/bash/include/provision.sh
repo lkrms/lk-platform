@@ -80,7 +80,7 @@ function _lk_settings_list_known() {
 } #### Reviewed: 2021-05-09
 
 function _lk_settings_writable_files() {
-    local FILE DIR_MODE FILE_MODE GROUP
+    local FILE DIR_MODE FILE_MODE ARGS
     if lk_will_elevate && [[ $LK_BASE/ != ~/* ]]; then
         FILE=$LK_BASE/etc/lk-platform/lk-platform.conf
         DIR_MODE=0755
@@ -88,11 +88,11 @@ function _lk_settings_writable_files() {
         [ ! -g "$LK_BASE" ] || {
             DIR_MODE=2775
             FILE_MODE=0664
-            GROUP=$(lk_file_group "$LK_BASE") || return
+            ARGS=(-g "$(lk_file_group "$LK_BASE")") || return
         }
-        lk_install -d -m "$DIR_MODE" ${GROUP:+-g "$GROUP"} \
+        lk_install -d -m "$DIR_MODE" ${ARGS+"${ARGS[@]}"} \
             "$LK_BASE"/etc{,/lk-platform} &&
-            lk_install -m "$FILE_MODE" ${GROUP:+-g "$GROUP"} "$FILE" || return
+            lk_install -m "$FILE_MODE" ${ARGS+"${ARGS[@]}"} "$FILE" || return
         echo "$FILE"
         [ ! -f /etc/default/lk-platform ] ||
             echo /etc/default/lk-platform
