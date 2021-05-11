@@ -162,23 +162,18 @@ fi
     lk_is_false LK_COMPLETION || { SH=$(
         if [ -r /usr/share/bash-completion/bash_completion ]; then
             COMMAND=/usr/share/bash-completion/bash_completion
-        elif [ -z "${HOMEBREW_PREFIX:-}" ]; then
-            return
-        else
-            shopt -s nullglob
-            VERSION=
-            ! lk_bash_at_least 4 ||
-                VERSION="@2"
-            DIR=$HOMEBREW_PREFIX/Cellar/bash-completion$VERSION
-            COMMANDS=("$DIR"/*/etc/profile.d/bash_completion.sh)
-            [ -n "${COMMANDS+1}" ] || return 0
-            COMMAND=${COMMANDS[0]}
-            [ -n "$VERSION" ] || {
-                COMMAND=${COMMAND/profile.d\/bash_completion.sh/bash_completion}
-                printf '%s=%q ' \
+        elif [ -n "${HOMEBREW_PREFIX-}" ]; then
+            COMMAND=$HOMEBREW_PREFIX/opt/bash-completion
+            if lk_bash_at_least 4; then
+                COMMAND+="@2/etc/profile.d/bash_completion.sh"
+            else
+                COMMAND+=/etc/bash_completion
+                printf '%s=%q\n' \
                     BASH_COMPLETION "$COMMAND" \
                     BASH_COMPLETION_DIR "$COMMAND.d"
-            }
+            fi
+        else
+            return
         fi
         printf '. %q\n' "$COMMAND" "$LK_BASE/lib/bash/completion.sh"
     ) && eval "$SH"; }

@@ -58,7 +58,7 @@ function _lk_prompt_command() {
     PS+=("\h\[$LK_RESET$LK_BOLD$LK_BLUE\] \w \[$LK_RESET\]")
     IFS=
     # "$ " or "# "
-    PS1=${PS[*]}'\$ '
+    PS1="${PS[*]}"'\$ '
     _LK_PROMPT_DISPLAYED=1
 }
 
