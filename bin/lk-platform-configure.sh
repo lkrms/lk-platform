@@ -48,6 +48,15 @@ shopt -s nullglob
 
 CONF_FILE=$_LK_INST/etc/lk-platform/lk-platform.conf
 
+DIR_MODE=0755
+FILE_MODE=0644
+PRIVILEGED_DIR_MODE=0700
+[ ! -g "$_LK_INST" ] || {
+    DIR_MODE=2775
+    FILE_MODE=0664
+    PRIVILEGED_DIR_MODE=2770
+}
+
 SETTINGS=(
     LK_BASE
     LK_PATH_PREFIX
@@ -262,8 +271,8 @@ lk_log_start
 
     lk_console_message "Checking lk-platform settings"
     [ -e "$CONF_FILE" ] || {
-        install -d -m 00755 "${CONF_FILE%/*}" &&
-            install -m 00644 /dev/null "$CONF_FILE"
+        install -d -m "$DIR_MODE" "${CONF_FILE%/*}" "${CONF_FILE%/*/*}" &&
+            install -m "$FILE_MODE" /dev/null "$CONF_FILE"
     }
 
     # Use the opening "Environment:" log entry created by hosting.sh as a last
@@ -376,14 +385,6 @@ lk_log_start
                 ! lk_is_true LK_GIT_REPO_UPDATED ||
                 restart_script "$@"
         fi
-        DIR_MODE=0755
-        FILE_MODE=0644
-        PRIVILEGED_DIR_MODE=0700
-        [ ! -g "$LK_BASE" ] || {
-            DIR_MODE=2775
-            FILE_MODE=0664
-            PRIVILEGED_DIR_MODE=2770
-        }
         LK_VERBOSE='' \
             lk_dir_set_modes "$LK_BASE" \
             "" \

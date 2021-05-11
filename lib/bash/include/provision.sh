@@ -80,18 +80,34 @@ function _lk_settings_list_known() {
 } #### Reviewed: 2021-05-09
 
 function _lk_settings_writable_files() {
+    local FILE DIR_MODE FILE_MODE GROUP
     if lk_will_elevate && [[ $LK_BASE/ != ~/* ]]; then
-        echo "$LK_BASE/etc/lk-platform/lk-platform.conf"
+        FILE=$LK_BASE/etc/lk-platform/lk-platform.conf
+        DIR_MODE=0755
+        FILE_MODE=0644
+        [ ! -g "$LK_BASE" ] || {
+            DIR_MODE=2775
+            FILE_MODE=0664
+            GROUP=$(lk_file_group "$LK_BASE") || return
+        }
+        lk_install -d -m "$DIR_MODE" ${GROUP:+-g "$GROUP"} \
+            "$LK_BASE"/etc{,/lk-platform} &&
+            lk_install -m "$FILE_MODE" ${GROUP:+-g "$GROUP"} "$FILE" || return
+        echo "$FILE"
         [ ! -f /etc/default/lk-platform ] ||
             echo /etc/default/lk-platform
     else
         local XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-~/.config} \
             LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
-        echo "$XDG_CONFIG_HOME/lk-platform/lk-platform.conf"
+        FILE=$XDG_CONFIG_HOME/lk-platform/lk-platform.conf
+        [ -e "$FILE" ] || {
+            mkdir -p "${FILE%/*}" && touch "$FILE" || return
+        }
+        echo "$FILE"
         [ ! -f ~/".${LK_PATH_PREFIX}settings" ] ||
             echo ~/".${LK_PATH_PREFIX}settings"
     fi
-} #### Reviewed: 2021-05-10
+} #### Reviewed: 2021-05-11
 
 # lk_settings_getopt [ARG...]
 #
@@ -167,10 +183,10 @@ function lk_settings_persist() {
                 <(_lk_settings_list_known | sort -u)))
         lk_get_shell_var "${VARS[@]}"
     ) || return
-    [ -e "$2" ] || { lk_install -d -m 00755 "${2%/*}" &&
-        lk_install -m 00644 "$2"; } || return
+    [ -e "$2" ] || { lk_maybe_sudo mkdir -p "${2%/*}" &&
+        lk_maybe_sudo touch "$2"; } || return
     lk_file_replace -m "$2" "$_FILE"
-} #### Reviewed: 2021-05-10
+} #### Reviewed: 2021-05-11
 
 # lk_symlink_bin TARGET [ALIAS]
 function lk_symlink_bin() {
