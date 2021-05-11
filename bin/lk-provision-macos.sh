@@ -420,8 +420,6 @@ EOF
     lk_console_blank
     LK_NO_LOG=1 LK_SUDO=1 \
         lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh"
-    [ ! -f "$LK_BASE/etc/lk-platform/lk-platform.conf" ] ||
-        . "$LK_BASE/etc/lk-platform/lk-platform.conf"
 
     lk_console_blank
     lk_console_message "Checking Homebrew packages"
