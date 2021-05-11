@@ -1151,7 +1151,8 @@ function _lk_log_close_fd() {
 # lk_log_start [TEMP_LOG_FILE]
 function lk_log_start() {
     local ARG0 ARGC HEADER EXT _FILE FILE LOG_FILE OUT_FILE FIFO
-    if lk_is_true LK_NO_LOG || lk_log_is_open || ! lk_is_script_running; then
+    if lk_is_true LK_NO_LOG || lk_log_is_open ||
+        { [[ $- == *i* ]] && ! lk_is_script_running; }; then
         return
     elif [ -z "${_LK_LOG_CMDLINE+1}" ]; then
         local _LK_LOG_CMDLINE=("${_LK_CMDLINE[@]}")
