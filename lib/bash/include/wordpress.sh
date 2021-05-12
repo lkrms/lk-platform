@@ -571,7 +571,7 @@ function lk_wp_disable_maintenance() {
 function lk_wp_set_permissions() {
     local SITE_ROOT OWNER LOG_FILE CHANGES
     SITE_ROOT=${1:-$(lk_wp_get_site_root)} &&
-        SITE_ROOT=$(realpath "$SITE_ROOT") || return
+        SITE_ROOT=$(_lk_realpath "$SITE_ROOT") || return
     if lk_will_elevate; then
         OWNER=$(lk_file_owner "$SITE_ROOT/..") &&
             LOG_FILE=$(lk_mktemp_file) || return

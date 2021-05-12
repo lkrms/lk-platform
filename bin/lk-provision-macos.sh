@@ -119,6 +119,8 @@ function exit_trap() {
 
     lk_console_log "Provisioning macOS"
 
+    lk_sudo_offer_nopasswd || lk_die "unable to run commands as root"
+
     LK_DEFAULTS_DIR=~/.${LK_PATH_PREFIX}defaults/00000000000000
     if [ ! -e "$LK_DEFAULTS_DIR" ] &&
         lk_confirm "Save current macOS settings to files?" N; then
@@ -144,8 +146,6 @@ function exit_trap() {
             lk_run_detail sudo systemsetup -setcomputersleep off
         }
     }
-
-    lk_sudo_offer_nopasswd || true
 
     scutil --get HostName &>/dev/null || {
         [ -n "${LK_NODE_HOSTNAME-}" ] ||
@@ -334,7 +334,7 @@ EOF
                     lk_die "unable to download: $URL"
                 }
             fi
-            CI=1 lk_tty caffeinate -i \
+            CI=1 HAVE_SUDO_ACCESS=0 lk_tty caffeinate -i \
                 ${BREW_ARCH[$i]:+arch "--${BREW_ARCH[$i]}"} bash "$FILE" ||
                 lk_die "$BREW_NAME installer failed"
             lk_command_exists "$BREW_PATH" ||

@@ -153,8 +153,6 @@ shift "$_LK_SHIFT"
 lk_getopt
 eval "set -- $LK_GETOPT"
 
-lk_sudo_offer_nopasswd || lk_die "unable to run commands as root"
-
 LK_PACKAGES_FILE=${1:-${LK_PACKAGES_FILE:-}}
 if [ -n "$LK_PACKAGES_FILE" ]; then
     if [ ! -f "$LK_PACKAGES_FILE" ]; then
@@ -177,6 +175,7 @@ lk_start_trace
 
 {
     lk_console_log "Provisioning Arch Linux"
+    lk_sudo_offer_nopasswd || lk_die "unable to run commands as root"
     ! lk_is_bootstrap || lk_console_detail "Bootstrap environment detected"
     GROUP=$(id -gn)
     MEMORY=$(lk_system_memory 2)

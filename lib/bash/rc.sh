@@ -163,17 +163,21 @@ fi
         if [ -r /usr/share/bash-completion/bash_completion ]; then
             COMMAND=/usr/share/bash-completion/bash_completion
         elif [ -n "${HOMEBREW_PREFIX-}" ]; then
+            VARS=()
             COMMAND=$HOMEBREW_PREFIX/opt/bash-completion
             if lk_bash_at_least 4; then
                 COMMAND+="@2/etc/profile.d/bash_completion.sh"
             else
                 COMMAND+=/etc/bash_completion
-                printf '%s=%q\n' \
-                    BASH_COMPLETION "$COMMAND" \
+                VARS+=(
+                    BASH_COMPLETION "$COMMAND"
                     BASH_COMPLETION_DIR "$COMMAND.d"
+                )
             fi
+            [ -r "$COMMAND" ] || return 0
+            [ -z "${VARS+1}" ] || printf '%s=%q\n' "${VARS[@]}"
         else
-            return
+            return 0
         fi
         printf '. %q\n' "$COMMAND" "$LK_BASE/lib/bash/completion.sh"
     ) && eval "$SH"; }
