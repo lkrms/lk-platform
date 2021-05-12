@@ -5,8 +5,7 @@
 # To install Arch Linux using the script below:
 # 1. boot from an Arch Linux live CD
 # 2. wpa_supplicant -B -i wlan0 -c <(wpa_passphrase SSID passphrase)
-# 3. curl -L https://lkr.ms/bs >bs
-# 4. bash bs
+# 3. bash -c "$(curl -fsSL http://lkr.ms/bs)"
 
 set -euo pipefail
 lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }

@@ -1226,6 +1226,7 @@ function lk_log_start() {
         "Output is being logged to $LK_BOLD$LOG_FILE$LK_RESET" "$LK_GREY" |
         lk_log_to_tty_stdout
     _LK_LOG_FILE=$LOG_FILE
+    _LK_OUT_FILE=$OUT_FILE
 }
 
 function lk_log_is_open() {

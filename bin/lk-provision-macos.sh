@@ -1,5 +1,14 @@
 #!/bin/bash
 
+# To provision macOS using the script below:
+#
+#     [LK_NO_INPUT=1] bash -c "$(curl -fsSL http://lkr.ms/macos)"
+#
+# Or, to test the develop branch:
+#
+#     [LK_NO_INPUT=1] LK_PLATFORM_BRANCH=develop _LK_FD=3 \
+#         bash -xc "$(curl -fL http://lkr.ms/macos-dev)" 3>&2 2>~/lk-install.err
+
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
 export LK_BASE=${LK_BASE:-/opt/lk-platform}
@@ -12,16 +21,18 @@ lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
 [[ $- != *s* ]] || lk_die "cannot run from standard input"
 
 function exit_trap() {
-    local _LOG_FILE=$_LK_LOG_FILE LOG_FILE
-    if lk_log_close &&
-        LOG_FILE=$(lk_log_create_file) &&
-        [ "$LOG_FILE" != "$_LOG_FILE" ]; then
+    local EXT _LOG_FILE LOG_FILE LK_LOG_BASENAME=lk-provision-macos.sh
+    lk_log_close || return
+    for EXT in log out; do
+        _LOG_FILE=_LK_$(lk_upper "$EXT")_FILE &&
+            _LOG_FILE=${!_LOG_FILE} &&
+            LOG_FILE=$(lk_log_create_file -e "$EXT") &&
+            [ "$LOG_FILE" != "$_LOG_FILE" ] || continue
         lk_console_log "Moving:" "$_LOG_FILE -> $LOG_FILE"
         cat "$_LOG_FILE" >>"$LOG_FILE" &&
             rm "$_LOG_FILE" ||
-            lk_console_warning \
-                "Error moving provisioning log entries to" "$LOG_FILE"
-    fi
+            lk_console_warning "Error moving" "$_LOG_FILE"
+    done
 }
 
 {
@@ -114,12 +125,13 @@ function exit_trap() {
 
     LK_FILE_BACKUP_TAKE=${LK_FILE_BACKUP_TAKE-1}
 
-    lk_log_start ~/"${LK_PATH_PREFIX}install.log"
+    lk_log_start ~/"${LK_PATH_PREFIX}install"
     lk_trap_add EXIT exit_trap
 
     lk_console_log "Provisioning macOS"
 
-    lk_sudo_offer_nopasswd || lk_die "unable to run commands as root"
+    lk_no_input || lk_sudo_offer_nopasswd ||
+        lk_die "unable to run commands as root"
 
     LK_DEFAULTS_DIR=~/.${LK_PATH_PREFIX}defaults/00000000000000
     if [ ! -e "$LK_DEFAULTS_DIR" ] &&
@@ -299,7 +311,7 @@ EOF
         local TAPS TAP
         TAPS=($(comm -13 \
             <(brew tap | sort -u) \
-            <(lk_echo_array HOMEBREW_TAPS | sort -u)))
+            <(lk_echo_array HOMEBREW_TAPS | sort -u))) || return
         [ ${#TAPS[@]} -eq 0 ] ||
             for TAP in "${TAPS[@]}"; do
                 lk_console_detail "Tapping" "$TAP"
@@ -346,7 +358,8 @@ EOF
             SH=$(. "$LK_BASE/lib/bash/env.sh") &&
                 eval "$SH"
         }
-        lk_brew_check_taps
+        lk_brew_check_taps ||
+            lk_die "unable to tap formula repositories"
         [ "${BREW_NEW[$i]}" -eq 1 ] || {
             lk_console_detail "Updating formulae"
             lk_brew update --quiet
