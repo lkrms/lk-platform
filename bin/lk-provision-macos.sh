@@ -21,10 +21,11 @@ lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
 [[ $- != *s* ]] || lk_die "cannot run from standard input"
 
 function exit_trap() {
-    local EXT _LOG_FILE LOG_FILE LK_LOG_BASENAME=lk-provision-macos.sh
+    local EXT _LOG_FILE LOG_FILE LK_LOG_BASENAME=lk-provision-macos.sh \
+        _LOG=$_LK_LOG_FILE _OUT=$_LK_OUT_FILE
     lk_log_close || return
     for EXT in log out; do
-        _LOG_FILE=_LK_$(lk_upper "$EXT")_FILE &&
+        _LOG_FILE=_$(lk_upper "$EXT") &&
             _LOG_FILE=${!_LOG_FILE} &&
             LOG_FILE=$(lk_log_create_file -e "$EXT") &&
             [ "$LOG_FILE" != "$_LOG_FILE" ] || continue
@@ -161,7 +162,8 @@ function exit_trap() {
 
     scutil --get HostName &>/dev/null || {
         [ -n "${LK_NODE_HOSTNAME-}" ] ||
-            LK_NODE_HOSTNAME=$(lk_console_read "Hostname for this system:") ||
+            LK_NODE_HOSTNAME=$(lk_console_read \
+                "Hostname for this system (optional):") ||
             lk_die ""
         [ -z "$LK_NODE_HOSTNAME" ] ||
             lk_macos_set_hostname "$LK_NODE_HOSTNAME"

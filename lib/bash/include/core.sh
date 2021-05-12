@@ -1220,6 +1220,7 @@ function lk_log_start() {
         exec 3> >(lk_tee >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
             >&"$_LK_TTY_OUT_FD")
         _LK_FD=3
+        _LK_FD_LOGGED=1
     }
     lk_log_to_file_stdout <<<"$HEADER"
     ! lk_verbose 2 || lk_echoc \
@@ -1242,19 +1243,30 @@ function lk_log_is_open() {
 # further logging (useful when closing a secondary log file).
 function lk_log_close() {
     lk_log_is_open || lk_warn "no output log" || return
-    [ -z "${_LK_LOG2_FD:-}" ] || {
-        eval "exec $_LK_LOG_FD"'> >(lk_log >>"$_LK_LOG_FILE")' &&
-            { ! lk_fd_is_open "$_LK_LOG2_FD" || eval "exec $_LK_LOG2_FD>&-"; }
-    } || return
-    unset _LK_LOG2_FD
-    [ "${1:-}" = -r ] || {
+    if [ "${1-}" = -r ]; then
+        [ -z "${_LK_LOG2_FD-}" ] || {
+            eval "exec $_LK_LOG_FD"'> >(lk_log >>"$_LK_LOG_FILE")' &&
+                { ! lk_fd_is_open "$_LK_LOG2_FD" ||
+                    eval "exec $_LK_LOG2_FD>&-"; }
+        } || return
+        unset _LK_LOG2_FD
+    else
+        CLOSE=()
+        [ -z "${_LK_FD_LOGGED-}" ] || CLOSE=(_LK_FD)
+        CLOSE+=(
+            _LK_LOG_FD
+            _LK_LOG_ERR_FD
+            _LK_LOG_OUT_FD
+            _LK_TTY_ERR_FD
+            _LK_TTY_OUT_FD
+            _LK_LOG2_FD
+        )
         exec >&"$_LK_TTY_OUT_FD" 2>&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}" &&
-            eval "exec$(printf ' %s>&-' \
-                "$_LK_FD" \
-                "$_LK_TTY_OUT_FD" "$_LK_TTY_ERR_FD" \
-                "$_LK_LOG_OUT_FD" "$_LK_LOG_ERR_FD" "$_LK_LOG_FD")" &&
-            unset _LK_FD _LK_{{TTY,LOG}_{OUT,ERR},LOG}_FD _LK_LOG_FILE
-    }
+            eval "$(printf 'exec %s>&-\n' $(for i in "${CLOSE[@]}"; do
+                echo "${!i-}"
+            done))" &&
+            unset "${CLOSE[@]}" _LK_{LOG,OUT}_FILE
+    fi
 }
 
 function lk_log_tty_off() {
