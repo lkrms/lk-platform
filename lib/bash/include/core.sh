@@ -1064,27 +1064,34 @@ function pv() {
     lk_ignore_SIGINT && lk_log_bypass_stderr command pv
 }
 
-function lk_tee() {
+function _lk_tee() {
     local PRESERVE
     [[ ! "$1" =~ ^-[0-9]+$ ]] || { PRESERVE=${1#-} && shift; }
     lk_ignore_SIGINT && eval exec "$(_lk_log_close_fd ${PRESERVE-})" || return
     exec tee "$@"
 }
 
+# lk_log [PREFIX]
+#
+# Add PREFIX and a microsecond-resolution timestamp to the beginning of each
+# line of input.
+#
+# Example:
+#
+#     $ echo "Hello, world." | lk_log '!!'
+#     !!2021-05-13 18:01:53.860513 +1000 Hello, world.
 function lk_log() {
-    local PREFIX=${1:-}
+    local PREFIX=${1-}
     lk_ignore_SIGINT && eval exec "$(_lk_log_close_fd)" || return
-    if lk_command_exists ts; then
-        PREFIX=${PREFIX//"%"/"%%"}
-        exec ts "$PREFIX%Y-%m-%d %H:%M:%.S %z"
-    else
-        set +x
-        while IFS= read -r LINE; do
-            printf '%s%s %s\n' \
-                "$PREFIX" "$(lk_date "%Y-%m-%d %H:%M:%S %z")" "$LINE"
-        done
-    fi
-} #### Reviewed: 2021-04-08
+    PREFIX=${PREFIX//"%"/"%%"} exec perl -pe '$| = 1;
+BEGIN {
+    use POSIX qw{strftime};
+    use Time::HiRes qw{gettimeofday};
+}
+( $s, $ms ) = Time::HiRes::gettimeofday();
+$ms = sprintf( "%06i", $ms );
+print strftime( "$ENV{PREFIX}%Y-%m-%d %H:%M:%S.$ms %z ", localtime($s) );'
+} #### Reviewed: 2021-05-13
 
 # lk_log_create_file [-e EXT] [DIR...]
 function lk_log_create_file() {
@@ -1212,12 +1219,12 @@ function lk_log_start() {
         _LK_LOG_FD=$(lk_fd_next) && { if [ -z "${_LK_LOG2_FD:-}" ]; then
             eval "exec $_LK_LOG_FD"'> >(lk_log >>"$LOG_FILE")'
         else
-            eval "exec $_LK_LOG_FD"'> >(lk_log > >(lk_tee -a "$LOG_FILE" >&"$_LK_LOG2_FD"))'
+            eval "exec $_LK_LOG_FD"'> >(lk_log > >(_lk_tee -a "$LOG_FILE" >&"$_LK_LOG2_FD"))'
         fi; } || return
     export _LK_FD _LK_{{TTY,LOG}_{OUT,ERR},LOG}_FD
     lk_log_tty_on
     [ "${_LK_FD:-2}" -ne 2 ] || {
-        exec 3> >(lk_tee >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
+        exec 3> >(_lk_tee >(_lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
             >&"$_LK_TTY_OUT_FD")
         _LK_FD=3
         _LK_FD_LOGGED=1
@@ -1272,35 +1279,35 @@ function lk_log_close() {
 function lk_log_tty_off() {
     lk_log_is_open || return 0
     exec \
-        > >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
-        2> >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") &&
+        > >(_lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
+        2> >(_lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") &&
         _LK_LOG_TTY_LAST=${FUNCNAME[0]}
 }
 
 function lk_log_tty_stdout_off() {
     lk_log_is_open || return 0
     exec \
-        > >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
-        2> >(lk_tee >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}") &&
+        > >(_lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
+        2> >(_lk_tee >(_lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}") &&
         _LK_LOG_TTY_LAST=${FUNCNAME[0]}
 }
 
 function lk_log_tty_on() {
     lk_log_is_open || return 0
     exec \
-        > >(lk_tee >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") >&"$_LK_TTY_OUT_FD") \
-        2> >(lk_tee >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}") &&
+        > >(_lk_tee >(_lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") >&"$_LK_TTY_OUT_FD") \
+        2> >(_lk_tee >(_lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}") &&
         _LK_LOG_TTY_LAST=${FUNCNAME[0]}
 }
 
 function lk_log_to_file_stdout() {
     lk_log_is_open || lk_warn "no output log" || return
-    cat > >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD")
+    cat > >(_lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD")
 }
 
 function lk_log_to_file_stderr() {
     lk_log_is_open || lk_warn "no output log" || return
-    cat > >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD")
+    cat > >(_lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD")
 }
 
 function lk_log_to_tty_stdout() {
@@ -1344,16 +1351,16 @@ function lk_log_bypass() {
     case "$ARG" in
     -to)
         _lk_log_bypass "$@" \
-            > >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD")
+            > >(_lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD")
         ;;
     -te)
         _lk_log_bypass "$@" \
-            2> >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD")
+            2> >(_lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD")
         ;;
     -t)
         _lk_log_bypass "$@" \
-            > >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
-            2> >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD")
+            > >(_lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
+            2> >(_lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD")
         ;;
     -o)
         _lk_log_bypass "$@" \
@@ -1365,8 +1372,8 @@ function lk_log_bypass() {
         ;;
     -n)
         _lk_log_bypass "$@" \
-            > >(lk_tee >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") >&"$_LK_TTY_OUT_FD") \
-            2> >(lk_tee >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}")
+            > >(_lk_tee >(_lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") >&"$_LK_TTY_OUT_FD") \
+            2> >(_lk_tee >(_lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}")
         ;;
     *)
         _lk_log_bypass "$@" \
