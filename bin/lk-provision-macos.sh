@@ -272,16 +272,18 @@ EOF
         sudo install -d -m 02775 -o "$USER" -g admin "$LK_BASE"
         lk_tty caffeinate -i git clone -b "$LK_PLATFORM_BRANCH" \
             https://github.com/lkrms/lk-platform.git "$LK_BASE"
-        sudo install -d -m 00775 -g admin "$LK_BASE/etc/lk-platform"
-        sudo install -m 00664 -g admin /dev/null \
-            "$LK_BASE/etc/lk-platform/lk-platform.conf"
+        sudo install -d -m 02775 -g admin "$LK_BASE"/{etc{,/lk-platform},var}
+        sudo install -d -m 00777 -g admin "$LK_BASE"/var/log
+        sudo install -d -m 00750 -g admin "$LK_BASE"/var/backup
+        FILE=$LK_BASE/etc/lk-platform/lk-platform.conf
+        sudo install -m 00664 -g admin /dev/null "$FILE"
         lk_get_shell_var \
             LK_BASE \
             LK_PATH_PREFIX \
             LK_PLATFORM_BRANCH \
             LK_PACKAGES_FILE |
-            sudo tee "$LK_BASE/etc/lk-platform/lk-platform.conf" >/dev/null
-        lk_console_detail_file "$LK_BASE/etc/lk-platform/lk-platform.conf"
+            sudo tee "$FILE" >/dev/null
+        lk_console_detail_file "$FILE"
     fi
 
     LK_VERBOSE=1 LK_SUDO=1 \

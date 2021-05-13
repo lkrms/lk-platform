@@ -33,7 +33,6 @@ HOMEBREW_FORMULAE=(
     jq
     lftp
     media-info
-    moreutils
     ncdu
     newt
     nmap

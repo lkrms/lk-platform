@@ -26,6 +26,7 @@ PAC_PACKAGES=(
     networkmanager
     git
     openssh
+    perl
 
     ### Services
     #
@@ -39,7 +40,6 @@ PAC_PACKAGES=(
     diffutils
     file
     mediainfo
-    moreutils
     pv
     rsync
     time

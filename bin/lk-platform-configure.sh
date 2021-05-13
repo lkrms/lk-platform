@@ -385,6 +385,8 @@ lk_log_start
                 ! lk_is_true LK_GIT_REPO_UPDATED ||
                 restart_script "$@"
         fi
+        install -d -m 00777 "$LK_BASE/var/log"
+        install -d -m 00750 "$LK_BASE/var/backup"
         LK_VERBOSE='' \
             lk_dir_set_modes "$LK_BASE" \
             "" \
@@ -397,8 +399,6 @@ lk_log_start
             "" "" \
             "\\./\\.git/objects/([0-9a-f]{2}|pack)/.*" \
             0555 0444
-        install -d -m 00777 "$LK_BASE/var/log"
-        install -d -m 00700 "$LK_BASE/var/backup"
         umask "$UMASK"
     fi
 

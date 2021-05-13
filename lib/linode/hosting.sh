@@ -431,8 +431,10 @@ fi
 TERM='' . "$LK_BASE/lib/bash/common.sh"
 lk_include hosting provision
 
+install -d -m 02775 -g adm "$LK_BASE"/{etc{,/lk-platform},var}
+install -d -m 00777 -g adm "$LK_BASE"/var/log
+install -d -m 00750 -g adm "$LK_BASE"/var/backup
 FILE=$LK_BASE/etc/lk-platform/lk-platform.conf
-install -d -m 00775 -g adm "${FILE%/*}"
 install -m 00664 -g adm /dev/null "$FILE"
 LK_SSH_JUMP_KEY=${LK_SSH_JUMP_KEY:+jump} \
     lk_get_shell_var \
@@ -823,9 +825,9 @@ PACKAGES=(
     less
     logrotate
     lsof
-    moreutils
     nano
     netcat-openbsd
+    perl
     psmisc
     pv
     rdfind
