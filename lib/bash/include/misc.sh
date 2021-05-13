@@ -169,4 +169,15 @@ function lk_nextcloud_get_excluded() {
     )
 }
 
+# lk_squid_get_directive_order [CONF [ORIG_CONF]]
+#
+# Print the names of all unique Squid directives in CONF in the same order as
+# their respective "TAG:" lines in ORIG_CONF.
+function lk_squid_get_directive_order() {
+    local CONF=${1:-/etc/squid/squid.conf} \
+        ORIG_CONF=${2:-/etc/squid/squid.conf.documented}
+    sed -En "s/^#  TAG: ($NS+).*/\1/p" "$ORIG_CONF" |
+        grep -Fxf <(awk '$0 !~ "^(#|'"$S"'*$)" {print $1}' "$CONF" | sort -u)
+}
+
 lk_provide misc

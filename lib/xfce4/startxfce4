@@ -5,12 +5,6 @@ lk_double_quote() {
     echo "\"${1%.}\""
 }
 
-[ ! -f /etc/default/lk-platform ] ||
-    . /etc/default/lk-platform
-LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
-[ ! -f ~/".${LK_PATH_PREFIX}settings" ] ||
-    . ~/".${LK_PATH_PREFIX}settings"
-
 [ -n "${LK_BASE:-}" ] || { SH=$(
     _FILE=$0
     if [ -L "$_FILE" ]; then
@@ -31,6 +25,16 @@ LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
 export LK_BASE
 
 [ -z "${LK_BASE:-}" ] || {
+    [ ! -f /etc/default/lk-platform ] ||
+        . /etc/default/lk-platform
+    [ ! -f "$LK_BASE/etc/lk-platform/lk-platform.conf" ] ||
+        . "$LK_BASE/etc/lk-platform/lk-platform.conf"
+    XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-~/.config}
+    LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
+    [ ! -f ~/".${LK_PATH_PREFIX}settings" ] ||
+        . ~/".${LK_PATH_PREFIX}settings"
+    [ ! -f "$XDG_CONFIG_HOME/lk-platform/lk-platform.conf" ] ||
+        . "$XDG_CONFIG_HOME/lk-platform/lk-platform.conf"
     SH=$(. "$LK_BASE/lib/bash/env.sh") &&
         eval "$SH"
     ! type autorandr >/dev/null 2>&1 || {

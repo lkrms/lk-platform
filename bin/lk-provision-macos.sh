@@ -1,5 +1,14 @@
 #!/bin/bash
 
+# To provision macOS using the script below:
+#
+#     [LK_NO_INPUT=1] bash -c "$(curl -fsSL http://lkr.ms/macos)"
+#
+# Or, to test the develop branch:
+#
+#     [LK_NO_INPUT=1] LK_PLATFORM_BRANCH=develop _LK_FD=3 \
+#         bash -xc "$(curl -fL http://lkr.ms/macos-dev)" 3>&2 2>~/lk-install.err
+
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
 export LK_BASE=${LK_BASE:-/opt/lk-platform}
@@ -12,16 +21,19 @@ lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
 [[ $- != *s* ]] || lk_die "cannot run from standard input"
 
 function exit_trap() {
-    local _LOG_FILE=$_LK_LOG_FILE LOG_FILE
-    if lk_log_close &&
-        LOG_FILE=$(lk_log_create_file) &&
-        [ "$LOG_FILE" != "$_LOG_FILE" ]; then
+    local EXT _LOG_FILE LOG_FILE LK_LOG_BASENAME=lk-provision-macos.sh \
+        _LOG=$_LK_LOG_FILE _OUT=$_LK_OUT_FILE
+    lk_log_close || return
+    for EXT in log out; do
+        _LOG_FILE=_$(lk_upper "$EXT") &&
+            _LOG_FILE=${!_LOG_FILE} &&
+            LOG_FILE=$(lk_log_create_file -e "$EXT") &&
+            [ "$LOG_FILE" != "$_LOG_FILE" ] || continue
         lk_console_log "Moving:" "$_LOG_FILE -> $LOG_FILE"
         cat "$_LOG_FILE" >>"$LOG_FILE" &&
             rm "$_LOG_FILE" ||
-            lk_console_warning \
-                "Error moving provisioning log entries to" "$LOG_FILE"
-    fi
+            lk_console_warning "Error moving" "$_LOG_FILE"
+    done
 }
 
 {
@@ -40,43 +52,63 @@ function exit_trap() {
     _DIR=/tmp/${LK_PATH_PREFIX}install
     mkdir -p "$_DIR"
 
-    EXIT_STATUS=0
+    STATUS=0
 
-    SH=$([ ! -f /etc/default/lk-platform ] || { . /etc/default/lk-platform &&
-        declare -p LK_PACKAGES_FILE; } 2>/dev/null) &&
-        eval "$SH"
-    LK_PACKAGES_FILE=${1:-${LK_PACKAGES_FILE:-}}
-    PACKAGES_REL=
-    if [ -n "$LK_PACKAGES_FILE" ]; then
-        if [ ! -f "$LK_PACKAGES_FILE" ]; then
-            FILE=${LK_PACKAGES_FILE##*/}
-            FILE=${FILE#packages-macos-}
-            FILE=${FILE%.sh}
-            FILE=$LK_BASE/share/packages/macos/$FILE.sh
-            [ -f "$FILE" ] || PACKAGES_REL=${FILE#$LK_BASE/}
-            LK_PACKAGES_FILE=$FILE
+    function load_settings() {
+        [ ! -f /etc/default/lk-platform ] ||
+            . /etc/default/lk-platform
+        [ ! -f "$LK_BASE/etc/lk-platform/lk-platform.conf" ] ||
+            . "$LK_BASE/etc/lk-platform/lk-platform.conf"
+        SETTINGS_SH=$(lk_settings_getopt)
+        eval "$SETTINGS_SH"
+        shift "$_LK_SHIFT"
+
+        LK_PACKAGES_FILE=${1:-${LK_PACKAGES_FILE:-}}
+        PACKAGES_REL=
+        if [ -n "$LK_PACKAGES_FILE" ]; then
+            if [ ! -f "$LK_PACKAGES_FILE" ]; then
+                FILE=${LK_PACKAGES_FILE##*/}
+                FILE=${FILE#packages-macos-}
+                FILE=${FILE%.sh}
+                FILE=$LK_BASE/share/packages/macos/$FILE.sh
+                [ -f "$FILE" ] || PACKAGES_REL=${FILE#$LK_BASE/}
+                LK_PACKAGES_FILE=$FILE
+            fi
+            SETTINGS_SH=$(
+                [ -z "${SETTINGS_SH:+1}" ] || cat <<<"$SETTINGS_SH"
+                printf '%s=%q\n' LK_PACKAGES_FILE "$LK_PACKAGES_FILE"
+            )
         fi
-        export LK_PACKAGES_FILE
-    fi
+    }
 
     if [ -f "$LK_BASE/lib/bash/include/core.sh" ]; then
         . "$LK_BASE/lib/bash/include/core.sh"
         lk_include macos provision whiptail
-        SUDOERS=$(cat "$LK_BASE/share/sudoers.d/default")
+        SUDOERS=$(<"$LK_BASE/share/sudoers.d/default")
+        load_settings "$@"
         ${PACKAGES_REL:+. "$LK_BASE/$PACKAGES_REL"}
     else
-        echo $'\E[1m\E[36m==> \E[m\017\E[1mChecking prerequisites\E[m\017' >&2
+        YELLOW=$'\E[33m'
+        CYAN=$'\E[36m'
+        BOLD=$'\E[1m'
+        RESET=$'\E[m\017'
+        echo "$BOLD$CYAN==> $RESET${BOLD}Checking prerequisites$RESET" >&2
         REPO_URL=https://raw.githubusercontent.com/lkrms/lk-platform
         for FILE_PATH in \
-            ${PACKAGES_REL:+"/$PACKAGES_REL"} \
             /lib/bash/include/core.sh \
             /lib/bash/include/macos.sh \
             /lib/bash/include/provision.sh \
             /lib/bash/include/whiptail.sh \
-            /share/sudoers.d/default; do
+            /share/sudoers.d/default \
+            PACKAGES; do
+            [ "$FILE_PATH" != PACKAGES ] || {
+                load_settings "$@"
+                [ -n "$PACKAGES_REL" ] || break
+                FILE_PATH=/$PACKAGES_REL
+            }
             FILE=$_DIR/${FILE_PATH##*/}
             URL=$REPO_URL/$LK_PLATFORM_BRANCH$FILE_PATH
-            MESSAGE=$'\E[1m\E[33m   -> \E[m\017{}\E[m\017\E[33m '"$URL"$'\E[m\017'
+            MESSAGE="$BOLD$YELLOW   -> $RESET{}$YELLOW $URL$RESET"
             if [ ! -e "$FILE" ]; then
                 echo "${MESSAGE/{\}/Downloading:}" >&2
                 curl "${CURL_OPTIONS[@]}" --output "$FILE" "$URL" || {
@@ -89,47 +121,53 @@ function exit_trap() {
             [[ ! $FILE_PATH =~ /include/[a-z0-9_]+\.sh$ ]] ||
                 . "$FILE"
         done
-        SUDOERS=$(cat "$_DIR/default")
+        SUDOERS=$(<"$_DIR/default")
     fi
-
-    SH=$(lk_provision_getopt)
-    eval "$SH"
-    shift "$LK_SHIFT"
 
     LK_FILE_BACKUP_TAKE=${LK_FILE_BACKUP_TAKE-1}
 
-    lk_log_start ~/"${LK_PATH_PREFIX}install.log"
+    lk_log_start ~/"${LK_PATH_PREFIX}install"
     lk_trap_add EXIT exit_trap
 
     lk_console_log "Provisioning macOS"
 
+    lk_no_input || lk_sudo_offer_nopasswd ||
+        lk_die "unable to run commands as root"
+
     LK_DEFAULTS_DIR=~/.${LK_PATH_PREFIX}defaults/00000000000000
-    if [ ! -e "$LK_DEFAULTS_DIR" ]; then
+    if [ ! -e "$LK_DEFAULTS_DIR" ] &&
+        lk_confirm "Save current macOS settings to files?" N; then
         lk_console_item "Dumping user defaults to domain files in" \
             ~/".${LK_PATH_PREFIX}defaults"
         lk_macos_defaults_dump
     fi
 
-    # This doubles as an early Full Disk Access check/reminder
-    STATUS=$(sudo systemsetup -getremotelogin)
-    if [[ ! "$STATUS" =~ ${S}On$ ]]; then
-        lk_console_message "Enabling Remote Login (SSH)"
-        lk_run_detail sudo systemsetup -setremotelogin on
-    fi
+    sudo systemsetup -getremotelogin | grep -Ei '\<On$' >/dev/null || {
+        [[ ${PIPESTATUS[0]}${PIPESTATUS[1]} =~ ^01$ ]] || lk_die ""
+        ! lk_confirm \
+            "Enable SSH server for remote access to this computer?" N || {
+            lk_console_message "Enabling Remote Login (SSH)"
+            lk_run_detail sudo systemsetup -setremotelogin on
+        }
+    }
 
-    STATUS=$(sudo systemsetup -getcomputersleep)
-    if [[ ! "$STATUS" =~ ${S}Never$ ]]; then
-        lk_console_message "Disabling computer sleep"
-        lk_run_detail sudo systemsetup -setcomputersleep off
-    fi
+    sudo systemsetup -getcomputersleep | grep -Ei '\<Never$' >/dev/null || {
+        [[ ${PIPESTATUS[0]}${PIPESTATUS[1]} =~ ^01$ ]] || lk_die ""
+        ! lk_confirm \
+            "Prevent computer from sleeping when display is off?" N || {
+            lk_console_message "Disabling computer sleep"
+            lk_run_detail sudo systemsetup -setcomputersleep off
+        }
+    }
 
-    lk_sudo_offer_nopasswd || true
-
-    scutil --get HostName &>/dev/null ||
-        [ -z "${LK_NODE_HOSTNAME:=$(
-            lk_console_read "Hostname for this system:"
-        )}" ] ||
-        lk_macos_set_hostname "$LK_NODE_HOSTNAME"
+    scutil --get HostName &>/dev/null || {
+        [ -n "${LK_NODE_HOSTNAME-}" ] ||
+            LK_NODE_HOSTNAME=$(lk_console_read \
+                "Hostname for this system (optional):") ||
+            lk_die ""
+        [ -z "$LK_NODE_HOSTNAME" ] ||
+            lk_macos_set_hostname "$LK_NODE_HOSTNAME"
+    }
 
     CURRENT_SHELL=$(dscl . -read ~/ UserShell | sed 's/^UserShell: //')
     if [ "$CURRENT_SHELL" != /bin/bash ]; then
@@ -168,15 +206,15 @@ EOF
     umask 002
 
     function path_add() {
-        local EXIT_STATUS
+        local STATUS
         while [ $# -gt 0 ]; do
             [[ :$_PATH: == *:$1:* ]] || {
                 _PATH=$1:${_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}
-                EXIT_STATUS=1
+                STATUS=1
             }
             shift
         done
-        return "${EXIT_STATUS:-0}"
+        return "${STATUS:-0}"
     }
     PATH_ADD=(/usr/local/bin)
     BREW_CMD=(brew)
@@ -234,18 +272,20 @@ EOF
         sudo install -d -m 02775 -o "$USER" -g admin "$LK_BASE"
         lk_tty caffeinate -i git clone -b "$LK_PLATFORM_BRANCH" \
             https://github.com/lkrms/lk-platform.git "$LK_BASE"
-        lk_file_keep_original /etc/default/lk-platform
-        [ -e /etc/default ] ||
-            sudo install -d -m 00755 -g wheel /etc/default
-        sudo install -m 00664 -g admin /dev/null /etc/default/lk-platform
+        sudo install -d -m 00775 -g admin "$LK_BASE/etc/lk-platform"
+        sudo install -m 00664 -g admin /dev/null \
+            "$LK_BASE/etc/lk-platform/lk-platform.conf"
         lk_get_shell_var \
             LK_BASE \
             LK_PATH_PREFIX \
             LK_PLATFORM_BRANCH \
             LK_PACKAGES_FILE |
-            sudo tee /etc/default/lk-platform >/dev/null
-        lk_console_detail_file /etc/default/lk-platform
+            sudo tee "$LK_BASE/etc/lk-platform/lk-platform.conf" >/dev/null
+        lk_console_detail_file "$LK_BASE/etc/lk-platform/lk-platform.conf"
     fi
+
+    LK_VERBOSE=1 LK_SUDO=1 \
+        lk_settings_persist "$SETTINGS_SH"
 
     [ -z "$LK_PACKAGES_FILE" ] ||
         . "$LK_PACKAGES_FILE"
@@ -270,16 +310,17 @@ EOF
     }
 
     function lk_brew_check_taps() {
-        local TAP
-        TAP=($(comm -13 \
+        local TAPS TAP
+        TAPS=($(comm -13 \
             <(brew tap | sort -u) \
-            <(lk_echo_array HOMEBREW_TAPS | sort -u)))
-        [ ${#TAP[@]} -eq 0 ] || {
-            for TAP in "${TAP[@]}"; do
+            <(lk_echo_array HOMEBREW_TAPS | sort -u))) || return
+        [ ${#TAPS[@]} -eq 0 ] ||
+            for TAP in "${TAPS[@]}"; do
                 lk_console_detail "Tapping" "$TAP"
+                ! ((i)) || [[ ! $TAP =~ ^[^/]+/[^/]+$ ]] ||
+                    TAP=file:///opt/homebrew/Library/Taps/${TAP%/*}/homebrew-${TAP#*/}
                 lk_brew tap --quiet "$TAP" || return
             done
-        }
     }
 
     function lk_brew_formulae() {
@@ -291,22 +332,27 @@ EOF
     }
 
     function install_homebrew() {
-        local FILE URL
+        local FILE URL HOMEBREW_{BREW,CORE}_GIT_REMOTE
+        ! ((i)) || {
+            export HOMEBREW_BREW_GIT_REMOTE=file:///opt/homebrew
+            export HOMEBREW_CORE_GIT_REMOTE=file:///opt/homebrew/Library/Taps/homebrew/homebrew-core
+        }
         BREW_NEW[$i]=0
         if ! lk_command_exists "$BREW_PATH"; then
             lk_console_message "Installing $BREW_NAME"
             FILE=$_DIR/homebrew-install.sh
             URL=https://raw.githubusercontent.com/Homebrew/install/master/install.sh
             if [ ! -e "$FILE" ]; then
-                curl --retry 8 --fail --output "$FILE" "$URL" || {
+                curl "${CURL_OPTIONS[@]}" --output "$FILE" "$URL" || {
                     rm -f "$FILE"
                     lk_die "unable to download: $URL"
                 }
             fi
-            CI=1 lk_tty caffeinate -i \
+            CI=1 HAVE_SUDO_ACCESS=0 lk_tty caffeinate -i \
                 ${BREW_ARCH[$i]:+arch "--${BREW_ARCH[$i]}"} bash "$FILE" ||
                 lk_die "$BREW_NAME installer failed"
-            lk_command_exists "$BREW_PATH" || lk_die "command not found: $BREW_PATH"
+            lk_command_exists "$BREW_PATH" ||
+                lk_die "command not found: $BREW_PATH"
             BREW_NEW[$i]=1
         fi
         lk_console_item "Found $BREW_NAME at:" "$("$BREW_PATH" --prefix)"
@@ -314,7 +360,8 @@ EOF
             SH=$(. "$LK_BASE/lib/bash/env.sh") &&
                 eval "$SH"
         }
-        lk_brew_check_taps
+        lk_brew_check_taps ||
+            lk_die "unable to tap formula repositories"
         [ "${BREW_NEW[$i]}" -eq 1 ] || {
             lk_console_detail "Updating formulae"
             lk_brew update --quiet
@@ -387,10 +434,7 @@ EOF
 
     lk_console_blank
     LK_NO_LOG=1 LK_SUDO=1 \
-        lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" \
-        ${LK_PACKAGES_FILE:+--set LK_PACKAGES_FILE="$LK_PACKAGES_FILE"}
-    [ ! -f /etc/default/lk-platform ] ||
-        . /etc/default/lk-platform
+        lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh"
 
     lk_console_blank
     lk_console_message "Checking Homebrew packages"
@@ -437,10 +481,10 @@ EOF
     fi
 
     function get_arch_formulae() {
-        local JQ="\
+        local COUNT JQ="\
 def is_native:
-    (.versions.bottle | not) or 
-        ([.bottle[].files | keys[] | select(match(\"^arm64_\"))] | length > 0);"
+    (.versions.bottle | not) or
+        ([.bottle[].files | keys[] | select(match(\"^(all\$|arm64_)\"))] | length > 0);"
         # Exclude formulae with no arm64 bottle on Apple Silicon unless
         # using `arch --x86_64`
         if [ -z "${BREW_ARCH[$i]}" ]; then
@@ -457,6 +501,10 @@ def is_native:
                     "$JQ"'.formulae[]|select(is_native|not).full_name' \
                     <<<"$HOMEBREW_FORMULAE_JSON"))
         fi
+        COUNT=${#HOMEBREW_FORMULAE[@]}
+        ! lk_verbose || [ -z "${FORMULAE_COUNT:-}" ] || lk_console_detail \
+            "$BREW_NAME formulae ($COUNT of $FORMULAE_COUNT):" \
+            $'\n'"${HOMEBREW_FORMULAE[*]}"
     }
     function check_installed() {
         ! lk_is_apple_silicon || {
@@ -476,7 +524,9 @@ def is_native:
     HOMEBREW_FORMULAE_JSON=$(brew info --formula --json=v2 \
         "${HOMEBREW_FORMULAE[@]}") && HOMEBREW_FORMULAE=($(jq -r \
             ".formulae[].full_name" <<<"$HOMEBREW_FORMULAE_JSON"))
+    FORMULAE_COUNT=${#HOMEBREW_FORMULAE[@]}
     lk_brew_loop check_installed
+    unset FORMULAE_COUNT
     INSTALL_FORMULAE=($(lk_echo_array "${!INSTALL_FORMULAE_@}" | sort -u))
     if [ ${#INSTALL_FORMULAE[@]} -gt 0 ]; then
         FORMULAE=()
@@ -612,7 +662,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
             MESSAGE=${3//"$s"/$BREW_NAME}
             lk_echo_array ARR |
                 lk_console_list "$MESSAGE" formula formulae
-            lk_brew "$1" --formula "${ARR[@]}" || EXIT_STATUS=$?
+            lk_brew "$1" --formula "${ARR[@]}" || STATUS=$?
         }
     }
     lk_brew_loop commit_changes upgrade UPGRADE_FORMULAE \
@@ -622,26 +672,26 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
 
     [ ${#UPGRADE_CASKS[@]} -eq 0 ] || {
         lk_console_message "Upgrading casks"
-        lk_brew upgrade --cask "${UPGRADE_CASKS[@]}" || EXIT_STATUS=$?
+        lk_brew upgrade --cask "${UPGRADE_CASKS[@]}" || STATUS=$?
     }
 
     [ ${#INSTALL_CASKS[@]} -eq 0 ] || {
         lk_echo_array INSTALL_CASKS |
             lk_console_list "Installing new casks:"
-        lk_brew install --cask "${INSTALL_CASKS[@]}" || EXIT_STATUS=$?
+        lk_brew install --cask "${INSTALL_CASKS[@]}" || STATUS=$?
     }
 
     [ ${#UPGRADE_APPS[@]} -eq 0 ] || {
         lk_console_message "Upgrading apps"
         lk_tty caffeinate -i \
-            mas upgrade "${UPGRADE_APPS[@]}" || EXIT_STATUS=$?
+            mas upgrade "${UPGRADE_APPS[@]}" || STATUS=$?
     }
 
     [ ${#INSTALL_APPS[@]} -eq 0 ] || {
         lk_echo_array APP_NAMES |
             lk_console_list "Installing new apps:"
         lk_tty caffeinate -i \
-            mas install "${INSTALL_APPS[@]}" || EXIT_STATUS=$?
+            mas install "${INSTALL_APPS[@]}" || STATUS=$?
     }
 
     lk_macos_xcode_maybe_accept_license
@@ -649,8 +699,8 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
     # `brew deps` is buggy AF, so find dependencies recursively via `brew info`
     lk_console_message "Checking for orphaned packages"
     function check_orphans() {
-        local ALL_FORMULAE PURGE_FORMULAE \
-            LAST_FORMULAE=() NEW_FORMULAE=() LAST_CASKS=() NEW_CASKS=()
+        local ALL_FORMULAE ALL_JSON NEW_JSON PURGE_FORMULAE \
+            j=0 LAST_FORMULAE=() NEW_FORMULAE=() LAST_CASKS=() NEW_CASKS=()
         ! lk_is_apple_silicon || {
             local HOMEBREW_FORMULAE
             get_arch_formulae
@@ -662,24 +712,40 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
             ALL_CASKS=($(comm -12 \
                 <(lk_brew_casks | sort -u) \
                 <(lk_echo_array HOMEBREW_CASKS HOMEBREW_KEEP_CASKS | sort -u)))
+        ALL_JSON=$(brew info --json=v2 --installed)
         while :; do
+            ((++j))
             NEW_FORMULAE=($(comm -23 \
                 <(lk_echo_array ALL_FORMULAE) \
                 <(lk_echo_array LAST_FORMULAE)))
-            [ "$i" -gt 0 ] ||
+            ! lk_verbose || [ ${#NEW_FORMULAE[@]} -eq 0 ] ||
+                lk_console_detail \
+                    "$BREW_NAME formulae dependencies (iteration #$j):" \
+                    $'\n'"${NEW_FORMULAE[*]}"
+            [ "$i" -gt 0 ] || {
                 NEW_CASKS=($(comm -23 \
                     <(lk_echo_array ALL_CASKS) \
                     <(lk_echo_array LAST_CASKS)))
+                ! lk_verbose || [ ${#NEW_CASKS[@]} -eq 0 ] ||
+                    lk_console_detail \
+                        "$BREW_NAME cask dependencies (iteration #$j):" \
+                        $'\n'"${NEW_CASKS[*]}"
+            }
             [ ${#NEW_FORMULAE[@]}+${#NEW_CASKS[@]} != 0+0 ] || break
             LAST_FORMULAE=(${ALL_FORMULAE[@]+"${ALL_FORMULAE[@]}"})
             [ "$i" -gt 0 ] ||
                 LAST_CASKS=(${ALL_CASKS[@]+"${ALL_CASKS[@]}"})
-            NEW_JSON=$({
-                [ ${#NEW_FORMULAE[@]} -eq 0 ] ||
-                    brew info --json=v2 --formula "${NEW_FORMULAE[@]}"
-                [ "$i" -gt 0 ] || [ ${#NEW_CASKS[@]} -eq 0 ] ||
-                    brew info --json=v2 --cask "${NEW_CASKS[@]}"
-            } | jq --slurp '{"formulae":[.[].formulae[]],"casks":[.[].casks[]]}')
+            NEW_JSON=$({ [ ${#NEW_FORMULAE[@]} -eq 0 ] || jq '{
+    "casks": [],
+    "formulae": [ .formulae[] | select(.full_name | IN($ARGS.positional[])) ]
+}' --args "${NEW_FORMULAE[@]}" <<<"$ALL_JSON"; } &&
+                { [ "$i" -gt 0 ] || [ ${#NEW_CASKS[@]} -eq 0 ] || jq '{
+    "formulae": [],
+    "casks": [ .casks[] | select(.token | IN($ARGS.positional[])) ]
+}' --args "${NEW_CASKS[@]}" <<<"$ALL_JSON"; } | jq --slurp '{
+    "formulae": [ .[].formulae[] ],
+    "casks": [ .[].casks[] ]
+}')
             ALL_FORMULAE=($({ lk_echo_array ALL_FORMULAE && jq -r "\
 .formulae[].dependencies[]?,\
 .casks[].depends_on.formula[]?" <<<"$NEW_JSON"; } | sort -u))
@@ -726,5 +792,5 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
 
     lk_console_success "Provisioning complete"
 
-    exit "$EXIT_STATUS"
+    exit "$STATUS"
 }

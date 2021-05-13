@@ -1,6 +1,6 @@
 #!/bin/bash
 
-unset LK_PROMPT_DISPLAYED
+unset _LK_PROMPT_DISPLAYED
 
 SH=$(
     set -u
@@ -18,9 +18,14 @@ SH=$(
     VARS=$(vars)
     [ ! -r /etc/default/lk-platform ] ||
         . /etc/default/lk-platform || exit
+    [ ! -r "${_DIR%/lib/bash}/etc/lk-platform/lk-platform.conf" ] ||
+        . "${_DIR%/lib/bash}/etc/lk-platform/lk-platform.conf" || exit
+    XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-~/.config}
     LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
     [ ! -f ~/".${LK_PATH_PREFIX}settings" ] ||
         . ~/".${LK_PATH_PREFIX}settings" || exit
+    [ ! -f "$XDG_CONFIG_HOME/lk-platform/lk-platform.conf" ] ||
+        . "$XDG_CONFIG_HOME/lk-platform/lk-platform.conf" || exit
     unset LK_BASE $VARS
     VARS=$(vars)
     [ -z "${VARS:+1}" ] ||
@@ -157,30 +162,29 @@ fi
     lk_is_false LK_COMPLETION || { SH=$(
         if [ -r /usr/share/bash-completion/bash_completion ]; then
             COMMAND=/usr/share/bash-completion/bash_completion
-        elif [ -z "${HOMEBREW_PREFIX:-}" ]; then
-            return
-        else
-            shopt -s nullglob
-            VERSION=
-            ! lk_bash_at_least 4 ||
-                VERSION="@2"
-            DIR=$HOMEBREW_PREFIX/Cellar/bash-completion$VERSION
-            COMMANDS=("$DIR"/*/etc/profile.d/bash_completion.sh)
-            [ -n "${COMMANDS+1}" ] || return 0
-            COMMAND=${COMMANDS[0]}
-            [ -n "$VERSION" ] || {
-                COMMAND=${COMMAND/profile.d\/bash_completion.sh/bash_completion}
-                printf '%s=%q ' \
-                    BASH_COMPLETION "$COMMAND" \
+        elif [ -n "${HOMEBREW_PREFIX-}" ]; then
+            VARS=()
+            COMMAND=$HOMEBREW_PREFIX/opt/bash-completion
+            if lk_bash_at_least 4; then
+                COMMAND+="@2/etc/profile.d/bash_completion.sh"
+            else
+                COMMAND+=/etc/bash_completion
+                VARS+=(
+                    BASH_COMPLETION "$COMMAND"
                     BASH_COMPLETION_DIR "$COMMAND.d"
-            }
+                )
+            fi
+            [ -r "$COMMAND" ] || return 0
+            [ -z "${VARS+1}" ] || printf '%s=%q\n' "${VARS[@]}"
+        else
+            return 0
         fi
         printf '. %q\n' "$COMMAND" "$LK_BASE/lib/bash/completion.sh"
     ) && eval "$SH"; }
 
     lk_is_false LK_PROMPT || {
         lk_include prompt
-        lk_enable_prompt
+        lk_prompt_enable
     }
 
     ! lk_command_exists dircolors || { SH=$(

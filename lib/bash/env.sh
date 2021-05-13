@@ -40,7 +40,9 @@ path_add_to_front() {
 OLD_PATH=$PATH
 PATH=$(path_add_to_front /usr/local/bin)
 # shellcheck disable=SC2039
-[ /opt/homebrew/bin -ef /usr/local/bin ] ||
+[ ! -d /opt/homebrew/bin ] ||
+    [ /opt/homebrew/bin -ef /usr/local/bin ] ||
+    [ "$(uname -m 2>/dev/null)" = x86_64 ] ||
     PATH=$(path_add_to_front /opt/homebrew/bin)
 
 ! type brew >/dev/null 2>&1 ||
@@ -64,8 +66,11 @@ IFS=':'
 for DIR in ${LK_ADD_TO_PATH:+$LK_ADD_TO_PATH} ${_LK_INST:-$LK_BASE}/bin; do
     PATH=$(path_add "$DIR")
 done
-for DIR in ${HOME:+$HOME/.local/bin} \
+for DIR in \
+    $([ "${HOMEBREW_PREFIX-}" -ef /usr/local ] ||
+        echo /usr/local/bin:/usr/local/sbin) \
     ${HOMEBREW_PREFIX:+$HOMEBREW_PREFIX/bin:$HOMEBREW_PREFIX/sbin} \
+    ${HOME:+$HOME/.local/bin} \
     ${LK_ADD_TO_PATH_FIRST:+$LK_ADD_TO_PATH_FIRST}; do
     PATH=$(path_add_to_front "$DIR")
 done

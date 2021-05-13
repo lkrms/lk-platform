@@ -489,6 +489,7 @@ Usage: $(lk_myself -f) DIR HOST..." || return
                 touch -r "$LOG_FILE" "$FILE" &&
                 rm -f "$FILE.tmp"
         } || return
+        # TODO: add $LK_BASE/etc/lk-platform/lk-platform.conf
         FILES=$(ssh "$SSH_HOST" ls -d \
             /etc/default/lk-platform \
             /etc/memcached.conf \

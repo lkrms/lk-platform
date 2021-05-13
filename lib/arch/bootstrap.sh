@@ -5,8 +5,7 @@
 # To install Arch Linux using the script below:
 # 1. boot from an Arch Linux live CD
 # 2. wpa_supplicant -B -i wlan0 -c <(wpa_passphrase SSID passphrase)
-# 3. curl -L https://lkr.ms/bs >bs
-# 4. bash bs
+# 3. bash -c "$(curl -fsSL http://lkr.ms/bs)"
 
 set -euo pipefail
 lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
@@ -44,6 +43,7 @@ LK_NODE_TIMEZONE=${LK_NODE_TIMEZONE:-UTC}                    # See `timedatectl 
 LK_NODE_SERVICES=${LK_NODE_SERVICES:-}                       #
 LK_NODE_LOCALES=${LK_NODE_LOCALES-en_AU.UTF-8 en_GB.UTF-8}   # "en_US.UTF-8" is added automatically
 LK_NODE_LANGUAGE=${LK_NODE_LANGUAGE-en_AU:en_GB:en}          #
+LK_SAMBA_WORKGROUP=${LK_SAMBA_WORKGROUP:-}                   #
 LK_GRUB_CMDLINE=${LK_GRUB_CMDLINE-$DEFAULT_CMDLINE}          #
 LK_NTP_SERVER=${LK_NTP_SERVER-time.apple.com}                #
 LK_ARCH_MIRROR=${LK_ARCH_MIRROR:-}                           #
@@ -100,7 +100,11 @@ CURL_OPTIONS=(
     --silent
 )
 
-echo $'\E[1m\E[36m==> \E[m\017\E[1mChecking prerequisites\E[m\017' >&2
+YELLOW=$'\E[33m'
+CYAN=$'\E[36m'
+BOLD=$'\E[1m'
+RESET=$'\E[m\017'
+echo "$BOLD$CYAN==> $RESET${BOLD}Checking prerequisites$RESET" >&2
 REPO_URL=https://raw.githubusercontent.com/lkrms/lk-platform
 for FILE_PATH in \
     /lib/bash/include/core.sh \
@@ -111,7 +115,7 @@ for FILE_PATH in \
     /share/sudoers.d/default; do
     FILE=$_DIR/${FILE_PATH##*/}
     URL=$REPO_URL/$LK_PLATFORM_BRANCH$FILE_PATH
-    MESSAGE=$'\E[1m\E[33m   -> \E[m\017{}\E[m\017\E[33m '"$URL"$'\E[m\017'
+    MESSAGE="$BOLD$YELLOW   -> $RESET{}$YELLOW $URL$RESET"
     if [ ! -e "$FILE" ]; then
         echo "${MESSAGE/{\}/Downloading:}" >&2
         curl "${CURL_OPTIONS[@]}" --output "$FILE" "$URL" || {
@@ -442,8 +446,9 @@ in_target install -d -m 02775 -o "$BOOTSTRAP_USERNAME" -g adm "$LK_BASE"
     in_target -u "$BOOTSTRAP_USERNAME" \
         git clone -b "$LK_PLATFORM_BRANCH" \
         https://github.com/lkrms/lk-platform.git "$LK_BASE")
-FILE=/mnt/etc/default/lk-platform
-install -m 00644 /dev/null "$FILE"
+FILE=$LK_BASE/etc/lk-platform/lk-platform.conf
+in_target install -d -m 00775 -g adm "${FILE%/*}"
+in_target install -m 00664 -g adm /dev/null "$FILE"
 lk_get_shell_var \
     LK_BASE \
     LK_PATH_PREFIX \
@@ -458,12 +463,13 @@ lk_get_shell_var \
     LK_NODE_SERVICES \
     LK_NODE_LOCALES \
     LK_NODE_LANGUAGE \
+    LK_SAMBA_WORKGROUP \
     LK_GRUB_CMDLINE \
     LK_NTP_SERVER \
     LK_ARCH_MIRROR \
     LK_ARCH_REPOS \
     LK_PLATFORM_BRANCH \
-    LK_PACKAGES_FILE >"$FILE"
+    LK_PACKAGES_FILE >"/mnt$FILE"
 
 PROVISIONED=
 in_target -u "$BOOTSTRAP_USERNAME" \

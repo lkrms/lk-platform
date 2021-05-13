@@ -41,15 +41,14 @@ HOMEBREW_FORMULAE=(
     pv
     python-yq
     rsync
+    watch
 
     #
     ${HOMEBREW_FORMULAE[@]+"${HOMEBREW_FORMULAE[@]}"}
 )
 
 HOMEBREW_CASKS=(
-    #dozer
     iterm2
-    mysides
 
     #
     ${HOMEBREW_CASKS[@]+"${HOMEBREW_CASKS[@]}"}
@@ -67,16 +66,13 @@ MAS_APPS=(
 HOMEBREW_KEEP_FORMULAE=(
     bash
     bash-completion@2
-    ocaml
+    gdb
 
     #
     ${HOMEBREW_KEEP_FORMULAE[@]+"${HOMEBREW_KEEP_FORMULAE[@]}"}
 )
 
 HOMEBREW_KEEP_CASKS=(
-    zoom
-
-    #
     ${HOMEBREW_KEEP_CASKS[@]+"${HOMEBREW_KEEP_CASKS[@]}"}
 )
 

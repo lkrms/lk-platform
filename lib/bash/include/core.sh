@@ -233,15 +233,23 @@ else
     if ! lk_is_macos; then
         # lk_date FORMAT [TIMESTAMP]
         function lk_date() {
-            gnu_date ${2:+-d "@$2"} +"$1"
+            if [ $# -lt 2 ]; then
+                gnu_date "+$1"
+            else
+                gnu_date -d "@$2" "+$1"
+            fi
         }
     else
         # lk_date FORMAT [TIMESTAMP]
         function lk_date() {
-            date ${2:+-jf '%s' "$2"} +"$1"
+            if [ $# -lt 2 ]; then
+                date "+$1"
+            else
+                date -jf '%s' "$2" "+$1"
+            fi
         }
     fi
-fi #### Reviewed: 2021-03-26
+fi #### Reviewed: 2021-04-30
 
 # lk_date_log [TIMESTAMP]
 function lk_date_log() {
@@ -331,11 +339,14 @@ function lk_double_quote() {
     printf '"%s"\n' "${STRING%.}"
 }
 
+# lk_get_shell_var [VAR...]
+#
+# Output a shell variable assignment for each declared VAR.
 function lk_get_shell_var() {
     while [ $# -gt 0 ]; do
-        if [ -n "${!1:-}" ]; then
+        if [ -n "${!1:+1}" ]; then
             printf '%s=%s\n' "$1" "$(lk_double_quote "${!1}")"
-        else
+        elif [ -n "${!1+1}" ]; then
             printf '%s=\n' "$1"
         fi
         shift
@@ -381,6 +392,21 @@ function lk_get_env() {
                 "$@"
     )
 } #### Reviewed: 2021-04-12
+
+# lk_path_edit REMOVE_REGEX [MOVE_REGEX [PATH]]
+function lk_path_edit() {
+    [ $# -gt 0 ] || lk_usage "\
+Usage: ${FUNCNAME[0]} REMOVE_REGEX [MOVE_REGEX [PATH]]" || return
+    awk \
+        -v "remove=$1" \
+        -v "move=${2-}" \
+        'function p(v) { printf "%s%s", s, v; s = ":" }
+BEGIN { RS = "[:\n]+" }
+remove && $0 ~ remove { next }
+move && $0 ~ move { a[i++] = $0; next }
+{ p($0) }
+END{ for (i in a) p(a[i]) }' <<<"${3-$PATH}"
+} #### Reviewed: 2021-05-10
 
 # lk_check_pid PID
 #
@@ -946,6 +972,7 @@ function lk_cache_mark_dirty() {
 function lk_get_outputs_of() {
     local SH EXIT_STATUS
     SH=$(
+        _LK_CAN_FAIL=1
         _LK_STDOUT=$(lk_mktemp_file) &&
             _LK_STDERR=$(lk_mktemp_file) &&
             lk_delete_on_exit "$_LK_STDOUT" "$_LK_STDERR" || exit
@@ -1038,13 +1065,15 @@ function pv() {
 }
 
 function lk_tee() {
-    lk_ignore_SIGINT &&
-        exec tee "$@"
+    local PRESERVE
+    [[ ! "$1" =~ ^-[0-9]+$ ]] || { PRESERVE=${1#-} && shift; }
+    lk_ignore_SIGINT && eval exec "$(_lk_log_close_fd ${PRESERVE-})" || return
+    exec tee "$@"
 }
 
 function lk_log() {
     local PREFIX=${1:-}
-    lk_ignore_SIGINT || return
+    lk_ignore_SIGINT && eval exec "$(_lk_log_close_fd)" || return
     if lk_command_exists ts; then
         PREFIX=${PREFIX//"%"/"%%"}
         exec ts "$PREFIX%Y-%m-%d %H:%M:%.S %z"
@@ -1109,10 +1138,21 @@ function lk_start_trace() {
     set -x
 }
 
+function _lk_log_close_fd() {
+    local IFS i SH=()
+    unset IFS
+    for i in _LK_FD _LK_{{TTY,LOG}_{OUT,ERR},LOG}_FD _LK_LOG2_FD; do
+        [ -z "${!i-}" ] || [ "${!i}" -lt 3 ] || [ "${!i}" -eq "${1:-0}" ] ||
+            SH[${#SH[@]}]="${!i}>&-"
+    done
+    echo "${SH[*]}"
+}
+
 # lk_log_start [TEMP_LOG_FILE]
 function lk_log_start() {
-    local ARG0 ARGC HEADER EXT _FILE FILE LOG_FILE OUT_FILE FIFO DIR
-    if lk_is_true LK_NO_LOG || lk_log_is_open || ! lk_is_script_running; then
+    local ARG0 ARGC HEADER EXT _FILE FILE LOG_FILE OUT_FILE FIFO
+    if lk_is_true LK_NO_LOG || lk_log_is_open ||
+        { [[ $- == *i* ]] && ! lk_is_script_running; }; then
         return
     elif [ -z "${_LK_LOG_CMDLINE+1}" ]; then
         local _LK_LOG_CMDLINE=("${_LK_CMDLINE[@]}")
@@ -1159,7 +1199,8 @@ function lk_log_start() {
     lk_ignore_SIGINT && lk_strip_non_printing <"$FIFO" >>"$OUT_FILE" &
     unset _LK_LOG2_FD
     [ -z "${LK_SECONDARY_LOG_FILE:-}" ] || { _LK_LOG2_FD=$(lk_fd_next) &&
-        eval "exec $_LK_LOG2_FD"'>>"$LK_SECONDARY_LOG_FILE"'; } || return
+        eval "exec $_LK_LOG2_FD"'>>"$LK_SECONDARY_LOG_FILE"' &&
+        export _LK_LOG2_FD; } || return
     _LK_TTY_OUT_FD=$(lk_fd_next) &&
         eval "exec $_LK_TTY_OUT_FD>&1" &&
         _LK_TTY_ERR_FD=$(lk_fd_next) &&
@@ -1176,15 +1217,17 @@ function lk_log_start() {
     export _LK_FD _LK_{{TTY,LOG}_{OUT,ERR},LOG}_FD
     lk_log_tty_on
     [ "${_LK_FD:-2}" -ne 2 ] || {
-        exec 3> >(lk_tee >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
+        exec 3> >(lk_tee >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
             >&"$_LK_TTY_OUT_FD")
         _LK_FD=3
+        _LK_FD_LOGGED=1
     }
     lk_log_to_file_stdout <<<"$HEADER"
     ! lk_verbose 2 || lk_echoc \
         "Output is being logged to $LK_BOLD$LOG_FILE$LK_RESET" "$LK_GREY" |
         lk_log_to_tty_stdout
     _LK_LOG_FILE=$LOG_FILE
+    _LK_OUT_FILE=$OUT_FILE
 }
 
 function lk_log_is_open() {
@@ -1200,52 +1243,64 @@ function lk_log_is_open() {
 # further logging (useful when closing a secondary log file).
 function lk_log_close() {
     lk_log_is_open || lk_warn "no output log" || return
-    [ -z "${_LK_LOG2_FD:-}" ] || {
-        eval "exec $_LK_LOG_FD"'> >(lk_log >>"$_LK_LOG_FILE")' &&
-            { ! lk_fd_is_open "$_LK_LOG2_FD" || eval "exec $_LK_LOG2_FD>&-"; }
-    } || return
-    unset _LK_LOG2_FD
-    [ "${1:-}" = -r ] || {
+    if [ "${1-}" = -r ]; then
+        [ -z "${_LK_LOG2_FD-}" ] || {
+            eval "exec $_LK_LOG_FD"'> >(lk_log >>"$_LK_LOG_FILE")' &&
+                { ! lk_fd_is_open "$_LK_LOG2_FD" ||
+                    eval "exec $_LK_LOG2_FD>&-"; }
+        } || return
+        unset _LK_LOG2_FD
+    else
+        CLOSE=()
+        [ -z "${_LK_FD_LOGGED-}" ] || CLOSE=(_LK_FD)
+        CLOSE+=(
+            _LK_LOG_FD
+            _LK_LOG_ERR_FD
+            _LK_LOG_OUT_FD
+            _LK_TTY_ERR_FD
+            _LK_TTY_OUT_FD
+            _LK_LOG2_FD
+        )
         exec >&"$_LK_TTY_OUT_FD" 2>&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}" &&
-            eval "exec$(printf ' %s>&-' \
-                "$_LK_TTY_OUT_FD" "$_LK_TTY_ERR_FD" \
-                "$_LK_LOG_OUT_FD" "$_LK_LOG_ERR_FD" "$_LK_LOG_FD")" &&
-            unset _LK_{{TTY,LOG}_{OUT,ERR},LOG}_FD _LK_LOG_FILE
-    }
+            eval "$(printf 'exec %s>&-\n' $(for i in "${CLOSE[@]}"; do
+                echo "${!i-}"
+            done))" &&
+            unset "${CLOSE[@]}" _LK_{LOG,OUT}_FILE
+    fi
 }
 
 function lk_log_tty_off() {
     lk_log_is_open || return 0
     exec \
-        > >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
-        2> >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") &&
+        > >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
+        2> >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") &&
         _LK_LOG_TTY_LAST=${FUNCNAME[0]}
 }
 
 function lk_log_tty_stdout_off() {
     lk_log_is_open || return 0
     exec \
-        > >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
-        2> >(lk_tee >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}") &&
+        > >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
+        2> >(lk_tee >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}") &&
         _LK_LOG_TTY_LAST=${FUNCNAME[0]}
 }
 
 function lk_log_tty_on() {
     lk_log_is_open || return 0
     exec \
-        > >(lk_tee >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") >&"$_LK_TTY_OUT_FD") \
-        2> >(lk_tee >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}") &&
+        > >(lk_tee >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") >&"$_LK_TTY_OUT_FD") \
+        2> >(lk_tee >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}") &&
         _LK_LOG_TTY_LAST=${FUNCNAME[0]}
 }
 
 function lk_log_to_file_stdout() {
     lk_log_is_open || lk_warn "no output log" || return
-    cat > >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD")
+    cat > >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD")
 }
 
 function lk_log_to_file_stderr() {
     lk_log_is_open || lk_warn "no output log" || return
-    cat > >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD")
+    cat > >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD")
 }
 
 function lk_log_to_tty_stdout() {
@@ -1289,16 +1344,16 @@ function lk_log_bypass() {
     case "$ARG" in
     -to)
         _lk_log_bypass "$@" \
-            > >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD")
+            > >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD")
         ;;
     -te)
         _lk_log_bypass "$@" \
-            2> >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD")
+            2> >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD")
         ;;
     -t)
         _lk_log_bypass "$@" \
-            > >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
-            2> >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD")
+            > >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
+            2> >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD")
         ;;
     -o)
         _lk_log_bypass "$@" \
@@ -1310,8 +1365,8 @@ function lk_log_bypass() {
         ;;
     -n)
         _lk_log_bypass "$@" \
-            > >(lk_tee >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") >&"$_LK_TTY_OUT_FD") \
-            2> >(lk_tee >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}")
+            > >(lk_tee >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") >&"$_LK_TTY_OUT_FD") \
+            2> >(lk_tee >(lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}")
         ;;
     *)
         _lk_log_bypass "$@" \
@@ -2582,10 +2637,10 @@ function lk_files_not_empty() {
 function lk_dir_parents() {
     local UNTIL=/
     [ "${1:-}" != -u ] || {
-        UNTIL=$(realpath "$2") || return
+        UNTIL=$(_lk_realpath "$2") || return
         shift 2
     }
-    realpath "$@" | awk -v "u=$UNTIL" 'BEGIN {
+    _lk_realpath "$@" | awk -v "u=$UNTIL" 'BEGIN {
     l = length(u) + 1
 }
 substr($0 "/", 1, l) == u "/" {
@@ -2930,6 +2985,59 @@ else
     }
 fi
 
+function lk_realpath() {
+    local FILE=$1 i=0 COMPONENT LN RESOLVED=
+    lk_maybe_sudo test -e "$FILE" || return
+    [ "${FILE:0:1}" = / ] || FILE=${PWD%/}/$FILE
+    while [ -n "$FILE" ]; do
+        ((i++)) || {
+            # 1. Replace "/./" with "/"
+            # 2. Replace subsequent "/"s with one "/"
+            # 3. Remove trailing "/"
+            FILE=$(sed -E \
+                -e 's/\/\.\//\//g' \
+                -e 's/\/+/\//g' \
+                -e 's/\/$//' <<<"$FILE") || return
+            FILE=${FILE:1}
+        }
+        COMPONENT=${FILE%%/*}
+        [ "$COMPONENT" != "$FILE" ] ||
+            FILE=
+        FILE=${FILE#*/}
+        case "$COMPONENT" in
+        '' | .)
+            continue
+            ;;
+        ..)
+            RESOLVED=${RESOLVED%/*}
+            continue
+            ;;
+        esac
+        RESOLVED=$RESOLVED/$COMPONENT
+        ! lk_maybe_sudo test -L "$RESOLVED" || {
+            LN=$(lk_maybe_sudo readlink "$RESOLVED") || return
+            [ "${LN:0:1}" = / ] || LN=${RESOLVED%/*}/$LN
+            FILE=$LN${FILE:+/$FILE}
+            RESOLVED=
+            i=0
+        }
+    done
+    echo "$RESOLVED"
+}
+
+function _lk_realpath() {
+    local STATUS=0
+    if lk_command_exists realpath; then
+        lk_maybe_sudo realpath "$@"
+    else
+        while [ $# -gt 0 ]; do
+            lk_realpath "$1" || STATUS=$?
+            shift
+        done
+        return "$STATUS"
+    fi
+}
+
 # lk_file_get_text FILE VAR
 #
 # Read the entire FILE into variable VAR, adding a newline at the end unless
@@ -2976,11 +3084,11 @@ function lk_file_backup() {
             lk_maybe_sudo test -f "$1" || lk_warn "not a file: $1" || return
             lk_maybe_sudo test -s "$1" || return 0
             ! lk_is_true MOVE || {
-                FILE=$(lk_maybe_sudo realpath "$1") || return
+                FILE=$(_lk_realpath "$1") || return
                 {
                     OWNER=$(lk_file_owner "$FILE") &&
                         OWNER_HOME=$(lk_expand_path "~$OWNER") &&
-                        OWNER_HOME=$(lk_maybe_sudo realpath "$OWNER_HOME")
+                        OWNER_HOME=$(_lk_realpath "$OWNER_HOME")
                 } 2>/dev/null || OWNER_HOME=
                 if lk_will_elevate && [ "${FILE#$OWNER_HOME}" = "$FILE" ]; then
                     lk_install -d \
@@ -3096,7 +3204,7 @@ Options:
     LK_FILE_REPLACE_DECLINED=0
     if lk_maybe_sudo test -e "$1"; then
         ! lk_is_true LINK || {
-            TEMP=$(realpath "$1") || return
+            TEMP=$(_lk_realpath "$1") || return
             set -- "$TEMP"
         }
         lk_maybe_sudo test -f "$1" || lk_warn "not a file: $1" || return

@@ -130,7 +130,7 @@ SCRIPT or any SOURCE. If -g is set, store results in global array variables:
     for COMMAND in "${COMMANDS[@]}"; do
         [[ ! $COMMAND =~ ^(lk_|\./) ]] || continue
         _PATH=$(type -P "$COMMAND") &&
-            _PATH=$(realpath "$_PATH") &&
+            _PATH=$(_lk_realpath "$_PATH") &&
             COMMAND_FILES[${#COMMAND_FILES[@]}]=$_PATH$(
                 [ "${COMMAND##*/}" = "${_PATH##*/}" ] || echo " ($COMMAND)"
             ) &&

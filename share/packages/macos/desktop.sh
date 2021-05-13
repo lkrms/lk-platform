@@ -6,6 +6,7 @@ HOMEBREW_CASKS=()
 MAS_APPS=()
 HOMEBREW_KEEP_FORMULAE=()
 HOMEBREW_KEEP_CASKS=()
+FORCE_IBREW=()
 LOGIN_ITEMS=()
 
 # Terminal-based
@@ -18,6 +19,10 @@ HOMEBREW_FORMULAE+=(
     # Networking
     openconnect
     vpn-slice
+)
+
+FORCE_IBREW+=(
+    unison
 )
 
 # Desktop
@@ -40,7 +45,9 @@ HOMEBREW_FORMULAE+=(
 )
 
 HOMEBREW_CASKS+=(
+    alt-tab
     chromium
+    cyberduck
     firefox
     flycut
     icanhazshortcut
@@ -49,6 +56,7 @@ HOMEBREW_CASKS+=(
     keepingyouawake
     libreoffice
     messenger
+    mysides
     nextcloud
     skype
     spotify
@@ -64,7 +72,9 @@ HOMEBREW_CASKS+=(
 
     # System
     geekbench
-    #lingon-x
+
+    # Non-free
+    microsoft-office
 )
 
 MAS_APPS+=(
@@ -90,7 +100,12 @@ HOMEBREW_CASKS+=(
     sonos
 )
 
+HOMEBREW_KEEP_FORMULAE+=(
+    ocaml
+)
+
 HOMEBREW_KEEP_CASKS+=(
+    lingon-x
     logitech-g-hub
     logitech-gaming-software
 )

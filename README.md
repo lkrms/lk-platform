@@ -3,8 +3,8 @@ Provisioning and automation for servers and desktops
 
 ## Configuration
 Settings are loaded in the following order (later values override earlier ones):
-1. `/etc/default/lk-platform`
-2. `~/.${LK_PATH_PREFIX}settings`, e.g. `~/.lk-settings`
+1. `$LK_BASE/etc/lk-platform/lk-platform.conf`
+2. `~/.config/lk-platform/lk-platform.conf`
 3. Environment variables
 
 ### Settings

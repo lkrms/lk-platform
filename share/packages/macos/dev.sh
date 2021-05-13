@@ -28,6 +28,7 @@ HOMEBREW_FORMULAE+=(
     # System
     #acme.sh
 )
+
 FORCE_IBREW+=(
     unison
 )
@@ -52,7 +53,9 @@ HOMEBREW_FORMULAE+=(
 )
 
 HOMEBREW_CASKS+=(
+    alt-tab
     chromium
+    cyberduck
     firefox
     flycut
     icanhazshortcut
@@ -62,6 +65,7 @@ HOMEBREW_CASKS+=(
     libreoffice
     messenger
     microsoft-teams
+    mysides
     nextcloud
     pencil
     scribus
@@ -80,8 +84,6 @@ HOMEBREW_CASKS+=(
 
     # Multimedia (video)
     handbrake
-    #makemkv
-    #mkvtoolnix
     subler
     vlc
 
@@ -89,8 +91,6 @@ HOMEBREW_CASKS+=(
     displaycal
     geekbench
     hex-fiend
-    #lingon-x
-    #shortcutdetective
 
     # Non-free
     acorn
@@ -121,10 +121,13 @@ MAS_APPS+=(
 # Development
 HOMEBREW_TAPS+=(
     adoptopenjdk/openjdk
+    lkrms/virt-manager
     #mongodb/brew
 )
 
 HOMEBREW_FORMULAE+=(
+    gdb
+
     # Email
     msmtp  # SMTP client
     s-nail # `mail` and `mailx` commands
@@ -153,6 +156,11 @@ HOMEBREW_FORMULAE+=(
     shellcheck
     shfmt
 
+    #
+    libvirt
+    qemu
+    lkrms/virt-manager/virt-manager
+
     # Platforms
     awscli
 )
@@ -176,18 +184,28 @@ MAS_APPS+=(
     497799835 # Xcode
 )
 
-# VMs and containers
-HOMEBREW_KEEP_CASKS+=(
-    virtualbox
-    virtualbox-extension-pack
-)
-
 # Hardware-related
 HOMEBREW_CASKS+=(
     sonos
 )
 
+HOMEBREW_KEEP_FORMULAE+=(
+    ocaml
+)
+
 HOMEBREW_KEEP_CASKS+=(
+    lingon-x
+    shortcutdetective
+
+    #
+    makemkv
+    mkvtoolnix
+
+    #
+    virtualbox
+    virtualbox-extension-pack
+
+    #
     logitech-g-hub
     logitech-gaming-software
 )

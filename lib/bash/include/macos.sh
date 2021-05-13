@@ -1,9 +1,22 @@
 #!/bin/bash
 
 ! lk_is_apple_silicon || {
-    function lk_macos_x86_64() { arch --x86_64 "$@"; }
-    function brew() { /opt/homebrew/bin/brew "$@"; }
-    function ibrew() { lk_macos_x86_64 /usr/local/bin/brew "$@"; }
+    function lk_macos_x86_64() {
+        local _PATH
+        _PATH=$(lk_path_edit "" "^/opt/homebrew(/|\$)") &&
+            PATH=$_PATH arch --x86_64 "$@"
+    }
+    function brew() {
+        local _PATH
+        _PATH=$(lk_path_edit "^/usr/local(/|\$)") &&
+            PATH=$_PATH /opt/homebrew/bin/brew "$@"
+    }
+    function ibrew() {
+        local _PATH
+        _PATH=$(lk_path_edit "^/opt/homebrew(/|\$)") &&
+            PATH=$_PATH arch --x86_64 /usr/local/bin/brew "$@"
+    }
+    function ibash() { lk_macos_x86_64 bash "$@"; }
 }
 
 function lk_macos_version() {

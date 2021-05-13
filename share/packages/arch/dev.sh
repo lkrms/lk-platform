@@ -5,6 +5,7 @@ PAC_REPOS=(
 http://sublimetext.mirror/arch/stable/\$arch|\
 http://sublimetext.mirror/sublimehq-pub.gpg|\
 8A8F901A"
+    "quarry|http://quarry.repo|||Optional TrustAll"
 )
 
 PAC_PACKAGES=()
@@ -51,18 +52,32 @@ lk_is_virtual || {
         ddcutil
         i2c-tools
     )
+    AUR_PACKAGES+=(
+        geekbench
+    )
     ! lk_system_has_intel_graphics || PAC_PACKAGES+=(
         clinfo
         intel-compute-runtime
+        vulkan-intel
+        vulkan-tools
     )
     ! lk_system_has_nvidia_graphics || PAC_PACKAGES+=(
         clinfo
         opencl-nvidia
+        vulkan-tools
     )
-    ! lk_system_has_amd_graphics || PAC_PACKAGES+=(
-        clinfo
-        opencl-mesa
-    )
+    ! lk_system_has_amd_graphics || {
+        PAC_PACKAGES+=(
+            clinfo
+            libclc
+            opencl-mesa
+            vulkan-radeon
+            vulkan-tools
+        )
+        AUR_PACKAGES+=(
+            rocm-opencl-runtime
+        )
+    }
 }
 
 AUR_PACKAGES+=(
@@ -78,25 +93,14 @@ PAC_PACKAGES+=(
     zsh
 
     # utilities
-    cdrtools #
-    cpio     # for libguestfs
+    cdrtools
     ext4magic
     fatresize
     partclone
-    wimlib
 
     # networking
     networkmanager-l2tp
     networkmanager-openconnect
-
-    # monitoring
-    atop
-    iotop
-
-    # network monitoring
-    iftop   # shows network traffic by service and host
-    nethogs # groups bandwidth by process ('nettop')
-    nload   # shows bandwidth by interface
 
     # system
     acme.sh
@@ -107,10 +111,8 @@ PAC_PACKAGES+=(
     cloud-utils
     cronie
     expac
-    hwinfo
     mlocate
     stow
-    sysfsutils
     ubuntu-keyring
 )
 
@@ -305,6 +307,9 @@ PAC_PACKAGES+=(
     python2
 
     #
+    ruby
+
+    #
     shellcheck
 
     #
@@ -324,6 +329,9 @@ AUR_PACKAGES+=(
     nvm
     phpdoc-phar
     robo3t-bin
+    ruby-rubocop
+    ruby-rubocop-performance
+    ruby-rubocop-rails
     sublime-merge
     sublime-text
     trickle

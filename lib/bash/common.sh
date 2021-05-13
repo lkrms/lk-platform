@@ -18,9 +18,14 @@
     VARS=$(vars)
     [ ! -r /etc/default/lk-platform ] ||
         . /etc/default/lk-platform || exit
+    [ ! -r "${_DIR%/lib/bash}/etc/lk-platform/lk-platform.conf" ] ||
+        . "${_DIR%/lib/bash}/etc/lk-platform/lk-platform.conf" || exit
+    XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-~/.config}
     LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
     [ ! -f ~/".${LK_PATH_PREFIX}settings" ] ||
         . ~/".${LK_PATH_PREFIX}settings" || exit
+    [ ! -f "$XDG_CONFIG_HOME/lk-platform/lk-platform.conf" ] ||
+        . "$XDG_CONFIG_HOME/lk-platform/lk-platform.conf" || exit
     unset LK_BASE $VARS
     VARS=$(vars)
     [ -z "${VARS:+1}" ] ||

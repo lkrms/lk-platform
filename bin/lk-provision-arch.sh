@@ -18,10 +18,6 @@ shopt -s nullglob
 . "$LK_BASE/lib/bash/common.sh"
 lk_include arch git linux provision
 
-SH=$(lk_provision_getopt)
-eval "$SH"
-shift "$LK_SHIFT"
-
 ! lk_in_chroot || _LK_BOOTSTRAP=1
 
 if lk_is_bootstrap; then
@@ -138,10 +134,24 @@ function memory_at_least() {
 lk_assert_not_root
 lk_assert_is_arch
 
+# Try to detect missing settings
+if ! lk_is_bootstrap; then
+    [ -n "${LK_NODE_TIMEZONE:-}" ] || ! _TZ=$(lk_system_timezone) ||
+        set -- --set LK_NODE_TIMEZONE "$_TZ" "$@"
+    [ -n "${LK_NODE_HOSTNAME:-}" ] || ! _HN=$(lk_hostname) ||
+        set -- --set LK_NODE_HOSTNAME "$_HN" "$@"
+    [ -n "${LK_NODE_LOCALES+1}" ] ||
+        set -- --set LK_NODE_LOCALES "en_AU.UTF-8 en_GB.UTF-8" "$@"
+    [ -n "${LK_NODE_LANGUAGE+1}" ] ||
+        set -- --set LK_NODE_LANGUAGE "en_AU:en_GB:en" "$@"
+fi
+
+SETTINGS_SH=$(lk_settings_getopt)
+eval "$SETTINGS_SH"
+shift "$_LK_SHIFT"
+
 lk_getopt
 eval "set -- $LK_GETOPT"
-
-lk_sudo_offer_nopasswd || lk_die "unable to run commands as root"
 
 LK_PACKAGES_FILE=${1:-${LK_PACKAGES_FILE:-}}
 if [ -n "$LK_PACKAGES_FILE" ]; then
@@ -153,7 +163,10 @@ if [ -n "$LK_PACKAGES_FILE" ]; then
         [ -f "$FILE" ] || lk_die "file not found: $LK_PACKAGES_FILE"
         LK_PACKAGES_FILE=$FILE
     fi
-    export LK_PACKAGES_FILE
+    SETTINGS_SH=$(
+        [ -z "${SETTINGS_SH:+1}" ] || cat <<<"$SETTINGS_SH"
+        printf '%s=%q\n' LK_PACKAGES_FILE "$LK_PACKAGES_FILE"
+    )
 fi
 
 lk_log_start
@@ -162,6 +175,7 @@ lk_start_trace
 
 {
     lk_console_log "Provisioning Arch Linux"
+    lk_sudo_offer_nopasswd || lk_die "unable to run commands as root"
     ! lk_is_bootstrap || lk_console_detail "Bootstrap environment detected"
     GROUP=$(id -gn)
     MEMORY=$(lk_system_memory 2)
@@ -171,23 +185,14 @@ lk_start_trace
     LK_FILE_BACKUP_TAKE=${LK_FILE_BACKUP_TAKE-$(lk_is_bootstrap || echo 1)}
     LK_FILE_BACKUP_MOVE=1
 
+    LK_VERBOSE=1 \
+        lk_settings_persist "$SETTINGS_SH"
+
     EXIT_STATUS=0
     SERVICE_STARTED=()
     SERVICE_ENABLE=()
     SERVICE_RESTART=()
     DAEMON_RELOAD=
-
-    # Try to detect missing settings
-    if ! lk_is_bootstrap; then
-        [ -n "${LK_NODE_TIMEZONE:-}" ] || ! _TZ=$(lk_system_timezone) ||
-            export LK_NODE_TIMEZONE=$_TZ
-        [ -n "${LK_NODE_HOSTNAME:-}" ] || ! _HN=$(lk_hostname) ||
-            export LK_NODE_HOSTNAME=$_HN
-        [ -n "${LK_NODE_LOCALES+1}" ] ||
-            LK_NODE_LOCALES="en_AU.UTF-8 en_GB.UTF-8"
-        [ -n "${LK_NODE_LANGUAGE+1}" ] ||
-            LK_NODE_LANGUAGE=en_AU:en_GB:en
-    fi
 
     if [ -n "${LK_NODE_TIMEZONE:-}" ]; then
         lk_console_message "Checking system time zone"
@@ -514,10 +519,7 @@ $LK_NODE_HOSTNAME" &&
 
     lk_console_blank
     LK_NO_LOG=1 \
-        lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" \
-        ${LK_PACKAGES_FILE:+--set LK_PACKAGES_FILE="$LK_PACKAGES_FILE"}
-    [ ! -f /etc/default/lk-platform ] ||
-        . /etc/default/lk-platform
+        lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh"
 
     lk_console_blank
     lk_console_log "Checking packages"
@@ -962,6 +964,26 @@ done\""
         { [ ${#a[@]} -eq 0 ] || printf " %q" "${a[@]}"; }')
         [ -z "$SH" ] ||
             eval "file_delete$SH"
+    fi
+
+    if { [ -n "${LK_SAMBA_WORKGROUP:-}" ] || lk_node_service_enabled samba; } &&
+        lk_pac_installed samba; then
+        unset LK_FILE_REPLACE_NO_CHANGE
+        FILE=/etc/samba/smb.conf
+        _FILE=$(LK_SAMBA_WORKGROUP=${LK_SAMBA_WORKGROUP:-WORKGROUP} \
+            lk_expand_template "$LK_BASE/share/samba/smb.template.conf")
+        lk_install -m 00644 "$FILE"
+        lk_file_replace -i "^(#|;|$S*\$)" "$FILE" "$_FILE"
+        SERVICE_ENABLE+=(
+            smb "Samba (SMB server)"
+            nmb "Samba (NMB server)"
+        )
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+            SERVICE_RESTART+=(smb nmb)
+        sudo pdbedit -L | cut -d: -f1 | grep -Fx "$USER" >/dev/null ||
+            lk_console_detail \
+                "User '$USER' not found in Samba user database. To fix, run:" \
+                $'\n'"sudo smbpasswd -a $USER"
     fi
 
     service_apply || EXIT_STATUS=$?
