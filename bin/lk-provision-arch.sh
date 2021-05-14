@@ -538,7 +538,7 @@ $LK_NODE_HOSTNAME" &&
             devtools pacutils vifm))
         [ ${#PAC_INSTALL[@]} -eq 0 ] || {
             lk_console_detail "Installing aurutils dependencies"
-            lk_tty sudo pacman -S --noconfirm "${PAC_INSTALL[@]}"
+            lk_tty pacman -S --noconfirm "${PAC_INSTALL[@]}"
         }
 
         DIR=$({ pacman-conf --repo=aur |
@@ -550,7 +550,7 @@ $LK_NODE_HOSTNAME" &&
         lk_console_detail "Checking pacman repo at" "$DIR"
         lk_install -d -m 00755 -o "$USER" -g "$GROUP" "$DIR"
         [ -e "$FILE" ] ||
-            lk_tty repo-add "$FILE"
+            LK_SUDO=0 lk_tty repo-add "$FILE"
 
         lk_arch_add_repo "aur|file://$DIR|||Optional TrustAll"
         LK_CONF_OPTION_FILE=/etc/pacman.conf
@@ -566,9 +566,9 @@ $LK_NODE_HOSTNAME" &&
             PKGDEST=$DIR lk_makepkg -a aurutils --force
             lk_files_exist "${LK_MAKEPKG_LIST[@]}" ||
                 lk_die "not found: ${LK_MAKEPKG_LIST[*]}"
-            lk_tty repo-add --remove "$FILE" "${LK_MAKEPKG_LIST[@]}"
+            LK_SUDO=0 lk_tty repo-add --remove "$FILE" "${LK_MAKEPKG_LIST[@]}"
             lk_pac_sync -f
-            lk_tty sudo pacman -S --noconfirm aur/aurutils
+            lk_tty pacman -S --noconfirm aur/aurutils
         fi
 
         FILE=/etc/aurutils/pacman-aur.conf
@@ -580,15 +580,16 @@ $LK_NODE_HOSTNAME" &&
 
         # Avoid "unknown public key" errors
         unset LK_SUDO
-        DIR=~/.gnupg
-        FILE=$DIR/gpg.conf
-        lk_install -d -m 00700 "$DIR"
+        FILE=~/.gnupg/gpg.conf
+        lk_install -d -m 00700 "${FILE%/*}"
         lk_install -m 00644 "$FILE"
         if ! grep -q "\<auto-key-retrieve\>" "$FILE"; then
             lk_console_detail \
                 "Enabling in $(lk_pretty_path $FILE):" "auto-key-retrieve"
             lk_conf_enable_row auto-key-retrieve "$FILE"
         fi
+        _LK_CONF_DELIM=" " \
+            lk_conf_set_option keyserver hkps://keyserver.ubuntu.com "$FILE"
         LK_SUDO=1
 
         if [ ${#AUR_PACKAGES[@]} -gt 0 ]; then
@@ -615,10 +616,10 @@ $LK_NODE_HOSTNAME" &&
         <(lk_echo_array PAC_EXPLICIT) \
         <(lk_pac_installed_explicit | sort -u)))
     [ ${#PAC_MARK_EXPLICIT[@]} -eq 0 ] ||
-        lk_log_bypass lk_tty sudo \
+        lk_log_bypass lk_tty \
             pacman -D --asexplicit "${PAC_MARK_EXPLICIT[@]}"
     [ ${#PAC_UNMARK_EXPLICIT[@]} -eq 0 ] ||
-        lk_log_bypass lk_tty sudo \
+        lk_log_bypass lk_tty \
             pacman -D --asdeps "${PAC_UNMARK_EXPLICIT[@]}"
 
     [ ${#PAC_KEEP[@]} -eq 0 ] ||
@@ -637,7 +638,7 @@ $LK_NODE_HOSTNAME" &&
     unset NOCONFIRM
     ! lk_no_input || NOCONFIRM=1
     [ ${#PAC_INSTALL[@]}${#PAC_UPGRADE[@]} = 00 ] ||
-        lk_log_bypass lk_tty sudo pacman -Su ${NOCONFIRM+--noconfirm} \
+        lk_log_bypass lk_tty pacman -Su ${NOCONFIRM+--noconfirm} \
             ${PAC_INSTALL[@]+"${PAC_INSTALL[@]}"}
 
     REMOVE_MESSAGE=()
@@ -658,7 +659,7 @@ $LK_NODE_HOSTNAME" &&
     [ ${#PAC_REMOVE[@]} -eq 0 ] || {
         lk_console_message \
             "Removing $(lk_implode " and " REMOVE_MESSAGE) packages"
-        lk_log_bypass lk_tty sudo pacman -Rs --noconfirm "${PAC_REMOVE[@]}"
+        lk_log_bypass lk_tty pacman -Rs --noconfirm "${PAC_REMOVE[@]}"
     }
 
     lk_symlink_bin codium code || true

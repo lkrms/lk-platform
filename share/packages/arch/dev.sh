@@ -307,6 +307,9 @@ PAC_PACKAGES+=(
     python2
 
     #
+    perl-tidy
+
+    #
     ruby
 
     #

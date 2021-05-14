@@ -246,7 +246,7 @@ function lk_makepkg_setup() {
 
 # lk_makepkg [-a AUR_PACKAGE] [MAKEPKG_ARG...]
 function lk_makepkg() {
-    local AUR_PACKAGE AUR_URL BUILD_DIR SH LIST
+    local LK_SUDO=0 AUR_PACKAGE AUR_URL BUILD_DIR SH LIST
     [ "${1:-}" != -a ] || { AUR_PACKAGE=$2 && shift 2; }
     lk_makepkg_setup
     LK_MAKEPKG_LIST=()

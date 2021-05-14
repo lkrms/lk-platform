@@ -171,7 +171,7 @@ function lk_usage() {
     [ -z "$MESSAGE" ] || MESSAGE=$(_lk_usage_format "$MESSAGE")
     _LK_TTY_NO_FOLD=1 \
         lk_console_log "${MESSAGE:-$(_lk_caller): invalid arguments}"
-    if lk_is_script_running; then
+    if [[ $- != *i* ]]; then
         exit "$EXIT_STATUS"
     else
         return "$EXIT_STATUS"
@@ -592,13 +592,19 @@ Usage: $(lk_myself -f) [-e] [-q] [FILE]"
 }
 
 function lk_lower() {
-    { [ $# -gt 0 ] && lk_echo_args "$@" || cat; } |
+    if [ $# -gt 0 ]; then
+        lk_echo_args "$@" | lk_lower
+    else
         tr '[:upper:]' '[:lower:]'
+    fi
 }
 
 function lk_upper() {
-    { [ $# -gt 0 ] && lk_echo_args "$@" || cat; } |
+    if [ $# -gt 0 ]; then
+        lk_echo_args "$@" | lk_upper
+    else
         tr '[:lower:]' '[:upper:]'
+    fi
 }
 
 function lk_upper_first() {
@@ -608,8 +614,11 @@ function lk_upper_first() {
 }
 
 function lk_trim() {
-    { [ $# -gt 0 ] && lk_echo_args "$@" || cat; } |
-        sed -Ee 's/^[[:blank:]]+//' -e 's/[[:blank:]]+$//'
+    if [ $# -gt 0 ]; then
+        lk_echo_args "$@" | lk_trim
+    else
+        sed -E "s/^$S*(.*$NS)?$S*\$/\1/"
+    fi
 }
 
 function lk_pad_zero() {
@@ -1146,12 +1155,13 @@ function lk_start_trace() {
 }
 
 function _lk_log_close_fd() {
-    local IFS i SH=()
+    local IFS i j=0 SH=()
     unset IFS
     for i in _LK_FD _LK_{{TTY,LOG}_{OUT,ERR},LOG}_FD _LK_LOG2_FD; do
         [ -z "${!i-}" ] || [ "${!i}" -lt 3 ] || [ "${!i}" -eq "${1:-0}" ] ||
-            SH[${#SH[@]}]="${!i}>&-"
+            SH[j++]="${!i}>&-"
     done
+    ((j)) || return 0
     echo "${SH[*]}"
 }
 
@@ -1269,9 +1279,9 @@ function lk_log_close() {
             _LK_LOG2_FD
         )
         exec >&"$_LK_TTY_OUT_FD" 2>&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}" &&
-            eval "$(printf 'exec %s>&-\n' $(for i in "${CLOSE[@]}"; do
-                echo "${!i-}"
-            done))" &&
+            eval "$(for i in "${CLOSE[@]}"; do
+                [ -z "${!i-}" ] || printf 'exec %s>&-\n' "${!i-}"
+            done)" &&
             unset "${CLOSE[@]}" _LK_{LOG,OUT}_FILE
     fi
 }
@@ -1938,8 +1948,23 @@ function lk_maybe_trace() {
             ${BASH_XTRACEFD:+BASH_XTRACEFD=$BASH_XTRACEFD}
             SHELLOPTS=xtrace
             "$@")
-    ! lk_will_sudo ||
-        COMMAND=(sudo -C 5 -H "${COMMAND[@]}")
+    ! lk_will_sudo || {
+        # See: https://bugzilla.sudo.ws/show_bug.cgi?id=950
+        local SUDO_MIN=3 VER
+        ! VER=$(sudo -V | awk 'NR == 1 { print $NF }') ||
+            printf '%s\n' "$VER" 1.8.9 1.8.32 1.9.0 1.9.4p1 | sort -V |
+            awk -v "v=$VER" '$0 == v { l = NR } END { exit 1 - l % 2 }' ||
+            SUDO_MIN=4
+        COMMAND=(
+            sudo -H
+            -C "$(($(set +u && printf '%s\n' $((SUDO_MIN - 1)) \
+                $((_LK_FD ? _LK_FD : 2)) $((BASH_XTRACEFD)) $((_LK_TRACE_FD)) \
+                $((_LK_TTY_OUT_FD)) $((_LK_TTY_ERR_FD)) \
+                $((_LK_LOG_OUT_FD)) $((_LK_LOG_ERR_FD)) \
+                $((_LK_LOG_FD)) $((_LK_LOG2_FD)) | sort -n | tail -n1) + 1))"
+            "${COMMAND[@]}"
+        )
+    }
     # Remove "env" from sudo command
     [[ $- != *x* ]] || ! lk_will_sudo || unset "COMMAND[4]"
     ! lk_is_true OUTPUT ||
@@ -2757,18 +2782,21 @@ function lk_expand_paths() {
 
 # lk_pretty_path [-z] [PATH...]
 function lk_pretty_path() {
-    local LK_Z=${LK_Z-} _LK_NUL_READ=(-d '') DELIM
+    local LK_Z=${LK_Z-} _LK_NUL_READ=(-d '') DELIM _PATH __PATH
     [ "${1:-}" != -z ] || { LK_Z=1 && shift; }
     DELIM=${LK_Z:+'\0'}
-    # Piping to `while` creates a subshell, so we don't need to declare locals
-    { [ $# -gt 0 ] && lk_echo_args "$@" || cat; } |
+    DELIM=${DELIM:-'\n'}
+    if [ $# -gt 0 ]; then
+        lk_echo_args "$@" | lk_pretty_path
+    else
         while IFS= read -r ${LK_Z:+"${_LK_NUL_READ[@]}"} _PATH; do
             __PATH=$_PATH
             [ "$_PATH" = "${_PATH#~}" ] || __PATH="~${_PATH#~}"
-            [ "$PWD" = / ] || [ "$PWD" = "$_PATH" ] || [[ $PWD = ~ ]] ||
-                [ "$_PATH" = "${_PATH#$PWD}" ] || __PATH=.${_PATH#$PWD}
-            printf "%s${DELIM:-\\n}" "$__PATH"
+            [ "$PWD" = / ] || [ "$PWD" = "$_PATH" ] ||
+                [ "$_PATH" = "${_PATH#$PWD/}" ] || __PATH=${_PATH#$PWD/}
+            printf "%s$DELIM" "$__PATH"
         done
+    fi
 }
 
 function lk_basename() {
