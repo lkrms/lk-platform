@@ -21,10 +21,6 @@ HOMEBREW_FORMULAE+=(
     vpn-slice
 )
 
-FORCE_IBREW+=(
-    unison
-)
-
 # Desktop
 HOMEBREW_TAPS+=(
     federico-terzi/espanso

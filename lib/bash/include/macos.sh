@@ -1,20 +1,32 @@
 #!/bin/bash
 
 ! lk_is_apple_silicon || {
+    function _lk_macos_env() {
+        local _LK_VAR _LK_VARS=(PATH) _LK_VAL
+        for _LK_VAR in "${_LK_VARS[@]}"; do
+            [ -n "${!_LK_VAR-}" ] || continue
+            _LK_VAL=$(lk_path_edit "$1" "${2-}" "${!_LK_VAR}") || return
+            printf 'local %s\n' "$_LK_VAR"
+            printf 'export %s=%q\n' "$_LK_VAR" "$_LK_VAL"
+        done
+    }
     function lk_macos_x86_64() {
-        local _PATH
-        _PATH=$(lk_path_edit "" "^/opt/homebrew(/|\$)") &&
-            PATH=$_PATH arch --x86_64 "$@"
+        local SH
+        SH=$(_lk_macos_env "" "^/opt/homebrew(/|\$)") &&
+            eval "$SH" &&
+            arch --x86_64 "$@"
     }
     function brew() {
-        local _PATH
-        _PATH=$(lk_path_edit "^/usr/local(/|\$)") &&
-            PATH=$_PATH /opt/homebrew/bin/brew "$@"
+        local SH
+        SH=$(_lk_macos_env "^/usr/local(/|\$)") &&
+            eval "$SH" &&
+            /opt/homebrew/bin/brew "$@"
     }
     function ibrew() {
-        local _PATH
-        _PATH=$(lk_path_edit "^/opt/homebrew(/|\$)") &&
-            PATH=$_PATH arch --x86_64 /usr/local/bin/brew "$@"
+        local SH
+        SH=$(_lk_macos_env "^/opt/homebrew(/|\$)") &&
+            eval "$SH" &&
+            arch --x86_64 /usr/local/bin/brew "$@"
     }
     function ibash() { lk_macos_x86_64 bash "$@"; }
 }
