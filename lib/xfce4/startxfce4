@@ -5,7 +5,7 @@ lk_double_quote() {
     echo "\"${1%.}\""
 }
 
-[ -n "${LK_BASE:-}" ] || { SH=$(
+[ -n "${LK_BASE-}" ] || { SH=$(
     _FILE=$0
     if [ -L "$_FILE" ]; then
         LN=$(readlink "$_FILE") || exit
@@ -24,7 +24,7 @@ lk_double_quote() {
 ) && eval "$SH"; }
 export LK_BASE
 
-[ -z "${LK_BASE:-}" ] || {
+[ -z "${LK_BASE-}" ] || {
     [ ! -f /etc/default/lk-platform ] ||
         . /etc/default/lk-platform
     [ ! -f "$LK_BASE/etc/lk-platform/lk-platform.conf" ] ||

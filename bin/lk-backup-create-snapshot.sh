@@ -157,7 +157,7 @@ function get_stage() {
 
 # run_rsync [SOURCE DEST]
 function run_rsync() {
-    local SRC=${1:-} DEST=${2:-}
+    local SRC=${1-} DEST=${2-}
     [ $# -eq 2 ] || {
         SRC=${SOURCE%/}/
         DEST=$LK_SNAPSHOT_FS/

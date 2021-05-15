@@ -73,7 +73,7 @@ function lk_bash_array_literals() {
 # lk_bash_find_scripts [-d DIR] [FIND_ACTION...]
 function lk_bash_find_scripts() {
     local DIR
-    [ "${1:-}" != -d ] || { DIR=$(cd "$2" && pwd -P) && shift 2 || return; }
+    [ "${1-}" != -d ] || { DIR=$(cd "$2" && pwd -P) && shift 2 || return; }
     gnu_find "${DIR:-.}" \
         ! \( \( \( -type d -name .git \) -o ! -readable \) -prune \) \
         -type f \
@@ -92,7 +92,7 @@ function lk_bash_find_scripts() {
 # - PACKAGES
 function lk_bash_audit() {
     local IFS=$'\n' FILE SCRIPT _COMMANDS FUNCTIONS COMMAND _PATH
-    [ "${1:-}" != -g ] &&
+    [ "${1-}" != -g ] &&
         { local COMMANDS COMMAND_FILES MISSING_COMMANDS PACKAGES; } || shift
     lk_paths_exist "$@" || lk_usage "\
 Usage: $(lk_myself -f) [-g] SCRIPT [SOURCE...]
@@ -159,7 +159,7 @@ SCRIPT or any SOURCE. If -g is set, store results in global array variables:
 function lk_bash_audit_tree() {
     local GLOBALS DIR SH FILES
     unset GLOBALS
-    [ "${1:-}" != -g ] || { GLOBALS=1 && shift; }
+    [ "${1-}" != -g ] || { GLOBALS=1 && shift; }
     DIR=${1:+$(cd "$1" && pwd -P)} || return
     SH=$(lk_bash_find_scripts ${DIR:+-d "$DIR"} -print0 | {
         lk_mapfile -z FILES &&
@@ -182,7 +182,7 @@ function lk_bash_audit_tree() {
 #     # <UDF name="_TIMEZONE" label="Timezone" default="UTC" />
 #     EOF
 #     export -n \
-#         _HOSTNAME=${_HOSTNAME:-} \
+#         _HOSTNAME=${_HOSTNAME-} \
 #         _TIMEZONE=${_TIMEZONE:-UTC}
 #
 function lk_bash_udf_defaults() {
@@ -193,7 +193,7 @@ function lk_bash_udf_defaults() {
             grep -E "^.*<($XML_PREFIX_REGEX:)?UDF name=\"([^\"]+)\"" |
             sed -E \
                 -e "s/^.*<($XML_PREFIX_REGEX:)?UDF name=\"([^\"]+)\".* default=\"([^\"]*)\".*/    \2=\${\2:-\3} \\\\/" \
-                -e "s/^.*<($XML_PREFIX_REGEX:)?UDF name=\"([^\"]+)\".*/    \2=\${\2:-} \\\\/"
+                -e "s/^.*<($XML_PREFIX_REGEX:)?UDF name=\"([^\"]+)\".*/    \2=\${\2-} \\\\/"
     ) && echo "${OUTPUT% \\}"
 }
 

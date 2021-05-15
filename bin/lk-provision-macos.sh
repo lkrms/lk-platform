@@ -63,7 +63,7 @@ function exit_trap() {
         eval "$SETTINGS_SH"
         shift "$_LK_SHIFT"
 
-        LK_PACKAGES_FILE=${1:-${LK_PACKAGES_FILE:-}}
+        LK_PACKAGES_FILE=${1:-${LK_PACKAGES_FILE-}}
         PACKAGES_REL=
         if [ -n "$LK_PACKAGES_FILE" ]; then
             if [ ! -f "$LK_PACKAGES_FILE" ]; then
@@ -504,7 +504,7 @@ def is_native:
                     <<<"$HOMEBREW_FORMULAE_JSON"))
         fi
         COUNT=${#HOMEBREW_FORMULAE[@]}
-        ! lk_verbose || [ -z "${FORMULAE_COUNT:-}" ] || lk_console_detail \
+        ! lk_verbose || [ -z "${FORMULAE_COUNT-}" ] || lk_console_detail \
             "$BREW_NAME formulae ($COUNT of $FORMULAE_COUNT):" \
             $'\n'"${HOMEBREW_FORMULAE[*]}"
     }

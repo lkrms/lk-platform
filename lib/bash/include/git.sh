@@ -3,7 +3,7 @@
 # shellcheck disable=SC2164
 
 function _lk_git() {
-    if [ "${1:-}" = -1 ]; then
+    if [ "${1-}" = -1 ]; then
         set -- "${@:2}"
     else
         set -- git "$@"
@@ -14,7 +14,7 @@ function _lk_git() {
             ${_LK_GIT_SSH_OPTIONS[@]+"${_LK_GIT_SSH_OPTIONS[@]}"})" \
         ${_LK_GIT_ENV[@]+"${_LK_GIT_ENV[@]}"} \
         "$@"
-    if [ -n "${_LK_GIT_USER:-}" ]; then
+    if [ -n "${_LK_GIT_USER-}" ]; then
         lk_run_as "$_LK_GIT_USER" "$@"
     else
         lk_maybe_sudo "$@"
@@ -26,7 +26,7 @@ function lk_git_cd() {
 }
 
 function lk_git_is_quiet() {
-    [ -n "${_LK_GIT_QUIET:-}" ]
+    [ -n "${_LK_GIT_QUIET-}" ]
 }
 
 function lk_git_is_work_tree() {
@@ -56,7 +56,7 @@ function lk_git_is_project_top_level() {
 
 function lk_git_is_clean() {
     local NO_REFRESH
-    [ "${1:-}" != -n ] || { NO_REFRESH=1 && shift; }
+    [ "${1-}" != -n ] || { NO_REFRESH=1 && shift; }
     (lk_git_cd "$@" &&
         { lk_is_true NO_REFRESH || _lk_git update-index --refresh; } &&
         git diff-index --quiet HEAD --) >/dev/null
@@ -70,7 +70,7 @@ function lk_git_remote_skipped() {
 }
 
 function lk_git_remote_skip() {
-    [ -n "${1:-}" ] || lk_usage "\
+    [ -n "${1-}" ] || lk_usage "\
 Usage: $(lk_myself -f) REMOTE" || return
     lk_confirm "Exclude remote '$1' from fetch and push?" Y || return
     _lk_git config --type=bool "remote.$1.skipDefaultUpdate" 1
@@ -144,7 +144,7 @@ function lk_git_stash_list() {
 # branch.
 function lk_git_branch_upstream() {
     lk_require_output -s \
-        git rev-parse --abbrev-ref "${1:-}@{upstream}" 2>/dev/null
+        git rev-parse --abbrev-ref "${1-}@{upstream}" 2>/dev/null
 }
 
 # lk_git_branch_upstream_remote [BRANCH]
@@ -163,7 +163,7 @@ function lk_git_branch_upstream_remote() {
 # branch.
 function lk_git_branch_push() {
     lk_require_output -s \
-        git rev-parse --abbrev-ref "${1:-}@{push}" 2>/dev/null ||
+        git rev-parse --abbrev-ref "${1-}@{push}" 2>/dev/null ||
         lk_git_branch_upstream "$@"
 }
 
@@ -233,7 +233,7 @@ Options:
     else
         lk_console_item "Updating $NAME in" "$2"
         (
-            OWNER=${OWNER:-}${GROUP:+:${GROUP:-}}
+            OWNER=${OWNER-}${GROUP:+:${GROUP-}}
             if [ -n "$OWNER" ]; then
                 lk_maybe_sudo chown -R "$OWNER" "$2" || exit
             fi
@@ -249,7 +249,7 @@ Options:
                 done
                 _lk_git remote add origin "$1" || exit
             }
-            lk_git_update_repo_to origin "${BRANCH:-}"
+            lk_git_update_repo_to origin "${BRANCH-}"
         )
     fi
 }
@@ -258,7 +258,7 @@ Options:
 function lk_git_fast_forward_branch() {
     local FORCE BEHIND TAG _BRANCH
     unset FORCE
-    [ "${1:-}" != -f ] || { FORCE= && shift; }
+    [ "${1-}" != -f ] || { FORCE= && shift; }
     BEHIND=$(git rev-list --count "$1..$2") || return
     [ "$BEHIND" -gt 0 ] || return 0
     git merge-base --is-ancestor "$1" "$2" && unset FORCE ||
@@ -319,13 +319,13 @@ push $LK_BOLD$1$LK_RESET to $LK_BOLD$2$LK_RESET?" Y ||
 # lk_git_fetch [-q] [REMOTE...]
 function lk_git_fetch() {
     local IFS QUIET ERRORS=0 REMOTES REMOTE
-    [ "${1:-}" != -q ] || { QUIET=1 && shift; }
+    [ "${1-}" != -q ] || { QUIET=1 && shift; }
     REMOTES=$*
     [ $# -gt 0 ] || REMOTES=$(git remote) || return
     for REMOTE in $REMOTES; do
         [ $# -gt 0 ] || ! lk_git_remote_skipped "$REMOTE" || continue
         _lk_git fetch --quiet --prune "$REMOTE" || {
-            [ -n "${QUIET:-}" ] || lk_console_warning \
+            [ -n "${QUIET-}" ] || lk_console_warning \
                 "Unable to fetch from remote:" "$REMOTE"
             ((++ERRORS))
         }
@@ -339,7 +339,7 @@ function lk_git_fetch() {
 # branch it has not diverged from. If -s is set, skip fetching from remotes.
 function lk_git_update_repo() {
     local FETCH=1 ERRORS=0 REMOTE BRANCH UPSTREAM
-    [ "${1:-}" != -s ] || { FETCH= && shift; }
+    [ "${1-}" != -s ] || { FETCH= && shift; }
     [ -z "$FETCH" ] || {
         lk_console_message "Fetching from all remotes"
         lk_git_fetch || ((++ERRORS))
@@ -356,12 +356,12 @@ function lk_git_update_repo() {
 
 function lk_git_update_remote() {
     local QUIET ERRORS=0 BRANCHES REMOTES BRANCH _PUSH PUSH=() REMOTE RBRANCHES
-    [ "${1:-}" != -q ] || { QUIET=1 && shift; }
+    [ "${1-}" != -q ] || { QUIET=1 && shift; }
     BRANCHES=$(lk_git_branch_list_local) &&
         REMOTES=$(git remote) || return
     for BRANCH in $BRANCHES; do
         _PUSH=$(lk_git_branch_push "$BRANCH") || {
-            [ -n "${QUIET:-}" ] ||
+            [ -n "${QUIET-}" ] ||
                 lk_console_warning "No push destination for branch:" "$BRANCH"
             continue
         }
@@ -391,7 +391,7 @@ function lk_git_update_remote() {
 function lk_git_update_repo_to() {
     local FORCE REMOTE BRANCH UPSTREAM _BRANCH BEHIND _UPSTREAM
     unset FORCE
-    [ "${1:-}" != -f ] || { FORCE= && shift; }
+    [ "${1-}" != -f ] || { FORCE= && shift; }
     [ $# -ge 1 ] || lk_usage "\
 Usage: $(lk_myself -f) [-f] REMOTE [BRANCH]" || return
     REMOTE=$1
@@ -449,7 +449,7 @@ function lk_git_get_repos() {
 
 function _lk_git_do_with_repo() {
     local SH EXIT_STATUS=0
-    if [ -z "${STDOUT:-}" ]; then
+    if [ -z "${STDOUT-}" ]; then
         SH=$(lk_get_outputs_of "${REPO_COMMAND[@]}") ||
             EXIT_STATUS=$?
         eval "$SH" || return
@@ -529,7 +529,7 @@ directory of a working tree" || return
         lk_git_get_repos REPOS
         [ ${#REPOS[@]} -gt 0 ] || lk_warn "no repos found" || return
     fi
-    [ -z "${PROMPT:-}" ] || lk_no_input || {
+    [ -z "${PROMPT-}" ] || lk_no_input || {
         lk_echo_array REPOS | lk_pretty_path |
             lk_console_list "Repositories:" repo repos
         lk_console_item "Command to run:" \
@@ -575,7 +575,7 @@ directory of a working tree" || return
 
 function lk_git_audit_repo() {
     local SKIP_FETCH ERRORS=0
-    [ "${1:-}" != -s ] || { SKIP_FETCH=1 && shift; }
+    [ "${1-}" != -s ] || { SKIP_FETCH=1 && shift; }
     lk_git_update_repo ${SKIP_FETCH:+-s} || ((++ERRORS))
     lk_git_update_remote -q && [ "$ERRORS" -eq 0 ]
 }
@@ -585,7 +585,7 @@ function lk_git_audit_repos() {
     local SKIP_FETCH FETCH_ERRORS=0 AUDIT_ERRORS=0 NOUN \
         _LK_GIT_QUIET=${_LK_GIT_QUIET-1} \
         LK_GIT_REPOS=(${LK_GIT_REPOS[@]+"${LK_GIT_REPOS[@]}"})
-    [ "${1:-}" != -s ] || { SKIP_FETCH=1 && shift; }
+    [ "${1-}" != -s ] || { SKIP_FETCH=1 && shift; }
     [ $# -eq 0 ] || LK_GIT_REPOS=("$@")
     [ ${#LK_GIT_REPOS[@]} -gt 0 ] || lk_git_get_repos LK_GIT_REPOS
     [ ${#LK_GIT_REPOS[@]} -gt 0 ] || lk_warn "no repos found" || return

@@ -9,7 +9,7 @@ function lk_wp() {
 }
 
 function lk_wp_is_quiet() {
-    [ -n "${_LK_WP_QUIET:-}" ]
+    [ -n "${_LK_WP_QUIET-}" ]
 }
 
 function lk_wp_get_site_root() {
@@ -112,7 +112,7 @@ function lk_wp_json_encode() {
 # - LK_WP_FLUSH: flush rewrite rules, caches and transients after renaming
 #   (default: 1)
 function lk_wp_rename_site() {
-    local NEW_URL OLD_URL=${LK_WP_OLD_URL:-} PLUGIN_WARNING \
+    local NEW_URL OLD_URL=${LK_WP_OLD_URL-} PLUGIN_WARNING \
         SITE_ROOT OLD_SITE_URL NEW_SITE_URL
     [ $# -eq 1 ] || lk_usage "\
 Usage: ${FUNCNAME[0]} NEW_URL" || return
@@ -245,8 +245,8 @@ EOF
 # lk_wp_db_dump_remote SSH_HOST [REMOTE_PATH]
 function lk_wp_db_dump_remote() {
     local REMOTE_PATH=${2:-public_html} WP_CONFIG SH \
-        DB_NAME=${DB_NAME:-} DB_USER=${DB_USER:-} \
-        DB_PASSWORD=${DB_PASSWORD:-} DB_HOST=${DB_HOST:-} \
+        DB_NAME=${DB_NAME-} DB_USER=${DB_USER-} \
+        DB_PASSWORD=${DB_PASSWORD-} DB_HOST=${DB_HOST-} \
         OUTPUT_FILE
     [ $# -ge 1 ] || lk_usage "\
 Usage: ${FUNCNAME[0]} SSH_HOST [REMOTE_PATH]" || return
@@ -308,12 +308,12 @@ Usage: ${FUNCNAME[0]} [SITE_ROOT]" || return
 # lk_wp_db_get_vars [-p PREFIX] [SITE_ROOT]
 function lk_wp_db_get_vars() {
     local SITE_ROOT SH PREFIX=
-    [ "${1:-}" != -p ] || { PREFIX=$2 && shift 2 || return; }
+    [ "${1-}" != -p ] || { PREFIX=$2 && shift 2 || return; }
     SITE_ROOT=${1:-$(lk_wp_get_site_root)} || return
     SH=$(
         for OPTION in DB_NAME DB_USER DB_PASSWORD DB_HOST; do
             VALUE=$(lk_wp --path="$SITE_ROOT" config get "$OPTION") || exit
-            [ "${FUNCNAME[1]:-}" = lk_wp_db_set_local ] ||
+            [ "${FUNCNAME[1]-}" = lk_wp_db_set_local ] ||
                 _lk_var_prefix
             printf '%s=%q\n' "$PREFIX$OPTION" "$VALUE"
         done

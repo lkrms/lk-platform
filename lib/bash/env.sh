@@ -61,10 +61,10 @@ export HOMEBREW_NO_AUTO_UPDATE=1
 export HOMEBREW_NO_INSTALL_CLEANUP=1
 export HOMEBREW_CASK_OPTS=--no-quarantine
 EOF
-    PATH=${MANPATH:-} in_path "$HOMEBREW_PREFIX/share/man" ||
+    PATH=${MANPATH-} in_path "$HOMEBREW_PREFIX/share/man" ||
         echo 'export MANPATH="$HOMEBREW_PREFIX/share/man${MANPATH+:$MANPATH}:"'
-    PATH=${INFOPATH:-} in_path "$HOMEBREW_PREFIX/share/info" ||
-        echo 'export INFOPATH="$HOMEBREW_PREFIX/share/info:${INFOPATH:-}"'
+    PATH=${INFOPATH-} in_path "$HOMEBREW_PREFIX/share/info" ||
+        echo 'export INFOPATH="$HOMEBREW_PREFIX/share/info:${INFOPATH-}"'
 }
 
 IFS=':'

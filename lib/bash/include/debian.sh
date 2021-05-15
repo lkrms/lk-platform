@@ -266,7 +266,7 @@ function lk_apt_reinstall_damaged() {
 function lk_apt_sources_get_clean() {
     local LIST=/etc/apt/sources.list CODENAME SH \
         SUITES=("$NS+") COMPONENTS=("$NS+")
-    [ "${1:-}" != -l ] || LIST=$2
+    [ "${1-}" != -l ] || LIST=$2
     [ "$LIST" != - ] || unset LIST
     if lk_is_ubuntu; then
         CODENAME=$(. /etc/lsb-release && echo "$DISTRIB_CODENAME") || return
@@ -297,10 +297,10 @@ function _lk_apt_sources_get_mirror() {
 # - lk_apt_sources_get_missing [-l LIST] SUITE COMPONENT [SUITE COMPONENT]...
 function lk_apt_sources_get_missing() {
     local LIST SOURCES COMPONENTS \
-        MIRROR=${LK_APT_DEFAULT_MIRROR:-} \
-        SECURITY_MIRROR=${LK_APT_DEFAULT_SECURITY_MIRROR:-}
+        MIRROR=${LK_APT_DEFAULT_MIRROR-} \
+        SECURITY_MIRROR=${LK_APT_DEFAULT_SECURITY_MIRROR-}
     unset LIST
-    [ "${1:-}" != -l ] || { LIST=$2 && shift 2; }
+    [ "${1-}" != -l ] || { LIST=$2 && shift 2; }
     [ $# -gt 0 ] || lk_warn "invalid arguments" || return
     # If there are no existing sources with a valid URI (unlikely), use these
     if lk_is_ubuntu; then

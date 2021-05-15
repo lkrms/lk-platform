@@ -6,7 +6,7 @@
 
 IFS=,
 PAC_REPOS=(
-    ${LK_ARCH_REPOS:-}
+    ${LK_ARCH_REPOS-}
     ${PAC_REPOS[@]+"${PAC_REPOS[@]}"}
 )
 unset IFS

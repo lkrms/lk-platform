@@ -1,7 +1,7 @@
 #!/bin/bash
 
 function lk_mysql_is_quiet() {
-    [ -n "${_LK_MYSQL_QUIET:-}" ]
+    [ -n "${_LK_MYSQL_QUIET-}" ]
 }
 
 function lk_mysql_escape() {
@@ -34,8 +34,8 @@ function lk_mysql_batch_unescape() {
 # followed by K, M, G, T, P or E (not case-sensitive).
 function lk_mysql_bytes() {
     local POWER=0
-    [[ ${1:-} =~ ^0*([0-9]+)([kKmMgGtTpPeE]?)$ ]] ||
-        lk_warn "invalid size: ${1:-}" || return
+    [[ ${1-} =~ ^0*([0-9]+)([kKmMgGtTpPeE]?)$ ]] ||
+        lk_warn "invalid size: ${1-}" || return
     case "${BASH_REMATCH[2]}" in
     k | K)
         POWER=1
@@ -80,7 +80,7 @@ function lk_mysql_write_cnf() {
 }
 
 function lk_mysql() {
-    if [ -n "${LK_MY_CNF:-}" ]; then
+    if [ -n "${LK_MY_CNF-}" ]; then
         [ -f "$LK_MY_CNF" ] || lk_warn "file not found: $LK_MY_CNF" || return
         "${LK_MYSQL_COMMAND:-mysql}" --defaults-file="$LK_MY_CNF" "$@"
     elif lk_is_root || lk_is_true LK_MYSQL_ELEVATE; then
@@ -185,7 +185,7 @@ Usage: $(lk_myself -f) DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
         lk_console_detail "mysqldump arguments:" \
             "${ARG_COLOUR+$ARG_COLOUR}${DUMP_ARGS[*]}${ARG_COLOUR+$LK_RESET}"
     }
-    [ -z "${OUTPUT_FILE:-}" ] ||
+    [ -z "${OUTPUT_FILE-}" ] ||
         lk_console_detail "Writing compressed SQL to" "$OUTPUT_FILE"
     _lk_mysqldump \
         "${DUMP_ARGS[@]}" \
@@ -193,8 +193,8 @@ Usage: $(lk_myself -f) DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
         gzip |
         pv ||
         EXIT_STATUS=$?
-    [ -z "${OUTPUT_FILE:-}" ] || eval "exec >&$OUTPUT_FD $OUTPUT_FD>&-"
-    [ -z "${LK_MY_CNF:-}" ] || {
+    [ -z "${OUTPUT_FILE-}" ] || eval "exec >&$OUTPUT_FD $OUTPUT_FD>&-"
+    [ -z "${LK_MY_CNF-}" ] || {
         lk_console_message "Deleting mysqldump configuration file"
         rm -f "$LK_MY_CNF" &&
             lk_console_detail "Deleted" "$LK_MY_CNF" ||
@@ -233,7 +233,7 @@ Usage: $(lk_myself -f) SSH_HOST DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
     lk_console_message "Dumping remote database"
     lk_console_detail "Database:" "$DB_NAME"
     lk_console_detail "Host:" "$DB_HOST"
-    [ -z "${OUTPUT_FILE:-}" ] ||
+    [ -z "${OUTPUT_FILE-}" ] ||
         lk_console_detail "Writing compressed SQL to" "$OUTPUT_FILE"
     # TODO: implement lk_mysql_innodb_only
     ssh "$SSH_HOST" "bash -c 'mysqldump \\
@@ -245,7 +245,7 @@ Usage: $(lk_myself -f) SSH_HOST DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
 exit \${PIPESTATUS[0]}' bash $(printf '%q' "$DB_NAME")" |
         pv ||
         EXIT_STATUS=$?
-    [ -z "${OUTPUT_FILE:-}" ] || eval "exec >&$OUTPUT_FD $OUTPUT_FD>&-"
+    [ -z "${OUTPUT_FILE-}" ] || eval "exec >&$OUTPUT_FD $OUTPUT_FD>&-"
     lk_console_message "Deleting mysqldump configuration file"
     ssh "$SSH_HOST" "bash -c 'rm -f .lk_mysqldump.cnf'" &&
         lk_console_detail "Deleted" "$SSH_HOST:.lk_mysqldump.cnf" ||

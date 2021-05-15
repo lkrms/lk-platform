@@ -388,7 +388,7 @@ fi
             done
         }
     done
-    [ -z "${LOCK_FILE:-}" ] || {
+    [ -z "${LOCK_FILE-}" ] || {
         exec 9>&- &&
             rm -f "$LOCK_FILE" || true
     }

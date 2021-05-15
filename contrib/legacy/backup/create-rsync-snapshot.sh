@@ -300,7 +300,7 @@ function exit_trap() {
     local EXIT_STATUS=$? MESSAGE TAR SUBJECT
     exec 8>&- &&
         rm -Rf "${FIFO_FILE%/*}" || true
-    [ -z "${LOCK_FILE:-}" ] || {
+    [ -z "${LOCK_FILE-}" ] || {
         exec 9>&- &&
             rm -f "$LOCK_FILE" || true
     }
@@ -446,7 +446,7 @@ function get_stage() {
 
 # run_rsync [SOURCE DEST]
 function run_rsync() {
-    local SRC=${1:-} DEST=${2:-}
+    local SRC=${1-} DEST=${2-}
     [ $# -eq 2 ] || {
         SRC=${SOURCE%/}/
         DEST=$LK_SNAPSHOT_FS/

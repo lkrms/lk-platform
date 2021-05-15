@@ -16,7 +16,7 @@ function _lk_validate_fail() {
 }
 
 function _lk_validate_list() {
-    local FN=$1 VAR=$2 VAL=${!2:-} IFS=, NULL VALID SELECTED i
+    local FN=$1 VAR=$2 VAL=${!2-} IFS=, NULL VALID SELECTED i
     shift
     SELECTED=($VAL)
     unset IFS
@@ -33,13 +33,13 @@ function _lk_validate_list() {
 }
 
 function lk_validate_not_null() {
-    [ -n "${!1:-}" ] ||
+    [ -n "${!1-}" ] ||
         _lk_validate_fail "Required: %s\n" "$1"
 }
 
 function lk_validate() {
     ! { [ "${LK_REQUIRED:-0}" -eq 0 ] || lk_validate_not_null "$1"; } ||
-        [ -z "${!1:-}" ] || {
+        [ -z "${!1-}" ] || {
         [[ "${!1}" =~ $2 ]] ||
             _lk_validate_fail "Invalid %s: %q\n" "$1" "${!1}"
     }
@@ -51,7 +51,7 @@ function lk_validate_list() {
 
 function lk_validate_one_of() {
     ! { [ "${LK_REQUIRED:-0}" -eq 0 ] || lk_validate_not_null "$1"; } ||
-        [ -z "${!1:-}" ] || {
+        [ -z "${!1-}" ] || {
         { [ $# -gt 1 ] && printf '%s\n' "${@:2}" || cat; } |
             grep -Fx "${!1}" >/dev/null ||
             _lk_validate_fail "Unknown %s: %q\n" "$1" "${!1}"

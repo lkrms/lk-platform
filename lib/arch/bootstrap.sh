@@ -28,25 +28,25 @@ DEFAULT_CMDLINE="quiet loglevel=3 audit=0$(! grep -q \
 BOOTSTRAP_PING_HOST=${BOOTSTRAP_PING_HOST:-one.one.one.one}  # https://blog.cloudflare.com/dns-resolver-1-1-1-1/
 BOOTSTRAP_MOUNT_OPTIONS=${BOOTSTRAP_MOUNT_OPTIONS:-defaults} # On VMs with TRIM support, "discard" is added automatically
 BOOTSTRAP_USERNAME=${BOOTSTRAP_USERNAME:-arch}               #
-BOOTSTRAP_PASSWORD=${BOOTSTRAP_PASSWORD:-}                   #
-BOOTSTRAP_KEY=${BOOTSTRAP_KEY:-}                             #
+BOOTSTRAP_PASSWORD=${BOOTSTRAP_PASSWORD-}                    #
+BOOTSTRAP_KEY=${BOOTSTRAP_KEY-}                              #
 BOOTSTRAP_FULL_NAME=${BOOTSTRAP_FULL_NAME:-Arch Linux}       #
-LK_IPV4_ADDRESS=${LK_IPV4_ADDRESS:-}                         #
-LK_IPV4_GATEWAY=${LK_IPV4_GATEWAY:-}                         #
-LK_IPV4_DNS_SERVER=${LK_IPV4_DNS_SERVER:-}                   #
-LK_IPV4_DNS_SEARCH=${LK_IPV4_DNS_SEARCH:-}                   #
-LK_BRIDGE_INTERFACE=${LK_BRIDGE_INTERFACE:-}                 #
+LK_IPV4_ADDRESS=${LK_IPV4_ADDRESS-}                          #
+LK_IPV4_GATEWAY=${LK_IPV4_GATEWAY-}                          #
+LK_IPV4_DNS_SERVER=${LK_IPV4_DNS_SERVER-}                    #
+LK_IPV4_DNS_SEARCH=${LK_IPV4_DNS_SEARCH-}                    #
+LK_BRIDGE_INTERFACE=${LK_BRIDGE_INTERFACE-}                  #
 LK_NODE_TIMEZONE=${LK_NODE_TIMEZONE:-UTC}                    # See `timedatectl list-timezones`
-LK_NODE_SERVICES=${LK_NODE_SERVICES:-}                       #
+LK_NODE_SERVICES=${LK_NODE_SERVICES-}                        #
 LK_NODE_LOCALES=${LK_NODE_LOCALES-en_AU.UTF-8 en_GB.UTF-8}   # "en_US.UTF-8" is added automatically
 LK_NODE_LANGUAGE=${LK_NODE_LANGUAGE-en_AU:en_GB:en}          #
-LK_SAMBA_WORKGROUP=${LK_SAMBA_WORKGROUP:-}                   #
+LK_SAMBA_WORKGROUP=${LK_SAMBA_WORKGROUP-}                    #
 LK_GRUB_CMDLINE=${LK_GRUB_CMDLINE-$DEFAULT_CMDLINE}          #
 LK_NTP_SERVER=${LK_NTP_SERVER-time.apple.com}                #
-LK_ARCH_MIRROR=${LK_ARCH_MIRROR:-}                           #
-LK_ARCH_REPOS=${LK_ARCH_REPOS:-}                             # REPO|SERVER|KEY_URL|KEY_ID|SIG_LEVEL,...
+LK_ARCH_MIRROR=${LK_ARCH_MIRROR-}                            #
+LK_ARCH_REPOS=${LK_ARCH_REPOS-}                              # REPO|SERVER|KEY_URL|KEY_ID|SIG_LEVEL,...
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
-LK_PACKAGES_FILE=${LK_PACKAGES_FILE:-}
+LK_PACKAGES_FILE=${LK_PACKAGES_FILE-}
 export LK_BASE=${LK_BASE:-/opt/lk-platform}
 export -n BOOTSTRAP_PASSWORD BOOTSTRAP_KEY
 
@@ -237,7 +237,7 @@ function exit_trap() {
 
 function in_target() {
     [ -d /mnt/boot ] || lk_die "no target mounted"
-    if [ "${1:-}" != -u ]; then
+    if [ "${1-}" != -u ]; then
         arch-chroot /mnt "$@"
     else
         (unset _LK_{{TTY,LOG}_{OUT,ERR},LOG}_FD _LK_LOG2_FD &&
@@ -342,11 +342,11 @@ if lk_is_virtual; then
     ! lk_block_device_is_ssd "$BOOT_PART" || BOOT_EXTRA=,discard
 fi
 lk_run_detail mount \
-    -o "$BOOTSTRAP_MOUNT_OPTIONS${ROOT_EXTRA:-}" \
+    -o "$BOOTSTRAP_MOUNT_OPTIONS${ROOT_EXTRA-}" \
     "$ROOT_PART" /mnt
 install -d -m 00755 /mnt/boot
 lk_run_detail mount \
-    -o "$BOOTSTRAP_MOUNT_OPTIONS${BOOT_EXTRA:-}" \
+    -o "$BOOTSTRAP_MOUNT_OPTIONS${BOOT_EXTRA-}" \
     "$BOOT_PART" /mnt/boot
 
 if ! lk_is_true FORMAT_BOOT; then

@@ -25,11 +25,11 @@ lk_start_trace
     lk_die "cannot read file: $LK_BASE/etc/firewall.conf"
 . "$LK_BASE/etc/firewall.conf"
 
-if [ -n "${ACCEPT_OUTPUT_CHAIN:-}" ]; then
+if [ -n "${ACCEPT_OUTPUT_CHAIN-}" ]; then
     lk_console_message "Applying outgoing traffic policy to firewall"
     IFS=,
     OUTPUT_ALLOW=(
-        ${LK_ACCEPT_OUTPUT_HOSTS:-}
+        ${LK_ACCEPT_OUTPUT_HOSTS-}
         ${ACCEPT_OUTPUT_HOSTS[@]+"${ACCEPT_OUTPUT_HOSTS[@]}"}
     )
     unset IFS

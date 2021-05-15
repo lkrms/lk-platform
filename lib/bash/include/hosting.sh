@@ -5,7 +5,7 @@ lk_include debian git provision
 # lk_hosting_add_administrator LOGIN [AUTHORIZED_KEY...]
 function lk_hosting_add_administrator() {
     local _GROUP _HOME
-    [ -n "${1:-}" ] || lk_usage "\
+    [ -n "${1-}" ] || lk_usage "\
 Usage: $(lk_myself -f) LOGIN" || return
     ! lk_user_exists "$1" || lk_warn "user already exists: $1" || return
     lk_console_item "Creating administrator account:" "$1"
@@ -33,7 +33,7 @@ Usage: $(lk_myself -f) LOGIN" || return
 # lk_hosting_add_user LOGIN
 function lk_hosting_add_user() {
     local _GROUP _HOME SKEL
-    [ -n "${1:-}" ] || lk_usage "\
+    [ -n "${1-}" ] || lk_usage "\
 Usage: $(lk_myself -f) LOGIN" || return
     [ -d /srv/www ] || lk_warn "directory not found: /srv/www" || return
     ! lk_user_exists "$1" || lk_warn "user already exists: $1" || return
@@ -143,9 +143,9 @@ function lk_hosting_configure_modsecurity() {
 
 # lk_hosting_configure_backup
 function lk_hosting_configure_backup() {
-    local LK_SUDO=1 BACKUP_SCHEDULE=${LK_AUTO_BACKUP_SCHEDULE:-} \
-        AUTO_REBOOT=${LK_AUTO_REBOOT:-} \
-        AUTO_REBOOT_TIME=${LK_AUTO_REBOOT_TIME:-} \
+    local LK_SUDO=1 BACKUP_SCHEDULE=${LK_AUTO_BACKUP_SCHEDULE-} \
+        AUTO_REBOOT=${LK_AUTO_REBOOT-} \
+        AUTO_REBOOT_TIME=${LK_AUTO_REBOOT_TIME-} \
         REGEX INHIBIT_PATH
     REGEX=$(lk_escape_ere "$LK_BASE/lib/hosting/backup-all.sh")
     lk_console_message "Configuring automatic backups"

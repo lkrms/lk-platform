@@ -32,7 +32,7 @@ function _lkc_mysql_dump() {
     -t | --timestamp)
         COMPREPLY=($(compgen -W "$(for i in %H%M%S %H%M00 %H0000; do
             printf "%(%Y-%m-%d-$i)T "
-        done) ${LK_BACKUP_TIMESTAMP:-}" -- "$cur"))
+        done) ${LK_BACKUP_TIMESTAMP-}" -- "$cur"))
         ;;
     *)
         case "$cur" in
