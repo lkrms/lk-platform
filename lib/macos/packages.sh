@@ -1,6 +1,7 @@
 #!/bin/bash
 
 HOMEBREW_TAPS=(
+    homebrew/autoupdate
     homebrew/cask
     homebrew/cask-drivers
     homebrew/cask-fonts
