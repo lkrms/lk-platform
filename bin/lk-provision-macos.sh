@@ -216,8 +216,8 @@ EOF
         done
         return "${STATUS:-0}"
     }
-    PATH_ADD=(/usr/local/bin)
-    BREW_CMD=(brew)
+    PATH_ADD=(/usr/local/{sbin,bin})
+    BREW_PATH=(/usr/local/bin/brew)
     BREW_ARCH=("")
     if lk_is_apple_silicon; then
         [ -f /Library/Apple/System/Library/LaunchDaemons/com.apple.oahd.plist ] || {
@@ -225,8 +225,8 @@ EOF
             lk_run_detail sudo \
                 softwareupdate --install-rosetta --agree-to-license
         }
-        PATH_ADD+=(/opt/homebrew/bin)
-        BREW_CMD=(/opt/homebrew/bin/brew /usr/local/bin/brew)
+        PATH_ADD+=(/opt/homebrew/{sbin,bin})
+        BREW_PATH=(/opt/homebrew/bin/brew /usr/local/bin/brew)
         BREW_ARCH=("" x86_64)
     fi
     lk_mapfile BREW_NAMES <(lk_echo_array BREW_ARCH |
@@ -294,11 +294,15 @@ EOF
     . "$LK_BASE/lib/macos/packages.sh"
 
     function lk_brew_loop() {
-        local BREW_PATH BREW BREW_NAME
-        for i in "${!BREW_CMD[@]}"; do
-            BREW_PATH=${BREW_CMD[$i]}
-            BREW=(${BREW_ARCH[$i]:+arch "--${BREW_ARCH[$i]}"} "$BREW_PATH")
-            BREW_NAME=${BREW_NAMES[$i]}
+        local i BREW BREW_NAME SH
+        for i in "${!BREW_PATH[@]}"; do
+            BREW=(${BREW_ARCH[i]:+arch "--${BREW_ARCH[i]}"} "${BREW_PATH[i]}")
+            BREW_NAME=${BREW_NAMES[i]}
+            if ! ((i)); then
+                SH=$(lk_macos_env "^/usr/local(/|\$)")
+            else
+                SH=$(lk_macos_env "^/opt/homebrew(/|\$)")
+            fi && eval "$SH" || return
             "$@" || return
         done
     }
@@ -325,6 +329,18 @@ EOF
             done
     }
 
+    function lk_brew_check_autoupdate() {
+        local LABEL=com.github.domt4.homebrew-autoupdate
+        { launchctl list "$LABEL" || {
+            LABEL+=.${BREW_ARCH[i]:-$(uname -m)} &&
+                launchctl list "$LABEL"
+        }; } &>/dev/null || {
+            lk_console_detail "Enabling daily \`brew update\`"
+            install -d -m 00755 ~/Library/LaunchAgents
+            lk_brew autoupdate start --cleanup
+        }
+    }
+
     function lk_brew_formulae() {
         brew list --formula --full-name
     }
@@ -339,8 +355,8 @@ EOF
             export HOMEBREW_BREW_GIT_REMOTE=file:///opt/homebrew
             export HOMEBREW_CORE_GIT_REMOTE=file:///opt/homebrew/Library/Taps/homebrew/homebrew-core
         }
-        BREW_NEW[$i]=0
-        if ! lk_command_exists "$BREW_PATH"; then
+        BREW_NEW[i]=0
+        if [ ! -x "${BREW_PATH[i]}" ]; then
             lk_console_message "Installing $BREW_NAME"
             FILE=$_DIR/homebrew-install.sh
             URL=https://raw.githubusercontent.com/Homebrew/install/master/install.sh
@@ -351,20 +367,22 @@ EOF
                 }
             fi
             CI=1 HAVE_SUDO_ACCESS=0 lk_tty caffeinate -i \
-                ${BREW_ARCH[$i]:+arch "--${BREW_ARCH[$i]}"} bash "$FILE" ||
+                ${BREW_ARCH[i]:+arch "--${BREW_ARCH[i]}"} bash "$FILE" ||
                 lk_die "$BREW_NAME installer failed"
-            lk_command_exists "$BREW_PATH" ||
-                lk_die "command not found: $BREW_PATH"
-            BREW_NEW[$i]=1
+            [ -x "${BREW_PATH[i]}" ] ||
+                lk_die "command not found: ${BREW_PATH[i]}"
+            BREW_NEW[i]=1
         fi
-        lk_console_item "Found $BREW_NAME at:" "$("$BREW_PATH" --prefix)"
+        lk_console_item "Found $BREW_NAME at:" "$("${BREW_PATH[i]}" --prefix)"
         ((i)) || {
             SH=$(. "$LK_BASE/lib/bash/env.sh") &&
                 eval "$SH"
         }
         lk_brew_check_taps ||
             lk_die "unable to tap formula repositories"
-        [ "${BREW_NEW[$i]}" -eq 1 ] || {
+        lk_brew_check_autoupdate ||
+            lk_die "unable to enable automatic \`brew update\`"
+        [ "${BREW_NEW[i]}" -eq 1 ] || {
             lk_console_detail "Updating formulae"
             lk_brew update --quiet
         }
@@ -373,20 +391,27 @@ EOF
     lk_brew_loop install_homebrew
 
     INSTALL=(
-        coreutils  # GNU utilities
-        diffutils  #
-        findutils  #
-        gawk       #
-        gnu-getopt #
-        grep       #
-        inetutils  #
-        gnu-sed    #
-        gnu-tar    #
-        wget       #
-        jq         # for parsing `brew info` output
-        newt       # for `whiptail`
-        python-yq  # for plist parsing with `xq`
+        coreutils
+        diffutils
+        findutils
+        gawk
+        gnu-getopt
+        grep
+        inetutils
+        gnu-sed
+        gnu-tar
+        wget
+
+        #
+        bash-completion
+        icdiff
+        jq
+        newt
+        pv
+        python-yq
+        rsync
     )
+
     ! MACOS_VERSION=$(lk_macos_version) ||
         ! lk_version_at_least "$MACOS_VERSION" 10.15 ||
         INSTALL+=(
@@ -443,7 +468,7 @@ EOF
     UPGRADE_CASKS=()
     function check_updates() {
         local UPGRADE_FORMULAE
-        [ "${BREW_NEW[$i]}" -eq 0 ] || return 0
+        [ "${BREW_NEW[i]}" -eq 0 ] || return 0
         [ "$i" -eq 0 ] || local OUTDATED
         OUTDATED=$(brew outdated --json=v2) &&
             UPGRADE_FORMULAE=($(jq -r \
@@ -489,7 +514,7 @@ def is_native:
         ([.bottle[].files | keys[] | select(match(\"^(all\$|arm64_)\"))] | length > 0);"
         # Exclude formulae with no arm64 bottle on Apple Silicon unless
         # using `arch --x86_64`
-        if [ -z "${BREW_ARCH[$i]}" ]; then
+        if [ -z "${BREW_ARCH[i]}" ]; then
             HOMEBREW_FORMULAE=($(jq -r \
                 "$JQ"'.formulae[]|select(is_native).full_name' \
                 <<<"$HOMEBREW_FORMULAE_JSON" | grep -Ev "^$(lk_regex_implode \
@@ -595,18 +620,14 @@ Please open the Mac App Store and sign in"
         if [ -n "$APPLE_ID" ]; then
             lk_console_detail "Apple ID:" "$APPLE_ID"
 
-            # `mas outdated` and `mas upgrade` stopped working after Mojave
-            if MACOS_VERSION=$(lk_macos_version) &&
-                lk_version_at_least 10.14 "$MACOS_VERSION"; then
-                OUTDATED=$(mas outdated)
-                if UPGRADE_APPS=($(grep -Eo '^[0-9]+' <<<"$OUTDATED")); then
-                    sed -E "s/^[0-9]+$S*//" <<<"$OUTDATED" |
-                        lk_console_detail_list "$(
-                            lk_maybe_plural ${#UPGRADE_APPS[@]} Update Updates
-                        ) available:" app apps
-                    lk_confirm "OK to upgrade outdated apps?" Y ||
-                        UPGRADE_APPS=()
-                fi
+            OUTDATED=$(mas outdated)
+            if UPGRADE_APPS=($(grep -Eo '^[0-9]+' <<<"$OUTDATED")); then
+                sed -E "s/^[0-9]+$S+(.*$NS)$S+\(/\1 (/" <<<"$OUTDATED" |
+                    lk_console_detail_list "$(
+                        lk_maybe_plural ${#UPGRADE_APPS[@]} Update Updates
+                    ) available:" app apps
+                lk_confirm "OK to upgrade outdated apps?" Y ||
+                    UPGRADE_APPS=()
             fi
 
             INSTALL_APPS=($(comm -13 \
@@ -620,7 +641,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
             APPS=()
             APP_NAMES=()
             for i in "${!INSTALL_APPS[@]}"; do
-                APP_ID=${INSTALL_APPS[$i]}
+                APP_ID=${INSTALL_APPS[i]}
                 if APP_SH=$(
                     mas info "$APP_ID" 2>/dev/null |
                         gnu_awk "$PROG"
@@ -637,7 +658,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
                     continue
                 fi
                 lk_console_warning "Unknown App ID:" "$APP_ID"
-                unset "INSTALL_APPS[$i]"
+                unset "INSTALL_APPS[i]"
             done
             if [ ${#INSTALL_APPS[@]} -gt 0 ]; then
                 APP_IDS=("${INSTALL_APPS[@]}")
@@ -646,8 +667,8 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
                     "Selected apps will be installed from the Mac App Store:" \
                     "${APPS[@]}")) && [ ${#INSTALL_APPS[@]} -gt 0 ]; then
                     for i in "${!APP_IDS[@]}"; do
-                        lk_in_array "${APP_IDS[$i]}" INSTALL_APPS ||
-                            unset "APP_NAMES[$i]"
+                        lk_in_array "${APP_IDS[i]}" INSTALL_APPS ||
+                            unset "APP_NAMES[i]"
                     done
                 else
                     INSTALL_APPS=()
