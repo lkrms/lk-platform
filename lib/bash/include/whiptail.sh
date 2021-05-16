@@ -18,7 +18,7 @@ function lk_whiptail_checklist() {
     # Maximum dialog width: 76 (i.e. 60+16)
     # Maximum list height: 10
     # Maximum dialog height: 16 + lines of text after wrapping
-    local TITLE=${1:-} TEXT=${2:-} LIST_HEIGHT=10 WIDTH=38 MAX_WIDTH=60 \
+    local TITLE=${1-} TEXT=${2-} LIST_HEIGHT=10 WIDTH=38 MAX_WIDTH=60 \
         STATUS LINE ITEM ITEMS=()
     [ $# -ge 4 ] || lk_warn "invalid arguments" || return
     shift 2

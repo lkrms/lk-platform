@@ -29,10 +29,6 @@ HOMEBREW_FORMULAE+=(
     #acme.sh
 )
 
-FORCE_IBREW+=(
-    unison
-)
-
 # Desktop
 HOMEBREW_TAPS+=(
     federico-terzi/espanso
@@ -165,6 +161,10 @@ HOMEBREW_FORMULAE+=(
     awscli
 )
 
+FORCE_IBREW+=(
+    lkrms/virt-manager/virt-manager
+)
+
 HOMEBREW_CASKS+=(
     android-studio
     dbeaver-community
@@ -191,6 +191,7 @@ HOMEBREW_CASKS+=(
 
 HOMEBREW_KEEP_FORMULAE+=(
     ocaml
+    lkrms/virt-manager/virt-manager
 )
 
 HOMEBREW_KEEP_CASKS+=(

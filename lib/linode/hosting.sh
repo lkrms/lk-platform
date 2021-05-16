@@ -50,36 +50,36 @@ SCRIPT_ENV=$(printenv | sed '/^LS_COLORS=/d' | sort)
 
 # Use lk_bash_udf_defaults to regenerate the following after changes above
 export -n \
-    LK_NODE_HOSTNAME=${LK_NODE_HOSTNAME:-} \
-    LK_NODE_FQDN=${LK_NODE_FQDN:-} \
+    LK_NODE_HOSTNAME=${LK_NODE_HOSTNAME-} \
+    LK_NODE_FQDN=${LK_NODE_FQDN-} \
     LK_NODE_TIMEZONE=${LK_NODE_TIMEZONE:-Australia/Sydney} \
-    LK_NODE_SERVICES=${LK_NODE_SERVICES:-} \
-    LK_NODE_PACKAGES=${LK_NODE_PACKAGES:-} \
-    LK_HOST_DOMAIN=${LK_HOST_DOMAIN:-} \
-    LK_HOST_ACCOUNT=${LK_HOST_ACCOUNT:-} \
+    LK_NODE_SERVICES=${LK_NODE_SERVICES-} \
+    LK_NODE_PACKAGES=${LK_NODE_PACKAGES-} \
+    LK_HOST_DOMAIN=${LK_HOST_DOMAIN-} \
+    LK_HOST_ACCOUNT=${LK_HOST_ACCOUNT-} \
     LK_HOST_SITE_ENABLE=${LK_HOST_SITE_ENABLE:-N} \
     LK_ADMIN_USERS=${LK_ADMIN_USERS:-linac} \
-    LK_ADMIN_EMAIL=${LK_ADMIN_EMAIL:-} \
-    LK_TRUSTED_IP_ADDRESSES=${LK_TRUSTED_IP_ADDRESSES:-} \
+    LK_ADMIN_EMAIL=${LK_ADMIN_EMAIL-} \
+    LK_TRUSTED_IP_ADDRESSES=${LK_TRUSTED_IP_ADDRESSES-} \
     LK_SSH_TRUSTED_ONLY=${LK_SSH_TRUSTED_ONLY:-N} \
-    LK_SSH_JUMP_HOST=${LK_SSH_JUMP_HOST:-} \
-    LK_SSH_JUMP_USER=${LK_SSH_JUMP_USER:-} \
-    LK_SSH_JUMP_KEY=${LK_SSH_JUMP_KEY:-} \
+    LK_SSH_JUMP_HOST=${LK_SSH_JUMP_HOST-} \
+    LK_SSH_JUMP_USER=${LK_SSH_JUMP_USER-} \
+    LK_SSH_JUMP_KEY=${LK_SSH_JUMP_KEY-} \
     LK_REJECT_OUTPUT=${LK_REJECT_OUTPUT:-N} \
-    LK_ACCEPT_OUTPUT_HOSTS=${LK_ACCEPT_OUTPUT_HOSTS:-} \
-    LK_MYSQL_USERNAME=${LK_MYSQL_USERNAME:-} \
-    LK_MYSQL_PASSWORD=${LK_MYSQL_PASSWORD:-} \
+    LK_ACCEPT_OUTPUT_HOSTS=${LK_ACCEPT_OUTPUT_HOSTS-} \
+    LK_MYSQL_USERNAME=${LK_MYSQL_USERNAME-} \
+    LK_MYSQL_PASSWORD=${LK_MYSQL_PASSWORD-} \
     LK_INNODB_BUFFER_SIZE=${LK_INNODB_BUFFER_SIZE:-256M} \
     LK_OPCACHE_MEMORY_CONSUMPTION=${LK_OPCACHE_MEMORY_CONSUMPTION:-256} \
-    LK_PHP_SETTINGS=${LK_PHP_SETTINGS:-} \
-    LK_PHP_ADMIN_SETTINGS=${LK_PHP_ADMIN_SETTINGS:-} \
+    LK_PHP_SETTINGS=${LK_PHP_SETTINGS-} \
+    LK_PHP_ADMIN_SETTINGS=${LK_PHP_ADMIN_SETTINGS-} \
     LK_MEMCACHED_MEMORY_LIMIT=${LK_MEMCACHED_MEMORY_LIMIT:-256} \
-    LK_SMTP_RELAY=${LK_SMTP_RELAY:-} \
-    LK_EMAIL_BLACKHOLE=${LK_EMAIL_BLACKHOLE:-} \
-    LK_UPGRADE_EMAIL=${LK_UPGRADE_EMAIL:-} \
-    LK_AUTO_REBOOT=${LK_AUTO_REBOOT:-} \
+    LK_SMTP_RELAY=${LK_SMTP_RELAY-} \
+    LK_EMAIL_BLACKHOLE=${LK_EMAIL_BLACKHOLE-} \
+    LK_UPGRADE_EMAIL=${LK_UPGRADE_EMAIL-} \
+    LK_AUTO_REBOOT=${LK_AUTO_REBOOT-} \
     LK_AUTO_REBOOT_TIME=${LK_AUTO_REBOOT_TIME:-02:00} \
-    LK_AUTO_BACKUP_SCHEDULE=${LK_AUTO_BACKUP_SCHEDULE:-} \
+    LK_AUTO_BACKUP_SCHEDULE=${LK_AUTO_BACKUP_SCHEDULE-} \
     LK_SNAPSHOT_HOURLY_MAX_AGE=${LK_SNAPSHOT_HOURLY_MAX_AGE:-24} \
     LK_SNAPSHOT_DAILY_MAX_AGE=${LK_SNAPSHOT_DAILY_MAX_AGE:-7} \
     LK_SNAPSHOT_WEEKLY_MAX_AGE=${LK_SNAPSHOT_WEEKLY_MAX_AGE:-52} \
@@ -304,7 +304,7 @@ function lk_console_item() {
 # edit_file FILE SEARCH_PATTERN REPLACE_PATTERN [ADD_TEXT]
 function edit_file() {
     local SED_SCRIPT="0,/$2/{s/$2/$3/}" BEFORE AFTER
-    [ -f "$1" ] || [ -n "${4:-}" ] || lk_die "file not found: $1"
+    [ -f "$1" ] || [ -n "${4-}" ] || lk_die "file not found: $1"
     [ "${MATCH_MANY:-N}" = "N" ] || SED_SCRIPT="s/$2/$3/"
     if grep -Eq -e "$2" "$1" 2>/dev/null; then
         lk_file_keep_original "$1"
@@ -313,7 +313,7 @@ function edit_file() {
         [ "$BEFORE" = "$AFTER" ] || {
             sed -Ei "$SED_SCRIPT" "$1"
         }
-    elif [ -n "${4:-}" ]; then
+    elif [ -n "${4-}" ]; then
         echo "$4" >>"$1"
     else
         lk_die "no line matching $2 in $1"
@@ -431,8 +431,10 @@ fi
 TERM='' . "$LK_BASE/lib/bash/common.sh"
 lk_include hosting provision
 
+install -d -m 02775 -g adm "$LK_BASE"/{etc{,/lk-platform},var}
+install -d -m 00777 -g adm "$LK_BASE"/var/log
+install -d -m 00750 -g adm "$LK_BASE"/var/backup
 FILE=$LK_BASE/etc/lk-platform/lk-platform.conf
-install -d -m 00775 -g adm "${FILE%/*}"
 install -m 00664 -g adm /dev/null "$FILE"
 LK_SSH_JUMP_KEY=${LK_SSH_JUMP_KEY:+jump} \
     lk_get_shell_var \
@@ -584,7 +586,7 @@ EXIT_STATUS=0
 exec 9>"/tmp/${LK_PATH_PREFIX}install.lock"
 if ! flock -n 9; then
     DEPLOY_PENDING=Y
-    [ "\${DPKG_MAINTSCRIPT_NAME:-}" != postinst ] || EXIT_STATUS=101
+    [ "\${DPKG_MAINTSCRIPT_NAME-}" != postinst ] || EXIT_STATUS=101
 fi
 LOG+=("Deploy pending: \$DEPLOY_PENDING")
 LOG+=("Exit status: \$EXIT_STATUS")
@@ -767,7 +769,7 @@ for USERNAME in ${LK_ADMIN_USERS//,/ }; do
     echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >"/etc/sudoers.d/nopasswd-$USERNAME"
 done
 
-if [ -n "${FIRST_ADMIN:-}" ] && [ -e "$KEYS_FILE" ]; then
+if [ -n "${FIRST_ADMIN-}" ] && [ -e "$KEYS_FILE" ]; then
     lk_console_item "Deleting" "$KEYS_FILE"
     rm -v "$KEYS_FILE"
 fi
@@ -823,9 +825,9 @@ PACKAGES=(
     less
     logrotate
     lsof
-    moreutils
     nano
     netcat-openbsd
+    perl
     psmisc
     pv
     rdfind

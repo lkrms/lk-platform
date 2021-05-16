@@ -163,7 +163,7 @@ lk_log_start
     fi
 
     lk_console_message "Checking environment"
-    LK_PATH_PREFIX=${LK_PATH_PREFIX:-${PATH_PREFIX:-${ORIGINAL_PATH_PREFIX:-}}}
+    LK_PATH_PREFIX=${LK_PATH_PREFIX:-${PATH_PREFIX:-${ORIGINAL_PATH_PREFIX-}}}
     [ -n "$LK_PATH_PREFIX" ] || lk_no_input || {
         lk_console_detail "LK_PATH_PREFIX is not set"
         lk_console_detail \
@@ -176,9 +176,9 @@ lk_log_start
         done
     }
     [ -n "$LK_PATH_PREFIX" ] || lk_die "LK_PATH_PREFIX not set"
-    [ -z "${LK_BASE:-}" ] ||
+    [ -z "${LK_BASE-}" ] ||
         [ "$LK_BASE" = "$_LK_INST" ] ||
-        [ "$LK_BASE" = "${OLD_LK_INST:-}" ] ||
+        [ "$LK_BASE" = "${OLD_LK_INST-}" ] ||
         [ ! -d "$LK_BASE" ] ||
         {
             lk_console_item "Existing installation found at" "$LK_BASE"
@@ -187,7 +187,7 @@ lk_log_start
     export LK_BASE=$_LK_INST
 
     lk_is_arch && _IS_ARCH=1 || _IS_ARCH=
-    _BASHRC='[ -z "${BASH_VERSION:-}" ] || [ ! -f ~/.bashrc ] || . ~/.bashrc'
+    _BASHRC='[ -z "${BASH_VERSION-}" ] || [ ! -f ~/.bashrc ] || . ~/.bashrc'
     _BYOBU=
     _BYOBURC=
     if BYOBU_PATH=$(command -pv byobu-launch); then
@@ -303,7 +303,7 @@ lk_log_start
     for i in "${SETTINGS[@]}"; do
         # Don't include null variables unless they already appear in
         # $LK_BASE/etc/lk-platform/lk-platform.conf
-        [ -n "${!i:-}" ] ||
+        [ -n "${!i-}" ] ||
             grep -Eq "^$i=" "$CONF_FILE" ||
             lk_in_array "$i" NEW_SETTINGS ||
             continue
@@ -344,7 +344,7 @@ lk_log_start
         cd "$LK_BASE"
         REPO_OWNER=$(lk_file_owner "$LK_BASE")
         _LK_GIT_ENV=()
-        [ -z "${SSH_AUTH_SOCK:-}" ] ||
+        [ -z "${SSH_AUTH_SOCK-}" ] ||
             ! SOCK_OWNER=$(lk_file_owner "$SSH_AUTH_SOCK" 2>/dev/null) ||
             [ "$SOCK_OWNER" != "$REPO_OWNER" ] ||
             _LK_GIT_ENV=(SSH_AUTH_SOCK="$SSH_AUTH_SOCK")
@@ -385,6 +385,8 @@ lk_log_start
                 ! lk_is_true LK_GIT_REPO_UPDATED ||
                 restart_script "$@"
         fi
+        install -d -m 00777 "$LK_BASE/var/log"
+        install -d -m 00750 "$LK_BASE/var/backup"
         LK_VERBOSE='' \
             lk_dir_set_modes "$LK_BASE" \
             "" \
@@ -397,8 +399,6 @@ lk_log_start
             "" "" \
             "\\./\\.git/objects/([0-9a-f]{2}|pack)/.*" \
             0555 0444
-        install -d -m 00777 "$LK_BASE/var/log"
-        install -d -m 00700 "$LK_BASE/var/backup"
         umask "$UMASK"
     fi
 
@@ -545,10 +545,10 @@ lk_log_start
 
     # Leave ~root/.ssh alone
     lk_remove_false "$(printf '[ "{}" != %q ]' "$(_lk_realpath ~root)")" _LK_HOMES
-    if [ -n "${LK_SSH_JUMP_HOST:-}" ]; then
+    if [ -n "${LK_SSH_JUMP_HOST-}" ]; then
         lk_ssh_configure "$LK_SSH_JUMP_HOST" \
-            "${LK_SSH_JUMP_USER:-}" \
-            "${LK_SSH_JUMP_KEY:-}"
+            "${LK_SSH_JUMP_USER-}" \
+            "${LK_SSH_JUMP_KEY-}"
     else
         lk_ssh_configure
     fi

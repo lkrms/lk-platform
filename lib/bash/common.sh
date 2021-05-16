@@ -55,13 +55,13 @@ function lk_die() {
 }
 
 function lk_is_dry_run() {
-    [ -n "${LK_DRY_RUN:-}" ]
+    [ -n "${LK_DRY_RUN-}" ]
 }
 
 # lk_maybe [-p] COMMAND [ARG...]
 function lk_maybe() {
     local PRINT=
-    [ "${1:-}" != -p ] || { PRINT=1 && shift; }
+    [ "${1-}" != -p ] || { PRINT=1 && shift; }
     if lk_is_dry_run; then
         ! lk_is_true PRINT && ! lk_verbose ||
             lk_console_item \
@@ -73,12 +73,12 @@ function lk_maybe() {
 
 function _lk_getopt_maybe_add_long() {
     [[ ,$LONG, == *,$1,* ]] ||
-        { [ $# -gt 1 ] && [ -z "${!2:-}" ]; } ||
+        { [ $# -gt 1 ] && [ -z "${!2-}" ]; } ||
         LONG=${LONG:+$LONG,}$1
 }
 
 function lk_getopt() {
-    local SHORT=${1:-} LONG=${2:-} ARGC=$# _OPTS HAS_ARG OPT OPTS=()
+    local SHORT=${1-} LONG=${2-} ARGC=$# _OPTS HAS_ARG OPT OPTS=()
     _lk_getopt_maybe_add_long help LK_USAGE
     _lk_getopt_maybe_add_long version LK_VERSION
     _lk_getopt_maybe_add_long dry-run
@@ -92,13 +92,13 @@ function lk_getopt() {
     while :; do
         case "$1" in
         --help)
-            [ -z "${LK_USAGE:-}" ] || {
+            [ -z "${LK_USAGE-}" ] || {
                 echo "$LK_USAGE"
                 exit
             }
             ;;
         --version)
-            [ -z "${LK_VERSION:-}" ] || {
+            [ -z "${LK_VERSION-}" ] || {
                 echo "$LK_VERSION"
                 exit
             }

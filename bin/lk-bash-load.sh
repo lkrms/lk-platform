@@ -29,9 +29,9 @@ lk_die() { s=$? && echo "$BASH_SOURCE: $1" >&2 && (exit $s) && false || exit; }
     >/dev/null || lk_die "command not found: realpath"
 
 function _lk_bash_load() {
-    local _DEPTH=${lk_bin_depth:-} _FILE _DIR
+    local _DEPTH=${lk_bin_depth-} _FILE _DIR
     if [ -n "$_DEPTH" ]; then
-        [ -n "${BASH_SOURCE[2]:-}" ] ||
+        [ -n "${BASH_SOURCE[2]-}" ] ||
             lk_die "not sourced from a shell script"
         _FILE=${BASH_SOURCE[2]}
     else

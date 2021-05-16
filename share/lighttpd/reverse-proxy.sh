@@ -8,7 +8,7 @@ HOST_NAME_REGEX="[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([-a-zA-Z0-
 [ $# -ge 2 ] &&
     [[ $1 =~ ^$HOST_NAME_REGEX$ ]] &&
     [[ $2 =~ ^$HOST_NAME_REGEX$ ]] &&
-    [[ ${3:-} =~ ^(|/([^/]+/)*)$ ]] || {
+    [[ ${3-} =~ ^(|/([^/]+/)*)$ ]] || {
     echo "Usage: ${0##*/} HOST TARGET_HOST [/TARGET_PATH/ [/IGNORE_PATH...]]" >&2
     exit 1
 }

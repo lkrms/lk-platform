@@ -18,7 +18,7 @@ function lk_iptables() {
 function _lk_iptables_args() {
     local OPTIND OPTARG OPT PARAMS=$1 LK_USAGE COMMAND=(iptables) \
     _LK_STACK_DEPTH=1
-    [ -z "${LK_IPTABLES_46:-}" ] ||
+    [ -z "${LK_IPTABLES_46-}" ] ||
         set -- "-${LK_IPTABLES_46#-}" "$@"
     LK_USAGE="\
 Usage: $(lk_myself -f) [-4|-6|-b]${2:+ $2}"

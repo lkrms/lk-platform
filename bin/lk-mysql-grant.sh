@@ -47,7 +47,7 @@ eval "set -- $LK_GETOPT"
 #
 # Otherwise, assume the invoking user has root access to MySQL
 REGEX="^[-a-zA-Z0-9_]+\$"
-if lk_is_root && [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
+if lk_is_root && [ -n "${SUDO_USER-}" ] && [ "$SUDO_USER" != "root" ]; then
     [[ "$USERNAME" =~ $REGEX ]] ||
         lk_die "$USERNAME: not a valid database identifier"
     REGEX="^$USERNAME(_[-a-zA-Z0-9_]*)?\$"

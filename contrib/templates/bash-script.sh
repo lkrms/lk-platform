@@ -26,8 +26,8 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} ||
 #
 ##
 
-[ -d "${LK_BASE:-}" ] || { [ -f "/etc/default/lk-platform" ] &&
-    . "/etc/default/lk-platform" && [ -d "${LK_BASE:-}" ]; } ||
+[ -d "${LK_BASE-}" ] || { [ -f "/etc/default/lk-platform" ] &&
+    . "/etc/default/lk-platform" && [ -d "${LK_BASE-}" ]; } ||
     lk_die "LK_BASE not set"
 
 . "$LK_BASE/lib/bash/common.sh"

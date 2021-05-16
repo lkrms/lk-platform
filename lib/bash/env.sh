@@ -42,8 +42,13 @@ PATH=$(path_add_to_front /usr/local/bin)
 # shellcheck disable=SC2039
 [ ! -d /opt/homebrew/bin ] ||
     [ /opt/homebrew/bin -ef /usr/local/bin ] ||
-    [ "$(uname -m 2>/dev/null)" = x86_64 ] ||
+    [ "$(uname -m 2>/dev/null)" = x86_64 ] || {
     PATH=$(path_add_to_front /opt/homebrew/bin)
+    # DYLD_FALLBACK_LIBRARY_PATH defaults to "$HOME/lib:/usr/local/lib:/usr/lib"
+    # (see `man dlopen`)
+    [ ! -d /opt/homebrew/lib ] ||
+        echo 'export DYLD_FALLBACK_LIBRARY_PATH=${DYLD_FALLBACK_LIBRARY_PATH-${HOME:+$HOME/lib:}/opt/homebrew/lib:/usr/local/lib:/usr/lib}'
+}
 
 ! type brew >/dev/null 2>&1 ||
     ! BREW_SH=$(brew shellenv 2>/dev/null |
@@ -56,10 +61,10 @@ export HOMEBREW_NO_AUTO_UPDATE=1
 export HOMEBREW_NO_INSTALL_CLEANUP=1
 export HOMEBREW_CASK_OPTS=--no-quarantine
 EOF
-    PATH=${MANPATH:-} in_path "$HOMEBREW_PREFIX/share/man" ||
+    PATH=${MANPATH-} in_path "$HOMEBREW_PREFIX/share/man" ||
         echo 'export MANPATH="$HOMEBREW_PREFIX/share/man${MANPATH+:$MANPATH}:"'
-    PATH=${INFOPATH:-} in_path "$HOMEBREW_PREFIX/share/info" ||
-        echo 'export INFOPATH="$HOMEBREW_PREFIX/share/info:${INFOPATH:-}"'
+    PATH=${INFOPATH-} in_path "$HOMEBREW_PREFIX/share/info" ||
+        echo 'export INFOPATH="$HOMEBREW_PREFIX/share/info:${INFOPATH-}"'
 }
 
 IFS=':'

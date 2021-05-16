@@ -107,7 +107,7 @@ function link_rename() {
 function link_reset() {
     . "$LK_BASE/lib/bash/include/core.sh"
     local BRIDGE DEV ACTIVE_UUID UUID
-    [ "${1:-}" != -b ] || { BRIDGE=$2 && shift 2; }
+    [ "${1-}" != -b ] || { BRIDGE=$2 && shift 2; }
     lk_run_detail nmcli connection reload
     for DEV in "$@"; do
         ! ACTIVE_UUID=$(lk_nm_active_connection_uuid "$DEV") ||
@@ -115,7 +115,7 @@ function link_reset() {
                 [ "$ACTIVE_UUID" = "$UUID" ]; } ||
             lk_run_detail nmcli connection down "$ACTIVE_UUID" || return
     done
-    if [ -n "${BRIDGE:-}" ]; then
+    if [ -n "${BRIDGE-}" ]; then
         lk_run_detail nmcli connection up "$BRIDGE" || return
     fi
     for DEV in "$@"; do
@@ -136,9 +136,9 @@ lk_assert_is_arch
 
 # Try to detect missing settings
 if ! lk_is_bootstrap; then
-    [ -n "${LK_NODE_TIMEZONE:-}" ] || ! _TZ=$(lk_system_timezone) ||
+    [ -n "${LK_NODE_TIMEZONE-}" ] || ! _TZ=$(lk_system_timezone) ||
         set -- --set LK_NODE_TIMEZONE "$_TZ" "$@"
-    [ -n "${LK_NODE_HOSTNAME:-}" ] || ! _HN=$(lk_hostname) ||
+    [ -n "${LK_NODE_HOSTNAME-}" ] || ! _HN=$(lk_hostname) ||
         set -- --set LK_NODE_HOSTNAME "$_HN" "$@"
     [ -n "${LK_NODE_LOCALES+1}" ] ||
         set -- --set LK_NODE_LOCALES "en_AU.UTF-8 en_GB.UTF-8" "$@"
@@ -153,7 +153,7 @@ shift "$_LK_SHIFT"
 lk_getopt
 eval "set -- $LK_GETOPT"
 
-LK_PACKAGES_FILE=${1:-${LK_PACKAGES_FILE:-}}
+LK_PACKAGES_FILE=${1:-${LK_PACKAGES_FILE-}}
 if [ -n "$LK_PACKAGES_FILE" ]; then
     if [ ! -f "$LK_PACKAGES_FILE" ]; then
         FILE=${LK_PACKAGES_FILE##*/}
@@ -185,8 +185,10 @@ lk_start_trace
     LK_FILE_BACKUP_TAKE=${LK_FILE_BACKUP_TAKE-$(lk_is_bootstrap || echo 1)}
     LK_FILE_BACKUP_MOVE=1
 
-    LK_VERBOSE=1 \
+    (
+        LK_VERBOSE=1
         lk_settings_persist "$SETTINGS_SH"
+    )
 
     EXIT_STATUS=0
     SERVICE_STARTED=()
@@ -194,7 +196,7 @@ lk_start_trace
     SERVICE_RESTART=()
     DAEMON_RELOAD=
 
-    if [ -n "${LK_NODE_TIMEZONE:-}" ]; then
+    if [ -n "${LK_NODE_TIMEZONE-}" ]; then
         lk_console_message "Checking system time zone"
         FILE=/usr/share/zoneinfo/$LK_NODE_TIMEZONE
         lk_symlink "$FILE" /etc/localtime
@@ -216,13 +218,13 @@ lk_start_trace
         NM_DIR=/etc/NetworkManager/system-connections
         NM_EXT=.nmconnection
         NM_IGNORE="^$S*(#|\$|uuid=)"
-        BRIDGE=${LK_BRIDGE_INTERFACE:-}
+        BRIDGE=${LK_BRIDGE_INTERFACE-}
         BRIDGE_FILE=${BRIDGE:+$NM_DIR/$BRIDGE$NM_EXT}
         IPV4=(
-            "${LK_IPV4_ADDRESS:-}"
-            "${LK_IPV4_GATEWAY:-}"
-            "${LK_IPV4_DNS_SERVER:-}"
-            "${LK_IPV4_DNS_SEARCH:-}"
+            "${LK_IPV4_ADDRESS-}"
+            "${LK_IPV4_GATEWAY-}"
+            "${LK_IPV4_DNS_SERVER-}"
+            "${LK_IPV4_DNS_SEARCH-}"
         )
         ETHERNET_NOW=($(lk_system_list_ethernet_links))
         ETHERNET_NOW=($(lk_system_sort_links "${ETHERNET_NOW[@]}"))
@@ -326,7 +328,7 @@ lk_start_trace
         fi
     fi
 
-    if [ -n "${LK_NODE_HOSTNAME:-}" ]; then
+    if [ -n "${LK_NODE_HOSTNAME-}" ]; then
         lk_console_message "Checking system hostname"
         FILE=/etc/hostname
         lk_install -m 00644 "$FILE"
@@ -449,7 +451,7 @@ $LK_NODE_HOSTNAME" &&
             DAEMON_RELOAD=1
     fi
 
-    if [ -n "${LK_NTP_SERVER:-}" ]; then
+    if [ -n "${LK_NTP_SERVER-}" ]; then
         lk_console_message "Checking NTP"
         unset LK_FILE_REPLACE_NO_CHANGE
         FILE=/etc/ntp.conf
@@ -538,7 +540,7 @@ $LK_NODE_HOSTNAME" &&
             devtools pacutils vifm))
         [ ${#PAC_INSTALL[@]} -eq 0 ] || {
             lk_console_detail "Installing aurutils dependencies"
-            lk_tty sudo pacman -S --noconfirm "${PAC_INSTALL[@]}"
+            lk_tty pacman -S --noconfirm "${PAC_INSTALL[@]}"
         }
 
         DIR=$({ pacman-conf --repo=aur |
@@ -550,7 +552,7 @@ $LK_NODE_HOSTNAME" &&
         lk_console_detail "Checking pacman repo at" "$DIR"
         lk_install -d -m 00755 -o "$USER" -g "$GROUP" "$DIR"
         [ -e "$FILE" ] ||
-            lk_tty repo-add "$FILE"
+            LK_SUDO=0 lk_tty repo-add "$FILE"
 
         lk_arch_add_repo "aur|file://$DIR|||Optional TrustAll"
         LK_CONF_OPTION_FILE=/etc/pacman.conf
@@ -566,9 +568,9 @@ $LK_NODE_HOSTNAME" &&
             PKGDEST=$DIR lk_makepkg -a aurutils --force
             lk_files_exist "${LK_MAKEPKG_LIST[@]}" ||
                 lk_die "not found: ${LK_MAKEPKG_LIST[*]}"
-            lk_tty repo-add --remove "$FILE" "${LK_MAKEPKG_LIST[@]}"
+            LK_SUDO=0 lk_tty repo-add --remove "$FILE" "${LK_MAKEPKG_LIST[@]}"
             lk_pac_sync -f
-            lk_tty sudo pacman -S --noconfirm aur/aurutils
+            lk_tty pacman -S --noconfirm aur/aurutils
         fi
 
         FILE=/etc/aurutils/pacman-aur.conf
@@ -580,15 +582,18 @@ $LK_NODE_HOSTNAME" &&
 
         # Avoid "unknown public key" errors
         unset LK_SUDO
-        DIR=~/.gnupg
-        FILE=$DIR/gpg.conf
-        lk_install -d -m 00700 "$DIR"
+        FILE=~/.gnupg/gpg.conf
+        lk_install -d -m 00700 "${FILE%/*}"
         lk_install -m 00644 "$FILE"
+        LK_FILE_KEEP_ORIGINAL=0
         if ! grep -q "\<auto-key-retrieve\>" "$FILE"; then
             lk_console_detail \
                 "Enabling in $(lk_pretty_path $FILE):" "auto-key-retrieve"
             lk_conf_enable_row auto-key-retrieve "$FILE"
         fi
+        _LK_CONF_DELIM=" " \
+            lk_conf_set_option keyserver hkps://keyserver.ubuntu.com "$FILE"
+        unset LK_FILE_KEEP_ORIGINAL
         LK_SUDO=1
 
         if [ ${#AUR_PACKAGES[@]} -gt 0 ]; then
@@ -604,6 +609,7 @@ $LK_NODE_HOSTNAME" &&
         PAC_KEEP=($(comm -12 \
             <(lk_echo_array PAC_KEEP | sort -u) \
             <(lk_pac_installed_list | sort -u)))
+        _PAC_KEEP=($(lk_echo_array PAC_KEEP | sed -E '/^aurutils$/d'))
     fi
 
     lk_console_message "Checking install reasons"
@@ -615,14 +621,14 @@ $LK_NODE_HOSTNAME" &&
         <(lk_echo_array PAC_EXPLICIT) \
         <(lk_pac_installed_explicit | sort -u)))
     [ ${#PAC_MARK_EXPLICIT[@]} -eq 0 ] ||
-        lk_log_bypass lk_tty sudo \
+        lk_log_bypass lk_tty \
             pacman -D --asexplicit "${PAC_MARK_EXPLICIT[@]}"
     [ ${#PAC_UNMARK_EXPLICIT[@]} -eq 0 ] ||
-        lk_log_bypass lk_tty sudo \
+        lk_log_bypass lk_tty \
             pacman -D --asdeps "${PAC_UNMARK_EXPLICIT[@]}"
 
-    [ ${#PAC_KEEP[@]} -eq 0 ] ||
-        lk_echo_array PAC_KEEP |
+    [ ${#_PAC_KEEP[@]} -eq 0 ] ||
+        lk_echo_array _PAC_KEEP |
         lk_console_list "Not uninstalling:" package packages
     PAC_INSTALL=($(comm -23 \
         <(lk_echo_array PAC_PACKAGES | sort -u) \
@@ -637,7 +643,7 @@ $LK_NODE_HOSTNAME" &&
     unset NOCONFIRM
     ! lk_no_input || NOCONFIRM=1
     [ ${#PAC_INSTALL[@]}${#PAC_UPGRADE[@]} = 00 ] ||
-        lk_log_bypass lk_tty sudo pacman -Su ${NOCONFIRM+--noconfirm} \
+        lk_log_bypass lk_tty pacman -Su ${NOCONFIRM+--noconfirm} \
             ${PAC_INSTALL[@]+"${PAC_INSTALL[@]}"}
 
     REMOVE_MESSAGE=()
@@ -658,7 +664,7 @@ $LK_NODE_HOSTNAME" &&
     [ ${#PAC_REMOVE[@]} -eq 0 ] || {
         lk_console_message \
             "Removing $(lk_implode " and " REMOVE_MESSAGE) packages"
-        lk_log_bypass lk_tty sudo pacman -Rs --noconfirm "${PAC_REMOVE[@]}"
+        lk_log_bypass lk_tty pacman -Rs --noconfirm "${PAC_REMOVE[@]}"
     }
 
     lk_symlink_bin codium code || true
@@ -966,7 +972,7 @@ done\""
             eval "file_delete$SH"
     fi
 
-    if { [ -n "${LK_SAMBA_WORKGROUP:-}" ] || lk_node_service_enabled samba; } &&
+    if { [ -n "${LK_SAMBA_WORKGROUP-}" ] || lk_node_service_enabled samba; } &&
         lk_pac_installed samba; then
         unset LK_FILE_REPLACE_NO_CHANGE
         FILE=/etc/samba/smb.conf

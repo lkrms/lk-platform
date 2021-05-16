@@ -2,7 +2,7 @@
 
 # shellcheck disable=SC1083,SC1087
 
-if [[ ! ${1:-} =~ ^(--new|--old)$ ]]; then
+if [[ ! ${1-} =~ ^(--new|--old)$ ]]; then
 
     lk_bin_depth=1 . lk-bash-load.sh || exit
     lk_include provision
@@ -189,7 +189,7 @@ local)
             "$NEW_HOST_NAME" \
             "$NEW_HOST" \
             "$NEW_USER" \
-            "${NEW_KEY_FILE:-}" \
+            "${NEW_KEY_FILE-}" \
             "${LK_SSH_JUMP_HOST:+jump}"
     }
 
@@ -240,7 +240,7 @@ EOF
     ${OLD_PASSWORD:+setsid -w} ssh -o LogLevel=QUIET -t "$OLD_HOST_NAME" \
         "bash -c$(printf ' %q' "$BASH_EXECUTION_STRING" bash --old "$KEY")" ||
         lk_die "ssh command failed (exit status $?)"
-    if [ -n "${SSH_ASKPASS:-}" ]; then
+    if [ -n "${SSH_ASKPASS-}" ]; then
         lk_console_detail "Deleting:" "$SSH_ASKPASS"
         rm "$SSH_ASKPASS"
     fi && lk_console_log "\

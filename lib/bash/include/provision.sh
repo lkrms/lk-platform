@@ -14,14 +14,14 @@ function lk_is_desktop() {
 #
 # Return true if SERVICE or an equivalent appears in LK_NODE_SERVICES.
 function lk_node_service_enabled() {
-    [ -n "${LK_NODE_SERVICES:-}" ] || return
+    [ -n "${LK_NODE_SERVICES-}" ] || return
     [[ ,$LK_NODE_SERVICES, == *,$1,* ]] ||
         [[ ,$(lk_node_expand_services), == *,$1,* ]]
 } #### Reviewed: 2021-03-27
 
 function _lk_node_expand_service() {
     local SERVICE REVERSE=1
-    [ "${1:-}" != -n ] || { REVERSE= && shift; }
+    [ "${1-}" != -n ] || { REVERSE= && shift; }
     if [[ ,$SERVICES, == *,$1,* ]]; then
         SERVICES=$SERVICES$(printf ',%s' "${@:2}")
     elif lk_is_true REVERSE; then
@@ -36,7 +36,7 @@ function _lk_node_expand_service() {
 #
 # Add alternative names to the service list (all enabled services by default).
 function lk_node_expand_services() {
-    local IFS=, SERVICES=${1-${LK_NODE_SERVICES:-}}
+    local IFS=, SERVICES=${1-${LK_NODE_SERVICES-}}
     _lk_node_expand_service apache+php apache2 php-fpm
     _lk_node_expand_service mysql mariadb
     _lk_node_expand_service -n xfce4 desktop
@@ -117,8 +117,8 @@ function _lk_settings_writable_files() {
 function lk_settings_getopt() {
     local IFS SHIFT=0 _SHIFT REGEX='^(LK_[a-zA-Z0-9_]*[a-zA-Z0-9])(=(.*))?$'
     unset IFS
-    while [[ ${1:-} =~ ^(-[sau]|--(set|add|unset))$ ]]; do
-        [[ ${2:-} =~ $REGEX ]] ||
+    while [[ ${1-} =~ ^(-[sau]|--(set|add|unset))$ ]]; do
+        [[ ${2-} =~ $REGEX ]] ||
             lk_warn "$1: invalid argument: ${2-}" || return
         # "--set LK_SETTING=value" -> "--set LK_SETTING value"
         [ -z "${BASH_REMATCH[2]-}" ] || {
@@ -217,12 +217,12 @@ Usage: $(lk_myself -f) TARGET [ALIAS]"
 function lk_configure_locales() {
     local LK_SUDO=1 LOCALES _LOCALES FILE _FILE
     lk_is_linux || lk_warn "platform not supported" || return
-    LOCALES=(${LK_NODE_LOCALES:-} en_US.UTF-8)
+    LOCALES=(${LK_NODE_LOCALES-} en_US.UTF-8)
     _LOCALES=$(lk_echo_array LOCALES |
         lk_escape_input_ere |
         lk_implode_input "|")
     [ ${#LOCALES[@]} -lt 2 ] || _LOCALES="($_LOCALES)"
-    FILE=${_LK_PROVISION_ROOT:-}/etc/locale.gen
+    FILE=${_LK_PROVISION_ROOT-}/etc/locale.gen
     # 1. Comment all locales out
     # 2. Uncomment configured locales
     _FILE=$(sed -E \
@@ -233,10 +233,10 @@ function lk_configure_locales() {
     lk_file_keep_original "$FILE" &&
         lk_file_replace -i "^$S*(#|\$)" "$FILE" "$_FILE" || return
     ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
-        [ -n "${_LK_PROVISION_ROOT:-}" ] ||
+        [ -n "${_LK_PROVISION_ROOT-}" ] ||
         lk_elevate locale-gen || return
 
-    FILE=${_LK_PROVISION_ROOT:-}/etc/locale.conf
+    FILE=${_LK_PROVISION_ROOT-}/etc/locale.conf
     lk_install -m 00644 "$FILE"
     lk_file_replace -i "^(#|$S*\$)" "$FILE" "\
 LANG=${LOCALES[0]}${LK_NODE_LANGUAGE:+
@@ -323,7 +323,7 @@ Usage: $(lk_myself -f) DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..
 
 function lk_sudo_add_nopasswd() {
     local LK_SUDO=1 FILE
-    [ -n "${1:-}" ] || lk_warn "no user" || return
+    [ -n "${1-}" ] || lk_warn "no user" || return
     lk_user_exists "$1" || lk_warn "user not found: $1" || return
     FILE=/etc/sudoers.d/nopasswd-$1
     lk_install -m 00440 "$FILE" &&
@@ -398,13 +398,13 @@ function lk_ssh_list_hosts() {
 }
 
 function lk_ssh_host_exists() {
-    [ -n "${1:-}" ] &&
+    [ -n "${1-}" ] &&
         lk_ssh_list_hosts | grep -Fx "$1" >/dev/null
 }
 
 function lk_ssh_get_host_key_files() {
     local KEY_FILE
-    [ -n "${1:-}" ] || lk_warn "no ssh host" || return
+    [ -n "${1-}" ] || lk_warn "no ssh host" || return
     lk_ssh_host_exists "$1" || lk_warn "ssh host not found: $1" || return
     KEY_FILE=$(ssh -G "$1" |
         awk '/^identityfile / { print $2 }' |
@@ -460,12 +460,12 @@ function lk_ssh_add_host() {
         h=${LK_SSH_HOME:-~} SSH_PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX} \
         LK_FILE_BACKUP_TAKE='' LK_VERBOSE=0 \
         KEY JUMP_ARGS JUMP_PORT CONF CONF_FILE TEST=
-    [ "${1:-}" != -t ] || { TEST=1 && shift; }
+    [ "${1-}" != -t ] || { TEST=1 && shift; }
     NAME=$1
     HOST=$2
     SSH_USER=$3
-    KEY_FILE=${4:-}
-    JUMP_HOST_NAME=${5:-}
+    KEY_FILE=${4-}
+    JUMP_HOST_NAME=${5-}
     [ $# -ge 3 ] || lk_usage "\
 Usage: $(lk_myself -f) [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
         return
@@ -555,7 +555,7 @@ function lk_ssh_is_reachable() {
 
 # lk_ssh_configure [JUMP_HOST[:JUMP_PORT] JUMP_USER [JUMP_KEY_FILE]]
 function lk_ssh_configure() {
-    local JUMP_HOST=${1:-} JUMP_USER=${2:-} JUMP_KEY_FILE=${3:-} \
+    local JUMP_HOST=${1-} JUMP_USER=${2-} JUMP_KEY_FILE=${3-} \
         SSH_PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX} \
         LK_FILE_BACKUP_TAKE='' LK_VERBOSE=0 \
         KEY PATTERN CONF AWK OWNER GROUP \
@@ -795,7 +795,7 @@ function lk_hosts_get_records() {
     "${COMMAND[@]}" |
         sed -E "$REGEX" |
         awk "\$4 ~ /^$(lk_regex_implode "${TYPES[@]}")$/" |
-        { [ -z "${CUT:-}" ] && cat || cut -d' ' "$CUT"; }
+        { [ -z "${CUT-}" ] && cat || cut -d' ' "$CUT"; }
 }
 
 # lk_hosts_resolve HOST...
@@ -860,7 +860,7 @@ function lk_host_soa() {
             unset SOA
         fi
     done
-    [ -n "${SOA:-}" ] || lk_warn "SOA lookup failed: $1"
+    [ -n "${SOA-}" ] || lk_warn "SOA lookup failed: $1"
 } #### Reviewed: 2021-03-30
 
 function lk_host_ns_resolve() {
@@ -945,9 +945,9 @@ function lk_tcp_is_reachable() {
 # lk_certbot_install [-w WEBROOT_PATH] DOMAIN... [-- CERTBOT_ARG...]
 function lk_certbot_install() {
     local WEBROOT WEBROOT_PATH ERRORS=0 \
-        EMAIL=${LK_LETSENCRYPT_EMAIL-${LK_ADMIN_EMAIL:-}} DOMAIN DOMAINS=()
+        EMAIL=${LK_LETSENCRYPT_EMAIL-${LK_ADMIN_EMAIL-}} DOMAIN DOMAINS=()
     unset WEBROOT
-    [ "${1:-}" != -w ] || { WEBROOT= && WEBROOT_PATH=$2 && shift 2; }
+    [ "${1-}" != -w ] || { WEBROOT= && WEBROOT_PATH=$2 && shift 2; }
     while [ $# -gt 0 ]; do
         [ "$1" != -- ] || {
             shift
@@ -1039,7 +1039,7 @@ CA bundle and private key for DOMAIN from SSH_HOST to TARGET_DIR
 
 # lk_ssl_verify_cert CERT KEY [CA_BUNDLE]
 function lk_ssl_verify_cert() {
-    local CERT=$1 KEY=$2 CA_BUNDLE=${3:-}
+    local CERT=$1 KEY=$2 CA_BUNDLE=${3-}
     openssl verify \
         ${CA_BUNDLE:+-CAfile <(cat <<<"$CA_BUNDLE")} <<<"$CERT" >/dev/null ||
         lk_warn "invalid certificate chain" || return
@@ -1096,7 +1096,7 @@ function _lk_option_check() {
 }
 
 function _lk_option_do_replace() {
-    [ -z "${SECTION:-}" ] || { __FILE=$(awk \
+    [ -z "${SECTION-}" ] || { __FILE=$(awk \
         -v "SECTION=$SECTION" \
         -v "ENTRIES=$__FILE" \
         -f "$LK_BASE/lib/awk/section-replace.awk" \
@@ -1146,7 +1146,7 @@ Usage: $(lk_myself -f) [-s SECTION] [-p] FILE SETTING CHECK_REGEX [REPLACE_REGEX
         { lk_install -d -m 00755 "${FILE%/*}" &&
             lk_install -m 00644 "$FILE"; } || return
     lk_maybe_sudo test -f "$FILE" || lk_warn "file not found: $FILE" || return
-    if [ -z "${SECTION:-}" ]; then
+    if [ -z "${SECTION-}" ]; then
         lk_file_get_text "$FILE" _FILE
     else
         _FILE=$(awk \
@@ -1174,25 +1174,27 @@ Usage: $(lk_myself -f) [-s SECTION] [-p] FILE SETTING CHECK_REGEX [REPLACE_REGEX
 
 # lk_conf_set_option [-s SECTION] OPTION VALUE [FILE]
 function lk_conf_set_option() {
-    local SECTION OPTION VALUE FILE
+    local SECTION OPTION VALUE DELIM FILE
     unset SECTION
-    [ "${1:-}" != -s ] || { SECTION=$2 && shift 2 || return; }
+    [ "${1-}" != -s ] || { SECTION=$2 && shift 2 || return; }
     OPTION=$(lk_escape_ere "$1")
     VALUE=$(lk_escape_ere "$2")
+    DELIM=$(lk_escape_ere "$(lk_trim <<<"${_LK_CONF_DELIM-=}")")
+    DELIM=${DELIM:-$_LK_CONF_DELIM}
     FILE=${3:-$LK_CONF_OPTION_FILE}
     lk_option_set ${SECTION+-s "$SECTION"} \
         "$FILE" \
         "$1${_LK_CONF_DELIM-=}$2" \
-        "^$S*$OPTION$S*=$S*$VALUE$S*\$" \
-        "^$S*$OPTION$S*=.*" \
-        "^$S*#"{,"$S","$S*"}"$OPTION$S*=.*"
+        "^$S*$OPTION$S*$DELIM$S*$VALUE$S*\$" \
+        "^$S*$OPTION$S*$DELIM.*" \
+        "^$S*#"{,"$S","$S*"}"$OPTION$S*$DELIM.*"
 }
 
 # lk_conf_enable_row [-s SECTION] ROW [FILE]
 function lk_conf_enable_row() {
     local SECTION ROW FILE
     unset SECTION
-    [ "${1:-}" != -s ] || { SECTION=$2 && shift 2 || return; }
+    [ "${1-}" != -s ] || { SECTION=$2 && shift 2 || return; }
     ROW=$(lk_regex_expand_whitespace "$(lk_escape_ere "$1")")
     FILE=${2:-$LK_CONF_OPTION_FILE}
     lk_option_set ${SECTION+-s "$SECTION"} \
@@ -1284,7 +1286,7 @@ function lk_squid_set_option() {
 
 # _lk_crontab REMOVE_REGEX ADD_COMMAND
 function _lk_crontab() {
-    local REGEX=${1:+".*$1.*"} ADD_COMMAND=${2:-} TYPE=${2:+a}${1:+r} \
+    local REGEX=${1:+".*$1.*"} ADD_COMMAND=${2-} TYPE=${2:+a}${1:+r} \
         CRONTAB NEW= NEW_CRONTAB
     lk_command_exists crontab || lk_warn "command not found: crontab" || return
     CRONTAB=$(lk_maybe_sudo crontab -l 2>/dev/null) &&
@@ -1334,29 +1336,29 @@ function _lk_crontab() {
 
 # lk_crontab_add COMMAND
 function lk_crontab_add() {
-    _lk_crontab "" "${1:-}"
+    _lk_crontab "" "${1-}"
 }
 
 # lk_crontab_remove REGEX
 function lk_crontab_remove() {
-    _lk_crontab "${1:-}" ""
+    _lk_crontab "${1-}" ""
 }
 
 # lk_crontab_apply CHECK_REGEX COMMAND
 function lk_crontab_apply() {
-    _lk_crontab "${1:-}" "${2:-}"
+    _lk_crontab "${1-}" "${2-}"
 }
 
 # lk_crontab_remove_command COMMAND
 function lk_crontab_remove_command() {
-    [ -n "${1:-}" ] || lk_warn "no command" || return
+    [ -n "${1-}" ] || lk_warn "no command" || return
     _lk_crontab "^$S*[^#[:blank:]].*$S$(lk_regex_expand_whitespace \
         "$(lk_escape_ere "$1")")($S|\$)" ""
 }
 
 # lk_crontab_get REGEX
 function lk_crontab_get() {
-    lk_maybe_sudo crontab -l 2>/dev/null | grep -E "${1:-}"
+    lk_maybe_sudo crontab -l 2>/dev/null | grep -E "${1-}"
 }
 
 # lk_system_memory [POWER]

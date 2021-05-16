@@ -65,7 +65,7 @@ lk_log_start
     }
 
     ARGS=()
-    while [ "${1:-}" = --set ]; do
+    while [ "${1-}" = --set ]; do
         ARGS+=("${@:1:2}")
         shift 2
     done

@@ -43,12 +43,11 @@ Settings are loaded in the following order (later values override earlier ones):
 - `LK_EMAIL_BLACKHOLE`
 - `LK_FILE_BACKUP_MOVE`
 - `LK_FILE_BACKUP_TAKE`
+- `LK_FILE_KEEP_ORIGINAL`
 - `LK_FILE_NO_DIFF`
 - `LK_FORCE_INPUT`
-- `LK_GIT_ENV`
 - `LK_GIT_REF`
 - `LK_GIT_REPOS`
-- `LK_GIT_USER`
 - `LK_GRUB_CMDLINE`
 - `LK_INNODB_BUFFER_SIZE`
 - `LK_IPTABLES_46`
@@ -96,11 +95,10 @@ Settings are loaded in the following order (later values override earlier ones):
 - `LK_PHP_SETTINGS`
 - `LK_PLATFORM_BRANCH`
 - `LK_PROMPT`
-- `LK_PROMPT_DISPLAYED`
-- `LK_PROMPT_LAST_COMMAND_CLEAN`
 - `LK_RED`
 - `LK_REJECT_OUTPUT`
 - `LK_REQUIRED`
+- `LK_SAMBA_WORKGROUP`
 - `LK_SCRIPT_DEBUG`
 - `LK_SECONDARY_LOG_FILE`
 - `LK_SHUTDOWN_DELAY`
@@ -139,7 +137,7 @@ Settings are loaded in the following order (later values override earlier ones):
 >
 > ```bash
 > lk_bash_find_scripts -d "$LK_BASE" -print0 |
->     xargs -0 grep -Pho '((?<=\$\{)|(?<=lk_is_true )|(?<=lk_is_false ))LK_[a-zA-Z0-9_]+\b(?!(\[[^]]+\])?\})' |
+>     xargs -0 gnu_grep -Pho '((?<=\$\{)|(?<=lk_is_true )|(?<=lk_is_false ))LK_[a-zA-Z0-9_]+\b(?!(\[[^]]+\])?\})' |
 >     sort -u |
 >     sed -Ee '/^LK_(.+_(UPDATED|NO_CHANGE)|BASE|USAGE|VERSION|Z|ADMIN_USERS|HOST_.+|MYSQL_(USERNAME|PASSWORD)|SHUTDOWN_ACTION)$/d' -e 's/.*/- `&`/'
 > ```

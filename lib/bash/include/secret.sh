@@ -31,8 +31,8 @@ fi
 # lk_secret VALUE LABEL [SERVICE]
 function lk_secret() {
     local SERVICE=${3:-$(lk_myself 1)} KEYCHAIN=keychain PASSWORD
-    [ -n "${1:-}" ] || lk_warn "no value" || return
-    [ -n "${2:-}" ] || lk_warn "no label" || return
+    [ -n "${1-}" ] || lk_warn "no value" || return
+    [ -n "${2-}" ] || lk_warn "no label" || return
     lk_is_macos || KEYCHAIN=keyring
     if ! PASSWORD=$(lk_secret_get "$1" "$SERVICE" 2>/dev/null); then
         ! lk_no_input ||
@@ -48,7 +48,7 @@ function lk_secret() {
 
 # lk_remove_secret VALUE [SERVICE]
 function lk_remove_secret() {
-    [ -n "${1:-}" ] || lk_warn "no value" || return
+    [ -n "${1-}" ] || lk_warn "no value" || return
     lk_secret_get "$@" &>/dev/null ||
         lk_warn "password not found" || return 0
     lk_secret_forget "$@" || return

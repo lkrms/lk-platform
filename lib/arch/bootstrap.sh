@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2124
-
 # To install Arch Linux using the script below:
 # 1. boot from an Arch Linux live CD
 # 2. wpa_supplicant -B -i wlan0 -c <(wpa_passphrase SSID passphrase)
@@ -9,17 +7,16 @@
 
 set -euo pipefail
 lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
-lk_log() { local l && while IFS= read -r l || [ -n "$l" ]; do
-    printf '%(%Y-%m-%d %H:%M:%S %z)T %s\n' -1 "$l"
-done; }
+lk_log() { trap "" SIGINT && exec perl -pe '$| = 1;
+BEGIN { use POSIX qw{strftime}; use Time::HiRes qw{gettimeofday}; }
+( $s, $ms ) = Time::HiRes::gettimeofday(); $ms = sprintf( "%06i", $ms );
+print strftime( "$ENV{p}%Y-%m-%d %H:%M:%S.$ms %z ", localtime($s) );'; }
 
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
 _DIR=/tmp/${LK_PATH_PREFIX}install
 mkdir -p "$_DIR"
-LOG_FILE=$_DIR/install.$(date +%s).log
-OUT_FILE=${LOG_FILE%.log}.out
-TRACE_FILE=${LOG_FILE%.log}.trace
-exec 4> >(lk_log >"$TRACE_FILE")
+LOG_FILE=$_DIR/install.$(date +%s)
+exec 4> >(lk_log >"$LOG_FILE.trace")
 BASH_XTRACEFD=4
 set -x
 
@@ -31,25 +28,25 @@ DEFAULT_CMDLINE="quiet loglevel=3 audit=0$(! grep -q \
 BOOTSTRAP_PING_HOST=${BOOTSTRAP_PING_HOST:-one.one.one.one}  # https://blog.cloudflare.com/dns-resolver-1-1-1-1/
 BOOTSTRAP_MOUNT_OPTIONS=${BOOTSTRAP_MOUNT_OPTIONS:-defaults} # On VMs with TRIM support, "discard" is added automatically
 BOOTSTRAP_USERNAME=${BOOTSTRAP_USERNAME:-arch}               #
-BOOTSTRAP_PASSWORD=${BOOTSTRAP_PASSWORD:-}                   #
-BOOTSTRAP_KEY=${BOOTSTRAP_KEY:-}                             #
+BOOTSTRAP_PASSWORD=${BOOTSTRAP_PASSWORD-}                    #
+BOOTSTRAP_KEY=${BOOTSTRAP_KEY-}                              #
 BOOTSTRAP_FULL_NAME=${BOOTSTRAP_FULL_NAME:-Arch Linux}       #
-LK_IPV4_ADDRESS=${LK_IPV4_ADDRESS:-}                         #
-LK_IPV4_GATEWAY=${LK_IPV4_GATEWAY:-}                         #
-LK_IPV4_DNS_SERVER=${LK_IPV4_DNS_SERVER:-}                   #
-LK_IPV4_DNS_SEARCH=${LK_IPV4_DNS_SEARCH:-}                   #
-LK_BRIDGE_INTERFACE=${LK_BRIDGE_INTERFACE:-}                 #
+LK_IPV4_ADDRESS=${LK_IPV4_ADDRESS-}                          #
+LK_IPV4_GATEWAY=${LK_IPV4_GATEWAY-}                          #
+LK_IPV4_DNS_SERVER=${LK_IPV4_DNS_SERVER-}                    #
+LK_IPV4_DNS_SEARCH=${LK_IPV4_DNS_SEARCH-}                    #
+LK_BRIDGE_INTERFACE=${LK_BRIDGE_INTERFACE-}                  #
 LK_NODE_TIMEZONE=${LK_NODE_TIMEZONE:-UTC}                    # See `timedatectl list-timezones`
-LK_NODE_SERVICES=${LK_NODE_SERVICES:-}                       #
+LK_NODE_SERVICES=${LK_NODE_SERVICES-}                        #
 LK_NODE_LOCALES=${LK_NODE_LOCALES-en_AU.UTF-8 en_GB.UTF-8}   # "en_US.UTF-8" is added automatically
 LK_NODE_LANGUAGE=${LK_NODE_LANGUAGE-en_AU:en_GB:en}          #
-LK_SAMBA_WORKGROUP=${LK_SAMBA_WORKGROUP:-}                   #
+LK_SAMBA_WORKGROUP=${LK_SAMBA_WORKGROUP-}                    #
 LK_GRUB_CMDLINE=${LK_GRUB_CMDLINE-$DEFAULT_CMDLINE}          #
 LK_NTP_SERVER=${LK_NTP_SERVER-time.apple.com}                #
-LK_ARCH_MIRROR=${LK_ARCH_MIRROR:-}                           #
-LK_ARCH_REPOS=${LK_ARCH_REPOS:-}                             # REPO|SERVER|KEY_URL|KEY_ID|SIG_LEVEL,...
+LK_ARCH_MIRROR=${LK_ARCH_MIRROR-}                            #
+LK_ARCH_REPOS=${LK_ARCH_REPOS-}                              # REPO|SERVER|KEY_URL|KEY_ID|SIG_LEVEL,...
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
-LK_PACKAGES_FILE=${LK_PACKAGES_FILE:-}
+LK_PACKAGES_FILE=${LK_PACKAGES_FILE-}
 export LK_BASE=${LK_BASE:-/opt/lk-platform}
 export -n BOOTSTRAP_PASSWORD BOOTSTRAP_KEY
 
@@ -217,15 +214,16 @@ fi
 lk_console_blank
 
 function exit_trap() {
+    if [ "$BASH_SUBSHELL" -gt 0 ]; then
+        return
+    fi
     [ ! -d /mnt/boot ] || {
         set +x
         unset BASH_XTRACEFD
-        exec >&"$TTY_OUT_FD" 2>&"$TTY_ERR_FD" &&
-            eval "exec$(printf ' %s>&-' 4 \
-                "$TTY_OUT_FD" "$TTY_ERR_FD" \
-                "$LOG_OUT_FD" "$LOG_ERR_FD" "$LOG_FD")"
+        exec 4>-
+        lk_log_close || true
         local LOG FILE
-        for LOG in "$LOG_FILE" "$OUT_FILE" "$TRACE_FILE"; do
+        for LOG in "$LOG_FILE".{log,out,trace}; do
             FILE=/var/log/${LK_PATH_PREFIX}${LOG##*/}
             in_target install -m 00640 -g adm /dev/null "$FILE" &&
                 cp -v --preserve=timestamps "$LOG" "/mnt/${FILE#/}" || break
@@ -237,49 +235,18 @@ function exit_trap() {
             "$BOOTSTRAP_PASSWORD"
 }
 
-function tty_off() {
-    exec > >(tee "/dev/fd/$LOG_FD" >&"$LOG_OUT_FD")
-    exec 2> >(tee "/dev/fd/$LOG_FD" >&"$LOG_ERR_FD")
-}
-
-function tty_on() {
-    exec > >(tee >(tee "/dev/fd/$LOG_FD" >&"$LOG_OUT_FD") >&"$TTY_OUT_FD")
-    exec 2> >(tee >(tee "/dev/fd/$LOG_FD" >&"$LOG_ERR_FD") >&"$TTY_ERR_FD")
-}
-
-function bypass_log() {
-    "$@" \
-        > >(tee "/dev/fd/$TTY_OUT_FD" >&"$LOG_OUT_FD") \
-        2> >(tee >(tee "/dev/fd/$LOG_FD" >&"$LOG_ERR_FD") >&"$TTY_ERR_FD")
-}
-
 function in_target() {
     [ -d /mnt/boot ] || lk_die "no target mounted"
-    [ "${1:-}" != -u ] || set -- runuser "${@:1:2}" -- "${@:3}"
-    arch-chroot /mnt "$@"
+    if [ "${1-}" != -u ]; then
+        arch-chroot /mnt "$@"
+    else
+        (unset _LK_{{TTY,LOG}_{OUT,ERR},LOG}_FD _LK_LOG2_FD &&
+            arch-chroot /mnt runuser "${@:1:2}" -- "${@:3}")
+    fi
 }
 
-FIFO_FILE=$(lk_mktemp_dir)/fifo
-mkfifo "$FIFO_FILE"
-lk_strip_non_printing <"$FIFO_FILE" >"$OUT_FILE" &
-lk_delete_on_exit "${FIFO_FILE%/*}"
-
-TTY_OUT_FD=$(lk_fd_next)
-eval "exec $TTY_OUT_FD>&1"
-TTY_ERR_FD=$(lk_fd_next)
-eval "exec $TTY_ERR_FD>&2"
-LOG_OUT_FD=$(lk_fd_next)
-eval "exec $LOG_OUT_FD> >(lk_log \"..\" >\"\$FIFO_FILE\")"
-LOG_ERR_FD=$(lk_fd_next)
-eval "exec $LOG_ERR_FD> >(lk_log \"!!\" >\"\$FIFO_FILE\")"
-LOG_FD=$(lk_fd_next)
-eval "exec $LOG_FD> >(lk_log >\"\$LOG_FILE\")"
-exec 3> >(tee >(tee "/dev/fd/$LOG_FD" >&"$LOG_OUT_FD") >&"$TTY_OUT_FD")
-export _LK_FD=3 \
-    _LK_TTY_OUT_FD=$TTY_OUT_FD _LK_TTY_ERR_FD=$TTY_ERR_FD \
-    _LK_LOG_OUT_FD=$LOG_OUT_FD _LK_LOG_ERR_FD=$LOG_ERR_FD _LK_LOG_FD=$LOG_FD
-tty_off
-
+lk_log_start "$LOG_FILE"
+lk_log_tty_off
 lk_trap_add EXIT exit_trap
 
 lk_console_log "Setting up live environment"
@@ -309,7 +276,7 @@ if [ -n "$LK_NTP_SERVER" ]; then
     lk_console_item "Synchronising system time with" "$LK_NTP_SERVER"
     if ! lk_command_exists ntpd; then
         lk_console_detail "Installing ntp"
-        bypass_log lk_tty pacman -Sy --noconfirm ntp ||
+        lk_log_bypass -o lk_tty pacman -Sy --noconfirm ntp ||
             lk_die "unable to install ntp"
     fi
     lk_run_detail ntpd -qgx "$LK_NTP_SERVER" ||
@@ -375,11 +342,11 @@ if lk_is_virtual; then
     ! lk_block_device_is_ssd "$BOOT_PART" || BOOT_EXTRA=,discard
 fi
 lk_run_detail mount \
-    -o "$BOOTSTRAP_MOUNT_OPTIONS${ROOT_EXTRA:-}" \
+    -o "$BOOTSTRAP_MOUNT_OPTIONS${ROOT_EXTRA-}" \
     "$ROOT_PART" /mnt
 install -d -m 00755 /mnt/boot
 lk_run_detail mount \
-    -o "$BOOTSTRAP_MOUNT_OPTIONS${BOOT_EXTRA:-}" \
+    -o "$BOOTSTRAP_MOUNT_OPTIONS${BOOT_EXTRA-}" \
     "$BOOT_PART" /mnt/boot
 
 if ! lk_is_true FORMAT_BOOT; then
@@ -389,7 +356,7 @@ fi
 
 lk_console_blank
 lk_console_log "Installing system"
-bypass_log lk_tty pacstrap /mnt "${PAC_PACKAGES[@]}"
+lk_log_bypass -o lk_tty pacstrap /mnt "${PAC_PACKAGES[@]}"
 
 lk_console_blank
 lk_console_log "Setting up installed system"
@@ -446,8 +413,10 @@ in_target install -d -m 02775 -o "$BOOTSTRAP_USERNAME" -g adm "$LK_BASE"
     in_target -u "$BOOTSTRAP_USERNAME" \
         git clone -b "$LK_PLATFORM_BRANCH" \
         https://github.com/lkrms/lk-platform.git "$LK_BASE")
+in_target install -d -m 02775 -g adm "$LK_BASE"/{etc{,/lk-platform},var}
+in_target install -d -m 00777 -g adm "$LK_BASE"/var/log
+in_target install -d -m 00750 -g adm "$LK_BASE"/var/backup
 FILE=$LK_BASE/etc/lk-platform/lk-platform.conf
-in_target install -d -m 00775 -g adm "${FILE%/*}"
 in_target install -m 00664 -g adm /dev/null "$FILE"
 lk_get_shell_var \
     LK_BASE \

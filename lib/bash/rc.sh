@@ -73,7 +73,7 @@ function lk_bak_diff() {
             }
             declare -f bak_diff
             lk_quote_args \
-                _LK_DIFF_REGEX=${_LK_DIFF_REGEX:-} \
+                _LK_DIFF_REGEX=${_LK_DIFF_REGEX-} \
                 bak_diff \
                 "$LK_BASE/lib/bash/rc.sh" \
                 "$@"
@@ -106,7 +106,7 @@ function lk_orig_diff() {
 
 function lk_find_latest() {
     local i TYPE=f TYPE_ARGS=()
-    [[ ! ${1:-} =~ ^[bcdflps]+$ ]] || { TYPE=$1 && shift; }
+    [[ ! ${1-} =~ ^[bcdflps]+$ ]] || { TYPE=$1 && shift; }
     for i in $(seq 0 $((${#TYPE} - 1))); do
         TYPE_ARGS+=(${TYPE_ARGS[@]+-o} -type "${TYPE:$i:1}")
     done
@@ -134,7 +134,7 @@ function latest_all_dir() {
 }
 
 function find_all() {
-    [ -n "${1:-}" ] || lk_warn "no search term" || return
+    [ -n "${1-}" ] || lk_warn "no search term" || return
     gnu_find -L . -xdev -iname "*$1*" "${@:2}"
 }
 

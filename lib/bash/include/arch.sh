@@ -3,11 +3,11 @@
 lk_include linux
 
 function lk_arch_chroot() {
-    [ "${1:-}" != -u ] || {
+    [ "${1-}" != -u ] || {
         [ $# -ge 3 ] || lk_warn "invalid arguments" || return
         set -- runuser "${@:1:2}" -- "${@:3}"
     }
-    if [ -n "${_LK_ARCH_ROOT:-}" ]; then
+    if [ -n "${_LK_ARCH_ROOT-}" ]; then
         lk_elevate arch-chroot "$_LK_ARCH_ROOT" "$@"
     else
         lk_elevate "$@"
@@ -15,7 +15,7 @@ function lk_arch_chroot() {
 }
 
 function lk_arch_path() {
-    [[ ${1:-} == /* ]] || lk_warn "path not absolute: ${1:-}" || return
+    [[ ${1-} == /* ]] || lk_warn "path not absolute: ${1-}" || return
     echo "${_LK_ARCH_ROOT:+${_LK_ARCH_ROOT%/}}$1"
 }
 
@@ -70,9 +70,9 @@ function lk_arch_add_repo() {
         ! pacman-conf --config "$FILE" --repo-list |
             grep -Fx "$REPO" >/dev/null || continue
         SERVER=${r[1]}
-        KEY_URL=${r[2]:-}
-        KEY_ID=${r[3]:-}
-        SIG_LEVEL=${r[4]:-}
+        KEY_URL=${r[2]-}
+        KEY_ID=${r[3]-}
+        SIG_LEVEL=${r[4]-}
         lk_console_detail "Adding '$REPO':" "$SERVER"
         if [ -n "$KEY_URL" ]; then
             lk_arch_chroot bash -c "$SH" bash "$KEY_URL"
@@ -114,7 +114,7 @@ lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
 
 [ "$EUID" -eq 0 ] || lk_die "not running as root"
 
-[[ ! ${1:-} =~ ^(-i|--install)$ ]] ||
+[[ ! ${1-} =~ ^(-i|--install)$ ]] ||
     grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
 grub-mkconfig -o /boot/grub/grub.cfg
 EOF
@@ -134,8 +134,8 @@ function lk_pac_official_repo_list() {
 # Return true if each PACKAGE is installed.
 function lk_pac_installed() {
     local E='' D=''
-    [ "${1:-}" != -e ] || E=-e
-    [ "${1:-}" != -d ] || D=-d
+    [ "${1-}" != -e ] || E=-e
+    [ "${1-}" != -d ] || D=-d
     [ -z "$E$D" ] || shift
     [ $# -gt 0 ] || lk_warn "no package" || return
     pacman -Qq $E $D "$@" &>/dev/null
@@ -146,8 +146,8 @@ function lk_pac_installed() {
 # Output each currently installed PACKAGE, or list all installed packages.
 function lk_pac_installed_list() {
     local E='' D=''
-    [ "${1:-}" != -e ] || E=-e
-    [ "${1:-}" != -d ] || D=-d
+    [ "${1-}" != -e ] || E=-e
+    [ "${1-}" != -d ] || D=-d
     [ -z "$E$D" ] || shift
     [ $# -eq 0 ] || {
         comm -12 \
@@ -163,8 +163,8 @@ function lk_pac_installed_list() {
 # Output each PACKAGE that isn't currently installed.
 function lk_pac_not_installed_list() {
     local E='' D=''
-    [ "${1:-}" != -e ] || E=-e
-    [ "${1:-}" != -d ] || D=-d
+    [ "${1-}" != -e ] || E=-e
+    [ "${1-}" != -d ] || D=-d
     [ -z "$E$D" ] || shift
     [ $# -gt 0 ] || lk_warn "no package" || return
     comm -13 \
@@ -174,7 +174,7 @@ function lk_pac_not_installed_list() {
 
 function lk_pac_sync() {
     ! lk_is_root && ! lk_can_sudo pacman ||
-        { lk_is_false LK_PACMAN_SYNC && [ "${1:-}" != -f ]; } ||
+        { lk_is_false LK_PACMAN_SYNC && [ "${1-}" != -f ]; } ||
         { lk_console_message "Refreshing package databases" &&
             lk_elevate pacman -Sy >/dev/null &&
             LK_PACMAN_SYNC=0; }
@@ -197,7 +197,7 @@ function lk_pac_repo_available_list() {
 # only output packages from official repositories.
 function lk_pac_available_list() {
     local OFFICIAL=
-    [ "${1:-}" != -o ] || { OFFICIAL=1 && shift; }
+    [ "${1-}" != -o ] || { OFFICIAL=1 && shift; }
     lk_pac_sync || return
     if [ $# -gt 0 ]; then
         comm -12 \
@@ -213,7 +213,7 @@ function lk_pac_available_list() {
 # lk_pac_unavailable_list [-o] PACKAGE...
 function lk_pac_unavailable_list() {
     local OFFICIAL=
-    [ "${1:-}" != -o ] || { OFFICIAL=1 && shift; }
+    [ "${1-}" != -o ] || { OFFICIAL=1 && shift; }
     [ $# -gt 0 ] || lk_warn "no package" || return
     lk_pac_sync || return
     comm -23 \
@@ -246,11 +246,11 @@ function lk_makepkg_setup() {
 
 # lk_makepkg [-a AUR_PACKAGE] [MAKEPKG_ARG...]
 function lk_makepkg() {
-    local AUR_PACKAGE AUR_URL BUILD_DIR SH LIST
-    [ "${1:-}" != -a ] || { AUR_PACKAGE=$2 && shift 2; }
+    local LK_SUDO=0 AUR_PACKAGE AUR_URL BUILD_DIR SH LIST
+    [ "${1-}" != -a ] || { AUR_PACKAGE=$2 && shift 2; }
     lk_makepkg_setup
     LK_MAKEPKG_LIST=()
-    if [ -n "${AUR_PACKAGE:-}" ]; then
+    if [ -n "${AUR_PACKAGE-}" ]; then
         AUR_URL=https://aur.archlinux.org/$AUR_PACKAGE.git
         BUILD_DIR=$(lk_mktemp_dir) &&
             lk_delete_on_exit "$BUILD_DIR" &&

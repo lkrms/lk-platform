@@ -33,7 +33,7 @@ function lk_openconnect() {
 
 function lk_mediainfo_check() {
     local FILE VALUE COUNT \
-        LK_MEDIAINFO_LABEL=${LK_MEDIAINFO_LABEL:-} \
+        LK_MEDIAINFO_LABEL=${LK_MEDIAINFO_LABEL-} \
         LK_MEDIAINFO_NO_VALUE=${LK_MEDIAINFO_NO_VALUE-<no content type>}
     LK_MEDIAINFO_FILES=()
     LK_MEDIAINFO_VALUES=()
@@ -101,7 +101,7 @@ function lk_vscode_state_set_item() {
 
 function lk_vscode_extension_disable() {
     local KEY=extensionsIdentifiers/disabled JSON DISABLED
-    [ -n "${1:-}" ] || lk_warn "no extension" || return
+    [ -n "${1-}" ] || lk_warn "no extension" || return
     JSON=$(lk_vscode_state_get_item "$KEY") &&
         JSON=${JSON:-"[]"} &&
         DISABLED=$(jq --arg id "$1" \

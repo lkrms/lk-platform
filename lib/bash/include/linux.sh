@@ -210,7 +210,7 @@ function lk_systemctl_mask() {
 }
 
 function _lk_lsblk() {
-    if [ "${1:-}" = -q ]; then
+    if [ "${1-}" = -q ]; then
         local SH
         shift
         SH=$(lsblk --pairs --output "$@" |
@@ -257,9 +257,9 @@ function lk_system_list_physical_links() {
     unset WIFI ETH UP
     WIFI_ARGS=(-execdir test -d "{}/wireless" -o -L "{}/phy80211" \;)
     UP_ARGS=(-execdir grep -Fxq 1 "{}/carrier" \;)
-    [ "${1:-}" != -w ] || { WIFI= && shift; }
-    [ "${1:-}" != -e ] || { WIFI= && ETH= && shift; }
-    [ "${1:-}" != -u ] || { UP= && shift; }
+    [ "${1-}" != -w ] || { WIFI= && shift; }
+    [ "${1-}" != -e ] || { WIFI= && ETH= && shift; }
+    [ "${1-}" != -u ] || { UP= && shift; }
     find /sys/class/net \
         -type l \
         ! -lname '*virtual*' \
@@ -289,7 +289,7 @@ function lk_system_sort_links() {
             printf '%s\t%s\t%s\n' \
                 "$IF" \
                 "${SORT:-2}" \
-                "${UDEV_ID_NET_NAME_ONBOARD:-}"
+                "${UDEV_ID_NET_NAME_ONBOARD-}"
         )
     done | sort -V -k2 -k3 -k1 | cut -f1
 }
@@ -352,10 +352,10 @@ function lk_nm_device_connection_uuid() {
 # Output NetworkManager [ipv4] and [ipv6] keyfile sections for the given
 # configuration. All arguments are optional.
 function lk_nm_file_get_ipv4_ipv6() {
-    local ADDRESS=${1:-} GATEWAY=${2:-} DNS DNS_SEARCH MANUAL IFS=$'; \t\n'
+    local ADDRESS=${1-} GATEWAY=${2-} DNS DNS_SEARCH MANUAL IFS=$'; \t\n'
     unset MANUAL
-    DNS=(${3:-})
-    DNS_SEARCH=(${4:-})
+    DNS=(${3-})
+    DNS_SEARCH=(${4-})
     [ -z "$ADDRESS" ] || MANUAL=
     cat <<EOF
 
@@ -375,7 +375,7 @@ EOF
 
 # lk_nm_file_get_ethernet DEV MAC [BRIDGE_DEV [IPV4_ARG...]]
 function lk_nm_file_get_ethernet() {
-    local NAME=$1 MAC=$2 MASTER=${3:-} UUID
+    local NAME=$1 MAC=$2 MASTER=${3-} UUID
     # Maintain UUID if possible
     UUID=$(lk_nm_connection_uuid "$NAME" 2>/dev/null) ||
         UUID=${UUID:-$(uuidgen)} || return
@@ -420,7 +420,7 @@ EOF
 # Print L (locked password), NP (has no password) or P (has a usable password)
 # for the given user.
 function lk_user_passwd_status() {
-    [ -n "${1:-}" ] || lk_warn "no user" || return
+    [ -n "${1-}" ] || lk_warn "no user" || return
     lk_user_exists "$1" || lk_warn "user not found: $1" || return
     lk_elevate passwd -S "$1" | awk '{print$2}'
 }
@@ -550,7 +550,7 @@ function lk_x_dpi() {
 
 function lk_fc_charset() {
     local MATCH FAMILY SH
-    [ -n "${1:-}" ] || lk_warn "no pattern" || return
+    [ -n "${1-}" ] || lk_warn "no pattern" || return
     MATCH=$(fc-match "$1" family charset) && [ -n "$MATCH" ] &&
         FAMILY=$(cut -d: -f1 <<<"$MATCH") ||
         lk_warn "match not found" || return

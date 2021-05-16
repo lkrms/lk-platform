@@ -8,7 +8,7 @@ if [ -f "$AUTORANDR_PROFILE_FOLDER/dpi" ] &&
 
     xrandr --dpi "$DPI"
 
-    case "${XDG_CURRENT_DESKTOP:-}" in
+    case "${XDG_CURRENT_DESKTOP-}" in
     XFCE)
         "$LK_BASE/bin/lk-xfce4-apply-dpi.sh" "$DPI"
         ;;&

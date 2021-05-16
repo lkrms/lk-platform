@@ -1,20 +1,32 @@
 #!/bin/bash
 
 ! lk_is_apple_silicon || {
+    function _lk_macos_env() {
+        local _LK_VAR _LK_VARS=(PATH) _LK_VAL
+        for _LK_VAR in "${_LK_VARS[@]}"; do
+            [ -n "${!_LK_VAR-}" ] || continue
+            _LK_VAL=$(lk_path_edit "$1" "${2-}" "${!_LK_VAR}") || return
+            printf 'local %s\n' "$_LK_VAR"
+            printf 'export %s=%q\n' "$_LK_VAR" "$_LK_VAL"
+        done
+    }
     function lk_macos_x86_64() {
-        local _PATH
-        _PATH=$(lk_path_edit "" "^/opt/homebrew(/|\$)") &&
-            PATH=$_PATH arch --x86_64 "$@"
+        local SH
+        SH=$(_lk_macos_env "" "^/opt/homebrew(/|\$)") &&
+            eval "$SH" &&
+            arch --x86_64 "$@"
     }
     function brew() {
-        local _PATH
-        _PATH=$(lk_path_edit "^/usr/local(/|\$)") &&
-            PATH=$_PATH /opt/homebrew/bin/brew "$@"
+        local SH
+        SH=$(_lk_macos_env "^/usr/local(/|\$)") &&
+            eval "$SH" &&
+            /opt/homebrew/bin/brew "$@"
     }
     function ibrew() {
-        local _PATH
-        _PATH=$(lk_path_edit "^/opt/homebrew(/|\$)") &&
-            PATH=$_PATH arch --x86_64 /usr/local/bin/brew "$@"
+        local SH
+        SH=$(_lk_macos_env "^/opt/homebrew(/|\$)") &&
+            eval "$SH" &&
+            arch --x86_64 /usr/local/bin/brew "$@"
     }
     function ibash() { lk_macos_x86_64 bash "$@"; }
 }
@@ -117,7 +129,7 @@ function lk_macos_xcode_maybe_accept_license() {
 # - $ = Shift
 # - @ = Command
 function lk_macos_kb_add_shortcut() {
-    local PLIST=${1:-}
+    local PLIST=${1-}
     [ $# -eq 3 ] || return
     [ "$1" != NSGlobalDomain ] || PLIST=.GlobalPreferences
     defaults write "$1" \
@@ -128,7 +140,7 @@ function lk_macos_kb_add_shortcut() {
 
 # lk_macos_kb_reset_shortcuts DOMAIN
 function lk_macos_kb_reset_shortcuts() {
-    local PLIST=${1:-}
+    local PLIST=${1-}
     [ $# -eq 1 ] || return
     [ "$1" != NSGlobalDomain ] || PLIST=.GlobalPreferences
     defaults delete "$1" \
@@ -211,7 +223,7 @@ function lk_macos_maybe_install_pkg_url() {
 # lk_macos_sshd_set_port SERVICE_NAME
 function lk_macos_sshd_set_port() {
     local PORT FILE=/System/Library/LaunchDaemons/ssh.plist
-    [ -n "${1:-}" ] || lk_usage "Usage: $(lk_myself -f) SERVICE_NAME" || return
+    [ -n "${1-}" ] || lk_usage "Usage: $(lk_myself -f) SERVICE_NAME" || return
     [ -f "$FILE" ] || lk_warn "file not found: $FILE" || return
     lk_plist_set_file "$FILE"
     PORT=$(lk_plist_get ":Sockets:Listeners:SockServiceName" 2>/dev/null) &&
@@ -244,7 +256,7 @@ function lk_macos_defaults_maybe_write() {
 # lk_macos_defaults_dump
 function lk_macos_defaults_dump() {
     local IFS=', ' DIR HOST DOMAINS DOMAIN FILE
-    if [ -n "${LK_DEFAULTS_DIR:-}" ]; then
+    if [ -n "${LK_DEFAULTS_DIR-}" ]; then
         DIR=${LK_DEFAULTS_DIR%/}
     else
         DIR=~/.${LK_PATH_PREFIX:-lk-}defaults/$(lk_date_ymdhms)
@@ -263,7 +275,7 @@ function lk_macos_defaults_dump() {
                 rm -f "$FILE"
         done
     done
-    [ -z "${_LK_MACOS_DEFAULTS_DUMP_SUDO:-}" ] ||
+    [ -z "${_LK_MACOS_DEFAULTS_DUMP_SUDO-}" ] ||
         return 0
     lk_is_root || ! lk_can_sudo defaults || {
         local _LK_MACOS_DEFAULTS_DUMP_SUDO=1
@@ -284,7 +296,7 @@ function PlistBuddy() {
 }
 
 function _lk_plist_buddy() {
-    [ -n "${_LK_PLIST:-}" ] ||
+    [ -n "${_LK_PLIST-}" ] ||
         lk_warn "lk_plist_set_file must be called before $(lk_myself -f 1)" ||
         return
     PlistBuddy -c "$1" "$_LK_PLIST" || return

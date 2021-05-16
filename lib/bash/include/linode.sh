@@ -70,9 +70,9 @@ function lk_linode_ssh_add() {
     for LINODE in "${LINODES[@]}"; do
         SH=$(lk_linode_get_shell_var <<<"$LINODE") &&
             eval "$SH"
-        eval "LABEL=${1:-}"
+        eval "LABEL=${1-}"
         LABEL=${LABEL:-${LINODE_LABEL%%.*}}
-        eval "USERNAME=${2:-}"
+        eval "USERNAME=${2-}"
         _LK_TTY_NO_FOLD=1 \
             lk_console_detail "Adding SSH host:" \
             $'\n'"${LK_SSH_PREFIX-$LK_PATH_PREFIX}$LABEL ($(lk_implode_args \
@@ -145,7 +145,7 @@ function lk_linode_hosting_ssh_add_all() {
 
 # lk_linode_domain [DOMAIN_ID|DOMAIN_NAME [LINODE_ARG...]]
 function lk_linode_domain() {
-    [ -n "${1:-}" ] ||
+    [ -n "${1-}" ] ||
         lk_linode_domain_singleton "${@:2}" ||
         lk_warn "no domain" || return
     lk_linode_domains "${@:2}" | jq -er --arg d "$1" \
@@ -186,13 +186,13 @@ function lk_linode_dns_check() {
         RECORDS REVERSE _RECORDS _REVERSE \
         NAME TYPE TARGET JSON RECORD_ID ADDRESS RDNS \
         NEW_RECORD_COUNT=0 NEW_REVERSE_RECORD_COUNT=0
-    [ "${1:-}" != -t ] || { USE_TAGS=1 && shift; }
+    [ "${1-}" != -t ] || { USE_TAGS=1 && shift; }
     LINODES=${1:-$(lk_linode_linodes "${@:3}")} &&
         LINODE_COUNT=$(jq length <<<"$LINODES") ||
         return
     [ "$LINODE_COUNT" -gt 0 ] || lk_warn "no linode objects" || return
     eval "$(lk_get_regex DOMAIN_PART_REGEX IPV4_PRIVATE_FILTER_REGEX)"
-    [ -z "${USE_TAGS:-}" ] || TAGS=$(lk_linode_linodes "${@:3}" | lk_jq \
+    [ -z "${USE_TAGS-}" ] || TAGS=$(lk_linode_linodes "${@:3}" | lk_jq \
         --arg p "^(?<part>$DOMAIN_PART_REGEX).*" \
         '[.[].tags[]|select(test($p))|sub($p;"\(.part)")]|counts|[.[]|select(.[1]==1)|.[0]]') ||
         return
@@ -258,7 +258,7 @@ function lk_linode_dns_check() {
 # lk_linode_dns_check_all [-t] [DOMAIN_ID [LINODE_ARG...]]
 function lk_linode_dns_check_all() {
     local USE_TAGS LINODES LABELS
-    [ "${1:-}" != -t ] || { USE_TAGS=1 && shift; }
+    [ "${1-}" != -t ] || { USE_TAGS=1 && shift; }
     LINODES=$(lk_linode_linodes "${@:2}") || return
     lk_jq_get_array LABELS '.[]|"\(.label) (\(.tags|join(", ")))"' <<<"$LINODES"
     [ ${#LABELS[@]} -gt 0 ] || lk_warn "no Linodes found" || return
@@ -321,7 +321,7 @@ function lk_linode_provision_hosting() {
     local IFS=$'\n' REBUILD NODE_FQDN NODE_HOSTNAME HOST_DOMAIN HOST_ACCOUNT \
         ROOT_PASS AUTHORIZED_KEYS STACKSCRIPT STACKSCRIPT_DATA \
         ARGS VERBS KEY FILE LINODES EXIT_STATUS LINODE SH
-    [ "${1:-}" != -r ] || { REBUILD=$2 && shift 2; }
+    [ "${1-}" != -r ] || { REBUILD=$2 && shift 2; }
     [ $# -ge 2 ] || lk_usage "\
 Usage: $(lk_myself -f) [-r LINODE_ID] FQDN DOMAIN [ACCOUNT [DATA_JSON [LINODE_ARG...]]]
 
@@ -346,7 +346,7 @@ Example:
         lk_warn "invalid username: $HOST_ACCOUNT" || return
     AUTHORIZED_KEYS=(
         ${LK_LINODE_SSH_KEYS[@]+"${LK_LINODE_SSH_KEYS[@]}"}
-        $([ ! -f "${LK_LINODE_SSH_KEYS_FILE:-}" ] ||
+        $([ ! -f "${LK_LINODE_SSH_KEYS_FILE-}" ] ||
             cat "$LK_LINODE_SSH_KEYS_FILE")
     )
     [ ${#AUTHORIZED_KEYS[@]} -gt 0 ] ||
@@ -359,7 +359,7 @@ Example:
         lk_warn "hosting.sh StackScript not found" || return
     ARGS=(linodes create)
     VERBS=(Creating created)
-    [ -z "${REBUILD:-}" ] || {
+    [ -z "${REBUILD-}" ] || {
         ARGS=(linodes rebuild)
         VERBS=(Rebuilding rebuilt)
         lk_linode_flush_cache
@@ -402,7 +402,7 @@ Example:
         --stackscript_id "$STACKSCRIPT"
         --stackscript_data "$STACKSCRIPT_DATA"
     )
-    [ -n "${REBUILD:-}" ] || ARGS+=(
+    [ -n "${REBUILD-}" ] || ARGS+=(
         --label "$NODE_HOSTNAME"
         --tags "${HOST_ACCOUNT:-$NODE_HOSTNAME}"
         --private_ip true
@@ -448,7 +448,7 @@ Example:
 
 # lk_linode_hosting_get_meta DIR HOST...
 function lk_linode_hosting_get_meta() {
-    local DIR=${1:-} _DIR HOST SSH_HOST FILE COMMIT LOG_FILE \
+    local DIR=${1-} _DIR HOST SSH_HOST FILE COMMIT LOG_FILE \
         FILES _FILES _FILE PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX} s=/
     [ $# -ge 2 ] || lk_usage "\
 Usage: $(lk_myself -f) DIR HOST..." || return
