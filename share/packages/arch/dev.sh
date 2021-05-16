@@ -247,6 +247,7 @@ PAC_PACKAGES+=(
     dbeaver-plugin-sshj
     eslint
     geckodriver
+    prettier
     python-pylint
     qcachegrind
     tidy
@@ -331,6 +332,7 @@ AUR_PACKAGES+=(
     nodejs-less
     nvm
     phpdoc-phar
+    prettier-plugin-php
     robo3t-bin
     ruby-rubocop
     ruby-rubocop-performance
