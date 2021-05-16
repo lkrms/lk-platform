@@ -585,6 +585,7 @@ $LK_NODE_HOSTNAME" &&
         FILE=~/.gnupg/gpg.conf
         lk_install -d -m 00700 "${FILE%/*}"
         lk_install -m 00644 "$FILE"
+        LK_FILE_KEEP_ORIGINAL=0
         if ! grep -q "\<auto-key-retrieve\>" "$FILE"; then
             lk_console_detail \
                 "Enabling in $(lk_pretty_path $FILE):" "auto-key-retrieve"
@@ -592,6 +593,7 @@ $LK_NODE_HOSTNAME" &&
         fi
         _LK_CONF_DELIM=" " \
             lk_conf_set_option keyserver hkps://keyserver.ubuntu.com "$FILE"
+        unset LK_FILE_KEEP_ORIGINAL
         LK_SUDO=1
 
         if [ ${#AUR_PACKAGES[@]} -gt 0 ]; then

@@ -3088,6 +3088,7 @@ function lk_file_get_text() {
 
 # lk_file_keep_original FILE
 function lk_file_keep_original() {
+    [ "${LK_FILE_KEEP_ORIGINAL:-1}" -eq 1 ] || return 0
     local v=
     ! lk_verbose || v=v
     while [ $# -gt 0 ]; do
