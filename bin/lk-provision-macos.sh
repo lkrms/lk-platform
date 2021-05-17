@@ -803,15 +803,26 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
     }
 
     lk_remove_missing LOGIN_ITEMS
-    lk_mapfile ADD_LOGIN_ITEMS <(comm -13 \
-        <("$LK_BASE/lib/macos/login-items-list.js" | tail -n+2 |
-            cut -f2 | sort -u) \
-        <(lk_echo_array LOGIN_ITEMS | sort -u))
-    [ ${#ADD_LOGIN_ITEMS[@]} -eq 0 ] || {
-        lk_echo_array ADD_LOGIN_ITEMS |
-            lk_console_list "Adding to Login Items:" app apps
-        "$LK_BASE/lib/macos/login-items-add.js" "${ADD_LOGIN_ITEMS[@]}"
-    }
+    if [ ${#LOGIN_ITEMS[@]} -gt 0 ]; then
+        lk_console_message "Checking Login Items for user '$USER'"
+        lk_mapfile LOGIN_ITEMS <(comm -13 \
+            <("$LK_BASE/lib/macos/login-items-list.js" | tail -n+2 |
+                cut -f2 | sort -u) \
+            <(lk_echo_array LOGIN_ITEMS | sort -u))
+        [ ${#LOGIN_ITEMS[@]} -eq 0 ] || {
+            ! { lk_whiptail_build_list \
+                LOGIN_ITEMS 's/^.*\///;s/\.app$//' "${LOGIN_ITEMS[@]}" &&
+                LOGIN_ITEMS=($(lk_whiptail_checklist \
+                    "Adding Login Items for user '$USER'" \
+                    "Selected items will open automatically when you log in:" \
+                    "${LOGIN_ITEMS[@]}")); } ||
+                [ ${#LOGIN_ITEMS[@]} -eq 0 ] || {
+                lk_echo_array LOGIN_ITEMS |
+                    lk_console_list "Adding to Login Items:" app apps
+                "$LK_BASE/lib/macos/login-items-add.js" "${LOGIN_ITEMS[@]}"
+            }
+        }
+    fi
 
     lk_console_success "Provisioning complete"
 

@@ -8,6 +8,24 @@ function lk_whiptail() {
     lk_log_bypass_stderr _lk_whiptail "$@"
 }
 
+# lk_whiptail_build_list ARRAY SED_SCRIPT TAG...
+#
+# Populate ARRAY with TAG ITEM elements for each TAG, where ITEM is the output
+# of `sed -E "$SED_SCRIPT" <<<"$TAG"`.
+#
+# Example:
+#
+#     $ lk_whiptail_build_list APPS 's/^(.*\/)?(.*)\.app$/\2/' /Applications/*.app
+#     $ printf '%s\t%s\n' "${APPS[@]}"
+#     /Applications/Firefox.app	Firefox
+#     /Applications/Keynote.app	Keynote
+#     ...
+#     /Applications/iTerm.app	iTerm
+function lk_whiptail_build_list() {
+    [ $# -ge 2 ] || lk_warn "invalid arguments" || return
+    lk_mapfile "$1" <(lk_echo_args "${@:3}" | sed -E "p;$2")
+}
+
 # lk_whiptail_checklist TITLE TEXT TAG ITEM [TAG ITEM...] [STATUS]
 #
 # Display options in a checklist box and output the TAG of each ITEM selected by
