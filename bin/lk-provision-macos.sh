@@ -59,7 +59,7 @@ function exit_trap() {
             . /etc/default/lk-platform
         [ ! -f "$LK_BASE/etc/lk-platform/lk-platform.conf" ] ||
             . "$LK_BASE/etc/lk-platform/lk-platform.conf"
-        SETTINGS_SH=$(lk_settings_getopt)
+        SETTINGS_SH=$(lk_settings_getopt "$@")
         eval "$SETTINGS_SH"
         shift "$_LK_SHIFT"
 

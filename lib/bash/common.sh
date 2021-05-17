@@ -78,6 +78,8 @@ function _lk_getopt_maybe_add_long() {
 }
 
 function lk_getopt() {
+    local SHIFT=0
+    [[ ${1-} != -* ]] || { SHIFT=${1#-} && shift; }
     local SHORT=${1-} LONG=${2-} ARGC=$# _OPTS HAS_ARG OPT OPTS=()
     _lk_getopt_maybe_add_long help LK_USAGE
     _lk_getopt_maybe_add_long version LK_VERSION
@@ -87,7 +89,7 @@ function lk_getopt() {
     _OPTS=$(gnu_getopt --options "$SHORT" \
         --longoptions "$LONG" \
         --name "${0##*/}" \
-        -- ${_LK_ARGV[@]+"${_LK_ARGV[@]}"}) || lk_usage
+        -- ${_LK_ARGV[@]+"${_LK_ARGV[@]:SHIFT}"}) || lk_usage
     eval "set -- $_OPTS"
     while :; do
         case "$1" in
