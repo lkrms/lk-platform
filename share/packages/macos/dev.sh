@@ -9,6 +9,12 @@ HOMEBREW_KEEP_CASKS=()
 FORCE_IBREW=()
 LOGIN_ITEMS=()
 
+HOMEBREW_TAPS+=(
+    homebrew/cask-drivers
+    homebrew/cask-fonts
+    homebrew/services
+)
+
 # Terminal-based
 HOMEBREW_FORMULAE+=(
     # Utilities
@@ -27,6 +33,7 @@ HOMEBREW_FORMULAE+=(
 
     # System
     #acme.sh
+    nmap
 )
 
 # Desktop
@@ -56,6 +63,7 @@ HOMEBREW_CASKS+=(
     flycut
     icanhazshortcut
     imageoptim
+    iterm2
     keepassxc
     keepingyouawake
     libreoffice

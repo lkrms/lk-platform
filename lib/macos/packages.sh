@@ -1,10 +1,8 @@
 #!/bin/bash
 
 HOMEBREW_TAPS=(
+    homebrew/autoupdate
     homebrew/cask
-    homebrew/cask-drivers
-    homebrew/cask-fonts
-    homebrew/cask-versions
 
     #
     ${HOMEBREW_TAPS[@]+"${HOMEBREW_TAPS[@]}"}
@@ -24,30 +22,33 @@ HOMEBREW_FORMULAE=(
     gnu-tar
     wget
 
-    # Basics
+    #
     bash-completion
-    byobu
-    glances
-    htop
     icdiff
     jq
-    lftp
-    media-info
-    ncdu
     newt
-    nmap
-    p7zip
     pv
     python-yq
     rsync
-    watch
 
     #
     ${HOMEBREW_FORMULAE[@]+"${HOMEBREW_FORMULAE[@]}"}
 )
 
+# Basics
+HOMEBREW_FORMULAE+=(
+    byobu
+    glances
+    htop
+    lftp
+    media-info
+    ncdu
+    p7zip
+    watch
+)
+
 HOMEBREW_CASKS=(
-    iterm2
+    #iterm2
 
     #
     ${HOMEBREW_CASKS[@]+"${HOMEBREW_CASKS[@]}"}

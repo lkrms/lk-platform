@@ -146,11 +146,11 @@ if ! lk_is_bootstrap; then
         set -- --set LK_NODE_LANGUAGE "en_AU:en_GB:en" "$@"
 fi
 
-SETTINGS_SH=$(lk_settings_getopt)
+SETTINGS_SH=$(lk_settings_getopt "$@")
 eval "$SETTINGS_SH"
 shift "$_LK_SHIFT"
 
-lk_getopt
+lk_getopt -"$_LK_SHIFT"
 eval "set -- $LK_GETOPT"
 
 LK_PACKAGES_FILE=${1:-${LK_PACKAGES_FILE-}}
