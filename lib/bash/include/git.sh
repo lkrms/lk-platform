@@ -398,10 +398,11 @@ Usage: $(lk_myself -f) [-f] REMOTE [BRANCH]" || return
     _lk_git fetch --quiet --prune "$REMOTE" ||
         lk_warn "unable to fetch from remote: $REMOTE" ||
         return
-    BRANCH=${2:-$(lk_git_remote_head "$REMOTE")} ||
+    _BRANCH=$(lk_git_branch_current) || _BRANCH=
+    { BRANCH=${2:-$_BRANCH} && [ -n "$BRANCH" ]; } ||
+        BRANCH=$(lk_git_remote_head "$REMOTE")} ||
         lk_warn "no default branch for remote: $REMOTE" || return
     UPSTREAM=$REMOTE/$BRANCH
-    _BRANCH=$(lk_git_branch_current) || _BRANCH=
     unset LK_GIT_REPO_UPDATED
     if lk_git_branch_list_local |
         grep -Fx "$BRANCH" >/dev/null; then
