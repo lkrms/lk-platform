@@ -168,7 +168,8 @@ function lk_mail_attach() {
     local FILE_NAME MIME_TYPE
     [ -f "$1" ] || return
     FILE_NAME=${2:-${1##*/}}
-    MIME_TYPE=${3:-$(file -bi "$(lk_realpath "$1")" | cut -d';' -f1)} ||
+    MIME_TYPE=${3:-$(file -bi "$(lk_realpath "$1")" | cut -d';' -f1 &&
+        (exit "${PIPESTATUS[0]}"))} ||
         MIME_TYPE=application/octet-stream
     _LK_MAIL_ATTACH=(
         ${_LK_MAIL_ATTACH[@]+"${_LK_MAIL_ATTACH[@]}"} "$1")
@@ -284,7 +285,7 @@ function lk_mail_send() {
         msmtp -oi -t
     else
         false
-    fi
+    fi && (exit "${PIPESTATUS[0]}")
 }
 
 LK_BOLD=$'\E[1m'
@@ -317,7 +318,7 @@ function exit_trap() {
         lk_mail_new
         MESSAGE=
         { [ ! -s "$RSYNC_OUT_FILE" ] && [ ! -s "$RSYNC_ERR_FILE" ]; } ||
-            ! TAR=$(mktemp -- "${TMPDIR%/}/${0##*/}.XXXXXXXXXX") ||
+            ! TAR=$(mktemp -- "${TMPDIR%/}/${0##*/}.XXXXXX") ||
             ! tar -C "${RSYNC_OUT_FILE%/*}" -czf "$TAR" \
                 "${RSYNC_OUT_FILE##*/}" \
                 "${RSYNC_ERR_FILE##*/}" || {
@@ -326,7 +327,6 @@ function exit_trap() {
                 "$HN-$SOURCE_NAME-$LK_SNAPSHOT_TIMESTAMP-rsync.log.tgz" \
                 application/gzip &&
                 MESSAGE="the attached log files and " || true
-            rm -f "$TAR" || true
         }
         [ "$EXIT_STATUS" -eq 0 ] && {
             [ "$RSYNC_EXIT_VALUE" -eq 0 ] && {
@@ -370,6 +370,7 @@ $(sed \
             "$SNAPSHOT_LOG_FILE")" &&
             lk_mail_set_text "$MESSAGE" &&
             lk_mail_send "$SUBJECT" "$LK_BACKUP_MAIL" "$LK_BACKUP_MAIL_FROM" || true
+        [ -z "${TAR-}" ] || rm -f "$TAR" || true
     }
 }
 
@@ -621,7 +622,8 @@ trap exit_trap EXIT
     lk_console_detail "Log files:" "$(lk_echo_args \
         "$SNAPSHOT_LOG_FILE" "$RSYNC_OUT_FILE" "$RSYNC_ERR_FILE")"
     RSYNC_ARGS=(-vrlpt --delete --stats "$@")
-    ! RSYNC_FILTERS=($(find_custom filter-rsync | tac)) || {
+    ! RSYNC_FILTERS=($(find_custom filter-rsync | tac &&
+        (exit "${PIPESTATUS[0]}"))) || {
         lk_console_detail "Rsync filter:" \
             "$(lk_echo_args "${RSYNC_FILTERS[@]/#/. }")"
         RSYNC_ARGS[${#RSYNC_ARGS[@]}]=--delete-excluded

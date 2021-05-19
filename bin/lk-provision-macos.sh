@@ -294,15 +294,18 @@ EOF
     . "$LK_BASE/lib/macos/packages.sh"
 
     function lk_brew_loop() {
-        local i BREW BREW_NAME SH
+        local i SH BREW BREW_NAME
         for i in "${!BREW_PATH[@]}"; do
-            BREW=(${BREW_ARCH[i]:+arch "--${BREW_ARCH[i]}"} "${BREW_PATH[i]}")
-            BREW_NAME=${BREW_NAMES[i]}
             if ! ((i)); then
                 SH=$(lk_macos_env "^/usr/local(/|\$)")
             else
                 SH=$(lk_macos_env "^/opt/homebrew(/|\$)")
-            fi && eval "$SH" || return
+            fi && BREW=(
+                env "PATH=$(eval "$SH" && echo "$PATH")"
+                ${BREW_ARCH[i]:+arch "--${BREW_ARCH[i]}"}
+                "${BREW_PATH[i]}"
+            ) || return
+            BREW_NAME=${BREW_NAMES[i]}
             "$@" || return
         done
     }
@@ -316,16 +319,17 @@ EOF
     }
 
     function lk_brew_check_taps() {
-        local TAPS TAP
+        local TAPS TAP URL
         TAPS=($(comm -13 \
             <(brew tap | sort -u) \
             <(lk_echo_array HOMEBREW_TAPS | sort -u))) || return
         [ ${#TAPS[@]} -eq 0 ] ||
             for TAP in "${TAPS[@]}"; do
                 lk_console_detail "Tapping" "$TAP"
+                unset URL
                 ! ((i)) || [[ ! $TAP =~ ^[^/]+/[^/]+$ ]] ||
-                    TAP=file:///opt/homebrew/Library/Taps/${TAP%/*}/homebrew-${TAP#*/}
-                lk_brew tap --quiet "$TAP" || return
+                    URL=file:///opt/homebrew/Library/Taps/${TAP%/*}/homebrew-${TAP#*/}
+                lk_brew tap --quiet "$TAP" ${URL+"$URL"} || return
             done
     }
 
