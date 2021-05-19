@@ -6,10 +6,60 @@ function lk_bash_is_builtin() {
     [ "$(type -t "$1")" = builtin ]
 }
 
+# lk_bash_function_names [-H] [FILE...]
+#
+# Print the name of each Bash function declared in FILE. If -H is set, add
+# "FILE:" to the beginning of each line.
 function lk_bash_function_names() {
-    cat ${1+"$1"} |
-        shfmt -tojson |
-        jq -r '..|select(type=="object" and .Type=="FuncDecl").Name.Value'
+    local WITH_FILENAME
+    [ "${1-}" != -H ] || { WITH_FILENAME=1 && shift; }
+    [ $# -gt 0 ] || set -- /dev/stdin
+    while [ $# -gt 0 ]; do
+        if [ ${WITH_FILENAME:-0} -eq 1 ]; then
+            lk_bash_function_names "$1" |
+                sed -E "s/^/$(lk_escape_ere_replace "$1"):/"
+        else
+            shfmt -tojson <"$1" | jq -r \
+                '..|select(type=="object" and .Type=="FuncDecl").Name.Value'
+        fi
+        shift
+    done
+}
+
+# lk_bash_function_declarations ROOT_DIR
+#
+# Print "FUNCTION_NAME TIMES_DECLARED FILE[:FILE]" for each Bash function
+# declared in ROOT_DIR.
+function lk_bash_function_declarations() {
+    local DIR
+    [ $# -eq 1 ] && DIR=$(cd "$1" && pwd -P) ||
+        lk_warn "directory not found: ${1-}" || return
+    local PROG='
+function print_pending() {
+    if (pending) {
+        print fn, count, pending
+    }
+}
+{
+    file = "." substr($1, length(dir) + 1)
+    if (fn == $2) {
+        pending = pending ":" file
+        count++
+    } else {
+        print_pending()
+        fn = $2
+        pending = file
+        count = 1
+    }
+}
+END {
+    print_pending()
+}'
+    lk_bash_find_scripts -d "$DIR" -print0 |
+        lk_xargs -z lk_bash_function_names -H |
+        sort -u |
+        sort -t: -k2 |
+        awk -F: -v "dir=${DIR%/}" "$PROG"
 }
 
 function lk_bash_local_variable_names() {
