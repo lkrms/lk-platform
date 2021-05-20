@@ -21,48 +21,76 @@ function _lk_git() {
     fi
 }
 
-function lk_git_cd() {
+function _lk_git_cd() {
     [ $# -eq 0 ] || cd "$1"
 }
 
-function lk_git_is_quiet() {
+function _lk_git_is_quiet() {
     [ -n "${_LK_GIT_QUIET-}" ]
 }
 
+# lk_git_is_work_tree [DIR]
 function lk_git_is_work_tree() {
     local RESULT
-    RESULT=$(lk_git_cd "$@" &&
+    RESULT=$(_lk_git_cd "$@" &&
         git rev-parse --is-inside-work-tree 2>/dev/null) &&
         lk_is_true RESULT
 }
 
+# lk_git_is_submodule [DIR]
 function lk_git_is_submodule() {
     local RESULT
-    RESULT=$(lk_git_cd "$@" &&
+    RESULT=$(_lk_git_cd "$@" &&
         git rev-parse --show-superproject-working-tree) &&
         [ -n "$RESULT" ]
 }
 
+# lk_git_is_top_level [DIR]
 function lk_git_is_top_level() {
     local RESULT
-    RESULT=$(lk_git_cd "$@" && git rev-parse --show-prefix) &&
+    RESULT=$(_lk_git_cd "$@" && git rev-parse --show-prefix) &&
         [ -z "$RESULT" ]
 }
 
+# lk_git_is_project_top_level [DIR]
 function lk_git_is_project_top_level() {
-    (lk_git_cd "$@" &&
+    (_lk_git_cd "$@" &&
         lk_git_is_work_tree && ! lk_git_is_submodule && lk_git_is_top_level)
 }
 
+# lk_git_is_clean [DIR]
 function lk_git_is_clean() {
     local NO_REFRESH
     [ "${1-}" != -n ] || { NO_REFRESH=1 && shift; }
-    (lk_git_cd "$@" &&
-        { lk_is_true NO_REFRESH || _lk_git update-index --refresh; } &&
+    (_lk_git_cd "$@" &&
+        { [ -n "${NO_REFRESH-}" ] || _lk_git update-index --refresh; } &&
         git diff-index --quiet HEAD --) >/dev/null
 }
 
-function lk_git_remote_skipped() {
+# lk_git_list_untracked [DIR]
+function lk_git_list_untracked() {
+    (_lk_git_cd "$@" &&
+        git ls-files --others --exclude-standard --directory)
+}
+
+# lk_git_has_untracked [DIR]
+function lk_git_has_untracked() {
+    lk_require_output -q lk_git_list_untracked "$@"
+}
+
+# lk_git_stash_list [DIR]
+function lk_git_stash_list() {
+    (_lk_git_cd "$@" &&
+        git stash list --format="%gd")
+}
+
+# lk_git_has_stash [DIR]
+function lk_git_has_stash() {
+    lk_require_output -q lk_git_stash_list "$@"
+}
+
+# lk_git_remote_is_skipped [REMOTE]
+function lk_git_remote_is_skipped() {
     {
         git config "remote.$1.skipDefaultUpdate" || true
         git config "remote.$1.skipFetchAll" || true
@@ -83,12 +111,17 @@ function lk_git_remote_singleton() {
     echo "${REMOTES[0]}"
 }
 
-# lk_git_remote_from_url URL
+# lk_git_remote_from_url [-E] URL
+#
+# Print the name of each remote with the given URL. If -E is set, treat URL as a
+# regular expression.
 function lk_git_remote_from_url() {
-    local REGEX='^remote\.(.+)\.url$' REMOTE
-    REMOTE=$(git config --name-only --get-regexp "$REGEX" "$1") &&
-        [[ $REMOTE =~ $REGEX ]] &&
-        echo "${BASH_REMATCH[1]}"
+    local FIXED= REGEX='^remote\.(.+)\.url$'
+    [ "${1-}" != -E ] || { unset FIXED && shift; }
+    [ $# -gt 0 ] || lk_usage "Usage: $FUNCNAME [-E] URL" || return
+    git config --local \
+        --name-only --get-regexp ${FIXED+--fixed-value} "$REGEX" "$1" |
+        lk_require_output sed -E "s/$REGEX/\1/"
 }
 
 # lk_git_list_push_remotes REMOTE
@@ -130,12 +163,6 @@ function lk_git_branch_list_remote() {
     git for-each-ref --format="%(refname:short)" "refs/remotes/$REMOTE" |
         lk_require_output \
             sed -E -e "/^$_REMOTE\/HEAD\$/d" -e "s/^$_REMOTE\///"
-}
-
-# lk_git_stash_list
-function lk_git_stash_list() {
-    lk_require_output \
-        git stash list --format="%gd"
 }
 
 # lk_git_branch_upstream [BRANCH]
@@ -323,7 +350,7 @@ function lk_git_fetch() {
     REMOTES=$*
     [ $# -gt 0 ] || REMOTES=$(git remote) || return
     for REMOTE in $REMOTES; do
-        [ $# -gt 0 ] || ! lk_git_remote_skipped "$REMOTE" || continue
+        [ $# -gt 0 ] || ! lk_git_remote_is_skipped "$REMOTE" || continue
         _lk_git fetch --quiet --prune "$REMOTE" || {
             [ -n "${QUIET-}" ] || lk_console_warning \
                 "Unable to fetch from remote:" "$REMOTE"
@@ -370,7 +397,7 @@ function lk_git_update_remote() {
             ((++ERRORS))
     done
     for REMOTE in $REMOTES; do
-        ! lk_git_remote_skipped "$REMOTE" || continue
+        ! lk_git_remote_is_skipped "$REMOTE" || continue
         RBRANCHES=$(lk_git_branch_list_remote "$REMOTE") &&
             RBRANCHES=$(comm -12 \
                 <(echo "$BRANCHES" | sort) \
@@ -454,11 +481,11 @@ function _lk_git_do_with_repo() {
         SH=$(lk_get_outputs_of "${REPO_COMMAND[@]}") ||
             EXIT_STATUS=$?
         eval "$SH" || return
-        lk_git_is_quiet && [ "$EXIT_STATUS" -eq 0 ] || echo "$(
+        _lk_git_is_quiet && [ "$EXIT_STATUS" -eq 0 ] || echo "$(
             unset _LK_FD
             _LK_TTY_NO_FOLD=1
             {
-                lk_git_is_quiet &&
+                _lk_git_is_quiet &&
                     lk_console_item "Command failed in" "$REPO" ||
                     lk_console_item "Processed:" "$REPO"
                 [ "$EXIT_STATUS" -eq 0 ] ||
@@ -540,7 +567,7 @@ directory of a working tree" || return
     [ ${#REPOS[@]} -gt 1 ] || unset PARALLEL
     NOUN="${#REPOS[@]} $(lk_maybe_plural ${#REPOS[@]} repo repos)"
     if lk_is_true PARALLEL; then
-        lk_git_is_quiet ||
+        _lk_git_is_quiet ||
             lk_console_log "Processing $NOUN in parallel"
         FD=$(lk_fd_next) &&
             eval "exec $FD>&2 2>/dev/null" || return
@@ -556,14 +583,14 @@ directory of a working tree" || return
             wait -n 2>/dev/null || ((++ERROR_COUNT))
         done
     else
-        lk_git_is_quiet ||
+        _lk_git_is_quiet ||
             lk_console_log "Processing $NOUN"
         for REPO in "${REPOS[@]}"; do
             (cd "$REPO" &&
                 _lk_git_do_with_repo) || ((++ERROR_COUNT))
         done
     fi
-    lk_git_is_quiet || {
+    _lk_git_is_quiet || {
         [ "$ERROR_COUNT" -eq 0 ] &&
             _LK_TTY_NO_FOLD=1 \
                 lk_console_success "Command succeeded in $NOUN" ||

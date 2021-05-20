@@ -26,18 +26,19 @@ BRANCH=$(lk_git_branch_current)
     lk_warn "repo at $DEST not on branch $SOURCE_BRANCH" || exit 0
 
 lk_console_log "Updating repo at" "$DEST"
-if git remote | grep -Fx local >/dev/null; then
-    URL=$(git remote get-url local)
-    [ "$URL" = "$SOURCE" ] ||
-        lk_run_detail git remote set-url local "$SOURCE"
-else
-    lk_run_detail git remote add local "$SOURCE"
-fi
+REMOTE=$(lk_git_remote_from_url -E \
+    "^(file://)?${SOURCE#file://}/?\$" | tail -n1) ||
+    { REMOTE=$(lk_hostname) &&
+        { lk_run_detail git remote add "$REMOTE" "$SOURCE" ||
+            lk_run_detail git remote set-url "$REMOTE" "$SOURCE"; }; } ||
+    lk_die "unable to add or update remote: $REMOTE"
 
-lk_run_detail git fetch --force local
-lk_run_detail git merge --ff-only "local/$BRANCH" || {
-    lk_git_is_clean || lk_die "uncommitted changes at $DEST"
-    lk_run_detail git reset --hard "local/$BRANCH"
+lk_run_detail git fetch "$REMOTE"
+lk_run_detail git merge --ff-only "$REMOTE/$BRANCH" || {
+    lk_git_is_clean || { lk_console_log "Stashing changes" &&
+        lk_run_detail git stash || lk_die "unable to stash changes: $DEST"; }
+    lk_run_detail git reset --hard "$REMOTE/$BRANCH"
 }
+lk_run_detail git branch --set-upstream-to="$REMOTE/$BRANCH"
 
 lk_console_log "Done"
