@@ -230,4 +230,6 @@ LOGIN_ITEMS+=(
     "/Applications/nextcloud.app"
     "/Applications/Skype.app"
     "/Applications/Todoist.app"
+    "/System/Applications/Mail.app"
+    "/System/Applications/Messages.app"
 )
