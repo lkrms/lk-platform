@@ -221,7 +221,7 @@ AUR_PACKAGES+=(
     spotify
     stretchly
     teams
-    todoist-electron
+    todoist-appimage
     trimage
     ttf-ms-win10
     typora
