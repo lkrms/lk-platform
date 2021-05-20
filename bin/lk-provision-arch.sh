@@ -994,9 +994,16 @@ done\""
 
     service_apply || EXIT_STATUS=$?
 
-    (exit "$EXIT_STATUS") &&
-        lk_console_success "Provisioning complete" ||
+    (exit "$EXIT_STATUS") ||
         lk_console_error -r "Provisioning completed with errors" || lk_die ""
+    lk_console_success "Provisioning complete"
+
+    ! lk_arch_reboot_required || {
+        lk_console_blank
+        lk_console_warning "Reboot required"
+        lk_confirm "Reboot now?" Y || exit 0
+        sudo shutdown -r now
+    }
 
     exit
 }
