@@ -530,6 +530,20 @@ $LK_NODE_HOSTNAME" &&
         . "$LK_PACKAGES_FILE"
     . "$LK_BASE/lib/arch/packages.sh"
 
+    # Avoid "unknown public key" errors
+    unset LK_SUDO
+    LK_CONF_OPTION_FILE=~/.gnupg/gpg.conf
+    lk_install -d -m 00700 "${LK_CONF_OPTION_FILE%/*}"
+    lk_install -m 00644 "$LK_CONF_OPTION_FILE"
+    LK_FILE_KEEP_ORIGINAL=0
+    if ! grep -q "\<auto-key-retrieve\>" "$LK_CONF_OPTION_FILE"; then
+        lk_conf_enable_row auto-key-retrieve
+    fi
+    _LK_CONF_DELIM=" " \
+        lk_conf_set_option keyserver hkps://keyserver.ubuntu.com
+    unset LK_FILE_KEEP_ORIGINAL
+    LK_SUDO=1
+
     if lk_command_exists aur ||
         { [ ${#AUR_PACKAGES[@]} -gt 0 ] && lk_confirm \
             "OK to install aurutils for AUR package management?" Y; }; then
@@ -580,19 +594,15 @@ $LK_NODE_HOSTNAME" &&
         lk_install -m 00644 "$FILE"
         lk_file_replace "$FILE" "$_FILE"
 
-        # Avoid "unknown public key" errors
         unset LK_SUDO
-        FILE=~/.gnupg/gpg.conf
-        lk_install -d -m 00700 "${FILE%/*}"
-        lk_install -m 00644 "$FILE"
+        LK_CONF_OPTION_FILE=~/.gnupg/gpg-agent.conf
+        lk_install -m 00644 "$LK_CONF_OPTION_FILE"
         LK_FILE_KEEP_ORIGINAL=0
-        if ! grep -q "\<auto-key-retrieve\>" "$FILE"; then
-            lk_console_detail \
-                "Enabling in $(lk_pretty_path $FILE):" "auto-key-retrieve"
-            lk_conf_enable_row auto-key-retrieve "$FILE"
+        if ! grep -q "\<allow-preset-passphrase\>" "$LK_CONF_OPTION_FILE"; then
+            lk_conf_enable_row allow-preset-passphrase
+            _LK_CONF_DELIM=" " \
+                lk_conf_set_option max-cache-ttl 86400
         fi
-        _LK_CONF_DELIM=" " \
-            lk_conf_set_option keyserver hkps://keyserver.ubuntu.com "$FILE"
         unset LK_FILE_KEEP_ORIGINAL
         LK_SUDO=1
 
