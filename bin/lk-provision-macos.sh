@@ -7,7 +7,7 @@
 # Or, to test the develop branch:
 #
 #     [LK_NO_INPUT=1] LK_PLATFORM_BRANCH=develop _LK_FD=3 \
-#         bash -xc "$(curl -fL http://lkr.ms/macos-dev)" 3>&2 2>~/lk-install.err
+#         bash -xc "$(curl -fsSL http://lkr.ms/macos-dev)" 3>&2 2>~/lk-install.err
 
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}

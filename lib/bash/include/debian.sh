@@ -182,28 +182,10 @@ function lk_apt_upgrade_all() {
     lk_apt_update &&
         SH=$(apt-get -qq --fix-broken --just-print \
             -o APT::Get::Show-User-Simulation-Note=false \
-            dist-upgrade | awk \
-            'function sh(op, arr, _i, _j) {
-    printf "local %s=(", op
-    for (_i in arr)
-        printf (_j++ ? " %s" : "%s"), arr[_i]
-    printf ")\n"
-}
-$1 == "Inst" {
-    inst[++i] = $2
-}
-$1 == "Conf" {
-    conf[++c] = $2
-}
-$1 == "Remv" {
-    remv[++r] = $2
-}
-END {
-    sh("INST", inst)
-    sh("CONF", conf)
-    sh("REMV", remv)
-    printf "local CHANGES=%s", i + c + r
-}') && eval "$SH" || return
+            dist-upgrade |
+            awk -v prefix="local " \
+                -f "$LK_BASE/lib/awk/apt-get-parse-dry-run.awk") &&
+        eval "$SH" || return
     [ "$CHANGES" -gt 0 ] || return 0
     lk_console_message "Upgrading APT packages"
     [ ${#INST[@]} -eq 0 ] || lk_console_detail "Upgrade:" $'\n'"${INST[*]}"
@@ -215,6 +197,41 @@ END {
     _lk_apt_flock apt-get -yq --fix-broken dist-upgrade || return
     lk_apt_autoremove
 }
+
+# lk_apt_list_missing_recommends
+#
+# For packages that are currently installed, output recommended packages that
+# are not installed.
+function lk_apt_list_missing_recommends() { (
+    lk_is_root || lk_warn "not running as root" || return
+    DIR=$(lk_mktemp_dir) &&
+        lk_delete_on_exit "$DIR" &&
+        install -d -m 00755 "$DIR/var/lib" &&
+        lk_apt_update >&2 || return
+    lk_console_message "Checking recommended APT packages"
+    lk_lock -f /var/lib/dpkg/lock || return
+    FILES=(
+        /var/lib/apt/lists/*_Packages
+        /var/lib/dpkg/{status,available}
+    )
+    lk_remove_missing FILES
+    [ ${#FILES[@]} -gt 0 ] || lk_warn "no package lists" || return
+    cp -a /var/lib/apt/ /var/lib/dpkg/ "$DIR/var/lib" || return
+    for FILE in "${FILES[@]}"; do
+        awk -f "$LK_BASE/lib/awk/apt-lists-merge-depends-recommends.awk" \
+            "$FILE" >"$DIR$FILE" || return
+    done
+    SH=$(apt-get -qq --fix-broken --just-print \
+        -o APT::Get::Show-User-Simulation-Note=false \
+        -o "Dir::State=$DIR/var/lib/apt" \
+        -o "Dir::State::status=$DIR/var/lib/dpkg/status" \
+        install |
+        awk -v prefix="local " \
+            -f "$LK_BASE/lib/awk/apt-get-parse-dry-run.awk") &&
+        eval "$SH" || return
+    [ ${#INST[@]} -eq 0 ] ||
+        printf '%s\n' "${INST[@]}"
+); }
 
 function lk_apt_reinstall_damaged() {
     local _DPKG _REAL _MISSING FILE_COUNT DIRS MISSING_COUNT REINSTALL AUTO
