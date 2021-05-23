@@ -297,7 +297,7 @@ function lk_aur_sync() {
         lk_console_list "Syncing from AUR:" package packages
     lk_makepkg_setup
     for PKG in "$@"; do
-        aur sync --database aur --no-view --noconfirm --remove \
+        lk_run_detail aur sync --database aur --no-view --noconfirm --remove \
             ${CHROOT+--chroot} \
             ${CHROOT+--makepkg-conf=/etc/makepkg.conf} \
             ${GPGKEY+--sign} \

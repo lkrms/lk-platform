@@ -607,9 +607,11 @@ $LK_NODE_HOSTNAME" &&
         LK_SUDO=1
 
         if [ ${#AUR_PACKAGES[@]} -gt 0 ]; then
-            lk_aur_sync "${AUR_PACKAGES[@]}"
+            lk_aur_sync "${AUR_PACKAGES[@]}" || EXIT_STATUS=$?
             ! lk_aur_can_chroot || lk_pac_sync -f
-            PAC_PACKAGES+=(aurutils "${AUR_PACKAGES[@]}")
+            PAC_PACKAGES+=($(comm -12 \
+                <({ echo aurutils && lk_echo_array AUR_PACKAGES; } | sort -u) \
+                <(lk_pac_repo_available_list aur | sort -u)))
             AUR_PACKAGES=()
         fi
         lk_log_tty_stdout_off
