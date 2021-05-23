@@ -1102,7 +1102,8 @@ BEGIN {
 }
 ( $s, $ms ) = Time::HiRes::gettimeofday();
 $ms = sprintf( "%06i", $ms );
-print strftime( "$ENV{PREFIX}%Y-%m-%d %H:%M:%S.$ms %z ", localtime($s) );'
+print strftime( "$ENV{PREFIX}%Y-%m-%d %H:%M:%S.$ms %z ", localtime($s) );
+s/.*\r(.)/\1/;'
 } #### Reviewed: 2021-05-13
 
 # lk_log_create_file [-e EXT] [DIR...]
@@ -1441,17 +1442,20 @@ function lk_readline_format() {
     echo "$STRING"
 }
 
-function lk_strip_non_printing() {
-    local STRING
-    eval "$(lk_get_regex NON_PRINTING_REGEX)"
+function lk_strip_cr() {
     if [ $# -gt 0 ]; then
-        STRING=$1
-        while [[ $STRING =~ (.*)$NON_PRINTING_REGEX(.*) ]]; do
-            STRING=${BASH_REMATCH[1]}${BASH_REMATCH[$((${#BASH_REMATCH[@]} - 1))]}
-        done
-        echo "$STRING"
+        lk_echo_args "$@" | lk_strip_cr
     else
-        sed -E "s/$NON_PRINTING_REGEX//g"
+        sed -E 's/.*\r(.)/\1/'
+    fi
+}
+
+function lk_strip_non_printing() {
+    if [ $# -gt 0 ]; then
+        lk_echo_args "$@" | lk_strip_non_printing
+    else
+        eval "$(lk_get_regex NON_PRINTING_REGEX)"
+        sed -Ee "s/$NON_PRINTING_REGEX//g" -e 's/.*\r(.)/\1/'
     fi
 }
 
