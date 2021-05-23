@@ -142,16 +142,12 @@ AUR_PACKAGES+=(
     masterpdfeditor-free
     skypeforlinux-stable-bin
     spotify
-    stretchly
+    stretchly-git
     teams
     todoist-appimage
     trimage
-    ttf-ms-win10
+    ttf-apple-emoji
     typora
-
-    # multimedia - video
-    makemkv
-    video-trimmer
 
     # system
     hfsprogs
@@ -160,6 +156,9 @@ AUR_PACKAGES+=(
     devilspie2
     quicktile-git
 )
+
+lk_is_bootstrap ||
+    AUR_PACKAGES+=(ttf-ms-win10)
 
 # development
 PAC_PACKAGES+=(

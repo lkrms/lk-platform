@@ -768,7 +768,7 @@ $LK_NODE_HOSTNAME" &&
 $(command -pv php7) $(command -pv wp) "\$@"
 EOF
         else
-            lk_rm "$FILE"
+            lk_rm -f "$FILE"
         fi
     fi
 
