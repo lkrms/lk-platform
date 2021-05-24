@@ -55,13 +55,15 @@ else
 fi
 
 function service_apply() {
-    local i EXIT_STATUS=0
+    local i _ERRORS=${#ERRORS[@]}
     lk_console_message "Checking services"
     lk_is_bootstrap || ! lk_is_true DAEMON_RELOAD ||
-        lk_run_detail sudo systemctl daemon-reload || EXIT_STATUS=$?
+        lk_run_detail sudo systemctl daemon-reload ||
+        ERRORS+=("Command failed: systemctl daemon-reload")
     [ ${#SERVICE_ENABLE[@]} -eq 0 ] ||
         for i in $(seq 0 2 $((${#SERVICE_ENABLE[@]} - 1))); do
-            systemctl_enable "${SERVICE_ENABLE[@]:$i:2}" || EXIT_STATUS=$?
+            systemctl_enable "${SERVICE_ENABLE[@]:i:2}" ||
+                ERRORS+=("Could not enable service: ${SERVICE_ENABLE[*]:i:1}")
         done
     lk_is_bootstrap || [ ${#SERVICE_RESTART[@]} -eq 0 ] || {
         SERVICE_RESTART=($(comm -23 \
@@ -70,16 +72,17 @@ function service_apply() {
             [ ${#SERVICE_RESTART[@]} -eq 0 ] || {
                 lk_console_message "Restarting services with changed settings"
                 for SERVICE in "${SERVICE_RESTART[@]}"; do
-                    lk_systemctl_restart "$SERVICE" || EXIT_STATUS=$?
+                    lk_systemctl_restart "$SERVICE" ||
+                        ERRORS+=("Could not restart service: $SERVICE")
                 done
-            } || EXIT_STATUS=$?
+            } || ERRORS+=("Could not restart services")
         }
     }
     DAEMON_RELOAD=
     SERVICE_ENABLE=()
     SERVICE_RESTART=()
     SERVICE_STARTED=()
-    return "$EXIT_STATUS"
+    [ "${#ERRORS[@]}" -eq "$_ERRORS" ]
 }
 
 function file_delete() {
@@ -190,7 +193,7 @@ lk_start_trace
         lk_settings_persist "$SETTINGS_SH"
     )
 
-    EXIT_STATUS=0
+    ERRORS=()
     SERVICE_STARTED=()
     SERVICE_ENABLE=()
     SERVICE_RESTART=()
@@ -607,7 +610,8 @@ $LK_NODE_HOSTNAME" &&
         LK_SUDO=1
 
         if [ ${#AUR_PACKAGES[@]} -gt 0 ]; then
-            lk_aur_sync "${AUR_PACKAGES[@]}" || EXIT_STATUS=$?
+            lk_aur_sync -g "${AUR_PACKAGES[@]}" ||
+                ERRORS+=("Failed to sync from AUR: ${FAILED[*]}")
             ! lk_aur_can_chroot || lk_pac_sync -f
             PAC_PACKAGES+=($(comm -12 \
                 <({ echo aurutils && lk_echo_array AUR_PACKAGES; } | sort -u) \
@@ -618,17 +622,13 @@ $LK_NODE_HOSTNAME" &&
     fi
 
     if [ ${#PAC_KEEP[@]} -gt 0 ]; then
-        PAC_KEEP=($(comm -12 \
-            <(lk_echo_array PAC_KEEP | sort -u) \
-            <(lk_pac_installed_list | sort -u)))
-        _PAC_KEEP=($(lk_echo_array PAC_KEEP | sed -E '/^aurutils$/d'))
+        PAC_KEEP=($(lk_pac_installed_list "${PAC_KEEP[@]}"))
     fi
+    _PAC_KEEP=($(lk_echo_array PAC_KEEP | sed -E '/^aurutils$/d'))
 
     lk_console_message "Checking install reasons"
     PAC_EXPLICIT=$(lk_echo_array PAC_PACKAGES AUR_PACKAGES PAC_KEEP | sort -u)
-    PAC_MARK_EXPLICIT=($(comm -12 \
-        <(lk_echo_array PAC_EXPLICIT) \
-        <(lk_pac_installed_not_explicit | sort -u)))
+    PAC_MARK_EXPLICIT=($(lk_pac_installed_not_explicit "${PAC_EXPLICIT[@]}"))
     PAC_UNMARK_EXPLICIT=($(comm -13 \
         <(lk_echo_array PAC_EXPLICIT) \
         <(lk_pac_installed_explicit | sort -u)))
@@ -638,6 +638,26 @@ $LK_NODE_HOSTNAME" &&
     [ ${#PAC_UNMARK_EXPLICIT[@]} -eq 0 ] ||
         lk_log_bypass lk_tty \
             pacman -D --asdeps "${PAC_UNMARK_EXPLICIT[@]}"
+
+    REMOVE_MESSAGE=()
+    ! PAC_REMOVE=($(pacman -Qdttq)) || [ ${#PAC_REMOVE[@]} -eq 0 ] || {
+        lk_echo_array PAC_REMOVE |
+            lk_console_list "Orphaned:" package packages
+        lk_confirm "Remove the above?" N &&
+            REMOVE_MESSAGE+=("orphaned") ||
+            PAC_REMOVE=()
+    }
+    [ ${#PAC_REJECT[@]} -eq 0 ] ||
+        PAC_REJECT=($(lk_pac_installed_list "${PAC_REJECT[@]}"))
+    [ ${#PAC_REJECT[@]} -eq 0 ] || {
+        REMOVE_MESSAGE+=("blacklisted")
+        PAC_REMOVE+=("${PAC_REJECT[@]}")
+    }
+    [ ${#PAC_REMOVE[@]} -eq 0 ] || {
+        lk_console_message \
+            "Removing $(lk_implode " and " REMOVE_MESSAGE) packages"
+        lk_log_bypass lk_tty pacman -Rs --noconfirm "${PAC_REMOVE[@]}"
+    }
 
     [ ${#_PAC_KEEP[@]} -eq 0 ] ||
         lk_echo_array _PAC_KEEP |
@@ -657,27 +677,6 @@ $LK_NODE_HOSTNAME" &&
     [ ${#PAC_INSTALL[@]}${#PAC_UPGRADE[@]} = 00 ] ||
         lk_log_bypass lk_tty pacman -Su ${NOCONFIRM+--noconfirm} \
             ${PAC_INSTALL[@]+"${PAC_INSTALL[@]}"}
-
-    REMOVE_MESSAGE=()
-    ! PAC_REMOVE=($(pacman -Qdttq)) || [ ${#PAC_REMOVE[@]} -eq 0 ] || {
-        lk_echo_array PAC_REMOVE |
-            lk_console_list "Orphaned:" package packages
-        lk_confirm "Remove the above?" N &&
-            REMOVE_MESSAGE+=("orphaned") ||
-            PAC_REMOVE=()
-    }
-    PAC_REJECT=($(comm -12 \
-        <(lk_echo_array PAC_REJECT | sort -u) \
-        <(lk_pac_installed_list | sort -u)))
-    [ ${#PAC_REJECT[@]} -eq 0 ] || {
-        REMOVE_MESSAGE+=("blacklisted")
-        PAC_REMOVE+=("${PAC_REJECT[@]}")
-    }
-    [ ${#PAC_REMOVE[@]} -eq 0 ] || {
-        lk_console_message \
-            "Removing $(lk_implode " and " REMOVE_MESSAGE) packages"
-        lk_log_bypass lk_tty pacman -Rs --noconfirm "${PAC_REMOVE[@]}"
-    }
 
     lk_symlink_bin codium code || true
     lk_symlink_bin vim vi || true
@@ -768,7 +767,8 @@ $LK_NODE_HOSTNAME" &&
 $(command -pv php7) $(command -pv wp) "\$@"
 EOF
         else
-            lk_rm -f "$FILE"
+            [ ! -f "$FILE" ] ||
+                lk_rm -f "$FILE"
         fi
     fi
 
@@ -1004,11 +1004,17 @@ done\""
                 $'\n'"sudo smbpasswd -a $USER"
     fi
 
-    service_apply || EXIT_STATUS=$?
+    service_apply || true
 
-    (exit "$EXIT_STATUS") ||
-        lk_console_error -r "Provisioning completed with errors" || lk_die ""
-    lk_console_success "Provisioning complete"
+    if [ ${#ERRORS[@]} -eq 0 ]; then
+        lk_console_success "Provisioning complete"
+    else
+        lk_console_error "Provisioning completed with errors"
+        for ERROR in "${ERRORS[@]}"; do
+            lk_console_detail "$ERROR"
+        done
+        lk_die ""
+    fi
 
     ! lk_arch_reboot_required || {
         lk_console_blank

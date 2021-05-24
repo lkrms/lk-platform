@@ -80,9 +80,10 @@ function _lk_settings_list_known() {
 } #### Reviewed: 2021-05-09
 
 function _lk_settings_writable_files() {
-    local FILE DIR_MODE FILE_MODE ARGS
+    local FILE OLD_FILE DIR_MODE FILE_MODE ARGS
     if lk_will_elevate && [[ $LK_BASE/ != ~/* ]]; then
         FILE=$LK_BASE/etc/lk-platform/lk-platform.conf
+        OLD_FILE=/etc/default/lk-platform
         DIR_MODE=0755
         FILE_MODE=0644
         [ ! -g "$LK_BASE" ] || {
@@ -94,20 +95,23 @@ function _lk_settings_writable_files() {
             "$LK_BASE"/etc{,/lk-platform} &&
             lk_install -m "$FILE_MODE" ${ARGS+"${ARGS[@]}"} "$FILE" || return
         echo "$FILE"
-        [ ! -f /etc/default/lk-platform ] ||
-            echo /etc/default/lk-platform
     else
         local XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-~/.config} \
             LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
         FILE=$XDG_CONFIG_HOME/lk-platform/lk-platform.conf
+        OLD_FILE=~/".${LK_PATH_PREFIX}settings"
         [ -e "$FILE" ] || {
             mkdir -p "${FILE%/*}" && touch "$FILE" || return
         }
         echo "$FILE"
-        [ ! -f ~/".${LK_PATH_PREFIX}settings" ] ||
-            echo ~/".${LK_PATH_PREFIX}settings"
     fi
-} #### Reviewed: 2021-05-11
+    [ ! -f "$OLD_FILE" ] || {
+        echo "$OLD_FILE"
+        [ -s "$FILE" ] || [ ! -s "$OLD_FILE" ] ||
+            LK_VERBOSE= LK_FILE_BACKUP_TAKE= \
+                lk_file_replace -f "$OLD_FILE" "$FILE" || return
+    }
+} #### Reviewed: 2021-05-24
 
 # lk_settings_getopt [ARG...]
 #
@@ -173,8 +177,8 @@ function lk_settings_persist() {
     }
     _FILE=$(
         unset "${!LK_@}"
-        for FILE in "${@:2}"; do
-            [ ! -f "$FILE" ] || . "$FILE" || return
+        for ((i = $#; i > 1; i--)); do
+            [ ! -f "${!i}" ] || . "${!i}" || return
         done
         eval "$1" || return
         VARS=($(_lk_settings_list_known &&
@@ -186,7 +190,7 @@ function lk_settings_persist() {
     [ -e "$2" ] || { lk_maybe_sudo mkdir -p "${2%/*}" &&
         lk_maybe_sudo touch "$2"; } || return
     lk_file_replace -m "$2" "$_FILE"
-} #### Reviewed: 2021-05-11
+} #### Reviewed: 2021-05-24
 
 # lk_symlink_bin TARGET [ALIAS]
 function lk_symlink_bin() {

@@ -284,7 +284,10 @@ function lk_aur_outdated() {
 }
 
 function lk_aur_sync() {
-    local OUTDATED CHROOT PKG SYNCED=() FAILED=()
+    local OUTDATED CHROOT PKG
+    [ "${1-}" != -g ] && { local SYNCED FAILED; } || shift
+    SYNCED=()
+    FAILED=()
     [ $# -gt 0 ] || {
         lk_console_message "Checking for updates to AUR packages"
         OUTDATED=($(lk_aur_outdated)) || return
