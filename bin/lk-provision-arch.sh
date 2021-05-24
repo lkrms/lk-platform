@@ -862,7 +862,7 @@ EOF
         ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
             SERVICE_RESTART+=(httpd)
 
-        lk_git_provision_repo -s \
+        lk_git_provision_repo -fs \
             -o "$USER:adm" \
             -n "opcache-gui" \
             https://github.com/lkrms/opcache-gui.git \
