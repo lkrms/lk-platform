@@ -618,17 +618,13 @@ $LK_NODE_HOSTNAME" &&
     fi
 
     if [ ${#PAC_KEEP[@]} -gt 0 ]; then
-        PAC_KEEP=($(comm -12 \
-            <(lk_echo_array PAC_KEEP | sort -u) \
-            <(lk_pac_installed_list | sort -u)))
-        _PAC_KEEP=($(lk_echo_array PAC_KEEP | sed -E '/^aurutils$/d'))
+        PAC_KEEP=($(lk_pac_installed_list "${PAC_KEEP[@]}"))
     fi
+    _PAC_KEEP=($(lk_echo_array PAC_KEEP | sed -E '/^aurutils$/d'))
 
     lk_console_message "Checking install reasons"
     PAC_EXPLICIT=$(lk_echo_array PAC_PACKAGES AUR_PACKAGES PAC_KEEP | sort -u)
-    PAC_MARK_EXPLICIT=($(comm -12 \
-        <(lk_echo_array PAC_EXPLICIT) \
-        <(lk_pac_installed_not_explicit | sort -u)))
+    PAC_MARK_EXPLICIT=($(lk_pac_installed_not_explicit "${PAC_EXPLICIT[@]}"))
     PAC_UNMARK_EXPLICIT=($(comm -13 \
         <(lk_echo_array PAC_EXPLICIT) \
         <(lk_pac_installed_explicit | sort -u)))
@@ -638,6 +634,26 @@ $LK_NODE_HOSTNAME" &&
     [ ${#PAC_UNMARK_EXPLICIT[@]} -eq 0 ] ||
         lk_log_bypass lk_tty \
             pacman -D --asdeps "${PAC_UNMARK_EXPLICIT[@]}"
+
+    REMOVE_MESSAGE=()
+    ! PAC_REMOVE=($(pacman -Qdttq)) || [ ${#PAC_REMOVE[@]} -eq 0 ] || {
+        lk_echo_array PAC_REMOVE |
+            lk_console_list "Orphaned:" package packages
+        lk_confirm "Remove the above?" N &&
+            REMOVE_MESSAGE+=("orphaned") ||
+            PAC_REMOVE=()
+    }
+    [ ${#PAC_REJECT[@]} -eq 0 ] ||
+        PAC_REJECT=($(lk_pac_installed_list "${PAC_REJECT[@]}"))
+    [ ${#PAC_REJECT[@]} -eq 0 ] || {
+        REMOVE_MESSAGE+=("blacklisted")
+        PAC_REMOVE+=("${PAC_REJECT[@]}")
+    }
+    [ ${#PAC_REMOVE[@]} -eq 0 ] || {
+        lk_console_message \
+            "Removing $(lk_implode " and " REMOVE_MESSAGE) packages"
+        lk_log_bypass lk_tty pacman -Rs --noconfirm "${PAC_REMOVE[@]}"
+    }
 
     [ ${#_PAC_KEEP[@]} -eq 0 ] ||
         lk_echo_array _PAC_KEEP |
@@ -657,27 +673,6 @@ $LK_NODE_HOSTNAME" &&
     [ ${#PAC_INSTALL[@]}${#PAC_UPGRADE[@]} = 00 ] ||
         lk_log_bypass lk_tty pacman -Su ${NOCONFIRM+--noconfirm} \
             ${PAC_INSTALL[@]+"${PAC_INSTALL[@]}"}
-
-    REMOVE_MESSAGE=()
-    ! PAC_REMOVE=($(pacman -Qdttq)) || [ ${#PAC_REMOVE[@]} -eq 0 ] || {
-        lk_echo_array PAC_REMOVE |
-            lk_console_list "Orphaned:" package packages
-        lk_confirm "Remove the above?" N &&
-            REMOVE_MESSAGE+=("orphaned") ||
-            PAC_REMOVE=()
-    }
-    PAC_REJECT=($(comm -12 \
-        <(lk_echo_array PAC_REJECT | sort -u) \
-        <(lk_pac_installed_list | sort -u)))
-    [ ${#PAC_REJECT[@]} -eq 0 ] || {
-        REMOVE_MESSAGE+=("blacklisted")
-        PAC_REMOVE+=("${PAC_REJECT[@]}")
-    }
-    [ ${#PAC_REMOVE[@]} -eq 0 ] || {
-        lk_console_message \
-            "Removing $(lk_implode " and " REMOVE_MESSAGE) packages"
-        lk_log_bypass lk_tty pacman -Rs --noconfirm "${PAC_REMOVE[@]}"
-    }
 
     lk_symlink_bin codium code || true
     lk_symlink_bin vim vi || true
@@ -768,7 +763,8 @@ $LK_NODE_HOSTNAME" &&
 $(command -pv php7) $(command -pv wp) "\$@"
 EOF
         else
-            lk_rm -f "$FILE"
+            [ ! -f "$FILE" ] ||
+                lk_rm -f "$FILE"
         fi
     fi
 
