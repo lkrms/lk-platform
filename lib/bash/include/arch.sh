@@ -239,9 +239,15 @@ function lk_pac_installed_not_explicit() {
 
 function lk_makepkg_setup() {
     local NAME EMAIL
-    NAME=$(lk_full_name) && [ -n "$NAME" ] || NAME=$USER
-    EMAIL=$USER@$(lk_fqdn) || EMAIL=$USER@localhost
-    export PACKAGER="$NAME <${EMAIL%.localdomain}>"
+    printenv PACKAGER &>/dev/null || (
+        unset PACKAGER
+        { [ ! -f /etc/makepkg.conf ] || . /etc/makepkg.conf; } &&
+            [ -n "${PACKAGER-}" ]
+    ) || {
+        NAME=$(lk_full_name) && [ -n "$NAME" ] || NAME=$USER
+        EMAIL=$USER@$(lk_fqdn) || EMAIL=$USER@localhost
+        export PACKAGER="$NAME <${EMAIL%.localdomain}>"
+    }
 }
 
 # lk_makepkg [-a AUR_PACKAGE] [MAKEPKG_ARG...]
@@ -291,9 +297,10 @@ function lk_aur_sync() {
         lk_console_list "Syncing from AUR:" package packages
     lk_makepkg_setup
     for PKG in "$@"; do
-        aur sync --database aur --no-view --noconfirm \
+        lk_run_detail aur sync --database aur --no-view --noconfirm --remove \
             ${CHROOT+--chroot} \
             ${CHROOT+--makepkg-conf=/etc/makepkg.conf} \
+            ${GPGKEY+--sign} \
             ${_LK_AUR_ARGS[@]+"${_LK_AUR_ARGS[@]}"} "$PKG" &&
             SYNCED+=("$PKG") ||
             FAILED+=("$PKG")

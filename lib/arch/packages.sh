@@ -230,7 +230,6 @@ if lk_node_service_enabled desktop; then
         #
         noto-fonts
         noto-fonts-cjk
-        noto-fonts-emoji
         terminus-font
         ttf-dejavu
         ttf-inconsolata
@@ -241,6 +240,11 @@ if lk_node_service_enabled desktop; then
         ttf-roboto-mono
         ttf-ubuntu-font-family
     )
+
+    lk_echo_array PAC_PACKAGES AUR_PACKAGES |
+        grep -E '(^ttf-joypixels$|^ttf-.*\<(tw)?emoji\>|\<fonts-emoji\>)' \
+            >/dev/null ||
+        PAC_PACKAGES+=(noto-fonts-emoji)
 
     AUR_PACKAGES+=(
         autorandr-git

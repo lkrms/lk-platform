@@ -1038,36 +1038,39 @@ function _lk_lock_check_args() {
         ;;
     esac || lk_warn "invalid arguments" || return 1
     printf 'set -- %s\n' "$(lk_quote_args "$@")"
-} #### Reviewed: 2021-04-10
+} #### Reviewed: 2021-05-23
 
-# lk_lock [LOCK_FILE_VAR LOCK_FD_VAR] [LOCK_NAME]
+# lk_lock [-f LOCK_FILE] [LOCK_FILE_VAR LOCK_FD_VAR] [LOCK_NAME]
 function lk_lock() {
-    local SH
-    SH=$(_lk_lock_check_args "$@") || { [ $? -eq 2 ] && return 0; } || return
-    eval "$SH" || return
+    local _LK_SH _LK_FILE
+    [ "${1-}" != -f ] || { _LK_FILE=${2-} && shift 2 || return; }
+    _LK_SH=$(_lk_lock_check_args "$@") ||
+        { [ $? -eq 2 ] && return 0; } || return
+    eval "$_LK_SH" || return
     unset "${@:1:2}"
-    eval "$1=/tmp/\${3:-.\${LK_PATH_PREFIX:-lk-}\$(lk_myself 1)}.lock" &&
+    eval "$1=\${_LK_FILE:-/tmp/\${3:-.\${LK_PATH_PREFIX:-lk-}\$(lk_myself 1)}.lock}" &&
         eval "$2=\$(lk_fd_next)" &&
         eval "exec ${!2}>\"\$$1\"" || return
     flock -n "${!2}" || lk_warn "unable to acquire lock: ${!1}" || return
     lk_trap_add EXIT "_lk_lock_trap $BASH_SUBSHELL$(printf ' %q' "$@")"
-} #### Reviewed: 2021-04-10
+} #### Reviewed: 2021-05-23
 
 function _lk_lock_trap() {
     [ "${1-}" != "$BASH_SUBSHELL" ] || lk_lock_drop "${@:2:3}"
-} #### Reviewed: 2021-04-10
+} #### Reviewed: 2021-05-23
 
 # lk_lock_drop [LOCK_FILE_VAR LOCK_FD_VAR] [LOCK_NAME]
 function lk_lock_drop() {
-    local SH
-    SH=$(_lk_lock_check_args "$@") || { [ $? -eq 2 ] && return 0; } || return
-    eval "$SH" || return
+    local _LK_SH
+    _LK_SH=$(_lk_lock_check_args "$@") ||
+        { [ $? -eq 2 ] && return 0; } || return
+    eval "$_LK_SH" || return
     if [ "${!1:+1}${!2:+1}" = 11 ]; then
         eval "exec ${!2}>&-" || lk_warn "unable to drop lock: ${!1}" || return
         rm -f -- "${!1}" 2>/dev/null || true
     fi
     unset "${@:1:2}"
-} #### Reviewed: 2021-04-10
+} #### Reviewed: 2021-05-23
 
 function pv() {
     lk_ignore_SIGINT && lk_log_bypass_stderr command pv
@@ -1099,7 +1102,8 @@ BEGIN {
 }
 ( $s, $ms ) = Time::HiRes::gettimeofday();
 $ms = sprintf( "%06i", $ms );
-print strftime( "$ENV{PREFIX}%Y-%m-%d %H:%M:%S.$ms %z ", localtime($s) );'
+print strftime( "$ENV{PREFIX}%Y-%m-%d %H:%M:%S.$ms %z ", localtime($s) );
+s/.*\r(.)/\1/;'
 } #### Reviewed: 2021-05-13
 
 # lk_log_create_file [-e EXT] [DIR...]
@@ -1438,17 +1442,20 @@ function lk_readline_format() {
     echo "$STRING"
 }
 
-function lk_strip_non_printing() {
-    local STRING
-    eval "$(lk_get_regex NON_PRINTING_REGEX)"
+function lk_strip_cr() {
     if [ $# -gt 0 ]; then
-        STRING=$1
-        while [[ $STRING =~ (.*)$NON_PRINTING_REGEX(.*) ]]; do
-            STRING=${BASH_REMATCH[1]}${BASH_REMATCH[$((${#BASH_REMATCH[@]} - 1))]}
-        done
-        echo "$STRING"
+        lk_echo_args "$@" | lk_strip_cr
     else
-        sed -E "s/$NON_PRINTING_REGEX//g"
+        sed -E 's/.*\r(.)/\1/'
+    fi
+}
+
+function lk_strip_non_printing() {
+    if [ $# -gt 0 ]; then
+        lk_echo_args "$@" | lk_strip_non_printing
+    else
+        eval "$(lk_get_regex NON_PRINTING_REGEX)"
+        sed -Ee "s/$NON_PRINTING_REGEX//g" -e 's/.*\r(.)/\1/'
     fi
 }
 

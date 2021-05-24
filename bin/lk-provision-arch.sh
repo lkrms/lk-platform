@@ -530,6 +530,20 @@ $LK_NODE_HOSTNAME" &&
         . "$LK_PACKAGES_FILE"
     . "$LK_BASE/lib/arch/packages.sh"
 
+    # Avoid "unknown public key" errors
+    unset LK_SUDO
+    LK_CONF_OPTION_FILE=~/.gnupg/gpg.conf
+    lk_install -d -m 00700 "${LK_CONF_OPTION_FILE%/*}"
+    lk_install -m 00644 "$LK_CONF_OPTION_FILE"
+    LK_FILE_KEEP_ORIGINAL=0
+    if ! grep -q "\<auto-key-retrieve\>" "$LK_CONF_OPTION_FILE"; then
+        lk_conf_enable_row auto-key-retrieve
+    fi
+    _LK_CONF_DELIM=" " \
+        lk_conf_set_option keyserver hkps://keyserver.ubuntu.com
+    unset LK_FILE_KEEP_ORIGINAL
+    LK_SUDO=1
+
     if lk_command_exists aur ||
         { [ ${#AUR_PACKAGES[@]} -gt 0 ] && lk_confirm \
             "OK to install aurutils for AUR package management?" Y; }; then
@@ -580,26 +594,24 @@ $LK_NODE_HOSTNAME" &&
         lk_install -m 00644 "$FILE"
         lk_file_replace "$FILE" "$_FILE"
 
-        # Avoid "unknown public key" errors
         unset LK_SUDO
-        FILE=~/.gnupg/gpg.conf
-        lk_install -d -m 00700 "${FILE%/*}"
-        lk_install -m 00644 "$FILE"
+        LK_CONF_OPTION_FILE=~/.gnupg/gpg-agent.conf
+        lk_install -m 00644 "$LK_CONF_OPTION_FILE"
         LK_FILE_KEEP_ORIGINAL=0
-        if ! grep -q "\<auto-key-retrieve\>" "$FILE"; then
-            lk_console_detail \
-                "Enabling in $(lk_pretty_path $FILE):" "auto-key-retrieve"
-            lk_conf_enable_row auto-key-retrieve "$FILE"
+        if ! grep -q "\<allow-preset-passphrase\>" "$LK_CONF_OPTION_FILE"; then
+            lk_conf_enable_row allow-preset-passphrase
+            _LK_CONF_DELIM=" " \
+                lk_conf_set_option max-cache-ttl 86400
         fi
-        _LK_CONF_DELIM=" " \
-            lk_conf_set_option keyserver hkps://keyserver.ubuntu.com "$FILE"
         unset LK_FILE_KEEP_ORIGINAL
         LK_SUDO=1
 
         if [ ${#AUR_PACKAGES[@]} -gt 0 ]; then
-            lk_aur_sync "${AUR_PACKAGES[@]}"
+            lk_aur_sync "${AUR_PACKAGES[@]}" || EXIT_STATUS=$?
             ! lk_aur_can_chroot || lk_pac_sync -f
-            PAC_PACKAGES+=(aurutils "${AUR_PACKAGES[@]}")
+            PAC_PACKAGES+=($(comm -12 \
+                <({ echo aurutils && lk_echo_array AUR_PACKAGES; } | sort -u) \
+                <(lk_pac_repo_available_list aur | sort -u)))
             AUR_PACKAGES=()
         fi
         lk_log_tty_stdout_off
@@ -756,7 +768,7 @@ $LK_NODE_HOSTNAME" &&
 $(command -pv php7) $(command -pv wp) "\$@"
 EOF
         else
-            lk_rm "$FILE"
+            lk_rm -f "$FILE"
         fi
     fi
 
@@ -994,9 +1006,16 @@ done\""
 
     service_apply || EXIT_STATUS=$?
 
-    (exit "$EXIT_STATUS") &&
-        lk_console_success "Provisioning complete" ||
+    (exit "$EXIT_STATUS") ||
         lk_console_error -r "Provisioning completed with errors" || lk_die ""
+    lk_console_success "Provisioning complete"
+
+    ! lk_arch_reboot_required || {
+        lk_console_blank
+        lk_console_warning "Reboot required"
+        lk_confirm "Reboot now?" Y || exit 0
+        sudo shutdown -r now
+    }
 
     exit
 }
