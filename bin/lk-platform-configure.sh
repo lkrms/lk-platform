@@ -343,11 +343,6 @@ lk_log_start
         lk_console_message "Checking repository"
         cd "$LK_BASE"
         REPO_OWNER=$(lk_file_owner "$LK_BASE")
-        _LK_GIT_ENV=()
-        [ -z "${SSH_AUTH_SOCK-}" ] ||
-            ! SOCK_OWNER=$(lk_file_owner "$SSH_AUTH_SOCK" 2>/dev/null) ||
-            [ "$SOCK_OWNER" != "$REPO_OWNER" ] ||
-            _LK_GIT_ENV=(SSH_AUTH_SOCK="$SSH_AUTH_SOCK")
         CONFIG_COMMANDS=()
         [ ! -g "$LK_BASE" ] ||
             check_repo_config "core.sharedRepository" "0664"

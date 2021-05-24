@@ -97,6 +97,7 @@ for i in "${!FUNCTIONS[@]}"; do
     REGEX=${PATTERNS[$i]}
     DESC=${DESCRIPTIONS[$i]}
     printf '# %s VALUE
+#
 # Return true if VALUE is a valid %s.
 function %s() {\n    local %s=%s\n    [[ $1 =~ ^$%s$ ]]\n}\n\n' \
         "$FUNCTION" "$DESC" \

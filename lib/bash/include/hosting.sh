@@ -133,7 +133,7 @@ function lk_hosting_configure_site() {
 
 function lk_hosting_configure_modsecurity() {
     lk_apt_install libapache2-mod-security2 &&
-        lk_git_provision_repo -s \
+        lk_git_provision_repo -fs \
             -o root:adm \
             -b "${LK_OWASP_CRS_BRANCH:-v3.3/master}" \
             -n "OWASP ModSecurity Core Rule Set" \
