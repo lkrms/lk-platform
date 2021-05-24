@@ -2342,7 +2342,7 @@ function lk_curl() {
 function lk_run_as() {
     [ $# -ge 2 ] || lk_warn "invalid arguments" || return
     if lk_is_linux; then
-        lk_maybe_sudo runuser -u "$1" -- "${@:2}"
+        lk_elevate runuser -u "$1" -- "${@:2}"
     else
         sudo -u "$1" -- "${@:2}"
     fi
@@ -2829,6 +2829,11 @@ function lk_is_declared() {
 function lk_is_readonly() {
     (unset "$1" 2>/dev/null) || return 0
     false
+}
+
+function lk_is_exported() {
+    local REGEX="^declare -$NS*x$NS*"
+    [[ $(declare -p "$1" 2>/dev/null) =~ $REGEX ]]
 }
 
 # lk_version_at_least INSTALLED_VERSION MINIMUM_VERSION
@@ -3509,6 +3514,7 @@ else
 fi
 
 # lk_is_host VALUE
+#
 # Return true if VALUE is a valid IP address, hostname or domain name.
 function lk_is_host() {
     local HOST_REGEX="(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))|([a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)*))"
@@ -3516,6 +3522,7 @@ function lk_is_host() {
 }
 
 # lk_is_fqdn VALUE
+#
 # Return true if VALUE is a valid domain name.
 function lk_is_fqdn() {
     local DOMAIN_NAME_REGEX="[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)+"
@@ -3523,6 +3530,7 @@ function lk_is_fqdn() {
 }
 
 # lk_is_email VALUE
+#
 # Return true if VALUE is a valid email address.
 function lk_is_email() {
     local EMAIL_ADDRESS_REGEX="[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)+"
@@ -3530,6 +3538,7 @@ function lk_is_email() {
 }
 
 # lk_is_uri VALUE
+#
 # Return true if VALUE is a valid URI with a scheme and host.
 function lk_is_uri() {
     local URI_REGEX_REQ_SCHEME_HOST="(([a-zA-Z][-a-zA-Z0-9+.]*):)(//(([-a-zA-Z0-9._~%!\$&'()*+,;=]+)(:([-a-zA-Z0-9._~%!\$&'()*+,;=]*))?@)?([-a-zA-Z0-9._~%!\$&'()*+,;=]+|\\[([0-9a-fA-F:]+)\\])(:([0-9]+))?)([-a-zA-Z0-9._~%!\$&'()*+,;=:@/]+)?(\\?([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]+))?(#([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]*))?"
@@ -3537,6 +3546,7 @@ function lk_is_uri() {
 }
 
 # lk_is_identifier VALUE
+#
 # Return true if VALUE is a valid Bash identifier.
 function lk_is_identifier() {
     local IDENTIFIER_REGEX="[a-zA-Z_][a-zA-Z0-9_]*"

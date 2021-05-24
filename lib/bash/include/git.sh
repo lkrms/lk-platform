@@ -1,25 +1,30 @@
 #!/bin/bash
 
-# shellcheck disable=SC2164
-
 function _lk_git() {
+    local VAR ENV=() SOCK_OWNER SSH_OPTIONS=(ClearAllForwardings=yes
+        ${_LK_GIT_SSH_OPTIONS+"${_LK_GIT_SSH_OPTIONS[@]}"})
     if [ "${1-}" = -1 ]; then
         set -- "${@:2}"
     else
         set -- git "$@"
     fi
+    for VAR in "${!GIT_@}"; do
+        ! lk_is_exported "$VAR" || ENV[${#ENV[@]}]="$VAR=${!VAR}"
+    done
+    [ "${SSH_AUTH_SOCK:+1}${_LK_GIT_USER:+1}" != 11 ] ||
+        ! SOCK_OWNER=$(lk_file_owner "$SSH_AUTH_SOCK" 2>/dev/null) ||
+        [ "$SOCK_OWNER" != "$_LK_GIT_USER" ] ||
+        ENV[${#ENV[@]}]="SSH_AUTH_SOCK=$SSH_AUTH_SOCK"
     set -- env \
-        GIT_SSH_COMMAND="ssh$(printf ' -o %s' \
-            ClearAllForwardings=yes \
-            ${_LK_GIT_SSH_OPTIONS[@]+"${_LK_GIT_SSH_OPTIONS[@]}"})" \
-        ${_LK_GIT_ENV[@]+"${_LK_GIT_ENV[@]}"} \
+        ${ENV+"${ENV[@]}"} \
+        GIT_SSH_COMMAND="ssh$(printf ' -o %s' "${SSH_OPTIONS[@]}")" \
         "$@"
     if [ -n "${_LK_GIT_USER-}" ]; then
         lk_run_as "$_LK_GIT_USER" "$@"
     else
         lk_maybe_sudo "$@"
     fi
-}
+} #### Reviewed: 2021-05-25
 
 function _lk_git_cd() {
     [ $# -eq 0 ] || cd "$1"
