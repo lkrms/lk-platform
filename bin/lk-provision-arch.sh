@@ -486,8 +486,6 @@ $LK_NODE_HOSTNAME" &&
 
     SERVICE_ENABLE+=(
         qemu-guest-agent "QEMU Guest Agent"
-        lightdm "LightDM"
-        cups "CUPS"
     )
 
     service_apply
@@ -685,6 +683,8 @@ $LK_NODE_HOSTNAME" &&
     lk_console_blank
     lk_console_log "Checking installed packages and services"
     SERVICE_ENABLE+=(
+        lightdm "LightDM"
+        cups "CUPS"
         atd "at"
         cronie "cron"
     )

@@ -99,7 +99,7 @@ function lk_git_remote_is_skipped() {
 
 function lk_git_remote_skip() {
     [ -n "${1-}" ] || lk_usage "\
-Usage: $(lk_myself -f) REMOTE" || return
+Usage: $FUNCNAME REMOTE" || return
     lk_confirm "Exclude remote '$1' from fetch and push?" Y || return
     _lk_git config --type=bool "remote.$1.skipDefaultUpdate" 1
     _lk_git config --type=bool "remote.$1.skipFetchAll" 1
@@ -210,19 +210,28 @@ function lk_git_ref() {
 
 # lk_git_provision_repo [OPTIONS] REMOTE_URL DIR
 function lk_git_provision_repo() {
-    local OPTIND OPTARG OPT SHARE OWNER GROUP BRANCH NAME LK_USAGE \
-        LK_SUDO=1 _LK_GIT_USER
-    unset SHARE
+    local OPTIND OPTARG OPT FORCE REMOTE SHARE OWNER GROUP BRANCH NAME \
+        LK_USAGE LK_SUDO=1 _LK_GIT_USER \
+        GIT_DIR GIT_WORK_TREE
+    unset FORCE SHARE
     LK_USAGE="\
-Usage: $(lk_myself -f) [OPTIONS] REMOTE_URL DIR
+Usage: $FUNCNAME [OPTIONS] REMOTE_URL DIR
 
 Options:
-  -s                            make repository group-shareable
-  -o OWNER|OWNER:GROUP|:GROUP   set ownership
-  -b BRANCH                     check out BRANCH
-  -n NAME                       use NAME instead of REMOTE_URL in messages"
-    while getopts ":so:b:n:" OPT; do
+  -f                        use \`git reset --hard\` if branches have diverged
+  -r NAME                   use NAME instead of origin as the remote name
+  -s                        make repository group-shareable
+  -o OWNER|[OWNER]:GROUP    set ownership
+  -b BRANCH                 check out BRANCH
+  -n NAME                   use NAME instead of REMOTE_URL in messages"
+    while getopts ":fr:so:b:n:" OPT; do
         case "$OPT" in
+        f)
+            FORCE=
+            ;;
+        r)
+            REMOTE=$OPTARG
+            ;;
         s)
             SHARE=
             ;;
@@ -248,38 +257,42 @@ Options:
     done
     shift $((OPTIND - 1))
     [ $# -eq 2 ] || lk_usage || return
+    NAME=${NAME:-$1}
     lk_install -d -m ${SHARE+02775} ${SHARE-00755} \
         ${OWNER:+-o "$OWNER"} ${GROUP:+-g "$GROUP"} "$2" || return
     if [ -z "$(ls -A "$2")" ]; then
         lk_console_item "Installing $NAME to" "$2"
-        (
-            umask ${SHARE+002} ${SHARE-022} &&
-                _lk_git clone \
-                    ${BRANCH:+-b "$BRANCH"} "$1" "$2"
-        )
+        (umask ${SHARE+002} ${SHARE-022} &&
+            _lk_git clone \
+                ${BRANCH:+-b "$BRANCH"} ${REMOTE:+-o "$REMOTE"} \
+                "$1" "$2")
     else
         lk_console_item "Updating $NAME in" "$2"
         (
             OWNER=${OWNER-}${GROUP:+:${GROUP-}}
             if [ -n "$OWNER" ]; then
-                lk_maybe_sudo chown -R "$OWNER" "$2" || exit
+                lk_elevate chown -R "$OWNER" "$2" || exit
             fi
             umask ${SHARE+002} ${SHARE-022} &&
                 cd "$2" || exit
-            REMOTE=$(git remote) &&
-                [ "$REMOTE" = origin ] &&
-                REMOTE_URL=$(git remote get-url origin 2>/dev/null) &&
-                [ "$REMOTE_URL" = "$1" ] || {
-                lk_console_detail "Resetting remotes"
-                for REMOTE_NAME in $REMOTE; do
-                    _lk_git remote remove "$REMOTE_NAME" || exit
-                done
-                _lk_git remote add origin "$1" || exit
-            }
-            lk_git_update_repo_to origin "${BRANCH-}"
+            _REMOTE=$(lk_git_remote_from_url "$1" | head -n1) ||
+                { _REMOTE=${REMOTE:-origin} &&
+                    if git remote | grep -Fx "$_REMOTE" >/dev/null; then
+                        _lk_git remote set-url "$_REMOTE" "$1"
+                    else
+                        _lk_git remote add "$_REMOTE" "$1"
+                    fi; } ||
+                lk_warn "unable to add or update remote: $_REMOTE" || exit
+            lk_git_update_repo_to ${FORCE+-f} "$_REMOTE" "${BRANCH-}"
         )
+    fi || return
+    export GIT_DIR=$2/.git GIT_WORK_TREE=$2
+    if [ -z "${SHARE+1}" ]; then
+        lk_git_config --unset core.sharedRepository
+    else
+        lk_git_config core.sharedRepository 0664
     fi
-}
+} #### Reviewed: 2021-05-25
 
 # lk_git_fast_forward_branch [-f] BRANCH UPSTREAM
 function lk_git_fast_forward_branch() {
@@ -288,12 +301,18 @@ function lk_git_fast_forward_branch() {
     [ "${1-}" != -f ] || { FORCE= && shift; }
     BEHIND=$(git rev-list --count "$1..$2") || return
     [ "$BEHIND" -gt 0 ] || return 0
-    git merge-base --is-ancestor "$1" "$2" && unset FORCE ||
-        { [ -n "${FORCE+1}" ] && lk_git_is_clean &&
-            TAG=diverged-$1-$(lk_git_ref) && _lk_git tag -f "$TAG" &&
-            lk_console_warning "Tag added:" "$TAG"; } ||
-        lk_console_warning -r "Local branch $1 has diverged from $2" ||
-        return
+    git merge-base --is-ancestor "$1" "$2" && unset FORCE || {
+        lk_console_warning "Local branch $1 has diverged from $2"
+        [ -n "${FORCE+1}" ] || return
+        if lk_git_is_clean; then
+            TAG=diverged-$1-$(lk_git_ref) &&
+                lk_console_detail "Tagging local HEAD:" "$TAG" &&
+                _lk_git tag -f "$TAG" || return
+        else
+            lk_console_detail "Stashing local changes" &&
+                _lk_git stash || return
+        fi
+    }
     _BRANCH=$(lk_git_branch_current) || return
     lk_console_detail \
         "${FORCE-Updating}${FORCE+Resetting} $1 ($BEHIND $(lk_maybe_plural \
@@ -306,7 +325,7 @@ function lk_git_fast_forward_branch() {
         # ('origin/develop') without checking it out
         _lk_git ${FORCE-fetch . "$2:$1"}${FORCE+branch -f "$1" "$2"}
     fi
-}
+} #### Reviewed: 2021-05-25
 
 # lk_git_push_branch BRANCH DOWNSTREAM
 function lk_git_push_branch() {
@@ -420,14 +439,14 @@ function lk_git_update_repo_to() {
     unset FORCE
     [ "${1-}" != -f ] || { FORCE= && shift; }
     [ $# -ge 1 ] || lk_usage "\
-Usage: $(lk_myself -f) [-f] REMOTE [BRANCH]" || return
+Usage: $FUNCNAME [-f] REMOTE [BRANCH]" || return
     REMOTE=$1
     _lk_git fetch --quiet --prune "$REMOTE" ||
         lk_warn "unable to fetch from remote: $REMOTE" ||
         return
     _BRANCH=$(lk_git_branch_current) || _BRANCH=
     { BRANCH=${2:-$_BRANCH} && [ -n "$BRANCH" ]; } ||
-        BRANCH=$(lk_git_remote_head "$REMOTE")} ||
+        BRANCH=$(lk_git_remote_head "$REMOTE") ||
         lk_warn "no default branch for remote: $REMOTE" || return
     UPSTREAM=$REMOTE/$BRANCH
     unset LK_GIT_REPO_UPDATED
@@ -517,7 +536,7 @@ function lk_git_with_repos() {
         REPOS=(${LK_GIT_REPOS[@]+"${LK_GIT_REPOS[@]}"})
     LK_GIT_REPO_ERROR_COUNT=${#REPOS[@]}
     LK_USAGE="\
-Usage: $(lk_myself -f) [-p|-t] [-y] COMMAND [ARG...]
+Usage: $FUNCNAME [-p|-t] [-y] COMMAND [ARG...]
 
 For each Git repository found in the current directory, run COMMAND in the
 working tree's top-level directory. If -p is set, process multiple repositories
@@ -662,6 +681,35 @@ function lk_git_ancestors() {
     [ ${#ANCESTORS[@]} -gt 0 ] || return
     printf '%s\t%s\t%s\t%s\n' "${ANCESTORS[@]}" | sort -n -k2 -k1 | cut -f2-
 }
+
+# - lk_git_config [-o] [--type=TYPE] NAME VALUE
+# - lk_git_config [-o] [--type=TYPE] --unset[-all] NAME
+function lk_git_config() {
+    local OUTPUT COMMAND
+    [ "${1-}" != -o ] || { OUTPUT=1 && shift; }
+    [ $# -ge 2 ] ||
+        lk_usage "\
+Usage: $FUNCNAME [-o] [--type=TYPE] NAME VALUE
+   or: $FUNCNAME [-o] [--type=TYPE] --unset[-all] NAME" || return
+    case "${*:$#-1:1}" in
+    --unset | --unset-all)
+        ! git config --local "${@:1:$#-2}" --get "${*:$#}" >/dev/null ||
+            COMMAND=(_lk_git config --local "$@")
+        ;;
+
+    *)
+        git config --local \
+            --fixed-value "${@:1:$#-2}" --get "${@:$#-1}" >/dev/null ||
+            COMMAND=(_lk_git config --local "$@")
+        ;;
+    esac
+    [ -z "${COMMAND+1}" ] ||
+        if [ -n "${OUTPUT-}" ]; then
+            lk_quote_args "${COMMAND[@]}"
+        else
+            "${COMMAND[@]}"
+        fi
+} #### Reviewed: 2021-05-25
 
 # lk_git_config_remote_push_all [REMOTE]
 #
