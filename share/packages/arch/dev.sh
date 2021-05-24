@@ -266,6 +266,7 @@ PAC_PACKAGES+=(
     #
     git-filter-repo
     meld
+    tig
 
     #
     jdk11-openjdk
