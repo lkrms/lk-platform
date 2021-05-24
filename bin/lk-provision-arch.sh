@@ -55,13 +55,15 @@ else
 fi
 
 function service_apply() {
-    local i EXIT_STATUS=0
+    local i _ERRORS=${#ERRORS[@]}
     lk_console_message "Checking services"
     lk_is_bootstrap || ! lk_is_true DAEMON_RELOAD ||
-        lk_run_detail sudo systemctl daemon-reload || EXIT_STATUS=$?
+        lk_run_detail sudo systemctl daemon-reload ||
+        ERRORS+=("Command failed: systemctl daemon-reload")
     [ ${#SERVICE_ENABLE[@]} -eq 0 ] ||
         for i in $(seq 0 2 $((${#SERVICE_ENABLE[@]} - 1))); do
-            systemctl_enable "${SERVICE_ENABLE[@]:$i:2}" || EXIT_STATUS=$?
+            systemctl_enable "${SERVICE_ENABLE[@]:i:2}" ||
+                ERRORS+=("Could not enable service: ${SERVICE_ENABLE[*]:i:1}")
         done
     lk_is_bootstrap || [ ${#SERVICE_RESTART[@]} -eq 0 ] || {
         SERVICE_RESTART=($(comm -23 \
@@ -70,16 +72,17 @@ function service_apply() {
             [ ${#SERVICE_RESTART[@]} -eq 0 ] || {
                 lk_console_message "Restarting services with changed settings"
                 for SERVICE in "${SERVICE_RESTART[@]}"; do
-                    lk_systemctl_restart "$SERVICE" || EXIT_STATUS=$?
+                    lk_systemctl_restart "$SERVICE" ||
+                        ERRORS+=("Could not restart service: $SERVICE")
                 done
-            } || EXIT_STATUS=$?
+            } || ERRORS+=("Could not restart services")
         }
     }
     DAEMON_RELOAD=
     SERVICE_ENABLE=()
     SERVICE_RESTART=()
     SERVICE_STARTED=()
-    return "$EXIT_STATUS"
+    [ "${#ERRORS[@]}" -eq "$_ERRORS" ]
 }
 
 function file_delete() {
@@ -190,7 +193,7 @@ lk_start_trace
         lk_settings_persist "$SETTINGS_SH"
     )
 
-    EXIT_STATUS=0
+    ERRORS=()
     SERVICE_STARTED=()
     SERVICE_ENABLE=()
     SERVICE_RESTART=()
@@ -483,8 +486,6 @@ $LK_NODE_HOSTNAME" &&
 
     SERVICE_ENABLE+=(
         qemu-guest-agent "QEMU Guest Agent"
-        lightdm "LightDM"
-        cups "CUPS"
     )
 
     service_apply
@@ -607,7 +608,8 @@ $LK_NODE_HOSTNAME" &&
         LK_SUDO=1
 
         if [ ${#AUR_PACKAGES[@]} -gt 0 ]; then
-            lk_aur_sync "${AUR_PACKAGES[@]}" || EXIT_STATUS=$?
+            lk_aur_sync -g "${AUR_PACKAGES[@]}" ||
+                ERRORS+=("Failed to sync from AUR: ${FAILED[*]}")
             ! lk_aur_can_chroot || lk_pac_sync -f
             PAC_PACKAGES+=($(comm -12 \
                 <({ echo aurutils && lk_echo_array AUR_PACKAGES; } | sort -u) \
@@ -681,6 +683,8 @@ $LK_NODE_HOSTNAME" &&
     lk_console_blank
     lk_console_log "Checking installed packages and services"
     SERVICE_ENABLE+=(
+        lightdm "LightDM"
+        cups "CUPS"
         atd "at"
         cronie "cron"
     )
@@ -1000,11 +1004,17 @@ done\""
                 $'\n'"sudo smbpasswd -a $USER"
     fi
 
-    service_apply || EXIT_STATUS=$?
+    service_apply || true
 
-    (exit "$EXIT_STATUS") ||
-        lk_console_error -r "Provisioning completed with errors" || lk_die ""
-    lk_console_success "Provisioning complete"
+    if [ ${#ERRORS[@]} -eq 0 ]; then
+        lk_console_success "Provisioning complete"
+    else
+        lk_console_error "Provisioning completed with errors"
+        for ERROR in "${ERRORS[@]}"; do
+            lk_console_detail "$ERROR"
+        done
+        lk_die ""
+    fi
 
     ! lk_arch_reboot_required || {
         lk_console_blank
