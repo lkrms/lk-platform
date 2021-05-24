@@ -362,6 +362,7 @@ fi
 #
 
 PAC_REJECT_REGEX=$(lk_echo_array PAC_REJECT | sort -u | lk_implode_input "|")
+PAC_REJECT_REGEX=${PAC_REJECT_REGEX:+"($PAC_REJECT_REGEX)"}
 
 IFS=$'\n'
 PAC_REPOS=($(lk_echo_array PAC_REPOS | sort -u))
@@ -404,8 +405,10 @@ PAC_MOVED=$(lk_pac_unavailable_list -o "${PAC_PACKAGES[@]}")
 }
 
 if [ -n "$PAC_REJECT_REGEX" ]; then
-    PAC_PACKAGES=($(lk_echo_array PAC_PACKAGES | sed "/^${PAC_REJECT_REGEX}\$/d"))
-    AUR_PACKAGES=($(lk_echo_array AUR_PACKAGES | sed "/^${PAC_REJECT_REGEX}\$/d"))
+    PAC_PACKAGES=($(lk_echo_array PAC_PACKAGES |
+        sed -E "/^${PAC_REJECT_REGEX}\$/d"))
+    AUR_PACKAGES=($(lk_echo_array AUR_PACKAGES |
+        sed -E "/^${PAC_REJECT_REGEX}\$/d"))
 fi
 
 # For any packages in custom repos named as follows, replace PACKAGE in
