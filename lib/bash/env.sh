@@ -5,7 +5,7 @@ double_quote() {
 }
 
 escape_ere() {
-    echo "$1" | sed -E 's/[]$()*+./?[\^{|}]/\\&/g'
+    echo "$1" | sed -E 's/[]$()*+./?\^{|}[]/\\&/g'
 }
 
 in_path() {

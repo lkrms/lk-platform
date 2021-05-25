@@ -318,25 +318,12 @@ function lk_is_false() {
     [[ ${!1-} =~ ^(0|[fF][aA][lL][sS][eE]|[nN][oO]?|[oO][fF][fF])$ ]]
 }
 
-# lk_escape STRING [ESCAPE_CHAR...]
-#
-# Escape STRING by inserting a backslash before each occurrence of each
-# ESCAPE_CHAR.
-function lk_escape() {
-    local STRING=$1 ESCAPE="\\" SPECIAL SEARCH i=0
-    SPECIAL=("$ESCAPE" "${@:2}")
-    for SEARCH in "${SPECIAL[@]}"; do
-        # Ensure ESCAPE itself is only escaped once
-        ! ((i++)) || [ "$SEARCH" != "$ESCAPE" ] || continue
-        STRING=${STRING//"$SEARCH"/$ESCAPE$SEARCH}
-    done
-    echo "$STRING"
-}
-
 function lk_double_quote() {
-    local STRING
-    STRING=$(lk_escape "$1." '$' '`' "\\" '"')
-    printf '"%s"\n' "${STRING%.}"
+    if [ $# -gt 0 ]; then
+        printf '%s\n' "$@" | lk_double_quote
+    else
+        sed -E 's/["$\`]/\\&/g; s/.*/"&"/'
+    fi
 }
 
 # lk_get_shell_var [VAR...]
@@ -418,37 +405,47 @@ function lk_check_pid() {
 }
 
 function lk_escape_ere() {
-    lk_escape "$1" '$' '(' ')' '*' '+' '.' '/' '?' '[' "\\" ']' '^' '{' '|' '}'
-}
-
-function lk_escape_input_ere() {
-    sed -E 's/[]$()*+./?\^{|}[]/\\&/g'
+    if [ $# -gt 0 ]; then
+        printf '%s\n' "$@" | lk_escape_ere
+    else
+        sed -E 's/[]$()*+./?\^{|}[]/\\&/g'
+    fi
 }
 
 function lk_escape_ere_replace() {
-    lk_escape "$1" '&' '/' "\\"
+    if [ $# -gt 0 ]; then
+        printf '%s\n' "$@" | lk_escape_ere_replace
+    else
+        sed -E 's/[&/\]/\\&/g'
+    fi
 }
 
 # lk_curl_config [--]ARG[=PARAM]...
 #
 # Output each ARG=PARAM pair formatted for use with `curl --config`.
 function lk_curl_config() {
-    local PARAM
-    while [ $# -gt 0 ]; do
-        [[ $1 =~ ^([^=]+)(=(.*))?$ ]] ||
-            lk_warn "invalid argument: $1" || return
-        if [ -z "${BASH_REMATCH[2]}" ]; then
-            printf -- '--%s\n' "${1#--}"
-        else
-            PARAM=$(lk_escape "${BASH_REMATCH[3]}" "\\" '"')
-            PARAM=${PARAM//$'\t'/\\t}
-            PARAM=${PARAM//$'\n'/\\n}
-            PARAM=${PARAM//$'\r'/\\r}
-            PARAM=${PARAM//$'\v'/\\v}
-            printf -- '--%s "%s"\n' "${BASH_REMATCH[1]#--}" "$PARAM"
-        fi
-        shift
-    done
+    awk 'BEGIN {
+    for (i = 1; i < ARGC; i++) {
+        if (ARGV[i] !~ /^(--)?[^-=[:blank:]][^=[:blank:]]*(=.*)?$/) {
+            print "invalid argument: " ARGV[i] | "cat >&2"
+            exit 1
+        }
+        name = value = ARGV[i]
+        gsub(/(^--|=.*)/, "", name)
+        sub(/^[^=]+/, "", value)
+        if (!value) {
+            printf "--%s\n", name
+        } else {
+            sub(/^=/, "", value)
+            gsub(/["\\]/, "\\\\&", value)
+            gsub(/\t/, "\\t", value)
+            gsub(/\n/, "\\n", value)
+            gsub(/\r/, "\\r", value)
+            gsub(/\v/, "\\v", value)
+            printf "--%s \"%s\"\n", name, value
+        }
+    }
+}' "$@"
 }
 
 # lk_regex_case_insensitive STRING
@@ -593,7 +590,7 @@ Usage: $(lk_myself -f) [-e] [-q] [FILE]"
 
 function lk_lower() {
     if [ $# -gt 0 ]; then
-        lk_echo_args "$@" | lk_lower
+        printf '%s\n' "$@" | lk_lower
     else
         tr '[:upper:]' '[:lower:]'
     fi
@@ -601,7 +598,7 @@ function lk_lower() {
 
 function lk_upper() {
     if [ $# -gt 0 ]; then
-        lk_echo_args "$@" | lk_upper
+        printf '%s\n' "$@" | lk_upper
     else
         tr '[:lower:]' '[:upper:]'
     fi
@@ -615,7 +612,7 @@ function lk_upper_first() {
 
 function lk_trim() {
     if [ $# -gt 0 ]; then
-        lk_echo_args "$@" | lk_trim
+        printf '%s\n' "$@" | lk_trim
     else
         sed -E "s/^$S*(.*$NS)?$S*\$/\1/"
     fi
@@ -1072,8 +1069,8 @@ function lk_lock_drop() {
     unset "${@:1:2}"
 } #### Reviewed: 2021-05-23
 
-function pv() {
-    lk_ignore_SIGINT && lk_log_bypass_stderr command pv
+function lk_pv() {
+    lk_ignore_SIGINT && lk_log_bypass_stderr pv "$@"
 }
 
 function _lk_tee() {
@@ -1444,7 +1441,7 @@ function lk_readline_format() {
 
 function lk_strip_cr() {
     if [ $# -gt 0 ]; then
-        lk_echo_args "$@" | lk_strip_cr
+        printf '%s\n' "$@" | lk_strip_cr
     else
         sed -E 's/.*\r(.)/\1/'
     fi
@@ -1452,7 +1449,7 @@ function lk_strip_cr() {
 
 function lk_strip_non_printing() {
     if [ $# -gt 0 ]; then
-        lk_echo_args "$@" | lk_strip_non_printing
+        printf '%s\n' "$@" | lk_strip_non_printing
     else
         eval "$(lk_get_regex NON_PRINTING_REGEX)"
         sed -Ee "s/$NON_PRINTING_REGEX//g" -e 's/.*\r(.)/\1/'
@@ -2759,7 +2756,8 @@ function lk_expand_path() {
     # Expand globs
     if [[ $_PATH =~ [*?] ]]; then
         # Escape characters that have special meanings within double quotes
-        _PATH=$(lk_escape "$_PATH" '$' '`' "\\" '"')
+        _PATH=$(lk_double_quote "$_PATH")
+        _PATH=${_PATH:1:${#_PATH}-2}
         # Add quotes around glob sequences so that when the whole path is
         # quoted, they will be unquoted
         q='"'

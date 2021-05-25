@@ -405,7 +405,7 @@ Proceed?" Y || return
         [[ $USER =~ ^[-a-zA-Z0-9_]+$ ]] &&
             [[ $LOCAL_DB_NAME =~ ^$USER(_[-a-zA-Z0-9_]*)?$ ]] ||
             unset SUDO
-        ${SUDO+LK_SUDO=1} \
+        LK_SUDO=${SUDO-${LK_SUDO-}} \
             lk_maybe_trace "$LK_BASE/bin/lk-mysql-grant.sh" \
             "$LOCAL_DB_NAME" "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD" || return
     }
@@ -427,9 +427,9 @@ Proceed?" Y || return
     echo "$_SQL" | lk_mysql || return
     lk_console_detail "Restoring from" "$1"
     if [[ $1 =~ \.gz(ip)?$ ]]; then
-        lk_log_bypass_stderr pv "$1" | gunzip
+        lk_pv "$1" | gunzip
     else
-        lk_log_bypass_stderr pv "$1"
+        lk_pv "$1"
     fi | lk_mysql "$LOCAL_DB_NAME" ||
         lk_console_error -r "Restore operation failed" || return
     lk_console_success "Database restored successfully"
