@@ -14,6 +14,7 @@
     # Discard settings with the same name as LK_* variables in the environment
     # and add any that remain to the global scope
     vars() { printf '%s\n' "${!LK_@}"; }
+    _PATH_PREFIX=${LK_PATH_PREFIX-}
     unset IFS LK_PATH_PREFIX
     VARS=$(vars)
     [ ! -r /etc/default/lk-platform ] ||
@@ -21,7 +22,7 @@
     [ ! -r "${_DIR%/lib/bash}/etc/lk-platform/lk-platform.conf" ] ||
         . "${_DIR%/lib/bash}/etc/lk-platform/lk-platform.conf" || exit
     XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-~/.config}
-    LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
+    LK_PATH_PREFIX=${LK_PATH_PREFIX:-${_PATH_PREFIX:-lk-}}
     [ ! -f ~/".${LK_PATH_PREFIX}settings" ] ||
         . ~/".${LK_PATH_PREFIX}settings" || exit
     [ ! -f "$XDG_CONFIG_HOME/lk-platform/lk-platform.conf" ] ||
