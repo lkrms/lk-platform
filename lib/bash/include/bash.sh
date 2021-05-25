@@ -242,7 +242,7 @@ function lk_bash_udf_defaults() {
         cat ${1+"$1"} |
             grep -E "^.*<($XML_PREFIX_REGEX:)?UDF name=\"([^\"]+)\"" |
             sed -E \
-                -e "s/^.*<($XML_PREFIX_REGEX:)?UDF name=\"([^\"]+)\".* default=\"([^\"]*)\".*/    \2=\${\2:-\3} \\\\/" \
+                -e "s/^.*<($XML_PREFIX_REGEX:)?UDF name=\"([^\"]+)\".* default=\"([^\"]+)\".*/    \2=\${\2:-\3} \\\\/" \
                 -e "s/^.*<($XML_PREFIX_REGEX:)?UDF name=\"([^\"]+)\".*/    \2=\${\2-} \\\\/"
     ) && echo "${OUTPUT% \\}"
 }
