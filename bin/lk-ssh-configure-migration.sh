@@ -43,10 +43,10 @@ Options:
         shift
         case "$OPT" in
         -o | --source-name)
-            OLD_HOST_NAME=$1
+            _OLD_HOST_NAME=$1
             ;;
         -n | --target-name)
-            NEW_HOST_NAME=$1
+            _NEW_HOST_NAME=$1
             ;;
         -k | --source-key)
             [ -f "$1" ] || lk_warn "file not found: $1" || lk_usage
@@ -93,8 +93,8 @@ STAGE=${1:-local}
 STAGE=${STAGE#--}
 if [ "$STAGE" = "local" ]; then
     SSH_PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX}
-    NEW_HOST_NAME=${NEW_HOST_NAME:-${NEW_USER:-$NEW_HOST}}
-    NEW_HOST_NAME=$SSH_PREFIX${NEW_HOST_NAME#$SSH_PREFIX}
+    NEW_HOST_NAME=${_NEW_HOST_NAME:-${NEW_USER:-$NEW_HOST}}
+    NEW_HOST_NAME=${_NEW_HOST_NAME:-$SSH_PREFIX${NEW_HOST_NAME#$SSH_PREFIX}}
 elif [ "$STAGE" = "new" ]; then
     . lk-bash-load.sh || exit
     lk_include provision
@@ -106,9 +106,9 @@ elif [ "$STAGE" = "new" ]; then
     OLD_HOST={{OLD_HOST}}
     OLD_KEY={{OLD_KEY}}
     OLD_PASSWORD={{OLD_PASSWORD}}
-    OLD_HOST_NAME={{OLD_HOST_NAME}}
-    OLD_HOST_NAME=${OLD_HOST_NAME:-${OLD_USER:-$OLD_HOST}-old}
-    OLD_HOST_NAME=$SSH_PREFIX${OLD_HOST_NAME#$SSH_PREFIX}
+    _OLD_HOST_NAME={{_OLD_HOST_NAME}}
+    OLD_HOST_NAME=${_OLD_HOST_NAME:-${OLD_USER:-$OLD_HOST}-old}
+    OLD_HOST_NAME=${_OLD_HOST_NAME:-$SSH_PREFIX${OLD_HOST_NAME#$SSH_PREFIX}}
 else
     set -euo pipefail
     LK_BOLD={{LK_BOLD}}
@@ -184,7 +184,7 @@ local)
     lk_ssh_configure
     [ -z "$NEW_KEY_FILE" ] && lk_ssh_host_exists "$NEW_HOST_NAME" || {
         lk_console_detail \
-            "Adding host:" "$NEW_HOST_NAME ($NEW_USER@$NEW_HOST)"
+            "Adding host:" "$NEW_HOST_NAME (${NEW_USER:+$NEW_USER@}$NEW_HOST)"
         lk_ssh_add_host -t \
             "$NEW_HOST_NAME" \
             "$NEW_HOST" \
@@ -194,9 +194,9 @@ local)
     }
 
     lk_console_item "Connecting to" "$NEW_HOST_NAME"
-    ssh -o LogLevel=QUIET -t "$NEW_HOST_NAME" "bash -c$(
-        printf ' %q' "$(lk_expand_template -q "$0")" bash --new
-    )"
+    ssh -o LogLevel=QUIET -t \
+        "${NEW_USER:+$NEW_USER@}$NEW_HOST_NAME" \
+        "bash -c$(printf ' %q' "$(lk_expand_template -q "$0")" bash --new)"
     ;;
 
 new)
@@ -206,7 +206,7 @@ new)
         add_authorized_key "$NEW_KEY"
     [ -z "$OLD_KEY" ] && lk_ssh_host_exists "$OLD_HOST_NAME" || {
         lk_console_detail \
-            "Adding host:" "$OLD_HOST_NAME ($OLD_USER@$OLD_HOST)"
+            "Adding host:" "$OLD_HOST_NAME (${OLD_USER:+$OLD_USER@}$OLD_HOST)"
         [ -n "$OLD_KEY" ] &&
             KEY_FILE=- ||
             KEY_FILE=${LK_SSH_JUMP_HOST:+jump}
@@ -237,7 +237,8 @@ EOF
         lk_console_detail \
             "Password will be requested if public key not already installed"
     fi
-    ${OLD_PASSWORD:+setsid -w} ssh -o LogLevel=QUIET -t "$OLD_HOST_NAME" \
+    ${OLD_PASSWORD:+setsid -w} ssh -o LogLevel=QUIET -t \
+        "${OLD_USER:+$OLD_USER@}$OLD_HOST_NAME" \
         "bash -c$(printf ' %q' "$BASH_EXECUTION_STRING" bash --old "$KEY")" ||
         lk_die "ssh command failed (exit status $?)"
     if [ -n "${SSH_ASKPASS-}" ]; then
