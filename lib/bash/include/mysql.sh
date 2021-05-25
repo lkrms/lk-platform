@@ -5,15 +5,27 @@ function lk_mysql_is_quiet() {
 }
 
 function lk_mysql_escape() {
-    lk_escape "$1" "\\" "'"
+    if [ $# -gt 0 ]; then
+        lk_echo_args "$@" | lk_mysql_escape
+    else
+        sed -E 's/['\''\]/\\&/g'
+    fi
 }
 
 function lk_mysql_escape_like() {
-    lk_escape "$1" "\\" "'" "%" "_"
+    if [ $# -gt 0 ]; then
+        lk_echo_args "$@" | lk_mysql_escape_like
+    else
+        sed -E 's/[%'\''\_]/\\&/g'
+    fi
 }
 
 function lk_mysql_escape_cnf() {
-    lk_escape "$1" "\\" '"'
+    if [ $# -gt 0 ]; then
+        lk_echo_args "$@" | lk_mysql_escape_cnf
+    else
+        sed -E 's/["\]/\\&/g'
+    fi
 }
 
 function lk_mysql_quote_identifier() {

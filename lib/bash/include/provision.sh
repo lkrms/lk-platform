@@ -223,7 +223,7 @@ function lk_configure_locales() {
     lk_is_linux || lk_warn "platform not supported" || return
     LOCALES=(${LK_NODE_LOCALES-} en_US.UTF-8)
     _LOCALES=$(lk_echo_array LOCALES |
-        lk_escape_input_ere |
+        lk_escape_ere |
         lk_implode_input "|")
     [ ${#LOCALES[@]} -lt 2 ] || _LOCALES="($_LOCALES)"
     FILE=${_LK_PROVISION_ROOT-}/etc/locale.gen

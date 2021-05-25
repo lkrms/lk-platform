@@ -121,11 +121,12 @@ function lk_git_remote_singleton() {
 # Print the name of each remote with the given URL. If -E is set, treat URL as a
 # regular expression.
 function lk_git_remote_from_url() {
-    local FIXED= REGEX='^remote\.(.+)\.url$'
-    [ "${1-}" != -E ] || { unset FIXED && shift; }
+    local VALUE REGEX='^remote\.(.+)\.url$'
+    unset VALUE
+    [ "${1-}" != -E ] || { shift && VALUE=${1-}; }
     [ $# -gt 0 ] || lk_usage "Usage: $FUNCNAME [-E] URL" || return
-    git config --local \
-        --name-only --get-regexp ${FIXED+--fixed-value} "$REGEX" "$1" |
+    VALUE=${VALUE-$(lk_escape_ere "${1-}")} &&
+        git config --local --name-only --get-regexp "$REGEX" "$VALUE" |
         lk_require_output sed -E "s/$REGEX/\1/"
 }
 
@@ -690,7 +691,7 @@ function lk_git_ancestors() {
 # - lk_git_config [-o] [--type=TYPE] NAME VALUE
 # - lk_git_config [-o] [--type=TYPE] --unset[-all] NAME
 function lk_git_config() {
-    local OUTPUT COMMAND
+    local OUTPUT COMMAND REGEX
     [ "${1-}" != -o ] || { OUTPUT=1 && shift; }
     [ $# -ge 2 ] ||
         lk_usage "\
@@ -703,8 +704,9 @@ Usage: $FUNCNAME [-o] [--type=TYPE] NAME VALUE
         ;;
 
     *)
+        REGEX=$(lk_escape_ere "${*:$#}") || return
         git config --local \
-            --fixed-value "${@:1:$#-2}" --get "${@:$#-1}" >/dev/null ||
+            "${@:1:$#-2}" --get "${*:$#-1:1}" "$REGEX" >/dev/null ||
             COMMAND=(_lk_git config --local "$@")
         ;;
     esac
