@@ -191,7 +191,7 @@ Usage: $(lk_myself -f) DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
         "${DUMP_ARGS[@]}" \
         "$DB_NAME" |
         gzip |
-        pv ||
+        lk_pv ||
         EXIT_STATUS=$?
     [ -z "${OUTPUT_FILE-}" ] || eval "exec >&$OUTPUT_FD $OUTPUT_FD>&-"
     [ -z "${LK_MY_CNF-}" ] || {
@@ -243,7 +243,7 @@ Usage: $(lk_myself -f) SSH_HOST DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
     --no-tablespaces \\
     \"\$1\" | gzip
 exit \${PIPESTATUS[0]}' bash $(printf '%q' "$DB_NAME")" |
-        pv ||
+        lk_pv ||
         EXIT_STATUS=$?
     [ -z "${OUTPUT_FILE-}" ] || eval "exec >&$OUTPUT_FD $OUTPUT_FD>&-"
     lk_console_message "Deleting mysqldump configuration file"
@@ -280,9 +280,9 @@ Proceed?" Y || return
     echo "$_SQL" | lk_mysql || return
     lk_console_detail "Restoring from" "$FILE"
     if [[ $FILE =~ \.gz(ip)?$ ]]; then
-        pv "$FILE" | gunzip
+        lk_pv "$FILE" | gunzip
     else
-        pv "$FILE"
+        lk_pv "$FILE"
     fi | lk_mysql "$DB_NAME" ||
         lk_console_error -r "Restore operation failed" || return
     lk_console_success "Database restored successfully"

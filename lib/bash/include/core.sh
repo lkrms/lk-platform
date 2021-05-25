@@ -1072,8 +1072,8 @@ function lk_lock_drop() {
     unset "${@:1:2}"
 } #### Reviewed: 2021-05-23
 
-function pv() {
-    lk_ignore_SIGINT && lk_log_bypass_stderr command pv
+function lk_pv() {
+    lk_ignore_SIGINT && lk_log_bypass_stderr pv "$@"
 }
 
 function _lk_tee() {
