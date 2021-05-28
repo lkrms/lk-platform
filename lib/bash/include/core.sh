@@ -2964,7 +2964,20 @@ if ! lk_is_macos; then
     function lk_file_security() {
         lk_maybe_sudo stat -c '%U:%G %04a' -- "$@"
     }
+    function lk_full_name() {
+        getent passwd "${1:-$UID}" | cut -d: -f5 | cut -d, -f1
+    }
 else
+    # lk_dscl_read [PATH] KEY
+    function lk_dscl_read() {
+        [ $# -ne 1 ] || set -- "/Users/$USER" "$1"
+        [ $# -eq 2 ] || lk_warn "invalid arguments" || return
+        dscl . -read "$@" |
+            sed -E "1s/^$(lk_escape_ere "$2")://;s/^ //;/^\$/d"
+    }
+    function lk_full_name() {
+        lk_dscl_read RealName
+    }
     function lk_file_sort_by_date() {
         lk_maybe_sudo stat -t '%s' -f '%Sm :%N' -- "$@" | _lk_file_sort
     }

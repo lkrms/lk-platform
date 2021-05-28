@@ -455,10 +455,6 @@ function lk_get_standard_users() {
         <(printf '%s\n' "${USERS[@]}" | sort)
 }
 
-function lk_full_name() {
-    getent passwd "${1:-$UID}" | cut -d: -f5 | cut -d, -f1
-}
-
 function lk_icon_install() {
     local TARGET_DIR=${2:-~/.local/share/icons/hicolor} SIZE SIZES=(
         16x16 22x22 24x24 32x32 36x36 48x48 64x64 72x72 96x96

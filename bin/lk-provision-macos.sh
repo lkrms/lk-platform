@@ -169,7 +169,7 @@ function exit_trap() {
             lk_macos_set_hostname "$LK_NODE_HOSTNAME"
     }
 
-    CURRENT_SHELL=$(dscl . -read ~/ UserShell | sed 's/^UserShell: //')
+    CURRENT_SHELL=$(lk_dscl_read UserShell)
     if [ "$CURRENT_SHELL" != /bin/bash ]; then
         lk_console_item "Setting default shell for user '$USER' to:" /bin/bash
         sudo chsh -s /bin/bash "$USER"
