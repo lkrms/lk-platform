@@ -114,36 +114,31 @@ function lk_myself() {
 } #### Reviewed: 2021-04-10
 
 function _lk_caller() {
-    local CONTEXT REGEX='^([0-9]+) ([^ ]+) (.*)$' SOURCE FUNC LINE \
-        VERBOSE DIM=${LK_DIM:-$LK_GREY} CALLER=()
-    if CONTEXT=${1:-$(caller 1)} &&
-        [[ $CONTEXT =~ $REGEX ]]; then
+    local CONTEXT REGEX='^([0-9]*) ([^ ]*) (.*)$' SOURCE= FUNC= LINE= \
+        CALLER=()
+    ! CONTEXT=${1-$(caller 1)} || [[ ! $CONTEXT =~ $REGEX ]] || {
         SOURCE=${BASH_REMATCH[3]}
         FUNC=${BASH_REMATCH[2]}
         LINE=${BASH_REMATCH[1]}
-    fi
-    ! lk_verbose || VERBOSE=1
+    }
     # If the caller isn't in the running script (or no script is running), start
     # with the shell/script name
-    if [ "${SOURCE:=}" != "$0" ] || [ "$SOURCE" = main ]; then
+    if [ "$SOURCE" != "$0" ] || [ "$SOURCE" = main ]; then
         CALLER=("$LK_BOLD${0##*/}$LK_RESET")
     fi
-    # Always include source filename (and line number if being verbose)
+    # Always include source filename and line number
     if [ -n "$SOURCE" ] && [ "$SOURCE" != main ]; then
-        CALLER+=("$(
-            if [ "$SOURCE" = "$0" ]; then
-                echo "$LK_BOLD${0##*/}$LK_RESET"
-            else
-                lk_pretty_path "$SOURCE"
-            fi
-        )${VERBOSE:+$DIM:$LINE$LK_RESET}")
+        CALLER+=("$(if [ "$SOURCE" = "$0" ]; then
+            echo "$LK_BOLD${0##*/}$LK_RESET"
+        else
+            lk_pretty_path "$SOURCE"
+        fi)$LK_DIM:${LINE:-1}$LK_RESET")
     fi
-    ! lk_verbose 2 ||
-        [ -z "${FUNC-}" ] ||
-        [ "$FUNC" = main ] ||
-        CALLER+=("$FUNC$DIM()$LK_RESET")
-    lk_implode "$DIM->$LK_RESET" CALLER
-}
+    ! lk_verbose ||
+        [ -z "$FUNC" ] || [ "$FUNC" = main ] ||
+        CALLER+=("$FUNC$LK_DIM()$LK_RESET")
+    lk_implode "$LK_DIM->$LK_RESET" CALLER
+} #### Reviewed: 2021-05-28
 
 # lk_warn [MESSAGE]
 #
@@ -1353,7 +1348,7 @@ function _lk_log_bypass() {
 # redirect stdout or stderr to output logs. If -n is set, run COMMAND with the
 # same redirections lk_log_tty_on would apply.
 function lk_log_bypass() {
-    local ARG=${1-}
+    local ARG=${1-} _LK_CAN_FAIL=1
     [[ ! $ARG =~ ^-(t?[oe]|n)$ ]] || shift
     lk_log_is_open || {
         "$@"
@@ -2410,6 +2405,7 @@ function lk_maybe_sudo() {
 # Run the given command with sudo unless the current user is root. If COMMAND is
 # not found in PATH and is a function, run it with LK_SUDO=1.
 function lk_elevate() {
+    local _LK_CAN_FAIL=1
     if [ "$EUID" -eq 0 ]; then
         "$@"
     else
@@ -3376,37 +3372,33 @@ function lk_trap_get() {
     elif [ $# -eq 4 ]; then
         echo "$3"
     else
-        lk_usage "\
-Usage: ${FUNCNAME[0]} SIGNAL"
+        lk_usage "Usage: $FUNCNAME SIGNAL"
     fi
-}
+} #### Reviewed: 2021-05-28
 
 # lk_trap_add SIGNAL COMMAND
 function lk_trap_add() {
     local CMD
-    [ $# -eq 2 ] || lk_usage "\
-Usage: ${FUNCNAME[0]} SIGNAL COMMAND" || return
-    set -- "$1" "$2"' "$LINENO ${FUNCNAME[0]-} ${BASH_SOURCE[0]-}"'
+    [ $# -eq 2 ] || lk_usage "Usage: $FUNCNAME SIGNAL COMMAND" || return
+    set -- "$1" "$2"' "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'
     CMD=$(lk_trap_get "$1" |
         sed -E "/^$(lk_escape_ere "$2")\$/d" && printf .) &&
         trap -- "${CMD%.}$2" "$1"
-}
+} #### Reviewed: 2021-05-28
 
 function _lk_exit_trap() {
     local STATUS=$?
-    [ "$STATUS" -eq 0 ] ||
-        [ "${_LK_CAN_FAIL:-0}" -eq 1 ] ||
-        [[ ${FUNCNAME[1]-} =~ ^_?lk_(die|usage|elevate)$ ]] ||
-        { [[ $- == *i* ]] && [ "$BASH_SUBSHELL" -eq 0 ]; } ||
-        _LK_TTY_NO_FOLD=1 \
-            lk_console_error \
+    [ $STATUS -eq 0 ] || [ "${_LK_CAN_FAIL-}" = 1 ] ||
+        [[ ${FUNCNAME[1]-} =~ ^_?lk_(die|usage)$ ]] ||
+        { [[ $- == *i* ]] && [ $BASH_SUBSHELL -eq 0 ]; } ||
+        _LK_TTY_NO_FOLD=1 lk_console_error \
             "$(_lk_caller "${_LK_ERR_TRAP_CALLER:-$1}"): unhandled error" \
             "$(lk_get_stack_trace $((1 - ${_LK_STACK_DEPTH:-0})))"
-}
+} #### Reviewed: 2021-05-28
 
 function _lk_err_trap() {
-    _LK_ERR_TRAP_CALLER=$(caller 0) || _LK_ERR_TRAP_CALLER=
-}
+    _LK_ERR_TRAP_CALLER=$1
+} #### Reviewed: 2021-05-28
 
 function _lk_cleanup_trap() {
     local COMMAND ARRAY LIST ITEM
