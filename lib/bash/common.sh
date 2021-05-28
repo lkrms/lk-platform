@@ -165,6 +165,7 @@ function _lk_elevate() {
 }
 
 function lk_elevate() {
+    local _LK_CAN_FAIL=1
     if [ "$EUID" -eq 0 ]; then
         if [ $# -gt 0 ]; then
             "$@"
@@ -175,6 +176,7 @@ function lk_elevate() {
 }
 
 function lk_maybe_elevate() {
+    local _LK_CAN_FAIL=1
     if [ "$EUID" -ne 0 ] && lk_can_sudo "${1-$0}"; then
         _lk_elevate "$@"
     elif [ $# -gt 0 ]; then

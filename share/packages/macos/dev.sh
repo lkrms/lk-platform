@@ -161,8 +161,8 @@ HOMEBREW_FORMULAE+=(
     shfmt
 
     #
-    libvirt
-    qemu
+    #libvirt
+    #qemu
     lkrms/virt-manager/virt-manager
 
     # Platforms
