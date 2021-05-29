@@ -691,7 +691,7 @@ function lk_git_ancestors() {
 # - lk_git_config [-o] [--type=TYPE] NAME VALUE
 # - lk_git_config [-o] [--type=TYPE] --unset[-all] NAME
 function lk_git_config() {
-    local OUTPUT COMMAND REGEX
+    local OUTPUT COMMAND=() REGEX
     [ "${1-}" != -o ] || { OUTPUT=1 && shift; }
     [ $# -ge 2 ] ||
         lk_usage "\
@@ -716,7 +716,7 @@ Usage: $FUNCNAME [-o] [--type=TYPE] NAME VALUE
         else
             "${COMMAND[@]}"
         fi
-} #### Reviewed: 2021-05-25
+} #### Reviewed: 2021-05-29
 
 # lk_git_config_remote_push_all [REMOTE]
 #

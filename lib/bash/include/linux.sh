@@ -582,6 +582,30 @@ function lk_xfce4_xfconf_dump() {
     done
 }
 
+# lk_file_acl_list-with-extended [STARTING_POINT...]
+#
+# Use `getfacl` to search each STARTING_POINT and print the name of each file
+# and directory with an extended ACL. If no STARTING_POINT is specified, search
+# the current directory.
+function lk_file_acl_list-with-extended() {
+    [ $# -gt 0 ] || set -- "$PWD" || return
+    getfacl -Rsp "$@" | sed -En 's/^# file: //p'
+} #### Reviewed: 2021-05-28
+
+# lk_file_acl_remove-extended [STARTING_POINT...]
+#
+# Search each STARTING_POINT and remove extended ACLs from all files and
+# directories. If no STARTING_POINT is specified, search the current directory.
+function lk_file_acl_remove-extended() {
+    lk_confirm "OK to remove extended ACL entries recursively?" Y || return
+    lk_file_acl_list-with-extended "$@" |
+        # Interpret special character escapes added by `getfacl`
+        gnu_xargs -d '\n' printf '%b\0' |
+        # Print filenames to stderr
+        tee >(tr '\n\0' ' \n' >&2) |
+        xargs -0 setfacl -b --
+} #### Reviewed: 2021-05-28
+
 lk_provide linux
 
 true || {

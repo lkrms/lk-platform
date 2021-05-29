@@ -547,22 +547,20 @@ Usage: $(lk_myself -f) [-e] [-q] [FILE]"
     TEMPLATE=$(cat ${1+"$1"} && printf .) || return
     ! lk_is_true EVAL || {
         lk_mapfile KEYS <(
-            printf '%q' "$TEMPLATE" |
-                sed -E \
-                    -e "s/$(lk_escape_ere "$(printf '%q' "({:")")/\(\{:/g" \
-                    -e "s/$(lk_escape_ere "$(printf '%q' ":})")")/:\}\)/g" |
+            # Add a newline to guarantee $'...\n'
+            printf '%q' "$TEMPLATE"$'\n' |
                 grep -Eo '\(\{:([^:]*|:[^}]|:\}[^)])*:\}\)' |
                 sort -u
         )
         [ ${#KEYS[@]} -eq 0 ] ||
             for i in $(seq 0 $((${#KEYS[@]} - 1))); do
-                eval "KEYS[$i]=\$'${KEYS[$i]:3:$((${#KEYS[$i]} - 6))}'"
-                eval "REPLACE=\$({ ${KEYS[$i]}"$'\n'"} && printf .)" ||
-                    lk_warn "error evaluating: ${KEYS[$i]}" || return
+                eval "KEYS[i]=\$'${KEYS[i]:3:$((${#KEYS[i]} - 6))}'"
+                REPLACE=$(eval "${KEYS[i]}" && printf .) ||
+                    lk_warn "error evaluating: ${KEYS[i]}" || return
                 ! lk_is_true QUOTE ||
                     REPLACE=$(printf '%q.' "${REPLACE%.}")
                 REPLACE=${REPLACE%.}
-                TEMPLATE=${TEMPLATE//"({:${KEYS[$i]}:})"/$REPLACE}
+                TEMPLATE=${TEMPLATE//"({:${KEYS[i]}:})"/$REPLACE}
             done
     }
     KEYS=($(echo "$TEMPLATE" |
