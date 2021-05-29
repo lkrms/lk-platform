@@ -13,6 +13,7 @@ HOMEBREW_TAPS+=(
     homebrew/cask-drivers
     homebrew/cask-fonts
     homebrew/services
+    lkrms/lk
 )
 
 # Terminal-based
@@ -84,7 +85,7 @@ HOMEBREW_CASKS+=(
     basictex
 
     # Photography
-    adobe-dng-converter
+    lkrms/lk/adobe-dng-converter
 
     # Multimedia (video)
     handbrake
