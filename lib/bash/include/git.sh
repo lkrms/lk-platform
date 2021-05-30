@@ -63,13 +63,30 @@ function lk_git_is_project_top_level() {
         lk_git_is_work_tree && ! lk_git_is_submodule && lk_git_is_top_level)
 }
 
-# lk_git_is_clean [DIR]
+# lk_git_is_clean [-n] [DIR]
+#
+# Return true if there are no uncommitted changes in the repository. If -n is
+# set, skip the index update.
 function lk_git_is_clean() {
     local NO_REFRESH
     [ "${1-}" != -n ] || { NO_REFRESH=1 && shift; }
     (_lk_git_cd "$@" &&
-        { [ -n "${NO_REFRESH-}" ] || _lk_git update-index --refresh; } &&
+        { [ -n "${NO_REFRESH-}" ] ||
+            _lk_git update-index --refresh; } &&
         git diff-index --quiet HEAD --) >/dev/null
+}
+
+# lk_git_list_changes [-n] [DIR]
+#
+# List uncommitted changes in the repository. If -n is set, skip the index
+# update.
+function lk_git_list_changes() {
+    local NO_REFRESH
+    [ "${1-}" != -n ] || { NO_REFRESH=1 && shift; }
+    (_lk_git_cd "$@" &&
+        { [ -n "${NO_REFRESH-}" ] ||
+            _lk_git update-index --refresh >/dev/null || true; } &&
+        git diff-index --name-status HEAD --)
 }
 
 # lk_git_list_untracked [DIR]
@@ -103,8 +120,7 @@ function lk_git_remote_is_skipped() {
 }
 
 function lk_git_remote_skip() {
-    [ -n "${1-}" ] || lk_usage "\
-Usage: $FUNCNAME REMOTE" || return
+    [ -n "${1-}" ] || lk_usage "Usage: $FUNCNAME REMOTE" || return
     lk_confirm "Exclude remote '$1' from fetch and push?" Y || return
     _lk_git config --type=bool "remote.$1.skipDefaultUpdate" 1
     _lk_git config --type=bool "remote.$1.skipFetchAll" 1
@@ -130,9 +146,13 @@ function lk_git_remote_from_url() {
         lk_require_output sed -E "s/$REGEX/\1/"
 }
 
+# lk_git_list_push_urls REMOTE
+function lk_git_list_push_urls() {
+    git remote get-url --push --all "$1"
+}
+
 # lk_git_list_push_remotes REMOTE
 function lk_git_list_push_remotes() {
-    local URLS
     { { git config --get-all "remote.$1.pushurl" ||
         git config --get "remote.$1.url"; } |
         lk_xargs lk_git_remote_from_url || true; } |
@@ -300,15 +320,28 @@ Options:
     fi
 } #### Reviewed: 2021-05-25
 
+function _lk_git_branch_check_diverged() {
+    git merge-base --is-ancestor "$1" "$2" || {
+        local STATUS=$?
+        [ -z "${_LK_GIT_ALREADY_WARNED+1}" ] || {
+            [[ ,${_LK_GIT_ALREADY_WARNED-}, != *,$1-$2-diverged,* ]] ||
+                return "$STATUS"
+            _LK_GIT_ALREADY_WARNED+=${_LK_GIT_ALREADY_WARNED:+,}$1-$2-diverged
+        }
+        lk_console_error "$1 has diverged from $2"
+        return "$STATUS"
+    }
+} #### Reviewed: 2021-05-30
+
 # lk_git_fast_forward_branch [-f] BRANCH UPSTREAM
 function lk_git_fast_forward_branch() {
-    local FORCE BEHIND TAG _BRANCH
-    unset FORCE
+    local FORCE QUIET BEHIND TAG _BRANCH
+    unset FORCE QUIET
     [ "${1-}" != -f ] || { FORCE= && shift; }
+    ! _lk_git_is_quiet || QUIET=
     BEHIND=$(git rev-list --count "$1..$2") || return
     [ "$BEHIND" -gt 0 ] || return 0
-    git merge-base --is-ancestor "$1" "$2" && unset FORCE || {
-        lk_console_warning "Local branch $1 has diverged from $2"
+    _lk_git_branch_check_diverged "$1" "$2" && unset FORCE || {
         [ -n "${FORCE+1}" ] || return
         if lk_git_is_clean; then
             TAG=diverged-$1-$(lk_git_ref) &&
@@ -316,20 +349,22 @@ function lk_git_fast_forward_branch() {
                 _lk_git tag -f "$TAG" || return
         else
             lk_console_detail "Stashing local changes" &&
-                _lk_git stash || return
+                _lk_git stash ${QUIET+--quiet} || return
         fi
     }
     _BRANCH=$(lk_git_branch_current) || return
     lk_console_detail \
-        "${FORCE-Updating}${FORCE+Resetting} $1 ($BEHIND $(lk_maybe_plural \
+        "${FORCE-Updating}${FORCE+Resetting}" "$1 ($BEHIND $(lk_maybe_plural \
             "$BEHIND" commit commits) behind${FORCE+, diverged})"
     LK_GIT_REPO_UPDATED=1
     if [ "$_BRANCH" = "$1" ]; then
-        _lk_git ${FORCE-merge --ff-only}${FORCE+reset --hard} "$2"
+        _lk_git ${FORCE-merge --ff-only}${FORCE+reset --hard} \
+            ${QUIET+--quiet} "$2"
     else
         # Fast-forward local BRANCH (e.g. 'develop') to UPSTREAM
         # ('origin/develop') without checking it out
-        _lk_git ${FORCE-fetch . "$2:$1"}${FORCE+branch -f "$1" "$2"}
+        _lk_git ${FORCE-fetch . "$2:$1"}${FORCE+branch -f "$1" "$2"} \
+            ${QUIET+--quiet}
     fi
 } #### Reviewed: 2021-05-25
 
@@ -345,15 +380,18 @@ function lk_git_push_branch() {
     [ "$AHEAD" -gt 0 ] || return 0
     ! lk_no_input ||
         lk_warn "in $_PATH, cannot push to $2: user input disabled" || return 0
-    git merge-base --is-ancestor "$2" "$1" ||
-        lk_console_warning -r "Local branch $1 has diverged from $2" ||
-        return
+    _lk_git_branch_check_diverged "$2" "$1" || return
     LOG=$(git log --reverse \
         --oneline --decorate --color=always "$2..$1") || return
     lk_tty_dump \
         "$LOG" \
         "Not pushed:" \
         "($AHEAD $(lk_maybe_plural "$AHEAD" commit commits))"
+    lk_mapfile PUSH_URLS <(lk_git_list_push_urls "$REMOTE" 2>/dev/null)
+    [ ${#PUSH_URLS[@]} -eq 0 ] ||
+        lk_console_detail "Push $(lk_maybe_plural \
+            ${#PUSH_URLS[@]} URL URLs):" \
+            $'\n'"$(lk_echo_array PUSH_URLS)"
     lk_confirm "In $LK_BOLD$_PATH$LK_RESET, \
 push $LK_BOLD$1$LK_RESET to $LK_BOLD$2$LK_RESET?" Y ||
         return 0
@@ -377,7 +415,7 @@ function lk_git_fetch() {
     for REMOTE in $REMOTES; do
         [ $# -gt 0 ] || ! lk_git_remote_is_skipped "$REMOTE" || continue
         _lk_git fetch --quiet --prune "$REMOTE" || {
-            [ -n "${QUIET-}" ] || lk_console_warning \
+            [ -n "${QUIET-}" ] || lk_console_error \
                 "Unable to fetch from remote:" "$REMOTE"
             ((++ERRORS))
         }
@@ -398,7 +436,7 @@ function lk_git_update_repo() {
     }
     for BRANCH in $(lk_git_branch_list_local); do
         UPSTREAM=$(lk_git_branch_upstream "$BRANCH") ||
-            lk_console_warning -r "No upstream for branch:" "$BRANCH" ||
+            lk_console_warning -r -n "No upstream:" "$BRANCH" ||
             continue
         lk_git_fast_forward_branch "$BRANCH" "$UPSTREAM" ||
             ((++ERRORS))
@@ -414,7 +452,7 @@ function lk_git_update_remote() {
     for BRANCH in $BRANCHES; do
         _PUSH=$(lk_git_branch_push "$BRANCH") || {
             [ -n "${QUIET-}" ] ||
-                lk_console_warning "No push destination for branch:" "$BRANCH"
+                lk_console_warning -n "No push destination:" "$BRANCH"
             continue
         }
         PUSH[${#PUSH[@]}]=$(lk_quote_args "$BRANCH" "$_PUSH")
@@ -444,8 +482,7 @@ function lk_git_update_repo_to() {
     local FORCE REMOTE BRANCH UPSTREAM _BRANCH BEHIND _UPSTREAM
     unset FORCE
     [ "${1-}" != -f ] || { FORCE= && shift; }
-    [ $# -ge 1 ] || lk_usage "\
-Usage: $FUNCNAME [-f] REMOTE [BRANCH]" || return
+    [ $# -ge 1 ] || lk_usage "Usage: $FUNCNAME [-f] REMOTE [BRANCH]" || return
     REMOTE=$1
     _lk_git fetch --quiet --prune "$REMOTE" ||
         lk_warn "unable to fetch from remote: $REMOTE" ||
@@ -501,46 +538,49 @@ function lk_git_get_repos() {
 }
 
 function _lk_git_do_with_repo() {
-    local SH EXIT_STATUS=0
+    local SH STATUS=0
     if [ -z "${STDOUT-}" ]; then
         SH=$(lk_get_outputs_of "${REPO_COMMAND[@]}") ||
-            EXIT_STATUS=$?
+            STATUS=$?
         eval "$SH" || return
-        _lk_git_is_quiet && [ "$EXIT_STATUS" -eq 0 ] || echo "$(
+        _lk_git_is_quiet && [ "$STATUS" -eq 0 ] || echo "$(
             unset _LK_FD
             _LK_TTY_NO_FOLD=1
             {
-                _lk_git_is_quiet &&
-                    lk_console_item "Command failed in" "$REPO" ||
-                    lk_console_item "Processed:" "$REPO"
-                [ "$EXIT_STATUS" -eq 0 ] ||
-                    lk_console_error "Exit status:" "$EXIT_STATUS"
+                if [ "$STATUS" -eq 0 ]; then
+                    _LK_TTY_PREFIX_COLOUR=$LK_BOLD$LK_GREEN \
+                        lk_console_item "Processed:" "$_REPO"
+                else
+                    lk_console_item \
+                        "Exit status $STATUS:" "$_REPO" "$LK_BOLD$LK_RED"
+                fi
                 [ -z "$_STDOUT" ] ||
                     _LK_TTY_COLOUR2=$LK_GREEN \
                         lk_console_detail "Output:" $'\n'"$_STDOUT"
                 [ -z "$_STDERR" ] ||
-                    _LK_TTY_COLOUR2=$([ "$EXIT_STATUS" -eq 0 ] &&
+                    _LK_TTY_COLOUR2=$([ "$STATUS" -eq 0 ] &&
                         echo "$LK_YELLOW" ||
                         echo "$LK_RED") \
                         lk_console_detail "Error output:" $'\n'"$_STDERR"
             } 2>&1
         )"
     else
-        lk_console_item "Processing:" "$REPO"
+        _LK_TTY_PREFIX_COLOUR=$LK_BOLD$LK_GREEN \
+            lk_console_item "Processing" "$_REPO"
         "${REPO_COMMAND[@]}" || {
-            EXIT_STATUS=$?
-            lk_console_item "Command failed in" "$REPO"
-            lk_console_error "Exit status:" "$EXIT_STATUS"
+            STATUS=$?
+            [ ${FUNCNAME[2]-} = lk_git_audit_repos ] ||
+                lk_console_error "Exit status $STATUS"
         }
     fi
-    return "$EXIT_STATUS"
+    return "$STATUS"
 }
 
 function lk_git_with_repos() {
     local OPTIND OPTARG OPT LK_USAGE PARALLEL STDOUT PROMPT=1 \
-        REPO_COMMAND NOUN FD REPO ERROR_COUNT=0 _LK_GIT_SSH_OPTIONS \
-        REPOS=(${LK_GIT_REPOS[@]+"${LK_GIT_REPOS[@]}"})
-    LK_GIT_REPO_ERROR_COUNT=${#REPOS[@]}
+        REPO_COMMAND NOUN FD ERR_FILE REPO _REPO ERR_COUNT=0 ERR_REPOS \
+        _LK_GIT_SSH_OPTIONS REPOS=(${LK_GIT_REPOS[@]+"${LK_GIT_REPOS[@]}"})
+    _LK_GIT_REPO_ERRORS=(${REPOS[@]+"${REPOS[@]}"})
     LK_USAGE="\
 Usage: $FUNCNAME [-p|-t] [-y] COMMAND [ARG...]
 
@@ -595,48 +635,68 @@ directory of a working tree" || return
         _lk_git_is_quiet ||
             lk_console_log "Processing $NOUN in parallel"
         FD=$(lk_fd_next) &&
-            eval "exec $FD>&2 2>/dev/null" || return
+            eval "exec $FD>&2 2>/dev/null" &&
+            ERR_FILE=$(lk_mktemp_file) &&
+            lk_delete_on_exit "$ERR_FILE" || return
         for REPO in "${REPOS[@]}"; do
+            _REPO=$(lk_pretty_path "$REPO")
             (
                 exec 2>&"$FD" &&
                     cd "$REPO" &&
-                    _lk_git_do_with_repo >&"$FD"
+                    _lk_git_do_with_repo >&"$FD" ||
+                    lk_pass eval 'echo "$_REPO" >>"$ERR_FILE"'
             ) &
+            lk_console_blank
         done
         eval "exec 2>&$FD $FD>&-"
         while [ -n "$(jobs -p)" ]; do
-            wait -n 2>/dev/null || ((++ERROR_COUNT))
+            wait -n 2>/dev/null || ((++ERR_COUNT))
         done
+        lk_mapfile ERR_REPOS "$ERR_FILE"
     else
         _lk_git_is_quiet ||
             lk_console_log "Processing $NOUN"
         for REPO in "${REPOS[@]}"; do
-            (cd "$REPO" &&
-                _lk_git_do_with_repo) || ((++ERROR_COUNT))
+            _REPO=$(lk_pretty_path "$REPO")
+            (cd "$REPO" && _lk_git_do_with_repo) ||
+                ERR_REPOS[ERR_COUNT++]=$_REPO
+            lk_console_blank
         done
     fi
     _lk_git_is_quiet || {
-        [ "$ERROR_COUNT" -eq 0 ] &&
+        [ "$ERR_COUNT" -eq 0 ] &&
             _LK_TTY_NO_FOLD=1 \
                 lk_console_success "Command succeeded in $NOUN" ||
             _LK_TTY_NO_FOLD=1 \
-                lk_console_error "Command failed in $ERROR_COUNT of $NOUN"
+                lk_console_error "Command failed in $ERR_COUNT of $NOUN:" \
+                "$(lk_echo_array ERR_REPOS)"
     }
-    LK_GIT_REPO_ERROR_COUNT=$ERROR_COUNT
-    [ "$ERROR_COUNT" -eq 0 ]
+    _LK_GIT_REPO_ERRORS=(${ERR_REPOS[@]+"${ERR_REPOS[@]}"})
+    [ "$ERR_COUNT" -eq 0 ]
 }
 
 function lk_git_audit_repo() {
-    local SKIP_FETCH ERRORS=0
+    local SKIP_FETCH ERRORS=0 STASHES _LK_GIT_ALREADY_WARNED=
     [ "${1-}" != -s ] || { SKIP_FETCH=1 && shift; }
     lk_git_update_repo ${SKIP_FETCH:+-s} || ((++ERRORS))
-    lk_git_update_remote -q && [ "$ERRORS" -eq 0 ]
+    lk_git_update_remote -q || ((++ERRORS))
+    lk_git_is_clean ||
+        lk_console_error -r -n "Changed:" \
+            $'\n'"$(lk_pass lk_git_list_changes -n)" || ((++ERRORS))
+    ! lk_git_has_untracked ||
+        lk_console_error -r -n "Untracked:" \
+            $'\n'"$(lk_pass lk_git_list_untracked)" || ((++ERRORS))
+    STASHES=$(lk_git_stash_list | wc -l) || { STASHES=0 && ((++ERRORS)); }
+    [ "$STASHES" -eq 0 ] ||
+        lk_console_error -r "Changes in $STASHES $(lk_pass \
+            lk_maybe_plural "$STASHES" stash stashes)" || ((++ERRORS))
+    [ "$ERRORS" -eq 0 ]
 }
 
 # lk_git_audit_repos [-s] [REPO...]
 function lk_git_audit_repos() {
-    local SKIP_FETCH FETCH_ERRORS=0 AUDIT_ERRORS=0 NOUN \
-        _LK_GIT_QUIET=${_LK_GIT_QUIET-1} \
+    local SKIP_FETCH NOUN _LK_GIT_QUIET=${_LK_GIT_QUIET-1} \
+        FETCH_ERRORS=() AUDIT_ERRORS=() \
         LK_GIT_REPOS=(${LK_GIT_REPOS[@]+"${LK_GIT_REPOS[@]}"})
     [ "${1-}" != -s ] || { SKIP_FETCH=1 && shift; }
     [ $# -eq 0 ] || LK_GIT_REPOS=("$@")
@@ -645,26 +705,33 @@ function lk_git_audit_repos() {
     NOUN="${#LK_GIT_REPOS[@]} $(lk_maybe_plural ${#LK_GIT_REPOS[@]} repo repos)"
     if ! lk_is_true SKIP_FETCH; then
         lk_echo_array LK_GIT_REPOS |
-            lk_console_list "Fetching from all remotes in $NOUN:"
+            lk_console_list "Fetching all remotes:" repo repos
         lk_git_with_repos -py lk_git_fetch ||
-            FETCH_ERRORS=$LK_GIT_REPO_ERROR_COUNT
+            FETCH_ERRORS=(${_LK_GIT_REPO_ERRORS[@]+"${_LK_GIT_REPO_ERRORS[@]}"})
+        lk_console_blank
     else
         lk_echo_array LK_GIT_REPOS |
-            lk_console_list "Auditing all remotes in $NOUN:"
+            lk_console_list "Auditing:" repo repos
+        lk_console_blank
     fi
     lk_git_with_repos -ty lk_git_audit_repo -s ||
-        AUDIT_ERRORS=$LK_GIT_REPO_ERROR_COUNT
-    [ "$FETCH_ERRORS" -eq 0 ] &&
+        AUDIT_ERRORS=(${_LK_GIT_REPO_ERRORS[@]+"${_LK_GIT_REPO_ERRORS[@]}"})
+    lk_console_message "Audit complete"
+    lk_is_true SKIP_FETCH || {
+        [ ${#FETCH_ERRORS[@]} -eq 0 ] &&
+            _LK_TTY_NO_FOLD=1 \
+                lk_console_success "Fetch succeeded in $NOUN" ||
+            _LK_TTY_NO_FOLD=1 \
+                lk_console_error "Fetch failed in ${#FETCH_ERRORS[@]} of $NOUN:" \
+                "$(lk_echo_array FETCH_ERRORS)"
+    }
+    [ ${#AUDIT_ERRORS[@]} -eq 0 ] &&
         _LK_TTY_NO_FOLD=1 \
-            lk_console_success "Fetch succeeded in $NOUN" ||
+            lk_console_success "Checks passed in $NOUN" ||
         _LK_TTY_NO_FOLD=1 \
-            lk_console_error "Fetch failed in $FETCH_ERRORS of $NOUN"
-    [ "$AUDIT_ERRORS" -eq 0 ] &&
-        _LK_TTY_NO_FOLD=1 \
-            lk_console_success "Update succeeded in $NOUN" ||
-        _LK_TTY_NO_FOLD=1 \
-            lk_console_error "Update failed in $AUDIT_ERRORS of $NOUN"
-    [[ $((FETCH_ERRORS + AUDIT_ERRORS)) -eq 0 ]]
+            lk_console_error "Checks failed in ${#AUDIT_ERRORS[@]} of $NOUN:" \
+            "$(lk_echo_array AUDIT_ERRORS)"
+    [[ $((${#FETCH_ERRORS[@]} + ${#AUDIT_ERRORS[@]})) -eq 0 ]]
 }
 
 # lk_git_ancestors REF...
