@@ -5,7 +5,6 @@ PAC_REPOS=(
 http://sublimetext.mirror/arch/stable/\$arch|\
 http://sublimetext.mirror/sublimehq-pub.gpg|\
 8A8F901A"
-    "quarry|http://quarry.repo|||Optional TrustAll"
 )
 
 PAC_PACKAGES=()

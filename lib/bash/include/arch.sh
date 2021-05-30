@@ -55,7 +55,7 @@ function lk_arch_add_repo() {
     SH=$(
         function add_key() { KEY_FILE=$(mktemp) && {
             STATUS=0
-            curl --fail --location --output "$KEY_FILE" "$1" &&
+            curl -fsSL --output "$KEY_FILE" "$1" &&
                 pacman-key --add "$KEY_FILE" || STATUS=$?
             rm -f "$KEY_FILE" || true
             return "$STATUS"
