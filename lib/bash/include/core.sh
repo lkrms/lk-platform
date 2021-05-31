@@ -1542,7 +1542,7 @@ function _lk_tty_width() {
 
 # lk_console_message MESSAGE [[MESSAGE2] COLOUR]
 function lk_console_message() {
-    lk_tty_print "${1-}" "${3+$2}" "${3-$_LK_TTY_COLOUR}"
+    lk_tty_print "${1-}" "${3+$2}" "${3-${2-$_LK_TTY_COLOUR}}"
 }
 
 # lk_tty_print [MESSAGE [MESSAGE2 [COLOUR]]]
@@ -1695,15 +1695,22 @@ function lk_console_detail_diff() {
 }
 
 function _lk_tty_log() {
-    local STATUS=$? COLOUR=$1 \
+    local _STATUS=$? STATUS=0 COLOUR=$1 \
         _LK_TTY_COLOUR2=${_LK_TTY_COLOUR2-} \
         _LK_TTY_MESSAGE_COLOUR
     shift
-    [ "${1-}" != -r ] && STATUS=0 || shift
+    while [ $# -gt 0 ]; do
+        case "$1" in
+        -r) STATUS=$_STATUS ;;
+        -n) local _LK_TTY_LOG_BOLD= ;;
+        *) break ;;
+        esac
+        shift
+    done
     _LK_TTY_MESSAGE_COLOUR=$(lk_maybe_bold "$1")$COLOUR
     _LK_TTY_COLOUR2=${_LK_TTY_COLOUR2//"$LK_BOLD"/}
     lk_tty_print "$1" "${2:+$(
-        BOLD=$(lk_maybe_bold "$2")
+        BOLD=${_LK_TTY_LOG_BOLD-$(lk_maybe_bold "$2")}
         RESET=${BOLD:+$LK_RESET}
         [ "${2#$'\n'}" = "$2" ] || printf '\n'
         echo "$BOLD${2#$'\n'}$RESET"
@@ -1711,39 +1718,39 @@ function _lk_tty_log() {
     return "$STATUS"
 }
 
-# lk_console_log [-r] MESSAGE [MESSAGE2...]
+# lk_console_log [-r] [-n] MESSAGE [MESSAGE2...]
 #
 # Output the given message to the console. If -r is set, return the most recent
-# command's exit status.
+# command's exit status. If -n is set, don't output MESSAGE2 in bold.
 function lk_console_log() {
     _LK_TTY_PREFIX=${_LK_TTY_PREFIX-" :: "} \
         _lk_tty_log "$_LK_TTY_COLOUR" "$@"
 }
 
-# lk_console_success [-r] MESSAGE [MESSAGE2...]
+# lk_console_success [-r] [-n] MESSAGE [MESSAGE2...]
 #
 # Output the given success message to the console. If -r is set, return the most
-# recent command's exit status.
+# recent command's exit status. If -n is set, don't output MESSAGE2 in bold.
 function lk_console_success() {
     # ✔ (\u2714)
     _LK_TTY_PREFIX=${_LK_TTY_PREFIX-$'  \xe2\x9c\x94 '} \
         _lk_tty_log "$_LK_SUCCESS_COLOUR" "$@"
 }
 
-# lk_console_warning [-r] MESSAGE [MESSAGE2...]
+# lk_console_warning [-r] [-n] MESSAGE [MESSAGE2...]
 #
 # Output the given warning to the console. If -r is set, return the most recent
-# command's exit status.
+# command's exit status. If -n is set, don't output MESSAGE2 in bold.
 function lk_console_warning() {
     # ✘ (\u2718)
     _LK_TTY_PREFIX=${_LK_TTY_PREFIX-$'  \xe2\x9c\x98 '} \
         _lk_tty_log "$_LK_WARNING_COLOUR" "$@"
 }
 
-# lk_console_error [-r] MESSAGE [MESSAGE2...]
+# lk_console_error [-r] [-n] MESSAGE [MESSAGE2...]
 #
 # Output the given error message to the console. If -r is set, return the most
-# recent command's exit status.
+# recent command's exit status. If -n is set, don't output MESSAGE2 in bold.
 function lk_console_error() {
     # ✘ (\u2718)
     _LK_TTY_PREFIX=${_LK_TTY_PREFIX-$'  \xe2\x9c\x98 '} \
