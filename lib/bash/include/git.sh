@@ -549,10 +549,9 @@ function _lk_git_do_with_repo() {
             {
                 if [ "$STATUS" -eq 0 ]; then
                     _LK_TTY_PREFIX_COLOUR=$LK_BOLD$LK_GREEN \
-                        lk_console_item "Processed:" "$_REPO"
+                        lk_console_message "$_REPO"
                 else
-                    lk_console_item \
-                        "Exit status $STATUS:" "$_REPO" "$LK_BOLD$LK_RED"
+                    lk_console_message "$_REPO" "$LK_BOLD$LK_RED"
                 fi
                 [ -z "$_STDOUT" ] ||
                     _LK_TTY_COLOUR2=$LK_GREEN \
@@ -562,16 +561,19 @@ function _lk_git_do_with_repo() {
                         echo "$LK_YELLOW" ||
                         echo "$LK_RED") \
                         lk_console_detail "Error output:" $'\n'"$_STDERR"
+                [ ${FUNCNAME[2]-} = lk_git_audit_repos ] ||
+                    lk_console_error "Exit status $STATUS"
             } 2>&1
-        )"
+        )"$'\n'
     else
         _LK_TTY_PREFIX_COLOUR=$LK_BOLD$LK_GREEN \
-            lk_console_item "Processing" "$_REPO"
+            lk_console_message "$_REPO"
         "${REPO_COMMAND[@]}" || {
             STATUS=$?
             [ ${FUNCNAME[2]-} = lk_git_audit_repos ] ||
                 lk_console_error "Exit status $STATUS"
         }
+        lk_console_blank
     fi
     return "$STATUS"
 }
@@ -646,7 +648,6 @@ directory of a working tree" || return
                     _lk_git_do_with_repo >&"$FD" ||
                     lk_pass eval 'echo "$_REPO" >>"$ERR_FILE"'
             ) &
-            lk_console_blank
         done
         eval "exec 2>&$FD $FD>&-"
         while [ -n "$(jobs -p)" ]; do
@@ -660,7 +661,6 @@ directory of a working tree" || return
             _REPO=$(lk_pretty_path "$REPO")
             (cd "$REPO" && _lk_git_do_with_repo) ||
                 ERR_REPOS[ERR_COUNT++]=$_REPO
-            lk_console_blank
         done
     fi
     _lk_git_is_quiet || {
@@ -682,10 +682,12 @@ function lk_git_audit_repo() {
     lk_git_update_remote -q || ((++ERRORS))
     lk_git_is_clean ||
         lk_console_error -r -n "Changed:" \
-            $'\n'"$(lk_pass lk_git_list_changes -n)" || ((++ERRORS))
+            $'\n'"$(lk_pass lk_git_list_changes -n |
+                head -n$((${LINES:-24} * 2 / 3)))" || ((++ERRORS))
     ! lk_git_has_untracked ||
         lk_console_error -r -n "Untracked:" \
-            $'\n'"$(lk_pass lk_git_list_untracked)" || ((++ERRORS))
+            $'\n'"$(lk_pass lk_git_list_untracked |
+                head -n$((${LINES:-24} * 2 / 3)))" || ((++ERRORS))
     STASHES=$(lk_git_stash_list | wc -l) || { STASHES=0 && ((++ERRORS)); }
     [ "$STASHES" -eq 0 ] ||
         lk_console_error -r "Changes in $STASHES $(lk_pass \
@@ -706,9 +708,9 @@ function lk_git_audit_repos() {
     if ! lk_is_true SKIP_FETCH; then
         lk_echo_array LK_GIT_REPOS |
             lk_console_list "Fetching all remotes:" repo repos
+        lk_console_blank
         lk_git_with_repos -py lk_git_fetch ||
             FETCH_ERRORS=(${_LK_GIT_REPO_ERRORS[@]+"${_LK_GIT_REPO_ERRORS[@]}"})
-        lk_console_blank
     else
         lk_echo_array LK_GIT_REPOS |
             lk_console_list "Auditing:" repo repos
