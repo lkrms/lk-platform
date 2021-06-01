@@ -1879,7 +1879,8 @@ ${2:-${_LK_TTY_INPUT_NAME:-/dev/stdin}}$LK_RESET"
         "$MESSAGE" \
         "${4-${_LK_TTY_MESSAGE_COLOUR-$LK_MAGENTA}}" \
         "${_LK_TTY_COLOUR2-}" \
-        _LK_TTY_INDENT=${_LK_TTY_INDENT:-0} lk_diff "$FILE1" "$FILE2"
+        "$(lk_quote_args \
+            _LK_TTY_INDENT=${_LK_TTY_INDENT:-0} lk_diff "$FILE1" "$FILE2")"
 }
 
 function lk_diff() { (

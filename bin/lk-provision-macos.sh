@@ -819,10 +819,10 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
         [ ${#LOGIN_ITEMS[@]} -eq 0 ] || {
             ! { lk_whiptail_build_list \
                 LOGIN_ITEMS 's/^.*\///;s/\.app$//' "${LOGIN_ITEMS[@]}" &&
-                LOGIN_ITEMS=($(lk_whiptail_checklist \
+                lk_mapfile LOGIN_ITEMS <(lk_whiptail_checklist \
                     "Adding Login Items for user '$USER'" \
                     "Selected items will open automatically when you log in:" \
-                    "${LOGIN_ITEMS[@]}")); } ||
+                    "${LOGIN_ITEMS[@]}"); } ||
                 [ ${#LOGIN_ITEMS[@]} -eq 0 ] || {
                 lk_echo_array LOGIN_ITEMS |
                     lk_console_list "Adding to Login Items:" app apps
