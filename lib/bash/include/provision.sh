@@ -1209,12 +1209,23 @@ function lk_conf_enable_row() {
         "^$S*#"{,"$S","$S*"}"$ROW$S*\$"
 }
 
-# lk_conf_remove_row ROW [FILE]
+# lk_conf_remove_row [-s SECTION] ROW [FILE]
 function lk_conf_remove_row() {
-    local ROW FILE=${2:-$LK_CONF_OPTION_FILE} _FILE
+    local SECTION ROW FILE __FILE
+    unset SECTION
+    [ "${1-}" != -s ] || { SECTION=$2 && shift 2 || return; }
     ROW=$(lk_regex_expand_whitespace "$(lk_escape_ere "$1")")
-    _FILE=$(sed -E "/^$S*$ROW$S*\$/d" "$FILE") &&
-        lk_file_replace -l "$FILE" "$_FILE"
+    FILE=${2:-$LK_CONF_OPTION_FILE}
+    if [ -z "${SECTION-}" ]; then
+        lk_file_get_text "$FILE" __FILE
+    else
+        __FILE=$(awk \
+            -v "SECTION=$SECTION" \
+            -f "$LK_BASE/lib/awk/section-get.awk" \
+            "$FILE")$'\n'
+    fi || return
+    __FILE=$(sed -E "/^$S*$ROW$S*\$/d" <<<"$__FILE") &&
+        _lk_option_do_replace
 }
 
 # lk_php_set_option OPTION VALUE [FILE]
