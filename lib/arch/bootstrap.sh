@@ -115,9 +115,11 @@ REPO_URL=https://raw.githubusercontent.com/lkrms/lk-platform
 for FILE_PATH in \
     /lib/bash/include/core.sh \
     /lib/bash/include/linux.sh \
-    /lib/bash/include/arch.sh \
     /lib/bash/include/provision.sh \
+    /lib/bash/include/arch.sh \
     /lib/arch/packages.sh \
+    /lib/awk/section-get.awk \
+    /lib/awk/section-replace.awk \
     /share/sudoers.d/default; do
     FILE=$_DIR/${FILE_PATH##*/}
     URL=$REPO_URL/$LK_PLATFORM_BRANCH$FILE_PATH

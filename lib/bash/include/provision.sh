@@ -1103,7 +1103,7 @@ function _lk_option_do_replace() {
     [ -z "${SECTION-}" ] || { __FILE=$(awk \
         -v "SECTION=$SECTION" \
         -v "ENTRIES=$__FILE" \
-        -f "$LK_BASE/lib/awk/section-replace.awk" \
+        -f "$(lk_awk_dir)/section-replace.awk" \
         "$FILE" && printf .) && __FILE=${__FILE%.}; } || return
     lk_file_keep_original "$FILE" &&
         lk_file_replace -l "$FILE" "$__FILE"
@@ -1155,7 +1155,7 @@ Usage: $(lk_myself -f) [-s SECTION] [-p] FILE SETTING CHECK_REGEX [REPLACE_REGEX
     else
         _FILE=$(awk \
             -v "SECTION=$SECTION" \
-            -f "$LK_BASE/lib/awk/section-get.awk" \
+            -f "$(lk_awk_dir)/section-get.awk" \
             "$FILE")$'\n'
     fi || return
     [ "${PRESERVE+1}" = 1 ] ||
@@ -1221,7 +1221,7 @@ function lk_conf_remove_row() {
     else
         __FILE=$(awk \
             -v "SECTION=$SECTION" \
-            -f "$LK_BASE/lib/awk/section-get.awk" \
+            -f "$(lk_awk_dir)/section-get.awk" \
             "$FILE")$'\n'
     fi || return
     __FILE=$(sed -E "/^$S*$ROW$S*\$/d" <<<"$__FILE") &&
