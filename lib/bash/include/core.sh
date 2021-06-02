@@ -156,9 +156,9 @@ function _lk_usage_format() {
     BOLD=$(lk_escape_ere_replace "$LK_BOLD")
     RESET=$(lk_escape_ere_replace "$LK_RESET")
     sed -E \
-        -e "s/^($S*([uU]sage|[oO]r):$S+(sudo )?)($CMD)($S|\$)/\1$BOLD\4$RESET\5/" \
-        -e "s/^[a-zA-Z0-9 ]+:\$/$BOLD&$RESET/" \
-        -e "s/^\\\\($NS)/\\1/" <<<"$1"
+        -e "s/^($S*(([uU]sage|[oO]r):$S+)?(sudo )?)($CMD)($S|\$)/\1$BOLD\5$RESET\6/" \
+        -e "s/^([a-zA-Z0-9][a-zA-Z0-9 ]*:|[A-Z0-9][A-Z0-9 ]*)\$/$BOLD&$RESET/" \
+        -e "s/^\\\\(.)/\\1/" <<<"$1"
 }
 
 function lk_usage() {
