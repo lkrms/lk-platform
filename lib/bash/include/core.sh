@@ -642,6 +642,16 @@ function lk_fqdn() {
     hostname -f
 }
 
+function lk_awk_dir() {
+    local DIR=${LK_BASE:+$LK_BASE/lib/awk} FILE
+    [ -d "$DIR" ] || {
+        FILE=${BASH_SOURCE[1]:-$PWD/}
+        DIR=${FILE%/*}
+        [ "$DIR" != "$FILE" ] && [ -d "$DIR" ] || DIR=.
+    }
+    echo "$DIR"
+}
+
 function _lk_get_colour() {
     local SEQ
     while [ $# -ge 2 ]; do
