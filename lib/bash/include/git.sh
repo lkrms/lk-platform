@@ -561,7 +561,8 @@ function _lk_git_do_with_repo() {
                         echo "$LK_YELLOW" ||
                         echo "$LK_RED") \
                         lk_console_detail "Error output:" $'\n'"$_STDERR"
-                [ ${FUNCNAME[2]-} = lk_git_audit_repos ] ||
+                [ "$STATUS" -eq 0 ] ||
+                    [ "${FUNCNAME[2]-}" = lk_git_audit_repos ] ||
                     lk_console_error "Exit status $STATUS"
             } 2>&1
         )"$'\n'
@@ -570,7 +571,7 @@ function _lk_git_do_with_repo() {
             lk_console_message "$_REPO"
         "${REPO_COMMAND[@]}" || {
             STATUS=$?
-            [ ${FUNCNAME[2]-} = lk_git_audit_repos ] ||
+            [ "${FUNCNAME[2]-}" = lk_git_audit_repos ] ||
                 lk_console_error "Exit status $STATUS"
         }
         lk_console_blank
