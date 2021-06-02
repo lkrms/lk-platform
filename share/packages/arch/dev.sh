@@ -14,7 +14,6 @@ PAC_REJECT=()
 PAC_KEEP=(
     ant
     apachedirectorystudio
-    geekbench4
     offlineimap
     subversion
     zoom
