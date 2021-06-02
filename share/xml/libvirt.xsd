@@ -4,6 +4,11 @@
   targetNamespace="http://linacreative.com/xmlns/libvirt/domain/1.0"
   xmlns:lk="http://linacreative.com/xmlns/libvirt/domain/1.0"
   elementFormDefault="qualified">
+  <xs:simpleType name="hexWord">
+    <xs:restriction base="xs:hexBinary">
+      <xs:length value="2" />
+    </xs:restriction>
+  </xs:simpleType>
   <xs:simpleType name="host">
     <xs:restriction base="xs:string">
       <xs:pattern value="(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])(/(3[0-2]|[12][0-9]|[1-9]))?|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))(/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9]))?|[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)*)" />
@@ -28,7 +33,16 @@
   <xs:element name="lk">
     <xs:complexType>
       <xs:sequence>
-        <xs:element name="ip">
+        <xs:element name="dev" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence maxOccurs="unbounded">
+              <xs:element name="name" type="xs:string" minOccurs="0" />
+              <xs:element name="vendor-id" type="lk:hexWord" />
+              <xs:element name="product-id" type="lk:hexWord" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="ip" minOccurs="0">
           <xs:complexType>
             <xs:sequence>
               <xs:element name="address" type="lk:ip" maxOccurs="unbounded" />

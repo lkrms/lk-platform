@@ -1,5 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <lk:lk xmlns:lk="http://linacreative.com/xmlns/libvirt/domain/1.0">
+  <!-- optional -->
+  <lk:dev>
+    <!-- one or more [lk:name] lk:vendor-id lk:product-id sequences -->
+    <lk:name>Epson DS-530</lk:name>
+    <lk:vendor-id>04b8</lk:vendor-id>
+    <lk:product-id>0155</lk:product-id>
+    <lk:name>Brother QL-570</lk:name>
+    <lk:vendor-id>04f9</lk:vendor-id>
+    <lk:product-id>2028</lk:product-id>
+    <lk:vendor-id>04b8</lk:vendor-id>
+    <lk:product-id>013b</lk:product-id>
+  </lk:dev>
+  <!-- optional -->
   <lk:ip>
     <!-- one or more required -->
     <lk:address>192.168.122.208</lk:address>
@@ -17,11 +30,9 @@
     </lk:forward>
     <!-- optional -->
     <lk:isolate>
-      <!--
-        Use one of the following if required:
-        <lk:no-log />
-        <lk:no-reject />
-      -->
+      <!-- optional, mutually exclusive -->
+      <!--<lk:no-log />-->
+      <!--<lk:no-reject />-->
       <!-- optional -->
       <lk:allow>
         <lk:gateway />

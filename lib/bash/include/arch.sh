@@ -1,6 +1,6 @@
 #!/bin/bash
 
-lk_include linux
+lk_include linux provision
 
 function lk_arch_chroot() {
     [ "${1-}" != -u ] || {
@@ -20,13 +20,12 @@ function lk_arch_path() {
 }
 
 function lk_arch_configure_pacman() {
-    local FILE LK_SUDO=1
-    FILE=$(lk_arch_path /etc/pacman.conf)
-    lk_console_item "Checking pacman options in" "$FILE"
-    lk_file_keep_original "$FILE" &&
-        # Leading and trailing whitespace in pacman.conf is ignored
-        lk_file_replace "$FILE" \
-            "$(sed -E "s/^$S*#$S*(Color|TotalDownload)$S*\$/\1/" "$FILE")"
+    local LK_CONF_OPTION_FILE _LK_CONF_DELIM=" = " LK_SUDO=1
+    LK_CONF_OPTION_FILE=$(lk_arch_path /etc/pacman.conf)
+    lk_console_item "Checking pacman options in" "$LK_CONF_OPTION_FILE"
+    lk_conf_enable_row -s options Color
+    lk_conf_remove_row -s options TotalDownload
+    lk_conf_set_option -s options ParallelDownloads 5
 }
 
 # lk_arch_add_repo REPO...
