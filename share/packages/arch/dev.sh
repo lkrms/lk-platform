@@ -244,8 +244,10 @@ PAC_PACKAGES+=(
     autopep8
     bash-language-server
     cloc
+    cmake
     dbeaver
     dbeaver-plugin-sshj
+    emscripten
     eslint
     geckodriver
     prettier

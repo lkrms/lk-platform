@@ -94,6 +94,37 @@ function lk_macos_command_line_tools_installed() {
     lk_macos_command_line_tools_path >/dev/null
 }
 
+# lk_macos_list_available_updates
+#
+# Output tab-separated fields LABEL, TITLE, VERSION, SIZE, RECOMMENDED, and
+# ACTION for each available update reported by `softwareupdate --list`.
+function lk_macos_list_available_updates() {
+    softwareupdate --list | awk -v "S=$S" '
+$1 ~ /^[*-]$/ {
+  recommended = ($1 == "*" ? "Y" : "N")
+  if (sub("^" S "*[*-]" S "+Label:" S "+", "")) label = $0
+  else label = ""
+  next
+}
+label {
+  title = version = size = action = ""
+  sub("^" S "+", "")
+  split($0, a, "," S "+")
+  for (i in a) if (match(a[i], ":" S "+")) {
+    f = substr(a[i], 1, RSTART - 1)
+    v = substr(a[i], RSTART + RLENGTH)
+    if (f == "Title") title = v
+    else if (f == "Version") version = v
+    else if (f == "Size") size = v
+    else if (f == "Action") action = v
+  }
+  if (title && version && size)
+    printf("%s\t%s\t%s\t%s\t%s\t%s\n",
+      label, title, version, size, recommended, action)
+}
+{ label = "" }'
+}
+
 function lk_macos_install_command_line_tools() {
     local ITEM_NAME \
         TRIGGER=/tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress
