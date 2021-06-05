@@ -12,7 +12,6 @@ LOGIN_ITEMS=()
 HOMEBREW_TAPS+=(
     homebrew/cask-drivers
     homebrew/cask-fonts
-    lkrms/lk
 )
 
 # Terminal-based
@@ -117,12 +116,6 @@ LOGIN_ITEMS+=(
     "/Applications/Flycut.app"
     "/Applications/Lightshot Screenshot.app"
     "/Applications/Magnet.app"
-    "/Applications/Mail.app"
-    "/Applications/Messages.app"
-    "/Applications/Messenger.app"
     "/Applications/nextcloud.app"
     "/Applications/Skype.app"
-    "/Applications/Todoist.app"
-    "/System/Applications/Mail.app"
-    "/System/Applications/Messages.app"
 )

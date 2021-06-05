@@ -16,23 +16,30 @@ function lk_iptables() {
 
 # _lk_iptables_args MIN_PARAMS USAGE [ARG...]
 function _lk_iptables_args() {
-    local OPTIND OPTARG OPT PARAMS=$1 LK_USAGE COMMAND=(iptables) \
-    _LK_STACK_DEPTH=1
+    local OPTIND OPTARG OPT LK_USAGE PARAMS=$1 HAS_SUFFIX= \
+        COMMAND=("iptables${_LK_IPTABLES_CMD_SUFFIX-}") \
+        _LK_STACK_DEPTH=1
+    [ -n "${_LK_IPTABLES_CMD_SUFFIX-}" ] || unset HAS_SUFFIX
     [ -z "${LK_IPTABLES_46-}" ] ||
         set -- "-${LK_IPTABLES_46#-}" "$@"
-    LK_USAGE="\
-Usage: $(lk_myself -f) [-4|-6|-b]${2:+ $2}"
+    LK_USAGE="Usage: ${FUNCNAME[1]} [-4|-6${HAS_SUFFIX-|-b}]${2:+ $2}"
     shift 2
-    while getopts ":46b" OPT; do
+    while getopts ":46bh" OPT; do
         case "$OPT" in
         4)
-            COMMAND=(iptables)
+            COMMAND=("iptables${_LK_IPTABLES_CMD_SUFFIX-}")
             ;;
         6)
-            COMMAND=(ip6tables)
+            COMMAND=("ip6tables${_LK_IPTABLES_CMD_SUFFIX-}")
             ;;
         b)
-            COMMAND=(lk_iptables)
+            [ -z "${HAS_SUFFIX+1}" ] || lk_usage || return
+            COMMAND=("lk_iptables")
+            ;;
+        h)
+            lk_usage
+            echo "return 0"
+            return 0
             ;;
         \? | :)
             lk_usage
@@ -42,14 +49,14 @@ Usage: $(lk_myself -f) [-4|-6|-b]${2:+ $2}"
     done
     shift $((OPTIND - 1))
     [ $# -ge "$PARAMS" ] || lk_usage || return
-    ! lk_verbose ||
+    ! lk_verbose || [ -n "${HAS_SUFFIX+1}" ] ||
         COMMAND+=(-v)
     printf 'local LK_USAGE=%q COMMAND=(%s)\n' \
         "$LK_USAGE" \
         "${COMMAND[*]}"
     printf 'shift %s\n' \
         $((OPTIND - 1))
-} #### Reviewed: 2021-03-22
+} #### Reviewed: 2021-06-05
 
 # lk_iptables_maybe_insert CHAIN [-t TABLE] RULE_SPEC
 function lk_iptables_maybe_insert() {
@@ -136,5 +143,26 @@ function lk_iptables_delete_all() {
         lk_elevate "${COMMAND[@]}" -D "$@" || break
     done
 } #### Reviewed: 2021-03-22
+
+function _lk_iptables_save() {
+    [ "$EUID" -eq 0 ] || {
+        lk_elevate bash -c "$(
+            declare -f _lk_iptables_save
+            declare -p COMMAND
+            lk_quote_args _lk_iptables_save "$@"
+        )"
+        return
+    }
+    for t in filter nat mangle raw security; do
+        "${COMMAND[@]}" -t "$t" || break
+    done | sed -E "s/^(:[^ ]+ [^ ]+ \[)[0-9]+:[0-9]+(\])/\10:0\2/"
+}
+
+function lk_iptables_save() {
+    local SH
+    SH=$(_LK_IPTABLES_CMD_SUFFIX=-save &&
+        _lk_iptables_args 0 "" "$@") && eval "$SH" || return
+    _lk_iptables_save "$@"
+}
 
 lk_provide iptables

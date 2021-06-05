@@ -13,7 +13,6 @@ HOMEBREW_TAPS+=(
     homebrew/cask-drivers
     homebrew/cask-fonts
     homebrew/services
-    lkrms/lk
 )
 
 # Terminal-based
@@ -85,7 +84,7 @@ HOMEBREW_CASKS+=(
     basictex
 
     # Photography
-    lkrms/lk/adobe-dng-converter
+    adobe-dng-converter
 
     # Multimedia (video)
     handbrake
@@ -131,6 +130,8 @@ HOMEBREW_TAPS+=(
 )
 
 HOMEBREW_FORMULAE+=(
+    cmake
+    emscripten
     gdb
 
     # Email
@@ -162,8 +163,6 @@ HOMEBREW_FORMULAE+=(
     shfmt
 
     #
-    #libvirt
-    #qemu
     lkrms/virt-manager/virt-manager
 
     # Platforms
@@ -200,6 +199,10 @@ HOMEBREW_CASKS+=(
 
 HOMEBREW_KEEP_FORMULAE+=(
     ocaml
+
+    #
+    libvirt
+    qemu
     lkrms/virt-manager/virt-manager
 )
 
@@ -226,12 +229,10 @@ LOGIN_ITEMS+=(
     "/Applications/Lightshot Screenshot.app"
     "/Applications/Magnet.app"
     "/Applications/Mail.app"
-    "/Applications/Messages.app"
     "/Applications/Messenger.app"
     "/Applications/Microsoft Teams.app"
     "/Applications/nextcloud.app"
     "/Applications/Skype.app"
     "/Applications/Todoist.app"
     "/System/Applications/Mail.app"
-    "/System/Applications/Messages.app"
 )
