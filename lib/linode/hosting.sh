@@ -37,7 +37,7 @@
 # <UDF name="LK_SNAPSHOT_WEEKLY_MAX_AGE" label="Backup: weekly snapshot max age (weeks, -1 = no maximum)" example="-1" default="52" />
 # <UDF name="LK_SNAPSHOT_FAILED_MAX_AGE" label="Backup: failed snapshot max age (days, -1 = no maximum)" default="28" />
 # <UDF name="LK_PATH_PREFIX" label="Prefix for files installed by lk-platform" default="lk-" />
-# <UDF name="LK_SCRIPT_DEBUG" label="Create trace output from provisioning script" oneof="Y,N" default="Y" />
+# <UDF name="LK_DEBUG" label="Create trace output from provisioning script" oneof="Y,N" default="N" />
 # <UDF name="LK_SHUTDOWN_ACTION" label="Reboot or power down after provisioning" oneof="reboot,poweroff" default="reboot" />
 # <UDF name="LK_SHUTDOWN_DELAY" label="Delay before shutdown/reboot after provisioning (in minutes)" default="0" />
 # <UDF name="LK_PLATFORM_BRANCH" label="lk-platform tracking branch" oneof="master,develop,provision-hosting" default="master" />
@@ -85,12 +85,12 @@ export -n \
     LK_SNAPSHOT_WEEKLY_MAX_AGE=${LK_SNAPSHOT_WEEKLY_MAX_AGE:-52} \
     LK_SNAPSHOT_FAILED_MAX_AGE=${LK_SNAPSHOT_FAILED_MAX_AGE:-28} \
     LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-} \
-    LK_SCRIPT_DEBUG=${LK_SCRIPT_DEBUG:-Y} \
+    LK_DEBUG=${LK_DEBUG:-N} \
     LK_SHUTDOWN_ACTION=${LK_SHUTDOWN_ACTION:-reboot} \
     LK_SHUTDOWN_DELAY=${LK_SHUTDOWN_DELAY:-0} \
     LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
 
-[ ! "$LK_SCRIPT_DEBUG" = Y ] || {
+[ ! "$LK_DEBUG" = Y ] || {
     TRACE_FILE=/var/log/${LK_PATH_PREFIX}install.trace
     install -m 00640 -g adm /dev/null "$TRACE_FILE"
     exec 4>>"$TRACE_FILE"
@@ -225,7 +225,7 @@ FIELD_ERRORS=$(
     valid LK_SNAPSHOT_WEEKLY_MAX_AGE "^(-1|[0-9]+)\$"
     valid LK_SNAPSHOT_FAILED_MAX_AGE "^(-1|[0-9]+)\$"
     valid LK_PATH_PREFIX "^[a-zA-Z0-9]{2,3}-\$"
-    one_of LK_SCRIPT_DEBUG Y N
+    one_of LK_DEBUG Y N
     one_of LK_SHUTDOWN_ACTION reboot poweroff
     valid LK_SHUTDOWN_DELAY "^[0-9]+\$"
     # TODO: validate LK_PLATFORM_BRANCH
@@ -379,7 +379,7 @@ export LK_BASE=/opt/lk-platform \
 
 lk_console_message "Bootstrapping Ubuntu for hosting"
 lk_console_item "Environment:" "$SCRIPT_ENV"
-[ ! "$LK_SCRIPT_DEBUG" = Y ] ||
+[ ! "$LK_DEBUG" = Y ] ||
     lk_console_item "Variables:" "$SCRIPT_VARS"
 
 IMAGE_BASE_PACKAGES=($(apt-mark showmanual))
@@ -468,7 +468,7 @@ LK_SSH_JUMP_KEY=${LK_SSH_JUMP_KEY:+jump} \
     LK_SNAPSHOT_DAILY_MAX_AGE \
     LK_SNAPSHOT_WEEKLY_MAX_AGE \
     LK_SNAPSHOT_FAILED_MAX_AGE \
-    LK_SCRIPT_DEBUG \
+    LK_DEBUG \
     LK_PLATFORM_BRANCH >"$FILE"
 
 install -v -d -m 02775 -g adm "$LK_BASE/etc"

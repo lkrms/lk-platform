@@ -1141,19 +1141,21 @@ function lk_log_create_file() {
 }
 
 function lk_start_trace() {
-    local TRACE_PATH
     # Don't interfere with an existing trace
-    [[ $- != *x* ]] && ! lk_is_false LK_SCRIPT_DEBUG || return 0
+    [[ $- != *x* ]] && lk_is_true LK_DEBUG || return 0
+    local TRACE_PATH
     TRACE_PATH=${_LK_LOG_TRACE_PATH:-$(lk_log_create_file \
         -e "$(lk_date_ymdhms).trace" /tmp ~)} &&
         exec 4> >(lk_log >"$TRACE_PATH") || return
     if lk_bash_at_least 4 1; then
         BASH_XTRACEFD=4
     else
+        # If BASH_XTRACEFD isn't supported, trace all output to stderr and send
+        # lk_tty_* to the terminal
         exec 2>&4 &&
             { ! lk_log_is_open || _LK_TRACE_FD=4; } &&
             { [ "${_LK_FD:-2}" -ne 2 ] ||
-                { exec 3>&1 && export _LK_FD=3; }; }
+                { exec 3>/dev/tty && export _LK_FD=3; }; }
     fi || lk_warn "unable to open trace file" || return
     set -x
 }

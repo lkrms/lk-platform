@@ -74,10 +74,19 @@ function _lk_settings_list_known() {
         LK_SITE_ENABLE_STAGING \
         LK_ARCH_MIRROR \
         LK_ARCH_REPOS \
-        LK_SCRIPT_DEBUG \
+        LK_DEBUG \
         LK_PLATFORM_BRANCH \
         LK_PACKAGES_FILE
 } #### Reviewed: 2021-05-09
+
+# _lk_settings_list_legacy
+#
+# Print the name of each setting that is no longer used.
+function _lk_settings_list_legacy() {
+    printf '%s\n' \
+        LK_PATH_PREFIX_ALPHA \
+        LK_SCRIPT_DEBUG
+} #### Reviewed: 2021-06-06
 
 function _lk_settings_writable_files() {
     local FILE OLD_FILE DIR_MODE FILE_MODE ARGS
@@ -184,7 +193,8 @@ function lk_settings_persist() {
         VARS=($(_lk_settings_list_known &&
             comm -23 \
                 <(printf '%s\n' "${!LK_@}" | sort -u) \
-                <(_lk_settings_list_known | sort -u)))
+                <({ _lk_settings_list_known &&
+                    _lk_settings_list_legacy; } | sort -u)))
         lk_get_shell_var "${VARS[@]}"
     ) || return
     [ -e "$2" ] || { lk_maybe_sudo mkdir -p "${2%/*}" &&
