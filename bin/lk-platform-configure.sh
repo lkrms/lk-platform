@@ -104,7 +104,7 @@ SETTINGS=(
     LK_SITE_ENABLE_STAGING
     LK_ARCH_MIRROR
     LK_ARCH_REPOS
-    LK_SCRIPT_DEBUG
+    LK_DEBUG
     LK_PLATFORM_BRANCH
     LK_PACKAGES_FILE
 )
@@ -312,7 +312,7 @@ lk_log_start
     OTHER_SETTINGS=($(comm -23 \
         <({ lk_echo_array NEW_SETTINGS &&
             sed -En \
-                -e '/^LK_PATH_PREFIX_ALPHA=/d' \
+                -e '/^(LK_PATH_PREFIX_ALPHA|LK_SCRIPT_DEBUG)=/d' \
                 -e 's/^([a-zA-Z_][a-zA-Z0-9_]*)=.*/\1/p' "$CONF_FILE"; } |
             sort -u) \
         <(lk_echo_array KNOWN_SETTINGS | sort)))

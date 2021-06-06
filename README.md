@@ -99,7 +99,7 @@ Settings are loaded in the following order (later values override earlier ones):
 - `LK_REJECT_OUTPUT`
 - `LK_REQUIRED`
 - `LK_SAMBA_WORKGROUP`
-- `LK_SCRIPT_DEBUG`
+- `LK_DEBUG`
 - `LK_SECONDARY_LOG_FILE`
 - `LK_SHUTDOWN_DELAY`
 - `LK_SMTP_RELAY`

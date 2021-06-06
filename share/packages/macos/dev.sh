@@ -139,6 +139,7 @@ HOMEBREW_FORMULAE+=(
     s-nail # `mail` and `mailx` commands
 
     #
+    git-cola
     git-filter-repo
 
     #
