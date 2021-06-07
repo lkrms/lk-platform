@@ -349,31 +349,39 @@ function lk_get_quoted_var() {
 
 # lk_get_env [-n] [VAR...]
 function lk_get_env() {
-    local _LK_VAR_LIST _LK_IGNORE_REGEX="^(_(_|LK|lk)|(PATH|BASH_XTRACEFD)$)"
-    unset _LK_VAR_LIST
-    [ "${1-}" != -n ] || { _LK_VAR_LIST= && shift; }
-    (
-        [ -n "${_LK_ENV+1}" ] || _LK_ENV=$(declare -x)
-        # Unset every variable that can be unset
-        unset $(lk_var_list |
-            sed -E "/$_LK_IGNORE_REGEX/d") 2>/dev/null || true
-        # Ignore the rest
-        _LK_IGNORE=$(lk_var_list |
-            sed -E "/$_LK_IGNORE_REGEX/d")
-        # Restore environment variables
-        eval "$_LK_ENV" 2>/dev/null
-        # Reduce the selection to variables not being ignored
-        set -- $(comm -13 \
-            <(sort -u <<<"$_LK_IGNORE") \
-            <({ [ $# -gt 0 ] && lk_echo_args "$@" || lk_var_list; } |
-                sed -E "/$_LK_IGNORE_REGEX/d" | sort -u))
-        [ $# -eq 0 ] ||
-            _LK_STACK_DEPTH=1 \
-                ${_LK_VAR_LIST-lk_get_quoted_var} \
-                ${_LK_VAR_LIST+lk_echo_args} \
-                "$@"
-    )
-} #### Reviewed: 2021-04-12
+    local _LK_VAR_LIST=
+    [ "${1-}" != -n ] || { _LK_VAR_LIST=1 && shift; }
+    if [ -n "${_LK_ENV+1}" ]; then
+        echo "$_LK_ENV"
+    else
+        declare -x
+    fi | awk \
+        -v var="$(lk_regex_implode "$@")" \
+        -v var_list="$_LK_VAR_LIST" \
+        -v prefix="$(_lk_var_prefix)" \
+        'BEGIN {
+    declare = "^declare -[^ ]+ "
+    any_var = "[a-zA-Z_][a-zA-Z0-9_]*"
+    var = var ? var : any_var
+    val = "([^\"\\\\]+|\\.)*"
+}
+function print_line() {
+    l = c ? l : $0
+    sub(declare, "", l)
+    if (var_list)
+        sub("=\".*", "", l)
+    else
+        l = prefix l
+    print l
+}
+!c && $0 ~ declare any_var "$" { next }
+!c && $0 ~ declare var "=\"" val "\"$" { print_line(); next }
+!c && $0 ~ declare var "=\"" val "$" { c = 1; l = $0; next }
+var != any_var && !c && $0 ~ declare any_var "=\"" val "\"$" { next }
+var != any_var && !c && $0 ~ declare any_var "=\"" val "$" { c = 2; next }
+c == 1 { l = l "\"$\47\\n\47\"" $0 }
+c && $0 ~ "^" val "\"$" { if (c == 1) print_line(); c = 0 }'
+} #### Reviewed: 2021-06-07
 
 # lk_path_edit REMOVE_REGEX [MOVE_REGEX [PATH]]
 function lk_path_edit() {
