@@ -39,6 +39,7 @@ HOMEBREW_FORMULAE=(
 HOMEBREW_FORMULAE+=(
     byobu
     glances
+    gnupg
     htop
     lftp
     media-info

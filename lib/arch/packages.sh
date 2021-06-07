@@ -265,7 +265,6 @@ if lk_node_service_enabled xfce4; then
         catfish
         engrampa
         libcanberra
-        libcanberra-pulse
         pavucontrol
         plank
         pulseaudio-alsa

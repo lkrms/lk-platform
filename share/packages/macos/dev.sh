@@ -33,6 +33,8 @@ HOMEBREW_FORMULAE+=(
 
     # System
     #acme.sh
+    dosfstools
+    mtools
     nmap
 )
 
@@ -199,6 +201,8 @@ HOMEBREW_CASKS+=(
 )
 
 HOMEBREW_KEEP_FORMULAE+=(
+    meson
+    ninja
     ocaml
 
     #
