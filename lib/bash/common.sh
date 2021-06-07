@@ -96,7 +96,7 @@ function lk_getopt() {
         case "$1" in
         --help)
             [ -z "${LK_USAGE-}" ] || {
-                echo "$LK_USAGE"
+                sed -E "s/^\\\\(.)/\\1/" <<<"$LK_USAGE"
                 exit
             }
             ;;
