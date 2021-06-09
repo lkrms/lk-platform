@@ -143,6 +143,7 @@ UBUNTU_MIRROR=${LK_UBUNTU_APT_MIRROR:-http://archive.ubuntu.com/ubuntu}
 
 SYSTEM_SOCKET=
 SESSION_SOCKET=
+POOL_ROOT=/var/lib/libvirt/images
 IMAGE_ARCH=amd64
 QEMU_ARCH=x86_64
 QEMU_MACHINE=
@@ -151,6 +152,7 @@ QEMU_MACHINE=
     # libvirtd on arm64
     SYSTEM_SOCKET=$HOMEBREW_PREFIX/var/run/libvirt/libvirt-sock
     SESSION_SOCKET=${XDG_RUNTIME_DIR:-~/.cache}/libvirt/libvirt-sock
+    POOL_ROOT=$HOMEBREW_PREFIX/var/lib/libvirt/images
     QEMU_MACHINE=q35,accel=hvf
     ! lk_is_apple_silicon || {
         IMAGE_ARCH=arm64
@@ -158,7 +160,6 @@ QEMU_MACHINE=
         QEMU_MACHINE=virt,accel=hvf,highmem=off
     }
 }
-VM_POOL_ROOT=/var/lib/libvirt/images
 VM_NETWORK_DEFAULT=default
 LIBVIRT_URI=qemu:///system${SYSTEM_SOCKET:+?socket=$SYSTEM_SOCKET}
 LK_SUDO=1
@@ -322,7 +323,7 @@ while :; do
         continue
         ;;
     -u | --session)
-        VM_POOL_ROOT=${LK_CLOUDIMG_SESSION_ROOT:-$HOME/.local/share/libvirt/images}
+        POOL_ROOT=${LK_CLOUDIMG_SESSION_ROOT:-$HOME/.local/share/libvirt/images}
         VM_NETWORK_DEFAULT=bridge=virbr0
         LIBVIRT_URI=qemu:///session${SESSION_SOCKET:+?socket=$SESSION_SOCKET}
         unset LK_SUDO
@@ -441,7 +442,7 @@ case "$IMAGE" in
     ;;
 *20.04*)
     IMAGE_NAME=ubuntu-20.04
-    IMAGE_URL=http://$UBUNTU_HOST/focal/current/focal-server-cloudimg-$IMAGE_ARCH-disk-kvm.img
+    IMAGE_URL=http://$UBUNTU_HOST/focal/current/focal-server-cloudimg-$IMAGE_ARCH.img
     SHA_URLS=(
         https://cloud-images.ubuntu.com/focal/current/SHA256SUMS.gpg
         https://cloud-images.ubuntu.com/focal/current/SHA256SUMS
@@ -642,7 +643,7 @@ printf '%s\t%s\n' \
         ${#METADATA_URLS[@]} "" s)" \
     "Shut down" "${POWEROFF:-no}" \
     "Libvirt service" "$LIBVIRT_URI" \
-    "Disk image path" "$VM_POOL_ROOT" | IFS=$'\t' lk_tty_detail_pairs
+    "Disk image path" "$POOL_ROOT" | IFS=$'\t' lk_tty_detail_pairs
 [ -z "$STACKSCRIPT" ] ||
     lk_console_detail "StackScript environment:" \
         $'\n'"$([ ${#SS_FIELDS[@]} -eq 0 ] && echo "<empty>" ||
@@ -676,8 +677,8 @@ lk_confirm "OK to proceed?" Y || lk_die ""
             lk_die "error writing to SHASUMS-$IMAGE_NAME"
     fi
 
-    CLOUDIMG_ROOT=$VM_POOL_ROOT/cloud-images
-    lk_install -d -m 00755 "$VM_POOL_ROOT" "$CLOUDIMG_ROOT"
+    CLOUDIMG_ROOT=$POOL_ROOT/cloud-images
+    lk_install -d -m 00755 "$POOL_ROOT" "$CLOUDIMG_ROOT"
     TIMESTAMP=$(lk_file_modified "$FILENAME")
     CLOUDIMG_PATH=$CLOUDIMG_ROOT/$IMG_NAME-$TIMESTAMP.qcow2
     if lk_maybe_sudo test -f "$CLOUDIMG_PATH"; then
@@ -708,8 +709,8 @@ lk_confirm "OK to proceed?" Y || lk_die ""
     fi
 
     IMAGE_BASENAME=$VM_HOSTNAME-$IMG_NAME-$TIMESTAMP
-    DISK_PATH=$VM_POOL_ROOT/$IMAGE_BASENAME.qcow2
-    NOCLOUD_PATH=$VM_POOL_ROOT/$IMAGE_BASENAME-cloud-init.qcow2
+    DISK_PATH=$POOL_ROOT/$IMAGE_BASENAME.qcow2
+    NOCLOUD_PATH=$POOL_ROOT/$IMAGE_BASENAME-cloud-init.qcow2
     if [ -e "$DISK_PATH" ]; then
         lk_console_error "Disk image already exists:" "$DISK_PATH"
         lk_is_true FORCE_DELETE || LK_FORCE_INPUT=1 lk_confirm \

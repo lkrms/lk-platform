@@ -141,6 +141,7 @@ HOMEBREW_FORMULAE+=(
     s-nail # `mail` and `mailx` commands
 
     #
+    git
     git-cola
     git-filter-repo
 
@@ -156,6 +157,9 @@ HOMEBREW_FORMULAE+=(
 
     #
     python
+
+    #
+    perltidy
 
     #
     mariadb
