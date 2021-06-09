@@ -1120,7 +1120,7 @@ function lk_log_create_file() {
     GROUP=$(id -gn) || return
     [ "${1-}" != -e ] || { EXT=$2 && shift 2; }
     CMD=${_LK_LOG_CMDLINE[0]:-$0}
-    [ ! -d "${_LK_INST:-$LK_BASE}" ] ||
+    [ ! -d "${_LK_INST:-${LK_BASE-}}" ] ||
         [ -z "$(ls -A "${_LK_INST:-$LK_BASE}")" ] ||
         LOG_DIRS=("${_LK_INST:-$LK_BASE}/var/log")
     LOG_DIRS+=("$@")
@@ -2875,7 +2875,9 @@ function lk_version_at_least() {
 }
 
 function lk_jq() {
-    jq -L "${_LK_INST:-$LK_BASE}/lib/jq" "${@:1:$#-1}" 'include "core";'"${*: -1}"
+    jq -L "${_LK_INST:-$LK_BASE}/lib/jq" \
+        "${@:1:$#-1}" \
+        'include "core";'"${*: -1}"
 }
 
 # lk_jq_get_array ARRAY [FILTER]
@@ -3182,7 +3184,8 @@ function lk_file_backup() {
                         OWNER_HOME=$(lk_expand_path "~$OWNER") &&
                         OWNER_HOME=$(_lk_realpath "$OWNER_HOME")
                 } 2>/dev/null || OWNER_HOME=
-                if lk_will_elevate && [ "${FILE#$OWNER_HOME}" = "$FILE" ]; then
+                if [ -d "${_LK_INST:-${LK_BASE-}}" ] &&
+                    lk_will_elevate && [ "${FILE#$OWNER_HOME}" = "$FILE" ]; then
                     lk_install -d \
                         -m "$([ -g "${_LK_INST:-$LK_BASE}" ] &&
                             echo 02775 ||
@@ -3193,15 +3196,14 @@ function lk_file_backup() {
                 elif lk_will_elevate; then
                     DEST=$OWNER_HOME/.lk-platform/backup
                     GROUP=$(id -gn "$OWNER") &&
-                        lk_install -d -m 00755 \
-                            -o "$OWNER" -g "$GROUP" "$OWNER_HOME/.lk-platform" ||
-                        return
+                        lk_install -d -m 00755 -o "$OWNER" -g "$GROUP" \
+                            "$OWNER_HOME/.lk-platform" || return
                 else
                     DEST=~/.lk-platform/backup
                     unset OWNER
                 fi
-                lk_install -d -m 00700 \
-                    ${OWNER:+-o "$OWNER" -g "$GROUP"} "$DEST" || return
+                lk_install -d -m 00700 ${OWNER:+-o "$OWNER" -g "$GROUP"} \
+                    "$DEST" || return
                 s=/
                 DEST=$DEST/${FILE//"$s"/__}
             }
