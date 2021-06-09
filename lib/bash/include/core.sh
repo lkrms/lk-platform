@@ -1870,19 +1870,16 @@ function lk_console_diff() {
 Usage: ${FUNCNAME[0]} FILE1 [FILE2 [MESSAGE [COLOUR]]]
 
 Compare FILE1 and FILE2 using diff. If FILE2 is the empty string, read it from
-input. If FILE1 is the only argument, compare with FILE1.orig if it exists,
-otherwise pass FILE1 to lk_tty_file." || return
+input. If FILE1 is the only argument, compare with FILE1.orig if it exists or
+with /dev/null if it doesn't." || return
     for f in FILE1 FILE2; do
         [ -n "${!f}" ] || {
             if [ "$f" = FILE2 ] && { [ -t 0 ] || [ $# -eq 1 ]; }; then
-                ! lk_maybe_sudo test -r "$1.orig" || {
-                    FILE1=$1.orig
-                    FILE2=$1
-                    set -- "$FILE1" "$FILE2" "${@:3}"
-                    break
-                }
-                lk_tty_file "$1" "${4-${_LK_TTY_MESSAGE_COLOUR-$LK_MAGENTA}}"
-                return
+                FILE1=$1.orig
+                FILE2=$1
+                lk_maybe_sudo test -r "$FILE1" || FILE1=/dev/null
+                set -- "$FILE1" "$FILE2" "${@:3}"
+                break
             fi
             eval "$f=/dev/stdin"
             continue
@@ -1905,21 +1902,35 @@ ${2:-${_LK_TTY_INPUT_NAME:-/dev/stdin}}$LK_RESET"
 
 function lk_diff() { (
     _LK_CAN_FAIL=1
-    [ $# -eq 2 ] || lk_usage "\
-Usage: ${FUNCNAME[0]} FILE1 FILE2" || exit
+    [ $# -eq 2 ] || lk_usage "Usage: $FUNCNAME FILE1 FILE2" || exit
     for i in 1 2; do
-        if [ -p "${!i}" ]; then
-            FILE=$(lk_mktemp_file) &&
-                lk_delete_on_exit "$FILE" &&
-                cp "${!i}" "$FILE" || exit
+        if [ -p "${!i}" ] || [ -n "${LK_DIFF_IGNORE:+1}" ]; then
+            FILE=$(lk_mktemp_file) && lk_delete_on_exit "$FILE" &&
+                lk_maybe_sudo sed -E \
+                    "${LK_DIFF_IGNORE:+"/${LK_DIFF_IGNORE//\//\\\/}/d"}" \
+                    "${!i}" >"$FILE" || exit
             set -- "${@:1:i-1}" "$FILE" "${@:i+1}"
         fi
     done
+    # Use the same escape sequences as icdiff, which ignores TERM
+    BLUE=$'\E[34m'
+    GREEN=$'\E[1;32m'
+    RESET=$'\E[m'
     if lk_command_exists icdiff; then
-        ! lk_require_output lk_maybe_sudo icdiff -U2 \
-            ${_LK_TTY_INDENT:+--cols=$(($(
-                lk_tty_columns
-            ) - 2 * (_LK_TTY_INDENT + 2)))} "$@"
+        # Don't use icdiff if FILE1 is empty
+        if [ ! -s "$1" ] && [ -s "$2" ]; then
+            echo "$BLUE$2$RESET"
+            printf '%s' "$GREEN"
+            # Add $RESET to the last line
+            lk_maybe_sudo cat "$2" | awk -v "r=$RESET" \
+                's { print l } { s = 1; l = $0 } END { print l r }'
+            false
+        else
+            ! lk_require_output lk_maybe_sudo icdiff -U2 \
+                ${_LK_TTY_INDENT:+--cols=$(($(
+                    lk_tty_columns
+                ) - 2 * (_LK_TTY_INDENT + 2)))} "$@"
+        fi
     elif lk_command_exists git; then
         lk_maybe_sudo \
             git diff --no-index --no-prefix --no-ext-diff --color -U3 "$@"
@@ -1927,7 +1938,7 @@ Usage: ${FUNCNAME[0]} FILE1 FILE2" || exit
         DIFF_VER=$(lk_diff_version 2>/dev/null) &&
             lk_version_at_least "$DIFF_VER" 3.4 || unset DIFF_VER
         lk_maybe_sudo gnu_diff ${DIFF_VER+--color=always} -U3 "$@"
-    fi && echo "${LK_BLUE}Files are identical$LK_RESET"
+    fi && echo "${BLUE}Files are identical$RESET"
 ); }
 
 function lk_run() {
