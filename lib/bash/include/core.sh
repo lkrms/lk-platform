@@ -3777,7 +3777,7 @@ else
             LK_WRAP_ON=$'\E[?7h' \
             LK_RESET=$'\E(B\E[m'
         ;;
-    rxvt | linux)
+    rxvt | linux | vt220)
         declare \
             LK_WRAP_OFF=$'\E[?7l' \
             LK_WRAP_ON=$'\E[?7h'
