@@ -147,6 +147,7 @@ POOL_ROOT=/var/lib/libvirt/images
 IMAGE_ARCH=amd64
 QEMU_ARCH=x86_64
 QEMU_MACHINE=
+QEMU_CPU=
 ! lk_is_macos || {
     # Use explicit sockets to ensure x86_64 virt-install connects to native
     # libvirtd on arm64
@@ -154,6 +155,7 @@ QEMU_MACHINE=
     SESSION_SOCKET=${XDG_RUNTIME_DIR:-~/.cache}/libvirt/libvirt-sock
     POOL_ROOT=$HOMEBREW_PREFIX/var/lib/libvirt/images
     QEMU_MACHINE=q35,accel=hvf
+    QEMU_CPU=host
     ! lk_is_apple_silicon || {
         IMAGE_ARCH=arm64
         QEMU_ARCH=aarch64
@@ -751,6 +753,10 @@ lk_confirm "OK to proceed?" Y || lk_die ""
         VIRT_OPTIONS+=(--machine "${QEMU_MACHINE%%,*}")
         QEMU_COMMANDLINE+=(-machine "$QEMU_MACHINE")
     }
+    [ -z "${QEMU_CPU:+1}" ] ||
+        QEMU_COMMANDLINE+=(-cpu "$QEMU_CPU")
+    ! lk_is_macos ||
+        VIRT_OPTIONS+=(--rng none)
 
     add_json NETWORK_CONFIG --arg mac "$VM_MAC_ADDRESS" '{
   "version": 1,
