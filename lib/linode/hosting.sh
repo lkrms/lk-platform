@@ -429,7 +429,7 @@ if [ -z "$(ls -A "$LK_BASE")" ]; then
 fi
 
 TERM='' . "$LK_BASE/lib/bash/common.sh"
-lk_include hosting provision
+lk_include debian hosting provision
 
 install -d -m 02775 -g adm "$LK_BASE"/{etc{,/lk-platform},var}
 install -d -m 00777 -g adm "$LK_BASE"/var/log
@@ -495,7 +495,7 @@ case "$DISTRIB_RELEASE" in
     REPOS+=("$CERTBOT_REPO")
     ADD_APT_REPOSITORY_ARGS=(-y)
     EXCLUDE_PACKAGES+=(icdiff php-apcu-bc php-yaml)
-    GET_PIP_URL=https://bootstrap.pypa.io/3.5/get-pip.py
+    GET_PIP_URL=https://bootstrap.pypa.io/pip/3.5/get-pip.py
     PHPVER=7.0
     ;;
 18.04)
@@ -816,7 +816,6 @@ PACKAGES=(
     dnsutils
     git
     htop
-    icdiff
     iptables
     iptables-persistent
     iputils-ping
@@ -839,6 +838,7 @@ PACKAGES=(
     vim
     wget
     whiptail
+    $(lk_apt_available_list icdiff)
 
     #
     apt-listchanges
@@ -923,6 +923,16 @@ $ACCEPT_OUTPUT_HOSTS_SH
 $(printf '%s=%q\n' \
         "ACCEPT_OUTPUT_CHAIN" "${P}output")" >"$LK_BASE/etc/firewall.conf"
 fi
+
+modprobe nf_conntrack_ftp nf_nat_ftp
+FILE=/etc/modules-load.d/${LK_PATH_PREFIX}nf_conntrack.conf
+install -m 00644 /dev/null "$FILE"
+cat <<EOF >"$FILE"
+nf_conntrack_ftp
+nf_nat_ftp
+EOF
+lk_console_diff "$FILE"
+
 iptables-restore <<EOF
 *filter
 :INPUT DROP [0:0]
@@ -949,14 +959,20 @@ iptables-restore <<EOF
 -A OUTPUT -j ${P}output
 -A OUTPUT -m limit --limit 12/min -j LOG --log-prefix "outgoing packet blocked: "
 -A OUTPUT -j ${P}reject
--A ${P}check -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A ${P}check -m conntrack --ctstate ESTABLISHED -j ACCEPT
 -A ${P}check -m conntrack --ctstate INVALID -j DROP
+-A ${P}check -p tcp -m conntrack --ctstate RELATED -m helper --helper ftp -m tcp --dport 1024:65535 -j ACCEPT
 -A ${P}check -p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN -m conntrack --ctstate NEW -j REJECT --reject-with tcp-reset
 -A ${P}check -p icmp -m icmp --icmp-type 8 -m conntrack --ctstate NEW -j ACCEPT
 -A ${P}input -p tcp -m tcp --dport 22 -j ${P}trusted
 -A ${P}reject -p udp -m udp -j REJECT --reject-with icmp-port-unreachable
 -A ${P}reject -p tcp -m tcp -j REJECT --reject-with tcp-reset
 -A ${P}reject -j REJECT --reject-with icmp-proto-unreachable
+COMMIT
+*raw
+:PREROUTING ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+-A PREROUTING -p tcp -m tcp --dport 21 -j CT --helper ftp
 COMMIT
 EOF
 ip6tables-restore <<EOF
@@ -982,14 +998,15 @@ ip6tables-restore <<EOF
 -A OUTPUT -o lo -j ACCEPT
 -A OUTPUT -j ${P}check_ll
 -A OUTPUT -j ${P}check
--A OUTPUT -p udp -m udp --dport 67 -j ACCEPT
+-A OUTPUT -p udp -m udp --dport 547 -j ACCEPT
 -A OUTPUT -p udp -m udp --dport 53 -j ACCEPT
 -A OUTPUT -p udp -m udp --dport 123 -j ACCEPT
 -A OUTPUT -j ${P}output
 -A OUTPUT -m limit --limit 12/min -j LOG --log-prefix "outgoing packet blocked: "
 -A OUTPUT -j ${P}reject
--A ${P}check -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A ${P}check -m conntrack --ctstate ESTABLISHED -j ACCEPT
 -A ${P}check -m conntrack --ctstate INVALID -j DROP
+-A ${P}check -p tcp -m conntrack --ctstate RELATED -m helper --helper ftp -m tcp --dport 1024:65535 -j ACCEPT
 -A ${P}check -p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN -m conntrack --ctstate NEW -j REJECT --reject-with tcp-reset
 -A ${P}check -p ipv6-icmp -m icmp6 --icmpv6-type 1 -j ACCEPT
 -A ${P}check -p ipv6-icmp -m icmp6 --icmpv6-type 2 -j ACCEPT
@@ -1014,6 +1031,11 @@ ip6tables-restore <<EOF
 -A ${P}reject -p udp -m udp -j REJECT --reject-with icmp6-port-unreachable
 -A ${P}reject -p tcp -m tcp -j REJECT --reject-with tcp-reset
 -A ${P}reject -j REJECT --reject-with icmp6-adm-prohibited
+COMMIT
+*raw
+:PREROUTING ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+-A PREROUTING -p tcp -m tcp --dport 21 -j CT --helper ftp
 COMMIT
 EOF
 if [ "$LK_REJECT_OUTPUT" = "N" ]; then
