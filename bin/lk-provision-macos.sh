@@ -406,6 +406,7 @@ EOF
         pv
         python-yq
         rsync
+        trash
     )
 
     ! MACOS_VERSION=$(lk_macos_version) ||

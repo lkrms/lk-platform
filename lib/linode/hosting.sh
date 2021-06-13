@@ -278,7 +278,7 @@ function lk_log() {
 function lk_console_message() {
     echo "\
 ${_LK_TTY_PREFIX-==> }\
-${1//$'\n'/$'\n'"${_LK_TTY_SPACES-  }"}" >&"${_LK_FD:-2}"
+${1//$'\n'/$'\n'"${_LK_TTY_SPACES-  }"}" >&"${_LK_FD-2}"
 }
 
 function lk_console_item() {

@@ -30,6 +30,7 @@ HOMEBREW_FORMULAE=(
     pv
     python-yq
     rsync
+    trash
 
     #
     ${HOMEBREW_FORMULAE[@]+"${HOMEBREW_FORMULAE[@]}"}

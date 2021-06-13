@@ -46,9 +46,9 @@ while [ $((SECONDS + 5)) -lt 120 ] || (((i - 1) % 5)); do
     done < <(virsh list --name | sed '/^$/d')
     if ((PENDING)); then
         if ((i % 5)); then
-            printf '.' >&"${_LK_FD:-2}"
+            printf '.' >&"${_LK_FD-2}"
         else
-            ! ((i)) || printf '\r' >&"${_LK_FD:-2}"
+            ! ((i)) || printf '\r' >&"${_LK_FD-2}"
             lk_console_detail \
                 "Shutdown pending:" "$(lk_implode ", " PENDING_DOMAINS)"
         fi
@@ -58,7 +58,7 @@ while [ $((SECONDS + 5)) -lt 120 ] || (((i - 1) % 5)); do
     ((++i))
 done
 
-printf '\r' >&"${_LK_FD:-2}"
+printf '\r' >&"${_LK_FD-2}"
 
 ! ((PENDING)) &&
     lk_console_success "All libvirt domains shut down successfully" ||

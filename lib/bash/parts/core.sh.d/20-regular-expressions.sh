@@ -131,4 +131,4 @@ printf '
         shift
     done
     return "$STATUS"
-}\n\n'
+}\n'

@@ -165,14 +165,14 @@ function lk_git_list_push_remotes() {
 function lk_git_remote_head() {
     local REMOTE HEAD
     REMOTE=${1:-$(lk_git_remote_singleton)} || lk_warn "no remote" || return
-    HEAD=$(git rev-parse --abbrev-ref "$REMOTE/HEAD" 2>/dev/null) &&
+    HEAD=$(git rev-parse --verify --abbrev-ref "$REMOTE/HEAD" 2>/dev/null) &&
         [ "$HEAD" != "$REMOTE/HEAD" ] &&
         echo "${HEAD#$REMOTE/}"
 }
 
 function lk_git_branch_current() {
     local BRANCH
-    BRANCH=$(git rev-parse --abbrev-ref HEAD) && [ "$BRANCH" != HEAD ] &&
+    BRANCH=$(git rev-parse --verify --abbrev-ref HEAD) && [ "$BRANCH" != HEAD ] &&
         echo "$BRANCH"
 }
 
@@ -196,8 +196,7 @@ function lk_git_branch_list_remote() {
 # Output upstream ("pull") <REMOTE>/<REMOTE_BRANCH> for BRANCH or the current
 # branch.
 function lk_git_branch_upstream() {
-    lk_require_output -s \
-        git rev-parse --abbrev-ref "${1-}@{upstream}" 2>/dev/null
+    git rev-parse --verify --abbrev-ref "${1-}@{upstream}" 2>/dev/null
 }
 
 # lk_git_branch_upstream_remote [BRANCH]
@@ -215,8 +214,7 @@ function lk_git_branch_upstream_remote() {
 # Output downstream ("push") <REMOTE>/<REMOTE_BRANCH> for BRANCH or the current
 # branch.
 function lk_git_branch_push() {
-    lk_require_output -s \
-        git rev-parse --abbrev-ref "${1-}@{push}" 2>/dev/null ||
+    git rev-parse --verify --abbrev-ref "${1-}@{push}" 2>/dev/null ||
         lk_git_branch_upstream "$@"
 }
 
@@ -231,7 +229,7 @@ function lk_git_branch_push_remote() {
 }
 
 function lk_git_ref() {
-    git rev-parse --short HEAD
+    git rev-parse --verify --short HEAD
 }
 
 # lk_git_provision_repo [OPTIONS] REMOTE_URL DIR
@@ -794,7 +792,7 @@ Usage: $FUNCNAME [-o] [--type=TYPE] NAME VALUE
 # (default: the upstream remote of the current branch).
 function lk_git_config_remote_push_all() {
     local UPSTREAM REMOTE_URL REMOTE
-    UPSTREAM=${1:-$(git rev-parse --abbrev-ref "@{u}" | sed 's/\/.*//')} &&
+    UPSTREAM=${1:-$(lk_git_branch_upstream_remote)} &&
         REMOTE_URL=$(git config "remote.$UPSTREAM.url") &&
         [ -n "$REMOTE_URL" ] || lk_warn "remote URL not found" || return
     lk_console_item "Configuring" "remote.$UPSTREAM.pushUrl"

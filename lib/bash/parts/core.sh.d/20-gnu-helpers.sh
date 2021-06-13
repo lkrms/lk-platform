@@ -156,5 +156,3 @@ fi
     return "$STATUS"
 }
 EOF
-
-printf '\n'

@@ -1,16 +1,23 @@
 #!/bin/bash
 
-# shellcheck disable=SC2094,SC2116
+#### BEGIN core.sh.d
 
 export -n BASH_XTRACEFD SHELLOPTS
 export LC_ALL=C
 
-_LK_ARG0=$0
-_LK_ARGV=("$@")
-_LK_CMDLINE=("$0" "$@")
 USER=${USER:-$(id -un)} &&
     { [ "${S-}" = "[[:blank:]]" ] || readonly S="[[:blank:]]"; } &&
     { [ "${NS-}" = "[^[:blank:]]" ] || readonly NS="[^[:blank:]]"; } || return
+
+_LK_ARGV=("$@")
+_LK_INCLUDES=core
+
+# lk_version_at_least INSTALLED MINIMUM
+function lk_version_at_least() {
+    local MIN
+    MIN=$(printf '%s\n' "$@" | sort -V | head -n1) &&
+        [ "$MIN" = "$2" ]
+}
 
 # lk_bash_at_least MAJOR [MINOR]
 function lk_bash_at_least() {
@@ -60,11 +67,12 @@ function lk_ubuntu_at_least() {
 }
 
 function lk_is_wsl() {
-    lk_is_linux && grep -qi Microsoft /proc/version &>/dev/null
+    lk_is_linux && grep -iq Microsoft /proc/version &>/dev/null
 }
 
 function lk_is_virtual() {
-    lk_is_linux && grep -Eq "^flags$S*:.*\\bhypervisor\\b" /proc/cpuinfo
+    lk_is_linux &&
+        grep -Eq "^flags[[:blank:]]*:.*\\<hypervisor\\>" /proc/cpuinfo
 }
 
 function lk_is_qemu() {
@@ -73,6 +81,378 @@ function lk_is_qemu() {
         [ ${#FILES[@]} -gt 0 ] &&
         grep -iq qemu "${FILES[@]}")
 }
+
+# Define wrapper functions (e.g. `gnu_find`) to invoke the GNU version of
+# certain commands (e.g. `gfind`) on systems where standard utilities are not
+# compatible with their GNU counterparts, e.g. BSD/macOS
+if ! lk_is_macos; then
+    function gnu_awk() { lk_maybe_sudo gawk "$@"; }
+    function gnu_chgrp() { lk_maybe_sudo chgrp "$@"; }
+    function gnu_chmod() { lk_maybe_sudo chmod "$@"; }
+    function gnu_chown() { lk_maybe_sudo chown "$@"; }
+    function gnu_cp() { lk_maybe_sudo cp "$@"; }
+    function gnu_date() { lk_maybe_sudo date "$@"; }
+    function gnu_df() { lk_maybe_sudo df "$@"; }
+    function gnu_diff() { lk_maybe_sudo diff "$@"; }
+    function gnu_du() { lk_maybe_sudo du "$@"; }
+    function gnu_find() { lk_maybe_sudo find "$@"; }
+    function gnu_getopt() { lk_maybe_sudo getopt "$@"; }
+    function gnu_grep() { lk_maybe_sudo grep "$@"; }
+    function gnu_ln() { lk_maybe_sudo ln "$@"; }
+    function gnu_mktemp() { lk_maybe_sudo mktemp "$@"; }
+    function gnu_mv() { lk_maybe_sudo mv "$@"; }
+    function gnu_realpath() { lk_maybe_sudo realpath "$@"; }
+    function gnu_sed() { lk_maybe_sudo sed "$@"; }
+    function gnu_sort() { lk_maybe_sudo sort "$@"; }
+    function gnu_stat() { lk_maybe_sudo stat "$@"; }
+    function gnu_tar() { lk_maybe_sudo tar "$@"; }
+    function gnu_xargs() { lk_maybe_sudo xargs "$@"; }
+else
+    lk_is_apple_silicon &&
+        _LK_HOMEBREW_PREFIX=/opt/homebrew ||
+        _LK_HOMEBREW_PREFIX=/usr/local
+    function gnu_awk() { lk_maybe_sudo gawk "$@"; }
+    function gnu_chgrp() { lk_maybe_sudo gchgrp "$@"; }
+    function gnu_chmod() { lk_maybe_sudo gchmod "$@"; }
+    function gnu_chown() { lk_maybe_sudo gchown "$@"; }
+    function gnu_cp() { lk_maybe_sudo gcp "$@"; }
+    function gnu_date() { lk_maybe_sudo gdate "$@"; }
+    function gnu_df() { lk_maybe_sudo gdf "$@"; }
+    function gnu_diff() { lk_maybe_sudo "${HOMEBREW_PREFIX:-$_LK_HOMEBREW_PREFIX}/bin/diff" "$@"; }
+    function gnu_du() { lk_maybe_sudo gdu "$@"; }
+    function gnu_find() { lk_maybe_sudo gfind "$@"; }
+    function gnu_getopt() { lk_maybe_sudo "${HOMEBREW_PREFIX:-$_LK_HOMEBREW_PREFIX}/opt/gnu-getopt/bin/getopt" "$@"; }
+    function gnu_grep() { lk_maybe_sudo ggrep "$@"; }
+    function gnu_ln() { lk_maybe_sudo gln "$@"; }
+    function gnu_mktemp() { lk_maybe_sudo gmktemp "$@"; }
+    function gnu_mv() { lk_maybe_sudo gmv "$@"; }
+    function gnu_realpath() { lk_maybe_sudo grealpath "$@"; }
+    function gnu_sed() { lk_maybe_sudo gsed "$@"; }
+    function gnu_sort() { lk_maybe_sudo gsort "$@"; }
+    function gnu_stat() { lk_maybe_sudo gstat "$@"; }
+    function gnu_tar() { lk_maybe_sudo gtar "$@"; }
+    function gnu_xargs() { lk_maybe_sudo gxargs "$@"; }
+fi
+
+# lk_is_host VALUE
+#
+# Return true if VALUE is a valid IP address, hostname or domain name.
+function lk_is_host() {
+    local HOST_REGEX="(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))|([a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)*))"
+    [[ $1 =~ ^$HOST_REGEX$ ]]
+}
+
+# lk_is_fqdn VALUE
+#
+# Return true if VALUE is a valid domain name.
+function lk_is_fqdn() {
+    local DOMAIN_NAME_REGEX="[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)+"
+    [[ $1 =~ ^$DOMAIN_NAME_REGEX$ ]]
+}
+
+# lk_is_email VALUE
+#
+# Return true if VALUE is a valid email address.
+function lk_is_email() {
+    local EMAIL_ADDRESS_REGEX="[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)+"
+    [[ $1 =~ ^$EMAIL_ADDRESS_REGEX$ ]]
+}
+
+# lk_is_uri VALUE
+#
+# Return true if VALUE is a valid URI with a scheme and host.
+function lk_is_uri() {
+    local URI_REGEX_REQ_SCHEME_HOST="(([a-zA-Z][-a-zA-Z0-9+.]*):)(//(([-a-zA-Z0-9._~%!\$&'()*+,;=]+)(:([-a-zA-Z0-9._~%!\$&'()*+,;=]*))?@)?([-a-zA-Z0-9._~%!\$&'()*+,;=]+|\\[([0-9a-fA-F:]+)\\])(:([0-9]+))?)([-a-zA-Z0-9._~%!\$&'()*+,;=:@/]+)?(\\?([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]+))?(#([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]*))?"
+    [[ $1 =~ ^$URI_REGEX_REQ_SCHEME_HOST$ ]]
+}
+
+# lk_is_identifier VALUE
+#
+# Return true if VALUE is a valid Bash identifier.
+function lk_is_identifier() {
+    local IDENTIFIER_REGEX="[a-zA-Z_][a-zA-Z0-9_]*"
+    [[ $1 =~ ^$IDENTIFIER_REGEX$ ]]
+}
+
+# lk_get_regex [REGEX...]
+#
+# Print a Bash variable assignment for each REGEX. If no REGEX is specified,
+# print all available regular expressions.
+function lk_get_regex() {
+    [ $# -gt 0 ] || set -- DOMAIN_PART_REGEX DOMAIN_NAME_REGEX EMAIL_ADDRESS_REGEX IPV4_REGEX IPV4_OPT_PREFIX_REGEX IPV6_REGEX IPV6_OPT_PREFIX_REGEX IP_REGEX IP_OPT_PREFIX_REGEX HOST_NAME_REGEX HOST_REGEX HOST_OPT_PREFIX_REGEX URI_REGEX URI_REGEX_REQ_SCHEME_HOST LINUX_USERNAME_REGEX MYSQL_USERNAME_REGEX DPKG_SOURCE_REGEX IDENTIFIER_REGEX PHP_SETTING_NAME_REGEX PHP_SETTING_REGEX READLINE_NON_PRINTING_REGEX CONTROL_SEQUENCE_REGEX ESCAPE_SEQUENCE_REGEX NON_PRINTING_REGEX IPV4_PRIVATE_FILTER_REGEX BACKUP_TIMESTAMP_FINDUTILS_REGEX
+    local STATUS=0
+    while [ $# -gt 0 ]; do
+        _lk_var_prefix
+        case "$1" in
+        DOMAIN_PART_REGEX)
+            printf '%s=%q\n' DOMAIN_PART_REGEX "[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
+            ;;
+        DOMAIN_NAME_REGEX)
+            printf '%s=%q\n' DOMAIN_NAME_REGEX "[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)+"
+            ;;
+        EMAIL_ADDRESS_REGEX)
+            printf '%s=%q\n' EMAIL_ADDRESS_REGEX "[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)+"
+            ;;
+        IPV4_REGEX)
+            printf '%s=%q\n' IPV4_REGEX "((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])"
+            ;;
+        IPV4_OPT_PREFIX_REGEX)
+            printf '%s=%q\n' IPV4_OPT_PREFIX_REGEX "((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])(/(3[0-2]|[12][0-9]|[1-9]))?"
+            ;;
+        IPV6_REGEX)
+            printf '%s=%q\n' IPV6_REGEX "(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))"
+            ;;
+        IPV6_OPT_PREFIX_REGEX)
+            printf '%s=%q\n' IPV6_OPT_PREFIX_REGEX "(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))(/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9]))?"
+            ;;
+        IP_REGEX)
+            printf '%s=%q\n' IP_REGEX "(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7})))"
+            ;;
+        IP_OPT_PREFIX_REGEX)
+            printf '%s=%q\n' IP_OPT_PREFIX_REGEX "(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])(/(3[0-2]|[12][0-9]|[1-9]))?|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))(/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9]))?)"
+            ;;
+        HOST_NAME_REGEX)
+            printf '%s=%q\n' HOST_NAME_REGEX "([a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)*)"
+            ;;
+        HOST_REGEX)
+            printf '%s=%q\n' HOST_REGEX "(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))|([a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)*))"
+            ;;
+        HOST_OPT_PREFIX_REGEX)
+            printf '%s=%q\n' HOST_OPT_PREFIX_REGEX "(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])(/(3[0-2]|[12][0-9]|[1-9]))?|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))(/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9]))?|([a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)*))"
+            ;;
+        URI_REGEX)
+            printf '%s=%q\n' URI_REGEX "(([a-zA-Z][-a-zA-Z0-9+.]*):)?(//(([-a-zA-Z0-9._~%!\$&'()*+,;=]+)(:([-a-zA-Z0-9._~%!\$&'()*+,;=]*))?@)?([-a-zA-Z0-9._~%!\$&'()*+,;=]+|\\[([0-9a-fA-F:]+)\\])(:([0-9]+))?)?([-a-zA-Z0-9._~%!\$&'()*+,;=:@/]+)?(\\?([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]+))?(#([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]*))?"
+            ;;
+        URI_REGEX_REQ_SCHEME_HOST)
+            printf '%s=%q\n' URI_REGEX_REQ_SCHEME_HOST "(([a-zA-Z][-a-zA-Z0-9+.]*):)(//(([-a-zA-Z0-9._~%!\$&'()*+,;=]+)(:([-a-zA-Z0-9._~%!\$&'()*+,;=]*))?@)?([-a-zA-Z0-9._~%!\$&'()*+,;=]+|\\[([0-9a-fA-F:]+)\\])(:([0-9]+))?)([-a-zA-Z0-9._~%!\$&'()*+,;=:@/]+)?(\\?([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]+))?(#([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]*))?"
+            ;;
+        LINUX_USERNAME_REGEX)
+            printf '%s=%q\n' LINUX_USERNAME_REGEX "[a-z_]([-a-z0-9_]{0,31}|[-a-z0-9_]{0,30}\\\$)"
+            ;;
+        MYSQL_USERNAME_REGEX)
+            printf '%s=%q\n' MYSQL_USERNAME_REGEX "[a-zA-Z0-9_]+"
+            ;;
+        DPKG_SOURCE_REGEX)
+            printf '%s=%q\n' DPKG_SOURCE_REGEX "[a-z0-9][-a-z0-9+.]+"
+            ;;
+        IDENTIFIER_REGEX)
+            printf '%s=%q\n' IDENTIFIER_REGEX "[a-zA-Z_][a-zA-Z0-9_]*"
+            ;;
+        PHP_SETTING_NAME_REGEX)
+            printf '%s=%q\n' PHP_SETTING_NAME_REGEX "[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*"
+            ;;
+        PHP_SETTING_REGEX)
+            printf '%s=%q\n' PHP_SETTING_REGEX "[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*=.+"
+            ;;
+        READLINE_NON_PRINTING_REGEX)
+            printf '%s=%q\n' READLINE_NON_PRINTING_REGEX "[^]*"
+            ;;
+        CONTROL_SEQUENCE_REGEX)
+            printf '%s=%q\n' CONTROL_SEQUENCE_REGEX "\\[[0-?]*[ -/]*[@-~]"
+            ;;
+        ESCAPE_SEQUENCE_REGEX)
+            printf '%s=%q\n' ESCAPE_SEQUENCE_REGEX "[ -/]*[0-~]"
+            ;;
+        NON_PRINTING_REGEX)
+            printf '%s=%q\n' NON_PRINTING_REGEX "([^]*|(\\[[0-?]*[ -/]*[@-~]|[ -/]*[0-Z\\\\-~]))"
+            ;;
+        IPV4_PRIVATE_FILTER_REGEX)
+            printf '%s=%q\n' IPV4_PRIVATE_FILTER_REGEX "^(10\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|192\\.168\\.|127\\.)"
+            ;;
+        BACKUP_TIMESTAMP_FINDUTILS_REGEX)
+            printf '%s=%q\n' BACKUP_TIMESTAMP_FINDUTILS_REGEX "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]"
+            ;;
+        *)
+            lk_warn "regex not found: $1"
+            STATUS=1
+            ;;
+        esac
+        shift
+    done
+    return "$STATUS"
+}
+
+# _lk_colourize [-b] VAR [COLOUR COLOUR_VAR]
+function _lk_colourize() {
+    local _BOLD _STRING _COLOUR_VAR_SET _COLOUR
+    unset _BOLD
+    [ "${1-}" != -b ] || { _BOLD=1 && shift; }
+    [ $# -gt 0 ] &&
+        _STRING=${!1-} &&
+        _COLOUR_VAR_SET=${3:+${!3+1}} || return
+    if [ -n "$_COLOUR_VAR_SET" ]; then
+        _COLOUR=${!3}
+    else
+        _COLOUR=${2-}
+        [ -z "${_BOLD:+$LK_BOLD}" ] ||
+            [[ $_COLOUR$_STRING == *$LK_BOLD* ]] ||
+            _COLOUR+=$LK_BOLD
+    fi
+    [ -z "${_STRING:+${_COLOUR:+$LK_RESET}}" ] || {
+        _STRING=$_COLOUR${_STRING//"$LK_RESET"/$LK_RESET$_COLOUR}$LK_RESET
+        eval "$1=\$_STRING"
+    }
+}
+
+# lk_tty_print [MESSAGE [MESSAGE2 [COLOUR]]]
+#
+# Write each message to the file descriptor set in _LK_FD or to the standard
+# error output. Print a prefix in bold with colour, then MESSAGE in bold unless
+# it already contains bold formatting, then MESSAGE2 in colour. If COLOUR is
+# specified, override the default prefix and MESSAGE2 colour.
+#
+# Output can be customised by setting the following variables:
+# - _LK_TTY_PREFIX: message prefix (default: "==> ")
+# - _LK_TTY_ONE_LINE: if enabled and MESSAGE has no newlines, the first line of
+#   MESSAGE2 will be printed on the same line as MESSAGE, and any subsequent
+#   lines will be aligned with the first (values: 0 or 1; default: 0)
+# - _LK_TTY_INDENT: MESSAGE2 indent (default: based on prefix length and message
+#   line counts)
+# - _LK_TTY_COLOUR: default colour for prefix and MESSAGE2 (default: $LK_CYAN)
+# - _LK_TTY_PREFIX_COLOUR: override prefix colour
+# - _LK_TTY_MESSAGE_COLOUR: override MESSAGE colour
+# - _LK_TTY_COLOUR2: override MESSAGE2 colour
+function lk_tty_print() {
+    [ $# -gt 0 ] || {
+        echo >&"${_LK_FD-2}"
+        return
+    }
+    local MESSAGE=${1-} MESSAGE2=${2-} COLOUR=${3-$_LK_TTY_COLOUR} IFS SPACES \
+        PREFIX=${_LK_TTY_PREFIX-==> } NEWLINE=0 NEWLINE2=0 SEP=$'\n' INDENT=0
+    unset IFS
+    [[ $MESSAGE != *$'\n'* ]] || {
+        SPACES=$'\n'$(printf "%${#PREFIX}s")
+        MESSAGE=${MESSAGE//$'\n'/$SPACES}
+        NEWLINE=1
+        # _LK_TTY_ONE_LINE only makes sense when MESSAGE prints on one line
+        local _LK_TTY_ONE_LINE=0
+    }
+    [ -z "${MESSAGE2:+1}" ] || {
+        [[ $MESSAGE2 != *$'\n'* ]] || NEWLINE2=1
+        MESSAGE2=${MESSAGE2#$'\n'}
+        case "${_LK_TTY_ONE_LINE-0}$NEWLINE$NEWLINE2" in
+        *00 | 1??)
+            # If MESSAGE and MESSAGE2 are one-liners or _LK_TTY_ONE_LINE is set,
+            # print both messages on the same line with a space between them
+            SEP=" "
+            ! ((NEWLINE2)) || INDENT=$(lk_tty_length "$MESSAGE.")
+            ;;
+        *01)
+            # If MESSAGE2 spans multiple lines, align it to the left of MESSAGE
+            INDENT=$((${#PREFIX} - 2))
+            ;;
+        *)
+            # Align MESSAGE2 to the right of MESSAGE if both span multiple
+            # lines or MESSAGE2 is a one-liner
+            INDENT=$((${#PREFIX} + 2))
+            ;;
+        esac
+        INDENT=${_LK_TTY_INDENT:-$INDENT}
+        SPACES=$'\n'$(printf "%$((INDENT > 0 ? INDENT : 0))s")
+        MESSAGE2=$SEP$MESSAGE2
+        MESSAGE2=${MESSAGE2//$'\n'/$SPACES}
+    }
+    _lk_colourize -b PREFIX "$COLOUR" _LK_TTY_PREFIX_COLOUR
+    _lk_colourize -b MESSAGE "" _LK_TTY_MESSAGE_COLOUR
+    [ -z "${MESSAGE2:+1}" ] ||
+        _lk_colourize MESSAGE2 "$COLOUR" _LK_TTY_COLOUR2
+    echo "$PREFIX$MESSAGE$MESSAGE2" >&"${_LK_FD-2}"
+}
+
+# lk_tty_detail MESSAGE [MESSAGE2 [COLOUR]]
+function lk_tty_detail() {
+    _LK_TTY_PREFIX=${_LK_TTY_PREFIX-   -> } \
+        _LK_TTY_COLOUR=$LK_YELLOW \
+        _LK_TTY_MESSAGE_COLOUR=${_LK_TTY_MESSAGE_COLOUR-} \
+        lk_tty_print "$@"
+}
+
+# - lk_tty_list [- [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
+# - lk_tty_list [ARRAY [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
+function lk_tty_list() {
+    local _ARRAY=${1:--} _MESSAGE=${2-List:} _SINGLE _PLURAL _COLOUR \
+        _PREFIX=${_LK_TTY_PREFIX-==> } _ITEMS _INDENT _LIST
+    [ $# -ge 2 ] || {
+        _SINGLE=item
+        _PLURAL=items
+    }
+    _COLOUR=${3-$_LK_TTY_COLOUR}
+    [ $# -le 3 ] || {
+        _SINGLE=${3-}
+        _PLURAL=${4-}
+        _COLOUR=${5-$_LK_TTY_COLOUR}
+    }
+    if [ "$_ARRAY" = - ]; then
+        [ ! -t 0 ] && lk_mapfile _ITEMS ||
+            lk_warn "no input" || return
+    else
+        _ARRAY="${_ARRAY}[@]"
+        _ITEMS=(${!ARR+"${!ARR}"}) || return
+    fi
+    if [[ $_MESSAGE != *$'\n'* ]]; then
+        _INDENT=$((${#_PREFIX} - 2))
+    else
+        _INDENT=$((${#_PREFIX} + 2))
+    fi
+    _INDENT=${_LK_TTY_INDENT:-$_INDENT}
+    _LIST=$([ -z "${_ITEMS+1}" ] ||
+        printf '%s\n' "${_ITEMS[@]}" |
+        COLUMNS=$(($(lk_tty_columns) - _INDENT)) column |
+            expand) || return
+    echo "$(
+        _LK_FD=1
+        _LK_TTY_PREFIX=$_PREFIX \
+            lk_tty_print "$_MESSAGE" $'\n'"$_LIST" "$_COLOUR"
+        [ -z "${_SINGLE:+${_PLURAL:+1}}" ] ||
+            _LK_TTY_PREFIX=$(printf "%$((_INDENT > 0 ? _INDENT : 0))s") \
+                lk_tty_detail "(${#_ITEMS[@]} $(lk_maybe_plural \
+                    ${#_ITEMS[@]} "$_SINGLE" "$_PLURAL"))"
+    )" >&"${_LK_FD-2}"
+}
+
+# lk_fd_is_open FD
+function lk_fd_is_open() {
+    [ -n "${1-}" ] && { : >&"$1"; } 2>/dev/null
+}
+
+# lk_fd_next
+#
+# In lieu of Bash 4.1's file descriptor variable syntax ({var}>, {var}<, etc.),
+# output the number of the next available file descriptor greater than or equal
+# to 10.
+function lk_fd_next() {
+    local USED FD=10 i=0
+    [ -d /dev/fd ] && USED=(/dev/fd/*) && [ ${#USED[@]} -ge 3 ] ||
+        lk_warn "not supported: /dev/fd" || return
+    USED=("${USED[@]#\/dev\/fd\/}")
+    while ((i < ${#USED[@]})); do
+        ((FD >= USED[i])) || break
+        ((FD > USED[i])) || ((FD++))
+        ((++i))
+    done
+    echo "$FD"
+}
+
+# lk_require_output [-q] COMMAND [ARG...]
+#
+# Return true if COMMAND writes output other than newlines and exits without
+# error. If -q is set, suppress output.
+function lk_require_output() {
+    local QUIET FD STATUS=0
+    [ "${1-}" != -q ] || { QUIET=1 && shift; }
+    [ -n "${QUIET-}" ] ||
+        { FD=$(lk_fd_next) && eval "exec $FD>&1"; } || return
+    if [ -n "${FD-}" ]; then
+        "$@" | tee "/dev/fd/$FD"
+    else
+        "$@"
+    fi | grep -E '^.+$' >/dev/null || STATUS=$?
+    [ -z "${FD-}" ] ||
+        eval "exec $FD>&-" || return
+    return "$STATUS"
+}
+
+#### END core.sh.d
 
 # lk_first_existing [FILE...]
 function lk_first_existing() {
@@ -1033,27 +1413,6 @@ function lk_get_outputs_of() {
     return "${EXIT_STATUS:-0}"
 }
 
-# lk_fd_next
-#
-# Output the next available file descriptor greater than or equal to 10.
-#
-# Essentially a shim for Bash 4.1's {var}>, {var}<, etc.
-function lk_fd_next() {
-    local USED
-    [ -d /dev/fd ] &&
-        USED=(/dev/fd/*) &&
-        [ ${#USED[@]} -ge 3 ] ||
-        lk_warn "not supported: /dev/fd" || return
-    USED=("${USED[@]#\/dev\/fd\/}")
-    lk_echo_array USED | sort -n |
-        awk 'BEGIN{n=10} n>$1{next} n==$1{n++;next} {exit} END{print n}'
-}
-
-# lk_fd_is_open FILE_DESCRIPTOR
-function lk_fd_is_open() {
-    [ -n "${1-}" ] && { true >&"$1"; } 2>/dev/null
-}
-
 function _lk_lock_check_args() {
     lk_is_linux || lk_command_exists flock || {
         [ "${FUNCNAME[1]-}" = lk_lock_drop ] ||
@@ -1189,7 +1548,7 @@ function lk_start_trace() {
         # lk_tty_* to the terminal
         exec 2>&4 &&
             { ! lk_log_is_open || _LK_TRACE_FD=4; } &&
-            { [ "${_LK_FD:-2}" -ne 2 ] ||
+            { [ "${_LK_FD-2}" -ne 2 ] ||
                 { exec 3>/dev/tty && export _LK_FD=3; }; }
     fi || lk_warn "unable to open trace file" || return
     set -x
@@ -1213,7 +1572,7 @@ function lk_log_start() {
         { [[ $- == *i* ]] && ! lk_is_script_running; }; then
         return
     elif [ -z "${_LK_LOG_CMDLINE+1}" ]; then
-        local _LK_LOG_CMDLINE=("${_LK_CMDLINE[@]}")
+        local _LK_LOG_CMDLINE=("$0" ${_LK_ARGV+"${_LK_ARGV[@]}"})
     fi
     ARG0=$(type -P "${_LK_LOG_CMDLINE[0]}") || ARG0=${_LK_LOG_CMDLINE[0]##*/}
     ARGC=$((${#_LK_LOG_CMDLINE[@]} - 1))
@@ -1274,7 +1633,7 @@ function lk_log_start() {
         fi; } || return
     export _LK_FD _LK_{{TTY,LOG}_{OUT,ERR},LOG}_FD
     lk_log_tty_on
-    [ "${_LK_FD:-2}" -ne 2 ] || {
+    [ "${_LK_FD-2}" -ne 2 ] || {
         exec 3> >(_lk_tee >(_lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
             >&"$_LK_TTY_OUT_FD")
         _LK_FD=3
@@ -1565,7 +1924,7 @@ function lk_tty_length() {
 }
 
 function lk_console_blank() {
-    echo >&"${_LK_FD:-2}"
+    echo >&"${_LK_FD-2}"
 }
 
 function lk_tty_columns() {
@@ -1592,91 +1951,6 @@ function lk_console_message() {
     lk_tty_print "${1-}" "${3+$2}" "${3-${2-$_LK_TTY_COLOUR}}"
 }
 
-# lk_tty_print [MESSAGE [MESSAGE2 [COLOUR]]]
-function lk_tty_print() {
-    local MESSAGE=${1-} MESSAGE2=${2-} COLOUR=${3-$_LK_TTY_COLOUR} IFS \
-        HAS_NEWLINE LENGTH HAS_NEWLINE2 LENGTH2 WIDTH SPACES INDENT=0 OUTPUT \
-        PREFIX=${_LK_TTY_PREFIX-==> }
-    # Save ourselves from word-splitting hell
-    unset IFS
-    [ ${LK_TTY_NO_BREAK:-0} -ne 1 ] ||
-        local _LK_TTY_NO_FOLD=1
-    # If MESSAGE breaks over multiple lines (or will after wrapping), align
-    # second and subsequent lines with the first
-    [[ ! $MESSAGE == *$'\n'* ]] || {
-        HAS_NEWLINE=1
-        # LK_TTY_NO_BREAK only makes sense when MESSAGE prints on one line
-        local LK_TTY_NO_BREAK=0
-    }
-    if [ ${HAS_NEWLINE:-0} -eq 1 ] ||
-        { [ ${_LK_TTY_NO_FOLD:-0} -ne 1 ] &&
-            [ $(_lk_tty_length) -gt $(_lk_tty_width) ]; }; then
-        SPACES=$'\n'$(printf "%${#PREFIX}s")
-        # Don't fold if MESSAGE is pre-formatted
-        [ ${HAS_NEWLINE:-0} -eq 1 ] ||
-            MESSAGE=$(lk_fold "$MESSAGE" $(($(_lk_tty_width) - ${#PREFIX})))
-        MESSAGE=${MESSAGE//$'\n'/$SPACES}
-        HAS_NEWLINE=1
-        INDENT=2
-    fi
-    [ -z "${MESSAGE2:+1}" ] || {
-        # If MESSAGE and MESSAGE2 are both one-liners, print them on one line
-        # with a space between
-        [[ ! $MESSAGE2 == *$'\n'* ]] || HAS_NEWLINE2=1
-        if [ ${HAS_NEWLINE2:-0} -eq 0 ] &&
-            [ ${HAS_NEWLINE:-0} -eq 0 ] &&
-            { [ ${_LK_TTY_NO_FOLD:-0} -eq 1 ] ||
-                [ $(_lk_tty_length2) -le $(_lk_tty_width) ]; }; then
-            MESSAGE2=" $MESSAGE2"
-        else
-            # Otherwise:
-            # - If they both span multiple lines, or MESSAGE2 is a one-liner,
-            #   keep INDENT=2 (increase MESSAGE2's left padding)
-            # - If only MESSAGE2 spans multiple lines, set INDENT=-2 (decrease
-            #   the left padding of MESSAGE2)
-            # - If LK_TTY_NO_BREAK is set, align MESSAGE2 under the first line
-            if [ ${LK_TTY_NO_BREAK:-0} -ne 1 ]; then
-                if { [ ${HAS_NEWLINE2:-0} -eq 1 ] ||
-                    [ -n "${LENGTH2-}" ]; } &&
-                    [ ${HAS_NEWLINE:-0} -eq 0 ]; then
-                    INDENT=-2
-                fi
-                INDENT=${_LK_TTY_INDENT:-$((${#PREFIX} + INDENT))}
-            else
-                INDENT=${_LK_TTY_INDENT:-$(($(_lk_tty_length) + 1))}
-            fi
-            SPACES=$'\n'$(printf "%$((INDENT > 0 ? INDENT : 0))s")
-            [ ${HAS_NEWLINE2:-0} -eq 1 ] ||
-                MESSAGE2=$(lk_fold "$MESSAGE2" $(($(_lk_tty_width) - INDENT)))
-            # If a leading newline was added to force MESSAGE2 onto its own
-            # line, remove it
-            MESSAGE2=${MESSAGE2#$'\n'}
-            MESSAGE2=${MESSAGE2//$'\n'/$SPACES}
-            [ ${LK_TTY_NO_BREAK:-0} -eq 1 ] &&
-                MESSAGE2=" $MESSAGE2" ||
-                MESSAGE2=$SPACES$MESSAGE2
-        fi
-    }
-    OUTPUT=$(
-        lk_echoc -n "$PREFIX" \
-            "${_LK_TTY_PREFIX_COLOUR-$([[ $COLOUR == *$LK_BOLD* ]] ||
-                echo "$LK_BOLD")$COLOUR}"
-        lk_echoc -n "$MESSAGE" \
-            "${_LK_TTY_MESSAGE_COLOUR-$([[ $MESSAGE == *$LK_BOLD* ]] ||
-                echo "$LK_BOLD")}"
-        [ -z "${MESSAGE2:+1}" ] ||
-            lk_echoc -n "$MESSAGE2" "${_LK_TTY_COLOUR2-$COLOUR}"
-    )
-    case "${FUNCNAME[1]-}" in
-    lk_console_list)
-        declare -p WIDTH HAS_NEWLINE OUTPUT 2>/dev/null || true
-        ;;
-    *)
-        echo "$OUTPUT" >&"${_LK_FD:-2}"
-        ;;
-    esac
-} #### Reviewed: 2021-03-22
-
 # lk_tty_pairs [-d DELIM] [COLOUR]
 function lk_tty_pairs() {
     local _LK_TTY_NO_FOLD=1 ARGS LEN=0 KEY VALUE KEYS=() VALUES=() GAP SPACES i
@@ -1692,7 +1966,7 @@ function lk_tty_pairs() {
     for i in "${!KEYS[@]}"; do
         KEY=${KEYS[$i]}
         ((SPACES = LEN - ${#KEY} + GAP)) || true
-        LK_TTY_NO_BREAK=1 lk_console_item \
+        _LK_TTY_ONE_LINE=1 lk_console_item \
             "$KEY:$( ! ((SPACES)) || eval "printf ' %.s' {1..$SPACES}")" \
             "${VALUES[$i]}" \
             "$@"
@@ -1709,9 +1983,7 @@ function lk_tty_detail_pairs() {
 
 # lk_console_detail MESSAGE [MESSAGE2 [COLOUR]]
 function lk_console_detail() {
-    local _LK_TTY_PREFIX=${_LK_TTY_PREFIX-   -> } \
-        _LK_TTY_MESSAGE_COLOUR=${_LK_TTY_MESSAGE_COLOUR-}
-    lk_tty_print "$1" "${2-}" "${3-$LK_YELLOW}"
+    lk_tty_detail "$@"
 }
 
 # lk_console_detail_list MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]
@@ -1809,44 +2081,10 @@ function lk_console_item() {
     lk_tty_print "$1" "$2" "${3-$_LK_TTY_COLOUR}"
 }
 
-# lk_console_list [-z] MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]
+# lk_console_list MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]
 function lk_console_list() {
-    local LK_Z=${LK_Z-} \
-        MESSAGE SINGLE PLURAL COLOUR _LK_TTY_PREFIX=${_LK_TTY_PREFIX-==> } \
-        ITEMS INDENT=-2 LIST SPACES SH
-    [ "${1-}" != -z ] || { LK_Z=1 && shift; }
-    MESSAGE=$1
-    shift
-    [ $# -le 1 ] || {
-        SINGLE=$1
-        PLURAL=$2
-        shift 2
-    }
-    COLOUR=${1-$_LK_TTY_COLOUR}
-    [ -t 0 ] && ITEMS=() && lk_warn "no input" ||
-        lk_mapfile ITEMS || lk_warn "unable to read items from input" || return
-    SH=$(lk_tty_print "$MESSAGE" "" "$COLOUR") &&
-        eval "$SH" || return
-    [ "${HAS_NEWLINE:-0}" -eq 0 ] ||
-        INDENT=2
-    LIST="$(lk_echo_array ITEMS |
-        COLUMNS=$(($(_lk_tty_width) - ${#_LK_TTY_PREFIX} - INDENT)) column -s $'\n' |
-        expand)" || return
-    SPACES=$((${#_LK_TTY_PREFIX} + INDENT))
-    SPACES=$(printf "%$((SPACES > 0 ? SPACES : 0))s")
-    # OUTPUT is assigned by lk_tty_print
-    echo "$(
-        echo "$OUTPUT"
-        lk_echoc "$SPACES${LIST//$'\n'/$'\n'$SPACES}" \
-            "${_LK_TTY_COLOUR2-$COLOUR}"
-        [ -z "${SINGLE-}" ] ||
-            _LK_FD=1 \
-                _LK_TTY_PREFIX=$SPACES \
-                lk_console_detail "(${#ITEMS[@]} $(
-                lk_maybe_plural ${#ITEMS[@]} "$SINGLE" "$PLURAL"
-            ))"
-    )" >&"${_LK_FD:-2}"
-} #### Reviewed: 2021-03-22
+    lk_tty_list - "$@"
+}
 
 # lk_tty_dump CONTENT [MESSAGE1 [MESSAGE2 [COLOUR [COLOUR2 [COMMAND...]]]]]
 #
@@ -1866,15 +2104,15 @@ function lk_tty_dump() {
     local _LK_TTY_PREFIX_COLOUR=${_LK_TTY_PREFIX_COLOUR-$BOLD_COLOUR}
     SPACES=$(printf "%$((_LK_TTY_INDENT > -2 ? _LK_TTY_INDENT + 2 : 0))s")
     _LK_TTY_INDENT=0 lk_tty_print "${2-}"
-    printf '%s' "$_LK_TTY_COLOUR2" >&"${_LK_FD:-2}"
+    printf '%s' "$_LK_TTY_COLOUR2" >&"${_LK_FD-2}"
     if [ -n "${1:+1}" ] || { [ $# -le 5 ] && [ -t 0 ]; }; then
         echo "${1%$'\n'}"
     elif [ $# -gt 5 ]; then
         eval "${@:6}" || LK_TTY_DUMP_COMMAND_STATUS=$?
     else
         cat
-    fi | sed -E "s/^/$SPACES/" >&"${_LK_FD:-2}"
-    printf '%s' "$LK_RESET" >&"${_LK_FD:-2}"
+    fi | sed -E "s/^/$SPACES/" >&"${_LK_FD-2}"
+    printf '%s' "$LK_RESET" >&"${_LK_FD-2}"
     _LK_TTY_PREFIX=${_LK_TTY_SUFFIX-<<< }
     _LK_TTY_INDENT=0 lk_tty_print "${3-}"
 }
@@ -2055,7 +2293,7 @@ function lk_console_read() {
     fi
     [ -z "$DEFAULT" ] || PROMPT+=("[$DEFAULT]")
     read -rep "$(_lk_console_get_prompt) " "${@:3}" VALUE \
-        2>&"${_LK_FD:-2}" || return
+        2>&"${_LK_FD-2}" || return
     [ -n "$VALUE" ] || VALUE=$DEFAULT
     echo "$VALUE"
 }
@@ -2085,44 +2323,30 @@ function lk_confirm() {
     fi
     while [[ ! ${VALUE-} =~ ^([yY]([eE][sS])?|[nN][oO]?)$ ]]; do
         read -re "${@:3}" \
-            -p "$(_lk_console_get_prompt) " VALUE 2>&"${_LK_FD:-2}" &&
+            -p "$(_lk_console_get_prompt) " VALUE 2>&"${_LK_FD-2}" &&
             [ -n "$VALUE" ] || VALUE=$DEFAULT
     done
     [[ $VALUE =~ ^[yY]([eE][sS])?$ ]]
 }
 
-function lk_no_input() {
-    ! lk_is_true LK_FORCE_INPUT || return
-    [ ! -t 0 ] ||
-        lk_is_true LK_NO_INPUT
-}
-
-function lk_verbose() {
-    [ "${LK_VERBOSE:-0}" -ge "${1:-1}" ]
-}
-
-# lk_require_output [-q|-s] COMMAND [ARG...]
+# lk_no_input
 #
-# Run COMMAND and return true if its exit status is zero and output other than
-# newline characters was written. If -q is set, suppress output. If -s is set,
-# suppress output if COMMAND fails.
-function lk_require_output() {
-    local SUPPRESS QUIET FD OUTPUT EXIT_STATUS=
-    # Until Bash 4.0, local variables were "created with the empty string for a
-    # value rather than no value"
-    unset SUPPRESS QUIET
-    [ "${1-}" != -q ] || { SUPPRESS= && QUIET= && shift; }
-    [ "${1-}" != -s ] || { SUPPRESS= && shift; }
-    FD=$(lk_fd_next) && eval "exec $FD>&1" || return
-    OUTPUT=$("$@" |
-        tee ${SUPPRESS-"/dev/fd/$FD"} ${SUPPRESS+/dev/null} && printf .) &&
-        OUTPUT=${OUTPUT%.} || EXIT_STATUS=$?
-    eval "exec $FD>&-" || EXIT_STATUS=${EXIT_STATUS:-$?}
-    (exit "${EXIT_STATUS:-0}") &&
-        [ -n "$(echo "$OUTPUT")" ] &&
-        { [ -z "${SUPPRESS+1}" ] || [ -n "${QUIET+1}" ] ||
-            printf '%s' "$OUTPUT"; }
-}
+# Return true if user input should not be requested.
+function lk_no_input() {
+    if [ "${LK_FORCE_INPUT-}" = 1 ]; then
+        { [ -t 0 ] || lk_warn "/dev/stdin is not a terminal"; } && false
+    else
+        [ ! -t 0 ] || [ "${LK_NO_INPUT-}" = 1 ]
+    fi
+} #### Reviewed: 2021-06-13
+
+# lk_verbose [LEVEL]
+#
+# Return true if the verbosity level set in LK_VERBOSE (default: 0) is greater
+# than or equal to LEVEL (default: 1).
+function lk_verbose() {
+    [ "${LK_VERBOSE:-0}" -ge "${1-1}" ]
+} #### Reviewed: 2021-06-13
 
 # lk_clip
 #
@@ -2894,13 +3118,6 @@ function lk_is_exported() {
     [[ $(declare -p "$1" 2>/dev/null) =~ $REGEX ]]
 }
 
-# lk_version_at_least INSTALLED_VERSION MINIMUM_VERSION
-function lk_version_at_least() {
-    local MIN
-    MIN=$(lk_echo_args "$@" | sort -V | head -n1) &&
-        [ "$MIN" = "$2" ]
-}
-
 function lk_jq() {
     jq -L "${_LK_INST:-$LK_BASE}/lib/jq" \
         "${@:1:$#-1}" \
@@ -3528,200 +3745,6 @@ function lk_kill_on_exit() {
     _lk_cleanup_on_exit _LK_EXIT_KILL_$BASH_SUBSHELL "$@"
 }
 
-#### BEGIN core.sh.d
-
-# Define wrapper functions (e.g. `gnu_find`) to invoke the GNU version of
-# certain commands (e.g. `gfind`) on systems where standard utilities are not
-# compatible with their GNU counterparts, e.g. BSD/macOS
-if ! lk_is_macos; then
-    function gnu_awk() { lk_maybe_sudo gawk "$@"; }
-    function gnu_chgrp() { lk_maybe_sudo chgrp "$@"; }
-    function gnu_chmod() { lk_maybe_sudo chmod "$@"; }
-    function gnu_chown() { lk_maybe_sudo chown "$@"; }
-    function gnu_cp() { lk_maybe_sudo cp "$@"; }
-    function gnu_date() { lk_maybe_sudo date "$@"; }
-    function gnu_df() { lk_maybe_sudo df "$@"; }
-    function gnu_diff() { lk_maybe_sudo diff "$@"; }
-    function gnu_du() { lk_maybe_sudo du "$@"; }
-    function gnu_find() { lk_maybe_sudo find "$@"; }
-    function gnu_getopt() { lk_maybe_sudo getopt "$@"; }
-    function gnu_grep() { lk_maybe_sudo grep "$@"; }
-    function gnu_ln() { lk_maybe_sudo ln "$@"; }
-    function gnu_mktemp() { lk_maybe_sudo mktemp "$@"; }
-    function gnu_mv() { lk_maybe_sudo mv "$@"; }
-    function gnu_realpath() { lk_maybe_sudo realpath "$@"; }
-    function gnu_sed() { lk_maybe_sudo sed "$@"; }
-    function gnu_sort() { lk_maybe_sudo sort "$@"; }
-    function gnu_stat() { lk_maybe_sudo stat "$@"; }
-    function gnu_tar() { lk_maybe_sudo tar "$@"; }
-    function gnu_xargs() { lk_maybe_sudo xargs "$@"; }
-else
-    lk_is_apple_silicon &&
-        _LK_HOMEBREW_PREFIX=/opt/homebrew ||
-        _LK_HOMEBREW_PREFIX=/usr/local
-    function gnu_awk() { lk_maybe_sudo gawk "$@"; }
-    function gnu_chgrp() { lk_maybe_sudo gchgrp "$@"; }
-    function gnu_chmod() { lk_maybe_sudo gchmod "$@"; }
-    function gnu_chown() { lk_maybe_sudo gchown "$@"; }
-    function gnu_cp() { lk_maybe_sudo gcp "$@"; }
-    function gnu_date() { lk_maybe_sudo gdate "$@"; }
-    function gnu_df() { lk_maybe_sudo gdf "$@"; }
-    function gnu_diff() { lk_maybe_sudo "${HOMEBREW_PREFIX:-$_LK_HOMEBREW_PREFIX}/bin/diff" "$@"; }
-    function gnu_du() { lk_maybe_sudo gdu "$@"; }
-    function gnu_find() { lk_maybe_sudo gfind "$@"; }
-    function gnu_getopt() { lk_maybe_sudo "${HOMEBREW_PREFIX:-$_LK_HOMEBREW_PREFIX}/opt/gnu-getopt/bin/getopt" "$@"; }
-    function gnu_grep() { lk_maybe_sudo ggrep "$@"; }
-    function gnu_ln() { lk_maybe_sudo gln "$@"; }
-    function gnu_mktemp() { lk_maybe_sudo gmktemp "$@"; }
-    function gnu_mv() { lk_maybe_sudo gmv "$@"; }
-    function gnu_realpath() { lk_maybe_sudo grealpath "$@"; }
-    function gnu_sed() { lk_maybe_sudo gsed "$@"; }
-    function gnu_sort() { lk_maybe_sudo gsort "$@"; }
-    function gnu_stat() { lk_maybe_sudo gstat "$@"; }
-    function gnu_tar() { lk_maybe_sudo gtar "$@"; }
-    function gnu_xargs() { lk_maybe_sudo gxargs "$@"; }
-fi
-
-# lk_is_host VALUE
-#
-# Return true if VALUE is a valid IP address, hostname or domain name.
-function lk_is_host() {
-    local HOST_REGEX="(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))|([a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)*))"
-    [[ $1 =~ ^$HOST_REGEX$ ]]
-}
-
-# lk_is_fqdn VALUE
-#
-# Return true if VALUE is a valid domain name.
-function lk_is_fqdn() {
-    local DOMAIN_NAME_REGEX="[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)+"
-    [[ $1 =~ ^$DOMAIN_NAME_REGEX$ ]]
-}
-
-# lk_is_email VALUE
-#
-# Return true if VALUE is a valid email address.
-function lk_is_email() {
-    local EMAIL_ADDRESS_REGEX="[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)+"
-    [[ $1 =~ ^$EMAIL_ADDRESS_REGEX$ ]]
-}
-
-# lk_is_uri VALUE
-#
-# Return true if VALUE is a valid URI with a scheme and host.
-function lk_is_uri() {
-    local URI_REGEX_REQ_SCHEME_HOST="(([a-zA-Z][-a-zA-Z0-9+.]*):)(//(([-a-zA-Z0-9._~%!\$&'()*+,;=]+)(:([-a-zA-Z0-9._~%!\$&'()*+,;=]*))?@)?([-a-zA-Z0-9._~%!\$&'()*+,;=]+|\\[([0-9a-fA-F:]+)\\])(:([0-9]+))?)([-a-zA-Z0-9._~%!\$&'()*+,;=:@/]+)?(\\?([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]+))?(#([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]*))?"
-    [[ $1 =~ ^$URI_REGEX_REQ_SCHEME_HOST$ ]]
-}
-
-# lk_is_identifier VALUE
-#
-# Return true if VALUE is a valid Bash identifier.
-function lk_is_identifier() {
-    local IDENTIFIER_REGEX="[a-zA-Z_][a-zA-Z0-9_]*"
-    [[ $1 =~ ^$IDENTIFIER_REGEX$ ]]
-}
-
-# lk_get_regex [REGEX...]
-#
-# Print a Bash variable assignment for each REGEX. If no REGEX is specified,
-# print all available regular expressions.
-function lk_get_regex() {
-    [ $# -gt 0 ] || set -- DOMAIN_PART_REGEX DOMAIN_NAME_REGEX EMAIL_ADDRESS_REGEX IPV4_REGEX IPV4_OPT_PREFIX_REGEX IPV6_REGEX IPV6_OPT_PREFIX_REGEX IP_REGEX IP_OPT_PREFIX_REGEX HOST_NAME_REGEX HOST_REGEX HOST_OPT_PREFIX_REGEX URI_REGEX URI_REGEX_REQ_SCHEME_HOST LINUX_USERNAME_REGEX MYSQL_USERNAME_REGEX DPKG_SOURCE_REGEX IDENTIFIER_REGEX PHP_SETTING_NAME_REGEX PHP_SETTING_REGEX READLINE_NON_PRINTING_REGEX CONTROL_SEQUENCE_REGEX ESCAPE_SEQUENCE_REGEX NON_PRINTING_REGEX IPV4_PRIVATE_FILTER_REGEX BACKUP_TIMESTAMP_FINDUTILS_REGEX
-    local STATUS=0
-    while [ $# -gt 0 ]; do
-        _lk_var_prefix
-        case "$1" in
-        DOMAIN_PART_REGEX)
-            printf '%s=%q\n' DOMAIN_PART_REGEX "[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
-            ;;
-        DOMAIN_NAME_REGEX)
-            printf '%s=%q\n' DOMAIN_NAME_REGEX "[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)+"
-            ;;
-        EMAIL_ADDRESS_REGEX)
-            printf '%s=%q\n' EMAIL_ADDRESS_REGEX "[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)+"
-            ;;
-        IPV4_REGEX)
-            printf '%s=%q\n' IPV4_REGEX "((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])"
-            ;;
-        IPV4_OPT_PREFIX_REGEX)
-            printf '%s=%q\n' IPV4_OPT_PREFIX_REGEX "((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])(/(3[0-2]|[12][0-9]|[1-9]))?"
-            ;;
-        IPV6_REGEX)
-            printf '%s=%q\n' IPV6_REGEX "(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))"
-            ;;
-        IPV6_OPT_PREFIX_REGEX)
-            printf '%s=%q\n' IPV6_OPT_PREFIX_REGEX "(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))(/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9]))?"
-            ;;
-        IP_REGEX)
-            printf '%s=%q\n' IP_REGEX "(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7})))"
-            ;;
-        IP_OPT_PREFIX_REGEX)
-            printf '%s=%q\n' IP_OPT_PREFIX_REGEX "(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])(/(3[0-2]|[12][0-9]|[1-9]))?|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))(/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9]))?)"
-            ;;
-        HOST_NAME_REGEX)
-            printf '%s=%q\n' HOST_NAME_REGEX "([a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)*)"
-            ;;
-        HOST_REGEX)
-            printf '%s=%q\n' HOST_REGEX "(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))|([a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)*))"
-            ;;
-        HOST_OPT_PREFIX_REGEX)
-            printf '%s=%q\n' HOST_OPT_PREFIX_REGEX "(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])(/(3[0-2]|[12][0-9]|[1-9]))?|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))(/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9]))?|([a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)*))"
-            ;;
-        URI_REGEX)
-            printf '%s=%q\n' URI_REGEX "(([a-zA-Z][-a-zA-Z0-9+.]*):)?(//(([-a-zA-Z0-9._~%!\$&'()*+,;=]+)(:([-a-zA-Z0-9._~%!\$&'()*+,;=]*))?@)?([-a-zA-Z0-9._~%!\$&'()*+,;=]+|\\[([0-9a-fA-F:]+)\\])(:([0-9]+))?)?([-a-zA-Z0-9._~%!\$&'()*+,;=:@/]+)?(\\?([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]+))?(#([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]*))?"
-            ;;
-        URI_REGEX_REQ_SCHEME_HOST)
-            printf '%s=%q\n' URI_REGEX_REQ_SCHEME_HOST "(([a-zA-Z][-a-zA-Z0-9+.]*):)(//(([-a-zA-Z0-9._~%!\$&'()*+,;=]+)(:([-a-zA-Z0-9._~%!\$&'()*+,;=]*))?@)?([-a-zA-Z0-9._~%!\$&'()*+,;=]+|\\[([0-9a-fA-F:]+)\\])(:([0-9]+))?)([-a-zA-Z0-9._~%!\$&'()*+,;=:@/]+)?(\\?([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]+))?(#([-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]*))?"
-            ;;
-        LINUX_USERNAME_REGEX)
-            printf '%s=%q\n' LINUX_USERNAME_REGEX "[a-z_]([-a-z0-9_]{0,31}|[-a-z0-9_]{0,30}\\\$)"
-            ;;
-        MYSQL_USERNAME_REGEX)
-            printf '%s=%q\n' MYSQL_USERNAME_REGEX "[a-zA-Z0-9_]+"
-            ;;
-        DPKG_SOURCE_REGEX)
-            printf '%s=%q\n' DPKG_SOURCE_REGEX "[a-z0-9][-a-z0-9+.]+"
-            ;;
-        IDENTIFIER_REGEX)
-            printf '%s=%q\n' IDENTIFIER_REGEX "[a-zA-Z_][a-zA-Z0-9_]*"
-            ;;
-        PHP_SETTING_NAME_REGEX)
-            printf '%s=%q\n' PHP_SETTING_NAME_REGEX "[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*"
-            ;;
-        PHP_SETTING_REGEX)
-            printf '%s=%q\n' PHP_SETTING_REGEX "[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*=.+"
-            ;;
-        READLINE_NON_PRINTING_REGEX)
-            printf '%s=%q\n' READLINE_NON_PRINTING_REGEX "[^]*"
-            ;;
-        CONTROL_SEQUENCE_REGEX)
-            printf '%s=%q\n' CONTROL_SEQUENCE_REGEX "\\[[0-?]*[ -/]*[@-~]"
-            ;;
-        ESCAPE_SEQUENCE_REGEX)
-            printf '%s=%q\n' ESCAPE_SEQUENCE_REGEX "[ -/]*[0-~]"
-            ;;
-        NON_PRINTING_REGEX)
-            printf '%s=%q\n' NON_PRINTING_REGEX "([^]*|(\\[[0-?]*[ -/]*[@-~]|[ -/]*[0-Z\\\\-~]))"
-            ;;
-        IPV4_PRIVATE_FILTER_REGEX)
-            printf '%s=%q\n' IPV4_PRIVATE_FILTER_REGEX "^(10\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|192\\.168\\.|127\\.)"
-            ;;
-        BACKUP_TIMESTAMP_FINDUTILS_REGEX)
-            printf '%s=%q\n' BACKUP_TIMESTAMP_FINDUTILS_REGEX "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]"
-            ;;
-        *)
-            lk_warn "regex not found: $1"
-            STATUS=1
-            ;;
-        esac
-        shift
-    done
-    return "$STATUS"
-}
-
-#### END core.sh.d
-
 set -o pipefail
 
 lk_trap_add EXIT _lk_exit_trap
@@ -3819,8 +3842,6 @@ _LK_TTY_COLOUR=$LK_CYAN
 _LK_SUCCESS_COLOUR=$LK_GREEN
 _LK_WARNING_COLOUR=$LK_YELLOW
 _LK_ERROR_COLOUR=$LK_RED
-
-_LK_INCLUDES=core
 
 true || {
     env
