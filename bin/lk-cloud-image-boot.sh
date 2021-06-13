@@ -139,7 +139,7 @@ allow-url:,no-log,no-reject"
 eval "set -- $LK_GETOPT"
 
 UBUNTU_HOST=${LK_UBUNTU_CLOUDIMG_HOST:-cloud-images.ubuntu.com}
-UBUNTU_MIRROR=${LK_UBUNTU_APT_MIRROR:-http://archive.ubuntu.com/ubuntu}
+UBUNTU_MIRROR=${LK_UBUNTU_MIRROR:-http://archive.ubuntu.com/ubuntu}
 
 SYSTEM_SOCKET=
 SESSION_SOCKET=
@@ -162,6 +162,9 @@ QEMU_CPU=
         QEMU_MACHINE=virt,accel=hvf,highmem=off
     }
 }
+[ "$IMAGE_ARCH" = amd64 ] ||
+    UBUNTU_MIRROR=${LK_UBUNTU_PORTS_MIRROR:-http://ports.ubuntu.com}
+
 VM_NETWORK_DEFAULT=default
 LIBVIRT_URI=qemu:///system${SYSTEM_SOCKET:+?socket=$SYSTEM_SOCKET}
 LK_SUDO=1
