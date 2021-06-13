@@ -53,6 +53,7 @@ function exit_trap() {
     mkdir -p "$_DIR"
 
     STATUS=0
+    unset BREW
 
     function load_settings() {
         [ ! -f /etc/default/lk-platform ] ||
@@ -83,7 +84,7 @@ function exit_trap() {
 
     if [ -f "$LK_BASE/lib/bash/include/core.sh" ]; then
         . "$LK_BASE/lib/bash/include/core.sh"
-        lk_include macos provision whiptail
+        lk_include brew macos provision whiptail
         SUDOERS=$(<"$LK_BASE/share/sudoers.d/default")
         load_settings "$@"
         ${PACKAGES_REL:+. "$LK_BASE/$PACKAGES_REL"}
@@ -96,6 +97,7 @@ function exit_trap() {
         REPO_URL=https://raw.githubusercontent.com/lkrms/lk-platform
         for FILE_PATH in \
             /lib/bash/include/core.sh \
+            /lib/bash/include/brew.sh \
             /lib/bash/include/macos.sh \
             /lib/bash/include/provision.sh \
             /lib/bash/include/whiptail.sh \
@@ -123,6 +125,9 @@ function exit_trap() {
         done
         SUDOERS=$(<"$_DIR/default")
     fi
+
+    ! lk_is_system_apple_silicon || lk_is_apple_silicon ||
+        lk_die "not running on native architecture"
 
     LK_FILE_BACKUP_TAKE=${LK_FILE_BACKUP_TAKE-1}
 
@@ -219,18 +224,11 @@ EOF
     PATH_ADD=(/usr/local/{sbin,bin})
     BREW_PATH=(/usr/local/bin/brew)
     BREW_ARCH=("")
-    if lk_is_apple_silicon; then
-        [ -f /Library/Apple/System/Library/LaunchDaemons/com.apple.oahd.plist ] || {
-            lk_console_message "Installing Rosetta 2"
-            lk_run_detail sudo \
-                softwareupdate --install-rosetta --agree-to-license
-        }
+    BREW_NAMES=("Homebrew")
+    ! lk_is_apple_silicon || {
         PATH_ADD+=(/opt/homebrew/{sbin,bin})
-        BREW_PATH=(/opt/homebrew/bin/brew /usr/local/bin/brew)
-        BREW_ARCH=("" x86_64)
-    fi
-    lk_mapfile BREW_NAMES <(lk_echo_array BREW_ARCH |
-        sed -Ee 's/.+/Homebrew (&)/' -e 's/^$/Homebrew/')
+        BREW_PATH=(/opt/homebrew/bin/brew)
+    }
     lk_console_message "Configuring default PATH"
     _PATH=$(defaults read \
         /var/db/com.apple.xpc.launchd/config/user.plist \
@@ -241,10 +239,10 @@ EOF
     path_add "${PATH_ADD[@]}" ||
         PATH=$_PATH
 
-    # disable sleep when charging
+    # Disable sleep when charging
     sudo pmset -c sleep 0
 
-    # always restart on power loss
+    # Always restart on power loss
     sudo pmset -a autorestart 1
 
     lk_macos_xcode_maybe_accept_license
@@ -256,10 +254,7 @@ EOF
         TOOLS_PATH=$(lk_macos_command_line_tools_path)
         if [[ "$TOOLS_PATH" != /Applications/Xcode.app* ]]; then
             lk_console_message "Configuring Xcode"
-            lk_console_detail \
-                "Switching from command line tools to Xcode with:" \
-                "xcode-select --switch /Applications/Xcode.app"
-            sudo xcode-select --switch /Applications/Xcode.app
+            lk_run_detail sudo xcode-select --switch /Applications/Xcode.app
             OLD_TOOLS_PATH=$TOOLS_PATH
             TOOLS_PATH=$(lk_macos_command_line_tools_path)
             lk_console_detail "Development tools directory:" \
@@ -317,7 +312,7 @@ EOF
         command "${BREW[@]:-brew}" "$@"
     }
 
-    function lk_brew() {
+    function _brew() {
         lk_tty caffeinate -i "${BREW[@]:-brew}" "$@"
     }
 
@@ -332,7 +327,7 @@ EOF
                 unset URL
                 ! ((i)) || [[ ! $TAP =~ ^[^/]+/[^/]+$ ]] ||
                     URL=file:///opt/homebrew/Library/Taps/${TAP%/*}/homebrew-${TAP#*/}
-                lk_brew tap --quiet "$TAP" ${URL+"$URL"} || return
+                _brew tap --quiet "$TAP" ${URL+"$URL"} || return
             done
     }
 
@@ -344,7 +339,7 @@ EOF
         }; } &>/dev/null || {
             lk_console_detail "Enabling daily \`brew update\`"
             install -d -m 00755 ~/Library/LaunchAgents
-            lk_brew autoupdate start --cleanup
+            _brew autoupdate start --cleanup
         }
     }
 
@@ -358,10 +353,8 @@ EOF
 
     function install_homebrew() {
         local FILE URL HOMEBREW_{BREW,CORE}_GIT_REMOTE
-        ! ((i)) || {
-            export HOMEBREW_BREW_GIT_REMOTE=file:///opt/homebrew
-            export HOMEBREW_CORE_GIT_REMOTE=file:///opt/homebrew/Library/Taps/homebrew/homebrew-core
-        }
+        ! ((i)) || export HOMEBREW_BREW_GIT_REMOTE=/opt/homebrew \
+            HOMEBREW_CORE_GIT_REMOTE=/opt/homebrew/Library/Taps/homebrew/homebrew-core
         BREW_NEW[i]=0
         if [ ! -x "${BREW_PATH[i]}" ]; then
             lk_console_message "Installing $BREW_NAME"
@@ -374,28 +367,24 @@ EOF
                 }
             fi
             CI=1 HAVE_SUDO_ACCESS=0 lk_tty caffeinate -i \
-                ${BREW_ARCH[i]:+arch "--${BREW_ARCH[i]}"} bash "$FILE" ||
+                ${BREW_ARCH[i]:+arch "--${BREW_ARCH[i]}"} /bin/bash "$FILE" ||
                 lk_die "$BREW_NAME installer failed"
             [ -x "${BREW_PATH[i]}" ] ||
                 lk_die "command not found: ${BREW_PATH[i]}"
             BREW_NEW[i]=1
         fi
         lk_console_item "Found $BREW_NAME at:" "$("${BREW_PATH[i]}" --prefix)"
-        ((i)) || {
-            SH=$(. "$LK_BASE/lib/bash/env.sh") &&
-                eval "$SH"
-        }
+        ((i)) || { SH=$(. "$LK_BASE/lib/bash/env.sh") &&
+            eval "$SH"; }
         lk_brew_check_taps ||
             lk_die "unable to tap formula repositories"
         lk_brew_check_autoupdate ||
             lk_die "unable to enable automatic \`brew update\`"
         [ "${BREW_NEW[i]}" -eq 1 ] || {
             lk_console_detail "Updating formulae"
-            lk_brew update --quiet
+            _brew update --quiet
         }
     }
-    BREW_NEW=()
-    lk_brew_loop install_homebrew
 
     INSTALL=(
         coreutils
@@ -421,16 +410,38 @@ EOF
 
     ! MACOS_VERSION=$(lk_macos_version) ||
         ! lk_version_at_least "$MACOS_VERSION" 10.15 ||
-        INSTALL+=(
-            mas # for managing Mac App Store apps
-        )
+        INSTALL+=(mas)
     HOMEBREW_FORMULAE=($(lk_echo_array HOMEBREW_FORMULAE INSTALL | sort -u))
+
+    FOREIGN=($(lk_brew_formulae_list_not_native "${HOMEBREW_FORMULAE[@]}"))
+    if lk_is_apple_silicon && {
+        [ -e /usr/local/bin/brew ] || { [ ${#FOREIGN[@]} -gt 0 ] &&
+            lk_echo_array FOREIGN | lk_console_list \
+                "Not supported on Apple Silicon:" formula formulae &&
+            lk_confirm \
+                "Install an Intel instance of Homebrew for the above?" Y; }
+    }; then
+        lk_macos_install_rosetta2
+        BREW_PATH=(/opt/homebrew/bin/brew /usr/local/bin/brew)
+        BREW_ARCH=("" x86_64)
+        BREW_NAMES=("Homebrew (native)" "Homebrew (Intel)")
+    elif [ ${#FOREIGN[@]} -gt 0 ]; then
+        lk_console_warning "Skipping unsupported formulae"
+        HOMEBREW_FORMULAE=($(comm -23 \
+            <(lk_echo_array HOMEBREW_FORMULAE | sort -u) \
+            <(lk_echo_array FOREIGN | sort -u)))
+        FOREIGN=()
+    fi
+
+    BREW_NEW=()
+    lk_brew_loop install_homebrew
+
     INSTALL=($(comm -13 \
         <(lk_brew_formulae | sort -u) \
         <(lk_echo_array INSTALL | sort -u)))
     [ ${#INSTALL[@]} -eq 0 ] || {
         lk_console_message "Installing lk-platform dependencies"
-        lk_brew install --formula "${INSTALL[@]}"
+        _brew install --formula "${INSTALL[@]}"
     }
 
     lk_console_message "Applying user defaults"
@@ -692,7 +703,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
             MESSAGE=${3//"$s"/$BREW_NAME}
             lk_echo_array ARR |
                 lk_console_list "$MESSAGE" formula formulae
-            lk_brew "$1" --formula "${ARR[@]}" || STATUS=$?
+            _brew "$1" --formula "${ARR[@]}" || STATUS=$?
         }
     }
     lk_brew_loop commit_changes upgrade UPGRADE_FORMULAE \
@@ -702,13 +713,13 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
 
     [ ${#UPGRADE_CASKS[@]} -eq 0 ] || {
         lk_console_message "Upgrading casks"
-        lk_brew upgrade --cask "${UPGRADE_CASKS[@]}" || STATUS=$?
+        _brew upgrade --cask "${UPGRADE_CASKS[@]}" || STATUS=$?
     }
 
     [ ${#INSTALL_CASKS[@]} -eq 0 ] || {
         lk_echo_array INSTALL_CASKS |
             lk_console_list "Installing new casks:"
-        lk_brew install --cask "${INSTALL_CASKS[@]}" || STATUS=$?
+        _brew install --cask "${INSTALL_CASKS[@]}" || STATUS=$?
     }
 
     [ ${#UPGRADE_APPS[@]} -eq 0 ] || {

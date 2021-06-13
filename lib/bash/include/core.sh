@@ -23,12 +23,21 @@ function lk_command_exists() {
     type -P "$1" >/dev/null
 }
 
+function lk_is_arm() {
+    [[ $MACHTYPE =~ ^(arm|aarch)64- ]]
+}
+
 function lk_is_macos() {
     [[ $OSTYPE == darwin* ]]
 }
 
 function lk_is_apple_silicon() {
-    lk_is_macos && [[ $MACHTYPE =~ ^(arm|aarch)64- ]]
+    lk_is_macos && lk_is_arm
+}
+
+function lk_is_system_apple_silicon() {
+    lk_is_macos && { lk_is_arm ||
+        [ "$(sysctl -n sysctl.proc_translated 2>/dev/null)" = 1 ]; }
 }
 
 function lk_is_linux() {
@@ -479,28 +488,46 @@ function lk_regex_case_insensitive() {
     echo "$REGEX"
 }
 
-# lk_regex_expand_whitespace [-o] STRING
+# lk_regex_expand_whitespace [-o] [STRING...]
 #
-# Replace each unquoted sequence of one or more whitespace characters in STRING
-# with "[[:blank:]]+". If -o is set, make whitespace optional with
-# "[[:blank:]]*". Escaped delimiters within double- and single-quoted sequences
-# are recognised.
+# Replace unquoted sequences of one or more whitespace characters in each STRING
+# or input with "[[:blank:]]+". If -o is set, make whitespace optional by using
+# "[[:blank:]]*" as the replacement string.
 #
 # Example:
 #
 #     $ lk_regex_expand_whitespace "message = 'Here\'s a message'"
 #     message[[:blank:]]+=[[:blank:]]+'Here\'s a message'
 function lk_regex_expand_whitespace() {
-    local NOT_SPECIAL="[^'\"[:blank:]]*[^\\]" \
-        ESCAPED_WHITESPACE="(\\\\[[:blank:]])*" \
-        QUOTED_SINGLE="(''|'([^']|\\\\')*[^\\]')" \
-        QUOTED_DOUBLE="(\"\"|\"([^\"]|\\\\\")*[^\\]\")" \
-        QUANTIFIER="+"
+    local QUANTIFIER="+"
     [ "${1-}" != -o ] || { QUANTIFIER="*" && shift; }
-    sed -E "\
-:start
-s/^(($NOT_SPECIAL|$ESCAPED_WHITESPACE|$QUOTED_SINGLE|$QUOTED_DOUBLE)*)$S+/\\1[[:blank:]]$QUANTIFIER/
-t start" <<<"$1"
+    lk_replace_whitespace "[[:blank:]]$QUANTIFIER" "$@"
+}
+
+# lk_replace_whitespace REPLACE [STRING...]
+function lk_replace_whitespace() {
+    [ $# -ge 1 ] || lk_usage "Usage: $FUNCNAME REPLACE [STRING...]" || return
+    local REPLACE=$1 FIND
+    [[ ! $REPLACE =~ ^($S+)$ ]] || {
+        [ ${#BASH_REMATCH[1]} -eq 1 ] || lk_warn "invalid arguments" || return
+        FIND="$S+{2,}"
+    }
+    if [ $# -gt 1 ]; then
+        printf '%s\n' "${@:2}" | lk_replace_whitespace "$1"
+    else
+        local NOT_SPECIAL="([^'\"[:blank:]\\]|\\\\.)+" \
+            QUOTED_SINGLE="(''|'([^'\\]|\\\\.)*')" \
+            QUOTED_DOUBLE="(\"\"|\"([^\"\\]|\\\\.)*\")"
+        # - H: append newline + pattern space to hold space
+        # - 1h: on line 1, copy pattern space to hold space
+        # - $!d: until the last line, delete pattern space and start next cycle
+        # - g: copy hold space to pattern space
+        sed -E "\
+H;1h;\$!d;g
+:repeat
+s/^((($(lk_escape_ere "$REPLACE"))?($NOT_SPECIAL|$QUOTED_SINGLE|$QUOTED_DOUBLE))*)${FIND:-$S+}/\\1$(lk_escape_ere_replace "$REPLACE")/
+t repeat"
+    fi
 }
 
 # lk_replace FIND REPLACE STRING
@@ -1946,7 +1973,7 @@ function lk_run() {
     [[ ! ${1-} =~ ^-([0-9]+)$ ]] || { SHIFT=${BASH_REMATCH[1]} && shift; }
     COMMAND=("$@")
     [ -z "$SHIFT" ] || shift "$SHIFT"
-    while [[ ${1-} =~ ^(lk_(elevate|maybe_(sudo|trace))|sudo)$ ]] &&
+    while [[ ${1-} =~ ^(lk_(elevate|maybe_(sudo|trace))|sudo|caffeinate)$ ]] &&
         [[ ${2-} != -* ]]; do
         case "$1" in
         lk_maybe_trace)

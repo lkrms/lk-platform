@@ -140,12 +140,18 @@ function lk_macos_install_command_line_tools() {
             tail -n1) ||
         lk_warn "unable to determine item name for Command Line Tools" ||
         return
-    lk_console_detail "Installing Command Line Tools with:" \
-        "softwareupdate --install \"$ITEM_NAME\""
-    lk_elevate caffeinate -i \
+    lk_run_detail lk_elevate caffeinate -i \
         softwareupdate --install "$ITEM_NAME" >/dev/null || return
     lk_macos_command_line_tools_installed || return
     rm -f "$TRIGGER" || true
+}
+
+function lk_macos_install_rosetta2() {
+    [ ! -f /Library/Apple/System/Library/LaunchDaemons/com.apple.oahd.plist ] ||
+        return 0
+    lk_console_message "Installing Rosetta 2"
+    lk_run_detail lk_elevate caffeinate -i \
+        softwareupdate --install-rosetta --agree-to-license
 }
 
 function lk_macos_xcode_maybe_accept_license() {
