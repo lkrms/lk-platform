@@ -33,18 +33,18 @@ function _lk_timeout_trap() {
             kill "$_LK_TIMEOUT_TIMER_PID" 2>/dev/null || true
             ! lk_verbose 2 ||
                 echo "Timer process killed: $_LK_TIMEOUT_TIMER_PID" \
-                    >&"${_LK_FD:-2}"
+                    >&"${_LK_FD-2}"
             ;;
         c)
             # The command timed out, so kill it
             kill "$_LK_TIMEOUT_CMD_PID" 2>/dev/null || true
             ! lk_verbose 2 ||
                 echo "Process killed after timing out: $_LK_TIMEOUT_CMD_PID" \
-                    >&"${_LK_FD:-2}"
+                    >&"${_LK_FD-2}"
             ;;
         tc)
             ! lk_verbose 2 ||
-                echo "SIGCHLD trapped for an unknown process" >&"${_LK_FD:-2}"
+                echo "SIGCHLD trapped for an unknown process" >&"${_LK_FD-2}"
             return 0
             ;;
         esac
