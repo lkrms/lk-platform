@@ -295,9 +295,9 @@ EOF
         local i SH BREW BREW_NAME
         for i in "${!BREW_PATH[@]}"; do
             if ! ((i)); then
-                SH=$(lk_macos_env "^/usr/local(/|\$)")
+                SH=$(_lk_macos_env "^/usr/local(/|\$)")
             else
-                SH=$(lk_macos_env "^/opt/homebrew(/|\$)")
+                SH=$(_lk_macos_env "^/opt/homebrew(/|\$)")
             fi && BREW=(
                 env "PATH=$(eval "$SH" && echo "$PATH")"
                 ${BREW_ARCH[i]:+arch "--${BREW_ARCH[i]}"}
