@@ -151,9 +151,7 @@ HOMEBREW_FORMULAE+=(
     yarn
 
     #
-    composer #
-    # gcc@7  # Db2 module build dependency
-    php
+    composer
 
     #
     python
@@ -169,14 +167,15 @@ HOMEBREW_FORMULAE+=(
     shellcheck
     shfmt
 
-    #
-    lkrms/virt-manager/virt-manager
-
     # Platforms
     awscli
 )
 
 FORCE_IBREW+=(
+    php
+    php@7.2
+    php@7.3
+    php@7.4
     lkrms/virt-manager/virt-manager
 )
 
@@ -208,6 +207,12 @@ HOMEBREW_KEEP_FORMULAE+=(
     meson
     ninja
     ocaml
+
+    #
+    php
+    php@7.2
+    php@7.3
+    php@7.4
 
     #
     libvirt

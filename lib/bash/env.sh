@@ -73,8 +73,8 @@ for DIR in ${LK_ADD_TO_PATH:+$LK_ADD_TO_PATH} ${_LK_INST:-$LK_BASE}/bin; do
 done
 for DIR in \
     $([ "${HOMEBREW_PREFIX-}" -ef /usr/local ] ||
-        echo /usr/local/bin:/usr/local/sbin) \
-    ${HOMEBREW_PREFIX:+$HOMEBREW_PREFIX/bin:$HOMEBREW_PREFIX/sbin} \
+        echo /usr/local/sbin:/usr/local/bin) \
+    ${HOMEBREW_PREFIX:+$HOMEBREW_PREFIX/sbin:$HOMEBREW_PREFIX/bin} \
     ${HOME:+$HOME/.local/bin} \
     ${LK_ADD_TO_PATH_FIRST:+$LK_ADD_TO_PATH_FIRST}; do
     PATH=$(path_add_to_front "$DIR")
