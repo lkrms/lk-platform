@@ -564,6 +564,11 @@ if [ "$LK_AUTO_REBOOT" = Y ]; then
         "Unattended-Upgrade::Automatic-Reboot-Time" "$LK_AUTO_REBOOT_TIME"
     )
 fi
+lk_console_detail "Disabling replacement of customised config files"
+APT_OPTIONS+=(
+    "DPkg::options::" "--force-confdef"
+    "DPkg::options::" "--force-confold"
+)
 {
     printf '# Created by %s at %s\n' "${0##*/}" "$(lk_date_log)"
     printf '%s "%s";\n' "${APT_OPTIONS[@]}"
