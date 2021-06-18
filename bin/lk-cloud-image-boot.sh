@@ -566,7 +566,8 @@ if [ -n "$STACKSCRIPT" ]; then
             lk_console_detail_list "$SELECT_TEXT:"
         [ -z "${DEFAULT-}" ] ||
             lk_console_detail "Default value:" "$DEFAULT"
-        VALUE=$(SH=$(_LK_STACK_DEPTH=1 lk_require_output lk_get_env "$NAME") &&
+        VALUE=$(SH=$(_LK_CAN_FAIL=1 &&
+            _LK_STACK_DEPTH=1 lk_require_output lk_get_env "$NAME") &&
             eval "$SH && echo \"\$$NAME\"") || unset VALUE
         i=0
         while ((++i)); do

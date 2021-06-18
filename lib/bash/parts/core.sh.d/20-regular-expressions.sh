@@ -50,7 +50,7 @@ add_regex DPKG_SOURCE_REGEX "[a-z0-9][-a-z0-9+.]+"
 
 add_regex IDENTIFIER_REGEX "[a-zA-Z_][a-zA-Z0-9_]*"
 add_regex PHP_SETTING_NAME_REGEX "$IDENTIFIER_REGEX(\\.$IDENTIFIER_REGEX)*"
-add_regex PHP_SETTING_REGEX "$PHP_SETTING_NAME_REGEX=.+"
+add_regex PHP_SETTING_REGEX "$PHP_SETTING_NAME_REGEX=.*"
 
 add_regex READLINE_NON_PRINTING_REGEX $'\x01[^\x02]*\x02'
 add_regex CONTROL_SEQUENCE_REGEX $'\x1b\\\x5b[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]'
