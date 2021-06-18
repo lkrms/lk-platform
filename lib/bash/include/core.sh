@@ -242,7 +242,7 @@ function lk_get_regex() {
             printf '%s=%q\n' PHP_SETTING_NAME_REGEX "[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*"
             ;;
         PHP_SETTING_REGEX)
-            printf '%s=%q\n' PHP_SETTING_REGEX "[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*=.+"
+            printf '%s=%q\n' PHP_SETTING_REGEX "[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*=.*"
             ;;
         READLINE_NON_PRINTING_REGEX)
             printf '%s=%q\n' READLINE_NON_PRINTING_REGEX "[^]*"
