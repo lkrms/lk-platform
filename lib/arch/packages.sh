@@ -77,6 +77,7 @@ PAC_PACKAGES=(
 
     # Network
     bind # dig
+    conntrack-tools
     curl
     inetutils # hostname, telnet
     iptables-nft
