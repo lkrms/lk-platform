@@ -202,6 +202,7 @@ PAC_PACKAGES+=(
     vdpauinfo
 
     # automation
+    evtest
     sxhkd
     wmctrl
     xautomation

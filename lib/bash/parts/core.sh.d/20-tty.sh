@@ -115,7 +115,7 @@ function lk_tty_list() {
             lk_warn "no input" || return
     else
         _ARRAY="${_ARRAY}[@]"
-        _ITEMS=(${!ARR+"${!ARR}"}) || return
+        _ITEMS=(${!_ARRAY+"${!_ARRAY}"}) || return
     fi
     if [[ $_MESSAGE != *$'\n'* ]]; then
         _INDENT=$((${#_PREFIX} - 2))

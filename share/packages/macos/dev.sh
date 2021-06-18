@@ -218,6 +218,9 @@ HOMEBREW_KEEP_FORMULAE+=(
     libvirt
     qemu
     lkrms/virt-manager/virt-manager
+
+    #
+    ddcctl
 )
 
 HOMEBREW_KEEP_CASKS+=(
@@ -236,6 +239,7 @@ HOMEBREW_KEEP_CASKS+=(
     #
     logitech-g-hub
     logitech-gaming-software
+    monitorcontrol
 )
 
 LOGIN_ITEMS+=(
