@@ -46,12 +46,12 @@ function lk_mediainfo_check() {
         LK_MEDIAINFO_FILES+=("$FILE")
         LK_MEDIAINFO_VALUES+=("$VALUE")
         if [ -n "${VALUE// /}" ]; then
-            lk_is_script_running && ! lk_verbose ||
+            lk_script_is_running && ! lk_verbose ||
                 lk_console_log "${FILE#./}:" \
                     "$LK_MEDIAINFO_LABEL$VALUE"
         else
             LK_MEDIAINFO_EMPTY_FILES+=("$FILE")
-            lk_is_script_running && ! lk_verbose ||
+            lk_script_is_running && ! lk_verbose ||
                 lk_console_warning "${FILE#./}:" \
                     "$LK_MEDIAINFO_LABEL$LK_MEDIAINFO_NO_VALUE"
         fi
@@ -60,7 +60,7 @@ function lk_mediainfo_check() {
             printf '%s\0' "$@" ||
             find -L . -type f ! -name '.*' -print0
     )
-    lk_is_script_running && ! lk_verbose 2 || {
+    lk_script_is_running && ! lk_verbose 2 || {
         lk_console_message \
             "$COUNT $(lk_maybe_plural "$COUNT" file files) checked"
         lk_console_detail \

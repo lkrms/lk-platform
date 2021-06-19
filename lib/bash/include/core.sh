@@ -13,22 +13,42 @@ _LK_ARGV=("$@")
 _LK_INCLUDES=core
 
 function _lk_caller() {
-    local CONTEXT REGEX='^([0-9]*) ([^ ]*) (.*)$' SOURCE= FUNC= LINE= \
-        CALLER=("$LK_BOLD${0##*/}$LK_RESET")
-    ! CONTEXT=${1-$(caller 1)} || [[ ! $CONTEXT =~ $REGEX ]] || {
+    local CALLER
+    if lk_script_is_running; then
+        CALLER=("${0##*/}")
+    else
+        CALLER=("${FUNCNAME+${FUNCNAME[*]: -1:1}}")
+        [ -n "$CALLER" ] || CALLER=("{main}")
+    fi
+    CALLER[0]=$LK_BOLD$CALLER$LK_RESET
+    lk_verbose || {
+        echo "$CALLER"
+        return
+    }
+    local CONTEXT REGEX='^([0-9]*) ([^ ]*) (.*)$' SOURCE= FUNC= LINE=
+    if CONTEXT=${1-$(caller 1)} && [[ $CONTEXT =~ $REGEX ]]; then
         SOURCE=${BASH_REMATCH[3]}
         FUNC=${BASH_REMATCH[2]}
         LINE=${BASH_REMATCH[1]}
-    }
-    ! lk_verbose 2 || {
-        [ -z "$SOURCE" ] || [ "$SOURCE" = main ] || [ "$SOURCE" = "$0" ] ||
-            CALLER+=("$(lk_pretty_path "$SOURCE")")
-        [ -z "$LINE" ] ||
-            CALLER[${#CALLER[@]} - 1]+=$LK_DIM:$LINE$LK_RESET
-        [ -z "$FUNC" ] || [ "$FUNC" = main ] ||
-            CALLER+=("$FUNC$LK_DIM()$LK_RESET")
-    }
+    else
+        SOURCE=${BASH_SOURCE[2]-}
+        FUNC=${FUNCNAME[2]-}
+        LINE=${BASH_LINENO[3]-}
+    fi
+    [ -z "$SOURCE" ] || [ "$SOURCE" = main ] || [ "$SOURCE" = "$0" ] ||
+        CALLER+=("$(lk_pretty_path "$SOURCE")")
+    [ -z "$LINE" ] ||
+        CALLER[${#CALLER[@]} - 1]+=$LK_DIM:$LINE$LK_RESET
     lk_implode "$LK_DIM->$LK_RESET" CALLER
+}
+
+# lk_warn [MESSAGE]
+#
+# Print "<CALLER>: MESSAGE" as a warning and return the most recent exit status.
+function lk_warn() {
+    local STATUS=$?
+    lk_console_warning "$(LK_VERBOSE= _lk_caller): ${1-execution failed}"
+    return "$STATUS"
 }
 
 # lk_version_at_least INSTALLED MINIMUM
@@ -99,6 +119,27 @@ function lk_is_qemu() {
         FILES=(/sys/devices/virtual/dmi/id/*_vendor) &&
         [ ${#FILES[@]} -gt 0 ] &&
         grep -iq qemu "${FILES[@]}")
+}
+
+function lk_script_is_running() {
+    [ "${BASH_SOURCE[*]+${BASH_SOURCE[*]: -1:1}}" = "$0" ]
+}
+
+# lk_verbose [LEVEL]
+#
+# Return true if LK_VERBOSE is at least LEVEL, or at least 1 if LEVEL is not
+# specified.
+#
+# The default value of LK_VERBOSE is 0.
+function lk_verbose() {
+    [ "${LK_VERBOSE:-0}" -ge "${1-1}" ]
+}
+
+# lk_debug
+#
+# Return true if LK_DEBUG is set.
+function lk_debug() {
+    [[ ${LK_DEBUG-} =~ ^[1Yy]$ ]]
 }
 
 # Define wrapper functions (e.g. `gnu_find`) to invoke the GNU version of
@@ -494,10 +535,6 @@ function lk_provide() {
         _LK_INCLUDES=$_LK_INCLUDES,$1
 }
 
-function lk_is_script_running() {
-    [ "${BASH_SOURCE[*]+${BASH_SOURCE[*]: -1:1}}" = "$0" ]
-}
-
 # lk_myself [-f] [STACK_DEPTH]
 #
 # If running from a source file and -f is not set, output the basename of the
@@ -510,23 +547,13 @@ function lk_is_script_running() {
 function lk_myself() {
     local STATUS=$? FUNC
     [ "${1-}" != -f ] || { FUNC=1 && shift; }
-    if [ ${FUNC:-0} -eq 0 ] && lk_is_script_running; then
+    if [ ${FUNC:-0} -eq 0 ] && lk_script_is_running; then
         echo "${0##*/}"
     else
         echo "${FUNCNAME[$((1 + ${1:-0} + ${_LK_STACK_DEPTH:-0}))]:-${0##*/}}"
     fi
     return "$STATUS"
 } #### Reviewed: 2021-04-10
-
-# lk_warn [MESSAGE]
-#
-# Output "<context>: MESSAGE" as a warning and return the most recent command's
-# exit status.
-function lk_warn() {
-    local EXIT_STATUS=$?
-    lk_console_warning "$(_lk_caller): ${1:-execution failed}"
-    return "$EXIT_STATUS"
-}
 
 function _lk_usage_format() {
     local CMD BOLD RESET
@@ -543,7 +570,7 @@ function lk_usage() {
     local EXIT_STATUS=$? MESSAGE=${1:-${LK_USAGE-}}
     [ -z "$MESSAGE" ] || MESSAGE=$(_lk_usage_format "$MESSAGE")
     _LK_TTY_NO_FOLD=1 \
-        lk_console_log "${MESSAGE:-$(_lk_caller): invalid arguments}"
+        lk_console_log "${MESSAGE:-$(LK_VERBOSE= _lk_caller): invalid arguments}"
     if [[ $- != *i* ]]; then
         exit "$EXIT_STATUS"
     else
@@ -1558,7 +1585,7 @@ function _lk_log_close_fd() {
 function lk_log_start() {
     local ARG0 ARGC HEADER EXT _FILE FILE LOG_FILE OUT_FILE FIFO
     if lk_is_true LK_NO_LOG || lk_log_is_open ||
-        { [[ $- == *i* ]] && ! lk_is_script_running; }; then
+        { [[ $- == *i* ]] && ! lk_script_is_running; }; then
         return
     elif [ -z "${_LK_LOG_CMDLINE+1}" ]; then
         local _LK_LOG_CMDLINE=("$0" ${_LK_ARGV+"${_LK_ARGV[@]}"})
@@ -2327,14 +2354,6 @@ function lk_no_input() {
     else
         [ ! -t 0 ] || [ "${LK_NO_INPUT-}" = 1 ]
     fi
-} #### Reviewed: 2021-06-13
-
-# lk_verbose [LEVEL]
-#
-# Return true if the verbosity level set in LK_VERBOSE (default: 0) is greater
-# than or equal to LEVEL (default: 1).
-function lk_verbose() {
-    [ "${LK_VERBOSE:-0}" -ge "${1-1}" ]
 } #### Reviewed: 2021-06-13
 
 # lk_clip

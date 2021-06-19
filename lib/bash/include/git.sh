@@ -580,7 +580,7 @@ function _lk_git_do_with_repo() {
 function lk_git_with_repos() {
     local OPTIND OPTARG OPT LK_USAGE PARALLEL STDOUT PROMPT=1 \
         REPO_COMMAND NOUN FD ERR_FILE REPO _REPO ERR_COUNT=0 ERR_REPOS \
-        _LK_GIT_SSH_OPTIONS REPOS=(${LK_GIT_REPOS[@]+"${LK_GIT_REPOS[@]}"})
+        _LK_GIT_SSH_OPTIONS=() REPOS=(${LK_GIT_REPOS[@]+"${LK_GIT_REPOS[@]}"})
     _LK_GIT_REPO_ERRORS=(${REPOS[@]+"${REPOS[@]}"})
     LK_USAGE="\
 Usage: $FUNCNAME [-p|-t] [-y] COMMAND [ARG...]
@@ -687,7 +687,7 @@ function lk_git_audit_repo() {
         lk_console_error -r -n "Untracked:" \
             $'\n'"$(lk_pass lk_git_list_untracked |
                 head -n$((${LINES:-24} * 2 / 3)))" || ((++ERRORS))
-    STASHES=$(lk_git_stash_list | wc -l) || { STASHES=0 && ((++ERRORS)); }
+    STASHES=$(lk_git_stash_list | wc -l | tr -d ' ') || { STASHES=0 && ((++ERRORS)); }
     [ "$STASHES" -eq 0 ] ||
         lk_console_error -r "Changes in $STASHES $(lk_pass \
             lk_maybe_plural "$STASHES" stash stashes)" || ((++ERRORS))
