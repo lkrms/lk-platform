@@ -2,6 +2,12 @@
 
 - /root/.cache
 + /root
+
+# These are bound to /srv/www/*/{public_html,log,backup}
+- /home/_*/public_html
+- /home/_*/log
+- /home/_*/backup
+
 - /home/*/.cache
 + /home
 
