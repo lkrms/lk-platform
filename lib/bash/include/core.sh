@@ -12,6 +12,25 @@ USER=${USER:-$(id -un)} &&
 _LK_ARGV=("$@")
 _LK_INCLUDES=core
 
+function _lk_caller() {
+    local CONTEXT REGEX='^([0-9]*) ([^ ]*) (.*)$' SOURCE= FUNC= LINE= \
+        CALLER=("$LK_BOLD${0##*/}$LK_RESET")
+    ! CONTEXT=${1-$(caller 1)} || [[ ! $CONTEXT =~ $REGEX ]] || {
+        SOURCE=${BASH_REMATCH[3]}
+        FUNC=${BASH_REMATCH[2]}
+        LINE=${BASH_REMATCH[1]}
+    }
+    ! lk_verbose 2 || {
+        [ -z "$SOURCE" ] || [ "$SOURCE" = main ] || [ "$SOURCE" = "$0" ] ||
+            CALLER+=("$(lk_pretty_path "$SOURCE")")
+        [ -z "$LINE" ] ||
+            CALLER[${#CALLER[@]} - 1]+=$LK_DIM:$LINE$LK_RESET
+        [ -z "$FUNC" ] || [ "$FUNC" = main ] ||
+            CALLER+=("$FUNC$LK_DIM()$LK_RESET")
+    }
+    lk_implode "$LK_DIM->$LK_RESET" CALLER
+}
+
 # lk_version_at_least INSTALLED MINIMUM
 function lk_version_at_least() {
     local MIN
@@ -498,33 +517,6 @@ function lk_myself() {
     fi
     return "$STATUS"
 } #### Reviewed: 2021-04-10
-
-function _lk_caller() {
-    local CONTEXT REGEX='^([0-9]*) ([^ ]*) (.*)$' SOURCE= FUNC= LINE= \
-        CALLER=()
-    ! CONTEXT=${1-$(caller 1)} || [[ ! $CONTEXT =~ $REGEX ]] || {
-        SOURCE=${BASH_REMATCH[3]}
-        FUNC=${BASH_REMATCH[2]}
-        LINE=${BASH_REMATCH[1]}
-    }
-    # If the caller isn't in the running script (or no script is running), start
-    # with the shell/script name
-    if [ "$SOURCE" != "$0" ] || [ "$SOURCE" = main ]; then
-        CALLER=("$LK_BOLD${0##*/}$LK_RESET")
-    fi
-    # Always include source filename and line number
-    if [ -n "$SOURCE" ] && [ "$SOURCE" != main ]; then
-        CALLER+=("$(if [ "$SOURCE" = "$0" ]; then
-            echo "$LK_BOLD${0##*/}$LK_RESET"
-        else
-            lk_pretty_path "$SOURCE"
-        fi)$LK_DIM:${LINE:-1}$LK_RESET")
-    fi
-    ! lk_verbose ||
-        [ -z "$FUNC" ] || [ "$FUNC" = main ] ||
-        CALLER+=("$FUNC$LK_DIM()$LK_RESET")
-    lk_implode "$LK_DIM->$LK_RESET" CALLER
-} #### Reviewed: 2021-05-28
 
 # lk_warn [MESSAGE]
 #
