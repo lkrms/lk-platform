@@ -688,7 +688,8 @@ HOST_KEYS=$([ -z "$LK_ADMIN_USERS" ] &&
 JUMP_KEY=$([ -z "$LK_SSH_JUMP_KEY" ] ||
     grep -E "$S$LK_SSH_JUMP_KEY\$" "$KEYS_FILE") || true
 [ -z "$LK_SSH_JUMP_KEY" ] ||
-    case "$([ -z "$JUMP_KEY" ] && echo 0 || wc -l <<<"$JUMP_KEY")" in
+    case "$([ -z "$JUMP_KEY" ] && echo 0 ||
+        wc -l <<<"$JUMP_KEY" | tr -d ' ')" in
     0)
         lk_console_item "SSH jump proxy key not found:" "$LK_SSH_JUMP_KEY"
         ;;

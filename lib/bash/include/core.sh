@@ -17,22 +17,20 @@ function _lk_caller() {
     if lk_script_is_running; then
         CALLER=("${0##*/}")
     else
-        CALLER=("${FUNCNAME+${FUNCNAME[*]: -1:1}}")
-        [ -n "$CALLER" ] || CALLER=("{main}")
+        CALLER=(${FUNCNAME+"${FUNCNAME[*]: -1}"})
+        [ -n "${CALLER+1}" ] || CALLER=("{main}")
     fi
     CALLER[0]=$LK_BOLD$CALLER$LK_RESET
     lk_verbose || {
         echo "$CALLER"
         return
     }
-    local CONTEXT REGEX='^([0-9]*) ([^ ]*) (.*)$' SOURCE= FUNC= LINE=
-    if CONTEXT=${1-$(caller 1)} && [[ $CONTEXT =~ $REGEX ]]; then
-        SOURCE=${BASH_REMATCH[3]}
-        FUNC=${BASH_REMATCH[2]}
+    local CONTEXT REGEX='^([0-9]*) [^ ]* (.*)$' SOURCE= LINE=
+    if [[ ${1-} =~ $REGEX ]]; then
+        SOURCE=${BASH_REMATCH[2]}
         LINE=${BASH_REMATCH[1]}
     else
         SOURCE=${BASH_SOURCE[2]-}
-        FUNC=${FUNCNAME[2]-}
         LINE=${BASH_LINENO[3]-}
     fi
     [ -z "$SOURCE" ] || [ "$SOURCE" = main ] || [ "$SOURCE" = "$0" ] ||
@@ -122,7 +120,7 @@ function lk_is_qemu() {
 }
 
 function lk_script_is_running() {
-    [ "${BASH_SOURCE[*]+${BASH_SOURCE[*]: -1:1}}" = "$0" ]
+    [ "${BASH_SOURCE+${BASH_SOURCE[*]: -1}}" = "$0" ]
 }
 
 # lk_verbose [LEVEL]
@@ -2367,7 +2365,7 @@ function lk_clip() {
         "xclip -selection clipboard" \
         pbcopy) &&
         echo -n "$OUTPUT" | $COMMAND &>/dev/null; then
-        LINES=$(wc -l <<<"$OUTPUT")
+        LINES=$(wc -l | tr -d ' ' <<<"$OUTPUT")
         [ "$LINES" -le "$DISPLAY_LINES" ] || {
             OUTPUT=$(head -n$((DISPLAY_LINES - 1)) <<<"$OUTPUT" &&
                 echo "$LK_BOLD$LK_MAGENTA...$LK_RESET")

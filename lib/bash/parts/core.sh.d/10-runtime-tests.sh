@@ -1,7 +1,7 @@
 #!/bin/bash
 
 function lk_script_is_running() {
-    [ "${BASH_SOURCE[*]+${BASH_SOURCE[*]: -1:1}}" = "$0" ]
+    [ "${BASH_SOURCE+${BASH_SOURCE[*]: -1}}" = "$0" ]
 }
 
 # lk_verbose [LEVEL]
