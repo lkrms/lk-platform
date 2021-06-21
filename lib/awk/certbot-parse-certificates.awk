@@ -1,13 +1,16 @@
 # Parse output from `certbot certificates` and output the following
 # tab-separated fields:
 # 1. Certificate name
-# 2. Domains (comma-separated)
+# 2. Domains (sorted, comma-separated)
 # 3. Expiry date (format: %Y-%m-%d %H:%M:%S%z)
 # 4. Certificate path
 # 5. Private key path
 
 BEGIN {
     OFS = "\t"
+    "mktemp" | getline temp
+    close("mktemp")
+    sort = "tr ',' '\\n' | sort -u | tr '\\n' ',' >" temp
 }
 
 function val(_) {
@@ -31,6 +34,11 @@ tolower($0) ~ /\<certificate name:/ {
 tolower($0) ~ /\<domains:/ {
     domains = val()
     gsub("[[:blank:]]+", ",", domains)
+    print domains | sort
+    close(sort)
+    getline domains < temp
+    close(temp)
+    sub(",$", "", domains)
 }
 
 tolower($0) ~ /\<expiry date:/ {
