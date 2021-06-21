@@ -853,7 +853,7 @@ function lk_host_soa() {
     ! lk_verbose ||
         lk_console_detail "Looking up SOA for domain:" "$1"
     APEX=$(awk '{sub("\\.$", "", $1); print $1}' <<<"$ANSWER" | sort -u)
-    wc -l <<<"$APEX" | grep -Fxq 1 ||
+    [ "$(wc -l <<<"$APEX")" -eq 1 ] ||
         lk_warn "invalid response to NS lookup" || return
     NAMESERVERS=($(awk '{sub("\\.$", "", $5); print $5}' <<<"$ANSWER" | sort))
     ! lk_verbose || {

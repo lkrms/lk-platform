@@ -146,7 +146,7 @@ function lk_getopt() {
     LK_GETOPT=$(lk_quote OPTS)
 }
 
-if ! lk_is_script_running; then
+if ! lk_script_is_running; then
     return
 fi
 

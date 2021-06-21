@@ -12,25 +12,6 @@ USER=${USER:-$(id -un)} &&
 _LK_ARGV=("$@")
 _LK_INCLUDES=core
 
-function _lk_caller() {
-    local CONTEXT REGEX='^([0-9]*) ([^ ]*) (.*)$' SOURCE= FUNC= LINE= \
-        CALLER=("$LK_BOLD${0##*/}$LK_RESET")
-    ! CONTEXT=${1-$(caller 1)} || [[ ! $CONTEXT =~ $REGEX ]] || {
-        SOURCE=${BASH_REMATCH[3]}
-        FUNC=${BASH_REMATCH[2]}
-        LINE=${BASH_REMATCH[1]}
-    }
-    ! lk_verbose 2 || {
-        [ -z "$SOURCE" ] || [ "$SOURCE" = main ] || [ "$SOURCE" = "$0" ] ||
-            CALLER+=("$(lk_pretty_path "$SOURCE")")
-        [ -z "$LINE" ] ||
-            CALLER[${#CALLER[@]} - 1]+=$LK_DIM:$LINE$LK_RESET
-        [ -z "$FUNC" ] || [ "$FUNC" = main ] ||
-            CALLER+=("$FUNC$LK_DIM()$LK_RESET")
-    }
-    lk_implode "$LK_DIM->$LK_RESET" CALLER
-}
-
 # lk_version_at_least INSTALLED MINIMUM
 function lk_version_at_least() {
     local MIN
@@ -99,6 +80,202 @@ function lk_is_qemu() {
         FILES=(/sys/devices/virtual/dmi/id/*_vendor) &&
         [ ${#FILES[@]} -gt 0 ] &&
         grep -iq qemu "${FILES[@]}")
+}
+
+function lk_script_is_running() {
+    [ "${BASH_SOURCE+${BASH_SOURCE[*]: -1}}" = "$0" ]
+}
+
+# lk_verbose [LEVEL]
+#
+# Return true if LK_VERBOSE is at least LEVEL, or at least 1 if LEVEL is not
+# specified.
+#
+# The default value of LK_VERBOSE is 0.
+function lk_verbose() {
+    [ "${LK_VERBOSE:-0}" -ge "${1-1}" ]
+}
+
+# lk_debug
+#
+# Return true if LK_DEBUG is set.
+function lk_debug() {
+    [[ ${LK_DEBUG-} =~ ^[1Yy]$ ]]
+}
+
+function _lk_caller() {
+    local CALLER
+    if lk_script_is_running; then
+        CALLER=("${0##*/}")
+    else
+        CALLER=(${FUNCNAME+"${FUNCNAME[*]: -1}"})
+        [ -n "${CALLER+1}" ] || CALLER=("{main}")
+    fi
+    CALLER[0]=$LK_BOLD$CALLER$LK_RESET
+    lk_verbose || {
+        echo "$CALLER"
+        return
+    }
+    local CONTEXT REGEX='^([0-9]*) [^ ]* (.*)$' SOURCE= LINE=
+    if [[ ${1-} =~ $REGEX ]]; then
+        SOURCE=${BASH_REMATCH[2]}
+        LINE=${BASH_REMATCH[1]}
+    else
+        SOURCE=${BASH_SOURCE[2]-}
+        LINE=${BASH_LINENO[3]-}
+    fi
+    [ -z "$SOURCE" ] || [ "$SOURCE" = main ] || [ "$SOURCE" = "$0" ] ||
+        CALLER+=("$(lk_pretty_path "$SOURCE")")
+    [ -z "$LINE" ] ||
+        CALLER[${#CALLER[@]} - 1]+=$LK_DIM:$LINE$LK_RESET
+    lk_implode "$LK_DIM->$LK_RESET" CALLER
+}
+
+# lk_warn [MESSAGE]
+#
+# Print "<CALLER>: MESSAGE" as a warning and return the most recent exit status.
+function lk_warn() {
+    local STATUS=$?
+    lk_console_warning "$(LK_VERBOSE= _lk_caller): ${1-execution failed}"
+    return "$STATUS"
+}
+
+# _lk_colourize [-b] VAR [COLOUR COLOUR_VAR]
+function _lk_colourize() {
+    local _BOLD _STRING _COLOUR_VAR_SET _COLOUR
+    unset _BOLD
+    [ "${1-}" != -b ] || { _BOLD=1 && shift; }
+    [ $# -gt 0 ] &&
+        _STRING=${!1-} &&
+        _COLOUR_VAR_SET=${3:+${!3+1}} || return
+    if [ -n "$_COLOUR_VAR_SET" ]; then
+        _COLOUR=${!3}
+    else
+        _COLOUR=${2-}
+        [ -z "${_BOLD:+$LK_BOLD}" ] ||
+            [[ $_COLOUR$_STRING == *$LK_BOLD* ]] ||
+            _COLOUR+=$LK_BOLD
+    fi
+    [ -z "${_STRING:+${_COLOUR:+$LK_RESET}}" ] || {
+        _STRING=$_COLOUR${_STRING//"$LK_RESET"/$LK_RESET$_COLOUR}$LK_RESET
+        eval "$1=\$_STRING"
+    }
+}
+
+# lk_tty_print [MESSAGE [MESSAGE2 [COLOUR]]]
+#
+# Write each message to the file descriptor set in _LK_FD or to the standard
+# error output. Print a prefix in bold with colour, then MESSAGE in bold unless
+# it already contains bold formatting, then MESSAGE2 in colour. If COLOUR is
+# specified, override the default prefix and MESSAGE2 colour.
+#
+# Output can be customised by setting the following variables:
+# - _LK_TTY_PREFIX: message prefix (default: "==> ")
+# - _LK_TTY_ONE_LINE: if enabled and MESSAGE has no newlines, the first line of
+#   MESSAGE2 will be printed on the same line as MESSAGE, and any subsequent
+#   lines will be aligned with the first (values: 0 or 1; default: 0)
+# - _LK_TTY_INDENT: MESSAGE2 indent (default: based on prefix length and message
+#   line counts)
+# - _LK_TTY_COLOUR: default colour for prefix and MESSAGE2 (default: $LK_CYAN)
+# - _LK_TTY_PREFIX_COLOUR: override prefix colour
+# - _LK_TTY_MESSAGE_COLOUR: override MESSAGE colour
+# - _LK_TTY_COLOUR2: override MESSAGE2 colour
+function lk_tty_print() {
+    [ $# -gt 0 ] || {
+        echo >&"${_LK_FD-2}"
+        return
+    }
+    local MESSAGE=${1-} MESSAGE2=${2-} COLOUR=${3-$_LK_TTY_COLOUR} IFS SPACES \
+        PREFIX=${_LK_TTY_PREFIX-==> } NEWLINE=0 NEWLINE2=0 SEP=$'\n' INDENT=0
+    unset IFS
+    [[ $MESSAGE != *$'\n'* ]] || {
+        SPACES=$'\n'$(printf "%${#PREFIX}s")
+        MESSAGE=${MESSAGE//$'\n'/$SPACES}
+        NEWLINE=1
+        # _LK_TTY_ONE_LINE only makes sense when MESSAGE prints on one line
+        local _LK_TTY_ONE_LINE=0
+    }
+    [ -z "${MESSAGE2:+1}" ] || {
+        [[ $MESSAGE2 != *$'\n'* ]] || NEWLINE2=1
+        MESSAGE2=${MESSAGE2#$'\n'}
+        case "${_LK_TTY_ONE_LINE-0}$NEWLINE$NEWLINE2" in
+        *00 | 1??)
+            # If MESSAGE and MESSAGE2 are one-liners or _LK_TTY_ONE_LINE is set,
+            # print both messages on the same line with a space between them
+            SEP=" "
+            ! ((NEWLINE2)) || INDENT=$(lk_tty_length "$MESSAGE.")
+            ;;
+        *01)
+            # If MESSAGE2 spans multiple lines, align it to the left of MESSAGE
+            INDENT=$((${#PREFIX} - 2))
+            ;;
+        *)
+            # Align MESSAGE2 to the right of MESSAGE if both span multiple
+            # lines or MESSAGE2 is a one-liner
+            INDENT=$((${#PREFIX} + 2))
+            ;;
+        esac
+        INDENT=${_LK_TTY_INDENT:-$INDENT}
+        SPACES=$'\n'$(printf "%$((INDENT > 0 ? INDENT : 0))s")
+        MESSAGE2=$SEP$MESSAGE2
+        MESSAGE2=${MESSAGE2//$'\n'/$SPACES}
+    }
+    _lk_colourize -b PREFIX "$COLOUR" _LK_TTY_PREFIX_COLOUR
+    _lk_colourize -b MESSAGE "" _LK_TTY_MESSAGE_COLOUR
+    [ -z "${MESSAGE2:+1}" ] ||
+        _lk_colourize MESSAGE2 "$COLOUR" _LK_TTY_COLOUR2
+    echo "$PREFIX$MESSAGE$MESSAGE2" >&"${_LK_FD-2}"
+}
+
+# lk_tty_detail MESSAGE [MESSAGE2 [COLOUR]]
+function lk_tty_detail() {
+    _LK_TTY_PREFIX=${_LK_TTY_PREFIX-   -> } \
+        _LK_TTY_COLOUR=$LK_YELLOW \
+        _LK_TTY_MESSAGE_COLOUR=${_LK_TTY_MESSAGE_COLOUR-} \
+        lk_tty_print "$@"
+}
+
+# - lk_tty_list [- [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
+# - lk_tty_list [ARRAY [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
+function lk_tty_list() {
+    local _ARRAY=${1:--} _MESSAGE=${2-List:} _SINGLE _PLURAL _COLOUR \
+        _PREFIX=${_LK_TTY_PREFIX-==> } _ITEMS _INDENT _LIST
+    [ $# -ge 2 ] || {
+        _SINGLE=item
+        _PLURAL=items
+    }
+    _COLOUR=${3-$_LK_TTY_COLOUR}
+    [ $# -le 3 ] || {
+        _SINGLE=${3-}
+        _PLURAL=${4-}
+        _COLOUR=${5-$_LK_TTY_COLOUR}
+    }
+    if [ "$_ARRAY" = - ]; then
+        [ ! -t 0 ] && lk_mapfile _ITEMS ||
+            lk_warn "no input" || return
+    else
+        _ARRAY="${_ARRAY}[@]"
+        _ITEMS=(${!_ARRAY+"${!_ARRAY}"}) || return
+    fi
+    if [[ $_MESSAGE != *$'\n'* ]]; then
+        _INDENT=$((${#_PREFIX} - 2))
+    else
+        _INDENT=$((${#_PREFIX} + 2))
+    fi
+    _INDENT=${_LK_TTY_INDENT:-$_INDENT}
+    _LIST=$([ -z "${_ITEMS+1}" ] ||
+        printf '%s\n' "${_ITEMS[@]}" |
+        COLUMNS=$(($(lk_tty_columns) - _INDENT)) column |
+            expand) || return
+    echo "$(
+        _LK_FD=1
+        _LK_TTY_PREFIX=$_PREFIX \
+            lk_tty_print "$_MESSAGE" $'\n'"$_LIST" "$_COLOUR"
+        [ -z "${_SINGLE:+${_PLURAL:+1}}" ] ||
+            _LK_TTY_PREFIX=$(printf "%$((_INDENT > 0 ? _INDENT : 0))s") \
+                lk_tty_detail "(${#_ITEMS[@]} $(lk_maybe_plural \
+                    ${#_ITEMS[@]} "$_SINGLE" "$_PLURAL"))"
+    )" >&"${_LK_FD-2}"
 }
 
 # Define wrapper functions (e.g. `gnu_find`) to invoke the GNU version of
@@ -291,144 +468,6 @@ function lk_get_regex() {
     return "$STATUS"
 }
 
-# _lk_colourize [-b] VAR [COLOUR COLOUR_VAR]
-function _lk_colourize() {
-    local _BOLD _STRING _COLOUR_VAR_SET _COLOUR
-    unset _BOLD
-    [ "${1-}" != -b ] || { _BOLD=1 && shift; }
-    [ $# -gt 0 ] &&
-        _STRING=${!1-} &&
-        _COLOUR_VAR_SET=${3:+${!3+1}} || return
-    if [ -n "$_COLOUR_VAR_SET" ]; then
-        _COLOUR=${!3}
-    else
-        _COLOUR=${2-}
-        [ -z "${_BOLD:+$LK_BOLD}" ] ||
-            [[ $_COLOUR$_STRING == *$LK_BOLD* ]] ||
-            _COLOUR+=$LK_BOLD
-    fi
-    [ -z "${_STRING:+${_COLOUR:+$LK_RESET}}" ] || {
-        _STRING=$_COLOUR${_STRING//"$LK_RESET"/$LK_RESET$_COLOUR}$LK_RESET
-        eval "$1=\$_STRING"
-    }
-}
-
-# lk_tty_print [MESSAGE [MESSAGE2 [COLOUR]]]
-#
-# Write each message to the file descriptor set in _LK_FD or to the standard
-# error output. Print a prefix in bold with colour, then MESSAGE in bold unless
-# it already contains bold formatting, then MESSAGE2 in colour. If COLOUR is
-# specified, override the default prefix and MESSAGE2 colour.
-#
-# Output can be customised by setting the following variables:
-# - _LK_TTY_PREFIX: message prefix (default: "==> ")
-# - _LK_TTY_ONE_LINE: if enabled and MESSAGE has no newlines, the first line of
-#   MESSAGE2 will be printed on the same line as MESSAGE, and any subsequent
-#   lines will be aligned with the first (values: 0 or 1; default: 0)
-# - _LK_TTY_INDENT: MESSAGE2 indent (default: based on prefix length and message
-#   line counts)
-# - _LK_TTY_COLOUR: default colour for prefix and MESSAGE2 (default: $LK_CYAN)
-# - _LK_TTY_PREFIX_COLOUR: override prefix colour
-# - _LK_TTY_MESSAGE_COLOUR: override MESSAGE colour
-# - _LK_TTY_COLOUR2: override MESSAGE2 colour
-function lk_tty_print() {
-    [ $# -gt 0 ] || {
-        echo >&"${_LK_FD-2}"
-        return
-    }
-    local MESSAGE=${1-} MESSAGE2=${2-} COLOUR=${3-$_LK_TTY_COLOUR} IFS SPACES \
-        PREFIX=${_LK_TTY_PREFIX-==> } NEWLINE=0 NEWLINE2=0 SEP=$'\n' INDENT=0
-    unset IFS
-    [[ $MESSAGE != *$'\n'* ]] || {
-        SPACES=$'\n'$(printf "%${#PREFIX}s")
-        MESSAGE=${MESSAGE//$'\n'/$SPACES}
-        NEWLINE=1
-        # _LK_TTY_ONE_LINE only makes sense when MESSAGE prints on one line
-        local _LK_TTY_ONE_LINE=0
-    }
-    [ -z "${MESSAGE2:+1}" ] || {
-        [[ $MESSAGE2 != *$'\n'* ]] || NEWLINE2=1
-        MESSAGE2=${MESSAGE2#$'\n'}
-        case "${_LK_TTY_ONE_LINE-0}$NEWLINE$NEWLINE2" in
-        *00 | 1??)
-            # If MESSAGE and MESSAGE2 are one-liners or _LK_TTY_ONE_LINE is set,
-            # print both messages on the same line with a space between them
-            SEP=" "
-            ! ((NEWLINE2)) || INDENT=$(lk_tty_length "$MESSAGE.")
-            ;;
-        *01)
-            # If MESSAGE2 spans multiple lines, align it to the left of MESSAGE
-            INDENT=$((${#PREFIX} - 2))
-            ;;
-        *)
-            # Align MESSAGE2 to the right of MESSAGE if both span multiple
-            # lines or MESSAGE2 is a one-liner
-            INDENT=$((${#PREFIX} + 2))
-            ;;
-        esac
-        INDENT=${_LK_TTY_INDENT:-$INDENT}
-        SPACES=$'\n'$(printf "%$((INDENT > 0 ? INDENT : 0))s")
-        MESSAGE2=$SEP$MESSAGE2
-        MESSAGE2=${MESSAGE2//$'\n'/$SPACES}
-    }
-    _lk_colourize -b PREFIX "$COLOUR" _LK_TTY_PREFIX_COLOUR
-    _lk_colourize -b MESSAGE "" _LK_TTY_MESSAGE_COLOUR
-    [ -z "${MESSAGE2:+1}" ] ||
-        _lk_colourize MESSAGE2 "$COLOUR" _LK_TTY_COLOUR2
-    echo "$PREFIX$MESSAGE$MESSAGE2" >&"${_LK_FD-2}"
-}
-
-# lk_tty_detail MESSAGE [MESSAGE2 [COLOUR]]
-function lk_tty_detail() {
-    _LK_TTY_PREFIX=${_LK_TTY_PREFIX-   -> } \
-        _LK_TTY_COLOUR=$LK_YELLOW \
-        _LK_TTY_MESSAGE_COLOUR=${_LK_TTY_MESSAGE_COLOUR-} \
-        lk_tty_print "$@"
-}
-
-# - lk_tty_list [- [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
-# - lk_tty_list [ARRAY [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
-function lk_tty_list() {
-    local _ARRAY=${1:--} _MESSAGE=${2-List:} _SINGLE _PLURAL _COLOUR \
-        _PREFIX=${_LK_TTY_PREFIX-==> } _ITEMS _INDENT _LIST
-    [ $# -ge 2 ] || {
-        _SINGLE=item
-        _PLURAL=items
-    }
-    _COLOUR=${3-$_LK_TTY_COLOUR}
-    [ $# -le 3 ] || {
-        _SINGLE=${3-}
-        _PLURAL=${4-}
-        _COLOUR=${5-$_LK_TTY_COLOUR}
-    }
-    if [ "$_ARRAY" = - ]; then
-        [ ! -t 0 ] && lk_mapfile _ITEMS ||
-            lk_warn "no input" || return
-    else
-        _ARRAY="${_ARRAY}[@]"
-        _ITEMS=(${!_ARRAY+"${!_ARRAY}"}) || return
-    fi
-    if [[ $_MESSAGE != *$'\n'* ]]; then
-        _INDENT=$((${#_PREFIX} - 2))
-    else
-        _INDENT=$((${#_PREFIX} + 2))
-    fi
-    _INDENT=${_LK_TTY_INDENT:-$_INDENT}
-    _LIST=$([ -z "${_ITEMS+1}" ] ||
-        printf '%s\n' "${_ITEMS[@]}" |
-        COLUMNS=$(($(lk_tty_columns) - _INDENT)) column |
-            expand) || return
-    echo "$(
-        _LK_FD=1
-        _LK_TTY_PREFIX=$_PREFIX \
-            lk_tty_print "$_MESSAGE" $'\n'"$_LIST" "$_COLOUR"
-        [ -z "${_SINGLE:+${_PLURAL:+1}}" ] ||
-            _LK_TTY_PREFIX=$(printf "%$((_INDENT > 0 ? _INDENT : 0))s") \
-                lk_tty_detail "(${#_ITEMS[@]} $(lk_maybe_plural \
-                    ${#_ITEMS[@]} "$_SINGLE" "$_PLURAL"))"
-    )" >&"${_LK_FD-2}"
-}
-
 # lk_fd_is_open FD
 function lk_fd_is_open() {
     [ -n "${1-}" ] && { : >&"$1"; } 2>/dev/null
@@ -494,10 +533,6 @@ function lk_provide() {
         _LK_INCLUDES=$_LK_INCLUDES,$1
 }
 
-function lk_is_script_running() {
-    [ "${BASH_SOURCE[*]+${BASH_SOURCE[*]: -1:1}}" = "$0" ]
-}
-
 # lk_myself [-f] [STACK_DEPTH]
 #
 # If running from a source file and -f is not set, output the basename of the
@@ -510,23 +545,13 @@ function lk_is_script_running() {
 function lk_myself() {
     local STATUS=$? FUNC
     [ "${1-}" != -f ] || { FUNC=1 && shift; }
-    if [ ${FUNC:-0} -eq 0 ] && lk_is_script_running; then
+    if [ ${FUNC:-0} -eq 0 ] && lk_script_is_running; then
         echo "${0##*/}"
     else
         echo "${FUNCNAME[$((1 + ${1:-0} + ${_LK_STACK_DEPTH:-0}))]:-${0##*/}}"
     fi
     return "$STATUS"
 } #### Reviewed: 2021-04-10
-
-# lk_warn [MESSAGE]
-#
-# Output "<context>: MESSAGE" as a warning and return the most recent command's
-# exit status.
-function lk_warn() {
-    local EXIT_STATUS=$?
-    lk_console_warning "$(_lk_caller): ${1:-execution failed}"
-    return "$EXIT_STATUS"
-}
 
 function _lk_usage_format() {
     local CMD BOLD RESET
@@ -543,7 +568,7 @@ function lk_usage() {
     local EXIT_STATUS=$? MESSAGE=${1:-${LK_USAGE-}}
     [ -z "$MESSAGE" ] || MESSAGE=$(_lk_usage_format "$MESSAGE")
     _LK_TTY_NO_FOLD=1 \
-        lk_console_log "${MESSAGE:-$(_lk_caller): invalid arguments}"
+        lk_console_log "${MESSAGE:-$(LK_VERBOSE= _lk_caller): invalid arguments}"
     if [[ $- != *i* ]]; then
         exit "$EXIT_STATUS"
     else
@@ -1558,7 +1583,7 @@ function _lk_log_close_fd() {
 function lk_log_start() {
     local ARG0 ARGC HEADER EXT _FILE FILE LOG_FILE OUT_FILE FIFO
     if lk_is_true LK_NO_LOG || lk_log_is_open ||
-        { [[ $- == *i* ]] && ! lk_is_script_running; }; then
+        { [[ $- == *i* ]] && ! lk_script_is_running; }; then
         return
     elif [ -z "${_LK_LOG_CMDLINE+1}" ]; then
         local _LK_LOG_CMDLINE=("$0" ${_LK_ARGV+"${_LK_ARGV[@]}"})
@@ -2329,14 +2354,6 @@ function lk_no_input() {
     fi
 } #### Reviewed: 2021-06-13
 
-# lk_verbose [LEVEL]
-#
-# Return true if the verbosity level set in LK_VERBOSE (default: 0) is greater
-# than or equal to LEVEL (default: 1).
-function lk_verbose() {
-    [ "${LK_VERBOSE:-0}" -ge "${1-1}" ]
-} #### Reviewed: 2021-06-13
-
 # lk_clip
 #
 # Copy input to the user's clipboard if possible, otherwise print it out.
@@ -2348,7 +2365,7 @@ function lk_clip() {
         "xclip -selection clipboard" \
         pbcopy) &&
         echo -n "$OUTPUT" | $COMMAND &>/dev/null; then
-        LINES=$(wc -l <<<"$OUTPUT")
+        LINES=$(wc -l | tr -d ' ' <<<"$OUTPUT")
         [ "$LINES" -le "$DISPLAY_LINES" ] || {
             OUTPUT=$(head -n$((DISPLAY_LINES - 1)) <<<"$OUTPUT" &&
                 echo "$LK_BOLD$LK_MAGENTA...$LK_RESET")

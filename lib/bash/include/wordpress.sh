@@ -578,7 +578,7 @@ function lk_wp_set_permissions() {
         lk_console_item "Setting file ownership in" "$SITE_ROOT"
         lk_console_detail "Owner:" "$OWNER"
         CHANGES=$(lk_maybe_sudo gnu_chown -Rhc "$OWNER" "$SITE_ROOT" |
-            tee -a "$LOG_FILE" | wc -l) || return
+            tee -a "$LOG_FILE" | wc -l | tr -d ' ') || return
         lk_console_detail "Changes:" "$CHANGES"
         ! ((CHANGES)) &&
             lk_delete_on_exit "$LOG_FILE" ||
