@@ -1015,6 +1015,45 @@ function lk_certbot_list_certificates() {
         awk -f "$LK_BASE/lib/awk/certbot-parse-certificates.awk"
 } #### Reviewed: 2021-04-22
 
+# lk_cpanel_add_credentials SERVER USER
+function lk_cpanel_add_credentials() {
+    [ $# -eq 2 ] || lk_usage "Usage: $FUNCNAME SERVER USER" || return
+    lk_console_warning "${LK_BOLD}WARNING:$LK_RESET \
+credentials will be stored ${LK_BOLD}WITHOUT ENCRYPTION$LK_RESET in ~/.netrc"
+    local PASSWORD FILE=~/.netrc
+    lk_tty_read_password "$2@$1/cpanel" PASSWORD || return
+    [[ ! $PASSWORD =~ [^\x21-\x7e] ]] ||
+        lk_warn "spaces and non-printing characters are not allowed" || return
+    lk_install -m 00600 "$FILE" &&
+        { printf 'machine %s login %s password %s\n' "$1" "$2" "$PASSWORD" &&
+        cat "$FILE"; } | lk_file_replace "$FILE" || return
+    lk_console_success "cPanel credentials added for:" "$2@$1"
+}
+
+# lk_cpanel_set_server SERVER USER
+function lk_cpanel_set_server() {
+    [ $# -eq 2 ] || lk_usage "Usage: $FUNCNAME SERVER USER" || return
+    _LK_CPANEL_SERVER=$1
+    _LK_CPANEL_USER=$2
+}
+
+# lk_cpanel_get MODULE FUNC APIVERSION [PARAMETER=VALUE...]
+function lk_cpanel_get() {
+    [ $# -ge 3 ] || lk_usage "\
+Usage: $FUNCNAME MODULE FUNC APIVERSION [DATA]" || return
+    [ "${_LK_CPANEL_SERVER:+1}${_LK_CPANEL_USER:+1}" = 11 ] ||
+        lk_warn "lk_cpanel_set_server must be called before $FUNCNAME" || return
+    # TODO: support `ssh SERVER uapi --output=json $1 $2 [PARAMETER=VALUE...]`
+    local DATA
+    [ $# -lt 4 ] || DATA=$(lk_uri_encode "${@:4}") || return
+    curl -fsSL --insecure --netrc "\
+https://$_LK_CPANEL_SERVER:2083/json-api/cpanel?api.version=1&\
+cpanel_jsonapi_user=$_LK_CPANEL_USER&\
+cpanel_jsonapi_module=$1&\
+cpanel_jsonapi_func=$2&\
+cpanel_jsonapi_apiversion=$3${4+&$DATA}"
+}
+
 # lk_cpanel_get_ssl_cert SSH_HOST DOMAIN [TARGET_DIR]
 function lk_cpanel_get_ssl_cert() {
     local TARGET_DIR=${3:-~/ssl} SSL_JSON CERT KEY \
