@@ -1,14 +1,14 @@
 #!/bin/bash
 
-# _lk_colourize [-b] VAR [COLOUR COLOUR_VAR]
-function _lk_colourize() {
-    local _BOLD _STRING _COLOUR_VAR_SET _COLOUR
+# _lk_tty_format [-b] VAR [COLOUR COLOUR_VAR]
+function _lk_tty_format() {
+    local _BOLD _STRING _COLOUR_SET _COLOUR _B=${_LK_TTY_B-} _E=${_LK_TTY_E-}
     unset _BOLD
     [ "${1-}" != -b ] || { _BOLD=1 && shift; }
     [ $# -gt 0 ] &&
         _STRING=${!1-} &&
-        _COLOUR_VAR_SET=${3:+${!3+1}} || return
-    if [ -n "$_COLOUR_VAR_SET" ]; then
+        _COLOUR_SET=${3:+${!3+1}} || return
+    if [ -n "$_COLOUR_SET" ]; then
         _COLOUR=${!3}
     else
         _COLOUR=${2-}
@@ -17,9 +17,15 @@ function _lk_colourize() {
             _COLOUR+=$LK_BOLD
     fi
     [ -z "${_STRING:+${_COLOUR:+$LK_RESET}}" ] || {
-        _STRING=$_COLOUR${_STRING//"$LK_RESET"/$LK_RESET$_COLOUR}$LK_RESET
+        _STRING=$_B$_COLOUR$_E${_STRING//"$LK_RESET"/$_B$LK_RESET$_COLOUR$_E}$_B$LK_RESET$_E
         eval "$1=\$_STRING"
     }
+}
+
+# _lk_tty_format_readline [-b] VAR [COLOUR COLOUR_VAR]
+function _lk_tty_format_readline() {
+    _LK_TTY_B=$'\x01' _LK_TTY_E=$'\x02' \
+        _lk_tty_format "$@"
 }
 
 # lk_tty_print [MESSAGE [MESSAGE2 [COLOUR]]]
@@ -80,10 +86,10 @@ function lk_tty_print() {
         MESSAGE2=$SEP$MESSAGE2
         MESSAGE2=${MESSAGE2//$'\n'/$SPACES}
     }
-    _lk_colourize -b PREFIX "$COLOUR" _LK_TTY_PREFIX_COLOUR
-    _lk_colourize -b MESSAGE "" _LK_TTY_MESSAGE_COLOUR
+    _lk_tty_format -b PREFIX "$COLOUR" _LK_TTY_PREFIX_COLOUR
+    _lk_tty_format -b MESSAGE "" _LK_TTY_MESSAGE_COLOUR
     [ -z "${MESSAGE2:+1}" ] ||
-        _lk_colourize MESSAGE2 "$COLOUR" _LK_TTY_COLOUR2
+        _lk_tty_format MESSAGE2 "$COLOUR" _LK_TTY_COLOUR2
     echo "$PREFIX$MESSAGE$MESSAGE2" >&"${_LK_FD-2}"
 }
 

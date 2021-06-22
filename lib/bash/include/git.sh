@@ -642,6 +642,7 @@ directory of a working tree" || return
         for REPO in "${REPOS[@]}"; do
             _REPO=$(lk_pretty_path "$REPO")
             (
+                _LK_CAN_FAIL=1
                 exec 2>&"$FD" &&
                     cd "$REPO" &&
                     _lk_git_do_with_repo >&"$FD" ||
@@ -658,7 +659,11 @@ directory of a working tree" || return
             lk_console_log "Processing $NOUN"
         for REPO in "${REPOS[@]}"; do
             _REPO=$(lk_pretty_path "$REPO")
-            (cd "$REPO" && _lk_git_do_with_repo) ||
+            (
+                _LK_CAN_FAIL=1
+                cd "$REPO" &&
+                    _lk_git_do_with_repo
+            ) ||
                 ERR_REPOS[ERR_COUNT++]=$_REPO
         done
     fi
