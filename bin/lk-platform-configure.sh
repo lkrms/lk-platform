@@ -359,18 +359,12 @@ lk_log_start
             lk_die "no branch checked out"
         LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-$BRANCH}
         if [ "$LK_PLATFORM_BRANCH" != "$BRANCH" ]; then
-            lk_console_warning "$(printf \
+            lk_console_error "$(printf \
                 "%s is set to %s, but %s is checked out" \
                 "LK_PLATFORM_BRANCH" \
                 "$LK_BOLD$LK_PLATFORM_BRANCH$LK_RESET" \
                 "$LK_BOLD$BRANCH$LK_RESET")"
-            if lk_confirm "Switch to $LK_PLATFORM_BRANCH?" Y; then
-                lk_console_detail "Switching to" "$LK_PLATFORM_BRANCH"
-                update_repo "$LK_PLATFORM_BRANCH"
-                restart_script "$@"
-            else
-                LK_PLATFORM_BRANCH=$BRANCH
-            fi
+            LK_PLATFORM_BRANCH=$BRANCH
         fi
         FETCH_TIME=$(lk_file_modified ".git/FETCH_HEAD" 2>/dev/null) ||
             FETCH_TIME=0
