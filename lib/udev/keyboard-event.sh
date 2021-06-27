@@ -81,10 +81,10 @@ env ${UNSET+"${UNSET[@]/#/--unset=}"} runuser -u "$_USER" -- bash -c "$(
             lk_quote_args DISPLAY=$_DISPLAY XAUTHORITY=~/.Xauthority \
                 postswitch \
                 "$2"
-        ) &>>/tmp/$1-$UID.out")
+        ) &>>/tmp/$1-postswitch-\$EUID.out")
     }
     declare -f run lk_quote_args
     lk_quote_args run \
         "${0##*/}" \
         "$LK_BASE/lib/autorandr/postswitch"
-) &>>/tmp/${0##*/}-$UID.out"
+) &>>/tmp/${0##*/}-run-\$EUID.out"
