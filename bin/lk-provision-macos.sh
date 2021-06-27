@@ -843,8 +843,6 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
         }
     fi
 
-    lk_console_success "Provisioning complete"
-
     if [ "$STATUS" -eq 0 ]; then
         lk_console_success "Provisioning complete"
     else

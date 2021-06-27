@@ -226,6 +226,7 @@ HOMEBREW_KEEP_FORMULAE+=(
 HOMEBREW_KEEP_CASKS+=(
     key-codes
     lingon-x
+    microsoft-azure-storage-explorer
     shortcutdetective
 
     #
