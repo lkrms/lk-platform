@@ -110,6 +110,7 @@ HOMEBREW_KEEP_CASKS+=(
     lingon-x
     logitech-g-hub
     logitech-gaming-software
+    teamviewer
 )
 
 LOGIN_ITEMS+=(

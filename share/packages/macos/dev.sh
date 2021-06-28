@@ -228,6 +228,7 @@ HOMEBREW_KEEP_CASKS+=(
     lingon-x
     microsoft-azure-storage-explorer
     shortcutdetective
+    teamviewer
 
     #
     makemkv

@@ -6,6 +6,7 @@ AUR_PACKAGES=()
 PAC_REJECT=()
 
 PAC_KEEP=(
+    teamviewer
     zoom
 )
 
