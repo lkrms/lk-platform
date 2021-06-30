@@ -82,7 +82,7 @@ function service_apply() {
     SERVICE_ENABLE=()
     SERVICE_RESTART=()
     SERVICE_STARTED=()
-    [ "${#ERRORS[@]}" -eq "$_ERRORS" ]
+    [ ${#ERRORS[@]} -eq "$_ERRORS" ]
 }
 
 function file_delete() {
@@ -97,7 +97,7 @@ function file_delete() {
 
 function link_rename() {
     . "$LK_BASE/lib/bash/include/core.sh"
-    lk_run_detail udevadm control -R
+    lk_run_detail udevadm control --reload
     while [ $# -ge 2 ]; do
         lk_run_detail ip link set "$1" down &&
             lk_run_detail ip link set "$1" name "$2" &&

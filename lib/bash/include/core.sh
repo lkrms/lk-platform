@@ -2294,10 +2294,10 @@ function lk_diff() { (
     _LK_CAN_FAIL=1
     [ $# -eq 2 ] || lk_usage "Usage: $FUNCNAME FILE1 FILE2" || exit
     for i in 1 2; do
-        if [ -p "${!i}" ] || [ -n "${LK_DIFF_IGNORE:+1}" ]; then
+        if [ -p "${!i}" ] || [ -n "${_LK_DIFF_IGNORE:+1}" ]; then
             FILE=$(lk_mktemp_file) && lk_delete_on_exit "$FILE" &&
                 lk_maybe_sudo sed -E \
-                    "${LK_DIFF_IGNORE:+"/${LK_DIFF_IGNORE//\//\\\/}/d"}" \
+                    "${_LK_DIFF_IGNORE:+"/${_LK_DIFF_IGNORE//\//\\\/}/d"}" \
                     "${!i}" >"$FILE" || exit
             set -- "${@:1:i-1}" "$FILE" "${@:i+1}"
         fi
@@ -2420,7 +2420,7 @@ function lk_clip() {
         "xclip -selection clipboard" \
         pbcopy) &&
         echo -n "$OUTPUT" | $COMMAND &>/dev/null; then
-        LINES=$(wc -l | tr -d ' ' <<<"$OUTPUT")
+        LINES=$(wc -l <<<"$OUTPUT" | tr -d ' ')
         [ "$LINES" -le "$DISPLAY_LINES" ] || {
             OUTPUT=$(head -n$((DISPLAY_LINES - 1)) <<<"$OUTPUT" &&
                 echo "$LK_BOLD$LK_MAGENTA...$LK_RESET")

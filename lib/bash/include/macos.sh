@@ -42,15 +42,14 @@ fi
 
 function lk_macos_version() {
     local VERSION
-    VERSION=$(sw_vers -productVersion) || return
-    [[ ! $VERSION =~ ^([0-9]+\.[0-9]+)(\.[0-9]+)?$ ]] ||
-        VERSION=${BASH_REMATCH[1]}
-    echo "$VERSION"
-}
+    VERSION=$(sw_vers -productVersion) &&
+        [[ $VERSION =~ ^([0-9]+\.[0-9]+)(\.[0-9]+)?$ ]] || return
+    echo "${BASH_REMATCH[1]}"
+} #### Reviewed: 2021-06-28
 
 function lk_macos_version_name() {
     local VERSION
-    VERSION=${1:-$(lk_macos_version)} || return
+    VERSION=${1-$(lk_macos_version)} || return
     case "$VERSION" in
     11.*)
         echo "big_sur"
@@ -78,76 +77,78 @@ function lk_macos_version_name() {
         return 1
         ;;
     esac
-}
+} #### Reviewed: 2021-06-28
 
 function lk_macos_set_hostname() {
-    sudo scutil --set ComputerName "$1" &&
-        sudo scutil --set HostName "$1" &&
-        sudo scutil --set LocalHostName "$1" &&
-        sudo defaults write \
+    lk_elevate scutil --set ComputerName "$1" &&
+        lk_elevate scutil --set HostName "$1" &&
+        lk_elevate scutil --set LocalHostName "$1" &&
+        lk_elevate defaults write \
             /Library/Preferences/SystemConfiguration/com.apple.smb.server \
             NetBIOSName "$1"
-}
+} #### Reviewed: 2021-06-28
 
 function lk_macos_command_line_tools_path() {
-    xcode-select --print-path 2>/dev/null
-}
+    xcode-select --print-path
+} #### Reviewed: 2021-06-28
 
 function lk_macos_command_line_tools_installed() {
-    lk_macos_command_line_tools_path >/dev/null
-}
+    lk_macos_command_line_tools_path &>/dev/null
+} #### Reviewed: 2021-06-28
 
-# lk_macos_list_available_updates
+# lk_macos_update_list_available
 #
 # Output tab-separated fields LABEL, TITLE, VERSION, SIZE, RECOMMENDED, and
 # ACTION for each available update reported by `softwareupdate --list`.
-function lk_macos_list_available_updates() {
-    softwareupdate --list | awk -v "S=$S" '
+function lk_macos_update_list_available() {
+    softwareupdate --list | awk -v "S=$S" -v OFS=$'\t' '
 $1 ~ /^[*-]$/ {
   recommended = ($1 == "*" ? "Y" : "N")
-  if (sub("^" S "*[*-]" S "+Label:" S "+", "")) label = $0
-  else label = ""
+  if (sub("^" S "*[*-]" S "+Label:" S "+", "")) {
+    label = $0
+  } else {
+    label = ""
+  }
   next
 }
 label {
-  title = version = size = action = ""
+  for (i in u) {
+    delete u[i]
+  }
   sub("^" S "+", "")
   split($0, a, "," S "+")
-  for (i in a) if (match(a[i], ":" S "+")) {
-    f = substr(a[i], 1, RSTART - 1)
-    v = substr(a[i], RSTART + RLENGTH)
-    if (f == "Title") title = v
-    else if (f == "Version") version = v
-    else if (f == "Size") size = v
-    else if (f == "Action") action = v
+  for (i in a) {
+    if (match(a[i], ":" S "+")) {
+      f = substr(a[i], 1, RSTART - 1)
+      v = substr(a[i], RSTART + RLENGTH)
+      u[f] = v
+    }
   }
-  if (title && version && size)
-    printf("%s\t%s\t%s\t%s\t%s\t%s\n",
-      label, title, version, size, recommended, action)
-}
-{ label = "" }'
-}
+  if (u["Title"] && u["Version"] && u["Size"]) {
+    print label, u["Title"], u["Version"], u["Size"], recommended, u["Action"]
+  }
+  label = ""
+}'
+} #### Reviewed: 2021-06-28
 
 function lk_macos_install_command_line_tools() {
-    local ITEM_NAME \
-        TRIGGER=/tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress
+    local FILE LABEL
     ! lk_macos_command_line_tools_installed || return 0
     lk_console_message "Installing command line tools"
     lk_console_detail "Searching for the latest Command Line Tools for Xcode"
-    touch "$TRIGGER" &&
-        ITEM_NAME=$(caffeinate -i softwareupdate --list |
-            grep -E "^$S*\*.*Command Line Tools" |
-            grep -Eiv "\W(beta|seed)\W" |
-            sed -E "s/^$S*\*$S*(Label:$S*)?//" |
-            sort --version-sort |
-            tail -n1) ||
+    FILE=/tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress
+    touch "$FILE" && LABEL=$(lk_macos_update_list_available |
+        awk -F$'\t' -v 'W=([^[:alnum:]_]|^|$)' '
+$5 == "Y" && $1 ~ "^Command Line Tools"W && $1 !~ W"(beta|seed)"W {print $1}' |
+        sort --version-sort | tail -n1) &&
+        [ -n "${LABEL:+1}" ] ||
         lk_warn "unable to determine item name for Command Line Tools" ||
         return
     lk_run_detail lk_elevate caffeinate -i \
-        softwareupdate --install "$ITEM_NAME" >/dev/null || return
+        softwareupdate --install "$LABEL" >/dev/null || return
     lk_macos_command_line_tools_installed || return
-    rm -f "$TRIGGER" || true
-}
+    rm -f "$FILE" || true
+} #### Reviewed: 2021-06-28
 
 function lk_macos_install_rosetta2() {
     [ ! -f /Library/Apple/System/Library/LaunchDaemons/com.apple.oahd.plist ] ||
@@ -155,7 +156,7 @@ function lk_macos_install_rosetta2() {
     lk_console_message "Installing Rosetta 2"
     lk_run_detail lk_elevate caffeinate -i \
         softwareupdate --install-rosetta --agree-to-license
-}
+} #### Reviewed: 2021-06-28
 
 function lk_macos_xcode_maybe_accept_license() {
     if [ -e /Applications/Xcode.app ] &&
@@ -163,7 +164,7 @@ function lk_macos_xcode_maybe_accept_license() {
         lk_console_message "Accepting Xcode license"
         lk_run_detail lk_elevate xcodebuild -license accept
     fi
-}
+} #### Reviewed: 2021-06-28
 
 # lk_macos_kb_add_shortcut DOMAIN MENU_TITLE SHORTCUT
 #

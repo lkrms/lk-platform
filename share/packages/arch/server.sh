@@ -51,18 +51,13 @@ lk_is_virtual || {
         opencl-nvidia
         vulkan-tools
     )
-    ! lk_system_has_amd_graphics || {
-        PAC_PACKAGES+=(
-            clinfo
-            libclc
-            opencl-mesa
-            vulkan-radeon
-            vulkan-tools
-        )
-        AUR_PACKAGES+=(
-            rocm-opencl-runtime
-        )
-    }
+    ! lk_system_has_amd_graphics || PAC_PACKAGES+=(
+        clinfo
+        libclc
+        opencl-mesa
+        vulkan-radeon
+        vulkan-tools
+    )
 }
 
 PAC_PACKAGES+=(

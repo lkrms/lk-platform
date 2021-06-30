@@ -215,6 +215,7 @@ AUR_PACKAGES+=(
     spotify
     stretchly-git
     teams
+    teamviewer
     todoist-appimage
     trimage
     ttf-apple-emoji
