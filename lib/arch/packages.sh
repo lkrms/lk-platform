@@ -455,7 +455,7 @@ if [ ${#AUR_PACKAGES[@]} -gt 0 ] ||
         grep -E '^file://'; } &>/dev/null; then
     PAC_BASE_DEVEL=($(lk_pac_groups base-devel))
     PAC_PACKAGES+=("${PAC_BASE_DEVEL[@]}" devtools pacutils vifm)
-    PAC_KEEP+=(aurutils)
+    PAC_KEEP+=(aurutils aurutils-git)
 fi
 
 # Reduce PAC_KEEP to packages not present in PAC_PACKAGES

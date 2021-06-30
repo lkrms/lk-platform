@@ -1,13 +1,17 @@
 # lk-platform
-Provisioning and automation for servers and desktops
 
 ## Configuration
-Settings are loaded in the following order (later values override earlier ones):
+
+Settings are loaded in the following order, with later values overriding earlier
+ones. If `lk-platform.conf` exists, it is expected to contain a series of shell
+variable assignments compatible with Bash and POSIX `sh`.
+
 1. `$LK_BASE/etc/lk-platform/lk-platform.conf`
 2. `~/.config/lk-platform/lk-platform.conf`
 3. Environment variables
 
 ### Settings
+
 - `LK_ACCEPT_OUTPUT_HOSTS`
 - `LK_ADD_TO_PATH`
 - `LK_ADD_TO_PATH_FIRST`
@@ -31,8 +35,10 @@ Settings are loaded in the following order (later values override earlier ones):
 - `LK_CERTBOT_OPTIONS`
 - `LK_CERTBOT_PLUGIN`
 - `LK_CLIP_LINES`
+- `LK_CLOUDIMG_SESSION_ROOT`
 - `LK_COMPLETION`
 - `LK_CURL_OPTIONS`
+- `LK_DEBUG`
 - `LK_DEFAULTS_DIR`
 - `LK_DIG_OPTIONS`
 - `LK_DIG_SERVER`
@@ -99,7 +105,6 @@ Settings are loaded in the following order (later values override earlier ones):
 - `LK_REJECT_OUTPUT`
 - `LK_REQUIRED`
 - `LK_SAMBA_WORKGROUP`
-- `LK_DEBUG`
 - `LK_SECONDARY_LOG_FILE`
 - `LK_SHUTDOWN_DELAY`
 - `LK_SMTP_RELAY`
@@ -114,11 +119,14 @@ Settings are loaded in the following order (later values override earlier ones):
 - `LK_SSH_PREFIX`
 - `LK_SSH_PRIORITY`
 - `LK_SSH_TRUSTED_ONLY`
+- `LK_STACKSCRIPT_EXPORT_DEFAULT`
 - `LK_SUDO`
 - `LK_SYSTEM_GRAPHICS`
 - `LK_TRUSTED_IP_ADDRESSES`
-- `LK_TTY_NO_BREAK`
 - `LK_TTY_NO_COLOUR`
+- `LK_UBUNTU_CLOUDIMG_HOST`
+- `LK_UBUNTU_MIRROR`
+- `LK_UBUNTU_PORTS_MIRROR`
 - `LK_UPGRADE_EMAIL`
 - `LK_VERBOSE`
 - `LK_WP_FLUSH`
@@ -133,11 +141,27 @@ Settings are loaded in the following order (later values override earlier ones):
 - `LK_WP_SYNC_EXCLUDE`
 - `LK_WP_SYNC_KEEP_LOCAL`
 
-> To generate the list above:
->
-> ```bash
-> lk_bash_find_scripts -d "$LK_BASE" -print0 |
->     xargs -0 gnu_grep -Pho '((?<=\$\{)|(?<=lk_is_true )|(?<=lk_is_false ))LK_[a-zA-Z0-9_]+\b(?!(\[[^]]+\])?\})' |
->     sort -u |
->     sed -Ee '/^LK_(.+_(UPDATED|NO_CHANGE)|BASE|USAGE|VERSION|Z|ADMIN_USERS|HOST_.+|MYSQL_(USERNAME|PASSWORD)|SHUTDOWN_ACTION)$/d' -e 's/.*/- `&`/'
-> ```
+### Check code for settings used
+
+To generate the list above, run the following in `$LK_BASE`:
+
+```bash
+lk_bash_find_scripts -print0 |
+    xargs -0 gnu_grep -Pho '((?<=\$\{)|(?<=lk_is_true )|(?<=lk_is_false ))LK_[a-zA-Z0-9_]+\b(?!(\[[^]]+\])?[#%}])' |
+    sort -u |
+    sed -Ee '/^LK_(.+_(UPDATED|NO_CHANGE)|BASE|USAGE|VERSION|Z|ADMIN_USERS|HOST_.+|MYSQL_(USERNAME|PASSWORD)|SHUTDOWN_ACTION)$/d' -e 's/.*/- `&`/'
+```
+
+## Conventions
+
+### File descriptors
+
+`lk_fd_next` is used if possible, otherwise the following conventions are used:
+
+- 3: `_LK_FD`: output from `lk_tty_*` functions
+- 4: `BASH_XTRACEFD`
+- 5: \<reserved by Bash\>
+- 6: original stdout
+- 7: original stderr
+- 8: FIFO
+- 9: lock file (passed to `flock -n`)
