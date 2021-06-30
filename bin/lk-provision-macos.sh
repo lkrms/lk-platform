@@ -21,7 +21,7 @@ lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
 [[ $- != *s* ]] || lk_die "cannot run from standard input"
 
 function exit_trap() {
-    local EXT _LOG_FILE LOG_FILE LK_LOG_BASENAME=lk-provision-macos.sh \
+    local EXT _LOG_FILE LOG_FILE _LK_LOG_BASENAME=lk-provision-macos.sh \
         _LOG=$_LK_LOG_FILE _OUT=$_LK_OUT_FILE
     lk_log_close || return
     for EXT in log out; do
@@ -44,7 +44,7 @@ function exit_trap() {
         --header "Cache-Control: no-cache"
         --header "Pragma: no-cache"
         --location
-        --retry 8
+        --retry 2
         --show-error
         --silent
     )

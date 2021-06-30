@@ -326,7 +326,7 @@ function lk_keep_trying() {
         ATTEMPT=1 WAIT=5 LAST_WAIT=3 NEW_WAIT EXIT_STATUS
     if ! "$@"; then
         while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
-            lk_console_message "Command failed:" "$*" ${LK_RED+"$LK_RED"}
+            lk_console_message "Command failed:" "$*" "$_LK_ERROR_COLOUR"
             lk_console_detail "Waiting $WAIT seconds"
             sleep "$WAIT"
             ((NEW_WAIT = WAIT + LAST_WAIT))

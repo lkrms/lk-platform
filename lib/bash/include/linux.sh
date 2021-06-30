@@ -296,12 +296,12 @@ function lk_system_sort_links() {
 
 function lk_system_list_graphics() {
     local EXIT_STATUS
-    LK_SYSTEM_GRAPHICS=${LK_SYSTEM_GRAPHICS-$(lspci | grep -E "VGA|3D")} || {
+    _LK_SYSTEM_GRAPHICS=${_LK_SYSTEM_GRAPHICS-$(lspci | grep -E "VGA|3D")} || {
         EXIT_STATUS=$?
-        unset LK_SYSTEM_GRAPHICS
+        unset _LK_SYSTEM_GRAPHICS
         return "$EXIT_STATUS"
     }
-    echo "$LK_SYSTEM_GRAPHICS"
+    echo "$_LK_SYSTEM_GRAPHICS"
 }
 
 function lk_system_has_intel_graphics() {

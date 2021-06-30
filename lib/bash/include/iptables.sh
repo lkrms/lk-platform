@@ -20,8 +20,8 @@ function _lk_iptables_args() {
         COMMAND=("iptables${_LK_IPTABLES_CMD_SUFFIX-}") \
         _LK_STACK_DEPTH=1
     [ -n "${_LK_IPTABLES_CMD_SUFFIX-}" ] || unset HAS_SUFFIX
-    [ -z "${LK_IPTABLES_46-}" ] ||
-        set -- "-${LK_IPTABLES_46#-}" "$@"
+    [ -z "${_LK_IPTABLES_46-}" ] ||
+        set -- "-${_LK_IPTABLES_46#-}" "$@"
     LK_USAGE="Usage: ${FUNCNAME[1]} [-4|-6${HAS_SUFFIX-|-b}]${2:+ $2}"
     shift 2
     while getopts ":46bh" OPT; do

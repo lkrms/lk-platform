@@ -101,7 +101,7 @@ CURL_OPTIONS=(
     --header "Cache-Control: no-cache"
     --header "Pragma: no-cache"
     --location
-    --retry 8
+    --retry 2
     --show-error
     --silent
 )

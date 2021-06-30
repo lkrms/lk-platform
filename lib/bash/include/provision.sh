@@ -700,11 +700,11 @@ function _lk_node_ip() {
         sed -E 's/%[^/]+\//\//') || return
     {
         grep -Ev "^$(lk_regex_implode "${PRIVATE[@]}")" <<<"$IP" || true
-        lk_is_true LK_IP_PUBLIC_ONLY ||
+        lk_is_true _LK_IP_PUBLIC_ONLY ||
             for i in "${PRIVATE[@]}"; do
                 grep -E "^$i" <<<"$IP" || true
             done
-    } | if lk_is_true LK_IP_KEEP_PREFIX; then
+    } | if lk_is_true _LK_IP_KEEP_PREFIX; then
         cat
     else
         sed -E 's/\/[0-9]+$//'
@@ -726,7 +726,7 @@ function lk_node_public_ipv4() {
     {
         ! IP=$(dig +noall +answer +short @1.1.1.1 \
             whoami.cloudflare TXT CH | sed -E 's/^"(.*)"$/\1/') || echo "$IP"
-        LK_IP_PUBLIC_ONLY=1 lk_node_ipv4
+        _LK_IP_PUBLIC_ONLY=1 lk_node_ipv4
     } | sort -u
 }
 
@@ -735,7 +735,7 @@ function lk_node_public_ipv6() {
     {
         ! IP=$(dig +noall +answer +short @2606:4700:4700::1111 \
             whoami.cloudflare TXT CH | sed -E 's/^"(.*)"$/\1/') || echo "$IP"
-        LK_IP_PUBLIC_ONLY=1 lk_node_ipv6
+        _LK_IP_PUBLIC_ONLY=1 lk_node_ipv6
     } | sort -u
 }
 
