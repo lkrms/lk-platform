@@ -234,7 +234,7 @@ function lk_apt_list_missing_recommends() { (
 ); }
 
 function lk_apt_reinstall_damaged() {
-    local _DPKG _REAL _MISSING FILE_COUNT DIRS MISSING_COUNT REINSTALL AUTO
+    local _DPKG _REAL _MISSING FILE_COUNT DIRS MISSING_COUNT REINSTALL
     lk_console_message "Checking APT package files"
     _DPKG=$(lk_mktemp_file) &&
         _REAL=$(lk_mktemp_file) &&
@@ -248,13 +248,13 @@ function lk_apt_reinstall_damaged() {
         return
     ! lk_verbose ||
         lk_console_detail "Files managed by dpkg:" "$FILE_COUNT"
-    local IFS=$'\n'
     lk_elevate find -L $DIRS -type f -print | sort -u >"$_REAL"
     comm -23 "$_DPKG" "$_REAL" >"$_MISSING" &&
         MISSING_COUNT=$(wc -l <"$_MISSING") || return
     ! lk_verbose ||
         lk_console_detail "Missing files:" "$MISSING_COUNT"
     [ "$MISSING_COUNT" -eq 0 ] || {
+        local IFS=$'\n'
         REINSTALL=($(xargs dpkg -S <"$_MISSING" | cut -d: -f1 | sort -u)) &&
             [ ${#REINSTALL[@]} -gt 0 ] ||
             lk_warn "unable to find packages for missing files" || return
@@ -264,18 +264,11 @@ function lk_apt_reinstall_damaged() {
                     "$MISSING_COUNT" file files):" \
                 "APT package" "APT packages"
         lk_confirm "Proceed?" Y || return
-        AUTO=($(apt-mark showauto | grep -Fxf <(lk_echo_array REINSTALL) ||
-            [ ${PIPESTATUS[1]} -eq 1 ])) || return
-        unset IFS
-        [ ${#AUTO[@]} -eq 0 ] ||
-            lk_console_log "Packages marked as 'automatically installed':" \
-                "${AUTO[*]}"
+        # apt-get doesn't set reinstalled packages to manually installed
         lk_apt_update &&
             _lk_apt_flock apt-get -yq \
                 --no-install-recommends --no-install-suggests --reinstall \
-                install "${REINSTALL[@]}" &&
-            { [ ${#AUTO[@]} -eq 0 ] ||
-                _lk_apt_flock apt-mark auto "${AUTO[@]}"; }
+                install "${REINSTALL[@]}"
     }
 }
 
