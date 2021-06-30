@@ -43,6 +43,8 @@ function lk_node_expand_services() {
     lk_echo_args $SERVICES | sort -u | lk_implode_input ","
 } #### Reviewed: 2021-03-27
 
+#### BEGIN provision.sh.d
+
 function _lk_settings_list_known() {
     printf '%s\n' \
         LK_BASE \
@@ -77,7 +79,7 @@ function _lk_settings_list_known() {
         LK_DEBUG \
         LK_PLATFORM_BRANCH \
         LK_PACKAGES_FILE
-} #### Reviewed: 2021-05-09
+}
 
 # _lk_settings_list_legacy
 #
@@ -86,7 +88,7 @@ function _lk_settings_list_legacy() {
     printf '%s\n' \
         LK_PATH_PREFIX_ALPHA \
         LK_SCRIPT_DEBUG
-} #### Reviewed: 2021-06-06
+}
 
 function _lk_settings_writable_files() {
     local FILE OLD_FILE DIR_MODE FILE_MODE ARGS
@@ -110,7 +112,8 @@ function _lk_settings_writable_files() {
         FILE=$XDG_CONFIG_HOME/lk-platform/lk-platform.conf
         OLD_FILE=~/".${LK_PATH_PREFIX}settings"
         [ -e "$FILE" ] || {
-            mkdir -p "${FILE%/*}" && touch "$FILE" || return
+            mkdir -p "${FILE%/*}" &&
+                touch "$FILE" || return
         }
         echo "$FILE"
     fi
@@ -120,7 +123,7 @@ function _lk_settings_writable_files() {
             LK_VERBOSE= LK_FILE_BACKUP_TAKE= \
                 lk_file_replace -f "$OLD_FILE" "$FILE" || return
     }
-} #### Reviewed: 2021-05-24
+}
 
 # lk_settings_getopt [ARG...]
 #
@@ -144,10 +147,8 @@ function lk_settings_getopt() {
             printf '%s=%q\n' "$2" "${3-}"
             ;;
         -a | --add)
-            [[ ${3-} != *,* ]] ||
-                lk_warn "$1: comma in argument: ${BASH_REMATCH[0]}" || return
-            printf '(_%s=%q;[[ ,${%s-}, == *,$_%s,* ]])||%s=${%s:+$%s,}%q\n' \
-                "$2" "${3-}" "$2" "$2" "$2" "$2" "$2" "${3-}"
+            printf '%s=$(IFS=, && printf '\''%%s\\n'\'' ${%s-} %s | sort -u | lk_implode_input ",")\n' \
+                "$2" "$2" "$(IFS=, && lk_quote_args ${3-})"
             ;;
         -u | --unset)
             # Reject "--unset LK_SETTING=value"
@@ -165,7 +166,7 @@ function lk_settings_getopt() {
         shift "$_SHIFT"
     done
     printf '%s=%q\n' _LK_SHIFT "$SHIFT"
-} #### Reviewed: 2021-05-09
+}
 
 # lk_settings_persist COMMANDS [FILE...]
 #
@@ -197,10 +198,10 @@ function lk_settings_persist() {
                     _lk_settings_list_legacy; } | sort -u)))
         lk_get_shell_var "${VARS[@]}"
     ) || return
-    [ -e "$2" ] || { lk_maybe_sudo mkdir -p "${2%/*}" &&
-        lk_maybe_sudo touch "$2"; } || return
     lk_file_replace -m "$2" "$_FILE"
-} #### Reviewed: 2021-05-24
+}
+
+#### END provision.sh.d
 
 # lk_symlink_bin TARGET [ALIAS]
 function lk_symlink_bin() {
