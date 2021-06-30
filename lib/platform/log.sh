@@ -20,9 +20,9 @@ export LK_BASE
     lk_usage "\
 Usage: ${0##*/} COMMAND [ARG...]"
 
-[ -n "${LK_LOG_BASENAME-}" ] ||
-    LK_LOG_BASENAME=${1##*/}-$(lk_hash "$@")
-export -n LK_LOG_BASENAME
+[ -n "${_LK_LOG_BASENAME-}" ] ||
+    _LK_LOG_BASENAME=${1##*/}-$(lk_hash "$@")
+export -n _LK_LOG_BASENAME
 
 _LK_LOG_CMDLINE=("$@")
 lk_log_start

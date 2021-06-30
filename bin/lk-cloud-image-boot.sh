@@ -524,7 +524,7 @@ if [ -n "$STACKSCRIPT" ]; then
         SS_ATTRIBS=()
         lk_mapfile SS_ATTRIBS <(grep -Eo "[a-z]+=\"[^\"]*\"" <<<"$SS_TAG")
         unset NAME LABEL DEFAULT SELECT_OPTIONS SELECT_TEXT VALIDATE_COMMAND
-        LK_REQUIRED=1
+        _LK_REQUIRED=1
         REQUIRED_TEXT=required
         for SS_ATTRIB in ${SS_ATTRIBS[@]+"${SS_ATTRIBS[@]}"}; do
             [[ $SS_ATTRIB =~ ^([a-z]+)=\"([^\"]*)\"$ ]]
@@ -537,7 +537,7 @@ if [ -n "$STACKSCRIPT" ]; then
                 ;;
             default)
                 DEFAULT=${BASH_REMATCH[2]}
-                unset LK_REQUIRED
+                unset _LK_REQUIRED
                 REQUIRED_TEXT=optional
                 ;;
             oneof | manyof)
@@ -555,7 +555,7 @@ if [ -n "$STACKSCRIPT" ]; then
                 ;;
             esac
         done
-        ! lk_is_true LK_REQUIRED ||
+        ! lk_is_true _LK_REQUIRED ||
             [ -n "${VALIDATE_COMMAND+1}" ] ||
             VALIDATE_COMMAND=(lk_validate_not_null VALUE)
         lk_console_item \

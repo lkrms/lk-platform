@@ -14,7 +14,8 @@ function _lk_prompt_debug_trap() {
 }
 
 function _lk_prompt_command() {
-    local STATUS=$? LK_DIM=${LK_DIM:-$LK_GREY} SECS PS=() STR LEN=25 IFS
+    local STATUS=$? DIM=$LK_DIM SECS PS=() STR LEN=25 IFS
+    DIM=${DIM:-$LK_GREY}
     history -a
     shopt -u promptvars
     if [ -n "${_LK_PROMPT_LAST+1}" ]; then
@@ -24,7 +25,7 @@ function _lk_prompt_command() {
             { [ "$(type -t "${_LK_PROMPT_LAST[0]}")" != builtin ] &&
                 [ "${_LK_PROMPT_LAST[0]}" != ls ]; }; then
             # "Thu May 06 15:02:32 "
-            PS+=("\n\[$LK_DIM\]\d \t\[$LK_RESET\] ")
+            PS+=("\n\[$DIM\]\d \t\[$LK_RESET\] ")
             if [ "$STATUS" -eq 0 ]; then
                 # "✔"
                 PS+=("\[$LK_GREEN\]"$'\xe2\x9c\x94')
@@ -36,7 +37,7 @@ function _lk_prompt_command() {
             fi
             # " after 12s "
             STR=" after ${SECS}s "
-            PS+=("$STR\[$LK_RESET$LK_DIM\]")
+            PS+=("$STR\[$LK_RESET$DIM\]")
             ((LEN = COLUMNS - LEN - ${#STR})) || true
             [ "$LEN" -le 0 ] || {
                 # "( sleep 12; false )"

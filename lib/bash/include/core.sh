@@ -1641,7 +1641,7 @@ function lk_log_create_file() {
         # needed, running commands via sudo only if they fail without it
         [ -d "$LOG_DIR" ] || lk_elevate_if_error \
             lk_install -d -m 00777 "$LOG_DIR" 2>/dev/null || continue
-        LOG_PATH=$LOG_DIR/${LK_LOG_BASENAME:-${CMD##*/}}-$UID.${EXT:-log}
+        LOG_PATH=$LOG_DIR/${_LK_LOG_BASENAME:-${CMD##*/}}-$UID.${EXT:-log}
         if [ -f "$LOG_PATH" ]; then
             [ -w "$LOG_PATH" ] || {
                 lk_elevate_if_error chmod 00600 "$LOG_PATH" || continue
@@ -1740,8 +1740,8 @@ function lk_log_start() {
         mkfifo "$FIFO" || return
     lk_ignore_SIGINT && lk_strip_non_printing <"$FIFO" >>"$OUT_FILE" &
     unset _LK_LOG2_FD
-    [ -z "${LK_SECONDARY_LOG_FILE-}" ] || { _LK_LOG2_FD=$(lk_fd_next) &&
-        eval "exec $_LK_LOG2_FD"'>>"$LK_SECONDARY_LOG_FILE"' &&
+    [ -z "${_LK_SECONDARY_LOG_FILE-}" ] || { _LK_LOG2_FD=$(lk_fd_next) &&
+        eval "exec $_LK_LOG2_FD"'>>"$_LK_SECONDARY_LOG_FILE"' &&
         export _LK_LOG2_FD; } || return
     _LK_TTY_OUT_FD=$(lk_fd_next) &&
         eval "exec $_LK_TTY_OUT_FD>&1" &&
@@ -2672,7 +2672,7 @@ function lk_curl() {
         --header "Cache-Control: no-cache"
         --header "Pragma: no-cache"
         --location
-        --retry 8
+        --retry 2
         --show-error
         --silent
     )

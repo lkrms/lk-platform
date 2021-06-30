@@ -94,14 +94,14 @@ function lk_mysql_write_cnf() {
 function lk_mysql() {
     if [ -n "${LK_MY_CNF-}" ]; then
         [ -f "$LK_MY_CNF" ] || lk_warn "file not found: $LK_MY_CNF" || return
-        "${LK_MYSQL_COMMAND:-mysql}" --defaults-file="$LK_MY_CNF" "$@"
+        "${_LK_MYSQL_COMMAND:-mysql}" --defaults-file="$LK_MY_CNF" "$@"
     elif lk_is_root || lk_is_true LK_MYSQL_ELEVATE; then
-        lk_elevate "${LK_MYSQL_COMMAND:-mysql}" \
+        lk_elevate "${_LK_MYSQL_COMMAND:-mysql}" \
             --no-defaults \
             --user="${LK_MYSQL_ELEVATE_USER:-root}" \
             "$@"
     elif [ -f ~/.my.cnf ]; then
-        "${LK_MYSQL_COMMAND:-mysql}" "$@"
+        "${_LK_MYSQL_COMMAND:-mysql}" "$@"
     else
         lk_warn "LK_MY_CNF not set"
     fi
@@ -129,7 +129,7 @@ function lk_mysql_mapfile() {
 }
 
 function _lk_mysqldump() {
-    LK_MYSQL_COMMAND=mysqldump \
+    _LK_MYSQL_COMMAND=mysqldump \
         lk_mysql "$@"
 }
 

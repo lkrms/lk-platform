@@ -86,7 +86,7 @@ function lk_arch_add_repo() {
 [$REPO]${SIG_LEVEL:+
 SigLevel = $SIG_LEVEL}
 Server = $SERVER"
-        unset LK_PACMAN_SYNC
+        unset _LK_PACMAN_SYNC
     done
 }
 
@@ -173,10 +173,10 @@ function lk_pac_not_installed_list() {
 
 function lk_pac_sync() {
     ! lk_is_root && ! lk_can_sudo pacman ||
-        { lk_is_false LK_PACMAN_SYNC && [ "${1-}" != -f ]; } ||
+        { lk_is_false _LK_PACMAN_SYNC && [ "${1-}" != -f ]; } ||
         { lk_console_message "Refreshing package databases" &&
             lk_elevate pacman -Sy >/dev/null &&
-            LK_PACMAN_SYNC=0; }
+            _LK_PACMAN_SYNC=0; }
 }
 
 function lk_pac_groups() {

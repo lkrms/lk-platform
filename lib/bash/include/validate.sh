@@ -27,7 +27,7 @@ function _lk_validate_list() {
         }
     done
     [ "${VALID:-1}" -eq 1 ] &&
-        { [ "${LK_REQUIRED:-0}" -eq 0 ] ||
+        { [ "${_LK_REQUIRED:-0}" -eq 0 ] ||
             [ "${NULL:-1}" -eq 0 ] ||
             _lk_validate_fail "Required: %s\n" "$1"; }
 }
@@ -38,7 +38,7 @@ function lk_validate_not_null() {
 }
 
 function lk_validate() {
-    ! { [ "${LK_REQUIRED:-0}" -eq 0 ] || lk_validate_not_null "$1"; } ||
+    ! { [ "${_LK_REQUIRED:-0}" -eq 0 ] || lk_validate_not_null "$1"; } ||
         [ -z "${!1-}" ] || {
         [[ "${!1}" =~ $2 ]] ||
             _lk_validate_fail "Invalid %s: %q\n" "$1" "${!1}"
@@ -50,7 +50,7 @@ function lk_validate_list() {
 }
 
 function lk_validate_one_of() {
-    ! { [ "${LK_REQUIRED:-0}" -eq 0 ] || lk_validate_not_null "$1"; } ||
+    ! { [ "${_LK_REQUIRED:-0}" -eq 0 ] || lk_validate_not_null "$1"; } ||
         [ -z "${!1-}" ] || {
         { [ $# -gt 1 ] && printf '%s\n' "${@:2}" || cat; } |
             grep -Fx "${!1}" >/dev/null ||
