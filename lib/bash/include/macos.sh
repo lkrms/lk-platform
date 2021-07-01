@@ -176,25 +176,20 @@ function lk_macos_xcode_maybe_accept_license() {
 # - $ = Shift
 # - @ = Command
 function lk_macos_kb_add_shortcut() {
-    local PLIST=${1-}
     [ $# -eq 3 ] || return
-    [ "$1" != NSGlobalDomain ] || PLIST=.GlobalPreferences
-    defaults write "$1" \
-        NSUserKeyEquivalents -dict-add "$2" "$3" &&
-        defaults write ~/"Library/Preferences/$PLIST.plist" \
-            NSUserKeyEquivalents -dict-add "$2" "$3"
+    defaults write "$1" NSUserKeyEquivalents -dict-add "$2" "$3" || return
+    [ "$1" = NSGlobalDomain ] ||
+        defaults read com.apple.universalaccess \
+            com.apple.custommenu.apps 2>/dev/null |
+        grep -F "\"$1\"" >/dev/null ||
+        defaults write com.apple.universalaccess \
+            com.apple.custommenu.apps -array-add "$1"
 }
 
 # lk_macos_kb_reset_shortcuts DOMAIN
 function lk_macos_kb_reset_shortcuts() {
-    local PLIST=${1-}
     [ $# -eq 1 ] || return
-    [ "$1" != NSGlobalDomain ] || PLIST=.GlobalPreferences
-    defaults delete "$1" \
-        NSUserKeyEquivalents &>/dev/null || true
-    [ ! -e ~/"Library/Preferences/$PLIST.plist" ] ||
-        defaults delete ~/"Library/Preferences/$PLIST.plist" \
-            NSUserKeyEquivalents &>/dev/null || true
+    defaults delete "$1" NSUserKeyEquivalents &>/dev/null || true
 }
 
 function lk_macos_unmount() {

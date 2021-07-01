@@ -105,38 +105,68 @@ function lk_orig_diff() {
         lk_bak_diff "$@"
 }
 
-function lk_find_latest() {
-    local i TYPE=f TYPE_ARGS=()
-    [[ ! ${1-} =~ ^[bcdflps]+$ ]] || { TYPE=$1 && shift; }
-    for i in $(seq 0 $((${#TYPE} - 1))); do
-        TYPE_ARGS+=(${TYPE_ARGS[@]+-o} -type "${TYPE:$i:1}")
+# latest [-t=TYPE[,...]] [-L] [-g] [-- FIND_ARG...]
+#
+# Options:
+#   -t=TYPE[,...]   Only match files of TYPE (default: f,l)
+#   -L              Follow symbolic links
+#   -g              Include .git directories
+function latest() {
+    local OPTIND OPTARG OPT LK_USAGE IFS TYPES=(f l) DEREF= NO_GIT=1
+    LK_USAGE="Usage: $FUNCNAME [-t=TYPE[,...]] [-L] [-g] [-- FIND_ARG...]"
+    while getopts ":t:Lg" OPT; do
+        case "$OPT" in
+        t)
+            IFS=,
+            TYPES=($OPTARG)
+            unset IFS
+            ;;
+        L)
+            DEREF=1
+            ;;
+        g)
+            NO_GIT=
+            ;;
+        \? | :)
+            lk_usage
+            return 1
+            ;;
+        esac
     done
-    [ ${#TYPE_ARGS[@]} -eq 2 ] || TYPE_ARGS=(\( "${TYPE_ARGS[@]}" \))
-    gnu_find -L . -xdev -regextype posix-egrep \
-        ${@+\( "$@" \)} "${TYPE_ARGS[@]}" -print0 |
-        xargs -0 gnu_stat --format '%Y :%y %12s %A %N' |
+    shift $((OPTIND - 1))
+    local TYPE i=0 ARGS=() FORMAT='%T@ :%t %12s %M %p'
+    for TYPE in ${TYPES+"${TYPES[@]}"}; do
+        [[ $TYPE =~ ^[bcdflps]$ ]] ||
+            lk_warn "invalid file type: $TYPE" || return
+        ! ((i++)) || ARGS+=(-o)
+        ARGS+=(-type "$TYPE")
+    done
+    ((i < 2)) || ARGS=(\( "${ARGS[@]}" \))
+    [ $# -eq 0 ] ||
+        ARGS=(\( "$@" \) ${ARGS+"${ARGS[@]}"})
+    [ -z "$NO_GIT" ] ||
+        ARGS=(! \( -type d -name .git -prune \) ${ARGS+"${ARGS[@]}"})
+    gnu_find ${DEREF:+-L} . -xdev -regextype posix-egrep \
+        ${ARGS+"${ARGS[@]}"} \
+        \( \( -type l -printf "$FORMAT -> %l\n" \) -o -printf "$FORMAT\n" \) |
         sort -nr | cut -d: -f2- | "${PAGER:-less}"
 }
 
-function latest() {
-    lk_find_latest "${1:-fl}" ! \( -type d -name .git -prune \)
-}
-
 function latest_dir() {
-    latest d
+    latest -td "$@"
 }
 
 function latest_all() {
-    lk_find_latest fl
+    latest -g "$@"
 }
 
 function latest_all_dir() {
-    lk_find_latest d
+    latest -g -td "$@"
 }
 
 function find_all() {
     [ -n "${1-}" ] || lk_warn "no search term" || return
-    gnu_find -L . -xdev -iname "*$1*" "${@:2}"
+    gnu_find . -xdev -iname "*$1*" "${@:2}"
 }
 
 [ ! -d /srv/www ] || lk_include hosting
