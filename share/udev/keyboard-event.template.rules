@@ -1,0 +1,2 @@
+ACTION=="add", ATTRS{idProduct}=="?*", ATTRS{idVendor}=="?*", ENV{ID_INPUT_KEYBOARD}=="?*", ENV{LK_KEYBOARD}="$attr{idVendor}:$attr{idProduct}", RUN+="'{{LK_BASE}}/lib/udev/keyboard-event.sh' %E{LK_KEYBOARD}"
+ACTION=="remove", ENV{LK_KEYBOARD}=="?*", RUN+="'{{LK_BASE}}/lib/udev/keyboard-event.sh' %E{LK_KEYBOARD}"
