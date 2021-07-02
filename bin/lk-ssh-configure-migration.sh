@@ -20,19 +20,30 @@ if [[ ! ${1-} =~ ^(--new|--old)$ ]]; then
     OLD_PASSWORD=
 
     LK_USAGE="\
-Usage: ${0##*/} [OPTION...] [USER@]SOURCE[:PORT] [USER@]TARGET[:PORT]
+${0##*/} [OPTIONS] [USER@]SOURCE[:PORT] [USER@]TARGET[:PORT]
 
-Configure SSH hosts and keys on SOURCE, TARGET, and the local system to allow
-key-based access to SOURCE from TARGET using private keys held only in an
-authentication agent on the local system. Requires lk-platform to be installed
-on TARGET.
+Configure SSH hosts and keys for access to SOURCE from TARGET using private keys
+held only in an authentication agent on the local system. Requires lk-platform
+to be installed on TARGET.
 
-Options:
-  -o, --source-name=HOST            configure SOURCE as HOST in ~/.ssh
-  -n, --target-name=HOST            configure TARGET as HOST in ~/.ssh
-  -k, --source-key=FILE             use key in FILE when logging into SOURCE
-  -i, --target-key=FILE             use key in FILE when logging into TARGET
-  -p, --source-password=PASSWORD    use PASSWORD when logging into SOURCE"
+OPTIONS
+
+    -o, --source-name=HOST          specify the SSH host name for SOURCE
+    -n, --target-name=HOST          specify the SSH host name for TARGET
+    -k, --source-key=FILE           use key in FILE when logging into SOURCE
+    -i, --target-key=FILE           use key in FILE when logging into TARGET
+    -p, --source-password=PASSWORD  use PASSWORD when logging into SOURCE
+
+EXAMPLES
+
+    If 'lk-mysite' is already configured as an SSH host on the local system:
+
+\\        ${0##*/} -p 'Passw0rd!' mysite@198.51.100.42 lk-mysite
+
+    If SSH hosts 'new-mysite' and 'old-mysite' are already configured on the
+    local system and TARGET respectively:
+
+\\        ${0##*/} -p 'Passw0rd!' old-mysite new-mysite"
 
     lk_getopt "o:n:k:i:p:" \
         "source-name:,target-name:,source-key:,target-key:,source-password:"
@@ -182,7 +193,8 @@ case "$STAGE" in
 local)
     lk_console_message "Configuring SSH"
     lk_ssh_configure
-    [ -z "$NEW_KEY_FILE" ] && lk_ssh_host_exists "$NEW_HOST_NAME" || {
+    lk_ssh_host_exists "$NEW_HOST_NAME" || {
+        NEW_HOST_NAME=$SSH_PREFIX${NEW_HOST_NAME#$SSH_PREFIX}
         lk_console_detail \
             "Adding host:" "$NEW_HOST_NAME (${NEW_USER:+$NEW_USER@}$NEW_HOST)"
         lk_ssh_add_host -t \
@@ -204,7 +216,8 @@ new)
     lk_ssh_configure
     [ -z "$NEW_KEY" ] ||
         add_authorized_key "$NEW_KEY"
-    [ -z "$OLD_KEY" ] && lk_ssh_host_exists "$OLD_HOST_NAME" || {
+    lk_ssh_host_exists "$OLD_HOST_NAME" || {
+        OLD_HOST_NAME=$SSH_PREFIX${OLD_HOST_NAME#$SSH_PREFIX}
         lk_console_detail \
             "Adding host:" "$OLD_HOST_NAME (${OLD_USER:+$OLD_USER@}$OLD_HOST)"
         [ -n "$OLD_KEY" ] &&
