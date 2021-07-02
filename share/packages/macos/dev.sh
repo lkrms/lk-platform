@@ -132,6 +132,7 @@ HOMEBREW_TAPS+=(
 )
 
 HOMEBREW_FORMULAE+=(
+    autopep8
     cmake
     emscripten
     gdb
