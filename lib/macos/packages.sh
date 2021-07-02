@@ -46,6 +46,7 @@ HOMEBREW_FORMULAE+=(
     media-info
     ncdu
     p7zip
+    pstree
     watch
 )
 

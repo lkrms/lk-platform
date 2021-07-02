@@ -331,6 +331,16 @@ lk_start_trace
         fi
     fi
 
+    lk_tty_print "Checking udev rules"
+    unset LK_FILE_REPLACE_NO_CHANGE
+    FILE=/etc/udev/rules.d/82-${LK_PATH_PREFIX}keyboard-event.rules
+    _FILE=$(lk_expand_template \
+        "$LK_BASE/share/udev/keyboard-event.template.rules")
+    lk_install -m 00644 "$FILE"
+    lk_file_replace "$FILE" "$_FILE"
+    ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+        lk_run_detail sudo udevadm control --reload
+
     if [ -n "${LK_NODE_HOSTNAME-}" ]; then
         lk_console_message "Checking system hostname"
         FILE=/etc/hostname

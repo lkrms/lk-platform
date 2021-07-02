@@ -2336,7 +2336,7 @@ function lk_run() {
     [[ ! ${1-} =~ ^-([0-9]+)$ ]] || { SHIFT=${BASH_REMATCH[1]} && shift; }
     COMMAND=("$@")
     [ -z "$SHIFT" ] || shift "$SHIFT"
-    while [[ ${1-} =~ ^(lk_(elevate|maybe_(sudo|trace))|sudo|caffeinate)$ ]] &&
+    while [[ ${1-} =~ ^(lk_(elevate|maybe_(sudo|trace))|sudo|env|caffeinate)$ ]] &&
         [[ ${2-} != -* ]]; do
         case "$1" in
         lk_maybe_trace)
