@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC2030
-
 function lk_is_bootstrap() {
     [ -n "${_LK_BOOTSTRAP-}" ]
 }
@@ -1031,39 +1029,46 @@ credentials will be stored ${LK_BOLD}WITHOUT ENCRYPTION$LK_RESET in ~/.netrc"
     lk_console_success "cPanel credentials added for:" "$2@$1"
 }
 
-# lk_cpanel_set_server SERVER USER
+# lk_cpanel_set_server SERVER
 function lk_cpanel_set_server() {
-    [ $# -eq 2 ] || lk_usage "Usage: $FUNCNAME SERVER USER" || return
+    [ $# -eq 1 ] || lk_usage "Usage: $FUNCNAME SERVER" || return
     _LK_CPANEL_SERVER=$1
-    _LK_CPANEL_USER=$2
+    _LK_CPANEL_ACCESS=curl
+    ! lk_ssh_host_exists "$1" || _LK_CPANEL_ACCESS=ssh
 }
 
 function _lk_cpanel_check_server() {
-    [ "${_LK_CPANEL_SERVER:+1}${_LK_CPANEL_USER:+1}" = 11 ] ||
+    [ "${_LK_CPANEL_SERVER:+1}${_LK_CPANEL_ACCESS:+1}" = 11 ] ||
         lk_warn "lk_cpanel_set_server must be called before ${FUNCNAME[1]}" ||
         return
 }
 
-# lk_cpanel_get MODULE FUNC APIVERSION [PARAMETER=VALUE...]
+# lk_cpanel_get MODULE FUNC [PARAMETER=VALUE...]
 function lk_cpanel_get() {
-    [ $# -ge 3 ] || lk_usage "\
-Usage: $FUNCNAME MODULE FUNC APIVERSION [DATA]" || return
+    [ $# -ge 2 ] || lk_usage "\
+Usage: $FUNCNAME MODULE FUNC [PARAMETER=VALUE...]" || return
     _lk_cpanel_check_server || return
-    # TODO: support `ssh SERVER uapi --output=json $1 $2 [PARAMETER=VALUE...]`
-    local DATA
-    [ $# -lt 4 ] || DATA=$(lk_uri_encode "${@:4}") || return
-    curl -fsSL --insecure --netrc "\
+    case "$_LK_CPANEL_ACCESS" in
+    curl)
+        local DATA
+        [ $# -lt 3 ] || DATA=$(lk_uri_encode "${@:3}") || return
+        curl -fsSL --insecure --netrc "\
 https://$_LK_CPANEL_SERVER:2083/json-api/cpanel?api.version=1&\
 cpanel_jsonapi_user=$_LK_CPANEL_USER&\
 cpanel_jsonapi_module=$1&\
 cpanel_jsonapi_func=$2&\
-cpanel_jsonapi_apiversion=$3${4+&$DATA}"
+cpanel_jsonapi_apiversion=3${3+&$DATA}"
+        ;;
+    ssh)
+        ssh "$_LK_CPANEL_SERVER" uapi --output=json "$1" "$2" "${@:3}"
+        ;;
+    esac
 }
 
 # lk_cpanel_get_domains
 function lk_cpanel_get_domains() {
     _lk_cpanel_check_server || return
-    lk_cpanel_get DomainInfo domains_data 3 |
+    lk_cpanel_get DomainInfo domains_data |
         # TODO: check parked_domains?
         jq -r '.result.data |
     ( [ .main_domain.domain ],
@@ -1093,7 +1098,7 @@ private key for DOMAIN from cPanel to TARGET_DIR or ~/ssl." || return
     lk_console_message "Retrieving SSL certificate"
     lk_console_detail "Host:" "$_LK_CPANEL_SERVER"
     lk_console_detail "Domain:" "$1"
-    SSL_JSON=$(lk_cpanel_get SSL fetch_best_for_domain 3 domain="$1") &&
+    SSL_JSON=$(lk_cpanel_get SSL fetch_best_for_domain domain="$1") &&
         CERT=$(jq -r '.result.data.crt' <<<"$SSL_JSON") &&
         CA_BUNDLE=$(jq -r '.result.data.cab' <<<"$SSL_JSON") &&
         KEY=$(jq -r '.result.data.key' <<<"$SSL_JSON") ||
