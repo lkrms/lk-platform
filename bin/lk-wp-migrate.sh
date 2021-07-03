@@ -213,7 +213,8 @@ lk_wp_flush || STATUS=$?
 if lk_is_true SSL; then
     SITE_ADDR=$(lk_wp_get_site_address) &&
         [[ $SITE_ADDR =~ ^https?://(www\.)?(.*) ]] &&
-        lk_cpanel_get_ssl_cert "$SSH_HOST" "${BASH_REMATCH[2]}"
+        lk_cpanel_set_server "$SSH_HOST" &&
+        lk_cpanel_get_ssl_cert "${BASH_REMATCH[2]}"
 fi || true
 
 if is_final; then
