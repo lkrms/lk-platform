@@ -15,3 +15,15 @@ function lk_require_output() {
         fi &&
         grep -Eq '^.+$' "$FILE" || return
 }
+
+# lk_env_clean COMMAND [ARG...]
+#
+# Remove _LK_* variables from the environment of COMMAND.
+function lk_env_clean() {
+    local _UNSET=("${!_LK_@}")
+    if [ -n "${_UNSET+1}" ]; then
+        env "${_UNSET[@]/#/--unset=}" "$@"
+    else
+        "$@"
+    fi
+}
