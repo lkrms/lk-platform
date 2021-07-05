@@ -132,12 +132,13 @@ function lk_settings_getopt() {
 # - update system settings if running as root
 # - if not running as root, update the current user's settings
 function lk_settings_persist() {
-    local FILES _FILE
+    local FILES DELETE=() _FILE
     [ $# -ge 1 ] || lk_warn "invalid arguments" || return
     [ $# -ge 2 ] || {
         local IFS=$'\n'
         FILES=($(_lk_settings_writable_files)) || return
         set -- "$1" "${FILES[@]}"
+        DELETE=("${@:3}")
         unset IFS
     }
     _FILE=$(
@@ -153,5 +154,7 @@ function lk_settings_persist() {
                     _lk_settings_list_legacy; } | sort -u)))
         lk_get_shell_var "${VARS[@]}"
     ) || return
-    lk_file_replace -m "$2" "$_FILE"
-} #### Reviewed: 2021-06-30
+    lk_file_replace -m "$2" "$_FILE" &&
+        lk_file_backup -m ${DELETE+"${DELETE[@]}"} &&
+        lk_maybe_sudo rm -f -- ${DELETE+"${DELETE[@]}"}
+} #### Reviewed: 2021-07-05
