@@ -28,7 +28,7 @@ BRANCH=$(lk_git_branch_current)
 lk_console_log "Updating repo at" "$DEST"
 REMOTE=$(lk_git_remote_from_url -E \
     "^(file://)?${SOURCE#file://}/?\$" | tail -n1) ||
-    { REMOTE=$(lk_hostname) &&
+    { REMOTE=local &&
         { lk_run_detail git remote add "$REMOTE" "$SOURCE" ||
             lk_run_detail git remote set-url "$REMOTE" "$SOURCE"; }; } ||
     lk_die "unable to add or update remote: $REMOTE"

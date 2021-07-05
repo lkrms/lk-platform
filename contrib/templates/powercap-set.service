@@ -1,0 +1,18 @@
+# Setting a TDP of 28W keeps my system's package temperature below 70°C under
+# load, but your mileage may vary. Perform your own testing, set your own TDP,
+# and remember it's all at your own risk ;)
+
+[Unit]
+Description=Set RAPL power limit for optimal package temperature
+Documentation=man:powercap-set
+After=multi-user.target
+
+[Service]
+Type=oneshot
+# Set Constraint 0 in Zone 0 (long_term) to 28W (default: 30W)
+ExecStart=-/usr/bin/powercap-set -p intel-rapl -z 0 -c 0 -l 28000000
+# Set Constraint 1 in Zone 0 (short_term) to 28W (default: 50W)
+ExecStart=-/usr/bin/powercap-set -p intel-rapl -z 0 -c 1 -l 28000000
+
+[Install]
+WantedBy=multi-user.target
