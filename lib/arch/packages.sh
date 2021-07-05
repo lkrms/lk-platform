@@ -268,7 +268,7 @@ if lk_node_service_enabled xfce4; then
         libcanberra
         pavucontrol
         plank
-        pulseaudio-alsa
+        pulseaudio-alsa # Alternative: pipewire-alsa
         xsecurelock
         xss-lock
     )
@@ -337,7 +337,10 @@ else
     if lk_node_service_enabled xfce4; then
         PAC_PACKAGES+=(
             blueman
-            pulseaudio-bluetooth
+            pulseaudio-bluetooth # Alternative: pipewire-pulse
+        )
+        AUR_PACKAGES+=(
+            bluez-git
         )
     fi
 

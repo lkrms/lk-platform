@@ -163,6 +163,7 @@ PAC_PACKAGES+=(
     catdoc              # Excel, Powerpoint
     perl-image-exiftool # EXIF metadata
     python-lxml         # spreadsheets
+    python-mutagen      # audio metadata
     recoll
     unrtf
 

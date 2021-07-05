@@ -605,6 +605,18 @@ function lk_require_output() {
         grep -Eq '^.+$' "$FILE" || return
 }
 
+# lk_env_clean COMMAND [ARG...]
+#
+# Remove _LK_* variables from the environment of COMMAND.
+function lk_env_clean() {
+    local _UNSET=("${!_LK_@}")
+    if [ -n "${_UNSET+1}" ]; then
+        env "${_UNSET[@]/#/--unset=}" "$@"
+    else
+        "$@"
+    fi
+}
+
 # lk_uri_encode PARAMETER=VALUE...
 function lk_uri_encode() {
     local ARGS=()
@@ -3467,7 +3479,7 @@ function lk_file_get_backup_suffix() {
     echo ".lk-bak-$(lk_date "%Y%m%dT%H%M%SZ" ${1+"$1"})"
 }
 
-# lk_file_backup [-m] FILE...
+# lk_file_backup [-m] [FILE...]
 #
 # Copy each FILE to FILE.lk-bak-TIMESTAMP, where TIMESTAMP is the file's last
 # modified time in UTC (e.g. 20201202T095515Z). If -m is set, copy FILE to
