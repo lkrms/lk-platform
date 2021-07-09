@@ -184,6 +184,7 @@ HOMEBREW_CASKS+=(
     android-studio
     dbeaver-community
     font-jetbrains-mono
+    http-toolkit
     sequel-pro
     sourcetree
     sublime-merge
