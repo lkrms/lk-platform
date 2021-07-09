@@ -80,6 +80,7 @@ PAC_PACKAGES+=(
     # Networking
     networkmanager-l2tp
     networkmanager-openconnect
+    ppp
 
     # Services
     at

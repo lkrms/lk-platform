@@ -19,6 +19,9 @@ PAC_KEEP=(
     zoom
 
     #
+    appimagelauncher
+
+    #
     displaycal
     xiccd
 
@@ -330,6 +333,7 @@ PAC_PACKAGES+=(
 
 AUR_PACKAGES+=(
     demjson
+    httptoolkit
     lua-posix
     nodejs-less
     nvm
