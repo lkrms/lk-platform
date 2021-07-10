@@ -72,6 +72,8 @@ add_regex BACKUP_TIMESTAMP_FINDUTILS_REGEX "$_4-$_2-$_2-$_6"
 
 # lk_is_identifier, lk_is_fqdn, etc.
 FUNCTIONS=(
+    lk_is_ip
+    lk_is_cidr
     lk_is_host
     lk_is_fqdn
     lk_is_email
@@ -79,6 +81,8 @@ FUNCTIONS=(
     lk_is_identifier
 )
 PATTERNS=(
+    IP_REGEX
+    IP_OPT_PREFIX_REGEX
     HOST_REGEX
     DOMAIN_NAME_REGEX
     EMAIL_ADDRESS_REGEX
@@ -86,6 +90,8 @@ PATTERNS=(
     IDENTIFIER_REGEX
 )
 DESCRIPTIONS=(
+    "IP address"
+    "IP address or CIDR"
     "IP address, hostname or domain name"
     "domain name"
     "email address"

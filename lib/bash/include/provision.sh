@@ -202,6 +202,23 @@ function lk_settings_persist() {
         lk_maybe_sudo rm -f -- ${DELETE+"${DELETE[@]}"}
 }
 
+# lk_dns_resolve_hosts HOST...
+function lk_dns_resolve_hosts() { {
+    local HOSTS=()
+    while [ $# -gt 0 ]; do
+        if lk_is_cidr; then
+            echo "$1"
+        elif lk_is_fqdn "$1"; then
+            HOSTS[${#HOSTS[@]}]=$1
+        elif [[ $1 == *\|* ]]; then
+            lk_curl "${1%%|*}" | jq -r "${1#*|}" || return
+        fi
+        shift
+    done
+    [ -z "${HOSTS+1}" ] ||
+        lk_hosts_get_records +VALUE A,AAAA "${HOSTS[@]}"
+} | sort -nu; }
+
 #### END provision.sh.d
 
 # lk_symlink_bin TARGET [ALIAS]
@@ -812,21 +829,6 @@ function lk_hosts_get_records() {
         sed -E "$REGEX" |
         awk "\$4 ~ /^$(lk_regex_implode "${TYPES[@]}")$/" |
         { [ -z "${CUT-}" ] && cat || cut -d' ' "$CUT"; }
-}
-
-# lk_hosts_resolve HOST...
-function lk_hosts_resolve() {
-    local HOSTS IP_ADDRESSES
-    IP_ADDRESSES=($({
-        lk_echo_args "$@" | lk_filter_ipv4
-        lk_echo_args "$@" | lk_filter_ipv6
-    }))
-    HOSTS=($(comm -23 <(lk_echo_args "$@" | sort -u) \
-        <(lk_echo_array IP_ADDRESSES | sort -u)))
-    [ ${#HOSTS[@]} -eq 0 ] ||
-        IP_ADDRESSES+=($(lk_hosts_get_records +VALUE A,AAAA "${HOSTS[@]}")) ||
-        return
-    lk_echo_array IP_ADDRESSES | sort -u
 }
 
 # lk_host_first_answer TYPE[,TYPE...] DOMAIN
