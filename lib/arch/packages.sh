@@ -336,11 +336,9 @@ else
 
     if lk_node_service_enabled xfce4; then
         PAC_PACKAGES+=(
+            bluez
             blueman
             pulseaudio-bluetooth # Alternative: pipewire-pulse
-        )
-        AUR_PACKAGES+=(
-            bluez-git
         )
     fi
 
@@ -362,7 +360,6 @@ else
 fi
 
 ####
-#
 
 PAC_REJECT_REGEX=$(lk_echo_array PAC_REJECT | sort -u | lk_implode_input "|")
 PAC_REJECT_REGEX=${PAC_REJECT_REGEX:+"($PAC_REJECT_REGEX)"}
@@ -380,7 +377,7 @@ lk_pac_sync
 if [ ${#AUR_PACKAGES[@]} -gt 0 ]; then
     AUR_MOVED=$(lk_pac_available_list -o "${AUR_PACKAGES[@]}")
     [ -z "$AUR_MOVED" ] || {
-        lk_console_warning "Moved from AUR to repo:" "$AUR_MOVED"
+        lk_console_warning "Moved from AUR to official repos:" "$AUR_MOVED"
         PAC_PACKAGES+=($AUR_MOVED)
         AUR_PACKAGES=($(lk_pac_unavailable_list -o "${AUR_PACKAGES[@]}"))
     }
@@ -390,9 +387,8 @@ PAC_GROUPS=($(comm -12 \
     <(lk_echo_array PAC_PACKAGES | sort -u) \
     <(lk_pac_groups | sort -u)))
 if [ ${#PAC_GROUPS[@]} -gt 0 ]; then
-    lk_console_message "Resolving package groups"
     PAC_PACKAGES=($(comm -13 \
-        <(lk_echo_array PAC_GROUPS | sort -u) \
+        <(lk_echo_array PAC_GROUPS) \
         <(lk_echo_array PAC_PACKAGES | sort -u)))
     PAC_PACKAGES+=($(comm -12 \
         <(lk_pac_groups "${PAC_GROUPS[@]}" | sort -u) \
@@ -402,7 +398,7 @@ fi
 # Check for PAC_PACKAGES removed from official repos
 PAC_MOVED=$(lk_pac_unavailable_list -o "${PAC_PACKAGES[@]}")
 [ -z "$PAC_MOVED" ] || {
-    lk_console_warning "Removed from repo:" "$PAC_MOVED"
+    lk_console_warning "Removed from official repos:" "$PAC_MOVED"
     AUR_PACKAGES+=($PAC_MOVED)
     PAC_PACKAGES=($(lk_pac_available_list -o "${PAC_PACKAGES[@]}"))
 }
@@ -414,36 +410,45 @@ if [ -n "$PAC_REJECT_REGEX" ]; then
         sed -E "/^${PAC_REJECT_REGEX}\$/d"))
 fi
 
-# For any packages in custom repos named as follows, replace PACKAGE in
-# PAC_PACKAGES and AUR_PACKAGES:
-# - ${PREFIX}PACKAGE
-# - ${PREFIX}PACKAGE-git
-# - PACKAGE-${PREFIX%-}
-# - PACKAGE-git
-# - PACKAGE-git-${PREFIX%-}
-PAC_AVAILABLE=($(lk_pac_available_list))
-PAC_UNOFFICIAL=($(comm -13 \
+# Use unofficial packages named PACKAGE-git, PACKAGE-lk or PACKAGE-git-lk
+# instead of PACKAGE
+lk_mktemp_with PAC_UNOFFICIAL comm -13 \
     <(lk_pac_available_list -o | sort -u) \
-    <(lk_echo_array PAC_AVAILABLE | sort -u)))
-PAC_REPLACE=$(lk_echo_array PAC_UNOFFICIAL | awk \
-    -v "p=^$LK_PATH_PREFIX" \
-    -v "s=-${LK_PATH_PREFIX%-}\$" \
-    'BEGIN {
-    a[1] = s; a[2] = p; a[3] = "-git$"
+    <(lk_pac_available_list | sort -u)
+lk_mktemp_with PAC_REPLACE awk -v "suffix=-${LK_PATH_PREFIX%-}\$" '
+function save() {
+    if (_prio[pkg] < prio) {
+        _replace[pkg] = $0
+        _prio[pkg] = prio
+    }
 }
-$0 ~ s || $0 ~ p || /-git$/ {
-    l = $0
-    for (i in a)
-        if (sub(a[i], "", l)) print l, $0
-}')
-if [ -n "$PAC_REPLACE" ]; then
-    SED_COMMAND=(sed -E)
+$0 ~ suffix || /-git$/ {
+    pkg = $0
+    prio = 0
+    # -lk beats -git, -git-lk beats -lk and -git
+    if (sub(suffix, "", pkg)) {
+        prio += 2
+        save()
+    }
+    if (sub(/-git$/, "", pkg)) {
+        prio += 1
+        save()
+    }
+}
+END {
+    for (pkg in _replace) {
+        print pkg, _replace[pkg]
+    }
+}' "$PAC_UNOFFICIAL"
+if [ -s "$PAC_REPLACE" ]; then
+    SED_SCRIPT=
     while read -r PACKAGE NEW_PACKAGE; do
-        SED_COMMAND+=(-e "s/^$(lk_escape_ere \
-            "$PACKAGE")\$/$(lk_escape_ere_replace "$NEW_PACKAGE")/")
-    done <<<"$PAC_REPLACE"
-    PAC_PACKAGES=($(lk_echo_array PAC_PACKAGES | "${SED_COMMAND[@]}"))
-    AUR_PACKAGES=($(lk_echo_array AUR_PACKAGES | "${SED_COMMAND[@]}"))
+        PACKAGE=$(lk_escape_ere "$PACKAGE")
+        NEW_PACKAGE=$(lk_escape_ere_replace "$NEW_PACKAGE")
+        SED_SCRIPT+="${SED_SCRIPT:+;}s/^$PACKAGE\$/$NEW_PACKAGE/"
+    done <"$PAC_REPLACE"
+    PAC_PACKAGES=($(lk_echo_array PAC_PACKAGES | sed -E "$SED_SCRIPT"))
+    AUR_PACKAGES=($(lk_echo_array AUR_PACKAGES | sed -E "$SED_SCRIPT"))
 fi
 
 # Move any AUR_PACKAGES that can be installed from a repo to PAC_PACKAGES
