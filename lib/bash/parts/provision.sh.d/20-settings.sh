@@ -158,3 +158,7 @@ function lk_settings_persist() {
         lk_file_backup -m ${DELETE+"${DELETE[@]}"} &&
         lk_maybe_sudo rm -f -- ${DELETE+"${DELETE[@]}"}
 } #### Reviewed: 2021-07-05
+
+function lk_node_is_router() {
+    [ "${LK_IPV4_ADDRESS:+1}${LK_IPV4_GATEWAY:+2}" = 1 ]
+}

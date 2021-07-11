@@ -202,6 +202,10 @@ function lk_settings_persist() {
         lk_maybe_sudo rm -f -- ${DELETE+"${DELETE[@]}"}
 }
 
+function lk_node_is_router() {
+    [ "${LK_IPV4_ADDRESS:+1}${LK_IPV4_GATEWAY:+2}" = 1 ]
+}
+
 # lk_dns_resolve_hosts HOST...
 function lk_dns_resolve_hosts() { {
     local HOSTS=()
