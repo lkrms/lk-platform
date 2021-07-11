@@ -27,3 +27,14 @@ function lk_env_clean() {
         "$@"
     fi
 }
+
+# lk_mktemp_with VAR COMMAND [ARG...]
+#
+# Set VAR to the name of a temporary file that contains the output of COMMAND.
+function lk_mktemp_with() {
+    [ $# -ge 2 ] || lk_usage "Usage: $FUNCNAME VAR COMMAND [ARG...]" || return
+    local VAR=$1 _LK_STACK_DEPTH=$((${_LK_STACK_DEPTH:-0} + 1))
+    eval "$VAR=\$(lk_mktemp_file)" &&
+        lk_delete_on_exit "${!VAR}" &&
+        "${@:2}" >"${!VAR}"
+}

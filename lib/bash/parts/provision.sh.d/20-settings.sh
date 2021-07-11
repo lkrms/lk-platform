@@ -160,5 +160,6 @@ function lk_settings_persist() {
 } #### Reviewed: 2021-07-05
 
 function lk_node_is_router() {
-    [ "${LK_IPV4_ADDRESS:+1}${LK_IPV4_GATEWAY:+2}" = 1 ]
+    [ "${LK_IPV4_ADDRESS:+1}${LK_IPV4_GATEWAY:+2}" = 1 ] ||
+        lk_node_service_enabled router
 }
