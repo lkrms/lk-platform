@@ -155,7 +155,7 @@ function _lk_iptables_save() {
     }
     for t in filter nat mangle raw security; do
         "${COMMAND[@]}" -t "$t" || break
-    done | sed -E "s/^(:[^ ]+ [^ ]+ \[)[0-9]+:[0-9]+(\])/\10:0\2/"
+    done | sed -E "s/^(:[^ ]+ [^ ]+ \[)[0-9]+:[0-9]+(\])/\10:0\2/; /^#/d"
 }
 
 function lk_iptables_save() {
