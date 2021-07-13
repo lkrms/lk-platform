@@ -15,16 +15,16 @@ DEVICE=${1-}
 [[ $DEVICE =~ ^([0-9a-f]{4}(:|$)){2}$ ]] || lk_usage
 
 FILE=/tmp/.${LK_PATH_PREFIX:-lk-}udev-keyboard-event
+# Supported: autorandr_load, dpms_off
+_ACTION=autorandr_load
 case "${ACTION-}" in
 add)
     OTHER_FILE=${FILE}-removed
     FILE+=-added
-    _ACTION=postswitch
     ;;
 remove)
     OTHER_FILE=${FILE}-added
     FILE+=-removed
-    _ACTION=dpms_off
     ;;
 *)
     lk_die "invalid action: ${ACTION-}"
@@ -64,11 +64,13 @@ function print_active() {
 END     { print_active() }'
 )
 
+[ -n "$SESSIONS" ] || lk_warn "no active sessions" || exit 0
+
 lk_tty_detail "Active sessions with local displays:" $'\n'"$SESSIONS"
 
 while read -r _USER _DISPLAY; do
     case "$_ACTION" in
-    postswitch)
+    autorandr_load)
         lk_tty_detail "Triggering autorandr on display" "$_DISPLAY"
         ;;
     dpms_off)
@@ -79,24 +81,19 @@ while read -r _USER _DISPLAY; do
     UNSET=("${!_LK_@}")
     env ${UNSET+"${UNSET[@]/#/--unset=}"} runuser -u "$_USER" -- bash -c "$(
         run() {
-            postswitch() {
-                autorandr --change --default default --force ||
-                    AUTORANDR_PROFILE_FOLDER=~/.config/autorandr/default \
-                        "$1"
+            autorandr_load() {
+                autorandr --change --force
             }
             dpms_off() {
                 xset dpms force off
             }
             at now < <(lk_quote_args bash -c "$(
                 declare -f "$_ACTION"
-                lk_quote_args DISPLAY=$_DISPLAY XAUTHORITY=~/.Xauthority \
-                    "$_ACTION" \
-                    "$2"
+                lk_quote_args \
+                    DISPLAY=$_DISPLAY XAUTHORITY=~/.Xauthority "$_ACTION"
             ) &>>/tmp/$1-action-\$EUID.out")
         }
         declare -f run lk_quote_args
-        lk_quote_args run \
-            "${0##*/}" \
-            "$LK_BASE/lib/autorandr/postswitch"
+        lk_quote_args run "${0##*/}"
     ) &>>/tmp/${0##*/}-run-\$EUID.out"
 done <<<"$SESSIONS"
