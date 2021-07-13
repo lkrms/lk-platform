@@ -16,7 +16,7 @@ export LK_BASE
 shopt -s nullglob
 
 . "$LK_BASE/lib/bash/common.sh"
-lk_include arch git linux provision
+lk_include arch git linux provision whiptail
 
 ! lk_in_chroot || _LK_BOOTSTRAP=1
 
@@ -648,13 +648,16 @@ $LK_NODE_HOSTNAME" &&
             pacman -D --asdeps "${PAC_UNMARK_EXPLICIT[@]}"
 
     REMOVE_MESSAGE=()
-    ! PAC_REMOVE=($(pacman -Qdttq)) || [ ${#PAC_REMOVE[@]} -eq 0 ] || {
-        lk_echo_array PAC_REMOVE |
-            lk_console_list "Orphaned:" package packages
-        lk_confirm "Remove the above?" N &&
-            REMOVE_MESSAGE+=("orphaned") ||
-            PAC_REMOVE=()
-    }
+    if PAC_REMOVE=($(pacman -Qdttq)) && [ ${#PAC_REMOVE[@]} -gt 0 ]; then
+        lk_whiptail_build_list PAC_REMOVE '' "${PAC_REMOVE[@]}"
+        lk_mapfile PAC_REMOVE <(lk_whiptail_checklist "Orphaned packages" \
+            "Selected packages will be removed:" "${PAC_REMOVE[@]}" off)
+        [ ${#PAC_REMOVE[@]} -eq 0 ] || {
+            lk_echo_array PAC_REMOVE |
+                lk_console_list "Orphaned:" package packages
+            REMOVE_MESSAGE+=("orphaned")
+        }
+    fi
     [ ${#PAC_REJECT[@]} -eq 0 ] ||
         PAC_REJECT=($(lk_pac_installed_list "${PAC_REJECT[@]}"))
     [ ${#PAC_REJECT[@]} -eq 0 ] || {
@@ -673,18 +676,32 @@ $LK_NODE_HOSTNAME" &&
     PAC_INSTALL=($(comm -23 \
         <(lk_echo_array PAC_PACKAGES | sort -u) \
         <(lk_pac_installed_list | sort -u)))
-    [ ${#PAC_INSTALL[@]} -eq 0 ] ||
-        lk_echo_array PAC_INSTALL |
-        lk_console_list "Installing:" package packages
-    PAC_UPGRADE=($(pacman -Sup --print-format %n))
-    [ ${#PAC_UPGRADE[@]} -eq 0 ] ||
-        lk_echo_array PAC_UPGRADE |
-        lk_console_list "Upgrading:" package packages
+    if [ ${#PAC_INSTALL[@]} -gt 0 ]; then
+        PAC_INSTALL=(
+            $(pacman -Sp --print-format "%n %r/%n-%v" "${PAC_INSTALL[@]}" |
+                # Remove dependencies from `pacman -Sp` output
+                grep -E "^$(lk_regex_implode "${PAC_INSTALL[@]}") ")
+        )
+        lk_mapfile PAC_INSTALL <(lk_whiptail_checklist "Installing packages" \
+            "Selected packages will be installed:" "${PAC_INSTALL[@]}")
+        [ ${#PAC_INSTALL[@]} -eq 0 ] ||
+            lk_echo_array PAC_INSTALL |
+            lk_console_list "Installing:" package packages
+    fi
+    PAC_UPGRADE=($(pacman -Sup --print-format "%n %r/%n-%v"))
+    if [ ${#PAC_UPGRADE[@]} -gt 0 ]; then
+        lk_mapfile PAC_UPGRADE <(lk_whiptail_checklist "Upgrading packages" \
+            "Selected packages will be upgraded:" "${PAC_UPGRADE[@]}")
+        [ ${#PAC_UPGRADE[@]} -eq 0 ] ||
+            lk_echo_array PAC_UPGRADE |
+            lk_console_list "Upgrading:" package packages
+    fi
     unset NOCONFIRM
     ! lk_no_input || NOCONFIRM=1
     [ ${#PAC_INSTALL[@]}${#PAC_UPGRADE[@]} = 00 ] ||
-        lk_log_bypass lk_tty pacman -Su ${NOCONFIRM+--noconfirm} \
-            ${PAC_INSTALL[@]+"${PAC_INSTALL[@]}"}
+        lk_log_bypass lk_tty pacman -S ${NOCONFIRM+--noconfirm} \
+            ${PAC_INSTALL[@]+"${PAC_INSTALL[@]}"} \
+            ${PAC_UPGRADE[@]+"${PAC_UPGRADE[@]}"}
 
     lk_symlink_bin codium code || true
     lk_symlink_bin vim vi || true
