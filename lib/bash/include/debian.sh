@@ -248,7 +248,7 @@ function lk_apt_reinstall_damaged() {
         return
     ! lk_verbose ||
         lk_console_detail "Files managed by dpkg:" "$FILE_COUNT"
-    lk_elevate find -L $DIRS -type f -print | sort -u >"$_REAL"
+    lk_elevate find -H $DIRS -type f -print | sort -u >"$_REAL"
     comm -23 "$_DPKG" "$_REAL" >"$_MISSING" &&
         MISSING_COUNT=$(wc -l <"$_MISSING") || return
     ! lk_verbose ||
