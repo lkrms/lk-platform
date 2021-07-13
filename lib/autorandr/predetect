@@ -1,0 +1,16 @@
+#!/bin/bash
+
+set -euo pipefail
+
+function get_hook() {
+    for HOOK in {~/.config,/etc/xdg}/autorandr/"$1"; do
+        [ ! -x "$HOOK" ] || break
+        HOOK=
+    done
+    [ -n "$HOOK" ]
+}
+
+if [[ ${ACTION-} =~ ^(add|remove)$ ]] &&
+    get_hook "post$ACTION"; then
+    "$HOOK"
+fi

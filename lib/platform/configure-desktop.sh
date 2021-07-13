@@ -36,7 +36,7 @@ EOF
         lk_console_message "Checking autorandr"
         DIR=/etc/xdg/autorandr
         lk_install -d -m 00755 "$DIR"
-        for FILE in postsave postswitch; do
+        for FILE in postsave postswitch predetect; do
             lk_install -m 00755 "$DIR/$FILE"
             lk_file_replace -f "$LK_BASE/lib/autorandr/$FILE" "$DIR/$FILE"
         done

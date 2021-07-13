@@ -38,7 +38,7 @@ export LK_BASE
     SH=$(. "$LK_BASE/lib/bash/env.sh") &&
         eval "$SH"
     ! type autorandr >/dev/null 2>&1 || {
-        autorandr --change --default default --force ||
+        autorandr --change --force ||
             AUTORANDR_PROFILE_FOLDER=~/.config/autorandr/default \
                 "$LK_BASE/lib/autorandr/postswitch" || true
         FILE=~/.config/autostart/autorandr.desktop
