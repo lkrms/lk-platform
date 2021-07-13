@@ -1803,7 +1803,7 @@ function lk_log_start() {
         _LK_FD=3
         _LK_FD_LOGGED=1
     }
-    lk_log_to_file_stdout <<<"$HEADER"
+    tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD" <<<"$HEADER"
     ! lk_verbose 2 || lk_echoc \
         "Output is being logged to $LK_BOLD$LOG_FILE$LK_RESET" "$LK_GREY" |
         lk_log_to_tty_stdout
