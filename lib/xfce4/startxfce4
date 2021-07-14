@@ -5,6 +5,17 @@ lk_double_quote() {
     echo "\"${1%.}\""
 }
 
+lk_application_suppress() {
+    FILE=~/.config/autostart/$1.desktop
+    [ -e "$FILE" ] ||
+        { install -d -m 00755 "${FILE%/*}" &&
+            install -m 00644 /dev/null "$FILE"; } || return
+    echo "\
+[Desktop Entry]
+Hidden=true
+" >"$FILE"
+}
+
 [ -n "${LK_BASE-}" ] || { SH=$(
     _FILE=$0
     if [ -L "$_FILE" ]; then
@@ -37,14 +48,17 @@ export LK_BASE
         . "$XDG_CONFIG_HOME/lk-platform/lk-platform.conf"
     SH=$(. "$LK_BASE/lib/bash/env.sh") &&
         eval "$SH"
-    ! type autorandr >/dev/null 2>&1 || {
-        autorandr --change --force ||
+    ! type xiccd >/dev/null 2>&1 || {
+        xiccd &
+        lk_application_suppress xiccd
+    } || true
+    ! type displaycal-apply-profiles >/dev/null 2>&1 ||
+        lk_application_suppress z-displaycal-apply-profiles || true
+    ! type autorandr >/dev/null 2>&1 ||
+        { { autorandr --change --force ||
             AUTORANDR_PROFILE_FOLDER=~/.config/autorandr/default \
-                "$LK_BASE/lib/autorandr/postswitch" || true
-        FILE=~/.config/autostart/autorandr.desktop
-        [ -e "$FILE" ] || { mkdir -p "${FILE%/*}" &&
-            printf '%s\n' '[Desktop Entry]' 'Hidden=true' >"$FILE" || true; }
-    }
+                "$LK_BASE/lib/autorandr/postswitch"; } &&
+            lk_application_suppress autorandr; } || true
     QT_FONT_DPI=$(xdpyinfo |
         grep -Eo '^[[:blank:]]+resolution:[[:blank:]]*[0-9]+x[0-9]+' |
         grep -Eo '[0-9]+' | head -n1) &&
