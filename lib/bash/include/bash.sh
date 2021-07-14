@@ -220,30 +220,32 @@ function lk_bash_audit_tree() {
     lk_bash_audit ${GLOBALS+-g} <(cat "${FILES[@]}")
 }
 
-# lk_bash_udf_defaults [STACKSCRIPT]
+# lk_linode_get_udf_vars [-n] [STACKSCRIPT]
 #
-# Output Bash-compatible variable assignments for each UDF tag in STACKSCRIPT or
-# on standard input.
+# Output shell variable assignments for the Linode UDF tags in input or
+# STACKSCRIPT. If -n is set, format the output as an `export -n` command.
 #
 # Example:
 #
-#     $ lk_bash_udf_defaults <<EOF
+#     $ lk_linode_get_udf_vars -n <<EOF
 #     # <UDF name="_HOSTNAME" label="Short hostname" />
 #     # <UDF name="_TIMEZONE" label="Timezone" default="UTC" />
 #     EOF
 #     export -n \
 #         _HOSTNAME=${_HOSTNAME-} \
 #         _TIMEZONE=${_TIMEZONE:-UTC}
-#
-function lk_bash_udf_defaults() {
-    local XML_PREFIX_REGEX="[a-zA-Z_][-a-zA-Z0-9._]*" OUTPUT
+function lk_linode_get_udf_vars() {
+    local EXPORT REGEX REGEX_DEFAULT OUTPUT
+    unset EXPORT
+    [ "${1-}" != -n ] || { EXPORT= && shift; }
+    REGEX="[a-zA-Z_][-a-zA-Z0-9._]*"
+    REGEX="^.*<($REGEX:)?UDF name=\"([^\"]+)\".*"
+    REGEX_DEFAULT="$REGEX default=\"([^\"]+)\".*"
     OUTPUT=$(
-        echo "export -n \\"
-        cat ${1+"$1"} |
-            grep -E "^.*<($XML_PREFIX_REGEX:)?UDF name=\"([^\"]+)\"" |
-            sed -E \
-                -e "s/^.*<($XML_PREFIX_REGEX:)?UDF name=\"([^\"]+)\".* default=\"([^\"]+)\".*/    \2=\${\2:-\3} \\\\/" \
-                -e "s/^.*<($XML_PREFIX_REGEX:)?UDF name=\"([^\"]+)\".*/    \2=\${\2-} \\\\/"
+        [ -z "${EXPORT+1}" ] || echo "export -n \\"
+        cat ${1+"$1"} | sed -En "\
+s/$REGEX_DEFAULT/${EXPORT+    }\2=\${\2:-\3}${EXPORT+ \\\\}/p
+s/$REGEX/${EXPORT+    }\2=\${\2-}${EXPORT+ \\\\}/p"
     ) && echo "${OUTPUT% \\}"
 }
 

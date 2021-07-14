@@ -4,7 +4,7 @@
 function lk_dns_resolve_hosts() { {
     local HOSTS=()
     while [ $# -gt 0 ]; do
-        if lk_is_cidr; then
+        if lk_is_cidr "$1"; then
             echo "$1"
         elif lk_is_fqdn "$1"; then
             HOSTS[${#HOSTS[@]}]=$1
