@@ -2284,12 +2284,11 @@ function lk_tty_dump() {
 # lk_tty_file FILE [COLOUR [FILE_COLOUR]]
 function lk_tty_file() {
     lk_maybe_sudo test -r "$1" || lk_warn "file not found: $1" || return
-    lk_tty_dump "" \
+    lk_maybe_sudo cat "$1" | lk_tty_dump "" \
         "$1" \
         "($(lk_file_summary "$1"))" \
         "${2-${_LK_TTY_MESSAGE_COLOUR-$LK_MAGENTA}}" \
-        "${3-${_LK_TTY_COLOUR2-$LK_GREEN}}" \
-        <"$1"
+        "${3-${_LK_TTY_COLOUR2-$LK_GREEN}}"
 }
 
 # lk_console_diff FILE1 [FILE2 [MESSAGE [COLOUR]]]
@@ -2347,7 +2346,7 @@ function lk_diff() { (
     RESET=$'\E[m'
     if lk_command_exists icdiff; then
         # Don't use icdiff if FILE1 is empty
-        if [ ! -s "$1" ] && [ -s "$2" ]; then
+        if lk_maybe_sudo test ! -s "$1" -a -s "$2"; then
             echo "$BLUE$2$RESET"
             printf '%s' "$GREEN"
             # Add $RESET to the last line
