@@ -48,7 +48,7 @@ SCRIPT_VARS=$(
 )
 SCRIPT_ENV=$(printenv | sed '/^LS_COLORS=/d' | sort)
 
-# Use lk_bash_udf_defaults to regenerate the following after changes above
+# Use lk_linode_get_udf_vars to regenerate the following after changes above
 export -n \
     LK_NODE_HOSTNAME=${LK_NODE_HOSTNAME-} \
     LK_NODE_FQDN=${LK_NODE_FQDN-} \
