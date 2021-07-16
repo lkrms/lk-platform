@@ -773,7 +773,7 @@ $LK_NODE_HOSTNAME" &&
                 (
                     LK_CONF_OPTION_FILE=$DIR/conf.d/xdebug.ini
                     [ -f "$LK_CONF_OPTION_FILE" ] || exit 0
-                    lk_install -d -m 00777 ~/.xdebug
+                    lk_install -d -m 01777 ~/.xdebug
                     lk_php_set_option xdebug.output_dir ~/.xdebug
                     # Alternative values: profile, trace
                     lk_php_set_option xdebug.mode debug

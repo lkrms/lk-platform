@@ -21,7 +21,7 @@ export LK_BASE
 Usage: ${0##*/} COMMAND [ARG...]"
 
 [ -n "${_LK_LOG_BASENAME-}" ] ||
-    _LK_LOG_BASENAME=${1##*/}-$(lk_hash "$@")
+    _LK_LOG_BASENAME=${1##*/}-$(lk_md5 "$@")
 export -n _LK_LOG_BASENAME
 
 _LK_LOG_CMDLINE=("$@")

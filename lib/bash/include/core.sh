@@ -103,6 +103,23 @@ function lk_debug() {
     [[ ${LK_DEBUG-} =~ ^[1Yy]$ ]]
 }
 
+function lk_ere_escape() {
+    if [ $# -gt 0 ]; then
+        printf '%s\n' "$@" | lk_ere_escape
+    else
+        sed -E 's/[]$()*+.?\^{|}[]/\\&/g'
+    fi
+}
+
+function lk_sed_escape() {
+    local DELIM=${_LK_SED_DELIM-/}
+    if [ $# -gt 0 ]; then
+        printf '%s\n' "$@" | lk_sed_escape
+    else
+        sed -E "s/[]\$()*+.$DELIM?\\^{|}[]/\\\\&/g"
+    fi
+}
+
 function _lk_caller() {
     local CALLER
     if lk_script_is_running; then
@@ -605,6 +622,51 @@ function lk_fd_next() {
     echo "$FD"
 }
 
+function _lk_log_install_file() {
+    local GID
+    if [ ! -w "$1" ]; then
+        if [ ! -e "$1" ]; then
+            local LOG_DIR=${1%${1##*/}}
+            [ -d "${LOG_DIR:=$PWD}" ] ||
+                install -d -m 00755 "$LOG_DIR" 2>/dev/null ||
+                sudo install -d -m 01777 "$LOG_DIR" || return
+            install -m 00600 /dev/null "$1" 2>/dev/null ||
+                { GID=$(id -g) &&
+                    sudo install -m 00600 -o "$UID" -g "$GID" /dev/null "$1"; }
+        else
+            chmod 00600 "$1" 2>/dev/null ||
+                sudo chmod 0600 "$1" || return
+            [ -w "$1" ] ||
+                sudo chown "$UID" "$1"
+        fi
+    fi
+}
+
+# lk_hash [ARG...]
+#
+# Compute the hash of the arguments or input using the most efficient algorithm
+# available (xxHash, SHA or MD5), joining multiple arguments to form one string
+# with a space between each argument.
+function lk_hash() {
+    _LK_HASH_COMMAND=${_LK_HASH_COMMAND:-${LK_HASH_COMMAND:-$(
+        lk_command_first_existing xxhsum shasum md5sum md5
+    )}} || lk_warn "checksum command not found" || return
+    if [ $# -gt 0 ]; then
+        local IFS
+        unset IFS
+        printf '%s' "$*" | "$_LK_HASH_COMMAND"
+    else
+        "$_LK_HASH_COMMAND"
+    fi | awk '{print $1}'
+}
+
+function lk_md5() {
+    local _LK_HASH_COMMAND
+    _LK_HASH_COMMAND=$(lk_command_first_existing md5sum md5) ||
+        lk_warn "md5 command not found" || return
+    lk_hash "$@"
+}
+
 # lk_keep_trying COMMAND [ARG...]
 #
 # Execute COMMAND until its exit status is zero or 10 attempts have been made.
@@ -988,11 +1050,7 @@ function lk_check_pid() {
 }
 
 function lk_escape_ere() {
-    if [ $# -gt 0 ]; then
-        printf '%s\n' "$@" | lk_escape_ere
-    else
-        sed -E 's/[]$()*+./?\^{|}[]/\\&/g'
-    fi
+    lk_sed_escape "$@"
 }
 
 function lk_escape_ere_replace() {
@@ -1706,7 +1764,7 @@ function lk_log_create_file() {
         # installing LOG_DIR (world-writable) and LOG_FILE (owner-only) if
         # needed, running commands via sudo only if they fail without it
         [ -d "$LOG_DIR" ] || lk_elevate_if_error \
-            lk_install -d -m 00777 "$LOG_DIR" 2>/dev/null || continue
+            lk_install -d -m 01777 "$LOG_DIR" 2>/dev/null || continue
         LOG_PATH=$LOG_DIR/${_LK_LOG_BASENAME:-${CMD##*/}}-$UID.${EXT:-log}
         if [ -f "$LOG_PATH" ]; then
             [ -w "$LOG_PATH" ] || {
@@ -1758,40 +1816,47 @@ function _lk_log_close_fd() {
 
 # lk_log_start [TEMP_LOG_FILE]
 function lk_log_start() {
-    local ARG0 ARGC HEADER EXT _FILE FILE LOG_FILE OUT_FILE FIFO
-    if lk_is_true LK_NO_LOG || lk_log_is_open ||
+    local ARG0 HEADER EXT _FILE FILE LOG_FILE OUT_FILE FIFO
+    if [ "${LK_NO_LOG-}" = 1 ] || lk_log_is_open ||
         { [[ $- == *i* ]] && ! lk_script_is_running; }; then
         return
     elif [ -z "${_LK_LOG_CMDLINE+1}" ]; then
         local _LK_LOG_CMDLINE=("$0" ${_LK_ARGV+"${_LK_ARGV[@]}"})
     fi
-    ARG0=$(type -P "${_LK_LOG_CMDLINE[0]}") || ARG0=${_LK_LOG_CMDLINE[0]##*/}
-    ARGC=$((${#_LK_LOG_CMDLINE[@]} - 1))
+    ARG0=$(type -P "${_LK_LOG_CMDLINE[0]}") &&
+        ARG0=$(lk_realpath "$ARG0") || ARG0=${_LK_LOG_CMDLINE[0]##*/}
     _LK_LOG_CMDLINE[0]=$ARG0
-    HEADER=$(printf '====> %s invoked' "$LK_BOLD$ARG0$LK_RESET" &&
-        [ "$ARGC" -eq 0 ] || {
-        printf ' with %s %s:' \
-            "$ARGC" \
-            "$(lk_maybe_plural "$ARGC" argument arguments)"
-        i=0
-        for ARG in "${_LK_LOG_CMDLINE[@]:1}"; do
-            ((++i))
-            printf '\n%s%3d%s %q' "$LK_BOLD" "$i" "$LK_RESET" "$ARG"
-        done
-    })
+    HEADER=$(
+        printf '====> %s invoked' "$LK_BOLD$ARG0$LK_RESET"
+        ! ((ARGC = ${#_LK_LOG_CMDLINE[@]} - 1)) || {
+            printf ' with %s %s:' "$ARGC" \
+                "$(lk_maybe_plural "$ARGC" argument arguments)"
+            for ((i = 1; i <= ARGC; i++)); do
+                printf '\n%s%3d%s %q' \
+                    "$LK_BOLD" "$i" "$LK_RESET" "${_LK_LOG_CMDLINE[i]}"
+            done
+        }
+    )
     if [[ ${1-} =~ (.+)(\.(log|out))?$ ]]; then
         set -- "${BASH_REMATCH[1]}"
     else
         set --
     fi
     for EXT in log out; do
-        if [ $# -gt 0 ]; then
+        if [ -n "${_LK_LOG_FILE-}" ]; then
+            if [ "$EXT" = log ]; then
+                FILE=$_LK_LOG_FILE
+                _lk_log_install_file "$FILE" || return
+            else
+                FILE=/dev/null
+            fi
+        elif [ $# -gt 0 ]; then
             _FILE=$1.$EXT
             if FILE=$(lk_log_create_file -e "$EXT"); then
                 [ ! -e "$_FILE" ] ||
                     { lk_file_backup -m "$_FILE" "$FILE" &&
                         cat -- "$_FILE" >>"$FILE" &&
-                        rm -f -- "$_FILE" || return; }
+                        rm -f -- "$_FILE"; } || return
             else
                 FILE=$_FILE
             fi
@@ -1834,8 +1899,8 @@ function lk_log_start() {
     ! lk_verbose 2 || lk_echoc \
         "Output is being logged to $LK_BOLD$LOG_FILE$LK_RESET" "$LK_GREY" |
         lk_log_to_tty_stdout
-    _LK_LOG_FILE=$LOG_FILE
-    _LK_OUT_FILE=$OUT_FILE
+    _LK_LOG_FILE_LOG=$LOG_FILE
+    _LK_LOG_FILE_OUT=$OUT_FILE
 }
 
 function lk_log_is_open() {
@@ -1853,7 +1918,7 @@ function lk_log_close() {
     lk_log_is_open || lk_warn "no output log" || return
     if [ "${1-}" = -r ]; then
         [ -z "${_LK_LOG2_FD-}" ] || {
-            eval "exec $_LK_LOG_FD"'> >(lk_log >>"$_LK_LOG_FILE")' &&
+            eval "exec $_LK_LOG_FD"'> >(lk_log >>"$_LK_LOG_FILE_LOG")' &&
                 { ! lk_fd_is_open "$_LK_LOG2_FD" ||
                     eval "exec $_LK_LOG2_FD>&-"; }
         } || return
@@ -3266,18 +3331,6 @@ else
         lk_maybe_sudo script -eqfc "$(lk_quote_args "$@")" /dev/null
     }
 fi
-
-function lk_hash() {
-    local COMMAND
-    COMMAND=$(lk_command_first_existing \
-        xxh128sum xxh64sum xxh32sum xxhsum sha256sum shasum md5sum md5) ||
-        lk_warn "command not found: md5" || return
-    if [ $# -gt 0 ]; then
-        printf '%s\0' "$@" | "$COMMAND"
-    else
-        "$COMMAND"
-    fi | awk '{print $1}'
-} #### Reviewed: 2021-03-25
 
 # lk_random_hex BYTES
 function lk_random_hex() {

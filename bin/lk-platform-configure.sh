@@ -374,7 +374,7 @@ lk_log_start
                 ! lk_is_true LK_GIT_REPO_UPDATED ||
                 restart_script "$@"
         fi
-        install -d -m 00777 "$LK_BASE/var/log"
+        install -d -m 01777 "$LK_BASE/var/log"
         install -d -m 00750 "$LK_BASE/var/backup"
         LK_VERBOSE='' \
             lk_dir_set_modes "$LK_BASE" \

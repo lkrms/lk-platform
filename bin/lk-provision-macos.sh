@@ -22,7 +22,7 @@ lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
 
 function exit_trap() {
     local EXT _LOG_FILE LOG_FILE _LK_LOG_BASENAME=lk-provision-macos.sh \
-        _LOG=$_LK_LOG_FILE _OUT=$_LK_OUT_FILE
+        _LOG=$_LK_LOG_FILE_LOG _OUT=$_LK_LOG_FILE_OUT
     lk_log_close || return
     for EXT in log out; do
         _LOG_FILE=_$(lk_upper "$EXT") &&
@@ -268,7 +268,7 @@ EOF
         lk_tty caffeinate -i git clone -b "$LK_PLATFORM_BRANCH" \
             https://github.com/lkrms/lk-platform.git "$LK_BASE"
         sudo install -d -m 02775 -g admin "$LK_BASE"/{etc{,/lk-platform},var}
-        sudo install -d -m 00777 -g admin "$LK_BASE"/var/log
+        sudo install -d -m 01777 -g admin "$LK_BASE"/var/log
         sudo install -d -m 00750 -g admin "$LK_BASE"/var/backup
         FILE=$LK_BASE/etc/lk-platform/lk-platform.conf
         sudo install -m 00664 -g admin /dev/null "$FILE"

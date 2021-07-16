@@ -511,12 +511,15 @@ function lk_wp_reapply_config() {
 
 # lk_wp_enable_system_cron [INTERVAL]
 function lk_wp_enable_system_cron() {
-    local INTERVAL=${1:-5} SITE_ROOT WP_PATH COMMAND REGEX CRONTAB
+    local INTERVAL=${1:-5} SITE_ROOT WP_PATH LOG_FILE COMMAND ENV REGEX CRONTAB
     SITE_ROOT=$(lk_wp_get_site_root) &&
         WP_PATH=$(type -P wp) || return
+    LOG_FILE=${SITE_ROOT%/*}/log/cron.log
+    [ -w "$LOG_FILE" ] || LOG_FILE=~/cron.log
     COMMAND=$(printf \
         '%q/lib/platform/log.sh %q --path=%q cron event run --due-now' \
         "$LK_BASE" "$WP_PATH" "$SITE_ROOT")
+    ENV=$(printf '_LK_LOG_FILE=%q' "$LOG_FILE")
     lk_console_item "Using crontab to schedule WP-Cron in" "$SITE_ROOT"
     lk_wp config get DISABLE_WP_CRON --type=constant 2>/dev/null |
         grep -Fx 1 >/dev/null ||
@@ -524,13 +527,20 @@ function lk_wp_enable_system_cron() {
         return
     # Remove legacy cron job
     lk_crontab_remove_command "$SITE_ROOT/wp-cron.php" || return
-    REGEX="$S$(lk_regex_expand_whitespace "$(lk_escape_ere "$COMMAND")")($S|\$)"
+    # awk needs to see "[^\\\\[:blank:]]" after unescaping, hence the otherwise
+    # superfluous backslashes
+    REGEX="$S(_LK_LOG_FILE=([^\\\\\\\\[:blank:]]|\\\\.)*$S+)?$(
+        lk_regex_expand_whitespace "$(lk_escape_ere "$COMMAND")"
+    )($S|\$)"
+    # Try to keep everything before and after "$ENV $COMMAND", e.g. environment
+    # variables and redirections
     [ $# -eq 0 ] && CRONTAB=$(lk_crontab_get "^$S*[^#[:blank:]].*$REGEX" |
-        head -n1 | awk -v "c=$COMMAND" -v "r=${REGEX//\\/\\\\}" \
+        head -n1 | awk -v "c=$ENV $COMMAND" -v "r=${REGEX//\\/\\\\}" \
         '{if(split($0,a,r)!=2)exit 1;printf("%s %s",a[1],c);if(a[2])printf(" %s",a[2])}') ||
+        # But if that's not possible, add or replace the whole job
         { [ "$INTERVAL" -lt 60 ] &&
-            CRONTAB="*/$INTERVAL * * * * $COMMAND >/dev/null" ||
-            CRONTAB="42 * * * * $COMMAND >/dev/null"; }
+            CRONTAB="*/$INTERVAL * * * * $ENV $COMMAND >/dev/null" ||
+            CRONTAB="42 * * * * $ENV $COMMAND >/dev/null"; }
     lk_crontab_apply "$REGEX" "$CRONTAB"
 }
 
