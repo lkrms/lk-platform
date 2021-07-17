@@ -489,13 +489,14 @@ Usage: $(lk_myself -f) DIR HOST..." || return
                 touch -r "$LOG_FILE" "$FILE" &&
                 rm -f "$FILE.tmp"
         } || return
-        # TODO: add $LK_BASE/etc/lk-platform/lk-platform.conf
-        FILES=$(ssh "$SSH_HOST" ls -d \
+        FILES=$(ssh "$SSH_HOST" realpath -eq \
             /etc/default/lk-platform \
+            /opt/{lk-,"$PREFIX"}platform/etc/{"sites/*.conf",lk-platform/lk-platform.conf} \
             /etc/memcached.conf \
             "/etc/apache2/sites-available/*.conf" \
             "/etc/mysql/mariadb.conf.d/*$PREFIX*.cnf" \
-            "/etc/php/*/fpm/pool.d/*.conf" 2>/dev/null) || [ $? -ne 255 ]
+            "/etc/php/*/fpm/pool.d/*.conf" \
+            2>/dev/null | sort -u) || [ $? -ne 255 ]
         lk_mapfile _FILES <<<"$FILES"
         for _FILE in ${_FILES[@]+"${_FILES[@]}"}; do
             FILE=${_FILE#/}
@@ -508,7 +509,8 @@ Usage: $(lk_myself -f) DIR HOST..." || return
                 -e 's/^((LK_)?NODE_(HOSTNAME|FQDN)=)/\1test-/' \
                 -e '/^(LK_)?ADMIN_EMAIL=/d' \
                 -e 's/^(CALL_HOME_MX=).*/\1/' &&
-                if grep -Eq '<(lk:)?UDF\>.*\<ADMIN_EMAIL\>' "$_DIR/StackScript-$HOST"; then
+                if grep -Eq '<(lk:)?UDF\>.*\<ADMIN_EMAIL\>' \
+                    "$_DIR/StackScript-$HOST"; then
                     printf ADMIN_EMAIL
                 else
                     printf LK_ADMIN_EMAIL
@@ -517,9 +519,7 @@ Usage: $(lk_myself -f) DIR HOST..." || return
                 printf '%s=%q\n' "$VAR" "$VALUE"
             done >"$_DIR/StackScript-env-$HOST" &&
             touch -r "$_DIR/install.log-$HOST" \
-                "$_DIR/StackScript-env-$HOST" \
-                "$_DIR" ||
-            return
+                "$_DIR/StackScript-env-$HOST" "$_DIR" || return
     done
 }
 

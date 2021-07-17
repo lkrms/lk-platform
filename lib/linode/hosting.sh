@@ -432,7 +432,7 @@ TERM='' . "$LK_BASE/lib/bash/common.sh"
 lk_include debian hosting provision
 
 install -d -m 02775 -g adm "$LK_BASE"/{etc{,/lk-platform},var}
-install -d -m 00777 -g adm "$LK_BASE"/var/log
+install -d -m 01777 -g adm "$LK_BASE"/var/log
 install -d -m 00750 -g adm "$LK_BASE"/var/backup
 FILE=$LK_BASE/etc/lk-platform/lk-platform.conf
 install -m 00664 -g adm /dev/null "$FILE"

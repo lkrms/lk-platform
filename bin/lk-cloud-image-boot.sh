@@ -658,7 +658,7 @@ lk_console_blank
 lk_confirm "OK to proceed?" Y || lk_die ""
 
 {
-    lk_elevate_if_error install -d -m 0777 \
+    lk_elevate_if_error install -d -m 01777 \
         "$LK_BASE/var/cache"{,/cloud-images,/NoCloud} 2>/dev/null &&
         cd "$LK_BASE/var/cache/cloud-images" ||
         lk_die "error creating cache directories"

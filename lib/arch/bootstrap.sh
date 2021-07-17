@@ -425,7 +425,7 @@ in_target install -d -m 02775 -o "$BOOTSTRAP_USERNAME" -g adm "$LK_BASE"
         git clone -b "$LK_PLATFORM_BRANCH" \
         https://github.com/lkrms/lk-platform.git "$LK_BASE")
 in_target install -d -m 02775 -g adm "$LK_BASE"/{etc{,/lk-platform},var}
-in_target install -d -m 00777 -g adm "$LK_BASE"/var/log
+in_target install -d -m 01777 -g adm "$LK_BASE"/var/log
 in_target install -d -m 00750 -g adm "$LK_BASE"/var/backup
 FILE=$LK_BASE/etc/lk-platform/lk-platform.conf
 in_target install -m 00664 -g adm /dev/null "$FILE"
