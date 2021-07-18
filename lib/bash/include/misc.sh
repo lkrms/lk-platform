@@ -62,7 +62,7 @@ function lk_mediainfo_check() {
     )
     lk_script_is_running && ! lk_verbose 2 || {
         lk_console_message \
-            "$COUNT $(lk_maybe_plural "$COUNT" file files) checked"
+            "$COUNT $(lk_plural "$COUNT" file files) checked"
         lk_console_detail \
             "File names and mediainfo output saved at same indices in arrays:" \
             $'LK_MEDIAINFO_FILES\nLK_MEDIAINFO_VALUES'
@@ -162,10 +162,10 @@ function lk_nextcloud_get_excluded() {
         lk_mapfile -z FILES <("${FIND[@]}" | sort -zu)
         [ ${#FILES[@]} -eq 0 ] &&
             lk_console_message \
-                "No files excluded by $(lk_pretty_path "$EXCLUDE_FILE")" ||
+                "No files excluded by $(lk_tty_path "$EXCLUDE_FILE")" ||
             lk_echo_array FILES |
             lk_console_list \
-                "Excluded by $(lk_pretty_path "$EXCLUDE_FILE"):" file files
+                "Excluded by $(lk_tty_path "$EXCLUDE_FILE"):" file files
     )
 }
 

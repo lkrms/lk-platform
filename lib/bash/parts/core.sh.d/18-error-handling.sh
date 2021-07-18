@@ -22,10 +22,10 @@ function _lk_caller() {
         LINE=${BASH_LINENO[3]-}
     fi
     [ -z "$SOURCE" ] || [ "$SOURCE" = main ] || [ "$SOURCE" = "$0" ] ||
-        CALLER+=("$(lk_pretty_path "$SOURCE")")
+        CALLER+=("$(lk_tty_path "$SOURCE")")
     [ -z "$LINE" ] ||
         CALLER[${#CALLER[@]} - 1]+=$LK_DIM:$LINE$LK_RESET
-    lk_implode "$LK_DIM->$LK_RESET" CALLER
+    lk_implode_args "$LK_DIM->$LK_RESET" "${CALLER[@]}"
 }
 
 # lk_warn [MESSAGE]

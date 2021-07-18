@@ -9,7 +9,7 @@ Usage: ${0##*/} PDF..."
 
 lk_log_start
 
-lk_console_message "Cleaning $# $(lk_maybe_plural $# file files)"
+lk_console_message "Cleaning $# $(lk_plural $# file files)"
 
 # Keep the original PDF unless file size is reduced by at least this much
 PERCENT_SAVED_THRESHOLD=${PERCENT_SAVED_THRESHOLD:-2}
@@ -54,6 +54,6 @@ done
 
 [ ${#ERRORS[@]} -eq 0 ] ||
     lk_console_error -r \
-        "Unable to process ${#ERRORS[@]} $(lk_maybe_plural \
+        "Unable to process ${#ERRORS[@]} $(lk_plural \
             ${#ERRORS[@]} file files):" $'\n'"$(lk_echo_array ERRORS)" ||
     lk_die ""

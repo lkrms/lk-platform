@@ -13,7 +13,7 @@ function lk_keep_trying() {
             lk_console_log \
                 "Command failed (attempt $ATTEMPT of $MAX_ATTEMPTS):" "$*"
             lk_console_detail \
-                "Trying again in $WAIT $(lk_maybe_plural $WAIT second seconds)"
+                "Trying again in $WAIT $(lk_plural $WAIT second seconds)"
             sleep "$WAIT"
             ((NEW_WAIT = WAIT + LAST_WAIT, LAST_WAIT = WAIT, WAIT = NEW_WAIT))
             lk_console_blank

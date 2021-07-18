@@ -645,7 +645,7 @@ printf '%s\t%s\n' \
     "IPv4 address" "${_VM_IPV4_ADDRESS:-<dhcp>}" \
     "MAC address" "$VM_MAC_ADDRESS" \
     "StackScript" "${STACKSCRIPT:-<none>}" \
-    "Custom metadata" "${#METADATA_URLS[@]} namespace$(lk_maybe_plural \
+    "Custom metadata" "${#METADATA_URLS[@]} namespace$(lk_plural \
         ${#METADATA_URLS[@]} "" s)" \
     "Shut down" "${POWEROFF:-no}" \
     "Libvirt service" "$LIBVIRT_URI" \
@@ -804,7 +804,7 @@ lk_confirm "OK to proceed?" Y || lk_die ""
             MOUNT_DIR=${FILESYSTEM_DIRS[1]}
             MOUNT_NAME=qemufs${#MOUNT_DIRS[@]}
             FILESYSTEM_DIRS[1]=$MOUNT_NAME
-            VIRT_OPTIONS+=(--filesystem "$(lk_implode "," FILESYSTEM_DIRS)")
+            VIRT_OPTIONS+=(--filesystem "$(lk_implode_arr "," FILESYSTEM_DIRS)")
             FSTAB+=("$MOUNT_NAME $MOUNT_DIR 9p defaults,nofail,trans=virtio,version=9p2000.L,posixacl,msize=262144,_netdev 0 0")
             MOUNT_DIRS+=("$MOUNT_DIR")
         done

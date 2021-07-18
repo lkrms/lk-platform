@@ -49,7 +49,7 @@ TO_DEACTIVATE=($(
 
 if [ ${#TO_DEACTIVATE[@]} -gt 0 ]; then
     lk_echo_array TO_DEACTIVATE | lk_console_detail_list \
-        "Production-only $(lk_maybe_plural ${#TO_DEACTIVATE[@]} \
+        "Production-only $(lk_plural ${#TO_DEACTIVATE[@]} \
             plugin plugins) must be deactivated to continue:"
     lk_confirm "Proceed?" Y || lk_die ""
     lk_wp plugin deactivate "${TO_DEACTIVATE[@]}"
@@ -85,7 +85,7 @@ lk_console_detail "Installed at:" "$SITE_ROOT"
     lk_console_detail "Active plugins:" "<none>" ||
     lk_echo_array ACTIVE_PLUGINS |
     lk_console_detail_list "Active $(
-        lk_maybe_plural ${#ACTIVE_PLUGINS[@]} \
+        lk_plural ${#ACTIVE_PLUGINS[@]} \
             "plugin" "plugins (${#ACTIVE_PLUGINS[@]})"
     ):"
 

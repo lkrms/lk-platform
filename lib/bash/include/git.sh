@@ -352,7 +352,7 @@ function lk_git_fast_forward_branch() {
     }
     _BRANCH=$(lk_git_branch_current) || return
     lk_console_detail \
-        "${FORCE-Updating}${FORCE+Resetting}" "$1 ($BEHIND $(lk_maybe_plural \
+        "${FORCE-Updating}${FORCE+Resetting}" "$1 ($BEHIND $(lk_plural \
             "$BEHIND" commit commits) behind${FORCE+, diverged})"
     LK_GIT_REPO_UPDATED=1
     if [ "$_BRANCH" = "$1" ]; then
@@ -374,7 +374,7 @@ function lk_git_push_branch() {
     REMOTE=${BASH_REMATCH[1]}
     REMOTE_BRANCH=${BASH_REMATCH[2]}
     AHEAD=$(git rev-list --count "$2..$1") &&
-        _PATH=$(pwd | lk_pretty_path) || return
+        _PATH=$(pwd | lk_tty_path) || return
     [ "$AHEAD" -gt 0 ] || return 0
     ! lk_no_input ||
         lk_warn "in $_PATH, cannot push to $2: user input disabled" || return 0
@@ -384,17 +384,17 @@ function lk_git_push_branch() {
     lk_tty_dump \
         "$LOG" \
         "Not pushed:" \
-        "($AHEAD $(lk_maybe_plural "$AHEAD" commit commits))"
+        "($AHEAD $(lk_plural "$AHEAD" commit commits))"
     lk_mapfile PUSH_URLS <(lk_git_list_push_urls "$REMOTE" 2>/dev/null)
     [ ${#PUSH_URLS[@]} -eq 0 ] ||
-        lk_console_detail "Push $(lk_maybe_plural \
+        lk_console_detail "Push $(lk_plural \
             ${#PUSH_URLS[@]} URL URLs):" \
             $'\n'"$(lk_echo_array PUSH_URLS)"
     lk_confirm "In $LK_BOLD$_PATH$LK_RESET, \
 push $LK_BOLD$1$LK_RESET to $LK_BOLD$2$LK_RESET?" Y ||
         return 0
     lk_console_detail \
-        "Pushing to $2 ($AHEAD $(lk_maybe_plural \
+        "Pushing to $2 ($AHEAD $(lk_plural \
             "$AHEAD" commit commits) ahead)"
     _lk_git push --tags "$REMOTE" "$1:$REMOTE_BRANCH" &&
         LK_GIT_REPO_UPDATED=1 || return
@@ -624,14 +624,14 @@ directory of a working tree" || return
         [ ${#REPOS[@]} -gt 0 ] || lk_warn "no repos found" || return
     fi
     [ -z "${PROMPT-}" ] || lk_no_input || {
-        lk_echo_array REPOS | lk_pretty_path |
+        lk_echo_array REPOS | lk_tty_path |
             lk_console_list "Repositories:" repo repos
         lk_console_item "Command to run:" \
             $'\n'"$(lk_quote_args "${REPO_COMMAND[@]}")"
         lk_confirm "Proceed?" Y || return
     }
     [ ${#REPOS[@]} -gt 1 ] || unset PARALLEL
-    NOUN="${#REPOS[@]} $(lk_maybe_plural ${#REPOS[@]} repo repos)"
+    NOUN="${#REPOS[@]} $(lk_plural ${#REPOS[@]} repo repos)"
     if lk_is_true PARALLEL; then
         _lk_git_is_quiet ||
             lk_console_log "Processing $NOUN in parallel"
@@ -640,7 +640,7 @@ directory of a working tree" || return
             ERR_FILE=$(lk_mktemp_file) &&
             lk_delete_on_exit "$ERR_FILE" || return
         for REPO in "${REPOS[@]}"; do
-            _REPO=$(lk_pretty_path "$REPO")
+            _REPO=$(lk_tty_path "$REPO")
             (
                 _LK_CAN_FAIL=1
                 exec 2>&"$FD" &&
@@ -658,7 +658,7 @@ directory of a working tree" || return
         _lk_git_is_quiet ||
             lk_console_log "Processing $NOUN"
         for REPO in "${REPOS[@]}"; do
-            _REPO=$(lk_pretty_path "$REPO")
+            _REPO=$(lk_tty_path "$REPO")
             (
                 _LK_CAN_FAIL=1
                 cd "$REPO" &&
@@ -695,7 +695,7 @@ function lk_git_audit_repo() {
     STASHES=$(lk_git_stash_list | wc -l | tr -d ' ') || { STASHES=0 && ((++ERRORS)); }
     [ "$STASHES" -eq 0 ] ||
         lk_console_error -r "Changes in $STASHES $(lk_pass \
-            lk_maybe_plural "$STASHES" stash stashes)" || ((++ERRORS))
+            lk_plural "$STASHES" stash stashes)" || ((++ERRORS))
     [ "$ERRORS" -eq 0 ]
 }
 
@@ -708,7 +708,7 @@ function lk_git_audit_repos() {
     [ $# -eq 0 ] || LK_GIT_REPOS=("$@")
     [ ${#LK_GIT_REPOS[@]} -gt 0 ] || lk_git_get_repos LK_GIT_REPOS
     [ ${#LK_GIT_REPOS[@]} -gt 0 ] || lk_warn "no repos found" || return
-    NOUN="${#LK_GIT_REPOS[@]} $(lk_maybe_plural ${#LK_GIT_REPOS[@]} repo repos)"
+    NOUN="${#LK_GIT_REPOS[@]} $(lk_plural ${#LK_GIT_REPOS[@]} repo repos)"
     if ! lk_is_true SKIP_FETCH; then
         lk_echo_array LK_GIT_REPOS |
             lk_console_list "Fetching all remotes:" repo repos

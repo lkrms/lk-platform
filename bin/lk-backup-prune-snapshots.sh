@@ -64,7 +64,7 @@ function print_max_age() {
         ;;
     *)
         lk_console_detail "$2 snapshots" \
-            "expire after $1 $(lk_maybe_plural "$1" "$3" "$4")"
+            "expire after $1 $(lk_plural "$1" "$3" "$4")"
         ;;
     esac
 }

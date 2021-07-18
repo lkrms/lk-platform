@@ -370,7 +370,7 @@ Example:
         SH=$(lk_linode_get_shell_var <<<"$LINODE") &&
             eval "$SH" || return
         lk_console_item "Rebuilding:" \
-            "$LINODE_LABEL ($(lk_implode ", " LINODE_TAGS))"
+            "$LINODE_LABEL ($(lk_implode_arr ", " LINODE_TAGS))"
         lk_console_detail "Linode ID:" "$LINODE_ID"
         lk_console_detail "Linode type:" "$LINODE_TYPE"
         lk_console_detail "CPU count:" "$LINODE_VPCUS"

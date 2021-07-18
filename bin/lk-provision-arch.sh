@@ -666,7 +666,7 @@ $LK_NODE_HOSTNAME" &&
     }
     [ ${#PAC_REMOVE[@]} -eq 0 ] || {
         lk_console_message \
-            "Removing $(lk_implode " and " REMOVE_MESSAGE) packages"
+            "Removing $(lk_implode_arr " and " REMOVE_MESSAGE) packages"
         lk_log_bypass lk_tty pacman -Rs --noconfirm "${PAC_REMOVE[@]}"
     }
 
