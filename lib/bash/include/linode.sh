@@ -8,6 +8,19 @@ function linode-cli() {
     command linode-cli --suppress-warnings "$@"
 }
 
+function linode-cli-json {
+    local JSON PAGE=0 COUNT
+    JSON=$(lk_mktemp_file) &&
+        lk_delete_on_exit "$JSON" || return
+    while :; do
+        ((++PAGE))
+        linode-cli --json --page "$PAGE" "$@" >"$JSON" &&
+            COUNT=$(jq 'length' "$JSON") &&
+            jq '.[]' "$JSON" || return
+        ((COUNT == 100)) || break
+    done | jq --slurp
+}
+
 function lk_linode_flush_cache() {
     lk_cache_mark_dirty
 }
@@ -23,23 +36,23 @@ function _lk_linode_filter() {
 }
 
 function lk_linode_linodes() {
-    lk_cache linode-cli --json linodes list "$@"
+    lk_cache linode-cli-json linodes list "$@"
 }
 
 function lk_linode_ips() {
-    lk_cache linode-cli --json networking ips-list "$@"
+    lk_cache linode-cli-json networking ips-list "$@"
 }
 
 function lk_linode_domains() {
-    lk_cache linode-cli --json domains list "$@"
+    lk_cache linode-cli-json domains list "$@"
 }
 
 function lk_linode_domain_records() {
-    lk_cache linode-cli --json domains records-list "$@"
+    lk_cache linode-cli-json domains records-list "$@"
 }
 
 function lk_linode_stackscripts() {
-    lk_cache linode-cli --json stackscripts list --is_public false "$@"
+    lk_cache linode-cli-json stackscripts list --is_public false "$@"
 }
 
 function lk_linode_get_shell_var() {
@@ -143,20 +156,72 @@ function lk_linode_hosting_ssh_add_all() {
     lk_console_success "SSH configuration complete"
 }
 
-# lk_linode_domain [DOMAIN_ID|DOMAIN_NAME [LINODE_ARG...]]
+function _lk_linode_domain() {
+    local SH _LK_STACK_DEPTH=-1
+    SH=$(lk_jq_get_shell_var \
+        DOMAIN_ID .id \
+        DOMAIN .domain) && eval "$SH"
+}
+
+# lk_linode_domain [-s] [DOMAIN_ID|DOMAIN_NAME [LINODE_ARG...]]
+#
+# If -s is set, assign values to DOMAIN_ID and DOMAIN in the caller's scope,
+# otherwise print the JSON representation of the resolved domain.
 function lk_linode_domain() {
+    local _JSON=1 JSON
+    [ "${1-}" != -s ] || { _JSON= && shift; }
     [ -n "${1-}" ] ||
         lk_linode_domain_singleton "${@:2}" ||
         lk_warn "no domain" || return
-    lk_linode_domains "${@:2}" | jq -er --arg d "$1" \
-        '[.[]|select((.id|tostring==$d) or .domain==$d)]|if length==1 then .[0] else empty end' ||
-        lk_warn "domain not found: $1"
+    JSON=$(lk_linode_domains "${@:2}" | jq -er --arg d "$1" \
+        '[.[]|select((.id|tostring==$d) or .domain==$d)]|if length==1 then .[0] else empty end') ||
+        lk_warn "domain not found: $1" || return
+    if [ -n "$_JSON" ]; then
+        cat <<<"$JSON"
+    else
+        _lk_linode_domain <<<"$JSON"
+    fi
 }
 
 # lk_linode_domain_singleton [LINODE_ARG...]
 function lk_linode_domain_singleton() {
     lk_linode_domains "$@" | jq -er \
         'if length==1 then .[0] else empty end'
+}
+
+function lk_linode_domain_cleanup() {
+    local DOMAIN_ID DOMAIN DUP
+    [ $# -gt 0 ] ||
+        lk_usage "Usage: $FUNCNAME DOMAIN_ID|DOMAIN_NAME [LINODE_ARG...]" ||
+        return
+    lk_linode_domain -s "$@" || return
+    lk_tty_print "Checking for duplicate DNS records"
+    lk_tty_detail "Domain ID:" "$DOMAIN_ID"
+    lk_tty_detail "Domain name:" "$DOMAIN"
+    DUP=$(lk_linode_domain_records "$DOMAIN_ID" |
+        jq -r '.[] | [.id, .name, .type, .target] | @tsv' |
+        sort -n | awk '
+{
+  r = $2 "\t" $3 "\t" $4
+  if (a[r])
+    d[$1] = r
+  else
+    a[r] = 1
+}
+END {
+  for (i in d)
+    print i "\t" d[i]
+}') || return
+    [ -n "${DUP:+1}" ] || {
+        lk_tty_detail "No duplicate records found"
+        return
+    }
+    lk_tty_detail "Duplicate records:" $'\n'"$DUP"
+    lk_confirm "OK to delete $(lk_plural -v \
+        $(wc -l <<<"$DUP") record records)?" Y || return
+    lk_linode_flush_cache
+    lk_xargs lk_run_detail \
+        linode-cli domains records-delete "$DOMAIN_ID" < <(cut -f1 <<<"$DUP")
 }
 
 function _lk_linode_dns_records() {
@@ -182,7 +247,7 @@ function _lk_linode_dns_records() {
 # - {LABEL}             AAAA    {IPV6}
 #
 function lk_linode_dns_check() {
-    local USE_TAGS LINODES LINODE_COUNT TAGS="[]" DOMAIN_JSON SH \
+    local USE_TAGS LINODES LINODE_COUNT TAGS="[]" DOMAIN_ID DOMAIN \
         RECORDS REVERSE _RECORDS _REVERSE \
         NAME TYPE TARGET JSON RECORD_ID ADDRESS RDNS \
         NEW_RECORD_COUNT=0 NEW_REVERSE_RECORD_COUNT=0
@@ -196,14 +261,10 @@ function lk_linode_dns_check() {
         --arg p "^(?<part>$DOMAIN_PART_REGEX).*" \
         '[.[].tags[]|select(test($p))|sub($p;"\(.part)")]|counts|[.[]|select(.[1]==1)|.[0]]') ||
         return
-    lk_console_message "Retrieving domain records and Linode IP addresses"
-    DOMAIN_JSON=$(lk_linode_domain "${@:2}") &&
-        SH=$(lk_jq_get_shell_var \
-            DOMAIN_ID .id \
-            DOMAIN .domain \
-            <<<"$DOMAIN_JSON") && eval "$SH" || return
-    lk_console_detail "Domain ID:" "$DOMAIN_ID"
-    lk_console_detail "Domain name:" "$DOMAIN"
+    lk_linode_domain -s "${@:2}" || return
+    lk_tty_print "Retrieving domain records and Linode IP addresses"
+    lk_tty_detail "Domain ID:" "$DOMAIN_ID"
+    lk_tty_detail "Domain name:" "$DOMAIN"
     RECORDS=$(lk_linode_domain_records "$DOMAIN_ID" "${@:3}" | jq -r \
         '.[]|"\(.name)\t\(.type)\t\(.target)"') &&
         REVERSE=$(lk_linode_ips "${@:3}" | jq -r \
@@ -225,8 +286,8 @@ function lk_linode_dns_check() {
         ((++NEW_RECORD_COUNT))
         lk_console_detail "Record ID:" "$RECORD_ID"
     done < <(comm -23 \
-        <(sort <<<"$_RECORDS") \
-        <(sort <<<"$RECORDS"))
+        <(sort -u <<<"$_RECORDS") \
+        <(sort -u <<<"$RECORDS"))
     while read -r ADDRESS RDNS; do
         [ "$NEW_RECORD_COUNT" -eq 0 ] ||
             [ "$NEW_REVERSE_RECORD_COUNT" -gt 0 ] || {
@@ -247,8 +308,8 @@ function lk_linode_dns_check() {
         <(sort <<<"$REVERSE"))
     ! lk_verbose || {
         RECORDS=$(comm -13 \
-            <(sort <<<"$_RECORDS") \
-            <(sort <<<"$RECORDS"))
+            <(sort -u <<<"$_RECORDS") \
+            <(sort -u <<<"$RECORDS"))
         [ -z "$RECORDS" ] ||
             lk_console_item "Records in '$DOMAIN' with no matching Linode:" \
                 $'\n'"$RECORDS" "$LK_BOLD$LK_RED"
