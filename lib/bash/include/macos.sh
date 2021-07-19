@@ -324,7 +324,7 @@ function lk_macos_defaults_dump() {
         LK_DEFAULTS_DIR=$DIR-system \
             lk_macos_defaults_dump || return
     }
-    DIR=$(lk_pretty_path "$DIR")
+    DIR=$(lk_tty_path "$DIR")
     lk_console_log \
         "Output of \"defaults [-currentHost] export \$DOMAIN\" dumped to:" \
         "$(for d in "$DIR" ${_LK_MACOS_DEFAULTS_DUMP_SUDO:+"$DIR-system"}; do

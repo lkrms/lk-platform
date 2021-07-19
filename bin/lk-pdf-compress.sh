@@ -9,7 +9,7 @@ Usage: ${0##*/} PDF..."
 
 lk_log_start
 
-lk_console_message "Compressing $# $(lk_maybe_plural $# file files)"
+lk_console_message "Compressing $# $(lk_plural $# file files)"
 
 # Adobe Distiller defaults (see:
 # https://www.adobe.com/content/dam/acom/en/devnet/acrobat/pdfs/distillerparameters.pdf)
@@ -123,6 +123,6 @@ done
 
 [ ${#ERRORS[@]} -eq 0 ] ||
     lk_console_error -r \
-        "Unable to process ${#ERRORS[@]} $(lk_maybe_plural \
+        "Unable to process ${#ERRORS[@]} $(lk_plural \
             ${#ERRORS[@]} file files):" $'\n'"$(lk_echo_array ERRORS)" ||
     lk_die ""

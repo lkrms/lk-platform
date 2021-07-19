@@ -10,7 +10,7 @@ Usage: ${0##*/} PDF..."
 
 lk_log_start
 
-lk_console_message "Embedding fonts in $# $(lk_maybe_plural $# file files)"
+lk_console_message "Embedding fonts in $# $(lk_plural $# file files)"
 
 ! lk_is_macos ||
     export GS_FONTPATH=${GS_FONTPATH-~/Library/Fonts:/Library/Fonts:/System/Library/Fonts}
@@ -67,6 +67,6 @@ done
 
 [ ${#ERRORS[@]} -eq 0 ] ||
     lk_console_error -r \
-        "Unable to process ${#ERRORS[@]} $(lk_maybe_plural \
+        "Unable to process ${#ERRORS[@]} $(lk_plural \
             ${#ERRORS[@]} file files):" $'\n'"$(lk_echo_array ERRORS)" ||
     lk_die ""

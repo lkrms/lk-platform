@@ -260,7 +260,7 @@ function lk_apt_reinstall_damaged() {
             lk_warn "unable to find packages for missing files" || return
         lk_echo_array REINSTALL |
             lk_console_detail_list \
-                "Reinstalling to restore $MISSING_COUNT $(lk_maybe_plural \
+                "Reinstalling to restore $MISSING_COUNT $(lk_plural \
                     "$MISSING_COUNT" file files):" \
                 "APT package" "APT packages"
         lk_confirm "Proceed?" Y || return
@@ -285,8 +285,8 @@ function lk_apt_sources_get_clean() {
     fi
     SH=$(lk_get_regex URI_REGEX_REQ_SCHEME_HOST) && eval "$SH"
     grep -E "^deb$S+$URI_REGEX_REQ_SCHEME_HOST$S+\
-($(lk_implode '|' SUITES))\
-($S+($(lk_implode '|' COMPONENTS)))+$S*(#.*|\$)" ${LIST:+"$LIST"} |
+($(lk_implode_arr '|' SUITES))\
+($S+($(lk_implode_arr '|' COMPONENTS)))+$S*(#.*|\$)" ${LIST:+"$LIST"} |
         sed -E "s/$S*(#.*)?\$//" |
         awk '{for(i=4;i<=NF;i++)print$1,$2,$3,$i}'
 }

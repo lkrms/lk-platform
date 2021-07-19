@@ -306,7 +306,7 @@ Usage: $(lk_myself -f) DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..
     done
     LOG_FILE=$(lk_mktemp_file) || return
     ! lk_verbose || lk_console_message \
-        "Updating file modes in $(lk_pretty_path "$DIR")"
+        "Updating file modes in $(lk_tty_path "$DIR")"
     for i in "${!MATCH[@]}"; do
         [ -n "${DIR_MODE[$i]:+1}${FILE_MODE[$i]:+1}" ] || continue
         ! lk_verbose 2 || lk_console_item "Checking:" "${MATCH[$i]}"
@@ -351,9 +351,9 @@ Usage: $(lk_myself -f) DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..
         $(lk_verbose &&
             echo "lk_console_message" ||
             echo "lk_console_detail") \
-            "$TOTAL file $(lk_maybe_plural \
+            "$TOTAL file $(lk_plural \
                 "$TOTAL" mode modes) updated$(lk_verbose ||
-                    echo " in $(lk_pretty_path "$DIR")")"
+                    echo " in $(lk_tty_path "$DIR")")"
     ! ((TOTAL)) &&
         lk_delete_on_exit "$LOG_FILE" ||
         lk_console_detail "Changes logged to:" "$LOG_FILE"
@@ -867,7 +867,7 @@ function lk_host_soa() {
     NAMESERVERS=($(awk '{sub("\\.$", "", $5); print $5}' <<<"$ANSWER" | sort))
     ! lk_verbose || {
         lk_console_detail "Domain apex:" "$APEX"
-        lk_console_detail "Name servers:" "$(lk_implode ", " NAMESERVERS)"
+        lk_console_detail "Name servers:" "$(lk_implode_arr ", " NAMESERVERS)"
     }
     for NAMESERVER in "${NAMESERVERS[@]}"; do
         if SOA=$(
@@ -1117,9 +1117,9 @@ private key for DOMAIN from cPanel to TARGET_DIR or ~/ssl." || return
     lk_ssl_verify_cert "$CERT" "$KEY" "$CA_BUNDLE" || return
     lk_console_message "Writing certificate files"
     lk_console_detail \
-        "Certificate and CA bundle:" "$(lk_pretty_path "$TARGET_DIR/$1.cert")"
+        "Certificate and CA bundle:" "$(lk_tty_path "$TARGET_DIR/$1.cert")"
     lk_console_detail \
-        "Private key:" "$(lk_pretty_path "$TARGET_DIR/$1.key")"
+        "Private key:" "$(lk_tty_path "$TARGET_DIR/$1.key")"
     lk_file_replace "$TARGET_DIR/$1.cert" \
         "$(lk_echo_args "$CERT" "$CA_BUNDLE")" &&
         lk_file_replace "$TARGET_DIR/$1.key" "$KEY"

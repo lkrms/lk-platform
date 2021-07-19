@@ -50,7 +50,7 @@ function _lk_wp_replace() {
     lk_console_detail "Replacing:" "$1 -> $2"
     "${_LK_WP_REPLACE_COMMAND:-lk_wp}" search-replace "$1" "$2" --no-report \
         --all-tables-with-prefix \
-        --skip-tables="$(lk_implode "," SKIP_TABLES)" \
+        --skip-tables="$(lk_implode_arr "," SKIP_TABLES)" \
         --skip-columns="guid"
 }
 

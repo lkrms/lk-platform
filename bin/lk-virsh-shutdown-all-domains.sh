@@ -50,7 +50,7 @@ while [ $((SECONDS + 5)) -lt 120 ] || (((i - 1) % 5)); do
         else
             ! ((i)) || printf '\r' >&"${_LK_FD-2}"
             lk_console_detail \
-                "Shutdown pending:" "$(lk_implode ", " PENDING_DOMAINS)"
+                "Shutdown pending:" "$(lk_implode_arr ", " PENDING_DOMAINS)"
         fi
     else
         break

@@ -28,6 +28,23 @@ function _lk_tty_format_readline() {
         _lk_tty_format "$@"
 }
 
+# lk_tty_path [PATH...]
+#
+# For each PATH or input line, replace $HOME with ~ and remove $PWD.
+function lk_tty_path() {
+    if [ $# -gt 0 ]; then
+        printf '%s\n' "$@" | lk_tty_path
+    else
+        while IFS= read -r _PATH; do
+            __PATH=$_PATH
+            [ "$_PATH" = "${_PATH#~}" ] || __PATH="~${_PATH#~}"
+            [ "$PWD" = / ] || [ "$PWD" = "$_PATH" ] ||
+                [ "$_PATH" = "${_PATH#$PWD/}" ] || __PATH=${_PATH#$PWD/}
+            printf '%s\n' "$__PATH"
+        done
+    fi
+}
+
 # lk_tty_print [MESSAGE [MESSAGE2 [COLOUR]]]
 #
 # Write each message to the file descriptor set in _LK_FD or to the standard
@@ -139,7 +156,7 @@ function lk_tty_list() {
             lk_tty_print "$_MESSAGE" $'\n'"$_LIST" "$_COLOUR"
         [ -z "${_SINGLE:+${_PLURAL:+1}}" ] ||
             _LK_TTY_PREFIX=$(printf "%$((_INDENT > 0 ? _INDENT : 0))s") \
-                lk_tty_detail "(${#_ITEMS[@]} $(lk_maybe_plural \
+                lk_tty_detail "(${#_ITEMS[@]} $(lk_plural \
                     ${#_ITEMS[@]} "$_SINGLE" "$_PLURAL"))"
     )" >&"${_LK_FD-2}"
 }

@@ -504,7 +504,7 @@ EOF
     [ ${#UPGRADE_FORMULAE_TEXT[@]} -eq 0 ] || {
         lk_echo_array UPGRADE_FORMULAE_TEXT |
             lk_console_detail_list "$(
-                lk_maybe_plural ${#UPGRADE_FORMULAE_TEXT[@]} Update Updates
+                lk_plural ${#UPGRADE_FORMULAE_TEXT[@]} Update Updates
             ) available:" formula formulae
         lk_confirm "OK to upgrade outdated formulae?" Y ||
             unset "${!UPGRADE_FORMULAE_@}"
@@ -519,7 +519,7 @@ EOF
     .name + \" (\" + .installed_versions + \" -> \" +
         .current_version + \")\"" |
                 lk_console_detail_list "$(
-                    lk_maybe_plural ${#UPGRADE_CASKS[@]} Update Updates
+                    lk_plural ${#UPGRADE_CASKS[@]} Update Updates
                 ) available:" cask casks
             lk_confirm "OK to upgrade outdated casks?" Y ||
                 UPGRADE_CASKS=()
@@ -643,7 +643,7 @@ Please open the Mac App Store and sign in"
             if UPGRADE_APPS=($(grep -Eo '^[0-9]+' <<<"$OUTDATED")); then
                 sed -E "s/^[0-9]+$S+(.*$NS)$S+\(/\1 (/" <<<"$OUTDATED" |
                     lk_console_detail_list "$(
-                        lk_maybe_plural ${#UPGRADE_APPS[@]} Update Updates
+                        lk_plural ${#UPGRADE_APPS[@]} Update Updates
                     ) available:" app apps
                 lk_confirm "OK to upgrade outdated apps?" Y ||
                     UPGRADE_APPS=()

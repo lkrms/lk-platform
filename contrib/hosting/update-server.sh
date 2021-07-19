@@ -97,13 +97,13 @@ lk_log_start
     lk_console_blank
 
     if [ ${#FAILED[@]} -gt 0 ]; then
-        lk_console_error "${#FAILED[@]} of $i $(lk_maybe_plural \
+        lk_console_error "${#FAILED[@]} of $i $(lk_plural \
             "$i" server servers) failed to update:" \
             $'\n'"$(lk_echo_array FAILED)"
         lk_die ""
     else
         lk_console_success \
-            "$i $(lk_maybe_plural "$i" server servers) updated successfully"
+            "$i $(lk_plural "$i" server servers) updated successfully"
     fi
 
     exit

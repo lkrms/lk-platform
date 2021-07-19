@@ -98,7 +98,7 @@ lk_start_trace
 lk_console_message "Preparing database backup"
 lk_console_detail "Retrieving list of databases on" "$DB_HOST"
 lk_mysql_mapfile DB_ALL -h"$DB_HOST" <<<"SHOW DATABASES" || lk_die ""
-lk_console_detail "${#DB_ALL[@]} $(lk_maybe_plural \
+lk_console_detail "${#DB_ALL[@]} $(lk_plural \
     ${#DB_ALL[@]} database databases) found"
 
 if lk_is_true ALL; then
@@ -119,7 +119,7 @@ else
         [ ${#DB_MISSING[@]} -eq 0 ] || {
             EXIT_STATUS=1
             lk_console_warning "${#DB_MISSING[@]} requested $(
-                lk_maybe_plural ${#DB_MISSING[@]} database databases
+                lk_plural ${#DB_MISSING[@]} database databases
             ) not available on this host:" "$(lk_echo_array DB_MISSING)"
         }
     fi
