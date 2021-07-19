@@ -42,6 +42,10 @@
 # <UDF name="LK_SHUTDOWN_DELAY" label="Delay before shutdown/reboot after provisioning (in minutes)" default="0" />
 # <UDF name="LK_PLATFORM_BRANCH" label="lk-platform tracking branch" oneof="master,develop,provision-hosting" default="master" />
 
+# Copy output to the console (e.g. LISH) unless it's connected to the systemd
+# journal (e.g. when invoked by cloud-init)
+[ -t 1 ] || [ -n "${JOURNAL_STREAM-}" ] || exec > >(tee /dev/console) 2>&1
+
 SCRIPT_VARS=$(
     unset BASH_EXECUTION_STRING
     declare -p
