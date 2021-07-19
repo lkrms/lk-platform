@@ -943,7 +943,7 @@ function lk_regex_implode() {
 function _lk_var_prefix() {
     [ "${_LK_STACK_DEPTH:-0}" -ge 0 ] || return 0
     case "${FUNCNAME[${_LK_STACK_DEPTH:-0} + 2]-}" in
-    '' | main)
+    '' | source | main)
         return
         ;;
     esac
