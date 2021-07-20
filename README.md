@@ -54,6 +54,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_GIT_REF`
 - `LK_GIT_REPOS`
 - `LK_GRUB_CMDLINE`
+- `LK_HASH_COMMAND`
 - `LK_INNODB_BUFFER_SIZE`
 - `LK_IPV4_ADDRESS`
 - `LK_IPV4_DNS_SEARCH`
@@ -109,6 +110,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_SSH_PREFIX`
 - `LK_SSH_PRIORITY`
 - `LK_SSH_TRUSTED_ONLY`
+- `LK_SSH_TRUSTED_PORT`
 - `LK_STACKSCRIPT_EXPORT_DEFAULT`
 - `LK_SUDO`
 - `LK_TRUSTED_IP_ADDRESSES`
