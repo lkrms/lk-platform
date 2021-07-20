@@ -14,6 +14,7 @@
 # <UDF name="LK_ADMIN_EMAIL" label="Forwarding address for system email" example="tech@linacreative.com" />
 # <UDF name="LK_TRUSTED_IP_ADDRESSES" label="Trusted IP addresses (comma-delimited)" example="10.0.0.0/8,172.16.0.0/12,192.168.0.0/16" default="" />
 # <UDF name="LK_SSH_TRUSTED_ONLY" label="Block SSH access from untrusted IP addresses (trusted IP addresses required)" oneof="Y,N" default="N" />
+# <UDF name="LK_SSH_TRUSTED_PORT" label="Trusted port for SSH access (login attempts allowed from any IP, must be >=1024)" example="2222" default="" />
 # <UDF name="LK_SSH_JUMP_HOST" label="SSH jump proxy: hostname and optional port" example="jump.linacreative.com:9922" default="" />
 # <UDF name="LK_SSH_JUMP_USER" label="SSH jump proxy: default user" default="" />
 # <UDF name="LK_SSH_JUMP_KEY" label="SSH jump proxy: default key (must match the comment field of one installed key)" default="" />
@@ -66,6 +67,7 @@ export -n \
     LK_ADMIN_EMAIL=${LK_ADMIN_EMAIL-} \
     LK_TRUSTED_IP_ADDRESSES=${LK_TRUSTED_IP_ADDRESSES-} \
     LK_SSH_TRUSTED_ONLY=${LK_SSH_TRUSTED_ONLY:-N} \
+    LK_SSH_TRUSTED_PORT=${LK_SSH_TRUSTED_PORT-} \
     LK_SSH_JUMP_HOST=${LK_SSH_JUMP_HOST-} \
     LK_SSH_JUMP_USER=${LK_SSH_JUMP_USER-} \
     LK_SSH_JUMP_KEY=${LK_SSH_JUMP_KEY-} \
@@ -206,6 +208,7 @@ FIELD_ERRORS=$(
     valid_list LK_TRUSTED_IP_ADDRESSES "^$IP_OPT_PREFIX_REGEX\$"
     REQUIRED=0
     one_of LK_SSH_TRUSTED_ONLY Y N
+    valid LK_SSH_TRUSTED_PORT "^(102[4-9]|10[3-9][0-9]|1[1-9][0-9]{2}|[2-9][0-9]{3}|[1-9][0-9]{4,})\$"
     valid LK_SSH_JUMP_HOST "^$HOST_REGEX\$"
     valid LK_SSH_JUMP_USER "^$LINUX_USERNAME_REGEX\$"
     valid LK_SSH_JUMP_KEY "^[-a-zA-Z0-9_]+\$"
@@ -452,6 +455,7 @@ LK_SSH_JUMP_KEY=${LK_SSH_JUMP_KEY:+jump} \
     LK_ADMIN_EMAIL \
     LK_TRUSTED_IP_ADDRESSES \
     LK_SSH_TRUSTED_ONLY \
+    LK_SSH_TRUSTED_PORT \
     LK_SSH_JUMP_HOST \
     LK_SSH_JUMP_USER \
     LK_SSH_JUMP_KEY \
