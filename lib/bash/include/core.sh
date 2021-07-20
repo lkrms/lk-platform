@@ -3725,7 +3725,8 @@ Options:
     fi
     TEMP=$(lk_file_prepare_temp "$1") &&
         lk_delete_on_exit "$TEMP" &&
-        echo "${CONTENT%$'\n'}" | lk_maybe_sudo tee "$TEMP" >/dev/null &&
+        { [ -z "${CONTENT:+1}" ] || echo "${CONTENT%$'\n'}"; } |
+        lk_maybe_sudo tee "$TEMP" >/dev/null &&
         lk_maybe_sudo mv -f"$vv" "$TEMP" "$1" &&
         LK_FILE_REPLACE_NO_CHANGE=0 || return
     ! lk_verbose || {
