@@ -123,7 +123,7 @@ function link_reset() {
     fi
     for DEV in "$@"; do
         grep -Fxq 1 "/sys/class/net/$DEV/carrier" 2>/dev/null ||
-            lk_console_warning \
+            lk_console_warning -r \
                 "Not bringing connection up (no carrier):" "$DEV" ||
             continue
         lk_run_detail nmcli connection up "$DEV" || return
@@ -188,10 +188,8 @@ lk_start_trace
     LK_FILE_BACKUP_TAKE=${LK_FILE_BACKUP_TAKE-$(lk_is_bootstrap || echo 1)}
     LK_FILE_BACKUP_MOVE=1
 
-    (
-        LK_VERBOSE=1
-        lk_settings_persist "$SETTINGS_SH"
-    )
+    (LK_VERBOSE=1 &&
+        lk_settings_persist "$SETTINGS_SH")
 
     ERRORS=()
     SERVICE_STARTED=()
@@ -216,7 +214,8 @@ lk_start_trace
     lk_console_message "Checking interfaces"
     systemctl_enable NetworkManager "Network Manager"
     ETHERNET=()
-    if lk_require_output -q lk_system_list_ethernet_links -u; then
+    if ! lk_is_portable &&
+        lk_require_output -q lk_system_list_ethernet_links -u; then
         unset LK_FILE_REPLACE_NO_CHANGE
         NM_DIR=/etc/NetworkManager/system-connections
         NM_EXT=.nmconnection
@@ -696,10 +695,8 @@ $LK_NODE_HOSTNAME" &&
             lk_echo_array PAC_UPGRADE |
             lk_console_list "Upgrading:" package packages
     fi
-    unset NOCONFIRM
-    ! lk_no_input || NOCONFIRM=1
     [ ${#PAC_INSTALL[@]}${#PAC_UPGRADE[@]} = 00 ] ||
-        lk_log_bypass lk_tty pacman -S ${NOCONFIRM+--noconfirm} \
+        lk_log_bypass lk_tty pacman -S --noconfirm \
             ${PAC_INSTALL[@]+"${PAC_INSTALL[@]}"} \
             ${PAC_UPGRADE[@]+"${PAC_UPGRADE[@]}"}
 
