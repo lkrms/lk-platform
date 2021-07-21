@@ -92,7 +92,8 @@ function lk_git_list_changes() {
 # lk_git_list_untracked [DIR]
 function lk_git_list_untracked() {
     (_lk_git_cd "$@" &&
-        git ls-files --others --exclude-standard --directory)
+        git ls-files --others --exclude-standard \
+            --directory --no-empty-directory)
 }
 
 # lk_git_has_untracked [DIR]
