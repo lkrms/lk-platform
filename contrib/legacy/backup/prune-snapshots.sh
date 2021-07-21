@@ -8,138 +8,13 @@ _DIR=${0%/*}
 _DIR=$(cd "$_DIR" && pwd -P) && [ ! -L "$0" ] ||
     lk_die "unable to resolve path to script"
 
-function lk_realpath() {
-    local FILE=$1 i=0 COMPONENT LN RESOLVED=
-    [ -e "$FILE" ] || return
-    [ "${FILE:0:1}" = / ] || FILE=${PWD%/}/$FILE
-    while [ -n "$FILE" ]; do
-        ((i++)) || {
-            # 1. Replace "/./" with "/"
-            # 2. Replace subsequent "/"s with one "/"
-            # 3. Remove trailing "/"
-            FILE=$(sed -e 's/\/\.\//\//g' -e 's/\/\+/\//g' -e 's/\/$//' \
-                <<<"$FILE") || return
-            FILE=${FILE:1}
-        }
-        COMPONENT=${FILE%%/*}
-        [ "$COMPONENT" != "$FILE" ] ||
-            FILE=
-        FILE=${FILE#*/}
-        case "$COMPONENT" in
-        '' | .)
-            continue
-            ;;
-        ..)
-            RESOLVED=${RESOLVED%/*}
-            continue
-            ;;
-        esac
-        RESOLVED=$RESOLVED/$COMPONENT
-        [ ! -L "$RESOLVED" ] || {
-            LN=$(readlink "$RESOLVED") || return
-            [ "${LN:0:1}" = / ] || LN=${RESOLVED%/*}/$LN
-            FILE=$LN${FILE:+/$FILE}
-            RESOLVED=
-            i=0
-        }
-    done
-    echo "$RESOLVED"
-}
+for FILE in "$_DIR"/{,../}common-bash2.sh; do
+    [ ! -f "$FILE" ] || break
+    FILE=
+done
 
-function lk_date_log() {
-    date +"%Y-%m-%d %H:%M:%S %z"
-}
-
-function lk_log() {
-    local LINE
-    while IFS= read -r LINE || [ -n "$LINE" ]; do
-        printf '%s %s\n' "$(lk_date_log)" "$LINE"
-    done
-}
-
-function lk_plural() {
-    [ "$1" -eq 1 ] && echo "$2" || echo "$3"
-}
-
-function lk_echo_args() {
-    [ $# -eq 0 ] ||
-        printf '%s\n' "$@"
-}
-
-function lk_echo_array() {
-    eval "lk_echo_args \${$1[@]+\"\${$1[@]}\"}"
-}
-
-function lk_console_message() {
-    echo "\
-$LK_BOLD${_LK_TTY_COLOUR-$LK_CYAN}${_LK_TTY_PREFIX-==> }\
-$LK_RESET${_LK_TTY_MESSAGE_COLOUR-$LK_BOLD}\
-$(sed "1b
-s/^/${_LK_TTY_SPACES-  }/" <<<"$1")$LK_RESET" >&2
-}
-
-function lk_console_item() {
-    lk_console_message "\
-$1$LK_RESET${_LK_TTY_COLOUR2-${_LK_TTY_COLOUR-$LK_CYAN}}$(
-        [ "${2/$'\n'/}" = "$2" ] &&
-            echo " $2" ||
-            echo $'\n'"${2#$'\n'}"
-    )"
-}
-
-function lk_console_detail() {
-    local _LK_TTY_PREFIX="   -> " _LK_TTY_SPACES="    " \
-        _LK_TTY_COLOUR=$LK_YELLOW _LK_TTY_MESSAGE_COLOUR=
-    [ $# -le 1 ] &&
-        lk_console_message "$1" ||
-        lk_console_item "$1" "$2"
-}
-
-function lk_console_detail_list() {
-    lk_console_detail \
-        "$1" "$(COLUMNS=${COLUMNS+$((COLUMNS - 4))} column | expand)"
-}
-
-function lk_console_log() {
-    local _LK_TTY_PREFIX=" :: " _LK_TTY_SPACES="    " \
-        _LK_TTY_COLOUR2=${_LK_TTY_COLOUR2-$LK_BOLD}
-    [ $# -le 1 ] &&
-        lk_console_message "${_LK_TTY_COLOUR-$LK_CYAN}$1" ||
-        lk_console_item "${_LK_TTY_COLOUR-$LK_CYAN}$1" "$2"
-}
-
-function lk_console_success() {
-    _LK_TTY_COLOUR=$LK_GREEN lk_console_log "$@"
-}
-
-function lk_console_warning() {
-    local EXIT_STATUS=$?
-    _LK_TTY_COLOUR=$LK_YELLOW lk_console_log "$@"
-    return "$EXIT_STATUS"
-}
-
-function lk_console_error() {
-    local EXIT_STATUS=$?
-    _LK_TTY_COLOUR=$LK_RED lk_console_log "$@"
-    return "$EXIT_STATUS"
-}
-
-function lk_mapfile() {
-    local i=0 LINE
-    eval "$1=()"
-    while IFS= read -r LINE || [ -n "$LINE" ]; do
-        eval "$1[$((i++))]=\$LINE"
-    done <"$2"
-}
-
-LK_BOLD=$'\E[1m'
-LK_RED=$'\E[31m'
-LK_GREEN=$'\E[32m'
-LK_YELLOW=$'\E[33m'
-LK_CYAN=$'\E[36m'
-LK_RESET=$'\E[m\017'
-
-##
+[ -n "$FILE" ] || lk_die "file not found: common-bash2.sh"
+. "$FILE"
 
 function find_snapshots() {
     lk_mapfile "$1" <(
@@ -176,7 +51,7 @@ function first_snapshot_in_hour() {
 
 function prune_snapshot() {
     local PRUNE=$SNAPSHOT_ROOT/$1
-    lk_console_item \
+    lk_tty_print \
         "Pruning (${2:-expired}):" "${PRUNE#$BACKUP_ROOT/snapshot/}"
     touch "$PRUNE/.pruning" &&
         rm -Rf "$PRUNE"
@@ -190,15 +65,15 @@ function get_usage() {
 function print_max_age() {
     case "$1" in
     "")
-        lk_console_detail "$2 snapshots" \
+        lk_tty_detail "$2 snapshots" \
             "do not expire"
         ;;
     0)
-        lk_console_detail "$2 snapshots" \
+        lk_tty_detail "$2 snapshots" \
             "expire immediately"
         ;;
     *)
-        lk_console_detail "$2 snapshots" \
+        lk_tty_detail "$2 snapshots" \
             "expire after $1 $(lk_plural "$1" "$3" "$4")"
         ;;
     esac
@@ -224,7 +99,7 @@ BACKUP_ROOT=$1
 
 [ -d "$BACKUP_ROOT" ] || lk_die "directory not found: $BACKUP_ROOT"
 [ -d "$BACKUP_ROOT/snapshot" ] || {
-    lk_console_log "Nothing to prune"
+    lk_tty_log "Nothing to prune"
     exit
 }
 
@@ -248,15 +123,15 @@ install -d -m 00711 "$BACKUP_ROOT/log"
     install -m 00600 /dev/null "$LOG_FILE"
 
 if [[ $- != *x* ]]; then
-    lk_log >>"$LOG_FILE" <<<"====> $(lk_realpath "$0") invoked on $FQDN"
+    (lk_log >>"$LOG_FILE") <<<"====> $(lk_realpath "$0") invoked on $FQDN"
     exec 6>&1 7>&2
     exec > >(tee >(lk_log >>"$LOG_FILE")) 2>&1
 fi
 
 {
     USAGE_START=($(get_usage "$BACKUP_ROOT"))
-    lk_console_log "Pruning backups at $BACKUP_ROOT on $FQDN (storage used: ${USAGE_START[0]}/${USAGE_START[1]})"
-    lk_console_message "Settings:"
+    lk_tty_log "Pruning backups at $BACKUP_ROOT on $FQDN (storage used: ${USAGE_START[0]}/${USAGE_START[1]})"
+    lk_tty_print "Settings:"
     print_max_age "$HOURLY_MAX_AGE" Hourly hour hours
     print_max_age "$DAILY_MAX_AGE" Daily day days
     print_max_age "$WEEKLY_MAX_AGE" Weekly week weeks
@@ -264,25 +139,25 @@ fi
     lk_mapfile SOURCE_NAMES <(find "$BACKUP_ROOT/snapshot" -mindepth 1 -maxdepth 1 \
         -type d -printf '%f\n' | sort)
     for SOURCE_NAME in ${SOURCE_NAMES[@]+"${SOURCE_NAMES[@]}"}; do
-        lk_console_message "Checking '$SOURCE_NAME' snapshots"
+        lk_tty_print "Checking '$SOURCE_NAME' snapshots"
         SNAPSHOT_ROOT=$BACKUP_ROOT/snapshot/$SOURCE_NAME
 
         find_snapshots SNAPSHOTS_CLEAN \
             -exec test -e '{}/.finished' \; \
             ! -exec test -e '{}/.pruning' \;
         [ "$SNAPSHOTS_CLEAN_COUNT" -gt 0 ] ||
-            lk_console_warning "Skipping $SOURCE_NAME (no clean snapshots)" ||
+            lk_tty_warning "Skipping $SOURCE_NAME (no clean snapshots)" ||
             continue
         LATEST_CLEAN=$(snapshot_date "${SNAPSHOTS_CLEAN[0]}")
         OLDEST_CLEAN=$(snapshot_date \
             "${SNAPSHOTS_CLEAN[$((SNAPSHOTS_CLEAN_COUNT - 1))]}")
-        lk_console_detail "Clean:" \
+        lk_tty_detail "Clean:" \
             "$SNAPSHOTS_CLEAN_COUNT ($([ "$LATEST_CLEAN" = "$OLDEST_CLEAN" ] ||
                 echo "$OLDEST_CLEAN to ")$LATEST_CLEAN)"
 
         find_snapshots SNAPSHOTS_PRUNING -exec test -e '{}/.pruning' \;
         [ "$SNAPSHOTS_PRUNING_COUNT" -eq 0 ] ||
-            lk_console_detail \
+            lk_tty_detail \
                 "Partially pruned:" "$SNAPSHOTS_PRUNING_COUNT"
 
         if [ -n "$FAILED_MAX_AGE" ]; then
@@ -296,7 +171,7 @@ fi
                 -exec sh -c 'test "${1##*/}" \< "$2"' sh \
                 '{}' "$PRUNE_FAILED_BEFORE_DATE" \;
             [ "$SNAPSHOTS_FAILED_COUNT" -eq 0 ] ||
-                lk_console_detail "Failed >$FAILED_MAX_AGE days ago:" \
+                lk_tty_detail "Failed >$FAILED_MAX_AGE days ago:" \
                     "$SNAPSHOTS_FAILED_COUNT"
         fi
 
@@ -367,9 +242,9 @@ fi
             <(lk_echo_array SNAPSHOTS_KEEP | sort))
         SNAPSHOTS_PRUNE_COUNT=${#SNAPSHOTS_PRUNE[@]}
 
-        lk_console_detail \
+        lk_tty_detail \
             "Expired:" "$SNAPSHOTS_PRUNE_COUNT"
-        lk_console_detail \
+        lk_tty_detail \
             "Fresh:" "$SNAPSHOTS_KEEP_COUNT" "$LK_BOLD$LK_GREEN"
 
         [ "$SNAPSHOTS_PRUNING_COUNT" -eq 0 ] || {
@@ -393,7 +268,7 @@ fi
             rm -f "$LOCK_FILE" || true
     }
     USAGE_END=($(get_usage "$BACKUP_ROOT"))
-    lk_console_success \
+    lk_tty_success \
         "Pruning complete (storage used: ${USAGE_END[0]}/${USAGE_END[1]})"
     exit
 }

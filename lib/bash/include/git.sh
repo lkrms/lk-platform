@@ -92,7 +92,8 @@ function lk_git_list_changes() {
 # lk_git_list_untracked [DIR]
 function lk_git_list_untracked() {
     (_lk_git_cd "$@" &&
-        git ls-files --others --exclude-standard --directory)
+        git ls-files --others --exclude-standard \
+            --directory --no-empty-directory)
 }
 
 # lk_git_has_untracked [DIR]
@@ -391,7 +392,7 @@ function lk_git_push_branch() {
             ${#PUSH_URLS[@]} URL URLs):" \
             $'\n'"$(lk_echo_array PUSH_URLS)"
     lk_confirm "In $LK_BOLD$_PATH$LK_RESET, \
-push $LK_BOLD$1$LK_RESET to $LK_BOLD$2$LK_RESET?" Y ||
+push $LK_BOLD$1$LK_RESET to $LK_BOLD$2$LK_RESET?" "${_LK_GIT_ANSWER-Y}" ||
         return 0
     lk_console_detail \
         "Pushing to $2 ($AHEAD $(lk_plural \
@@ -457,21 +458,22 @@ function lk_git_update_remote() {
         lk_git_push_branch "$BRANCH" "$_PUSH" ||
             ((++ERRORS))
     done
-    for REMOTE in $REMOTES; do
-        ! lk_git_remote_is_skipped "$REMOTE" || continue
-        RBRANCHES=$(lk_git_branch_list_remote "$REMOTE") &&
-            RBRANCHES=$(comm -12 \
-                <(echo "$BRANCHES" | sort) \
-                <(echo "$RBRANCHES" | sort)) &&
-            [ -n "$RBRANCHES" ] || continue
-        for BRANCH in $RBRANCHES; do
-            _PUSH=$(lk_quote_args "$BRANCH" "$REMOTE/$BRANCH")
-            ! lk_in_array "$_PUSH" PUSH || continue
-            PUSH[${#PUSH[@]}]=$_PUSH
-            lk_git_push_branch "$BRANCH" "$REMOTE/$BRANCH" ||
-                ((++ERRORS))
+    [ -n "${QUIET-}" ] ||
+        for REMOTE in $REMOTES; do
+            ! lk_git_remote_is_skipped "$REMOTE" || continue
+            RBRANCHES=$(lk_git_branch_list_remote "$REMOTE") &&
+                RBRANCHES=$(comm -12 \
+                    <(echo "$BRANCHES" | sort) \
+                    <(echo "$RBRANCHES" | sort)) &&
+                [ -n "$RBRANCHES" ] || continue
+            for BRANCH in $RBRANCHES; do
+                _PUSH=$(lk_quote_args "$BRANCH" "$REMOTE/$BRANCH")
+                ! lk_in_array "$_PUSH" PUSH || continue
+                PUSH[${#PUSH[@]}]=$_PUSH
+                lk_git_push_branch "$BRANCH" "$REMOTE/$BRANCH" ||
+                    ((++ERRORS))
+            done
         done
-    done
     [ "$ERRORS" -eq 0 ]
 }
 
@@ -680,7 +682,7 @@ directory of a working tree" || return
 }
 
 function lk_git_audit_repo() {
-    local SKIP_FETCH ERRORS=0 STASHES _LK_GIT_ALREADY_WARNED=
+    local SKIP_FETCH ERRORS=0 STASHES _LK_GIT_ALREADY_WARNED= _LK_GIT_ANSWER=N
     [ "${1-}" != -s ] || { SKIP_FETCH=1 && shift; }
     lk_git_update_repo ${SKIP_FETCH:+-s} || ((++ERRORS))
     lk_git_update_remote -q || ((++ERRORS))

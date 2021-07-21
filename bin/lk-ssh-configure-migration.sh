@@ -8,12 +8,14 @@ if [[ ! ${1-} =~ ^(--new|--old)$ ]]; then
     lk_include provision
 
     # TODO: implement NEW_PASSWORD
+    _NEW_HOST_NAME=
     NEW_USER=
     NEW_HOST=
     NEW_KEY_FILE=
     NEW_KEY=
     NEW_PASSWORD=
 
+    _OLD_HOST_NAME=
     OLD_USER=
     OLD_HOST=
     OLD_KEY=
@@ -38,7 +40,7 @@ EXAMPLES
 
     If 'lk-mysite' is already configured as an SSH host on the local system:
 
-\\        ${0##*/} -p 'Passw0rd!' mysite@198.51.100.42 lk-mysite
+\\        ${0##*/} -p 'Passw0rd!' mysite@198.51.100.42:4001 lk-mysite
 
     If SSH hosts 'new-mysite' and 'old-mysite' are already configured on the
     local system and TARGET respectively:
