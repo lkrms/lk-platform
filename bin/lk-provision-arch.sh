@@ -647,7 +647,7 @@ $LK_NODE_HOSTNAME" &&
             pacman -D --asdeps "${PAC_UNMARK_EXPLICIT[@]}"
 
     REMOVE_MESSAGE=()
-    if PAC_REMOVE=($(pacman -Qdttq)) && [ ${#PAC_REMOVE[@]} -gt 0 ]; then
+    if PAC_REMOVE=($(pacman -Qdttq | sort)) && [ ${#PAC_REMOVE[@]} -gt 0 ]; then
         lk_whiptail_build_list PAC_REMOVE '' "${PAC_REMOVE[@]}"
         lk_mapfile PAC_REMOVE <(lk_whiptail_checklist "Orphaned packages" \
             "Selected packages will be removed:" "${PAC_REMOVE[@]}" off)
@@ -679,7 +679,7 @@ $LK_NODE_HOSTNAME" &&
         PAC_INSTALL=(
             $(pacman -Sp --print-format "%n %r/%n-%v" "${PAC_INSTALL[@]}" |
                 # Remove dependencies from `pacman -Sp` output
-                grep -E "^$(lk_regex_implode "${PAC_INSTALL[@]}") ")
+                sort | grep -E "^$(lk_regex_implode "${PAC_INSTALL[@]}") ")
         )
         lk_mapfile PAC_INSTALL <(lk_whiptail_checklist "Installing packages" \
             "Selected packages will be installed:" "${PAC_INSTALL[@]}")
@@ -687,7 +687,7 @@ $LK_NODE_HOSTNAME" &&
             lk_echo_array PAC_INSTALL |
             lk_console_list "Installing:" package packages
     fi
-    PAC_UPGRADE=($(pacman -Sup --print-format "%n %r/%n-%v"))
+    PAC_UPGRADE=($(pacman -Sup --print-format "%n %r/%n-%v" | sort))
     if [ ${#PAC_UPGRADE[@]} -gt 0 ]; then
         lk_mapfile PAC_UPGRADE <(lk_whiptail_checklist "Upgrading packages" \
             "Selected packages will be upgraded:" "${PAC_UPGRADE[@]}")
