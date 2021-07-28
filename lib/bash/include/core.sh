@@ -3930,10 +3930,6 @@ if lk_is_true LK_TTY_NO_COLOUR; then
         LK_BOLD= \
         LK_DIM= \
         LK_UNDIM= \
-        LK_UL_ON= \
-        LK_UL_OFF= \
-        LK_WRAP_OFF= \
-        LK_WRAP_ON= \
         LK_RESET=
 else
     # See: `man 4 console_codes`
@@ -3946,7 +3942,7 @@ else
         LK_MAGENTA=$'\E[35m' \
         LK_CYAN=$'\E[36m' \
         LK_WHITE=$'\E[37m' \
-        LK_GREY=$'\E[38m' \
+        LK_GREY=$'\E[90m' \
         LK_BLACK_BG=$'\E[40m' \
         LK_RED_BG=$'\E[41m' \
         LK_GREEN_BG=$'\E[42m' \
@@ -3955,40 +3951,17 @@ else
         LK_MAGENTA_BG=$'\E[45m' \
         LK_CYAN_BG=$'\E[46m' \
         LK_WHITE_BG=$'\E[47m' \
-        LK_GREY_BG=$'\E[48m' \
+        LK_GREY_BG=$'\E[100m' \
         LK_BOLD=$'\E[1m' \
         LK_DIM=$'\E[2m' \
         LK_UNDIM=$'\E[22m' \
-        LK_UL_ON=$'\E[4m' \
-        LK_UL_OFF=$'\E[24m' \
-        LK_WRAP_OFF= \
-        LK_WRAP_ON= \
-        LK_RESET=$'\E[m\017'
+        LK_RESET=$'\E[m'
 
     case "${TERM-}" in
     '' | dumb | unknown)
-        [ -z "${TERM+1}" ] ||
-            unset TERM
+        [ -z "${TERM+1}" ] || unset TERM
         ;;
-    xterm-256color | xterm-16color)
-        declare \
-            LK_GREY=$'\E[90m' \
-            LK_GREY_BG=$'\E[100m' \
-            LK_WRAP_OFF=$'\E[?7l' \
-            LK_WRAP_ON=$'\E[?7h' \
-            LK_RESET=$'\E(B\E[m'
-        ;;
-    xterm)
-        declare \
-            LK_WRAP_OFF=$'\E[?7l' \
-            LK_WRAP_ON=$'\E[?7h' \
-            LK_RESET=$'\E(B\E[m'
-        ;;
-    rxvt | linux | vt220)
-        declare \
-            LK_WRAP_OFF=$'\E[?7l' \
-            LK_WRAP_ON=$'\E[?7h'
-        ;;
+    xterm-*color) ;;
     *)
         eval "$(lk_get_colours)"
         ;;
