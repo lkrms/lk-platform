@@ -222,11 +222,11 @@ lk_start_trace
         NM_IGNORE="^$S*(#|\$|uuid=)"
         BRIDGE=${LK_BRIDGE_INTERFACE-}
         BRIDGE_FILE=${BRIDGE:+$NM_DIR/$BRIDGE$NM_EXT}
-        IPV4=(
+        IPV4_IPV6=(
             "${LK_IPV4_ADDRESS-}"
             "${LK_IPV4_GATEWAY-}"
-            "${LK_IPV4_DNS_SERVER-}"
-            "${LK_IPV4_DNS_SEARCH-}"
+            "${LK_DNS_SERVERS-}"
+            "${LK_DNS_SEARCH-}"
         )
         ETHERNET_NOW=($(lk_system_list_ethernet_links))
         ETHERNET_NOW=($(lk_system_sort_links "${ETHERNET_NOW[@]}"))
@@ -259,13 +259,13 @@ lk_start_trace
             0)
                 lk_file_replace -i "$NM_IGNORE" "$FILE" \
                     < <(lk_nm_file_get_ethernet \
-                        "$IF_NAME" "$IF_ADDRESS" "" "${IPV4[@]}")
+                        "$IF_NAME" "$IF_ADDRESS" "" "${IPV4_IPV6[@]}")
                 ;;
             0b)
                 lk_install -m 00600 "$BRIDGE_FILE"
                 lk_file_replace -i "$NM_IGNORE" "$BRIDGE_FILE" \
                     < <(lk_nm_file_get_bridge \
-                        "$BRIDGE" "$IF_ADDRESS" "${IPV4[@]}")
+                        "$BRIDGE" "$IF_ADDRESS" "${IPV4_IPV6[@]}")
                 lk_file_replace -i "$NM_IGNORE" "$FILE" \
                     < <(lk_nm_file_get_ethernet \
                         "$IF_NAME" "$IF_ADDRESS" "$BRIDGE")
