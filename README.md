@@ -44,6 +44,8 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_DIG_SERVER`
 - `LK_DIM_AFTER`
 - `LK_DIM_TIME`
+- `LK_DNS_SEARCH`
+- `LK_DNS_SERVERS`
 - `LK_DRY_RUN`
 - `LK_EMAIL_BLACKHOLE`
 - `LK_FILE_BACKUP_MOVE`
@@ -57,8 +59,6 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_HASH_COMMAND`
 - `LK_INNODB_BUFFER_SIZE`
 - `LK_IPV4_ADDRESS`
-- `LK_IPV4_DNS_SEARCH`
-- `LK_IPV4_DNS_SERVER`
 - `LK_IPV4_GATEWAY`
 - `LK_KEEP_TRYING_MAX`
 - `LK_LETSENCRYPT_EMAIL`

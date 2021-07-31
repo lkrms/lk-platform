@@ -42,8 +42,8 @@ BOOTSTRAP_KEY=${BOOTSTRAP_KEY-}                              #
 BOOTSTRAP_FULL_NAME=${BOOTSTRAP_FULL_NAME:-Arch Linux}       #
 LK_IPV4_ADDRESS=${LK_IPV4_ADDRESS-}                          #
 LK_IPV4_GATEWAY=${LK_IPV4_GATEWAY-}                          #
-LK_IPV4_DNS_SERVER=${LK_IPV4_DNS_SERVER-}                    #
-LK_IPV4_DNS_SEARCH=${LK_IPV4_DNS_SEARCH-}                    #
+LK_DNS_SERVERS=${LK_DNS_SERVERS-}                            # Space- or semicolon-delimited
+LK_DNS_SEARCH=${LK_DNS_SEARCH-}                              #
 LK_BRIDGE_INTERFACE=${LK_BRIDGE_INTERFACE-}                  #
 LK_NODE_TIMEZONE=${LK_NODE_TIMEZONE:-UTC}                    # See `timedatectl list-timezones`
 LK_NODE_SERVICES=${LK_NODE_SERVICES-}                        #
@@ -114,8 +114,8 @@ echo "$BOLD$CYAN==> $RESET${BOLD}Checking prerequisites$RESET" >&2
 REPO_URL=https://raw.githubusercontent.com/lkrms/lk-platform
 for FILE_PATH in \
     /lib/bash/include/core.sh \
-    /lib/bash/include/linux.sh \
     /lib/bash/include/provision.sh \
+    /lib/bash/include/linux.sh \
     /lib/bash/include/arch.sh \
     /lib/arch/packages.sh \
     /lib/awk/section-get.awk \
@@ -436,8 +436,8 @@ lk_get_shell_var \
     LK_NODE_FQDN \
     LK_IPV4_ADDRESS \
     LK_IPV4_GATEWAY \
-    LK_IPV4_DNS_SERVER \
-    LK_IPV4_DNS_SEARCH \
+    LK_DNS_SERVERS \
+    LK_DNS_SEARCH \
     LK_BRIDGE_INTERFACE \
     LK_NODE_TIMEZONE \
     LK_NODE_SERVICES \

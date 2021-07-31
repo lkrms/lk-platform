@@ -1,5 +1,7 @@
 #!/bin/bash
 
+lk_include provision
+
 function lk_atop_ps_mem() {
     lk_elevate atop -R -PCPL,MEM,SWP,PAG,PRM "$@" |
         awk -f "$LK_BASE/lib/awk/atop-ps-mem.awk"
@@ -347,33 +349,36 @@ function lk_nm_device_connection_uuid() {
             lk_require_output awk -v "i=$1" '$0==i{f=1;next}f{print;f=0}'
 }
 
-# lk_nm_file_get_ipv4_ipv6 ADDRESS GATEWAY DNS_SERVER DNS_SEARCH
+# lk_nm_file_get_ipv4_ipv6 IPV4_ADDRESS IPV4_GATEWAY DNS_SERVERS DNS_SEARCH
 #
 # Output NetworkManager [ipv4] and [ipv6] keyfile sections for the given
 # configuration. All arguments are optional.
 function lk_nm_file_get_ipv4_ipv6() {
-    local ADDRESS=${1-} GATEWAY=${2-} DNS DNS_SEARCH MANUAL IFS=$'; \t\n'
+    local ADDRESS=${1-} GATEWAY=${2-} DNS4 DNS6 DNS_SEARCH MANUAL IFS=$'; \t\n'
     unset MANUAL
-    DNS=(${3-})
+    DNS4=($(printf '%s\n' ${3-} | lk_filter_ipv4))
+    DNS6=($(printf '%s\n' ${3-} | lk_filter_ipv6))
     DNS_SEARCH=(${4-})
     [ -z "$ADDRESS" ] || MANUAL=
     cat <<EOF
 
 [ipv4]${ADDRESS:+
-address1=$ADDRESS${GATEWAY:+,$GATEWAY}}${DNS[*]+
-dns=${DNS[*]};}${DNS_SEARCH[*]+
+address1=$ADDRESS${GATEWAY:+,$GATEWAY}}${DNS4[*]+
+dns=${DNS4[*]};}${DNS_SEARCH[*]+
 dns-search=${DNS_SEARCH[*]};}
 method=${MANUAL-auto}${MANUAL+manual
 
 [ipv6]
-addr-gen-mode=stable-privacy${DNS_SEARCH[*]+
+addr-gen-mode=stable-privacy${DNS6[*]+
+dns=${DNS6[*]};
+ignore-auto-dns=true}${DNS_SEARCH[*]+
 dns-search=${DNS_SEARCH[*]};}
 ip6-privacy=0
 method=auto}
 EOF
 }
 
-# lk_nm_file_get_ethernet DEV MAC [BRIDGE_DEV [IPV4_ARG...]]
+# lk_nm_file_get_ethernet DEV MAC [BRIDGE_DEV [IP_ARG...]]
 function lk_nm_file_get_ethernet() {
     local NAME=$1 MAC=$2 MASTER=${3-} UUID
     # Maintain UUID if possible
@@ -395,7 +400,7 @@ EOF
         lk_nm_file_get_ipv4_ipv6 "${@:4}"
 }
 
-# lk_nm_file_get_bridge DEV MAC [IPV4_ARG...]
+# lk_nm_file_get_bridge DEV MAC [IP_ARG...]
 function lk_nm_file_get_bridge() {
     local NAME=$1 MAC=$2 UUID
     UUID=$(lk_nm_connection_uuid "$NAME" 2>/dev/null) ||
