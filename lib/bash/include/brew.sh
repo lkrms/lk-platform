@@ -1,8 +1,9 @@
 #!/bin/bash
 
-# lk_brew_formulae_list_native [FORMULA...]
+# lk_brew_formulae_list_native [-n] [FORMULA...]
 function lk_brew_formulae_list_native() {
-    local NATIVE=${_LK_BREW_NATIVE:-true}
+    local NATIVE=true
+    [ "${1-}" != -n ] || { NATIVE=false && shift; }
     if ! lk_is_system_apple_silicon; then
         [ "$NATIVE" = false ] ||
             brew info --json=v2 --formula "${@---all}" |
@@ -21,7 +22,7 @@ def is_native:
 # lk_brew_formulae_list_not_native [FORMULA...]
 function lk_brew_formulae_list_not_native() {
     local _LK_BREW_NATIVE=false
-    lk_brew_formulae_list_native "$@"
+    lk_brew_formulae_list_native -n "$@"
 }
 
 lk_provide brew
