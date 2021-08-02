@@ -355,6 +355,7 @@ EOF
         local FILE URL HOMEBREW_{BREW,CORE}_GIT_REMOTE
         ! ((i)) || export HOMEBREW_BREW_GIT_REMOTE=/opt/homebrew \
             HOMEBREW_CORE_GIT_REMOTE=/opt/homebrew/Library/Taps/homebrew/homebrew-core
+        [ "${BREW_NEW[i]-0}" -eq 0 ] || return 0
         BREW_NEW[i]=0
         if [ ! -x "${BREW_PATH[i]}" ]; then
             lk_console_message "Installing $BREW_NAME"
@@ -414,6 +415,10 @@ EOF
         INSTALL+=(mas)
     HOMEBREW_FORMULAE=($(lk_echo_array HOMEBREW_FORMULAE INSTALL | sort -u))
 
+    BREW_NEW=()
+    lk_command_exists brew ||
+        lk_brew_loop install_homebrew
+
     FOREIGN=($(lk_brew_formulae_list_not_native "${HOMEBREW_FORMULAE[@]}"))
     if lk_is_apple_silicon && {
         [ -e /usr/local/bin/brew ] || { [ ${#FOREIGN[@]} -gt 0 ] &&
@@ -434,7 +439,6 @@ EOF
         FOREIGN=()
     fi
 
-    BREW_NEW=()
     lk_brew_loop install_homebrew
 
     INSTALL=($(comm -13 \
