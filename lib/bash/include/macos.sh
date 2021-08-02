@@ -151,7 +151,7 @@ $5 == "Y" && $1 ~ "^Command Line Tools"W && $1 !~ W"(beta|seed)"W {print $1}' |
 } #### Reviewed: 2021-06-28
 
 function lk_macos_install_rosetta2() {
-    [ ! -f /Library/Apple/System/Library/LaunchDaemons/com.apple.oahd.plist ] ||
+    ! pkgutil --pkgs='com\.apple\.pkg\.RosettaUpdateAuto' &>/dev/null ||
         return 0
     lk_console_message "Installing Rosetta 2"
     lk_run_detail lk_elevate caffeinate -i \
