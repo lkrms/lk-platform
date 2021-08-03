@@ -615,7 +615,7 @@ Usage: $FUNCNAME PROMPT NAME [DEFAULT [READ_ARG...]]" || return
         local _PROMPT=("$1")
         [ -z "${3:+1}" ] || _PROMPT+=("[$3]")
         read -rep "$(_lk_tty_prompt)" "${@:4}" "$2" 2>&"${_LK_FD-2}" || return
-        [ -n "${!2}" ] || eval "$2=\$3"
+        [ -n "${!2}" ] || eval "$2=\${3-}"
     fi
 }
 
