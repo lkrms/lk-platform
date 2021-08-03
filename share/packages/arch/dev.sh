@@ -19,9 +19,6 @@ PAC_KEEP=(
     zoom
 
     #
-    appimagelauncher
-
-    #
     displaycal
     xiccd
 

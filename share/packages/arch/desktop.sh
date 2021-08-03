@@ -8,9 +8,6 @@ PAC_REJECT=()
 PAC_KEEP=(
     teamviewer
     zoom
-
-    #
-    appimagelauncher
 )
 
 lk_is_virtual || {
