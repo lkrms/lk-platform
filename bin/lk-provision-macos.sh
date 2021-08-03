@@ -265,7 +265,7 @@ EOF
     if [ ! -e "$LK_BASE" ] || [ -z "$(ls -A "$LK_BASE")" ]; then
         lk_console_item "Installing lk-platform to" "$LK_BASE"
         sudo install -d -m 02775 -o "$USER" -g admin "$LK_BASE"
-        lk_tty caffeinate -i git clone -b "$LK_PLATFORM_BRANCH" \
+        lk_tty caffeinate -d git clone -b "$LK_PLATFORM_BRANCH" \
             https://github.com/lkrms/lk-platform.git "$LK_BASE"
         sudo install -d -m 02775 -g admin "$LK_BASE"/{etc{,/lk-platform},var}
         sudo install -d -m 01777 -g admin "$LK_BASE"/var/log
@@ -291,7 +291,7 @@ EOF
         . "$LK_PACKAGES_FILE"
     . "$LK_BASE/lib/macos/packages.sh"
 
-    function lk_brew_loop() {
+    function brew_loop() {
         local i SH BREW BREW_NAME
         for i in "${!BREW_PATH[@]}"; do
             if ! ((i)); then
@@ -300,7 +300,7 @@ EOF
                 SH=$(_lk_macos_env "^/opt/homebrew(/|\$)")
             fi && BREW=(
                 env "PATH=$(eval "$SH" && echo "$PATH")"
-                ${BREW_ARCH[i]:+arch "--${BREW_ARCH[i]}"}
+                ${BREW_ARCH[i]:+arch "-${BREW_ARCH[i]}"}
                 "${BREW_PATH[i]}"
             ) || return
             BREW_NAME=${BREW_NAMES[i]}
@@ -309,81 +309,27 @@ EOF
     }
 
     function brew() {
-        command "${BREW[@]:-brew}" "$@"
-    }
-
-    function _brew() {
-        lk_tty caffeinate -i "${BREW[@]:-brew}" "$@"
-    }
-
-    function lk_brew_check_taps() {
-        local TAPS TAP URL
-        TAPS=($(comm -13 \
-            <(brew tap | sort -u) \
-            <(lk_echo_array HOMEBREW_TAPS | sort -u))) || return
-        [ ${#TAPS[@]} -eq 0 ] ||
-            for TAP in "${TAPS[@]}"; do
-                lk_console_detail "Tapping" "$TAP"
-                unset URL
-                ! ((i)) || [[ ! $TAP =~ ^[^/]+/[^/]+$ ]] ||
-                    URL=file:///opt/homebrew/Library/Taps/${TAP%/*}/homebrew-${TAP#*/}
-                _brew tap --quiet "$TAP" ${URL+"$URL"} || return
-            done
-    }
-
-    function lk_brew_check_autoupdate() {
-        local LABEL=com.github.domt4.homebrew-autoupdate
-        { launchctl list "$LABEL" || {
-            LABEL+=.${BREW_ARCH[i]:-$(uname -m)} &&
-                launchctl list "$LABEL"
-        }; } &>/dev/null || {
-            lk_console_detail "Enabling daily \`brew update\`"
-            install -d -m 00755 ~/Library/LaunchAgents
-            _brew autoupdate start --cleanup
-        }
-    }
-
-    function lk_brew_formulae() {
-        brew list --formula --full-name
-    }
-
-    function lk_brew_casks() {
-        brew list --cask --full-name
-    }
-
-    function install_homebrew() {
-        local FILE URL HOMEBREW_{BREW,CORE}_GIT_REMOTE
-        ! ((i)) || export HOMEBREW_BREW_GIT_REMOTE=/opt/homebrew \
-            HOMEBREW_CORE_GIT_REMOTE=/opt/homebrew/Library/Taps/homebrew/homebrew-core
-        [ "${BREW_NEW[i]-0}" -eq 0 ] || return 0
-        BREW_NEW[i]=0
-        if [ ! -x "${BREW_PATH[i]}" ]; then
-            lk_console_message "Installing $BREW_NAME"
-            FILE=$_DIR/homebrew-install.sh
-            URL=https://raw.githubusercontent.com/Homebrew/install/master/install.sh
-            if [ ! -e "$FILE" ]; then
-                curl "${CURL_OPTIONS[@]}" --output "$FILE" "$URL" || {
-                    rm -f "$FILE"
-                    lk_die "unable to download: $URL"
-                }
-            fi
-            CI=1 HAVE_SUDO_ACCESS=0 lk_tty caffeinate -i \
-                ${BREW_ARCH[i]:+arch "--${BREW_ARCH[i]}"} /bin/bash "$FILE" ||
-                lk_die "$BREW_NAME installer failed"
-            [ -x "${BREW_PATH[i]}" ] ||
-                lk_die "command not found: ${BREW_PATH[i]}"
-            BREW_NEW[i]=1
+        if [ -t 1 ]; then
+            lk_tty caffeinate -d "${BREW[@]:-brew}" "$@"
+        else
+            command "${BREW[@]:-brew}" "$@"
         fi
-        lk_console_item "Found $BREW_NAME at:" "$("${BREW_PATH[i]}" --prefix)"
-        ((i)) || { SH=$(. "$LK_BASE/lib/bash/env.sh") &&
-            eval "$SH"; }
-        lk_brew_check_taps ||
+    }
+
+    function check_homebrew() {
+        [ "${BREW_NEW[i]-0}" -eq 0 ] || return 0
+        HAVE_SUDO_ACCESS=0 \
+            lk_brew_install_homebrew "${BREW_PATH[i]%/bin/brew}" ||
+            lk_die "$BREW_NAME installation failed"
+        BREW_NEW[i]=$LK_BREW_NEW_INSTALL
+        lk_tty_print "Found $BREW_NAME at:" "$("${BREW_PATH[i]}" --prefix)"
+        lk_brew_tap "${HOMEBREW_TAPS[@]}" ||
             lk_die "unable to tap formula repositories"
-        lk_brew_check_autoupdate ||
+        lk_brew_enable_autoupdate ||
             lk_die "unable to enable automatic \`brew update\`"
-        [ "${BREW_NEW[i]}" -eq 1 ] || {
-            lk_console_detail "Updating formulae"
-            _brew update --quiet
+        [ "$LK_BREW_NEW_INSTALL" -eq 1 ] || {
+            lk_tty_print "Updating formulae"
+            brew update --quiet
         }
     }
 
@@ -417,7 +363,14 @@ EOF
 
     BREW_NEW=()
     lk_command_exists brew ||
-        lk_brew_loop install_homebrew
+        brew_loop check_homebrew
+    INSTALL=($(comm -13 \
+        <(lk_brew_list_formulae | sort -u) \
+        <(lk_echo_array INSTALL | sort -u)))
+    [ ${#INSTALL[@]} -eq 0 ] || {
+        lk_tty_print "Installing lk-platform dependencies"
+        brew install --formula "${INSTALL[@]}"
+    }
 
     FOREIGN=($(lk_brew_formulae_list_not_native "${HOMEBREW_FORMULAE[@]}"))
     if lk_is_apple_silicon && {
@@ -439,15 +392,7 @@ EOF
         FOREIGN=()
     fi
 
-    lk_brew_loop install_homebrew
-
-    INSTALL=($(comm -13 \
-        <(lk_brew_formulae | sort -u) \
-        <(lk_echo_array INSTALL | sort -u)))
-    [ ${#INSTALL[@]} -eq 0 ] || {
-        lk_console_message "Installing lk-platform dependencies"
-        _brew install --formula "${INSTALL[@]}"
-    }
+    brew_loop check_homebrew
 
     lk_console_message "Applying user defaults"
     XQ="\
@@ -502,7 +447,7 @@ EOF
         .current_version + \")\"") || return
         eval "UPGRADE_FORMULAE_$i=(\${UPGRADE_FORMULAE[@]+\"\${UPGRADE_FORMULAE[@]}\"})"
     }
-    lk_brew_loop check_updates
+    brew_loop check_updates
     lk_mapfile UPGRADE_FORMULAE_TEXT \
         <(lk_echo_array "${!UPGRADE_FORMULAE_TEXT_@}" | sort -u)
     [ ${#UPGRADE_FORMULAE_TEXT[@]} -eq 0 ] || {
@@ -535,8 +480,8 @@ EOF
 def is_native:
     (.versions.bottle | not) or
         ([.bottle[].files | keys[] | select(match(\"^(all\$|arm64_)\"))] | length > 0);"
-        # Exclude formulae with no arm64 bottle on Apple Silicon unless
-        # using `arch --x86_64`
+        # Exclude formulae with no arm64 bottle on Apple Silicon unless using
+        # `arch -x86_64`
         if [ -z "${BREW_ARCH[i]}" ]; then
             HOMEBREW_FORMULAE=($(jq -r \
                 "$JQ"'.formulae[]|select(is_native).full_name' \
@@ -562,7 +507,7 @@ def is_native:
             get_arch_formulae
         }
         lk_mapfile "INSTALL_FORMULAE_$i" <(comm -13 \
-            <(lk_brew_formulae | sort -u) \
+            <(lk_brew_list_formulae | sort -u) \
             <(lk_echo_array HOMEBREW_FORMULAE | sort -u))
     }
     function check_selected() {
@@ -575,7 +520,7 @@ def is_native:
         "${HOMEBREW_FORMULAE[@]}") && HOMEBREW_FORMULAE=($(jq -r \
             ".formulae[].full_name" <<<"$HOMEBREW_FORMULAE_JSON"))
     FORMULAE_COUNT=${#HOMEBREW_FORMULAE[@]}
-    lk_brew_loop check_installed
+    brew_loop check_installed
     unset FORMULAE_COUNT
     INSTALL_FORMULAE=($(lk_echo_array "${!INSTALL_FORMULAE_@}" | sort -u))
     if [ ${#INSTALL_FORMULAE[@]} -gt 0 ]; then
@@ -596,14 +541,14 @@ def is_native:
             "Installing new formulae" \
             "Selected Homebrew formulae will be installed:" \
             "${FORMULAE[@]}")) && [ ${#INSTALL_FORMULAE[@]} -gt 0 ]; then
-            lk_brew_loop check_selected
+            brew_loop check_selected
         else
             unset "${!INSTALL_FORMULAE@}"
         fi
     fi
 
     INSTALL_CASKS=($(comm -13 \
-        <(lk_brew_casks | sort -u) \
+        <(lk_brew_list_casks | sort -u) \
         <(lk_echo_array HOMEBREW_CASKS |
             sort -u)))
     if [ ${#INSTALL_CASKS[@]} -gt 0 ]; then
@@ -708,35 +653,35 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
             MESSAGE=${3//"$s"/$BREW_NAME}
             lk_echo_array ARR |
                 lk_console_list "$MESSAGE" formula formulae
-            _brew "$1" --formula "${ARR[@]}" || STATUS=$?
+            brew "$1" --formula "${ARR[@]}" || STATUS=$?
         }
     }
-    lk_brew_loop commit_changes upgrade UPGRADE_FORMULAE \
+    brew_loop commit_changes upgrade UPGRADE_FORMULAE \
         "Upgrading {} formulae:"
-    lk_brew_loop commit_changes install INSTALL_FORMULAE \
+    brew_loop commit_changes install INSTALL_FORMULAE \
         "Installing new {} formulae:"
 
     [ ${#UPGRADE_CASKS[@]} -eq 0 ] || {
         lk_console_message "Upgrading casks"
-        _brew upgrade --cask "${UPGRADE_CASKS[@]}" || STATUS=$?
+        brew upgrade --cask "${UPGRADE_CASKS[@]}" || STATUS=$?
     }
 
     [ ${#INSTALL_CASKS[@]} -eq 0 ] || {
         lk_echo_array INSTALL_CASKS |
             lk_console_list "Installing new casks:"
-        _brew install --cask "${INSTALL_CASKS[@]}" || STATUS=$?
+        brew install --cask "${INSTALL_CASKS[@]}" || STATUS=$?
     }
 
     [ ${#UPGRADE_APPS[@]} -eq 0 ] || {
         lk_console_message "Upgrading apps"
-        lk_tty caffeinate -i \
+        lk_tty caffeinate -d \
             mas upgrade "${UPGRADE_APPS[@]}" || STATUS=$?
     }
 
     [ ${#INSTALL_APPS[@]} -eq 0 ] || {
         lk_echo_array APP_NAMES |
             lk_console_list "Installing new apps:"
-        lk_tty caffeinate -i \
+        lk_tty caffeinate -d \
             mas install "${INSTALL_APPS[@]}" || STATUS=$?
     }
 
@@ -752,11 +697,11 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
             get_arch_formulae
         }
         ALL_FORMULAE=($(comm -12 \
-            <(lk_brew_formulae | sort -u) \
+            <(lk_brew_list_formulae | sort -u) \
             <(lk_echo_array HOMEBREW_FORMULAE HOMEBREW_KEEP_FORMULAE | sort -u)))
         [ "$i" -gt 0 ] ||
             ALL_CASKS=($(comm -12 \
-                <(lk_brew_casks | sort -u) \
+                <(lk_brew_list_casks | sort -u) \
                 <(lk_echo_array HOMEBREW_CASKS HOMEBREW_KEEP_CASKS | sort -u)))
         ALL_JSON=$(brew info --json=v2 --installed)
         while :; do
@@ -801,7 +746,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
         done
 
         PURGE_FORMULAE=($(comm -23 \
-            <(lk_brew_formulae | sort -u) \
+            <(lk_brew_list_formulae | sort -u) \
             <(lk_echo_array ALL_FORMULAE)))
         [ ${#PURGE_FORMULAE[@]} -eq 0 ] || {
             lk_echo_array PURGE_FORMULAE |
@@ -813,10 +758,10 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
                     --force --ignore-dependencies "${PURGE_FORMULAE[@]}"
         }
     }
-    lk_brew_loop check_orphans
+    brew_loop check_orphans
 
     PURGE_CASKS=($(comm -23 \
-        <(lk_brew_casks | sort -u) \
+        <(lk_brew_list_casks | sort -u) \
         <(lk_echo_array ALL_CASKS)))
     [ ${#PURGE_CASKS[@]} -eq 0 ] || {
         lk_echo_array PURGE_CASKS |
