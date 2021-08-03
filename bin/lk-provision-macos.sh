@@ -317,7 +317,7 @@ EOF
     }
 
     function check_homebrew() {
-        [ "${BREW_NEW[i]-0}" -eq 0 ] || return 0
+        [ -z "${BREW_NEW[i]-}" ] || return 0
         HAVE_SUDO_ACCESS=0 \
             lk_brew_install_homebrew "${BREW_PATH[i]%/bin/brew}" ||
             lk_die "$BREW_NAME installation failed"
@@ -325,7 +325,7 @@ EOF
         lk_tty_print "Found $BREW_NAME at:" "$("${BREW_PATH[i]}" --prefix)"
         lk_brew_tap "${HOMEBREW_TAPS[@]}" ||
             lk_die "unable to tap formula repositories"
-        lk_brew_enable_autoupdate ||
+        lk_brew_enable_autoupdate ${BREW_ARCH[i]:+"${BREW_ARCH[i]}"} ||
             lk_die "unable to enable automatic \`brew update\`"
         [ "$LK_BREW_NEW_INSTALL" -eq 1 ] || {
             lk_tty_print "Updating formulae"
@@ -362,8 +362,7 @@ EOF
     HOMEBREW_FORMULAE=($(lk_echo_array HOMEBREW_FORMULAE INSTALL | sort -u))
 
     BREW_NEW=()
-    lk_command_exists brew ||
-        brew_loop check_homebrew
+    brew_loop check_homebrew
     INSTALL=($(comm -13 \
         <(lk_brew_list_formulae | sort -u) \
         <(lk_echo_array INSTALL | sort -u)))
