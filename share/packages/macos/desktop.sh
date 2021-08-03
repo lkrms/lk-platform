@@ -48,22 +48,18 @@ HOMEBREW_FORMULAE+=(
 HOMEBREW_CASKS+=(
     alt-tab
     chromium
-    cyberduck
     firefox
     flycut
-    icanhazshortcut
     imageoptim
     iterm2
     keepassxc
     keepingyouawake
-    libreoffice
     messenger
     mysides
     nextcloud
     skype
     spotify
     the-unarchiver
-    transmission
     typora
 
     # PDF
@@ -71,9 +67,6 @@ HOMEBREW_CASKS+=(
 
     # Multimedia (video)
     vlc
-
-    # System
-    geekbench
 
     # Non-free
     microsoft-office
@@ -107,10 +100,15 @@ HOMEBREW_KEEP_FORMULAE+=(
 )
 
 HOMEBREW_KEEP_CASKS+=(
+    cyberduck
+    geekbench
+    icanhazshortcut
+    libreoffice
     lingon-x
     logitech-g-hub
     logitech-gaming-software
     teamviewer
+    transmission
 )
 
 LOGIN_ITEMS+=(

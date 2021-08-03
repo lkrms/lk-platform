@@ -144,7 +144,7 @@ $5 == "Y" && $1 ~ "^Command Line Tools"W && $1 !~ W"(beta|seed)"W {print $1}' |
         [ -n "${LABEL:+1}" ] ||
         lk_warn "unable to determine item name for Command Line Tools" ||
         return
-    lk_run_detail lk_elevate caffeinate -i \
+    lk_run_detail lk_elevate caffeinate -d \
         softwareupdate --install "$LABEL" >/dev/null || return
     lk_macos_command_line_tools_installed || return
     rm -f "$FILE" || true
@@ -154,7 +154,7 @@ function lk_macos_install_rosetta2() {
     ! pkgutil --pkgs='com\.apple\.pkg\.RosettaUpdateAuto' &>/dev/null ||
         return 0
     lk_console_message "Installing Rosetta 2"
-    lk_run_detail lk_elevate caffeinate -i \
+    lk_run_detail lk_elevate caffeinate -d \
         softwareupdate --install-rosetta --agree-to-license
 } #### Reviewed: 2021-06-28
 
