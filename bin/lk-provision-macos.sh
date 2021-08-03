@@ -309,7 +309,7 @@ EOF
     }
 
     function brew() {
-        if [ -t 1 ]; then
+        if [ "$BASH_SUBSHELL" -eq 0 ]; then
             lk_tty caffeinate -d "${BREW[@]:-brew}" "$@"
         else
             command "${BREW[@]:-brew}" "$@"
