@@ -3955,7 +3955,7 @@ else
         LK_BOLD=$'\E[1m' \
         LK_DIM=$'\E[2m' \
         LK_UNDIM=$'\E[22m' \
-        LK_RESET=$'\E[m'
+        LK_RESET=$'\E[m\017'
 
     case "${TERM-}" in
     '' | dumb | unknown)
