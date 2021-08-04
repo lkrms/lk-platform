@@ -205,7 +205,6 @@ if lk_node_service_enabled desktop; then
         elementary-wallpapers
         gtk-engine-murrine # GTK 2 support
         gtk-theme-elementary
-        materia-gtk-theme
         papirus-icon-theme
         sound-theme-elementary
 
@@ -254,6 +253,11 @@ if lk_node_service_enabled desktop; then
         autorandr-git
         networkmanager-dispatcher-ntpd
         xrandr-invert-colors
+
+        #
+        numix-gtk-theme-git
+        sound-theme-smooth
+        zuki-themes
     )
 fi
 
@@ -278,6 +282,10 @@ if lk_node_service_enabled xfce4; then
     AUR_PACKAGES+=(
         mugshot
         xfce4-panel-profiles
+
+        #
+        elementary-xfce-icons
+        xfce-theme-greybird
     )
 fi
 
