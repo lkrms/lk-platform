@@ -39,7 +39,6 @@ path_add_to_front() {
 
 OLD_PATH=$PATH
 PATH=$(path_add_to_front /usr/local/bin)
-# shellcheck disable=SC2039
 [ ! -d /opt/homebrew/bin ] ||
     [ /opt/homebrew/bin -ef /usr/local/bin ] ||
     [ "$(uname -m 2>/dev/null)" = x86_64 ] || {
@@ -49,6 +48,7 @@ PATH=$(path_add_to_front /usr/local/bin)
     [ ! -d /opt/homebrew/lib ] ||
         echo 'export DYLD_FALLBACK_LIBRARY_PATH=${DYLD_FALLBACK_LIBRARY_PATH-${HOME:+$HOME/lib:}/opt/homebrew/lib:/usr/local/lib:/usr/lib}'
 }
+PATH=$(path_add_to_front /home/linuxbrew/.linuxbrew/bin)
 
 ! type brew >/dev/null 2>&1 ||
     ! BREW_SH=$(brew shellenv 2>/dev/null |
