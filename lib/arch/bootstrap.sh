@@ -451,11 +451,13 @@ lk_get_shell_var \
     LK_PLATFORM_BRANCH \
     LK_PACKAGES_FILE >"/mnt$FILE"
 
+lk_log_tty_on
 PROVISIONED=
 in_target -u "$BOOTSTRAP_USERNAME" \
     env BASH_XTRACEFD=$BASH_XTRACEFD SHELLOPTS=xtrace LK_NO_LOG=1 \
     "$LK_BASE/bin/lk-provision-arch.sh" --yes && PROVISIONED=1 ||
     lk_console_error "Provisioning failed"
+lk_log_tty_off
 
 lk_console_message "Installing boot loader"
 i=0

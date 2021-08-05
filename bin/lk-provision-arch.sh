@@ -560,7 +560,7 @@ $LK_NODE_HOSTNAME" &&
         lk_log_tty_on
         lk_console_message "Checking AUR packages"
         PAC_INSTALL=($(lk_pac_not_installed_list \
-            ${PAC_BASE_DEVEL[@]+"${PAC_BASE_DEVEL[@]}"} \
+            ${PAC_BASE_DEVEL+"${PAC_BASE_DEVEL[@]}"} \
             devtools pacutils vifm))
         [ ${#PAC_INSTALL[@]} -eq 0 ] || {
             lk_console_detail "Installing aurutils dependencies"
@@ -696,9 +696,12 @@ $LK_NODE_HOSTNAME" &&
             lk_console_list "Upgrading:" package packages
     fi
     [ ${#PAC_INSTALL[@]}${#PAC_UPGRADE[@]} = 00 ] ||
-        lk_log_bypass lk_tty pacman -S --noconfirm \
-            ${PAC_INSTALL[@]+"${PAC_INSTALL[@]}"} \
-            ${PAC_UPGRADE[@]+"${PAC_UPGRADE[@]}"}
+        for v in "" v; do
+            # Sync the package with keys used to sign other packages first
+            ! SYNC=($(lk_echo_array PAC_INSTALL PAC_UPGRADE |
+                grep -Fx"$v" archlinux-keyring)) ||
+                lk_log_bypass lk_tty pacman -S --noconfirm "${SYNC[@]}"
+        done
 
     lk_symlink_bin codium code || true
     lk_symlink_bin vim vi || true
@@ -744,7 +747,7 @@ $LK_NODE_HOSTNAME" &&
                 sqlite3
                 zip
             )
-            for EXT in ${PHP_EXT[@]+"${PHP_EXT[@]}"}; do
+            for EXT in ${PHP_EXT+"${PHP_EXT[@]}"}; do
                 lk_php_enable_option extension "$EXT"
             done
             STANDALONE_PHP_EXT=(
@@ -752,7 +755,7 @@ $LK_NODE_HOSTNAME" &&
                 memcache.so
                 memcached.so
             )
-            for EXT in ${STANDALONE_PHP_EXT[@]+"${STANDALONE_PHP_EXT[@]}"}; do
+            for EXT in ${STANDALONE_PHP_EXT+"${STANDALONE_PHP_EXT[@]}"}; do
                 FILE=$DIR/conf.d/${EXT%.*}.ini
                 [ -f "$FILE" ] || continue
                 lk_php_enable_option extension "$EXT" "$FILE"
