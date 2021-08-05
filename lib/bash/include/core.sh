@@ -26,8 +26,13 @@ function lk_bash_at_least() {
         [ "${BASH_VERSINFO[0]}" -gt "$1" ]
 }
 
+# lk_command_exists COMMAND...
 function lk_command_exists() {
-    type -P "$1" >/dev/null
+    [ $# -gt 0 ] || return
+    while [ $# -gt 0 ]; do
+        type -P "$1" >/dev/null || return
+        shift
+    done
 }
 
 function lk_is_arm() {
@@ -582,8 +587,9 @@ function lk_tty_list() {
     fi
     _INDENT=${_LK_TTY_INDENT:-$_INDENT}
     _LIST=$([ -z "${_ITEMS+1}" ] ||
-        printf '%s\n' "${_ITEMS[@]}" |
-        COLUMNS=$(($(lk_tty_columns) - _INDENT)) column |
+        printf '%s\n' "${_ITEMS[@]}")
+    ! lk_command_exists column expand ||
+        _LIST=$(COLUMNS=$(($(lk_tty_columns) - _INDENT)) column <<<"$_LIST" |
             expand) || return
     echo "$(
         _LK_FD=1
