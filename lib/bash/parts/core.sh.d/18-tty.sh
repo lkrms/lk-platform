@@ -147,8 +147,9 @@ function lk_tty_list() {
     fi
     _INDENT=${_LK_TTY_INDENT:-$_INDENT}
     _LIST=$([ -z "${_ITEMS+1}" ] ||
-        printf '%s\n' "${_ITEMS[@]}" |
-        COLUMNS=$(($(lk_tty_columns) - _INDENT)) column |
+        printf '%s\n' "${_ITEMS[@]}")
+    ! lk_command_exists column expand ||
+        _LIST=$(COLUMNS=$(($(lk_tty_columns) - _INDENT)) column <<<"$_LIST" |
             expand) || return
     echo "$(
         _LK_FD=1

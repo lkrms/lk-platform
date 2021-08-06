@@ -14,8 +14,13 @@ function lk_bash_at_least() {
         [ "${BASH_VERSINFO[0]}" -gt "$1" ]
 }
 
+# lk_command_exists COMMAND...
 function lk_command_exists() {
-    type -P "$1" >/dev/null
+    [ $# -gt 0 ] || return
+    while [ $# -gt 0 ]; do
+        type -P "$1" >/dev/null || return
+        shift
+    done
 }
 
 function lk_is_arm() {
