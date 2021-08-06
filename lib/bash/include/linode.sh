@@ -504,7 +504,8 @@ Example:
         LK_SSH_PRIORITY='' \
             lk_linode_ssh_add "$HOST_ACCOUNT-admin" "" <<<"$LINODES"
     }
-    lk_linode_dns_check -t "$LINODES" "${NODE_FQDN#*.}" "${@:5}"
+    lk_linode_dns_check -t "$LINODES" "${NODE_FQDN#*.}" "${@:5}" || return
+    LK_LINODE_JSON_FILE=$FILE
 }
 
 # lk_linode_hosting_get_meta DIR HOST...
