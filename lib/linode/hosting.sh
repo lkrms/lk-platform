@@ -14,7 +14,7 @@
 # <UDF name="LK_ADMIN_EMAIL" label="Forwarding address for system email" example="tech@linacreative.com" />
 # <UDF name="LK_TRUSTED_IP_ADDRESSES" label="Trusted IP addresses (comma-delimited)" example="10.0.0.0/8,172.16.0.0/12,192.168.0.0/16" default="" />
 # <UDF name="LK_SSH_TRUSTED_ONLY" label="Block SSH access from untrusted IP addresses (trusted IP addresses required)" oneof="Y,N" default="N" />
-# <UDF name="LK_SSH_TRUSTED_PORT" label="Trusted port for SSH access (login attempts allowed from any IP, must be >=1024)" example="2222" default="" />
+# <UDF name="LK_SSH_TRUSTED_PORT" label="Trusted port for SSH access (login attempts allowed from any IP, must be higher than 1023)" example="2222" default="" />
 # <UDF name="LK_SSH_JUMP_HOST" label="SSH jump proxy: hostname and optional port" example="jump.linacreative.com:9922" default="" />
 # <UDF name="LK_SSH_JUMP_USER" label="SSH jump proxy: default user" default="" />
 # <UDF name="LK_SSH_JUMP_KEY" label="SSH jump proxy: default key (must match the comment field of one installed key)" default="" />
@@ -43,9 +43,8 @@
 # <UDF name="LK_SHUTDOWN_DELAY" label="Delay before shutdown/reboot after provisioning (in minutes)" default="0" />
 # <UDF name="LK_PLATFORM_BRANCH" label="lk-platform tracking branch" oneof="master,develop,provision-hosting" default="master" />
 
-# Copy output to the console (e.g. LISH) unless it's connected to the systemd
-# journal (e.g. when invoked by cloud-init)
-[ -t 1 ] || [ -n "${JOURNAL_STREAM-}" ] || exec > >(tee /dev/console) 2>&1
+# Copy output to the console (i.e. LISH) if running on a Linode
+[ -z "${LINODE_ID-}" ] || exec > >(tee /dev/console) 2>&1
 
 SCRIPT_VARS=$(
     unset BASH_EXECUTION_STRING
@@ -562,7 +561,7 @@ lk_console_detail "Enabling unattended upgrades (security packages only)"
 APT_OPTIONS+=(
     "APT::Periodic::Update-Package-Lists" "1"
     "APT::Periodic::Unattended-Upgrade" "1"
-    "Unattended-Upgrade::Mail" "$LK_UPGRADE_EMAIL"
+    "Unattended-Upgrade::Mail" "${LK_UPGRADE_EMAIL:-root}"
     "Unattended-Upgrade::Remove-Unused-Kernel-Packages" "true"
 )
 if [ "$LK_AUTO_REBOOT" = Y ]; then
