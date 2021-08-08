@@ -1232,26 +1232,29 @@ function lk_regex_expand_whitespace() {
 # lk_replace_whitespace REPLACE [STRING...]
 function lk_replace_whitespace() {
     [ $# -ge 1 ] || lk_usage "Usage: $FUNCNAME REPLACE [STRING...]" || return
-    local REPLACE=$1 FIND
-    [[ ! $REPLACE =~ ^($S+)$ ]] || {
-        [ ${#BASH_REMATCH[1]} -eq 1 ] || lk_warn "invalid arguments" || return
-        FIND="$S+{2,}"
-    }
     if [ $# -gt 1 ]; then
         printf '%s\n' "${@:2}" | lk_replace_whitespace "$1"
     else
-        local NOT_SPECIAL="([^'\"[:blank:]\\]|\\\\.)+" \
-            QUOTED_SINGLE="(''|'([^'\\]|\\\\.)*')" \
-            QUOTED_DOUBLE="(\"\"|\"([^\"\\]|\\\\.)*\")"
-        # - H: append newline + pattern space to hold space
-        # - 1h: on line 1, copy pattern space to hold space
-        # - $!d: until the last line, delete pattern space and start next cycle
-        # - g: copy hold space to pattern space
-        sed -E "\
-H;1h;\$!d;g
-:repeat
-s/^((($(lk_escape_ere "$REPLACE"))?($NOT_SPECIAL|$QUOTED_SINGLE|$QUOTED_DOUBLE))*)${FIND:-$S+}/\\1$(lk_escape_ere_replace "$REPLACE")/
-t repeat"
+        awk -v "replace=$1" '
+NR == 1 { s_in = $0; next }
+        { s_in = s_in RS $0 }
+END     {
+    # \47 = single quote
+    not_special    = "([^\47\"[:blank:]\\\\]|\\\\.)+"
+    quoted_single  = "(\47\47|\47([^\47\\\\]|\\\\.)*\47)"
+    quoted_double  = "(\"\"|\"([^\"\\\\]|\\\\.)*\")"
+    not_whitespace = "^(" not_special "|" quoted_single "|" quoted_double ")*"
+    while (length(s_in) && match(s_in, not_whitespace)) {
+        l = RLENGTH
+        s_out = s_out substr(s_in, 1, l) (l < length(s_in) ? replace : "")
+        s_in = substr(s_in, l + 1)
+        if (! sub(/[[:blank:]]+/, "", s_in) && l < length(s_in)) {
+            print FILENAME ": unmatched \47 or \"" > "/dev/stderr"
+            exit 1
+        }
+    }
+    print s_out
+}'
     fi
 }
 
