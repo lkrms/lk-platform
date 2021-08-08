@@ -254,7 +254,7 @@ LOGIN_ITEMS+=(
     "/Applications/Mail.app"
     "/Applications/Messenger.app"
     "/Applications/Microsoft Teams.app"
-    "/Applications/nextcloud.app"
+    "/Applications/Nextcloud.app"
     "/Applications/Skype.app"
     "/Applications/Todoist.app"
     "/System/Applications/Mail.app"
