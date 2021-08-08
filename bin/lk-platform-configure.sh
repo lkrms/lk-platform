@@ -115,9 +115,9 @@ LK_FILE_BACKUP_MOVE=1
 LK_VERBOSE=${LK_VERBOSE-1}
 
 NEW_SETTINGS=()
-unset ELEVATED
+unset ELEVATED NO_UPGRADE
 
-lk_getopt "s:" "elevated,set:"
+lk_getopt "s:" "elevated,set:,no-upgrade"
 eval "set -- $LK_GETOPT"
 
 while :; do
@@ -133,6 +133,9 @@ while :; do
         ;;
     --elevated)
         ELEVATED=1
+        ;;
+    --no-upgrade)
+        NO_UPGRADE=1
         ;;
     --)
         break
@@ -367,13 +370,15 @@ lk_log_start
                 "$LK_BOLD$BRANCH$LK_RESET")"
             LK_PLATFORM_BRANCH=$BRANCH
         fi
-        FETCH_TIME=$(lk_file_modified ".git/FETCH_HEAD" 2>/dev/null) ||
-            FETCH_TIME=0
-        if [ $(($(lk_timestamp) - FETCH_TIME)) -gt 300 ]; then
-            lk_console_detail "Checking for changes"
-            ! update_repo ||
-                ! lk_is_true LK_GIT_REPO_UPDATED ||
-                restart_script "$@"
+        if [ -z "${NO_UPGRADE-}" ]; then
+            FETCH_TIME=$(lk_file_modified ".git/FETCH_HEAD" 2>/dev/null) ||
+                FETCH_TIME=0
+            if [ $(($(lk_timestamp) - FETCH_TIME)) -gt 300 ]; then
+                lk_console_detail "Checking for changes"
+                ! update_repo ||
+                    ! lk_is_true LK_GIT_REPO_UPDATED ||
+                    restart_script "$@"
+            fi
         fi
         install -d -m 01777 "$LK_BASE/var/log"
         install -d -m 00750 "$LK_BASE/var/backup"
