@@ -2444,7 +2444,8 @@ with /dev/null if it doesn't." || return
     MESSAGE="\
 ${1:-${_LK_TTY_INPUT_NAME:-/dev/stdin}}$LK_BOLD -> \
 ${2:-${_LK_TTY_INPUT_NAME:-/dev/stdin}}$LK_RESET"
-    lk_tty_dump \
+    _LK_DIFF_SED_SCRIPT=':repeat
+s/^(( {4})*)\t/\1    /; t repeat' lk_tty_dump \
         "" \
         "${3-$MESSAGE}" \
         "$MESSAGE" \
@@ -2458,10 +2459,10 @@ function lk_diff() { (
     _LK_CAN_FAIL=1
     [ $# -eq 2 ] || lk_usage "Usage: $FUNCNAME FILE1 FILE2" || exit
     for i in 1 2; do
-        if [ -p "${!i}" ] || [ -n "${_LK_DIFF_IGNORE:+1}" ]; then
+        if [ -p "${!i}" ] || [ -n "${_LK_DIFF_SED_SCRIPT:+1}" ]; then
             FILE=$(lk_mktemp_file) && lk_delete_on_exit "$FILE" &&
                 lk_maybe_sudo sed -E \
-                    "${_LK_DIFF_IGNORE:+"/${_LK_DIFF_IGNORE//\//\\\/}/d"}" \
+                    "${_LK_DIFF_SED_SCRIPT-}" \
                     "${!i}" >"$FILE" || exit
             set -- "${@:1:i-1}" "$FILE" "${@:i+1}"
         fi
@@ -2480,7 +2481,8 @@ function lk_diff() { (
                 's { print l } { s = 1; l = $0 } END { print l r }'
             false
         else
-            ! lk_require_output lk_maybe_sudo icdiff -U2 \
+            printf '%s' "$LK_RESET"
+            ! lk_require_output lk_maybe_sudo icdiff -U2 --no-headers \
                 ${_LK_TTY_INDENT:+--cols=$(($(
                     lk_tty_columns
                 ) - 2 * (_LK_TTY_INDENT + 2)))} "$@"
@@ -2492,7 +2494,7 @@ function lk_diff() { (
         DIFF_VER=$(lk_diff_version 2>/dev/null) &&
             lk_version_at_least "$DIFF_VER" 3.4 || unset DIFF_VER
         lk_maybe_sudo gnu_diff ${DIFF_VER+--color=always} -U3 "$@"
-    fi && echo "${BLUE}Files are identical$RESET"
+    fi && echo "${BLUE}Files are identical${_LK_DIFF_SED_SCRIPT:+ or have hidden differences}$RESET"
 ); }
 
 function lk_run() {

@@ -1580,11 +1580,13 @@ EOF
     compress
     delaycompress
     notifempty
-    create
     sharedscripts
     postrotate
-        test ! -x /usr/lib/php/php$PHPVER-fpm-reopenlogs || /usr/lib/php/php$PHPVER-fpm-reopenlogs
-        ! invoke-rc.d apache2 status &>/dev/null || invoke-rc.d apache2 reload &>/dev/null
+        ! invoke-rc.d apache2 status >/dev/null 2>&1 ||
+            invoke-rc.d apache2 reload
+        for c in /usr/lib/php/php*-fpm-reopenlogs; do
+            [ ! -x "$c" ] || "$c"
+        done
     endscript
 }
 EOF
