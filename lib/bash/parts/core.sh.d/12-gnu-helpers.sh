@@ -17,6 +17,7 @@ REQUIRED_COMMANDS=(
     chown
     cp
     date
+    dd
     df
     diff
     find
@@ -35,6 +36,7 @@ COMMANDS=(
     chown
     cp
     date
+    dd
     df
     diff
     du

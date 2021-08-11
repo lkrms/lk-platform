@@ -102,6 +102,7 @@ HOMEBREW_KEEP_FORMULAE+=(
 HOMEBREW_KEEP_CASKS+=(
     cyberduck
     geekbench
+    hammerspoon
     icanhazshortcut
     libreoffice
     lingon-x

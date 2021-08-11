@@ -60,10 +60,9 @@ HOMEBREW_FORMULAE+=(
 HOMEBREW_CASKS+=(
     alt-tab
     chromium
-    cyberduck
     firefox
     flycut
-    icanhazshortcut
+    hammerspoon
     imageoptim
     iterm2
     keepassxc
@@ -226,6 +225,8 @@ HOMEBREW_KEEP_FORMULAE+=(
 )
 
 HOMEBREW_KEEP_CASKS+=(
+    cyberduck
+    icanhazshortcut
     key-codes
     lingon-x
     microsoft-azure-storage-explorer

@@ -21,3 +21,12 @@ function lk_mapfile() {
         done <"$2"
     fi
 } #### Reviewed: 2021-07-18
+
+# lk_set_bashpid
+#
+# Unless Bash version is 4 or higher, set BASHPID to the process ID of the
+# running (sub)shell.
+function lk_set_bashpid() {
+    lk_bash_at_least 4 ||
+        BASHPID=$(exec sh -c 'echo "$PPID"')
+}

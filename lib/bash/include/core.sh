@@ -118,6 +118,7 @@ if ! lk_is_macos; then
     function gnu_chown() { lk_maybe_sudo chown "$@"; }
     function gnu_cp() { lk_maybe_sudo cp "$@"; }
     function gnu_date() { lk_maybe_sudo date "$@"; }
+    function gnu_dd() { lk_maybe_sudo dd "$@"; }
     function gnu_df() { lk_maybe_sudo df "$@"; }
     function gnu_diff() { lk_maybe_sudo diff "$@"; }
     function gnu_du() { lk_maybe_sudo du "$@"; }
@@ -143,6 +144,7 @@ else
     function gnu_chown() { lk_maybe_sudo gchown "$@"; }
     function gnu_cp() { lk_maybe_sudo gcp "$@"; }
     function gnu_date() { lk_maybe_sudo gdate "$@"; }
+    function gnu_dd() { lk_maybe_sudo gdd "$@"; }
     function gnu_df() { lk_maybe_sudo gdf "$@"; }
     function gnu_diff() { lk_maybe_sudo "${HOMEBREW_PREFIX:-$_LK_HOMEBREW_PREFIX}/bin/diff" "$@"; }
     function gnu_du() { lk_maybe_sudo gdu "$@"; }
@@ -180,6 +182,15 @@ function lk_mapfile() {
             eval "$1[\${#$1[@]}]=\$_LINE"
         done <"$2"
     fi
+}
+
+# lk_set_bashpid
+#
+# Unless Bash version is 4 or higher, set BASHPID to the process ID of the
+# running (sub)shell.
+function lk_set_bashpid() {
+    lk_bash_at_least 4 ||
+        BASHPID=$(exec sh -c 'echo "$PPID"')
 }
 
 # lk_is_ip VALUE
@@ -692,6 +703,16 @@ function lk_console_read_secret() {
 
 function lk_confirm() {
     lk_tty_yn "$@"
+}
+
+# lk_fifo_flush FIFO_PATH
+function lk_fifo_flush() {
+    [ -p "${1-}" ] || lk_warn "not a FIFO: ${1-}" || return
+    gnu_dd \
+        if="$1" \
+        of=/dev/null \
+        iflag=nonblock \
+        status=none &>/dev/null || true
 }
 
 # lk_fd_is_open FD

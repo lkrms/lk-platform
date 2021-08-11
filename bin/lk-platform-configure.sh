@@ -223,6 +223,7 @@ lk_log_start
                 chown gnu_chown 1
                 cp gnu_cp 1
                 date gnu_date 1
+                dd gnu_dd 1
                 df gnu_df 1
                 diff gnu_diff 1
                 du gnu_du 0
@@ -247,6 +248,7 @@ lk_log_start
                 gchown gnu_chown 1
                 gcp gnu_cp 1
                 gdate gnu_date 1
+                gdd gnu_dd 1
                 gdf gnu_df 1
                 "${HOMEBREW_PREFIX:-$_LK_HOMEBREW_PREFIX}/bin/diff" gnu_diff 1
                 gdu gnu_du 0
