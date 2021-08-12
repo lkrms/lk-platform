@@ -92,11 +92,11 @@ done
 if lk_is_true REGISTER; then
     if lk_is_macos; then
         function plist() {
-            defaults write "$PLIST" "$@"
+            defaults write "$_FILE" "$@"
         }
         LABEL=com.linacreative.platform.keepassxc
-        PLIST=~/Library/LaunchAgents/$LABEL.plist
-        launchctl unload "$PLIST" &>/dev/null || true
+        FILE=~/Library/LaunchAgents/$LABEL.plist
+        _FILE=$(lk_mktemp_dir)/$LABEL.plist && lk_delete_on_exit "${_FILE%/*}"
         plist Disabled -bool false
         plist Label -string "$LABEL"
         plist ProcessType -string "Interactive"
@@ -104,7 +104,15 @@ if lk_is_true REGISTER; then
         plist RunAtLoad -bool true
         plist StandardErrorPath -string /tmp/lk-keepassxc.sh.err
         plist StandardOutPath -string /tmp/lk-keepassxc.sh.out
-        launchctl load -w "$PLIST"
+        if ! diff -q \
+            <(plutil -convert xml1 -o - "$FILE" 2>/dev/null) \
+            <(plutil -convert xml1 -o - "$_FILE") >/dev/null; then
+            launchctl unload "$FILE" &>/dev/null || true
+            lk_install -d -m 00755 "${FILE%/*}"
+            lk_install -m 00644 "$FILE"
+            cp "$_FILE" "$FILE"
+            launchctl load -w "$FILE"
+        fi
     else
         lk_die "--autostart not implemented on this platform"
     fi
@@ -114,14 +122,50 @@ fi
 ! lk_is_true CHECK_HAS_PASSWORD ||
     exit 0
 
-if lk_is_true DAEMON; then
-    exec "$KEEPASSXC" \
-        --pw-stdin "${DATABASES[@]}"
-else
-    nohup "$KEEPASSXC" \
-        --pw-stdin "${DATABASES[@]}" &>/dev/null &
+FIFO=$(lk_mktemp_dir)/fifo
+PW_FIFO=${FIFO%/*}/pw_fifo
+mkfifo "$FIFO" "$PW_FIFO"
+FIFO_FD=$(lk_fd_next)
+eval "exec $FIFO_FD"'<>"$FIFO"'
+PW_FIFO_FD=$(lk_fd_next)
+eval "exec $PW_FIFO_FD"'<>"$PW_FIFO"'
+
+MAIN_PID=$$
+if ! lk_is_true DAEMON; then
+    nohup \
+        "$KEEPASSXC" --pw-stdin "${DATABASES[@]}" \
+        <&"$PW_FIFO_FD" >&"$FIFO_FD" 2>/dev/null &
+    MAIN_PID=$!
     disown
-fi < <(for PASSWORD in "${PASSWORDS[@]}"; do
-    sleep 5
-    echo "$PASSWORD"
-done)
+fi
+
+(
+    lk_set_bashpid
+    PW_PID=$BASHPID
+    (
+        while :; do
+            sleep 2
+            lk_check_pid "$MAIN_PID" || break
+        done
+        # Stop waiting for a password prompt if KeePassXC is dead
+        kill "$PW_PID" 2>/dev/null || true
+    ) &
+    CHECK_PID=$!
+    for PASSWORD in "${PASSWORDS[@]}"; do
+        # Wait for the first character of the password prompt
+        IFS= read -rd '' -n1 -u"$FIFO_FD" CHAR || break
+        # Flush the rest of it
+        lk_fifo_flush "$FIFO"
+        echo "$PASSWORD" >&"$PW_FIFO_FD"
+    done
+    kill "$CHECK_PID" 2>/dev/null || true
+) &
+
+if lk_is_true DAEMON; then
+    # Prevent the subshell spawned above becoming a zombie when KeePassXC fails
+    # to reap it
+    trap "" SIGCHLD
+    exec \
+        "$KEEPASSXC" --pw-stdin "${DATABASES[@]}" \
+        <&"$PW_FIFO_FD" >&"$FIFO_FD"
+fi
