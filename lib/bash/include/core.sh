@@ -1941,7 +1941,10 @@ function lk_log_start() {
     FIFO=$(lk_mktemp_dir)/fifo &&
         lk_delete_on_exit "${FIFO%/*}" &&
         mkfifo "$FIFO" || return
-    lk_ignore_SIGINT && lk_strip_non_printing <"$FIFO" >>"$OUT_FILE" &
+    (
+        function sed() { exec sed "$@"; }
+        lk_ignore_SIGINT && lk_strip_non_printing <"$FIFO" >>"$OUT_FILE"
+    ) &
     unset _LK_LOG2_FD
     [ -z "${_LK_SECONDARY_LOG_FILE-}" ] || { _LK_LOG2_FD=$(lk_fd_next) &&
         eval "exec $_LK_LOG2_FD"'>>"$_LK_SECONDARY_LOG_FILE"' &&
