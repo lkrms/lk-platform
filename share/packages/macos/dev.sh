@@ -167,6 +167,10 @@ HOMEBREW_FORMULAE+=(
     shellcheck
     shfmt
 
+    #
+    lua
+    luarocks
+
     # Platforms
     awscli
 )
@@ -226,7 +230,6 @@ HOMEBREW_KEEP_FORMULAE+=(
 
 HOMEBREW_KEEP_CASKS+=(
     cyberduck
-    icanhazshortcut
     key-codes
     lingon-x
     microsoft-azure-storage-explorer

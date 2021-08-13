@@ -103,7 +103,6 @@ HOMEBREW_KEEP_CASKS+=(
     cyberduck
     geekbench
     hammerspoon
-    icanhazshortcut
     libreoffice
     lingon-x
     logitech-g-hub
