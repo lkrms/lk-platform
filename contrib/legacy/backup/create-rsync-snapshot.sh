@@ -246,7 +246,9 @@ $(sed \
             -e $'s/\x01[^\x02]*\x02//g' \
             -e $'s/\x1b\\\x5b[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]//g' \
             -e $'s/\x1b[\x20-\x2f]*[\x30-\x7e]//g' \
-            "$SNAPSHOT_LOG_FILE")" &&
+            -e $'s/.*\r\(.\)/\\1/' \
+            "$SNAPSHOT_LOG_FILE" |
+            tr -d '\0-\10\13\16-\37\177')" &&
             lk_mail_set_text "$MESSAGE" &&
             lk_mail_send "$SUBJECT" "$LK_BACKUP_MAIL" "$LK_BACKUP_MAIL_FROM" || true
         [ -z "${TAR-}" ] || rm -f "$TAR" || true

@@ -76,7 +76,7 @@ $(printf '%q' "$0" && { [ ${#_LK_ARGV[@]} -eq 0 ] || printf ' \\\n    %q' "${_LK
 
 Output:
 
-$(lk_strip_non_printing <"$SNAPSHOT_LOG_FILE")" &&
+$(lk_strip_non_printing -d '\v' <"$SNAPSHOT_LOG_FILE")" &&
             lk_mail_set_text "$MESSAGE" &&
             lk_mail_send "$SUBJECT" "$LK_BACKUP_MAIL" "$LK_BACKUP_MAIL_FROM" || true
     }

@@ -47,6 +47,7 @@ HOMEBREW_FORMULAE+=(
 
 HOMEBREW_CASKS+=(
     alt-tab
+    bbedit
     chromium
     firefox
     flycut
@@ -100,10 +101,8 @@ HOMEBREW_KEEP_FORMULAE+=(
 )
 
 HOMEBREW_KEEP_CASKS+=(
-    cyberduck
     geekbench
     hammerspoon
-    icanhazshortcut
     libreoffice
     lingon-x
     logitech-g-hub

@@ -105,9 +105,9 @@ for i in "${!FUNCTIONS[@]}"; do
     printf '# %s VALUE
 #
 # Return true if VALUE is a valid %s.
-function %s() {\n    local %s=%s\n    [[ $1 =~ ^$%s$ ]]\n}\n\n' \
+function %s() {\n    local %s=%q\n    [[ $1 =~ ^$%s$ ]]\n}\n\n' \
         "$FUNCTION" "$DESC" \
-        "$FUNCTION" "$REGEX" "$(double_quote "${!REGEX}")" "$REGEX"
+        "$FUNCTION" "$REGEX" "${!REGEX}" "$REGEX"
 done
 
 printf '# lk_get_regex [REGEX...]
@@ -124,9 +124,9 @@ function lk_get_regex() {
 for REGEX in "${ALL[@]}"; do
     printf "
         %s)
-            printf '%%s=%%q\\\\n' %s %s
+            printf '%%s=%%q\\\\n' %s %q
             ;;" \
-        "$REGEX" "$REGEX" "$(double_quote "${!REGEX}")"
+        "$REGEX" "$REGEX" "${!REGEX}"
 done
 printf '
         *)

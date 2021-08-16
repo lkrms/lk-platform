@@ -14,12 +14,12 @@ if lk_is_apple_silicon; then
     function lk_x86() {
         local SH
         SH=$(_lk_macos_env "" "^/opt/homebrew(/|\$)") && eval "$SH" &&
-            arch --x86_64 "$@"
+            arch -x86_64 "$@"
     }
     function lk_x86_only() {
         local SH
         SH=$(_lk_macos_env "^/opt/homebrew(/|\$)") && eval "$SH" &&
-            arch --x86_64 "$@"
+            arch -x86_64 "$@"
     }
     function brew() {
         local SH
@@ -29,7 +29,7 @@ if lk_is_apple_silicon; then
     function ibrew() {
         local SH
         SH=$(_lk_macos_env "^/opt/homebrew(/|\$)") && eval "$SH" &&
-            arch --x86_64 /usr/local/bin/brew "$@"
+            arch -x86_64 /usr/local/bin/brew "$@"
     }
     function ibash() { lk_x86 bash "$@"; }
 else
