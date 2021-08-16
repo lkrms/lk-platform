@@ -7,6 +7,7 @@ PAC_REJECT=()
 
 PAC_KEEP=(
     #
+    expect
     geekbench
     handbrake-cli
     mlocate

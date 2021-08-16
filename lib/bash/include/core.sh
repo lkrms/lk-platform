@@ -418,8 +418,8 @@ function lk_strip_non_printing() {
         printf '%s\n' "$@" | lk_strip_non_printing ${DELETE:+-d "$DELETE"}
     else
         eval "$(lk_get_regex NON_PRINTING_REGEX)"
-        sed -E "s/$NON_PRINTING_REGEX//g; "$'s/.*\r(.)/\\1/' |
-            tr -d '\0-\10\16-\37\177'"${DELETE-}"
+        ${LK_EXEC:+exec} sed -Eu "s/$NON_PRINTING_REGEX//g; "$'s/.*\r(.)/\\1/' |
+            lk_unbuffer ${LK_EXEC:+exec} tr -d '\0-\10\16-\37\177'"${DELETE-}"
     fi
 }
 
@@ -790,6 +790,52 @@ function lk_md5() {
     _LK_HASH_COMMAND=$(lk_command_first_existing md5sum md5) ||
         lk_warn "md5 command not found" || return
     lk_hash "$@"
+}
+
+# lk_unbuffer [exec] COMMAND [ARG...]
+#
+# Run COMMAND with unbuffered input and line-buffered output (if supported by
+# the command and platform).
+function lk_unbuffer() {
+    [ "$1" != exec ] || { local LK_EXEC=1 && shift; }
+    case "$1" in
+    sed | gsed | gnu_sed)
+        set -- "$1" -u "${@:2}"
+        ;;
+    grep | ggrep | gnu_grep)
+        set -- "$1" --line-buffered "${@:2}"
+        ;;
+    *)
+        if [ "$1" = tr ] && lk_is_macos; then
+            set -- "$1" -u "${@:2}"
+        else
+            case "$(lk_command_first_existing unbuffer stdbuf)" in
+            unbuffer)
+                set -- unbuffer -p "$@"
+                ;;
+            stdbuf)
+                set -- stdbuf -i0 -oL -eL "$@"
+                ;;
+            esac
+        fi
+        ;;
+    esac
+    lk_maybe_sudo "$@"
+}
+
+# lk_tty [exec] COMMAND [ARG...]
+#
+# Run COMMAND in a pseudo-terminal to satisfy tty checks even if output is being
+# redirected.
+function lk_tty() {
+    [ "$1" != exec ] || { local LK_EXEC=1 && shift; }
+    if ! lk_is_macos; then
+        SHELL=$BASH lk_maybe_sudo \
+            script -q -f -e -c "$(lk_quote_args "$@")" /dev/null
+    else
+        lk_maybe_sudo \
+            script -q -t 0 /dev/null "$@"
+    fi
 }
 
 # lk_keep_trying COMMAND [ARG...]
@@ -1950,10 +1996,8 @@ function lk_log_start() {
     FIFO=$(lk_mktemp_dir)/fifo &&
         lk_delete_on_exit "${FIFO%/*}" &&
         mkfifo "$FIFO" || return
-    (
-        function sed() { exec sed "$@"; }
-        lk_ignore_SIGINT && lk_strip_non_printing <"$FIFO" >>"$OUT_FILE"
-    ) &
+    (lk_ignore_SIGINT &&
+        LK_EXEC=1 lk_strip_non_printing <"$FIFO" >>"$OUT_FILE") &
     unset _LK_LOG2_FD
     [ -z "${_LK_SECONDARY_LOG_FILE-}" ] || { _LK_LOG2_FD=$(lk_fd_next) &&
         eval "exec $_LK_LOG2_FD"'>>"$_LK_SECONDARY_LOG_FILE"' &&
@@ -2941,10 +2985,11 @@ function lk_will_sudo() {
 #
 # Run the given command line with sudo if LK_SUDO is set.
 function lk_maybe_sudo() {
-    if lk_is_true LK_SUDO; then
+    if [ -n "${LK_SUDO-}" ]; then
         lk_elevate "$@"
     else
-        "$@"
+        [ "$1" != exec ] || { local LK_EXEC=1 && shift; }
+        ${LK_EXEC:+exec} "$@"
     fi
 }
 
@@ -2954,21 +2999,20 @@ function lk_maybe_sudo() {
 # not found in PATH and is a function, run it with LK_SUDO=1.
 function lk_elevate() {
     local _LK_CAN_FAIL=1
+    [ "$1" != exec ] || { local LK_EXEC=1 && shift; }
     if [ "$EUID" -eq 0 ]; then
+        ${LK_EXEC:+exec} "$@"
+    elif ! lk_command_exists "$1" && [ "$(type -t "$1")" = function ]; then
+        local LK_SUDO=1
         "$@"
     else
-        if ! lk_command_exists "$1" &&
-            [ "$(type -t "$1")" = function ]; then
-            LK_SUDO=1 "$@"
-        else
-            sudo -H "$@"
-        fi
+        ${LK_EXEC:+exec} sudo -H "$@"
     fi
 }
 
 function lk_elevate_if_error() {
     local EXIT_STATUS=0
-    LK_SUDO=0 "$@" || {
+    LK_SUDO= "$@" || {
         EXIT_STATUS=$?
         [ "$EUID" -ne 0 ] || return "$EXIT_STATUS"
         if [ "$(type -t "$1")" != function ]; then
@@ -3369,18 +3413,6 @@ function lk_json_from_xml_schema() {
 Usage: $(lk_myself -f) XSD_FILE [XML_FILE]" || return
     "$LK_BASE/lib/python/json_from_xml_schema.py" "$@"
 }
-
-if lk_is_macos; then
-    function lk_tty() {
-        # "-t 0" is equivalent to "-f" on Linux (immediately flush output after
-        # each write)
-        lk_maybe_sudo script -q -t 0 /dev/null "$@"
-    }
-else
-    function lk_tty() {
-        lk_maybe_sudo script -eqfc "$(lk_quote_args "$@")" /dev/null
-    }
-fi
 
 # lk_random_hex BYTES
 function lk_random_hex() {

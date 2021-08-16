@@ -1,5 +1,51 @@
 #!/bin/bash
 
+# lk_unbuffer [exec] COMMAND [ARG...]
+#
+# Run COMMAND with unbuffered input and line-buffered output (if supported by
+# the command and platform).
+function lk_unbuffer() {
+    [ "$1" != exec ] || { local LK_EXEC=1 && shift; }
+    case "$1" in
+    sed | gsed | gnu_sed)
+        set -- "$1" -u "${@:2}"
+        ;;
+    grep | ggrep | gnu_grep)
+        set -- "$1" --line-buffered "${@:2}"
+        ;;
+    *)
+        if [ "$1" = tr ] && lk_is_macos; then
+            set -- "$1" -u "${@:2}"
+        else
+            case "$(lk_command_first_existing unbuffer stdbuf)" in
+            unbuffer)
+                set -- unbuffer -p "$@"
+                ;;
+            stdbuf)
+                set -- stdbuf -i0 -oL -eL "$@"
+                ;;
+            esac
+        fi
+        ;;
+    esac
+    lk_maybe_sudo "$@"
+}
+
+# lk_tty [exec] COMMAND [ARG...]
+#
+# Run COMMAND in a pseudo-terminal to satisfy tty checks even if output is being
+# redirected.
+function lk_tty() {
+    [ "$1" != exec ] || { local LK_EXEC=1 && shift; }
+    if ! lk_is_macos; then
+        SHELL=$BASH lk_maybe_sudo \
+            script -q -f -e -c "$(lk_quote_args "$@")" /dev/null
+    else
+        lk_maybe_sudo \
+            script -q -t 0 /dev/null "$@"
+    fi
+}
+
 # lk_keep_trying COMMAND [ARG...]
 #
 # Execute COMMAND until its exit status is zero or 10 attempts have been made.

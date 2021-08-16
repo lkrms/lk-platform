@@ -71,7 +71,7 @@ function lk_strip_non_printing() {
         printf '%s\n' "$@" | lk_strip_non_printing ${DELETE:+-d "$DELETE"}
     else
         eval "$(lk_get_regex NON_PRINTING_REGEX)"
-        sed -E "s/$NON_PRINTING_REGEX//g; "$'s/.*\r(.)/\\1/' |
-            tr -d '\0-\10\16-\37\177'"${DELETE-}"
+        ${LK_EXEC:+exec} sed -Eu "s/$NON_PRINTING_REGEX//g; "$'s/.*\r(.)/\\1/' |
+            lk_unbuffer ${LK_EXEC:+exec} tr -d '\0-\10\16-\37\177'"${DELETE-}"
     fi
 }
