@@ -229,7 +229,7 @@ HOMEBREW_KEEP_FORMULAE+=(
 )
 
 HOMEBREW_KEEP_CASKS+=(
-    cyberduck
+    bbedit
     key-codes
     lingon-x
     microsoft-azure-storage-explorer

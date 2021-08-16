@@ -58,11 +58,20 @@ function lk_strip_cr() {
     fi
 }
 
+# lk_strip_non_printing [-d DELETE] [STRING...]
+#
+# Remove escape sequences and non-printing characters from each STRING or input
+# line, including carriage returns that aren't part of a CRLF line ending and
+# any characters appearing before them on the same line. Use -d to specify
+# additional characters to remove (DELETE is passed directly to `tr -d`).
 function lk_strip_non_printing() {
+    local DELETE
+    [ "${1-}" != -d ] || { DELETE=$2 && shift 2; }
     if [ $# -gt 0 ]; then
-        printf '%s\n' "$@" | lk_strip_non_printing
+        printf '%s\n' "$@" | lk_strip_non_printing ${DELETE:+-d "$DELETE"}
     else
         eval "$(lk_get_regex NON_PRINTING_REGEX)"
-        sed -E "s/$NON_PRINTING_REGEX//g; s/.*\r(.)/\1/"
+        sed -E "s/$NON_PRINTING_REGEX//g; "$'s/.*\r(.)/\\1/' |
+            tr -d '\0-\10\16-\37\177'"${DELETE-}"
     fi
 }
