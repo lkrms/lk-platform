@@ -1572,7 +1572,7 @@ EOF
     lk_console_message "Adding virtual host log files to logrotate.d"
     mv -v "/etc/logrotate.d/apache2" "/etc/logrotate.d/apache2.disabled"
     mv -v "/etc/logrotate.d/php$PHPVER-fpm" "/etc/logrotate.d/php$PHPVER-fpm.disabled"
-    cat <<EOF >"/etc/logrotate.d/${LK_PATH_PREFIX}log"
+    cat <<"EOF" >"/etc/logrotate.d/${LK_PATH_PREFIX}log"
 /var/log/apache2/*.log /var/log/php$PHPVER-fpm.log /srv/www/*/log/*.log {
     daily
     missingok

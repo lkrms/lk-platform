@@ -43,6 +43,7 @@ path_add_to_front() {
     _path_check "$_path:$PATH"
 }
 
+IFS=:
 PATH=${PATH-}
 OLD_PATH=$PATH
 PATH=$(path_add \
@@ -78,7 +79,6 @@ EOF
         echo 'export INFOPATH="$HOMEBREW_PREFIX/share/info:${INFOPATH-}"'
 }
 
-IFS=:
 PATH=$(path_add_to_front \
     ${LK_ADD_TO_PATH_FIRST-} \
     ${HOME:+$HOME/.local/bin} \
