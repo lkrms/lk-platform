@@ -20,6 +20,7 @@ lk_include backup mail mysql
 
 function exit_trap() {
     local EXIT_STATUS=$? MESSAGE TAR SUBJECT
+    [ "$BASH_SUBSHELL" -eq 0 ] || return
     exec 8>&- &&
         rm -Rf "${FIFO_FILE%/*}" || true
     lk_log_close -r

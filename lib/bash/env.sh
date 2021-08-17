@@ -1,16 +1,12 @@
 #!/bin/sh
 
-double_quote() {
-    echo "$1" | sed -Ee 's/[$`\"]/\\&/g' -e 's/^.*$/"&"/'
-}
-
-escape_ere() {
-    echo "$1" | sed -E 's/[]$()*+./?\^{|}[]/\\&/g'
+quote() {
+    echo "'$(echo "$1" | sed -E "s/'/'\\\\''/g")'"
 }
 
 in_path() {
-    case ":$PATH:" in
-    *:$1:*)
+    case ":$2:" in
+    *:"$1":*)
         return
         ;;
     *)
@@ -19,40 +15,56 @@ in_path() {
     esac
 }
 
+_path_join() {
+    _path=
+    while [ $# -gt 0 ]; do
+        [ ! -d "$1" ] ||
+            _path=${_path:+$_path:}$1
+        shift
+    done
+}
+
+_path_check() {
+    echo "$1" | awk -v RS=: '
+function add_dir(d) { a[i++] = d; b[d] = 1 }
+{ gsub(/(^[[:space:]]+|[[:space:]]+$)/, "") }
+$0 && !b[$0] { add_dir($0) }
+END { for (i in a) { s = (s ? s RS : "") a[i] } print s }' 2>/dev/null ||
+        echo "$1"
+}
+
 path_add() {
-    if ! in_path "$1" && [ -d "$1" ]; then
-        echo "$PATH:$1" | sed -Ee 's/:+/:/g' -e 's/(^:|:$)//g'
-    else
-        echo "$PATH"
-    fi
+    _path_join "$@"
+    _path_check "$PATH:$_path"
 }
 
 path_add_to_front() {
-    if [ -d "$1" ]; then
-        echo "$1:$(echo "$PATH" |
-            sed -Ee "s/(:|^)$(escape_ere "$1")(:|$)/\\1\\2/g" \
-                -e 's/:+/:/g' -e 's/(^:|:$)//g')"
-    else
-        echo "$PATH"
-    fi
+    _path_join "$@"
+    _path_check "$_path:$PATH"
 }
 
+IFS=:
+PATH=${PATH-}
 OLD_PATH=$PATH
-PATH=$(path_add_to_front /usr/local/bin)
-[ ! -d /opt/homebrew/bin ] ||
-    [ /opt/homebrew/bin -ef /usr/local/bin ] ||
+PATH=$(path_add \
+    /usr/bin /bin /usr/sbin /sbin \
+    ${_LK_INST:-$LK_BASE}/bin \
+    ${LK_ADD_TO_PATH-})
+PATH=$(path_add_to_front \
+    /usr/local/bin /usr/local/sbin \
+    /home/linuxbrew/.linuxbrew/bin /home/linuxbrew/.linuxbrew/sbin)
+[ ! -d /opt/homebrew/bin ] || [ /opt/homebrew/bin -ef /usr/local/bin ] ||
     [ "$(uname -m 2>/dev/null)" = x86_64 ] || {
-    PATH=$(path_add_to_front /opt/homebrew/bin)
+    PATH=$(path_add_to_front /opt/homebrew/bin /opt/homebrew/sbin)
     # DYLD_FALLBACK_LIBRARY_PATH defaults to "$HOME/lib:/usr/local/lib:/usr/lib"
     # (see `man dlopen`)
     [ ! -d /opt/homebrew/lib ] ||
         echo 'export DYLD_FALLBACK_LIBRARY_PATH=${DYLD_FALLBACK_LIBRARY_PATH-${HOME:+$HOME/lib:}/opt/homebrew/lib:/usr/local/lib:/usr/lib}'
 }
-PATH=$(path_add_to_front /home/linuxbrew/.linuxbrew/bin)
 
 ! type brew >/dev/null 2>&1 ||
     ! BREW_SH=$(brew shellenv 2>/dev/null |
-        grep -E '\<HOMEBREW_(PREFIX|CELLAR|REPOSITORY)=') || {
+        grep -E '\<HOMEBREW_(PREFIX|CELLAR|REPOSITORY|SHELLENV_PREFIX)=') || {
     eval "$BREW_SH"
     cat <<EOF
 $BREW_SH
@@ -61,27 +73,18 @@ export HOMEBREW_NO_AUTO_UPDATE=1
 export HOMEBREW_NO_INSTALL_CLEANUP=1
 export HOMEBREW_CASK_OPTS=--no-quarantine
 EOF
-    PATH=${MANPATH-} in_path "$HOMEBREW_PREFIX/share/man" ||
+    in_path "$HOMEBREW_PREFIX/share/man" "${MANPATH-}" ||
         echo 'export MANPATH="$HOMEBREW_PREFIX/share/man${MANPATH+:$MANPATH}:"'
-    PATH=${INFOPATH-} in_path "$HOMEBREW_PREFIX/share/info" ||
+    in_path "$HOMEBREW_PREFIX/share/info" "${INFOPATH-}" ||
         echo 'export INFOPATH="$HOMEBREW_PREFIX/share/info:${INFOPATH-}"'
 }
 
-IFS=':'
-for DIR in ${LK_ADD_TO_PATH:+$LK_ADD_TO_PATH} ${_LK_INST:-$LK_BASE}/bin; do
-    PATH=$(path_add "$DIR")
-done
-for DIR in \
-    $([ "${HOMEBREW_PREFIX-}" -ef /usr/local ] ||
-        echo /usr/local/sbin:/usr/local/bin) \
-    ${HOMEBREW_PREFIX:+$HOMEBREW_PREFIX/sbin:$HOMEBREW_PREFIX/bin} \
+PATH=$(path_add_to_front \
+    ${LK_ADD_TO_PATH_FIRST-} \
     ${HOME:+$HOME/.local/bin} \
-    ${LK_ADD_TO_PATH_FIRST:+$LK_ADD_TO_PATH_FIRST}; do
-    PATH=$(path_add_to_front "$DIR")
-done
-[ "$PATH" = "$OLD_PATH" ] || {
-    echo "export PATH=$(double_quote "$PATH")"
-}
+    ${HOMEBREW_PREFIX:+$HOMEBREW_PREFIX/bin:$HOMEBREW_PREFIX/sbin})
+[ "$PATH" = "$OLD_PATH" ] ||
+    echo "export PATH=$(quote "$PATH")"
 UNSET="${LK_ADD_TO_PATH+ LK_ADD_TO_PATH}\
 ${LK_ADD_TO_PATH_FIRST+ LK_ADD_TO_PATH_FIRST}"
 cat <<EOF
