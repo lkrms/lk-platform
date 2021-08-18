@@ -5,16 +5,37 @@
 lk_log_start
 
 {
+    function keep-alive() {
+        local OUT_FILE
+        # To make the running script resistant to broken connections (SIGHUP),
+        # Ctrl+C (SIGINT) and kill signals (SIGTERM):
+        # 0. Invoke Bash with SIGHUP, SIGINT and SIGTERM already ignored
+        #    (otherwise child processes will be able to receive them)
+        # 1. Copy stdout and stderr to FD 6 and FD 7
+        # 2. Redirect stdout and stderr to OUT_FILE
+        # 3. Redirect stdin from /dev/null
+        # 4. Run `tail -f OUT_FILE` in the background to display the script's
+        #    output on FD 6 without tying it to a possibly fragile TTY
+        OUT_FILE=$(mktemp -- \
+            ~/update-server.sh-keep-alive.nohup.out.XXXXXXXXXX) &&
+            echo "Redirecting output to $OUT_FILE" >&2 &&
+            exec 6>&1 7>&2 8>"$OUT_FILE" &&
+            exec >&8 2>&1 </dev/null || return
+        (trap - SIGHUP SIGINT SIGTERM &&
+            exec tail -fn+1 "$OUT_FILE") >&6 2>&7 &
+        trap "kill $!" EXIT
+    }
+
     # update-server BRANCH [--set SETTING]...
     function update-server() {
-
         function update-wp() {
             local CRONTAB DISABLE_WP_CRON
             cd "$1" &&
                 . /opt/lk-platform/lib/bash/rc.sh || return
             lk_console_item "Checking WordPress at" "$1"
             if CRONTAB=$(crontab -l 2>/dev/null | grep -F "$(printf \
-                'wp --path=%q cron event run --due-now' "$1")") &&
+                'wp --path=%q cron event run --due-now' "$1")" |
+                grep -F _LK_LOG_FILE) &&
                 DISABLE_WP_CRON=$(lk_wp \
                     config get DISABLE_WP_CRON --type=constant) &&
                 lk_is_true DISABLE_WP_CRON; then
@@ -23,7 +44,7 @@ lk_log_start
                 lk_console_detail \
                     "crontab command:" $'\n'"$CRONTAB"
             else
-                lk_console_detail "WP-Cron does not appear in crontab"
+                lk_console_detail "WP-Cron: valid job not found in crontab"
                 lk_wp_enable_system_cron
             fi
         }
@@ -38,44 +59,74 @@ lk_log_start
             chmod -c 02775 . ||
             return
 
-        { git remote set-url origin "https://github.com/lkrms/lk-platform.git" ||
-            git remote add origin "https://github.com/lkrms/lk-platform.git"; } &&
+        (umask 002 &&
+            { git remote set-url origin "$2" ||
+                git remote add origin "$2"; } &&
             git fetch origin &&
+            git stash --include-untracked &&
             git checkout "$1" &&
             git branch --set-upstream-to "origin/$1" &&
-            git merge ||
+            { git merge || git reset --hard "origin/$1"; }) ||
             return
 
-        ./bin/lk-platform-configure.sh "${@:2}" \
-            --set LK_PLATFORM_BRANCH="$1" &&
-            . /opt/lk-platform/lib/bash/rc.sh &&
-            lk_include hosting &&
-            lk_hosting_configure_backup
+        . ./lib/bash/rc.sh || return
+
+        # Install icdiff if it's not already installed
+        INSTALL=$(lk_dpkg_not_installed_list icdiff)
+        [ -z "$INSTALL" ] ||
+            lk_apt_install $INSTALL || return
 
         shopt -s nullglob
+
+        [ -z "${3:+1}" ] ||
+            ! KEYS_FILE=$(lk_first_existing \
+                /etc/skel.*/.ssh/{authorized_keys_*,authorized_keys}) || (
+            # Prevent early termination of `tail`
+            trap - EXIT
+            lk_file_replace -m "$KEYS_FILE" "$3"
+        )
+
+        ./bin/lk-provision-hosting.sh \
+            "${@:4}" --set LK_PLATFORM_BRANCH="$1" ||
+            return
+
         for WP in /srv/www/{*,*/*}/public_html/wp-config.php; do
             WP=${WP%/wp-config.php}
-            OWNER=$(lk_file_owner "$WP") || return
+            OWNER=$(stat -c '%U' "$WP") || return
             runuser -u "$OWNER" -- bash -c "$(
                 declare -f update-wp
-                lk_quote_args update-wp "$WP"
+                printf '%q %q\n' update-wp "$WP"
             )"
         done
+    }
 
+    function do-update-server() {
+        local STATUS=0
+        keep-alive || return
+        update-server "$@" || STATUS=$?
+        echo "update-server exit status: $STATUS" >&2
+        return "$STATUS"
     }
 
     ARGS=()
-    while [ "${1-}" = --set ]; do
-        ARGS+=("${@:1:2}")
-        shift 2
+    while [[ ${1-} =~ ^(-[sau]|--(set|add|unset))$ ]]; do
+        SHIFT=2
+        [[ ${2-} == *=* ]] || [[ $1 =~ ^--?u ]] ||
+            ((SHIFT++))
+        ARGS+=("${@:1:SHIFT}")
+        shift "$SHIFT"
     done
 
-    COMMAND=(sudo -H bash -c "$(lk_quote_args "$(
-        declare -f update-server
-        lk_quote_args update-server \
+    COMMAND=(sudo -HE bash -c "$(lk_quote_args "$(
+        declare -f keep-alive update-server do-update-server
+        lk_quote_args trap "" SIGHUP SIGINT SIGTERM
+        lk_quote_args set -m
+        lk_quote_args do-update-server \
             "${UPDATE_SERVER_BRANCH:-master}" \
+            "${UPDATE_SERVER_REPO:-https://github.com/lkrms/lk-platform.git}" \
+            "${UPDATE_SERVER_HOSTING_KEYS-}" \
             ${ARGS[@]+"${ARGS[@]}"}
-    )")")
+    ) & wait \$! 2>/dev/null")")
 
     FAILED=()
     i=0
@@ -84,7 +135,10 @@ lk_log_start
         ! ((i++)) || lk_console_blank
         lk_console_item "Updating" "$1"
 
-        ssh "$1" "${COMMAND[@]}" || {
+        trap "" SIGHUP SIGINT SIGTERM
+
+        ssh -o ControlPath=none -t "$1" LK_VERBOSE=${LK_VERBOSE-1} "${COMMAND[@]}" || {
+            trap - SIGHUP SIGINT SIGTERM
             lk_console_error "Update failed (exit status $?):" "$1"
             FAILED+=("$1")
             [ $# -gt 1 ] && lk_confirm "Continue?" Y || break
@@ -93,6 +147,8 @@ lk_log_start
         shift
 
     done
+
+    trap - SIGHUP SIGINT SIGTERM
 
     lk_console_blank
 

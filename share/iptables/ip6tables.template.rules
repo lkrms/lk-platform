@@ -1,0 +1,130 @@
+# See https://www.ietf.org/rfc/rfc4890.txt (especially 4.3 and 4.4) and
+# https://blog.apnic.net/2017/07/12/local-packet-filtering-ipv6/
+*filter
+:INPUT DROP [0:0]
+:FORWARD DROP [0:0]
+:OUTPUT DROP [0:0]
+:lk_check - [0:0]
+:lk_check_local - [0:0]
+:lk_forward - [0:0]
+:lk_input - [0:0]
+:lk_output - [0:0]
+:lk_reject - [0:0]
+:lk_trusted - [0:0]
+-A INPUT -j lk_check
+-A INPUT -j lk_check_local
+-A INPUT -m conntrack --ctstate NEW -j lk_input
+-A INPUT -i lo -j ACCEPT
+-A INPUT -j lk_reject
+-A FORWARD -j lk_check
+-A FORWARD -m conntrack --ctstate NEW -j lk_forward
+-A FORWARD -j lk_reject
+-A OUTPUT -j lk_check
+-A OUTPUT -j lk_check_local
+-A OUTPUT -m conntrack --ctstate NEW -j lk_output
+-A OUTPUT -o lo -j ACCEPT
+-A OUTPUT -j lk_reject
+-A lk_check -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A lk_check -m conntrack --ctstate INVALID -j DROP
+-A lk_check -p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN -m conntrack --ctstate NEW -j REJECT --reject-with tcp-reset
+-A lk_check -p ipv6-icmp -m icmp6 --icmpv6-type 1 -j ACCEPT
+-A lk_check -p ipv6-icmp -m icmp6 --icmpv6-type 2 -j ACCEPT
+-A lk_check -p ipv6-icmp -m icmp6 --icmpv6-type 3 -j ACCEPT
+-A lk_check -p ipv6-icmp -m icmp6 --icmpv6-type 4 -j ACCEPT
+-A lk_check -p ipv6-icmp -m icmp6 --icmpv6-type 128 -j ACCEPT
+-A lk_check -p ipv6-icmp -m icmp6 --icmpv6-type 129 -j ACCEPT
+-A lk_check_local -p ipv6-icmp -m hl --hl-eq 255 -m icmp6 --icmpv6-type 133 -j ACCEPT
+-A lk_check_local -p ipv6-icmp -m hl --hl-eq 255 -m icmp6 --icmpv6-type 134 -j ACCEPT
+-A lk_check_local -p ipv6-icmp -m hl --hl-eq 255 -m icmp6 --icmpv6-type 135 -j ACCEPT
+-A lk_check_local -p ipv6-icmp -m hl --hl-eq 255 -m icmp6 --icmpv6-type 136 -j ACCEPT
+-A lk_check_local -p ipv6-icmp -m hl --hl-eq 255 -m icmp6 --icmpv6-type 141 -j ACCEPT
+-A lk_check_local -p ipv6-icmp -m hl --hl-eq 255 -m icmp6 --icmpv6-type 142 -j ACCEPT
+-A lk_check_local -s fe80::/10 -p ipv6-icmp -m icmp6 --icmpv6-type 130 -j ACCEPT
+-A lk_check_local -s fe80::/10 -p ipv6-icmp -m icmp6 --icmpv6-type 131 -j ACCEPT
+-A lk_check_local -s fe80::/10 -p ipv6-icmp -m icmp6 --icmpv6-type 132 -j ACCEPT
+-A lk_check_local -s fe80::/10 -p ipv6-icmp -m icmp6 --icmpv6-type 143 -j ACCEPT
+-A lk_check_local -p ipv6-icmp -m hl --hl-eq 255 -m icmp6 --icmpv6-type 148 -j ACCEPT
+-A lk_check_local -p ipv6-icmp -m hl --hl-eq 255 -m icmp6 --icmpv6-type 149 -j ACCEPT
+-A lk_check_local -s fe80::/10 -p ipv6-icmp -m hl --hl-eq 1 -m icmp6 --icmpv6-type 151 -j ACCEPT
+-A lk_check_local -s fe80::/10 -p ipv6-icmp -m hl --hl-eq 1 -m icmp6 --icmpv6-type 152 -j ACCEPT
+-A lk_check_local -s fe80::/10 -p ipv6-icmp -m hl --hl-eq 1 -m icmp6 --icmpv6-type 153 -j ACCEPT
+-A lk_input -p tcp -m tcp --dport 22 -j lk_trusted
+-A lk_output -p udp -m udp --dport 547 -j ACCEPT
+-A lk_output -p udp -m udp --dport 53 -j ACCEPT
+-A lk_output -p udp -m udp --dport 123 -j ACCEPT
+-A lk_reject -p udp -m udp -j REJECT --reject-with icmp6-port-unreachable
+-A lk_reject -p tcp -m tcp -j REJECT --reject-with tcp-reset
+-A lk_reject -j REJECT --reject-with icmp6-adm-prohibited
+({:
+[ -z "${IPTABLES_TCP_LISTEN+1}" ] ||
+    printf -- '-A lk_input -p tcp -m tcp --dport %s -j ACCEPT\n' \
+        "${IPTABLES_TCP_LISTEN[@]}"
+[ -z "${IPTABLES_UDP_LISTEN+1}" ] ||
+    printf -- '-A lk_input -p udp -m udp --dport %s -j ACCEPT\n' \
+        "${IPTABLES_UDP_LISTEN[@]}"
+[ -z "${LK_SSH_TRUSTED_PORT:+1}" ] ||
+    printf -- '-I lk_input -p tcp -m tcp --dport %s -j ACCEPT\n' \
+        "$LK_SSH_TRUSTED_PORT"
+! lk_node_is_router ||
+    printf -- '-I FORWARD 2 -j lk_check_local\n'
+! lk_node_service_enabled libvirt || {
+    printf ':%s - [0:0]\n' \
+        LIBVIRT_FWI LIBVIRT_FWO LIBVIRT_FWX LIBVIRT_INP LIBVIRT_OUT
+    printf -- '-I %s -j %s\n' \
+        INPUT LIBVIRT_INP OUTPUT LIBVIRT_OUT \
+        FORWARD LIBVIRT_FWO FORWARD LIBVIRT_FWI FORWARD LIBVIRT_FWX
+}
+if [ "${LK_REJECT_OUTPUT:-N}" = N ]; then
+    printf -- '-A lk_output -j ACCEPT\n'
+elif [ -n "${LK_ACCEPT_OUTPUT_HOSTS:+1}" ]; then
+    IFS=$'\n'
+    HOSTS=($(sed -E \
+        's/(^|[^\]),/\1\n/g; s/\\,/,/g' <<<"$LK_ACCEPT_OUTPUT_HOSTS")) &&
+        HOSTS=($(lk_dns_resolve_hosts "${HOSTS[@]}" | lk_filter_ipv6)) || exit
+    [ -z "${HOSTS+1}" ] ||
+        printf -- '-A lk_output -d %s -j ACCEPT\n' "${HOSTS[@]}"
+    unset IFS
+fi
+IFS=,
+ALL=(${LK_TRUSTED_IP_ADDRESSES-})
+unset IFS
+IPV6=($(printf '%s\n' ${ALL+"${ALL[@]}"} | lk_filter_ipv6))
+case ${LK_SSH_TRUSTED_ONLY:-N}-${#ALL[@]}-${#IPV6[@]} in
+*-0-0 | N-*) printf -- '-A lk_trusted -j ACCEPT\n' ;;
+*-0) ;;
+*) printf -- '-A lk_trusted -s %s -j ACCEPT\n' "${IPV6[@]}" ;;
+esac
+:})COMMIT
+*nat
+:PREROUTING ACCEPT [0:0]
+:INPUT ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+:POSTROUTING ACCEPT [0:0]
+({:
+! lk_node_service_enabled libvirt || {
+    printf ':%s - [0:0]\n' LIBVIRT_PRT
+    printf -- '-I %s -j %s\n' POSTROUTING LIBVIRT_PRT
+}
+:})COMMIT
+*mangle
+:PREROUTING ACCEPT [0:0]
+:INPUT ACCEPT [0:0]
+:FORWARD ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+:POSTROUTING ACCEPT [0:0]
+({:
+! lk_node_service_enabled libvirt || {
+    printf ':%s - [0:0]\n' LIBVIRT_PRT
+    printf -- '-I %s -j %s\n' POSTROUTING LIBVIRT_PRT
+}
+:})COMMIT
+*raw
+:PREROUTING ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+-A PREROUTING -p tcp -m tcp --dport 21 -j CT --helper ftp
+COMMIT
+*security
+:INPUT ACCEPT [0:0]
+:FORWARD ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+COMMIT

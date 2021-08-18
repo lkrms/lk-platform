@@ -10,7 +10,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 2. `~/.config/lk-platform/lk-platform.conf`
 3. Environment variables
 
-### Settings
+### Global settings
 
 - `LK_ACCEPT_OUTPUT_HOSTS`
 - `LK_ADD_TO_PATH`
@@ -97,7 +97,12 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_PROMPT`
 - `LK_REJECT_OUTPUT`
 - `LK_SAMBA_WORKGROUP`
-- `LK_SHUTDOWN_DELAY`
+- `LK_SITE_DISABLE_HTTPS`
+- `LK_SITE_DISABLE_WWW`
+- `LK_SITE_ENABLE`
+- `LK_SITE_ENABLE_STAGING`
+- `LK_SITE_PHP_FPM_MAX_CHILDREN`
+- `LK_SITE_PHP_FPM_TIMEOUT`
 - `LK_SMTP_RELAY`
 - `LK_SNAPSHOT_DAILY_MAX_AGE`
 - `LK_SNAPSHOT_FAILED_MAX_AGE`
@@ -132,7 +137,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_WP_SYNC_EXCLUDE`
 - `LK_WP_SYNC_KEEP_LOCAL`
 
-### Check code for settings used
+#### Check code for settings used
 
 To generate the list above, run the following in `$LK_BASE`:
 
@@ -140,8 +145,33 @@ To generate the list above, run the following in `$LK_BASE`:
 lk_bash_find_scripts -print0 |
     xargs -0 gnu_grep -Pho '((?<=\$\{)|(?<=lk_is_true )|(?<=lk_is_false ))LK_[a-zA-Z0-9_]+\b(?!(\[[^]]+\])?[#%}])' |
     sort -u |
-    sed -Ee '/^LK_(.+_(UPDATED|NO_CHANGE)|BASE|USAGE|VERSION|Z|ADMIN_USERS|HOST_.+|MYSQL_(USERNAME|PASSWORD)|SHUTDOWN_ACTION)$/d' -e 's/.*/- `&`/'
+    sed -Ee '/^LK_(.+_(UPDATED|DECLINED|NO_CHANGE)|BASE|USAGE|VERSION|Z|ADMIN_USERS|HOST_.+|MYSQL_(USERNAME|PASSWORD)|SHUTDOWN_ACTION)$/d' -e 's/.*/- `&`/'
 ```
+
+### Site settings
+
+Each site on a [hosting server](bin/lk-provision-hosting.sh) is configured in
+`$LK_BASE/etc/sites/DOMAIN.conf`, where `DOMAIN` is the site's primary domain.
+Available settings:
+
+- **`SITE_ALIASES`** (comma-separated secondary domains; do not use for
+  `www.DOMAIN`)
+- **`SITE_ROOT`** (`/srv/www/USER` or `/srv/www/USER/CHILD`)
+- **`SITE_ENABLE`** (`Y` or `N`; default: `Y`)
+- **`SITE_ORDER`** (default: `-1`)
+- **`SITE_DISABLE_WWW`** (`Y` or `N`; default: `N`)
+- **`SITE_DISABLE_HTTPS`** (`Y` or `N`; default: `N`)
+- **`SITE_ENABLE_STAGING`** (`Y` or `N`; default: `N`)
+- **`SITE_PHP_FPM_POOL`** (default: `USER`)
+- **`SITE_PHP_FPM_USER`** (usually `www-data` or `USER`; default: `www-data` if
+  `USER` is an administrator, otherwise `USER`)
+- **`SITE_PHP_FPM_MAX_CHILDREN`**
+- **`SITE_PHP_FPM_TIMEOUT`** (in seconds; default: `300`)
+- **`SITE_PHP_FPM_OPCACHE_SIZE`** (in MiB; default: `128`)
+- **`SITE_PHP_FPM_ADMIN_SETTINGS`**
+- **`SITE_PHP_FPM_SETTINGS`**
+- **`SITE_PHP_FPM_ENV`**
+- **`SITE_PHP_VERSION`** (e.g. `7.0`, `7.2`, `7.4`; default: *system-dependent*)
 
 ## Conventions
 

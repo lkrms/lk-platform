@@ -45,7 +45,8 @@ while [ $# -gt 0 ]; do
                 cat "$part"
             fi |
                 awk 'NR<3 && $0 ~ /^(#!\/|$)/ {next} {print} END {print ""}' |
-                sed -E 's/^\} #### Reviewed: [0-9]{4}(-[0-9]{2}){2}$/}/'
+                sed -E \
+                    's/^((\); )?\}) #### Reviewed: [0-9]{4}(-[0-9]{2}){2}$/\1/'
         done
         ! ((embed)) ||
             awk -v "from=#### END $d" \
