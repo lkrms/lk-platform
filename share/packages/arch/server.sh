@@ -79,6 +79,7 @@ PAC_PACKAGES+=(
     ubuntu-keyring
 
     # Networking
+    iperf3
     networkmanager-l2tp
     networkmanager-openconnect
     ppp

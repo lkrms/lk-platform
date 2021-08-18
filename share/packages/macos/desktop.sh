@@ -22,6 +22,7 @@ HOMEBREW_FORMULAE+=(
     unison
 
     # Networking
+    iperf3
     openconnect
     vpn-slice
 )

@@ -93,6 +93,7 @@ PAC_PACKAGES+=(
     partclone
 
     # networking
+    iperf3
     networkmanager-l2tp
     networkmanager-openconnect
 

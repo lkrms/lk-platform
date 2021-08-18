@@ -45,6 +45,7 @@ AUR_PACKAGES+=(
 
 PAC_PACKAGES+=(
     # networking
+    iperf3
     networkmanager-l2tp
     networkmanager-openconnect
 )
