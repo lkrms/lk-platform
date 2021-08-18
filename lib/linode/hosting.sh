@@ -41,7 +41,7 @@ lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
 # <UDF name="LK_PATH_PREFIX" label="Prefix for files installed by lk-platform" default="lk-" />
 # <UDF name="LK_DEBUG" label="Create trace output from provisioning script" oneof="Y,N" default="N" />
 # <UDF name="LK_SHUTDOWN_ACTION" label="Reboot or power down after provisioning" oneof="reboot,poweroff" default="reboot" />
-# <UDF name="LK_PLATFORM_BRANCH" label="lk-platform tracking branch" oneof="master,develop,provision-hosting" default="master" />
+# <UDF name="LK_PLATFORM_BRANCH" label="lk-platform tracking branch" oneof="master,develop" default="master" />
 
 # Copy output to the console (i.e. LISH) if running on a Linode
 [ -z "${LINODE_ID-}" ] || exec > >(tee /dev/console) 2>&1
