@@ -194,7 +194,8 @@ lk_log_start
     _BASHRC='[ -z "${BASH_VERSION-}" ] || [ ! -f ~/.bashrc ] || . ~/.bashrc'
     _BYOBU=
     _BYOBURC=
-    if BYOBU_PATH=$(command -pv byobu-launch); then
+    if BYOBU_PATH=$(command -pv byobu-launch) &&
+        BYOBU_PATH=$(realpath "$BYOBU_PATH"); then
         _BYOBU=$(
             ! lk_is_macos ||
                 printf '[ ! "$SSH_CONNECTION" ] || '
