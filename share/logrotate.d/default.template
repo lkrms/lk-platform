@@ -1,0 +1,8 @@
+{{LK_PLATFORM_LOGS}} {
+	weekly
+	missingok
+	rotate 12
+	compress
+	delaycompress
+	notifempty
+}

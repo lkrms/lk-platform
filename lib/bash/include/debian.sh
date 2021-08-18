@@ -178,7 +178,8 @@ function lk_apt_purge_removed() {
 }
 
 function lk_apt_upgrade_all() {
-    local SH
+    local SH _LK_APT_UPGRADE
+    export _LK_APT_UPGRADE=1
     lk_apt_update &&
         SH=$(apt-get -qq --fix-broken --just-print \
             -o APT::Get::Show-User-Simulation-Note=false \

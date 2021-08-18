@@ -1,0 +1,7 @@
+[mysqld]
+max_connections = {{LK_MYSQL_MAX_CONNECTIONS}}
+
+innodb_buffer_pool_size = {{LK_INNODB_BUFFER_SIZE}}
+innodb_buffer_pool_instances = {{LK_INNODB_BUFFERS}}
+innodb_buffer_pool_dump_at_shutdown = 1
+innodb_buffer_pool_load_at_startup = 1
