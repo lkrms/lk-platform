@@ -48,6 +48,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_DNS_SERVERS`
 - `LK_DRY_RUN`
 - `LK_EMAIL_BLACKHOLE`
+- `LK_EXEC`
 - `LK_FILE_BACKUP_MOVE`
 - `LK_FILE_BACKUP_TAKE`
 - `LK_FILE_KEEP_ORIGINAL`
@@ -74,6 +75,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_MYSQL_ELEVATE`
 - `LK_MYSQL_ELEVATE_USER`
 - `LK_MYSQL_HOST`
+- `LK_MYSQL_MAX_CONNECTIONS`
 - `LK_MY_CNF`
 - `LK_MY_CNF_OPTIONS`
 - `LK_NODE_FQDN`
@@ -125,6 +127,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_UBUNTU_PORTS_MIRROR`
 - `LK_UPGRADE_EMAIL`
 - `LK_VERBOSE`
+- `LK_WIFI_REGDOM`
 - `LK_WP_FLUSH`
 - `LK_WP_MODE_DIR`
 - `LK_WP_MODE_FILE`

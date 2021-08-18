@@ -330,6 +330,19 @@ lk_start_trace
         fi
     fi
 
+    if lk_require_output -q lk_system_list_wifi_links &&
+        lk_pac_installed crda; then
+        lk_console_message "Checking wireless regulatory domain"
+        [[ ${LK_WIFI_REGDOM-} =~ ^(|00|[A-Z]{2})$ ]] ||
+            lk_die "invalid regulatory domain: $LK_WIFI_REGDOM"
+        FILE=/etc/conf.d/wireless-regdom
+        lk_file_keep_original "$FILE"
+        lk_file_replace "$FILE" < <(sed -E \
+            -e "s/^[#[:blank:]]*(WIRELESS_REGDOM=)/#\\1/" \
+            -e "s/^#(WIRELESS_REGDOM=)([\"']?)(${LK_WIFI_REGDOM-})\\2$S*\$/\\1\"\\3\"/" \
+            "$FILE") || return
+    fi
+
     lk_tty_print "Checking udev rules"
     unset LK_FILE_REPLACE_NO_CHANGE
     FILE=/etc/udev/rules.d/82-${LK_PATH_PREFIX}keyboard-event.rules
