@@ -12,6 +12,7 @@ LOGIN_ITEMS=()
 HOMEBREW_TAPS+=(
     homebrew/cask-drivers
     homebrew/cask-fonts
+    lkrms/autoupdate
 )
 
 # Terminal-based
@@ -22,6 +23,7 @@ HOMEBREW_FORMULAE+=(
     unison
 
     # Networking
+    iperf3
     openconnect
     vpn-slice
 )

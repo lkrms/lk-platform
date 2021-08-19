@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -euo pipefail
-die() { echo "${BASH_SOURCE:-$0}: $1" >&2 && rm -f "$out" && false || exit; }
+die() { echo "${BASH_SOURCE:-$0}: $1" >&2 && false || exit; }
 
 _DIR=${BASH_SOURCE%${BASH_SOURCE##*/}}
 _DIR=$(cd "${_DIR:-$PWD}" && pwd -P) &&

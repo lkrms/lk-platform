@@ -13,6 +13,7 @@ HOMEBREW_TAPS+=(
     homebrew/cask-drivers
     homebrew/cask-fonts
     homebrew/services
+    lkrms/autoupdate
 )
 
 # Terminal-based
@@ -24,6 +25,7 @@ HOMEBREW_FORMULAE+=(
     unison
 
     # Networking
+    iperf3
     openconnect
     vpn-slice
 
