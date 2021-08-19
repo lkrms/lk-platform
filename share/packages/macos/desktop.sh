@@ -12,6 +12,7 @@ LOGIN_ITEMS=()
 HOMEBREW_TAPS+=(
     homebrew/cask-drivers
     homebrew/cask-fonts
+    lkrms/autoupdate
 )
 
 # Terminal-based

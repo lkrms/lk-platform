@@ -13,6 +13,7 @@ HOMEBREW_TAPS+=(
     homebrew/cask-drivers
     homebrew/cask-fonts
     homebrew/services
+    lkrms/autoupdate
 )
 
 # Terminal-based
