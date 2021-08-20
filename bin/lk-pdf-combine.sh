@@ -21,14 +21,7 @@ lk_echo_args "$@" |
 mutool merge -o "$TEMP" -- "$@"
 touch -r "$NEWEST" -- "$TEMP"
 
-if lk_command_exists trash-put; then
-    trash-put -- "$@"
-else
-    for f in "$@"; do
-        lk_file_backup -m "$f"
-        rm -- "$f"
-    done
-fi
+lk_rm -- "$@"
 
 mv -- "$TEMP" "$FILE"
 lk_console_item "Successfully combined to:" "$FILE"
