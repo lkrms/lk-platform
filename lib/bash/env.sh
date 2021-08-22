@@ -29,8 +29,8 @@ _path_check() {
 function add_dir(d) { a[i++] = d; b[d] = 1 }
 { gsub(/(^[[:space:]]+|[[:space:]]+$)/, "") }
 $0 && !b[$0] { add_dir($0) }
-END { for (i in a) { s = (s ? s RS : "") a[i] } print s }' 2>/dev/null ||
-        echo "$1"
+END { for (i = 0; i < length(a); i++) { s = (i ? s RS : "") a[i] } print s }' \
+        2>/dev/null || echo "$1"
 }
 
 path_add() {

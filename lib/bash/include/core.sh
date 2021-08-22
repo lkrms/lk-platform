@@ -1209,7 +1209,7 @@ BEGIN { RS = "[:\n]+" }
 remove && $0 ~ remove { next }
 move && $0 ~ move { a[i++] = $0; next }
 { p($0) }
-END{ for (i in a) p(a[i]) }' <<<"${3-$PATH}"
+END{ for (i = 0; i < length(a); i++) p(a[i]) }' <<<"${3-$PATH}"
 } #### Reviewed: 2021-05-10
 
 # lk_check_pid PID
