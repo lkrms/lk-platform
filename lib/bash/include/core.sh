@@ -1209,7 +1209,7 @@ BEGIN { RS = "[:\n]+" }
 remove && $0 ~ remove { next }
 move && $0 ~ move { a[i++] = $0; next }
 { p($0) }
-END{ for (i in a) p(a[i]) }' <<<"${3-$PATH}"
+END{ for (i = 0; i < length(a); i++) p(a[i]) }' <<<"${3-$PATH}"
 } #### Reviewed: 2021-05-10
 
 # lk_check_pid PID
@@ -3045,11 +3045,26 @@ function lk_me() {
     lk_maybe_sudo id -un
 }
 
+# lk_rm [-v] [--] [FILE...]
 function lk_rm() {
+    local v=
+    [ "${1-}" != -v ] || { v=v && shift; }
+    [ "${1-}" != -- ] || shift
+    [ $# -gt 0 ] || return 0
     if lk_command_exists trash-put; then
-        lk_maybe_sudo trash-put "$@"
+        lk_maybe_sudo trash-put -f"$v" -- "$@"
+    elif lk_command_exists trash; then
+        local DELETE=()
+        while [ $# -gt 0 ]; do
+            lk_maybe_sudo test -e "$1" &&
+                DELETE[${#DELETE[@]}]=$1 || true
+            shift
+        done
+        [ -z "${DELETE+1}" ] ||
+            lk_maybe_sudo trash -F"$v" -- "${DELETE[@]}"
     else
-        lk_maybe_sudo rm "$@"
+        lk_file_backup -m "$@" &&
+            lk_maybe_sudo rm -Rf"$v" -- "$@"
     fi
 }
 
@@ -3158,7 +3173,7 @@ Usage: $(lk_myself -f) [-f] TARGET LINK"
             lk_maybe_sudo \
                 mv -f"$v" -- "$LINK" "$LINK.orig" || return
         else
-            lk_rm -Rf"$v" -- "$LINK" || return
+            lk_rm ${v:+"-$v"} -- "$LINK" || return
         fi
     elif lk_maybe_sudo test ! -d "$LINK_DIR"; then
         lk_maybe_sudo \
@@ -3701,8 +3716,11 @@ function lk_file_prepare_temp() {
     TEMP=$(lk_maybe_sudo mktemp -- "${DIR%/}/.${1##*/}.XXXXXXXXXX") || return
     ! lk_maybe_sudo test -f "$1" ||
         if lk_is_true NO_COPY; then
+            local OPT
+            lk_is_macos || OPT=--
             MODE=$(lk_file_mode "$1") &&
-                lk_maybe_sudo chmod "$(lk_pad_zero 5 "$MODE")" -- "$TEMP"
+                lk_maybe_sudo chmod "$(lk_pad_zero 5 "$MODE")" \
+                    ${OPT:+"$OPT"} "$TEMP"
         else
             lk_maybe_sudo cp -aL"$vv" -- "$1" "$TEMP"
         fi >&2 || return

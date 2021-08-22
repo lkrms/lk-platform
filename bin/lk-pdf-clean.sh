@@ -42,12 +42,7 @@ for FILE in "$@"; do
         lk_console_detail "Keeping original:" "$FILE"
         continue
     fi
-    if lk_command_exists trash-put; then
-        trash-put -- "$FILE"
-    else
-        lk_file_backup -m "$FILE"
-        rm -- "$FILE"
-    fi
+    lk_rm -- "$FILE"
     mv -- "$TEMP" "$FILE"
     lk_console_detail "Cleaned successfully:" "$FILE"
 done

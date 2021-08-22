@@ -1,15 +1,27 @@
 #!/bin/bash
 
 . lk-bash-load.sh || exit
+lk_include provision
 
 lk_assert_command_exists gs
 
+GS_OPTIONS=()
+while [[ ${1-} =~ ^(-[^-]|--.) ]]; do
+    GS_OPTIONS+=("$1")
+    shift
+done
+
+[ "${1-}" != -- ] || shift
+
 lk_test_many lk_is_pdf "$@" || lk_usage "\
-Usage: ${0##*/} PDF..."
+Usage: ${0##*/} [GS_OPTION...] PDF..."
 
 lk_log_start
 
 lk_console_message "Compressing $# $(lk_plural $# file files)"
+
+# Default: 1.4
+COMPATIBILITY_LEVEL=${COMPATIBILITY_LEVEL:-1.4}
 
 # Adobe Distiller defaults (see:
 # https://www.adobe.com/content/dam/acom/en/devnet/acrobat/pdfs/distillerparameters.pdf)
@@ -59,6 +71,7 @@ DISTILLER_PARAMS=(
     "/GrayImageDownsampleType /Bicubic"
     "/MonoImageResolution $MONO_DPI"
     "/MonoImageDownsampleThreshold $MONO_DPI_THRESHOLD"
+    "/CompatibilityLevel $COMPATIBILITY_LEVEL"
 
     # Default: true
     "/EmbedAllFonts false"
@@ -69,7 +82,7 @@ DISTILLER_PARAMS=(
 
 NPROC=$(nproc 2>/dev/null) || NPROC=
 MEM=$(lk_system_memory_free 0) && [ "$MEM" -gt $((256 * 1024 ** 2)) ] || MEM=
-GS_OPTIONS=(
+GS_OPTIONS+=(
     -dSAFER
     -sDEVICE=pdfwrite
     "-dPDFSETTINGS=${PDFSETTINGS:-/screen}"
@@ -111,12 +124,7 @@ for FILE in "$@"; do
         lk_console_detail "Keeping original:" "$FILE"
         continue
     fi
-    if lk_command_exists trash-put; then
-        trash-put -- "$FILE"
-    else
-        lk_file_backup -m "$FILE"
-        rm -- "$FILE"
-    fi
+    lk_rm -- "$FILE"
     mv -- "$TEMP" "$FILE"
     lk_console_detail "Compressed successfully:" "$FILE"
 done

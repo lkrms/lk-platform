@@ -808,7 +808,7 @@ $(command -pv php7) $(command -pv wp) "\$@"
 EOF
         else
             [ ! -f "$FILE" ] ||
-                lk_rm -f "$FILE"
+                lk_rm "$FILE"
         fi
     fi
 

@@ -55,12 +55,7 @@ for FILE in "$@"; do
         ERRORS+=("$FILE")
         continue
     }
-    if lk_command_exists trash-put; then
-        trash-put -- "$FILE"
-    else
-        lk_file_backup -m "$FILE"
-        rm -- "$FILE"
-    fi
+    lk_rm -- "$FILE"
     mv -- "$TEMP" "$FILE"
     lk_console_detail "Fonts embedded successfully:" "$FILE"
 done

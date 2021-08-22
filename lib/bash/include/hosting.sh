@@ -120,7 +120,7 @@ function lk_hosting_php_get_settings() {
 }
 next}
 {e=2}
-END{for (i in k) {o=k[i]; if(p=="env")
+END{for (i = 0; i < length(k); i++) {o=k[i]; if(p=="env")
   s=""
 else if(tolower(a[o]) ~ "^(on|true|yes|off|false|no)$")
   s="flag"
