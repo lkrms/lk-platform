@@ -36,6 +36,9 @@ PAC_KEEP=(
     wp-cli
 
     #
+    powerpanel
+
+    #
     brother-hl5450dn
     brother-hll3230cdw
 )

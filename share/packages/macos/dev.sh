@@ -235,6 +235,7 @@ HOMEBREW_KEEP_FORMULAE+=(
 
 HOMEBREW_KEEP_CASKS+=(
     bbedit
+    google-chrome
     key-codes
     lingon-x
     microsoft-azure-storage-explorer
