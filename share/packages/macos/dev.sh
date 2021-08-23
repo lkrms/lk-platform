@@ -54,18 +54,21 @@ HOMEBREW_FORMULAE+=(
     pandoc
     poppler
     pstoedit
+    qpdf
 
     # Multimedia (video)
     youtube-dl
 )
 
 HOMEBREW_CASKS+=(
+    adobe-acrobat-reader
     alt-tab
     chromium
     firefox
     flycut
     hammerspoon
     imageoptim
+    inkscape
     iterm2
     keepassxc
     keepingyouawake
