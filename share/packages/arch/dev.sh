@@ -153,6 +153,7 @@ PAC_PACKAGES+=(
     pandoc       # text conversion tool (e.g. Markdown to PDF)
     poppler      # PDF tools like pdfimages
     pstoedit     # converts PDF/PostScript to vector formats
+    qpdf         # e.g. --underlay
     texlive-core # required for PDF output from pandoc
 
     # photography
