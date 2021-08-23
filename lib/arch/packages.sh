@@ -92,6 +92,7 @@ PAC_PACKAGES=(
     traceroute
     wget
     whois
+    wol
 
     # Network monitoring
     iftop   # traffic by service and host

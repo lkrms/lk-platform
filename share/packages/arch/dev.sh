@@ -39,6 +39,7 @@ PAC_KEEP=(
     woeusb
 
     #
+    powerpanel
     raidar
 )
 

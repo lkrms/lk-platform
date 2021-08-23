@@ -106,6 +106,7 @@ HOMEBREW_KEEP_FORMULAE+=(
 
 HOMEBREW_KEEP_CASKS+=(
     geekbench
+    google-chrome
     hammerspoon
     libreoffice
     lingon-x
