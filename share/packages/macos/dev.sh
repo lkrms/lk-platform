@@ -12,6 +12,7 @@ LOGIN_ITEMS=()
 HOMEBREW_TAPS+=(
     homebrew/cask-drivers
     homebrew/cask-fonts
+    homebrew/cask-versions
     homebrew/services
     lkrms/autoupdate
 )
@@ -78,7 +79,7 @@ HOMEBREW_CASKS+=(
     mysides
     nextcloud
     pencil
-    scribus
+    scribus-dev
     skype
     spotify
     stretchly

@@ -104,7 +104,7 @@ if lk_is_true REGISTER; then
         plist RunAtLoad -bool true
         plist StandardErrorPath -string /tmp/lk-keepassxc.sh.err
         plist StandardOutPath -string /tmp/lk-keepassxc.sh.out
-        if ! diff -q \
+        if ! diff \
             <(plutil -convert xml1 -o - "$FILE" 2>/dev/null) \
             <(plutil -convert xml1 -o - "$_FILE") >/dev/null; then
             launchctl unload "$FILE" &>/dev/null || true
