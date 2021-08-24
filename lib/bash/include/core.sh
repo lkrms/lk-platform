@@ -3797,7 +3797,7 @@ Options:
         }
         lk_maybe_sudo test -f "$1" || lk_warn "not a file: $1" || return
         ! lk_maybe_sudo test -s "$1" || unset NEW VERB
-        lk_maybe_sudo test -L "$1" || ! diff -q \
+        lk_maybe_sudo test -L "$1" || ! diff \
             <(TARGET=$1 _lk_maybe_filter "$IGNORE" "$FILTER" \
                 lk_maybe_sudo cat "\"\$TARGET\"") \
             <([ -z "${CONTENT:+1}" ] || _lk_maybe_filter "$IGNORE" "$FILTER" \
