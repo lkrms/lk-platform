@@ -6,11 +6,21 @@
 # 4. Certificate path
 # 5. Private key path
 
+function quote(str, _q, _q_count, _arr, _i, _out) {
+    # \47 = single quote
+    _q = "\47"
+    _q_count = split(str, _arr, _q)
+    for (_i in _arr) {
+        _out = _out _q _arr[_i] _q (_i < _q_count ? "\\" _q : "")
+    }
+    return _out
+}
+
 BEGIN {
     OFS = "\t"
     "mktemp" | getline temp
     close("mktemp")
-    sort = "tr ',' '\\n' | sort -u | tr '\\n' ',' >" temp
+    sort = "tr ',' '\\n' | sort -u | tr '\\n' ',' >" quote(temp)
 }
 
 function val(_) {
@@ -56,4 +66,5 @@ tolower($0) ~ /\<expiry date:/ {
 
 END {
     maybe_print()
+    system("rm -f " quote(temp))
 }

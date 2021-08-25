@@ -109,7 +109,7 @@ lk_log_start
     }
 
     ARGS=()
-    while [[ ${1-} =~ ^(-[sau]|--(set|add|unset))$ ]]; do
+    while [[ ${1-} =~ ^(-[saru]|--(set|add|remove|unset))$ ]]; do
         SHIFT=2
         [[ ${2-} == *=* ]] || [[ $1 =~ ^--?u ]] ||
             ((SHIFT++))

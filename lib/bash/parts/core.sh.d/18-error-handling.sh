@@ -1,13 +1,11 @@
 #!/bin/bash
 
 function _lk_caller() {
-    local CALLER
-    if lk_script_is_running; then
+    local CALLER=()
+    lk_script_is_running ||
+        CALLER=(${FUNCNAME[2]+"${FUNCNAME[*]: -1}"})
+    [ -n "${CALLER+1}" ] ||
         CALLER=("${0##*/}")
-    else
-        CALLER=(${FUNCNAME+"${FUNCNAME[*]: -1}"})
-        [ -n "${CALLER+1}" ] || CALLER=("{main}")
-    fi
     CALLER[0]=$LK_BOLD$CALLER$LK_RESET
     lk_verbose || {
         echo "$CALLER"
@@ -23,16 +21,22 @@ function _lk_caller() {
     fi
     [ -z "$SOURCE" ] || [ "$SOURCE" = main ] || [ "$SOURCE" = "$0" ] ||
         CALLER+=("$(lk_tty_path "$SOURCE")")
-    [ -z "$LINE" ] ||
+    [ -z "$LINE" ] || [ "$LINE" -eq 1 ] ||
         CALLER[${#CALLER[@]} - 1]+=$LK_DIM:$LINE$LK_RESET
-    lk_implode_args "$LK_DIM->$LK_RESET" "${CALLER[@]}"
+    lk_implode_arr "$LK_DIM->$LK_RESET" CALLER
+}
+
+function lk_pass() {
+    local STATUS=$?
+    [[ ! ${1-} =~ ^-[0-9]+$ ]] || { STATUS=${1:1} && shift; }
+    "$@" || true
+    return "$STATUS"
 }
 
 # lk_warn [MESSAGE]
 #
 # Print "<CALLER>: MESSAGE" as a warning and return the most recent exit status.
 function lk_warn() {
-    local STATUS=$?
-    lk_console_warning "$(LK_VERBOSE= _lk_caller): ${1-execution failed}"
-    return "$STATUS"
+    lk_pass -$? \
+        lk_console_warning "$(LK_VERBOSE= _lk_caller): ${1-command failed}"
 }

@@ -116,7 +116,7 @@ function lk_hosting_php_get_settings() {
     [ $# -gt 1 ] || lk_warn "no settings" || return
     lk_echo_args "${@:2}" | awk -F= -v "p=$1" \
         '/^[^[:space:]=]+=/ {o=$1; if(!a[o]){
-  sub("^[^=]+=", ""); sub("^$", "\"\""); a[o]=$0; k[++i]=o
+  sub("^[^=]+=", ""); sub("^$", "\"\""); a[o]=$0; k[i++]=o
 }
 next}
 {e=2}
@@ -312,7 +312,7 @@ function lk_hosting_site_migrate_legacy() { (
         lk_delete_on_exit "$ETC_FILE" &&
             lk_hosting_site_set_settings "$DOMAIN" &&
             lk_hosting_site_configure "$DOMAIN" &&
-            lk_remove_delete_on_exit "$ETC_FILE" || return
+            lk_delete_on_exit_withdraw "$ETC_FILE" || return
     done
     lk_console_success "Legacy sites migrated successfully"
     lk_hosting_mark_clean "legacy-sites.migration"

@@ -17,7 +17,8 @@ function lk_unbuffer() {
         if [ "$1" = tr ] && lk_is_macos; then
             set -- "$1" -u "${@:2}"
         else
-            case "$(lk_command_first_existing unbuffer stdbuf)" in
+            # TODO: reinstate `unbuffer` when LF -> CRLF issue is resolved
+            case "$(lk_command_first_existing stdbuf)" in
             unbuffer)
                 set -- unbuffer -p "$@"
                 ;;
@@ -77,8 +78,8 @@ function lk_keep_trying() {
 #
 # Return true if COMMAND writes output other than newlines and exits without
 # error. If -q is set, suppress output.
-function lk_require_output() {
-    local QUIET FILE
+function lk_require_output() { (
+    unset QUIET
     [ "${1-}" != -q ] || { QUIET=1 && shift; }
     FILE=$(lk_mktemp_file) && lk_delete_on_exit "$FILE" &&
         if [ -z "${QUIET-}" ]; then
@@ -86,8 +87,8 @@ function lk_require_output() {
         else
             "$@" >"$FILE"
         fi &&
-        grep -Eq '^.+$' "$FILE" || return
-}
+        grep -Eq '^.+$' "$FILE"
+); }
 
 # lk_env_clean COMMAND [ARG...]
 #
@@ -101,13 +102,15 @@ function lk_env_clean() {
     fi
 }
 
-# lk_mktemp_with VAR COMMAND [ARG...]
+# lk_mktemp_with VAR [COMMAND [ARG...]]
 #
 # Set VAR to the name of a temporary file that contains the output of COMMAND.
 function lk_mktemp_with() {
-    [ $# -ge 2 ] || lk_usage "Usage: $FUNCNAME VAR COMMAND [ARG...]" || return
-    local VAR=$1 _LK_STACK_DEPTH=1
-    eval "$VAR=\$(lk_mktemp_file)" &&
-        lk_delete_on_exit "${!VAR}" &&
-        "${@:2}" >"${!VAR}"
+    [ $# -ge 1 ] || lk_usage "Usage: $FUNCNAME VAR COMMAND [ARG...]" || return
+    local _LK_STACK_DEPTH=1
+    eval "$1=\$(lk_mktemp_file)" &&
+        lk_delete_on_exit "${!1}" &&
+        { [ $# -lt 2 ] || "${@:2}" >"${!1}"; }
 }
+
+#### Reviewed: 2021-08-28

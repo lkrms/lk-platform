@@ -30,3 +30,15 @@ function lk_set_bashpid() {
     lk_bash_at_least 4 ||
         BASHPID=$(exec sh -c 'echo "$PPID"')
 }
+
+# lk_sed_i SUFFIX SED_ARG...
+#
+# Run `sed` with the correct arguments to edit files in-place on the detected
+# platform.
+function lk_sed_i() {
+    if ! lk_is_macos; then
+        sed -i"${1-}" "${@:2}"
+    else
+        sed -i "$@"
+    fi
+}

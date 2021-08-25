@@ -114,6 +114,7 @@ PAC_PACKAGES+=(
 
 AUR_PACKAGES+=(
     aha
+    csvkit
     pacman-cleanup-hook
     powershell-bin
     vpn-slice
