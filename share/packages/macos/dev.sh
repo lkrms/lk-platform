@@ -20,6 +20,7 @@ HOMEBREW_TAPS+=(
 # Terminal-based
 HOMEBREW_FORMULAE+=(
     # Utilities
+    csvkit
     exiftool
     imagemagick
     s3cmd

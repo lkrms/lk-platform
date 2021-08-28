@@ -86,7 +86,7 @@ if ! lk_is_bootstrap; then
     [ $# -eq 0 ] ||
         [ "$1" = --no-upgrade ] ||
         lk_usage "\
-Usage: ${0##*/} [--set|--add|--unset SETTING[=VALUE]]... [--no-upgrade]"
+Usage: ${0##*/} [--set|--add|--remove|--unset SETTING[=VALUE]]... [--no-upgrade]"
 fi
 
 lk_assert_is_root
@@ -345,9 +345,9 @@ fi
 ${IPV4_ADDRESS:-127.0.1.1} $HOST_NAMES${IPV6_ADDRESS:+
 $IPV6_ADDRESS $HOST_NAMES}" &&
         awk \
-            -v "HOSTS=$HOSTS" \
+            -v "BLOCK=$HOSTS" \
             -v 'FIRST=^# ((Added|Generated) by |Virtual hosts$)' \
-            -f "$LK_BASE/lib/awk/hosts-update.awk" \
+            -f "$LK_BASE/lib/awk/block-replace.awk" \
             "$FILE" && printf .)
     _FILE=${_FILE%.}
     lk_file_keep_original "$FILE"
@@ -594,6 +594,7 @@ $IPV6_ADDRESS $HOST_NAMES}" &&
         LK_CONF_OPTION_FILE=$_FILE
         (
             unset LK_VERBOSE
+            LK_FILE_KEEP_ORIGINAL=0
             lk_conf_set_option -s apt frontend none
             lk_conf_set_option -s apt which both
             lk_conf_set_option -s apt headers true
@@ -1012,7 +1013,10 @@ tolower($0) ~ "^(blackhole|\"blackhole\")" S "*:" {
         )
         lk_file_replace "$FILE" "$_FILE"
         if lk_is_bootstrap; then
-            lk_run_detail systemctl start mariadb.service
+            # Ubuntu 16.04's MariaDB packages don't install `mariadb.service`
+            # and later versions install a `mysql.service` alias, so use
+            # `mysql.service` for maximum portability
+            lk_run_detail systemctl start mysql.service
             if [ -n "$LK_MYSQL_USERNAME" ]; then
                 lk_tty_detail "Creating MariaDB administrator:" \
                     "$LK_MYSQL_USERNAME"
@@ -1025,7 +1029,7 @@ EOF
             fi
         else
             ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
-                lk_run_detail systemctl restart mariadb.service
+                lk_run_detail systemctl restart mysql.service
         fi
     fi
 
@@ -1034,7 +1038,7 @@ EOF
         LK_CONF_OPTION_FILE=/etc/memcached.conf
         get_before_file "$LK_CONF_OPTION_FILE"
         _LK_CONF_DELIM=" " \
-            lk_conf_set_option -m "$LK_MEMCACHED_MEMORY_LIMIT"
+            lk_conf_set_option -m "${LK_MEMCACHED_MEMORY_LIMIT:-64}"
         check_after_file
         lk_is_bootstrap && ! lk_systemctl_running memcached ||
             ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||

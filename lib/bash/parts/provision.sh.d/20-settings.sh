@@ -36,7 +36,7 @@ function _lk_settings_list_known() {
         LK_DEBUG \
         LK_PLATFORM_BRANCH \
         LK_PACKAGES_FILE
-} #### Reviewed: 2021-05-09
+}
 
 # _lk_settings_list_legacy
 #
@@ -45,7 +45,7 @@ function _lk_settings_list_legacy() {
     printf '%s\n' \
         LK_PATH_PREFIX_ALPHA \
         LK_SCRIPT_DEBUG
-} #### Reviewed: 2021-06-06
+}
 
 function _lk_settings_writable_files() {
     local FILE OLD_FILE DIR_MODE FILE_MODE ARGS
@@ -80,17 +80,17 @@ function _lk_settings_writable_files() {
             LK_VERBOSE= LK_FILE_BACKUP_TAKE= \
                 lk_file_replace -f "$OLD_FILE" "$FILE" || return
     }
-} #### Reviewed: 2021-06-30
+}
 
 # lk_settings_getopt [ARG...]
 #
-# Output Bash code to
-# - apply any --set, --add, or --unset arguments to the running shell
-# - assign the number of arguments consumed to _LK_SHIFT
+# Output Bash commands that
+# - apply any --set, --add, --remove, or --unset arguments to the running shell
+# - set _LK_SHIFT to the number of arguments consumed
 function lk_settings_getopt() {
     local IFS SHIFT=0 _SHIFT REGEX='^(LK_[a-zA-Z0-9_]*[a-zA-Z0-9])(=(.*))?$'
     unset IFS
-    while [[ ${1-} =~ ^(-[sau]|--(set|add|unset))$ ]]; do
+    while [[ ${1-} =~ ^(-[saru]|--(set|add|remove|unset))$ ]]; do
         [[ ${2-} =~ $REGEX ]] ||
             lk_warn "$1: invalid argument: ${2-}" || return
         # "--set LK_SETTING=value" -> "--set LK_SETTING value"
@@ -104,8 +104,12 @@ function lk_settings_getopt() {
             printf '%s=%q\n' "$2" "${3-}"
             ;;
         -a | --add)
-            printf '%s=$(IFS=, && printf '\''%%s\\n'\'' ${%s-} %s | sort -u | lk_implode_input ",")\n' \
-                "$2" "$2" "$(IFS=, && lk_quote_args ${3-})"
+            printf '%s=$(unset IFS && IFS=, lk_string_sort -u "${%s-},"%q)\n' \
+                "$2" "$2" "${3-}"
+            ;;
+        -r | --remove)
+            printf '%s=$(unset IFS && IFS=, lk_string_remove "${%s-}" %q)\n' \
+                "$2" "$2" "${3-}"
             ;;
         -u | --unset)
             # Reject "--unset LK_SETTING=value"
@@ -123,16 +127,18 @@ function lk_settings_getopt() {
         shift "$_SHIFT"
     done
     printf '%s=%q\n' _LK_SHIFT "$SHIFT"
-} #### Reviewed: 2021-06-30
+}
 
 # lk_settings_persist COMMANDS [FILE...]
 #
-# Source each FILE, execute COMMANDS, and replace the first FILE with shell
-# variable assignments for all declared LK_* variables.
+# Source each FILE, execute COMMANDS (e.g. lk_settings_getopt output), and
+# replace the first FILE with shell variable assignments for all declared LK_*
+# variables.
 #
 # If FILE is not specified:
 # - update system settings if running as root
 # - if not running as root, update the current user's settings
+# - delete old config files
 function lk_settings_persist() {
     local FILES DELETE=() _FILE
     [ $# -ge 1 ] || lk_warn "invalid arguments" || return
@@ -143,7 +149,8 @@ function lk_settings_persist() {
         DELETE=("${@:3}")
         unset IFS
     }
-    _FILE=$(
+    lk_mktemp_with _FILE
+    (
         unset "${!LK_@}"
         for ((i = $#; i > 1; i--)); do
             [ ! -f "${!i}" ] || . "${!i}" || return
@@ -155,13 +162,15 @@ function lk_settings_persist() {
                 <({ _lk_settings_list_known &&
                     _lk_settings_list_legacy; } | sort -u)))
         lk_get_shell_var "${VARS[@]}"
-    ) || return
-    lk_file_replace -m "$2" "$_FILE" &&
+    ) >"$_FILE" || return
+    lk_file_replace -m -f "$_FILE" "$2" &&
         lk_file_backup -m ${DELETE+"${DELETE[@]}"} &&
         lk_maybe_sudo rm -f -- ${DELETE+"${DELETE[@]}"}
-} #### Reviewed: 2021-07-05
+}
 
 function lk_node_is_router() {
     [ "${LK_IPV4_ADDRESS:+1}${LK_IPV4_GATEWAY:+2}" = 1 ] ||
         lk_node_service_enabled router
 }
+
+#### Reviewed: 2021-08-28

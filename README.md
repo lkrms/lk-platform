@@ -99,6 +99,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_PROMPT`
 - `LK_REJECT_OUTPUT`
 - `LK_SAMBA_WORKGROUP`
+- `LK_SFTP_ONLY_GROUP`
 - `LK_SITE_DISABLE_HTTPS`
 - `LK_SITE_DISABLE_WWW`
 - `LK_SITE_ENABLE`

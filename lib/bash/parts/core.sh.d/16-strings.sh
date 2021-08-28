@@ -41,6 +41,21 @@ function lk_ere_escape() {
     fi
 }
 
+# lk_ere_implode_input [-e]
+#
+# If -e is set, escape each input line.
+function lk_ere_implode_input() {
+    if [ "${1-}" != -e ]; then
+        awk '
+NR == 1 { first = $0; next }
+NR == 2 { printf "(%s", first }
+        { printf "|%s", $0 }
+END     { if (NR > 1) { print ")" } else if (NR) { printf "%s\n", first } }'
+    else
+        lk_ere_escape | lk_ere_implode_input
+    fi
+}
+
 function lk_sed_escape() {
     local DELIM=${_LK_SED_DELIM-/}
     if [ $# -gt 0 ]; then
@@ -75,3 +90,23 @@ function lk_strip_non_printing() {
             lk_unbuffer ${LK_EXEC:+exec} tr -d '\0-\10\16-\37\177'"${DELETE-}"
     fi
 }
+
+# lk_string_sort [[SORT_ARGS] STRING]
+function lk_string_sort() {
+    local IFS=${IFS:- } ARGS
+    [ $# -le 1 ] || { ARGS=$1 && shift; }
+    printf '%s' "${IFS::1}$1${IFS::1}" | tr -s "$IFS" '\0' |
+        sort -z ${ARGS:+"$ARGS"} | tr '\0' "${IFS::1}" |
+        sed -E '1s/^.//; $s/.$//'
+}
+
+# lk_string_remove [STRING [REMOVE...]]
+function lk_string_remove() {
+    local IFS=${IFS:- } REGEX
+    REGEX=$([ $# -le 1 ] || printf '%s\n' "${@:2}" | lk_ere_implode_input)
+    printf '%s' "${IFS::1}$1${IFS::1}" | tr -s "$IFS" "${IFS::1}" |
+        awk -v "RS=${IFS::1}" -v "regex=$REGEX" \
+            'NR == 1 {next} $0 !~ regex {printf "%s%s", (i++ ? RS : ""), $0 }'
+}
+
+#### Reviewed: 2021-08-28

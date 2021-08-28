@@ -193,6 +193,18 @@ function lk_set_bashpid() {
         BASHPID=$(exec sh -c 'echo "$PPID"')
 }
 
+# lk_sed_i SUFFIX SED_ARG...
+#
+# Run `sed` with the correct arguments to edit files in-place on the detected
+# platform.
+function lk_sed_i() {
+    if ! lk_is_macos; then
+        sed -i"${1-}" "${@:2}"
+    else
+        sed -i "$@"
+    fi
+}
+
 # lk_is_ip VALUE
 #
 # Return true if VALUE is a valid IP address.
@@ -388,6 +400,21 @@ function lk_ere_escape() {
     fi
 }
 
+# lk_ere_implode_input [-e]
+#
+# If -e is set, escape each input line.
+function lk_ere_implode_input() {
+    if [ "${1-}" != -e ]; then
+        awk '
+NR == 1 { first = $0; next }
+NR == 2 { printf "(%s", first }
+        { printf "|%s", $0 }
+END     { if (NR > 1) { print ")" } else if (NR) { printf "%s\n", first } }'
+    else
+        lk_ere_escape | lk_ere_implode_input
+    fi
+}
+
 function lk_sed_escape() {
     local DELIM=${_LK_SED_DELIM-/}
     if [ $# -gt 0 ]; then
@@ -423,14 +450,38 @@ function lk_strip_non_printing() {
     fi
 }
 
+# lk_string_sort [[SORT_ARGS] STRING]
+function lk_string_sort() {
+    local IFS=${IFS:- } ARGS
+    [ $# -le 1 ] || { ARGS=$1 && shift; }
+    printf '%s' "${IFS::1}$1${IFS::1}" | tr -s "$IFS" '\0' |
+        sort -z ${ARGS:+"$ARGS"} | tr '\0' "${IFS::1}" |
+        sed -E '1s/^.//; $s/.$//'
+}
+
+# lk_string_remove [STRING [REMOVE...]]
+function lk_string_remove() {
+    local IFS=${IFS:- } REGEX
+    REGEX=$([ $# -le 1 ] || printf '%s\n' "${@:2}" | lk_ere_implode_input)
+    printf '%s' "${IFS::1}$1${IFS::1}" | tr -s "$IFS" "${IFS::1}" |
+        awk -v "RS=${IFS::1}" -v "regex=$REGEX" \
+            'NR == 1 {next} $0 !~ regex {printf "%s%s", (i++ ? RS : ""), $0 }'
+}
+
+# lk_array_remove_value ARRAY VALUE
+function lk_array_remove_value() {
+    local _SH
+    _SH=$(eval "for _i in \${$1+\"\${!$1[@]}\"}; do
+    [ \"\${$1[_i]}\" != \"\$2\" ] || echo \"unset $1[\$_i]\"
+done") && eval "$_SH"
+}
+
 function _lk_caller() {
-    local CALLER
-    if lk_script_is_running; then
+    local CALLER=()
+    lk_script_is_running ||
+        CALLER=(${FUNCNAME[2]+"${FUNCNAME[*]: -1}"})
+    [ -n "${CALLER+1}" ] ||
         CALLER=("${0##*/}")
-    else
-        CALLER=(${FUNCNAME+"${FUNCNAME[*]: -1}"})
-        [ -n "${CALLER+1}" ] || CALLER=("{main}")
-    fi
     CALLER[0]=$LK_BOLD$CALLER$LK_RESET
     lk_verbose || {
         echo "$CALLER"
@@ -446,18 +497,77 @@ function _lk_caller() {
     fi
     [ -z "$SOURCE" ] || [ "$SOURCE" = main ] || [ "$SOURCE" = "$0" ] ||
         CALLER+=("$(lk_tty_path "$SOURCE")")
-    [ -z "$LINE" ] ||
+    [ -z "$LINE" ] || [ "$LINE" -eq 1 ] ||
         CALLER[${#CALLER[@]} - 1]+=$LK_DIM:$LINE$LK_RESET
-    lk_implode_args "$LK_DIM->$LK_RESET" "${CALLER[@]}"
+    lk_implode_arr "$LK_DIM->$LK_RESET" CALLER
+}
+
+function lk_pass() {
+    local STATUS=$?
+    [[ ! ${1-} =~ ^-[0-9]+$ ]] || { STATUS=${1:1} && shift; }
+    "$@" || true
+    return "$STATUS"
 }
 
 # lk_warn [MESSAGE]
 #
 # Print "<CALLER>: MESSAGE" as a warning and return the most recent exit status.
 function lk_warn() {
-    local STATUS=$?
-    lk_console_warning "$(LK_VERBOSE= _lk_caller): ${1-execution failed}"
-    return "$STATUS"
+    lk_pass -$? \
+        lk_console_warning "$(LK_VERBOSE= _lk_caller): ${1-command failed}"
+}
+
+# lk_trap_add SIGNAL COMMAND [ARG...]
+function lk_trap_add() {
+    [ $# -ge 2 ] ||
+        lk_usage "Usage: $FUNCNAME SIGNAL COMMAND [ARG...]" || return
+    [ $# -eq 2 ] ||
+        set -- "$1" "$2$(printf ' %q' "${@:3}")"
+    _LK_TRAPS=(${_LK_TRAPS+"${_LK_TRAPS[@]}"})
+    local i TRAPS=()
+    for ((i = 0; i < ${#_LK_TRAPS[@]}; i += 3)); do
+        ((_LK_TRAPS[i] == BASH_SUBSHELL)) &&
+            [[ ${_LK_TRAPS[i + 1]} == "$1" ]] || continue
+        TRAPS[${#TRAPS[@]}]=${_LK_TRAPS[i + 2]}
+        [[ ${_LK_TRAPS[i + 2]} != "${2-}" ]] ||
+            set -- "$1"
+    done
+    [ $# -eq 1 ] || {
+        TRAPS[${#TRAPS[@]}]=$2
+        _LK_TRAPS+=("$BASH_SUBSHELL" "$1" "$2")
+    }
+    trap -- "$(
+        printf '{ %s; }' "$TRAPS"
+        [ "${#TRAPS[@]}" -lt 2 ] || printf ' && { %s; }' "${TRAPS[@]:1}"
+    )" "$1"
+}
+
+function _lk_cleanup_on_exit() {
+    local ARRAY=$1 COMMAND=$2
+    shift 2
+    [ -n "${!ARRAY+1}" ] ||
+        { COMMAND="{ [ -z \"\${${ARRAY}+1}\" ] ||
+    $COMMAND \"\${${ARRAY}[@]}\" || [ \"\$EUID\" -eq 0 ] ||
+    sudo $COMMAND \"\${${ARRAY}[@]}\" || true; } 2>/dev/null" &&
+            eval "$ARRAY=()" &&
+            lk_trap_add EXIT "$COMMAND" || return; }
+    eval "$ARRAY+=(\"\$@\")"
+}
+
+function lk_kill_on_exit() {
+    _lk_cleanup_on_exit "_LK_EXIT_KILL_$BASH_SUBSHELL" "kill" "$@"
+}
+
+function lk_delete_on_exit() {
+    _lk_cleanup_on_exit "_LK_EXIT_DELETE_$BASH_SUBSHELL" "rm -Rf --" "$@"
+}
+
+# lk_delete_on_exit_withdraw FILE...
+function lk_delete_on_exit_withdraw() {
+    while [ $# -gt 0 ]; do
+        lk_array_remove_value "_LK_EXIT_DELETE_$BASH_SUBSHELL" "$1" || return
+        shift
+    done
 }
 
 # _lk_tty_format [-b] VAR [COLOUR COLOUR_VAR]
@@ -809,7 +919,8 @@ function lk_unbuffer() {
         if [ "$1" = tr ] && lk_is_macos; then
             set -- "$1" -u "${@:2}"
         else
-            case "$(lk_command_first_existing unbuffer stdbuf)" in
+            # TODO: reinstate `unbuffer` when LF -> CRLF issue is resolved
+            case "$(lk_command_first_existing stdbuf)" in
             unbuffer)
                 set -- unbuffer -p "$@"
                 ;;
@@ -869,8 +980,8 @@ function lk_keep_trying() {
 #
 # Return true if COMMAND writes output other than newlines and exits without
 # error. If -q is set, suppress output.
-function lk_require_output() {
-    local QUIET FILE
+function lk_require_output() { (
+    unset QUIET
     [ "${1-}" != -q ] || { QUIET=1 && shift; }
     FILE=$(lk_mktemp_file) && lk_delete_on_exit "$FILE" &&
         if [ -z "${QUIET-}" ]; then
@@ -878,8 +989,8 @@ function lk_require_output() {
         else
             "$@" >"$FILE"
         fi &&
-        grep -Eq '^.+$' "$FILE" || return
-}
+        grep -Eq '^.+$' "$FILE"
+); }
 
 # lk_env_clean COMMAND [ARG...]
 #
@@ -893,15 +1004,15 @@ function lk_env_clean() {
     fi
 }
 
-# lk_mktemp_with VAR COMMAND [ARG...]
+# lk_mktemp_with VAR [COMMAND [ARG...]]
 #
 # Set VAR to the name of a temporary file that contains the output of COMMAND.
 function lk_mktemp_with() {
-    [ $# -ge 2 ] || lk_usage "Usage: $FUNCNAME VAR COMMAND [ARG...]" || return
-    local VAR=$1 _LK_STACK_DEPTH=1
-    eval "$VAR=\$(lk_mktemp_file)" &&
-        lk_delete_on_exit "${!VAR}" &&
-        "${@:2}" >"${!VAR}"
+    [ $# -ge 1 ] || lk_usage "Usage: $FUNCNAME VAR COMMAND [ARG...]" || return
+    local _LK_STACK_DEPTH=1
+    eval "$1=\$(lk_mktemp_file)" &&
+        lk_delete_on_exit "${!1}" &&
+        { [ $# -lt 2 ] || "${@:2}" >"${!1}"; }
 }
 
 # lk_uri_encode PARAMETER=VALUE...
@@ -1723,12 +1834,6 @@ function lk_has_arg() {
     lk_in_array "$1" _LK_ARGV
 }
 
-function lk_pass() {
-    local STATUS=$?
-    "$@" || true
-    return $STATUS
-} #### Reviewed: 2021-03-25
-
 function _lk_cache_dir() {
     echo "${_LK_OUTPUT_CACHE:=$(
         TMPDIR=${TMPDIR:-/tmp}
@@ -1822,11 +1927,7 @@ function lk_lock() {
         eval "$2=\$(lk_fd_next)" &&
         eval "exec ${!2}>\"\$$1\"" || return
     flock -n "${!2}" || lk_warn "unable to acquire lock: ${!1}" || return
-    lk_trap_add EXIT "_lk_lock_trap $BASH_SUBSHELL$(printf ' %q' "$@")"
-} #### Reviewed: 2021-05-23
-
-function _lk_lock_trap() {
-    [ "${1-}" != "$BASH_SUBSHELL" ] || lk_lock_drop "${@:2:3}"
+    lk_trap_add EXIT lk_lock_drop "$@"
 } #### Reviewed: 2021-05-23
 
 # lk_lock_drop [LOCK_FILE_VAR LOCK_FD_VAR] [LOCK_NAME]
@@ -2369,7 +2470,7 @@ function lk_console_detail_file() {
     local _LK_TTY_PREFIX=${_LK_TTY_PREFIX-  >>> } \
         _LK_TTY_SUFFIX=${_LK_TTY_SUFFIX-  <<< } \
         _LK_TTY_MESSAGE_COLOUR=${_LK_TTY_MESSAGE_COLOUR-$LK_YELLOW} \
-        _LK_TTY_COLOUR2=${_LK_TTY_COLOUR2-$_LK_TTY_COLOUR} \
+        _LK_TTY_COLOUR2=${_LK_TTY_COLOUR2-} \
         _LK_TTY_INDENT=2
     ${_LK_TTY_COMMAND:-lk_tty_file} "$@"
 }
@@ -2471,27 +2572,32 @@ function lk_tty_dump() {
     local _LK_TTY_PREFIX_COLOUR=${_LK_TTY_PREFIX_COLOUR-$BOLD_COLOUR}
     SPACES=$(printf "%$((_LK_TTY_INDENT > -2 ? _LK_TTY_INDENT + 2 : 0))s")
     _LK_TTY_INDENT=0 lk_tty_print "${2-}"
-    printf '%s' "$_LK_TTY_COLOUR2" >&"${_LK_FD-2}"
-    if [ -n "${1:+1}" ] || { [ $# -le 5 ] && [ -t 0 ]; }; then
-        echo "${1%$'\n'}"
-    elif [ $# -gt 5 ]; then
-        eval "${@:6}" || LK_TTY_DUMP_COMMAND_STATUS=$?
-    else
-        cat
-    fi | sed -E "s/^/$SPACES/" >&"${_LK_FD-2}"
-    printf '%s' "$LK_RESET" >&"${_LK_FD-2}"
+    {
+        printf '%s' "$_LK_TTY_COLOUR2"
+        if [ -n "${1:+1}" ] || { [ $# -le 5 ] && [ -t 0 ]; }; then
+            echo "${1%$'\n'}"
+        elif [ $# -gt 5 ]; then
+            eval "${@:6}" || LK_TTY_DUMP_COMMAND_STATUS=$?
+        else
+            cat
+        fi | sed -E "s/^/$SPACES/"
+        printf '%s' "$LK_RESET"
+    } >&"${_LK_FD-2}"
     _LK_TTY_PREFIX=${_LK_TTY_SUFFIX-<<< }
+    _LK_TTY_MESSAGE_COLOUR=$(lk_maybe_bold "${3-}$COLOUR")$COLOUR
     _LK_TTY_INDENT=0 lk_tty_print "${3-}"
 }
 
 # lk_tty_file FILE [COLOUR [FILE_COLOUR]]
 function lk_tty_file() {
-    lk_maybe_sudo test -r "$1" || lk_warn "file not found: $1" || return
+    local MESSAGE2=${1-} _LK_TTY_INDENT=-2
+    lk_maybe_sudo test -r "${1-}" || lk_warn "file not found: ${1-}" || return
+    ! lk_verbose || MESSAGE2=$(lk_maybe_sudo ls -ld "$1") || return
     lk_maybe_sudo cat "$1" | lk_tty_dump "" \
         "$1" \
-        "($(lk_file_summary "$1"))" \
-        "${2-${_LK_TTY_MESSAGE_COLOUR-$LK_MAGENTA}}" \
-        "${3-${_LK_TTY_COLOUR2-$LK_GREEN}}"
+        "$MESSAGE2" \
+        "${2-${_LK_TTY_MESSAGE_COLOUR-$_LK_TTY_COLOUR}}" \
+        "${3-${_LK_TTY_COLOUR2-}}"
 }
 
 # lk_console_diff FILE1 [FILE2 [MESSAGE [COLOUR]]]
@@ -3187,11 +3293,13 @@ function lk_user_exists() {
     id "$1" &>/dev/null || return
 }
 
+function lk_user_home() {
+    lk_expand_path "~${1-}"
+}
+
 # lk_user_groups [USER]
 function lk_user_groups() {
-    eval "$(lk_get_regex LINUX_USERNAME_REGEX)"
-    groups ${1+"$1"} | sed 's/^.*:[[:blank:]]*//' |
-        grep -Eo "$LINUX_USERNAME_REGEX"
+    id -Gn | tr -s '[:blank:]' '\n'
 }
 
 # lk_user_in_group GROUP [USER]
@@ -3538,25 +3646,6 @@ function lk_file_age() {
     local MODIFIED
     MODIFIED=$(lk_file_modified "$1") &&
         echo $(($(lk_timestamp) - MODIFIED))
-}
-
-function lk_file_summary() {
-    local IFS=$'\t' f
-    # e.g. "-rwxrwxr-x  lina    adm     19162   1608099521"
-    if ! lk_is_macos; then
-        f=($(lk_maybe_sudo gnu_stat -L --printf '%A\t%U\t%G\t%s\t%Y' -- "$1"))
-    else
-        f=($(lk_maybe_sudo stat -L -t '%s' -f '%Sp%t%Su%t%Sg%t%z%t%Sm' -- "$1"))
-    fi
-    f[3]="${f[3]} bytes"
-    if ! lk_maybe_sudo test -f "$1"; then
-        f[3]=
-    elif lk_maybe_sudo test -L "$1"; then
-        f[3]="target: ${f[3]}"
-    fi
-    f[4]=$(lk_date "%-d %b %Y %H:%M%z" "${f[4]}")
-    f[4]=${f[4]/"$(lk_date " %Y ")"/ }
-    echo "${f[3]:+${f[3]}, }modified ${f[4]}, ${f[0]} ${f[1]} ${f[2]}"
 }
 
 if ! lk_is_macos; then
@@ -3911,28 +4000,6 @@ function lk_propagate_SIGINT() {
         kill -SIGINT -- -"$PGID"
 }
 
-# lk_trap_get SIGNAL
-function lk_trap_get() {
-    if [ $# -eq 1 ]; then
-        local SH
-        SH=$(trap -p "$1") && [ -z "$SH" ] || eval "lk_trap_get $SH"
-    elif [ $# -eq 4 ]; then
-        echo "$3"
-    else
-        lk_usage "Usage: $FUNCNAME SIGNAL"
-    fi
-} #### Reviewed: 2021-05-28
-
-# lk_trap_add SIGNAL COMMAND
-function lk_trap_add() {
-    local CMD
-    [ $# -eq 2 ] || lk_usage "Usage: $FUNCNAME SIGNAL COMMAND" || return
-    set -- "$1" "$2"' "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'
-    CMD=$(lk_trap_get "$1" |
-        sed -E "/^$(lk_escape_ere "$2")\$/d" && printf .) &&
-        trap -- "${CMD%.}$2" "$1"
-} #### Reviewed: 2021-05-28
-
 function _lk_exit_trap() {
     local STATUS=$?
     [ $STATUS -eq 0 ] || [ "${_LK_CAN_FAIL-}" = 1 ] ||
@@ -3947,59 +4014,10 @@ function _lk_err_trap() {
     _LK_ERR_TRAP_CALLER=$1
 } #### Reviewed: 2021-05-28
 
-function _lk_cleanup_trap() {
-    local COMMAND ARRAY LIST ITEM
-    COMMAND=(rm -Rf --)
-    for ARRAY in _LK_EXIT_{DELETE_,KILL_}${1:-$BASH_SUBSHELL}; do
-        LIST="${ARRAY}[@]"
-        for ITEM in ${!LIST+"${!LIST}"}; do
-            { "${COMMAND[@]}" "$ITEM" ||
-                lk_is_root ||
-                lk_elevate "${COMMAND[@]}" "$ITEM" || true; } 2>/dev/null
-        done
-        unset "$ARRAY"
-        COMMAND=(kill)
-    done
-    # Because subshells don't receive individual EXIT signals on SIGINT, and
-    # SIGINT traps aren't inherited, clean up recursively on SIGINT
-    if [ -n "${1-}" ] && (($1 > 0)); then
-        _lk_cleanup_trap $(($1 - 1)) "${@:2}"
-    fi
-}
-
-function _lk_cleanup_on_exit() {
-    local ARRAY=$1
-    shift
-    [ -n "${!ARRAY+1}" ] || {
-        lk_trap_add EXIT "_lk_cleanup_trap ''" &&
-            lk_trap_add SIGINT "_lk_cleanup_trap $BASH_SUBSHELL" &&
-            lk_trap_add SIGINT lk_propagate_SIGINT &&
-            eval "$ARRAY=()" || return
-    }
-    while [ $# -gt 0 ]; do
-        eval "${ARRAY}[\${#${ARRAY}[@]}]=\$1" &&
-            shift || return
-    done
-}
-
-function lk_delete_on_exit() {
-    _lk_cleanup_on_exit _LK_EXIT_DELETE_$BASH_SUBSHELL "$@"
-}
-
-function lk_remove_delete_on_exit() {
-    local ARRAY=_LK_EXIT_DELETE_$BASH_SUBSHELL
-    [ -n "${!ARRAY+1}" ] && lk_in_array "$1" "$ARRAY" || return
-    lk_remove_false "$(printf '[ "{}" != %q ]' "$1")" "$ARRAY"
-}
-
-function lk_kill_on_exit() {
-    _lk_cleanup_on_exit _LK_EXIT_KILL_$BASH_SUBSHELL "$@"
-}
-
 set -o pipefail
 
-lk_trap_add EXIT _lk_exit_trap
-lk_trap_add ERR _lk_err_trap
+lk_trap_add EXIT '_lk_exit_trap "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'
+lk_trap_add ERR '_lk_err_trap "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'
 
 if lk_is_true LK_TTY_NO_COLOUR; then
     declare \
@@ -4055,7 +4073,7 @@ else
     '' | dumb | unknown)
         [ -z "${TERM+1}" ] || unset TERM
         ;;
-    xterm-*color) ;;
+    linux | vt220 | xterm-*color) ;;
     *)
         eval "$(lk_get_colours)"
         ;;
