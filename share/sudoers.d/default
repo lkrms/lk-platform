@@ -1,9 +1,9 @@
 Defaults always_set_home
 Defaults closefrom_override
-Defaults env_keep += "*_PROXY *_proxy BASH_XTRACEFD SHELLOPTS LK_* _LK_*"
-Defaults>root env_keep += "SSH_AUTH_SOCK"
+Defaults env_keep += "BASH_XTRACEFD SHELLOPTS SSH_AUTH_SOCK *_PROXY *_proxy LK_* _LK_*"
 Defaults !mail_badpass
 Defaults !mail_no_user
 Defaults !secure_path
 Defaults umask = 0002
+Defaults>root umask = 0022
 Defaults !umask_override
