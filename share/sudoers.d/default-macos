@@ -1,0 +1,13 @@
+# Undo the default %admin policy
+%admin ALL = (ALL) !ALL
+
+# Don't accidentally pollute /Library/* or use root privileges when installing
+# packages to /usr/local
+Cmnd_Alias PACKAGE_MANAGERS = \
+  /usr/local/bin/pip3*,     /opt/homebrew/bin/pip3*,    /usr/bin/pip3,  \
+  /usr/local/bin/gem,       /opt/homebrew/bin/gem,      /usr/bin/gem,   \
+  /usr/local/bin/cpan,      /opt/homebrew/bin/cpan,     /usr/bin/cpan,  \
+  /usr/local/bin/npm,       /opt/homebrew/bin/npm,                      \
+  /usr/local/bin/composer,  /opt/homebrew/bin/composer
+
+%admin ALL = (ALL) NOPASSWD:ALL, !PACKAGE_MANAGERS

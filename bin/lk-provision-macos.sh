@@ -85,7 +85,7 @@ function exit_trap() {
     if [ -f "$LK_BASE/lib/bash/include/core.sh" ]; then
         . "$LK_BASE/lib/bash/include/core.sh"
         lk_include brew macos provision whiptail
-        SUDOERS=$(<"$LK_BASE/share/sudoers.d/default")
+        SUDOERS=$LK_BASE/share/sudoers.d/default
         load_settings "$@"
         ${PACKAGES_REL:+. "$LK_BASE/$PACKAGES_REL"}
     else
@@ -101,7 +101,7 @@ function exit_trap() {
             /lib/bash/include/macos.sh \
             /lib/bash/include/provision.sh \
             /lib/bash/include/whiptail.sh \
-            /share/sudoers.d/default \
+            /share/sudoers.d/default{,-macos} \
             PACKAGES; do
             [ "$FILE_PATH" != PACKAGES ] || {
                 load_settings "$@"
@@ -123,7 +123,7 @@ function exit_trap() {
             [[ ! $FILE_PATH =~ /include/[a-z0-9_]+\.sh$ ]] ||
                 . "$FILE"
         done
-        SUDOERS=$(<"$_DIR/default")
+        SUDOERS=$_DIR/default
     fi
 
     ! lk_is_system_apple_silicon || lk_is_apple_silicon ||
@@ -184,9 +184,13 @@ function exit_trap() {
     FILE=/etc/sudoers.d/${LK_PATH_PREFIX}default
     sudo test ! -e "${FILE}s" || sudo test -e "$FILE" ||
         sudo mv -v "${FILE}s" "$FILE"
-    sudo test -e "$FILE" ||
-        sudo install -m 00440 /dev/null "$FILE"
-    LK_SUDO=1 lk_file_replace "$FILE" "$SUDOERS"
+    for SUFFIX in "" -macos; do
+        [ -z "$SUFFIX" ] || FILE=${FILE%/*}/zz-${FILE##*/}
+        sudo test -e "$FILE$SUFFIX" ||
+            sudo install -m 00440 /dev/null "$FILE$SUFFIX"
+        LK_SUDO=1 LK_FILE_BACKUP_MOVE=1 \
+            lk_file_replace -f "$SUDOERS$SUFFIX" "$FILE$SUFFIX"
+    done
 
     lk_console_message "Configuring default umask"
     if ! USER_UMASK=$(defaults read \

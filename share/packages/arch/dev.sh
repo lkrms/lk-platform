@@ -24,9 +24,6 @@ PAC_KEEP=(
     xiccd
 
     #
-    azure-cli
-    azure-functions-core-tools-bin
-    storageexplorer
 
     #
     sfdx-cli
@@ -354,7 +351,10 @@ AUR_PACKAGES+=(
     git-cola
 
     # platforms
+    azure-cli
+    azure-functions-core-tools-bin
     linode-cli
+    storageexplorer
     wp-cli
 )
 
