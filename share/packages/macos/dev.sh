@@ -14,6 +14,7 @@ HOMEBREW_TAPS+=(
     homebrew/cask-fonts
     homebrew/cask-versions
     homebrew/services
+    azure/functions
     lkrms/autoupdate
 )
 
@@ -180,6 +181,8 @@ HOMEBREW_FORMULAE+=(
 
     # Platforms
     awscli
+    azure-cli
+    azure-functions-core-tools@3
 )
 
 FORCE_IBREW+=(
@@ -195,6 +198,7 @@ HOMEBREW_CASKS+=(
     dbeaver-community
     font-jetbrains-mono
     http-toolkit
+    robo-3t
     sequel-pro
     sourcetree
     sublime-merge
