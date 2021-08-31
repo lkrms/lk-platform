@@ -913,7 +913,7 @@ function lk_node_public_ipv6() {
     } | sort -u
 }
 
-# lk_hosts_get_records [+FIELD[,FIELD...]>] TYPE[,TYPE...] HOST...
+# lk_hosts_get_records [+FIELD[,FIELD...]] TYPE[,TYPE...] HOST...
 #
 # Print space-separated resource records of each TYPE for each HOST, optionally
 # limiting output to each FIELD.
@@ -1077,6 +1077,8 @@ function lk_host_ns_resolve() {
 # AAAA record for DOMAIN.
 function lk_node_is_host() {
     local NODE_IP HOST_IP
+    lk_require_output -q lk_dns_resolve_hosts "$1" ||
+        lk_warn "domain not found: $1" || return
     NODE_IP=($(lk_node_public_ipv4 && lk_node_public_ipv6)) &&
         [ ${#NODE_IP} -gt 0 ] ||
         lk_warn "public IP address not found" || return

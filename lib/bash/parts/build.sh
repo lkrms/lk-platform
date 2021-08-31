@@ -55,9 +55,11 @@ while [ $# -gt 0 ]; do
                 awk 'NR<3 && $0 ~ /^(#!\/|$)/ {next} {print} END {print ""}' |
                 sed -En '
 s/^(((\); )?\}) )?#### Reviewed: [0-9]{4}(-[0-9]{2}){2}$/\2/
-t maybe_skip; p; b
+t maybe_skip
+p; b
 :maybe_skip
-/^./ { p; b }; n; /^$/ d; p'
+/^./ { p; b
+}; n; /^$/ d; p'
         done
         ! ((embed)) ||
             awk -v "from=#### END $d" \

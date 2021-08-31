@@ -49,7 +49,7 @@ lk_log_start
             fi
         }
 
-        local OWNER
+        local INSTALL KEYS_FILE NO_CERTBOT WP OWNER STATUS=0
 
         cd /opt/lk-platform 2>/dev/null ||
             cd /opt/*-platform ||
@@ -72,7 +72,7 @@ lk_log_start
         . ./lib/bash/rc.sh || return
 
         # Install icdiff if it's not already installed
-        INSTALL=$(lk_dpkg_not_installed_list icdiff)
+        INSTALL=$(lk_dpkg_not_installed_list icdiff) || return
         [ -z "$INSTALL" ] ||
             lk_apt_install $INSTALL || return
 
@@ -80,24 +80,41 @@ lk_log_start
 
         [ -z "${3:+1}" ] ||
             ! KEYS_FILE=$(lk_first_existing \
-                /etc/skel.*/.ssh/{authorized_keys_*,authorized_keys}) || (
-            # Prevent early termination of `tail`
-            trap - EXIT
-            lk_file_replace -m "$KEYS_FILE" "$3"
-        )
+                /etc/skel.*/.ssh/{authorized_keys_*,authorized_keys}) ||
+            lk_file_replace -m "$KEYS_FILE" "$3" || return
 
         ./bin/lk-provision-hosting.sh \
-            "${@:4}" --set LK_PLATFORM_BRANCH="$1" ||
-            return
+            "${@:4}" --set LK_PLATFORM_BRANCH="$1" || return
+
+        lk_console_message "Checking TLS certificates"
+        local IFS=$'\n'
+        NO_CERTBOT=($(comm -13 \
+            <(lk_certbot_list_certificates 2>/dev/null |
+                awk -F$'\t' -v "now=$(lk_date "%Y-%m-%d %H:%M:%S%z")" \
+                    '$3 > now {print $2}' | sort -u) \
+            <(lk_hosting_site_list -e |
+                awk -F$'\t' '$11 == "N" {print $10}' | sort -u))) || return
+        IFS=,
+        [ -z "${NO_CERTBOT+1}" ] ||
+            for DOMAINS in "${NO_CERTBOT[@]}"; do
+                lk_console_detail \
+                    "Requesting TLS certificate:" "${DOMAINS//,/ }"
+                lk_certbot_install $DOMAINS ||
+                    lk_console_error -r \
+                        "TLS certificate not obtained" || STATUS=$?
+            done
+        unset IFS
 
         for WP in /srv/www/{*,*/*}/public_html/wp-config.php; do
             WP=${WP%/wp-config.php}
-            OWNER=$(stat -c '%U' "$WP") || return
-            runuser -u "$OWNER" -- bash -c "$(
-                declare -f update-wp
-                printf '%q %q\n' update-wp "$WP"
-            )"
+            OWNER=$(stat -c '%U' "$WP") &&
+                runuser -u "$OWNER" -- bash -c "$(
+                    declare -f update-wp
+                    printf '%q %q\n' update-wp "$WP"
+                )" || STATUS=$?
         done
+
+        return "$STATUS"
     }
 
     function do-update-server() {
@@ -138,11 +155,12 @@ lk_log_start
         trap "" SIGHUP SIGINT SIGTERM
 
         ssh -o ControlPath=none -t "$1" LK_VERBOSE=${LK_VERBOSE-1} "${COMMAND[@]}" || {
-            trap - SIGHUP SIGINT SIGTERM
             lk_console_error "Update failed (exit status $?):" "$1"
             FAILED+=("$1")
-            [ $# -gt 1 ] && lk_confirm "Continue?" Y || break
         }
+
+        trap - SIGHUP SIGINT SIGTERM
+        [ $# -gt 1 ] && lk_confirm "Continue?" Y || break
 
         shift
 

@@ -608,7 +608,7 @@ function lk_file_acl_remove_extended() {
         gnu_xargs -d '\n' printf '%b\0' |
         # Print filenames to stderr
         tee >(tr '\n\0' ' \n' >&2) |
-        xargs -0 setfacl -b --
+        gnu_xargs -0r setfacl -b --
 } #### Reviewed: 2021-05-28
 
 lk_provide linux

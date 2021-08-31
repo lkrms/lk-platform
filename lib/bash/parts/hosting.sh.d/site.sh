@@ -45,7 +45,8 @@ function _lk_hosting_site_check_root() {
 # 7. PHP_FPM_POOL
 # 8. PHP_FPM_USER
 # 9. ORDER
-# 10. ALIASES
+# 10. ALL_DOMAINS (sorted, comma-separated)
+# 11. DISABLE_HTTPS
 function lk_hosting_site_list() { (
     unset ENABLED
     [ "${1-}" != -e ] || ENABLED=1
@@ -68,13 +69,24 @@ function lk_hosting_site_list() { (
                     SITE_PHP_FPM_USER=$_SITE_USER
                 fi
             lk_get_quoted_var SITE_ENABLE SITE_ROOT SITE_ORDER SITE_ALIASES \
-                _SITE_IS_CHILD SITE_PHP_FPM_POOL SITE_PHP_FPM_USER
+                _SITE_IS_CHILD SITE_PHP_FPM_POOL SITE_PHP_FPM_USER \
+                SITE_DISABLE_WWW SITE_DISABLE_HTTPS
         ) && eval "$SH" || continue
         lk_is_true SITE_ENABLE && SITE_ENABLE=Y ||
             { [ -z "${ENABLED-}" ] && SITE_ENABLE=N || continue; }
         lk_is_true _SITE_IS_CHILD && _SITE_IS_CHILD_H=Y || _SITE_IS_CHILD_H=N
+        DOMAINS=$({
+            IFS=,
+            echo "$DOMAIN"
+            lk_is_true "${SITE_DISABLE_WWW:-${LK_SITE_DISABLE_WWW:-N}}" ||
+                echo "www.$DOMAIN"
+            [ -z "$SITE_ALIASES" ] ||
+                printf '%s\n' $SITE_ALIASES
+        } | sort -u | lk_implode_input ",")
+        lk_is_true "${SITE_DISABLE_HTTPS:-${LK_SITE_DISABLE_HTTPS:-N}}" &&
+            SITE_DISABLE_HTTPS=Y || SITE_DISABLE_HTTPS=N
         lk_elevate gnu_stat -L \
-            --printf "$DOMAIN\\t$SITE_ENABLE\\t%n\\t%i\\t%U\\t$_SITE_IS_CHILD_H\\t$SITE_PHP_FPM_POOL\\t$SITE_PHP_FPM_USER\\t$SITE_ORDER\\t$SITE_ALIASES\\n" \
+            --printf "$DOMAIN\\t$SITE_ENABLE\\t%n\\t%i\\t%U\\t$_SITE_IS_CHILD_H\\t$SITE_PHP_FPM_POOL\\t$SITE_PHP_FPM_USER\\t$SITE_ORDER\\t$DOMAINS\\t$SITE_DISABLE_HTTPS\\n" \
             "$SITE_ROOT" || return
     done | sort -t$'\t' -k6 -k9n -k1
 ); } #### Reviewed: 2021-07-12

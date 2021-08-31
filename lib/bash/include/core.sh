@@ -472,7 +472,7 @@ function lk_string_remove() {
 function lk_array_remove_value() {
     local _SH
     _SH=$(eval "for _i in \${$1+\"\${!$1[@]}\"}; do
-    [ \"\${$1[_i]}\" != \"\$2\" ] || echo \"unset $1[\$_i]\"
+    [ \"\${$1[_i]}\" != \"\$2\" ] || echo \"unset \\\"$1[\$_i]\\\"\"
 done") && eval "$_SH"
 }
 
