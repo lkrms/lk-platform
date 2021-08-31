@@ -417,6 +417,7 @@ EOF
         fi
     done
     lk_macos_defaults_maybe_write 1 com.apple.Spotlight showedFTE -bool true
+    lk_macos_defaults_maybe_write 1 com.apple.Spotlight showedLearnMore -bool true
     lk_macos_defaults_maybe_write 3 com.apple.Spotlight useCount -int 3
 
     # source ~/.bashrc in ~/.bash_profile, creating both files if necessary
