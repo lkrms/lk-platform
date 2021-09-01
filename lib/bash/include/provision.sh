@@ -314,15 +314,15 @@ function lk_settings_getopt() {
 # - if not running as root, update the current user's settings
 # - delete old config files
 function lk_settings_persist() {
-    local FILES DELETE=() _FILE
+    local IFS FILES DELETE=() _FILE
     [ $# -ge 1 ] || lk_warn "invalid arguments" || return
     [ $# -ge 2 ] || {
-        local IFS=$'\n'
+        IFS=$'\n'
         FILES=($(_lk_settings_writable_files)) || return
         set -- "$1" "${FILES[@]}"
         DELETE=("${@:3}")
-        unset IFS
     }
+    unset IFS
     lk_mktemp_with _FILE
     (
         unset "${!LK_@}"
@@ -393,7 +393,8 @@ Usage: $(lk_myself -f) TARGET [ALIAS]"
 }
 
 function lk_configure_locales() {
-    local LK_SUDO=1 LOCALES _LOCALES FILE _FILE
+    local IFS LK_SUDO=1 LOCALES _LOCALES FILE _FILE
+    unset IFS
     lk_is_linux || lk_warn "platform not supported" || return
     LOCALES=(${LK_NODE_LOCALES-} en_US.UTF-8)
     _LOCALES=$(lk_echo_array LOCALES |
@@ -1007,7 +1008,8 @@ function lk_host_first_answer() {
 } #### Reviewed: 2021-03-30
 
 function lk_host_soa() {
-    local ANSWER APEX NAMESERVERS NAMESERVER SOA
+    local IFS ANSWER APEX NAMESERVERS NAMESERVER SOA
+    unset IFS
     ANSWER=$(lk_host_first_answer NS "$1") || return
     ! lk_verbose ||
         lk_console_detail "Looking up SOA for domain:" "$1"
@@ -1037,8 +1039,9 @@ function lk_host_soa() {
 } #### Reviewed: 2021-03-30
 
 function lk_host_ns_resolve() {
-    local NAMESERVER IP CNAME LK_DIG_SERVER LK_DIG_OPTIONS \
+    local IFS NAMESERVER IP CNAME LK_DIG_SERVER LK_DIG_OPTIONS \
         _LK_CNAME_DEPTH=${_LK_CNAME_DEPTH:-0}
+    unset IFS
     [ "$_LK_CNAME_DEPTH" -lt 7 ] || lk_warn "too much recursion" || return
     ((++_LK_CNAME_DEPTH))
     NAMESERVER=$(lk_host_soa "$1" |
@@ -1076,7 +1079,8 @@ function lk_host_ns_resolve() {
 # Return true if at least one public IP address matches an authoritative A or
 # AAAA record for DOMAIN.
 function lk_node_is_host() {
-    local NODE_IP HOST_IP
+    local IFS NODE_IP HOST_IP
+    unset IFS
     lk_require_output -q lk_dns_resolve_hosts "$1" ||
         lk_warn "domain not found: $1" || return
     NODE_IP=($(lk_node_public_ipv4 && lk_node_public_ipv6)) &&
