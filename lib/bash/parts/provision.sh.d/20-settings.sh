@@ -140,15 +140,15 @@ function lk_settings_getopt() {
 # - if not running as root, update the current user's settings
 # - delete old config files
 function lk_settings_persist() {
-    local FILES DELETE=() _FILE
+    local IFS FILES DELETE=() _FILE
     [ $# -ge 1 ] || lk_warn "invalid arguments" || return
     [ $# -ge 2 ] || {
-        local IFS=$'\n'
+        IFS=$'\n'
         FILES=($(_lk_settings_writable_files)) || return
         set -- "$1" "${FILES[@]}"
         DELETE=("${@:3}")
-        unset IFS
     }
+    unset IFS
     lk_mktemp_with _FILE
     (
         unset "${!LK_@}"
