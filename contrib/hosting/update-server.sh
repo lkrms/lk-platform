@@ -49,6 +49,8 @@ lk_log_start
             fi
         }
 
+        set -uo pipefail
+
         local INSTALL KEYS_FILE NO_CERTBOT WP OWNER STATUS=0
 
         cd /opt/lk-platform 2>/dev/null ||
@@ -59,15 +61,46 @@ lk_log_start
             chmod -c 02775 . ||
             return
 
-        (umask 002 &&
-            { git remote set-url origin "$2" ||
-                git remote add origin "$2"; } &&
-            git fetch origin &&
-            git stash --include-untracked &&
-            git checkout "$1" &&
-            git branch --set-upstream-to "origin/$1" &&
-            { git merge || git reset --hard "origin/$1"; }) ||
-            return
+        (IFS= && umask 002 &&
+            # Remove every remote that isn't origin
+            { git remote | grep -Fxv origin | tr '\n' '\0' |
+                xargs -0 -n1 -r git remote remove ||
+                [ "${PIPESTATUS[*]}" = 0100 ]; } &&
+            # Add origin or update its URL
+            if git remote | grep -Fx origin >/dev/null; then
+                git config remote.origin.url | grep -Fx "$2" >/dev/null ||
+                    git remote set-url origin "$2"
+            else
+                git remote add origin "$2"
+            fi &&
+            # Retrieve latest commits from origin
+            git fetch --prune origin &&
+            # Stash local changes
+            { git stash --include-untracked ||
+                { git config user.name "$USER" &&
+                    git config user.email "$USER@$(hostname -f)" &&
+                    git stash --include-untracked; }; } &&
+            if git rev-parse --verify --abbrev-ref HEAD |
+                grep -Fx "$1" >/dev/null; then
+                # If the branch is already checked out, merge upstream changes
+                git merge --ff-only "origin/$1" ||
+                    git reset --hard "origin/$1"
+            elif git for-each-ref --format="%(refname:short)" refs/heads |
+                grep -Fx "$1" >/dev/null; then
+                # If the branch exists but isn't checked out, merge upstream
+                # changes, then switch
+                { git merge-base --is-ancestor "$1" "origin/$1" &&
+                    git fetch . "origin/$1:$1" ||
+                    git branch -f "$1" "origin/$1"; } &&
+                    git checkout "$1"
+            else
+                # Otherwise, create a new branch from origin/<branch>
+                git checkout -b "$1" --track "origin/$1"
+            fi &&
+            # Set remote-tracking branch to origin/<branch> if needed
+            { git rev-parse --verify --abbrev-ref "@{upstream}" 2>/dev/null |
+                grep -Fx "origin/$1" >/dev/null ||
+                git branch --set-upstream-to "origin/$1"; }) || return
 
         . ./lib/bash/rc.sh || return
 
