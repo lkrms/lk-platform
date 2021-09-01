@@ -1011,13 +1011,13 @@ function lk_host_soa() {
     local IFS ANSWER APEX NAMESERVERS NAMESERVER SOA
     unset IFS
     ANSWER=$(lk_host_first_answer NS "$1") || return
-    ! lk_verbose ||
+    ! lk_verbose 2 ||
         lk_console_detail "Looking up SOA for domain:" "$1"
     APEX=$(awk '{sub("\\.$", "", $1); print $1}' <<<"$ANSWER" | sort -u)
     [ "$(wc -l <<<"$APEX")" -eq 1 ] ||
         lk_warn "invalid response to NS lookup" || return
     NAMESERVERS=($(awk '{sub("\\.$", "", $5); print $5}' <<<"$ANSWER" | sort))
-    ! lk_verbose || {
+    ! lk_verbose 2 || {
         lk_console_detail "Domain apex:" "$APEX"
         lk_console_detail "Name servers:" "$(lk_implode_arr ", " NAMESERVERS)"
     }
@@ -1027,7 +1027,7 @@ function lk_host_soa() {
             LK_DIG_OPTIONS=(+norecurse)
             lk_require_output lk_hosts_get_records SOA "$APEX"
         ); then
-            ! lk_verbose ||
+            ! lk_verbose 2 ||
                 lk_console_detail "SOA from $NAMESERVER for $APEX:" $'\n'"$SOA"
             echo "$SOA"
             break
@@ -1048,19 +1048,19 @@ function lk_host_ns_resolve() {
         awk '{sub("\\.$", "", $5); print $5}') || return
     LK_DIG_SERVER=$NAMESERVER
     LK_DIG_OPTIONS=(+norecurse)
-    ! lk_verbose || {
+    ! lk_verbose 2 || {
         lk_console_detail "Using name server:" "$NAMESERVER"
         lk_console_detail "Looking up A and AAAA records for:" "$1"
     }
     IP=($(lk_hosts_get_records +VALUE A,AAAA "$1")) || return
     if [ ${#IP[@]} -eq 0 ]; then
-        ! lk_verbose || {
+        ! lk_verbose 2 || {
             lk_console_detail "No A or AAAA records returned"
             lk_console_detail "Looking up CNAME record for:" "$1"
         }
         CNAME=($(lk_hosts_get_records +VALUE CNAME "$1")) || return
         if [ ${#CNAME[@]} -eq 1 ]; then
-            ! lk_verbose ||
+            ! lk_verbose 2 ||
                 lk_console_detail "CNAME value from $NAMESERVER for $1:" \
                     "${CNAME[0]}"
             lk_host_ns_resolve "${CNAME[0]%.}" || return
@@ -1068,7 +1068,7 @@ function lk_host_ns_resolve() {
         fi
     fi
     [ ${#IP[@]} -gt 0 ] || lk_warn "could not resolve $1: $NAMESERVER" || return
-    ! lk_verbose ||
+    ! lk_verbose 2 ||
         lk_console_detail "A and AAAA values from $NAMESERVER for $1:" \
             "$(lk_echo_array IP)"
     lk_echo_array IP
