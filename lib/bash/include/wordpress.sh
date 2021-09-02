@@ -15,9 +15,12 @@ function lk_wp_is_quiet() {
 function lk_wp_get_site_root() {
     local SITE_ROOT
     SITE_ROOT=$(lk_wp eval "echo ABSPATH;" --skip-wordpress) &&
-        { [ "$SITE_ROOT" != "/" ] ||
-            lk_warn "WordPress installation not found"; } &&
-        echo "${SITE_ROOT%/}"
+        [ "$SITE_ROOT" != / ] &&
+        echo "${SITE_ROOT%/}" || {
+        ! lk_wp_is_quiet || return
+        lk_warn "WordPress installation not found"
+        false
+    }
 }
 
 function lk_wp_get_site_address() {

@@ -973,8 +973,8 @@ tolower($0) ~ "^(blackhole|\"blackhole\")" S "*:" {
 
         lk_console_message "Checking WP-CLI"
         FILE=/usr/local/bin/wp
-        if [ -x "$FILE" ]; then
-            lk_install -m 00755 "$FILE"
+        lk_install -m 00755 "$FILE"
+        if [ -s "$FILE" ]; then
             lk_run_detail "$FILE" cli update --yes
         else
             lk_console_detail "Installing WP-CLI to" "$FILE"
@@ -983,7 +983,7 @@ tolower($0) ~ "^(blackhole|\"blackhole\")" S "*:" {
             URL=https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
             curl "${CURL_OPTIONS[@]}" --output "$_FILE" "$URL" ||
                 lk_die "unable to download: $URL"
-            lk_install -m 00755 "$_FILE" "$FILE"
+            cp "$_FILE" "$FILE"
         fi
 
         lk_keep_trying lk_git_provision_repo -fs \
