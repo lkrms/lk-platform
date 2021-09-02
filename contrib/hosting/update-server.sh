@@ -32,7 +32,7 @@ lk_log_start
             local CRONTAB DISABLE_WP_CRON
             cd "$1" &&
                 . /opt/lk-platform/lib/bash/rc.sh || return
-            lk_console_item "Checking WordPress at" "$1"
+            lk_tty_print "Checking WordPress at" "$1"
             if CRONTAB=$(crontab -l 2>/dev/null | grep -F "$(printf \
                 'wp --path=%q cron event run --due-now' "$1")" |
                 grep -F _LK_LOG_FILE) &&
@@ -132,7 +132,8 @@ lk_log_start
             for DOMAINS in "${NO_CERTBOT[@]}"; do
                 lk_console_detail \
                     "Requesting TLS certificate:" "${DOMAINS//,/ }"
-                lk_certbot_install $DOMAINS ||
+                [[ ! $DOMAINS =~ \.$TLD_REGEX(,|$) ]] ||
+                    lk_certbot_install $DOMAINS ||
                     lk_console_error -r \
                         "TLS certificate not obtained" || STATUS=$?
             done
@@ -158,6 +159,17 @@ lk_log_start
         return "$STATUS"
     }
 
+    function do-query-server() {
+        local IFS PUBLIC_IP HOSTED_DOMAIN
+        unset IFS
+        . /opt/lk-platform/lib/bash/rc.sh &&
+            lk_include provision hosting &&
+            PUBLIC_IP=$(lk_node_ipv4 | head -n1) &&
+            HOSTED_DOMAIN=($(lk_hosting_site_list -e |
+                awk '{print $10}' | tr ',' '\n')) &&
+            declare -p PUBLIC_IP HOSTED_DOMAIN
+    }
+
     ARGS=()
     while [[ ${1-} =~ ^(-[saru]|--(set|add|remove|unset))$ ]]; do
         SHIFT=2
@@ -167,8 +179,13 @@ lk_log_start
         shift "$SHIFT"
     done
 
+    TLD_REGEX=$(curl -fsSL \
+        "https://data.iana.org/TLD/tlds-alpha-by-domain.txt" |
+        sed -E '/^(#|$|HOSTING$)/d' | tr '[:upper:]' '[:lower:]' |
+        lk_ere_implode_input -e)
     COMMAND=(sudo -HE bash -c "$(lk_quote_args "$(
         declare -f keep-alive update-server do-update-server
+        declare -p TLD_REGEX
         lk_quote_args trap "" SIGHUP SIGINT SIGTERM
         lk_quote_args set -m
         lk_quote_args do-update-server \
@@ -178,18 +195,80 @@ lk_log_start
             ${ARGS[@]+"${ARGS[@]}"}
     ) & wait \$! 2>/dev/null")")
 
+    COMMAND2=(bash -c "$(lk_quote_args "$(
+        declare -f do-query-server
+        lk_quote_args do-query-server
+    )")")
+
+    TEMP=$(lk_mktemp_file)
+    lk_delete_on_exit "$TEMP"
+
+    UPDATED=()
     FAILED=()
     i=0
     while [ $# -gt 0 ]; do
 
-        ! ((i++)) || lk_console_blank
-        lk_console_item "Updating" "$1"
+        ! ((i++)) || lk_tty_print
+        lk_tty_print "Updating" "$1"
 
         trap "" SIGHUP SIGINT SIGTERM
 
-        ssh -o ControlPath=none -t "$1" LK_VERBOSE=${LK_VERBOSE-1} "${COMMAND[@]}" || {
-            lk_console_error "Update failed (exit status $?):" "$1"
+        STATUS=0
+        ssh -o ControlPath=none -o LogLevel=QUIET -t "$1" \
+            LK_VERBOSE=${LK_VERBOSE-1} "${COMMAND[@]}" || STATUS=$?
+        SH=$(ssh -o ControlPath=none -o LogLevel=QUIET "$1" \
+            "${COMMAND2[@]}") &&
+            eval "$SH" && {
+            lk_tty_print
+            lk_tty_print "Testing HTTPS access to hosted domains:" "$1"
+            for DOMAIN in ${HOSTED_DOMAIN+"${HOSTED_DOMAIN[@]}"}; do
+                ARGS=()
+                INVALID_TLS=
+                OLD_STATUS=$STATUS
+                while :; do
+                    HTTP=$(curl -sSI \
+                        -o "$TEMP" \
+                        -H "Cache-Control: no-cache" \
+                        -H "Pragma: no-cache" \
+                        --connect-to "$DOMAIN::$PUBLIC_IP:" \
+                        ${ARGS+"${ARGS[@]}"} \
+                        "https://$DOMAIN" 2>&1 >/dev/null | head -n1) &&
+                        HTTP=$(awk \
+                            'NR == 1 || tolower($1) == "location:" {print}' \
+                            "$TEMP") &&
+                        [[ $HTTP =~ ^HTTP/$NS+$S+([0-9]+) ]] &&
+                        [ ${BASH_REMATCH[1]} -lt 400 ] &&
+                        lk_console_success \
+                            "OK:" "https://$DOMAIN$INVALID_TLS" &&
+                        lk_tty_detail "$HTTP" &&
+                        break || {
+                        STATUS=$?
+                        case "$STATUS" in
+                        60)
+                            # "Peer certificate cannot be authenticated with
+                            # known CA certificates"
+                            lk_in_array --insecure ARGS || {
+                                ARGS+=(--insecure)
+                                INVALID_TLS=" $LK_RED(insecure)$LK_RESET"
+                                STATUS=$OLD_STATUS
+                                continue
+                            }
+                            ;;
+                        *)
+                            lk_console_error \
+                                "Request failed:" "https://$DOMAIN$INVALID_TLS"
+                            lk_tty_detail "${HTTP:-($STATUS)}"
+                            ;;
+                        esac
+                    }
+                    break
+                done
+                lk_tty_print
+            done
+        } && (exit "$STATUS") && UPDATED+=("$1") || {
+            lk_tty_print "Update failed:" "$1" "$LK_BOLD$LK_RED"
             FAILED+=("$1")
+            lk_tty_print
         }
 
         trap - SIGHUP SIGINT SIGTERM
@@ -201,8 +280,6 @@ lk_log_start
 
     trap - SIGHUP SIGINT SIGTERM
 
-    lk_console_blank
-
     if [ ${#FAILED[@]} -gt 0 ]; then
         lk_console_error "${#FAILED[@]} of $i $(lk_plural \
             "$i" server servers) failed to update:" \
@@ -210,7 +287,8 @@ lk_log_start
         lk_die ""
     else
         lk_console_success \
-            "$i $(lk_plural "$i" server servers) updated successfully"
+            "$i $(lk_plural "$i" server servers) updated successfully:" \
+            $'\n'"$(lk_echo_array UPDATED)"
     fi
 
     exit
