@@ -51,6 +51,14 @@ function lk_linode_domain_records() {
     lk_cache linode-cli-json domains records-list "$@"
 }
 
+function lk_linode_firewalls() {
+    lk_cache linode-cli-json firewalls list "$@"
+}
+
+function lk_linode_firewall_devices() {
+    lk_cache linode-cli-json firewalls devices-list "$@"
+}
+
 function lk_linode_stackscripts() {
     lk_cache linode-cli-json stackscripts list --is_public false "$@"
 }
@@ -290,10 +298,20 @@ function lk_linode_dns_check() {
         <(sort -u <<<"$RECORDS"))
     while read -r ADDRESS RDNS; do
         [ "$NEW_RECORD_COUNT" -eq 0 ] ||
-            [ "$NEW_REVERSE_RECORD_COUNT" -gt 0 ] || {
-            lk_console_message "Waiting 60 seconds"
-            sleep 60
-        }
+            [ "$NEW_REVERSE_RECORD_COUNT" -gt 0 ] || (
+            lk_console_message "Waiting for $RDNS to resolve"
+            i=0
+            while ((i < 8)); do
+                SLEEP=$(((++i) ** 2))
+                ((i == 1)) || lk_tty_detail "Trying again in $SLEEP seconds"
+                sleep "$SLEEP" || return
+                ! lk_require_output -q lk_dns_resolve_hosts "$RDNS" ||
+                    exit 0
+            done
+            exit 1
+        ) || lk_warn \
+            "cannot add RDNS record for $ADDRESS until $RDNS resolves" ||
+            return
         lk_console_item "Adding RDNS record:" "$ADDRESS $RDNS"
         JSON=$(linode-cli --json networking ip-update \
             --rdns "$RDNS" \
