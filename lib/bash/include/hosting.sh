@@ -259,12 +259,14 @@ function lk_hosting_site_list() { (
         DOMAINS=$({
             IFS=,
             echo "$DOMAIN"
-            lk_is_true "${SITE_DISABLE_WWW:-${LK_SITE_DISABLE_WWW:-N}}" ||
+            SITE_DISABLE_WWW=${SITE_DISABLE_WWW:-${LK_SITE_DISABLE_WWW:-N}}
+            lk_is_true SITE_DISABLE_WWW ||
                 echo "www.$DOMAIN"
             [ -z "$SITE_ALIASES" ] ||
                 printf '%s\n' $SITE_ALIASES
         } | sort -u | lk_implode_input ",")
-        lk_is_true "${SITE_DISABLE_HTTPS:-${LK_SITE_DISABLE_HTTPS:-N}}" &&
+        SITE_DISABLE_HTTPS=${SITE_DISABLE_HTTPS:-${LK_SITE_DISABLE_HTTPS:-N}}
+        lk_is_true SITE_DISABLE_HTTPS &&
             SITE_DISABLE_HTTPS=Y || SITE_DISABLE_HTTPS=N
         lk_elevate gnu_stat -L \
             --printf "$DOMAIN\\t$SITE_ENABLE\\t%n\\t%i\\t%U\\t$_SITE_IS_CHILD_H\\t$SITE_PHP_FPM_POOL\\t$SITE_PHP_FPM_USER\\t$SITE_ORDER\\t$DOMAINS\\t$SITE_DISABLE_HTTPS\\n" \
