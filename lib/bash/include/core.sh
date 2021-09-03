@@ -2117,13 +2117,11 @@ function lk_log_start() {
             eval "exec $_LK_LOG_FD"'> >(lk_log > >(_lk_tee -a "$LOG_FILE" >&"$_LK_LOG2_FD"))'
         fi; } || return
     export _LK_FD _LK_{{TTY,LOG}_{OUT,ERR},LOG}_FD
-    lk_log_tty_on
     [ "${_LK_FD-2}" -ne 2 ] || {
-        exec 3> >(_lk_tee >(_lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
-            >&"$_LK_TTY_OUT_FD")
         _LK_FD=3
         _LK_FD_LOGGED=1
     }
+    lk_log_tty_on
     tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD" <<<"$HEADER"
     ! lk_verbose 2 || lk_echoc \
         "Output is being logged to $LK_BOLD$LOG_FILE$LK_RESET" "$LK_GREY" |
@@ -2171,11 +2169,14 @@ function lk_log_close() {
     fi
 }
 
+# lk_log_tty_off -a
 function lk_log_tty_off() {
     lk_log_is_open || return 0
     exec \
         > >(_lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") \
         2> >(_lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") &&
+        { [ "${1-}" != -a ] || [ -z "${_LK_FD_LOGGED-}" ] ||
+            eval "exec $_LK_FD"'> >(_lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD")'; } &&
         _LK_LOG_TTY_LAST=${FUNCNAME[0]}
 }
 
@@ -2192,6 +2193,8 @@ function lk_log_tty_on() {
     exec \
         > >(_lk_tee >(_lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") >&"$_LK_TTY_OUT_FD") \
         2> >(_lk_tee >(_lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_ERR_FD") >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}") &&
+        { [ -z "${_LK_FD_LOGGED-}" ] ||
+            eval "exec $_LK_FD"'> >(_lk_tee >(_lk_tee -"$_LK_LOG_FD" "/dev/fd/$_LK_LOG_FD" >&"$_LK_LOG_OUT_FD") >&"$_LK_TTY_OUT_FD")'; } &&
         _LK_LOG_TTY_LAST=${FUNCNAME[0]}
 }
 

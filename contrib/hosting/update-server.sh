@@ -2,8 +2,6 @@
 
 . lk-bash-load.sh || exit
 
-lk_log_start
-
 {
     function keep-alive() {
         local OUT_FILE
@@ -201,95 +199,127 @@ lk_log_start
     )")")
 
     TEMP=$(lk_mktemp_file)
-    lk_delete_on_exit "$TEMP"
-
-    UPDATED=()
-    FAILED=()
+    UPDATED=$(lk_mktemp_file)
+    FAILED=$(lk_mktemp_file)
+    lk_delete_on_exit "$TEMP" "$UPDATED" "$FAILED"
     i=0
     while [ $# -gt 0 ]; do
 
-        ! ((i++)) || lk_tty_print
-        lk_tty_print "Updating" "$1"
-
         trap "" SIGHUP SIGINT SIGTERM
 
-        STATUS=0
-        ssh -o ControlPath=none -o LogLevel=QUIET -t "$1" \
-            LK_VERBOSE=${LK_VERBOSE-1} "${COMMAND[@]}" || STATUS=$?
-        SH=$(ssh -o ControlPath=none -o LogLevel=QUIET "$1" \
-            "${COMMAND2[@]}") &&
-            eval "$SH" && {
-            lk_tty_print
-            lk_tty_print "Testing HTTPS access to hosted domains:" "$1"
-            for DOMAIN in ${HOSTED_DOMAIN+"${HOSTED_DOMAIN[@]}"}; do
-                ARGS=()
-                INVALID_TLS=
-                OLD_STATUS=$STATUS
-                while :; do
-                    HTTP=$(curl -sSI \
-                        -o "$TEMP" \
-                        -H "Cache-Control: no-cache" \
-                        -H "Pragma: no-cache" \
-                        --connect-to "$DOMAIN::$PUBLIC_IP:" \
-                        ${ARGS+"${ARGS[@]}"} \
-                        "https://$DOMAIN" 2>&1 >/dev/null | head -n1) &&
-                        HTTP=$(awk \
-                            'NR == 1 || tolower($1) == "location:" {print}' \
-                            "$TEMP") &&
-                        [[ $HTTP =~ ^HTTP/$NS+$S+([0-9]+) ]] &&
-                        [ ${BASH_REMATCH[1]} -lt 400 ] &&
-                        lk_console_success \
-                            "OK:" "https://$DOMAIN$INVALID_TLS" &&
-                        lk_tty_detail "$HTTP" &&
-                        break || {
-                        STATUS=$?
-                        case "$STATUS" in
-                        60)
-                            # "Peer certificate cannot be authenticated with
-                            # known CA certificates"
-                            lk_in_array --insecure ARGS || {
-                                ARGS+=(--insecure)
-                                INVALID_TLS=" $LK_RED(insecure)$LK_RESET"
-                                STATUS=$OLD_STATUS
-                                continue
-                            }
-                            ;;
-                        *)
-                            lk_console_error \
-                                "Request failed:" "https://$DOMAIN$INVALID_TLS"
-                            lk_tty_detail "${HTTP:-($STATUS)}"
-                            ;;
-                        esac
-                    }
-                    break
-                done
-                lk_tty_print
-            done
-        } && (exit "$STATUS") && UPDATED+=("$1") || {
-            lk_tty_print "Update failed:" "$1" "$LK_BOLD$LK_RED"
-            FAILED+=("$1")
-            lk_tty_print
-        }
+        ! ((i++)) || lk_no_input || lk_tty_print
+        lk_tty_print "Updating" "$1"
 
-        trap - SIGHUP SIGINT SIGTERM
-        [ $# -gt 1 ] && lk_confirm "Continue?" Y || break
+        (
+            trap "" SIGHUP SIGINT SIGTERM
+
+            _LK_LOG_CMDLINE=("$0-$1")
+            lk_log_start
+
+            [ "${LK_NO_INPUT-}" != 1 ] ||
+                lk_log_tty_off -a
+
+            STATUS=0
+            ssh -o ControlPath=none -o LogLevel=QUIET -tt "$1" \
+                LK_VERBOSE=${LK_VERBOSE-1} "${COMMAND[@]}" || STATUS=$?
+            SH=$(ssh -o ControlPath=none -o LogLevel=QUIET "$1" \
+                "${COMMAND2[@]}") &&
+                eval "$SH" && {
+                lk_tty_print
+                lk_tty_print "Testing HTTPS access to hosted domains:" "$1"
+                for DOMAIN in ${HOSTED_DOMAIN+"${HOSTED_DOMAIN[@]}"}; do
+                    ARGS=()
+                    INVALID_TLS=
+                    OLD_STATUS=$STATUS
+                    while :; do
+                        HTTP=$(curl -sSI \
+                            -o "$TEMP" \
+                            -H "Cache-Control: no-cache" \
+                            -H "Pragma: no-cache" \
+                            --connect-to "$DOMAIN::$PUBLIC_IP:" \
+                            ${ARGS+"${ARGS[@]}"} \
+                            "https://$DOMAIN" 2>&1 >/dev/null | head -n1) &&
+                            HTTP=$(awk \
+                                'NR == 1 || tolower($1) == "location:" {print}' \
+                                "$TEMP") &&
+                            [[ $HTTP =~ ^HTTP/$NS+$S+([0-9]+) ]] &&
+                            [ ${BASH_REMATCH[1]} -lt 400 ] &&
+                            lk_console_success \
+                                "OK:" "https://$DOMAIN$INVALID_TLS" &&
+                            lk_tty_detail "$HTTP" &&
+                            break || {
+                            STATUS=$?
+                            case "$STATUS" in
+                            60)
+                                # "Peer certificate cannot be authenticated with
+                                # known CA certificates"
+                                lk_in_array --insecure ARGS || {
+                                    ARGS+=(--insecure)
+                                    INVALID_TLS=" $LK_RED(insecure)$LK_RESET"
+                                    STATUS=$OLD_STATUS
+                                    continue
+                                }
+                                ;;
+                            *)
+                                lk_console_error \
+                                    "Request failed:" "https://$DOMAIN$INVALID_TLS"
+                                lk_tty_detail "${HTTP:-($STATUS)}"
+                                ;;
+                            esac
+                        }
+                        break
+                    done
+                    lk_tty_print
+                done
+            } || STATUS=$?
+
+            [ "${LK_NO_INPUT-}" != 1 ] ||
+                lk_log_tty_on
+
+            (exit "$STATUS") &&
+                { FILE=$UPDATED &&
+                    [ "${LK_NO_INPUT-}" != 1 ] ||
+                    lk_tty_print "Update completed:" "$1" \
+                        "$LK_BOLD$_LK_SUCCESS_COLOUR" || :; } ||
+                { FILE=$FAILED &&
+                    lk_tty_print "Update failed:" "$1" \
+                        "$LK_BOLD$_LK_ERROR_COLOUR" &&
+                    [ "${LK_NO_INPUT-}" = 1 ] || lk_tty_print; }
+            echo "$1" >>"$FILE"
+        ) &
+
+        lk_no_input || {
+            wait "$!"
+            trap - SIGHUP SIGINT SIGTERM
+            [ $# -gt 1 ] && lk_confirm "Continue?" Y || break
+        }
 
         shift
 
     done
 
-    trap - SIGHUP SIGINT SIGTERM
+    ! lk_no_input || {
+        lk_tty_print "Waiting for updates to complete"
+        wait
+        lk_tty_print
+    }
 
-    if [ ${#FAILED[@]} -gt 0 ]; then
-        lk_console_error "${#FAILED[@]} of $i $(lk_plural \
+    _FAILED=($(<"$FAILED"))
+    _UPDATED=($(<"$UPDATED"))
+
+    [ ${#_FAILED[@]} -eq 0 ] || {
+        lk_console_error "${#_FAILED[@]} of $i $(lk_plural \
             "$i" server servers) failed to update:" \
-            $'\n'"$(lk_echo_array FAILED)"
-        lk_die ""
-    else
-        lk_console_success \
-            "$i $(lk_plural "$i" server servers) updated successfully:" \
-            $'\n'"$(lk_echo_array UPDATED)"
-    fi
+            $'\n'"$(lk_echo_array _FAILED)"
+        lk_tty_print
+    }
+
+    [ ${#_UPDATED[@]} -eq 0 ] ||
+        lk_console_success "${#_UPDATED[@]} $(lk_plural \
+            "${#_UPDATED[@]}" server servers) updated successfully:" \
+            $'\n'"$(lk_echo_array _UPDATED)"
+
+    [ ${#_FAILED[@]} -eq 0 ] || lk_die ""
 
     exit
 }
