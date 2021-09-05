@@ -5,8 +5,13 @@ function add_regex() {
     ALL[${#ALL[@]}]=$1
 }
 
-function double_quote() {
-    sed -Ee 's/[$`\"]/\\&/g' -e 's/^.*$/"&"/' <<<"$1"
+function quote() {
+    if [[ "$1" =~ [^[:print:]] ]]; then
+        printf '%q\n' "$1"
+    else
+        local r="'\\''"
+        echo "'${1//"'"/$r}'"
+    fi
 }
 
 ALL=()
@@ -105,9 +110,9 @@ for i in "${!FUNCTIONS[@]}"; do
     printf '# %s VALUE
 #
 # Return true if VALUE is a valid %s.
-function %s() {\n    local %s=%q\n    [[ $1 =~ ^$%s$ ]]\n}\n\n' \
+function %s() {\n    local %s=%s\n    [[ $1 =~ ^$%s$ ]]\n}\n\n' \
         "$FUNCTION" "$DESC" \
-        "$FUNCTION" "$REGEX" "${!REGEX}" "$REGEX"
+        "$FUNCTION" "$REGEX" "$(quote "${!REGEX}")" "$REGEX"
 done
 
 printf '# lk_get_regex [REGEX...]
@@ -116,21 +121,22 @@ printf '# lk_get_regex [REGEX...]
 # print all available regular expressions.
 function lk_get_regex() {
     [ $# -gt 0 ] || set -- %s
-    local STATUS=0
+    local STATUS=0 PREFIX=
+    [[ ${FUNCNAME[1]-} =~ ^(|main|source)$ ]] || PREFIX="local "
     while [ $# -gt 0 ]; do
-        _lk_var_prefix
+        [ -z "$PREFIX" ] || printf '\''%%s'\'' "$PREFIX"
         case "$1" in' \
     "${ALL[*]}"
 for REGEX in "${ALL[@]}"; do
     printf "
         %s)
-            printf '%%s=%%q\\\\n' %s %q
+            printf '%%s=%%q\\\\n' %s %s
             ;;" \
-        "$REGEX" "$REGEX" "${!REGEX}"
+        "$REGEX" "$REGEX" "$(quote "${!REGEX}")"
 done
 printf '
         *)
-            lk_warn "regex not found: $1"
+            lk_err "regex not found: $1"
             STATUS=1
             ;;
         esac

@@ -76,8 +76,7 @@ function lk_is_wsl() {
 }
 
 function lk_is_virtual() {
-    lk_is_linux &&
-        grep -Eq "^flags[[:blank:]]*:.*\\<hypervisor\\>" /proc/cpuinfo
+    lk_is_linux && grep -Eq "^flags$S*:.*\\<hypervisor\\>" /proc/cpuinfo
 }
 
 function lk_is_qemu() {
@@ -108,58 +107,139 @@ function lk_debug() {
     [[ ${LK_DEBUG-} =~ ^[1Yy]$ ]]
 }
 
+# lk_pass [-STATUS] COMMAND [ARG...]
+function lk_pass() {
+    local s=$?
+    [[ ! ${1-} =~ ^-[0-9]+$ ]] || { s=${1:1} && shift; }
+    "$@" || true
+    return "$s"
+}
+
+function lk_err() {
+    lk_pass echo "${FUNCNAME[1]-${0##*/}}: $1" >&2
+}
+
+function lk_command_first() {
+    local IFS COMMAND
+    unset IFS
+    while [ $# -gt 0 ]; do
+        COMMAND=($1)
+        if type -P "${COMMAND[0]}" >/dev/null; then
+            echo "$1"
+            break
+        fi
+        unset COMMAND
+        shift
+    done
+    [ -n "${COMMAND+1}" ]
+}
+
+# lk_elevate [exec] [COMMAND [ARG...]]
+#
+# Use sudo to run COMMAND as the root user if Bash is not already running with
+# root privileges, otherwise run COMMAND without sudo. If COMMAND is not found
+# in PATH and is a function, run it with LK_SUDO=1.
+function lk_elevate() {
+    local c
+    [ "${1-}" != exec ] || { local LK_EXEC=1 && shift; }
+    if [ "$EUID" -eq 0 ]; then
+        [ $# -eq 0 ] ||
+            ${LK_EXEC:+exec} "$@"
+    elif [ $# -eq 0 ]; then
+        ${LK_EXEC:+exec} sudo -H "$0" ${_LK_ARGV+"${_LK_ARGV[@]}"}
+    elif ! c=$(type -P "$1") && [ "$(type -t "$1")" = "function" ]; then
+        local LK_SUDO=1
+        "$@"
+    elif [ -n "$c" ]; then
+        ${LK_EXEC:+exec} sudo -H "$c" "${@:2}"
+    else
+        lk_err "invalid command: $1"
+    fi
+}
+
+# lk_sudo [exec] COMMAND [ARG...]
+#
+# Use sudo to run COMMAND as the root user if:
+# - the LK_SUDO variable is set and is not the empty string
+# - Bash is not already running with root privileges
+# Otherwise run COMMAND without sudo.
+function lk_sudo() {
+    if [ -n "${LK_SUDO-}" ]; then
+        lk_elevate "$@"
+    else
+        [ "$1" != exec ] || { local LK_EXEC=1 && shift; }
+        ${LK_EXEC:+exec} "$@"
+    fi
+}
+
+# lk_will_elevate
+#
+# Return true if commands invoked with lk_sudo will run as the root user, even
+# if sudo will not be used.
+function lk_will_elevate() {
+    [ "$EUID" -eq 0 ] || [ -n "${LK_SUDO-}" ]
+}
+
+# lk_will_sudo
+#
+# Return true if sudo will be used to run commands invoked with lk_sudo. Return
+# false if Bash is already running with root privileges or LK_SUDO is not set.
+function lk_will_sudo() {
+    [ "$EUID" -ne 0 ] && [ -n "${LK_SUDO-}" ]
+}
+
 # Define wrapper functions (e.g. `gnu_find`) to invoke the GNU version of
-# certain commands (e.g. `gfind`) on systems where standard utilities are not
-# compatible with their GNU counterparts, e.g. BSD/macOS
+# certain commands (e.g. `gfind`) when standard utilities are not compatible
+# with their GNU counterparts, e.g. on BSD/macOS
 if ! lk_is_macos; then
-    function gnu_awk() { lk_maybe_sudo gawk "$@"; }
-    function gnu_chgrp() { lk_maybe_sudo chgrp "$@"; }
-    function gnu_chmod() { lk_maybe_sudo chmod "$@"; }
-    function gnu_chown() { lk_maybe_sudo chown "$@"; }
-    function gnu_cp() { lk_maybe_sudo cp "$@"; }
-    function gnu_date() { lk_maybe_sudo date "$@"; }
-    function gnu_dd() { lk_maybe_sudo dd "$@"; }
-    function gnu_df() { lk_maybe_sudo df "$@"; }
-    function gnu_diff() { lk_maybe_sudo diff "$@"; }
-    function gnu_du() { lk_maybe_sudo du "$@"; }
-    function gnu_find() { lk_maybe_sudo find "$@"; }
-    function gnu_getopt() { lk_maybe_sudo getopt "$@"; }
-    function gnu_grep() { lk_maybe_sudo grep "$@"; }
-    function gnu_ln() { lk_maybe_sudo ln "$@"; }
-    function gnu_mktemp() { lk_maybe_sudo mktemp "$@"; }
-    function gnu_mv() { lk_maybe_sudo mv "$@"; }
-    function gnu_realpath() { lk_maybe_sudo realpath "$@"; }
-    function gnu_sed() { lk_maybe_sudo sed "$@"; }
-    function gnu_sort() { lk_maybe_sudo sort "$@"; }
-    function gnu_stat() { lk_maybe_sudo stat "$@"; }
-    function gnu_tar() { lk_maybe_sudo tar "$@"; }
-    function gnu_xargs() { lk_maybe_sudo xargs "$@"; }
+    function gnu_awk() { lk_sudo gawk "$@"; }
+    function gnu_chgrp() { lk_sudo chgrp "$@"; }
+    function gnu_chmod() { lk_sudo chmod "$@"; }
+    function gnu_chown() { lk_sudo chown "$@"; }
+    function gnu_cp() { lk_sudo cp "$@"; }
+    function gnu_date() { lk_sudo date "$@"; }
+    function gnu_dd() { lk_sudo dd "$@"; }
+    function gnu_df() { lk_sudo df "$@"; }
+    function gnu_diff() { lk_sudo diff "$@"; }
+    function gnu_du() { lk_sudo du "$@"; }
+    function gnu_find() { lk_sudo find "$@"; }
+    function gnu_getopt() { lk_sudo getopt "$@"; }
+    function gnu_grep() { lk_sudo grep "$@"; }
+    function gnu_ln() { lk_sudo ln "$@"; }
+    function gnu_mktemp() { lk_sudo mktemp "$@"; }
+    function gnu_mv() { lk_sudo mv "$@"; }
+    function gnu_realpath() { lk_sudo realpath "$@"; }
+    function gnu_sed() { lk_sudo sed "$@"; }
+    function gnu_sort() { lk_sudo sort "$@"; }
+    function gnu_stat() { lk_sudo stat "$@"; }
+    function gnu_tar() { lk_sudo tar "$@"; }
+    function gnu_xargs() { lk_sudo xargs "$@"; }
 else
     lk_is_apple_silicon &&
         _LK_HOMEBREW_PREFIX=/opt/homebrew ||
         _LK_HOMEBREW_PREFIX=/usr/local
-    function gnu_awk() { lk_maybe_sudo gawk "$@"; }
-    function gnu_chgrp() { lk_maybe_sudo gchgrp "$@"; }
-    function gnu_chmod() { lk_maybe_sudo gchmod "$@"; }
-    function gnu_chown() { lk_maybe_sudo gchown "$@"; }
-    function gnu_cp() { lk_maybe_sudo gcp "$@"; }
-    function gnu_date() { lk_maybe_sudo gdate "$@"; }
-    function gnu_dd() { lk_maybe_sudo gdd "$@"; }
-    function gnu_df() { lk_maybe_sudo gdf "$@"; }
-    function gnu_diff() { lk_maybe_sudo "${HOMEBREW_PREFIX:-$_LK_HOMEBREW_PREFIX}/bin/diff" "$@"; }
-    function gnu_du() { lk_maybe_sudo gdu "$@"; }
-    function gnu_find() { lk_maybe_sudo gfind "$@"; }
-    function gnu_getopt() { lk_maybe_sudo "${HOMEBREW_PREFIX:-$_LK_HOMEBREW_PREFIX}/opt/gnu-getopt/bin/getopt" "$@"; }
-    function gnu_grep() { lk_maybe_sudo ggrep "$@"; }
-    function gnu_ln() { lk_maybe_sudo gln "$@"; }
-    function gnu_mktemp() { lk_maybe_sudo gmktemp "$@"; }
-    function gnu_mv() { lk_maybe_sudo gmv "$@"; }
-    function gnu_realpath() { lk_maybe_sudo grealpath "$@"; }
-    function gnu_sed() { lk_maybe_sudo gsed "$@"; }
-    function gnu_sort() { lk_maybe_sudo gsort "$@"; }
-    function gnu_stat() { lk_maybe_sudo gstat "$@"; }
-    function gnu_tar() { lk_maybe_sudo gtar "$@"; }
-    function gnu_xargs() { lk_maybe_sudo gxargs "$@"; }
+    function gnu_awk() { lk_sudo gawk "$@"; }
+    function gnu_chgrp() { lk_sudo gchgrp "$@"; }
+    function gnu_chmod() { lk_sudo gchmod "$@"; }
+    function gnu_chown() { lk_sudo gchown "$@"; }
+    function gnu_cp() { lk_sudo gcp "$@"; }
+    function gnu_date() { lk_sudo gdate "$@"; }
+    function gnu_dd() { lk_sudo gdd "$@"; }
+    function gnu_df() { lk_sudo gdf "$@"; }
+    function gnu_diff() { lk_sudo "${HOMEBREW_PREFIX:-$_LK_HOMEBREW_PREFIX}/opt/diffutils/bin/diff" "$@"; }
+    function gnu_du() { lk_sudo gdu "$@"; }
+    function gnu_find() { lk_sudo gfind "$@"; }
+    function gnu_getopt() { lk_sudo "${HOMEBREW_PREFIX:-$_LK_HOMEBREW_PREFIX}/opt/gnu-getopt/bin/getopt" "$@"; }
+    function gnu_grep() { lk_sudo ggrep "$@"; }
+    function gnu_ln() { lk_sudo gln "$@"; }
+    function gnu_mktemp() { lk_sudo gmktemp "$@"; }
+    function gnu_mv() { lk_sudo gmv "$@"; }
+    function gnu_realpath() { lk_sudo grealpath "$@"; }
+    function gnu_sed() { lk_sudo gsed "$@"; }
+    function gnu_sort() { lk_sudo gsort "$@"; }
+    function gnu_stat() { lk_sudo gstat "$@"; }
+    function gnu_tar() { lk_sudo gtar "$@"; }
+    function gnu_xargs() { lk_sudo gxargs "$@"; }
 fi
 
 # lk_mapfile [-z] ARRAY [FILE]
@@ -170,7 +250,7 @@ function lk_mapfile() {
     local _ARGS=()
     [ "${1-}" != -z ] || { _ARGS=(-d '') && shift; }
     [ -n "${2+1}" ] || set -- "$1" /dev/stdin
-    [ -r "$2" ] || lk_warn "not readable: $2" || return
+    [ -r "$2" ] || lk_err "not readable: $2" || return
     if lk_bash_at_least 4 4 ||
         { [ -z "${_ARGS+1}" ] && lk_bash_at_least 4 0; }; then
         mapfile -t ${_ARGS+"${_ARGS[@]}"} "$1" <"$2"
@@ -199,17 +279,49 @@ function lk_set_bashpid() {
 # platform.
 function lk_sed_i() {
     if ! lk_is_macos; then
-        sed -i"${1-}" "${@:2}"
+        lk_sudo sed -i"${1-}" "${@:2}"
     else
-        sed -i "$@"
+        lk_sudo sed -i "$@"
     fi
+}
+
+# lk_unbuffer [exec] COMMAND [ARG...]
+#
+# Run COMMAND with unbuffered input and line-buffered output (if supported by
+# the command and platform).
+function lk_unbuffer() {
+    [ "$1" != exec ] || { local LK_EXEC=1 && shift; }
+    case "$1" in
+    sed | gsed | gnu_sed)
+        set -- "$1" -u "${@:2}"
+        ;;
+    grep | ggrep | gnu_grep)
+        set -- "$1" --line-buffered "${@:2}"
+        ;;
+    *)
+        if [ "$1" = tr ] && lk_is_macos; then
+            set -- "$1" -u "${@:2}"
+        else
+            # TODO: reinstate unbuffer after resolving LF -> CRLF issue
+            case "$(lk_command_first stdbuf)" in
+            stdbuf)
+                set -- stdbuf -i0 -oL -eL "$@"
+                ;;
+            unbuffer)
+                set -- unbuffer -p "$@"
+                ;;
+            esac
+        fi
+        ;;
+    esac
+    lk_sudo "$@"
 }
 
 # lk_is_ip VALUE
 #
 # Return true if VALUE is a valid IP address.
 function lk_is_ip() {
-    local IP_REGEX=\(\(\(25\[0-5\]\|2\[0-4\]\[0-9\]\|\(1\[0-9\]\|\[1-9\]\)\?\[0-9\]\)\\.\)\{3\}\(25\[0-5\]\|2\[0-4\]\[0-9\]\|\(1\[0-9\]\|\[1-9\]\)\?\[0-9\]\)\|\(\(\[0-9a-fA-F\]\{1\,4\}:\)\{7\}\(:\|\[0-9a-fA-F\]\{1\,4\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{6\}\(:\|:\[0-9a-fA-F\]\{1\,4\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{5\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,2\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{4\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,3\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{3\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,4\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{2\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,5\}\)\|\[0-9a-fA-F\]\{1\,4\}:\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,6\}\)\|:\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,7\}\)\)\)
+    local IP_REGEX='(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7})))'
     [[ $1 =~ ^$IP_REGEX$ ]]
 }
 
@@ -217,7 +329,7 @@ function lk_is_ip() {
 #
 # Return true if VALUE is a valid IP address or CIDR.
 function lk_is_cidr() {
-    local IP_OPT_PREFIX_REGEX=\(\(\(25\[0-5\]\|2\[0-4\]\[0-9\]\|\(1\[0-9\]\|\[1-9\]\)\?\[0-9\]\)\\.\)\{3\}\(25\[0-5\]\|2\[0-4\]\[0-9\]\|\(1\[0-9\]\|\[1-9\]\)\?\[0-9\]\)\(/\(3\[0-2\]\|\[12\]\[0-9\]\|\[1-9\]\)\)\?\|\(\(\[0-9a-fA-F\]\{1\,4\}:\)\{7\}\(:\|\[0-9a-fA-F\]\{1\,4\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{6\}\(:\|:\[0-9a-fA-F\]\{1\,4\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{5\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,2\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{4\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,3\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{3\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,4\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{2\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,5\}\)\|\[0-9a-fA-F\]\{1\,4\}:\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,6\}\)\|:\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,7\}\)\)\(/\(12\[0-8\]\|1\[01\]\[0-9\]\|\[1-9\]\[0-9\]\|\[1-9\]\)\)\?\)
+    local IP_OPT_PREFIX_REGEX='(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])(/(3[0-2]|[12][0-9]|[1-9]))?|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))(/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9]))?)'
     [[ $1 =~ ^$IP_OPT_PREFIX_REGEX$ ]]
 }
 
@@ -225,7 +337,7 @@ function lk_is_cidr() {
 #
 # Return true if VALUE is a valid IP address, hostname or domain name.
 function lk_is_host() {
-    local HOST_REGEX=\(\(\(25\[0-5\]\|2\[0-4\]\[0-9\]\|\(1\[0-9\]\|\[1-9\]\)\?\[0-9\]\)\\.\)\{3\}\(25\[0-5\]\|2\[0-4\]\[0-9\]\|\(1\[0-9\]\|\[1-9\]\)\?\[0-9\]\)\|\(\(\[0-9a-fA-F\]\{1\,4\}:\)\{7\}\(:\|\[0-9a-fA-F\]\{1\,4\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{6\}\(:\|:\[0-9a-fA-F\]\{1\,4\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{5\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,2\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{4\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,3\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{3\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,4\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{2\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,5\}\)\|\[0-9a-fA-F\]\{1\,4\}:\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,6\}\)\|:\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,7\}\)\)\|\(\[a-zA-Z0-9\]\(\[-a-zA-Z0-9\]\*\[a-zA-Z0-9\]\)\?\(\\.\[a-zA-Z0-9\]\(\[-a-zA-Z0-9\]\*\[a-zA-Z0-9\]\)\?\)\*\)\)
+    local HOST_REGEX='(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))|([a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)*))'
     [[ $1 =~ ^$HOST_REGEX$ ]]
 }
 
@@ -233,7 +345,7 @@ function lk_is_host() {
 #
 # Return true if VALUE is a valid domain name.
 function lk_is_fqdn() {
-    local DOMAIN_NAME_REGEX=\[a-zA-Z0-9\]\(\[-a-zA-Z0-9\]\*\[a-zA-Z0-9\]\)\?\(\\.\[a-zA-Z0-9\]\(\[-a-zA-Z0-9\]\*\[a-zA-Z0-9\]\)\?\)+
+    local DOMAIN_NAME_REGEX='[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)+'
     [[ $1 =~ ^$DOMAIN_NAME_REGEX$ ]]
 }
 
@@ -241,7 +353,7 @@ function lk_is_fqdn() {
 #
 # Return true if VALUE is a valid email address.
 function lk_is_email() {
-    local EMAIL_ADDRESS_REGEX=\[-a-zA-Z0-9\!#\$%\&\'\*+/=\?\^_\`\{\|\}~\]\(\[-a-zA-Z0-9.\!#\$%\&\'\*+/=\?\^_\`\{\|\}~\]\{\,62\}\[-a-zA-Z0-9\!#\$%\&\'\*+/=\?\^_\`\{\|\}~\]\)\?@\[a-zA-Z0-9\]\(\[-a-zA-Z0-9\]\*\[a-zA-Z0-9\]\)\?\(\\.\[a-zA-Z0-9\]\(\[-a-zA-Z0-9\]\*\[a-zA-Z0-9\]\)\?\)+
+    local EMAIL_ADDRESS_REGEX='[-a-zA-Z0-9!#$%&'\''*+/=?^_`{|}~]([-a-zA-Z0-9.!#$%&'\''*+/=?^_`{|}~]{,62}[-a-zA-Z0-9!#$%&'\''*+/=?^_`{|}~])?@[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)+'
     [[ $1 =~ ^$EMAIL_ADDRESS_REGEX$ ]]
 }
 
@@ -249,7 +361,7 @@ function lk_is_email() {
 #
 # Return true if VALUE is a valid URI with a scheme and host.
 function lk_is_uri() {
-    local URI_REGEX_REQ_SCHEME_HOST=\(\(\[a-zA-Z\]\[-a-zA-Z0-9+.\]\*\):\)\(//\(\(\[-a-zA-Z0-9._~%\!\$\&\'\(\)\*+\,\;=\]+\)\(:\(\[-a-zA-Z0-9._~%\!\$\&\'\(\)\*+\,\;=\]\*\)\)\?@\)\?\(\[-a-zA-Z0-9._~%\!\$\&\'\(\)\*+\,\;=\]+\|\\\[\(\[0-9a-fA-F:\]+\)\\\]\)\(:\(\[0-9\]+\)\)\?\)\(\[-a-zA-Z0-9._~%\!\$\&\'\(\)\*+\,\;=:@/\]+\)\?\(\\\?\(\[-a-zA-Z0-9._~%\!\$\&\'\(\)\*+\,\;=:@\?/\]+\)\)\?\(#\(\[-a-zA-Z0-9._~%\!\$\&\'\(\)\*+\,\;=:@\?/\]\*\)\)\?
+    local URI_REGEX_REQ_SCHEME_HOST='(([a-zA-Z][-a-zA-Z0-9+.]*):)(//(([-a-zA-Z0-9._~%!$&'\''()*+,;=]+)(:([-a-zA-Z0-9._~%!$&'\''()*+,;=]*))?@)?([-a-zA-Z0-9._~%!$&'\''()*+,;=]+|\[([0-9a-fA-F:]+)\])(:([0-9]+))?)([-a-zA-Z0-9._~%!$&'\''()*+,;=:@/]+)?(\?([-a-zA-Z0-9._~%!$&'\''()*+,;=:@?/]+))?(#([-a-zA-Z0-9._~%!$&'\''()*+,;=:@?/]*))?'
     [[ $1 =~ ^$URI_REGEX_REQ_SCHEME_HOST$ ]]
 }
 
@@ -257,7 +369,7 @@ function lk_is_uri() {
 #
 # Return true if VALUE is a valid Bash identifier.
 function lk_is_identifier() {
-    local IDENTIFIER_REGEX=\[a-zA-Z_\]\[a-zA-Z0-9_\]\*
+    local IDENTIFIER_REGEX='[a-zA-Z_][a-zA-Z0-9_]*'
     [[ $1 =~ ^$IDENTIFIER_REGEX$ ]]
 }
 
@@ -267,69 +379,70 @@ function lk_is_identifier() {
 # print all available regular expressions.
 function lk_get_regex() {
     [ $# -gt 0 ] || set -- DOMAIN_PART_REGEX DOMAIN_NAME_REGEX EMAIL_ADDRESS_REGEX IPV4_REGEX IPV4_OPT_PREFIX_REGEX IPV6_REGEX IPV6_OPT_PREFIX_REGEX IP_REGEX IP_OPT_PREFIX_REGEX HOST_NAME_REGEX HOST_REGEX HOST_OPT_PREFIX_REGEX URI_REGEX URI_REGEX_REQ_SCHEME_HOST LINUX_USERNAME_REGEX MYSQL_USERNAME_REGEX DPKG_SOURCE_REGEX IDENTIFIER_REGEX PHP_SETTING_NAME_REGEX PHP_SETTING_REGEX READLINE_NON_PRINTING_REGEX CONTROL_SEQUENCE_REGEX ESCAPE_SEQUENCE_REGEX NON_PRINTING_REGEX IPV4_PRIVATE_FILTER_REGEX BACKUP_TIMESTAMP_FINDUTILS_REGEX
-    local STATUS=0
+    local STATUS=0 PREFIX=
+    [[ ${FUNCNAME[1]-} =~ ^(|main|source)$ ]] || PREFIX="local "
     while [ $# -gt 0 ]; do
-        _lk_var_prefix
+        [ -z "$PREFIX" ] || printf '%s' "$PREFIX"
         case "$1" in
         DOMAIN_PART_REGEX)
-            printf '%s=%q\n' DOMAIN_PART_REGEX \[a-zA-Z0-9\]\(\[-a-zA-Z0-9\]\*\[a-zA-Z0-9\]\)\?
+            printf '%s=%q\n' DOMAIN_PART_REGEX '[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?'
             ;;
         DOMAIN_NAME_REGEX)
-            printf '%s=%q\n' DOMAIN_NAME_REGEX \[a-zA-Z0-9\]\(\[-a-zA-Z0-9\]\*\[a-zA-Z0-9\]\)\?\(\\.\[a-zA-Z0-9\]\(\[-a-zA-Z0-9\]\*\[a-zA-Z0-9\]\)\?\)+
+            printf '%s=%q\n' DOMAIN_NAME_REGEX '[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)+'
             ;;
         EMAIL_ADDRESS_REGEX)
-            printf '%s=%q\n' EMAIL_ADDRESS_REGEX \[-a-zA-Z0-9\!#\$%\&\'\*+/=\?\^_\`\{\|\}~\]\(\[-a-zA-Z0-9.\!#\$%\&\'\*+/=\?\^_\`\{\|\}~\]\{\,62\}\[-a-zA-Z0-9\!#\$%\&\'\*+/=\?\^_\`\{\|\}~\]\)\?@\[a-zA-Z0-9\]\(\[-a-zA-Z0-9\]\*\[a-zA-Z0-9\]\)\?\(\\.\[a-zA-Z0-9\]\(\[-a-zA-Z0-9\]\*\[a-zA-Z0-9\]\)\?\)+
+            printf '%s=%q\n' EMAIL_ADDRESS_REGEX '[-a-zA-Z0-9!#$%&'\''*+/=?^_`{|}~]([-a-zA-Z0-9.!#$%&'\''*+/=?^_`{|}~]{,62}[-a-zA-Z0-9!#$%&'\''*+/=?^_`{|}~])?@[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)+'
             ;;
         IPV4_REGEX)
-            printf '%s=%q\n' IPV4_REGEX \(\(25\[0-5\]\|2\[0-4\]\[0-9\]\|\(1\[0-9\]\|\[1-9\]\)\?\[0-9\]\)\\.\)\{3\}\(25\[0-5\]\|2\[0-4\]\[0-9\]\|\(1\[0-9\]\|\[1-9\]\)\?\[0-9\]\)
+            printf '%s=%q\n' IPV4_REGEX '((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])'
             ;;
         IPV4_OPT_PREFIX_REGEX)
-            printf '%s=%q\n' IPV4_OPT_PREFIX_REGEX \(\(25\[0-5\]\|2\[0-4\]\[0-9\]\|\(1\[0-9\]\|\[1-9\]\)\?\[0-9\]\)\\.\)\{3\}\(25\[0-5\]\|2\[0-4\]\[0-9\]\|\(1\[0-9\]\|\[1-9\]\)\?\[0-9\]\)\(/\(3\[0-2\]\|\[12\]\[0-9\]\|\[1-9\]\)\)\?
+            printf '%s=%q\n' IPV4_OPT_PREFIX_REGEX '((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])(/(3[0-2]|[12][0-9]|[1-9]))?'
             ;;
         IPV6_REGEX)
-            printf '%s=%q\n' IPV6_REGEX \(\(\[0-9a-fA-F\]\{1\,4\}:\)\{7\}\(:\|\[0-9a-fA-F\]\{1\,4\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{6\}\(:\|:\[0-9a-fA-F\]\{1\,4\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{5\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,2\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{4\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,3\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{3\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,4\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{2\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,5\}\)\|\[0-9a-fA-F\]\{1\,4\}:\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,6\}\)\|:\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,7\}\)\)
+            printf '%s=%q\n' IPV6_REGEX '(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))'
             ;;
         IPV6_OPT_PREFIX_REGEX)
-            printf '%s=%q\n' IPV6_OPT_PREFIX_REGEX \(\(\[0-9a-fA-F\]\{1\,4\}:\)\{7\}\(:\|\[0-9a-fA-F\]\{1\,4\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{6\}\(:\|:\[0-9a-fA-F\]\{1\,4\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{5\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,2\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{4\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,3\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{3\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,4\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{2\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,5\}\)\|\[0-9a-fA-F\]\{1\,4\}:\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,6\}\)\|:\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,7\}\)\)\(/\(12\[0-8\]\|1\[01\]\[0-9\]\|\[1-9\]\[0-9\]\|\[1-9\]\)\)\?
+            printf '%s=%q\n' IPV6_OPT_PREFIX_REGEX '(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))(/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9]))?'
             ;;
         IP_REGEX)
-            printf '%s=%q\n' IP_REGEX \(\(\(25\[0-5\]\|2\[0-4\]\[0-9\]\|\(1\[0-9\]\|\[1-9\]\)\?\[0-9\]\)\\.\)\{3\}\(25\[0-5\]\|2\[0-4\]\[0-9\]\|\(1\[0-9\]\|\[1-9\]\)\?\[0-9\]\)\|\(\(\[0-9a-fA-F\]\{1\,4\}:\)\{7\}\(:\|\[0-9a-fA-F\]\{1\,4\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{6\}\(:\|:\[0-9a-fA-F\]\{1\,4\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{5\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,2\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{4\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,3\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{3\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,4\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{2\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,5\}\)\|\[0-9a-fA-F\]\{1\,4\}:\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,6\}\)\|:\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,7\}\)\)\)
+            printf '%s=%q\n' IP_REGEX '(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7})))'
             ;;
         IP_OPT_PREFIX_REGEX)
-            printf '%s=%q\n' IP_OPT_PREFIX_REGEX \(\(\(25\[0-5\]\|2\[0-4\]\[0-9\]\|\(1\[0-9\]\|\[1-9\]\)\?\[0-9\]\)\\.\)\{3\}\(25\[0-5\]\|2\[0-4\]\[0-9\]\|\(1\[0-9\]\|\[1-9\]\)\?\[0-9\]\)\(/\(3\[0-2\]\|\[12\]\[0-9\]\|\[1-9\]\)\)\?\|\(\(\[0-9a-fA-F\]\{1\,4\}:\)\{7\}\(:\|\[0-9a-fA-F\]\{1\,4\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{6\}\(:\|:\[0-9a-fA-F\]\{1\,4\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{5\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,2\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{4\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,3\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{3\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,4\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{2\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,5\}\)\|\[0-9a-fA-F\]\{1\,4\}:\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,6\}\)\|:\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,7\}\)\)\(/\(12\[0-8\]\|1\[01\]\[0-9\]\|\[1-9\]\[0-9\]\|\[1-9\]\)\)\?\)
+            printf '%s=%q\n' IP_OPT_PREFIX_REGEX '(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])(/(3[0-2]|[12][0-9]|[1-9]))?|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))(/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9]))?)'
             ;;
         HOST_NAME_REGEX)
-            printf '%s=%q\n' HOST_NAME_REGEX \(\[a-zA-Z0-9\]\(\[-a-zA-Z0-9\]\*\[a-zA-Z0-9\]\)\?\(\\.\[a-zA-Z0-9\]\(\[-a-zA-Z0-9\]\*\[a-zA-Z0-9\]\)\?\)\*\)
+            printf '%s=%q\n' HOST_NAME_REGEX '([a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)*)'
             ;;
         HOST_REGEX)
-            printf '%s=%q\n' HOST_REGEX \(\(\(25\[0-5\]\|2\[0-4\]\[0-9\]\|\(1\[0-9\]\|\[1-9\]\)\?\[0-9\]\)\\.\)\{3\}\(25\[0-5\]\|2\[0-4\]\[0-9\]\|\(1\[0-9\]\|\[1-9\]\)\?\[0-9\]\)\|\(\(\[0-9a-fA-F\]\{1\,4\}:\)\{7\}\(:\|\[0-9a-fA-F\]\{1\,4\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{6\}\(:\|:\[0-9a-fA-F\]\{1\,4\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{5\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,2\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{4\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,3\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{3\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,4\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{2\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,5\}\)\|\[0-9a-fA-F\]\{1\,4\}:\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,6\}\)\|:\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,7\}\)\)\|\(\[a-zA-Z0-9\]\(\[-a-zA-Z0-9\]\*\[a-zA-Z0-9\]\)\?\(\\.\[a-zA-Z0-9\]\(\[-a-zA-Z0-9\]\*\[a-zA-Z0-9\]\)\?\)\*\)\)
+            printf '%s=%q\n' HOST_REGEX '(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))|([a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)*))'
             ;;
         HOST_OPT_PREFIX_REGEX)
-            printf '%s=%q\n' HOST_OPT_PREFIX_REGEX \(\(\(25\[0-5\]\|2\[0-4\]\[0-9\]\|\(1\[0-9\]\|\[1-9\]\)\?\[0-9\]\)\\.\)\{3\}\(25\[0-5\]\|2\[0-4\]\[0-9\]\|\(1\[0-9\]\|\[1-9\]\)\?\[0-9\]\)\(/\(3\[0-2\]\|\[12\]\[0-9\]\|\[1-9\]\)\)\?\|\(\(\[0-9a-fA-F\]\{1\,4\}:\)\{7\}\(:\|\[0-9a-fA-F\]\{1\,4\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{6\}\(:\|:\[0-9a-fA-F\]\{1\,4\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{5\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,2\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{4\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,3\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{3\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,4\}\)\|\(\[0-9a-fA-F\]\{1\,4\}:\)\{2\}\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,5\}\)\|\[0-9a-fA-F\]\{1\,4\}:\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,6\}\)\|:\(:\|\(:\[0-9a-fA-F\]\{1\,4\}\)\{1\,7\}\)\)\(/\(12\[0-8\]\|1\[01\]\[0-9\]\|\[1-9\]\[0-9\]\|\[1-9\]\)\)\?\|\(\[a-zA-Z0-9\]\(\[-a-zA-Z0-9\]\*\[a-zA-Z0-9\]\)\?\(\\.\[a-zA-Z0-9\]\(\[-a-zA-Z0-9\]\*\[a-zA-Z0-9\]\)\?\)\*\)\)
+            printf '%s=%q\n' HOST_OPT_PREFIX_REGEX '(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])(/(3[0-2]|[12][0-9]|[1-9]))?|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))(/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9]))?|([a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)*))'
             ;;
         URI_REGEX)
-            printf '%s=%q\n' URI_REGEX \(\(\[a-zA-Z\]\[-a-zA-Z0-9+.\]\*\):\)\?\(//\(\(\[-a-zA-Z0-9._~%\!\$\&\'\(\)\*+\,\;=\]+\)\(:\(\[-a-zA-Z0-9._~%\!\$\&\'\(\)\*+\,\;=\]\*\)\)\?@\)\?\(\[-a-zA-Z0-9._~%\!\$\&\'\(\)\*+\,\;=\]+\|\\\[\(\[0-9a-fA-F:\]+\)\\\]\)\(:\(\[0-9\]+\)\)\?\)\?\(\[-a-zA-Z0-9._~%\!\$\&\'\(\)\*+\,\;=:@/\]+\)\?\(\\\?\(\[-a-zA-Z0-9._~%\!\$\&\'\(\)\*+\,\;=:@\?/\]+\)\)\?\(#\(\[-a-zA-Z0-9._~%\!\$\&\'\(\)\*+\,\;=:@\?/\]\*\)\)\?
+            printf '%s=%q\n' URI_REGEX '(([a-zA-Z][-a-zA-Z0-9+.]*):)?(//(([-a-zA-Z0-9._~%!$&'\''()*+,;=]+)(:([-a-zA-Z0-9._~%!$&'\''()*+,;=]*))?@)?([-a-zA-Z0-9._~%!$&'\''()*+,;=]+|\[([0-9a-fA-F:]+)\])(:([0-9]+))?)?([-a-zA-Z0-9._~%!$&'\''()*+,;=:@/]+)?(\?([-a-zA-Z0-9._~%!$&'\''()*+,;=:@?/]+))?(#([-a-zA-Z0-9._~%!$&'\''()*+,;=:@?/]*))?'
             ;;
         URI_REGEX_REQ_SCHEME_HOST)
-            printf '%s=%q\n' URI_REGEX_REQ_SCHEME_HOST \(\(\[a-zA-Z\]\[-a-zA-Z0-9+.\]\*\):\)\(//\(\(\[-a-zA-Z0-9._~%\!\$\&\'\(\)\*+\,\;=\]+\)\(:\(\[-a-zA-Z0-9._~%\!\$\&\'\(\)\*+\,\;=\]\*\)\)\?@\)\?\(\[-a-zA-Z0-9._~%\!\$\&\'\(\)\*+\,\;=\]+\|\\\[\(\[0-9a-fA-F:\]+\)\\\]\)\(:\(\[0-9\]+\)\)\?\)\(\[-a-zA-Z0-9._~%\!\$\&\'\(\)\*+\,\;=:@/\]+\)\?\(\\\?\(\[-a-zA-Z0-9._~%\!\$\&\'\(\)\*+\,\;=:@\?/\]+\)\)\?\(#\(\[-a-zA-Z0-9._~%\!\$\&\'\(\)\*+\,\;=:@\?/\]\*\)\)\?
+            printf '%s=%q\n' URI_REGEX_REQ_SCHEME_HOST '(([a-zA-Z][-a-zA-Z0-9+.]*):)(//(([-a-zA-Z0-9._~%!$&'\''()*+,;=]+)(:([-a-zA-Z0-9._~%!$&'\''()*+,;=]*))?@)?([-a-zA-Z0-9._~%!$&'\''()*+,;=]+|\[([0-9a-fA-F:]+)\])(:([0-9]+))?)([-a-zA-Z0-9._~%!$&'\''()*+,;=:@/]+)?(\?([-a-zA-Z0-9._~%!$&'\''()*+,;=:@?/]+))?(#([-a-zA-Z0-9._~%!$&'\''()*+,;=:@?/]*))?'
             ;;
         LINUX_USERNAME_REGEX)
-            printf '%s=%q\n' LINUX_USERNAME_REGEX \[a-z_\]\(\[-a-z0-9_\]\{0\,31\}\|\[-a-z0-9_\]\{0\,30\}\\\$\)
+            printf '%s=%q\n' LINUX_USERNAME_REGEX '[a-z_]([-a-z0-9_]{0,31}|[-a-z0-9_]{0,30}\$)'
             ;;
         MYSQL_USERNAME_REGEX)
-            printf '%s=%q\n' MYSQL_USERNAME_REGEX \[a-zA-Z0-9_\]+
+            printf '%s=%q\n' MYSQL_USERNAME_REGEX '[a-zA-Z0-9_]+'
             ;;
         DPKG_SOURCE_REGEX)
-            printf '%s=%q\n' DPKG_SOURCE_REGEX \[a-z0-9\]\[-a-z0-9+.\]+
+            printf '%s=%q\n' DPKG_SOURCE_REGEX '[a-z0-9][-a-z0-9+.]+'
             ;;
         IDENTIFIER_REGEX)
-            printf '%s=%q\n' IDENTIFIER_REGEX \[a-zA-Z_\]\[a-zA-Z0-9_\]\*
+            printf '%s=%q\n' IDENTIFIER_REGEX '[a-zA-Z_][a-zA-Z0-9_]*'
             ;;
         PHP_SETTING_NAME_REGEX)
-            printf '%s=%q\n' PHP_SETTING_NAME_REGEX \[a-zA-Z_\]\[a-zA-Z0-9_\]\*\(\\.\[a-zA-Z_\]\[a-zA-Z0-9_\]\*\)\*
+            printf '%s=%q\n' PHP_SETTING_NAME_REGEX '[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*'
             ;;
         PHP_SETTING_REGEX)
-            printf '%s=%q\n' PHP_SETTING_REGEX \[a-zA-Z_\]\[a-zA-Z0-9_\]\*\(\\.\[a-zA-Z_\]\[a-zA-Z0-9_\]\*\)\*=.\*
+            printf '%s=%q\n' PHP_SETTING_REGEX '[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*=.*'
             ;;
         READLINE_NON_PRINTING_REGEX)
             printf '%s=%q\n' READLINE_NON_PRINTING_REGEX $'\001[^\002]*\002'
@@ -344,13 +457,13 @@ function lk_get_regex() {
             printf '%s=%q\n' NON_PRINTING_REGEX $'(\001[^\002]*\002|\E(\\[[0-?]*[ -/]*[@-~]|[ -/]*[0-Z\\\\-~]))'
             ;;
         IPV4_PRIVATE_FILTER_REGEX)
-            printf '%s=%q\n' IPV4_PRIVATE_FILTER_REGEX \^\(10\\.\|172\\.\(1\[6-9\]\|2\[0-9\]\|3\[01\]\)\\.\|192\\.168\\.\|127\\.\)
+            printf '%s=%q\n' IPV4_PRIVATE_FILTER_REGEX '^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.)'
             ;;
         BACKUP_TIMESTAMP_FINDUTILS_REGEX)
-            printf '%s=%q\n' BACKUP_TIMESTAMP_FINDUTILS_REGEX \[0-9\]\[0-9\]\[0-9\]\[0-9\]-\[0-9\]\[0-9\]-\[0-9\]\[0-9\]-\[0-9\]\[0-9\]\[0-9\]\[0-9\]\[0-9\]\[0-9\]
+            printf '%s=%q\n' BACKUP_TIMESTAMP_FINDUTILS_REGEX '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]'
             ;;
         *)
-            lk_warn "regex not found: $1"
+            lk_err "regex not found: $1"
             STATUS=1
             ;;
         esac
@@ -500,13 +613,6 @@ function _lk_caller() {
     [ -z "$LINE" ] || [ "$LINE" -eq 1 ] ||
         CALLER[${#CALLER[@]} - 1]+=$LK_DIM:$LINE$LK_RESET
     lk_implode_arr "$LK_DIM->$LK_RESET" CALLER
-}
-
-function lk_pass() {
-    local STATUS=$?
-    [[ ! ${1-} =~ ^-[0-9]+$ ]] || { STATUS=${1:1} && shift; }
-    "$@" || true
-    return "$STATUS"
 }
 
 # lk_warn [MESSAGE]
@@ -884,7 +990,7 @@ function _lk_log_install_file() {
 # with a space between each argument.
 function lk_hash() {
     _LK_HASH_COMMAND=${_LK_HASH_COMMAND:-${LK_HASH_COMMAND:-$(
-        lk_command_first_existing xxhsum shasum md5sum md5
+        lk_command_first xxhsum shasum md5sum md5
     )}} || lk_warn "checksum command not found" || return
     if [ $# -gt 0 ]; then
         local IFS
@@ -897,41 +1003,9 @@ function lk_hash() {
 
 function lk_md5() {
     local _LK_HASH_COMMAND
-    _LK_HASH_COMMAND=$(lk_command_first_existing md5sum md5) ||
+    _LK_HASH_COMMAND=$(lk_command_first md5sum md5) ||
         lk_warn "md5 command not found" || return
     lk_hash "$@"
-}
-
-# lk_unbuffer [exec] COMMAND [ARG...]
-#
-# Run COMMAND with unbuffered input and line-buffered output (if supported by
-# the command and platform).
-function lk_unbuffer() {
-    [ "$1" != exec ] || { local LK_EXEC=1 && shift; }
-    case "$1" in
-    sed | gsed | gnu_sed)
-        set -- "$1" -u "${@:2}"
-        ;;
-    grep | ggrep | gnu_grep)
-        set -- "$1" --line-buffered "${@:2}"
-        ;;
-    *)
-        if [ "$1" = tr ] && lk_is_macos; then
-            set -- "$1" -u "${@:2}"
-        else
-            # TODO: reinstate `unbuffer` when LF -> CRLF issue is resolved
-            case "$(lk_command_first_existing stdbuf)" in
-            unbuffer)
-                set -- unbuffer -p "$@"
-                ;;
-            stdbuf)
-                set -- stdbuf -i0 -oL -eL "$@"
-                ;;
-            esac
-        fi
-        ;;
-    esac
-    lk_maybe_sudo "$@"
 }
 
 # lk_tty [exec] COMMAND [ARG...]
@@ -941,10 +1015,10 @@ function lk_unbuffer() {
 function lk_tty() {
     [ "$1" != exec ] || { local LK_EXEC=1 && shift; }
     if ! lk_is_macos; then
-        SHELL=$BASH lk_maybe_sudo \
+        SHELL=$BASH lk_sudo \
             script -q -f -e -c "$(lk_quote_args "$@")" /dev/null
     else
-        lk_maybe_sudo \
+        lk_sudo \
             script -q -t 0 /dev/null "$@"
     fi
 }
@@ -1112,16 +1186,7 @@ function lk_mktemp_dir() {
 }
 
 function lk_command_first_existing() {
-    local COMMAND
-    while [ $# -gt 0 ]; do
-        eval "COMMAND=($1)"
-        if type -P "${COMMAND[0]}" >/dev/null; then
-            echo "$1"
-            return 0
-        fi
-        shift
-    done
-    false
+    lk_command_first "$@"
 }
 
 function lk_regex_implode() {
@@ -3082,41 +3147,8 @@ function lk_can_sudo() {
     }
 }
 
-function lk_will_elevate() {
-    lk_is_root || lk_is_true LK_SUDO
-}
-
-function lk_will_sudo() {
-    ! lk_is_root && lk_is_true LK_SUDO
-}
-
-# lk_maybe_sudo COMMAND [ARG...]
-#
-# Run the given command line with sudo if LK_SUDO is set.
 function lk_maybe_sudo() {
-    if [ -n "${LK_SUDO-}" ]; then
-        lk_elevate "$@"
-    else
-        [ "$1" != exec ] || { local LK_EXEC=1 && shift; }
-        ${LK_EXEC:+exec} "$@"
-    fi
-}
-
-# lk_elevate COMMAND [ARG...]
-#
-# Run the given command with sudo unless the current user is root. If COMMAND is
-# not found in PATH and is a function, run it with LK_SUDO=1.
-function lk_elevate() {
-    local _LK_CAN_FAIL=1
-    [ "$1" != exec ] || { local LK_EXEC=1 && shift; }
-    if [ "$EUID" -eq 0 ]; then
-        ${LK_EXEC:+exec} "$@"
-    elif ! lk_command_exists "$1" && [ "$(type -t "$1")" = function ]; then
-        local LK_SUDO=1
-        "$@"
-    else
-        ${LK_EXEC:+exec} sudo -H "$@"
-    fi
+    lk_sudo "$@"
 }
 
 function lk_elevate_if_error() {
@@ -3136,18 +3168,6 @@ function lk_elevate_if_error() {
         fi
     }
     return "$EXIT_STATUS"
-}
-
-# lk_maybe_elevate COMMAND [ARG...]
-#
-# Run the given command line with sudo if the current user is allowed to,
-# otherwise run it without elevation.
-function lk_maybe_elevate() {
-    if [ "$EUID" -eq 0 ] || ! lk_can_sudo "$1"; then
-        "$@"
-    else
-        sudo -H "$@"
-    fi
 }
 
 function lk_me() {
