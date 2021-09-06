@@ -151,7 +151,10 @@ function lk_elevate() {
         local LK_SUDO=1
         "$@"
     elif [ -n "$c" ]; then
-        ${LK_EXEC:+exec} sudo -H "$c" "${@:2}"
+        # Use `shift` and "$@" because Bash 3.2 expands "${@:2}" to the
+        # equivalent of `IFS=" "; echo "${*:2}"` unless there is a space in IFS
+        shift
+        ${LK_EXEC:+exec} sudo -H "$c" "$@"
     else
         lk_err "invalid command: $1"
     fi
