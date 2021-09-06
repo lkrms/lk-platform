@@ -64,8 +64,7 @@ function lk_is_wsl() {
 }
 
 function lk_is_virtual() {
-    lk_is_linux &&
-        grep -Eq "^flags[[:blank:]]*:.*\\<hypervisor\\>" /proc/cpuinfo
+    lk_is_linux && grep -Eq "^flags$S*:.*\\<hypervisor\\>" /proc/cpuinfo
 }
 
 function lk_is_qemu() {
@@ -74,3 +73,5 @@ function lk_is_qemu() {
         [ ${#FILES[@]} -gt 0 ] &&
         grep -iq qemu "${FILES[@]}")
 }
+
+#### Reviewed: 2021-09-06

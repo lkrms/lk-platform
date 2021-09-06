@@ -75,7 +75,7 @@ function gnu_command() {
         COMMAND=g$1
         ;;
     diff)
-        COMMAND=${COMMAND+"\"\${HOMEBREW_PREFIX:-\$_LK_HOMEBREW_PREFIX}/bin/$1\""}${COMMAND-$1}
+        COMMAND=${COMMAND+"\"\${HOMEBREW_PREFIX:-\$_LK_HOMEBREW_PREFIX}/opt/diffutils/bin/$1\""}${COMMAND-$1}
         ;;
     getopt)
         COMMAND=${COMMAND+"\"\${HOMEBREW_PREFIX:-\$_LK_HOMEBREW_PREFIX}/opt/gnu-getopt/bin/$1\""}${COMMAND-$1}
@@ -98,7 +98,7 @@ function render() {
                 _LK_HOMEBREW_PREFIX /usr/local
         fi
         for COMMAND in "${COMMANDS[@]}"; do
-            printf 'function gnu_%s() { lk_maybe_sudo %s "$@"; }\n' \
+            printf 'function gnu_%s() { lk_sudo %s "$@"; }\n' \
                 "$COMMAND" "$(gnu_command "$COMMAND")"
         done
         ;;
@@ -123,8 +123,8 @@ if [[ ! $1 =~ ^(-i|--install)$ ]]; then
     MODE=
     cat <<"EOF"
 # Define wrapper functions (e.g. `gnu_find`) to invoke the GNU version of
-# certain commands (e.g. `gfind`) on systems where standard utilities are not
-# compatible with their GNU counterparts, e.g. BSD/macOS
+# certain commands (e.g. `gfind`) when standard utilities are not compatible
+# with their GNU counterparts, e.g. on BSD/macOS
 EOF
 else
     MODE=install
@@ -158,3 +158,5 @@ fi
     return "$STATUS"
 }
 EOF
+
+#### Reviewed: 2021-09-06

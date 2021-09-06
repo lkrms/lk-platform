@@ -1,37 +1,5 @@
 #!/bin/bash
 
-# lk_unbuffer [exec] COMMAND [ARG...]
-#
-# Run COMMAND with unbuffered input and line-buffered output (if supported by
-# the command and platform).
-function lk_unbuffer() {
-    [ "$1" != exec ] || { local LK_EXEC=1 && shift; }
-    case "$1" in
-    sed | gsed | gnu_sed)
-        set -- "$1" -u "${@:2}"
-        ;;
-    grep | ggrep | gnu_grep)
-        set -- "$1" --line-buffered "${@:2}"
-        ;;
-    *)
-        if [ "$1" = tr ] && lk_is_macos; then
-            set -- "$1" -u "${@:2}"
-        else
-            # TODO: reinstate `unbuffer` when LF -> CRLF issue is resolved
-            case "$(lk_command_first_existing stdbuf)" in
-            unbuffer)
-                set -- unbuffer -p "$@"
-                ;;
-            stdbuf)
-                set -- stdbuf -i0 -oL -eL "$@"
-                ;;
-            esac
-        fi
-        ;;
-    esac
-    lk_maybe_sudo "$@"
-}
-
 # lk_tty [exec] COMMAND [ARG...]
 #
 # Run COMMAND in a pseudo-terminal to satisfy tty checks even if output is being
@@ -39,10 +7,10 @@ function lk_unbuffer() {
 function lk_tty() {
     [ "$1" != exec ] || { local LK_EXEC=1 && shift; }
     if ! lk_is_macos; then
-        SHELL=$BASH lk_maybe_sudo \
+        SHELL=$BASH lk_sudo \
             script -q -f -e -c "$(lk_quote_args "$@")" /dev/null
     else
-        lk_maybe_sudo \
+        lk_sudo \
             script -q -t 0 /dev/null "$@"
     fi
 }
@@ -112,5 +80,14 @@ function lk_mktemp_with() {
         lk_delete_on_exit "${!1}" &&
         { [ $# -lt 2 ] || "${@:2}" >"${!1}"; }
 }
+
+#### Other command wrappers:
+#### - lk_pass
+#### - lk_elevate
+#### - lk_sudo
+#### - lk_unbuffer
+#### - lk_maybe
+#### - lk_git_with_repos
+#### - _lk_apt_flock
 
 #### Reviewed: 2021-08-28

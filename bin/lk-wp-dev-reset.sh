@@ -56,7 +56,7 @@ if [ ${#TO_DEACTIVATE[@]} -gt 0 ]; then
     STALE=1
 fi
 
-IP=$(LK_DIG_SERVER=1.1.1.1 lk_hosts_get_records A,AAAA "$SITE_DOMAIN")
+IP=$(LK_DIG_SERVER=1.1.1.1 lk_dns_get_records A,AAAA "$SITE_DOMAIN")
 if [ -n "$IP" ] && ! lk_node_is_host "$SITE_HOST"; then
     NEW_SITE_ADDR=$(lk_console_read "New site address:" "" \
         -i "http://${SITE_DOMAIN%%.*}.hosting")

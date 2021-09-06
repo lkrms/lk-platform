@@ -347,6 +347,59 @@ function lk_node_is_router() {
         lk_node_service_enabled router
 }
 
+# lk_dns_get_records [+FIELD[,FIELD...]] TYPE[,TYPE...] NAME...
+#
+# For each NAME, print space-delimited resource records that match one of the
+# given record types, optionally limiting the output to one more fields.
+#
+# FIELD must be one of 'NAME', 'TTL', 'CLASS', 'TYPE', 'RDATA' or 'VALUE'.
+# 'RDATA' and 'VALUE' are equivalent. If multiple fields are specified, they are
+# printed in resource record order.
+function lk_dns_get_records() {
+    local FIELDS='$1, $2, $3, $4, $5' IFS TYPES TYPE NAME COMMAND=(
+        dig +noall +answer
+        ${LK_DIG_OPTIONS+"${LK_DIG_OPTIONS[@]}"}
+        ${LK_DIG_SERVER:+@"$LK_DIG_SERVER"}
+    )
+    [[ ${1-} != +* ]] || {
+        FIELDS=$(tr ',' '\n' <<<"${1:1}" | awk '
+BEGIN { t["NAME"] = 1; t["TTL"] = 2; t["CLASS"] = 3; t["TYPE"] = 4; t["RDATA"] = 5; t["VALUE"] = 5 }
+t[$0] { f[t[$0]] = 1; next }
+      { exit 1 }
+END   { for (i = 1; i < 6; i++)
+        if (f[i]) printf "%s", (j++ ? ", " : "") "$" i }') &&
+            [ -n "$FIELDS" ] || lk_warn "invalid field list: $1" || return
+        shift
+    }
+    IFS=,
+    TYPES=($(lk_upper "$1"))
+    [ ${#TYPES[@]} -gt 0 ] || lk_warn "invalid record type list: $1" || return
+    for TYPE in "${TYPES[@]}"; do
+        [[ $TYPE =~ ^[A-Z]+$ ]] ||
+            lk_warn "invalid record type: $TYPE" || return
+        for NAME in "${@:2}"; do
+            COMMAND+=("$NAME" "$TYPE")
+        done
+    done
+    "${COMMAND[@]}" | awk -v "r=^$(lk_regex_implode "${TYPES[@]}")\$" \
+        "\$4 ~ r { print $FIELDS }"
+}
+
+# lk_dns_get_records_first_parent TYPE[,TYPE...] DOMAIN
+function lk_dns_get_records_first_parent() {
+    lk_is_fqdn "$2" || lk_warn "invalid domain: $2" || return
+    local DOMAIN=$2 ANSWER
+    while :; do
+        ANSWER=$(lk_dns_get_records "$1" "$DOMAIN") || return
+        [ -z "$ANSWER" ] || {
+            echo "$ANSWER"
+            break
+        }
+        DOMAIN=${DOMAIN#*.}
+        lk_is_fqdn "$DOMAIN" || lk_warn "$1 lookup failed: $2" || return
+    done
+}
+
 # lk_dns_resolve_hosts HOST...
 function lk_dns_resolve_hosts() { {
     local HOSTS=()
@@ -361,7 +414,7 @@ function lk_dns_resolve_hosts() { {
         shift
     done
     [ -z "${HOSTS+1}" ] ||
-        lk_hosts_get_records +VALUE A,AAAA "${HOSTS[@]}"
+        lk_dns_get_records +VALUE A,AAAA "${HOSTS[@]}"
 } | sort -nu; }
 
 #### END provision.sh.d
@@ -914,103 +967,10 @@ function lk_node_public_ipv6() {
     } | sort -u
 }
 
-# lk_hosts_get_records [+FIELD[,FIELD...]] TYPE[,TYPE...] HOST...
-#
-# Print space-separated resource records of each TYPE for each HOST, optionally
-# limiting output to each FIELD.
-#
-# Fields and output order:
-# - NAME
-# - TTL
-# - CLASS
-# - TYPE
-# - RDATA
-# - VALUE (synonym for RDATA)
-function lk_hosts_get_records() {
-    local FIELDS FIELD CUT TYPE IFS TYPES HOST \
-        COMMAND=(
-            dig +noall +answer
-            ${LK_DIG_OPTIONS[@]:+"${LK_DIG_OPTIONS[@]}"}
-            ${LK_DIG_SERVER:+@"$LK_DIG_SERVER"}
-        )
-    if [ "${1:0:1}" = + ]; then
-        IFS=,
-        FIELDS=(${1:1})
-        shift
-        unset IFS
-        [ ${#FIELDS[@]} -gt 0 ] || lk_warn "no output field" || return
-        FIELDS=($(lk_echo_array FIELDS | sort -u))
-        CUT=-f
-        for FIELD in "${FIELDS[@]}"; do
-            case "$FIELD" in
-            NAME)
-                CUT=${CUT}1,
-                ;;
-            TTL)
-                CUT=${CUT}2,
-                ;;
-            CLASS)
-                CUT=${CUT}3,
-                ;;
-            TYPE)
-                CUT=${CUT}4,
-                ;;
-            RDATA | VALUE)
-                CUT=${CUT}5,
-                ;;
-            *)
-                lk_warn "invalid field: $FIELD"
-                return 1
-                ;;
-            esac
-        done
-        CUT=${CUT%,}
-    fi
-    TYPE=$1
-    shift
-    [[ $TYPE =~ ^[a-zA-Z]+(,[a-zA-Z]+)*$ ]] ||
-        lk_warn "invalid type(s): $TYPE" || return
-    lk_test_many lk_is_host "$@" || lk_warn "invalid host(s): $*" || return
-    IFS=,
-    TYPES=($TYPE)
-    for TYPE in "${TYPES[@]}"; do
-        for HOST in "$@"; do
-            COMMAND+=(
-                "$HOST" "$TYPE"
-            )
-        done
-    done
-    REGEX="s/^($NS+)$S+($NS+)$S+($NS+)$S+($NS+)$S+($NS+)/\\1 \\2 \\3 \\4 \\5/"
-    "${COMMAND[@]}" |
-        sed -E "$REGEX" |
-        awk "\$4 ~ /^$(lk_regex_implode "${TYPES[@]}")$/" |
-        { [ -z "${CUT-}" ] && cat || cut -d' ' "$CUT"; }
-}
-
-# lk_host_first_answer TYPE[,TYPE...] DOMAIN
-#
-# Print DNS records of each TYPE for DOMAIN, or for the closest parent of DOMAIN
-# with at least one matching record.
-function lk_host_first_answer() {
-    local DOMAIN=$2 ANSWER
-    lk_is_fqdn "$2" || lk_warn "invalid domain: $2" || return
-    lk_require_output -q lk_hosts_get_records A,AAAA "$2" ||
-        lk_warn "lookup failed: $2" || return
-    while :; do
-        ANSWER=$(lk_hosts_get_records "$1" "$DOMAIN") || return
-        [ -z "$ANSWER" ] || {
-            echo "$ANSWER"
-            break
-        }
-        DOMAIN=${DOMAIN#*.}
-        lk_is_fqdn "$DOMAIN" || lk_warn "$1 lookup failed: $2" || return
-    done
-} #### Reviewed: 2021-03-30
-
 function lk_host_soa() {
     local IFS ANSWER APEX NAMESERVERS NAMESERVER SOA
     unset IFS
-    ANSWER=$(lk_host_first_answer NS "$1") || return
+    ANSWER=$(lk_dns_get_records_first_parent NS "$1") || return
     ! lk_verbose 2 ||
         lk_console_detail "Looking up SOA for domain:" "$1"
     APEX=$(awk '{sub("\\.$", "", $1); print $1}' <<<"$ANSWER" | sort -u)
@@ -1025,7 +985,7 @@ function lk_host_soa() {
         if SOA=$(
             LK_DIG_SERVER=$NAMESERVER
             LK_DIG_OPTIONS=(+norecurse)
-            lk_require_output lk_hosts_get_records SOA "$APEX"
+            lk_require_output lk_dns_get_records SOA "$APEX"
         ); then
             ! lk_verbose 2 ||
                 lk_console_detail "SOA from $NAMESERVER for $APEX:" $'\n'"$SOA"
@@ -1052,13 +1012,13 @@ function lk_host_ns_resolve() {
         lk_console_detail "Using name server:" "$NAMESERVER"
         lk_console_detail "Looking up A and AAAA records for:" "$1"
     }
-    IP=($(lk_hosts_get_records +VALUE A,AAAA "$1")) || return
+    IP=($(lk_dns_get_records +VALUE A,AAAA "$1")) || return
     if [ ${#IP[@]} -eq 0 ]; then
         ! lk_verbose 2 || {
             lk_console_detail "No A or AAAA records returned"
             lk_console_detail "Looking up CNAME record for:" "$1"
         }
-        CNAME=($(lk_hosts_get_records +VALUE CNAME "$1")) || return
+        CNAME=($(lk_dns_get_records +VALUE CNAME "$1")) || return
         if [ ${#CNAME[@]} -eq 1 ]; then
             ! lk_verbose 2 ||
                 lk_console_detail "CNAME value from $NAMESERVER for $1:" \

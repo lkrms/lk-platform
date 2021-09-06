@@ -26,13 +26,6 @@ function _lk_caller() {
     lk_implode_arr "$LK_DIM->$LK_RESET" CALLER
 }
 
-function lk_pass() {
-    local STATUS=$?
-    [[ ! ${1-} =~ ^-[0-9]+$ ]] || { STATUS=${1:1} && shift; }
-    "$@" || true
-    return "$STATUS"
-}
-
 # lk_warn [MESSAGE]
 #
 # Print "<CALLER>: MESSAGE" as a warning and return the most recent exit status.

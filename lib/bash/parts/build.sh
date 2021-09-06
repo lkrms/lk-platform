@@ -4,29 +4,41 @@ set -euo pipefail
 out=$(mktemp)
 die() { echo "${BASH_SOURCE:-$0}: $1" >&2 && rm -f "$out" && false || exit; }
 
-_DIR=${BASH_SOURCE%${BASH_SOURCE##*/}}
-_DIR=${_DIR:-$PWD}
-cd "$_DIR"
+_dir=${BASH_SOURCE%${BASH_SOURCE##*/}}
+_dir=${_dir:-$PWD}
+cd "$_dir"
 
 [ $# -gt 0 ] || set -- *.d
 
 export LC_ALL=C
 
-unset TRASH
+format=1
+minify=1
+shfmt_args=(-mn)
+[ "${shfmt_minify-1}" = 1 ] || {
+    minify=0
+    shfmt_args=(-s -i "${shfmt_indent:-4}")
+}
+[ "${shfmt_simplify-1}" = 1 ] || {
+    format=0
+    minify=0
+}
+
+unset trash_cmd
 for c in trash-put trash; do
     type -P "$c" >/dev/null || continue
-    TRASH=$c
+    trash_cmd=$c
     break
 done
 
-[ -n "${TRASH-}" ] || {
+[ -n "${trash_cmd-}" ] || {
     function trash() {
-        local DEST
-        DEST=$(mktemp "$1.XXXXXX") &&
-            cp -a "$1" "$DEST" &&
+        local dest
+        dest=$(mktemp "$1.XXXXXX") &&
+            cp -a "$1" "$dest" &&
             rm -f "$1"
     }
-    TRASH=trash
+    trash_cmd=trash
 }
 
 while [ $# -gt 0 ]; do
@@ -42,35 +54,48 @@ while [ $# -gt 0 ]; do
             embed=1
             awk -v "until=#### BEGIN $d" \
                 'f{next}{print}$0==until{f=1;print""}' "$f"
-        else
+        elif ((!minify)); then
             printf '%s\n\n' "#!/bin/bash"
         fi
+        i=0
         for part in "$d"/*; do
             echo "  Processing: $part" >&2
+            ((!i || (!embed && minify))) || echo
             if [ -x "$part" ]; then
                 "$part"
             else
                 cat "$part"
             fi |
-                awk 'NR<3 && $0 ~ /^(#!\/|$)/ {next} {print} END {print ""}' |
-                sed -En '
-s/^(((\); )?\}) )?#### Reviewed: [0-9]{4}(-[0-9]{2}){2}$/\2/
-t maybe_skip
-p; b
-:maybe_skip
-/^./ { p; b
-}; n; /^$/ d; p'
+                # Remove shebangs, lines that start with "####", consecutive
+                # empty lines, and trailing empty lines
+                awk -v s="[[:blank:]]" '
+NR == 1 && /^#!\//      {next}
+                        {if (gsub("(^|" s "+)####(" s ".*|$)", "") && !$0) next}
+!f && /^./              {f = NR}
+!f                      {next}
+NR > f && last $0 != "" {print last}
+                        {last = $0}
+END                     {if (last) print last}' |
+                if ((!embed && format)) && type -P shfmt >/dev/null; then
+                    shfmt "${shfmt_args[@]}" | shfmt "${shfmt_args[@]}"
+                else
+                    cat
+                fi
+            ((++i))
         done
-        ! ((embed)) ||
-            awk -v "from=#### END $d" \
-                '$0==from{f=1}!f{next}{print}END{if(!f)exit 1}' "$f" ||
-            die "not found in $PWD/$f: #### END $d"
+        ((!embed)) || awk -v "from=#### END $d" \
+            '$0==from{if(!f)print"";f=1}!f{next}{print}END{if(!f)exit 1}' \
+            "$f" || die "not found in $PWD/$f: #### END $d"
     } >"$out"
+    args=(-i "${shfmt_indent:-4}")
+    ((embed || !format)) ||
+        args=("${shfmt_args[@]}")
     ! type -P shfmt >/dev/null ||
-        shfmt -i 4 -d "$out" >&2 ||
+        shfmt "${args[@]}" -d "$out" >&2 ||
         die "incorrect formatting in part(s): $PWD/$d"
-    if [ -s "$out" ] && ! diff -q "$f" "$out" >/dev/null; then
-        "$TRASH" "$f"
+    if [ -s "$out" ] &&
+        ! diff -q --unidirectional-new-file "$f" "$out" >/dev/null; then
+        [ ! -s "$f" ] || "$trash_cmd" "$f"
         cp -v "$out" "$f"
         echo "Updated: $f" >&2
     else
