@@ -10,6 +10,7 @@ MAINTENANCE=
 DEACTIVATE=()
 RENAME=
 SSL=0
+SHUFFLE_SALTS=0
 EXCLUDE=()
 DEFAULT_DB_NAME=
 DEFAULT_DB_USER=
@@ -33,6 +34,7 @@ Options:
   -r, --rename=URL          change site address to URL after migration
   -c, --ssl-cert            attempt to retrieve SSL certificate, CA bundle and
                             private key from remote system (cPanel only)
+  -t, --shuffle-salts       refresh salts defined in wp-config.php
   -e, --exclude=PATTERN     exclude files matching PATTERN
                             (may be given multiple times)
       --db-name=DB_NAME     if local connection fails, use database DB_NAME
@@ -45,8 +47,8 @@ Maintenance modes:
 
 Maintenance mode is always enabled on the local system during migration."
 
-lk_getopt "s:d:m:p:r:ce:" \
-    "source:,dest:,maintenance:,deactivate:,rename:,ssl-cert,exclude:,db-name:,db-user:"
+lk_getopt "s:d:m:p:r:cte:" \
+    "source:,dest:,maintenance:,deactivate:,rename:,ssl-cert,shuffle-salts,exclude:,db-name:,db-user:"
 eval "set -- $LK_GETOPT"
 
 while :; do
@@ -78,6 +80,9 @@ while :; do
         ;;
     -c | --ssl-cert)
         SSL=1
+        ;;
+    -t | --shuffle-salts)
+        SHUFFLE_SALTS=1
         ;;
     -e | --exclude)
         EXCLUDE+=("$1")
@@ -139,7 +144,9 @@ lk_console_detail "Plugins to deactivate:" "$([ ${#DEACTIVATE[@]} -eq 0 ] &&
 [ -z "$RENAME" ] ||
     lk_console_detail "Rename site to:" "$RENAME"
 lk_console_detail "Copy remote SSL certificate:" \
-    "$(lk_is_true SSL && echo "yes" || echo "no")"
+    "$([ "$SSL" -eq 1 ] && echo "yes" || echo "no")"
+lk_console_detail "Refresh salts in local wp-config.php:" \
+    "$([ "$SHUFFLE_SALTS" -eq 1 ] && echo "yes" || echo "no")"
 lk_console_detail "Local WP-Cron:" "$(
     [ "$MAINTENANCE" = indefinite ] &&
         echo "enable" ||
@@ -189,8 +196,10 @@ maybe_disable_remote_maintenance
 cd "$LOCAL_PATH"
 LK_NO_INPUT=1 \
     lk_wp_db_restore_local "$DB_FILE" "$DEFAULT_DB_NAME" "$DEFAULT_DB_USER"
-lk_console_message "Refreshing salts defined in wp-config.php"
-lk_wp config shuffle-salts
+if [ "$SHUFFLE_SALTS" -eq 1 ]; then
+    lk_console_message "Refreshing salts defined in wp-config.php"
+    lk_wp config shuffle-salts
+fi
 if [ ${#DEACTIVATE[@]} -gt 0 ]; then
     ACTIVE_PLUGINS=($(lk_wp plugin list --status=active --field=name))
     DEACTIVATE=($(comm -12 \
@@ -210,7 +219,7 @@ fi
 lk_wp_reapply_config || STATUS=$?
 lk_wp_flush || STATUS=$?
 
-if lk_is_true SSL; then
+if [ "$SSL" -eq 1 ]; then
     SITE_ADDR=$(lk_wp_get_site_address) &&
         [[ $SITE_ADDR =~ ^https?://(www\.)?(.*) ]] &&
         lk_cpanel_set_server "$SSH_HOST" &&

@@ -90,5 +90,4 @@ ${LK_ADD_TO_PATH_FIRST+ LK_ADD_TO_PATH_FIRST}"
 cat <<EOF
 ${UNSET:+unset$UNSET
 }export SUDO_PROMPT="[sudo] password for %p: "
-export WP_CLI_CONFIG_PATH=\${_LK_INST:-\$LK_BASE}/share/wp-cli/config.yml
 EOF

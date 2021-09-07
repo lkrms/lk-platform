@@ -534,6 +534,10 @@ lk_log_start
             replace_byobu "$DIR/statusrc" \
                 ${_IS_ARCH:+'[ ! -f "/etc/arch-release" ] || RELEASE_ABBREVIATED=1'} \
                 "BYOBU_CHARMAP=x"
+            # Use Ctrl+A to go to beginning of line
+            replace_byobu "$DIR/keybindings.tmux" \
+                "set -g prefix F12" \
+                "unbind-key -n C-a"
             # Fix output issue when connecting from OpenSSH on Windows
             replace_byobu "$DIR/.tmux.conf" \
                 "set -s escape-time 50"
