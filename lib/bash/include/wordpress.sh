@@ -4,6 +4,12 @@
 
 lk_include mysql provision
 
+function wp() {
+    WP_CLI_CONFIG_PATH="$LK_BASE/share/wp-cli/config.yml" \
+        HTTP_CLIENT_IP=127.0.1.1 \
+        command wp "$@"
+}
+
 function lk_wp() {
     wp --skip-plugins --skip-themes "$@"
 }
