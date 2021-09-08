@@ -333,7 +333,7 @@ lk_start_trace
     if lk_require_output -q lk_system_list_wifi_links &&
         lk_pac_installed crda; then
         lk_console_message "Checking wireless regulatory domain"
-        [[ ${LK_WIFI_REGDOM-} =~ ^(|00|[A-Z]{2})$ ]] ||
+        [[ ${LK_WIFI_REGDOM-} =~ ^(00|[A-Z]{2})?$ ]] ||
             lk_die "invalid regulatory domain: $LK_WIFI_REGDOM"
         FILE=/etc/conf.d/wireless-regdom
         lk_file_keep_original "$FILE"

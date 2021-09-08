@@ -122,7 +122,7 @@ printf '# lk_get_regex [REGEX...]
 function lk_get_regex() {
     [ $# -gt 0 ] || set -- %s
     local STATUS=0 PREFIX=
-    [[ ${FUNCNAME[1]-} =~ ^(|main|source)$ ]] || PREFIX="local "
+    [[ ${FUNCNAME[1]-} =~ ^(main|source)?$ ]] || PREFIX="local "
     while [ $# -gt 0 ]; do
         [ -z "$PREFIX" ] || printf '\''%%s'\'' "$PREFIX"
         case "$1" in' \
