@@ -417,6 +417,294 @@ function lk_dns_resolve_hosts() { {
         lk_dns_get_records +VALUE A,AAAA "${HOSTS[@]}"
 } | sort -nu; }
 
+function _lk_openssl_verify() { (
+    # Disable xtrace if its output would break the test below
+    [[ $- != *x* ]] ||
+        { lk_bash_at_least 4 1 && [ "${BASH_XTRACEFD:-2}" -gt 2 ]; } ||
+        set +x
+    # In case openssl is too old to exit non-zero when `verify` fails, return
+    # false if there are multiple lines of output (NB: some versions send errors
+    # to stderr)
+    lk_sudo openssl verify "$@" 2>&1 |
+        awk '{print} END {exit NR > 1 ? 1 : 0}'
+); }
+
+# lk_ssl_is_cert_self_signed CERT_FILE
+function lk_ssl_is_cert_self_signed() {
+    lk_mktemp_dir_with -c _LK_EMPTY_DIR || return
+    # "-CApath /empty/dir" is more portable than "-no-CApath"
+    _lk_openssl_verify -CApath "$_LK_EMPTY_DIR" -CAfile "$1" "$1" >/dev/null
+}
+
+# lk_ssl_verify_cert [-s] CERT_FILE [KEY_FILE [CA_FILE]]
+#
+# If -s is set, return true if the certificate is trusted, even if it is
+# self-signed.
+function lk_ssl_verify_cert() {
+    local SS_OK
+    [ "${1-}" != -s ] || { SS_OK=1 && shift; }
+    lk_files_exist "$@" || lk_usage "\
+Usage: $FUNCNAME [-s] CERT_FILE [KEY_FILE [CA_FILE]]" || return
+    local CERT=$1 KEY=${2-} CA=${3-} CERT_MODULUS KEY_MODULUS
+    # If no CA file has been provided but CERT contains multiple certificates,
+    # copy the first to a temp CERT file and the others to a temp CA file
+    [ -n "$CA" ] || [ "$(grep -Ec "^-+BEGIN$S" "$CERT")" -le 1 ] ||
+        { lk_mktemp_with CA \
+            lk_sudo awk "/^-+BEGIN$S/ {c++} c > 1 {print}" "$CERT" &&
+            lk_mktemp_with CERT \
+                lk_sudo awk "/^-+BEGIN$S/ {c++} c <= 1 {print}" "$CERT" ||
+            return; }
+    if [ -n "$CA" ]; then
+        _lk_openssl_verify "$CA" &&
+            _lk_openssl_verify -untrusted "$CA" "$CERT"
+    else
+        _lk_openssl_verify "$CERT"
+    fi >/dev/null ||
+        lk_warn "invalid certificate chain" || return
+    [ -z "$KEY" ] || {
+        CERT_MODULUS=$(lk_sudo openssl x509 -noout -modulus -in "$CERT") &&
+            KEY_MODULUS=$(lk_sudo openssl rsa -noout -modulus -in "$KEY") &&
+            [ "$CERT_MODULUS" = "$KEY_MODULUS" ] ||
+            lk_warn "certificate and private key do not match" || return
+    }
+    [ -n "${SS_OK-}" ] || ! lk_ssl_is_cert_self_signed "$CERT" ||
+        lk_warn "certificate is self-signed" || return
+}
+
+# _lk_cpanel_get_url SERVER MODULE FUNC [PARAMETER=VALUE...]
+function _lk_cpanel_get_url() {
+    [ $# -ge 3 ] || lk_warn "invalid arguments" || return
+    local PARAMS
+    printf 'https://%s:%s/%s/%s' \
+        "$1" \
+        "${_LK_CPANEL_PORT:-2083}" \
+        "${_LK_CPANEL_ROOT:-execute}" \
+        "$2${3:+/$3}"
+    shift 3
+    PARAMS=$(lk_uri_encode "$@") || return
+    [ -z "${PARAMS:+1}" ] || printf "?%s" "$PARAMS"
+    echo
+}
+
+# _lk_cpanel_via_whm_get_url [-u USER] SERVER MODULE FUNC [PARAMETER=VALUE...]
+function _lk_cpanel_via_whm_get_url() {
+    local _USER PORT=2083
+    [ "${1-}" != -u ] || { _USER=$2 && PORT=2087 && shift 2; }
+    [ $# -ge 3 ] || lk_warn "invalid arguments" || return
+    local MODULE=$2 FUNC=$3 PARAMS
+    printf 'https://%s:%s/json-api/cpanel' \
+        "$1" \
+        "${_LK_CPANEL_PORT:-$PORT}"
+    shift 3
+    PARAMS=$(lk_uri_encode \
+        "api.version=1" \
+        ${_USER:+"cpanel_jsonapi_user=$_USER"} \
+        "cpanel_jsonapi_module=$MODULE" \
+        "cpanel_jsonapi_func=$FUNC" \
+        "cpanel_jsonapi_apiversion=3" \
+        "$@") || return
+    printf "?%s\n" "$PARAMS"
+}
+
+# _lk_cpanel_token_generate_name PREFIX
+function _lk_cpanel_token_generate_name() {
+    local HOSTNAME=${HOSTNAME-} NAME
+    HOSTNAME=${HOSTNAME:-$(lk_hostname)} &&
+        NAME=$1-${LK_PATH_PREFIX:-lk-}$USER@$HOSTNAME-$(lk_timestamp) &&
+        NAME=$(printf '%s' "$NAME" | tr -Cs '[:alnum:]-_' '-') &&
+        echo "$NAME"
+}
+
+# lk_cpanel_server_set SERVER [USER]
+function lk_cpanel_server_set() {
+    [ $# -ge 1 ] || lk_usage "Usage: $FUNCNAME SERVER [USER]" || return
+    unset "${!_LK_CPANEL_@}"
+    _LK_CPANEL_SERVER=$1
+    if lk_ssh_host_exists "$1"; then
+        _LK_CPANEL_METHOD=ssh
+        [ $# -eq 1 ] || _LK_CPANEL_SERVER=$2@$1
+    else
+        _LK_CPANEL_METHOD=curl
+        [ $# -ge 2 ] || lk_warn "username required for curl access" || return
+    fi
+    local FILE
+    lk_check_user_config FILE \
+        token "cpanel-${_LK_CPANEL_METHOD}-${2+$2@}$1" 00600 00700 &&
+        . "$FILE" || return
+    [ -s "$FILE" ] ||
+        case "$_LK_CPANEL_METHOD" in
+        curl)
+            local NAME URL
+            NAME=$(_lk_cpanel_token_generate_name "$2") &&
+                URL=$(_lk_cpanel_get_url "$1" Tokens create_full_access \
+                    "name=$NAME") || return
+            _LK_CPANEL_TOKEN=$2:$(curl -fsSL --insecure --user "$2" "$URL" |
+                jq -r '.data.token') ||
+                lk_warn "unable to create API token" || return
+            ;;
+        esac
+    lk_file_replace "$FILE" < <(lk_get_shell_var "${!_LK_CPANEL_@}") &&
+        lk_symlink "${FILE##*/}" "${FILE%/*}/cpanel-current"
+}
+
+# _lk_cpanel_server_do_check METHOD_VAR SERVER_VAR TOKEN_VAR PREFIX
+function _lk_cpanel_server_do_check() {
+    local i=0 FILE _LK_STACK_DEPTH=2
+    while :; do
+        case "${!1-}" in
+        ssh)
+            [ "${!2:+1}" != 1 ] ||
+                return 0
+            ;;
+        curl)
+            [ "${!2:+1}${!3:+1}" != 11 ] ||
+                return 0
+            ;;
+        esac
+        ! ((i++)) &&
+            lk_check_user_config -n FILE token "$4-current" &&
+            [ -f "$FILE" ] &&
+            . "$FILE" || break
+    done
+    lk_warn "lk_$4_set_server must be called first"
+    false
+}
+
+function _lk_cpanel_server_check() {
+    _lk_cpanel_server_do_check \
+        _LK_CPANEL_METHOD _LK_CPANEL_SERVER _LK_CPANEL_TOKEN cpanel
+}
+
+# lk_cpanel_get MODULE FUNC [PARAMETER=VALUE...]
+function lk_cpanel_get() {
+    [ $# -ge 2 ] || lk_usage "\
+Usage: $FUNCNAME MODULE FUNC [PARAMETER=VALUE...]" || return
+    _lk_cpanel_server_check || return
+    local IFS
+    unset IFS
+    case "$_LK_CPANEL_METHOD" in
+    ssh)
+        # {"result":{"data":{}}}
+        ssh "$_LK_CPANEL_SERVER" \
+            uapi --output=json "$1" "$2" "${@:3}" |
+            jq '.result'
+        ;;
+    curl)
+        # _lk_cpanel_get_url: {"data":{}}
+        # _lk_cpanel_via_whm_get_url: {"result":{"data":{}}}
+        local URL
+        URL=$(_lk_cpanel_get_url "$_LK_CPANEL_SERVER" "$1" "$2" "${@:3}") &&
+            curl -fsSL --insecure \
+                -H "Authorization: cpanel $_LK_CPANEL_TOKEN" \
+                "$URL"
+        ;;
+    esac
+}
+
+# _lk_whm_get_url SERVER FUNC [PARAMETER=VALUE...]
+function _lk_whm_get_url() {
+    [ $# -ge 2 ] || lk_warn "invalid arguments" || return
+    local SERVER=$1 FUNC=$2 \
+        _LK_CPANEL_PORT=2087 _LK_CPANEL_ROOT=json-api
+    shift 2
+    _lk_cpanel_get_url "$SERVER" "$FUNC" "" "api.version=1" "$@"
+}
+
+# lk_whm_server_set SERVER [USER]
+function lk_whm_server_set() {
+    [ $# -ge 1 ] || lk_usage "Usage: $FUNCNAME SERVER [USER]" || return
+    unset "${!_LK_WHM_@}"
+    _LK_WHM_SERVER=$1
+    if lk_ssh_host_exists "$1"; then
+        _LK_WHM_METHOD=ssh
+        [ $# -eq 1 ] || _LK_WHM_SERVER=$2@$1
+    else
+        _LK_WHM_METHOD=curl
+        [ $# -ge 2 ] || lk_warn "username required for curl access" || return
+    fi
+    local FILE
+    lk_check_user_config FILE \
+        token "whm-${_LK_WHM_METHOD}-${2+$2@}$1" 00600 00700 &&
+        . "$FILE" || return
+    [ -s "$FILE" ] ||
+        case "$_LK_WHM_METHOD" in
+        curl)
+            local NAME URL
+            NAME=$(_lk_cpanel_token_generate_name "whm-$2") &&
+                URL=$(_lk_whm_get_url "$1" api_token_create \
+                    "token_name=$NAME") || return
+            _LK_WHM_TOKEN=$2:$(curl -fsSL --insecure --user "$2" "$URL" |
+                jq -r '.data.token') ||
+                lk_warn "unable to create API token" || return
+            ;;
+        esac
+    lk_file_replace "$FILE" < <(lk_get_shell_var "${!_LK_WHM_@}") &&
+        lk_symlink "${FILE##*/}" "${FILE%/*}/whm-current"
+}
+
+function _lk_whm_server_check() {
+    _lk_cpanel_server_do_check \
+        _LK_WHM_METHOD _LK_WHM_SERVER _LK_WHM_TOKEN whm
+}
+
+# lk_whm_get FUNC [PARAMETER=VALUE...]
+function lk_whm_get() {
+    [ $# -ge 1 ] || lk_usage "\
+Usage: $FUNCNAME FUNC [PARAMETER=VALUE...]" || return
+    _lk_whm_server_check || return
+    local IFS
+    unset IFS
+    case "$_LK_WHM_METHOD" in
+    ssh)
+        # {"data":{}}
+        ssh "$_LK_WHM_SERVER" \
+            whmapi1 --output=json "$1" "${@:2}"
+        ;;
+    curl)
+        # {"data":{}}
+        local URL
+        URL=$(_lk_whm_get_url "$_LK_WHM_SERVER" "$1" "${@:2}") &&
+            curl -fsSL --insecure \
+                -H "Authorization: whm $_LK_WHM_TOKEN" \
+                "$URL"
+        ;;
+    esac
+}
+
+# lk_cpanel_domain_list
+function lk_cpanel_domain_list() {
+    _lk_cpanel_server_check || return
+    lk_cpanel_get DomainInfo domains_data format=list |
+        jq -r '.data[] | (.domain, .serveralias) | select(. != null)' |
+        tr -s '[:space:]' '\n' |
+        sort -u
+}
+
+# lk_cpanel_ssl_get_for_domain DOMAIN [TARGET_DIR]
+function lk_cpanel_ssl_get_for_domain() {
+    lk_is_fqdn "${1-}" && { [ $# -lt 2 ] || [ -d "$2" ]; } ||
+        lk_usage "Usage: $FUNCNAME DOMAIN [DIR]" || return
+    _lk_cpanel_server_check || return
+    local DIR=${2-$PWD} JSON CERT CA KEY
+    [ -w "$DIR" ] || lk_warn "directory not writable: $DIR" || return
+    lk_tty_print "Retrieving TLS certificate for" "$1"
+    lk_tty_detail "cPanel server:" "$_LK_CPANEL_SERVER"
+    lk_mktemp_with JSON lk_cpanel_get SSL fetch_best_for_domain domain="$1" &&
+        lk_mktemp_with CERT jq -r '.data.crt' "$JSON" &&
+        lk_mktemp_with CA jq -r '.data.cab' "$JSON" &&
+        lk_mktemp_with KEY jq -r '.data.key' "$JSON" ||
+        lk_warn "unable to retrieve TLS certificate" || return
+    lk_tty_print "Verifying certificate"
+    lk_ssl_verify_cert "$CERT" "$KEY" "$CA" || return
+    lk_tty_print "Writing certificate files"
+    lk_tty_detail "Certificate and CA bundle:" "$(lk_tty_path "$DIR/$1.cert")"
+    lk_tty_detail "Private key:" "$(lk_tty_path "$DIR/$1.key")"
+    lk_install -m 00644 "$DIR/$1.cert" &&
+        lk_install -m 00640 "$DIR/$1.key" &&
+        lk_file_replace -b "$DIR/$1.cert" < <(cat "$CERT" "$CA") &&
+        lk_file_replace -bf "$KEY" "$DIR/$1.key"
+}
+
 #### END provision.sh.d
 
 # lk_symlink_bin TARGET [ALIAS]
@@ -1140,122 +1428,6 @@ function lk_certbot_list_certificates() {
         awk -f "$LK_BASE/lib/awk/certbot-parse-certificates.awk"
 } #### Reviewed: 2021-04-22
 
-# lk_cpanel_add_credentials SERVER USER
-function lk_cpanel_add_credentials() {
-    [ $# -eq 2 ] || lk_usage "Usage: $FUNCNAME SERVER USER" || return
-    lk_console_warning "${LK_BOLD}WARNING:$LK_RESET \
-credentials will be stored ${LK_BOLD}WITHOUT ENCRYPTION$LK_RESET in ~/.netrc"
-    local PASSWORD REGEX=$'[^\x21-\x7e]' FILE=~/.netrc
-    lk_tty_read_password "$2@$1/cpanel" PASSWORD || return
-    [[ ! $PASSWORD =~ $REGEX ]] ||
-        lk_warn "spaces and non-printing characters are not allowed" || return
-    lk_install -m 00600 "$FILE" &&
-        { printf 'machine %s login %s password %s\n' "$1" "$2" "$PASSWORD" &&
-        cat "$FILE"; } | lk_file_replace "$FILE" || return
-    lk_console_success "cPanel credentials added for:" "$2@$1"
-}
-
-# lk_cpanel_set_server SERVER
-function lk_cpanel_set_server() {
-    [ $# -eq 1 ] || lk_usage "Usage: $FUNCNAME SERVER" || return
-    _LK_CPANEL_SERVER=$1
-    _LK_CPANEL_ACCESS=curl
-    ! lk_ssh_host_exists "$1" || _LK_CPANEL_ACCESS=ssh
-}
-
-function _lk_cpanel_check_server() {
-    [ "${_LK_CPANEL_SERVER:+1}${_LK_CPANEL_ACCESS:+1}" = 11 ] ||
-        lk_warn "lk_cpanel_set_server must be called before ${FUNCNAME[1]}" ||
-        return
-}
-
-# lk_cpanel_get MODULE FUNC [PARAMETER=VALUE...]
-function lk_cpanel_get() {
-    [ $# -ge 2 ] || lk_usage "\
-Usage: $FUNCNAME MODULE FUNC [PARAMETER=VALUE...]" || return
-    _lk_cpanel_check_server || return
-    case "$_LK_CPANEL_ACCESS" in
-    curl)
-        local DATA
-        [ $# -lt 3 ] || DATA=$(lk_uri_encode "${@:3}") || return
-        curl -fsSL --insecure --netrc "\
-https://$_LK_CPANEL_SERVER:2083/json-api/cpanel?api.version=1&\
-cpanel_jsonapi_user=$_LK_CPANEL_USER&\
-cpanel_jsonapi_module=$1&\
-cpanel_jsonapi_func=$2&\
-cpanel_jsonapi_apiversion=3${3+&$DATA}"
-        ;;
-    ssh)
-        ssh "$_LK_CPANEL_SERVER" uapi --output=json "$1" "$2" "${@:3}"
-        ;;
-    esac
-}
-
-# lk_cpanel_get_domains
-function lk_cpanel_get_domains() {
-    _lk_cpanel_check_server || return
-    lk_cpanel_get DomainInfo domains_data |
-        # TODO: check parked_domains?
-        jq -r '.result.data |
-    ( [ .main_domain.domain ],
-        ( .addon_domains[] | [ .domain, .servername ] ) ) | @tsv'
-}
-
-# lk_cpanel_get_ssl_cert DOMAIN [TARGET_DIR]
-function lk_cpanel_get_ssl_cert() {
-    local TARGET_DIR=${2-~/ssl} ARGS SSL_JSON CERT CA_BUNDLE KEY \
-        LK_FILE_BACKUP_TAKE=1
-    [ $# -ge 1 ] && lk_is_fqdn "$1" || lk_usage "\
-Usage: $FUNCNAME DOMAIN [TARGET_DIR]
-
-Use SSL::fetch_best_for_domain to download an SSL certificate, CA bundle and
-private key for DOMAIN from cPanel to TARGET_DIR or ~/ssl." || return
-    _lk_cpanel_check_server || return
-    TARGET_DIR=${TARGET_DIR:-.}
-    TARGET_DIR=${TARGET_DIR%/}
-    [ -w "$TARGET_DIR" ] || {
-        local LK_SUDO=1
-        ARGS=(-o "$(lk_file_owner "${TARGET_DIR%/*}")") &&
-            ARGS+=(-g "$(lk_file_group "${TARGET_DIR%/*}")") || return
-    }
-    lk_install -d -m 00750 ${ARGS+"${ARGS[@]}"} "$TARGET_DIR" &&
-        lk_install -m 00640 ${ARGS+"${ARGS[@]}"} "$TARGET_DIR/$1.cert" &&
-        lk_install -m 00640 ${ARGS+"${ARGS[@]}"} "$TARGET_DIR/$1.key" || return
-    lk_console_message "Retrieving SSL certificate"
-    lk_console_detail "Host:" "$_LK_CPANEL_SERVER"
-    lk_console_detail "Domain:" "$1"
-    SSL_JSON=$(lk_cpanel_get SSL fetch_best_for_domain domain="$1") &&
-        CERT=$(jq -r '.result.data.crt' <<<"$SSL_JSON") &&
-        CA_BUNDLE=$(jq -r '.result.data.cab' <<<"$SSL_JSON") &&
-        KEY=$(jq -r '.result.data.key' <<<"$SSL_JSON") ||
-        lk_warn "unable to retrieve SSL certificate for domain $1" || return
-    lk_console_message "Verifying certificate"
-    lk_ssl_verify_cert "$CERT" "$KEY" "$CA_BUNDLE" || return
-    lk_console_message "Writing certificate files"
-    lk_console_detail \
-        "Certificate and CA bundle:" "$(lk_tty_path "$TARGET_DIR/$1.cert")"
-    lk_console_detail \
-        "Private key:" "$(lk_tty_path "$TARGET_DIR/$1.key")"
-    lk_file_replace "$TARGET_DIR/$1.cert" \
-        "$(lk_echo_args "$CERT" "$CA_BUNDLE")" &&
-        lk_file_replace "$TARGET_DIR/$1.key" "$KEY"
-}
-
-# lk_ssl_verify_cert CERT KEY [CA_BUNDLE]
-function lk_ssl_verify_cert() {
-    local CERT=$1 KEY=$2 CA_BUNDLE=${3-}
-    openssl verify \
-        ${CA_BUNDLE:+-CAfile <(cat <<<"$CA_BUNDLE")} <<<"$CERT" >/dev/null ||
-        lk_warn "invalid certificate chain" || return
-    openssl x509 -noout -checkend 86400 <<<"$CERT" >/dev/null ||
-        lk_warn "certificate has expired" || return
-    CERT_MODULUS=$(openssl x509 -noout -modulus <<<"$CERT") &&
-        KEY_MODULUS=$(openssl rsa -noout -modulus <<<"$KEY") &&
-        [ "$CERT_MODULUS" = "$KEY_MODULUS" ] ||
-        lk_warn "certificate and private key have different modulus" || return
-    lk_console_log "SSL certificate and private key verified"
-}
-
 # lk_ssl_get_self_signed_cert DOMAIN...
 function lk_ssl_get_self_signed_cert() {
     lk_test_many lk_is_fqdn "$@" || lk_warn "invalid domain(s): $*" || return
@@ -1497,6 +1669,22 @@ function lk_squid_set_option() {
         "^$S*$OPTION$S+$VALUE($S*\$|$S+#$S+)" \
         "0,/^$S*$REGEX\$/{s/^($S*)$REGEX\$/\\1$REPLACE_WITH\\4/}" \
         "0,/^$S*#"{,"$S","$S*"}"$REGEX\$/{s/^($S*)#$REGEX\$/\\1$REPLACE_WITH\\4/}"
+}
+
+# lk_check_user_config [-n] VAR DIR FILE [FILE_MODE [DIR_MODE]]
+#
+# Create or update permissions on a user-specific config file and assign its
+# path to VAR in the caller's scope. If -n is set, don't create the file (useful
+# for setting VAR only). DIR may be the empty string.
+function lk_check_user_config() {
+    local _INSTALL=1
+    [ "${1-}" != -n ] || { _INSTALL= && shift; }
+    local _FILE_MODE=${4-} _DIR_MODE=${5-}
+    eval "$1=\${XDG_CONFIG_HOME:-~/.config}/lk-platform/${2:+\$2/}\$3"
+    [ -z "$_INSTALL" ] ||
+        { [ -z "$_FILE_MODE$_DIR_MODE" ] && [ -r "${!1}" ]; } ||
+        { lk_install -d ${_DIR_MODE:+-m "$_DIR_MODE"} "${!1%/*}" &&
+            lk_install ${_FILE_MODE:+-m "$_FILE_MODE"} "${!1}"; }
 }
 
 # _lk_crontab REMOVE_REGEX ADD_COMMAND

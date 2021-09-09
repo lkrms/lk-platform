@@ -15,7 +15,6 @@ HOMEBREW_TAPS+=(
     homebrew/cask-versions
     homebrew/services
     azure/functions
-    lkrms/autoupdate
 )
 
 # Terminal-based

@@ -32,7 +32,7 @@ Options:
   -p, --deactivate=PLUGIN   deactivate the specified WordPress plugin after
                             migration (may be given multiple times)
   -r, --rename=URL          change site address to URL after migration
-  -c, --ssl-cert            attempt to retrieve SSL certificate, CA bundle and
+  -c, --ssl-cert            attempt to retrieve TLS certificate, CA bundle and
                             private key from remote system (cPanel only)
   -t, --shuffle-salts       refresh salts defined in wp-config.php
   -e, --exclude=PATTERN     exclude files matching PATTERN
@@ -143,7 +143,7 @@ lk_console_detail "Plugins to deactivate:" "$([ ${#DEACTIVATE[@]} -eq 0 ] &&
     lk_echo_array DEACTIVATE)"
 [ -z "$RENAME" ] ||
     lk_console_detail "Rename site to:" "$RENAME"
-lk_console_detail "Copy remote SSL certificate:" \
+lk_console_detail "Copy remote TLS certificate:" \
     "$([ "$SSL" -eq 1 ] && echo "yes" || echo "no")"
 lk_console_detail "Refresh salts in local wp-config.php:" \
     "$([ "$SHUFFLE_SALTS" -eq 1 ] && echo "yes" || echo "no")"
@@ -220,10 +220,13 @@ lk_wp_reapply_config || STATUS=$?
 lk_wp_flush || STATUS=$?
 
 if [ "$SSL" -eq 1 ]; then
-    SITE_ADDR=$(lk_wp_get_site_address) &&
-        [[ $SITE_ADDR =~ ^https?://(www\.)?(.*) ]] &&
-        lk_cpanel_set_server "$SSH_HOST" &&
-        lk_cpanel_get_ssl_cert "${BASH_REMATCH[2]}"
+    eval "$(lk_get_regex DOMAIN_NAME_REGEX)" &&
+        SITE_ADDR=$(lk_wp_get_site_address) &&
+        [[ $SITE_ADDR =~ ^https?://(www\.)?($DOMAIN_NAME_REGEX) ]] &&
+        DOMAIN=${BASH_REMATCH[2]} &&
+        lk_install -d -m 00750 ~/ssl &&
+        lk_cpanel_server_set "$SSH_HOST" &&
+        lk_cpanel_ssl_get_for_domain "$DOMAIN" ~/ssl
 fi || true
 
 if is_final; then
