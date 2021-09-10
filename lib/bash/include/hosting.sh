@@ -541,7 +541,7 @@ Usage: $FUNCNAME [-w] DOMAIN [SITE_ROOT [ALIAS...]]" || return
                 SSL_TMP=$(lk_mktemp_dir) &&
                     lk_delete_on_exit "$SSL_TMP" &&
                     cd "$SSL_TMP" &&
-                    lk_ssl_get_self_signed_cert "${DOMAINS[@]}" &&
+                    lk_ssl_create_self_signed_cert "${DOMAINS[@]}" &&
                     lk_file_replace -bf \
                         "$_SITE_DOMAIN.cert" "${SSL_FILES[0]}" &&
                     lk_file_replace -bf \

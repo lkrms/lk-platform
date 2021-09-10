@@ -471,6 +471,45 @@ Usage: $FUNCNAME [-s] CERT_FILE [KEY_FILE [CA_FILE]]" || return
         lk_warn "certificate is self-signed" || return
 }
 
+# lk_ssl_create_self_signed_cert DOMAIN...
+function lk_ssl_create_self_signed_cert() {
+    [ $# -gt 0 ] || lk_usage "Usage: $FUNCNAME DOMAIN..." || return
+    lk_test_many lk_is_fqdn "$@" || lk_warn "invalid arguments" || return
+    lk_tty_print "Creating a self-signed TLS certificate for:" \
+        $'\n'"$(printf '%s\n' "$@")"
+    lk_no_input || {
+        local FILES=("$1".{key,csr,cert})
+        lk_remove_missing_or_empty FILES || return
+        [ ${#FILES[@]} -eq 0 ] || {
+            lk_tty_detail "Files to overwrite:" \
+                $'\n'"$(printf '%s\n' "${FILES[@]}")"
+            lk_confirm "Proceed?" Y || return
+        }
+    }
+    local CONF
+    lk_mktemp_with CONF cat /etc/ssl/openssl.cnf &&
+        printf "\n[ %s ]\n%s = %s" san subjectAltName \
+            "$(lk_implode_args ", " "${@/#/DNS:}")" >>"$CONF" || return
+    lk_install -m 00644 "$1.cert" &&
+        lk_install -m 00640 "$1".{key,csr} || return
+    openssl genrsa \
+        -out "$1.key" \
+        2048 &&
+        openssl req -new \
+            -key "$1.key" \
+            -subj "/CN=$1" \
+            -reqexts san \
+            -config "$CONF" \
+            -out "$1.csr" &&
+        openssl x509 -req -days 365 \
+            -in "$1.csr" \
+            -extensions san \
+            -extfile "$CONF" \
+            -signkey "$1.key" \
+            -out "$1.cert" &&
+        rm -f "$1.csr"
+}
+
 # _lk_cpanel_get_url SERVER MODULE FUNC [PARAMETER=VALUE...]
 function _lk_cpanel_get_url() {
     [ $# -ge 3 ] || lk_warn "invalid arguments" || return
@@ -1427,42 +1466,6 @@ function lk_certbot_list_certificates() {
     lk_elevate certbot certificates ${ARGS[@]+"${ARGS[@]}"} |
         awk -f "$LK_BASE/lib/awk/certbot-parse-certificates.awk"
 } #### Reviewed: 2021-04-22
-
-# lk_ssl_get_self_signed_cert DOMAIN...
-function lk_ssl_get_self_signed_cert() {
-    lk_test_many lk_is_fqdn "$@" || lk_warn "invalid domain(s): $*" || return
-    lk_console_detail "Generating a self-signed SSL certificate for:" \
-        $'\n'"$(lk_echo_args "$@")"
-    lk_no_input || {
-        local FILES=("$1".{key,csr,cert})
-        lk_remove_false '[ -s "{}" ]' FILES || return
-        [ ${#FILES[@]} -eq 0 ] || {
-            lk_echo_array FILES | lk_console_detail_list \
-                "Existing files will be overwritten:" file files
-            lk_confirm "Proceed?" Y || return
-        }
-    }
-    OPENSSL_CONF=$(cat /etc/ssl/openssl.cnf) || return
-    OPENSSL_EXT_CONF=$(printf '\n%s' \
-        "[ san ]" \
-        "subjectAltName = $(printf 'DNS:%s\n' "$@" | lk_implode_input ", ")")
-    openssl genrsa \
-        -out "$1.key" \
-        2048 || return
-    openssl req -new \
-        -key "$1.key" \
-        -subj "/CN=$1" \
-        -reqexts san \
-        -config <(cat <<<"$OPENSSL_CONF$OPENSSL_EXT_CONF") \
-        -out "$1.csr" || return
-    openssl x509 -req -days 365 \
-        -in "$1.csr" \
-        -extensions san \
-        -extfile <(cat <<<"$OPENSSL_EXT_CONF") \
-        -signkey "$1.key" \
-        -out "$1.cert" || return
-    rm -f "$1.csr"
-}
 
 function _lk_option_check() {
     { { [ $# -gt 0 ] &&

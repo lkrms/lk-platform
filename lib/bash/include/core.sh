@@ -3444,6 +3444,13 @@ function lk_remove_missing() {
     lk_remove_false 'lk_maybe_sudo test -e "{}" -o -L "{}"' "$1"
 }
 
+# lk_remove_missing_or_empty ARRAY
+#
+# Remove paths to missing or empty files from ARRAY.
+function lk_remove_missing_or_empty() {
+    lk_remove_false 'lk_maybe_sudo test -s "{}" -o -L "{}"' "$1"
+}
+
 # lk_resolve_files ARRAY
 #
 # Resolve paths in ARRAY to absolute file names and remove any duplicates.

@@ -54,4 +54,43 @@ Usage: $FUNCNAME [-s] CERT_FILE [KEY_FILE [CA_FILE]]" || return
         lk_warn "certificate is self-signed" || return
 }
 
+# lk_ssl_create_self_signed_cert DOMAIN...
+function lk_ssl_create_self_signed_cert() {
+    [ $# -gt 0 ] || lk_usage "Usage: $FUNCNAME DOMAIN..." || return
+    lk_test_many lk_is_fqdn "$@" || lk_warn "invalid arguments" || return
+    lk_tty_print "Creating a self-signed TLS certificate for:" \
+        $'\n'"$(printf '%s\n' "$@")"
+    lk_no_input || {
+        local FILES=("$1".{key,csr,cert})
+        lk_remove_missing_or_empty FILES || return
+        [ ${#FILES[@]} -eq 0 ] || {
+            lk_tty_detail "Files to overwrite:" \
+                $'\n'"$(printf '%s\n' "${FILES[@]}")"
+            lk_confirm "Proceed?" Y || return
+        }
+    }
+    local CONF
+    lk_mktemp_with CONF cat /etc/ssl/openssl.cnf &&
+        printf "\n[ %s ]\n%s = %s" san subjectAltName \
+            "$(lk_implode_args ", " "${@/#/DNS:}")" >>"$CONF" || return
+    lk_install -m 00644 "$1.cert" &&
+        lk_install -m 00640 "$1".{key,csr} || return
+    openssl genrsa \
+        -out "$1.key" \
+        2048 &&
+        openssl req -new \
+            -key "$1.key" \
+            -subj "/CN=$1" \
+            -reqexts san \
+            -config "$CONF" \
+            -out "$1.csr" &&
+        openssl x509 -req -days 365 \
+            -in "$1.csr" \
+            -extensions san \
+            -extfile "$CONF" \
+            -signkey "$1.key" \
+            -out "$1.cert" &&
+        rm -f "$1.csr"
+}
+
 #### Reviewed: 2021-09-10
