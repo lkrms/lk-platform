@@ -1081,15 +1081,40 @@ function lk_env_clean() {
     fi
 }
 
-# lk_mktemp_with VAR [COMMAND [ARG...]]
+# lk_mktemp_with [-c] VAR [COMMAND [ARG...]]
 #
-# Set VAR to the name of a temporary file that contains the output of COMMAND.
+# Set VAR to the name of a new temporary file that optionally contains the
+# output of COMMAND. If -c is specified, do nothing if VAR is already set to the
+# path of an existing file.
 function lk_mktemp_with() {
-    [ $# -ge 1 ] || lk_usage "Usage: $FUNCNAME VAR COMMAND [ARG...]" || return
-    local _LK_STACK_DEPTH=1
-    eval "$1=\$(lk_mktemp_file)" &&
-        lk_delete_on_exit "${!1}" &&
-        { [ $# -lt 2 ] || "${@:2}" >"${!1}"; }
+    local IFS _CACHE
+    [ "${1-}" != -c ] || { _CACHE=1 && shift; }
+    [ $# -ge 1 ] || lk_usage "\
+Usage: $FUNCNAME [-c] VAR [COMMAND [ARG...]]" || return
+    [ -z "${_CACHE-}" ] || [ ! -f "${!1-}" ] || return 0
+    local _VAR=$1 _LK_STACK_DEPTH=1
+    shift
+    eval "$_VAR=\$(lk_mktemp_file)" &&
+        lk_delete_on_exit "${!_VAR}" &&
+        { [ $# -eq 0 ] || "$@" >"${!_VAR}"; }
+}
+
+# lk_mktemp_dir_with [-c] VAR [COMMAND [ARG...]]
+#
+# Set VAR to the name of a new temporary directory and optionally use it as the
+# working directory to run COMMAND. If -c is specified, do nothing if VAR is
+# already set to the path of an existing directory.
+function lk_mktemp_dir_with() {
+    local IFS _CACHE
+    [ "${1-}" != -c ] || { _CACHE=1 && shift; }
+    [ $# -ge 1 ] || lk_usage "\
+Usage: $FUNCNAME [-c] VAR [COMMAND [ARG...]]" || return
+    [ -z "${_CACHE-}" ] || [ ! -d "${!1-}" ] || return 0
+    local _VAR=$1 _LK_STACK_DEPTH=1
+    shift
+    eval "$_VAR=\$(lk_mktemp_dir)" &&
+        lk_delete_on_exit "${!_VAR}" &&
+        { [ $# -eq 0 ] || (cd "${!_VAR}" && "$@"); }
 }
 
 # lk_uri_encode PARAMETER=VALUE...
@@ -3417,6 +3442,13 @@ function lk_remove_false() {
 # Remove paths to missing files from ARRAY.
 function lk_remove_missing() {
     lk_remove_false 'lk_maybe_sudo test -e "{}" -o -L "{}"' "$1"
+}
+
+# lk_remove_missing_or_empty ARRAY
+#
+# Remove paths to missing or empty files from ARRAY.
+function lk_remove_missing_or_empty() {
+    lk_remove_false 'lk_maybe_sudo test -s "{}" -o -L "{}"' "$1"
 }
 
 # lk_resolve_files ARRAY

@@ -2,6 +2,7 @@
 
 HOMEBREW_TAPS=(
     homebrew/cask
+    lkrms/autoupdate
 
     #
     ${HOMEBREW_TAPS[@]+"${HOMEBREW_TAPS[@]}"}

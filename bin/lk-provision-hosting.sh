@@ -885,7 +885,7 @@ tolower($0) ~ "^(blackhole|\"blackhole\")" S "*:" {
                     --arg config intermediate \
                     -f "$LK_BASE/lib/jq/httpd_get_ssl_directives.jq" \
                     <<<"$JSON" ||
-                    lk_warn "error processing Mozilla SSL recommendations" ||
+                    lk_warn "error processing Mozilla TLS recommendations" ||
                     continue
                 exit
             done

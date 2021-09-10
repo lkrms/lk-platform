@@ -295,13 +295,13 @@ function lk_macos_defaults_maybe_write() {
     fi
 }
 
-# lk_macos_defaults_dump
+# lk_macos_defaults_dump [TAG]
 function lk_macos_defaults_dump() {
     local IFS=', ' DIR HOST DOMAINS DOMAIN FILE
     if [ -n "${LK_DEFAULTS_DIR-}" ]; then
         DIR=${LK_DEFAULTS_DIR%/}
     else
-        DIR=~/.${LK_PATH_PREFIX:-lk-}defaults/$(lk_date_ymdhms)
+        DIR=~/.${LK_PATH_PREFIX:-lk-}defaults/$(lk_date_ymdhms)${1+-$1}
     fi
     for HOST in "" currentHost; do
         mkdir -p "$DIR${HOST:+/$HOST}" || return
@@ -321,13 +321,13 @@ function lk_macos_defaults_dump() {
         return 0
     lk_is_root || ! lk_can_sudo defaults || {
         local _LK_MACOS_DEFAULTS_DUMP_SUDO=1
-        LK_DEFAULTS_DIR=$DIR-system \
+        LK_DEFAULTS_DIR=$DIR/system \
             lk_macos_defaults_dump || return
     }
     DIR=$(lk_tty_path "$DIR")
     lk_console_log \
         "Output of \"defaults [-currentHost] export \$DOMAIN\" dumped to:" \
-        "$(for d in "$DIR" ${_LK_MACOS_DEFAULTS_DUMP_SUDO:+"$DIR-system"}; do
+        "$(for d in "$DIR" ${_LK_MACOS_DEFAULTS_DUMP_SUDO:+"$DIR/system"}; do
             lk_echo_args \
                 "$d" "$d/currentHost"
         done)"

@@ -532,14 +532,16 @@ Usage: $FUNCNAME [-w] DOMAIN [SITE_ROOT [ALIAS...]]" || return
         # Failing that, use SITE_ROOT/ssl/DOMAIN.cert, creating it if needed
         lk_files_exist ${SSL_FILES+"${SSL_FILES[@]}"} || {
             SSL_FILES=("$SITE_ROOT/ssl/$_SITE_DOMAIN".{cert,key})
-            lk_install -m 00640 \
-                -o "$_SITE_USER" -g "$_SITE_GROUP" "${SSL_FILES[@]}" || return
+            lk_install -m 00644 -o "$_SITE_USER" -g "$_SITE_GROUP" \
+                "${SSL_FILES[0]}" &&
+                lk_install -m 00640 -o "$_SITE_USER" -g "$_SITE_GROUP" \
+                    "${SSL_FILES[1]}" || return
             lk_files_not_empty "${SSL_FILES[@]}" || {
                 LK_FILE_NO_DIFF=1
                 SSL_TMP=$(lk_mktemp_dir) &&
                     lk_delete_on_exit "$SSL_TMP" &&
                     cd "$SSL_TMP" &&
-                    lk_ssl_get_self_signed_cert "${DOMAINS[@]}" &&
+                    lk_ssl_create_self_signed_cert "${DOMAINS[@]}" &&
                     lk_file_replace -bf \
                         "$_SITE_DOMAIN.cert" "${SSL_FILES[0]}" &&
                     lk_file_replace -bf \
