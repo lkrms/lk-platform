@@ -181,6 +181,12 @@ function lk_hosting_httpd_config_apply() {
 
 #### BEGIN hosting.sh.d
 
+function _lk_hosting_check() {
+    lk_is_ubuntu &&
+        lk_dirs_exist /srv/www{,/.tmp,/.opcache} ||
+        lk_warn "system not configured for hosting"
+}
+
 # _lk_hosting_site_list_settings [FORMAT [EXTRA_SETTING...]]
 function _lk_hosting_site_list_settings() {
     local FORMAT=${1:-'%s\n'}
@@ -352,8 +358,10 @@ function _lk_hosting_site_write_settings() {
         lk_file_replace -lp "$FILE" "$(lk_get_shell_var "${!SITE_@}")"
 } #### Reviewed: 2021-07-12
 
-# lk_hosting_site_set_settings DOMAIN
+# lk_hosting_site_set_settings [-n] DOMAIN
 function lk_hosting_site_set_settings() {
+    local WRITE=1
+    [ "${1-}" != -n ] || { WRITE= && shift; }
     [ $# -gt 0 ] || lk_warn "no domain" || return
     lk_is_fqdn "$1" || lk_warn "invalid domain: $1" || return
     local LK_SUDO=1 INODE _SITE_LIST SAME_ROOT ALIASES=() SAME_DOMAIN
@@ -391,7 +399,8 @@ END                     { print max + 1 }' $SAME_ROOT)} || return
     done
     SITE_ALIASES=${ALIASES[*]-}
     unset IFS
-    _lk_hosting_site_write_settings "$1"
+    [ -z "$WRITE" ] ||
+        _lk_hosting_site_write_settings "$1"
 } #### Reviewed: 2021-07-12
 
 function _lk_hosting_site_check_settings() {
@@ -462,34 +471,32 @@ function _lk_hosting_site_check_settings() {
 
 # lk_hosting_site_configure [-w] DOMAIN [SITE_ROOT [ALIAS...]]
 function lk_hosting_site_configure() { (
-    LK_SUDO=1
-    LK_VERBOSE=${LK_VERBOSE-1}
-    NO_WWW=
+    declare LK_SUDO=1 LK_VERBOSE=${LK_VERBOSE-1} NO_WWW= SSL=
     [ "${1-}" != -w ] || { NO_WWW=1 && shift; }
     [ $# -ge 1 ] || lk_usage "\
 Usage: $FUNCNAME [-w] DOMAIN [SITE_ROOT [ALIAS...]]" || return
-    lk_dirs_exist /srv/www{,/.tmp,/.opcache} ||
-        lk_warn "hosting base directories not found" || return
-    unset "${!SITE_@}" "${!_SITE_@}" SSL
+    _lk_hosting_check || return
+    unset IFS "${!SITE_@}" "${!_SITE_@}"
     _SITE_DOMAIN=${1#www.}
-    SH=$(_lk_hosting_site_read_settings "$_SITE_DOMAIN") && eval "$SH" || return
+    SH=$(_lk_hosting_site_read_settings "$_SITE_DOMAIN") &&
+        eval "$SH" || return
     if [ -z "${2-}" ]; then
         [ -f "$_SITE_FILE" ] ||
             lk_warn "file not found: $_SITE_FILE" || return
     else
         [ ! -f "$_SITE_FILE" ] || [ "$SITE_ROOT" -ef "$2" ] ||
-            lk_warn "domain already configured: $_SITE_FILE" || return
+            lk_warn "domain already configured in $_SITE_FILE" || return
         SITE_ROOT=$2
     fi
     [ -z "$NO_WWW" ] ||
         SITE_DISABLE_WWW=Y
-    SITE_ALIASES=$(IFS=, &&
-        printf '%s\n' "${@:3}" $SITE_ALIASES | sort -u | lk_implode_input ",")
+    SITE_ALIASES=$(printf '%s\n' "${@:3}" ${SITE_ALIASES//,/ } |
+        sort -u | lk_implode_input ",")
     eval "$(lk_get_regex LINUX_USERNAME_REGEX)"
     lk_tty_print "Configuring site:" "$_SITE_DOMAIN"
     # TODO: move _lk_hosting_site_check_settings here
     _lk_hosting_site_check_settings &&
-        lk_hosting_site_set_settings "$_SITE_DOMAIN" || return
+        lk_hosting_site_set_settings -n "$_SITE_DOMAIN" || return
     LOG_DIR=$SITE_ROOT/log
     lk_install -d -m 00750 \
         -o "$_SITE_USER" -g "$_SITE_GROUP" "$SITE_ROOT"/{,public_html,ssl} &&
@@ -503,12 +510,10 @@ Usage: $FUNCNAME [-w] DOMAIN [SITE_ROOT [ALIAS...]]" || return
         DOMAINS+=("www.$_SITE_DOMAIN")
         APACHE+=(ServerAlias "www.$_SITE_DOMAIN")
     }
-    IFS=,
-    for ALIAS in $SITE_ALIASES; do
+    for ALIAS in ${SITE_ALIASES//,/ }; do
         DOMAINS+=("$ALIAS")
         APACHE+=(ServerAlias "$ALIAS")
     done
-    unset IFS
     DOMAINS=($(printf '%s\n' "${DOMAINS[@]}" | sort -u))
     unset LK_FILE_REPLACE_NO_CHANGE LK_FILE_REPLACE_DECLINED
     lk_is_true SITE_DISABLE_HTTPS || {
@@ -537,30 +542,32 @@ Usage: $FUNCNAME [-w] DOMAIN [SITE_ROOT [ALIAS...]]" || return
                 lk_install -m 00640 -o "$_SITE_USER" -g "$_SITE_GROUP" \
                     "${SSL_FILES[1]}" || return
             lk_files_not_empty "${SSL_FILES[@]}" || {
-                LK_FILE_NO_DIFF=1
-                SSL_TMP=$(lk_mktemp_dir) &&
-                    lk_delete_on_exit "$SSL_TMP" &&
-                    cd "$SSL_TMP" &&
-                    lk_ssl_create_self_signed_cert "${DOMAINS[@]}" &&
-                    lk_file_replace -bf \
-                        "$_SITE_DOMAIN.cert" "${SSL_FILES[0]}" &&
-                    lk_file_replace -bf \
-                        "$_SITE_DOMAIN.key" "${SSL_FILES[1]}" || return
-                lk_tty_detail \
-                    "Adding self-signed certificate to local trust store"
-                FILE=/usr/local/share/ca-certificates/$_SITE_DOMAIN.crt
-                lk_install -m 00644 "$FILE" &&
-                    lk_file_replace -mf "${SSL_FILES[0]}" "$FILE" &&
-                    lk_elevate update-ca-certificates || return
-                unset LK_FILE_NO_DIFF
+                [ -n "${LK_SSL_CA-}" ] ||
+                    printf '%s\n' "${DOMAINS[@]}" |
+                    grep -Ev '\.(test|localhost)$' >/dev/null ||
+                    declare LK_SSL_CA=$LK_BASE/share/ssl/hosting-CA.cert \
+                        LK_SSL_CA_KEY=$LK_BASE/share/ssl/hosting-CA.key
+                lk_mktemp_dir_with SSL_TMP \
+                    lk_ssl_create_self_signed_cert "${DOMAINS[@]}" || return
+                LK_VERBOSE= lk_file_replace -bf \
+                    "$SSL_TMP/$_SITE_DOMAIN.cert" "${SSL_FILES[0]}" &&
+                    LK_VERBOSE= lk_file_replace -bf \
+                        "$SSL_TMP/$_SITE_DOMAIN.key" "${SSL_FILES[1]}" || return
+                if [ -z "${LK_SSL_CA-}" ]; then
+                    lk_tty_detail \
+                        "Adding self-signed certificate to local trust store"
+                    lk_ssl_install_ca_certificate "${SSL_FILES[0]}"
+                else
+                    lk_tty_detail "Checking local trust store"
+                    lk_ssl_install_ca_certificate "$LK_SSL_CA"
+                fi || return
             }
         }
         SITE_SSL_CERT_FILE=${SSL_FILES[0]}
         SITE_SSL_KEY_FILE=${SSL_FILES[1]}
         [ -n "${SSL_FILES[2]:+1}" ] ||
             unset SITE_SSL_CHAIN_FILE
-        # Use a subshell to maintain the value of LK_FILE_REPLACE_NO_CHANGE
-        (_lk_hosting_site_write_settings "$_SITE_DOMAIN") || return
+        _lk_hosting_site_write_settings "$_SITE_DOMAIN" || return
     }
     _SITE_ALIASES=${SITE_ALIASES//,/, }
     lk_tty_detail "Aliases:" "${_SITE_ALIASES:-<none>}"
