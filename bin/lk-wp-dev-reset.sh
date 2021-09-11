@@ -59,7 +59,7 @@ fi
 IP=$(LK_DIG_SERVER=1.1.1.1 lk_dns_get_records A,AAAA "$SITE_DOMAIN")
 if [ -n "$IP" ] && ! lk_node_is_host "$SITE_HOST"; then
     NEW_SITE_ADDR=$(lk_console_read "New site address:" "" \
-        -i "http://${SITE_DOMAIN%%.*}.hosting")
+        -i "https://${SITE_DOMAIN%%.*}.test")
     if [ -n "$NEW_SITE_ADDR" ] && [ "$NEW_SITE_ADDR" != "$SITE_ADDR" ]; then
         _LK_WP_QUIET=1 LK_WP_REPLACE=1 LK_WP_REAPPLY=0 LK_WP_FLUSH=0 \
             _LK_WP_REPLACE_COMMAND=wp \

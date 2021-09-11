@@ -179,7 +179,7 @@
 
     TLD_REGEX=$(curl -fsSL \
         "https://data.iana.org/TLD/tlds-alpha-by-domain.txt" |
-        sed -E '/^(#|$|HOSTING$)/d' | tr '[:upper:]' '[:lower:]' |
+        sed -E '/^(#|$)/d' | tr '[:upper:]' '[:lower:]' |
         lk_ere_implode_input -e)
     COMMAND=(sudo -HE bash -c "$(lk_quote_args "$(
         declare -f keep-alive update-server do-update-server

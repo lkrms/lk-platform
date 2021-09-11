@@ -60,8 +60,9 @@ function lk_ssl_create_self_signed_cert() {
     lk_test_many lk_is_fqdn "$@" || lk_warn "invalid arguments" || return
     lk_tty_print "Creating a self-signed TLS certificate for:" \
         $'\n'"$(printf '%s\n' "$@")"
+    local CA_FILE=${LK_SSL_CA:+$1-${LK_SSL_CA##*/}}
     lk_no_input || {
-        local FILES=("$1".{key,csr,cert})
+        local FILES=("$1".{key,csr,cert} ${CA_FILE:+"$CA_FILE"})
         lk_remove_missing_or_empty FILES || return
         [ ${#FILES[@]} -eq 0 ] || {
             lk_tty_detail "Files to overwrite:" \
@@ -73,24 +74,62 @@ function lk_ssl_create_self_signed_cert() {
     lk_mktemp_with CONF cat /etc/ssl/openssl.cnf &&
         printf "\n[ %s ]\n%s = %s" san subjectAltName \
             "$(lk_implode_args ", " "${@/#/DNS:}")" >>"$CONF" || return
-    lk_install -m 00644 "$1.cert" &&
+    lk_install -m 00644 "$1.cert" ${CA_FILE:+"$CA_FILE"} &&
         lk_install -m 00640 "$1".{key,csr} || return
-    openssl genrsa \
-        -out "$1.key" \
-        2048 &&
-        openssl req -new \
-            -key "$1.key" \
-            -subj "/CN=$1" \
-            -reqexts san \
-            -config "$CONF" \
-            -out "$1.csr" &&
-        openssl x509 -req -days 365 \
+    local ARGS=(-signkey "$1.key")
+    [ -z "$CA_FILE" ] || {
+        local ARGS=(-CA "$LK_SSL_CA" -CAcreateserial)
+        [ -z "${LK_SSL_CA_KEY:+1}" ] ||
+            ARGS+=(-CAkey "$LK_SSL_CA_KEY")
+    }
+    lk_sudo openssl req -new \
+        -newkey rsa:2048 \
+        -nodes \
+        -keyout "$1.key" \
+        -subj "/OU=lk-platform/CN=$1" \
+        -reqexts san \
+        -config "$CONF" \
+        -out "$1.csr" &&
+        lk_sudo openssl x509 -req \
+            -days 365 \
             -in "$1.csr" \
             -extensions san \
             -extfile "$CONF" \
-            -signkey "$1.key" \
-            -out "$1.cert" &&
-        rm -f "$1.csr"
+            -out "$1.cert" \
+            "${ARGS[@]}" &&
+        lk_sudo rm -f "$1.csr" || return
+    [ -z "$CA_FILE" ] || {
+        lk_sudo openssl x509 -in "$LK_SSL_CA" -out "$CA_FILE" &&
+            LK_VERBOSE= lk_file_replace \
+                "$1.cert" < <(lk_sudo cat "$1.cert" "$CA_FILE")
+    }
+}
+
+# lk_ssl_install_ca_certificate CERT_FILE
+function lk_ssl_install_ca_certificate() {
+    local DIR COMMAND CERT FILE \
+        _LK_FILE_REPLACE_NO_CHANGE=${LK_FILE_REPLACE_NO_CHANGE-}
+    unset LK_FILE_REPLACE_NO_CHANGE
+    DIR=$(LK_SUDO= lk_first_existing \
+        /usr/local/share/ca-certificates/ \
+        /etc/ca-certificates/trust-source/anchors/) &&
+        COMMAND=$(LK_SUDO= lk_command_first \
+            update-ca-certificates \
+            update-ca-trust) ||
+        lk_warn "CA certificate store not found" || return
+    lk_mktemp_with CERT \
+        lk_sudo openssl x509 -in "$1" || return
+    FILE=$DIR${1##*/}
+    FILE=${FILE%.*}.crt
+    local LK_SUDO=1
+    lk_install -m 00644 "$FILE" &&
+        LK_FILE_NO_DIFF=1 \
+            lk_file_replace -mf "$1" "$FILE" || return
+    if lk_is_false LK_FILE_REPLACE_NO_CHANGE; then
+        lk_elevate "$COMMAND"
+    else
+        LK_FILE_REPLACE_NO_CHANGE=$_LK_FILE_REPLACE_NO_CHANGE
+    fi
 }
 
 #### Reviewed: 2021-09-10
