@@ -36,6 +36,10 @@ PAC_KEEP=(
     wp-cli
 
     #
+    linux-headers
+    r8152-dkms
+
+    #
     powerpanel
 
     #
