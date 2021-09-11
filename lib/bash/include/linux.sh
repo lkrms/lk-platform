@@ -364,15 +364,16 @@ function lk_nm_file_get_ipv4_ipv6() {
 
 [ipv4]${ADDRESS:+
 address1=$ADDRESS${GATEWAY:+,$GATEWAY}}${DNS4[*]+
-dns=${DNS4[*]};}${DNS_SEARCH[*]+
+dns=${DNS4[*]};${DNS_SEARCH[*]+
 dns-search=${DNS_SEARCH[*]};}
+ignore-auto-dns=true}
 method=${MANUAL-auto}${MANUAL+manual
 
 [ipv6]
 addr-gen-mode=stable-privacy${DNS6[*]+
-dns=${DNS6[*]};
-ignore-auto-dns=true}${DNS_SEARCH[*]+
+dns=${DNS6[*]};${DNS_SEARCH[*]+
 dns-search=${DNS_SEARCH[*]};}
+ignore-auto-dns=true}
 ip6-privacy=0
 method=auto}
 EOF
