@@ -219,7 +219,7 @@ lk_start_trace
         unset LK_FILE_REPLACE_NO_CHANGE
         NM_DIR=/etc/NetworkManager/system-connections
         NM_EXT=.nmconnection
-        NM_IGNORE="^$S*(#|\$|uuid=)"
+        NM_IGNORE="^$S*(#|\$|(uuid|permissions|timestamp)=|\[proxy\])"
         BRIDGE=${LK_BRIDGE_INTERFACE-}
         BRIDGE_FILE=${BRIDGE:+$NM_DIR/$BRIDGE$NM_EXT}
         IPV4_IPV6=(
@@ -421,7 +421,9 @@ $LK_NODE_HOSTNAME" &&
 
     lk_console_message "Checking kernel parameters"
     unset LK_FILE_REPLACE_NO_CHANGE
-    for FILE in default.conf $(lk_is_virtual || lk_echo_args sysrq.conf); do
+    for FILE in default.conf \
+        $(! lk_node_is_router || echo router.conf) \
+        $(lk_is_virtual || echo sysrq.conf); do
         TARGET=/etc/sysctl.d/90-${FILE/default/${LK_PATH_PREFIX}default}
         FILE=$LK_BASE/share/sysctl.d/$FILE
         lk_install -m 00644 "$TARGET"
