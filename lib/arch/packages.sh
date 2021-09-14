@@ -19,6 +19,7 @@ PAC_PACKAGES=(
     mkinitcpio
     grub
     efibootmgr
+    kernel-modules-hook
 
     #### lk-platform requirements
     #
