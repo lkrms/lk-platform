@@ -94,6 +94,7 @@ PAC_PACKAGES+=(
     # Services
     at
     cronie
+    fail2ban
 
     # Multimedia
     ffmpeg

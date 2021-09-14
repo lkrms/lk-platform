@@ -731,6 +731,19 @@ $LK_NODE_HOSTNAME" &&
         cronie "cron"
     )
 
+    if lk_pac_installed fail2ban; then
+        unset LK_FILE_REPLACE_NO_CHANGE
+        _FILE=$LK_BASE/share/fail2ban/default-arch.conf
+        FILE=/etc/fail2ban/jail.local
+        lk_install -m 00644 "$FILE"
+        lk_file_replace -f "$_FILE" "$FILE"
+        SERVICE_ENABLE+=(
+            fail2ban "Fail2ban"
+        )
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+            SERVICE_RESTART+=(fail2ban)
+    fi
+
     if lk_pac_installed mariadb; then
         sudo test -d /var/lib/mysql/mysql ||
             sudo mariadb-install-db \
