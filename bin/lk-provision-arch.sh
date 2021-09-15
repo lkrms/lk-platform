@@ -1074,7 +1074,7 @@ done\""
     ! lk_arch_reboot_required || {
         lk_console_blank
         lk_console_warning "Reboot required"
-        lk_confirm "Reboot now?" Y || exit 0
+        lk_confirm "Reboot now?" N -t 5 || exit 0
         sudo shutdown -r now
     }
 
