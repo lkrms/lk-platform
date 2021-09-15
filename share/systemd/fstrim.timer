@@ -1,13 +1,14 @@
 [Unit]
-Description=Discard unused blocks 10 minutes after booting, then weekly
+Description=Discard unused blocks at least 1 hour after booting, then weekly
 Documentation=man:fstrim
 Documentation=https://github.com/lkrms/lk-platform
 ConditionVirtualization=!container
 
 [Timer]
-OnBootSec=600
-OnActiveSec=1w
+OnBootSec=1h
+OnUnitActiveSec=1w
 AccuracySec=1h
+RandomizedDelaySec=1h
 
 [Install]
 WantedBy=timers.target
