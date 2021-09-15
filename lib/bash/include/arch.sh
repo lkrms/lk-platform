@@ -323,9 +323,15 @@ function lk_aur_rebuild() {
 }
 
 function lk_arch_reboot_required() {
-    local DIR
-    DIR=/usr/lib/modules/$(uname -r) &&
-        ! [ -d "$DIR" ]
+    local RELEASE PACKAGE PACKAGE_VER
+    RELEASE=$(uname -r) || return
+    [ ! -d "/usr/lib/modules/$RELEASE" ] || {
+        PACKAGE=$(awk -F= -v RS='[[:blank:]]+' '
+/^BOOT_IMAGE=/ { if (sub(/^\/vmlinuz-/, "", $2)) p = $2 }
+END { if (p) print p }' /proc/cmdline) && [ -n "$PACKAGE" ] || return
+        PACKAGE_VER=$(pacman -Q "$PACKAGE" | awk '{print $2}') || return
+        [[ ${RELEASE//./-} != ${PACKAGE_VER//./-}* ]]
+    }
 }
 
 lk_provide arch
