@@ -933,8 +933,8 @@ EOF
 # If a reverse proxy with a hostname is enabled, lighttpd will go down with
 # "Temporary failure in name resolution" if started too early
 [Unit]
-After=network-online.target
 Wants=network-online.target
+After=network-online.target
 EOF
         ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
             DAEMON_RELOAD=1

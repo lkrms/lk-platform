@@ -3877,7 +3877,7 @@ function lk_file_prepare_temp() {
 # lk_file_replace [OPTIONS] TARGET [CONTENT]
 function lk_file_replace() {
     local OPTIND OPTARG OPT LK_USAGE IFS SOURCE= IGNORE= FILTER= ASK= \
-        LINK BACKUP=${LK_FILE_BACKUP_TAKE-} MOVE=${LK_FILE_BACKUP_MOVE-} \
+        LINK=1 BACKUP=${LK_FILE_BACKUP_TAKE-} MOVE=${LK_FILE_BACKUP_MOVE-} \
         NEW=1 VERB=Created CONTENT PREVIOUS TEMP vv=
     unset IFS PREVIOUS
     LK_USAGE="\
@@ -3889,7 +3889,6 @@ Options:
   -f SOURCE     read CONTENT from SOURCE
   -i PATTERN    ignore lines matching the regular expression when comparing
   -s SCRIPT     filter lines through \`sed -E SCRIPT\` when comparing
-  -l            if TARGET is a symbolic link, replace the linked file
   -b            back up TARGET before replacing it
   -m            use a separate location when backing up (-b is implied)
   -p            prompt before replacing TARGET"
