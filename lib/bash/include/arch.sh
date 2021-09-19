@@ -236,6 +236,35 @@ function lk_pac_installed_not_explicit() {
     lk_pac_installed_list -d "$@"
 }
 
+# lk_pac_list_changed_files [DIR...]
+function lk_pac_list_changed_files() {
+    [ $# -gt 0 ] || set -- /etc
+    local REGEX
+    REGEX=$(lk_regex_implode "$@")
+    {
+        comm -13 \
+            <(pacman -Ql |
+                awk "\$2 ~ \"^$REGEX/.*[^/]\$\" {print \$2}" | sort -u) \
+            <(sudo find "$@" ! \( \( \
+                -path /etc/ca-certificates -o \
+                -path /etc/ssl/certs \
+                \) -prune \) ! -type d | sort -u) |
+            tr '\n' '\0' |
+            sudo xargs -0 ls -ld --time-style=long-iso |
+            sed -E 's/^/NEW /' || return
+        { sudo paccheck --md5sum --sha256sum --file-properties \
+            --backup --noextract --noupgrade --quiet || true; } |
+            awk -F"'" "\$2 ~ \"^$REGEX/.*[^/]\$\" {print \$2}" |
+            sort -u |
+            tr '\n' '\0' |
+            sudo xargs -0 ls -ld --time-style=long-iso |
+            sed -E 's/^/CHANGED /'
+    } | sort -k9 | awk '
+{ for (i = 1; i <= 8; i++) { printf "%s%s", $i, (i == 7 ? " " : "\t"); $i = "" }
+  sub("^[[:blank:]]+", "")
+  print }'
+}
+
 function lk_makepkg_setup() {
     local NAME EMAIL
     printenv PACKAGER &>/dev/null || (
