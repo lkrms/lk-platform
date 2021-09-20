@@ -95,38 +95,35 @@ function file_delete() {
     }
 }
 
+# - In: i, IF_ARRAY, IF_PREFIX, ${IF_ARRAY}_NOW[i]
+# - Out: IF, IF_PATH, IF_ADDRESS, IF_NAME, ${IF_ARRAY}[i], UDEV_RULES[],
+#   IF_RENAME[]
+function process_interface() {
+    eval "IF=\${${IF_ARRAY}_NOW[i]}"
+    IF_PATH=/sys/class/net/$IF
+    IF_ADDRESS=$(<"$IF_PATH/address")
+    IF_NAME=$IF_PREFIX$i
+    eval "${IF_ARRAY}[i]=\$IF_NAME"
+    [ -z "${UDEV_RULES[i]+1}" ] || local i=${#UDEV_RULES[@]}
+    UDEV_RULES[i]=$(printf \
+        'SUBSYSTEM=="net", DEVPATH!="*/virtual/*", ACTION=="add", ATTR{address}=="%s", NAME="%s"\n' \
+        "$IF_ADDRESS" "$IF_NAME")
+    [ "$IF" = "$IF_NAME" ] ||
+        IF_RENAME+=("$IF" "$IF_NAME")
+}
+
 function link_rename() {
     . "$LK_BASE/lib/bash/include/core.sh"
     lk_run_detail udevadm control --reload
     while [ $# -ge 2 ]; do
-        lk_run_detail ip link set "$1" down &&
+        { ! lk_require_output -q \
+            nmcli -g GENERAL.CONNECTION device show "$1" 2>/dev/null ||
+            lk_run_detail nmcli device disconnect "$1"; } &&
+            lk_run_detail ip link set "$1" down &&
             lk_run_detail ip link set "$1" name "$2" &&
             lk_run_detail ip link set "$2" up ||
             return
         shift 2
-    done
-}
-
-function link_reset() {
-    . "$LK_BASE/lib/bash/include/core.sh"
-    local BRIDGE DEV ACTIVE_UUID UUID
-    [ "${1-}" != -b ] || { BRIDGE=$2 && shift 2; }
-    lk_run_detail nmcli connection reload
-    for DEV in "$@"; do
-        ! ACTIVE_UUID=$(lk_nm_active_connection_uuid "$DEV") ||
-            { UUID=$(lk_nm_connection_uuid "$DEV") &&
-                [ "$ACTIVE_UUID" = "$UUID" ]; } ||
-            lk_run_detail nmcli connection down "$ACTIVE_UUID" || return
-    done
-    if [ -n "${BRIDGE-}" ]; then
-        lk_run_detail nmcli connection up "$BRIDGE" || return
-    fi
-    for DEV in "$@"; do
-        grep -Fxq 1 "/sys/class/net/$DEV/carrier" 2>/dev/null ||
-            lk_console_warning -r \
-                "Not bringing connection up (no carrier):" "$DEV" ||
-            continue
-        lk_run_detail nmcli connection up "$DEV" || return
     done
 }
 
@@ -213,12 +210,15 @@ lk_start_trace
 
     lk_console_message "Checking interfaces"
     systemctl_enable NetworkManager "Network Manager"
+    unset LK_FILE_REPLACE_NO_CHANGE
+    NM_DIR=/etc/NetworkManager/system-connections
+    NM_EXT=.nmconnection
     ETHERNET=()
+    WIFI=()
+    UDEV_RULES=()
+    IF_RENAME=()
     if ! lk_is_portable &&
         lk_require_output -q lk_system_list_ethernet_links -u; then
-        unset LK_FILE_REPLACE_NO_CHANGE
-        NM_DIR=/etc/NetworkManager/system-connections
-        NM_EXT=.nmconnection
         NM_IGNORE="^$S*(#|\$|(uuid|permissions|timestamp)=|\[proxy\])"
         BRIDGE=${LK_BRIDGE_INTERFACE-}
         BRIDGE_FILE=${BRIDGE:+$NM_DIR/$BRIDGE$NM_EXT}
@@ -230,28 +230,20 @@ lk_start_trace
         )
         ETHERNET_NOW=($(lk_system_list_ethernet_links))
         ETHERNET_NOW=($(lk_system_sort_links "${ETHERNET_NOW[@]}"))
-        UDEV_RULES=()
-        IF_RENAME=()
+        IF_PREFIX=en
+        IF_ARRAY=ETHERNET
         # Reverse the order to minimise *.nmconnection renaming collisions
         for i in $(lk_echo_args "${!ETHERNET_NOW[@]}" | tac); do
-            IF=${ETHERNET_NOW[$i]}
-            IF_PATH=/sys/class/net/$IF
-            IF_ADDRESS=$(<"$IF_PATH/address")
-            IF_NAME=en$i
-            ETHERNET[$i]=$IF_NAME
+            process_interface
             FILE=$NM_DIR/$IF_NAME$NM_EXT
-            UDEV_RULES[$i]=$(printf \
-                'SUBSYSTEM=="net", DEVPATH!="*/virtual/*", ACTION=="add", ATTR{address}=="%s", NAME="%s"\n' \
-                "$IF_ADDRESS" "$IF_NAME")
-            if [ "$IF" != "$IF_NAME" ]; then
+            [ "$IF" = "$IF_NAME" ] || {
                 # If this interface has a connection profile, try to rename it
                 PREV_FILE=$NM_DIR/$IF$NM_EXT
                 ! sudo test -e "$PREV_FILE" -a ! -e "$FILE" || {
                     LK_FILE_REPLACE_NO_CHANGE=0
                     lk_run_detail sudo mv -n "$PREV_FILE" "$FILE"
                 }
-                IF_RENAME+=("$IF" "$IF_NAME")
-            fi
+            }
             # Install a connection profile for this interface and/or the bridge
             # interface
             lk_install -m 00600 "$FILE"
@@ -281,53 +273,77 @@ lk_start_trace
             esac
             # Delete any other connections using the MAC address of this
             # interface
-            eval "NM_FILES=($(
+            lk_mapfile -z NM_FILES <(
                 sudo find "$NM_DIR" -maxdepth 1 -type f -name "*$NM_EXT" \
                     ! -name "$IF_NAME$NM_EXT" \
                     ${BRIDGE:+! -name "$BRIDGE$NM_EXT"} \
                     -execdir grep -Eiq "\\<mac-address$S*=$S*$IF_ADDRESS$S*\$" \
-                    '{}' \; -print0 |
-                    while IFS= read -rd '' LINE; do
-                        printf '%q\n' "$LINE"
-                    done
-            ))"
+                    '{}' \; -print0
+            )
             [ ${#NM_FILES[@]} -eq 0 ] || {
                 LK_FILE_REPLACE_NO_CHANGE=0
                 lk_file_backup "${NM_FILES[@]}" &&
                     lk_run_detail sudo rm "${NM_FILES[@]}"
             }
         done
-        FILE=/etc/udev/rules.d/10-${LK_PATH_PREFIX}local.rules
-        _FILE=$(lk_echo_array UDEV_RULES)
-        lk_install -m 00644 "$FILE"
-        lk_file_replace "$FILE" "$_FILE"
-        if ! lk_is_bootstrap &&
-            lk_is_false LK_FILE_REPLACE_NO_CHANGE &&
-            { ! lk_arch_reboot_required ||
-                lk_warn "reboot required to apply changes"; }; then
-            lk_systemctl_start NetworkManager
-            if [ ${#IF_RENAME[@]} -gt 0 ]; then
-                lk_maybe_trace bash -c \
-                    "$(declare -f link_rename); link_rename \"\$@\"" \
-                    bash \
-                    "${IF_RENAME[@]}" ||
-                    lk_die "interface rename failed"
-                lk_console_detail "Waiting for renamed interfaces to settle"
+    fi
+    if lk_require_output -q lk_system_list_wifi_links -u; then
+        WIFI_NOW=($(lk_system_list_wifi_links))
+        WIFI_NOW=($(lk_system_sort_links "${WIFI_NOW[@]}"))
+        IF_PREFIX=wl
+        IF_ARRAY=WIFI
+        for i in "${!WIFI_NOW[@]}"; do
+            process_interface
+            [ "$IF" = "$IF_NAME" ] || {
+                # Update any connections that use the old interface name
+                lk_mapfile -z NM_FILES <(
+                    sudo find "$NM_DIR" -maxdepth 1 -type f -name "*$NM_EXT" \
+                        -execdir grep -Fxq "interface-name=$IF" '{}' \; \
+                        -print0
+                )
+                [ ${#NM_FILES[@]} -eq 0 ] || {
+                    LK_FILE_REPLACE_NO_CHANGE=0
+                    lk_file_backup "${NM_FILES[@]}" &&
+                        lk_run_detail lk_sudo sed -Ei \
+                            "s/^(interface-name=)$IF\$/\\1$IF_NAME/" \
+                            "${NM_FILES[@]}"
+                }
+            }
+        done
+    fi
+    FILE=/etc/udev/rules.d/10-${LK_PATH_PREFIX}local.rules
+    _FILE=$(lk_echo_array UDEV_RULES)
+    lk_install -m 00644 "$FILE"
+    lk_file_replace "$FILE" "$_FILE"
+    if ! lk_is_bootstrap && lk_is_false LK_FILE_REPLACE_NO_CHANGE; then
+        lk_systemctl_start NetworkManager
+        if [ ${#IF_RENAME[@]} -gt 0 ]; then
+            lk_maybe_trace bash -c "$(
+                declare -f link_rename
+                lk_quote_args link_rename "${IF_RENAME[@]}"
+            )" || lk_die "interface rename failed"
+            (
+                # Reduce IF_RENAME to new Ethernet interfaces
+                for ((i = 0; i < ${#IF_RENAME[@]}; i += 2)); do
+                    unset "IF_RENAME[i]"
+                done
+                IF_RENAME=($(comm -12 \
+                    <(lk_echo_array IF_RENAME | sort) \
+                    <(lk_echo_array ETHERNET | sort)))
+                [ ${#IF_RENAME[@]} -gt 0 ] || exit 0
+                lk_console_detail \
+                    "Waiting for renamed Ethernet interfaces to settle"
                 while :; do
                     sleep 2
                     ! lk_system_list_ethernet_links -u |
-                        grep -Fx -f <(lk_echo_array ETHERNET) >/dev/null ||
+                        grep -Fxc -f <(lk_echo_array IF_RENAME) |
+                        grep -Fx ${#IF_RENAME[@]} &>/dev/null ||
                         break
                 done
-            fi
-            lk_maybe_trace bash -c \
-                "$(declare -f lk_nm_is_running \
-                    lk_nm_active_connection_uuid lk_nm_connection_uuid \
-                    link_reset); link_reset \"\$@\"" \
-                bash \
-                ${BRIDGE:+-b "$BRIDGE"} "${ETHERNET[@]}" ||
-                lk_die "interface reset failed"
+            )
         fi
+        lk_systemctl_restart NetworkManager &&
+            nm-online -s -q || lk_die "error restarting NetworkManager"
     fi
 
     if lk_require_output -q lk_system_list_wifi_links &&
