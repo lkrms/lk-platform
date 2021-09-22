@@ -39,7 +39,6 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_COMPLETION`
 - `LK_CURL_OPTIONS`
 - `LK_DEBUG`
-- `LK_DEFAULTS_DIR`
 - `LK_DIG_OPTIONS`
 - `LK_DIG_SERVER`
 - `LK_DIM_AFTER`
@@ -119,6 +118,8 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_SSH_PRIORITY`
 - `LK_SSH_TRUSTED_ONLY`
 - `LK_SSH_TRUSTED_PORT`
+- `LK_SSL_CA`
+- `LK_SSL_CA_KEY`
 - `LK_STACKSCRIPT_EXPORT_DEFAULT`
 - `LK_SUDO`
 - `LK_TRUSTED_IP_ADDRESSES`
