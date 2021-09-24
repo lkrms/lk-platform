@@ -146,7 +146,8 @@ AUR_PACKAGES+=(
     teams
     todoist-appimage
     trimage
-    ttf-apple-emoji
+    #ttf-apple-emoji
+    ttf-twemoji
     typora
 
     # system

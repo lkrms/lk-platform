@@ -105,6 +105,7 @@ PAC_PACKAGES+=(
     cronie
     expac
     mlocate
+    namcap
     stow
     ubuntu-keyring
 )
@@ -221,7 +222,8 @@ AUR_PACKAGES+=(
     teamviewer
     todoist-appimage
     trimage
-    ttf-apple-emoji
+    #ttf-apple-emoji
+    ttf-twemoji
     typora
 
     # multimedia - video
@@ -250,6 +252,7 @@ PAC_PACKAGES+=(
     emscripten
     eslint
     geckodriver
+    gobject-introspection
     prettier
     python-pylint
     qcachegrind
