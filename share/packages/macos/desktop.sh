@@ -45,6 +45,7 @@ HOMEBREW_FORMULAE+=(
 
     # Multimedia (video)
     youtube-dl
+    yt-dlp
 )
 
 HOMEBREW_CASKS+=(

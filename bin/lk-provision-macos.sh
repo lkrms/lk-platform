@@ -139,8 +139,8 @@ function exit_trap() {
     lk_no_input || lk_sudo_offer_nopasswd ||
         lk_die "unable to run commands as root"
 
-    LK_DEFAULTS_DIR=~/.${LK_PATH_PREFIX}defaults/00000000000000
-    if [ ! -e "$LK_DEFAULTS_DIR" ] &&
+    _LK_DEFAULTS_DIR=~/.${LK_PATH_PREFIX}defaults/00000000000000
+    if [ ! -e "$_LK_DEFAULTS_DIR" ] &&
         lk_confirm "Save current macOS settings to files?" N; then
         lk_console_item "Dumping user defaults to domain files in" \
             ~/".${LK_PATH_PREFIX}defaults"
@@ -649,6 +649,19 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
         fi
     fi
 
+    lk_mapfile INSTALL_UPDATES <(lk_macos_update_list_available |
+        awk -F'\t' '{
+    print $1
+    print $2 " (" $4 ($6 ? ", Action: " $6 : "") ", Version: " $3 ")"
+    print $5 == "Y" ? "on" : "off"
+}')
+    if [ ${#INSTALL_UPDATES[@]} -gt 0 ]; then
+        lk_mapfile INSTALL_UPDATES <(lk_whiptail_checklist -s \
+            "Installing system software updates" \
+            "Selected updates will be installed:" \
+            "${INSTALL_UPDATES[@]}")
+    fi
+
     function commit_changes() {
         local _ARR="$2_${i}[@]" ARR
         ARR=(${!_ARR+"${!_ARR}"})
@@ -687,6 +700,13 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
             lk_console_list "Installing new apps:"
         lk_tty caffeinate -d \
             mas install "${INSTALL_APPS[@]}" || STATUS=$?
+    }
+
+    [ ${#INSTALL_UPDATES[@]} -eq 0 ] || {
+        lk_echo_array INSTALL_UPDATES |
+            lk_console_list "Installing system software updates:"
+        lk_tty caffeinate -d \
+            softwareupdate --install "${INSTALL_UPDATES[@]}" || STATUS=$?
     }
 
     lk_macos_xcode_maybe_accept_license

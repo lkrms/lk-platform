@@ -105,6 +105,7 @@ PAC_PACKAGES+=(
     cronie
     expac
     mlocate
+    namcap
     stow
     ubuntu-keyring
 )
@@ -221,12 +222,14 @@ AUR_PACKAGES+=(
     teamviewer
     todoist-appimage
     trimage
-    ttf-apple-emoji
+    #ttf-apple-emoji
+    ttf-twemoji
     typora
 
     # multimedia - video
     makemkv
     video-trimmer
+    yt-dlp
 
     # system
     hfsprogs
@@ -250,6 +253,7 @@ PAC_PACKAGES+=(
     emscripten
     eslint
     geckodriver
+    gobject-introspection
     prettier
     python-pylint
     qcachegrind
@@ -336,6 +340,7 @@ AUR_PACKAGES+=(
     lua-posix
     nodejs-less
     nvm
+    php-sqlsrv
     phpdoc-phar
     prettier-plugin-php
     robo3t-bin
