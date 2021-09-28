@@ -113,6 +113,9 @@ AUR_PACKAGES+=(
     # Networking
     vpn-slice
 
+    # Multimedia
+    yt-dlp
+
     #
     demjson
     ruby-erubis

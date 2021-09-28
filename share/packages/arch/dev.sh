@@ -229,6 +229,7 @@ AUR_PACKAGES+=(
     # multimedia - video
     makemkv
     video-trimmer
+    yt-dlp
 
     # system
     hfsprogs
@@ -339,6 +340,7 @@ AUR_PACKAGES+=(
     lua-posix
     nodejs-less
     nvm
+    php-sqlsrv
     phpdoc-phar
     prettier-plugin-php
     robo3t-bin

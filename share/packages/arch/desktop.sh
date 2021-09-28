@@ -150,6 +150,9 @@ AUR_PACKAGES+=(
     ttf-twemoji
     typora
 
+    # multimedia - video
+    yt-dlp
+
     # system
     hfsprogs
 
