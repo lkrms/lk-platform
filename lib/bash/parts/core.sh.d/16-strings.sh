@@ -1,15 +1,5 @@
 #!/bin/bash
 
-# lk_plural -v VALUE SINGLE_NOUN PLURAL_NOUN
-#
-# Print SINGLE_NOUN if VALUE is 1, PLURAL_NOUN otherwise. If -v is set, include
-# VALUE in the output.
-function lk_plural() {
-    local VALUE=
-    [ "${1-}" != -v ] || { VALUE="$2 " && shift; }
-    [ "$1" -eq 1 ] && echo "$VALUE$2" || echo "$VALUE$3"
-}
-
 # lk_implode_args GLUE [ARG...]
 function lk_implode_args() {
     local GLUE=${1//\\/\\\\}

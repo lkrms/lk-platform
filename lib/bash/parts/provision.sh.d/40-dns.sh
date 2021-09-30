@@ -11,8 +11,8 @@
 function lk_dns_get_records() {
     local FIELDS='$1, $2, $3, $4, $5' IFS TYPES TYPE NAME COMMAND=(
         dig +noall +answer
-        ${LK_DIG_OPTIONS+"${LK_DIG_OPTIONS[@]}"}
-        ${LK_DIG_SERVER:+@"$LK_DIG_SERVER"}
+        ${_LK_DIG_OPTIONS+"${_LK_DIG_OPTIONS[@]}"}
+        ${_LK_DNS_SERVER:+@"$_LK_DNS_SERVER"}
     )
     [[ ${1-} != +* ]] || {
         FIELDS=$(tr ',' '\n' <<<"${1:1}" | awk '

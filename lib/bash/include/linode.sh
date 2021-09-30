@@ -258,7 +258,8 @@ function lk_linode_dns_check() {
     local USE_TAGS LINODES LINODE_COUNT TAGS="[]" DOMAIN_ID DOMAIN \
         RECORDS REVERSE _RECORDS _REVERSE \
         NAME TYPE TARGET JSON RECORD_ID ADDRESS RDNS \
-        NEW_RECORD_COUNT=0 NEW_REVERSE_RECORD_COUNT=0
+        NEW_RECORD_COUNT=0 NEW_REVERSE_RECORD_COUNT=0 \
+        _LK_DNS_SERVER
     [ "${1-}" != -t ] || { USE_TAGS=1 && shift; }
     LINODES=${1:-$(lk_linode_linodes "${@:3}")} &&
         LINODE_COUNT=$(jq length <<<"$LINODES") ||
@@ -305,6 +306,7 @@ function lk_linode_dns_check() {
                 SLEEP=$(((++i) ** 2))
                 ((i == 1)) || lk_tty_detail "Trying again in $SLEEP seconds"
                 sleep "$SLEEP" || return
+                _LK_DNS_SERVER=ns$((RANDOM % 5 + 1)).linode.com
                 ! lk_require_output -q lk_dns_resolve_hosts "$RDNS" ||
                     exit 0
             done

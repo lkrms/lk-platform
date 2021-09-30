@@ -61,7 +61,7 @@ function lk_unbuffer() {
             set -- "$1" -u "${@:2}"
         else
             # TODO: reinstate unbuffer after resolving LF -> CRLF issue
-            case "$(lk_command_first stdbuf)" in
+            case "$(lk_first_command stdbuf)" in
             stdbuf)
                 set -- stdbuf -i0 -oL -eL "$@"
                 ;;

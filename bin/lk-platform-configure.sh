@@ -386,6 +386,7 @@ lk_log_start
         fi
         install -d -m 01777 "$LK_BASE/var/log"
         install -d -m 00750 "$LK_BASE/var/backup"
+        install -d -m "$PRIVILEGED_DIR_MODE" "$LK_BASE/var/run"{,/dirty}
         LK_VERBOSE='' \
             lk_dir_set_modes "$LK_BASE" \
             "" \

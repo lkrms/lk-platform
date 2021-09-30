@@ -309,10 +309,10 @@ fi
     lk_console_log "Provisioning Ubuntu for hosting"
 
     install -d -m 02775 -g adm "$LK_BASE"/{etc,var}
-    install -d -m 02770 -g adm "$LK_BASE/var/run"/{,dirty}
+    install -d -m 02770 -g adm "$LK_BASE/var/run"{,/dirty}
 
     lk_is_bootstrap || [ -d "$LK_BASE/etc/sites" ] ||
-        lk_hosting_mark_dirty "legacy-sites.migration"
+        lk_mark_dirty "legacy-sites.migration"
 
     install -d -m 02770 -g adm "$LK_BASE/etc/sites"
 
@@ -924,7 +924,7 @@ tolower($0) ~ "^(blackhole|\"blackhole\")" S "*:" {
         fi
         ! lk_is_false LK_FILE_REPLACE_NO_CHANGE &&
             ! lk_is_false LK_SYMLINK_NO_CHANGE ||
-            lk_hosting_mark_dirty "apache2.service"
+            lk_mark_dirty "apache2.service"
         IPTABLES_TCP_LISTEN+=(80 443)
     fi
 
@@ -953,7 +953,7 @@ tolower($0) ~ "^(blackhole|\"blackhole\")" S "*:" {
                     $'\n'"$(lk_echo_array DEFAULT_POOLS | lk_basename)"
                 lk_file_keep_original "${DEFAULT_POOLS[@]}" &&
                     rm "${DEFAULT_POOLS[@]}" &&
-                    lk_hosting_mark_dirty "php$PHPVER-fpm.service"
+                    lk_mark_dirty "php$PHPVER-fpm.service"
             }
         }
 
@@ -968,7 +968,7 @@ tolower($0) ~ "^(blackhole|\"blackhole\")" S "*:" {
             "$FILE"
         ! lk_is_false LK_FILE_REPLACE_NO_CHANGE || {
             lk_run_detail systemctl daemon-reload &&
-                lk_hosting_mark_dirty "php$PHPVER-fpm.service"
+                lk_mark_dirty "php$PHPVER-fpm.service"
         }
 
         lk_console_message "Checking WP-CLI"
@@ -1059,7 +1059,7 @@ EOF
         fi
     fi
 
-    ! lk_hosting_is_dirty "legacy-sites.migration" ||
+    ! lk_is_dirty "legacy-sites.migration" ||
         lk_hosting_site_migrate_legacy
 
     if ! lk_hosting_site_list | wc -l | tr -d ' ' | grep -Fxq 0; then
@@ -1069,8 +1069,8 @@ EOF
 
     unset SKIP_TEST
     if lk_dpkg_installed php-fpm apache2; then
-        if lk_hosting_is_dirty "php$PHPVER-fpm.service" ||
-            lk_hosting_is_dirty "apache2.service"; then
+        if lk_is_dirty "php$PHPVER-fpm.service" ||
+            lk_is_dirty "apache2.service"; then
             lk_console_message "Checking hosting services"
             lk_hosting_php_fpm_config_test &&
                 lk_hosting_httpd_config_test ||
@@ -1081,12 +1081,12 @@ EOF
     fi
 
     if lk_dpkg_installed php-fpm &&
-        lk_hosting_is_dirty "php$PHPVER-fpm.service"; then
+        lk_is_dirty "php$PHPVER-fpm.service"; then
         lk_hosting_php_fpm_config_apply ${SKIP_TEST+-s} "$PHPVER"
     fi
 
     if lk_dpkg_installed apache2 &&
-        lk_hosting_is_dirty "apache2.service"; then
+        lk_is_dirty "apache2.service"; then
         lk_hosting_httpd_config_apply ${SKIP_TEST+-s}
     fi
 

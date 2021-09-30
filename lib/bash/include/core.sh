@@ -116,22 +116,56 @@ function lk_pass() {
 }
 
 function lk_err() {
-    lk_pass echo "${FUNCNAME[1]-${0##*/}}: $1" >&2
+    local d=${_LK_STACK_DEPTH:-0}
+    lk_pass echo "${FUNCNAME[1 + d]-${0##*/}}: $1" >&2
 }
 
-function lk_command_first() {
-    local IFS COMMAND
+function lk_first_command() {
+    local IFS c
     unset IFS
     while [ $# -gt 0 ]; do
-        COMMAND=($1)
-        if type -P "${COMMAND[0]}" >/dev/null; then
+        c=($1)
+        if type -P "${c[0]}" >/dev/null; then
             echo "$1"
-            break
+            return 0
         fi
-        unset COMMAND
         shift
     done
-    [ -n "${COMMAND+1}" ]
+    false
+}
+
+# lk_plural [-v] VALUE SINGLE_NOUN [PLURAL_NOUN]
+#
+# Print SINGLE_NOUN if VALUE is 1 or the name of an array with 1 element,
+# PLURAL_NOUN otherwise. If PLURAL_NOUN is omitted, print "${SINGLE_NOUN}s"
+# instead. If -v is set, include VALUE in the output.
+function lk_plural() {
+    local v
+    [ "${1-}" != -v ] || { v=1 && shift; }
+    local c=$1
+    [[ ! $1 =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] || eval "c=\${#$1[@]}" || return
+    v="${v:+$c }"
+    [ "$c" = 1 ] && echo "$v$2" || echo "$v${3-$2s}"
+}
+
+# lk_vars_not_empty [-q] VAR...
+#
+# Print a warning and return false if any VAR is empty or unset. If -q is set,
+# suppress output.
+function lk_vars_not_empty() {
+    local q e=()
+    [ "${1-}" != -q ] || { q=1 && shift; }
+    while [ $# -gt 0 ]; do
+        [ -n "${!1:+1}" ] || e[${#e[@]}]=$1
+        shift
+    done
+    [ -z "${e+1}" ] || {
+        [ -n "${q-}" ] || {
+            local IFS=' ' _LK_STACK_DEPTH=1
+            lk_err "$(lk_plural e value values) required: ${e[*]}"
+        }
+        false
+    }
 }
 
 # lk_elevate [exec] [COMMAND [ARG...]]
@@ -306,7 +340,7 @@ function lk_unbuffer() {
             set -- "$1" -u "${@:2}"
         else
             # TODO: reinstate unbuffer after resolving LF -> CRLF issue
-            case "$(lk_command_first stdbuf)" in
+            case "$(lk_first_command stdbuf)" in
             stdbuf)
                 set -- stdbuf -i0 -oL -eL "$@"
                 ;;
@@ -473,16 +507,6 @@ function lk_get_regex() {
         shift
     done
     return "$STATUS"
-}
-
-# lk_plural -v VALUE SINGLE_NOUN PLURAL_NOUN
-#
-# Print SINGLE_NOUN if VALUE is 1, PLURAL_NOUN otherwise. If -v is set, include
-# VALUE in the output.
-function lk_plural() {
-    local VALUE=
-    [ "${1-}" != -v ] || { VALUE="$2 " && shift; }
-    [ "$1" -eq 1 ] && echo "$VALUE$2" || echo "$VALUE$3"
 }
 
 # lk_implode_args GLUE [ARG...]
@@ -1020,7 +1044,7 @@ function _lk_log_install_file() {
 # with a space between each argument.
 function lk_hash() {
     _LK_HASH_COMMAND=${_LK_HASH_COMMAND:-${LK_HASH_COMMAND:-$(
-        lk_command_first xxhsum shasum md5sum md5
+        lk_first_command xxhsum shasum md5sum md5
     )}} || lk_warn "checksum command not found" || return
     if [ $# -gt 0 ]; then
         local IFS
@@ -1033,9 +1057,20 @@ function lk_hash() {
 
 function lk_md5() {
     local _LK_HASH_COMMAND
-    _LK_HASH_COMMAND=$(lk_command_first md5sum md5) ||
+    _LK_HASH_COMMAND=$(lk_first_command md5sum md5) ||
         lk_warn "md5 command not found" || return
     lk_hash "$@"
+}
+
+# lk_report_error COMMAND [ARG...]
+#
+# Run COMMAND and print an error message if it exits non-zero.
+function lk_report_error() {
+    "$@" || {
+        local STATUS=$? IFS=' '
+        lk_console_error "Exit status $STATUS:" "$*"
+        return $STATUS
+    }
 }
 
 # lk_tty [exec] COMMAND [ARG...]
@@ -1045,39 +1080,33 @@ function lk_md5() {
 function lk_tty() {
     [ "$1" != exec ] || { local LK_EXEC=1 && shift; }
     if ! lk_is_macos; then
-        SHELL=$BASH lk_sudo \
-            script -q -f -e -c "$(lk_quote_args "$@")" /dev/null
+        SHELL=$BASH lk_sudo script -qfec "$(lk_quote_args "$@")" /dev/null
     else
-        lk_sudo \
-            script -q -t 0 /dev/null "$@"
+        lk_sudo script -qt 0 /dev/null "$@"
     fi
 }
 
-# lk_keep_trying COMMAND [ARG...]
+# lk_keep_trying [-MAX_ATTEMPTS] COMMAND [ARG...]
 #
-# Execute COMMAND until its exit status is zero or 10 attempts have been made.
-# The delay between each attempt starts at 1 second and follows the Fibonnaci
-# sequence (2 sec, 3 sec, 5 sec, 8 sec, 13 sec, etc.).
+# Execute COMMAND until its exit status is zero or MAX_ATTEMPTS have been made
+# (default: 10). The delay between each attempt starts at 1 second and follows
+# the Fibonnaci sequence (2 sec, 3 sec, 5 sec, 8 sec, 13 sec, etc.).
 function lk_keep_trying() {
-    local MAX_ATTEMPTS=${LK_KEEP_TRYING_MAX:-10} \
-        ATTEMPT=0 WAIT=1 LAST_WAIT=1 NEW_WAIT EXIT_STATUS
-    if ! "$@"; then
-        while ((++ATTEMPT < MAX_ATTEMPTS)); do
-            lk_console_log \
-                "Command failed (attempt $ATTEMPT of $MAX_ATTEMPTS):" "$*"
-            lk_console_detail \
-                "Trying again in $WAIT $(lk_plural $WAIT second seconds)"
+    local i=0 MAX_ATTEMPTS=10 WAIT=1 PREV=1 NEXT _IFS=${IFS-$' \t\n'}
+    [[ ! ${1-} =~ ^-[0-9]+$ ]] || { MAX_ATTEMPTS=${1:1} && shift; }
+    while :; do
+        "$@" && return 0 || {
+            local STATUS=$? IFS=' '
+            ((++i < MAX_ATTEMPTS)) || break
+            lk_console_log "Failed (attempt $i of $MAX_ATTEMPTS):" "$*"
+            lk_tty_detail "Trying again in $(lk_plural -v $WAIT second)"
             sleep "$WAIT"
-            ((NEW_WAIT = WAIT + LAST_WAIT, LAST_WAIT = WAIT, WAIT = NEW_WAIT))
-            lk_console_blank
-            if "$@"; then
-                return 0
-            else
-                EXIT_STATUS=$?
-            fi
-        done
-        return "$EXIT_STATUS"
-    fi
+            ((NEXT = WAIT + PREV, PREV = WAIT, WAIT = NEXT))
+            lk_tty_print
+            IFS=$_IFS
+        }
+    done
+    return $STATUS
 }
 
 # lk_require_output [-q] COMMAND [ARG...]
@@ -1108,29 +1137,32 @@ function lk_env_clean() {
     fi
 }
 
-# lk_mktemp_with [-c] VAR [COMMAND [ARG...]]
+# lk_mktemp_with [-c|-r] VAR [COMMAND [ARG...]]
 #
 # Set VAR to the name of a new temporary file that optionally contains the
-# output of COMMAND. If -c is specified, do nothing if VAR is already set to the
-# path of an existing file.
+# output of COMMAND. If VAR is already set to the path of an existing file:
+# - do nothing if -c ("cache") is set, or
+# - proceed without creating a new file if -r ("reuse") is set.
 function lk_mktemp_with() {
-    local IFS _CACHE
-    [ "${1-}" != -c ] || { _CACHE=1 && shift; }
+    local IFS _CACHE _REUSE
+    { [ "${1-}" = -c ] && _CACHE=1 && shift; } ||
+        { [ "${1-}" = -r ] && _REUSE=1 && shift; } || true
     [ $# -ge 1 ] || lk_usage "\
-Usage: $FUNCNAME [-c] VAR [COMMAND [ARG...]]" || return
+Usage: $FUNCNAME [-c|-r] VAR [COMMAND [ARG...]]" || return
     [ -z "${_CACHE-}" ] || [ ! -f "${!1-}" ] || return 0
     local _VAR=$1 _LK_STACK_DEPTH=1
     shift
-    eval "$_VAR=\$(lk_mktemp_file)" &&
-        lk_delete_on_exit "${!_VAR}" &&
-        { [ $# -eq 0 ] || "$@" >"${!_VAR}"; }
+    [ -n "${_REUSE-}" ] && [ -f "${!1-}" ] ||
+        { eval "$_VAR=\$(lk_mktemp_file)" &&
+            lk_delete_on_exit "${!_VAR}"; } || return
+    { [ $# -eq 0 ] || "$@" >"${!_VAR}"; }
 }
 
 # lk_mktemp_dir_with [-c] VAR [COMMAND [ARG...]]
 #
 # Set VAR to the name of a new temporary directory and optionally use it as the
-# working directory to run COMMAND. If -c is specified, do nothing if VAR is
-# already set to the path of an existing directory.
+# working directory to run COMMAND. If -c ("cache") is set, do nothing if VAR
+# already contains the path of an existing directory.
 function lk_mktemp_dir_with() {
     local IFS _CACHE
     [ "${1-}" != -c ] || { _CACHE=1 && shift; }
@@ -1241,7 +1273,7 @@ function lk_mktemp_dir() {
 }
 
 function lk_command_first_existing() {
-    lk_command_first "$@"
+    lk_first_command "$@"
 }
 
 function lk_regex_implode() {
