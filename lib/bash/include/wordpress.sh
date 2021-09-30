@@ -64,9 +64,9 @@ function _lk_wp_replace() {
 }
 
 function lk_wp_package_install() {
-    local PACKAGES
-    PACKAGES=($(lk_wp package list --format=ids)) || return
-    lk_in_array "$1" PACKAGES || {
+    [ $# -eq 1 ] ||
+        lk_usage "Usage: $FUNCNAME PACKAGE[:<VERSION|@stable>]" || return
+    lk_wp package list --format=ids | grep -Fx "${1%%:*}" >/dev/null || {
         lk_console_detail "Installing WP-CLI package:" "$1"
         lk_wp package install "$1"
     }
@@ -87,7 +87,7 @@ function lk_wp_flush() {
     if lk_wp plugin is-active wp-rocket; then
         lk_console_detail "Clearing WP Rocket cache"
         wp cli has-command "rocket clean" ||
-            lk_wp_package_install wp-media/wp-rocket-cli || return
+            lk_wp_package_install wp-media/wp-rocket-cli:@stable || return
         wp rocket clean --confirm || return
     fi
 }
@@ -501,19 +501,19 @@ function lk_wp_reapply_config() {
     if lk_wp plugin is-active wp-rocket; then
         lk_console_detail "Regenerating WP Rocket files"
         wp cli has-command "rocket regenerate" ||
-            lk_wp_package_install wp-media/wp-rocket-cli || return
+            lk_wp_package_install wp-media/wp-rocket-cli:@stable || return
         for FILE in htaccess advanced-cache config; do
-            wp rocket regenerate --file="$FILE" || STATUS=$?
+            lk_report_error wp rocket regenerate --file="$FILE" || STATUS=$?
         done
     fi
     if lk_wp plugin is-active email-log; then
         lk_console_detail "Re-activating Email Log"
-        lk_wp plugin deactivate email-log
-        lk_wp plugin activate email-log
+        lk_report_error lk_wp plugin deactivate email-log &&
+            lk_report_error lk_wp plugin activate email-log || STATUS=$?
     fi
     if wp cli has-command "yoast index"; then
         lk_console_detail "Building Yoast index"
-        wp yoast index || STATUS=$?
+        lk_report_error wp yoast index || STATUS=$?
     fi
     return "$STATUS"
 }

@@ -113,7 +113,7 @@ function lk_ssl_install_ca_certificate() {
     DIR=$(LK_SUDO= lk_first_existing \
         /usr/local/share/ca-certificates/ \
         /etc/ca-certificates/trust-source/anchors/) &&
-        COMMAND=$(LK_SUDO= lk_command_first \
+        COMMAND=$(LK_SUDO= lk_first_command \
             update-ca-certificates \
             update-ca-trust) ||
         lk_warn "CA certificate store not found" || return

@@ -39,8 +39,6 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_COMPLETION`
 - `LK_CURL_OPTIONS`
 - `LK_DEBUG`
-- `LK_DIG_OPTIONS`
-- `LK_DIG_SERVER`
 - `LK_DIM_AFTER`
 - `LK_DIM_TIME`
 - `LK_DNS_SEARCH`

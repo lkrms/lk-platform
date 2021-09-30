@@ -56,23 +56,6 @@ Usage: $(lk_myself -f) LOGIN" || return
     lk_tty_detail "Home directory:" "$_HOME"
 }
 
-function lk_hosting_is_dirty() {
-    [[ ${1-} =~ ^[^/]+$ ]] &&
-        [ -f "$LK_BASE/var/run/dirty/$1" ]
-}
-
-function lk_hosting_mark_dirty() {
-    [[ ${1-} =~ ^[^/]+$ ]] &&
-        touch "$LK_BASE/var/run/dirty/$1" ||
-        lk_warn "unable to mark dirty: $1"
-}
-
-function lk_hosting_mark_clean() {
-    [[ ${1-} =~ ^[^/]+$ ]] &&
-        rm -f "$LK_BASE/var/run/dirty/$1" ||
-        lk_warn "unable to mark clean: $1"
-}
-
 function lk_hosting_service_apply() {
     if lk_is_bootstrap; then
         lk_systemctl_enable "$1"
@@ -81,7 +64,7 @@ function lk_hosting_service_apply() {
     else
         lk_systemctl_enable_now "$1"
     fi || return
-    lk_hosting_mark_clean "$1"
+    lk_mark_clean "$1"
 }
 
 function lk_hosting_service_disable() {
@@ -90,7 +73,7 @@ function lk_hosting_service_disable() {
     else
         lk_systemctl_disable_now "$1"
     fi || return
-    lk_hosting_mark_clean "$1"
+    lk_mark_clean "$1"
 }
 
 function lk_hosting_php_get_default_version() { (
@@ -335,7 +318,7 @@ function lk_hosting_site_migrate_legacy() { (
             lk_delete_on_exit_withdraw "$ETC_FILE" || return
     done
     lk_console_success "Legacy sites migrated successfully"
-    lk_hosting_mark_clean "legacy-sites.migration"
+    lk_mark_clean "legacy-sites.migration"
 ); } #### Reviewed: 2021-06-20
 
 # _lk_hosting_site_read_settings DOMAIN
@@ -636,7 +619,7 @@ Usage: $FUNCNAME [-w] DOMAIN [SITE_ROOT [ALIAS...]]" || return
                 "$FILE" "$_FILE" ||
             lk_is_true LK_FILE_REPLACE_DECLINED || return
         ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
-            lk_hosting_mark_dirty "php$SITE_PHP_VERSION-fpm.service"
+            lk_mark_dirty "php$SITE_PHP_VERSION-fpm.service"
     )
     if [ -d /etc/apache2/sites-available ]; then
         lk_install -m 00640 \
@@ -698,7 +681,7 @@ Usage: $FUNCNAME [-w] DOMAIN [SITE_ROOT [ALIAS...]]" || return
                 LK_FILE_REPLACE_NO_CHANGE=0
             fi
         ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
-            lk_hosting_mark_dirty "apache2.service"
+            lk_mark_dirty "apache2.service"
     fi
 ); }
 

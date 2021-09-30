@@ -1,6 +1,9 @@
 apache_modules:
   - mod_rewrite
 
+require:
+  - error-handling.php
+
 # Known to throw CLI exceptions
 skip-plugins:
   - addthis

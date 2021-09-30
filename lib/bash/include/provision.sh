@@ -358,8 +358,8 @@ function lk_node_is_router() {
 function lk_dns_get_records() {
     local FIELDS='$1, $2, $3, $4, $5' IFS TYPES TYPE NAME COMMAND=(
         dig +noall +answer
-        ${LK_DIG_OPTIONS+"${LK_DIG_OPTIONS[@]}"}
-        ${LK_DIG_SERVER:+@"$LK_DIG_SERVER"}
+        ${_LK_DIG_OPTIONS+"${_LK_DIG_OPTIONS[@]}"}
+        ${_LK_DNS_SERVER:+@"$_LK_DNS_SERVER"}
     )
     [[ ${1-} != +* ]] || {
         FIELDS=$(tr ',' '\n' <<<"${1:1}" | awk '
@@ -530,7 +530,7 @@ function lk_ssl_install_ca_certificate() {
     DIR=$(LK_SUDO= lk_first_existing \
         /usr/local/share/ca-certificates/ \
         /etc/ca-certificates/trust-source/anchors/) &&
-        COMMAND=$(LK_SUDO= lk_command_first \
+        COMMAND=$(LK_SUDO= lk_first_command \
             update-ca-certificates \
             update-ca-trust) ||
         lk_warn "CA certificate store not found" || return
@@ -781,6 +781,51 @@ function lk_cpanel_ssl_get_for_domain() {
         lk_install -m 00640 "$DIR/$1.key" &&
         lk_file_replace -b "$DIR/$1.cert" < <(cat "$CERT" "$CA") &&
         lk_file_replace -bf "$KEY" "$DIR/$1.key"
+}
+
+function _lk_dirty_check() {
+    local DIR=$LK_BASE/var/run/dirty
+    [ -d "$DIR" ] && [ -w "$DIR" ] ||
+        lk_warn "not a writable directory: $DIR"
+}
+
+function _lk_dirty_check_scope() {
+    FILE=$LK_BASE/var/run/dirty/$1
+    [[ ${1-} =~ ^[^/]+$ ]] ||
+        lk_warn "invalid scope: ${1-}"
+}
+
+function lk_is_dirty() {
+    local FILE
+    while [ $# -gt 0 ]; do
+        _lk_dirty_check_scope "$1" || return
+        shift
+        [ -f "$FILE" ] || continue
+        return
+    done
+    false
+}
+
+function lk_mark_dirty() {
+    _lk_dirty_check || return
+    local FILE
+    while [ $# -gt 0 ]; do
+        _lk_dirty_check_scope "$1" &&
+            touch "$FILE" ||
+            lk_warn "unable to mark dirty: $1" || return
+        shift
+    done
+}
+
+function lk_mark_clean() {
+    _lk_dirty_check || return
+    local FILE
+    while [ $# -gt 0 ]; do
+        _lk_dirty_check_scope "$1" &&
+            rm -f "$FILE" ||
+            lk_warn "unable to mark clean: $1" || return
+        shift
+    done
 }
 
 #### END provision.sh.d
@@ -1349,8 +1394,8 @@ function lk_host_soa() {
     }
     for NAMESERVER in "${NAMESERVERS[@]}"; do
         if SOA=$(
-            LK_DIG_SERVER=$NAMESERVER
-            LK_DIG_OPTIONS=(+norecurse)
+            _LK_DNS_SERVER=$NAMESERVER
+            _LK_DIG_OPTIONS=(+norecurse)
             lk_require_output lk_dns_get_records SOA "$APEX"
         ); then
             ! lk_verbose 2 ||
@@ -1365,15 +1410,15 @@ function lk_host_soa() {
 } #### Reviewed: 2021-03-30
 
 function lk_host_ns_resolve() {
-    local IFS NAMESERVER IP CNAME LK_DIG_SERVER LK_DIG_OPTIONS \
+    local IFS NAMESERVER IP CNAME _LK_DNS_SERVER _LK_DIG_OPTIONS \
         _LK_CNAME_DEPTH=${_LK_CNAME_DEPTH:-0}
     unset IFS
     [ "$_LK_CNAME_DEPTH" -lt 7 ] || lk_warn "too much recursion" || return
     ((++_LK_CNAME_DEPTH))
     NAMESERVER=$(lk_host_soa "$1" |
         awk '{sub("\\.$", "", $5); print $5}') || return
-    LK_DIG_SERVER=$NAMESERVER
-    LK_DIG_OPTIONS=(+norecurse)
+    _LK_DNS_SERVER=$NAMESERVER
+    _LK_DIG_OPTIONS=(+norecurse)
     ! lk_verbose 2 || {
         lk_console_detail "Using name server:" "$NAMESERVER"
         lk_console_detail "Looking up A and AAAA records for:" "$1"

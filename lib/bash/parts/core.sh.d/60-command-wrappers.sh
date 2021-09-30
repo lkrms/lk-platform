@@ -1,5 +1,16 @@
 #!/bin/bash
 
+# lk_report_error COMMAND [ARG...]
+#
+# Run COMMAND and print an error message if it exits non-zero.
+function lk_report_error() {
+    "$@" || {
+        local STATUS=$? IFS=' '
+        lk_console_error "Exit status $STATUS:" "$*"
+        return $STATUS
+    }
+}
+
 # lk_tty [exec] COMMAND [ARG...]
 #
 # Run COMMAND in a pseudo-terminal to satisfy tty checks even if output is being
@@ -7,39 +18,33 @@
 function lk_tty() {
     [ "$1" != exec ] || { local LK_EXEC=1 && shift; }
     if ! lk_is_macos; then
-        SHELL=$BASH lk_sudo \
-            script -q -f -e -c "$(lk_quote_args "$@")" /dev/null
+        SHELL=$BASH lk_sudo script -qfec "$(lk_quote_args "$@")" /dev/null
     else
-        lk_sudo \
-            script -q -t 0 /dev/null "$@"
+        lk_sudo script -qt 0 /dev/null "$@"
     fi
 }
 
-# lk_keep_trying COMMAND [ARG...]
+# lk_keep_trying [-MAX_ATTEMPTS] COMMAND [ARG...]
 #
-# Execute COMMAND until its exit status is zero or 10 attempts have been made.
-# The delay between each attempt starts at 1 second and follows the Fibonnaci
-# sequence (2 sec, 3 sec, 5 sec, 8 sec, 13 sec, etc.).
+# Execute COMMAND until its exit status is zero or MAX_ATTEMPTS have been made
+# (default: 10). The delay between each attempt starts at 1 second and follows
+# the Fibonnaci sequence (2 sec, 3 sec, 5 sec, 8 sec, 13 sec, etc.).
 function lk_keep_trying() {
-    local MAX_ATTEMPTS=${LK_KEEP_TRYING_MAX:-10} \
-        ATTEMPT=0 WAIT=1 LAST_WAIT=1 NEW_WAIT EXIT_STATUS
-    if ! "$@"; then
-        while ((++ATTEMPT < MAX_ATTEMPTS)); do
-            lk_console_log \
-                "Command failed (attempt $ATTEMPT of $MAX_ATTEMPTS):" "$*"
-            lk_console_detail \
-                "Trying again in $WAIT $(lk_plural $WAIT second seconds)"
+    local i=0 MAX_ATTEMPTS=10 WAIT=1 PREV=1 NEXT _IFS=${IFS-$' \t\n'}
+    [[ ! ${1-} =~ ^-[0-9]+$ ]] || { MAX_ATTEMPTS=${1:1} && shift; }
+    while :; do
+        "$@" && return 0 || {
+            local STATUS=$? IFS=' '
+            ((++i < MAX_ATTEMPTS)) || break
+            lk_console_log "Failed (attempt $i of $MAX_ATTEMPTS):" "$*"
+            lk_tty_detail "Trying again in $(lk_plural -v $WAIT second)"
             sleep "$WAIT"
-            ((NEW_WAIT = WAIT + LAST_WAIT, LAST_WAIT = WAIT, WAIT = NEW_WAIT))
-            lk_console_blank
-            if "$@"; then
-                return 0
-            else
-                EXIT_STATUS=$?
-            fi
-        done
-        return "$EXIT_STATUS"
-    fi
+            ((NEXT = WAIT + PREV, PREV = WAIT, WAIT = NEXT))
+            lk_tty_print
+            IFS=$_IFS
+        }
+    done
+    return $STATUS
 }
 
 # lk_require_output [-q] COMMAND [ARG...]
@@ -70,29 +75,32 @@ function lk_env_clean() {
     fi
 }
 
-# lk_mktemp_with [-c] VAR [COMMAND [ARG...]]
+# lk_mktemp_with [-c|-r] VAR [COMMAND [ARG...]]
 #
 # Set VAR to the name of a new temporary file that optionally contains the
-# output of COMMAND. If -c is specified, do nothing if VAR is already set to the
-# path of an existing file.
+# output of COMMAND. If VAR is already set to the path of an existing file:
+# - do nothing if -c ("cache") is set, or
+# - proceed without creating a new file if -r ("reuse") is set.
 function lk_mktemp_with() {
-    local IFS _CACHE
-    [ "${1-}" != -c ] || { _CACHE=1 && shift; }
+    local IFS _CACHE _REUSE
+    { [ "${1-}" = -c ] && _CACHE=1 && shift; } ||
+        { [ "${1-}" = -r ] && _REUSE=1 && shift; } || true
     [ $# -ge 1 ] || lk_usage "\
-Usage: $FUNCNAME [-c] VAR [COMMAND [ARG...]]" || return
+Usage: $FUNCNAME [-c|-r] VAR [COMMAND [ARG...]]" || return
     [ -z "${_CACHE-}" ] || [ ! -f "${!1-}" ] || return 0
     local _VAR=$1 _LK_STACK_DEPTH=1
     shift
-    eval "$_VAR=\$(lk_mktemp_file)" &&
-        lk_delete_on_exit "${!_VAR}" &&
-        { [ $# -eq 0 ] || "$@" >"${!_VAR}"; }
+    [ -n "${_REUSE-}" ] && [ -f "${!1-}" ] ||
+        { eval "$_VAR=\$(lk_mktemp_file)" &&
+            lk_delete_on_exit "${!_VAR}"; } || return
+    { [ $# -eq 0 ] || "$@" >"${!_VAR}"; }
 }
 
 # lk_mktemp_dir_with [-c] VAR [COMMAND [ARG...]]
 #
 # Set VAR to the name of a new temporary directory and optionally use it as the
-# working directory to run COMMAND. If -c is specified, do nothing if VAR is
-# already set to the path of an existing directory.
+# working directory to run COMMAND. If -c ("cache") is set, do nothing if VAR
+# already contains the path of an existing directory.
 function lk_mktemp_dir_with() {
     local IFS _CACHE
     [ "${1-}" != -c ] || { _CACHE=1 && shift; }
