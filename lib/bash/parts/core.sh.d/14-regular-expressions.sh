@@ -47,6 +47,8 @@ _F="[-a-zA-Z0-9._~%!\$&'()*+,;=:@?/]*"                     # fragment
 add_regex URI_REGEX "(($_S):)?(//(($_U)(:($_P))?@)?$_H(:($_O))?)?($_A)?(\\?($_Q))?(#($_F))?"
 add_regex URI_REGEX_REQ_SCHEME_HOST "(($_S):)(//(($_U)(:($_P))?@)?$_H(:($_O))?)($_A)?(\\?($_Q))?(#($_F))?"
 
+add_regex HTTP_HEADER_NAME "[-a-zA-Z0-9!#\$%&'*+.^_\`|~]+"
+
 add_regex LINUX_USERNAME_REGEX "[a-z_]([-a-z0-9_]{0,31}|[-a-z0-9_]{0,30}\\\$)"
 add_regex MYSQL_USERNAME_REGEX "[a-zA-Z0-9_]+"
 

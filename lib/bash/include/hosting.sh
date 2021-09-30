@@ -180,9 +180,11 @@ function _lk_hosting_site_list_settings() {
         SITE_ORDER \
         SITE_DISABLE_{WWW,HTTPS} \
         SITE_ENABLE_STAGING \
+        SITE_SSL_{CERT,KEY,CHAIN}_FILE \
         SITE_PHP_FPM_{POOL,USER,MAX_CHILDREN,TIMEOUT,OPCACHE_SIZE} \
         SITE_PHP_FPM_{{ADMIN_,}SETTINGS,ENV} \
         SITE_PHP_VERSION \
+        SITE_DOWNSTREAM_{FROM,FORCE} \
         "${@:2}"
 }
 
@@ -562,13 +564,24 @@ Usage: $FUNCNAME [-w] DOMAIN [SITE_ROOT [ALIAS...]]" || return
     ! lk_is_true SITE_ENABLE_STAGING ||
         APACHE+=(Use Staging)
     [ -z "${SITE_DOWNSTREAM_FROM-}" ] || {
-        SITE_DOWNSTREAM_FROM=${SITE_DOWNSTREAM_FROM,,}
-        [[ $SITE_DOWNSTREAM_FROM =~ ^cloudflare$ ]] ||
-            lk_warn "invalid SITE_DOWNSTREAM_FROM: $SITE_DOWNSTREAM_FROM" ||
-            return
+        MACRO=${SITE_DOWNSTREAM_FROM,,}
+        PARAMS=
+        case "$MACRO" in
+        cloudflare) ;;
+        *)
+            eval "$(lk_get_regex IP_OPT_PREFIX_REGEX HTTP_HEADER_NAME)"
+            REGEX="$IP_OPT_PREFIX_REGEX"
+            REGEX="($HTTP_HEADER_NAME):($REGEX(,$REGEX)*)"
+            [[ $SITE_DOWNSTREAM_FROM =~ ^$REGEX$ ]] ||
+                lk_warn "invalid SITE_DOWNSTREAM_FROM: $SITE_DOWNSTREAM_FROM" ||
+                return
+            MACRO=proxy
+            PARAMS=" \"${BASH_REMATCH[2]//,/ }\" ${BASH_REMATCH[1]}"
+            ;;
+        esac
         lk_is_true SITE_DOWNSTREAM_FORCE &&
-            APACHE+=(Use "Require${SITE_DOWNSTREAM_FROM^}") ||
-            APACHE+=(Use "Trust${SITE_DOWNSTREAM_FROM^}")
+            APACHE+=(Use "Require${MACRO^}$PARAMS") ||
+            APACHE+=(Use "Trust${MACRO^}$PARAMS")
     }
     [ -z "${_SITE_PHP_FPM_PM-}" ] ||
         # Configure PHP-FPM if this is the first site using this pool
