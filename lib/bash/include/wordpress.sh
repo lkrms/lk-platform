@@ -56,7 +56,7 @@ function _lk_wp_replace() {
         "rg_lead*"
     )
     SKIP_TABLES=("${SKIP_TABLES[@]/#/$TABLE_PREFIX}")
-    lk_console_detail "Replacing:" "$1 -> $2"
+    lk_tty_detail "Replacing:" "$1 -> $2"
     "${_LK_WP_REPLACE_COMMAND:-lk_wp}" search-replace "$1" "$2" --no-report \
         --all-tables-with-prefix \
         --skip-tables="$(lk_implode_arr "," SKIP_TABLES)" \
@@ -67,28 +67,28 @@ function lk_wp_package_install() {
     [ $# -eq 1 ] ||
         lk_usage "Usage: $FUNCNAME PACKAGE[:<VERSION|@stable>]" || return
     lk_wp package list --format=ids | grep -Fx "${1%%:*}" >/dev/null || {
-        lk_console_detail "Installing WP-CLI package:" "$1"
+        lk_tty_detail "Installing WP-CLI package:" "$1"
         lk_wp package install "$1"
     }
 }
 
 function lk_wp_flush() {
-    lk_console_message "Flushing WordPress rewrite rules and caches"
-    lk_console_detail "Flushing object cache"
-    wp cache flush || return
-    lk_console_detail "Deleting transients"
-    wp transient delete --all || return
-    lk_console_detail "Flushing rewrite rules"
-    wp rewrite flush || return
+    lk_tty_print "Flushing WordPress rewrite rules and caches"
+    lk_tty_detail "Flushing object cache"
+    lk_report_error wp cache flush || return
+    lk_tty_detail "Deleting transients"
+    lk_report_error wp transient delete --all || return
+    lk_tty_detail "Flushing rewrite rules"
+    lk_report_error wp rewrite flush || return
     if wp cli has-command "w3-total-cache flush"; then
-        lk_console_detail "Flushing W3 Total Cache"
-        wp w3-total-cache flush all
+        lk_tty_detail "Flushing W3 Total Cache"
+        lk_report_error wp w3-total-cache flush all || true
     fi
     if lk_wp plugin is-active wp-rocket; then
-        lk_console_detail "Clearing WP Rocket cache"
-        wp cli has-command "rocket clean" ||
-            lk_wp_package_install wp-media/wp-rocket-cli:@stable || return
-        wp rocket clean --confirm || return
+        lk_tty_detail "Clearing WP Rocket cache"
+        { wp cli has-command "rocket clean" ||
+            lk_wp_package_install wp-media/wp-rocket-cli:@stable; } &&
+            lk_report_error wp rocket clean --confirm || true
     fi
 }
 
@@ -136,10 +136,10 @@ Usage: ${FUNCNAME[0]} NEW_URL" || return
     SITE_ROOT=$(lk_wp_get_site_root) &&
         OLD_SITE_URL=$(lk_wp option get siteurl) || return
     NEW_SITE_URL=$(lk_replace "$OLD_URL" "$NEW_URL" "$OLD_SITE_URL")
-    lk_console_item "Renaming WordPress installation at" "$SITE_ROOT"
-    lk_console_detail \
+    lk_tty_print "Renaming WordPress installation at" "$SITE_ROOT"
+    lk_tty_detail \
         "Site address:" "$OLD_URL -> $LK_BOLD$NEW_URL$LK_RESET"
-    lk_console_detail \
+    lk_tty_detail \
         "WordPress address:" "$OLD_SITE_URL -> $LK_BOLD$NEW_SITE_URL$LK_RESET"
     lk_wp_is_quiet || lk_confirm "Proceed?" Y || return
     { ! lk_wp config has WP_HOME || lk_wp config delete WP_HOME; } &&
@@ -160,7 +160,7 @@ function lk_wp_replace_url() {
     [ $# -eq 2 ] || lk_usage "\
 Usage: ${FUNCNAME[0]} OLD_URL NEW_URL"
     lk_test_many lk_is_uri "$@" || lk_warn "invalid URL" || return
-    lk_console_message "Performing WordPress search/replace"
+    lk_tty_print "Performing WordPress search/replace"
     OLD_URL=$1
     NEW_URL=$2
     REPLACE=(
@@ -206,7 +206,7 @@ function _lk_wp_maybe_reapply() {
             PLUGIN_WARNING=; }; then
         lk_wp_reapply_config || return
     elif [ -z "${LK_WP_REAPPLY+1}" ]; then
-        lk_console_detail "To reapply configuration:" "lk_wp_reapply_config"
+        lk_tty_detail "To reapply configuration:" "lk_wp_reapply_config"
     fi
     _lk_wp_maybe_flush
 }
@@ -218,8 +218,8 @@ function _lk_wp_maybe_flush() {
             lk_confirm "OK to flush rewrite rules, caches and transients?$PLUGIN_WARNING" Y; }; then
         lk_wp_flush
     elif [ -z "${LK_WP_FLUSH+1}" ]; then
-        lk_console_detail "To flush rewrite rules:" "wp rewrite flush"
-        lk_console_detail "To flush everything:" "lk_wp_flush"
+        lk_tty_detail "To flush rewrite rules:" "wp rewrite flush"
+        lk_tty_detail "To flush everything:" "lk_wp_flush"
     fi
 }
 
@@ -261,15 +261,15 @@ function lk_wp_db_dump_remote() {
 Usage: ${FUNCNAME[0]} SSH_HOST [REMOTE_PATH]" || return
     [ -n "$1" ] || lk_warn "no ssh host" || return
     REMOTE_PATH=${REMOTE_PATH%/}
-    lk_console_message "Preparing to dump remote WordPress database"
+    lk_tty_print "Preparing to dump remote WordPress database"
     [ -n "$DB_NAME" ] &&
         [ -n "$DB_USER" ] &&
         [ -n "$DB_PASSWORD" ] &&
         [ -n "$DB_HOST" ] || {
-        lk_console_message "Getting credentials"
-        lk_console_detail "Retrieving" "$1:$REMOTE_PATH/wp-config.php"
+        lk_tty_print "Getting credentials"
+        lk_tty_detail "Retrieving" "$1:$REMOTE_PATH/wp-config.php"
         WP_CONFIG=$(ssh "$1" cat "$REMOTE_PATH/wp-config.php") || return
-        lk_console_detail "Parsing WordPress configuration"
+        lk_tty_detail "Parsing WordPress configuration"
         SH=$(lk_wp_db_config <<<"$WP_CONFIG") &&
             eval "$SH" || return
     }
@@ -277,7 +277,7 @@ Usage: ${FUNCNAME[0]} SSH_HOST [REMOTE_PATH]" || return
         lk_mysql_dump_remote "$1" "$DB_NAME"
     else
         OUTPUT_FILE=~/.lk-platform/cache/db/$1-${REMOTE_PATH//\//_}-$(lk_date_ymdhms).sql.gz
-        lk_console_item "Initiating MySQL dump to" "$OUTPUT_FILE"
+        lk_tty_print "Initiating MySQL dump to" "$OUTPUT_FILE"
         install -d -m 00700 "${OUTPUT_FILE%/*}" &&
             lk_mysql_dump_remote "$1" "$DB_NAME" >"$OUTPUT_FILE"
     fi
@@ -300,8 +300,8 @@ Usage: ${FUNCNAME[0]} [SITE_ROOT]" || return
         [ -w "${OUTPUT_FILE%/*}" ] ||
             lk_warn "cannot write to ${OUTPUT_FILE%/*}" || return
     }
-    lk_console_message "Preparing to dump WordPress database"
-    lk_console_detail "Getting credentials"
+    lk_tty_print "Preparing to dump WordPress database"
+    lk_tty_detail "Getting credentials"
     DB_NAME=$(lk_wp config get DB_NAME) &&
         DB_USER=$(lk_wp config get DB_USER) &&
         DB_PASSWORD=$(lk_wp config get DB_PASSWORD) &&
@@ -309,7 +309,7 @@ Usage: ${FUNCNAME[0]} [SITE_ROOT]" || return
     if [ ! -t 1 ]; then
         lk_mysql_dump "$DB_NAME"
     else
-        lk_console_item "Initiating MySQL dump to" "$OUTPUT_FILE"
+        lk_tty_print "Initiating MySQL dump to" "$OUTPUT_FILE"
         lk_mysql_dump "$DB_NAME" >"$OUTPUT_FILE"
     fi
 }
@@ -386,10 +386,10 @@ function lk_wp_db_restore_local() {
     [ -f "$1" ] || lk_usage "\
 Usage: ${FUNCNAME[0]} SQL_PATH [DB_NAME [DB_USER]]" || return
     SITE_ROOT=$(lk_wp_get_site_root) || return
-    lk_console_message "Preparing to restore WordPress database"
+    lk_tty_print "Preparing to restore WordPress database"
     lk_wp_is_quiet || {
-        lk_console_detail "Backup file:" "$1"
-        lk_console_detail "WordPress installation:" "$SITE_ROOT"
+        lk_tty_detail "Backup file:" "$1"
+        lk_tty_detail "WordPress installation:" "$SITE_ROOT"
     }
     SH=$(lk_wp_db_get_vars "$SITE_ROOT") && eval "$SH" || return
     lk_wp_db_set_local "$SITE_ROOT" "${@:2}" || return
@@ -399,14 +399,14 @@ Usage: ${FUNCNAME[0]} SQL_PATH [DB_NAME [DB_USER]]" || return
     )
     _SQL=$(printf '%s;\n' "${SQL[@]}")
     [ "$DB_NAME" = "$LOCAL_DB_NAME" ] ||
-        lk_console_detail "DB_NAME will be updated to" "$LOCAL_DB_NAME"
+        lk_tty_detail "DB_NAME will be updated to" "$LOCAL_DB_NAME"
     [ "$DB_USER" = "$LOCAL_DB_USER" ] ||
-        lk_console_detail "DB_USER will be updated to" "$LOCAL_DB_USER"
+        lk_tty_detail "DB_USER will be updated to" "$LOCAL_DB_USER"
     [ "$DB_HOST" = "$LOCAL_DB_HOST" ] ||
-        lk_console_detail "DB_HOST will be updated to" "$LOCAL_DB_HOST"
+        lk_tty_detail "DB_HOST will be updated to" "$LOCAL_DB_HOST"
     [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] ||
-        lk_console_detail "DB_PASSWORD will be reset"
-    lk_console_detail "Local database will be reset with:" "$_SQL"
+        lk_tty_detail "DB_PASSWORD will be reset"
+    lk_tty_detail "Local database will be reset with:" "$_SQL"
     lk_confirm "\
 All data in local database '$LOCAL_DB_NAME' will be permanently destroyed.
 Proceed?" Y || return
@@ -418,8 +418,8 @@ Proceed?" Y || return
             lk_maybe_trace "$LK_BASE/bin/lk-mysql-grant.sh" \
             "$LOCAL_DB_NAME" "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD" || return
     }
-    lk_console_message "Restoring WordPress database to local system"
-    lk_console_detail "Checking wp-config.php"
+    lk_tty_print "Restoring WordPress database to local system"
+    lk_tty_detail "Checking wp-config.php"
     [ "$DB_NAME" = "$LOCAL_DB_NAME" ] ||
         lk_wp config set \
             DB_NAME "$LOCAL_DB_NAME" --type=constant --quiet || return
@@ -432,9 +432,9 @@ Proceed?" Y || return
     [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] ||
         lk_wp config set \
             DB_PASSWORD "$LOCAL_DB_PASSWORD" --type=constant --quiet || return
-    lk_console_detail "Resetting database" "$LOCAL_DB_NAME"
+    lk_tty_detail "Resetting database" "$LOCAL_DB_NAME"
     echo "$_SQL" | lk_mysql || return
-    lk_console_detail "Restoring from" "$1"
+    lk_tty_detail "Restoring from" "$1"
     if [[ $1 =~ \.gz(ip)?$ ]]; then
         lk_pv "$1" | gunzip
     else
@@ -466,19 +466,19 @@ Usage: ${FUNCNAME[0]} SSH_HOST [REMOTE_PATH [LOCAL_PATH [RSYNC_ARG...]]]" || ret
     )
     LOCAL_PATH=${3:-$(lk_wp_get_site_root 2>/dev/null)} ||
         LOCAL_PATH=~/public_html
-    lk_console_message "Preparing to sync WordPress files"
+    lk_tty_print "Preparing to sync WordPress files"
     REMOTE_PATH=${REMOTE_PATH%/}
     LOCAL_PATH=${LOCAL_PATH%/}
     lk_wp_is_quiet || {
-        lk_console_detail "Source:" "$1:$REMOTE_PATH"
-        lk_console_detail "Destination:" "$LOCAL_PATH"
+        lk_tty_detail "Source:" "$1:$REMOTE_PATH"
+        lk_tty_detail "Destination:" "$LOCAL_PATH"
     }
     for FILE in "${KEEP_LOCAL[@]}"; do
         [ ! -e "$LOCAL_PATH/$FILE" ] || EXCLUDE+=("/$FILE")
     done
     ARGS+=("${EXCLUDE[@]/#/--exclude=}")
     ARGS+=("$1:$REMOTE_PATH/" "$LOCAL_PATH/")
-    lk_console_detail "Local files will be overwritten with command:" \
+    lk_tty_detail "Local files will be overwritten with command:" \
         "rsync ${ARGS[*]}"
     lk_wp_is_quiet || ! lk_confirm "Perform a trial run first?" N ||
         rsync --dry-run "${ARGS[@]}" | "${PAGER:-less}" >&2 || true
@@ -499,7 +499,7 @@ Usage: ${FUNCNAME[0]} SSH_HOST [REMOTE_PATH [LOCAL_PATH [RSYNC_ARG...]]]" || ret
 function lk_wp_reapply_config() {
     local FILE STATUS=0
     if lk_wp plugin is-active wp-rocket; then
-        lk_console_detail "Regenerating WP Rocket files"
+        lk_tty_detail "Regenerating WP Rocket files"
         wp cli has-command "rocket regenerate" ||
             lk_wp_package_install wp-media/wp-rocket-cli:@stable || return
         for FILE in htaccess advanced-cache config; do
@@ -509,12 +509,12 @@ function lk_wp_reapply_config() {
         done
     fi
     if lk_wp plugin is-active email-log; then
-        lk_console_detail "Re-activating Email Log"
+        lk_tty_detail "Re-activating Email Log"
         lk_report_error lk_wp plugin deactivate email-log &&
             lk_report_error lk_wp plugin activate email-log || STATUS=$?
     fi
     if wp cli has-command "yoast index"; then
-        lk_console_detail "Building Yoast index"
+        lk_tty_detail "Building Yoast index"
         lk_report_error wp yoast index || STATUS=$?
     fi
     return "$STATUS"
@@ -531,7 +531,7 @@ function lk_wp_enable_system_cron() {
         '%q/lib/platform/log.sh %q --path=%q cron event run --due-now' \
         "$LK_BASE" "$WP_PATH" "$SITE_ROOT")
     ENV=$(printf '_LK_LOG_FILE=%q' "$LOG_FILE")
-    lk_console_item "Using crontab to schedule WP-Cron in" "$SITE_ROOT"
+    lk_tty_print "Using crontab to schedule WP-Cron in" "$SITE_ROOT"
     lk_wp config get DISABLE_WP_CRON --type=constant 2>/dev/null |
         grep -Fx 1 >/dev/null ||
         lk_wp config set DISABLE_WP_CRON true --type=constant --raw ||
@@ -559,7 +559,7 @@ function lk_wp_enable_system_cron() {
 function lk_wp_disable_cron() {
     local SITE_ROOT
     SITE_ROOT=$(lk_wp_get_site_root) || return
-    lk_console_item "Disabling WP-Cron in" "$SITE_ROOT"
+    lk_tty_print "Disabling WP-Cron in" "$SITE_ROOT"
     lk_wp config get DISABLE_WP_CRON --type=constant 2>/dev/null |
         grep -Fx 1 >/dev/null ||
         lk_wp config set DISABLE_WP_CRON true --type=constant --raw ||
@@ -596,14 +596,14 @@ function lk_wp_set_permissions() {
     if lk_will_elevate; then
         OWNER=$(lk_file_owner "$SITE_ROOT/..") &&
             LOG_FILE=$(lk_mktemp_file) || return
-        lk_console_item "Setting file ownership in" "$SITE_ROOT"
-        lk_console_detail "Owner:" "$OWNER"
+        lk_tty_print "Setting file ownership in" "$SITE_ROOT"
+        lk_tty_detail "Owner:" "$OWNER"
         CHANGES=$(lk_maybe_sudo gnu_chown -Rhc "$OWNER" "$SITE_ROOT" |
             tee -a "$LOG_FILE" | wc -l | tr -d ' ') || return
-        lk_console_detail "Changes:" "$CHANGES"
+        lk_tty_detail "Changes:" "$CHANGES"
         ! ((CHANGES)) &&
             lk_delete_on_exit "$LOG_FILE" ||
-            lk_console_detail "Changes logged to:" "$LOG_FILE"
+            lk_tty_detail "Changes logged to:" "$LOG_FILE"
     else
         lk_console_warning "Unable to set owner (not running as root)"
     fi
