@@ -503,7 +503,9 @@ function lk_wp_reapply_config() {
         wp cli has-command "rocket regenerate" ||
             lk_wp_package_install wp-media/wp-rocket-cli:@stable || return
         for FILE in htaccess advanced-cache config; do
-            lk_report_error wp rocket regenerate --file="$FILE" || STATUS=$?
+            # `wp rocket regenerate` is known to exit non-zero after running
+            # successfully, so ignore any errors
+            lk_report_error wp rocket regenerate --file="$FILE" || true
         done
     fi
     if lk_wp plugin is-active email-log; then
