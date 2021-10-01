@@ -10,9 +10,11 @@ function _lk_hosting_site_list_settings() {
         SITE_ORDER \
         SITE_DISABLE_{WWW,HTTPS} \
         SITE_ENABLE_STAGING \
+        SITE_SSL_{CERT,KEY,CHAIN}_FILE \
         SITE_PHP_FPM_{POOL,USER,MAX_CHILDREN,TIMEOUT,OPCACHE_SIZE} \
         SITE_PHP_FPM_{{ADMIN_,}SETTINGS,ENV} \
         SITE_PHP_VERSION \
+        SITE_DOWNSTREAM_{FROM,FORCE} \
         "${@:2}"
 } #### Reviewed: 2021-07-12
 

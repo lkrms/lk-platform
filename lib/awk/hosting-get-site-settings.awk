@@ -135,9 +135,25 @@ is_apache && tolower($1) == "use" && tolower($2) == "staging" {
     enable_staging = "Y"
 }
 
+function check_downstream() {
+    downstream_force = tolower($2) ~ "^require" ? "Y" : "N"
+}
+
+is_apache && tolower($1) == "use" && tolower($2) ~ "^(trust|require)proxy$" {
+    gsub("\"", "")
+    s = ""
+    for (i = 3; i < NF; i++) {
+        s = s (i > 3 ? "," : "") $i
+    }
+    if (s) {
+        downstream_from = $NF ":" s
+        check_downstream()
+    }
+}
+
 is_apache && tolower($1) == "use" && tolower($2) ~ "^(trust|require)cloudflare$" {
     downstream_from = "cloudflare"
-    downstream_force = tolower($2) ~ "^require" ? "Y" : "N"
+    check_downstream()
 }
 
 is_apache && tolower($1) == "use" && tolower($2) ~ /^phpfpmproxy[0-9]+$/ {
