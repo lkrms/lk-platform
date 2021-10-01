@@ -453,7 +453,9 @@ $LK_NODE_HOSTNAME" &&
         unset LK_FILE_REPLACE_NO_CHANGE
         FILE=/etc/tlp.d/90-${LK_PATH_PREFIX}default.conf
         lk_install -m 00644 "$FILE"
-        lk_file_replace -f "$LK_BASE/share/tlp.d/default.conf" "$FILE"
+        lk_file_replace "$FILE" < <(cat \
+            "$LK_BASE/share/tlp.d/default.conf" \
+            "$LK_BASE/share/tlp.d/rotational.conf")
         systemctl_mask systemd-rfkill.service
         systemctl_mask systemd-rfkill.socket
         file_delete "/etc/tlp.d/90-${LK_PATH_PREFIX}defaults.conf"
