@@ -763,6 +763,66 @@ function lk_git_ancestors() {
     printf '%s\t%s\t%s\t%s\n' "${ANCESTORS[@]}" | sort -n -k2 -k1 | cut -f2-
 }
 
+# lk_git_patch_parse [PATCH_FILE...]
+#
+# For each diff header in PATCH_FILE or input, print the fields below
+# (tab-delimited, in order of appearance).
+#
+# 1. BLOB_BEFORE
+# 2. BLOB_AFTER
+# 3. FILE_BEFORE
+# 4. FILE_AFTER
+function lk_git_patch_parse() {
+    awk '
+/^diff --git /  { d = 1; next }
+d == 1  { if ($0 !~ /^index /) { next }
+          split($2, c, "\\.\\.") }
+d > 1   { if (! sub(/^[-+]{3} [ab]\//, "")) { next }
+          if (c[d - 1] !~ /^0+$/) { c[d + 1] = $0 }
+          else { c[d + 1] = "" } }
+d == 3  { for (i in c) { printf "%s\t", c[i] }
+          print ""
+          d = 0 }
+d       { d++ }' "$@"
+}
+
+# lk_git_patch_base_objects [PATCH_FILE...]
+#
+# For the first appearance of each file with a diff header in PATCH_FILE or
+# input, print tab-delimited fields BLOB_BEFORE and FILE_BEFORE.
+function lk_git_patch_base_objects() {
+    lk_git_patch_parse "$@" | awk -F'\t' -v OFS='\t' '
+$1 ~ /^0+$/ { next }
+!a[$3]      { a[$3] = $1 }
+END         { for (f in a) { print a[f], f } }'
+}
+
+# lk_git_patch_base [PATCH_FILE...]
+#
+# Print the most recent commit that could be the parent of every diff in
+# PATCH_FILE or input.
+function lk_git_patch_base() {
+    local BASE_OBJECTS FILES REGEX
+    lk_mktemp_with BASE_OBJECTS lk_git_patch_base_objects "$@" &&
+        lk_mapfile FILES <(cut -f2- "$BASE_OBJECTS" | sort -u) &&
+        REGEX=$(cut -f1 "$BASE_OBJECTS" | lk_ere_implode_input) || return
+    [ -n "${FILES+1}" ] || lk_warn "no files patched" || return
+    # 1. Print all object IDs referenced by the most recent commit, otherwise
+    #    objects that haven't changed since the patch was generated won't be
+    #    matched until we reach the commit that introduced them
+    # 2. Print object IDs referenced by commits that changed one or more of the
+    #    patched files.
+    { git rev-list --objects --in-commit-order --no-walk HEAD &&
+        git rev-list --objects --in-commit-order --skip=1 HEAD -- \
+            "${FILES[@]}"; } |
+        awk -v re="^$REGEX" -v f=${#FILES[@]} '
+NR == 1 || (!$2 && last_path) { commit = $1 }
+$1 ~ re && !h[$1] { h[$1] = 1; if (!--f) { print commit; exit } }
+{ last_path = $2 }
+END { exit f ? 1 : 0 }' || [ ${PIPESTATUS[1]} -eq 0 ] ||
+        lk_warn "no base commit found for patch"
+}
+
 # - lk_git_config [-o] [--type=TYPE] NAME VALUE
 # - lk_git_config [-o] [--type=TYPE] --unset[-all] NAME
 function lk_git_config() {
