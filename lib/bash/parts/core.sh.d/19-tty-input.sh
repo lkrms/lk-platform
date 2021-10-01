@@ -73,21 +73,3 @@ Usage: $FUNCNAME PROMPT [DEFAULT [READ_ARG...]]" || return
         done
     fi
 }
-
-# lk_console_read PROMPT [DEFAULT [READ_ARG...]]
-function lk_console_read() {
-    local REPLY
-    lk_tty_read "$1" REPLY "${@:2}" &&
-        echo "$REPLY"
-}
-
-# lk_console_read_secret PROMPT [READ_ARG...]
-function lk_console_read_secret() {
-    local REPLY
-    lk_tty_read_silent "$1" REPLY "${@:2}" &&
-        echo "$REPLY"
-}
-
-function lk_confirm() {
-    lk_tty_yn "$@"
-}

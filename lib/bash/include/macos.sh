@@ -265,7 +265,7 @@ function lk_macos_maybe_install_pkg_url() {
 # lk_macos_sshd_set_port SERVICE_NAME
 function lk_macos_sshd_set_port() {
     local PORT FILE=/System/Library/LaunchDaemons/ssh.plist
-    [ -n "${1-}" ] || lk_usage "Usage: $(lk_myself -f) SERVICE_NAME" || return
+    [ -n "${1-}" ] || lk_usage "Usage: $FUNCNAME SERVICE_NAME" || return
     [ -f "$FILE" ] || lk_warn "file not found: $FILE" || return
     lk_plist_set_file "$FILE"
     PORT=$(lk_plist_get ":Sockets:Listeners:SockServiceName" 2>/dev/null) &&
@@ -319,7 +319,7 @@ function lk_macos_defaults_dump() {
     done
     [ -z "${_LK_MACOS_DEFAULTS_DUMP_SUDO-}" ] ||
         return 0
-    lk_is_root || ! lk_can_sudo defaults || {
+    lk_root || ! lk_can_sudo defaults || {
         local _LK_MACOS_DEFAULTS_DUMP_SUDO=1
         _LK_DEFAULTS_DIR=$DIR/system \
             lk_macos_defaults_dump || return
@@ -339,7 +339,7 @@ function PlistBuddy() {
 
 function _lk_plist_buddy() {
     [ -n "${_LK_PLIST-}" ] ||
-        lk_warn "lk_plist_set_file must be called before $(lk_myself -f 1)" ||
+        lk_warn "lk_plist_set_file must be called before ${FUNCNAME[1]}" ||
         return
     PlistBuddy -c "$1" "$_LK_PLIST" || return
 }

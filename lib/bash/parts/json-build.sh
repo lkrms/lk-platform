@@ -9,7 +9,7 @@ _dir=${_dir:-$PWD}
 cd "$_dir"
 
 [ $# -gt 0 ] ||
-    set -- core.sh.d/[0-9][0-9]-regular-expressions.sh ../../jq/regex.json
+    set -- core.sh.d/[0-9][0-9]-regular-expressions.sh ../../json/regex.json
 
 while [ $# -ge 2 ]; do
     s=$1

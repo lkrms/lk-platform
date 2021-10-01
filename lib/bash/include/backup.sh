@@ -3,7 +3,7 @@
 # lk_backup_snapshot_list ARRAY SNAPSHOT_ROOT [FIND_ARG...]
 function lk_backup_snapshot_list() {
     [ $# -ge 2 ] && lk_is_identifier "$1" && [ -d "$2" ] || lk_usage "\
-Usage: $(lk_myself -f) ARRAY SNAPSHOT_ROOT [FIND_ARG...]" || return
+Usage: $FUNCNAME ARRAY SNAPSHOT_ROOT [FIND_ARG...]" || return
     eval "$(lk_get_regex BACKUP_TIMESTAMP_FINDUTILS_REGEX)"
     lk_mapfile "$1" <(
         find "$2" \

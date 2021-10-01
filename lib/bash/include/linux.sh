@@ -13,7 +13,7 @@ function _lk_systemctl_args() {
     unset _USER _MACHINE
     [ -z "${_LK_PARAMS+1}" ] || PARAMS=${#_LK_PARAMS[@]}
     LK_USAGE="\
-Usage: $(lk_myself -f) [-u] [-m MACHINE] [-n NAME] \
+Usage: ${FUNCNAME[1]} [-u] [-m MACHINE] [-n NAME] \
 ${_LK_PARAMS[*]+${_LK_PARAMS[*]} }\
 SERVICE"
     while getopts ":um:n:" OPT; do

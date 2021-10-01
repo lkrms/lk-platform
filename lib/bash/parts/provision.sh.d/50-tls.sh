@@ -110,7 +110,7 @@ function lk_ssl_install_ca_certificate() {
     local DIR COMMAND CERT FILE \
         _LK_FILE_REPLACE_NO_CHANGE=${LK_FILE_REPLACE_NO_CHANGE-}
     unset LK_FILE_REPLACE_NO_CHANGE
-    DIR=$(LK_SUDO= lk_first_existing \
+    DIR=$(lk_first_file \
         /usr/local/share/ca-certificates/ \
         /etc/ca-certificates/trust-source/anchors/) &&
         COMMAND=$(LK_SUDO= lk_first_command \

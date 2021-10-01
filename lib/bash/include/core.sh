@@ -14,9 +14,7 @@ _LK_INCLUDES=core
 
 # lk_version_at_least INSTALLED MINIMUM
 function lk_version_at_least() {
-    local MIN
-    MIN=$(printf '%s\n' "$@" | sort -V | head -n1) &&
-        [ "$MIN" = "$2" ]
+    printf '%s\n' "$@" | sort -V | head -n1 | grep -Fx "$2" >/dev/null
 }
 
 # lk_bash_at_least MAJOR [MINOR]
@@ -76,17 +74,15 @@ function lk_is_wsl() {
 }
 
 function lk_is_virtual() {
-    lk_is_linux && grep -Eq "^flags$S*:.*\\<hypervisor\\>" /proc/cpuinfo
+    lk_is_linux && grep -Eq '^flags[[:blank:]]*:.*\<hypervisor\>' /proc/cpuinfo
 }
 
 function lk_is_qemu() {
-    lk_is_virtual && (shopt -s nullglob &&
-        FILES=(/sys/devices/virtual/dmi/id/*_vendor) &&
-        [ ${#FILES[@]} -gt 0 ] &&
-        grep -iq qemu "${FILES[@]}")
+    lk_is_virtual &&
+        grep -iq QEMU /sys/devices/virtual/dmi/id/*_vendor 2>/dev/null
 }
 
-function lk_script_is_running() {
+function lk_script_running() {
     [ "${BASH_SOURCE+${BASH_SOURCE[*]: -1}}" = "$0" ]
 }
 
@@ -104,28 +100,63 @@ function lk_verbose() {
 #
 # Return true if LK_DEBUG is set.
 function lk_debug() {
-    [[ ${LK_DEBUG-} =~ ^[1Yy]$ ]]
+    [ "${LK_DEBUG-}" = Y ]
+}
+
+function lk_root() {
+    [ "$EUID" -eq 0 ]
+}
+
+# lk_true VAR
+#
+# Return true if VAR or ${!VAR} is 'Y', 'yes', '1', 'true', or 'on' (not
+# case-sensitive).
+function lk_true() {
+    local REGEX='^([yY]([eE][sS])?|1|[tT][rR][uU][eE]|[oO][nN])$'
+    [[ $1 =~ $REGEX ]] || [[ ${1:+${!1-}} =~ $REGEX ]]
+}
+
+# lk_false VAR
+#
+# Return true if VAR or ${!VAR} is 'N', 'no', '0', 'false', or 'off' (not
+# case-sensitive).
+function lk_false() {
+    local REGEX='^([nN][oO]?|0|[fF][aA][lL][sS][eE]|[oO][fF][fF])$'
+    [[ $1 =~ $REGEX ]] || [[ ${1:+${!1-}} =~ $REGEX ]]
 }
 
 # lk_pass [-STATUS] COMMAND [ARG...]
 function lk_pass() {
-    local s=$?
-    [[ ! ${1-} =~ ^-[0-9]+$ ]] || { s=${1:1} && shift; }
+    local STATUS=$?
+    [[ ! ${1-} =~ ^-[0-9]+$ ]] || { STATUS=${1:1} && shift; }
     "$@" || true
-    return "$s"
+    return "$STATUS"
 }
 
 function lk_err() {
-    local d=${_LK_STACK_DEPTH:-0}
-    lk_pass echo "${FUNCNAME[1 + d]-${0##*/}}: $1" >&2
+    lk_pass echo "${FUNCNAME[1 + ${_LK_STACK_DEPTH:-0}]-${0##*/}}: $1" >&2
+}
+
+# lk_script_name [STACK_DEPTH]
+function lk_script_name() {
+    local DEPTH=$((${1:-0} + ${_LK_STACK_DEPTH:-0})) NAME
+    lk_script_running ||
+        NAME=${FUNCNAME[1 + DEPTH]+"${FUNCNAME[*]: -1}"}
+    echo "${NAME:-${0##*/}}"
+}
+
+# lk_caller_name [STACK_DEPTH]
+function lk_caller_name() {
+    local DEPTH=$((${1:-0} + ${_LK_STACK_DEPTH:-0}))
+    echo "${FUNCNAME[2 + DEPTH]-${0##*/}}"
 }
 
 function lk_first_command() {
-    local IFS c
+    local IFS CMDLINE
     unset IFS
     while [ $# -gt 0 ]; do
-        c=($1)
-        if type -P "${c[0]}" >/dev/null; then
+        CMDLINE=($1)
+        if type -P "${CMDLINE[0]}" >/dev/null; then
             echo "$1"
             return 0
         fi
@@ -134,18 +165,37 @@ function lk_first_command() {
     false
 }
 
+function lk_first_file() {
+    while [ $# -gt 0 ]; do
+        [ ! -e "$1" ] || break
+        shift
+    done
+    [ $# -gt 0 ] && echo "$1"
+}
+
 # lk_plural [-v] VALUE SINGLE_NOUN [PLURAL_NOUN]
 #
 # Print SINGLE_NOUN if VALUE is 1 or the name of an array with 1 element,
 # PLURAL_NOUN otherwise. If PLURAL_NOUN is omitted, print "${SINGLE_NOUN}s"
 # instead. If -v is set, include VALUE in the output.
 function lk_plural() {
-    local v
-    [ "${1-}" != -v ] || { v=1 && shift; }
-    local c=$1
-    [[ ! $1 =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] || eval "c=\${#$1[@]}" || return
-    v="${v:+$c }"
-    [ "$c" = 1 ] && echo "$v$2" || echo "$v${3-$2s}"
+    local VALUE
+    [ "${1-}" != -v ] || { VALUE=1 && shift; }
+    local COUNT=$1
+    [[ ! $1 =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] || eval "COUNT=\${#$1[@]}" || return
+    VALUE="${VALUE:+$COUNT }"
+    [ "$COUNT" = 1 ] && echo "$VALUE$2" || echo "$VALUE${3-$2s}"
+}
+
+# lk_no_input
+#
+# Return true if user input should not be requested.
+function lk_no_input() {
+    if [ "${LK_FORCE_INPUT-}" = 1 ]; then
+        { [ -t 0 ] || lk_err "/dev/stdin is not a terminal"; } && false
+    else
+        [ ! -t 0 ] || [ "${LK_NO_INPUT-}" = 1 ]
+    fi
 }
 
 # lk_vars_not_empty [-q] VAR...
@@ -153,16 +203,16 @@ function lk_plural() {
 # Print a warning and return false if any VAR is empty or unset. If -q is set,
 # suppress output.
 function lk_vars_not_empty() {
-    local q e=()
-    [ "${1-}" != -q ] || { q=1 && shift; }
+    local QUIET EMPTY=()
+    [ "${1-}" != -q ] || { QUIET=1 && shift; }
     while [ $# -gt 0 ]; do
-        [ -n "${!1:+1}" ] || e[${#e[@]}]=$1
+        [ -n "${!1:+1}" ] || EMPTY[${#EMPTY[@]}]=$1
         shift
     done
-    [ -z "${e+1}" ] || {
-        [ -n "${q-}" ] || {
+    [ -z "${EMPTY+1}" ] || {
+        [ -n "${QUIET-}" ] || {
             local IFS=' ' _LK_STACK_DEPTH=1
-            lk_err "$(lk_plural e value values) required: ${e[*]}"
+            lk_err "$(lk_plural EMPTY value values) required: ${EMPTY[*]}"
         }
         false
     }
@@ -170,36 +220,36 @@ function lk_vars_not_empty() {
 
 # lk_elevate [exec] [COMMAND [ARG...]]
 #
-# Use sudo to run COMMAND as the root user if Bash is not already running with
-# root privileges, otherwise run COMMAND without sudo. If COMMAND is not found
-# in PATH and is a function, run it with LK_SUDO=1.
+# If Bash is running as root, run COMMAND, otherwise use `sudo` to run it as the
+# root user. If COMMAND is not found in PATH and is a function, run it with
+# LK_SUDO set. If no COMMAND is specified and Bash is not running as root, run
+# the current script, with its original arguments, as the root user.
 function lk_elevate() {
-    local c
+    local COMMAND
     [ "${1-}" != exec ] || { local LK_EXEC=1 && shift; }
     if [ "$EUID" -eq 0 ]; then
         [ $# -eq 0 ] ||
             ${LK_EXEC:+exec} "$@"
     elif [ $# -eq 0 ]; then
         ${LK_EXEC:+exec} sudo -H "$0" ${_LK_ARGV+"${_LK_ARGV[@]}"}
-    elif ! c=$(type -P "$1") && [ "$(type -t "$1")" = "function" ]; then
+    elif ! COMMAND=$(type -P "$1") && [ "$(type -t "$1")" = "function" ]; then
         local LK_SUDO=1
         "$@"
-    elif [ -n "$c" ]; then
+    elif [ -n "$COMMAND" ]; then
         # Use `shift` and "$@" because Bash 3.2 expands "${@:2}" to the
         # equivalent of `IFS=" "; echo "${*:2}"` unless there is a space in IFS
         shift
-        ${LK_EXEC:+exec} sudo -H "$c" "$@"
+        ${LK_EXEC:+exec} sudo -H "$COMMAND" "$@"
     else
         lk_err "invalid command: $1"
+        false
     fi
 }
 
 # lk_sudo [exec] COMMAND [ARG...]
 #
-# Use sudo to run COMMAND as the root user if:
-# - the LK_SUDO variable is set and is not the empty string
-# - Bash is not already running with root privileges
-# Otherwise run COMMAND without sudo.
+# If Bash is running as root or LK_SUDO is empty or unset, run COMMAND,
+# otherwise use `sudo` to run it as the root user.
 function lk_sudo() {
     if [ -n "${LK_SUDO-}" ]; then
         lk_elevate "$@"
@@ -354,60 +404,87 @@ function lk_unbuffer() {
     lk_sudo "$@"
 }
 
-# lk_is_ip VALUE
-#
-# Return true if VALUE is a valid IP address.
-function lk_is_ip() {
-    local IP_REGEX='(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7})))'
-    [[ $1 =~ ^$IP_REGEX$ ]]
+# lk_grep_regex [-v] REGEX
+function lk_grep_regex() {
+    local v SH
+    [ "${1-}" != -v ] || { v=1 && shift; }
+    [ $# -eq 1 ] || lk_err "invalid arguments" || return 2
+    SH=$(lk_get_regex "$1") && eval "$SH" || return 2
+    grep -Ex${v:+v} "${!1}"
+}
+
+# lk_is_regex REGEX VALUE
+function lk_is_regex() {
+    local SH
+    SH=$(lk_get_regex "$1") && eval "$SH" || return 2
+    [[ $2 =~ ^${!1}$ ]]
 }
 
 # lk_is_cidr VALUE
 #
 # Return true if VALUE is a valid IP address or CIDR.
 function lk_is_cidr() {
-    local IP_OPT_PREFIX_REGEX='(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])(/(3[0-2]|[12][0-9]|[1-9]))?|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))(/(12[0-8]|1[01][0-9]|[1-9][0-9]|[1-9]))?)'
-    [[ $1 =~ ^$IP_OPT_PREFIX_REGEX$ ]]
-}
-
-# lk_is_host VALUE
-#
-# Return true if VALUE is a valid IP address, hostname or domain name.
-function lk_is_host() {
-    local HOST_REGEX='(((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])|(([0-9a-fA-F]{1,4}:){7}(:|[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){6}(:|:[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){5}(:|(:[0-9a-fA-F]{1,4}){1,2})|([0-9a-fA-F]{1,4}:){4}(:|(:[0-9a-fA-F]{1,4}){1,3})|([0-9a-fA-F]{1,4}:){3}(:|(:[0-9a-fA-F]{1,4}){1,4})|([0-9a-fA-F]{1,4}:){2}(:|(:[0-9a-fA-F]{1,4}){1,5})|[0-9a-fA-F]{1,4}:(:|(:[0-9a-fA-F]{1,4}){1,6})|:(:|(:[0-9a-fA-F]{1,4}){1,7}))|([a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)*))'
-    [[ $1 =~ ^$HOST_REGEX$ ]]
+    lk_is_regex IP_OPT_PREFIX_REGEX "$@"
 }
 
 # lk_is_fqdn VALUE
 #
 # Return true if VALUE is a valid domain name.
 function lk_is_fqdn() {
-    local DOMAIN_NAME_REGEX='[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)+'
-    [[ $1 =~ ^$DOMAIN_NAME_REGEX$ ]]
+    lk_is_regex DOMAIN_NAME_REGEX "$@"
 }
 
 # lk_is_email VALUE
 #
 # Return true if VALUE is a valid email address.
 function lk_is_email() {
-    local EMAIL_ADDRESS_REGEX='[-a-zA-Z0-9!#$%&'\''*+/=?^_`{|}~]([-a-zA-Z0-9.!#$%&'\''*+/=?^_`{|}~]{,62}[-a-zA-Z0-9!#$%&'\''*+/=?^_`{|}~])?@[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)+'
-    [[ $1 =~ ^$EMAIL_ADDRESS_REGEX$ ]]
+    lk_is_regex EMAIL_ADDRESS_REGEX "$@"
 }
 
 # lk_is_uri VALUE
 #
 # Return true if VALUE is a valid URI with a scheme and host.
 function lk_is_uri() {
-    local URI_REGEX_REQ_SCHEME_HOST='(([a-zA-Z][-a-zA-Z0-9+.]*):)(//(([-a-zA-Z0-9._~%!$&'\''()*+,;=]+)(:([-a-zA-Z0-9._~%!$&'\''()*+,;=]*))?@)?([-a-zA-Z0-9._~%!$&'\''()*+,;=]+|\[([0-9a-fA-F:]+)\])(:([0-9]+))?)([-a-zA-Z0-9._~%!$&'\''()*+,;=:@/]+)?(\?([-a-zA-Z0-9._~%!$&'\''()*+,;=:@?/]+))?(#([-a-zA-Z0-9._~%!$&'\''()*+,;=:@?/]*))?'
-    [[ $1 =~ ^$URI_REGEX_REQ_SCHEME_HOST$ ]]
+    lk_is_regex URI_REGEX_REQ_SCHEME_HOST "$@"
 }
 
 # lk_is_identifier VALUE
 #
 # Return true if VALUE is a valid Bash identifier.
 function lk_is_identifier() {
-    local IDENTIFIER_REGEX='[a-zA-Z_][a-zA-Z0-9_]*'
-    [[ $1 =~ ^$IDENTIFIER_REGEX$ ]]
+    lk_is_regex IDENTIFIER_REGEX "$@"
+}
+
+# lk_filter_ipv4 [-v]
+#
+# Print each input line that is a valid dotted-decimal IPv4 address or CIDR. If
+# -v is set, print each line that is not valid.
+function lk_filter_ipv4() {
+    _LK_STACK_DEPTH=1 lk_grep_regex "$@" IPV4_OPT_PREFIX_REGEX || true
+}
+
+# lk_filter_ipv6 [-v]
+#
+# Print each input line that is a valid 8-hextet IPv6 address or CIDR. If -v is
+# set, print each line that is not valid.
+function lk_filter_ipv6() {
+    _LK_STACK_DEPTH=1 lk_grep_regex "$@" IPV6_OPT_PREFIX_REGEX || true
+}
+
+# lk_filter_cidr [-v]
+#
+# Print each input line that is a valid IP address or CIDR. If -v is set, print
+# each line that is not valid.
+function lk_filter_cidr() {
+    _LK_STACK_DEPTH=1 lk_grep_regex "$@" IP_OPT_PREFIX_REGEX || true
+}
+
+# lk_filter_fqdn [-v]
+#
+# Print each input line that is a valid domain name. If -v is set, print each
+# line that is not valid.
+function lk_filter_fqdn() {
+    _LK_STACK_DEPTH=1 lk_grep_regex "$@" DOMAIN_NAME_REGEX || true
 }
 
 # lk_get_regex [REGEX...]
@@ -558,12 +635,28 @@ END     { if (NR > 1) { print ")" } else if (NR) { printf "%s\n", first } }'
     fi
 }
 
+# lk_ere_implode_args [-e] [--] [ARG...]
+function lk_ere_implode_args() {
+    local ARGS
+    [ "${1-}" != -e ] || { ARGS=(-e) && shift; }
+    [ "${1-}" != -- ] || shift
+    [ $# -eq 0 ] ||
+        printf '%s\n' "$@" | lk_ere_implode_input ${ARGS+"${ARGS[@]}"}
+}
+
 function lk_sed_escape() {
-    local DELIM=${_LK_SED_DELIM-/}
     if [ $# -gt 0 ]; then
         printf '%s\n' "$@" | lk_sed_escape
     else
-        sed -E "s/[]\$()*+.$DELIM?\\^{|}[]/\\\\&/g"
+        sed -E "s/[]\$()*+./?\\^{|}[]/\\\\&/g"
+    fi
+}
+
+function lk_sed_escape_replace() {
+    if [ $# -gt 0 ]; then
+        printf '%s\n' "$@" | lk_sed_escape_replace
+    else
+        sed -E "s/[&/\\]/\\\\&/g"
     fi
 }
 
@@ -620,11 +713,8 @@ done") && eval "$_SH"
 }
 
 function _lk_caller() {
-    local CALLER=()
-    lk_script_is_running ||
-        CALLER=(${FUNCNAME[2]+"${FUNCNAME[*]: -1}"})
-    [ -n "${CALLER+1}" ] ||
-        CALLER=("${0##*/}")
+    local CALLER
+    CALLER=("$(lk_script_name 2)")
     CALLER[0]=$LK_BOLD$CALLER$LK_RESET
     lk_verbose || {
         echo "$CALLER"
@@ -751,6 +841,17 @@ function lk_tty_path() {
     fi
 }
 
+function lk_tty_columns() {
+    local _COLUMNS
+    _COLUMNS=${_LK_TTY_COLUMNS:-${COLUMNS:-${TERM:+$(TERM=$TERM tput cols)}}} ||
+        _COLUMNS=
+    echo "${_COLUMNS:-120}"
+}
+
+function lk_tty_length() {
+    lk_strip_non_printing "$1" | awk 'NR == 1 { print length() }'
+}
+
 # lk_tty_print [MESSAGE [MESSAGE2 [COLOUR]]]
 #
 # Write each message to the file descriptor set in _LK_FD or to the standard
@@ -863,8 +964,7 @@ function lk_tty_list() {
             lk_tty_print "$_MESSAGE" $'\n'"$_LIST" "$_COLOUR"
         [ -z "${_SINGLE:+${_PLURAL:+1}}" ] ||
             _LK_TTY_PREFIX=$(printf "%$((_INDENT > 0 ? _INDENT : 0))s") \
-                lk_tty_detail "(${#_ITEMS[@]} $(lk_plural \
-                    ${#_ITEMS[@]} "$_SINGLE" "$_PLURAL"))"
+                lk_tty_detail "($(lk_plural -v _ITEMS "$_SINGLE" "$_PLURAL"))"
     )" >&"${_LK_FD-2}"
 }
 
@@ -942,22 +1042,21 @@ Usage: $FUNCNAME PROMPT [DEFAULT [READ_ARG...]]" || return
     fi
 }
 
-# lk_console_read PROMPT [DEFAULT [READ_ARG...]]
-function lk_console_read() {
-    local REPLY
-    lk_tty_read "$1" REPLY "${@:2}" &&
-        echo "$REPLY"
+function lk_include() {
+    local FILE
+    while [ $# -gt 0 ]; do
+        [[ ,$_LK_INCLUDES, == *,$1,* ]] || {
+            FILE=${_LK_INST:-$LK_BASE}/lib/bash/include/$1.sh
+            [ -r "$FILE" ] || lk_err "file not found: $FILE" || return
+            . "$FILE" || return
+        }
+        shift
+    done
 }
 
-# lk_console_read_secret PROMPT [READ_ARG...]
-function lk_console_read_secret() {
-    local REPLY
-    lk_tty_read_silent "$1" REPLY "${@:2}" &&
-        echo "$REPLY"
-}
-
-function lk_confirm() {
-    lk_tty_yn "$@"
+function lk_provide() {
+    [[ ,$_LK_INCLUDES, == *,$1,* ]] ||
+        _LK_INCLUDES=$_LK_INCLUDES,$1
 }
 
 # lk_fifo_flush FIFO_PATH
@@ -1011,7 +1110,7 @@ function lk_fd_next() {
     local USED FD=10 i=0
     [ -d /dev/fd ] &&
         USED=($(ls -1 /dev/fd/ | sort -n)) && [ ${#USED[@]} -ge 3 ] ||
-        lk_warn "not supported: /dev/fd" || return
+        lk_err "not supported: /dev/fd" || return
     while ((i < ${#USED[@]})); do
         ((FD >= USED[i])) || break
         ((FD > USED[i])) || ((FD++))
@@ -1048,7 +1147,7 @@ function _lk_log_install_file() {
 function lk_hash() {
     _LK_HASH_COMMAND=${_LK_HASH_COMMAND:-${LK_HASH_COMMAND:-$(
         lk_first_command xxhsum shasum md5sum md5
-    )}} || lk_warn "checksum command not found" || return
+    )}} || lk_err "checksum command not found" || return
     if [ $# -gt 0 ]; then
         local IFS
         unset IFS
@@ -1061,7 +1160,7 @@ function lk_hash() {
 function lk_md5() {
     local _LK_HASH_COMMAND
     _LK_HASH_COMMAND=$(lk_first_command md5sum md5) ||
-        lk_warn "md5 command not found" || return
+        lk_err "md5 command not found" || return
     lk_hash "$@"
 }
 
@@ -1192,51 +1291,25 @@ function lk_uri_encode() {
             '[$ARGS.named|to_entries[]|"\(.key)=\(.value|@uri)"]|join("&")'
 }
 
+lk_command_first_existing() { lk_first_command "$@"; }
+lk_confirm() { lk_tty_yn "$@"; }
+lk_console_blank() { lk_tty_print; }
+lk_console_detail() { lk_tty_detail "$@"; }
+lk_console_item() { lk_tty_print "$1" "$2" "${3-$_LK_TTY_COLOUR}"; }
+lk_console_list() { lk_tty_list - "$@"; }
+lk_console_message() { lk_tty_print "${1-}" "${3+$2}" "${3-${2-$_LK_TTY_COLOUR}}"; }
+lk_console_read_secret() { local r && lk_tty_read_silent "$1" r "${@:2}" && echo "$r"; }
+lk_console_read() { local r && lk_tty_read "$1" r "${@:2}" && echo "$r"; }
+lk_escape_ere_replace() { lk_sed_escape_replace "$@"; }
+lk_escape_ere() { lk_sed_escape "$@"; }
+lk_first_existing() { lk_first_file "$@"; }
+lk_is_false() { lk_false "$@"; }
+lk_is_true() { lk_true "$@"; }
+lk_maybe_sudo() { lk_sudo "$@"; }
+lk_myself() { local s=$? && { [[ ${1-} != -* ]] || _LK_STACK_DEPTH= lk_warn "-f not supported"; } && lk_pass -$s lk_script_name $((2 + ${_LK_STACK_DEPTH:-0})); }
+lk_regex_implode() { lk_ere_implode_args -- "$@"; }
+
 #### END core.sh.d
-
-# lk_first_existing [FILE...]
-function lk_first_existing() {
-    while [ $# -gt 0 ]; do
-        ! lk_maybe_sudo test -e "$1" || break
-        shift
-    done
-    [ $# -gt 0 ] && echo "$1"
-}
-
-function lk_include() {
-    local i FILE
-    for i in "$@"; do
-        [[ ,$_LK_INCLUDES, != *,$i,* ]] || continue
-        FILE=${_LK_INST:-$LK_BASE}/lib/bash/include/$i.sh
-        [ -r "$FILE" ] || lk_warn "$FILE: file not found" || return
-        . "$FILE" || return
-    done
-}
-
-function lk_provide() {
-    [[ ,$_LK_INCLUDES, == *,$1,* ]] ||
-        _LK_INCLUDES=$_LK_INCLUDES,$1
-}
-
-# lk_myself [-f] [STACK_DEPTH]
-#
-# If running from a source file and -f is not set, output the basename of the
-# running script, otherwise print the name of the function at STACK_DEPTH in the
-# call stack, where stack depth 0 (the default) represents the invoking
-# function, stack depth 1 represents its caller, and so on.
-#
-# Returns the most recent command's exit status to facilitate typical lk_usage
-# scenarios.
-function lk_myself() {
-    local STATUS=$? FUNC
-    [ "${1-}" != -f ] || { FUNC=1 && shift; }
-    if [ ${FUNC:-0} -eq 0 ] && lk_script_is_running; then
-        echo "${0##*/}"
-    else
-        echo "${FUNCNAME[$((1 + ${1:-0} + ${_LK_STACK_DEPTH:-0}))]:-${0##*/}}"
-    fi
-    return "$STATUS"
-} #### Reviewed: 2021-04-10
 
 function _lk_usage_format() {
     local CMD BOLD RESET
@@ -1273,19 +1346,6 @@ function lk_mktemp_file() {
 
 function lk_mktemp_dir() {
     _lk_mktemp -d
-}
-
-function lk_command_first_existing() {
-    lk_first_command "$@"
-}
-
-function lk_regex_implode() {
-    [ $# -gt 0 ] || return 0
-    if [ $# -gt 1 ]; then
-        printf '(%s)' "$(lk_implode_args "|" "$@")"
-    else
-        printf '%s' "$1"
-    fi
 }
 
 function _lk_var_prefix() {
@@ -1362,36 +1422,6 @@ else
         lk_console_blank
     }
 fi
-
-function lk_is_root() {
-    [ "$EUID" -eq 0 ]
-}
-
-# lk_is_true VAR
-#
-# Return true if the value of variable VAR is one of the following "truthy"
-# values (case-insensitive).
-# - 1
-# - True
-# - Y
-# - Yes
-# - On
-function lk_is_true() {
-    [[ ${!1-} =~ ^(1|[tT][rR][uU][eE]|[yY]([eE][sS])?|[oO][nN])$ ]]
-}
-
-# lk_is_false VAR
-#
-# Return true if the value of variable VAR is one of the following "falsy"
-# values (case-insensitive).
-# - 0
-# - False
-# - N
-# - No
-# - Off
-function lk_is_false() {
-    [[ ${!1-} =~ ^(0|[fF][aA][lL][sS][eE]|[nN][oO]?|[oO][fF][fF])$ ]]
-}
 
 function lk_double_quote() {
     if [ $# -gt 0 ]; then
@@ -1485,18 +1515,6 @@ END{ for (i = 0; i < length(a); i++) p(a[i]) }' <<<"${3-$PATH}"
 function lk_check_pid() {
     [ $# -eq 1 ] || return
     lk_maybe_sudo kill -0 "$1" 2>/dev/null
-}
-
-function lk_escape_ere() {
-    lk_sed_escape "$@"
-}
-
-function lk_escape_ere_replace() {
-    if [ $# -gt 0 ]; then
-        printf '%s\n' "$@" | lk_escape_ere_replace
-    else
-        sed -E 's/[&/\]/\\&/g'
-    fi
 }
 
 # lk_curl_config [--]ARG[=PARAM]...
@@ -1643,7 +1661,7 @@ function lk_expand_template() {
             ;;
         \? | :)
             lk_usage "\
-Usage: $(lk_myself -f) [-e] [-q] [FILE]"
+Usage: $FUNCNAME [-e] [-q] [FILE]"
             return 1
             ;;
         esac
@@ -1969,7 +1987,7 @@ function _lk_maybe_xargs() {
         { LK_Z=1 && set -- "$1" "${@:3}"; }
     # Return false ASAP if there's exactly one value for the caller to process
     (($# - $1 - 2)) || return
-    COMMAND=("$(lk_myself -f 1)" "${@:2:$1}")
+    COMMAND=("${FUNCNAME[1]}" "${@:2:$1}")
     EXIT_STATUS=0
     # If there are no values to process, use lk_xargs to pass input lines
     if ! (($# - $1 - 1)); then
@@ -2201,7 +2219,7 @@ function _lk_log_close_fd() {
 function lk_log_start() {
     local ARG0 HEADER EXT _FILE FILE LOG_FILE OUT_FILE FIFO
     if [ "${LK_NO_LOG-}" = 1 ] || lk_log_is_open ||
-        { [[ $- == *i* ]] && ! lk_script_is_running; }; then
+        { [[ $- == *i* ]] && ! lk_script_running; }; then
         return
     elif [ -z "${_LK_LOG_CMDLINE+1}" ]; then
         local _LK_LOG_CMDLINE=("$0" ${_LK_ARGV+"${_LK_ARGV[@]}"})
@@ -2490,7 +2508,7 @@ function lk_fold() {
         PARTS=() CODES=() LINE_TEXT LINE i PART CODE _LINE_TEXT
     eval "$(lk_get_regex NON_PRINTING_REGEX)"
     [ $# -gt 0 ] || lk_usage "\
-Usage: $(lk_myself -f) STRING [WIDTH]" || return
+Usage: $FUNCNAME STRING [WIDTH]" || return
     STRING=$1
     ! lk_command_exists expand ||
         STRING=$(expand <<<"$STRING") || return
@@ -2542,41 +2560,6 @@ Usage: $(lk_myself -f) STRING [WIDTH]" || return
     echo "${STRING%$'\n'}"
 }
 
-function lk_tty_length() {
-    local STRING
-    STRING=$(lk_strip_non_printing "$1.")
-    STRING=${STRING%.}
-    echo ${#STRING}
-}
-
-function lk_console_blank() {
-    echo >&"${_LK_FD-2}"
-}
-
-function lk_tty_columns() {
-    local _COLUMNS
-    _COLUMNS=${_LK_TTY_COLUMNS:-${COLUMNS:-${TERM:+$(TERM=$TERM tput cols)}}} ||
-        _COLUMNS=
-    echo "${_COLUMNS:-120}"
-}
-
-function _lk_tty_length() {
-    echo "${LENGTH:=$(lk_tty_length "$PREFIX$MESSAGE")}"
-}
-
-function _lk_tty_length2() {
-    echo "${LENGTH2:=$(lk_tty_length "$PREFIX$MESSAGE $MESSAGE2")}"
-}
-
-function _lk_tty_width() {
-    echo "${WIDTH:=$(lk_tty_columns)}"
-}
-
-# lk_console_message MESSAGE [[MESSAGE2] COLOUR]
-function lk_console_message() {
-    lk_tty_print "${1-}" "${3+$2}" "${3-${2-$_LK_TTY_COLOUR}}"
-}
-
 # lk_tty_pairs [-d DELIM] [COLOUR]
 function lk_tty_pairs() {
     local _LK_TTY_NO_FOLD=1 ARGS LEN=0 KEY VALUE KEYS=() VALUES=() GAP SPACES i
@@ -2606,11 +2589,6 @@ function lk_tty_detail_pairs() {
     [ "${1-}" != -d ] || { ARGS=(-d "$2") && shift 2; }
     lk_tty_pairs ${ARGS[@]+"${ARGS[@]}"} "${1-$LK_YELLOW}"
 } #### Reviewed: 2021-03-22
-
-# lk_console_detail MESSAGE [MESSAGE2 [COLOUR]]
-function lk_console_detail() {
-    lk_tty_detail "$@"
-}
 
 # lk_console_detail_list MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]
 function lk_console_detail_list() {
@@ -2700,16 +2678,6 @@ function lk_console_error() {
     # ✘ (\u2718)
     _LK_TTY_PREFIX=${_LK_TTY_PREFIX-$'  \xe2\x9c\x98 '} \
         _lk_tty_log "$_LK_ERROR_COLOUR" "$@"
-}
-
-# lk_console_item MESSAGE ITEM [COLOUR]
-function lk_console_item() {
-    lk_tty_print "$1" "$2" "${3-$_LK_TTY_COLOUR}"
-}
-
-# lk_console_list MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]
-function lk_console_list() {
-    lk_tty_list - "$@"
 }
 
 # lk_tty_dump CONTENT [MESSAGE1 [MESSAGE2 [COLOUR [COLOUR2 [COMMAND...]]]]]
@@ -2904,17 +2872,6 @@ function lk_maybe_trace() {
         COMMAND=(lk_quote_args "${COMMAND[@]}")
     "${COMMAND[@]}"
 }
-
-# lk_no_input
-#
-# Return true if user input should not be requested.
-function lk_no_input() {
-    if [ "${LK_FORCE_INPUT-}" = 1 ]; then
-        { [ -t 0 ] || lk_warn "/dev/stdin is not a terminal"; } && false
-    else
-        [ ! -t 0 ] || [ "${LK_NO_INPUT-}" = 1 ]
-    fi
-} #### Reviewed: 2021-06-13
 
 # lk_clip
 #
@@ -3197,7 +3154,7 @@ function lk_run_as() {
 }
 
 function lk_maybe_drop() {
-    if ! lk_is_root; then
+    if ! lk_root; then
         "$@"
     elif lk_is_linux; then
         runuser -u nobody -- "$@"
@@ -3235,10 +3192,6 @@ function lk_can_sudo() {
                 sudo ${USERNAME:+-u "$USERNAME"} -l "$COMMAND" >/dev/null
         }
     }
-}
-
-function lk_maybe_sudo() {
-    lk_sudo "$@"
 }
 
 function lk_elevate_if_error() {
@@ -3295,8 +3248,8 @@ function lk_install() {
     local OPTIND OPTARG OPT LK_USAGE _USER LK_SUDO=${LK_SUDO-} \
         DIR MODE OWNER GROUP VERBOSE DEST STAT REGEX ARGS=()
     LK_USAGE="\
-Usage: $(lk_myself -f) [-m MODE] [-o OWNER] [-g GROUP] [-v] FILE...
-   or: $(lk_myself -f) -d [-m MODE] [-o OWNER] [-g GROUP] [-v] DIRECTORY..."
+Usage: $FUNCNAME [-m MODE] [-o OWNER] [-g GROUP] [-v] FILE...
+   or: $FUNCNAME -d [-m MODE] [-o OWNER] [-g GROUP] [-v] DIRECTORY..."
     while getopts ":dm:o:g:v" OPT; do
         case "$OPT" in
         d)
@@ -3370,7 +3323,7 @@ function lk_symlink() {
     local TARGET LINK LINK_DIR CURRENT_TARGET NO_ORIG v='' vv=''
     [ "${1-}" != -f ] || { NO_ORIG=1 && shift; }
     [ $# -eq 2 ] || lk_usage "\
-Usage: $(lk_myself -f) [-f] TARGET LINK"
+Usage: $FUNCNAME [-f] TARGET LINK"
     TARGET=$1
     LINK=${2%/}
     LINK_DIR=${LINK%/*}
@@ -3618,7 +3571,7 @@ function lk_is_exported() {
 }
 
 function lk_jq() {
-    jq -L "${_LK_INST:-$LK_BASE}/lib/jq" "$@"
+    jq -L"${_LK_INST:-$LK_BASE}"/lib/{jq,json} "$@"
 }
 
 # lk_jq_get_array ARRAY [FILTER]
@@ -3651,7 +3604,7 @@ function lk_jq_get_shell_var() {
 
 function lk_json_from_xml_schema() {
     [ $# -gt 0 ] && [ $# -le 2 ] && lk_files_exist "$@" || lk_usage "\
-Usage: $(lk_myself -f) XSD_FILE [XML_FILE]" || return
+Usage: $FUNCNAME XSD_FILE [XML_FILE]" || return
     "$LK_BASE/lib/python/json_from_xml_schema.py" "$@"
 }
 
@@ -3941,7 +3894,7 @@ function lk_file_replace() {
         NEW=1 VERB=Created CONTENT PREVIOUS TEMP vv=
     unset IFS PREVIOUS
     LK_USAGE="\
-Usage: $(lk_myself -f) [OPTIONS] TARGET [CONTENT]
+Usage: $FUNCNAME [OPTIONS] TARGET [CONTENT]
 
 If TARGET differs from input or CONTENT, replace TARGET.
 

@@ -2,10 +2,15 @@
 
 # Run with -i to output the `install_gnu_commands` function
 #
-# To update REQUIRED_COMMANDS:
+# To update REQUIRED_COMMANDS, run this in `$LK_BASE`:
 #
-#     lk_bash_find_scripts -d "$LK_BASE" -print0 |
-#         xargs -0 grep -Pho "\\bgnu_([a-zA-Z0-9_](?!$S*\\(\\)))+\\b" |
+#     lk_bash_find_scripts -print0 | xargs -0 awk \
+#         -v s="^$S*" \
+#         -v r='function install_gnu_commands\\(\\) \\{$' '
+#             $0 ~ s r        { skip = 1; e = $0; sub(r, "", e); e = e "}" }
+#             skip && $0 == e { skip = 0; next }
+#             !skip           { print }' |
+#         grep -Pho "\\bgnu_([a-zA-Z0-9_](?!$S*\\(\\)))+\\b" |
 #         sort -u |
 #         sed 's/^gnu_//'
 
@@ -63,7 +68,7 @@ OPTIONAL_COMMANDS=($(comm -13 \
     <(printf '%s\n' "${REQUIRED_COMMANDS[@]}" | sort -u) \
     <(printf '%s\n' "${COMMANDS[@]}")))
 
-function gnu_command() {
+function get_gnu_command() {
     local COMMAND PREFIX=
     unset COMMAND
     if [ "$PLATFORM" = macos ]; then
@@ -90,7 +95,7 @@ function gnu_command() {
 function render() {
     local COMMAND
     case "$MODE" in
-    "")
+    build)
         if [ "$PLATFORM" = macos ]; then
             printf '%s &&\n    %s=%s ||\n    %s=%s\n' \
                 lk_is_apple_silicon \
@@ -99,7 +104,7 @@ function render() {
         fi
         for COMMAND in "${COMMANDS[@]}"; do
             printf 'function gnu_%s() { lk_sudo %s "$@"; }\n' \
-                "$COMMAND" "$(gnu_command "$COMMAND")"
+                "$COMMAND" "$(get_gnu_command "$COMMAND")"
         done
         ;;
     install)
@@ -107,11 +112,11 @@ function render() {
         {
             for COMMAND in "${REQUIRED_COMMANDS[@]}"; do
                 printf '    %s gnu_%s 1\n' \
-                    "$(gnu_command "$COMMAND")" "$COMMAND"
+                    "$(get_gnu_command "$COMMAND")" "$COMMAND"
             done
             for COMMAND in "${OPTIONAL_COMMANDS[@]}"; do
                 printf '    %s gnu_%s 0\n' \
-                    "$(gnu_command "$COMMAND")" "$COMMAND"
+                    "$(get_gnu_command "$COMMAND")" "$COMMAND"
             done
         } | sort -k2
         printf ')\n'
@@ -119,20 +124,27 @@ function render() {
     esac | sed 's/^/    /'
 }
 
-if [[ ! $1 =~ ^(-i|--install)$ ]]; then
-    MODE=
+case "${1+${1:-null}}" in
+"")
+    MODE=build
     cat <<"EOF"
 # Define wrapper functions (e.g. `gnu_find`) to invoke the GNU version of
 # certain commands (e.g. `gfind`) when standard utilities are not compatible
 # with their GNU counterparts, e.g. on BSD/macOS
 EOF
-else
+    ;;
+-i | --install)
     MODE=install
     cat <<"EOF"
 function install_gnu_commands() {
     local GNU_COMMANDS i STATUS=0
 EOF
-fi
+    ;;
+*)
+    echo "Usage: ${0##*/} [-i|--install]" >&2
+    exit 1
+    ;;
+esac
 
 {
     printf 'if ! lk_is_macos; then\n'
@@ -159,4 +171,4 @@ fi
 }
 EOF
 
-#### Reviewed: 2021-09-06
+#### Reviewed: 2021-10-07

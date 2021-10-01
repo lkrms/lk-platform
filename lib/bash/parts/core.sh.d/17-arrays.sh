@@ -7,3 +7,5 @@ function lk_array_remove_value() {
     [ \"\${$1[_i]}\" != \"\$2\" ] || echo \"unset \\\"$1[\$_i]\\\"\"
 done") && eval "$_SH"
 }
+
+#### Reviewed: 2021-10-04

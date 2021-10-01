@@ -2,36 +2,36 @@
 
 # lk_elevate [exec] [COMMAND [ARG...]]
 #
-# Use sudo to run COMMAND as the root user if Bash is not already running with
-# root privileges, otherwise run COMMAND without sudo. If COMMAND is not found
-# in PATH and is a function, run it with LK_SUDO=1.
+# If Bash is running as root, run COMMAND, otherwise use `sudo` to run it as the
+# root user. If COMMAND is not found in PATH and is a function, run it with
+# LK_SUDO set. If no COMMAND is specified and Bash is not running as root, run
+# the current script, with its original arguments, as the root user.
 function lk_elevate() {
-    local c
+    local COMMAND
     [ "${1-}" != exec ] || { local LK_EXEC=1 && shift; }
     if [ "$EUID" -eq 0 ]; then
         [ $# -eq 0 ] ||
             ${LK_EXEC:+exec} "$@"
     elif [ $# -eq 0 ]; then
         ${LK_EXEC:+exec} sudo -H "$0" ${_LK_ARGV+"${_LK_ARGV[@]}"}
-    elif ! c=$(type -P "$1") && [ "$(type -t "$1")" = "function" ]; then
+    elif ! COMMAND=$(type -P "$1") && [ "$(type -t "$1")" = "function" ]; then
         local LK_SUDO=1
         "$@"
-    elif [ -n "$c" ]; then
+    elif [ -n "$COMMAND" ]; then
         # Use `shift` and "$@" because Bash 3.2 expands "${@:2}" to the
         # equivalent of `IFS=" "; echo "${*:2}"` unless there is a space in IFS
         shift
-        ${LK_EXEC:+exec} sudo -H "$c" "$@"
+        ${LK_EXEC:+exec} sudo -H "$COMMAND" "$@"
     else
         lk_err "invalid command: $1"
+        false
     fi
 }
 
 # lk_sudo [exec] COMMAND [ARG...]
 #
-# Use sudo to run COMMAND as the root user if:
-# - the LK_SUDO variable is set and is not the empty string
-# - Bash is not already running with root privileges
-# Otherwise run COMMAND without sudo.
+# If Bash is running as root or LK_SUDO is empty or unset, run COMMAND,
+# otherwise use `sudo` to run it as the root user.
 function lk_sudo() {
     if [ -n "${LK_SUDO-}" ]; then
         lk_elevate "$@"
@@ -57,4 +57,4 @@ function lk_will_sudo() {
     [ "$EUID" -ne 0 ] && [ -n "${LK_SUDO-}" ]
 }
 
-#### Reviewed: 2021-09-06
+#### Reviewed: 2021-10-07

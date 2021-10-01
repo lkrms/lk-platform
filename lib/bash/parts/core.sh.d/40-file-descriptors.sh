@@ -14,7 +14,7 @@ function lk_fd_next() {
     local USED FD=10 i=0
     [ -d /dev/fd ] &&
         USED=($(ls -1 /dev/fd/ | sort -n)) && [ ${#USED[@]} -ge 3 ] ||
-        lk_warn "not supported: /dev/fd" || return
+        lk_err "not supported: /dev/fd" || return
     while ((i < ${#USED[@]})); do
         ((FD >= USED[i])) || break
         ((FD > USED[i])) || ((FD++))

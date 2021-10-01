@@ -46,12 +46,28 @@ END     { if (NR > 1) { print ")" } else if (NR) { printf "%s\n", first } }'
     fi
 }
 
+# lk_ere_implode_args [-e] [--] [ARG...]
+function lk_ere_implode_args() {
+    local ARGS
+    [ "${1-}" != -e ] || { ARGS=(-e) && shift; }
+    [ "${1-}" != -- ] || shift
+    [ $# -eq 0 ] ||
+        printf '%s\n' "$@" | lk_ere_implode_input ${ARGS+"${ARGS[@]}"}
+}
+
 function lk_sed_escape() {
-    local DELIM=${_LK_SED_DELIM-/}
     if [ $# -gt 0 ]; then
         printf '%s\n' "$@" | lk_sed_escape
     else
-        sed -E "s/[]\$()*+.$DELIM?\\^{|}[]/\\\\&/g"
+        sed -E "s/[]\$()*+./?\\^{|}[]/\\\\&/g"
+    fi
+}
+
+function lk_sed_escape_replace() {
+    if [ $# -gt 0 ]; then
+        printf '%s\n' "$@" | lk_sed_escape_replace
+    else
+        sed -E "s/[&/\\]/\\\\&/g"
     fi
 }
 
@@ -99,4 +115,4 @@ function lk_string_remove() {
             'NR == 1 {next} $0 !~ regex {printf "%s%s", (i++ ? RS : ""), $0 }'
 }
 
-#### Reviewed: 2021-08-28
+#### Reviewed: 2021-10-04
