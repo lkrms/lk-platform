@@ -124,7 +124,7 @@ function lk_wp_rename_site() {
     local NEW_URL OLD_URL=${LK_WP_OLD_URL-} PLUGIN_WARNING \
         SITE_ROOT OLD_SITE_URL NEW_SITE_URL
     [ $# -eq 1 ] || lk_usage "\
-Usage: ${FUNCNAME[0]} NEW_URL" || return
+Usage: $FUNCNAME NEW_URL" || return
     NEW_URL=$1
     lk_is_uri "$NEW_URL" ||
         lk_warn "not a valid URL: $NEW_URL" || return
@@ -158,7 +158,7 @@ Usage: ${FUNCNAME[0]} NEW_URL" || return
 function lk_wp_replace_url() {
     local OLD_URL NEW_URL REPLACE TEMP i SEARCH _SEARCH
     [ $# -eq 2 ] || lk_usage "\
-Usage: ${FUNCNAME[0]} OLD_URL NEW_URL"
+Usage: $FUNCNAME OLD_URL NEW_URL"
     lk_test_many lk_is_uri "$@" || lk_warn "invalid URL" || return
     lk_tty_print "Performing WordPress search/replace"
     OLD_URL=$1
@@ -258,7 +258,7 @@ function lk_wp_db_dump_remote() {
         DB_PASSWORD=${DB_PASSWORD-} DB_HOST=${DB_HOST-} \
         OUTPUT_FILE
     [ $# -ge 1 ] || lk_usage "\
-Usage: ${FUNCNAME[0]} SSH_HOST [REMOTE_PATH]" || return
+Usage: $FUNCNAME SSH_HOST [REMOTE_PATH]" || return
     [ -n "$1" ] || lk_warn "no ssh host" || return
     REMOTE_PATH=${REMOTE_PATH%/}
     lk_tty_print "Preparing to dump remote WordPress database"
@@ -288,7 +288,7 @@ function lk_wp_db_dump() {
     local SITE_ROOT OUTPUT_FILE \
         DB_NAME DB_USER DB_PASSWORD DB_HOST
     SITE_ROOT=${1:-$(lk_wp_get_site_root)} || lk_usage "\
-Usage: ${FUNCNAME[0]} [SITE_ROOT]" || return
+Usage: $FUNCNAME [SITE_ROOT]" || return
     [ ! -t 1 ] || {
         OUTPUT_FILE=$(lk_replace ~/ "" "$SITE_ROOT")
         OUTPUT_FILE=localhost-${OUTPUT_FILE//\//_}-$(lk_date_ymdhms).sql.gz
@@ -384,7 +384,7 @@ function lk_wp_db_restore_local() {
     local SITE_ROOT SH SQL _SQL SUDO=1 \
         LOCAL_DB_NAME LOCAL_DB_USER LOCAL_DB_PASSWORD LOCAL_DB_HOST
     [ -f "$1" ] || lk_usage "\
-Usage: ${FUNCNAME[0]} SQL_PATH [DB_NAME [DB_USER]]" || return
+Usage: $FUNCNAME SQL_PATH [DB_NAME [DB_USER]]" || return
     SITE_ROOT=$(lk_wp_get_site_root) || return
     lk_tty_print "Preparing to restore WordPress database"
     lk_wp_is_quiet || {
@@ -449,7 +449,7 @@ function lk_wp_sync_files_from_remote() {
     local REMOTE_PATH=${2:-public_html} LOCAL_PATH KEEP_LOCAL EXCLUDE STATUS=0 \
         ARGS=(-vrlptH -x --delete "${@:4}")
     [ $# -ge 1 ] || lk_usage "\
-Usage: ${FUNCNAME[0]} SSH_HOST [REMOTE_PATH [LOCAL_PATH [RSYNC_ARG...]]]" || return
+Usage: $FUNCNAME SSH_HOST [REMOTE_PATH [LOCAL_PATH [RSYNC_ARG...]]]" || return
     # files that already exist on the local system will be added to --exclude
     KEEP_LOCAL=(
         wp-config.php

@@ -1507,7 +1507,7 @@ function lk_certbot_install() {
         shift
     done
     [ ${#DOMAINS[@]} -gt 0 ] || lk_usage "\
-Usage: ${FUNCNAME[0]} [-w WEBROOT_PATH] DOMAIN... [-- CERTBOT_ARG...]" || return
+Usage: $FUNCNAME [-w WEBROOT_PATH] DOMAIN... [-- CERTBOT_ARG...]" || return
     lk_test_many lk_is_fqdn "${DOMAINS[@]}" ||
         lk_warn "invalid domain(s): ${DOMAINS[*]}" || return
     [ -z "${WEBROOT+1}" ] || lk_elevate test -d "$WEBROOT_PATH" ||

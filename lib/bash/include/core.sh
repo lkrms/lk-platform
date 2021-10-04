@@ -1466,7 +1466,7 @@ c && $0 ~ "^" val "\"$" { if (c == 1) print_line(); c = 0 }'
 # lk_path_edit REMOVE_REGEX [MOVE_REGEX [PATH]]
 function lk_path_edit() {
     [ $# -gt 0 ] || lk_usage "\
-Usage: ${FUNCNAME[0]} REMOVE_REGEX [MOVE_REGEX [PATH]]" || return
+Usage: $FUNCNAME REMOVE_REGEX [MOVE_REGEX [PATH]]" || return
     awk \
         -v "remove=$1" \
         -v "move=${2-}" \
@@ -2762,7 +2762,7 @@ function lk_tty_file() {
 function lk_console_diff() {
     local FILE1=${1-} FILE2=${2-} f MESSAGE
     [ -n "$FILE1$FILE2" ] || lk_usage "\
-Usage: ${FUNCNAME[0]} FILE1 [FILE2 [MESSAGE [COLOUR]]]
+Usage: $FUNCNAME FILE1 [FILE2 [MESSAGE [COLOUR]]]
 
 Compare FILE1 and FILE2 using diff. If FILE2 is the empty string, read it from
 input. If FILE1 is the only argument, compare with FILE1.orig if it exists or
