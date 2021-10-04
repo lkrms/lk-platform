@@ -4,7 +4,7 @@
 #
 #     [LK_NO_INPUT=1] bash -c "$(curl -fsSL http://lkr.ms/macos)"
 #
-# Or, to test the develop branch:
+# Or, to test the 'develop' branch:
 #
 #     [LK_NO_INPUT=1] LK_PLATFORM_BRANCH=develop _LK_FD=3 \
 #         bash -xc "$(curl -fsSL http://lkr.ms/macos-dev)" 3>&2 2>~/lk-install.err
@@ -19,6 +19,8 @@ lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
 [ "$EUID" -ne 0 ] || lk_die "cannot run as root"
 [[ $OSTYPE == darwin* ]] || lk_die "not running on macOS"
 [[ $- != *s* ]] || lk_die "cannot run from standard input"
+
+umask 002
 
 function exit_trap() {
     local EXT _LOG_FILE LOG_FILE _LK_LOG_BASENAME=lk-provision-macos.sh \
@@ -56,30 +58,30 @@ function exit_trap() {
     unset BREW
 
     function load_settings() {
-        [ ! -f /etc/default/lk-platform ] ||
-            . /etc/default/lk-platform
-        [ ! -f "$LK_BASE/etc/lk-platform/lk-platform.conf" ] ||
-            . "$LK_BASE/etc/lk-platform/lk-platform.conf"
-        SETTINGS_SH=$(lk_settings_getopt "$@")
-        eval "$SETTINGS_SH"
-        shift "$_LK_SHIFT"
+        local FILE
+        for FILE in /etc/default/lk-platform \
+            "$LK_BASE/etc/lk-platform"/lk{-platform,}.conf; do
+            [ ! -f "$FILE" ] || . "$FILE" || return
+        done
+        SETTINGS_SH=$(lk_settings_getopt "$@") &&
+            eval "$SETTINGS_SH" &&
+            shift "$_LK_SHIFT" || return
 
         LK_PACKAGES_FILE=${1:-${LK_PACKAGES_FILE-}}
         PACKAGES_REL=
-        if [ -n "$LK_PACKAGES_FILE" ]; then
-            if [ ! -f "$LK_PACKAGES_FILE" ]; then
-                FILE=${LK_PACKAGES_FILE##*/}
-                FILE=${FILE#packages-macos-}
-                FILE=${FILE%.sh}
-                FILE=$LK_BASE/share/packages/macos/$FILE.sh
-                [ -f "$FILE" ] || PACKAGES_REL=${FILE#$LK_BASE/}
-                LK_PACKAGES_FILE=$FILE
-            fi
-            SETTINGS_SH=$(
-                [ -z "${SETTINGS_SH:+1}" ] || cat <<<"$SETTINGS_SH"
-                printf '%s=%q\n' LK_PACKAGES_FILE "$LK_PACKAGES_FILE"
-            )
-        fi
+        [ -n "$LK_PACKAGES_FILE" ] || return 0
+        [ -f "$LK_PACKAGES_FILE" ] || {
+            FILE=${LK_PACKAGES_FILE##*/}
+            FILE=${FILE#packages-macos-}
+            FILE=${FILE%.sh}
+            FILE=$LK_BASE/share/packages/macos/$FILE.sh
+            [ -f "$FILE" ] || PACKAGES_REL=${FILE#$LK_BASE/}
+            LK_PACKAGES_FILE=$FILE
+        }
+        SETTINGS_SH=$(
+            [ -z "${SETTINGS_SH:+1}" ] || cat <<<"$SETTINGS_SH"
+            printf '%s=%q\n' LK_PACKAGES_FILE "$LK_PACKAGES_FILE"
+        )
     }
 
     if [ -f "$LK_BASE/lib/bash/include/core.sh" ]; then
@@ -96,20 +98,15 @@ function exit_trap() {
         echo "$BOLD$CYAN==> $RESET${BOLD}Checking prerequisites$RESET" >&2
         REPO_URL=https://raw.githubusercontent.com/lkrms/lk-platform
         for FILE_PATH in \
-            /lib/bash/include/core.sh \
-            /lib/bash/include/brew.sh \
-            /lib/bash/include/macos.sh \
-            /lib/bash/include/provision.sh \
-            /lib/bash/include/whiptail.sh \
-            /share/sudoers.d/default{,-macos} \
-            PACKAGES; do
-            [ "$FILE_PATH" != PACKAGES ] || {
+            lib/bash/include/{core,brew,macos,provision,whiptail}.sh \
+            share/sudoers.d/default{,-macos} ""; do
+            [ -n "$FILE_PATH" ] || {
                 load_settings "$@"
                 [ -n "$PACKAGES_REL" ] || break
-                FILE_PATH=/$PACKAGES_REL
+                FILE_PATH=$PACKAGES_REL
             }
-            FILE=$_DIR/${FILE_PATH##*/}
-            URL=$REPO_URL/$LK_PLATFORM_BRANCH$FILE_PATH
+            FILE=$_DIR/${FILE_PATH//\//__}
+            URL=$REPO_URL/$LK_PLATFORM_BRANCH/$FILE_PATH
             MESSAGE="$BOLD$YELLOW   -> $RESET{}$YELLOW $URL$RESET"
             if [ ! -e "$FILE" ]; then
                 echo "${MESSAGE/{\}/Downloading:}" >&2
@@ -130,57 +127,53 @@ function exit_trap() {
         lk_die "not running on native architecture"
 
     LK_FILE_BACKUP_TAKE=${LK_FILE_BACKUP_TAKE-1}
+    LK_FILE_BACKUP_MOVE=1
 
     lk_log_start ~/"${LK_PATH_PREFIX}install"
     lk_trap_add EXIT exit_trap
 
     lk_console_log "Provisioning macOS"
 
-    lk_no_input || lk_sudo_offer_nopasswd ||
-        lk_die "unable to run commands as root"
+    lk_sudo_offer_nopasswd || lk_die "unable to run commands as root"
 
-    _LK_DEFAULTS_DIR=~/.${LK_PATH_PREFIX}defaults/00000000000000
-    if [ ! -e "$_LK_DEFAULTS_DIR" ] &&
-        lk_confirm "Save current macOS settings to files?" N; then
-        lk_console_item "Dumping user defaults to domain files in" \
-            ~/".${LK_PATH_PREFIX}defaults"
+    [ -d ~/".${LK_PATH_PREFIX}defaults" ] ||
+        ! lk_confirm "Save current macOS settings to files?" N || {
+        lk_tty_print "Dumping defaults to domain files"
         lk_macos_defaults_dump
-    fi
+    }
 
     sudo systemsetup -getremotelogin | grep -Ei '\<On$' >/dev/null || {
-        [[ ${PIPESTATUS[0]}${PIPESTATUS[1]} =~ ^01$ ]] || lk_die ""
-        ! lk_confirm \
-            "Enable SSH server for remote access to this computer?" N || {
-            lk_console_message "Enabling Remote Login (SSH)"
+        [ "${PIPESTATUS[0]}${PIPESTATUS[1]}" = 01 ] || lk_die ""
+        ! lk_confirm "Enable remote access to this computer via SSH?" N || {
+            lk_tty_print "Enabling Remote Login (SSH)"
             lk_run_detail sudo systemsetup -setremotelogin on
         }
     }
 
     sudo systemsetup -getcomputersleep | grep -Ei '\<Never$' >/dev/null || {
-        [[ ${PIPESTATUS[0]}${PIPESTATUS[1]} =~ ^01$ ]] || lk_die ""
-        ! lk_confirm \
-            "Prevent computer from sleeping when display is off?" N || {
-            lk_console_message "Disabling computer sleep"
+        [ "${PIPESTATUS[0]}${PIPESTATUS[1]}" = 01 ] || lk_die ""
+        ! lk_confirm "Prevent sleep when display is off?" N || {
+            lk_tty_print "Disabling computer sleep"
             lk_run_detail sudo systemsetup -setcomputersleep off
         }
     }
 
     scutil --get HostName &>/dev/null || {
         [ -n "${LK_NODE_HOSTNAME-}" ] ||
-            LK_NODE_HOSTNAME=$(lk_console_read \
-                "Hostname for this system (optional):") ||
+            lk_tty_read "System hostname (optional):" LK_NODE_HOSTNAME ||
             lk_die ""
         [ -z "$LK_NODE_HOSTNAME" ] ||
             lk_macos_set_hostname "$LK_NODE_HOSTNAME"
     }
 
     CURRENT_SHELL=$(lk_dscl_read UserShell)
-    if [ "$CURRENT_SHELL" != /bin/bash ]; then
-        lk_console_item "Setting default shell for user '$USER' to:" /bin/bash
-        sudo chsh -s /bin/bash "$USER"
-    fi
+    [[ $CURRENT_SHELL == */bash ]] ||
+        ! lk_confirm "Use Bash as the default shell for user '$USER'?" N || {
+        lk_tty_print "Setting default shell"
+        lk_run_detail sudo chsh -s /bin/bash "$USER"
+    }
 
-    lk_console_message "Configuring sudo"
+    lk_tty_print "Configuring sudo"
     FILE=/etc/sudoers.d/${LK_PATH_PREFIX}default
     sudo test ! -e "${FILE}s" || sudo test -e "$FILE" ||
         sudo mv -v "${FILE}s" "$FILE"
@@ -188,22 +181,18 @@ function exit_trap() {
         [ -z "$SUFFIX" ] || FILE=${FILE%/*}/zz-${FILE##*/}
         sudo test -e "$FILE$SUFFIX" ||
             sudo install -m 00440 /dev/null "$FILE$SUFFIX"
-        LK_SUDO=1 LK_FILE_BACKUP_MOVE=1 \
-            lk_file_replace -f "$SUDOERS$SUFFIX" "$FILE$SUFFIX"
+        LK_SUDO=1 lk_file_replace -f "$SUDOERS$SUFFIX" "$FILE$SUFFIX"
     done
 
-    lk_console_message "Configuring default umask"
-    if ! USER_UMASK=$(defaults read \
-        /var/db/com.apple.xpc.launchd/config/user.plist \
-        Umask 2>/dev/null) ||
-        [ "$USER_UMASK" -ne 2 ]; then
+    lk_tty_print "Configuring default umask"
+    { defaults read /var/db/com.apple.xpc.launchd/config/user.plist Umask |
+        grep -Fx 2; } &>/dev/null ||
         lk_run_detail sudo launchctl config user umask 002 >/dev/null
-    fi
     FILE=/etc/profile
-    if [ -r "$FILE" ] && ! grep -q umask "$FILE"; then
-        lk_console_detail "Setting umask in" "$FILE"
-        LK_SUDO=1 lk_file_keep_original "$FILE"
-        sudo tee -a "$FILE" <<"EOF" >/dev/null
+    [ ! -r "$FILE" ] || grep -Eq '\<umask\>' "$FILE" || {
+        lk_tty_detail "Setting umask in" "$FILE"
+        LK_SUDO=1 lk_file_keep_original "$FILE" &&
+            sudo tee -a "$FILE" <<"EOF" >/dev/null
 
 if [ "$(id -u)" -ne 0 ]; then
     umask 002
@@ -211,8 +200,7 @@ else
     umask 022
 fi
 EOF
-    fi
-    umask 002
+    }
 
     function path_add() {
         local STATUS
@@ -233,7 +221,7 @@ EOF
         PATH_ADD+=(/opt/homebrew/{sbin,bin})
         BREW_PATH=(/opt/homebrew/bin/brew)
     }
-    lk_console_message "Configuring default PATH"
+    lk_tty_print "Configuring default PATH"
     _PATH=$(defaults read \
         /var/db/com.apple.xpc.launchd/config/user.plist \
         PathEnvironmentVariable 2>/dev/null) || _PATH=
@@ -257,17 +245,17 @@ EOF
     if [ -e /Applications/Xcode.app ]; then
         TOOLS_PATH=$(lk_macos_command_line_tools_path)
         if [[ "$TOOLS_PATH" != /Applications/Xcode.app* ]]; then
-            lk_console_message "Configuring Xcode"
+            lk_tty_print "Configuring Xcode"
             lk_run_detail sudo xcode-select --switch /Applications/Xcode.app
             OLD_TOOLS_PATH=$TOOLS_PATH
             TOOLS_PATH=$(lk_macos_command_line_tools_path)
-            lk_console_detail "Development tools directory:" \
+            lk_tty_detail "Development tools directory:" \
                 "$OLD_TOOLS_PATH -> $LK_BOLD$TOOLS_PATH$LK_RESET"
         fi
     fi
 
     if [ ! -e "$LK_BASE" ] || [ -z "$(ls -A "$LK_BASE")" ]; then
-        lk_console_item "Installing lk-platform to" "$LK_BASE"
+        lk_tty_print "Installing lk-platform to" "$LK_BASE"
         sudo install -d -m 02775 -o "$USER" -g admin "$LK_BASE"
         lk_tty caffeinate -d git clone -b "$LK_PLATFORM_BRANCH" \
             https://github.com/lkrms/lk-platform.git "$LK_BASE"
@@ -397,7 +385,7 @@ EOF
 
     brew_loop check_homebrew
 
-    lk_console_message "Applying user defaults"
+    lk_tty_print "Applying user defaults"
     XQ="\
 .plist.dict.key |
     [ .[] |
@@ -411,7 +399,7 @@ EOF
             ~/Library/Preferences/"$DOMAIN.plist" |
             xq -r "$XQ")
         if [ -n "$KEYS" ]; then
-            lk_console_detail "Disabling tour notifications in" "$DOMAIN"
+            lk_tty_detail "Disabling tour notifications in" "$DOMAIN"
             xargs -J % -n 1 \
                 defaults write "$DOMAIN" % -date "$(date -uR)" <<<"$KEYS"
         fi
@@ -436,7 +424,7 @@ EOF
         lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh"
 
     lk_console_blank
-    lk_console_message "Checking Homebrew packages"
+    lk_tty_print "Checking Homebrew packages"
     UPGRADE_CASKS=()
     function check_updates() {
         local UPGRADE_FORMULAE
@@ -501,7 +489,7 @@ def is_native:
                     <<<"$HOMEBREW_FORMULAE_JSON"))
         fi
         COUNT=${#HOMEBREW_FORMULAE[@]}
-        ! lk_verbose || [ -z "${FORMULAE_COUNT-}" ] || lk_console_detail \
+        ! lk_verbose || [ -z "${FORMULAE_COUNT-}" ] || lk_tty_detail \
             "$BREW_NAME formulae ($COUNT of $FORMULAE_COUNT):" \
             $'\n'"${HOMEBREW_FORMULAE[*]}"
     }
@@ -580,17 +568,17 @@ def is_native:
     INSTALL_APPS=()
     UPGRADE_APPS=()
     if [ ${#MAS_APPS[@]} -gt "0" ] && lk_command_exists mas; then
-        lk_console_message "Checking Mac App Store apps"
+        lk_tty_print "Checking Mac App Store apps"
         while ! APPLE_ID=$(mas account 2>/dev/null); do
             APPLE_ID=
-            lk_console_detail "\
+            lk_tty_detail "\
 Unable to retrieve Apple ID
 Please open the Mac App Store and sign in"
             lk_confirm "Try again?" Y || break
         done
 
         if [ -n "$APPLE_ID" ]; then
-            lk_console_detail "Apple ID:" "$APPLE_ID"
+            lk_tty_detail "Apple ID:" "$APPLE_ID"
 
             OUTDATED=$(mas outdated)
             if UPGRADE_APPS=($(grep -Eo '^[0-9]+' <<<"$OUTDATED")); then
@@ -679,7 +667,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
         "Installing new {} formulae:"
 
     [ ${#UPGRADE_CASKS[@]} -eq 0 ] || {
-        lk_console_message "Upgrading casks"
+        lk_tty_print "Upgrading casks"
         brew upgrade --cask "${UPGRADE_CASKS[@]}" || STATUS=$?
     }
 
@@ -690,7 +678,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
     }
 
     [ ${#UPGRADE_APPS[@]} -eq 0 ] || {
-        lk_console_message "Upgrading apps"
+        lk_tty_print "Upgrading apps"
         lk_tty caffeinate -d \
             mas upgrade "${UPGRADE_APPS[@]}" || STATUS=$?
     }
@@ -712,7 +700,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
     lk_macos_xcode_maybe_accept_license
 
     # `brew deps` is buggy AF, so find dependencies recursively via `brew info`
-    lk_console_message "Checking for orphaned packages"
+    lk_tty_print "Checking for orphaned packages"
     function check_orphans() {
         local ALL_FORMULAE ALL_JSON NEW_JSON PURGE_FORMULAE \
             j=0 LAST_FORMULAE=() NEW_FORMULAE=() LAST_CASKS=() NEW_CASKS=()
@@ -734,7 +722,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
                 <(lk_echo_array ALL_FORMULAE) \
                 <(lk_echo_array LAST_FORMULAE)))
             ! lk_verbose || [ ${#NEW_FORMULAE[@]} -eq 0 ] ||
-                lk_console_detail \
+                lk_tty_detail \
                     "$BREW_NAME formulae dependencies (iteration #$j):" \
                     $'\n'"${NEW_FORMULAE[*]}"
             [ "$i" -gt 0 ] || {
@@ -742,7 +730,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
                     <(lk_echo_array ALL_CASKS) \
                     <(lk_echo_array LAST_CASKS)))
                 ! lk_verbose || [ ${#NEW_CASKS[@]} -eq 0 ] ||
-                    lk_console_detail \
+                    lk_tty_detail \
                         "$BREW_NAME cask dependencies (iteration #$j):" \
                         $'\n'"${NEW_CASKS[*]}"
             }
@@ -796,7 +784,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
 
     lk_remove_missing LOGIN_ITEMS
     if [ ${#LOGIN_ITEMS[@]} -gt 0 ]; then
-        lk_console_message "Checking Login Items for user '$USER'"
+        lk_tty_print "Checking Login Items for user '$USER'"
         lk_mapfile LOGIN_ITEMS <(comm -13 \
             <("$LK_BASE/lib/macos/login-items-list.js" | tail -n+2 |
                 cut -f2 | sort -u) \
