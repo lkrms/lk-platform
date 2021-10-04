@@ -124,7 +124,7 @@ label {
       u[f] = v
     }
   }
-  if (u["Title"] && u["Version"] && u["Size"]) {
+  if (u["Title"] && u["Size"]) {
     print label, u["Title"], u["Version"], u["Size"], recommended, u["Action"]
   }
   label = ""
