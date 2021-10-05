@@ -94,26 +94,6 @@ function lk_hosting_php_get_default_version() { (
     esac || lk_warn "Ubuntu release not supported: $DISTRIB_RELEASE"
 ); }
 
-# lk_hosting_php_get_settings PREFIX SETTING=VALUE...
-function lk_hosting_php_get_settings() {
-    [ $# -gt 1 ] || lk_warn "no settings" || return
-    lk_echo_args "${@:2}" | awk -F= -v "p=$1" \
-        '/^[^[:space:]=]+=/ {o=$1; if(!a[o]){
-  sub("^[^=]+=", ""); sub("^$", "\"\""); a[o]=$0; k[i++]=o
-}
-next}
-{e=2}
-END{for (i = 0; i < length(k); i++) {o=k[i]; if(p=="env")
-  s=""
-else if(tolower(a[o]) ~ "^(on|true|yes|off|false|no)$")
-  s="flag"
-else
-  s="value"
-sub("^\"\"$", "", a[o])
-printf("%s%s[%s] = %s\n", p, s, o, a[o])}
-exit e}'
-}
-
 # lk_hosting_php_fpm_pool_list [PHP_VERSION]
 function lk_hosting_php_fpm_pool_list() { (
     PHPVER=${1:-$(lk_hosting_php_get_default_version)} || return
@@ -264,6 +244,40 @@ function lk_hosting_site_list() { (
             "$SITE_ROOT" || return
     done | sort -t$'\t' -k6 -k9n -k1
 ); }
+
+# lk_hosting_php_get_settings PREFIX SETTING=VALUE...
+#
+# Print each PHP setting as a PHP-FPM pool directive. If the same SETTING is
+# given more than once, only use the first VALUE.
+#
+# Example:
+#
+#     $ lk_hosting_php_get_settings php_admin_ log_errors=On memory_limit=80M
+#     php_admin_flag[log_errors] = On
+#     php_admin_value[memory_limit] = 80M
+function lk_hosting_php_get_settings() {
+    [ $# -gt 1 ] || lk_warn "no settings" || return
+    printf '%s\n' "${@:2}" | awk -F= -v "prefix=$1" '
+/^[^[:space:]=]+=/ {
+  setting = $1
+  if(!arr[setting]) {
+    sub("^[^=]+=", "")
+    arr[setting] = $0
+    keys[i++] = setting }
+  next }
+{ status = 2 }
+END {
+  for (i = 0; i < length(keys); i++) {
+    setting = keys[i]
+    if(prefix=="env") {
+      suffix = "" }
+    else if(tolower(arr[setting]) ~ "^(on|true|yes|off|false|no)$") {
+      suffix = "flag" }
+    else {
+      suffix = "value" }
+    printf("%s%s[%s] = %s\n", prefix, suffix, setting, arr[setting]) }
+  exit status }'
+}
 
 #### END hosting.sh.d
 
@@ -602,13 +616,15 @@ Usage: $FUNCNAME [-w] DOMAIN [SITE_ROOT [ALIAS...]]" || return
         SITE_PHP_FPM_PM=${SITE_PHP_FPM_PM:-$_SITE_PHP_FPM_PM}
         PHP_SETTINGS=$(
             IFS=,
+            # The numeric form of the error_reporting value below is 4597
             lk_hosting_php_get_settings php_admin_ \
                 opcache.memory_consumption="$SITE_PHP_FPM_OPCACHE_SIZE" \
                 error_log="$LOG_DIR/php$SITE_PHP_VERSION-fpm.error.log" \
                 ${LK_PHP_ADMIN_SETTINGS-} \
                 ${SITE_PHP_FPM_ADMIN_SETTINGS-} \
                 opcache.file_cache=/srv/www/.opcache/\$pool \
-                error_reporting="E_ERROR|E_RECOVERABLE_ERROR|E_CORE_ERROR|E_COMPILE_ERROR" \
+                error_reporting="E_ALL & ~E_WARNING & ~E_NOTICE & ~E_USER_WARNING & ~E_USER_NOTICE & ~E_STRICT & ~E_DEPRECATED & ~E_USER_DEPRECATED" \
+                disable_functions="error_reporting" \
                 log_errors=On \
                 memory_limit=80M
             lk_hosting_php_get_settings php_ \
