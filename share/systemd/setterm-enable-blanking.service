@@ -7,6 +7,7 @@ ConditionPathExists=/dev/tty0
 
 [Service]
 Type=oneshot
+RemainAfterExit=yes
 Environment=TERM=linux
 ExecStart=/usr/bin/setterm --blank 60 --powerdown 60
 StandardOutput=tty

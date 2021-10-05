@@ -9,6 +9,7 @@ After=multi-user.target
 
 [Service]
 Type=oneshot
+RemainAfterExit=yes
 # Set Constraint 0 in Zone 0 (long_term) to 28W (default: 30W)
 ExecStart=-/usr/bin/powercap-set -p intel-rapl -z 0 -c 0 -l 28000000
 # Set Constraint 1 in Zone 0 (short_term) to 28W (default: 50W)

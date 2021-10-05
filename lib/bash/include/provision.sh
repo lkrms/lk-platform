@@ -1613,7 +1613,7 @@ Usage: $(lk_myself -f) [-s SECTION] [-p] FILE SETTING CHECK_REGEX [REPLACE_REGEX
         lk_file_get_text "$FILE" _FILE
     else
         _FILE=$(awk \
-            -v "SECTION=$SECTION" \
+            -v "section=$SECTION" \
             -f "$(lk_awk_dir)/section-get.awk" \
             "$FILE")$'\n'
     fi || return
@@ -1679,7 +1679,7 @@ function lk_conf_remove_row() {
         lk_file_get_text "$FILE" __FILE
     else
         __FILE=$(awk \
-            -v "SECTION=$SECTION" \
+            -v "section=$SECTION" \
             -f "$(lk_awk_dir)/section-get.awk" \
             "$FILE")$'\n'
     fi || return
