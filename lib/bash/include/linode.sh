@@ -307,7 +307,7 @@ function lk_linode_dns_check() {
                 ((i == 1)) || lk_tty_detail "Trying again in $SLEEP seconds"
                 sleep "$SLEEP" || return
                 _LK_DNS_SERVER=ns$((RANDOM % 5 + 1)).linode.com
-                ! lk_require_output -q lk_dns_resolve_hosts "$RDNS" ||
+                ! lk_require_output -q lk_dns_resolve_hosts -d "$RDNS" ||
                     exit 0
             done
             exit 1
