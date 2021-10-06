@@ -64,9 +64,7 @@ function lk_linode_stackscripts() {
 }
 
 function lk_linode_get_shell_var() {
-    eval "$(lk_get_regex IPV4_PRIVATE_FILTER_REGEX)"
     lk_jq_get_shell_var \
-        --arg ipv4Private "$IPV4_PRIVATE_FILTER_REGEX" \
         LINODE_ID .id \
         LINODE_LABEL .label \
         LINODE_TAGS .tags \
@@ -75,8 +73,8 @@ function lk_linode_get_shell_var() {
         LINODE_VPCUS .specs.vcpus \
         LINODE_MEMORY .specs.memory \
         LINODE_IMAGE .image \
-        LINODE_IPV4_PUBLIC '[.ipv4[]|select(test($ipv4Private)==false)]|first' \
-        LINODE_IPV4_PRIVATE '[.ipv4[]|select(test($ipv4Private))]|first' \
+        LINODE_IPV4_PUBLIC '[.ipv4[]|select(test(regex.ipv4PrivateFilter)==false)]|first' \
+        LINODE_IPV4_PRIVATE '[.ipv4[]|select(test(regex.ipv4PrivateFilter))]|first' \
         LINODE_IPV6 '.ipv6|split("/")[0]'
 }
 
@@ -233,11 +231,9 @@ END {
 }
 
 function _lk_linode_dns_records() {
-    jq -r \
+    lk_jq -r \
         "$@" \
         --arg domain "$DOMAIN" \
-        --arg domainPart "^(?<part>$DOMAIN_PART_REGEX).*" \
-        --arg ipv4Private "$IPV4_PRIVATE_FILTER_REGEX" \
         --argjson tags "$TAGS" \
         -f "$LK_BASE/lib/jq/linode_dns_records.jq" \
         <<<"$LINODES"
@@ -256,8 +252,8 @@ function _lk_linode_dns_records() {
 #
 function lk_linode_dns_check() {
     local USE_TAGS LINODES LINODE_COUNT TAGS="[]" DOMAIN_ID DOMAIN \
-        RECORDS REVERSE _RECORDS _REVERSE \
-        NAME TYPE TARGET JSON RECORD_ID ADDRESS RDNS \
+        RR RECORDS REVERSE _RECORDS _REVERSE RECORD \
+        NAME TYPE TARGET JSON ADDRESS RDNS \
         NEW_RECORD_COUNT=0 NEW_REVERSE_RECORD_COUNT=0 \
         _LK_DNS_SERVER
     [ "${1-}" != -t ] || { USE_TAGS=1 && shift; }
@@ -266,41 +262,63 @@ function lk_linode_dns_check() {
         return
     [ "$LINODE_COUNT" -gt 0 ] || lk_warn "no linode objects" || return
     eval "$(lk_get_regex DOMAIN_PART_REGEX IPV4_PRIVATE_FILTER_REGEX)"
-    [ -z "${USE_TAGS-}" ] || TAGS=$(lk_linode_linodes "${@:3}" | lk_jq \
-        --arg p "^(?<part>$DOMAIN_PART_REGEX).*" \
-        '[.[].tags[]|select(test($p))|sub($p;"\(.part)")]|counts|[.[]|select(.[1]==1)|.[0]]') ||
-        return
+    [ -z "${USE_TAGS-}" ] || TAGS=$(lk_linode_linodes "${@:3}" | lk_jq '
+include "core";
+"^(?<part>\(regex.domainPart)).*" as $p |
+    [ .[].tags[] | select(test($p)) | sub($p; "\(.part)") ] |
+    counts |
+    [ .[] | select(.[1] == 1) | .[0] ]') || return
     lk_linode_domain -s "${@:2}" || return
     lk_tty_print "Retrieving domain records and Linode IP addresses"
     lk_tty_detail "Domain ID:" "$DOMAIN_ID"
     lk_tty_detail "Domain name:" "$DOMAIN"
-    RECORDS=$(lk_linode_domain_records "$DOMAIN_ID" "${@:3}" | jq -r \
-        '.[]|"\(.name)\t\(.type)\t\(.target)"') &&
+    lk_mktemp_with RR lk_linode_domain_records "$DOMAIN_ID" "${@:3}"
+    RECORDS=$(jq -r \
+        '.[]|"\(.name)\t\(.type)\t\(.target)\t\(.ttl_sec)"' <"$RR") &&
         REVERSE=$(lk_linode_ips "${@:3}" | jq -r \
             '.[]|select(.rdns!=null)|"\(.address)\t\(.rdns|sub("\\.$";""))"') &&
         _RECORDS=$(_lk_linode_dns_records --argjson reverse false) &&
         _REVERSE=$(_lk_linode_dns_records --argjson reverse true) ||
         return
-    while read -r NAME TYPE TARGET; do
-        lk_console_detail "Adding DNS record:" "$NAME $TYPE $TARGET"
-        JSON=$(linode-cli --json domains records-create \
-            --type "$TYPE" \
-            --name "$NAME" \
-            --target "$TARGET" \
-            "$DOMAIN_ID" \
-            "${@:3}") &&
-            RECORD_ID=$(jq '.[0].id' <<<"$JSON") ||
-            lk_warn "linode-cli failed with: $JSON" || return
+    while IFS=$'\t' read -r NAME TYPE TARGET TTL; do
+        if RECORD=($(lk_require_output lk_jq -r \
+            --arg name "$NAME" --arg type "$TYPE" '
+include "core";
+.[] | select((.name == $name) and (.type | in_arr([$type, "CNAME"]))) | .id' \
+            <"$RR")); then
+            [ ${#RECORD[@]} -eq 1 ] ||
+                lk_warn "unable to update existing records: $NAME.$DOMAIN" ||
+                continue
+            lk_tty_detail "Updating DNS record $RECORD:" "$NAME $TYPE $TARGET"
+            JSON=$(linode-cli --json domains records-update \
+                --type "$TYPE" \
+                --name "$NAME" \
+                --target "$TARGET" \
+                --ttl_sec "$TTL" \
+                "$DOMAIN_ID" \
+                "$RECORD" \
+                "${@:3}")
+        else
+            lk_tty_detail "Adding DNS record:" "$NAME $TYPE $TARGET"
+            ((++NEW_RECORD_COUNT))
+            JSON=$(linode-cli --json domains records-create \
+                --type "$TYPE" \
+                --name "$NAME" \
+                --target "$TARGET" \
+                --ttl_sec "$TTL" \
+                "$DOMAIN_ID" \
+                "${@:3}") &&
+                RECORD[0]=$(jq '.[0].id' <<<"$JSON") &&
+                lk_tty_detail "Record ID:" "$RECORD"
+        fi || lk_warn "linode-cli failed with: $JSON" || return
         lk_linode_flush_cache
-        ((++NEW_RECORD_COUNT))
-        lk_console_detail "Record ID:" "$RECORD_ID"
     done < <(comm -23 \
         <(sort -u <<<"$_RECORDS") \
         <(sort -u <<<"$RECORDS"))
-    while read -r ADDRESS RDNS; do
+    while IFS=$'\t' read -r ADDRESS RDNS; do
         [ "$NEW_RECORD_COUNT" -eq 0 ] ||
             [ "$NEW_REVERSE_RECORD_COUNT" -gt 0 ] || (
-            lk_console_message "Waiting for $RDNS to resolve"
+            lk_tty_print "Waiting for $RDNS to resolve"
             i=0
             while ((i < 8)); do
                 SLEEP=$(((++i) ** 2))
@@ -314,7 +332,7 @@ function lk_linode_dns_check() {
         ) || lk_warn \
             "cannot add RDNS record for $ADDRESS until $RDNS resolves" ||
             return
-        lk_console_item "Adding RDNS record:" "$ADDRESS $RDNS"
+        lk_tty_print "Adding RDNS record:" "$ADDRESS $RDNS"
         JSON=$(linode-cli --json networking ip-update \
             --rdns "$RDNS" \
             "$ADDRESS" \
@@ -327,11 +345,13 @@ function lk_linode_dns_check() {
         <(sort <<<"$_REVERSE") \
         <(sort <<<"$REVERSE"))
     ! lk_verbose || {
+        RECORDS=$(lk_linode_domain_records "$DOMAIN_ID" "${@:3}" |
+            jq -r '.[]|"\(.name)\t\(.type)\t\(.target)\t\(.ttl_sec)"') || return
         RECORDS=$(comm -13 \
             <(sort -u <<<"$_RECORDS") \
             <(sort -u <<<"$RECORDS"))
         [ -z "$RECORDS" ] ||
-            lk_console_item "Records in '$DOMAIN' with no matching Linode:" \
+            lk_tty_print "Records in '$DOMAIN' with no matching Linode:" \
                 $'\n'"$RECORDS" "$LK_BOLD$LK_RED"
     }
 }

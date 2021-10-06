@@ -3618,9 +3618,7 @@ function lk_is_exported() {
 }
 
 function lk_jq() {
-    jq -L "${_LK_INST:-$LK_BASE}/lib/jq" \
-        "${@:1:$#-1}" \
-        'include "core";'"${*: -1}"
+    jq -L "${_LK_INST:-$LK_BASE}/lib/jq" "$@"
 }
 
 # lk_jq_get_array ARRAY [FILTER]
@@ -3644,7 +3642,7 @@ function lk_jq_get_shell_var() {
     done
     [ $# -gt 0 ] && ! (($# % 2)) || lk_warn "invalid arguments" || return
     JQ=$(printf '"%s":(%s),' "$@")
-    JQ='{'${JQ%,}'} | to_sh($_lk_var_prefix)'
+    JQ='include "core"; {'${JQ%,}'} | to_sh($_lk_var_prefix)'
     lk_jq -r \
         ${ARGS[@]+"${ARGS[@]}"} \
         --arg _lk_var_prefix "$(_lk_var_prefix)" \
