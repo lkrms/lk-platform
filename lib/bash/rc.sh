@@ -40,7 +40,7 @@ unset SH
 function lk_cat_log() {
     local FILES FILE
     lk_files_exist "$@" || lk_usage "\
-Usage: ${FUNCNAME[0]} LOG_FILE[.gz] [LOG_FILE...]" || return
+Usage: $FUNCNAME LOG_FILE[.gz] [LOG_FILE...]" || return
     lk_mapfile FILES <(lk_file_sort_by_date "$@")
     for FILE in "${FILES[@]}"; do
         case "$FILE" in

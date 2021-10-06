@@ -1030,7 +1030,7 @@ dns-nameservers $VM_IPV4_GATEWAY" '{
         lk_maybe_sudo virsh --connect "$LIBVIRT_URI" capabilities |
         xq --arg arch "$QEMU_ARCH" \
             '.capabilities.guest[].arch|select(.["@name"] == $arch)' |
-            lk_jq -r '.domain|to_array[]["@type"]' |
+            lk_jq -r 'include "core"; .domain | to_array[]["@type"]' |
             grep -Fxv qemu ||
         { [[ "${PIPESTATUS[*]}" =~ ^0+1$ ]] && echo qemu; })
 

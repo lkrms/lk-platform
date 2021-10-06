@@ -183,6 +183,7 @@ HOMEBREW_FORMULAE+=(
     awscli
     azure-cli
     azure-functions-core-tools@3
+    wp-cli
 )
 
 FORCE_IBREW+=(

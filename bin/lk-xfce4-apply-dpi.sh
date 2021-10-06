@@ -71,12 +71,21 @@ gtk-button=${_16},${_16}:gtk-dialog=${_48},${_48}:\
 gtk-dnd=${_32},${_32}:gtk-large-toolbar=${_24},${_24}:\
 gtk-menu=${_16},${_16}:gtk-small-toolbar=${_16},${_16}"
 
+FILE=~/.gtkrc-2.0
+lk_file_replace "$FILE" < <(
+    [ ! -e "$FILE" ] ||
+        awk '$1 != "gtk-icon-sizes" {print}' "$FILE"
+    echo "gtk-icon-sizes = \"$GTK_ICON_SIZES\""
+)
+
+XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-~/.config}
+FILE=$XDG_CONFIG_HOME/gtk-3.0/settings.ini
+lk_conf_set_option -s Settings gtk-icon-sizes "$GTK_ICON_SIZES" "$FILE"
+
 xfconf-query -c xsettings -n -t int \
     -p /Xft/DPI -s "$DPI"
 xfconf-query -c xsettings -n -t int \
     -p /Gtk/CursorThemeSize -s "${_24}"
-xfconf-query -c xsettings -n -t string \
-    -p /Gtk/IconSizes -s "$GTK_ICON_SIZES"
 xfconf-query -c xfce4-desktop -n -t uint \
     -p /desktop-icons/icon-size -s "${_48}"
 xfconf-query -c xfce4-desktop -n -t double \

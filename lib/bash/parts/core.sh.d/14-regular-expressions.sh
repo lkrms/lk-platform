@@ -77,6 +77,15 @@ _4="$_2$_2"
 _6="$_2$_2$_2"
 add_regex BACKUP_TIMESTAMP_FINDUTILS_REGEX "$_4-$_2-$_2-$_6"
 
+case "$1" in
+-j | --json)
+    for REGEX in "${ALL[@]}"; do
+        printf '%s\n' "${REGEX%_REGEX}" "${!REGEX}"
+    done | jq -Rn '[[inputs] | . as $stdin | keys[] | select(. % 2 == 0) | {($stdin[.] | ascii_downcase | gsub("_(?<a>[a-z])"; .a | ascii_upcase)): $stdin[. + 1]}] | add'
+    exit
+    ;;
+esac
+
 # lk_is_identifier, lk_is_fqdn, etc.
 FUNCTIONS=(
     lk_is_ip
