@@ -1,11 +1,8 @@
 #!/bin/bash
 
 function _lk_caller() {
-    local CALLER=()
-    lk_script_is_running ||
-        CALLER=(${FUNCNAME[2]+"${FUNCNAME[*]: -1}"})
-    [ -n "${CALLER+1}" ] ||
-        CALLER=("${0##*/}")
+    local CALLER
+    CALLER=("$(lk_script_name 2)")
     CALLER[0]=$LK_BOLD$CALLER$LK_RESET
     lk_verbose || {
         echo "$CALLER"
@@ -33,3 +30,5 @@ function lk_warn() {
     lk_pass -$? \
         lk_console_warning "$(LK_VERBOSE= _lk_caller): ${1-command failed}"
 }
+
+#### Reviewed: 2021-10-04

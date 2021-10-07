@@ -6,7 +6,7 @@ lk_include debian git linux provision
 function lk_hosting_user_add_admin() {
     local _GROUP _HOME
     [ -n "${1-}" ] || lk_usage "\
-Usage: $(lk_myself -f) LOGIN" || return
+Usage: $FUNCNAME LOGIN" || return
     ! lk_user_exists "$1" || lk_warn "user already exists: $1" || return
     lk_tty_print "Creating administrator account:" "$1"
     lk_tty_detail "Supplementary groups:" "adm, sudo"
@@ -34,7 +34,7 @@ Usage: $(lk_myself -f) LOGIN" || return
 function lk_hosting_user_add() {
     local _GROUP _HOME SKEL
     [ -n "${1-}" ] || lk_usage "\
-Usage: $(lk_myself -f) LOGIN" || return
+Usage: $FUNCNAME LOGIN" || return
     [ -d /srv/www ] || lk_warn "directory not found: /srv/www" || return
     ! lk_user_exists "$1" || lk_warn "user already exists: $1" || return
     for SKEL in /etc/skel{.${LK_PATH_PREFIX%-},}; do

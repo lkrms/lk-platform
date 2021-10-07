@@ -77,53 +77,105 @@ _4="$_2$_2"
 _6="$_2$_2$_2"
 add_regex BACKUP_TIMESTAMP_FINDUTILS_REGEX "$_4-$_2-$_2-$_6"
 
-case "$1" in
+case "${1+${1:-null}}" in
+"") ;;
 -j | --json)
     for REGEX in "${ALL[@]}"; do
         printf '%s\n' "${REGEX%_REGEX}" "${!REGEX}"
     done | jq -Rn '[[inputs] | . as $stdin | keys[] | select(. % 2 == 0) | {($stdin[.] | ascii_downcase | gsub("_(?<a>[a-z])"; .a | ascii_upcase)): $stdin[. + 1]}] | add'
     exit
     ;;
+*)
+    echo "Usage: ${0##*/} [-j|--json]" >&2
+    exit 1
+    ;;
 esac
 
-# lk_is_identifier, lk_is_fqdn, etc.
+printf '# lk_grep_regex [-v] REGEX
+function lk_grep_regex() {
+    local v SH
+    [ "${1-}" != -v ] || { v=1 && shift; }
+    [ $# -eq 1 ] || lk_err "invalid arguments" || return 2
+    SH=$(lk_get_regex "$1") && eval "$SH" || return 2
+    grep -Ex${v:+v} "${!1}"
+}\n\n'
+
+printf '# lk_is_regex REGEX VALUE
+function lk_is_regex() {
+    local SH
+    SH=$(lk_get_regex "$1") && eval "$SH" || return 2
+    [[ $2 =~ ^${!1}$ ]]
+}\n\n'
+
 FUNCTIONS=(
-    lk_is_ip
+    #lk_is_ip
+    #lk_is_host
     lk_is_cidr
-    lk_is_host
     lk_is_fqdn
     lk_is_email
     lk_is_uri
     lk_is_identifier
 )
 PATTERNS=(
-    IP_REGEX
+    #IP_REGEX
+    #HOST_REGEX
     IP_OPT_PREFIX_REGEX
-    HOST_REGEX
     DOMAIN_NAME_REGEX
     EMAIL_ADDRESS_REGEX
     URI_REGEX_REQ_SCHEME_HOST
     IDENTIFIER_REGEX
 )
 DESCRIPTIONS=(
-    "IP address"
+    #"IP address"
+    #"IP address, hostname or domain name"
     "IP address or CIDR"
-    "IP address, hostname or domain name"
     "domain name"
     "email address"
     "URI with a scheme and host"
     "Bash identifier"
 )
 for i in "${!FUNCTIONS[@]}"; do
-    FUNCTION=${FUNCTIONS[$i]}
-    REGEX=${PATTERNS[$i]}
-    DESC=${DESCRIPTIONS[$i]}
+    FUNCTION=${FUNCTIONS[i]}
+    REGEX=${PATTERNS[i]}
+    DESC=${DESCRIPTIONS[i]}
     printf '# %s VALUE
 #
 # Return true if VALUE is a valid %s.
-function %s() {\n    local %s=%s\n    [[ $1 =~ ^$%s$ ]]\n}\n\n' \
-        "$FUNCTION" "$DESC" \
-        "$FUNCTION" "$REGEX" "$(quote "${!REGEX}")" "$REGEX"
+function %s() {\n    lk_is_regex %s "$@"\n}\n\n' \
+        "$FUNCTION" "$DESC" "$FUNCTION" "$REGEX"
+done
+
+FUNCTIONS=(
+    lk_filter_ipv4
+    lk_filter_ipv6
+    lk_filter_cidr
+    lk_filter_fqdn
+)
+PATTERNS=(
+    IPV4_OPT_PREFIX_REGEX
+    IPV6_OPT_PREFIX_REGEX
+    IP_OPT_PREFIX_REGEX
+    DOMAIN_NAME_REGEX
+)
+DESCRIPTIONS=(
+    "dotted-decimal IPv4 address or CIDR"
+    "8-hextet IPv6 address or CIDR"
+    "IP address or CIDR"
+    "domain name"
+)
+
+for i in "${!FUNCTIONS[@]}"; do
+    FUNCTION=${FUNCTIONS[i]}
+    REGEX=${PATTERNS[i]}
+    DESC=$(printf \
+        'Print each input line that is a valid %s. If -v is set, print each line that is not valid.\n' \
+        "${DESCRIPTIONS[i]}" | fold -s -w 78 |
+        sed -E 's/^/# /; s/[[:blank:]]+$//')
+    printf '# %s [-v]
+#
+%s
+function %s() {\n    _LK_STACK_DEPTH=1 lk_grep_regex "$@" %s || true\n}\n\n' \
+        "$FUNCTION" "$DESC" "$FUNCTION" "$REGEX"
 done
 
 printf '# lk_get_regex [REGEX...]

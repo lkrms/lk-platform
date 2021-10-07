@@ -17,7 +17,7 @@ export LK_BASE
 lk_include linux
 
 unset _USER
-lk_is_root || {
+lk_root || {
     _USER=
     export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$UID}
 }

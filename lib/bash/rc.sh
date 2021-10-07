@@ -65,7 +65,7 @@ function lk_bak_find() {
 function lk_bak_diff() {
     local BACKUP FILE FILE2 \
         REGEX=".*(-[0-9]+\\.bak|\\.lk-bak-[0-9]{8}T[0-9]{6}Z)"
-    lk_is_root || ! lk_can_sudo bash || {
+    lk_root || ! lk_can_sudo bash || {
         lk_elevate bash -c "$(
             function bak_diff() {
                 . "$1"

@@ -45,6 +45,17 @@ function lk_tty_path() {
     fi
 }
 
+function lk_tty_columns() {
+    local _COLUMNS
+    _COLUMNS=${_LK_TTY_COLUMNS:-${COLUMNS:-${TERM:+$(TERM=$TERM tput cols)}}} ||
+        _COLUMNS=
+    echo "${_COLUMNS:-120}"
+}
+
+function lk_tty_length() {
+    lk_strip_non_printing "$1" | awk 'NR == 1 { print length() }'
+}
+
 # lk_tty_print [MESSAGE [MESSAGE2 [COLOUR]]]
 #
 # Write each message to the file descriptor set in _LK_FD or to the standard
@@ -157,7 +168,8 @@ function lk_tty_list() {
             lk_tty_print "$_MESSAGE" $'\n'"$_LIST" "$_COLOUR"
         [ -z "${_SINGLE:+${_PLURAL:+1}}" ] ||
             _LK_TTY_PREFIX=$(printf "%$((_INDENT > 0 ? _INDENT : 0))s") \
-                lk_tty_detail "(${#_ITEMS[@]} $(lk_plural \
-                    ${#_ITEMS[@]} "$_SINGLE" "$_PLURAL"))"
+                lk_tty_detail "($(lk_plural -v _ITEMS "$_SINGLE" "$_PLURAL"))"
     )" >&"${_LK_FD-2}"
 }
+
+#### Reviewed: 2021-10-04

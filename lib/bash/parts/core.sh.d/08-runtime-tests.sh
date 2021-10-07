@@ -1,6 +1,6 @@
 #!/bin/bash
 
-function lk_script_is_running() {
+function lk_script_running() {
     [ "${BASH_SOURCE+${BASH_SOURCE[*]: -1}}" = "$0" ]
 }
 
@@ -18,7 +18,29 @@ function lk_verbose() {
 #
 # Return true if LK_DEBUG is set.
 function lk_debug() {
-    [[ ${LK_DEBUG-} =~ ^[1Yy]$ ]]
+    [ "${LK_DEBUG-}" = Y ]
 }
 
-#### Reviewed: 2021-09-27
+function lk_root() {
+    [ "$EUID" -eq 0 ]
+}
+
+# lk_true VAR
+#
+# Return true if VAR or ${!VAR} is 'Y', 'yes', '1', 'true', or 'on' (not
+# case-sensitive).
+function lk_true() {
+    local REGEX='^([yY]([eE][sS])?|1|[tT][rR][uU][eE]|[oO][nN])$'
+    [[ $1 =~ $REGEX ]] || [[ ${1:+${!1-}} =~ $REGEX ]]
+}
+
+# lk_false VAR
+#
+# Return true if VAR or ${!VAR} is 'N', 'no', '0', 'false', or 'off' (not
+# case-sensitive).
+function lk_false() {
+    local REGEX='^([nN][oO]?|0|[fF][aA][lL][sS][eE]|[oO][fF][fF])$'
+    [[ $1 =~ $REGEX ]] || [[ ${1:+${!1-}} =~ $REGEX ]]
+}
+
+#### Reviewed: 2021-10-04

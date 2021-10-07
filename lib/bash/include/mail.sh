@@ -2,7 +2,7 @@
 
 function _lk_mail_ready() {
     lk_is_true _LK_MAIL_READY ||
-        lk_warn "lk_mail_new must be called before $(lk_myself -f 1)" || return
+        lk_warn "lk_mail_new must be called before ${FUNCNAME[1]}" || return
 }
 
 function lk_mail_new() {
@@ -133,7 +133,7 @@ function lk_mail_send() {
     local MTA
     _lk_mail_ready || return
     [ $# -ge 2 ] || lk_usage "\
-Usage: $(lk_myself -f) SUBJECT TO [FROM [HEADERS...]]" || return
+Usage: $FUNCNAME SUBJECT TO [FROM [HEADERS...]]" || return
     MTA=$(lk_command_first_existing sendmail msmtp) ||
         lk_warn "MTA not found" || return
     lk_mail_get_mime "$@" | "$MTA" -oi -t

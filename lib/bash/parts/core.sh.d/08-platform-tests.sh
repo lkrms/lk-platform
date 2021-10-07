@@ -2,9 +2,7 @@
 
 # lk_version_at_least INSTALLED MINIMUM
 function lk_version_at_least() {
-    local MIN
-    MIN=$(printf '%s\n' "$@" | sort -V | head -n1) &&
-        [ "$MIN" = "$2" ]
+    printf '%s\n' "$@" | sort -V | head -n1 | grep -Fx "$2" >/dev/null
 }
 
 # lk_bash_at_least MAJOR [MINOR]
@@ -64,14 +62,12 @@ function lk_is_wsl() {
 }
 
 function lk_is_virtual() {
-    lk_is_linux && grep -Eq "^flags$S*:.*\\<hypervisor\\>" /proc/cpuinfo
+    lk_is_linux && grep -Eq '^flags[[:blank:]]*:.*\<hypervisor\>' /proc/cpuinfo
 }
 
 function lk_is_qemu() {
-    lk_is_virtual && (shopt -s nullglob &&
-        FILES=(/sys/devices/virtual/dmi/id/*_vendor) &&
-        [ ${#FILES[@]} -gt 0 ] &&
-        grep -iq qemu "${FILES[@]}")
+    lk_is_virtual &&
+        grep -iq QEMU /sys/devices/virtual/dmi/id/*_vendor 2>/dev/null
 }
 
-#### Reviewed: 2021-09-06
+#### Reviewed: 2021-10-01

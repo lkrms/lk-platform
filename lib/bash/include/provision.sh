@@ -559,7 +559,7 @@ function lk_ssl_install_ca_certificate() {
     local DIR COMMAND CERT FILE \
         _LK_FILE_REPLACE_NO_CHANGE=${LK_FILE_REPLACE_NO_CHANGE-}
     unset LK_FILE_REPLACE_NO_CHANGE
-    DIR=$(LK_SUDO= lk_first_existing \
+    DIR=$(lk_first_file \
         /usr/local/share/ca-certificates/ \
         /etc/ca-certificates/trust-source/anchors/) &&
         COMMAND=$(LK_SUDO= lk_first_command \
@@ -867,7 +867,7 @@ function lk_symlink_bin() {
     local TARGET LINK EXIT_STATUS vv='' \
         BIN_PATH=${LK_BIN_PATH:-/usr/local/bin} _PATH=:$PATH:
     [ $# -ge 1 ] || lk_usage "\
-Usage: $(lk_myself -f) TARGET [ALIAS]"
+Usage: $FUNCNAME TARGET [ALIAS]"
     ! lk_verbose 2 || vv=v
     set -- "$1" "${2:-${1##*/}}"
     TARGET=$1
@@ -923,7 +923,7 @@ function lk_dir_set_modes() {
     local DIR REGEX LOG_FILE i TYPE MODE ARGS CHANGES _CHANGES TOTAL=0 \
         _PRUNE _EXCLUDE MATCH=() DIR_MODE=() FILE_MODE=() PRUNE=() LK_USAGE
     LK_USAGE="\
-Usage: $(lk_myself -f) DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..."
+Usage: $FUNCNAME DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..."
     [ $# -ge 4 ] && ! ((($# - 1) % 3)) || lk_usage || return
     lk_maybe_sudo test -d "$1" || lk_warn "not a directory: $1" || return
     DIR=$(_lk_realpath "$1") || return
@@ -1011,7 +1011,7 @@ function lk_sudo_add_nopasswd() {
 # unlimited access and no password prompts.
 function lk_sudo_offer_nopasswd() {
     local FILE
-    ! lk_is_root || lk_warn "cannot run as root" || return
+    ! lk_root || lk_warn "cannot run as root" || return
     FILE=/etc/sudoers.d/nopasswd-$USER
     sudo -n test -e "$FILE" 2>/dev/null || {
         lk_can_sudo install || return
@@ -1142,7 +1142,7 @@ function lk_ssh_add_host() {
     KEY_FILE=${4-}
     JUMP_HOST_NAME=${5-}
     [ $# -ge 3 ] || lk_usage "\
-Usage: $(lk_myself -f) [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
+Usage: $FUNCNAME [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
         return
     NAME=${NAME#$SSH_PREFIX}
     [ "${KEY_FILE:--}" = - ] ||
@@ -1184,7 +1184,7 @@ Usage: $(lk_myself -f) [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" |
             JUMP_ARGS=(
                 -o ConnectTimeout=5
                 -o ControlMaster=auto
-                -o ControlPath="/tmp/.$(lk_myself -f)_%h-%p-%r-%l"
+                -o ControlPath="/tmp/.${FUNCNAME}_%h-%p-%r-%l"
                 -o ControlPersist=120
             )
             ssh -O check "${JUMP_ARGS[@]}" "$JUMP_HOST_NAME" 2>/dev/null ||
@@ -1308,33 +1308,11 @@ EOF
             shopt -s nullglob
             chmod 00600 \
                 "$h/.ssh/"{config,"$SSH_PREFIX"{config.d,keys}/*}
-            ! lk_is_root ||
+            ! lk_root ||
                 chown "$OWNER:$GROUP" \
                     "$h/.ssh/"{config,"$SSH_PREFIX"{config.d,keys}/*}
         )
     done
-}
-
-# lk_filter_ipv4 [-v]
-#
-# Print each input line that is (or isn't) a valid dotted-decimal IPv4 address
-# or CIDR.
-function lk_filter_ipv4() {
-    local COMMAND='!d'
-    [ "${1-}" != -v ] || COMMAND=d
-    eval "$(lk_get_regex IPV4_OPT_PREFIX_REGEX)"
-    sed -E "\\#^$IPV4_OPT_PREFIX_REGEX\$#$COMMAND"
-}
-
-# lk_filter_ipv6 [-v]
-#
-# Print each input line that is (or isn't) a valid 8-hextet IPv6 address or
-# CIDR.
-function lk_filter_ipv6() {
-    local COMMAND='!d'
-    [ "${1-}" != -v ] || COMMAND=d
-    eval "$(lk_get_regex IPV6_OPT_PREFIX_REGEX)"
-    sed -E "\\#^$IPV6_OPT_PREFIX_REGEX\$#$COMMAND"
 }
 
 # lk_hosts_file_add IP NAME...
@@ -1620,7 +1598,7 @@ function lk_option_set() {
         PRESERVE SECTION _FILE __FILE
     unset PRESERVE __FILE
     LK_USAGE="\
-Usage: $(lk_myself -f) [-s SECTION] [-p] FILE SETTING CHECK_REGEX [REPLACE_REGEX...]"
+Usage: $FUNCNAME [-s SECTION] [-p] FILE SETTING CHECK_REGEX [REPLACE_REGEX...]"
     while getopts ":s:p" OPT; do
         case "$OPT" in
         s)

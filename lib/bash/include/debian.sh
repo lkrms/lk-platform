@@ -204,7 +204,7 @@ function lk_apt_upgrade_all() {
 # For packages that are currently installed, output recommended packages that
 # are not installed.
 function lk_apt_list_missing_recommends() { (
-    lk_is_root || lk_warn "not running as root" || return
+    lk_root || lk_warn "not running as root" || return
     DIR=$(lk_mktemp_dir) &&
         lk_delete_on_exit "$DIR" &&
         install -d -m 00755 "$DIR/var/lib" &&

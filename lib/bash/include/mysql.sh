@@ -95,7 +95,7 @@ function lk_mysql() {
     if [ -n "${LK_MY_CNF-}" ]; then
         [ -f "$LK_MY_CNF" ] || lk_warn "file not found: $LK_MY_CNF" || return
         "${_LK_MYSQL_COMMAND:-mysql}" --defaults-file="$LK_MY_CNF" "$@"
-    elif lk_is_root || lk_is_true LK_MYSQL_ELEVATE; then
+    elif lk_root || lk_is_true LK_MYSQL_ELEVATE; then
         lk_elevate "${_LK_MYSQL_COMMAND:-mysql}" \
             --no-defaults \
             --user="${LK_MYSQL_ELEVATE_USER:-root}" \
@@ -153,7 +153,7 @@ function lk_mysql_dump() {
         INNODB_ONLY DUMP_ARGS ARG_COLOUR EXIT_STATUS=0
     unset ARG_COLOUR
     [ $# -ge 1 ] || lk_usage "\
-Usage: $(lk_myself -f) DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
+Usage: $FUNCNAME DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
         return
     [ -n "$DB_NAME" ] || lk_warn "no database name" || return
     if [ "${DB_USER:+1}${DB_PASSWORD:+1}$DB_HOST" = localhost ] &&
@@ -227,7 +227,7 @@ function lk_mysql_dump_remote() {
         DB_HOST=${5-${DB_HOST-${LK_MYSQL_HOST:-localhost}}} \
         OUTPUT_FILE OUTPUT_FD EXIT_STATUS=0
     [ $# -ge 2 ] || lk_usage "\
-Usage: $(lk_myself -f) SSH_HOST DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
+Usage: $FUNCNAME SSH_HOST DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
         return
     [ -n "$SSH_HOST" ] || lk_warn "no ssh host" || return
     [ -n "$DB_NAME" ] || lk_warn "no database name" || return

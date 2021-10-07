@@ -424,7 +424,7 @@ function lk_linode_provision_hosting() {
         ARGS VERBS KEY FILE LINODES EXIT_STATUS LINODE SH
     [ "${1-}" != -r ] || { REBUILD=$2 && shift 2; }
     [ $# -ge 2 ] || lk_usage "\
-Usage: $(lk_myself -f) [-r LINODE_ID] FQDN DOMAIN [ACCOUNT [DATA_JSON [LINODE_ARG...]]]
+Usage: $FUNCNAME [-r LINODE_ID] FQDN DOMAIN [ACCOUNT [DATA_JSON [LINODE_ARG...]]]
 
 Create a new Linode at FQDN and configure it to serve DOMAIN from user ACCOUNT.
 
@@ -435,7 +435,7 @@ Create a new Linode at FQDN and configure it to serve DOMAIN from user ACCOUNT.
   are empty or unset)
 
 Example:
-  $(lk_myself -f) syd06.linode.myhosting.com linacreative.com lina" || return
+  $FUNCNAME syd06.linode.myhosting.com linacreative.com lina" || return
     lk_is_fqdn "$1" || lk_warn "invalid domain: $1" || return
     lk_is_fqdn "$2" || lk_warn "invalid domain: $2" || return
     eval "$(lk_get_regex LINUX_USERNAME_REGEX)"
@@ -518,7 +518,7 @@ Example:
         $'\n'"$(lk_quote_args_folded linode-cli "${ARGS[@]##ssh-??? * }")"
     lk_confirm "Proceed?" Y || return
     lk_console_message "${VERBS[0]} Linode"
-    FILE=/tmp/$(lk_myself -f)-$1-$(lk_date %s).json
+    FILE=/tmp/$FUNCNAME-$1-$(lk_date %s).json
     LINODES=$(linode-cli "${ARGS[@]}" | tee "$FILE") ||
         lk_pass rm -f "$FILE" || return
     lk_linode_flush_cache
@@ -552,7 +552,7 @@ function lk_linode_hosting_get_meta() {
     local DIR=${1-} _DIR HOST SSH_HOST FILE COMMIT EXT \
         FILES _FILES _FILE PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX} s=/
     [ $# -ge 2 ] || lk_usage "\
-Usage: $(lk_myself -f) DIR HOST..." || return
+Usage: $FUNCNAME DIR HOST..." || return
     [ -d "$DIR" ] || lk_warn "not a directory: $DIR" || return
     DIR=${DIR%/}
     for HOST in "${@:2}"; do
