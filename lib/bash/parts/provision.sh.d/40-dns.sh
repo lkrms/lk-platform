@@ -63,7 +63,7 @@ function lk_dns_resolve_names() {
     [ "${1-}" != -d ] || { USE_DNS= && shift; }
     case "${USE_DNS-$(lk_first_command getent dscacheutil)}" in
     getent)
-        getent ahosts "$@" | awk '
+        { getent ahosts "$@" || [ $# -eq 2 ]; } | awk '
 $3          { host = $3 }
 !a[$1,host] { print $1, host; a[$1,host] = 1 }'
         ;;

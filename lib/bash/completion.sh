@@ -62,7 +62,8 @@ function __lk_generic() {
     fi
 } && complete -F __lk_generic \
     lk-keepassxc.sh \
-    lk-ssh-configure-migration.sh
+    lk-ssh-configure-migration.sh \
+    lk-wp-dev-reset.sh
 
 function __lk_mysql_dump() {
     local cur prev words cword split

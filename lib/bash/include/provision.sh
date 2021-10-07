@@ -67,7 +67,8 @@ function lk_group_exists() {
 function lk_user_add_sftp_only() {
     local LK_SUDO=1 FILE REGEX MATCH CONFIG _HOME DIR GROUP TEMP \
         LK_FILE_REPLACE_NO_CHANGE SFTP_ONLY=${LK_SFTP_ONLY_GROUP:-sftp-only}
-    [ -n "${1-}" ] || lk_usage "Usage: $FUNCNAME USERNAME" || return
+    [ -n "${1-}" ] || lk_usage "\
+Usage: $FUNCNAME USERNAME [SOURCE_DIR TARGET_DIR]..." || return
     lk_group_exists "$SFTP_ONLY" || {
         lk_tty_print "Creating group:" "$SFTP_ONLY"
         lk_run_detail lk_elevate groupadd "$SFTP_ONLY" || return
@@ -410,7 +411,7 @@ function lk_dns_resolve_names() {
     [ "${1-}" != -d ] || { USE_DNS= && shift; }
     case "${USE_DNS-$(lk_first_command getent dscacheutil)}" in
     getent)
-        getent ahosts "$@" | awk '
+        { getent ahosts "$@" || [ $# -eq 2 ]; } | awk '
 $3          { host = $3 }
 !a[$1,host] { print $1, host; a[$1,host] = 1 }'
         ;;

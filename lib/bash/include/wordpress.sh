@@ -568,24 +568,36 @@ function lk_wp_disable_cron() {
         lk_crontab_remove_command "--path=$SITE_ROOT"
 }
 
-function lk_wp_get_maintenance_php() {
-    echo '<?php $upgrading = time(); ?>'
+function lk_wp_maintenance_get_php() {
+    printf '<?php $upgrading = time(); ?>'
 }
 
-# lk_wp_enable_maintenance [SITE_ROOT]
-function lk_wp_enable_maintenance() {
-    local SITE_ROOT MAINTENANCE_PHP
+# lk_wp_maintenance_enable [SITE_ROOT]
+function lk_wp_maintenance_enable() {
+    local SITE_ROOT ACTIVE=1
     SITE_ROOT=${1:-$(lk_wp_get_site_root)} || return
-    MAINTENANCE_PHP=$(lk_wp_get_maintenance_php)
-    echo "$MAINTENANCE_PHP" >"$SITE_ROOT/.maintenance"
+    lk_wp maintenance-mode is-active &>/dev/null || ACTIVE=0
+    [ -n "${_LK_WP_MAINTENANCE_ON-}" ] ||
+        _LK_WP_MAINTENANCE_ON=$ACTIVE
+    ((ACTIVE)) ||
+        lk_tty_detail "Enabling maintenance mode"
+    # Always activate explicitly, in case $upgrading is about to expire
+    lk_wp_maintenance_get_php >"$SITE_ROOT/.maintenance"
 }
 
-# lk_wp_disable_maintenance [SITE_ROOT]
-function lk_wp_disable_maintenance() {
+# lk_wp_maintenance_disable [SITE_ROOT]
+function lk_wp_maintenance_disable() {
     local SITE_ROOT
     SITE_ROOT=${1:-$(lk_wp_get_site_root)} || return
-    [ ! -e "$SITE_ROOT/.maintenance" ] ||
-        rm "$SITE_ROOT/.maintenance"
+    ! lk_wp maintenance-mode is-active &>/dev/null ||
+        lk_tty_detail "Disabling maintenance mode"
+    rm -f "$SITE_ROOT/.maintenance"
+}
+
+# lk_wp_maintenance_maybe_disable [SITE_ROOT]
+function lk_wp_maintenance_maybe_disable() {
+    ((${_LK_WP_MAINTENANCE_ON-0} == 1)) ||
+        lk_wp_maintenance_disable "$@"
 }
 
 # lk_wp_set_permissions [SITE_ROOT]
