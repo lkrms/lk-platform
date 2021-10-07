@@ -257,24 +257,26 @@ function lk_hosting_site_list() { (
 #     php_admin_value[memory_limit] = 80M
 function lk_hosting_php_get_settings() {
     [ $# -gt 1 ] || lk_warn "no settings" || return
-    printf '%s\n' "${@:2}" | awk -F= -v "prefix=$1" '
+    printf '%s\n' "${@:2}" | awk -F= -v prefix="$1" -v null='""' '
 /^[^[:space:]=]+=/ {
   setting = $1
   if(!arr[setting]) {
     sub("^[^=]+=", "")
-    arr[setting] = $0
+    arr[setting] = $0 ? $0 : null
     keys[i++] = setting }
   next }
 { status = 2 }
 END {
   for (i = 0; i < length(keys); i++) {
     setting = keys[i]
-    if(prefix=="env") {
+    if(prefix == "env") {
       suffix = "" }
     else if(tolower(arr[setting]) ~ "^(on|true|yes|off|false|no)$") {
       suffix = "flag" }
     else {
       suffix = "value" }
+    if (arr[setting] == null) {
+      arr[setting] = "" }
     printf("%s%s[%s] = %s\n", prefix, suffix, setting, arr[setting]) }
   exit status }'
 }
