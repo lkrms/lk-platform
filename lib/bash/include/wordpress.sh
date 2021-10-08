@@ -444,6 +444,23 @@ Proceed?" Y || return
     lk_console_success "Database restored successfully"
 }
 
+function lk_wp_db_myisam_to_innodb() {
+    local SH _LK_WP_MAINTENANCE_ON
+    SH=$(lk_wp_db_get_vars) && eval "$SH" &&
+        lk_mysql_write_cnf || return
+    lk_wp_is_quiet || {
+        lk_tty_print "Preparing to convert MyISAM tables to InnoDB"
+        lk_console_warning \
+            "${LK_BOLD}WARNING:$LK_RESET data loss may occur if conversion fails (${LK_BOLD}TAKE A BACKUP FIRST$LK_RESET)"
+        lk_confirm "Proceed?" Y || return
+    }
+    lk_tty_print "Converting MyISAM tables in WordPress database to InnoDB"
+    lk_verbose || local _LK_MYSQL_QUIET=1
+    lk_wp_maintenance_enable &&
+        lk_mysql_myisam_to_innodb "$DB_NAME" &&
+        lk_wp_maintenance_maybe_disable
+}
+
 # lk_wp_sync_files_from_remote SSH_HOST [REMOTE_PATH [LOCAL_PATH [RSYNC_ARG...]]]
 function lk_wp_sync_files_from_remote() {
     local REMOTE_PATH=${2:-public_html} LOCAL_PATH KEEP_LOCAL EXCLUDE STATUS=0 \

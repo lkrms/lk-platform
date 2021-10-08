@@ -17,6 +17,8 @@ DEFAULT_DEACTIVATE=(
     cd ~/public_html || true; } &>/dev/null
 
 DEACTIVATE=()
+NEW_SITE_ADDR=
+INNODB=0
 SHUFFLE_SALTS=1
 UPDATE_EMAIL=1
 DISABLE_EMAIL=1
@@ -33,6 +35,7 @@ Options:
   -p, --deactivate=PLUGIN   deactivate the specified WordPress plugin (may be
                             given multiple times)
   -r, --rename=URL          change site address to URL
+  -i, --innodb              convert any MyISAM tables to InnoDB
       --no-shuffle-salts    do not refresh salts defined in wp-config.php
       --no-deactivate       clear the default list of plugins to deactivate
                             (does not affect --deactivate)
@@ -41,8 +44,8 @@ Options:
 
 Maintenance mode is enabled during processing."
 
-lk_getopt "d:p:r:" \
-    "dir:,deactivate:,rename:,no-shuffle-salts,no-deactivate,no-anon-email,no-disable-email"
+lk_getopt "d:p:r:i" \
+    "dir:,deactivate:,rename:,innodb,no-shuffle-salts,no-deactivate,no-anon-email,no-disable-email"
 eval "set -- $LK_GETOPT"
 
 while :; do
@@ -58,9 +61,12 @@ while :; do
         shift
         ;;
     -r | --rename)
-        RENAME=$1
+        NEW_SITE_ADDR=$1
         lk_is_uri "$1" || lk_warn "invalid URL: $1" || lk_usage
         shift
+        ;;
+    -i | --innodb)
+        INNODB=1
         ;;
     --no-shuffle-salts)
         SHUFFLE_SALTS=0
@@ -123,10 +129,12 @@ if [ ${#TO_DEACTIVATE[@]} -gt 0 ]; then
     STALE=1
 fi
 
-IP=$(_LK_DNS_SERVER=1.1.1.1 lk_dns_get_records A,AAAA "$SITE_DOMAIN")
-if [ -n "$IP" ] && ! lk_node_is_host "$SITE_HOST"; then
-    lk_tty_read "New site address:" NEW_SITE_ADDR "" \
-        -i "https://${SITE_DOMAIN%%.*}.test"
+if [ -n "$NEW_SITE_ADDR" ] || { IP=$(_LK_DNS_SERVER=1.1.1.1 \
+    lk_dns_get_records A,AAAA "$SITE_DOMAIN") && [ -n "$IP" ] &&
+    ! lk_node_is_host "$SITE_HOST"; }; then
+    [ -n "$NEW_SITE_ADDR" ] ||
+        lk_tty_read "New site address:" NEW_SITE_ADDR "" \
+            -i "https://${SITE_DOMAIN%%.*}.test"
     if [ -n "$NEW_SITE_ADDR" ] && [ "$NEW_SITE_ADDR" != "$SITE_ADDR" ]; then
         lk_wp_maintenance_enable
         _LK_WP_QUIET=1 LK_WP_REPLACE=1 LK_WP_REAPPLY=0 LK_WP_FLUSH=0 \
@@ -162,6 +170,11 @@ lk_tty_detail "Maintenance mode will be enabled while processing"
 ((!UPDATE_EMAIL)) || {
     lk_tty_detail "Admin email address will be updated to:" "$ADMIN_EMAIL"
     lk_tty_detail "User addresses will be updated to:" "*_<ID>@$SITE_DOMAIN"
+}
+((!INNODB)) || {
+    ! lk_mysql_innodb_only "$DB_NAME" && lk_tty_detail \
+        "MyISAM tables will be converted to InnoDB (TAKE A BACKUP FIRST)" ||
+        INNODB=0
 }
 ! lk_wp config has WP_CACHE --type=constant ||
     lk_tty_detail "WP_CACHE will be disabled"
@@ -222,6 +235,10 @@ SQL
     lk_wp user update 1 --user_email="$ADMIN_EMAIL" --skip-email
     lk_wp user meta update 1 billing_email "$ADMIN_EMAIL"
 }
+
+((!INNODB)) ||
+    _LK_WP_QUIET=1 LK_VERBOSE=1 \
+        lk_wp_db_myisam_to_innodb
 
 if lk_wp config has WP_CACHE --type=constant; then
     lk_tty_detail "Disabling WP_CACHE in wp-config.php"

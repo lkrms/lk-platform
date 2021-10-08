@@ -90,7 +90,7 @@ function __lk_wp_migrate() {
     case "$prev" in
     -s | --source | -d | --dest) _filedir -d ;;
     -m | --maintenance)
-        COMPREPLY=($(compgen -W "ignore on indefinite" -- "$cur"))
+        COMPREPLY=($(compgen -W "ignore off on permanent" -- "$cur"))
         ;;
     -r | --rename)
         COMP_WORDBREAKS=${COMP_WORDBREAKS//:/}

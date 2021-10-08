@@ -9,6 +9,7 @@ LOCAL_PATH=$(lk_wp_get_site_root 2>/dev/null) ||
 MAINTENANCE=
 DEACTIVATE=()
 RENAME=
+INNODB=0
 SSL=0
 SHUFFLE_SALTS=0
 EXCLUDE=()
@@ -32,6 +33,7 @@ Options:
   -p, --deactivate=PLUGIN   deactivate the specified WordPress plugin after
                             migration (may be given multiple times)
   -r, --rename=URL          change site address to URL after migration
+  -i, --innodb              convert any MyISAM tables to InnoDB after migration
   -c, --ssl-cert            attempt to retrieve TLS certificate, CA bundle and
                             private key from remote system (cPanel only)
   -t, --shuffle-salts       refresh salts defined in wp-config.php
@@ -40,15 +42,16 @@ Options:
       --db-name=DB_NAME     if local connection fails, use database DB_NAME
       --db-user=DB_USER     if local connection fails, use MySQL user DB_USER
 
-Maintenance modes:
-  ignore        don't enable
-  on            enable during migration
-  indefinite    enable permanently
+Maintenance modes (for remote system only):
+  ignore/off    do not activate or deactivate
+  on            activate during migration, deactivate when done
+  permanent     activate during migration, do not deactivate
 
-Maintenance mode is always enabled on the local system during migration."
+On the local system, maintenance mode is always active during migration, and
+deactivated when the migration succeeds."
 
-lk_getopt "s:d:m:p:r:cte:" \
-    "source:,dest:,maintenance:,deactivate:,rename:,ssl-cert,shuffle-salts,exclude:,db-name:,db-user:"
+lk_getopt "s:d:m:p:r:icte:" \
+    "source:,dest:,maintenance:,deactivate:,rename:,innodb,ssl-cert,shuffle-salts,exclude:,db-name:,db-user:"
 eval "set -- $LK_GETOPT"
 
 while :; do
@@ -64,7 +67,7 @@ while :; do
         shift
         ;;
     -m | --maintenance)
-        [[ $1 =~ ^(ignore|on|indefinite)$ ]] ||
+        [[ $1 =~ ^(ignore|off|on|permanent)$ ]] ||
             lk_warn "invalid remote maintenance mode: $1" || lk_usage
         MAINTENANCE=$1
         shift
@@ -77,6 +80,9 @@ while :; do
         RENAME=$1
         lk_is_uri "$1" || lk_warn "invalid URL: $1" || lk_usage
         shift
+        ;;
+    -i | --innodb)
+        INNODB=1
         ;;
     -c | --ssl-cert)
         SSL=1
@@ -107,7 +113,7 @@ SSH_HOST=$1
 shift
 
 function is_final() {
-    [ "$MAINTENANCE" = indefinite ]
+    [ "$MAINTENANCE" = permanent ]
 }
 
 function maybe_disable_remote_maintenance() {
@@ -116,14 +122,13 @@ function maybe_disable_remote_maintenance() {
         lk_console_message "[remote] Disabling maintenance mode"
         lk_console_detail "Deleting" "$SSH_HOST:$REMOTE_PATH/.maintenance"
         ssh "$SSH_HOST" \
-            "bash -c 'rm \"\$1/.maintenance\"'" bash "$REMOTE_PATH" ||
+            '/bin/sh -c '\''rm "$1/.maintenance"'\''' sh "$REMOTE_PATH" ||
             lk_warn "\
 Error deleting $SSH_HOST:$REMOTE_PATH/.maintenance
 Maintenance mode may have been disabled early by another process"
     fi
 }
 
-MAINTENANCE_PHP='<?php $upgrading = time(); ?>'
 REMOTE_PATH=${REMOTE_PATH%/}
 LOCAL_PATH=${LOCAL_PATH%/}
 STATUS=0
@@ -144,14 +149,13 @@ lk_console_detail "Plugins to deactivate:" "$([ ${#DEACTIVATE[@]} -eq 0 ] &&
 [ -z "$RENAME" ] ||
     lk_console_detail "Rename site to:" "$RENAME"
 lk_console_detail "Copy remote TLS certificate:" \
-    "$([ "$SSL" -eq 1 ] && echo "yes" || echo "no")"
+    "$( ((SSL)) && echo yes || echo no)"
 lk_console_detail "Refresh salts in local wp-config.php:" \
-    "$([ "$SHUFFLE_SALTS" -eq 1 ] && echo "yes" || echo "no")"
-lk_console_detail "Local WP-Cron:" "$(
-    [ "$MAINTENANCE" = indefinite ] &&
-        echo "enable" ||
-        echo "disable"
-)"
+    "$( ((SHUFFLE_SALTS)) && echo yes || echo no)"
+lk_console_detail "Convert MyISAM tables to InnoDB:" \
+    "$( ((INNODB)) && echo yes || echo no)"
+lk_console_detail "Local WP-Cron:" \
+    "$([ "$MAINTENANCE" = permanent ] && echo enable || echo disable)"
 
 lk_console_detail "Exclude files:" "$([ ${#EXCLUDE[@]} -eq 0 ] &&
     echo "<none>" ||
@@ -163,19 +167,19 @@ lk_console_message "Enabling WordPress maintenance mode"
 [ -n "$MAINTENANCE" ] || {
     lk_console_detail "\
 To minimise downtime, successfully complete at least one migration without
-enabling maintenance mode on the remote site, then enable it for the final
+enabling maintenance mode on the remote system, then enable it for the final
 migration (immediately before updating DNS)"
     lk_console_detail "\
 Once enabled, WordPress will remain in maintenance mode indefinitely"
     ! lk_confirm "Enable maintenance mode on remote system? " N ||
-        MAINTENANCE=indefinite
+        MAINTENANCE=permanent
 }
 lk_console_detail "[local] Creating" "$LOCAL_PATH/.maintenance"
-echo -n "$MAINTENANCE_PHP" >"$LOCAL_PATH/.maintenance"
-if [[ $MAINTENANCE =~ ^(on|indefinite)$ ]]; then
+lk_wp_maintenance_get_php >"$LOCAL_PATH/.maintenance"
+if [[ $MAINTENANCE =~ ^(on|permanent)$ ]]; then
     lk_console_detail "[remote] Creating" "$SSH_HOST:$REMOTE_PATH/.maintenance"
-    ssh "$SSH_HOST" "bash -c 'cat >\"\$1/.maintenance\"'" bash \
-        "$REMOTE_PATH" <<<"$MAINTENANCE_PHP"
+    ssh "$SSH_HOST" '/bin/sh -c '\''cat >"$1/.maintenance"'\''' sh \
+        "$REMOTE_PATH" < <(lk_wp_maintenance_get_php)
 fi
 
 ! is_final || {
@@ -192,10 +196,17 @@ LK_NO_INPUT=1 \
 DB_FILE=~/.lk-platform/cache/db/$SSH_HOST-${REMOTE_PATH//\//_}-$(lk_date_ymdhms).sql.gz
 install -d -m 00700 "${DB_FILE%/*}"
 lk_wp_db_dump_remote "$SSH_HOST" "$REMOTE_PATH" >"$DB_FILE"
+# TODO: put this in an exit trap
 maybe_disable_remote_maintenance
 cd "$LOCAL_PATH"
 LK_NO_INPUT=1 \
     lk_wp_db_restore_local "$DB_FILE" "$DEFAULT_DB_NAME" "$DEFAULT_DB_USER"
+if [ "$INNODB" -eq 1 ]; then
+    lk_console_message "Converting MyISAM tables to InnoDB"
+    SH=$(lk_wp_db_get_vars)
+    eval "$SH"
+    lk_wp_db_myisam_to_innodb
+fi
 if [ "$SHUFFLE_SALTS" -eq 1 ]; then
     lk_console_message "Refreshing salts defined in wp-config.php"
     lk_wp config shuffle-salts

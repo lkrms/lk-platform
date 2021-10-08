@@ -159,7 +159,7 @@ WHERE TABLE_TYPE = 'BASE TABLE'
             lk_mysql "$1" <"$SQL" &&
                 lk_console_success "Tables converted successfully" ||
                 lk_console_error -r "Table conversion failed"
-        elif ! lk_mysql_is_quiet; then
+        else
             lk_console_success "No MyISAM tables in database:" "$1"
         fi
     )
