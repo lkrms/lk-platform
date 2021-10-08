@@ -26,10 +26,10 @@ Options:
   -s, --source=PATH         sync files from PATH on remote system
                             (default: ~/public_html)
   -d, --dest=PATH           sync files to PATH on local system
-                            (default: site root if WordPress installation found
-                            in working directory, or ~/public_html)
+                            (default: ~/public_html if WordPress not found in
+                            current directory, otherwise root of installation)
   -m, --maintenance=MODE    specify remote WordPress maintenance MODE
-                            (default: <ask>)
+                            (default: ignore)
   -p, --deactivate=PLUGIN   deactivate the specified WordPress plugin after
                             migration (may be given multiple times)
   -r, --rename=URL          change site address to URL after migration
@@ -47,8 +47,12 @@ Maintenance modes (for remote system only):
   on            activate during migration, deactivate when done
   permanent     activate during migration, do not deactivate
 
-On the local system, maintenance mode is always active during migration, and
-deactivated when the migration succeeds."
+On the local system, maintenance mode is always active during migration, and is
+always deactivated after a successful migration.
+
+For minimal downtime, complete one or more migrations without activating
+maintenance mode on the remote system, then run the final migration with
+'--maintenance=permanent' before updating DNS."
 
 lk_getopt "s:d:m:p:r:icte:" \
     "source:,dest:,maintenance:,deactivate:,rename:,innodb,ssl-cert,shuffle-salts,exclude:,db-name:,db-user:"
@@ -69,7 +73,7 @@ while :; do
     -m | --maintenance)
         [[ $1 =~ ^(ignore|off|on|permanent)$ ]] ||
             lk_warn "invalid remote maintenance mode: $1" || lk_usage
-        MAINTENANCE=$1
+        MAINTENANCE=${1/off/ignore}
         shift
         ;;
     -p | --deactivate)
@@ -141,8 +145,7 @@ lk_start_trace
 lk_console_message "Preparing WordPress migration"
 lk_console_detail "[remote] Source:" "$SSH_HOST:$REMOTE_PATH"
 lk_console_detail "[local] Destination:" "$LOCAL_PATH"
-[ -z "$MAINTENANCE" ] ||
-    lk_console_detail "Remote maintenance mode:" "$MAINTENANCE"
+lk_console_detail "Remote maintenance mode:" "${MAINTENANCE:-ignore}"
 lk_console_detail "Plugins to deactivate:" "$([ ${#DEACTIVATE[@]} -eq 0 ] &&
     echo "<none>" ||
     lk_echo_array DEACTIVATE)"
@@ -164,16 +167,6 @@ lk_console_detail "Exclude files:" "$([ ${#EXCLUDE[@]} -eq 0 ] &&
 lk_confirm "Proceed?" Y
 
 lk_console_message "Enabling WordPress maintenance mode"
-[ -n "$MAINTENANCE" ] || {
-    lk_console_detail "\
-To minimise downtime, successfully complete at least one migration without
-enabling maintenance mode on the remote system, then enable it for the final
-migration (immediately before updating DNS)"
-    lk_console_detail "\
-Once enabled, WordPress will remain in maintenance mode indefinitely"
-    ! lk_confirm "Enable maintenance mode on remote system? " N ||
-        MAINTENANCE=permanent
-}
 lk_console_detail "[local] Creating" "$LOCAL_PATH/.maintenance"
 lk_wp_maintenance_get_php >"$LOCAL_PATH/.maintenance"
 if [[ $MAINTENANCE =~ ^(on|permanent)$ ]]; then
@@ -202,7 +195,6 @@ cd "$LOCAL_PATH"
 LK_NO_INPUT=1 \
     lk_wp_db_restore_local "$DB_FILE" "$DEFAULT_DB_NAME" "$DEFAULT_DB_USER"
 if [ "$INNODB" -eq 1 ]; then
-    lk_console_message "Converting MyISAM tables to InnoDB"
     SH=$(lk_wp_db_get_vars)
     eval "$SH"
     lk_wp_db_myisam_to_innodb

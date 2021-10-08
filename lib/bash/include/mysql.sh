@@ -308,9 +308,9 @@ function lk_mysql_restore_local() {
     )
     _SQL=$(printf '%s;\n' "${SQL[@]}")
     lk_console_detail "Local database will be reset with:" "$_SQL"
-    lk_confirm "\
-All data in local database '$DB_NAME' will be permanently destroyed.
-Proceed?" Y || return
+    lk_console_log \
+        "All data in local database '$DB_NAME' will be permanently destroyed"
+    lk_confirm "Proceed?" Y || return
     lk_console_message "Restoring database to local system"
     lk_console_detail "Resetting database" "$DB_NAME"
     echo "$_SQL" | lk_mysql || return

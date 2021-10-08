@@ -30,8 +30,8 @@ Prepare a local replica of a live WordPress site for staging or development.
 
 Options:
   -d, --dir=PATH            target the WordPress installation at PATH
-                            (default: use the current directory if WordPress is
-                            installed, ~/public_html otherwise)
+                            (default: ~/public_html if WordPress not found in
+                            current directory, otherwise root of installation)
   -p, --deactivate=PLUGIN   deactivate the specified WordPress plugin (may be
                             given multiple times)
   -r, --rename=URL          change site address to URL
@@ -86,7 +86,11 @@ while :; do
     esac
 done
 
-lk_tty_print "Checking WordPress"
+lk_log_start
+lk_start_trace
+
+SITE_ROOT=$(lk_wp_get_site_root)
+lk_tty_print "Checking WordPress installation at" "$SITE_ROOT"
 
 # Connect to MySQL
 lk_tty_detail "Testing MySQL connection"
@@ -98,18 +102,18 @@ lk_mysql_connects "$DB_NAME"
 # Retrieve particulars
 function get_state() {
     local SH
-    SITE_ADDR=$(lk_wp_get_site_address) &&
-        SH=$(lk_uri_parts "$SITE_ADDR" _HOST) &&
-        eval "$SH" || lk_die "unable to retrieve site address"
+    SITE_ADDR=$(lk_wp_get_site_address) ||
+        lk_die "unable to retrieve site address"
+    SH=$(lk_uri_parts "${NEW_SITE_ADDR:-$SITE_ADDR}" _HOST) &&
+        eval "$SH" ||
+        lk_die "invalid URL: ${NEW_SITE_ADDR:-$SITE_ADDR}"
     SITE_HOST=$_HOST
     [[ $SITE_HOST =~ ^(www[^.]*|local|dev|staging)\.(.+)$ ]] &&
         SITE_DOMAIN=${BASH_REMATCH[2]} ||
         SITE_DOMAIN=$SITE_HOST
-    SITE_ROOT=$(lk_wp_get_site_root) &&
-        ACTIVE_PLUGINS=($(
-            lk_wp plugin list --status=active --field=name | sort -u
-        )) &&
-        STALE=0
+    STALE=0
+    ACTIVE_PLUGINS=($(lk_wp plugin list --status=active --field=name |
+        sort -u))
 }
 lk_tty_detail "Checking active plugins"
 get_state
@@ -129,19 +133,23 @@ if [ ${#TO_DEACTIVATE[@]} -gt 0 ]; then
     STALE=1
 fi
 
-if [ -n "$NEW_SITE_ADDR" ] || { IP=$(_LK_DNS_SERVER=1.1.1.1 \
-    lk_dns_get_records A,AAAA "$SITE_DOMAIN") && [ -n "$IP" ] &&
-    ! lk_node_is_host "$SITE_HOST"; }; then
-    [ -n "$NEW_SITE_ADDR" ] ||
-        lk_tty_read "New site address:" NEW_SITE_ADDR "" \
-            -i "https://${SITE_DOMAIN%%.*}.test"
-    if [ -n "$NEW_SITE_ADDR" ] && [ "$NEW_SITE_ADDR" != "$SITE_ADDR" ]; then
-        lk_wp_maintenance_enable
-        _LK_WP_QUIET=1 LK_WP_REPLACE=1 LK_WP_REAPPLY=0 LK_WP_FLUSH=0 \
-            _LK_WP_REPLACE_COMMAND=wp \
-            lk_wp_rename_site "$NEW_SITE_ADDR"
+# Offer to rename if --rename was not passed and either
+# 1. public DNS isn't working (make sure IP is empty if so), or
+# 2. DNS records for the current name exist but they don't point to us
+if [ -z "$NEW_SITE_ADDR" ] &&
+    { lk_tty_detail "Checking site address:" "$SITE_ADDR" &&
+        { ! IP=$(_LK_DNS_SERVER=1.1.1.1 \
+            lk_dns_get_records A,AAAA "$SITE_HOST") && IP=; } ||
+        { [ -n "$IP" ] && ! lk_node_is_host "$SITE_HOST"; }; }; then
+    SUGGEST=https://${SITE_DOMAIN%%.*}.test
+    while :; do
+        lk_tty_read "Rename site to:" NEW_SITE_ADDR "" -i "$SUGGEST"
+        [ -z "$NEW_SITE_ADDR" ] || lk_is_uri "$NEW_SITE_ADDR" ||
+            lk_warn "invalid URI: $NEW_SITE_ADDR" || continue
+        break
+    done
+    [ -z "$NEW_SITE_ADDR" ] ||
         STALE=1
-    fi
 fi
 
 lk_tty_print "Preparing to reset WordPress for local development"
@@ -153,9 +161,12 @@ EXTRA_HOST=www.${SITE_HOST#www.}
 [ "$EXTRA_HOST" = "$SITE_HOST" ] ||
     HOSTS+=("$EXTRA_HOST")
 
+[ -z "$NEW_SITE_ADDR" ] ||
+    [ "$NEW_SITE_ADDR" != "$SITE_ADDR" ] ||
+    NEW_SITE_ADDR=
+
 ADMIN_EMAIL=admin@$SITE_DOMAIN
-lk_tty_detail "Site address:" "$SITE_ADDR"
-lk_tty_detail "Domain:" "$SITE_DOMAIN"
+lk_tty_detail "Site address:" "${NEW_SITE_ADDR:+$SITE_ADDR -> $LK_BOLD}${NEW_SITE_ADDR:-$SITE_ADDR}${NEW_SITE_ADDR:+$LK_RESET}"
 lk_tty_detail "Installed at:" "$SITE_ROOT"
 [ ${#ACTIVE_PLUGINS[@]} -eq 0 ] &&
     lk_tty_detail "Active plugins:" "<none>" ||
@@ -184,7 +195,7 @@ if lk_wp plugin is-active woocommerce; then
     printf '%s\n' PayPal Stripe eWAY |
         lk_console_detail_list \
             "Test mode will be enabled for known WooCommerce gateways:"
-    lk_tty_detail "WooCommerce webhooks will be" disabled
+    lk_tty_detail "WooCommerce webhooks will be disabled"
 fi
 lk_require_output -q lk_dns_resolve_names "${HOSTS[@]}" && unset HOSTS ||
     lk_tty_detail "/etc/hosts will be updated with:" "${HOSTS[*]}"
@@ -192,17 +203,24 @@ lk_tty_detail "Plugin code will be allowed to run where necessary"
 
 lk_confirm "Proceed?" Y || lk_pass lk_wp_maintenance_maybe_disable || lk_die ""
 
-lk_tty_print "Resetting WordPress for local development"
+lk_tty_print
+lk_console_log "Resetting WordPress for local development"
 
 lk_wp_maintenance_enable
 
+if [ -n "$NEW_SITE_ADDR" ]; then
+    _LK_WP_QUIET=1 LK_WP_REPLACE=1 LK_WP_REAPPLY=0 LK_WP_FLUSH=0 \
+        _LK_WP_REPLACE_COMMAND=wp \
+        lk_wp_rename_site "$NEW_SITE_ADDR"
+fi
+
 ((!SHUFFLE_SALTS)) || {
-    lk_tty_detail "Refreshing salts defined in wp-config.php"
+    lk_tty_print "Refreshing salts defined in wp-config.php"
     lk_run_detail lk_wp config shuffle-salts
 }
 
 ((!UPDATE_EMAIL)) || {
-    lk_tty_detail "Updating email addresses"
+    lk_tty_print "Updating email addresses"
     lk_mysql "$DB_NAME" <<SQL
 UPDATE ${TABLE_PREFIX}options
 SET option_value = '$(lk_mysql_escape "$ADMIN_EMAIL")'
@@ -241,11 +259,12 @@ SQL
         lk_wp_db_myisam_to_innodb
 
 if lk_wp config has WP_CACHE --type=constant; then
-    lk_tty_detail "Disabling WP_CACHE in wp-config.php"
+    lk_tty_print "Disabling WP_CACHE"
     lk_run_detail lk_wp config set WP_CACHE false --type=constant --raw
 fi
 
 ((!DISABLE_EMAIL)) || {
+    lk_tty_print "Disabling outgoing email"
     if ! lk_wp plugin is-installed wp-mail-smtp; then
         lk_tty_detail "Installing and activating WP Mail SMTP"
         lk_run_detail lk_wp plugin install wp-mail-smtp --activate
@@ -253,8 +272,6 @@ fi
         lk_tty_detail "Activating WP Mail SMTP"
         lk_run_detail lk_wp plugin activate wp-mail-smtp
     fi
-
-    lk_tty_detail "Disabling outgoing email"
     lk_wp option patch insert wp_mail_smtp general '{
   "do_not_send": true,
   "am_notifications_hidden": false,
@@ -263,7 +280,7 @@ fi
 }
 
 if lk_wp plugin is-active woocommerce; then
-    lk_tty_detail "WooCommerce: disabling live payments for known gateways"
+    lk_tty_print "WooCommerce: disabling live payments for known gateways"
     lk_run_detail lk_wp option patch update \
         woocommerce_paypal_settings testmode yes
     if lk_wp plugin is-active woocommerce-gateway-stripe; then
@@ -281,7 +298,7 @@ if lk_wp plugin is-active woocommerce; then
             wp --user=1 wc webhook list --field=id --status=paused
         ))
         [ ${#TO_DEACTIVATE[@]} -eq 0 ] || {
-            lk_tty_detail "WooCommerce: disabling webhooks"
+            lk_tty_print "WooCommerce: disabling webhooks"
             for WEBHOOK_ID in "${TO_DEACTIVATE[@]}"; do
                 lk_run_detail wp --user=1 \
                     wc webhook update "$WEBHOOK_ID" --status=disabled

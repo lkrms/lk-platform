@@ -407,9 +407,8 @@ Usage: $FUNCNAME SQL_PATH [DB_NAME [DB_USER]]" || return
     [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] ||
         lk_tty_detail "DB_PASSWORD will be reset"
     lk_tty_detail "Local database will be reset with:" "$_SQL"
-    lk_confirm "\
-All data in local database '$LOCAL_DB_NAME' will be permanently destroyed.
-Proceed?" Y || return
+    lk_console_log "All data in local database '$LOCAL_DB_NAME' will be permanently destroyed"
+    lk_confirm "Proceed?" Y || return
     [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] || {
         [[ $USER =~ ^[-a-zA-Z0-9_]+$ ]] &&
             [[ $LOCAL_DB_NAME =~ ^$USER(_[-a-zA-Z0-9_]*)?$ ]] ||
@@ -454,8 +453,10 @@ function lk_wp_db_myisam_to_innodb() {
             "${LK_BOLD}WARNING:$LK_RESET data loss may occur if conversion fails (${LK_BOLD}TAKE A BACKUP FIRST$LK_RESET)"
         lk_confirm "Proceed?" Y || return
     }
-    lk_tty_print "Converting MyISAM tables in WordPress database to InnoDB"
-    lk_verbose || local _LK_MYSQL_QUIET=1
+    lk_verbose || {
+        local _LK_MYSQL_QUIET=1
+        lk_tty_print "Converting MyISAM tables in WordPress database to InnoDB"
+    }
     lk_wp_maintenance_enable &&
         lk_mysql_myisam_to_innodb "$DB_NAME" &&
         lk_wp_maintenance_maybe_disable
@@ -613,7 +614,7 @@ function lk_wp_maintenance_disable() {
 
 # lk_wp_maintenance_maybe_disable [SITE_ROOT]
 function lk_wp_maintenance_maybe_disable() {
-    ((${_LK_WP_MAINTENANCE_ON-0} == 1)) ||
+    ((${_LK_WP_MAINTENANCE_ON-1} == 1)) ||
         lk_wp_maintenance_disable "$@"
 }
 
