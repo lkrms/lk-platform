@@ -139,10 +139,30 @@ function lk_mysql_innodb_only() {
 FROM information_schema.TABLES
 WHERE TABLE_TYPE = 'BASE TABLE'
     AND ENGINE <> 'InnoDB'
-    AND TABLE_SCHEMA = '$(lk_mysql_escape "$1")'") || return
-    [ "$NOT_INNODB" -eq 0 ] &&
-        echo yes ||
-        echo no
+    AND TABLE_SCHEMA = '$(lk_mysql_escape "$1")'") || return 2
+    [ "$NOT_INNODB" -eq 0 ]
+}
+
+# lk_mysql_myisam_to_innodb DB_NAME
+function lk_mysql_myisam_to_innodb() {
+    [ $# -eq 1 ] || lk_usage "Usage: $FUNCNAME DB_NAME" || return
+    lk_mysql_list <<<"SELECT TABLE_NAME
+FROM information_schema.TABLES
+WHERE TABLE_TYPE = 'BASE TABLE'
+    AND ENGINE = 'MyISAM'
+    AND TABLE_SCHEMA = '$(lk_mysql_escape "$1")'" | (
+        lk_mktemp_with SQL sed -E 's/.*/ALTER TABLE & ENGINE=InnoDB;/' || return
+        if [ -s "$SQL" ]; then
+            lk_mysql_is_quiet || lk_tty_print \
+                "Converting MyISAM tables to InnoDB in database '$1':" \
+                $'\n'"$(<"$SQL")"
+            lk_mysql "$1" <"$SQL" &&
+                lk_console_success "Tables converted successfully" ||
+                lk_console_error -r "Table conversion failed"
+        elif ! lk_mysql_is_quiet; then
+            lk_console_success "No MyISAM tables in database:" "$1"
+        fi
+    )
 }
 
 # lk_mysql_dump DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]
@@ -150,7 +170,7 @@ function lk_mysql_dump() {
     local DB_NAME=$1 DB_USER=${2-${DB_USER-}} DB_PASSWORD=${3-${DB_PASSWORD-}} \
         DB_HOST=${4-${DB_HOST-${LK_MYSQL_HOST:-localhost}}} \
         LK_MYSQL_ELEVATE LK_MY_CNF OUTPUT_FILE OUTPUT_FD \
-        INNODB_ONLY DUMP_ARGS ARG_COLOUR EXIT_STATUS=0
+        INNODB_ONLY=1 DUMP_ARGS ARG_COLOUR EXIT_STATUS=0
     unset ARG_COLOUR
     [ $# -ge 1 ] || lk_usage "\
 Usage: $FUNCNAME DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
@@ -174,8 +194,11 @@ Usage: $FUNCNAME DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
             OUTPUT_FD=$(lk_fd_next) &&
             eval "exec $OUTPUT_FD>&1 >\"\$OUTPUT_FILE\"" || return
     }
-    INNODB_ONLY=$(lk_mysql_innodb_only "$DB_NAME") || return
-    if lk_is_true INNODB_ONLY; then
+    lk_mysql_innodb_only "$DB_NAME" || {
+        [ $? -eq 1 ] || return
+        INNODB_ONLY=0
+    }
+    if ((INNODB_ONLY)); then
         DUMP_ARGS=(
             --single-transaction
             --skip-lock-tables
@@ -191,9 +214,10 @@ Usage: $FUNCNAME DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
         lk_console_item "Dumping database:" "$DB_NAME"
         lk_console_detail "Host:" "$DB_HOST"
     }
-    { lk_mysql_is_quiet && lk_is_true INNODB_ONLY; } || {
-        lk_console_detail "InnoDB only?" \
-            "${ARG_COLOUR+$ARG_COLOUR}$INNODB_ONLY${ARG_COLOUR+$LK_RESET}"
+    { lk_mysql_is_quiet && ((INNODB_ONLY)); } || {
+        lk_console_detail "InnoDB only?" "${ARG_COLOUR+$ARG_COLOUR}$(
+            ((INNODB_ONLY)) && echo yes || echo no
+        )${ARG_COLOUR+$LK_RESET}"
         lk_console_detail "mysqldump arguments:" \
             "${ARG_COLOUR+$ARG_COLOUR}${DUMP_ARGS[*]}${ARG_COLOUR+$LK_RESET}"
     }
