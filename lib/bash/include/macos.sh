@@ -6,7 +6,7 @@ if lk_is_apple_silicon; then
         for _LK_VAR in "${_LK_VARS[@]}"; do
             [ -n "${!_LK_VAR-}" ] || continue
             _LK_VAL=$(lk_path_edit "$1" "${2-}" "${!_LK_VAR}") || return
-            _lk_var_prefix
+            lk_maybe_local
             printf '%s\n' "$_LK_VAR"
             printf 'export %s=%q\n' "$_LK_VAR" "$_LK_VAL"
         done

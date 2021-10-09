@@ -12,6 +12,23 @@ function lk_err() {
     lk_pass echo "${FUNCNAME[1 + ${_LK_STACK_DEPTH:-0}]-${0##*/}}: $1" >&2
 }
 
+# lk_trace [MESSAGE]
+function lk_trace() {
+    [ "${LK_DEBUG-}" = Y ] || return 0
+    local NOW
+    NOW=$(gnu_date +%s.%N) || return 0
+    _LK_TRACE_FIRST=${_LK_TRACE_FIRST:-$NOW}
+    printf '%s\t%s\t%s\t%s\t%s\n' \
+        "$NOW" \
+        "$_LK_TRACE_FIRST" \
+        "${_LK_TRACE_LAST:-$NOW}" \
+        "${1+${1::30}}" \
+        "${BASH_SOURCE[1]+${BASH_SOURCE[1]#$LK_BASE/}:${BASH_LINENO[0]}}" |
+        awk -F'\t' -v "d=$LK_DIM" -v "u=$LK_UNDIM" \
+            '{printf "%s%09.4f  +%.4f\t%-30s\t%s\n",d,$1-$2,$1-$3,$4,$5 u}' >&2
+    _LK_TRACE_LAST=$NOW
+}
+
 # lk_script_name [STACK_DEPTH]
 function lk_script_name() {
     local DEPTH=$((${1:-0} + ${_LK_STACK_DEPTH:-0})) NAME
@@ -62,4 +79,13 @@ function lk_plural() {
     [ "$COUNT" = 1 ] && echo "$VALUE$2" || echo "$VALUE${3-$2s}"
 }
 
-#### Reviewed: 2021-10-04
+function lk_maybe_local() {
+    local DEPTH=${1:-${_LK_STACK_DEPTH:-0}}
+    ((DEPTH < 0)) ||
+        case "${FUNCNAME[DEPTH + 2]-}" in
+        '' | source | main) ;;
+        *) printf 'local ' ;;
+        esac
+}
+
+#### Reviewed: 2021-10-07
