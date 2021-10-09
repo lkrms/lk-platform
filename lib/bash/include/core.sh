@@ -704,6 +704,20 @@ function lk_string_remove() {
             'NR == 1 {next} $0 !~ regex {printf "%s%s", (i++ ? RS : ""), $0 }'
 }
 
+# lk_arr [ARRAY...]
+function lk_arr() {
+    local SH i=0
+    SH="printf '%s\n'"
+    while [ $# -gt 0 ]; do
+        # Count array members until one is found
+        ((i)) || eval "\${$1+let i+=\${#$1[@]}}"
+        ((!i)) || SH+=" \${$1+\"\${$1[@]}\"}"
+        shift
+    done
+    # Print nothing if no array members were found
+    ((!i)) || eval "$SH"
+}
+
 # lk_array_remove_value ARRAY VALUE
 function lk_array_remove_value() {
     local _SH
@@ -720,7 +734,7 @@ function _lk_caller() {
         echo "$CALLER"
         return
     }
-    local CONTEXT REGEX='^([0-9]*) [^ ]* (.*)$' SOURCE= LINE=
+    local REGEX='^([0-9]*) [^ ]* (.*)$' SOURCE LINE
     if [[ ${1-} =~ $REGEX ]]; then
         SOURCE=${BASH_REMATCH[2]}
         LINE=${BASH_REMATCH[1]}
@@ -1042,6 +1056,46 @@ Usage: $FUNCNAME PROMPT [DEFAULT [READ_ARG...]]" || return
     fi
 }
 
+# lk_trace [MESSAGE]
+function lk_trace() {
+    [ "${LK_DEBUG-}" = Y ] || return 0
+    local NOW
+    NOW=$(gnu_date +%s.%N) || return 0
+    _LK_TRACE_FIRST=${_LK_TRACE_FIRST:-$NOW}
+    printf '%s\t%s\t%s\t%s\t%s\n' \
+        "$NOW" \
+        "$_LK_TRACE_FIRST" \
+        "${_LK_TRACE_LAST:-$NOW}" \
+        "${1+${1::30}}" \
+        "${BASH_SOURCE[1]+${BASH_SOURCE[1]#$LK_BASE/}:${BASH_LINENO[0]}}" |
+        awk -F'\t' -v "d=$LK_DIM" -v "u=$LK_UNDIM" \
+            '{printf "%s%09.4f  +%.4f\t%-30s\t%s\n",d,$1-$2,$1-$3,$4,$5 u}' >&2
+    _LK_TRACE_LAST=$NOW
+}
+
+# lk_get_stack_trace [FIRST_FRAME_DEPTH [ROWS [FIRST_FRAME]]]
+function lk_get_stack_trace() {
+    local i=$((${1:-0} + ${_LK_STACK_DEPTH:-0})) r=0 ROWS=${2:-0} FRAME=${3-} \
+        DEPTH=$((${#FUNCNAME[@]} - 1)) WIDTH FUNC FILE LINE \
+        REGEX='^([0-9]*) ([^ ]*) (.*)$'
+    WIDTH=${#DEPTH}
+    while ((i++ < DEPTH)) && ((!ROWS || r++ < ROWS)); do
+        FUNC=${FUNCNAME[i]-"{main}"}
+        FILE=${BASH_SOURCE[i]-"{main}"}
+        LINE=${BASH_LINENO[i - 1]-0}
+        [[ ! ${FRAME-} =~ $REGEX ]] || {
+            FUNC=${BASH_REMATCH[2]:-$FUNC}
+            FILE=${BASH_REMATCH[3]:-$FILE}
+            LINE=${BASH_REMATCH[1]:-$LINE}
+            unset FRAME
+        }
+        ((ROWS == 1)) || printf "%${WIDTH}d. " "$((DEPTH - i + 1))"
+        printf "%s %s (%s:%s)\n" \
+            "$( ((r > 1)) && echo at || echo in)" \
+            "$LK_BOLD$FUNC$LK_RESET" "$FILE$LK_DIM" "$LINE$LK_RESET"
+    done
+}
+
 function lk_include() {
     local FILE
     while [ $# -gt 0 ]; do
@@ -1300,6 +1354,7 @@ lk_console_list() { lk_tty_list - "$@"; }
 lk_console_message() { lk_tty_print "${1-}" "${3+$2}" "${3-${2-$_LK_TTY_COLOUR}}"; }
 lk_console_read_secret() { local r && lk_tty_read_silent "$1" r "${@:2}" && echo "$r"; }
 lk_console_read() { local r && lk_tty_read "$1" r "${@:2}" && echo "$r"; }
+lk_echo_array() { lk_arr "$@"; }
 lk_escape_ere_replace() { lk_sed_escape_replace "$@"; }
 lk_escape_ere() { lk_sed_escape "$@"; }
 lk_first_existing() { lk_first_file "$@"; }
@@ -1856,13 +1911,6 @@ function lk_echo_args() {
     [ "${1-}" != -z ] || { DELIM='\0' && shift; }
     [ $# -eq 0 ] ||
         printf "%s${DELIM:-\\n}" "$@"
-}
-
-# lk_echo_array [-z] [ARRAY...]
-function lk_echo_array() {
-    local LK_Z=${LK_Z-}
-    [ "${1-}" != -z ] || { LK_Z=1 && shift; }
-    _lk_array_action lk_echo_args "$@"
 }
 
 # lk_array_merge NEW_ARRAY [ARRAY...]
@@ -4012,22 +4060,6 @@ function _lk_maybe_filter() {
     esac
 } #### Reviewed: 2021-03-26
 
-# lk_get_stack_trace [INITIAL_STACK_DEPTH [ROWS]]
-function lk_get_stack_trace() {
-    local i=$((${1:-0} + ${_LK_STACK_DEPTH:-0})) r=0 ROWS=${2:-0} \
-        DEPTH=$((${#FUNCNAME[@]} - 1)) WIDTH FUNC FILE LINE
-    WIDTH=${#DEPTH}
-    while ((i++ < DEPTH)) && ((!ROWS || r++ < ROWS)); do
-        FUNC=${FUNCNAME[i]-"{main}"}
-        FILE=${BASH_SOURCE[i]-"{main}"}
-        LINE=${BASH_LINENO[i - 1]-0}
-        ((ROWS == 1)) || printf "%${WIDTH}d. " "$((DEPTH - i + 1))"
-        printf "%s %s (%s:%s)\n" \
-            "$( ((r > 1)) && echo at || echo in)" \
-            "$LK_BOLD$FUNC$LK_RESET" "$FILE$LK_DIM" "$LINE$LK_RESET"
-    done
-}
-
 # lk_nohup COMMAND [ARG...]
 function lk_nohup() { (
     _LK_CAN_FAIL=1
@@ -4077,7 +4109,7 @@ function _lk_exit_trap() {
         { [[ $- == *i* ]] && [ $BASH_SUBSHELL -eq 0 ]; } ||
         _LK_TTY_NO_FOLD=1 lk_console_error \
             "$(_lk_caller "${_LK_ERR_TRAP_CALLER:-$1}"): unhandled error" \
-            "$(lk_get_stack_trace $((1 - ${_LK_STACK_DEPTH:-0})))"
+            "$(lk_get_stack_trace $((1 - ${_LK_STACK_DEPTH:-0})) "" "${_LK_ERR_TRAP_CALLER-}")"
 } #### Reviewed: 2021-05-28
 
 function _lk_err_trap() {

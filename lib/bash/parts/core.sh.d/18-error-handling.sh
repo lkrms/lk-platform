@@ -8,7 +8,7 @@ function _lk_caller() {
         echo "$CALLER"
         return
     }
-    local CONTEXT REGEX='^([0-9]*) [^ ]* (.*)$' SOURCE= LINE=
+    local REGEX='^([0-9]*) [^ ]* (.*)$' SOURCE LINE
     if [[ ${1-} =~ $REGEX ]]; then
         SOURCE=${BASH_REMATCH[2]}
         LINE=${BASH_REMATCH[1]}
@@ -31,4 +31,4 @@ function lk_warn() {
         lk_console_warning "$(LK_VERBOSE= _lk_caller): ${1-command failed}"
 }
 
-#### Reviewed: 2021-10-04
+#### Reviewed: 2021-10-09
