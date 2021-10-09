@@ -243,7 +243,7 @@ if lk_node_service_enabled desktop; then
         ttf-ubuntu-font-family
     )
 
-    if lk_echo_array PAC_PACKAGES AUR_PACKAGES | grep -E \
+    if lk_arr PAC_PACKAGES AUR_PACKAGES | grep -E \
         '(^ttf-joypixels$|^ttf-.*\<(tw)?emoji\>|\<fonts-emoji\>)' \
         >/dev/null; then
         PAC_REJECT+=(noto-fonts-emoji)
@@ -371,65 +371,71 @@ fi
 
 ####
 
-PAC_REJECT_REGEX=$(lk_echo_array PAC_REJECT | sort -u | lk_implode_input "|")
-PAC_REJECT_REGEX=${PAC_REJECT_REGEX:+"($PAC_REJECT_REGEX)"}
+SUFFIX=-${LK_PATH_PREFIX%-}
 
-IFS=$'\n'
-PAC_REPOS=($(lk_echo_array PAC_REPOS | sort -u))
-unset IFS
-[ ${#PAC_REPOS[@]} -eq 0 ] ||
+if [ ${#PAC_REPOS[@]} -gt 0 ]; then
+    PAC_REPOS=($(lk_arr PAC_REPOS | sort -u))
     lk_arch_add_repo "${PAC_REPOS[@]}"
+fi
 
 lk_pac_sync
 
+# To minimise expensive pacman calls, create lists and filter with grep/awk/sed
+lk_mktemp_with _PAC_ALL pacman -Sl
+lk_mktemp_with _PAC_ALL_GROUPS pacman -Sgg
+lk_mktemp_with _PAC_PACKAGES sort -u <(awk '{ print $2 }' "$_PAC_ALL")
+lk_mktemp_with _PAC_GROUPS sort -u <(awk '{ print $1 }' "$_PAC_ALL_GROUPS")
+lk_mktemp_with _PAC_OFFICIAL sort -u \
+    <(awk '$1 ~ /^(core|extra|community|multilib)$/ { print $2 }' "$_PAC_ALL")
+lk_mktemp_with _PAC_UNOFFICIAL sort -u \
+    <(awk '$1 !~ /^(core|extra|community|multilib)$/ { print $2 }' "$_PAC_ALL")
+
 # If any AUR_PACKAGES now appear in core, extra, community or multilib, move
 # them to PAC_PACKAGES and notify the user
-if [ ${#AUR_PACKAGES[@]} -gt 0 ]; then
-    AUR_MOVED=$(lk_pac_available_list -o "${AUR_PACKAGES[@]}")
-    [ -z "$AUR_MOVED" ] || {
-        lk_console_warning "Moved from AUR to official repos:" "$AUR_MOVED"
-        PAC_PACKAGES+=($AUR_MOVED)
-        AUR_PACKAGES=($(lk_pac_unavailable_list -o "${AUR_PACKAGES[@]}"))
-    }
-fi
-
-PAC_GROUPS=($(comm -12 \
-    <(lk_echo_array PAC_PACKAGES | sort -u) \
-    <(lk_pac_groups | sort -u)))
-if [ ${#PAC_GROUPS[@]} -gt 0 ]; then
-    PAC_PACKAGES=($(comm -13 \
-        <(lk_echo_array PAC_GROUPS) \
-        <(lk_echo_array PAC_PACKAGES | sort -u)))
-    PAC_PACKAGES+=($(comm -12 \
-        <(lk_pac_groups "${PAC_GROUPS[@]}" | sort -u) \
-        <(lk_pac_available_list -o | sort -u)))
+if AUR_MOVED=$(grep -Fxf <(lk_arr AUR_PACKAGES) "$_PAC_OFFICIAL"); then
+    lk_console_warning "Moved from AUR to official repos:" "$AUR_MOVED"
+    PAC_PACKAGES+=($AUR_MOVED)
 fi
 
 # Check for PAC_PACKAGES removed from official repos
-PAC_MOVED=$(lk_pac_unavailable_list -o "${PAC_PACKAGES[@]}")
-[ -z "$PAC_MOVED" ] || {
+if PAC_MOVED=$(lk_arr PAC_PACKAGES |
+    grep -Fxvf "$_PAC_OFFICIAL" -f "$_PAC_GROUPS"); then
     lk_console_warning "Removed from official repos:" "$PAC_MOVED"
     AUR_PACKAGES+=($PAC_MOVED)
-    PAC_PACKAGES=($(lk_pac_available_list -o "${PAC_PACKAGES[@]}"))
-}
+fi
 
-if [ -n "$PAC_REJECT_REGEX" ]; then
-    PAC_PACKAGES=($(lk_echo_array PAC_PACKAGES |
-        sed -E "/^${PAC_REJECT_REGEX}\$/d"))
-    AUR_PACKAGES=($(lk_echo_array AUR_PACKAGES |
-        sed -E "/^${PAC_REJECT_REGEX}\$/d"))
+# If PAC_PACKAGES contains group names, replace them with their packages
+if PAC_GROUPS=$(lk_arr PAC_PACKAGES | grep -Fxf "$_PAC_GROUPS"); then
+    PAC_PACKAGES=($({
+        lk_arr PAC_PACKAGES | grep -Fxvf "$_PAC_GROUPS" || true
+        awk -v "re=$(lk_ere_implode_input <<<"$PAC_GROUPS")" \
+            '$1 ~ "^" re "$" { print $2 }' "$_PAC_ALL_GROUPS"
+    } | sort -u))
+fi
+
+if [ -n "${PAC_REJECT+1}" ]; then
+    REJECT=(
+        "${PAC_REJECT[@]}"
+        "${PAC_REJECT[@]/%/-git}"
+        "${PAC_REJECT[@]/%/-git$SUFFIX}"
+        "${PAC_REJECT[@]/%/$SUFFIX}"
+    )
+    PAC_PACKAGES=($(lk_arr PAC_PACKAGES | grep -Fxvf <(lk_arr REJECT) || true))
+    AUR_PACKAGES=($(lk_arr AUR_PACKAGES | grep -Fxvf <(lk_arr REJECT) || true))
 fi
 
 # Use unofficial packages named PACKAGE-git, PACKAGE-lk or PACKAGE-git-lk
 # instead of PACKAGE
-lk_mktemp_with PAC_UNOFFICIAL comm -13 \
-    <(lk_pac_available_list -o | sort -u) \
-    <(lk_pac_available_list | sort -u)
-lk_mktemp_with PAC_REPLACE awk -v "suffix=-${LK_PATH_PREFIX%-}\$" '
-function save() {
+lk_mktemp_with PAC_REPLACE awk -v "suffix=$SUFFIX\$" '
+function save(_p) {
     if (_prio[pkg] < prio) {
+        if (_replace[pkg]) {
+            _replace[_replace[pkg]] = $0
+        }
         _replace[pkg] = $0
         _prio[pkg] = prio
+    } else {
+        _replace[$0] = _replace[pkg]
     }
 }
 $0 ~ suffix || /-git$/ {
@@ -449,23 +455,24 @@ END {
     for (pkg in _replace) {
         print pkg, _replace[pkg]
     }
-}' "$PAC_UNOFFICIAL"
+}' "$_PAC_UNOFFICIAL"
 if [ -s "$PAC_REPLACE" ]; then
-    SED_SCRIPT=
-    while read -r PACKAGE NEW_PACKAGE; do
-        PACKAGE=$(lk_escape_ere "$PACKAGE")
-        NEW_PACKAGE=$(lk_escape_ere_replace "$NEW_PACKAGE")
-        SED_SCRIPT+="${SED_SCRIPT:+;}s/^$PACKAGE\$/$NEW_PACKAGE/"
-    done <"$PAC_REPLACE"
-    PAC_PACKAGES=($(lk_echo_array PAC_PACKAGES | sed -E "$SED_SCRIPT"))
-    AUR_PACKAGES=($(lk_echo_array AUR_PACKAGES | sed -E "$SED_SCRIPT"))
+    lk_mktemp_with SED \
+        awk -v "suffix=$SUFFIX" \
+        '{print "s/^" $1 "(-git)?(" suffix ")?$/" $2 "/"}' "$PAC_REPLACE"
+    PAC_PACKAGES=($(lk_arr PAC_PACKAGES | sed -Ef "$SED" | sort -u))
+    AUR_PACKAGES=($(lk_arr AUR_PACKAGES | sed -Ef "$SED" | sort -u))
+    PAC_REJECT+=($(awk '{print $1}' "$PAC_REPLACE"))
 fi
 
-# Move any AUR_PACKAGES that can be installed from a repo to PAC_PACKAGES
-if [ ${#AUR_PACKAGES[@]} -gt 0 ]; then
-    PAC_PACKAGES+=($(lk_pac_available_list "${AUR_PACKAGES[@]}"))
-    AUR_PACKAGES=($(lk_pac_unavailable_list "${AUR_PACKAGES[@]}"))
-fi
+# Move any AUR_PACKAGES that can be installed from a repo to PAC_PACKAGES, and
+# vice-versa
+ALL_PACKAGES=(
+    ${PAC_PACKAGES+"${PAC_PACKAGES[@]}"}
+    ${AUR_PACKAGES+"${AUR_PACKAGES[@]}"}
+)
+PAC_PACKAGES=($(lk_arr ALL_PACKAGES | grep -Fxf "$_PAC_PACKAGES" || true))
+AUR_PACKAGES=($(lk_arr ALL_PACKAGES | grep -Fxvf "$_PAC_PACKAGES" || true))
 
 if [ ${#AUR_PACKAGES[@]} -gt 0 ] ||
     { pacman-conf --repo=aur |
@@ -473,15 +480,13 @@ if [ ${#AUR_PACKAGES[@]} -gt 0 ] ||
         grep -E '^file://'; } &>/dev/null; then
     PAC_BASE_DEVEL=($(lk_pac_groups base-devel))
     PAC_PACKAGES+=("${PAC_BASE_DEVEL[@]}" devtools pacutils vifm)
-    PAC_KEEP+=(aurutils aurutils-git)
+    PAC_KEEP+=(aurutils{,-git}{,"$SUFFIX"})
 fi
 
 # Reduce PAC_KEEP to packages not present in PAC_PACKAGES
 if [ ${#PAC_KEEP[@]} -gt 0 ]; then
-    PAC_KEEP=($(comm -23 \
-        <(lk_echo_array PAC_KEEP | sort -u) \
-        <(lk_echo_array PAC_PACKAGES | sort -u)))
+    PAC_KEEP=($(lk_arr PAC_KEEP | grep -Fxvf <(lk_arr PAC_PACKAGES) || true))
 fi
 
-# If any AUR_PACKAGES remain, lk_pac_unavailable_list has already sorted them
-PAC_PACKAGES=($(lk_echo_array PAC_PACKAGES | sort -u))
+PAC_PACKAGES=($(lk_arr PAC_PACKAGES | sort -u))
+AUR_PACKAGES=($(lk_arr AUR_PACKAGES | sort -u))
