@@ -407,9 +407,8 @@ Usage: $FUNCNAME SQL_PATH [DB_NAME [DB_USER]]" || return
     [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] ||
         lk_tty_detail "DB_PASSWORD will be reset"
     lk_tty_detail "Local database will be reset with:" "$_SQL"
-    lk_confirm "\
-All data in local database '$LOCAL_DB_NAME' will be permanently destroyed.
-Proceed?" Y || return
+    lk_console_log "All data in local database '$LOCAL_DB_NAME' will be permanently destroyed"
+    lk_confirm "Proceed?" Y || return
     [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] || {
         [[ $USER =~ ^[-a-zA-Z0-9_]+$ ]] &&
             [[ $LOCAL_DB_NAME =~ ^$USER(_[-a-zA-Z0-9_]*)?$ ]] ||
@@ -442,6 +441,25 @@ Proceed?" Y || return
     fi | lk_mysql "$LOCAL_DB_NAME" ||
         lk_console_error -r "Restore operation failed" || return
     lk_console_success "Database restored successfully"
+}
+
+function lk_wp_db_myisam_to_innodb() {
+    local SH _LK_WP_MAINTENANCE_ON
+    SH=$(lk_wp_db_get_vars) && eval "$SH" &&
+        lk_mysql_write_cnf || return
+    lk_wp_is_quiet || {
+        lk_tty_print "Preparing to convert MyISAM tables to InnoDB"
+        lk_console_warning \
+            "${LK_BOLD}WARNING:$LK_RESET data loss may occur if conversion fails (${LK_BOLD}TAKE A BACKUP FIRST$LK_RESET)"
+        lk_confirm "Proceed?" Y || return
+    }
+    lk_verbose || {
+        local _LK_MYSQL_QUIET=1
+        lk_tty_print "Converting MyISAM tables in WordPress database to InnoDB"
+    }
+    lk_wp_maintenance_enable &&
+        lk_mysql_myisam_to_innodb "$DB_NAME" &&
+        lk_wp_maintenance_maybe_disable
 }
 
 # lk_wp_sync_files_from_remote SSH_HOST [REMOTE_PATH [LOCAL_PATH [RSYNC_ARG...]]]
@@ -568,24 +586,36 @@ function lk_wp_disable_cron() {
         lk_crontab_remove_command "--path=$SITE_ROOT"
 }
 
-function lk_wp_get_maintenance_php() {
-    echo '<?php $upgrading = time(); ?>'
+function lk_wp_maintenance_get_php() {
+    printf '<?php $upgrading = time(); ?>'
 }
 
-# lk_wp_enable_maintenance [SITE_ROOT]
-function lk_wp_enable_maintenance() {
-    local SITE_ROOT MAINTENANCE_PHP
+# lk_wp_maintenance_enable [SITE_ROOT]
+function lk_wp_maintenance_enable() {
+    local SITE_ROOT ACTIVE=1
     SITE_ROOT=${1:-$(lk_wp_get_site_root)} || return
-    MAINTENANCE_PHP=$(lk_wp_get_maintenance_php)
-    echo "$MAINTENANCE_PHP" >"$SITE_ROOT/.maintenance"
+    lk_wp maintenance-mode is-active &>/dev/null || ACTIVE=0
+    [ -n "${_LK_WP_MAINTENANCE_ON-}" ] ||
+        _LK_WP_MAINTENANCE_ON=$ACTIVE
+    ((ACTIVE)) ||
+        lk_tty_detail "Enabling maintenance mode"
+    # Always activate explicitly, in case $upgrading is about to expire
+    lk_wp_maintenance_get_php >"$SITE_ROOT/.maintenance"
 }
 
-# lk_wp_disable_maintenance [SITE_ROOT]
-function lk_wp_disable_maintenance() {
+# lk_wp_maintenance_disable [SITE_ROOT]
+function lk_wp_maintenance_disable() {
     local SITE_ROOT
     SITE_ROOT=${1:-$(lk_wp_get_site_root)} || return
-    [ ! -e "$SITE_ROOT/.maintenance" ] ||
-        rm "$SITE_ROOT/.maintenance"
+    ! lk_wp maintenance-mode is-active &>/dev/null ||
+        lk_tty_detail "Disabling maintenance mode"
+    rm -f "$SITE_ROOT/.maintenance"
+}
+
+# lk_wp_maintenance_maybe_disable [SITE_ROOT]
+function lk_wp_maintenance_maybe_disable() {
+    ((${_LK_WP_MAINTENANCE_ON-1} == 1)) ||
+        lk_wp_maintenance_disable "$@"
 }
 
 # lk_wp_set_permissions [SITE_ROOT]

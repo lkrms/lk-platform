@@ -111,7 +111,7 @@ function lk_tty_print() {
         esac
         INDENT=${_LK_TTY_INDENT:-$INDENT}
         SPACES=$'\n'$(printf "%$((INDENT > 0 ? INDENT : 0))s")
-        MESSAGE2=$SEP$MESSAGE2
+        MESSAGE2=${MESSAGE:+$SEP}$MESSAGE2
         MESSAGE2=${MESSAGE2//$'\n'/$SPACES}
     }
     _lk_tty_format -b PREFIX "$COLOUR" _LK_TTY_PREFIX_COLOUR

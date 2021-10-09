@@ -667,7 +667,7 @@ $LK_NODE_HOSTNAME" &&
     _PAC_KEEP=($(lk_echo_array PAC_KEEP | sed -E '/^aurutils$/d'))
 
     lk_console_message "Checking install reasons"
-    PAC_EXPLICIT=$(lk_echo_array PAC_PACKAGES AUR_PACKAGES PAC_KEEP | sort -u)
+    PAC_EXPLICIT=($(lk_echo_array PAC_PACKAGES AUR_PACKAGES PAC_KEEP | sort -u))
     PAC_MARK_EXPLICIT=($(lk_pac_installed_not_explicit "${PAC_EXPLICIT[@]}"))
     PAC_UNMARK_EXPLICIT=($(comm -13 \
         <(lk_echo_array PAC_EXPLICIT) \
@@ -680,7 +680,7 @@ $LK_NODE_HOSTNAME" &&
             pacman -D --asdeps "${PAC_UNMARK_EXPLICIT[@]}"
 
     REMOVE_MESSAGE=()
-    if PAC_REMOVE=($(pacman -Qdttq | sort)) && [ ${#PAC_REMOVE[@]} -gt 0 ]; then
+    if PAC_REMOVE=($(pacman -Qdttq | grep -Fxvf <(lk_arr PAC_REJECT))); then
         lk_whiptail_build_list PAC_REMOVE '' "${PAC_REMOVE[@]}"
         lk_mapfile PAC_REMOVE <(lk_whiptail_checklist "Orphaned packages" \
             "Selected packages will be removed:" "${PAC_REMOVE[@]}" off)
@@ -699,7 +699,7 @@ $LK_NODE_HOSTNAME" &&
     [ ${#PAC_REMOVE[@]} -eq 0 ] || {
         lk_console_message \
             "Removing $(lk_implode_arr " and " REMOVE_MESSAGE) packages"
-        lk_log_bypass lk_tty pacman -Rs --noconfirm "${PAC_REMOVE[@]}"
+        lk_log_bypass lk_tty pacman -Rdds --noconfirm "${PAC_REMOVE[@]}"
     }
 
     [ ${#_PAC_KEEP[@]} -eq 0 ] ||

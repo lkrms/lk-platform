@@ -250,6 +250,7 @@ PAC_PACKAGES+=(
     cmake
     dbeaver
     dbeaver-plugin-sshj
+    dbeaver-plugin-sshj-lib
     emscripten
     eslint
     geckodriver

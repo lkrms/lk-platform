@@ -62,7 +62,8 @@ function __lk_generic() {
     fi
 } && complete -F __lk_generic \
     lk-keepassxc.sh \
-    lk-ssh-configure-migration.sh
+    lk-ssh-configure-migration.sh \
+    lk-wp-dev-reset.sh
 
 function __lk_mysql_dump() {
     local cur prev words cword split
@@ -89,7 +90,7 @@ function __lk_wp_migrate() {
     case "$prev" in
     -s | --source | -d | --dest) _filedir -d ;;
     -m | --maintenance)
-        COMPREPLY=($(compgen -W "ignore on indefinite" -- "$cur"))
+        COMPREPLY=($(compgen -W "ignore off on permanent" -- "$cur"))
         ;;
     -r | --rename)
         COMP_WORDBREAKS=${COMP_WORDBREAKS//:/}

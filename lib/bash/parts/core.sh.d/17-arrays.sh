@@ -1,5 +1,19 @@
 #!/bin/bash
 
+# lk_arr [ARRAY...]
+function lk_arr() {
+    local SH i=0
+    SH="printf '%s\n'"
+    while [ $# -gt 0 ]; do
+        # Count array members until one is found
+        ((i)) || eval "\${$1+let i+=\${#$1[@]}}"
+        ((!i)) || SH+=" \${$1+\"\${$1[@]}\"}"
+        shift
+    done
+    # Print nothing if no array members were found
+    ((!i)) || eval "$SH"
+}
+
 # lk_array_remove_value ARRAY VALUE
 function lk_array_remove_value() {
     local _SH
@@ -8,4 +22,4 @@ function lk_array_remove_value() {
 done") && eval "$_SH"
 }
 
-#### Reviewed: 2021-10-04
+#### Reviewed: 2021-10-09
