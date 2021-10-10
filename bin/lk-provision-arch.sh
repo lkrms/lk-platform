@@ -749,6 +749,17 @@ $LK_NODE_HOSTNAME" &&
         cronie "cron"
     )
 
+    if lk_pac_installed logrotate; then
+        FILE=/etc/logrotate.d/lk-platform
+        DIR=$LK_BASE/var/log
+        [[ $DIR =~ ^[-a-zA-Z0-9/._]+$ ]] || DIR=$(lk_double_quote "$DIR")
+        GROUP=$(lk_file_group "$LK_BASE")
+        lk_install -m 00644 "$FILE"
+        lk_file_replace "$FILE" < <(LK_PLATFORM_LOGS="$DIR/*.log" \
+            LK_PLATFORM_OWNER="root $GROUP" \
+            lk_expand_template "$LK_BASE/share/logrotate.d/default.template")
+    fi
+
     if lk_pac_installed fail2ban; then
         unset LK_FILE_REPLACE_NO_CHANGE
         _FILE=$LK_BASE/share/fail2ban/default-arch.conf
