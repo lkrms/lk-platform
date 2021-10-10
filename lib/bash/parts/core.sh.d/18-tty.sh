@@ -56,6 +56,25 @@ function lk_tty_length() {
     lk_strip_non_printing "$1" | awk 'NR == 1 { print length() }'
 }
 
+# lk_tty_group [[-n] MESSAGE [MESSAGE2 [COLOUR]]]
+function lk_tty_group() {
+    local NEST=
+    [ "${1-}" != -n ] || { NEST=1 && shift; }
+    _LK_TTY_GROUP=$((${_LK_TTY_GROUP:--1} + 1))
+    [ -n "${_LK_TTY_NEST+1}" ] || _LK_TTY_NEST=()
+    unset "_LK_TTY_NEST[_LK_TTY_GROUP]"
+    [ $# -eq 0 ] || {
+        lk_tty_print "$@"
+        _LK_TTY_NEST[_LK_TTY_GROUP]=$NEST
+    }
+}
+
+# lk_tty_group_end [COUNT]
+function lk_tty_group_end() {
+    _LK_TTY_GROUP=$((${_LK_TTY_GROUP:-0} - ${1:-1}))
+    ((_LK_TTY_GROUP > -1)) || unset _LK_TTY_GROUP _LK_TTY_NEST
+}
+
 # lk_tty_print [MESSAGE [MESSAGE2 [COLOUR]]]
 #
 # Write each message to the file descriptor set in _LK_FD or to the standard
@@ -70,21 +89,41 @@ function lk_tty_length() {
 #   lines will be aligned with the first (values: 0 or 1; default: 0)
 # - _LK_TTY_INDENT: MESSAGE2 indent (default: based on prefix length and message
 #   line counts)
-# - _LK_TTY_COLOUR: default colour for prefix and MESSAGE2 (default: $LK_CYAN)
-# - _LK_TTY_PREFIX_COLOUR: override prefix colour
+# - _LK_COLOUR: default colour of prefix and MESSAGE2 (default: $LK_CYAN)
+# - _LK_ALT_COLOUR: default colour of prefix and MESSAGE2 for nested messages
+#   and output from lk_tty_detail et al (default: $LK_YELLOW)
+# - _LK_TTY_COLOUR: override prefix and MESSAGE2 colour
+# - _LK_TTY_PREFIX_COLOUR: override prefix colour (supersedes _LK_TTY_COLOUR)
 # - _LK_TTY_MESSAGE_COLOUR: override MESSAGE colour
-# - _LK_TTY_COLOUR2: override MESSAGE2 colour
+# - _LK_TTY_COLOUR2: override MESSAGE2 colour (supersedes _LK_TTY_COLOUR)
 function lk_tty_print() {
     [ $# -gt 0 ] || {
         echo >&"${_LK_FD-2}"
         return
     }
-    local MESSAGE=${1-} MESSAGE2=${2-} COLOUR=${3-$_LK_TTY_COLOUR} IFS SPACES \
-        PREFIX=${_LK_TTY_PREFIX-==> } NEWLINE=0 NEWLINE2=0 SEP=$'\n' INDENT=0
+    [ -z "${_LK_TTY_GROUP-}" ] ||
+        [ -z "${_LK_TTY_NEST[_LK_TTY_GROUP]-}" ] ||
+        [ "${FUNCNAME[2]-}" = "$FUNCNAME" ] || {
+        local FUNC
+        case "${FUNCNAME[1]-}" in
+        _lk_tty_detail2) ;;
+        lk_tty_*detail) FUNC=_lk_tty_detail2 ;;
+        *) FUNC=lk_tty_detail ;;
+        esac
+        [ -z "${FUNC-}" ] || {
+            "$FUNC" "$@"
+            return
+        }
+    }
+    local MESSAGE=${1-} MESSAGE2=${2-} \
+        COLOUR=${3-${_LK_TTY_COLOUR-$_LK_COLOUR}} \
+        PREFIX=${_LK_TTY_PREFIX-${_LK_TTY_PREFIX1-==> }} \
+        IFS MARGIN SPACES NEWLINE=0 NEWLINE2=0 SEP=$'\n' INDENT=0
     unset IFS
+    MARGIN=$(printf "%$((${_LK_TTY_GROUP:-0} * 4))s")
     [[ $MESSAGE != *$'\n'* ]] || {
         SPACES=$'\n'$(printf "%${#PREFIX}s")
-        MESSAGE=${MESSAGE//$'\n'/$SPACES}
+        MESSAGE=${MESSAGE//$'\n'/$SPACES$MARGIN}
         NEWLINE=1
         # _LK_TTY_ONE_LINE only makes sense when MESSAGE prints on one line
         local _LK_TTY_ONE_LINE=0
@@ -112,19 +151,27 @@ function lk_tty_print() {
         INDENT=${_LK_TTY_INDENT:-$INDENT}
         SPACES=$'\n'$(printf "%$((INDENT > 0 ? INDENT : 0))s")
         MESSAGE2=${MESSAGE:+$SEP}$MESSAGE2
-        MESSAGE2=${MESSAGE2//$'\n'/$SPACES}
+        MESSAGE2=${MESSAGE2//$'\n'/$SPACES$MARGIN}
     }
     _lk_tty_format -b PREFIX "$COLOUR" _LK_TTY_PREFIX_COLOUR
     _lk_tty_format -b MESSAGE "" _LK_TTY_MESSAGE_COLOUR
     [ -z "${MESSAGE2:+1}" ] ||
         _lk_tty_format MESSAGE2 "$COLOUR" _LK_TTY_COLOUR2
-    echo "$PREFIX$MESSAGE$MESSAGE2" >&"${_LK_FD-2}"
+    echo "$MARGIN$PREFIX$MESSAGE$MESSAGE2" >&"${_LK_FD-2}"
 }
 
 # lk_tty_detail MESSAGE [MESSAGE2 [COLOUR]]
 function lk_tty_detail() {
-    _LK_TTY_PREFIX=${_LK_TTY_PREFIX-   -> } \
-        _LK_TTY_COLOUR=$LK_YELLOW \
+    local _LK_TTY_COLOUR_ORIG=${_LK_COLOUR-}
+    _LK_TTY_PREFIX1=${_LK_TTY_PREFIX2- -> } \
+        _LK_COLOUR=${_LK_ALT_COLOUR-} \
+        _LK_TTY_MESSAGE_COLOUR=${_LK_TTY_MESSAGE_COLOUR-} \
+        lk_tty_print "$@"
+}
+
+function _lk_tty_detail2() {
+    _LK_TTY_PREFIX1=${_LK_TTY_PREFIX3-  - } \
+        _LK_COLOUR=${_LK_TTY_COLOUR_ORIG-$_LK_COLOUR} \
         _LK_TTY_MESSAGE_COLOUR=${_LK_TTY_MESSAGE_COLOUR-} \
         lk_tty_print "$@"
 }
@@ -133,16 +180,17 @@ function lk_tty_detail() {
 # - lk_tty_list [ARRAY [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
 function lk_tty_list() {
     local _ARRAY=${1:--} _MESSAGE=${2-List:} _SINGLE _PLURAL _COLOUR \
-        _PREFIX=${_LK_TTY_PREFIX-==> } _ITEMS _INDENT _LIST
+        _PREFIX=${_LK_TTY_PREFIX-${_LK_TTY_PREFIX1-==> }} \
+        _ITEMS _INDENT _COLUMNS _LIST
     [ $# -ge 2 ] || {
         _SINGLE=item
         _PLURAL=items
     }
-    _COLOUR=${3-$_LK_TTY_COLOUR}
+    _COLOUR=${3-${_LK_TTY_COLOUR-$_LK_COLOUR}}
     [ $# -le 3 ] || {
         _SINGLE=${3-}
         _PLURAL=${4-}
-        _COLOUR=${5-$_LK_TTY_COLOUR}
+        _COLOUR=${5-${_LK_TTY_COLOUR-$_LK_COLOUR}}
     }
     if [ "$_ARRAY" = - ]; then
         [ ! -t 0 ] && lk_mapfile _ITEMS ||
@@ -157,11 +205,12 @@ function lk_tty_list() {
         _INDENT=$((${#_PREFIX} + 2))
     fi
     _INDENT=${_LK_TTY_INDENT:-$_INDENT}
+    _COLUMNS=$(($(lk_tty_columns) - _INDENT - ${_LK_TTY_GROUP:-0} * 4))
     _LIST=$([ -z "${_ITEMS+1}" ] ||
         printf '%s\n' "${_ITEMS[@]}")
     ! lk_command_exists column expand ||
-        _LIST=$(COLUMNS=$(($(lk_tty_columns) - _INDENT)) column <<<"$_LIST" |
-            expand) || return
+        _LIST=$(COLUMNS=$((_COLUMNS > 0 ? _COLUMNS : 0)) \
+            column <<<"$_LIST" | expand) || return
     echo "$(
         _LK_FD=1
         _LK_TTY_PREFIX=$_PREFIX \
@@ -172,4 +221,14 @@ function lk_tty_list() {
     )" >&"${_LK_FD-2}"
 }
 
-#### Reviewed: 2021-10-04
+# - lk_tty_list_detail [- [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
+# - lk_tty_list_detail [ARRAY [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
+function lk_tty_list_detail() {
+    local _LK_TTY_COLOUR_ORIG=${_LK_COLOUR-}
+    _LK_TTY_PREFIX1=${_LK_TTY_PREFIX2- -> } \
+        _LK_COLOUR=${_LK_ALT_COLOUR-} \
+        _LK_TTY_MESSAGE_COLOUR=${_LK_TTY_MESSAGE_COLOUR-} \
+        lk_tty_list "$@"
+}
+
+#### Reviewed: 2021-10-10

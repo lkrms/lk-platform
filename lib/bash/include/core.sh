@@ -137,6 +137,23 @@ function lk_err() {
     lk_pass echo "${FUNCNAME[1 + ${_LK_STACK_DEPTH:-0}]-${0##*/}}: $1" >&2
 }
 
+# lk_trace [MESSAGE]
+function lk_trace() {
+    [ "${LK_DEBUG-}" = Y ] || return 0
+    local NOW
+    NOW=$(gnu_date +%s.%N) || return 0
+    _LK_TRACE_FIRST=${_LK_TRACE_FIRST:-$NOW}
+    printf '%s\t%s\t%s\t%s\t%s\n' \
+        "$NOW" \
+        "$_LK_TRACE_FIRST" \
+        "${_LK_TRACE_LAST:-$NOW}" \
+        "${1+${1::30}}" \
+        "${BASH_SOURCE[1]+${BASH_SOURCE[1]#$LK_BASE/}:${BASH_LINENO[0]}}" |
+        awk -F'\t' -v "d=$LK_DIM" -v "u=$LK_UNDIM" \
+            '{printf "%s%09.4f  +%.4f\t%-30s\t%s\n",d,$1-$2,$1-$3,$4,$5 u}' >&2
+    _LK_TRACE_LAST=$NOW
+}
+
 # lk_script_name [STACK_DEPTH]
 function lk_script_name() {
     local DEPTH=$((${1:-0} + ${_LK_STACK_DEPTH:-0})) NAME
@@ -185,6 +202,15 @@ function lk_plural() {
     [[ ! $1 =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] || eval "COUNT=\${#$1[@]}" || return
     VALUE="${VALUE:+$COUNT }"
     [ "$COUNT" = 1 ] && echo "$VALUE$2" || echo "$VALUE${3-$2s}"
+}
+
+function lk_maybe_local() {
+    local DEPTH=${1:-${_LK_STACK_DEPTH:-0}}
+    ((DEPTH < 0)) ||
+        case "${FUNCNAME[DEPTH + 2]-}" in
+        '' | source | main) ;;
+        *) printf 'local ' ;;
+        esac
 }
 
 # lk_no_input
@@ -493,10 +519,9 @@ function lk_filter_fqdn() {
 # print all available regular expressions.
 function lk_get_regex() {
     [ $# -gt 0 ] || set -- DOMAIN_PART_REGEX DOMAIN_NAME_REGEX EMAIL_ADDRESS_REGEX IPV4_REGEX IPV4_OPT_PREFIX_REGEX IPV6_REGEX IPV6_OPT_PREFIX_REGEX IP_REGEX IP_OPT_PREFIX_REGEX HOST_NAME_REGEX HOST_REGEX HOST_OPT_PREFIX_REGEX URI_REGEX URI_REGEX_REQ_SCHEME_HOST HTTP_HEADER_NAME LINUX_USERNAME_REGEX MYSQL_USERNAME_REGEX DPKG_SOURCE_REGEX IDENTIFIER_REGEX PHP_SETTING_NAME_REGEX PHP_SETTING_REGEX READLINE_NON_PRINTING_REGEX CONTROL_SEQUENCE_REGEX ESCAPE_SEQUENCE_REGEX NON_PRINTING_REGEX IPV4_PRIVATE_FILTER_REGEX BACKUP_TIMESTAMP_FINDUTILS_REGEX
-    local STATUS=0 PREFIX=
-    [[ ${FUNCNAME[1]-} =~ ^(main|source)?$ ]] || PREFIX="local "
+    local STATUS=0
     while [ $# -gt 0 ]; do
-        [ -z "$PREFIX" ] || printf '%s' "$PREFIX"
+        lk_maybe_local
         case "$1" in
         DOMAIN_PART_REGEX)
             printf '%s=%q\n' DOMAIN_PART_REGEX '[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?'
@@ -866,6 +891,25 @@ function lk_tty_length() {
     lk_strip_non_printing "$1" | awk 'NR == 1 { print length() }'
 }
 
+# lk_tty_group [[-n] MESSAGE [MESSAGE2 [COLOUR]]]
+function lk_tty_group() {
+    local NEST=
+    [ "${1-}" != -n ] || { NEST=1 && shift; }
+    _LK_TTY_GROUP=$((${_LK_TTY_GROUP:--1} + 1))
+    [ -n "${_LK_TTY_NEST+1}" ] || _LK_TTY_NEST=()
+    unset "_LK_TTY_NEST[_LK_TTY_GROUP]"
+    [ $# -eq 0 ] || {
+        lk_tty_print "$@"
+        _LK_TTY_NEST[_LK_TTY_GROUP]=$NEST
+    }
+}
+
+# lk_tty_group_end [COUNT]
+function lk_tty_group_end() {
+    _LK_TTY_GROUP=$((${_LK_TTY_GROUP:-0} - ${1:-1}))
+    ((_LK_TTY_GROUP > -1)) || unset _LK_TTY_GROUP _LK_TTY_NEST
+}
+
 # lk_tty_print [MESSAGE [MESSAGE2 [COLOUR]]]
 #
 # Write each message to the file descriptor set in _LK_FD or to the standard
@@ -880,21 +924,41 @@ function lk_tty_length() {
 #   lines will be aligned with the first (values: 0 or 1; default: 0)
 # - _LK_TTY_INDENT: MESSAGE2 indent (default: based on prefix length and message
 #   line counts)
-# - _LK_TTY_COLOUR: default colour for prefix and MESSAGE2 (default: $LK_CYAN)
-# - _LK_TTY_PREFIX_COLOUR: override prefix colour
+# - _LK_COLOUR: default colour of prefix and MESSAGE2 (default: $LK_CYAN)
+# - _LK_ALT_COLOUR: default colour of prefix and MESSAGE2 for nested messages
+#   and output from lk_tty_detail et al (default: $LK_YELLOW)
+# - _LK_TTY_COLOUR: override prefix and MESSAGE2 colour
+# - _LK_TTY_PREFIX_COLOUR: override prefix colour (supersedes _LK_TTY_COLOUR)
 # - _LK_TTY_MESSAGE_COLOUR: override MESSAGE colour
-# - _LK_TTY_COLOUR2: override MESSAGE2 colour
+# - _LK_TTY_COLOUR2: override MESSAGE2 colour (supersedes _LK_TTY_COLOUR)
 function lk_tty_print() {
     [ $# -gt 0 ] || {
         echo >&"${_LK_FD-2}"
         return
     }
-    local MESSAGE=${1-} MESSAGE2=${2-} COLOUR=${3-$_LK_TTY_COLOUR} IFS SPACES \
-        PREFIX=${_LK_TTY_PREFIX-==> } NEWLINE=0 NEWLINE2=0 SEP=$'\n' INDENT=0
+    [ -z "${_LK_TTY_GROUP-}" ] ||
+        [ -z "${_LK_TTY_NEST[_LK_TTY_GROUP]-}" ] ||
+        [ "${FUNCNAME[2]-}" = "$FUNCNAME" ] || {
+        local FUNC
+        case "${FUNCNAME[1]-}" in
+        _lk_tty_detail2) ;;
+        lk_tty_*detail) FUNC=_lk_tty_detail2 ;;
+        *) FUNC=lk_tty_detail ;;
+        esac
+        [ -z "${FUNC-}" ] || {
+            "$FUNC" "$@"
+            return
+        }
+    }
+    local MESSAGE=${1-} MESSAGE2=${2-} \
+        COLOUR=${3-${_LK_TTY_COLOUR-$_LK_COLOUR}} \
+        PREFIX=${_LK_TTY_PREFIX-${_LK_TTY_PREFIX1-==> }} \
+        IFS MARGIN SPACES NEWLINE=0 NEWLINE2=0 SEP=$'\n' INDENT=0
     unset IFS
+    MARGIN=$(printf "%$((${_LK_TTY_GROUP:-0} * 4))s")
     [[ $MESSAGE != *$'\n'* ]] || {
         SPACES=$'\n'$(printf "%${#PREFIX}s")
-        MESSAGE=${MESSAGE//$'\n'/$SPACES}
+        MESSAGE=${MESSAGE//$'\n'/$SPACES$MARGIN}
         NEWLINE=1
         # _LK_TTY_ONE_LINE only makes sense when MESSAGE prints on one line
         local _LK_TTY_ONE_LINE=0
@@ -922,19 +986,27 @@ function lk_tty_print() {
         INDENT=${_LK_TTY_INDENT:-$INDENT}
         SPACES=$'\n'$(printf "%$((INDENT > 0 ? INDENT : 0))s")
         MESSAGE2=${MESSAGE:+$SEP}$MESSAGE2
-        MESSAGE2=${MESSAGE2//$'\n'/$SPACES}
+        MESSAGE2=${MESSAGE2//$'\n'/$SPACES$MARGIN}
     }
     _lk_tty_format -b PREFIX "$COLOUR" _LK_TTY_PREFIX_COLOUR
     _lk_tty_format -b MESSAGE "" _LK_TTY_MESSAGE_COLOUR
     [ -z "${MESSAGE2:+1}" ] ||
         _lk_tty_format MESSAGE2 "$COLOUR" _LK_TTY_COLOUR2
-    echo "$PREFIX$MESSAGE$MESSAGE2" >&"${_LK_FD-2}"
+    echo "$MARGIN$PREFIX$MESSAGE$MESSAGE2" >&"${_LK_FD-2}"
 }
 
 # lk_tty_detail MESSAGE [MESSAGE2 [COLOUR]]
 function lk_tty_detail() {
-    _LK_TTY_PREFIX=${_LK_TTY_PREFIX-   -> } \
-        _LK_TTY_COLOUR=$LK_YELLOW \
+    local _LK_TTY_COLOUR_ORIG=${_LK_COLOUR-}
+    _LK_TTY_PREFIX1=${_LK_TTY_PREFIX2- -> } \
+        _LK_COLOUR=${_LK_ALT_COLOUR-} \
+        _LK_TTY_MESSAGE_COLOUR=${_LK_TTY_MESSAGE_COLOUR-} \
+        lk_tty_print "$@"
+}
+
+function _lk_tty_detail2() {
+    _LK_TTY_PREFIX1=${_LK_TTY_PREFIX3-  - } \
+        _LK_COLOUR=${_LK_TTY_COLOUR_ORIG-$_LK_COLOUR} \
         _LK_TTY_MESSAGE_COLOUR=${_LK_TTY_MESSAGE_COLOUR-} \
         lk_tty_print "$@"
 }
@@ -943,16 +1015,17 @@ function lk_tty_detail() {
 # - lk_tty_list [ARRAY [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
 function lk_tty_list() {
     local _ARRAY=${1:--} _MESSAGE=${2-List:} _SINGLE _PLURAL _COLOUR \
-        _PREFIX=${_LK_TTY_PREFIX-==> } _ITEMS _INDENT _LIST
+        _PREFIX=${_LK_TTY_PREFIX-${_LK_TTY_PREFIX1-==> }} \
+        _ITEMS _INDENT _COLUMNS _LIST
     [ $# -ge 2 ] || {
         _SINGLE=item
         _PLURAL=items
     }
-    _COLOUR=${3-$_LK_TTY_COLOUR}
+    _COLOUR=${3-${_LK_TTY_COLOUR-$_LK_COLOUR}}
     [ $# -le 3 ] || {
         _SINGLE=${3-}
         _PLURAL=${4-}
-        _COLOUR=${5-$_LK_TTY_COLOUR}
+        _COLOUR=${5-${_LK_TTY_COLOUR-$_LK_COLOUR}}
     }
     if [ "$_ARRAY" = - ]; then
         [ ! -t 0 ] && lk_mapfile _ITEMS ||
@@ -967,11 +1040,12 @@ function lk_tty_list() {
         _INDENT=$((${#_PREFIX} + 2))
     fi
     _INDENT=${_LK_TTY_INDENT:-$_INDENT}
+    _COLUMNS=$(($(lk_tty_columns) - _INDENT - ${_LK_TTY_GROUP:-0} * 4))
     _LIST=$([ -z "${_ITEMS+1}" ] ||
         printf '%s\n' "${_ITEMS[@]}")
     ! lk_command_exists column expand ||
-        _LIST=$(COLUMNS=$(($(lk_tty_columns) - _INDENT)) column <<<"$_LIST" |
-            expand) || return
+        _LIST=$(COLUMNS=$((_COLUMNS > 0 ? _COLUMNS : 0)) \
+            column <<<"$_LIST" | expand) || return
     echo "$(
         _LK_FD=1
         _LK_TTY_PREFIX=$_PREFIX \
@@ -982,11 +1056,21 @@ function lk_tty_list() {
     )" >&"${_LK_FD-2}"
 }
 
+# - lk_tty_list_detail [- [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
+# - lk_tty_list_detail [ARRAY [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
+function lk_tty_list_detail() {
+    local _LK_TTY_COLOUR_ORIG=${_LK_COLOUR-}
+    _LK_TTY_PREFIX1=${_LK_TTY_PREFIX2- -> } \
+        _LK_COLOUR=${_LK_ALT_COLOUR-} \
+        _LK_TTY_MESSAGE_COLOUR=${_LK_TTY_MESSAGE_COLOUR-} \
+        lk_tty_list "$@"
+}
+
 function _lk_tty_prompt() {
     unset IFS
     PREFIX=" :: "
     PROMPT=${_PROMPT[*]}
-    _lk_tty_format_readline -b PREFIX "$_LK_TTY_COLOUR" _LK_TTY_PREFIX_COLOUR
+    _lk_tty_format_readline -b PREFIX "${_LK_TTY_COLOUR-$_LK_COLOUR}" _LK_TTY_PREFIX_COLOUR
     _lk_tty_format_readline -b PROMPT "" _LK_TTY_MESSAGE_COLOUR
     echo "$PREFIX$PROMPT "
 }
@@ -1348,10 +1432,11 @@ function lk_uri_encode() {
 lk_command_first_existing() { lk_first_command "$@"; }
 lk_confirm() { lk_tty_yn "$@"; }
 lk_console_blank() { lk_tty_print; }
+lk_console_detail_list() { lk_tty_list_detail - "$@"; }
 lk_console_detail() { lk_tty_detail "$@"; }
-lk_console_item() { lk_tty_print "$1" "$2" "${3-$_LK_TTY_COLOUR}"; }
+lk_console_item() { lk_tty_print "$1" "$2" "${3-${_LK_TTY_COLOUR-$_LK_COLOUR}}"; }
 lk_console_list() { lk_tty_list - "$@"; }
-lk_console_message() { lk_tty_print "${1-}" "${3+$2}" "${3-${2-$_LK_TTY_COLOUR}}"; }
+lk_console_message() { lk_tty_print "${1-}" "${3+$2}" "${3-${2-${_LK_TTY_COLOUR-$_LK_COLOUR}}}"; }
 lk_console_read_secret() { local r && lk_tty_read_silent "$1" r "${@:2}" && echo "$r"; }
 lk_console_read() { local r && lk_tty_read "$1" r "${@:2}" && echo "$r"; }
 lk_echo_array() { lk_arr "$@"; }
@@ -1401,16 +1486,6 @@ function lk_mktemp_file() {
 
 function lk_mktemp_dir() {
     _lk_mktemp -d
-}
-
-function _lk_var_prefix() {
-    [ "${_LK_STACK_DEPTH:-0}" -ge 0 ] || return 0
-    case "${FUNCNAME[${_LK_STACK_DEPTH:-0} + 2]-}" in
-    '' | source | main)
-        return
-        ;;
-    esac
-    printf 'local '
 }
 
 if lk_bash_at_least 4 2; then
@@ -1502,7 +1577,7 @@ function lk_get_shell_var() {
 
 function lk_get_quoted_var() {
     while [ $# -gt 0 ]; do
-        _lk_var_prefix
+        lk_maybe_local
         if [ -n "${!1-}" ]; then
             printf '%s=%q\n' "$1" "${!1}"
         else
@@ -1523,7 +1598,7 @@ function lk_get_env() {
     fi | awk \
         -v var="$(lk_regex_implode "$@")" \
         -v var_list="$_LK_VAR_LIST" \
-        -v prefix="$(_lk_var_prefix)" \
+        -v prefix="$(lk_maybe_local)" \
         'BEGIN {
     declare = "^declare -[^ ]+ "
     any_var = "[a-zA-Z_][a-zA-Z0-9_]*"
@@ -1845,7 +1920,7 @@ function _lk_get_colour() {
 # lk_get_colours [PREFIX]
 function lk_get_colours() {
     local PREFIX
-    PREFIX=$(_lk_var_prefix)${1-LK_}
+    PREFIX=$(lk_maybe_local)${1-LK_}
     _lk_get_colour \
         BLACK "setaf 0" \
         RED "setaf 1" \
@@ -2105,7 +2180,7 @@ function lk_get_outputs_of() {
         unset _LK_FD
         "$@" >"$_LK_STDOUT" 2>"$_LK_STDERR" || EXIT_STATUS=$?
         for i in _LK_STDOUT _LK_STDERR; do
-            _lk_var_prefix
+            lk_maybe_local
             printf '%s=%q\n' "${i#_LK}" "$(cat "${!i}" |
                 lk_strip_non_printing)"
         done
@@ -2638,17 +2713,6 @@ function lk_tty_detail_pairs() {
     lk_tty_pairs ${ARGS[@]+"${ARGS[@]}"} "${1-$LK_YELLOW}"
 } #### Reviewed: 2021-03-22
 
-# lk_console_detail_list MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]
-function lk_console_detail_list() {
-    local _LK_TTY_PREFIX=${_LK_TTY_PREFIX-   -> } \
-        _LK_TTY_MESSAGE_COLOUR=${_LK_TTY_MESSAGE_COLOUR-}
-    if [ $# -le 2 ]; then
-        lk_console_list "$1" "${2-$LK_YELLOW}"
-    else
-        lk_console_list "${@:1:3}" "${4-$LK_YELLOW}"
-    fi
-}
-
 # lk_console_detail_file FILE [COLOUR [FILE_COLOUR]]
 function lk_console_detail_file() {
     local _LK_TTY_PREFIX=${_LK_TTY_PREFIX-  >>> } \
@@ -2695,7 +2759,7 @@ function _lk_tty_log() {
 # command's exit status. If -n is set, don't output MESSAGE2 in bold.
 function lk_console_log() {
     _LK_TTY_PREFIX=${_LK_TTY_PREFIX-" :: "} \
-        _lk_tty_log "$_LK_TTY_COLOUR" "$@"
+        _lk_tty_log "${_LK_TTY_COLOUR-$_LK_COLOUR}" "$@"
 }
 
 # lk_console_success [-r] [-n] MESSAGE [MESSAGE2...]
@@ -2734,7 +2798,7 @@ function lk_console_error() {
 # empty string, use the output of `eval COMMAND...` or read from input.
 function lk_tty_dump() {
     local BOLD_COLOUR SPACES \
-        COLOUR=${4-${_LK_TTY_MESSAGE_COLOUR-$_LK_TTY_COLOUR}} \
+        COLOUR=${4-${_LK_TTY_MESSAGE_COLOUR-${_LK_TTY_COLOUR-$_LK_COLOUR}}} \
         _LK_TTY_COLOUR2=${5-${_LK_TTY_COLOUR2-}} \
         _LK_TTY_PREFIX=${_LK_TTY_PREFIX->>> } \
         _LK_TTY_INDENT=${_LK_TTY_INDENT:-0} \
@@ -2770,7 +2834,7 @@ function lk_tty_file() {
     lk_maybe_sudo cat "$1" | lk_tty_dump "" \
         "$1" \
         "$MESSAGE2" \
-        "${2-${_LK_TTY_MESSAGE_COLOUR-$_LK_TTY_COLOUR}}" \
+        "${2-${_LK_TTY_MESSAGE_COLOUR-${_LK_TTY_COLOUR-$_LK_COLOUR}}}" \
         "${3-${_LK_TTY_COLOUR2-}}"
 }
 
@@ -3039,7 +3103,7 @@ function lk_uri_parts() {
             return 1
             ;;
         esac
-        _lk_var_prefix
+        lk_maybe_local
         printf '%s=%q\n' "$PART" "$VALUE"
     done
 }
@@ -3643,10 +3707,10 @@ function lk_jq_get_shell_var() {
     done
     [ $# -gt 0 ] && ! (($# % 2)) || lk_warn "invalid arguments" || return
     JQ=$(printf '"%s":(%s),' "$@")
-    JQ='include "core"; {'${JQ%,}'} | to_sh($_lk_var_prefix)'
+    JQ='include "core"; {'${JQ%,}'} | to_sh($_prefix)'
     lk_jq -r \
         ${ARGS[@]+"${ARGS[@]}"} \
-        --arg _lk_var_prefix "$(_lk_var_prefix)" \
+        --arg _prefix "$(lk_maybe_local)" \
         "$JQ"
 }
 
@@ -4182,7 +4246,8 @@ else
     esac
 fi
 
-_LK_TTY_COLOUR=$LK_CYAN
+_LK_COLOUR=$LK_CYAN
+_LK_ALT_COLOUR=$LK_YELLOW
 _LK_SUCCESS_COLOUR=$LK_GREEN
 _LK_WARNING_COLOUR=$LK_YELLOW
 _LK_ERROR_COLOUR=$LK_RED

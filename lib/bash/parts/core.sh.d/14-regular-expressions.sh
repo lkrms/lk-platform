@@ -184,10 +184,9 @@ printf '# lk_get_regex [REGEX...]
 # print all available regular expressions.
 function lk_get_regex() {
     [ $# -gt 0 ] || set -- %s
-    local STATUS=0 PREFIX=
-    [[ ${FUNCNAME[1]-} =~ ^(main|source)?$ ]] || PREFIX="local "
+    local STATUS=0
     while [ $# -gt 0 ]; do
-        [ -z "$PREFIX" ] || printf '\''%%s'\'' "$PREFIX"
+        lk_maybe_local
         case "$1" in' \
     "${ALL[*]}"
 for REGEX in "${ALL[@]}"; do
