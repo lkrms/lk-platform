@@ -1,24 +1,46 @@
 #!/bin/bash
 
 set -euo pipefail
-_DEPTH=2
-_FILE=${BASH_SOURCE[0]}
-lk_die() { s=$? && echo "$_FILE: $1" >&2 && (exit $s) && false || exit; }
-{ type -P realpath || { type -P python && realpath() { python -c \
-    "import os,sys;print(os.path.realpath(sys.argv[1]))" "$1"; }; }; } \
-    >/dev/null || lk_die "command not found: realpath"
-_FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
-    LK_BASE=$(realpath "$_DIR$(eval printf '/..%.s' $(seq 1 "$_DEPTH"))") &&
-    [ -d "$LK_BASE/lib/bash" ] ||
-    lk_die "unable to locate LK_BASE"
-export LK_BASE
+lk_die() { echo "${BASH_SOURCE-$0}: $1" >&2 && false || exit; }
+
+_DIR=${BASH_SOURCE%${BASH_SOURCE##*/}}
+LK_BASE=$(cd "${_DIR:-.}/../.." && pwd -P) &&
+    [ "$LK_BASE/lib/platform/${BASH_SOURCE##*/}" -ef "$BASH_SOURCE" ] &&
+    export LK_BASE || lk_die "LK_BASE not found"
 
 . "$LK_BASE/lib/bash/common.sh"
 
-[ $# -gt 0 ] &&
-    { lk_command_exists "$1" || lk_warn "command not found: $1"; } ||
-    lk_usage "\
-Usage: ${0##*/} COMMAND [ARG...]"
+LK_USAGE="\
+Usage: ${0##*/} [OPTION...] -- COMMAND [ARG...]
+
+Run COMMAND in a standard lk-platform shell environment with output logging
+enabled. COMMAND is interpreted by Bash and may therefore be a shell builtin
+or function.
+
+OPTIONS
+
+    -i, --include=LIBRARY   call \`lk_include LIBRARY\` before running COMMAND
+                            (may be given multiple times)"
+
+lk_getopt "i:" "include:"
+eval "set -- $LK_GETOPT"
+
+while :; do
+    OPT=$1
+    shift
+    case "$OPT" in
+    -i | --include)
+        lk_include "$1" || lk_warn "invalid library: $1" || lk_usage
+        shift
+        ;;
+    --)
+        break
+        ;;
+    esac
+done
+
+[ $# -gt 0 ] || lk_usage
+type -t "$1" >/dev/null || lk_warn "command not found: $1" || lk_usage
 
 [ -n "${_LK_LOG_BASENAME-}" ] ||
     _LK_LOG_BASENAME=${1##*/}-$(lk_md5 "$@")

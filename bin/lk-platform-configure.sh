@@ -21,13 +21,13 @@ set -o pipefail
 
 set -eu
 SH=$(
-    die() { echo "${BASH_SOURCE:-$0}: $1" >&2 && false || exit; }
+    lk_die() { echo "${BASH_SOURCE-$0}: $1" >&2 && false || exit; }
     _FILE=$BASH_SOURCE && [ -f "$_FILE" ] && [ ! -L "$_FILE" ] ||
-        die "script must be invoked directly"
+        lk_die "script must be invoked directly"
     [[ $_FILE == */* ]] || _FILE=./$_FILE
     _DIR=$(cd "${_FILE%/*}" && pwd -P) &&
         printf 'export _LK_INST=%q\n' "${_DIR%/bin}" ||
-        die "base directory not found"
+        lk_die "base directory not found"
     # Override LK_* environment variables with the same name as settings in
     # $LK_BASE/etc/lk-platform/lk-platform.conf
     vars() { printf '%s\n' "${!LK_@}"; }

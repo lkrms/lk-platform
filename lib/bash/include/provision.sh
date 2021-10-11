@@ -1791,7 +1791,7 @@ function lk_check_user_config() {
 
 # _lk_crontab REMOVE_REGEX ADD_COMMAND
 function _lk_crontab() {
-    local REGEX=${1:+".*$1.*"} ADD_COMMAND=${2-} TYPE=${2:+a}${1:+r} \
+    local REGEX="${1:+.*$1.*}" ADD_COMMAND=${2-} TYPE=${2:+a}${1:+r} \
         CRONTAB NEW= NEW_CRONTAB
     lk_command_exists crontab || lk_warn "command not found: crontab" || return
     CRONTAB=$(lk_maybe_sudo crontab -l 2>/dev/null) &&
@@ -1803,12 +1803,13 @@ function _lk_crontab() {
     case "$TYPE" in
     a | ar)
         REGEX=${REGEX:-"^$S*$(lk_regex_expand_whitespace \
-            "$(lk_escape_ere "$ADD_COMMAND")")$S*\$"}
+            "$(lk_ere_escape "$ADD_COMMAND")")$S*\$"}
         # If the command is already present, replace the first occurrence and
         # delete any duplicates
         if grep -E "$REGEX" >/dev/null <<<"$CRONTAB"; then
+            REGEX=${REGEX//\//\\\/}
             NEW_CRONTAB=$(gnu_sed -E "0,/$REGEX/{s/$REGEX/$(
-                lk_escape_ere_replace "$ADD_COMMAND"
+                lk_sed_escape_replace "$ADD_COMMAND"
             )/};t;/$REGEX/d" <<<"$CRONTAB")
         else
             # Otherwise, add it to the end of the file
@@ -1816,7 +1817,7 @@ function _lk_crontab() {
         fi
         ;;
     r)
-        NEW_CRONTAB=$(sed -E "/$REGEX/d" <<<"$CRONTAB")
+        NEW_CRONTAB=$(sed -E "/${REGEX//\//\\\/}/d" <<<"$CRONTAB")
         ;;
     *)
         false || lk_warn "invalid arguments"
@@ -1858,7 +1859,7 @@ function lk_crontab_apply() {
 function lk_crontab_remove_command() {
     [ -n "${1-}" ] || lk_warn "no command" || return
     _lk_crontab "^$S*[^#[:blank:]].*$S$(lk_regex_expand_whitespace \
-        "$(lk_escape_ere "$1")")($S|\$)" ""
+        "$(lk_ere_escape "$1")")($S|\$)" ""
 }
 
 # lk_crontab_get REGEX

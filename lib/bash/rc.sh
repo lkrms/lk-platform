@@ -4,13 +4,13 @@ unset _LK_PROMPT_DISPLAYED
 
 SH=$(
     set -u
-    die() { echo "${BASH_SOURCE:-$0}: $1" >&2 && false || exit; }
+    lk_die() { echo "${BASH_SOURCE-$0}: $1" >&2 && false || exit; }
     _FILE=$BASH_SOURCE && [ -f "$_FILE" ] && [ ! -L "$_FILE" ] ||
-        die "script must be sourced directly"
+        lk_die "script must be sourced directly"
     [[ $_FILE == */* ]] || _FILE=./$_FILE
     _DIR=$(cd "${_FILE%/*}" && pwd -P) &&
         printf 'export LK_BASE=%q\n' "${_DIR%/lib/bash}" ||
-        die "LK_BASE not found"
+        lk_die "LK_BASE not found"
     # Discard settings with the same name as LK_* variables in the environment
     # and add any that remain to the global scope
     vars() { printf '%s\n' "${!LK_@}"; }
