@@ -15,6 +15,7 @@ SHUFFLE_SALTS=0
 EXCLUDE=()
 DEFAULT_DB_NAME=
 DEFAULT_DB_USER=
+NO_WAIT=
 
 LK_USAGE="\
 Usage: ${0##*/} [OPTION...] SSH_HOST [-- RSYNC_ARG...]
@@ -41,6 +42,8 @@ Options:
                             (may be given multiple times)
       --db-name=DB_NAME     if local connection fails, use database DB_NAME
       --db-user=DB_USER     if local connection fails, use MySQL user DB_USER
+      --no-wait             skip 60-second delay after activating permanent
+                            maintenance mode on remote system
 
 Maintenance modes (for remote system only):
   ignore/off    do not activate or deactivate
@@ -55,7 +58,7 @@ maintenance mode on the remote system, then run the final migration with
 '--maintenance=permanent' before updating DNS."
 
 lk_getopt "s:d:m:p:r:icte:" \
-    "source:,dest:,maintenance:,deactivate:,rename:,innodb,ssl-cert,shuffle-salts,exclude:,db-name:,db-user:"
+    "source:,dest:,maintenance:,deactivate:,rename:,innodb,ssl-cert,shuffle-salts,exclude:,db-name:,db-user:,no-wait"
 eval "set -- $LK_GETOPT"
 
 while :; do
@@ -105,6 +108,9 @@ while :; do
     --db-user)
         DEFAULT_DB_USER=$1
         shift
+        ;;
+    --no-wait)
+        NO_WAIT=1
         ;;
     --)
         break
@@ -175,7 +181,7 @@ if [[ $MAINTENANCE =~ ^(on|permanent)$ ]]; then
         "$REMOTE_PATH" < <(lk_wp_maintenance_get_php)
 fi
 
-! is_final || {
+! is_final || [ -n "$NO_WAIT" ] || {
     lk_console_message "Waiting 60 seconds for active requests to complete"
     sleep 60
 }
