@@ -744,11 +744,9 @@ function lk_hosting_configure_backup() {
         AUTO_REBOOT=${LK_AUTO_REBOOT-} \
         AUTO_REBOOT_TIME=${LK_AUTO_REBOOT_TIME-} \
         REGEX INHIBIT_PATH
-    REGEX="($({ lk_escape_ere "\
-$LK_BASE/lib/hosting/backup-all.sh" &&
-        lk_escape_ere "\
-${LK_BASE%/*}/${LK_PATH_PREFIX}platform/lib/hosting/backup-all.sh"; } |
-        sort -u | lk_implode_input "|"))"
+    REGEX=$(printf '%s\n' "$LK_BASE/lib/hosting/backup-all.sh" \
+        "${LK_BASE%/*}/${LK_PATH_PREFIX}platform/lib/hosting/backup-all.sh" |
+        sort -u | lk_ere_implode_input -e)
     lk_tty_print "Configuring automatic backups"
     if lk_is_false LK_AUTO_BACKUP; then
         lk_console_error \

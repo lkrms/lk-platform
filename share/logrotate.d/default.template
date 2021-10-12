@@ -5,4 +5,5 @@
 	compress
 	delaycompress
 	notifempty
+	su {{LK_PLATFORM_OWNER}}
 }

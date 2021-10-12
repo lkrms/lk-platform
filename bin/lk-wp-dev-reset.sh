@@ -256,7 +256,7 @@ SQL
 
 ((!INNODB)) ||
     _LK_WP_QUIET=1 LK_VERBOSE=1 \
-        lk_wp_db_myisam_to_innodb
+        lk_wp_db_myisam_to_innodb -n
 
 if lk_wp config has WP_CACHE --type=constant; then
     lk_tty_print "Disabling WP_CACHE"

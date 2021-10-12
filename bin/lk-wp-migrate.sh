@@ -197,7 +197,7 @@ LK_NO_INPUT=1 \
 if [ "$INNODB" -eq 1 ]; then
     SH=$(lk_wp_db_get_vars)
     eval "$SH"
-    lk_wp_db_myisam_to_innodb
+    lk_wp_db_myisam_to_innodb -n
 fi
 if [ "$SHUFFLE_SALTS" -eq 1 ]; then
     lk_console_message "Refreshing salts defined in wp-config.php"

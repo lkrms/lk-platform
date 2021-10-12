@@ -186,11 +186,11 @@ function lk_tty_list() {
         _SINGLE=item
         _PLURAL=items
     }
-    _COLOUR=${3-${_LK_TTY_COLOUR-$_LK_COLOUR}}
+    _COLOUR=3
     [ $# -le 3 ] || {
         _SINGLE=${3-}
         _PLURAL=${4-}
-        _COLOUR=${5-${_LK_TTY_COLOUR-$_LK_COLOUR}}
+        _COLOUR=5
     }
     if [ "$_ARRAY" = - ]; then
         [ ! -t 0 ] && lk_mapfile _ITEMS ||
@@ -213,8 +213,7 @@ function lk_tty_list() {
             column <<<"$_LIST" | expand) || return
     echo "$(
         _LK_FD=1
-        _LK_TTY_PREFIX=$_PREFIX \
-            lk_tty_print "$_MESSAGE" $'\n'"$_LIST" "$_COLOUR"
+        lk_tty_print "$_MESSAGE" $'\n'"$_LIST" ${!_COLOUR+"${!_COLOUR}"}
         [ -z "${_SINGLE:+${_PLURAL:+1}}" ] ||
             _LK_TTY_PREFIX=$(printf "%$((_INDENT > 0 ? _INDENT : 0))s") \
                 lk_tty_detail "($(lk_plural -v _ITEMS "$_SINGLE" "$_PLURAL"))"

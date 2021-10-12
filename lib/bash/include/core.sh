@@ -1021,11 +1021,11 @@ function lk_tty_list() {
         _SINGLE=item
         _PLURAL=items
     }
-    _COLOUR=${3-${_LK_TTY_COLOUR-$_LK_COLOUR}}
+    _COLOUR=3
     [ $# -le 3 ] || {
         _SINGLE=${3-}
         _PLURAL=${4-}
-        _COLOUR=${5-${_LK_TTY_COLOUR-$_LK_COLOUR}}
+        _COLOUR=5
     }
     if [ "$_ARRAY" = - ]; then
         [ ! -t 0 ] && lk_mapfile _ITEMS ||
@@ -1048,8 +1048,7 @@ function lk_tty_list() {
             column <<<"$_LIST" | expand) || return
     echo "$(
         _LK_FD=1
-        _LK_TTY_PREFIX=$_PREFIX \
-            lk_tty_print "$_MESSAGE" $'\n'"$_LIST" "$_COLOUR"
+        lk_tty_print "$_MESSAGE" $'\n'"$_LIST" ${!_COLOUR+"${!_COLOUR}"}
         [ -z "${_SINGLE:+${_PLURAL:+1}}" ] ||
             _LK_TTY_PREFIX=$(printf "%$((_INDENT > 0 ? _INDENT : 0))s") \
                 lk_tty_detail "($(lk_plural -v _ITEMS "$_SINGLE" "$_PLURAL"))"
@@ -2278,7 +2277,7 @@ function lk_log_create_file() {
     local OWNER=$UID GROUP EXT CMD LOG_DIRS=() LOG_DIR LOG_PATH
     GROUP=$(id -gn) || return
     [ "${1-}" != -e ] || { EXT=$2 && shift 2; }
-    CMD=${_LK_LOG_CMDLINE[0]:-$0}
+    CMD=${_LK_LOG_CMDLINE:-$0}
     [ ! -d "${_LK_INST:-${LK_BASE-}}" ] ||
         [ -z "$(ls -A "${_LK_INST:-$LK_BASE}")" ] ||
         LOG_DIRS=("${_LK_INST:-$LK_BASE}/var/log")
@@ -2344,12 +2343,13 @@ function lk_log_start() {
     if [ "${LK_NO_LOG-}" = 1 ] || lk_log_is_open ||
         { [[ $- == *i* ]] && ! lk_script_running; }; then
         return
-    elif [ -z "${_LK_LOG_CMDLINE+1}" ]; then
-        local _LK_LOG_CMDLINE=("$0" ${_LK_ARGV+"${_LK_ARGV[@]}"})
     fi
-    ARG0=$(type -P "${_LK_LOG_CMDLINE[0]}") &&
-        ARG0=$(lk_realpath "$ARG0") || ARG0=${_LK_LOG_CMDLINE[0]##*/}
-    _LK_LOG_CMDLINE[0]=$ARG0
+    ARG0=$(type -p "${_LK_LOG_CMDLINE:-$0}") &&
+        ARG0=${ARG0:-${_LK_LOG_CMDLINE+"Bash $(type -t \
+            "$_LK_LOG_CMDLINE") $_LK_LOG_CMDLINE"}} || ARG0=
+    [ -n "${_LK_LOG_CMDLINE+1}" ] ||
+        local _LK_LOG_CMDLINE=("$0" ${_LK_ARGV+"${_LK_ARGV[@]}"})
+    _LK_LOG_CMDLINE[0]=${ARG0:-$_LK_LOG_CMDLINE}
     HEADER=$(
         printf '====> %s invoked' "$LK_BOLD$ARG0$LK_RESET"
         ! ((ARGC = ${#_LK_LOG_CMDLINE[@]} - 1)) || {

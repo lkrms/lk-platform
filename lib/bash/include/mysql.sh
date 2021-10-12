@@ -144,26 +144,24 @@ WHERE TABLE_TYPE = 'BASE TABLE'
 }
 
 # lk_mysql_myisam_to_innodb DB_NAME
-function lk_mysql_myisam_to_innodb() {
+function lk_mysql_myisam_to_innodb() { (
     [ $# -eq 1 ] || lk_usage "Usage: $FUNCNAME DB_NAME" || return
-    lk_mysql_list <<<"SELECT TABLE_NAME
+    lk_mktemp_with TABLES lk_mysql_list <<<"SELECT TABLE_NAME
 FROM information_schema.TABLES
 WHERE TABLE_TYPE = 'BASE TABLE'
     AND ENGINE = 'MyISAM'
-    AND TABLE_SCHEMA = '$(lk_mysql_escape "$1")'" | (
-        lk_mktemp_with SQL sed -E 's/.*/ALTER TABLE & ENGINE=InnoDB;/' || return
-        if [ -s "$SQL" ]; then
-            lk_mysql_is_quiet || lk_tty_print \
-                "Converting MyISAM tables to InnoDB in database '$1':" \
-                $'\n'"$(<"$SQL")"
-            lk_mysql "$1" <"$SQL" &&
-                lk_console_success "Tables converted successfully" ||
-                lk_console_error -r "Table conversion failed"
-        else
-            lk_console_success "No MyISAM tables in database:" "$1"
-        fi
-    )
-}
+    AND TABLE_SCHEMA = '$(lk_mysql_escape "$1")'" || return
+    if [ -s "$TABLES" ]; then
+        lk_tty_list - "Converting to InnoDB from MyISAM in database '$1':" \
+            table tables <"$TABLES"
+        sed -E 's/.*/ALTER TABLE & ENGINE=InnoDB;/' "$TABLES" |
+            lk_mysql "$1" &&
+            lk_console_success "Tables converted successfully" ||
+            lk_console_error -r "Table conversion failed"
+    else
+        lk_console_success "No MyISAM tables in database:" "$1"
+    fi
+); }
 
 # lk_mysql_dump DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]
 function lk_mysql_dump() {
@@ -181,9 +179,9 @@ Usage: $FUNCNAME DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
         LK_MYSQL_ELEVATE=1
     else
         LK_MY_CNF=~/.lk_mysqldump.cnf
-        lk_console_message "Creating temporary mysqldump configuration file"
-        lk_console_detail "Adding credentials for user" "$DB_USER"
-        lk_console_detail "Writing" "$LK_MY_CNF"
+        lk_tty_print "Creating temporary mysqldump configuration file"
+        lk_tty_detail "Adding credentials for user" "$DB_USER"
+        lk_tty_detail "Writing" "$LK_MY_CNF"
         lk_mysql_write_cnf
     fi
     lk_mysql_connects "$DB_NAME" 2>/dev/null ||
@@ -211,18 +209,18 @@ Usage: $FUNCNAME DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
     fi
     DUMP_ARGS+=(--no-tablespaces)
     lk_mysql_is_quiet || {
-        lk_console_item "Dumping database:" "$DB_NAME"
-        lk_console_detail "Host:" "$DB_HOST"
+        lk_tty_print "Dumping database:" "$DB_NAME"
+        lk_tty_detail "Host:" "$DB_HOST"
     }
     { lk_mysql_is_quiet && ((INNODB_ONLY)); } || {
-        lk_console_detail "InnoDB only?" "${ARG_COLOUR+$ARG_COLOUR}$(
+        lk_tty_detail "InnoDB only?" "${ARG_COLOUR+$ARG_COLOUR}$(
             ((INNODB_ONLY)) && echo yes || echo no
         )${ARG_COLOUR+$LK_RESET}"
-        lk_console_detail "mysqldump arguments:" \
+        lk_tty_detail "mysqldump arguments:" \
             "${ARG_COLOUR+$ARG_COLOUR}${DUMP_ARGS[*]}${ARG_COLOUR+$LK_RESET}"
     }
     [ -z "${OUTPUT_FILE-}" ] ||
-        lk_console_detail "Writing compressed SQL to" "$OUTPUT_FILE"
+        lk_tty_detail "Writing compressed SQL to" "$OUTPUT_FILE"
     _lk_mysqldump \
         "${DUMP_ARGS[@]}" \
         "$DB_NAME" |
@@ -231,9 +229,9 @@ Usage: $FUNCNAME DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
         EXIT_STATUS=$?
     [ -z "${OUTPUT_FILE-}" ] || eval "exec >&$OUTPUT_FD $OUTPUT_FD>&-"
     [ -z "${LK_MY_CNF-}" ] || {
-        lk_console_message "Deleting mysqldump configuration file"
+        lk_tty_print "Deleting mysqldump configuration file"
         rm -f "$LK_MY_CNF" &&
-            lk_console_detail "Deleted" "$LK_MY_CNF" ||
+            lk_tty_detail "Deleted" "$LK_MY_CNF" ||
             lk_console_warning "Error deleting" "$LK_MY_CNF"
     }
     lk_mysql_is_quiet || {
@@ -255,9 +253,9 @@ Usage: $FUNCNAME SSH_HOST DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
         return
     [ -n "$SSH_HOST" ] || lk_warn "no ssh host" || return
     [ -n "$DB_NAME" ] || lk_warn "no database name" || return
-    lk_console_message "Creating temporary mysqldump configuration file"
-    lk_console_detail "Adding credentials for user" "$DB_USER"
-    lk_console_detail "Writing" "$SSH_HOST:.lk_mysqldump.cnf"
+    lk_tty_print "Creating temporary mysqldump configuration file"
+    lk_tty_detail "Adding credentials for user" "$DB_USER"
+    lk_tty_detail "Writing" "$SSH_HOST:.lk_mysqldump.cnf"
     lk_mysql_get_cnf |
         ssh "$SSH_HOST" "bash -c 'cat >.lk_mysqldump.cnf'" || return
     [ ! -t 1 ] || {
@@ -266,11 +264,11 @@ Usage: $FUNCNAME SSH_HOST DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
             OUTPUT_FD=$(lk_fd_next) &&
             eval "exec $OUTPUT_FD>&1 >\"\$OUTPUT_FILE\"" || return
     }
-    lk_console_message "Dumping remote database"
-    lk_console_detail "Database:" "$DB_NAME"
-    lk_console_detail "Host:" "$DB_HOST"
+    lk_tty_print "Dumping remote database"
+    lk_tty_detail "Database:" "$DB_NAME"
+    lk_tty_detail "Host:" "$DB_HOST"
     [ -z "${OUTPUT_FILE-}" ] ||
-        lk_console_detail "Writing compressed SQL to" "$OUTPUT_FILE"
+        lk_tty_detail "Writing compressed SQL to" "$OUTPUT_FILE"
     # TODO: implement lk_mysql_innodb_only
     ssh "$SSH_HOST" "bash -c 'mysqldump \\
     --defaults-file=.lk_mysqldump.cnf \\
@@ -282,9 +280,9 @@ exit \${PIPESTATUS[0]}' bash $(printf '%q' "$DB_NAME")" |
         lk_pv ||
         EXIT_STATUS=$?
     [ -z "${OUTPUT_FILE-}" ] || eval "exec >&$OUTPUT_FD $OUTPUT_FD>&-"
-    lk_console_message "Deleting mysqldump configuration file"
+    lk_tty_print "Deleting mysqldump configuration file"
     ssh "$SSH_HOST" "bash -c 'rm -f .lk_mysqldump.cnf'" &&
-        lk_console_detail "Deleted" "$SSH_HOST:.lk_mysqldump.cnf" ||
+        lk_tty_detail "Deleted" "$SSH_HOST:.lk_mysqldump.cnf" ||
         lk_console_warning "Error deleting" "$SSH_HOST:.lk_mysqldump.cnf"
     [ "$EXIT_STATUS" -eq 0 ] &&
         lk_console_success "Database dump completed successfully" ||
@@ -299,22 +297,22 @@ function lk_mysql_restore_local() {
     [ -n "$DB_NAME" ] || lk_warn "no database name" || return
     ! lk_can_sudo mysql ||
         LK_MYSQL_ELEVATE=1
-    lk_console_message "Preparing to restore database"
-    lk_console_detail "Backup file:" "$FILE"
-    lk_console_detail "Database:" "$DB_NAME"
+    lk_tty_print "Preparing to restore database"
+    lk_tty_detail "Backup file:" "$FILE"
+    lk_tty_detail "Database:" "$DB_NAME"
     SQL=(
         "DROP DATABASE IF EXISTS $(lk_mysql_quote_identifier "$DB_NAME")"
         "CREATE DATABASE $(lk_mysql_quote_identifier "$DB_NAME")"
     )
     _SQL=$(printf '%s;\n' "${SQL[@]}")
-    lk_console_detail "Local database will be reset with:" "$_SQL"
-    lk_console_log \
+    lk_tty_detail "Local database will be reset with:" "$_SQL"
+    lk_console_warning \
         "All data in local database '$DB_NAME' will be permanently destroyed"
     lk_confirm "Proceed?" Y || return
-    lk_console_message "Restoring database to local system"
-    lk_console_detail "Resetting database" "$DB_NAME"
+    lk_tty_print "Restoring database to local system"
+    lk_tty_detail "Resetting database" "$DB_NAME"
     echo "$_SQL" | lk_mysql || return
-    lk_console_detail "Restoring from" "$FILE"
+    lk_tty_detail "Restoring" "$FILE"
     if [[ $FILE =~ \.gz(ip)?$ ]]; then
         lk_pv "$FILE" | gunzip
     else

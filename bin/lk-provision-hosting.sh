@@ -566,13 +566,14 @@ $IPV6_ADDRESS $HOST_NAMES}" &&
         FILE=/etc/logrotate.d/lk-platform
         OLD_FILE=/etc/logrotate.d/${LK_PATH_PREFIX}log
         maybe_move_old "$OLD_FILE" "$FILE"
+        DIR=$LK_BASE/var/log
+        [[ $DIR =~ ^[-a-zA-Z0-9/._]+$ ]] || DIR=$(lk_double_quote "$DIR")
+        GROUP=$(lk_file_group "$LK_BASE")
         lk_install -m 00644 "$FILE"
-        _FILE=$(
-            LK_PLATFORM_LOGS=$(lk_double_quote "$LK_BASE/var/log/*.log")
-            cat "$LK_BASE/share/logrotate.d"/{hosting,default}.template |
-                lk_expand_template
-        )
-        lk_file_replace "$FILE" "$_FILE"
+        lk_file_replace "$FILE" < <(LK_PLATFORM_LOGS="$DIR/*.log" \
+            LK_PLATFORM_OWNER="root $GROUP" \
+            lk_expand_template < <(cat \
+                "$LK_BASE/share/logrotate.d"/{hosting,default}.template))
         # Don't run `invoke-rc.d apache2 reload` twice per logrotate
         FILE=/etc/logrotate.d/apache2
         [ ! -e "$FILE" ] ||

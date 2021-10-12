@@ -407,7 +407,8 @@ Usage: $FUNCNAME SQL_PATH [DB_NAME [DB_USER]]" || return
     [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] ||
         lk_tty_detail "DB_PASSWORD will be reset"
     lk_tty_detail "Local database will be reset with:" "$_SQL"
-    lk_console_log "All data in local database '$LOCAL_DB_NAME' will be permanently destroyed"
+    lk_console_warning \
+        "All data in local database '$LOCAL_DB_NAME' will be permanently destroyed"
     lk_confirm "Proceed?" Y || return
     [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] || {
         [[ $USER =~ ^[-a-zA-Z0-9_]+$ ]] &&
@@ -433,7 +434,7 @@ Usage: $FUNCNAME SQL_PATH [DB_NAME [DB_USER]]" || return
             DB_PASSWORD "$LOCAL_DB_PASSWORD" --type=constant --quiet || return
     lk_tty_detail "Resetting database" "$LOCAL_DB_NAME"
     echo "$_SQL" | lk_mysql || return
-    lk_tty_detail "Restoring from" "$1"
+    lk_tty_detail "Restoring" "$1"
     if [[ $1 =~ \.gz(ip)?$ ]]; then
         lk_pv "$1" | gunzip
     else
@@ -443,24 +444,32 @@ Usage: $FUNCNAME SQL_PATH [DB_NAME [DB_USER]]" || return
     lk_console_success "Database restored successfully"
 }
 
-function lk_wp_db_myisam_to_innodb() {
-    local SH _LK_WP_MAINTENANCE_ON
+# lk_wp_db_myisam_to_innodb [-n]
+#
+# If -n is set, do not take a backup before conversion.
+function lk_wp_db_myisam_to_innodb() { (
+    BACKUP=1
+    [ "${1-}" != -n ] || BACKUP=
+    lk_tty_group -n \
+        "Preparing to convert MyISAM tables in WordPress database to InnoDB"
     SH=$(lk_wp_db_get_vars) && eval "$SH" &&
         lk_mysql_write_cnf || return
+    ! lk_mysql_innodb_only "$DB_NAME" ||
+        lk_warn "no MyISAM tables in database '$DB_NAME'" || return 0
     lk_wp_is_quiet || {
-        lk_tty_print "Preparing to convert MyISAM tables to InnoDB"
-        lk_console_warning \
-            "${LK_BOLD}WARNING:$LK_RESET data loss may occur if conversion fails (${LK_BOLD}TAKE A BACKUP FIRST$LK_RESET)"
+        if [ -z "$BACKUP" ]; then
+            lk_console_warning "Data loss may occur if conversion fails"
+        else
+            lk_console_log "The database will be backed up before conversion"
+        fi
         lk_confirm "Proceed?" Y || return
     }
-    lk_verbose || {
-        local _LK_MYSQL_QUIET=1
-        lk_tty_print "Converting MyISAM tables in WordPress database to InnoDB"
-    }
+    unset _LK_WP_MAINTENANCE_ON
     lk_wp_maintenance_enable &&
+        { [ -z "$BACKUP" ] || lk_wp_db_dump; } &&
         lk_mysql_myisam_to_innodb "$DB_NAME" &&
         lk_wp_maintenance_maybe_disable
-}
+); }
 
 # lk_wp_sync_files_from_remote SSH_HOST [REMOTE_PATH [LOCAL_PATH [RSYNC_ARG...]]]
 function lk_wp_sync_files_from_remote() {
@@ -540,15 +549,14 @@ function lk_wp_reapply_config() {
 
 # lk_wp_enable_system_cron [INTERVAL]
 function lk_wp_enable_system_cron() {
-    local INTERVAL=${1:-5} SITE_ROOT WP_PATH LOG_FILE COMMAND ENV REGEX CRONTAB
-    SITE_ROOT=$(lk_wp_get_site_root) &&
-        WP_PATH=$(type -P wp) || return
+    local INTERVAL=${1:-5} SITE_ROOT LOG_FILE ARGS ARGS_RE COMMAND REGEX CRONTAB
+    SITE_ROOT=$(lk_wp_get_site_root) || return
     LOG_FILE=${SITE_ROOT%/*}/log/cron.log
     [ -w "$LOG_FILE" ] || LOG_FILE=~/cron.log
-    COMMAND=$(printf \
-        '%q/lib/platform/log.sh %q --path=%q cron event run --due-now' \
-        "$LK_BASE" "$WP_PATH" "$SITE_ROOT")
-    ENV=$(printf '_LK_LOG_FILE=%q' "$LOG_FILE")
+    lk_mapfile ARGS <(printf '%q\n' \
+        "$LK_BASE/lib/platform/log.sh" "--path=$SITE_ROOT")
+    COMMAND=$(printf "_LK_LOG_FILE=%q %s -i wordpress -- \
+wp %s cron event run --due-now" "$LOG_FILE" "${ARGS[@]::2}")
     lk_tty_print "Using crontab to schedule WP-Cron in" "$SITE_ROOT"
     lk_wp config get DISABLE_WP_CRON --type=constant 2>/dev/null |
         grep -Fx 1 >/dev/null ||
@@ -556,20 +564,18 @@ function lk_wp_enable_system_cron() {
         return
     # Remove legacy cron job
     lk_crontab_remove_command "$SITE_ROOT/wp-cron.php" || return
-    # awk needs to see "[^\\\\[:blank:]]" after unescaping, hence the otherwise
-    # superfluous backslashes
-    REGEX="$S(_LK_LOG_FILE=([^\\\\\\\\[:blank:]]|\\\\.)*$S+)?$(
-        lk_regex_expand_whitespace "$(lk_escape_ere "$COMMAND")"
-    )($S|\$)"
-    # Try to keep everything before and after "$ENV $COMMAND", e.g. environment
+    # Try to keep everything before and after COMMAND, e.g. environment
     # variables and redirections
+    lk_mapfile ARGS_RE <(lk_arr ARGS | lk_ere_escape)
+    REGEX=$(lk_regex_expand_whitespace " (_LK_LOG_FILE=$NS+ )?\
+${ARGS_RE[0]} .+ ${ARGS_RE[1]} cron event run --due-now( |\$)")
     [ $# -eq 0 ] && CRONTAB=$(lk_crontab_get "^$S*[^#[:blank:]].*$REGEX" |
-        head -n1 | awk -v "c=$ENV $COMMAND" -v "r=${REGEX//\\/\\\\}" \
+        head -n1 | awk -v "c=$COMMAND" -v "r=${REGEX//\\/\\\\}" \
         '{if(split($0,a,r)!=2)exit 1;printf("%s %s",a[1],c);if(a[2])printf(" %s",a[2])}') ||
         # But if that's not possible, add or replace the whole job
         { [ "$INTERVAL" -lt 60 ] &&
-            CRONTAB="*/$INTERVAL * * * * $ENV $COMMAND >/dev/null" ||
-            CRONTAB="42 * * * * $ENV $COMMAND >/dev/null"; }
+            CRONTAB="*/$INTERVAL * * * * $COMMAND >/dev/null" ||
+            CRONTAB="42 * * * * $COMMAND >/dev/null"; }
     lk_crontab_apply "$REGEX" "$CRONTAB"
 }
 
@@ -598,7 +604,7 @@ function lk_wp_maintenance_enable() {
     [ -n "${_LK_WP_MAINTENANCE_ON-}" ] ||
         _LK_WP_MAINTENANCE_ON=$ACTIVE
     ((ACTIVE)) ||
-        lk_tty_detail "Enabling maintenance mode"
+        lk_tty_print "Enabling maintenance mode"
     # Always activate explicitly, in case $upgrading is about to expire
     lk_wp_maintenance_get_php >"$SITE_ROOT/.maintenance"
 }
@@ -608,7 +614,7 @@ function lk_wp_maintenance_disable() {
     local SITE_ROOT
     SITE_ROOT=${1:-$(lk_wp_get_site_root)} || return
     ! lk_wp maintenance-mode is-active &>/dev/null ||
-        lk_tty_detail "Disabling maintenance mode"
+        lk_tty_print "Disabling maintenance mode"
     rm -f "$SITE_ROOT/.maintenance"
 }
 
