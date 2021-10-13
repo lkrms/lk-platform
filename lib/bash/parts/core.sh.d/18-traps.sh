@@ -4,6 +4,8 @@
 function lk_trap_add() {
     [ $# -ge 2 ] ||
         lk_usage "Usage: $FUNCNAME SIGNAL COMMAND [ARG...]" || return
+    local IFS
+    unset IFS
     [ $# -eq 2 ] ||
         set -- "$1" "$2$(printf ' %q' "${@:3}")"
     _LK_TRAPS=(${_LK_TRAPS+"${_LK_TRAPS[@]}"})

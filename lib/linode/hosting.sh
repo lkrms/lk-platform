@@ -107,7 +107,7 @@ LK_HOST_ACCOUNT=${LK_HOST_ACCOUNT:-${LK_HOST_DOMAIN%%.*}}
 LK_BASE=/opt/lk-platform
 export "${!LK_@}" \
     _LK_BOOTSTRAP=1 \
-    _LK_TTY_COLUMNS=120 \
+    _LK_COLUMNS=120 \
     DEBIAN_FRONTEND=noninteractive \
     DEBCONF_NONINTERACTIVE_SEEN=true
 

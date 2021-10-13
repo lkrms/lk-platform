@@ -58,7 +58,6 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_INNODB_BUFFER_SIZE`
 - `LK_IPV4_ADDRESS`
 - `LK_IPV4_GATEWAY`
-- `LK_KEEP_TRYING_MAX`
 - `LK_LETSENCRYPT_EMAIL`
 - `LK_LETSENCRYPT_IGNORE_DNS`
 - `LK_LINODE_SKIP_REGEX`
@@ -177,6 +176,26 @@ Available settings:
 - **`SITE_PHP_VERSION`** (e.g. `7.0`, `7.2`, `7.4`; default: *system-dependent*)
 
 ## Conventions
+
+### Parameter expansion
+
+Bash 3.2 expands `"${@:2}"` to the equivalent of `"$(IFS=" "; echo "${*:2}")"`
+unless `IFS` contains a space. The following workaround should generally be
+used:
+
+```bash
+local IFS
+unset IFS
+some_command "${@:2}"
+```
+
+Or, if changing IFS could have side-effects:
+
+```bash
+local ARG=$1
+shift
+some_command "$@"
+```
 
 ### File descriptors
 

@@ -10,27 +10,13 @@ USER=${USER:-$(id -un)} &&
     { [ "${NS-}" = "[^[:blank:]]" ] || readonly NS="[^[:blank:]]"; } || return
 
 _LK_ARGV=("$@")
-_LK_INCLUDES=core
-
-# lk_version_at_least INSTALLED MINIMUM
-function lk_version_at_least() {
-    printf '%s\n' "$@" | sort -V | head -n1 | grep -Fx "$2" >/dev/null
-}
+_LK_PROVIDED=core
 
 # lk_bash_at_least MAJOR [MINOR]
 function lk_bash_at_least() {
     [ "${BASH_VERSINFO[0]}" -eq "$1" ] &&
         [ "${BASH_VERSINFO[1]}" -ge "${2:-0}" ] ||
         [ "${BASH_VERSINFO[0]}" -gt "$1" ]
-}
-
-# lk_command_exists COMMAND...
-function lk_command_exists() {
-    [ $# -gt 0 ] || return
-    while [ $# -gt 0 ]; do
-        type -P "$1" >/dev/null || return
-        shift
-    done
 }
 
 function lk_is_arm() {
@@ -41,10 +27,18 @@ function lk_is_macos() {
     [[ $OSTYPE == darwin* ]]
 }
 
+# lk_is_apple_silicon
+#
+# Return true if running natively on Apple Silicon, otherwise return false.
+# Returns false when running as a translated Intel binary on Apple Silicon.
 function lk_is_apple_silicon() {
     lk_is_macos && lk_is_arm
 }
 
+# lk_is_system_apple_silicon
+#
+# Return true if running on Apple Silicon, whether natively or as a translated
+# Intel binary.
 function lk_is_system_apple_silicon() {
     lk_is_macos && { lk_is_arm ||
         [ "$(sysctl -n sysctl.proc_translated 2>/dev/null)" = 1 ]; }
@@ -80,6 +74,20 @@ function lk_is_virtual() {
 function lk_is_qemu() {
     lk_is_virtual &&
         grep -iq QEMU /sys/devices/virtual/dmi/id/*_vendor 2>/dev/null
+}
+
+# lk_command_exists COMMAND...
+function lk_command_exists() {
+    [ $# -gt 0 ] || return
+    while [ $# -gt 0 ]; do
+        type -P "$1" >/dev/null || return
+        shift
+    done
+}
+
+# lk_version_at_least INSTALLED MINIMUM
+function lk_version_at_least() {
+    printf '%s\n' "$@" | sort -V | head -n1 | grep -Fx "$2" >/dev/null
 }
 
 function lk_script_running() {
@@ -126,6 +134,9 @@ function lk_false() {
 }
 
 # lk_pass [-STATUS] COMMAND [ARG...]
+#
+# Run COMMAND without changing the previous command's exit status, or run
+# COMMAND and return STATUS.
 function lk_pass() {
     local STATUS=$?
     [[ ! ${1-} =~ ^-[0-9]+$ ]] || { STATUS=${1:1} && shift; }
@@ -133,25 +144,9 @@ function lk_pass() {
     return "$STATUS"
 }
 
+# lk_err MESSAGE
 function lk_err() {
     lk_pass echo "${FUNCNAME[1 + ${_LK_STACK_DEPTH:-0}]-${0##*/}}: $1" >&2
-}
-
-# lk_trace [MESSAGE]
-function lk_trace() {
-    [ "${LK_DEBUG-}" = Y ] || return 0
-    local NOW
-    NOW=$(gnu_date +%s.%N) || return 0
-    _LK_TRACE_FIRST=${_LK_TRACE_FIRST:-$NOW}
-    printf '%s\t%s\t%s\t%s\t%s\n' \
-        "$NOW" \
-        "$_LK_TRACE_FIRST" \
-        "${_LK_TRACE_LAST:-$NOW}" \
-        "${1+${1::30}}" \
-        "${BASH_SOURCE[1]+${BASH_SOURCE[1]#$LK_BASE/}:${BASH_LINENO[0]}}" |
-        awk -F'\t' -v "d=$LK_DIM" -v "u=$LK_UNDIM" \
-            '{printf "%s%09.4f  +%.4f\t%-30s\t%s\n",d,$1-$2,$1-$3,$4,$5 u}' >&2
-    _LK_TRACE_LAST=$NOW
 }
 
 # lk_script_name [STACK_DEPTH]
@@ -168,20 +163,25 @@ function lk_caller_name() {
     echo "${FUNCNAME[2 + DEPTH]-${0##*/}}"
 }
 
+# lk_first_command [COMMAND...]
+#
+# Print the first executable COMMAND in PATH or return false if no COMMAND was
+# found. To allow the inclusion of arguments, word splitting is performed on
+# each COMMAND after resetting IFS.
 function lk_first_command() {
-    local IFS CMDLINE
+    local IFS CMD
     unset IFS
     while [ $# -gt 0 ]; do
-        CMDLINE=($1)
-        if type -P "${CMDLINE[0]}" >/dev/null; then
-            echo "$1"
-            return 0
-        fi
+        CMD=($1)
+        ! type -P "${CMD[0]}" >/dev/null || break
         shift
     done
-    false
+    [ $# -gt 0 ] && echo "$1"
 }
 
+# lk_first_file [FILE...]
+#
+# Print the first FILE that exists or return false if no FILE was found.
 function lk_first_file() {
     while [ $# -gt 0 ]; do
         [ ! -e "$1" ] || break
@@ -190,11 +190,11 @@ function lk_first_file() {
     [ $# -gt 0 ] && echo "$1"
 }
 
-# lk_plural [-v] VALUE SINGLE_NOUN [PLURAL_NOUN]
+# lk_plural [-v] VALUE SINGLE [PLURAL]
 #
-# Print SINGLE_NOUN if VALUE is 1 or the name of an array with 1 element,
-# PLURAL_NOUN otherwise. If PLURAL_NOUN is omitted, print "${SINGLE_NOUN}s"
-# instead. If -v is set, include VALUE in the output.
+# Print SINGLE if VALUE is 1 or the name of an array with 1 element, PLURAL
+# otherwise. If PLURAL is omitted, print "${SINGLE}s" instead. If -v is set,
+# include VALUE in the output.
 function lk_plural() {
     local VALUE
     [ "${1-}" != -v ] || { VALUE=1 && shift; }
@@ -204,6 +204,23 @@ function lk_plural() {
     [ "$COUNT" = 1 ] && echo "$VALUE$2" || echo "$VALUE${3-$2s}"
 }
 
+# lk_assign VAR
+#
+# Read standard input until EOF or NUL and assign it to VAR.
+#
+# Example:
+#
+#     lk_assign SQL <<"SQL"
+#     SELECT id, name FROM table;
+#     SQL
+function lk_assign() {
+    IFS= read -rd '' "$1"
+}
+
+# lk_maybe_local
+#
+# Print 'local ' with no line break if the caller was called by a function.
+# Useful when emitting variable declarations.
 function lk_maybe_local() {
     local DEPTH=${1:-${_LK_STACK_DEPTH:-0}}
     ((DEPTH < 0)) ||
@@ -222,26 +239,6 @@ function lk_no_input() {
     else
         [ ! -t 0 ] || [ "${LK_NO_INPUT-}" = 1 ]
     fi
-}
-
-# lk_vars_not_empty [-q] VAR...
-#
-# Print a warning and return false if any VAR is empty or unset. If -q is set,
-# suppress output.
-function lk_vars_not_empty() {
-    local QUIET EMPTY=()
-    [ "${1-}" != -q ] || { QUIET=1 && shift; }
-    while [ $# -gt 0 ]; do
-        [ -n "${!1:+1}" ] || EMPTY[${#EMPTY[@]}]=$1
-        shift
-    done
-    [ -z "${EMPTY+1}" ] || {
-        [ -n "${QUIET-}" ] || {
-            local IFS=' ' _LK_STACK_DEPTH=1
-            lk_err "$(lk_plural EMPTY value values) required: ${EMPTY[*]}"
-        }
-        false
-    }
 }
 
 # lk_elevate [exec] [COMMAND [ARG...]]
@@ -392,6 +389,8 @@ function lk_set_bashpid() {
 # platform.
 function lk_sed_i() {
     if ! lk_is_macos; then
+        local IFS
+        unset IFS
         lk_sudo sed -i"${1-}" "${@:2}"
     else
         lk_sudo sed -i "$@"
@@ -404,24 +403,26 @@ function lk_sed_i() {
 # the command and platform).
 function lk_unbuffer() {
     [ "$1" != exec ] || { local LK_EXEC=1 && shift; }
-    case "$1" in
+    local CMD=$1
+    shift
+    case "$CMD" in
     sed | gsed | gnu_sed)
-        set -- "$1" -u "${@:2}"
+        set -- "$CMD" -u "$@"
         ;;
     grep | ggrep | gnu_grep)
-        set -- "$1" --line-buffered "${@:2}"
+        set -- "$CMD" --line-buffered "$@"
         ;;
     *)
-        if [ "$1" = tr ] && lk_is_macos; then
-            set -- "$1" -u "${@:2}"
+        if [ "$CMD" = tr ] && lk_is_macos; then
+            set -- "$CMD" -u "$@"
         else
             # TODO: reinstate unbuffer after resolving LF -> CRLF issue
             case "$(lk_first_command stdbuf)" in
             stdbuf)
-                set -- stdbuf -i0 -oL -eL "$@"
+                set -- stdbuf -i0 -oL -eL "$CMD" "$@"
                 ;;
             unbuffer)
-                set -- unbuffer -p "$@"
+                set -- unbuffer -p "$CMD" "$@"
                 ;;
             esac
         fi
@@ -614,9 +615,27 @@ function lk_get_regex() {
     return "$STATUS"
 }
 
+# _lk_stream_args COMMAND_ARGS COMMAND... [ARG...]
+function _lk_stream_args() {
+    local IFS
+    unset IFS
+    if (($# > $1 + 1)); then
+        printf '%s\n' "${@:$1+2}" | "${@:2:$1}"
+    else
+        [ "$(type -t "$2")" = file ] || local LK_EXEC
+        ${LK_EXEC:+exec} "${@:2:$1}"
+    fi
+}
+
+# lk_uniq [STRING...]
+function lk_uniq() {
+    _lk_stream_args 2 awk '!seen[$0]++ { print }' "$@"
+}
+
 # lk_implode_args GLUE [ARG...]
 function lk_implode_args() {
-    local GLUE=${1//\\/\\\\}
+    local IFS GLUE=${1//\\/\\\\}
+    unset IFS
     GLUE=${GLUE//%/%%}
     [ $# -eq 1 ] || printf '%s' "$2"
     [ $# -le 2 ] || printf -- "$GLUE%s" "${@:3}"
@@ -625,7 +644,8 @@ function lk_implode_args() {
 
 # lk_implode_arr GLUE [ARRAY_NAME...]
 function lk_implode_arr() {
-    local _ARR _EVAL=
+    local IFS _ARR _EVAL=
+    unset IFS
     for _ARR in "${@:2}"; do
         _EVAL+=" \${$_ARR+\"\${${_ARR}[@]}\"}"
     done
@@ -638,11 +658,7 @@ function lk_implode_input() {
 }
 
 function lk_ere_escape() {
-    if [ $# -gt 0 ]; then
-        printf '%s\n' "$@" | lk_ere_escape
-    else
-        sed -E 's/[]$()*+.?\^{|}[]/\\&/g'
-    fi
+    _lk_stream_args 3 sed -E 's/[]$()*+.?\^{|}[]/\\&/g' "$@"
 }
 
 # lk_ere_implode_input [-e]
@@ -670,27 +686,15 @@ function lk_ere_implode_args() {
 }
 
 function lk_sed_escape() {
-    if [ $# -gt 0 ]; then
-        printf '%s\n' "$@" | lk_sed_escape
-    else
-        sed -E "s/[]\$()*+./?\\^{|}[]/\\\\&/g"
-    fi
+    _lk_stream_args 3 sed -E "s/[]\$()*+./?\\^{|}[]/\\\\&/g" "$@"
 }
 
 function lk_sed_escape_replace() {
-    if [ $# -gt 0 ]; then
-        printf '%s\n' "$@" | lk_sed_escape_replace
-    else
-        sed -E "s/[&/\\]/\\\\&/g"
-    fi
+    _lk_stream_args 3 sed -E "s/[&/\\]/\\\\&/g" "$@"
 }
 
 function lk_strip_cr() {
-    if [ $# -gt 0 ]; then
-        printf '%s\n' "$@" | lk_strip_cr
-    else
-        sed -E 's/.*\r(.)/\1/'
-    fi
+    _lk_stream_args 3 sed -E 's/.*\r(.)/\1/' "$@"
 }
 
 # lk_strip_non_printing [-d DELETE] [STRING...]
@@ -702,13 +706,10 @@ function lk_strip_cr() {
 function lk_strip_non_printing() {
     local DELETE
     [ "${1-}" != -d ] || { DELETE=$2 && shift 2; }
-    if [ $# -gt 0 ]; then
-        printf '%s\n' "$@" | lk_strip_non_printing ${DELETE:+-d "$DELETE"}
-    else
-        eval "$(lk_get_regex NON_PRINTING_REGEX)"
-        ${LK_EXEC:+exec} sed -Eu "s/$NON_PRINTING_REGEX//g; "$'s/.*\r(.)/\\1/' |
-            lk_unbuffer ${LK_EXEC:+exec} tr -d '\0-\10\16-\37\177'"${DELETE-}"
-    fi
+    eval "$(lk_get_regex NON_PRINTING_REGEX)"
+    _lk_stream_args 3 \
+        sed -Eu "s/$NON_PRINTING_REGEX//g; "$'s/.*\r(.)/\\1/' "$@" |
+        lk_unbuffer tr -d '\0-\10\16-\37\177'"${DELETE-}"
 }
 
 # lk_string_sort [[SORT_ARGS] STRING]
@@ -717,16 +718,22 @@ function lk_string_sort() {
     [ $# -le 1 ] || { ARGS=$1 && shift; }
     printf '%s' "${IFS::1}$1${IFS::1}" | tr -s "$IFS" '\0' |
         sort -z ${ARGS:+"$ARGS"} | tr '\0' "${IFS::1}" |
-        sed -E '1s/^.//; $s/.$//'
+        awk -v "RS=${IFS::1}" '
+NR == 1 {next}
+        {printf "%s%s", (i++ ? RS : ""), $0}
+END     {printf "\n"}'
 }
 
 # lk_string_remove [STRING [REMOVE...]]
 function lk_string_remove() {
     local IFS=${IFS:- } REGEX
-    REGEX=$([ $# -le 1 ] || printf '%s\n' "${@:2}" | lk_ere_implode_input)
+    REGEX=$(unset IFS && [ $# -le 1 ] ||
+        printf '%s\n' "${@:2}" | lk_ere_implode_input -e)
     printf '%s' "${IFS::1}$1${IFS::1}" | tr -s "$IFS" "${IFS::1}" |
-        awk -v "RS=${IFS::1}" -v "regex=$REGEX" \
-            'NR == 1 {next} $0 !~ regex {printf "%s%s", (i++ ? RS : ""), $0 }'
+        awk -v "RS=${IFS::1}" -v "regex=^${REGEX//\\/\\\\}\$" '
+NR == 1     {next}
+$0 !~ regex {printf "%s%s", (i++ ? RS : ""), $0}
+END         {printf "\n"}'
 }
 
 # lk_arr [ARRAY...]
@@ -786,6 +793,8 @@ function lk_warn() {
 function lk_trap_add() {
     [ $# -ge 2 ] ||
         lk_usage "Usage: $FUNCNAME SIGNAL COMMAND [ARG...]" || return
+    local IFS
+    unset IFS
     [ $# -eq 2 ] ||
         set -- "$1" "$2$(printf ' %q' "${@:3}")"
     _LK_TRAPS=(${_LK_TRAPS+"${_LK_TRAPS[@]}"})
@@ -836,9 +845,12 @@ function lk_delete_on_exit_withdraw() {
 }
 
 # _lk_tty_format [-b] VAR [COLOUR COLOUR_VAR]
+#
+# If COLOUR_VAR is not unset, use its value to set the default appearance of
+# text in VAR. Otherwise, use COLOUR as the default, adding bold if -b is set
+# unless $LK_BOLD already appears in COLOUR or the text.
 function _lk_tty_format() {
-    local _BOLD _STRING _COLOUR_SET _COLOUR _B=${_LK_TTY_B-} _E=${_LK_TTY_E-}
-    unset _BOLD
+    local _BOLD= _STRING _COLOUR_SET _COLOUR _B=${_LK_TTY_B-} _E=${_LK_TTY_E-}
     [ "${1-}" != -b ] || { _BOLD=1 && shift; }
     [ $# -gt 0 ] &&
         _STRING=${!1-} &&
@@ -867,22 +879,18 @@ function _lk_tty_format_readline() {
 #
 # For each PATH or input line, replace $HOME with ~ and remove $PWD.
 function lk_tty_path() {
-    if [ $# -gt 0 ]; then
-        printf '%s\n' "$@" | lk_tty_path
-    else
-        while IFS= read -r _PATH; do
-            __PATH=$_PATH
-            [ "$_PATH" = "${_PATH#~}" ] || __PATH="~${_PATH#~}"
-            [ "$PWD" = / ] || [ "$PWD" = "$_PATH" ] ||
-                [ "$_PATH" = "${_PATH#$PWD/}" ] || __PATH=${_PATH#$PWD/}
-            printf '%s\n' "$__PATH"
-        done
-    fi
+    local HOME=${HOME:-~}
+    _lk_stream_args 6 awk -v "home=$HOME" -v "pwd=$PWD" '
+home && index($0, home) == 1 {
+    $0 = "~" substr($0, length(home) + 1) }
+pwd != "/" && pwd != $0 && index($0, pwd "/") == 1 {
+    $0 = substr($0, length(pwd) + 2) }
+{ print }' "$@"
 }
 
 function lk_tty_columns() {
     local _COLUMNS
-    _COLUMNS=${_LK_TTY_COLUMNS:-${COLUMNS:-${TERM:+$(TERM=$TERM tput cols)}}} ||
+    _COLUMNS=${_LK_COLUMNS:-${COLUMNS:-${TERM:+$(TERM=$TERM tput cols)}}} ||
         _COLUMNS=
     echo "${_COLUMNS:-120}"
 }
@@ -924,18 +932,22 @@ function lk_tty_group_end() {
 #   lines will be aligned with the first (values: 0 or 1; default: 0)
 # - _LK_TTY_INDENT: MESSAGE2 indent (default: based on prefix length and message
 #   line counts)
-# - _LK_COLOUR: default colour of prefix and MESSAGE2 (default: $LK_CYAN)
+# - _LK_COLOUR: default colour of prefix and MESSAGE2 (default: LK_CYAN)
 # - _LK_ALT_COLOUR: default colour of prefix and MESSAGE2 for nested messages
-#   and output from lk_tty_detail et al (default: $LK_YELLOW)
+#   and output from lk_tty_detail, lk_tty_list_detail, etc. (default: LK_YELLOW)
 # - _LK_TTY_COLOUR: override prefix and MESSAGE2 colour
 # - _LK_TTY_PREFIX_COLOUR: override prefix colour (supersedes _LK_TTY_COLOUR)
 # - _LK_TTY_MESSAGE_COLOUR: override MESSAGE colour
 # - _LK_TTY_COLOUR2: override MESSAGE2 colour (supersedes _LK_TTY_COLOUR)
 function lk_tty_print() {
+    # Print a blank line and return if nothing was passed
     [ $# -gt 0 ] || {
         echo >&"${_LK_FD-2}"
         return
     }
+    # If nested grouping is active and lk_tty_print isn't already in its own
+    # call stack, bump lk_tty_print -> lk_tty_detail and lk_tty_detail ->
+    # _lk_tty_detail2
     [ -z "${_LK_TTY_GROUP-}" ] ||
         [ -z "${_LK_TTY_NEST[_LK_TTY_GROUP]-}" ] ||
         [ "${FUNCNAME[2]-}" = "$FUNCNAME" ] || {
@@ -1048,7 +1060,8 @@ function lk_tty_list() {
             column <<<"$_LIST" | expand) || return
     echo "$(
         _LK_FD=1
-        lk_tty_print "$_MESSAGE" $'\n'"$_LIST" ${!_COLOUR+"${!_COLOUR}"}
+        ${_LK_TTY_COMMAND:-lk_tty_print} \
+            "$_MESSAGE" $'\n'"$_LIST" ${!_COLOUR+"${!_COLOUR}"}
         [ -z "${_SINGLE:+${_PLURAL:+1}}" ] ||
             _LK_TTY_PREFIX=$(printf "%$((_INDENT > 0 ? _INDENT : 0))s") \
                 lk_tty_detail "($(lk_plural -v _ITEMS "$_SINGLE" "$_PLURAL"))"
@@ -1058,11 +1071,62 @@ function lk_tty_list() {
 # - lk_tty_list_detail [- [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
 # - lk_tty_list_detail [ARRAY [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
 function lk_tty_list_detail() {
-    local _LK_TTY_COLOUR_ORIG=${_LK_COLOUR-}
-    _LK_TTY_PREFIX1=${_LK_TTY_PREFIX2- -> } \
-        _LK_COLOUR=${_LK_ALT_COLOUR-} \
-        _LK_TTY_MESSAGE_COLOUR=${_LK_TTY_MESSAGE_COLOUR-} \
-        lk_tty_list "$@"
+    _LK_STACK_DEPTH=1 _LK_TTY_COMMAND=lk_tty_detail lk_tty_list "$@"
+}
+
+# - lk_tty_run [-SHIFT]                         COMMAND [ARG...]
+# - lk_tty_run [-ARG=[REPLACE][:ARG=...]]       COMMAND [ARG...]
+# - lk_tty_run [-SHIFT:ARG=[REPLACE][:ARG=...]] COMMAND [ARG...]
+#
+# Print COMMAND and run it after making optional changes to the printed version,
+# where SHIFT is the number of arguments to remove (starting with COMMAND) and
+# ARG is the 1-based argument to remove or REPLACE (starting with COMMAND or the
+# first argument not removed by SHIFT).
+function lk_tty_run() {
+    local IFS SHIFT= TRANSFORM= CMD i REGEX='([0-9]+)=([^:]*)'
+    unset IFS
+    [[ ${1-} != -* ]] ||
+        { [[ $1 =~ ^-(([0-9]+)(:($REGEX(:$REGEX)*))?|($REGEX(:$REGEX)*))$ ]] &&
+            SHIFT=${BASH_REMATCH[2]} &&
+            TRANSFORM=${BASH_REMATCH[4]:-${BASH_REMATCH[1]}} &&
+            shift; } || lk_warn "invalid arguments" || return
+    CMD=("$@")
+    [ -z "$SHIFT" ] || shift "$SHIFT"
+    while [[ $TRANSFORM =~ ^$REGEX:?(.*) ]]; do
+        i=${BASH_REMATCH[1]}
+        [[ -z "${BASH_REMATCH[2]}" ]] &&
+            set -- "${@:1:i-1}" "${@:i+1}" ||
+            set -- "${@:1:i-1}" "${BASH_REMATCH[2]}" "${@:i+1}"
+        TRANSFORM=${BASH_REMATCH[3]}
+    done
+    while :; do
+        case "${1-}" in
+        lk_elevate)
+            shift
+            lk_root || set -- sudo "$@"
+            break
+            ;;
+        lk_sudo | lk_maybe_sudo)
+            shift
+            ! lk_will_sudo || set -- sudo "$@"
+            break
+            ;;
+        -*)
+            shift
+            continue
+            ;;
+        esac
+        break
+    done
+    ${_LK_TTY_COMMAND:-lk_tty_print} "Running:" "$(lk_quote_args "$@")"
+    "${CMD[@]}"
+}
+
+# lk_tty_run_detail [OPTIONS] COMMAND [ARG...]
+#
+# See lk_tty_run for details.
+function lk_tty_run_detail() {
+    _LK_STACK_DEPTH=1 _LK_TTY_COMMAND=lk_tty_detail lk_tty_run "$@"
 }
 
 function _lk_tty_prompt() {
@@ -1078,6 +1142,8 @@ function _lk_tty_prompt() {
 function lk_tty_read() {
     [ $# -ge 2 ] || lk_usage "\
 Usage: $FUNCNAME PROMPT NAME [DEFAULT [READ_ARG...]]" || return
+    local IFS
+    unset IFS
     if lk_no_input && [ -n "${3:+1}" ]; then
         eval "$2=\$3"
     else
@@ -1090,6 +1156,8 @@ Usage: $FUNCNAME PROMPT NAME [DEFAULT [READ_ARG...]]" || return
 
 # lk_tty_read_silent PROMPT NAME [READ_ARG...]
 function lk_tty_read_silent() {
+    local IFS
+    unset IFS
     lk_tty_read "${@:1:2}" "" -s "${@:3}"
     lk_tty_print
 }
@@ -1113,13 +1181,14 @@ function lk_tty_read_password() {
 
 # lk_tty_yn PROMPT [DEFAULT [READ_ARG...]]
 function lk_tty_yn() {
-    local YES="[yY]([eE][sS])?" NO="[nN][oO]?"
     [ $# -ge 1 ] || lk_usage "\
 Usage: $FUNCNAME PROMPT [DEFAULT [READ_ARG...]]" || return
+    local YES="[yY]([eE][sS])?" NO="[nN][oO]?"
     if lk_no_input && [[ ${2-} =~ ^($YES|$NO)$ ]]; then
         [[ $2 =~ ^$YES$ ]]
     else
-        local _PROMPT=("$1") DEFAULT= PROMPT REPLY
+        local IFS _PROMPT=("$1") DEFAULT= PROMPT REPLY
+        unset IFS
         if [[ ${2-} =~ ^$YES$ ]]; then
             _PROMPT+=("[Y/n]")
             DEFAULT=Y
@@ -1179,10 +1248,10 @@ function lk_get_stack_trace() {
     done
 }
 
-function lk_include() {
+function lk_require() {
     local FILE
     while [ $# -gt 0 ]; do
-        [[ ,$_LK_INCLUDES, == *,$1,* ]] || {
+        [[ ,$_LK_PROVIDED, == *,$1,* ]] || {
             FILE=${_LK_INST:-$LK_BASE}/lib/bash/include/$1.sh
             [ -r "$FILE" ] || lk_err "file not found: $FILE" || return
             . "$FILE" || return
@@ -1192,8 +1261,8 @@ function lk_include() {
 }
 
 function lk_provide() {
-    [[ ,$_LK_INCLUDES, == *,$1,* ]] ||
-        _LK_INCLUDES=$_LK_INCLUDES,$1
+    [[ ,$_LK_PROVIDED, == *,$1,* ]] ||
+        _LK_PROVIDED=$_LK_PROVIDED,$1
 }
 
 # lk_fifo_flush FIFO_PATH
@@ -1301,12 +1370,21 @@ function lk_md5() {
     lk_hash "$@"
 }
 
-# lk_report_error COMMAND [ARG...]
+# lk_report_error [-q] COMMAND [ARG...]
 #
-# Run COMMAND and print an error message if it exits non-zero.
+# Run COMMAND and print an error message if it exits non-zero. If -q is set,
+# discard output to stderr unless COMMAND fails.
 function lk_report_error() {
-    "$@" || {
+    local QUIET STDERR
+    [ "${1-}" != -q ] || { QUIET=1 && shift; }
+    if [ -n "${QUIET-}" ]; then
+        lk_mktemp_with STDERR || return
+        "$@" 2>"$STDERR"
+    else
+        "$@"
+    fi || {
         local STATUS=$? IFS=' '
+        [ ! -s "${STDERR-}" ] || cat "$STDERR" >&2
         lk_console_error "Exit status $STATUS:" "$*"
         return $STATUS
     }
@@ -1436,17 +1514,20 @@ lk_console_detail() { lk_tty_detail "$@"; }
 lk_console_item() { lk_tty_print "$1" "$2" "${3-${_LK_TTY_COLOUR-$_LK_COLOUR}}"; }
 lk_console_list() { lk_tty_list - "$@"; }
 lk_console_message() { lk_tty_print "${1-}" "${3+$2}" "${3-${2-${_LK_TTY_COLOUR-$_LK_COLOUR}}}"; }
-lk_console_read_secret() { local r && lk_tty_read_silent "$1" r "${@:2}" && echo "$r"; }
-lk_console_read() { local r && lk_tty_read "$1" r "${@:2}" && echo "$r"; }
+lk_console_read_secret() { local IFS r && unset IFS && lk_tty_read_silent "$1" r "${@:2}" && echo "$r"; }
+lk_console_read() { local IFS r && unset IFS && lk_tty_read "$1" r "${@:2}" && echo "$r"; }
 lk_echo_array() { lk_arr "$@"; }
 lk_escape_ere_replace() { lk_sed_escape_replace "$@"; }
 lk_escape_ere() { lk_sed_escape "$@"; }
 lk_first_existing() { lk_first_file "$@"; }
+lk_include() { lk_require "$@"; }
 lk_is_false() { lk_false "$@"; }
 lk_is_true() { lk_true "$@"; }
 lk_maybe_sudo() { lk_sudo "$@"; }
 lk_myself() { local s=$? && { [[ ${1-} != -* ]] || _LK_STACK_DEPTH= lk_warn "-f not supported"; } && lk_pass -$s lk_script_name $((2 + ${_LK_STACK_DEPTH:-0})); }
 lk_regex_implode() { lk_ere_implode_args -- "$@"; }
+lk_run_detail() { lk_tty_run_detail "$@"; }
+lk_run() { lk_tty_run "$@"; }
 
 #### END core.sh.d
 
@@ -2917,39 +2998,6 @@ function lk_diff() { (
         lk_maybe_sudo gnu_diff ${DIFF_VER+--color=always} -U3 "$@"
     fi && echo "${BLUE}Files are identical${_LK_DIFF_SED_SCRIPT:+ or have hidden differences}$RESET"
 ); }
-
-function lk_run() {
-    local COMMAND TRACE SH ARGS WIDTH SHIFT=
-    [[ ! ${1-} =~ ^-([0-9]+)$ ]] || { SHIFT=${BASH_REMATCH[1]} && shift; }
-    COMMAND=("$@")
-    [ -z "$SHIFT" ] || shift "$SHIFT"
-    while [[ ${1-} =~ ^(lk_(elevate|(maybe_)?(sudo|trace))|sudo|env|caffeinate)$ ]] &&
-        [[ ${2-} != -* ]]; do
-        case "$1" in
-        lk_maybe_trace)
-            TRACE=1
-            ;;
-        esac
-        shift
-    done
-    ! lk_is_true TRACE || {
-        SH="set -- $(lk_maybe_trace -o "$@")" &&
-            eval "$SH"
-    } || return
-    ARGS=$(lk_quote_args "$@")
-    WIDTH=$(lk_tty_columns)
-    [ ${#ARGS} -le $((WIDTH - ${_LK_TTY_INDENT:-2} - 11)) ] ||
-        ARGS=$'\n'$(lk_quote_args_folded "$@")
-    _LK_TTY_NO_FOLD=1 \
-        ${_LK_TTY_COMMAND:-lk_console_item} "Running:" "$ARGS"
-    "${COMMAND[@]}"
-}
-
-function lk_run_detail() {
-    _LK_TTY_COMMAND=lk_console_detail \
-        _LK_TTY_INDENT=${_LK_TTY_INDENT:-4} \
-        lk_run "$@"
-}
 
 function lk_maybe_trace() {
     local OUTPUT COMMAND
