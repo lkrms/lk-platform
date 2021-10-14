@@ -13,6 +13,8 @@ function _lk_tty_prompt() {
 function lk_tty_read() {
     [ $# -ge 2 ] || lk_usage "\
 Usage: $FUNCNAME PROMPT NAME [DEFAULT [READ_ARG...]]" || return
+    local IFS
+    unset IFS
     if lk_no_input && [ -n "${3:+1}" ]; then
         eval "$2=\$3"
     else
@@ -25,6 +27,8 @@ Usage: $FUNCNAME PROMPT NAME [DEFAULT [READ_ARG...]]" || return
 
 # lk_tty_read_silent PROMPT NAME [READ_ARG...]
 function lk_tty_read_silent() {
+    local IFS
+    unset IFS
     lk_tty_read "${@:1:2}" "" -s "${@:3}"
     lk_tty_print
 }
@@ -48,13 +52,14 @@ function lk_tty_read_password() {
 
 # lk_tty_yn PROMPT [DEFAULT [READ_ARG...]]
 function lk_tty_yn() {
-    local YES="[yY]([eE][sS])?" NO="[nN][oO]?"
     [ $# -ge 1 ] || lk_usage "\
 Usage: $FUNCNAME PROMPT [DEFAULT [READ_ARG...]]" || return
+    local YES="[yY]([eE][sS])?" NO="[nN][oO]?"
     if lk_no_input && [[ ${2-} =~ ^($YES|$NO)$ ]]; then
         [[ $2 =~ ^$YES$ ]]
     else
-        local _PROMPT=("$1") DEFAULT= PROMPT REPLY
+        local IFS _PROMPT=("$1") DEFAULT= PROMPT REPLY
+        unset IFS
         if [[ ${2-} =~ ^$YES$ ]]; then
             _PROMPT+=("[Y/n]")
             DEFAULT=Y

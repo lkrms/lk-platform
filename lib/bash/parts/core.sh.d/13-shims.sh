@@ -37,6 +37,8 @@ function lk_set_bashpid() {
 # platform.
 function lk_sed_i() {
     if ! lk_is_macos; then
+        local IFS
+        unset IFS
         lk_sudo sed -i"${1-}" "${@:2}"
     else
         lk_sudo sed -i "$@"
@@ -49,24 +51,26 @@ function lk_sed_i() {
 # the command and platform).
 function lk_unbuffer() {
     [ "$1" != exec ] || { local LK_EXEC=1 && shift; }
-    case "$1" in
+    local CMD=$1
+    shift
+    case "$CMD" in
     sed | gsed | gnu_sed)
-        set -- "$1" -u "${@:2}"
+        set -- "$CMD" -u "$@"
         ;;
     grep | ggrep | gnu_grep)
-        set -- "$1" --line-buffered "${@:2}"
+        set -- "$CMD" --line-buffered "$@"
         ;;
     *)
-        if [ "$1" = tr ] && lk_is_macos; then
-            set -- "$1" -u "${@:2}"
+        if [ "$CMD" = tr ] && lk_is_macos; then
+            set -- "$CMD" -u "$@"
         else
             # TODO: reinstate unbuffer after resolving LF -> CRLF issue
             case "$(lk_first_command stdbuf)" in
             stdbuf)
-                set -- stdbuf -i0 -oL -eL "$@"
+                set -- stdbuf -i0 -oL -eL "$CMD" "$@"
                 ;;
             unbuffer)
-                set -- unbuffer -p "$@"
+                set -- unbuffer -p "$CMD" "$@"
                 ;;
             esac
         fi

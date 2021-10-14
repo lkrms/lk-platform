@@ -66,10 +66,15 @@ while [ $# -gt 0 ]; do
             else
                 cat "$part"
             fi |
-                # Remove shebangs, lines that start with "####", consecutive
-                # empty lines, and trailing empty lines
+                # Remove shebangs, sections between "#### /*" and "#### */",
+                # lines that start with "####", consecutive empty lines, and
+                # trailing empty lines
                 awk -v s="[[:blank:]]" '
 NR == 1 && /^#!\//      {next}
+skip < 0                {skip = 0}
+/^#### \/\*/            {skip = 1}
+/^#### \*\//            {skip = -1}
+skip                    {next}
                         {if (gsub("(^|" s "+)####(" s ".*|$)", "") && !$0) next}
 !f && /^./              {f = NR}
 !f                      {next}

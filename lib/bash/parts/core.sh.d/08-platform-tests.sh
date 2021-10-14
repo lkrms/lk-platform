@@ -1,24 +1,10 @@
 #!/bin/bash
 
-# lk_version_at_least INSTALLED MINIMUM
-function lk_version_at_least() {
-    printf '%s\n' "$@" | sort -V | head -n1 | grep -Fx "$2" >/dev/null
-}
-
 # lk_bash_at_least MAJOR [MINOR]
 function lk_bash_at_least() {
     [ "${BASH_VERSINFO[0]}" -eq "$1" ] &&
         [ "${BASH_VERSINFO[1]}" -ge "${2:-0}" ] ||
         [ "${BASH_VERSINFO[0]}" -gt "$1" ]
-}
-
-# lk_command_exists COMMAND...
-function lk_command_exists() {
-    [ $# -gt 0 ] || return
-    while [ $# -gt 0 ]; do
-        type -P "$1" >/dev/null || return
-        shift
-    done
 }
 
 function lk_is_arm() {
@@ -29,10 +15,18 @@ function lk_is_macos() {
     [[ $OSTYPE == darwin* ]]
 }
 
+# lk_is_apple_silicon
+#
+# Return true if running natively on Apple Silicon, otherwise return false.
+# Returns false when running as a translated Intel binary on Apple Silicon.
 function lk_is_apple_silicon() {
     lk_is_macos && lk_is_arm
 }
 
+# lk_is_system_apple_silicon
+#
+# Return true if running on Apple Silicon, whether natively or as a translated
+# Intel binary.
 function lk_is_system_apple_silicon() {
     lk_is_macos && { lk_is_arm ||
         [ "$(sysctl -n sysctl.proc_translated 2>/dev/null)" = 1 ]; }
@@ -70,4 +64,18 @@ function lk_is_qemu() {
         grep -iq QEMU /sys/devices/virtual/dmi/id/*_vendor 2>/dev/null
 }
 
-#### Reviewed: 2021-10-01
+# lk_command_exists COMMAND...
+function lk_command_exists() {
+    [ $# -gt 0 ] || return
+    while [ $# -gt 0 ]; do
+        type -P "$1" >/dev/null || return
+        shift
+    done
+}
+
+# lk_version_at_least INSTALLED MINIMUM
+function lk_version_at_least() {
+    printf '%s\n' "$@" | sort -V | head -n1 | grep -Fx "$2" >/dev/null
+}
+
+#### Reviewed: 2021-10-14

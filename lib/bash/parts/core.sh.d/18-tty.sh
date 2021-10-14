@@ -1,9 +1,12 @@
 #!/bin/bash
 
 # _lk_tty_format [-b] VAR [COLOUR COLOUR_VAR]
+#
+# If COLOUR_VAR is not unset, use its value to set the default appearance of
+# text in VAR. Otherwise, use COLOUR as the default, adding bold if -b is set
+# unless $LK_BOLD already appears in COLOUR or the text.
 function _lk_tty_format() {
-    local _BOLD _STRING _COLOUR_SET _COLOUR _B=${_LK_TTY_B-} _E=${_LK_TTY_E-}
-    unset _BOLD
+    local _BOLD= _STRING _COLOUR_SET _COLOUR _B=${_LK_TTY_B-} _E=${_LK_TTY_E-}
     [ "${1-}" != -b ] || { _BOLD=1 && shift; }
     [ $# -gt 0 ] &&
         _STRING=${!1-} &&
@@ -32,22 +35,18 @@ function _lk_tty_format_readline() {
 #
 # For each PATH or input line, replace $HOME with ~ and remove $PWD.
 function lk_tty_path() {
-    if [ $# -gt 0 ]; then
-        printf '%s\n' "$@" | lk_tty_path
-    else
-        while IFS= read -r _PATH; do
-            __PATH=$_PATH
-            [ "$_PATH" = "${_PATH#~}" ] || __PATH="~${_PATH#~}"
-            [ "$PWD" = / ] || [ "$PWD" = "$_PATH" ] ||
-                [ "$_PATH" = "${_PATH#$PWD/}" ] || __PATH=${_PATH#$PWD/}
-            printf '%s\n' "$__PATH"
-        done
-    fi
+    local HOME=${HOME:-~}
+    _lk_stream_args 6 awk -v "home=$HOME" -v "pwd=$PWD" '
+home && index($0, home) == 1 {
+    $0 = "~" substr($0, length(home) + 1) }
+pwd != "/" && pwd != $0 && index($0, pwd "/") == 1 {
+    $0 = substr($0, length(pwd) + 2) }
+{ print }' "$@"
 }
 
 function lk_tty_columns() {
     local _COLUMNS
-    _COLUMNS=${_LK_TTY_COLUMNS:-${COLUMNS:-${TERM:+$(TERM=$TERM tput cols)}}} ||
+    _COLUMNS=${_LK_COLUMNS:-${COLUMNS:-${TERM:+$(TERM=$TERM tput cols)}}} ||
         _COLUMNS=
     echo "${_COLUMNS:-120}"
 }
@@ -89,18 +88,22 @@ function lk_tty_group_end() {
 #   lines will be aligned with the first (values: 0 or 1; default: 0)
 # - _LK_TTY_INDENT: MESSAGE2 indent (default: based on prefix length and message
 #   line counts)
-# - _LK_COLOUR: default colour of prefix and MESSAGE2 (default: $LK_CYAN)
+# - _LK_COLOUR: default colour of prefix and MESSAGE2 (default: LK_CYAN)
 # - _LK_ALT_COLOUR: default colour of prefix and MESSAGE2 for nested messages
-#   and output from lk_tty_detail et al (default: $LK_YELLOW)
+#   and output from lk_tty_detail, lk_tty_list_detail, etc. (default: LK_YELLOW)
 # - _LK_TTY_COLOUR: override prefix and MESSAGE2 colour
 # - _LK_TTY_PREFIX_COLOUR: override prefix colour (supersedes _LK_TTY_COLOUR)
 # - _LK_TTY_MESSAGE_COLOUR: override MESSAGE colour
 # - _LK_TTY_COLOUR2: override MESSAGE2 colour (supersedes _LK_TTY_COLOUR)
 function lk_tty_print() {
+    # Print a blank line and return if nothing was passed
     [ $# -gt 0 ] || {
         echo >&"${_LK_FD-2}"
         return
     }
+    # If nested grouping is active and lk_tty_print isn't already in its own
+    # call stack, bump lk_tty_print -> lk_tty_detail and lk_tty_detail ->
+    # _lk_tty_detail2
     [ -z "${_LK_TTY_GROUP-}" ] ||
         [ -z "${_LK_TTY_NEST[_LK_TTY_GROUP]-}" ] ||
         [ "${FUNCNAME[2]-}" = "$FUNCNAME" ] || {
@@ -213,7 +216,8 @@ function lk_tty_list() {
             column <<<"$_LIST" | expand) || return
     echo "$(
         _LK_FD=1
-        lk_tty_print "$_MESSAGE" $'\n'"$_LIST" ${!_COLOUR+"${!_COLOUR}"}
+        ${_LK_TTY_COMMAND:-lk_tty_print} \
+            "$_MESSAGE" $'\n'"$_LIST" ${!_COLOUR+"${!_COLOUR}"}
         [ -z "${_SINGLE:+${_PLURAL:+1}}" ] ||
             _LK_TTY_PREFIX=$(printf "%$((_INDENT > 0 ? _INDENT : 0))s") \
                 lk_tty_detail "($(lk_plural -v _ITEMS "$_SINGLE" "$_PLURAL"))"
@@ -223,11 +227,62 @@ function lk_tty_list() {
 # - lk_tty_list_detail [- [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
 # - lk_tty_list_detail [ARRAY [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
 function lk_tty_list_detail() {
-    local _LK_TTY_COLOUR_ORIG=${_LK_COLOUR-}
-    _LK_TTY_PREFIX1=${_LK_TTY_PREFIX2- -> } \
-        _LK_COLOUR=${_LK_ALT_COLOUR-} \
-        _LK_TTY_MESSAGE_COLOUR=${_LK_TTY_MESSAGE_COLOUR-} \
-        lk_tty_list "$@"
+    _LK_STACK_DEPTH=1 _LK_TTY_COMMAND=lk_tty_detail lk_tty_list "$@"
 }
 
-#### Reviewed: 2021-10-10
+# - lk_tty_run [-SHIFT]                         COMMAND [ARG...]
+# - lk_tty_run [-ARG=[REPLACE][:ARG=...]]       COMMAND [ARG...]
+# - lk_tty_run [-SHIFT:ARG=[REPLACE][:ARG=...]] COMMAND [ARG...]
+#
+# Print COMMAND and run it after making optional changes to the printed version,
+# where SHIFT is the number of arguments to remove (starting with COMMAND) and
+# ARG is the 1-based argument to remove or REPLACE (starting with COMMAND or the
+# first argument not removed by SHIFT).
+function lk_tty_run() {
+    local IFS SHIFT= TRANSFORM= CMD i REGEX='([0-9]+)=([^:]*)'
+    unset IFS
+    [[ ${1-} != -* ]] ||
+        { [[ $1 =~ ^-(([0-9]+)(:($REGEX(:$REGEX)*))?|($REGEX(:$REGEX)*))$ ]] &&
+            SHIFT=${BASH_REMATCH[2]} &&
+            TRANSFORM=${BASH_REMATCH[4]:-${BASH_REMATCH[1]}} &&
+            shift; } || lk_warn "invalid arguments" || return
+    CMD=("$@")
+    [ -z "$SHIFT" ] || shift "$SHIFT"
+    while [[ $TRANSFORM =~ ^$REGEX:?(.*) ]]; do
+        i=${BASH_REMATCH[1]}
+        [[ -z "${BASH_REMATCH[2]}" ]] &&
+            set -- "${@:1:i-1}" "${@:i+1}" ||
+            set -- "${@:1:i-1}" "${BASH_REMATCH[2]}" "${@:i+1}"
+        TRANSFORM=${BASH_REMATCH[3]}
+    done
+    while :; do
+        case "${1-}" in
+        lk_elevate)
+            shift
+            lk_root || set -- sudo "$@"
+            break
+            ;;
+        lk_sudo | lk_maybe_sudo)
+            shift
+            ! lk_will_sudo || set -- sudo "$@"
+            break
+            ;;
+        -*)
+            shift
+            continue
+            ;;
+        esac
+        break
+    done
+    ${_LK_TTY_COMMAND:-lk_tty_print} "Running:" "$(lk_quote_args "$@")"
+    "${CMD[@]}"
+}
+
+# lk_tty_run_detail [OPTIONS] COMMAND [ARG...]
+#
+# See lk_tty_run for details.
+function lk_tty_run_detail() {
+    _LK_STACK_DEPTH=1 _LK_TTY_COMMAND=lk_tty_detail lk_tty_run "$@"
+}
+
+#### Reviewed: 2021-10-15

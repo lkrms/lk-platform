@@ -1185,7 +1185,7 @@ Usage: $FUNCNAME [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
             JUMP_ARGS=(
                 -o ConnectTimeout=5
                 -o ControlMaster=auto
-                -o ControlPath="/tmp/.${FUNCNAME}_%h-%p-%r-%l"
+                -o ControlPath="/tmp/.${FUNCNAME}_%h-%p-%r-%u-%l"
                 -o ControlPersist=120
             )
             ssh -O check "${JUMP_ARGS[@]}" "$JUMP_HOST_NAME" 2>/dev/null ||
@@ -1290,7 +1290,7 @@ IdentitiesOnly          yes
 ForwardAgent            yes
 StrictHostKeyChecking   accept-new
 ControlMaster           auto
-ControlPath             /tmp/ssh_%h-%p-%r-%l
+ControlPath             /tmp/ssh_%h-%p-%r-%u-%l
 ControlPersist          120
 SendEnv                 LANG LC_*
 ServerAliveInterval     30

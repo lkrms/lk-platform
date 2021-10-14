@@ -1,8 +1,26 @@
 #!/bin/bash
 
+# _lk_stream_args COMMAND_ARGS COMMAND... [ARG...]
+function _lk_stream_args() {
+    local IFS
+    unset IFS
+    if (($# > $1 + 1)); then
+        printf '%s\n' "${@:$1+2}" | "${@:2:$1}"
+    else
+        [ "$(type -t "$2")" = file ] || local LK_EXEC
+        ${LK_EXEC:+exec} "${@:2:$1}"
+    fi
+}
+
+# lk_uniq [STRING...]
+function lk_uniq() {
+    _lk_stream_args 2 awk '!seen[$0]++ { print }' "$@"
+}
+
 # lk_implode_args GLUE [ARG...]
 function lk_implode_args() {
-    local GLUE=${1//\\/\\\\}
+    local IFS GLUE=${1//\\/\\\\}
+    unset IFS
     GLUE=${GLUE//%/%%}
     [ $# -eq 1 ] || printf '%s' "$2"
     [ $# -le 2 ] || printf -- "$GLUE%s" "${@:3}"
@@ -11,7 +29,8 @@ function lk_implode_args() {
 
 # lk_implode_arr GLUE [ARRAY_NAME...]
 function lk_implode_arr() {
-    local _ARR _EVAL=
+    local IFS _ARR _EVAL=
+    unset IFS
     for _ARR in "${@:2}"; do
         _EVAL+=" \${$_ARR+\"\${${_ARR}[@]}\"}"
     done
@@ -24,11 +43,7 @@ function lk_implode_input() {
 }
 
 function lk_ere_escape() {
-    if [ $# -gt 0 ]; then
-        printf '%s\n' "$@" | lk_ere_escape
-    else
-        sed -E 's/[]$()*+.?\^{|}[]/\\&/g'
-    fi
+    _lk_stream_args 3 sed -E 's/[]$()*+.?\^{|}[]/\\&/g' "$@"
 }
 
 # lk_ere_implode_input [-e]
@@ -56,27 +71,15 @@ function lk_ere_implode_args() {
 }
 
 function lk_sed_escape() {
-    if [ $# -gt 0 ]; then
-        printf '%s\n' "$@" | lk_sed_escape
-    else
-        sed -E "s/[]\$()*+./?\\^{|}[]/\\\\&/g"
-    fi
+    _lk_stream_args 3 sed -E "s/[]\$()*+./?\\^{|}[]/\\\\&/g" "$@"
 }
 
 function lk_sed_escape_replace() {
-    if [ $# -gt 0 ]; then
-        printf '%s\n' "$@" | lk_sed_escape_replace
-    else
-        sed -E "s/[&/\\]/\\\\&/g"
-    fi
+    _lk_stream_args 3 sed -E "s/[&/\\]/\\\\&/g" "$@"
 }
 
 function lk_strip_cr() {
-    if [ $# -gt 0 ]; then
-        printf '%s\n' "$@" | lk_strip_cr
-    else
-        sed -E 's/.*\r(.)/\1/'
-    fi
+    _lk_stream_args 3 sed -E 's/.*\r(.)/\1/' "$@"
 }
 
 # lk_strip_non_printing [-d DELETE] [STRING...]
@@ -88,13 +91,10 @@ function lk_strip_cr() {
 function lk_strip_non_printing() {
     local DELETE
     [ "${1-}" != -d ] || { DELETE=$2 && shift 2; }
-    if [ $# -gt 0 ]; then
-        printf '%s\n' "$@" | lk_strip_non_printing ${DELETE:+-d "$DELETE"}
-    else
-        eval "$(lk_get_regex NON_PRINTING_REGEX)"
-        ${LK_EXEC:+exec} sed -Eu "s/$NON_PRINTING_REGEX//g; "$'s/.*\r(.)/\\1/' |
-            lk_unbuffer ${LK_EXEC:+exec} tr -d '\0-\10\16-\37\177'"${DELETE-}"
-    fi
+    eval "$(lk_get_regex NON_PRINTING_REGEX)"
+    _lk_stream_args 3 \
+        sed -Eu "s/$NON_PRINTING_REGEX//g; "$'s/.*\r(.)/\\1/' "$@" |
+        lk_unbuffer tr -d '\0-\10\16-\37\177'"${DELETE-}"
 }
 
 # lk_string_sort [[SORT_ARGS] STRING]
@@ -103,16 +103,22 @@ function lk_string_sort() {
     [ $# -le 1 ] || { ARGS=$1 && shift; }
     printf '%s' "${IFS::1}$1${IFS::1}" | tr -s "$IFS" '\0' |
         sort -z ${ARGS:+"$ARGS"} | tr '\0' "${IFS::1}" |
-        sed -E '1s/^.//; $s/.$//'
+        awk -v "RS=${IFS::1}" '
+NR == 1 {next}
+        {printf "%s%s", (i++ ? RS : ""), $0}
+END     {printf "\n"}'
 }
 
 # lk_string_remove [STRING [REMOVE...]]
 function lk_string_remove() {
     local IFS=${IFS:- } REGEX
-    REGEX=$([ $# -le 1 ] || printf '%s\n' "${@:2}" | lk_ere_implode_input)
+    REGEX=$(unset IFS && [ $# -le 1 ] ||
+        printf '%s\n' "${@:2}" | lk_ere_implode_input -e)
     printf '%s' "${IFS::1}$1${IFS::1}" | tr -s "$IFS" "${IFS::1}" |
-        awk -v "RS=${IFS::1}" -v "regex=$REGEX" \
-            'NR == 1 {next} $0 !~ regex {printf "%s%s", (i++ ? RS : ""), $0 }'
+        awk -v "RS=${IFS::1}" -v "regex=^${REGEX//\\/\\\\}\$" '
+NR == 1     {next}
+$0 !~ regex {printf "%s%s", (i++ ? RS : ""), $0}
+END         {printf "\n"}'
 }
 
 #### Reviewed: 2021-10-04

@@ -8,6 +8,6 @@ USER=${USER:-$(id -un)} &&
     { [ "${NS-}" = "[^[:blank:]]" ] || readonly NS="[^[:blank:]]"; } || return
 
 _LK_ARGV=("$@")
-_LK_INCLUDES=core
+_LK_PROVIDED=core
 
-#### Reviewed: 2021-10-01
+#### Reviewed: 2021-10-14

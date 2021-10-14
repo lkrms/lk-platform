@@ -11,6 +11,7 @@ function lk_no_input() {
     fi
 }
 
+#### /*
 # lk_vars_not_empty [-q] VAR...
 #
 # Print a warning and return false if any VAR is empty or unset. If -q is set,
@@ -30,5 +31,6 @@ function lk_vars_not_empty() {
         false
     }
 }
+#### */
 
-#### Reviewed: 2021-10-07
+#### Reviewed: 2021-10-14

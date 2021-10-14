@@ -1,11 +1,20 @@
 #!/bin/bash
 
-# lk_report_error COMMAND [ARG...]
+# lk_report_error [-q] COMMAND [ARG...]
 #
-# Run COMMAND and print an error message if it exits non-zero.
+# Run COMMAND and print an error message if it exits non-zero. If -q is set,
+# discard output to stderr unless COMMAND fails.
 function lk_report_error() {
-    "$@" || {
+    local QUIET STDERR
+    [ "${1-}" != -q ] || { QUIET=1 && shift; }
+    if [ -n "${QUIET-}" ]; then
+        lk_mktemp_with STDERR || return
+        "$@" 2>"$STDERR"
+    else
+        "$@"
+    fi || {
         local STATUS=$? IFS=' '
+        [ ! -s "${STDERR-}" ] || cat "$STDERR" >&2
         lk_console_error "Exit status $STATUS:" "$*"
         return $STATUS
     }
