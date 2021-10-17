@@ -100,4 +100,26 @@ function lk_maybe_local() {
         esac
 }
 
-#### Reviewed: 2021-10-17
+# lk_x_off
+#
+# Output Bash commands that disable xtrace temporarily and prevent themselves
+# from appearing in trace output.
+#
+# Recommended usage, assuming Bash could be writing trace output to either FD 2
+# or FD 4:
+#
+#     function quiet() {
+#         { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
+#         # Can also be used in a && or || list
+#         eval "$_lk_x_return"
+#     }
+#
+# Or, outside of a function:
+#
+#     { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
+#     eval "$_lk_x_restore"
+function lk_x_off() {
+    echo 'eval "{ declare _lk_x_restore= _lk_x_return=\"return \\\$?\"; [ \"\${-/x/}\" = \"\$-\" ] || { _lk_x_restore=\"set -x\"; _lk_x_return=\"eval \\\"{ local _lk_x_status=\\\\\\\$?; set -x; return \\\\\\\$_lk_x_status; } \\\${BASH_XTRACEFD:-2}>/dev/null\\\"\"; set +x; }; } ${BASH_XTRACEFD:-2}>/dev/null"'
+}
+
+#### Reviewed: 2021-10-18
