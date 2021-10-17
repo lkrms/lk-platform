@@ -307,7 +307,6 @@ SOURCE_LATEST=$BACKUP_ROOT/latest/$SOURCE_NAME
 SNAPSHOT_LOG_FILE=$LK_SNAPSHOT/log/snapshot.log
 RSYNC_OUT_FILE=$LK_SNAPSHOT/log/rsync.log
 RSYNC_ERR_FILE=$LK_SNAPSHOT/log/rsync.err.log
-SNAPSHOT_DEVICE=$(df "$LK_SNAPSHOT" | awk 'END {print $1}')
 
 [ -d "$SOURCE_LATEST" ] ||
     [ ! -d "$LK_SNAPSHOT_ROOT" ] ||
@@ -337,6 +336,8 @@ for f in SNAPSHOT_LOG_FILE RSYNC_OUT_FILE RSYNC_ERR_FILE; do
     [ -e "${!f}" ] ||
         install -m "$LOG_MODE" /dev/null "${!f}"
 done
+
+SNAPSHOT_DEVICE=$(df "$LK_SNAPSHOT" | awk 'END {print $1}')
 
 _LK_LOG_CMDLINE=("$0-$JOB_NAME" "${_LK_ARGV[@]}")
 _LK_SECONDARY_LOG_FILE=$SNAPSHOT_LOG_FILE \

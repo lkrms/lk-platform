@@ -429,7 +429,6 @@ LOG_FILE=$BACKUP_ROOT/log/$SOURCE_NAME.source.log
 SNAPSHOT_LOG_FILE=$LK_SNAPSHOT/log/snapshot.log
 RSYNC_OUT_FILE=$LK_SNAPSHOT/log/rsync.log
 RSYNC_ERR_FILE=$LK_SNAPSHOT/log/rsync.err.log
-SNAPSHOT_DEVICE=$(df "$LK_SNAPSHOT" | awk 'END {print $1}')
 
 ! is_stage_complete finished ||
     lk_die "already finalised: $LK_SNAPSHOT"
@@ -454,6 +453,8 @@ for f in LOG_FILE SNAPSHOT_LOG_FILE RSYNC_OUT_FILE RSYNC_ERR_FILE; do
     [ -e "${!f}" ] ||
         install -m "$LOG_MODE" /dev/null "${!f}"
 done
+
+SNAPSHOT_DEVICE=$(df "$LK_SNAPSHOT" | awk 'END {print $1}')
 
 if [[ $- != *x* ]]; then
     lk_log >>"$LOG_FILE" <<<"====> $(lk_realpath "$0") invoked on $FQDN"
