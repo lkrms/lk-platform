@@ -83,6 +83,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_NODE_TIMEZONE`
 - `LK_NO_INPUT`
 - `LK_NO_LOG`
+- `LK_NO_STACK_TRACE`
 - `LK_NTP_SERVER`
 - `LK_OPCACHE_MEMORY_CONSUMPTION`
 - `LK_OPENCONNECT_PROTOCOL`

@@ -21,13 +21,16 @@ function lk_script_name() {
     local DEPTH=$((${1:-0} + ${_LK_STACK_DEPTH:-0})) NAME
     lk_script_running ||
         NAME=${FUNCNAME[1 + DEPTH]+"${FUNCNAME[*]: -1}"}
+    [[ ! ${NAME-} =~ ^(source|main)$ ]] || NAME=
     echo "${NAME:-${0##*/}}"
 }
 
 # lk_caller_name [STACK_DEPTH]
 function lk_caller_name() {
-    local DEPTH=$((${1:-0} + ${_LK_STACK_DEPTH:-0}))
-    echo "${FUNCNAME[2 + DEPTH]-${0##*/}}"
+    local DEPTH=$((${1:-0} + ${_LK_STACK_DEPTH:-0})) NAME
+    NAME=${FUNCNAME[2 + DEPTH]-}
+    [[ ! ${NAME-} =~ ^(source|main)$ ]] || NAME=
+    echo "${NAME:-${0##*/}}"
 }
 
 # lk_first_command [COMMAND...]
@@ -97,4 +100,4 @@ function lk_maybe_local() {
         esac
 }
 
-#### Reviewed: 2021-10-14
+#### Reviewed: 2021-10-17

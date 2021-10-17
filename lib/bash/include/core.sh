@@ -154,13 +154,16 @@ function lk_script_name() {
     local DEPTH=$((${1:-0} + ${_LK_STACK_DEPTH:-0})) NAME
     lk_script_running ||
         NAME=${FUNCNAME[1 + DEPTH]+"${FUNCNAME[*]: -1}"}
+    [[ ! ${NAME-} =~ ^(source|main)$ ]] || NAME=
     echo "${NAME:-${0##*/}}"
 }
 
 # lk_caller_name [STACK_DEPTH]
 function lk_caller_name() {
-    local DEPTH=$((${1:-0} + ${_LK_STACK_DEPTH:-0}))
-    echo "${FUNCNAME[2 + DEPTH]-${0##*/}}"
+    local DEPTH=$((${1:-0} + ${_LK_STACK_DEPTH:-0})) NAME
+    NAME=${FUNCNAME[2 + DEPTH]-}
+    [[ ! ${NAME-} =~ ^(source|main)$ ]] || NAME=
+    echo "${NAME:-${0##*/}}"
 }
 
 # lk_first_command [COMMAND...]
@@ -777,8 +780,8 @@ function _lk_caller() {
     [ -z "$SOURCE" ] || [ "$SOURCE" = main ] || [ "$SOURCE" = "$0" ] ||
         CALLER+=("$(lk_tty_path "$SOURCE")")
     [ -z "$LINE" ] || [ "$LINE" -eq 1 ] ||
-        CALLER[${#CALLER[@]} - 1]+=$LK_DIM:$LINE$LK_RESET
-    lk_implode_arr "$LK_DIM->$LK_RESET" CALLER
+        CALLER[${#CALLER[@]} - 1]+=$LK_DIM:$LINE$LK_UNDIM
+    lk_implode_arr "$LK_DIM->$LK_UNDIM" CALLER
 }
 
 # lk_warn [MESSAGE]
@@ -1225,26 +1228,30 @@ function lk_trace() {
     _LK_TRACE_LAST=$NOW
 }
 
-# lk_get_stack_trace [FIRST_FRAME_DEPTH [ROWS [FIRST_FRAME]]]
-function lk_get_stack_trace() {
-    local i=$((${1:-0} + ${_LK_STACK_DEPTH:-0})) r=0 ROWS=${2:-0} FRAME=${3-} \
-        DEPTH=$((${#FUNCNAME[@]} - 1)) WIDTH FUNC FILE LINE \
+# lk_stack_trace [FIRST_FRAME_DEPTH [ROWS [FIRST_FRAME]]]
+function lk_stack_trace() {
+    local DEPTH=$((${1:-0} + ${_LK_STACK_DEPTH:-0})) ROWS=${2:-0} FRAME=${3-} \
+        _D=$((${#FUNCNAME[@]} - 1)) _R WIDTH ROW=0 FUNC FILE LINE \
         REGEX='^([0-9]*) ([^ ]*) (.*)$'
-    WIDTH=${#DEPTH}
-    while ((i++ < DEPTH)) && ((!ROWS || r++ < ROWS)); do
-        FUNC=${FUNCNAME[i]-"{main}"}
-        FILE=${BASH_SOURCE[i]-"{main}"}
-        LINE=${BASH_LINENO[i - 1]-0}
+    # _D = maximum DEPTH, _R = maximum rows of output (DEPTH=0 is always skipped
+    # to exclude lk_stack_trace)
+    ((_R = _D - DEPTH, ROWS = ROWS ? (ROWS > _R ? _R : ROWS) : _R, ROWS)) ||
+        lk_warn "invalid arguments" || return
+    WIDTH=${#_R}
+    while ((ROW++ < ROWS)) && ((DEPTH++ < _D)); do
+        FUNC=${FUNCNAME[DEPTH]-"{main}"}
+        FILE=${BASH_SOURCE[DEPTH]-"{main}"}
+        LINE=${BASH_LINENO[DEPTH - 1]-0}
         [[ ! ${FRAME-} =~ $REGEX ]] || {
             FUNC=${BASH_REMATCH[2]:-$FUNC}
             FILE=${BASH_REMATCH[3]:-$FILE}
             LINE=${BASH_REMATCH[1]:-$LINE}
             unset FRAME
         }
-        ((ROWS == 1)) || printf "%${WIDTH}d. " "$((DEPTH - i + 1))"
+        ((ROWS == 1)) || printf "%${WIDTH}d. " "$ROW"
         printf "%s %s (%s:%s)\n" \
-            "$( ((r > 1)) && echo at || echo in)" \
-            "$LK_BOLD$FUNC$LK_RESET" "$FILE$LK_DIM" "$LINE$LK_RESET"
+            "$( ((ROW > 1)) && echo at || echo in)" \
+            "$LK_BOLD$FUNC$LK_RESET" "$FILE$LK_DIM" "$LINE$LK_UNDIM"
     done
 }
 
@@ -1524,7 +1531,6 @@ lk_include() { lk_require "$@"; }
 lk_is_false() { lk_false "$@"; }
 lk_is_true() { lk_true "$@"; }
 lk_maybe_sudo() { lk_sudo "$@"; }
-lk_myself() { local s=$? && { [[ ${1-} != -* ]] || _LK_STACK_DEPTH= lk_warn "-f not supported"; } && lk_pass -$s lk_script_name $((2 + ${_LK_STACK_DEPTH:-0})); }
 lk_regex_implode() { lk_ere_implode_args -- "$@"; }
 lk_run_detail() { lk_tty_run_detail "$@"; }
 lk_run() { lk_tty_run "$@"; }
@@ -1533,7 +1539,7 @@ lk_run() { lk_tty_run "$@"; }
 
 function _lk_usage_format() {
     local CMD BOLD RESET
-    CMD=$(lk_escape_ere "$(lk_myself 2)")
+    CMD=$(lk_escape_ere "$(lk_caller_name 1)")
     BOLD=$(lk_escape_ere_replace "$LK_BOLD")
     RESET=$(lk_escape_ere_replace "$LK_RESET")
     sed -E \
@@ -2291,18 +2297,20 @@ function _lk_lock_check_args() {
     printf 'set -- %s\n' "$(lk_quote_args "$@")"
 } #### Reviewed: 2021-05-23
 
-# lk_lock [-f LOCK_FILE] [LOCK_FILE_VAR LOCK_FD_VAR] [LOCK_NAME]
+# lk_lock [-f LOCK_FILE] [-w] [LOCK_FILE_VAR LOCK_FD_VAR] [LOCK_NAME]
 function lk_lock() {
-    local _LK_SH _LK_FILE
+    local _LK_FILE _LK_NONBLOCK=1 _LK_SH
     [ "${1-}" != -f ] || { _LK_FILE=${2-} && shift 2 || return; }
+    [ "${1-}" != -w ] || { unset _LK_NONBLOCK && shift || return; }
     _LK_SH=$(_lk_lock_check_args "$@") ||
         { [ $? -eq 2 ] && return 0; } || return
     eval "$_LK_SH" || return
     unset "${@:1:2}"
-    eval "$1=\${_LK_FILE:-/tmp/\${3:-.\${LK_PATH_PREFIX:-lk-}\$(lk_myself 1)}.lock}" &&
+    eval "$1=\${_LK_FILE:-/tmp/\${3:-.\${LK_PATH_PREFIX:-lk-}\$(lk_caller_name)}.lock}" &&
         eval "$2=\$(lk_fd_next)" &&
         eval "exec ${!2}>\"\$$1\"" || return
-    flock -n "${!2}" || lk_warn "unable to acquire lock: ${!1}" || return
+    flock ${_LK_NONBLOCK+-n} "${!2}" ||
+        lk_warn "unable to acquire lock: ${!1}" || return
     lk_trap_add EXIT lk_lock_drop "$@"
 } #### Reviewed: 2021-05-23
 
@@ -4219,9 +4227,13 @@ function _lk_exit_trap() {
     [ $STATUS -eq 0 ] || [ "${_LK_CAN_FAIL-}" = 1 ] ||
         [[ ${FUNCNAME[1]-} =~ ^_?lk_(die|usage)$ ]] ||
         { [[ $- == *i* ]] && [ $BASH_SUBSHELL -eq 0 ]; } ||
-        _LK_TTY_NO_FOLD=1 lk_console_error \
-            "$(_lk_caller "${_LK_ERR_TRAP_CALLER:-$1}"): unhandled error" \
-            "$(lk_get_stack_trace $((1 - ${_LK_STACK_DEPTH:-0})) "" "${_LK_ERR_TRAP_CALLER-}")"
+        lk_console_error \
+            "$(LK_VERBOSE=1 \
+                _lk_caller "${_LK_ERR_TRAP_CALLER:-$1}"): unhandled error" \
+            "$(lk_stack_trace \
+                $((1 - ${_LK_STACK_DEPTH:-0})) \
+                "$([ "${LK_NO_STACK_TRACE-}" != 1 ] || echo 1)" \
+                "${_LK_ERR_TRAP_CALLER-}")"
 } #### Reviewed: 2021-05-28
 
 function _lk_err_trap() {

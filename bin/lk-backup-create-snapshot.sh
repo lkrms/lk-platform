@@ -19,14 +19,14 @@ lk_include backup mail mysql
     lk_include linux
 
 function exit_trap() {
-    local EXIT_STATUS=$? MESSAGE TAR SUBJECT
+    local STATUS=$? MESSAGE TAR SUBJECT
     [ "$BASH_SUBSHELL" -eq 0 ] || return
     exec 8>&- &&
         rm -Rf "${FIFO_FILE%/*}" || true
     lk_log_close -r
     [ -z "$LK_BACKUP_MAIL" ] ||
-        { [ "$EXIT_STATUS" -eq 0 ] &&
-            [ "$RSYNC_EXIT_VALUE" -eq 0 ] &&
+        { [ "$STATUS" -eq 0 ] &&
+            [ "$RSYNC_STATUS" -eq 0 ] &&
             [ "$LK_BACKUP_MAIL_ERROR_ONLY" = Y ]; } || {
         lk_mail_new
         MESSAGE=
@@ -42,8 +42,8 @@ function exit_trap() {
                 application/gzip &&
                 MESSAGE="the attached log files and " || true
         }
-        [ "$EXIT_STATUS" -eq 0 ] && {
-            [ "$RSYNC_EXIT_VALUE" -eq 0 ] && {
+        [ "$STATUS" -eq 0 ] && {
+            [ "$RSYNC_STATUS" -eq 0 ] && {
                 SUBJECT="Success"
                 MESSAGE="\
 The following backup ${RSYNC_RESULT:-completed without error}."
@@ -107,10 +107,10 @@ function run_custom_hook() {
         for SOURCE_SCRIPT in "${SCRIPTS[@]}"; do
             lk_console_item "Running hook script:" "$SOURCE_SCRIPT"
             (
-                EXIT_STATUS=0
-                . "$SOURCE_SCRIPT" || EXIT_STATUS=$?
+                STATUS=0
+                (. "$SOURCE_SCRIPT") || STATUS=$?
                 echo "# ." >&8
-                exit "$EXIT_STATUS"
+                exit "$STATUS"
             ) &
             LINES=()
             while IFS= read -ru 8 LINE && [ "$LINE" != "# ." ]; do
@@ -284,8 +284,8 @@ esac
 
 SOURCE_NAME=${SOURCE_NAME//\//_}
 BACKUP_ROOT=$(realpath "$BACKUP_ROOT")
-LOCK_NAME=${0##*/}-${BACKUP_ROOT//\//_}-$SOURCE_NAME
-lk_lock LOCK_FILE LOCK_FD "$LOCK_NAME"
+JOB_NAME=${BACKUP_ROOT//\//_}-$SOURCE_NAME
+lk_lock LOCK_FILE LOCK_FD "${0##*/}-$JOB_NAME"
 FIFO_FILE=$(lk_mktemp_dir)/fifo
 mkfifo "$FIFO_FILE"
 exec 8<>"$FIFO_FILE"
@@ -307,6 +307,7 @@ SOURCE_LATEST=$BACKUP_ROOT/latest/$SOURCE_NAME
 SNAPSHOT_LOG_FILE=$LK_SNAPSHOT/log/snapshot.log
 RSYNC_OUT_FILE=$LK_SNAPSHOT/log/rsync.log
 RSYNC_ERR_FILE=$LK_SNAPSHOT/log/rsync.err.log
+SNAPSHOT_DEVICE=$(df "$LK_SNAPSHOT" | awk 'END {print $1}')
 
 [ -d "$SOURCE_LATEST" ] ||
     [ ! -d "$LK_SNAPSHOT_ROOT" ] ||
@@ -337,10 +338,11 @@ for f in SNAPSHOT_LOG_FILE RSYNC_OUT_FILE RSYNC_ERR_FILE; do
         install -m "$LOG_MODE" /dev/null "${!f}"
 done
 
+_LK_LOG_CMDLINE=("$0-$JOB_NAME" "${_LK_ARGV[@]}")
 _LK_SECONDARY_LOG_FILE=$SNAPSHOT_LOG_FILE \
     lk_log_start
 
-RSYNC_EXIT_VALUE=0
+RSYNC_STATUS=0
 RSYNC_RESULT=
 RSYNC_STAGE_SUFFIX=
 
@@ -371,7 +373,13 @@ lk_trap_add EXIT exit_trap
         mark_stage_complete previous-copy-started
         # Prevent unwelcome set-group-ID propagation
         install -d -m 00700 "$LK_SNAPSHOT_FS"
+        # Limit concurrent snapshot duplication to one job per device, otherwise
+        # jobs started simultaneously will bottleneck each other before any of
+        # them progress to syncing
+        lk_lock -f "/tmp/${0##*/}-${SNAPSHOT_DEVICE//\//_}.copy.lock" -w \
+            COPY_LOCK_FILE COPY_LOCK_FD
         gnu_cp -alT "$LATEST" "$LK_SNAPSHOT_FS"
+        lk_lock_drop COPY_LOCK_FILE COPY_LOCK_FD
         mark_stage_complete previous-copy-finished
         lk_console_log "Copy complete"
     else
@@ -401,33 +409,33 @@ lk_trap_add EXIT exit_trap
         ! lk_in_array -n RSYNC_ARGS || DRY_RUN=1
 
     [ "${DRY_RUN:-0}" -ne 0 ] || mark_stage_complete rsync-started
-    run_rsync || RSYNC_EXIT_VALUE=$?
-    EXIT_STATUS=$RSYNC_EXIT_VALUE
-    case "$EXIT_STATUS" in
+    run_rsync || RSYNC_STATUS=$?
+    STATUS=$RSYNC_STATUS
+    case "$STATUS" in
     0)
         RSYNC_RESULT="completed successfully"
         ;;
     23 | 24)
         RSYNC_RESULT="completed with transfer errors"
         RSYNC_STAGE_SUFFIX=partial_transfer
-        EXIT_STATUS=0
+        STATUS=0
         ;;
     *)
         RSYNC_RESULT="failed to complete"
         ;;
     esac
-    [ "${DRY_RUN:-0}" -ne 0 ] || [ "$EXIT_STATUS" -ne 0 ] ||
+    [ "${DRY_RUN:-0}" -ne 0 ] || [ "$STATUS" -ne 0 ] ||
         mark_stage_complete \
             "rsync${RSYNC_STAGE_SUFFIX:+-$RSYNC_STAGE_SUFFIX}-finished"
-    lk_console_log "rsync $RSYNC_RESULT (exit status $RSYNC_EXIT_VALUE)"
+    lk_console_log "rsync $RSYNC_RESULT (exit status $RSYNC_STATUS)"
 
     run_custom_hook post_rsync
 
-    [ "${DRY_RUN:-0}" -ne 0 ] || [ "$EXIT_STATUS" -ne 0 ] || {
+    [ "${DRY_RUN:-0}" -ne 0 ] || [ "$STATUS" -ne 0 ] || {
         lk_console_message "Updating latest snapshot symlink for $SOURCE_NAME"
         ln -sfnv "$LK_SNAPSHOT" "$BACKUP_ROOT/latest/$SOURCE_NAME"
         mark_stage_complete finished
     }
 
-    exit "$EXIT_STATUS"
+    exit "$STATUS"
 }

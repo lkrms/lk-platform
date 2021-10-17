@@ -18,7 +18,6 @@ lk_include() { lk_require "$@"; }
 lk_is_false() { lk_false "$@"; }
 lk_is_true() { lk_true "$@"; }
 lk_maybe_sudo() { lk_sudo "$@"; }
-lk_myself() { local s=$? && { [[ ${1-} != -* ]] || _LK_STACK_DEPTH= lk_warn "-f not supported"; } && lk_pass -$s lk_script_name $((2 + ${_LK_STACK_DEPTH:-0})); }
 lk_regex_implode() { lk_ere_implode_args -- "$@"; }
 lk_run_detail() { lk_tty_run_detail "$@"; }
 lk_run() { lk_tty_run "$@"; }
