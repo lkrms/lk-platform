@@ -21,13 +21,16 @@ function lk_script_name() {
     local DEPTH=$((${1:-0} + ${_LK_STACK_DEPTH:-0})) NAME
     lk_script_running ||
         NAME=${FUNCNAME[1 + DEPTH]+"${FUNCNAME[*]: -1}"}
+    [[ ! ${NAME-} =~ ^(source|main)$ ]] || NAME=
     echo "${NAME:-${0##*/}}"
 }
 
 # lk_caller_name [STACK_DEPTH]
 function lk_caller_name() {
-    local DEPTH=$((${1:-0} + ${_LK_STACK_DEPTH:-0}))
-    echo "${FUNCNAME[2 + DEPTH]-${0##*/}}"
+    local DEPTH=$((${1:-0} + ${_LK_STACK_DEPTH:-0})) NAME
+    NAME=${FUNCNAME[2 + DEPTH]-}
+    [[ ! ${NAME-} =~ ^(source|main)$ ]] || NAME=
+    echo "${NAME:-${0##*/}}"
 }
 
 # lk_first_command [COMMAND...]
@@ -97,4 +100,26 @@ function lk_maybe_local() {
         esac
 }
 
-#### Reviewed: 2021-10-14
+# lk_x_off
+#
+# Output Bash commands that disable xtrace temporarily and prevent themselves
+# from appearing in trace output.
+#
+# Recommended usage, assuming Bash could be writing trace output to either FD 2
+# or FD 4:
+#
+#     function quiet() {
+#         { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
+#         # Can also be used in a && or || list
+#         eval "$_lk_x_return"
+#     }
+#
+# Or, outside of a function:
+#
+#     { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
+#     eval "$_lk_x_restore"
+function lk_x_off() {
+    echo 'eval "{ declare _lk_x_restore= _lk_x_return=\"return \\\$?\"; [ \"\${-/x/}\" = \"\$-\" ] || { _lk_x_restore=\"set -x\"; _lk_x_return=\"eval \\\"{ local _lk_x_status=\\\\\\\$?; set -x; return \\\\\\\$_lk_x_status; } \\\${BASH_XTRACEFD:-2}>/dev/null\\\"\"; set +x; }; } ${BASH_XTRACEFD:-2}>/dev/null"'
+}
+
+#### Reviewed: 2021-10-18

@@ -19,8 +19,8 @@ function _lk_caller() {
     [ -z "$SOURCE" ] || [ "$SOURCE" = main ] || [ "$SOURCE" = "$0" ] ||
         CALLER+=("$(lk_tty_path "$SOURCE")")
     [ -z "$LINE" ] || [ "$LINE" -eq 1 ] ||
-        CALLER[${#CALLER[@]} - 1]+=$LK_DIM:$LINE$LK_RESET
-    lk_implode_arr "$LK_DIM->$LK_RESET" CALLER
+        CALLER[${#CALLER[@]} - 1]+=$LK_DIM:$LINE$LK_UNDIM
+    lk_implode_arr "$LK_DIM->$LK_UNDIM" CALLER
 }
 
 # lk_warn [MESSAGE]
@@ -31,4 +31,4 @@ function lk_warn() {
         lk_console_warning "$(LK_VERBOSE= _lk_caller): ${1-command failed}"
 }
 
-#### Reviewed: 2021-10-09
+#### Reviewed: 2021-10-17

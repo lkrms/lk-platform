@@ -1319,7 +1319,7 @@ EOF
 # lk_hosts_file_add IP NAME...
 function lk_hosts_file_add() {
     local LK_SUDO=1 FILE=/etc/hosts BLOCK_ID SH REGEX HOSTS _FILE
-    BLOCK_ID=$(lk_myself 1) &&
+    BLOCK_ID=$(lk_caller_name) &&
         SH=$(lk_get_regex IP_REGEX HOST_NAME_REGEX) &&
         eval "$SH" || return
     REGEX="^$S*(#$S*)?$IP_REGEX($S+$HOST_NAME_REGEX)+$S+##$S*$BLOCK_ID$S*##"

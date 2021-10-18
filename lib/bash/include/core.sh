@@ -154,13 +154,16 @@ function lk_script_name() {
     local DEPTH=$((${1:-0} + ${_LK_STACK_DEPTH:-0})) NAME
     lk_script_running ||
         NAME=${FUNCNAME[1 + DEPTH]+"${FUNCNAME[*]: -1}"}
+    [[ ! ${NAME-} =~ ^(source|main)$ ]] || NAME=
     echo "${NAME:-${0##*/}}"
 }
 
 # lk_caller_name [STACK_DEPTH]
 function lk_caller_name() {
-    local DEPTH=$((${1:-0} + ${_LK_STACK_DEPTH:-0}))
-    echo "${FUNCNAME[2 + DEPTH]-${0##*/}}"
+    local DEPTH=$((${1:-0} + ${_LK_STACK_DEPTH:-0})) NAME
+    NAME=${FUNCNAME[2 + DEPTH]-}
+    [[ ! ${NAME-} =~ ^(source|main)$ ]] || NAME=
+    echo "${NAME:-${0##*/}}"
 }
 
 # lk_first_command [COMMAND...]
@@ -228,6 +231,28 @@ function lk_maybe_local() {
         '' | source | main) ;;
         *) printf 'local ' ;;
         esac
+}
+
+# lk_x_off
+#
+# Output Bash commands that disable xtrace temporarily and prevent themselves
+# from appearing in trace output.
+#
+# Recommended usage, assuming Bash could be writing trace output to either FD 2
+# or FD 4:
+#
+#     function quiet() {
+#         { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
+#         # Can also be used in a && or || list
+#         eval "$_lk_x_return"
+#     }
+#
+# Or, outside of a function:
+#
+#     { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
+#     eval "$_lk_x_restore"
+function lk_x_off() {
+    echo 'eval "{ declare _lk_x_restore= _lk_x_return=\"return \\\$?\"; [ \"\${-/x/}\" = \"\$-\" ] || { _lk_x_restore=\"set -x\"; _lk_x_return=\"eval \\\"{ local _lk_x_status=\\\\\\\$?; set -x; return \\\\\\\$_lk_x_status; } \\\${BASH_XTRACEFD:-2}>/dev/null\\\"\"; set +x; }; } ${BASH_XTRACEFD:-2}>/dev/null"'
 }
 
 # lk_no_input
@@ -777,8 +802,8 @@ function _lk_caller() {
     [ -z "$SOURCE" ] || [ "$SOURCE" = main ] || [ "$SOURCE" = "$0" ] ||
         CALLER+=("$(lk_tty_path "$SOURCE")")
     [ -z "$LINE" ] || [ "$LINE" -eq 1 ] ||
-        CALLER[${#CALLER[@]} - 1]+=$LK_DIM:$LINE$LK_RESET
-    lk_implode_arr "$LK_DIM->$LK_RESET" CALLER
+        CALLER[${#CALLER[@]} - 1]+=$LK_DIM:$LINE$LK_UNDIM
+    lk_implode_arr "$LK_DIM->$LK_UNDIM" CALLER
 }
 
 # lk_warn [MESSAGE]
@@ -901,6 +926,7 @@ function lk_tty_length() {
 
 # lk_tty_group [[-n] MESSAGE [MESSAGE2 [COLOUR]]]
 function lk_tty_group() {
+    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     local NEST=
     [ "${1-}" != -n ] || { NEST=1 && shift; }
     _LK_TTY_GROUP=$((${_LK_TTY_GROUP:--1} + 1))
@@ -910,12 +936,15 @@ function lk_tty_group() {
         lk_tty_print "$@"
         _LK_TTY_NEST[_LK_TTY_GROUP]=$NEST
     }
+    eval "$_lk_x_return"
 }
 
 # lk_tty_group_end [COUNT]
 function lk_tty_group_end() {
+    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _LK_TTY_GROUP=$((${_LK_TTY_GROUP:-0} - ${1:-1}))
     ((_LK_TTY_GROUP > -1)) || unset _LK_TTY_GROUP _LK_TTY_NEST
+    eval "$_lk_x_return"
 }
 
 # lk_tty_print [MESSAGE [MESSAGE2 [COLOUR]]]
@@ -940,10 +969,11 @@ function lk_tty_group_end() {
 # - _LK_TTY_MESSAGE_COLOUR: override MESSAGE colour
 # - _LK_TTY_COLOUR2: override MESSAGE2 colour (supersedes _LK_TTY_COLOUR)
 function lk_tty_print() {
+    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     # Print a blank line and return if nothing was passed
     [ $# -gt 0 ] || {
         echo >&"${_LK_FD-2}"
-        return
+        eval "$_lk_x_return"
     }
     # If nested grouping is active and lk_tty_print isn't already in its own
     # call stack, bump lk_tty_print -> lk_tty_detail and lk_tty_detail ->
@@ -1005,15 +1035,18 @@ function lk_tty_print() {
     [ -z "${MESSAGE2:+1}" ] ||
         _lk_tty_format MESSAGE2 "$COLOUR" _LK_TTY_COLOUR2
     echo "$MARGIN$PREFIX$MESSAGE$MESSAGE2" >&"${_LK_FD-2}"
+    eval "$_lk_x_return"
 }
 
 # lk_tty_detail MESSAGE [MESSAGE2 [COLOUR]]
 function lk_tty_detail() {
+    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     local _LK_TTY_COLOUR_ORIG=${_LK_COLOUR-}
     _LK_TTY_PREFIX1=${_LK_TTY_PREFIX2- -> } \
         _LK_COLOUR=${_LK_ALT_COLOUR-} \
         _LK_TTY_MESSAGE_COLOUR=${_LK_TTY_MESSAGE_COLOUR-} \
         lk_tty_print "$@"
+    eval "$_lk_x_return"
 }
 
 function _lk_tty_detail2() {
@@ -1026,6 +1059,7 @@ function _lk_tty_detail2() {
 # - lk_tty_list [- [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
 # - lk_tty_list [ARRAY [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
 function lk_tty_list() {
+    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     local _ARRAY=${1:--} _MESSAGE=${2-List:} _SINGLE _PLURAL _COLOUR \
         _PREFIX=${_LK_TTY_PREFIX-${_LK_TTY_PREFIX1-==> }} \
         _ITEMS _INDENT _COLUMNS _LIST
@@ -1041,10 +1075,10 @@ function lk_tty_list() {
     }
     if [ "$_ARRAY" = - ]; then
         [ ! -t 0 ] && lk_mapfile _ITEMS ||
-            lk_warn "no input" || return
+            lk_warn "no input" || eval "$_lk_x_return"
     else
         _ARRAY="${_ARRAY}[@]"
-        _ITEMS=(${!_ARRAY+"${!_ARRAY}"}) || return
+        _ITEMS=(${!_ARRAY+"${!_ARRAY}"}) || eval "$_lk_x_return"
     fi
     if [[ $_MESSAGE != *$'\n'* ]]; then
         _INDENT=$((${#_PREFIX} - 2))
@@ -1057,7 +1091,7 @@ function lk_tty_list() {
         printf '%s\n' "${_ITEMS[@]}")
     ! lk_command_exists column expand ||
         _LIST=$(COLUMNS=$((_COLUMNS > 0 ? _COLUMNS : 0)) \
-            column <<<"$_LIST" | expand) || return
+            column <<<"$_LIST" | expand) || eval "$_lk_x_return"
     echo "$(
         _LK_FD=1
         ${_LK_TTY_COMMAND:-lk_tty_print} \
@@ -1066,12 +1100,15 @@ function lk_tty_list() {
             _LK_TTY_PREFIX=$(printf "%$((_INDENT > 0 ? _INDENT : 0))s") \
                 lk_tty_detail "($(lk_plural -v _ITEMS "$_SINGLE" "$_PLURAL"))"
     )" >&"${_LK_FD-2}"
+    eval "$_lk_x_return"
 }
 
 # - lk_tty_list_detail [- [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
 # - lk_tty_list_detail [ARRAY [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
 function lk_tty_list_detail() {
+    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _LK_STACK_DEPTH=1 _LK_TTY_COMMAND=lk_tty_detail lk_tty_list "$@"
+    eval "$_lk_x_return"
 }
 
 # - lk_tty_run [-SHIFT]                         COMMAND [ARG...]
@@ -1083,13 +1120,14 @@ function lk_tty_list_detail() {
 # ARG is the 1-based argument to remove or REPLACE (starting with COMMAND or the
 # first argument not removed by SHIFT).
 function lk_tty_run() {
+    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     local IFS SHIFT= TRANSFORM= CMD i REGEX='([0-9]+)=([^:]*)'
     unset IFS
     [[ ${1-} != -* ]] ||
         { [[ $1 =~ ^-(([0-9]+)(:($REGEX(:$REGEX)*))?|($REGEX(:$REGEX)*))$ ]] &&
             SHIFT=${BASH_REMATCH[2]} &&
             TRANSFORM=${BASH_REMATCH[4]:-${BASH_REMATCH[1]}} &&
-            shift; } || lk_warn "invalid arguments" || return
+            shift; } || lk_warn "invalid arguments" || eval "$_lk_x_return"
     CMD=("$@")
     [ -z "$SHIFT" ] || shift "$SHIFT"
     while [[ $TRANSFORM =~ ^$REGEX:?(.*) ]]; do
@@ -1120,13 +1158,16 @@ function lk_tty_run() {
     done
     ${_LK_TTY_COMMAND:-lk_tty_print} "Running:" "$(lk_quote_args "$@")"
     "${CMD[@]}"
+    eval "$_lk_x_return"
 }
 
 # lk_tty_run_detail [OPTIONS] COMMAND [ARG...]
 #
 # See lk_tty_run for details.
 function lk_tty_run_detail() {
+    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _LK_STACK_DEPTH=1 _LK_TTY_COMMAND=lk_tty_detail lk_tty_run "$@"
+    eval "$_lk_x_return"
 }
 
 function _lk_tty_prompt() {
@@ -1225,26 +1266,30 @@ function lk_trace() {
     _LK_TRACE_LAST=$NOW
 }
 
-# lk_get_stack_trace [FIRST_FRAME_DEPTH [ROWS [FIRST_FRAME]]]
-function lk_get_stack_trace() {
-    local i=$((${1:-0} + ${_LK_STACK_DEPTH:-0})) r=0 ROWS=${2:-0} FRAME=${3-} \
-        DEPTH=$((${#FUNCNAME[@]} - 1)) WIDTH FUNC FILE LINE \
+# lk_stack_trace [FIRST_FRAME_DEPTH [ROWS [FIRST_FRAME]]]
+function lk_stack_trace() {
+    local DEPTH=$((${1:-0} + ${_LK_STACK_DEPTH:-0})) ROWS=${2:-0} FRAME=${3-} \
+        _D=$((${#FUNCNAME[@]} - 1)) _R WIDTH ROW=0 FUNC FILE LINE \
         REGEX='^([0-9]*) ([^ ]*) (.*)$'
-    WIDTH=${#DEPTH}
-    while ((i++ < DEPTH)) && ((!ROWS || r++ < ROWS)); do
-        FUNC=${FUNCNAME[i]-"{main}"}
-        FILE=${BASH_SOURCE[i]-"{main}"}
-        LINE=${BASH_LINENO[i - 1]-0}
+    # _D = maximum DEPTH, _R = maximum rows of output (DEPTH=0 is always skipped
+    # to exclude lk_stack_trace)
+    ((_R = _D - DEPTH, ROWS = ROWS ? (ROWS > _R ? _R : ROWS) : _R, ROWS)) ||
+        lk_warn "invalid arguments" || return
+    WIDTH=${#_R}
+    while ((ROW++ < ROWS)) && ((DEPTH++ < _D)); do
+        FUNC=${FUNCNAME[DEPTH]-"{main}"}
+        FILE=${BASH_SOURCE[DEPTH]-"{main}"}
+        LINE=${BASH_LINENO[DEPTH - 1]-0}
         [[ ! ${FRAME-} =~ $REGEX ]] || {
             FUNC=${BASH_REMATCH[2]:-$FUNC}
             FILE=${BASH_REMATCH[3]:-$FILE}
             LINE=${BASH_REMATCH[1]:-$LINE}
             unset FRAME
         }
-        ((ROWS == 1)) || printf "%${WIDTH}d. " "$((DEPTH - i + 1))"
+        ((ROWS == 1)) || printf "%${WIDTH}d. " "$ROW"
         printf "%s %s (%s:%s)\n" \
-            "$( ((r > 1)) && echo at || echo in)" \
-            "$LK_BOLD$FUNC$LK_RESET" "$FILE$LK_DIM" "$LINE$LK_RESET"
+            "$( ((ROW > 1)) && echo at || echo in)" \
+            "$LK_BOLD$FUNC$LK_RESET" "$FILE$LK_DIM" "$LINE$LK_UNDIM"
     done
 }
 
@@ -1524,7 +1569,6 @@ lk_include() { lk_require "$@"; }
 lk_is_false() { lk_false "$@"; }
 lk_is_true() { lk_true "$@"; }
 lk_maybe_sudo() { lk_sudo "$@"; }
-lk_myself() { local s=$? && { [[ ${1-} != -* ]] || _LK_STACK_DEPTH= lk_warn "-f not supported"; } && lk_pass -$s lk_script_name $((2 + ${_LK_STACK_DEPTH:-0})); }
 lk_regex_implode() { lk_ere_implode_args -- "$@"; }
 lk_run_detail() { lk_tty_run_detail "$@"; }
 lk_run() { lk_tty_run "$@"; }
@@ -1533,7 +1577,7 @@ lk_run() { lk_tty_run "$@"; }
 
 function _lk_usage_format() {
     local CMD BOLD RESET
-    CMD=$(lk_escape_ere "$(lk_myself 2)")
+    CMD=$(lk_escape_ere "$(lk_caller_name 1)")
     BOLD=$(lk_escape_ere_replace "$LK_BOLD")
     RESET=$(lk_escape_ere_replace "$LK_RESET")
     sed -E \
@@ -2291,18 +2335,20 @@ function _lk_lock_check_args() {
     printf 'set -- %s\n' "$(lk_quote_args "$@")"
 } #### Reviewed: 2021-05-23
 
-# lk_lock [-f LOCK_FILE] [LOCK_FILE_VAR LOCK_FD_VAR] [LOCK_NAME]
+# lk_lock [-f LOCK_FILE] [-w] [LOCK_FILE_VAR LOCK_FD_VAR] [LOCK_NAME]
 function lk_lock() {
-    local _LK_SH _LK_FILE
+    local _LK_FILE _LK_NONBLOCK=1 _LK_SH
     [ "${1-}" != -f ] || { _LK_FILE=${2-} && shift 2 || return; }
+    [ "${1-}" != -w ] || { unset _LK_NONBLOCK && shift || return; }
     _LK_SH=$(_lk_lock_check_args "$@") ||
         { [ $? -eq 2 ] && return 0; } || return
     eval "$_LK_SH" || return
     unset "${@:1:2}"
-    eval "$1=\${_LK_FILE:-/tmp/\${3:-.\${LK_PATH_PREFIX:-lk-}\$(lk_myself 1)}.lock}" &&
+    eval "$1=\${_LK_FILE:-/tmp/\${3:-.\${LK_PATH_PREFIX:-lk-}\$(lk_caller_name)}.lock}" &&
         eval "$2=\$(lk_fd_next)" &&
         eval "exec ${!2}>\"\$$1\"" || return
-    flock -n "${!2}" || lk_warn "unable to acquire lock: ${!1}" || return
+    flock ${_LK_NONBLOCK+-n} "${!2}" ||
+        lk_warn "unable to acquire lock: ${!1}" || return
     lk_trap_add EXIT lk_lock_drop "$@"
 } #### Reviewed: 2021-05-23
 
@@ -4219,9 +4265,13 @@ function _lk_exit_trap() {
     [ $STATUS -eq 0 ] || [ "${_LK_CAN_FAIL-}" = 1 ] ||
         [[ ${FUNCNAME[1]-} =~ ^_?lk_(die|usage)$ ]] ||
         { [[ $- == *i* ]] && [ $BASH_SUBSHELL -eq 0 ]; } ||
-        _LK_TTY_NO_FOLD=1 lk_console_error \
-            "$(_lk_caller "${_LK_ERR_TRAP_CALLER:-$1}"): unhandled error" \
-            "$(lk_get_stack_trace $((1 - ${_LK_STACK_DEPTH:-0})) "" "${_LK_ERR_TRAP_CALLER-}")"
+        lk_console_error \
+            "$(LK_VERBOSE=1 \
+                _lk_caller "${_LK_ERR_TRAP_CALLER:-$1}"): unhandled error" \
+            "$(lk_stack_trace \
+                $((1 - ${_LK_STACK_DEPTH:-0})) \
+                "$([ "${LK_NO_STACK_TRACE-}" != 1 ] || echo 1)" \
+                "${_LK_ERR_TRAP_CALLER-}")"
 } #### Reviewed: 2021-05-28
 
 function _lk_err_trap() {

@@ -77,7 +77,7 @@ PASSWORDS=()
 for DATABASE_FILE in "$@"; do
     DATABASE_FILE=$(realpath "$DATABASE_FILE")
     if lk_is_true RESET_PASSWORD; then
-        lk_remove_secret "$DATABASE_FILE"
+        lk_secret_remove "$DATABASE_FILE"
     fi
     PASSWORD="$(lk_secret "$DATABASE_FILE" "KeePassXC password for ${DATABASE_FILE##*/}")" ||
         lk_die "unable to retrieve password for $DATABASE_FILE"
