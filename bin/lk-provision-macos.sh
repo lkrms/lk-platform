@@ -257,7 +257,7 @@ EOF
     if [ ! -e "$LK_BASE" ] || [ -z "$(ls -A "$LK_BASE")" ]; then
         lk_tty_print "Installing lk-platform to" "$LK_BASE"
         sudo install -d -m 02775 -o "$USER" -g admin "$LK_BASE"
-        lk_tty caffeinate -d git clone -b "$LK_PLATFORM_BRANCH" \
+        lk_faketty caffeinate -d git clone -b "$LK_PLATFORM_BRANCH" \
             https://github.com/lkrms/lk-platform.git "$LK_BASE"
         sudo install -d -m 02775 -g admin "$LK_BASE"/{etc{,/lk-platform},var}
         sudo install -d -m 01777 -g admin "$LK_BASE"/var/log
@@ -302,7 +302,7 @@ EOF
 
     function brew() {
         if [ "$BASH_SUBSHELL" -eq 0 ]; then
-            lk_tty caffeinate -d "${BREW[@]:-brew}" "$@"
+            lk_faketty caffeinate -d "${BREW[@]:-brew}" "$@"
         else
             command "${BREW[@]:-brew}" "$@"
         fi
@@ -679,21 +679,21 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
 
     [ ${#UPGRADE_APPS[@]} -eq 0 ] || {
         lk_tty_print "Upgrading apps"
-        lk_tty caffeinate -d \
+        lk_faketty caffeinate -d \
             mas upgrade "${UPGRADE_APPS[@]}" || STATUS=$?
     }
 
     [ ${#INSTALL_APPS[@]} -eq 0 ] || {
         lk_echo_array APP_NAMES |
             lk_console_list "Installing new apps:"
-        lk_tty caffeinate -d \
+        lk_faketty caffeinate -d \
             mas install "${INSTALL_APPS[@]}" || STATUS=$?
     }
 
     [ ${#INSTALL_UPDATES[@]} -eq 0 ] || {
         lk_echo_array INSTALL_UPDATES |
             lk_console_list "Installing system software updates:"
-        lk_tty caffeinate -d \
+        lk_faketty caffeinate -d \
             softwareupdate --install "${INSTALL_UPDATES[@]}" || STATUS=$?
     }
 

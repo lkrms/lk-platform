@@ -76,12 +76,16 @@ function lk_bash_unset_local_variable_names() {
 
 function lk_bash_command_literals() {
     local EXEC_COMMANDS=(
+        _lk_apt_flock
         command
         exec
         lk_cache
         lk_elevate
         lk_elevate_if_error
+        lk_env_clean
+        lk_faketty
         lk_get_outputs_of
+        lk_git_with_repos
         lk_keep_trying
         lk_log_bypass
         lk_log_bypass_stderr
@@ -90,17 +94,25 @@ function lk_bash_command_literals() {
         lk_log_bypass_tty_stderr
         lk_log_bypass_tty_stdout
         lk_log_no_bypass
+        lk_maybe
         lk_maybe_drop
-        lk_maybe_elevate
         lk_maybe_sudo
         lk_maybe_trace
+        lk_mktemp_dir_with
+        lk_mktemp_with
+        lk_nohup
         lk_pass
+        lk_report_error
         lk_require_output
         lk_run
         lk_run_as
         lk_run_detail
-        lk_tty
+        lk_sudo
+        lk_tty_run
+        lk_tty_run_detail
+        lk_unbuffer
         lk_xargs
+        sudo
         xargs
     )
     cat ${1+"$1"} |

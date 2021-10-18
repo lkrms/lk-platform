@@ -3,7 +3,6 @@
 #### BEGIN core.sh.d
 
 export -n BASH_XTRACEFD SHELLOPTS
-export LC_ALL=C
 
 USER=${USER:-$(id -un)} &&
     { [ "${S-}" = "[[:blank:]]" ] || readonly S="[[:blank:]]"; } &&
@@ -1435,11 +1434,11 @@ function lk_report_error() {
     }
 }
 
-# lk_tty [exec] COMMAND [ARG...]
+# lk_faketty [exec] COMMAND [ARG...]
 #
 # Run COMMAND in a pseudo-terminal to satisfy tty checks even if output is being
 # redirected.
-function lk_tty() {
+function lk_faketty() {
     [ "$1" != exec ] || { local LK_EXEC=1 && shift; }
     if ! lk_is_macos; then
         SHELL=$BASH lk_sudo script -qfec "$(lk_quote_args "$@")" /dev/null

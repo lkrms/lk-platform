@@ -1,7 +1,6 @@
 #!/bin/bash
 
 export -n BASH_XTRACEFD SHELLOPTS
-export LC_ALL=C
 
 USER=${USER:-$(id -un)} &&
     { [ "${S-}" = "[[:blank:]]" ] || readonly S="[[:blank:]]"; } &&

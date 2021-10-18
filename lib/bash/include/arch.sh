@@ -294,7 +294,7 @@ function lk_makepkg() {
             eval "$SH"
     else
         lk_pac_sync &&
-            lk_tty makepkg --syncdeps --rmdeps --clean --noconfirm "$@" &&
+            lk_faketty makepkg --syncdeps --rmdeps --clean --noconfirm "$@" &&
             LIST=$(lk_require_output makepkg --packagelist) &&
             lk_mapfile LK_MAKEPKG_LIST <<<"$LIST"
     fi

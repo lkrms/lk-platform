@@ -55,7 +55,7 @@ function _lk_apt_flock() {
     local SH DIR
     SH=$(apt-config shell DIR Dir::State/d) &&
         eval "$SH" &&
-        lk_elevate lk_tty flock "${DIR%/}/daily_lock" "$@"
+        lk_elevate lk_faketty flock "${DIR%/}/daily_lock" "$@"
 }
 
 # lk_apt_available_list [PACKAGE...]
