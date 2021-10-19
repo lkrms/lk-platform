@@ -2256,7 +2256,7 @@ function lk_has_arg() {
 function _lk_cache_dir() {
     echo "${_LK_OUTPUT_CACHE:=$(
         TMPDIR=${TMPDIR:-/tmp}
-        DIR=${TMPDIR%/}/_lk_output_cache_${EUID}_$$
+        DIR=${TMPDIR%/}/_lk_output_cache_$EUID
         install -d -m 00700 "$DIR" && echo "$DIR"
     )}"
 } #### Reviewed: 2021-03-25
@@ -2279,7 +2279,7 @@ function lk_cache() {
                 [ "$AGE" -lt "$TTL" ]; }; }; then
         cat "$FILE"
     else
-        "$@" | tee "$FILE" || lk_pass rm -f -- "$FILE"
+        "$@" >"$FILE" && cat -- "$FILE" || lk_pass rm -f -- "$FILE"
     fi
 } #### Reviewed: 2021-03-25
 
