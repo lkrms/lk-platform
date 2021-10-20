@@ -110,7 +110,7 @@ BACKUP_ROOT=$(lk_realpath "$BACKUP_ROOT")
         flock -n 9 || lk_die "unable to acquire a lock on $LOCK_FILE"
 }
 
-export LC_ALL=C TZ=UTC
+export TZ=UTC
 HN=$(hostname -s) || HN=localhost
 FQDN=$(hostname -f) || FQDN=$HN.localdomain
 _2="[0-9][0-9]"

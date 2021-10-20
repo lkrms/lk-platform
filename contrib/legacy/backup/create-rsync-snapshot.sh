@@ -409,7 +409,7 @@ FIFO_FILE=$(mktemp -d -- "${TMPDIR%/}/${0##*/}.XXXXXX")/fifo
 mkfifo "$FIFO_FILE"
 exec 8<>"$FIFO_FILE"
 
-export LC_ALL=C TZ=UTC
+export TZ=UTC
 USER=${USER:-$(id -un)}
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
 HN=$(hostname -s) || HN=localhost

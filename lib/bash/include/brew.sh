@@ -32,7 +32,7 @@ function lk_brew_install_homebrew() {
         [ -s "${_LK_BREW_INSTALL-}" ] ||
             lk_mktemp_with _LK_BREW_INSTALL lk_curl "$URL" ||
             lk_pass rm -f "${_LK_BREW_INSTALL-}" || return
-        CI=1 lk_tty ${COMMAND+"${COMMAND[@]}"} \
+        CI=1 lk_faketty ${COMMAND+"${COMMAND[@]}"} \
             /bin/bash "$_LK_BREW_INSTALL" || return
         [ -x "$BREW" ] ||
             lk_warn "$BREW: command not found" || return

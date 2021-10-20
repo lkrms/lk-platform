@@ -288,7 +288,7 @@ if [ -n "$LK_NTP_SERVER" ]; then
     lk_console_item "Synchronising system time with" "$LK_NTP_SERVER"
     if ! lk_command_exists ntpd; then
         lk_console_detail "Installing ntp"
-        lk_log_bypass -o lk_tty pacman -Sy --noconfirm ntp ||
+        lk_log_bypass -o lk_faketty pacman -Sy --noconfirm ntp ||
             lk_die "unable to install ntp"
     fi
     lk_run_detail ntpd -qgx "$LK_NTP_SERVER" ||
@@ -368,7 +368,7 @@ fi
 
 lk_console_blank
 lk_console_log "Installing system"
-lk_log_bypass -o lk_tty pacstrap /mnt "${PAC_PACKAGES[@]}"
+lk_log_bypass -o lk_faketty pacstrap /mnt "${PAC_PACKAGES[@]}"
 
 lk_console_blank
 lk_console_log "Setting up installed system"

@@ -24,16 +24,8 @@ PAC_KEEP=(
     xiccd
 
     #
-
-    #
-    sfdx-cli
-
-    #
     mongodb-bin
     mongodb-tools-bin
-
-    #
-    woeusb
 
     #
     powerpanel

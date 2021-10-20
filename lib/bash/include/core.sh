@@ -3,7 +3,6 @@
 #### BEGIN core.sh.d
 
 export -n BASH_XTRACEFD SHELLOPTS
-export LC_ALL=C
 
 USER=${USER:-$(id -un)} &&
     { [ "${S-}" = "[[:blank:]]" ] || readonly S="[[:blank:]]"; } &&
@@ -217,7 +216,7 @@ function lk_plural() {
 #     SELECT id, name FROM table;
 #     SQL
 function lk_assign() {
-    IFS= read -rd '' "$1"
+    IFS= read -rd '' "$1" || true
 }
 
 # lk_maybe_local
@@ -1435,11 +1434,11 @@ function lk_report_error() {
     }
 }
 
-# lk_tty [exec] COMMAND [ARG...]
+# lk_faketty [exec] COMMAND [ARG...]
 #
 # Run COMMAND in a pseudo-terminal to satisfy tty checks even if output is being
 # redirected.
-function lk_tty() {
+function lk_faketty() {
     [ "$1" != exec ] || { local LK_EXEC=1 && shift; }
     if ! lk_is_macos; then
         SHELL=$BASH lk_sudo script -qfec "$(lk_quote_args "$@")" /dev/null
@@ -2257,7 +2256,7 @@ function lk_has_arg() {
 function _lk_cache_dir() {
     echo "${_LK_OUTPUT_CACHE:=$(
         TMPDIR=${TMPDIR:-/tmp}
-        DIR=${TMPDIR%/}/_lk_output_cache_${EUID}_$$
+        DIR=${TMPDIR%/}/_lk_output_cache_$EUID
         install -d -m 00700 "$DIR" && echo "$DIR"
     )}"
 } #### Reviewed: 2021-03-25
@@ -2280,7 +2279,7 @@ function lk_cache() {
                 [ "$AGE" -lt "$TTL" ]; }; }; then
         cat "$FILE"
     else
-        "$@" | tee "$FILE" || lk_pass rm -f -- "$FILE"
+        "$@" >"$FILE" && cat -- "$FILE" || lk_pass rm -f -- "$FILE"
     fi
 } #### Reviewed: 2021-03-25
 

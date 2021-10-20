@@ -597,7 +597,7 @@ $LK_NODE_HOSTNAME" &&
             devtools pacutils vifm))
         [ ${#PAC_INSTALL[@]} -eq 0 ] || {
             lk_console_detail "Installing aurutils dependencies"
-            lk_tty pacman -S --noconfirm "${PAC_INSTALL[@]}"
+            lk_faketty pacman -S --noconfirm "${PAC_INSTALL[@]}"
         }
 
         DIR=$({ pacman-conf --repo=aur |
@@ -609,7 +609,7 @@ $LK_NODE_HOSTNAME" &&
         lk_console_detail "Checking pacman repo at" "$DIR"
         lk_install -d -m 00755 -o "$USER" -g "$GROUP" "$DIR"
         [ -e "$FILE" ] ||
-            LK_SUDO= lk_tty repo-add "$FILE"
+            LK_SUDO= lk_faketty repo-add "$FILE"
 
         lk_arch_add_repo "aur|file://$DIR|||Optional TrustAll"
         LK_CONF_OPTION_FILE=/etc/pacman.conf
@@ -625,9 +625,9 @@ $LK_NODE_HOSTNAME" &&
             PKGDEST=$DIR lk_makepkg -a aurutils --force
             lk_files_exist "${LK_MAKEPKG_LIST[@]}" ||
                 lk_die "not found: ${LK_MAKEPKG_LIST[*]}"
-            LK_SUDO= lk_tty repo-add --remove "$FILE" "${LK_MAKEPKG_LIST[@]}"
+            LK_SUDO= lk_faketty repo-add --remove "$FILE" "${LK_MAKEPKG_LIST[@]}"
             lk_pac_sync -f
-            lk_tty pacman -S --noconfirm aur/aurutils
+            lk_faketty pacman -S --noconfirm aur/aurutils
         fi
 
         FILE=/etc/aurutils/pacman-aur.conf
@@ -673,10 +673,10 @@ $LK_NODE_HOSTNAME" &&
         <(lk_echo_array PAC_EXPLICIT) \
         <(lk_pac_installed_explicit | sort -u)))
     [ ${#PAC_MARK_EXPLICIT[@]} -eq 0 ] ||
-        lk_log_bypass lk_tty \
+        lk_log_bypass lk_faketty \
             pacman -D --asexplicit "${PAC_MARK_EXPLICIT[@]}"
     [ ${#PAC_UNMARK_EXPLICIT[@]} -eq 0 ] ||
-        lk_log_bypass lk_tty \
+        lk_log_bypass lk_faketty \
             pacman -D --asdeps "${PAC_UNMARK_EXPLICIT[@]}"
 
     REMOVE_MESSAGE=()
@@ -699,7 +699,7 @@ $LK_NODE_HOSTNAME" &&
     [ ${#PAC_REMOVE[@]} -eq 0 ] || {
         lk_console_message \
             "Removing $(lk_implode_arr " and " REMOVE_MESSAGE) packages"
-        lk_log_bypass lk_tty pacman -Rdds --noconfirm "${PAC_REMOVE[@]}"
+        lk_log_bypass lk_faketty pacman -Rdds --noconfirm "${PAC_REMOVE[@]}"
     }
 
     [ ${#_PAC_KEEP[@]} -eq 0 ] ||
@@ -733,7 +733,7 @@ $LK_NODE_HOSTNAME" &&
             # Sync the package with keys used to sign other packages first
             ! SYNC=($(lk_echo_array PAC_INSTALL PAC_UPGRADE |
                 grep -Fx"$v" archlinux-keyring)) ||
-                lk_log_bypass lk_tty pacman -S --noconfirm "${SYNC[@]}"
+                lk_log_bypass lk_faketty pacman -S --noconfirm "${SYNC[@]}"
         done
 
     lk_symlink_bin codium code || true
