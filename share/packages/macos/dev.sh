@@ -221,6 +221,7 @@ HOMEBREW_CASKS+=(
 )
 
 HOMEBREW_KEEP_FORMULAE+=(
+    automake
     meson
     ninja
     ocaml
@@ -230,6 +231,10 @@ HOMEBREW_KEEP_FORMULAE+=(
     php@7.2
     php@7.3
     php@7.4
+
+    #
+    microsoft/mssql-release/msodbcsql17
+    microsoft/mssql-release/mssql-tools
 
     #
     libvirt

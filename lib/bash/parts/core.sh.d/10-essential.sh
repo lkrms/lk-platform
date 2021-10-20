@@ -122,4 +122,13 @@ function lk_x_off() {
     echo 'eval "{ declare _lk_x_restore= _lk_x_return=\"return \\\$?\"; [ \"\${-/x/}\" = \"\$-\" ] || { _lk_x_restore=\"set -x\"; _lk_x_return=\"eval \\\"{ local _lk_x_status=\\\\\\\$?; set -x; return \\\\\\\$_lk_x_status; } \\\${BASH_XTRACEFD:-2}>/dev/null\\\"\"; set +x; }; } ${BASH_XTRACEFD:-2}>/dev/null"'
 }
 
-#### Reviewed: 2021-10-18
+function lk_x_no_off() {
+    function lk_x_off() {
+        echo 'declare _lk_x_restore= _lk_x_return="return \$?"'
+    }
+    export _LK_NO_X_OFF=1
+}
+
+[ -z "${_LK_NO_X_OFF-}" ] || lk_x_no_off
+
+#### Reviewed: 2021-10-21
