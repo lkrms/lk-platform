@@ -216,7 +216,7 @@ function lk_plural() {
 #     SELECT id, name FROM table;
 #     SQL
 function lk_assign() {
-    IFS= read -rd '' "$1"
+    IFS= read -rd '' "$1" || true
 }
 
 # lk_maybe_local
