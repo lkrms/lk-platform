@@ -515,13 +515,13 @@ esac
 
 if [ -n "$STACKSCRIPT" ]; then
     lk_console_log "Processing StackScript"
-    SS_TAGS=()
     lk_mapfile SS_TAGS <(grep -Eo \
         "<(lk:)?[uU][dD][fF]($S+[a-zA-Z]+=\"[^\"]*\")*$S*/>" \
         "$STACKSCRIPT")
     SS_FIELDS=()
+    TAG=0
     for SS_TAG in ${SS_TAGS[@]+"${SS_TAGS[@]}"}; do
-        SS_ATTRIBS=()
+        ((++TAG))
         lk_mapfile SS_ATTRIBS <(grep -Eo "[a-z]+=\"[^\"]*\"" <<<"$SS_TAG")
         unset NAME LABEL DEFAULT SELECT_OPTIONS SELECT_TEXT VALIDATE_COMMAND
         _LK_REQUIRED=1
@@ -559,7 +559,7 @@ if [ -n "$STACKSCRIPT" ]; then
             [ -n "${VALIDATE_COMMAND+1}" ] ||
             VALIDATE_COMMAND=(lk_validate_not_null VALUE)
         lk_console_item \
-            "Checking field $((${#SS_FIELDS[@]} + 1)) of ${#SS_TAGS[@]}:" \
+            "Checking field $TAG of ${#SS_TAGS[@]}:" \
             "$NAME"
         [ -z "${SELECT_TEXT-}" ] ||
             lk_echo_array SELECT_OPTIONS |

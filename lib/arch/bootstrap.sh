@@ -124,7 +124,7 @@ for FILE_PATH in \
     /share/sudoers.d/default; do
     FILE=$_DIR/${FILE_PATH##*/}
     URL=$REPO_URL/$LK_PLATFORM_BRANCH$FILE_PATH
-    MESSAGE="$BOLD$YELLOW   -> $RESET{}$YELLOW $URL$RESET"
+    MESSAGE="$BOLD$YELLOW -> $RESET{}$YELLOW $URL$RESET"
     if [ ! -e "$FILE" ]; then
         echo "${MESSAGE/{\}/Downloading:}" >&2
         curl "${CURL_OPTIONS[@]}" --output "$FILE" "$URL" || {

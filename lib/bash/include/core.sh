@@ -192,6 +192,26 @@ function lk_first_file() {
     [ $# -gt 0 ] && echo "$1"
 }
 
+# lk_first_open [PATH...]
+#
+# Print the first PATH that is a writable character special file, or return
+# false if no such PATH was found.
+function lk_first_open() {
+    while [ $# -gt 0 ]; do
+        { [ ! -c "$1" ] || ! : >"$1"; } 2>/dev/null || break
+        shift
+    done
+    [ $# -gt 0 ] && echo "$1"
+}
+
+# lk_get_tty
+#
+# Print "/dev/tty" if Bash has a controlling terminal, otherwise print
+# "/dev/console" if it is open for writing, or return false.
+function lk_get_tty() {
+    lk_first_open /dev/tty /dev/console
+}
+
 # lk_plural [-v] VALUE SINGLE [PLURAL]
 #
 # Print SINGLE if VALUE is 1 or the name of an array with 1 element, PLURAL
@@ -274,43 +294,64 @@ function lk_no_input() {
     fi
 }
 
-# lk_elevate [exec] [COMMAND [ARG...]]
+function _lk_sudo_check() {
+    local LK_SUDO_ON_FAIL=${LK_SUDO_ON_FAIL-} LK_EXEC=${LK_EXEC-} SHIFT=0 \
+        _LK_STACK_DEPTH=1
+    [ "${1-}" != -f ] || { LK_SUDO_ON_FAIL=1 && ((++SHIFT)) && shift; }
+    [ "${1-}" != exec ] || { LK_EXEC=1 && ((++SHIFT)) && shift; }
+    [ "${LK_EXEC:+e}${LK_SUDO_ON_FAIL:+f}" != ef ] ||
+        lk_err "LK_EXEC and LK_SUDO_ON_FAIL are mutually exclusive" || return
+    [ -z "$LK_SUDO_ON_FAIL" ] || [ $# -gt 0 ] ||
+        lk_warn "command required if LK_SUDO_ON_FAIL is set" || return
+    declare -p LK_EXEC LK_SUDO_ON_FAIL
+    ((!SHIFT)) || printf 'shift %s\n' "$SHIFT"
+}
+
+# lk_elevate [-f] [exec] [COMMAND [ARG...]]
 #
 # If Bash is running as root, run COMMAND, otherwise use `sudo` to run it as the
 # root user. If COMMAND is not found in PATH and is a function, run it with
 # LK_SUDO set. If no COMMAND is specified and Bash is not running as root, run
 # the current script, with its original arguments, as the root user.
 function lk_elevate() {
-    local COMMAND
-    [ "${1-}" != exec ] || { local LK_EXEC=1 && shift; }
+    local _SH _COMMAND
+    _SH=$(_lk_sudo_check "$@") && eval "$_SH" || return
     if [ "$EUID" -eq 0 ]; then
         [ $# -eq 0 ] ||
             ${LK_EXEC:+exec} "$@"
     elif [ $# -eq 0 ]; then
         ${LK_EXEC:+exec} sudo -H "$0" ${_LK_ARGV+"${_LK_ARGV[@]}"}
-    elif ! COMMAND=$(type -P "$1") && [ "$(type -t "$1")" = "function" ]; then
-        local LK_SUDO=1
+    elif ! _COMMAND=$(type -P "$1") && [ "$(type -t "$1")" = "function" ]; then
+        LK_SUDO=
+        if [ -n "$LK_SUDO_ON_FAIL" ] && "$@" 2>/dev/null; then
+            return 0
+        fi
+        LK_SUDO=1
         "$@"
-    elif [ -n "$COMMAND" ]; then
-        # Use `shift` and "$@" because Bash 3.2 expands "${@:2}" to the
-        # equivalent of `IFS=" "; echo "${*:2}"` unless there is a space in IFS
+    elif [ -n "$_COMMAND" ]; then
         shift
-        ${LK_EXEC:+exec} sudo -H "$COMMAND" "$@"
+        if [ -n "$LK_SUDO_ON_FAIL" ] && "$_COMMAND" "$@" 2>/dev/null; then
+            return 0
+        fi
+        ${LK_EXEC:+exec} sudo -H "$_COMMAND" "$@"
     else
         lk_err "invalid command: $1"
         false
     fi
 }
 
-# lk_sudo [exec] COMMAND [ARG...]
+# lk_sudo [-f] [exec] COMMAND [ARG...]
 #
 # If Bash is running as root or LK_SUDO is empty or unset, run COMMAND,
-# otherwise use `sudo` to run it as the root user.
+# otherwise use `sudo` to run it as the root user. If -f is set and `sudo` will
+# be used, attempt without `sudo` first and only run as root if the first
+# attempt fails.
 function lk_sudo() {
+    local _SH
+    _SH=$(_lk_sudo_check "$@") && eval "$_SH" || return
     if [ -n "${LK_SUDO-}" ]; then
         lk_elevate "$@"
     else
-        [ "$1" != exec ] || { local LK_EXEC=1 && shift; }
         ${LK_EXEC:+exec} "$@"
     fi
 }
@@ -929,6 +970,73 @@ function lk_tty_length() {
     lk_strip_non_printing "$1" | awk 'NR == 1 { print length() }'
 }
 
+function _lk_tty_margin_apply() {
+    local _COLUMNS
+    # Avoid recursion when `stty columns` triggers SIGWINCH
+    [ "$FUNCNAME" = "${FUNCNAME[1]-}" ] ||
+        # Skip initial adjustment if it's already been applied
+        [ "$_RESIZED-$2" = 1-start ] ||
+        { { [ "$2" != resize ] || _RESIZED=1; } &&
+            _COLUMNS=$(stty size <"$_TTY" |
+                awk -v "margin=$1" '{print $2 - margin}') &&
+            stty columns "$_COLUMNS" <"$_TTY"; }
+}
+
+function _lk_tty_margin_clear() {
+    _lk_tty_margin_apply "-$1" end
+}
+
+function _lk_tty_margin_add() {
+    local _R=$'\r'
+    if ((_MARGIN > 0)); then
+        _SPACES=$(printf "%${_MARGIN}s")
+        "$@" \
+            > >(LC_ALL=C sed -Eu "s/(^|($_R)(.))/\2$_SPACES\3/") \
+            2> >(LC_ALL=C sed -Eu "s/(^|($_R)(.))/\2$_SPACES\3/" >&2)
+    else
+        "$@"
+    fi
+}
+
+# lk_tty_add_margin MARGIN [lk_faketty] COMMAND [ARG...]
+#
+# Run COMMAND and add MARGIN spaces before each line of output, trapping
+# SIGWINCH and using stty to adjust the reported terminal size.
+function lk_tty_add_margin() { (
+    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
+    [ $# -gt 1 ] && ((_MARGIN = $1)) ||
+        lk_warn "invalid arguments" || eval "$_lk_x_return"
+    shift
+    ((_MARGIN > 0)) && _TTY=$(lk_get_tty) || {
+        _lk_tty_margin_add "$@"
+        eval "$_lk_x_return"
+    }
+    _RESIZED=
+    _CLEAR_SH="trap - SIGWINCH; _lk_tty_margin_clear $_MARGIN"
+    _SIGNAL=$(kill -L SIGWINCH) &&
+        trap "_lk_tty_margin_apply $_MARGIN resize" SIGWINCH &&
+        _lk_tty_margin_apply "$_MARGIN" start &&
+        trap "$_CLEAR_SH" EXIT || eval "$_lk_x_return"
+    # Run the command in the background because only the foreground process
+    # receives SIGWINCH, but remain interactive by redirecting terminal input to
+    # the background process
+    _INPUT=/dev/tty
+    [ "$_TTY" = /dev/tty ] && [ -t 0 ] || _INPUT=/dev/stdin
+    _lk_tty_margin_add "$@" <"$_INPUT" &
+    # Pass Ctrl+C to the background process
+    trap "kill -SIGINT $! 2>/dev/null || true" SIGINT
+    # Kill the background process if the foreground process is killed
+    trap "kill $! 2>/dev/null || true; $_CLEAR_SH" EXIT
+    while :; do
+        STATUS=0
+        wait || STATUS=$?
+        # Continue if interrupted by SIGWINCH
+        [ "$STATUS" -eq $((128 + _SIGNAL)) ] || break
+    done
+    (exit "$STATUS")
+    eval "$_lk_x_return"
+); }
+
 # lk_tty_group [[-n] MESSAGE [MESSAGE2 [COLOUR]]]
 function lk_tty_group() {
     { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
@@ -994,7 +1102,7 @@ function lk_tty_print() {
         esac
         [ -z "${FUNC-}" ] || {
             "$FUNC" "$@"
-            return
+            eval "$_lk_x_return"
         }
     }
     local MESSAGE=${1-} MESSAGE2=${2-} \
@@ -1013,20 +1121,23 @@ function lk_tty_print() {
     [ -z "${MESSAGE2:+1}" ] || {
         [[ $MESSAGE2 != *$'\n'* ]] || NEWLINE2=1
         MESSAGE2=${MESSAGE2#$'\n'}
-        case "${_LK_TTY_ONE_LINE-0}$NEWLINE$NEWLINE2" in
-        *00 | 1??)
-            # If MESSAGE and MESSAGE2 are one-liners or _LK_TTY_ONE_LINE is set,
-            # print both messages on the same line with a space between them
+        case "${_LK_TTY_ONE_LINE-0}${MESSAGE:+2}$NEWLINE$NEWLINE2" in
+        *00 | 1* | ???)
+            # If MESSAGE and MESSAGE2 are one-liners, _LK_TTY_ONE_LINE is set,
+            # or MESSAGE is empty, print both messages on the same line with a
+            # space between them and align MESSAGE2 with itself
             SEP=" "
-            ! ((NEWLINE2)) || INDENT=$(lk_tty_length "$MESSAGE.")
+            ((!NEWLINE2)) || { [ -z "${MESSAGE:+1}" ] &&
+                INDENT=${#PREFIX} ||
+                INDENT=$((${#PREFIX} + $(lk_tty_length "$MESSAGE."))); }
             ;;
         *01)
             # If MESSAGE2 spans multiple lines, align it to the left of MESSAGE
             INDENT=$((${#PREFIX} - 2))
             ;;
         *)
-            # Align MESSAGE2 to the right of MESSAGE if both span multiple
-            # lines or MESSAGE2 is a one-liner
+            # Align MESSAGE2 to the right of MESSAGE if both span multiple lines
+            # or MESSAGE2 is a one-liner
             INDENT=$((${#PREFIX} + 2))
             ;;
         esac
@@ -1116,6 +1227,85 @@ function lk_tty_list_detail() {
     eval "$_lk_x_return"
 }
 
+# lk_tty_dump OUTPUT MESSAGE1 MESSAGE2 COLOUR OUTPUT_COLOUR COMMAND [ARG...]
+#
+# Print OUTPUT between MESSAGE1 and MESSAGE2. If OUTPUT is empty or "-", then:
+# - if COMMAND is specified, run COMMAND and stream its output; or
+# - if no COMMAND is specified, stream from standard input.
+#
+# Because all arguments are optional, COLOUR arguments are ignored if empty. Use
+# _LK_TTY_COLOUR and _LK_TTY_OUTPUT_COLOUR to specify an empty colour for COLOUR
+# and OUTPUT_COLOUR respectively.
+function lk_tty_dump() {
+    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
+    local _MESSAGE1=${2-} _MESSAGE2=${3-} _INDENT _CMD \
+        _COLOUR=${_LK_TTY_OUTPUT_COLOUR-${_LK_TTY_MESSAGE_COLOUR-${5-}}}
+    unset LK_TTY_DUMP_STATUS
+    _lk_tty_format -b _MESSAGE1
+    _lk_tty_format -b _MESSAGE2
+    _INDENT=$((${_LK_TTY_INDENT:-0} + ${_LK_TTY_GROUP:-0} * 4))
+    ((_INDENT > 0)) && _CMD=(lk_tty_add_margin "$_INDENT") || unset _CMD
+    _LK_TTY_PREFIX1=${_LK_TTY_PREFIX1->>> } \
+        _LK_TTY_PREFIX2=${_LK_TTY_PREFIX2- >> } \
+        _LK_TTY_PREFIX3=${_LK_TTY_PREFIX3-  > } \
+        ${_LK_TTY_COMMAND:-lk_tty_print} "" "$_MESSAGE1" ${4:+"$4"}
+    {
+        [ -z "${_COLOUR:+1}" ] || printf '%s' "$_COLOUR"
+        case "$#-${1+${#1}${1:0:1}}" in
+        [6-9]-1- | [6-9]-0 | [1-9][0-9]*-1- | [1-9][0-9]*-0)
+            (unset IFS && shift 5 && ${_CMD+"${_CMD[@]}"} "$@") ||
+                LK_TTY_DUMP_STATUS=$?
+            ;;
+        0- | *-1- | *-0)
+            if [ -t 0 ]; then
+                lk_warn "input is a terminal"
+                false
+            else
+                ${_CMD+"${_CMD[@]}"} cat
+            fi
+            ;;
+        *)
+            ${_CMD+"${_CMD[@]}"} cat <<<"${1%$'\n'}"
+            ;;
+        esac || eval "$_lk_x_return"
+        printf '%s' "$LK_RESET"
+    } >&"${_LK_FD-2}"
+    _LK_TTY_PREFIX1=${_LK_TTY_SUFFIX1-<<< } \
+        _LK_TTY_PREFIX2=${_LK_TTY_SUFFIX2- << } \
+        _LK_TTY_PREFIX3=${_LK_TTY_SUFFIX3-  < } \
+        ${_LK_TTY_COMMAND:-lk_tty_print} "" "$_MESSAGE2" ${4:+"$4"}
+    eval "$_lk_x_return"
+}
+
+# lk_tty_dump_detail [OPTIONS]
+#
+# See lk_tty_dump for details.
+function lk_tty_dump_detail() {
+    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
+    _LK_STACK_DEPTH=1 _LK_TTY_COMMAND=lk_tty_detail lk_tty_dump "$@"
+    eval "$_lk_x_return"
+}
+
+# lk_tty_file FILE [COLOUR [FILE_COLOUR]]
+function lk_tty_file() {
+    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
+    [ -n "${1-}" ] && lk_sudo -f test -r "${1-}" ||
+        lk_warn "file not found: ${1-}" || eval "$_lk_x_return"
+    local IFS MESSAGE2
+    unset IFS
+    ! lk_verbose || { MESSAGE2=$(lk_sudo -f ls -ld "$1") &&
+        MESSAGE2=${MESSAGE2/"$1"/$LK_BOLD$1$LK_RESET}; } || eval "$_lk_x_return"
+    lk_sudo -f cat "$1" | lk_tty_dump - "$1" "${MESSAGE2-}" "${@:2}"
+    eval "$_lk_x_return"
+}
+
+# lk_tty_file_detail FILE [COLOUR [FILE_COLOUR]]
+function lk_tty_file_detail() {
+    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
+    _LK_STACK_DEPTH=1 _LK_TTY_COMMAND=lk_tty_detail lk_tty_file "$@"
+    eval "$_lk_x_return"
+}
+
 # - lk_tty_run [-SHIFT]                         COMMAND [ARG...]
 # - lk_tty_run [-ARG=[REPLACE][:ARG=...]]       COMMAND [ARG...]
 # - lk_tty_run [-SHIFT:ARG=[REPLACE][:ARG=...]] COMMAND [ARG...]
@@ -1172,6 +1362,110 @@ function lk_tty_run() {
 function lk_tty_run_detail() {
     { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _LK_STACK_DEPTH=1 _LK_TTY_COMMAND=lk_tty_detail lk_tty_run "$@"
+    eval "$_lk_x_return"
+}
+
+# - lk_tty_pairs [-d DELIM] [COLOUR [--] [KEY VALUE...]]
+# - lk_tty_pairs [-d DELIM] -- [KEY VALUE...]
+#
+# Print the key and value pair from each line of input such that values are
+# left-aligned. Use -d to specify the line delimiter (default: $'\n'), and IFS
+# to specify word delimiters (default: $'\t' if DELIM is not specified). Ignore
+# input if KEY VALUE pairs are given as arguments or the "--" option is used.
+#
+# Only the first character of DELIM is used. If IFS is empty or unset, the
+# default value is used. Characters in DELIM and IFS must not appear in any KEY
+# or VALUE.
+function lk_tty_pairs() {
+    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
+    local IFS=${IFS:-$'\t'} LF COLOUR ARGS= TEMP LEN KEY VALUE
+    unset LF COLOUR
+    [ "${1-}" != -d ] || { LF=${2::1} && shift 2; }
+    [ "${1-}" = -- ] || [ $# -eq 0 ] || { COLOUR=$1 && shift; }
+    [ "${1-}" != -- ] || { ARGS=1 && shift; }
+    [ -n "${LF+1}" ] || { LF=$'\n' && IFS=$'\t'; }
+    # Check for an even number of arguments remaining and that LF does not
+    # appear in IFS, then remove duplicates in IFS and rearrange it for the
+    # regex bracket expression below
+    (($# % 2 == 0)) && { [ -z "$LF" ] ||
+        { [ -n "$LF" ] && [[ $IFS != *$LF* ]]; }; } &&
+        IFS=$(LF=${LF:-\\0} && printf "%s${LF//%/%%}" "$IFS" |
+            awk -v "RS=$LF" '
+{ FS = ORS = RS
+  gsub(/./, "&" RS)
+  for (i = 1; i < NF; i++) {
+    if ($i == "-") { last = "-" }
+    else if ($i == "]") { first = "]" }
+    else { middle = middle $i } }
+  print first middle last }') ||
+        lk_warn "invalid arguments" || eval "$_lk_x_return"
+    if [ $# -gt 0 ]; then
+        local SEP=${IFS::1}
+        lk_mktemp_with TEMP printf "%s${SEP//%/%%}%s\n" "$@"
+    elif [ -z "$ARGS" ]; then
+        lk_mktemp_with TEMP cat
+    else
+        true
+        eval "$_lk_x_return"
+    fi || eval "$_lk_x_return"
+    # Align the length of the longest KEY to the nearest tab
+    LEN=$(awk -F"[$IFS]+" -v "RS=${LF:-\\0}" -v m=2 '
+    { if ((l = length($1)) > m) m = l }
+END { g = (m + 2) % 4; print (g ? m + 4 - g : m) + 1 }' "$TEMP") ||
+        eval "$_lk_x_return"
+    while read -r -d "$LF" KEY VALUE; do
+        _LK_TTY_ONE_LINE=1 ${_LK_TTY_COMMAND:-lk_tty_print} \
+            "$(printf "%-${LEN}s" "$KEY:")" "$VALUE" ${COLOUR+"$COLOUR"}
+    done <"$TEMP"
+    eval "$_lk_x_return"
+}
+
+# - lk_tty_pairs_detail [-d DELIM] [COLOUR [--] [KEY VALUE...]]
+# - lk_tty_pairs_detail [-d DELIM] -- [KEY VALUE...]
+#
+# See lk_tty_pairs for details.
+function lk_tty_pairs_detail() {
+    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
+    _LK_STACK_DEPTH=1 _LK_TTY_COMMAND=lk_tty_detail lk_tty_pairs "$@"
+    eval "$_lk_x_return"
+}
+
+# lk_tty_diff [-L LABEL1 [-L LABEL2]] [FILE1] FILE2 [MESSAGE]
+#
+# Compare FILE1 and FILE2 using diff. If FILE1 or FILE2 is empty or "-", read it
+# from input. If FILE2 is the only argument, use FILE2.orig as FILE1 if it
+# exists and has a size greater than zero, otherwise call lk_tty_file FILE2.
+function lk_tty_diff() {
+    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
+    local LABEL1 LABEL2
+    [ "${1-}" != -L ] || { LABEL1=$2 && shift 2; }
+    [ "${1-}" != -L ] || { LABEL2=$2 && shift 2; }
+    [ $# -gt 0 ] || lk_warn "invalid arguments" || eval "$_lk_x_return"
+    [ $# -gt 1 ] ||
+        if lk_sudo -f test -s "$1.orig"; then
+            set -- "$1.orig" "$@"
+        else
+            lk_tty_file "$1"
+            eval "$_lk_x_return"
+        fi
+    local FILE1=${1:--} FILE2=${2:--} MESSAGE=${3-}
+    [ "$FILE1:$FILE2" != -:- ] ||
+        lk_warn "FILE1 and FILE2 cannot both be read from input" ||
+        eval "$_lk_x_return"
+    [[ :${#FILE1}${FILE1:0:1}:${#FILE2}${FILE2:0:1}: != *:1-:* ]] ||
+        [ ! -t 0 ] ||
+        lk_warn "input is a terminal" || eval "$_lk_x_return"
+    [ "$FILE1" != - ] || { FILE1=/dev/stdin && LABEL1="${LABEL1:-<input>}"; }
+    [ "$FILE2" != - ] || { FILE2=/dev/stdin && LABEL2="${LABEL2:-<input>}"; }
+    lk_tty_dump - \
+        "${MESSAGE:-${LABEL1:-$FILE1}$LK_BOLD -> ${LABEL2:-$FILE2}$LK_RESET}" \
+        "" "" "" lk_diff "$FILE1" "$FILE2"
+    eval "$_lk_x_return"
+}
+
+function lk_tty_diff_detail() {
+    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
+    _LK_STACK_DEPTH=1 _LK_TTY_COMMAND=lk_tty_detail lk_tty_diff "$@"
     eval "$_lk_x_return"
 }
 
@@ -1559,8 +1853,11 @@ function lk_uri_encode() {
 lk_command_first_existing() { lk_first_command "$@"; }
 lk_confirm() { lk_tty_yn "$@"; }
 lk_console_blank() { lk_tty_print; }
+lk_console_detail_diff() { lk_tty_diff_detail "$@"; }
+lk_console_detail_file() { lk_tty_file_detail "$@"; }
 lk_console_detail_list() { lk_tty_list_detail - "$@"; }
 lk_console_detail() { lk_tty_detail "$@"; }
+lk_console_diff() { lk_tty_diff "$@"; }
 lk_console_item() { lk_tty_print "$1" "$2" "${3-${_LK_TTY_COLOUR-$_LK_COLOUR}}"; }
 lk_console_list() { lk_tty_list - "$@"; }
 lk_console_message() { lk_tty_print "${1-}" "${3+$2}" "${3-${2-${_LK_TTY_COLOUR-$_LK_COLOUR}}}"; }
@@ -1577,6 +1874,7 @@ lk_maybe_sudo() { lk_sudo "$@"; }
 lk_regex_implode() { lk_ere_implode_args -- "$@"; }
 lk_run_detail() { lk_tty_run_detail "$@"; }
 lk_run() { lk_tty_run "$@"; }
+lk_tty_detail_pairs() { lk_tty_pairs_detail "$@"; }
 
 #### END core.sh.d
 
@@ -2754,52 +3052,6 @@ function lk_readline_format() {
     echo "$STRING"
 }
 
-# lk_tty_pairs [-d DELIM] [COLOUR]
-function lk_tty_pairs() {
-    local _LK_TTY_NO_FOLD=1 ARGS LEN=0 KEY VALUE KEYS=() VALUES=() GAP SPACES i
-    [ "${1-}" != -d ] || { ARGS=(-d "$2") && shift 2; }
-    while read -r ${ARGS[@]+"${ARGS[@]}"} KEY VALUE; do
-        [ ${#KEY} -le "$LEN" ] || LEN=${#KEY}
-        KEYS[${#KEYS[@]}]=$KEY
-        VALUES[${#VALUES[@]}]=$VALUE
-    done
-    # Align to the nearest tab
-    [ -n "${_LK_TTY_PREFIX-}" ] && GAP=${#_LK_TTY_PREFIX} || GAP=0
-    ((GAP = ((GAP + LEN + 2) % 4), GAP = (GAP > 0 ? 4 - GAP : 0))) || true
-    for i in "${!KEYS[@]}"; do
-        KEY=${KEYS[$i]}
-        ((SPACES = LEN - ${#KEY} + GAP)) || true
-        _LK_TTY_ONE_LINE=1 lk_console_item \
-            "$KEY:$( ! ((SPACES)) || eval "printf ' %.s' {1..$SPACES}")" \
-            "${VALUES[$i]}" \
-            "$@"
-    done
-} #### Reviewed: 2021-03-22
-
-# lk_tty_detail_pairs [-d DELIM] [COLOUR]
-function lk_tty_detail_pairs() {
-    local ARGS _LK_TTY_PREFIX=${_LK_TTY_PREFIX-   -> } \
-        _LK_TTY_MESSAGE_COLOUR=${_LK_TTY_MESSAGE_COLOUR-}
-    [ "${1-}" != -d ] || { ARGS=(-d "$2") && shift 2; }
-    lk_tty_pairs ${ARGS[@]+"${ARGS[@]}"} "${1-$LK_YELLOW}"
-} #### Reviewed: 2021-03-22
-
-# lk_console_detail_file FILE [COLOUR [FILE_COLOUR]]
-function lk_console_detail_file() {
-    local _LK_TTY_PREFIX=${_LK_TTY_PREFIX-  >>> } \
-        _LK_TTY_SUFFIX=${_LK_TTY_SUFFIX-  <<< } \
-        _LK_TTY_MESSAGE_COLOUR=${_LK_TTY_MESSAGE_COLOUR-$LK_YELLOW} \
-        _LK_TTY_COLOUR2=${_LK_TTY_COLOUR2-} \
-        _LK_TTY_INDENT=2
-    ${_LK_TTY_COMMAND:-lk_tty_file} "$@"
-}
-
-# lk_console_detail_diff FILE1 [FILE2 [MESSAGE [COLOUR]]]
-function lk_console_detail_diff() {
-    _LK_TTY_COMMAND=lk_console_diff \
-        lk_console_detail_file "$@"
-}
-
 function _lk_tty_log() {
     local _STATUS=$? STATUS=0 COLOUR=$1 \
         _LK_TTY_COLOUR2=${_LK_TTY_COLOUR2-} \
@@ -2861,90 +3113,6 @@ function lk_console_error() {
     # ✘ (\u2718)
     _LK_TTY_PREFIX=${_LK_TTY_PREFIX-$'  \xe2\x9c\x98 '} \
         _lk_tty_log "$_LK_ERROR_COLOUR" "$@"
-}
-
-# lk_tty_dump CONTENT [MESSAGE1 [MESSAGE2 [COLOUR [COLOUR2 [COMMAND...]]]]]
-#
-# Output CONTENT to the terminal between two message lines. If CONTENT is the
-# empty string, use the output of `eval COMMAND...` or read from input.
-function lk_tty_dump() {
-    local BOLD_COLOUR SPACES \
-        COLOUR=${4-${_LK_TTY_MESSAGE_COLOUR-${_LK_TTY_COLOUR-$_LK_COLOUR}}} \
-        _LK_TTY_COLOUR2=${5-${_LK_TTY_COLOUR2-}} \
-        _LK_TTY_PREFIX=${_LK_TTY_PREFIX->>> } \
-        _LK_TTY_INDENT=${_LK_TTY_INDENT:-0} \
-        _LK_TTY_NO_FOLD=1 \
-        _LK_TTY_MESSAGE_COLOUR
-    unset LK_TTY_DUMP_COMMAND_STATUS
-    BOLD_COLOUR=$(lk_maybe_bold "$COLOUR")$COLOUR
-    _LK_TTY_MESSAGE_COLOUR=$(lk_maybe_bold "${2-}$COLOUR")$COLOUR
-    local _LK_TTY_PREFIX_COLOUR=${_LK_TTY_PREFIX_COLOUR-$BOLD_COLOUR}
-    SPACES=$(printf "%$((_LK_TTY_INDENT > -2 ? _LK_TTY_INDENT + 2 : 0))s")
-    _LK_TTY_INDENT=0 lk_tty_print "${2-}"
-    {
-        printf '%s' "$_LK_TTY_COLOUR2"
-        if [ -n "${1:+1}" ] || { [ $# -le 5 ] && [ -t 0 ]; }; then
-            echo "${1%$'\n'}"
-        elif [ $# -gt 5 ]; then
-            eval "${@:6}" || LK_TTY_DUMP_COMMAND_STATUS=$?
-        else
-            cat
-        fi | sed -E "s/^/$SPACES/"
-        printf '%s' "$LK_RESET"
-    } >&"${_LK_FD-2}"
-    _LK_TTY_PREFIX=${_LK_TTY_SUFFIX-<<< }
-    _LK_TTY_MESSAGE_COLOUR=$(lk_maybe_bold "${3-}$COLOUR")$COLOUR
-    _LK_TTY_INDENT=0 lk_tty_print "${3-}"
-}
-
-# lk_tty_file FILE [COLOUR [FILE_COLOUR]]
-function lk_tty_file() {
-    local MESSAGE2=${1-} _LK_TTY_INDENT=-2
-    lk_maybe_sudo test -r "${1-}" || lk_warn "file not found: ${1-}" || return
-    ! lk_verbose || MESSAGE2=$(lk_maybe_sudo ls -ld "$1") || return
-    lk_maybe_sudo cat "$1" | lk_tty_dump "" \
-        "$1" \
-        "$MESSAGE2" \
-        "${2-${_LK_TTY_MESSAGE_COLOUR-${_LK_TTY_COLOUR-$_LK_COLOUR}}}" \
-        "${3-${_LK_TTY_COLOUR2-}}"
-}
-
-# lk_console_diff FILE1 [FILE2 [MESSAGE [COLOUR]]]
-function lk_console_diff() {
-    local FILE1=${1-} FILE2=${2-} f MESSAGE
-    [ -n "$FILE1$FILE2" ] || lk_usage "\
-Usage: $FUNCNAME FILE1 [FILE2 [MESSAGE [COLOUR]]]
-
-Compare FILE1 and FILE2 using diff. If FILE2 is the empty string, read it from
-input. If FILE1 is the only argument, compare with FILE1.orig if it exists or
-with /dev/null if it doesn't." || return
-    for f in FILE1 FILE2; do
-        [ -n "${!f}" ] || {
-            if [ "$f" = FILE2 ] && { [ -t 0 ] || [ $# -eq 1 ]; }; then
-                FILE1=$1.orig
-                FILE2=$1
-                lk_maybe_sudo test -r "$FILE1" || FILE1=/dev/null
-                set -- "$FILE1" "$FILE2" "${@:3}"
-                break
-            fi
-            eval "$f=/dev/stdin"
-            continue
-        }
-        lk_maybe_sudo test -r "${!f}" ||
-            lk_warn "file not found: ${!f}" || return
-    done
-    MESSAGE="\
-${1:-${_LK_TTY_INPUT_NAME:-/dev/stdin}}$LK_BOLD -> \
-${2:-${_LK_TTY_INPUT_NAME:-/dev/stdin}}$LK_RESET"
-    _LK_DIFF_SED_SCRIPT=':repeat
-s/^(( {4})*)\t/\1    /; t repeat' lk_tty_dump \
-        "" \
-        "${3-$MESSAGE}" \
-        "$MESSAGE" \
-        "${4-${_LK_TTY_MESSAGE_COLOUR-$LK_MAGENTA}}" \
-        "${_LK_TTY_COLOUR2-}" \
-        "$(lk_quote_args \
-            _LK_TTY_INDENT=${_LK_TTY_INDENT:-0} lk_diff "$FILE1" "$FILE2")"
 }
 
 function lk_diff() { (

@@ -43,11 +43,15 @@ lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
 # <UDF name="LK_SHUTDOWN_ACTION" label="Reboot or power down after provisioning" oneof="reboot,poweroff" default="reboot" />
 # <UDF name="LK_PLATFORM_BRANCH" label="lk-platform tracking branch" oneof="master,develop" default="master" />
 
-# Copy output to the console (i.e. LISH) if running on a Linode
-[ -z "${LINODE_ID-}" ] || exec > >(tee /dev/console) 2>&1
+# Redirect output to /dev/console if there is no controlling terminal
+{ : >/dev/tty ||
+    ! : >/dev/console; } 2>/dev/null ||
+    exec &>/dev/console
 
-SCRIPT_VARS=$(declare -p)
-SCRIPT_ENV=$(printenv)
+SCRIPT_VARS=$(declare -p $(eval \
+    "printf '%s\n'$(printf ' "${!%s@}"' {a..z} {A..Z} _)" |
+    grep -Evi 'password'))
+SCRIPT_ENV=$(printenv | grep -Evi '^[^=]*password[^=]*=' || true)
 
 # Apply defaults from the tags above (use `lk_linode_get_udf_vars` to generate)
 LK_NODE_FQDN=${LK_NODE_FQDN-}
@@ -125,7 +129,7 @@ for FILE_PATH in \
     /lib/bash/include/{core,debian,git}.sh /share/sudoers.d/default; do
     FILE=$_DIR/${FILE_PATH##*/}
     URL=$REPO_URL/$LK_PLATFORM_BRANCH$FILE_PATH
-    MESSAGE="$BOLD$YELLOW   -> $RESET{}$YELLOW $URL$RESET"
+    MESSAGE="$BOLD$YELLOW -> $RESET{}$YELLOW $URL$RESET"
     if [ ! -e "$FILE" ]; then
         echo "${MESSAGE/{\}/Downloading:}" >&2
         curl "${CURL_OPTIONS[@]}" --output "$FILE" "$URL" || {
