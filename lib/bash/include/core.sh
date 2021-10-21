@@ -254,6 +254,15 @@ function lk_x_off() {
     echo 'eval "{ declare _lk_x_restore= _lk_x_return=\"return \\\$?\"; [ \"\${-/x/}\" = \"\$-\" ] || { _lk_x_restore=\"set -x\"; _lk_x_return=\"eval \\\"{ local _lk_x_status=\\\\\\\$?; set -x; return \\\\\\\$_lk_x_status; } \\\${BASH_XTRACEFD:-2}>/dev/null\\\"\"; set +x; }; } ${BASH_XTRACEFD:-2}>/dev/null"'
 }
 
+function lk_x_no_off() {
+    function lk_x_off() {
+        echo 'declare _lk_x_restore= _lk_x_return="return \$?"'
+    }
+    export _LK_NO_X_OFF=1
+}
+
+[ -z "${_LK_NO_X_OFF-}" ] || lk_x_no_off
+
 # lk_no_input
 #
 # Return true if user input should not be requested.
@@ -666,16 +675,6 @@ function lk_implode_args() {
     printf '\n'
 }
 
-# lk_implode_arr GLUE [ARRAY_NAME...]
-function lk_implode_arr() {
-    local IFS _ARR _EVAL=
-    unset IFS
-    for _ARR in "${@:2}"; do
-        _EVAL+=" \${$_ARR+\"\${${_ARR}[@]}\"}"
-    done
-    eval "lk_implode_args \"\$1\" $_EVAL"
-}
-
 # lk_implode_input GLUE
 function lk_implode_input() {
     awk -v "OFS=$1" 'NR > 1 { printf "%s", OFS } { printf "%s", $0 }'
@@ -718,7 +717,7 @@ function lk_sed_escape_replace() {
 }
 
 function lk_strip_cr() {
-    _lk_stream_args 3 sed -E 's/.*\r(.)/\1/' "$@"
+    LC_ALL=C _lk_stream_args 3 sed -E $'s/.*\r(.)/\\1/' "$@"
 }
 
 # lk_strip_non_printing [-d DELETE] [STRING...]
@@ -731,7 +730,7 @@ function lk_strip_non_printing() {
     local DELETE
     [ "${1-}" != -d ] || { DELETE=$2 && shift 2; }
     eval "$(lk_get_regex NON_PRINTING_REGEX)"
-    _lk_stream_args 3 \
+    LC_ALL=C _lk_stream_args 3 \
         sed -Eu "s/$NON_PRINTING_REGEX//g; "$'s/.*\r(.)/\\1/' "$@" |
         lk_unbuffer tr -d '\0-\10\16-\37\177'"${DELETE-}"
 }
@@ -762,16 +761,23 @@ END         {printf "\n"}'
 
 # lk_arr [ARRAY...]
 function lk_arr() {
-    local SH i=0
-    SH="printf '%s\n'"
+    local _SH _i=0
+    _SH="printf '%s\n'"
     while [ $# -gt 0 ]; do
         # Count array members until one is found
-        ((i)) || eval "\${$1+let i+=\${#$1[@]}}"
-        ((!i)) || SH+=" \${$1+\"\${$1[@]}\"}"
+        ((_i)) || eval "\${$1+let _i+=\${#$1[@]}}"
+        ((!_i)) || _SH+=" \${$1+\"\${$1[@]}\"}"
         shift
     done
     # Print nothing if no array members were found
-    ((!i)) || eval "$SH"
+    ((!_i)) || eval "$_SH"
+}
+
+# lk_implode_arr GLUE [ARRAY_NAME...]
+function lk_implode_arr() {
+    local IFS
+    unset IFS
+    lk_arr "${@:2}" | lk_implode_input "$1"
 }
 
 # lk_array_remove_value ARRAY VALUE
@@ -2746,67 +2752,6 @@ function lk_readline_format() {
         done
     done
     echo "$STRING"
-}
-
-# lk_fold STRING [WIDTH]
-#
-# Wrap STRING to fit in WIDTH (default: 120) after accounting for non-printing
-# character sequences, breaking at whitespace only.
-function lk_fold() {
-    local STRING WIDTH=${2:-120} REGEX \
-        PARTS=() CODES=() LINE_TEXT LINE i PART CODE _LINE_TEXT
-    eval "$(lk_get_regex NON_PRINTING_REGEX)"
-    [ $# -gt 0 ] || lk_usage "\
-Usage: $FUNCNAME STRING [WIDTH]" || return
-    STRING=$1
-    ! lk_command_exists expand ||
-        STRING=$(expand <<<"$STRING") || return
-    REGEX=$'^([^\x1b\x01]*)'"(($NON_PRINTING_REGEX)+)(.*)"
-    while [[ $STRING =~ $REGEX ]]; do
-        PARTS+=("${BASH_REMATCH[1]}")
-        CODES+=("${BASH_REMATCH[2]}")
-        STRING=${BASH_REMATCH[$((${#BASH_REMATCH[@]} - 1))]}
-    done
-    [ -z "$STRING" ] || {
-        PARTS+=("$STRING")
-        CODES+=("")
-    }
-    STRING=
-    LINE_TEXT=
-    LINE=
-    REGEX="^(([^[:space:]]*)([[:space:]]*))(.*)"
-    for i in "${!PARTS[@]}"; do
-        PART=${PARTS[$i]}
-        CODE=${CODES[$i]}
-        while [ -n "$PART" ]; do
-            [[ $PART =~ $REGEX ]]
-            _LINE_TEXT=$LINE_TEXT
-            LINE_TEXT=$LINE_TEXT${BASH_REMATCH[2]}
-            [ ${#LINE_TEXT} -le "$WIDTH" ] ||
-                [ "${BASH_REMATCH[2]}" = "$LINE_TEXT" ] ||
-                {
-                    # If this line only exceeds WIDTH because of trailing
-                    # whitespace, trim the excess
-                    [[ ! $_LINE_TEXT =~ ^.{$WIDTH}([[:space:]]+)$ ]] ||
-                        LINE=${LINE%${BASH_REMATCH[1]}}
-                    STRING=$STRING$LINE$'\n'
-                    LINE_TEXT=
-                    LINE=
-                    continue
-                }
-            LINE_TEXT=$LINE_TEXT${BASH_REMATCH[3]}
-            LINE=$LINE${BASH_REMATCH[1]}
-            PART=${BASH_REMATCH[4]}
-            if lk_has_newline "BASH_REMATCH[3]"; then
-                STRING=$STRING${LINE%$'\n'*}$'\n'
-                LINE_TEXT=${LINE_TEXT##*$'\n'}
-                LINE=$LINE_TEXT
-            fi
-        done
-        LINE=$LINE$CODE
-    done
-    STRING=$STRING$LINE
-    echo "${STRING%$'\n'}"
 }
 
 # lk_tty_pairs [-d DELIM] [COLOUR]

@@ -27,16 +27,6 @@ function lk_implode_args() {
     printf '\n'
 }
 
-# lk_implode_arr GLUE [ARRAY_NAME...]
-function lk_implode_arr() {
-    local IFS _ARR _EVAL=
-    unset IFS
-    for _ARR in "${@:2}"; do
-        _EVAL+=" \${$_ARR+\"\${${_ARR}[@]}\"}"
-    done
-    eval "lk_implode_args \"\$1\" $_EVAL"
-}
-
 # lk_implode_input GLUE
 function lk_implode_input() {
     awk -v "OFS=$1" 'NR > 1 { printf "%s", OFS } { printf "%s", $0 }'
@@ -79,7 +69,7 @@ function lk_sed_escape_replace() {
 }
 
 function lk_strip_cr() {
-    _lk_stream_args 3 sed -E 's/.*\r(.)/\1/' "$@"
+    LC_ALL=C _lk_stream_args 3 sed -E $'s/.*\r(.)/\\1/' "$@"
 }
 
 # lk_strip_non_printing [-d DELETE] [STRING...]
@@ -92,7 +82,7 @@ function lk_strip_non_printing() {
     local DELETE
     [ "${1-}" != -d ] || { DELETE=$2 && shift 2; }
     eval "$(lk_get_regex NON_PRINTING_REGEX)"
-    _lk_stream_args 3 \
+    LC_ALL=C _lk_stream_args 3 \
         sed -Eu "s/$NON_PRINTING_REGEX//g; "$'s/.*\r(.)/\\1/' "$@" |
         lk_unbuffer tr -d '\0-\10\16-\37\177'"${DELETE-}"
 }
@@ -121,4 +111,4 @@ $0 !~ regex {printf "%s%s", (i++ ? RS : ""), $0}
 END         {printf "\n"}'
 }
 
-#### Reviewed: 2021-10-04
+#### Reviewed: 2021-10-21
