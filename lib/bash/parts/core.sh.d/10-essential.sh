@@ -60,6 +60,26 @@ function lk_first_file() {
     [ $# -gt 0 ] && echo "$1"
 }
 
+# lk_first_open [PATH...]
+#
+# Print the first PATH that is a writable character special file, or return
+# false if no such PATH was found.
+function lk_first_open() {
+    while [ $# -gt 0 ]; do
+        { [ ! -c "$1" ] || ! : >"$1"; } 2>/dev/null || break
+        shift
+    done
+    [ $# -gt 0 ] && echo "$1"
+}
+
+# lk_get_tty
+#
+# Print "/dev/tty" if Bash has a controlling terminal, otherwise print
+# "/dev/console" if it is open for writing, or return false.
+function lk_get_tty() {
+    lk_first_open /dev/tty /dev/console
+}
+
 # lk_plural [-v] VALUE SINGLE [PLURAL]
 #
 # Print SINGLE if VALUE is 1 or the name of an array with 1 element, PLURAL

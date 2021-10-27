@@ -169,7 +169,12 @@
     }
 
     ARGS=()
-    while [[ ${1-} =~ ^(-[saru]|--(set|add|remove|unset))$ ]]; do
+    while [[ ${1-} =~ ^(-[saru]|--(set|add|remove|unset|no-upgrade))$ ]]; do
+        [ "$1" != --no-upgrade ] || {
+            ARGS+=("$1")
+            shift
+            continue
+        }
         SHIFT=2
         [[ ${2-} == *=* ]] || [[ $1 =~ ^--?u ]] ||
             ((SHIFT++))
@@ -237,6 +242,7 @@
                             -H "Cache-Control: no-cache" \
                             -H "Pragma: no-cache" \
                             --connect-to "$DOMAIN::$PUBLIC_IP:" \
+                            --connect-timeout 5 \
                             ${ARGS+"${ARGS[@]}"} \
                             "https://$DOMAIN" 2>&1 >/dev/null | head -n1) &&
                             HTTP=$(awk \

@@ -142,7 +142,7 @@ HOMEBREW_FORMULAE+=(
     autopep8
     cmake
     emscripten
-    gdb
+    #gdb
 
     # Email
     msmtp  # SMTP client
@@ -160,6 +160,7 @@ HOMEBREW_FORMULAE+=(
 
     #
     composer
+    php
 
     #
     python
@@ -191,7 +192,6 @@ FORCE_IBREW+=(
     php@7.2
     php@7.3
     php@7.4
-    lkrms/virt-manager/virt-manager
 )
 
 HOMEBREW_CASKS+=(
@@ -221,13 +221,7 @@ HOMEBREW_CASKS+=(
 )
 
 HOMEBREW_KEEP_FORMULAE+=(
-    automake
-    meson
-    ninja
-    ocaml
-
     #
-    php
     php@7.2
     php@7.3
     php@7.4

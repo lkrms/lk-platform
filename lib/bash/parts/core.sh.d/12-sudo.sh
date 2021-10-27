@@ -1,42 +1,63 @@
 #!/bin/bash
 
-# lk_elevate [exec] [COMMAND [ARG...]]
+function _lk_sudo_check() {
+    local LK_SUDO_ON_FAIL=${LK_SUDO_ON_FAIL-} LK_EXEC=${LK_EXEC-} SHIFT=0 \
+        _LK_STACK_DEPTH=1
+    [ "${1-}" != -f ] || { LK_SUDO_ON_FAIL=1 && ((++SHIFT)) && shift; }
+    [ "${1-}" != exec ] || { LK_EXEC=1 && ((++SHIFT)) && shift; }
+    [ "${LK_EXEC:+e}${LK_SUDO_ON_FAIL:+f}" != ef ] ||
+        lk_err "LK_EXEC and LK_SUDO_ON_FAIL are mutually exclusive" || return
+    [ -z "$LK_SUDO_ON_FAIL" ] || [ $# -gt 0 ] ||
+        lk_warn "command required if LK_SUDO_ON_FAIL is set" || return
+    declare -p LK_EXEC LK_SUDO_ON_FAIL
+    ((!SHIFT)) || printf 'shift %s\n' "$SHIFT"
+}
+
+# lk_elevate [-f] [exec] [COMMAND [ARG...]]
 #
 # If Bash is running as root, run COMMAND, otherwise use `sudo` to run it as the
 # root user. If COMMAND is not found in PATH and is a function, run it with
 # LK_SUDO set. If no COMMAND is specified and Bash is not running as root, run
 # the current script, with its original arguments, as the root user.
 function lk_elevate() {
-    local COMMAND
-    [ "${1-}" != exec ] || { local LK_EXEC=1 && shift; }
+    local _SH _COMMAND
+    _SH=$(_lk_sudo_check "$@") && eval "$_SH" || return
     if [ "$EUID" -eq 0 ]; then
         [ $# -eq 0 ] ||
             ${LK_EXEC:+exec} "$@"
     elif [ $# -eq 0 ]; then
         ${LK_EXEC:+exec} sudo -H "$0" ${_LK_ARGV+"${_LK_ARGV[@]}"}
-    elif ! COMMAND=$(type -P "$1") && [ "$(type -t "$1")" = "function" ]; then
-        local LK_SUDO=1
+    elif ! _COMMAND=$(type -P "$1") && [ "$(type -t "$1")" = "function" ]; then
+        LK_SUDO=
+        if [ -n "$LK_SUDO_ON_FAIL" ] && "$@" 2>/dev/null; then
+            return 0
+        fi
+        LK_SUDO=1
         "$@"
-    elif [ -n "$COMMAND" ]; then
-        # Use `shift` and "$@" because Bash 3.2 expands "${@:2}" to the
-        # equivalent of `IFS=" "; echo "${*:2}"` unless there is a space in IFS
+    elif [ -n "$_COMMAND" ]; then
         shift
-        ${LK_EXEC:+exec} sudo -H "$COMMAND" "$@"
+        if [ -n "$LK_SUDO_ON_FAIL" ] && "$_COMMAND" "$@" 2>/dev/null; then
+            return 0
+        fi
+        ${LK_EXEC:+exec} sudo -H "$_COMMAND" "$@"
     else
         lk_err "invalid command: $1"
         false
     fi
 }
 
-# lk_sudo [exec] COMMAND [ARG...]
+# lk_sudo [-f] [exec] COMMAND [ARG...]
 #
 # If Bash is running as root or LK_SUDO is empty or unset, run COMMAND,
-# otherwise use `sudo` to run it as the root user.
+# otherwise use `sudo` to run it as the root user. If -f is set and `sudo` will
+# be used, attempt without `sudo` first and only run as root if the first
+# attempt fails.
 function lk_sudo() {
+    local _SH
+    _SH=$(_lk_sudo_check "$@") && eval "$_SH" || return
     if [ -n "${LK_SUDO-}" ]; then
         lk_elevate "$@"
     else
-        [ "$1" != exec ] || { local LK_EXEC=1 && shift; }
         ${LK_EXEC:+exec} "$@"
     fi
 }
@@ -57,4 +78,4 @@ function lk_will_sudo() {
     [ "$EUID" -ne 0 ] && [ -n "${LK_SUDO-}" ]
 }
 
-#### Reviewed: 2021-10-07
+#### Reviewed: 2021-10-24

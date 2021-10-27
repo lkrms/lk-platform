@@ -53,7 +53,8 @@ PATH=$(path_add \
 PATH=$(path_add_to_front \
     /usr/local/bin /usr/local/sbin \
     /home/linuxbrew/.linuxbrew/bin /home/linuxbrew/.linuxbrew/sbin)
-[ ! -d /opt/homebrew/bin ] || [ /opt/homebrew/bin -ef /usr/local/bin ] ||
+[ ! -d /opt/homebrew/bin ] ||
+    [ /opt/homebrew/bin -ef /usr/local/bin ] ||
     [ "$(uname -m 2>/dev/null)" = x86_64 ] || {
     PATH=$(path_add_to_front /opt/homebrew/bin /opt/homebrew/sbin)
     # DYLD_FALLBACK_LIBRARY_PATH defaults to "$HOME/lib:/usr/local/lib:/usr/lib"

@@ -15,6 +15,7 @@ PAC_KEEP=(
     ant
     apachedirectorystudio
     expect
+    linux-headers
     offlineimap
     subversion
     zoom
