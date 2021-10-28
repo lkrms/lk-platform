@@ -609,7 +609,7 @@ $LK_NODE_HOSTNAME" &&
         lk_console_detail "Checking pacman repo at" "$DIR"
         lk_install -d -m 00755 -o "$USER" -g "$GROUP" "$DIR"
         [ -e "$FILE" ] ||
-            LK_SUDO= lk_faketty repo-add "$FILE"
+            (LK_SUDO= && lk_faketty repo-add "$FILE")
 
         lk_arch_add_repo "aur|file://$DIR|||Optional TrustAll"
         LK_CONF_OPTION_FILE=/etc/pacman.conf
@@ -625,7 +625,8 @@ $LK_NODE_HOSTNAME" &&
             PKGDEST=$DIR lk_makepkg -a aurutils --force
             lk_files_exist "${LK_MAKEPKG_LIST[@]}" ||
                 lk_die "not found: ${LK_MAKEPKG_LIST[*]}"
-            LK_SUDO= lk_faketty repo-add --remove "$FILE" "${LK_MAKEPKG_LIST[@]}"
+            (LK_SUDO= &&
+                lk_faketty repo-add --remove "$FILE" "${LK_MAKEPKG_LIST[@]}")
             lk_pac_sync -f
             lk_faketty pacman -S --noconfirm aur/aurutils
         fi

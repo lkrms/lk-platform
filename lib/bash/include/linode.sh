@@ -310,7 +310,7 @@ include "core";
                 "${@:3}") &&
                 RECORD[0]=$(jq '.[0].id' <<<"$JSON") &&
                 lk_tty_detail "Record ID:" "$RECORD"
-        fi || lk_warn "linode-cli failed with: $JSON" || return
+        fi || lk_warn "unable to add DNS record" || return
         lk_linode_flush_cache
     done < <(comm -23 \
         <(sort -u <<<"$_RECORDS") \
@@ -333,11 +333,12 @@ include "core";
             "cannot add RDNS record for $ADDRESS until $RDNS resolves" ||
             return
         lk_tty_print "Adding RDNS record:" "$ADDRESS $RDNS"
-        JSON=$(linode-cli --json networking ip-update \
+        lk_keep_trying eval "JSON=\$($(lk_quote_args \
+            linode-cli --json networking ip-update \
             --rdns "$RDNS" \
             "$ADDRESS" \
-            "${@:3}") ||
-            lk_warn "linode-cli failed with: $JSON" || return
+            "${@:3}"))" ||
+            lk_warn "unable to add RDNS record" || return
         lk_linode_flush_cache
         ((++NEW_REVERSE_RECORD_COUNT))
         lk_console_detail "Record added"
@@ -412,7 +413,7 @@ function lk_linode_hosting_update_stackscript() {
         --is_public false \
         --rev_note "commit: ${HASH:0:7} (based on lk-platform/${BASED_ON[2]}@${BASED_ON[1]:0:7}" \
         "${@:3}") ||
-        lk_warn "linode-cli failed with: $OUTPUT" || return
+        lk_warn "unable to ${ARGS[0]} StackScript" || return
     lk_linode_flush_cache
     STACKSCRIPT=$(jq -r '.[0].id' <<<"$OUTPUT") &&
         lk_console_detail "StackScript $STACKSCRIPT $MESSAGE" "${HASH:0:7}:hosting.sh"

@@ -413,8 +413,8 @@ Usage: $FUNCNAME SQL_PATH [DB_NAME [DB_USER]]" || return
         [[ $USER =~ ^[-a-zA-Z0-9_]+$ ]] &&
             [[ $LOCAL_DB_NAME =~ ^$USER(_[-a-zA-Z0-9_]*)?$ ]] ||
             unset SUDO
-        LK_SUDO=${SUDO-${LK_SUDO-}} \
-            "$LK_BASE/bin/lk-mysql-grant.sh" \
+        local LK_SUDO=${SUDO-${LK_SUDO-}}
+        lk_maybe_trace "$LK_BASE/bin/lk-mysql-grant.sh" \
             "$LOCAL_DB_NAME" "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD" || return
     }
     lk_tty_print "Restoring WordPress database"

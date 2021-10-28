@@ -181,7 +181,7 @@ function exit_trap() {
         [ -z "$SUFFIX" ] || FILE=${FILE%/*}/zz-${FILE##*/}
         sudo test -e "$FILE$SUFFIX" ||
             sudo install -m 00440 /dev/null "$FILE$SUFFIX"
-        LK_SUDO=1 lk_file_replace -f "$SUDOERS$SUFFIX" "$FILE$SUFFIX"
+        (LK_SUDO=1 && lk_file_replace -f "$SUDOERS$SUFFIX" "$FILE$SUFFIX")
     done
 
     lk_tty_print "Configuring default umask"
@@ -191,7 +191,7 @@ function exit_trap() {
     FILE=/etc/profile
     [ ! -r "$FILE" ] || grep -Eq '\<umask\>' "$FILE" || {
         lk_tty_detail "Setting umask in" "$FILE"
-        LK_SUDO=1 lk_file_keep_original "$FILE" &&
+        (LK_SUDO=1 && lk_file_keep_original "$FILE") &&
             sudo tee -a "$FILE" <<"EOF" >/dev/null
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -419,9 +419,11 @@ EOF
             echo "[ ! -f ~/.bashrc ] || . ~/.bashrc")"
     fi
 
+    LK_SUDO=1
     lk_console_blank
-    LK_NO_LOG=1 LK_SUDO=1 \
+    LK_NO_LOG=1 \
         lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh"
+    unset LK_SUDO
 
     lk_console_blank
     lk_tty_print "Checking Homebrew packages"
