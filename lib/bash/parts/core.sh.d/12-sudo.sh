@@ -18,7 +18,9 @@ function _lk_sudo_check() {
 # If Bash is running as root, run COMMAND, otherwise use `sudo` to run it as the
 # root user. If COMMAND is not found in PATH and is a function, run it with
 # LK_SUDO set. If no COMMAND is specified and Bash is not running as root, run
-# the current script, with its original arguments, as the root user.
+# the current script, with its original arguments, as the root user. If -f is
+# set, attempt without `sudo` first and only run as root if the first attempt
+# fails.
 function lk_elevate() {
     local _SH _COMMAND
     _SH=$(_lk_sudo_check "$@") && eval "$_SH" || return

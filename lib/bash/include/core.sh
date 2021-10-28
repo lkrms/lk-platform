@@ -312,7 +312,9 @@ function _lk_sudo_check() {
 # If Bash is running as root, run COMMAND, otherwise use `sudo` to run it as the
 # root user. If COMMAND is not found in PATH and is a function, run it with
 # LK_SUDO set. If no COMMAND is specified and Bash is not running as root, run
-# the current script, with its original arguments, as the root user.
+# the current script, with its original arguments, as the root user. If -f is
+# set, attempt without `sudo` first and only run as root if the first attempt
+# fails.
 function lk_elevate() {
     local _SH _COMMAND
     _SH=$(_lk_sudo_check "$@") && eval "$_SH" || return
@@ -1864,6 +1866,7 @@ lk_console_message() { lk_tty_print "${1-}" "${3+$2}" "${3-${2-${_LK_TTY_COLOUR-
 lk_console_read_secret() { local IFS r && unset IFS && lk_tty_read_silent "$1" r "${@:2}" && echo "$r"; }
 lk_console_read() { local IFS r && unset IFS && lk_tty_read "$1" r "${@:2}" && echo "$r"; }
 lk_echo_array() { lk_arr "$@"; }
+lk_elevate_if_error() { lk_elevate -f "$@"; }
 lk_escape_ere_replace() { lk_sed_escape_replace "$@"; }
 lk_escape_ere() { lk_sed_escape "$@"; }
 lk_first_existing() { lk_first_file "$@"; }
@@ -3510,25 +3513,6 @@ function lk_can_sudo() {
                 sudo ${USERNAME:+-u "$USERNAME"} -l "$COMMAND" >/dev/null
         }
     }
-}
-
-function lk_elevate_if_error() {
-    local EXIT_STATUS=0
-    LK_SUDO= "$@" || {
-        EXIT_STATUS=$?
-        [ "$EUID" -ne 0 ] || return "$EXIT_STATUS"
-        if [ "$(type -t "$1")" != function ]; then
-            ! lk_can_sudo "$1" ||
-                {
-                    EXIT_STATUS=0
-                    sudo -H "$@" || EXIT_STATUS=$?
-                }
-        else
-            EXIT_STATUS=0
-            LK_SUDO=1 "$@" || EXIT_STATUS=$?
-        fi
-    }
-    return "$EXIT_STATUS"
 }
 
 function lk_me() {

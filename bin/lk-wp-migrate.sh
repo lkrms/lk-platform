@@ -161,7 +161,7 @@ lk_console_detail "Copy remote TLS certificate:" \
     "$( ((SSL)) && echo yes || echo no)"
 lk_console_detail "Refresh salts in local wp-config.php:" \
     "$( ((SHUFFLE_SALTS)) && echo yes || echo no)"
-lk_console_detail "Convert MyISAM tables to InnoDB:" \
+lk_console_detail "Convert local MyISAM tables to InnoDB:" \
     "$( ((INNODB)) && echo yes || echo no)"
 lk_console_detail "Local WP-Cron:" \
     "$([ "$MAINTENANCE" = permanent ] && echo enable || echo disable)"
