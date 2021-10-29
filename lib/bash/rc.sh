@@ -170,6 +170,7 @@ function find_all() {
 }
 
 [ ! -d /srv/www ] || lk_include hosting
+[ ! -d /srv/backup ] || lk_include backup
 lk_include bash git linode misc provision wordpress
 
 if lk_is_linux; then
