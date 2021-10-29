@@ -302,7 +302,7 @@ function _lk_sudo_check() {
     [ "${LK_EXEC:+e}${LK_SUDO_ON_FAIL:+f}" != ef ] ||
         lk_err "LK_EXEC and LK_SUDO_ON_FAIL are mutually exclusive" || return
     [ -z "$LK_SUDO_ON_FAIL" ] || [ $# -gt 0 ] ||
-        lk_warn "command required if LK_SUDO_ON_FAIL is set" || return
+        lk_err "command required if LK_SUDO_ON_FAIL is set" || return
     declare -p LK_EXEC LK_SUDO_ON_FAIL
     ((!SHIFT)) || printf 'shift %s\n' "$SHIFT"
 }
@@ -804,16 +804,14 @@ END         {printf "\n"}'
 
 # lk_arr [ARRAY...]
 function lk_arr() {
-    local _SH _i=0
-    _SH="printf '%s\n'"
+    local _sh _SH=
     while [ $# -gt 0 ]; do
-        # Count array members until one is found
-        ((_i)) || eval "\${$1+let _i+=\${#$1[@]}}"
-        ((!_i)) || _SH+=" \${$1+\"\${$1[@]}\"}"
+        _sh=" \"\${$1[@]}\""
+        _SH+=${!1+$_sh}
         shift
     done
     # Print nothing if no array members were found
-    ((!_i)) || eval "$_SH"
+    [ -z "${_SH:+1}" ] || eval "printf '%s\n'$_SH"
 }
 
 # lk_implode_arr GLUE [ARRAY_NAME...]
@@ -859,7 +857,47 @@ function _lk_caller() {
 # Print "<CALLER>: MESSAGE" as a warning and return the most recent exit status.
 function lk_warn() {
     lk_pass -$? \
-        lk_console_warning "$(LK_VERBOSE= _lk_caller): ${1-command failed}"
+        lk_tty_warning "$(LK_VERBOSE= _lk_caller): ${1-command failed}"
+}
+
+function lk_mktemp() {
+    local TMPDIR=${TMPDIR:-/tmp} FUNC=${FUNCNAME[1 + ${_LK_STACK_DEPTH:-0}]-}
+    mktemp "$@" ${_LK_MKTEMP_ARGS+"${_LK_MKTEMP_ARGS[@]}"} \
+        "${TMPDIR%/}/${0##*/}${FUNC:+-$FUNC}${_LK_MKTEMP_EXT-}.XXXXXXXXXX"
+}
+
+# lk_mktemp_with [-r] VAR [COMMAND [ARG...]]
+#
+# Create a temporary file that will be deleted when the (sub)shell exits, assign
+# its path to VAR, and return after invoking COMMAND (if given) and redirecting
+# its output to the file. If VAR is already set to the path of an existing
+# file and -r ("reuse") is set, proceed without creating a new file.
+function lk_mktemp_with() {
+    local _REUSE= _LK_STACK_DEPTH=$((1 + ${_LK_STACK_DEPTH:-0}))
+    [ "${1-}" != -r ] || { _REUSE=1 && shift; }
+    [ $# -ge 1 ] || lk_err "invalid arguments" || return
+    local _VAR=$1
+    shift
+    [ -n "${_REUSE-}" ] && [ -e "${!_VAR-}" ] ||
+        { eval "$_VAR=\$(lk_mktemp)" &&
+            lk_delete_on_exit "${!_VAR}"; } || return
+    { [ $# -eq 0 ] || "$@" >"${!_VAR}"; }
+}
+
+# lk_mktemp_dir_with [-r] VAR [COMMAND [ARG...]]
+#
+# Create a temporary directory that will be deleted when the (sub)shell exits,
+# assign its path to VAR, and return after invoking COMMAND (if given) in the
+# directory. If VAR is already set to the path of an existing directory and -r
+# ("reuse") is set, proceed without creating a new directory.
+function lk_mktemp_dir_with() {
+    local IFS _ARG=1 _LK_STACK_DEPTH=$((1 + ${_LK_STACK_DEPTH:-0})) \
+        _LK_MKTEMP_ARGS=(-d)
+    unset IFS
+    [ "${1-}" != -r ] || { _ARG=2; }
+    lk_mktemp_with "${@:1:_ARG}" || return
+    local _VAR=${!_ARG}
+    { [ $# -eq "$_ARG" ] || (cd "${!_VAR}" && "${@:_ARG+1}"); }
 }
 
 # lk_trap_add SIGNAL COMMAND [ARG...]
@@ -1007,7 +1045,7 @@ function _lk_tty_margin_add() {
 function lk_tty_add_margin() { (
     { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     [ $# -gt 1 ] && ((_MARGIN = $1)) ||
-        lk_warn "invalid arguments" || eval "$_lk_x_return"
+        lk_err "invalid arguments" || eval "$_lk_x_return"
     shift
     ((_MARGIN > 0)) && _TTY=$(lk_get_tty) || {
         _lk_tty_margin_add "$@"
@@ -1193,7 +1231,7 @@ function lk_tty_list() {
     }
     if [ "$_ARRAY" = - ]; then
         [ ! -t 0 ] && lk_mapfile _ITEMS ||
-            lk_warn "no input" || eval "$_lk_x_return"
+            lk_err "no input" || eval "$_lk_x_return"
     else
         _ARRAY="${_ARRAY}[@]"
         _ITEMS=(${!_ARRAY+"${!_ARRAY}"}) || eval "$_lk_x_return"
@@ -1260,7 +1298,7 @@ function lk_tty_dump() {
             ;;
         0- | *-1- | *-0)
             if [ -t 0 ]; then
-                lk_warn "input is a terminal"
+                lk_err "input is a terminal"
                 false
             else
                 ${_CMD+"${_CMD[@]}"} cat
@@ -1292,7 +1330,7 @@ function lk_tty_dump_detail() {
 function lk_tty_file() {
     { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     [ -n "${1-}" ] && lk_sudo -f test -r "${1-}" ||
-        lk_warn "file not found: ${1-}" || eval "$_lk_x_return"
+        lk_err "file not found: ${1-}" || eval "$_lk_x_return"
     local IFS MESSAGE2
     unset IFS
     ! lk_verbose || { MESSAGE2=$(lk_sudo -f ls -ld "$1") &&
@@ -1324,7 +1362,7 @@ function lk_tty_run() {
         { [[ $1 =~ ^-(([0-9]+)(:($REGEX(:$REGEX)*))?|($REGEX(:$REGEX)*))$ ]] &&
             SHIFT=${BASH_REMATCH[2]} &&
             TRANSFORM=${BASH_REMATCH[4]:-${BASH_REMATCH[1]}} &&
-            shift; } || lk_warn "invalid arguments" || eval "$_lk_x_return"
+            shift; } || lk_err "invalid arguments" || eval "$_lk_x_return"
     CMD=("$@")
     [ -z "$SHIFT" ] || shift "$SHIFT"
     while [[ $TRANSFORM =~ ^$REGEX:?(.*) ]]; do
@@ -1400,7 +1438,7 @@ function lk_tty_pairs() {
     else if ($i == "]") { first = "]" }
     else { middle = middle $i } }
   print first middle last }') ||
-        lk_warn "invalid arguments" || eval "$_lk_x_return"
+        lk_err "invalid arguments" || eval "$_lk_x_return"
     if [ $# -gt 0 ]; then
         local SEP=${IFS::1}
         lk_mktemp_with TEMP printf "%s${SEP//%/%%}%s\n" "$@"
@@ -1442,7 +1480,7 @@ function lk_tty_diff() {
     local LABEL1 LABEL2
     [ "${1-}" != -L ] || { LABEL1=$2 && shift 2; }
     [ "${1-}" != -L ] || { LABEL2=$2 && shift 2; }
-    [ $# -gt 0 ] || lk_warn "invalid arguments" || eval "$_lk_x_return"
+    [ $# -gt 0 ] || lk_err "invalid arguments" || eval "$_lk_x_return"
     [ $# -gt 1 ] ||
         if lk_sudo -f test -s "$1.orig"; then
             set -- "$1.orig" "$@"
@@ -1452,11 +1490,11 @@ function lk_tty_diff() {
         fi
     local FILE1=${1:--} FILE2=${2:--} MESSAGE=${3-}
     [ "$FILE1:$FILE2" != -:- ] ||
-        lk_warn "FILE1 and FILE2 cannot both be read from input" ||
+        lk_err "FILE1 and FILE2 cannot both be read from input" ||
         eval "$_lk_x_return"
     [[ :${#FILE1}${FILE1:0:1}:${#FILE2}${FILE2:0:1}: != *:1-:* ]] ||
         [ ! -t 0 ] ||
-        lk_warn "input is a terminal" || eval "$_lk_x_return"
+        lk_err "input is a terminal" || eval "$_lk_x_return"
     [ "$FILE1" != - ] || { FILE1=/dev/stdin && LABEL1="${LABEL1:-<input>}"; }
     [ "$FILE2" != - ] || { FILE2=/dev/stdin && LABEL2="${LABEL2:-<input>}"; }
     lk_tty_dump - \
@@ -1469,6 +1507,36 @@ function lk_tty_diff_detail() {
     { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _LK_STACK_DEPTH=1 _LK_TTY_COMMAND=lk_tty_detail lk_tty_diff "$@"
     eval "$_lk_x_return"
+}
+
+function _lk_tty_log() {
+    local STATUS=$? IFS=' '
+    [ "${1-}" = -r ] && shift || STATUS=0
+    local _LK_TTY_PREFIX=${_LK_TTY_PREFIX-$1} _LK_TTY_MESSAGE_COLOUR=$2 \
+        MESSAGE2=${4-} _LK_TTY_COLOUR2=${_LK_TTY_COLOUR2-}
+    [ -z "${MESSAGE2:+1}" ] || _lk_tty_format -b MESSAGE2
+    lk_tty_print "${3-}" "$MESSAGE2${5+ ${*:5}}" "$2"
+    return "$STATUS"
+}
+
+# lk_tty_success [-r] MESSAGE [MESSAGE2...]
+function lk_tty_success() {
+    _lk_tty_log " ^^ " "$_LK_SUCCESS_COLOUR" "$@"
+}
+
+# lk_tty_log [-r] MESSAGE [MESSAGE2...]
+function lk_tty_log() {
+    _lk_tty_log " :: " "${_LK_TTY_COLOUR-$_LK_COLOUR}" "$@"
+}
+
+# lk_tty_warning [-r] MESSAGE [MESSAGE2...]
+function lk_tty_warning() {
+    _lk_tty_log "  ! " "$_LK_WARNING_COLOUR" "$@"
+}
+
+# lk_tty_error [-r] MESSAGE [MESSAGE2...]
+function lk_tty_error() {
+    _lk_tty_log " !! " "$_LK_ERROR_COLOUR" "$@"
 }
 
 function _lk_tty_prompt() {
@@ -1575,7 +1643,7 @@ function lk_stack_trace() {
     # _D = maximum DEPTH, _R = maximum rows of output (DEPTH=0 is always skipped
     # to exclude lk_stack_trace)
     ((_R = _D - DEPTH, ROWS = ROWS ? (ROWS > _R ? _R : ROWS) : _R, ROWS)) ||
-        lk_warn "invalid arguments" || return
+        lk_err "invalid arguments" || return
     WIDTH=${#_R}
     while ((ROW++ < ROWS)) && ((DEPTH++ < _D)); do
         FUNC=${FUNCNAME[DEPTH]-"{main}"}
@@ -1613,7 +1681,7 @@ function lk_provide() {
 
 # lk_fifo_flush FIFO_PATH
 function lk_fifo_flush() {
-    [ -p "${1-}" ] || lk_warn "not a FIFO: ${1-}" || return
+    [ -p "${1-}" ] || lk_err "not a FIFO: ${1-}" || return
     gnu_dd \
         if="$1" \
         of=/dev/null \
@@ -1731,7 +1799,7 @@ function lk_report_error() {
     fi || {
         local STATUS=$? IFS=' '
         [ ! -s "${STDERR-}" ] || cat "$STDERR" >&2
-        lk_console_error "Exit status $STATUS:" "$*"
+        lk_tty_error "Exit status $STATUS:" "$*"
         return $STATUS
     }
 }
@@ -1761,7 +1829,7 @@ function lk_keep_trying() {
         "$@" && return 0 || {
             local STATUS=$? IFS=' '
             ((++i < MAX_ATTEMPTS)) || break
-            lk_console_log "Failed (attempt $i of $MAX_ATTEMPTS):" "$*"
+            lk_tty_log "Failed (attempt $i of $MAX_ATTEMPTS):" "$*"
             lk_tty_detail "Trying again in $(lk_plural -v $WAIT second)"
             sleep "$WAIT"
             ((NEXT = WAIT + PREV, PREV = WAIT, WAIT = NEXT))
@@ -1779,7 +1847,7 @@ function lk_keep_trying() {
 function lk_require_output() { (
     unset QUIET
     [ "${1-}" != -q ] || { QUIET=1 && shift; }
-    FILE=$(lk_mktemp_file) && lk_delete_on_exit "$FILE" &&
+    FILE=$(lk_mktemp) && lk_delete_on_exit "$FILE" &&
         if [ -z "${QUIET-}" ]; then
             "$@" | tee "$FILE"
         else
@@ -1800,50 +1868,11 @@ function lk_env_clean() {
     fi
 }
 
-# lk_mktemp_with [-c|-r] VAR [COMMAND [ARG...]]
-#
-# Set VAR to the name of a new temporary file that optionally contains the
-# output of COMMAND. If VAR is already set to the path of an existing file:
-# - do nothing if -c ("cache") is set, or
-# - proceed without creating a new file if -r ("reuse") is set.
-function lk_mktemp_with() {
-    local IFS _CACHE _REUSE
-    { [ "${1-}" = -c ] && _CACHE=1 && shift; } ||
-        { [ "${1-}" = -r ] && _REUSE=1 && shift; } || true
-    [ $# -ge 1 ] || lk_usage "\
-Usage: $FUNCNAME [-c|-r] VAR [COMMAND [ARG...]]" || return
-    [ -z "${_CACHE-}" ] || [ ! -f "${!1-}" ] || return 0
-    local _VAR=$1 _LK_STACK_DEPTH=1
-    shift
-    [ -n "${_REUSE-}" ] && [ -f "${!1-}" ] ||
-        { eval "$_VAR=\$(lk_mktemp_file)" &&
-            lk_delete_on_exit "${!_VAR}"; } || return
-    { [ $# -eq 0 ] || "$@" >"${!_VAR}"; }
-}
-
-# lk_mktemp_dir_with [-c] VAR [COMMAND [ARG...]]
-#
-# Set VAR to the name of a new temporary directory and optionally use it as the
-# working directory to run COMMAND. If -c ("cache") is set, do nothing if VAR
-# already contains the path of an existing directory.
-function lk_mktemp_dir_with() {
-    local IFS _CACHE
-    [ "${1-}" != -c ] || { _CACHE=1 && shift; }
-    [ $# -ge 1 ] || lk_usage "\
-Usage: $FUNCNAME [-c] VAR [COMMAND [ARG...]]" || return
-    [ -z "${_CACHE-}" ] || [ ! -d "${!1-}" ] || return 0
-    local _VAR=$1 _LK_STACK_DEPTH=1
-    shift
-    eval "$_VAR=\$(lk_mktemp_dir)" &&
-        lk_delete_on_exit "${!_VAR}" &&
-        { [ $# -eq 0 ] || (cd "${!_VAR}" && "$@"); }
-}
-
 # lk_uri_encode PARAMETER=VALUE...
 function lk_uri_encode() {
     local ARGS=()
     while [ $# -gt 0 ]; do
-        [[ $1 =~ ^([^=]+)=(.*) ]] || lk_warn "invalid parameter: $1" || return
+        [[ $1 =~ ^([^=]+)=(.*) ]] || lk_err "invalid parameter: $1" || return
         ARGS+=(--arg "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}")
         shift
     done
@@ -1860,11 +1889,15 @@ lk_console_detail_file() { lk_tty_file_detail "$@"; }
 lk_console_detail_list() { lk_tty_list_detail - "$@"; }
 lk_console_detail() { lk_tty_detail "$@"; }
 lk_console_diff() { lk_tty_diff "$@"; }
+lk_console_error() { lk_tty_error "$@"; }
 lk_console_item() { lk_tty_print "$1" "$2" "${3-${_LK_TTY_COLOUR-$_LK_COLOUR}}"; }
 lk_console_list() { lk_tty_list - "$@"; }
+lk_console_log() { lk_tty_log "$@"; }
 lk_console_message() { lk_tty_print "${1-}" "${3+$2}" "${3-${2-${_LK_TTY_COLOUR-$_LK_COLOUR}}}"; }
 lk_console_read_secret() { local IFS r && unset IFS && lk_tty_read_silent "$1" r "${@:2}" && echo "$r"; }
 lk_console_read() { local IFS r && unset IFS && lk_tty_read "$1" r "${@:2}" && echo "$r"; }
+lk_console_success() { lk_tty_success "$@"; }
+lk_console_warning() { lk_tty_warning "$@"; }
 lk_echo_array() { lk_arr "$@"; }
 lk_elevate_if_error() { lk_elevate -f "$@"; }
 lk_escape_ere_replace() { lk_sed_escape_replace "$@"; }
@@ -1874,6 +1907,8 @@ lk_include() { lk_require "$@"; }
 lk_is_false() { lk_false "$@"; }
 lk_is_true() { lk_true "$@"; }
 lk_maybe_sudo() { lk_sudo "$@"; }
+lk_mktemp_dir() { _LK_STACK_DEPTH=$((1 + ${_LK_STACK_DEPTH:-0})) lk_mktemp -d; }
+lk_mktemp_file() { _LK_STACK_DEPTH=$((1 + ${_LK_STACK_DEPTH:-0})) lk_mktemp; }
 lk_regex_implode() { lk_ere_implode_args -- "$@"; }
 lk_run_detail() { lk_tty_run_detail "$@"; }
 lk_run() { lk_tty_run "$@"; }
@@ -1902,20 +1937,6 @@ function lk_usage() {
     else
         return "$EXIT_STATUS"
     fi
-}
-
-function _lk_mktemp() {
-    local TMPDIR=${TMPDIR-/tmp} FUNC=${FUNCNAME[${_LK_STACK_DEPTH:-0} + 2]-}
-    TMPDIR=${TMPDIR:+${TMPDIR%/}/}
-    mktemp "$@" -- "$TMPDIR${0##*/}${FUNC:+-$FUNC}${_LK_MKTEMP_EXT:+.$_LK_MKTEMP_EXT}.XXXXXXXXXX"
-} #### Reviewed: 2021-04-14
-
-function lk_mktemp_file() {
-    _lk_mktemp
-}
-
-function lk_mktemp_dir() {
-    _lk_mktemp -d
 }
 
 if lk_bash_at_least 4 2; then
@@ -3055,69 +3076,6 @@ function lk_readline_format() {
     echo "$STRING"
 }
 
-function _lk_tty_log() {
-    local _STATUS=$? STATUS=0 COLOUR=$1 \
-        _LK_TTY_COLOUR2=${_LK_TTY_COLOUR2-} \
-        _LK_TTY_MESSAGE_COLOUR
-    shift
-    while [ $# -gt 0 ]; do
-        case "$1" in
-        -r) STATUS=$_STATUS ;;
-        -n) local _LK_TTY_LOG_BOLD= ;;
-        *) break ;;
-        esac
-        shift
-    done
-    _LK_TTY_MESSAGE_COLOUR=$(lk_maybe_bold "$1")$COLOUR
-    _LK_TTY_COLOUR2=${_LK_TTY_COLOUR2//"$LK_BOLD"/}
-    lk_tty_print "$1" "${2:+$(
-        BOLD=${_LK_TTY_LOG_BOLD-$(lk_maybe_bold "$2")}
-        RESET=${BOLD:+$LK_RESET}
-        [ "${2#$'\n'}" = "$2" ] || printf '\n'
-        echo "$BOLD${2#$'\n'}$RESET"
-    )}${3:+ ${*:3}}" "$COLOUR"
-    return "$STATUS"
-}
-
-# lk_console_log [-r] [-n] MESSAGE [MESSAGE2...]
-#
-# Output the given message to the console. If -r is set, return the most recent
-# command's exit status. If -n is set, don't output MESSAGE2 in bold.
-function lk_console_log() {
-    _LK_TTY_PREFIX=${_LK_TTY_PREFIX-" :: "} \
-        _lk_tty_log "${_LK_TTY_COLOUR-$_LK_COLOUR}" "$@"
-}
-
-# lk_console_success [-r] [-n] MESSAGE [MESSAGE2...]
-#
-# Output the given success message to the console. If -r is set, return the most
-# recent command's exit status. If -n is set, don't output MESSAGE2 in bold.
-function lk_console_success() {
-    # ✔ (\u2714)
-    _LK_TTY_PREFIX=${_LK_TTY_PREFIX-$'  \xe2\x9c\x94 '} \
-        _lk_tty_log "$_LK_SUCCESS_COLOUR" "$@"
-}
-
-# lk_console_warning [-r] [-n] MESSAGE [MESSAGE2...]
-#
-# Output the given warning to the console. If -r is set, return the most recent
-# command's exit status. If -n is set, don't output MESSAGE2 in bold.
-function lk_console_warning() {
-    # ✘ (\u2718)
-    _LK_TTY_PREFIX=${_LK_TTY_PREFIX-$'  \xe2\x9c\x98 '} \
-        _lk_tty_log "$_LK_WARNING_COLOUR" "$@"
-}
-
-# lk_console_error [-r] [-n] MESSAGE [MESSAGE2...]
-#
-# Output the given error message to the console. If -r is set, return the most
-# recent command's exit status. If -n is set, don't output MESSAGE2 in bold.
-function lk_console_error() {
-    # ✘ (\u2718)
-    _LK_TTY_PREFIX=${_LK_TTY_PREFIX-$'  \xe2\x9c\x98 '} \
-        _lk_tty_log "$_LK_ERROR_COLOUR" "$@"
-}
-
 function lk_diff() { (
     _LK_CAN_FAIL=1
     [ $# -eq 2 ] || lk_usage "Usage: $FUNCNAME FILE1 FILE2" || exit
@@ -3687,7 +3645,7 @@ function lk_test_many() {
     shift
     [ $# -gt 0 ] || return 1
     while [ $# -gt 0 ] && ((PASSED + FAILED < 2)); do
-        eval "$TEST \"\$1\"" &&
+        eval "($TEST \"\$1\")" &&
             PASSED=1 ||
             FAILED=1
         shift
@@ -3747,7 +3705,7 @@ substr($0 "/", 1, l) == u "/" {
 function lk_remove_false() {
     local _LK_TEMP_ARRAY _LK_TEST _LK_VAL _lk_i=0
     _lk_array_fill_temp "$2" || return
-    _LK_TEST="$(lk_replace '{}' '$_LK_VAL' "$1")"
+    _LK_TEST="($(lk_replace '{}' '$_LK_VAL' "$1"))"
     eval "$2=()"
     for _LK_VAL in ${_LK_TEMP_ARRAY[@]+"${_LK_TEMP_ARRAY[@]}"}; do
         ! eval "$_LK_TEST" || eval "$2[$((_lk_i++))]=\$_LK_VAL"
@@ -3855,7 +3813,7 @@ function lk_filter() {
     [ -n "$TEST" ] || lk_warn "no test command" || return
     shift
     DELIM=${LK_Z:+'\0'}
-    ! eval "$TEST \"\$1\"" || printf "%s${DELIM:-\\n}" "$1"
+    ! eval "($TEST \"\$1\")" || printf "%s${DELIM:-\\n}" "$1"
 }
 
 function lk_is_declared() {
@@ -4320,7 +4278,7 @@ function lk_nohup() { (
     trap "" SIGHUP SIGINT SIGTERM
     set -m
     OUT_FILE=$(TMPDIR=$(lk_first_existing "$LK_BASE/var/log" ~ /tmp) &&
-        _LK_MKTEMP_EXT=nohup.out lk_mktemp_file) &&
+        _LK_MKTEMP_EXT=.nohup.out lk_mktemp_file) &&
         OUT_FD=$(lk_fd_next) &&
         eval "exec $OUT_FD"'>"$OUT_FILE"' || return
     ! lk_verbose || lk_console_item "Redirecting output to" "$OUT_FILE"

@@ -120,6 +120,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_SSL_CA_KEY`
 - `LK_STACKSCRIPT_EXPORT_DEFAULT`
 - `LK_SUDO`
+- `LK_SUDO_ON_FAIL`
 - `LK_TRUSTED_IP_ADDRESSES`
 - `LK_TTY_NO_COLOUR`
 - `LK_UBUNTU_CLOUDIMG_HOST`

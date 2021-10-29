@@ -2,7 +2,7 @@
 
 # lk_fifo_flush FIFO_PATH
 function lk_fifo_flush() {
-    [ -p "${1-}" ] || lk_warn "not a FIFO: ${1-}" || return
+    [ -p "${1-}" ] || lk_err "not a FIFO: ${1-}" || return
     gnu_dd \
         if="$1" \
         of=/dev/null \

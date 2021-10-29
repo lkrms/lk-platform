@@ -464,7 +464,7 @@ function _lk_openssl_verify() { (
 
 # lk_ssl_is_cert_self_signed CERT_FILE
 function lk_ssl_is_cert_self_signed() {
-    lk_mktemp_dir_with -c _LK_EMPTY_DIR || return
+    lk_mktemp_dir_with -r _LK_EMPTY_DIR || return
     # "-CApath /empty/dir" is more portable than "-no-CApath"
     _lk_openssl_verify -CApath "$_LK_EMPTY_DIR" -CAfile "$1" "$1" >/dev/null
 }

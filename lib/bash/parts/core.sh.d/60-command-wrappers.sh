@@ -15,7 +15,7 @@ function lk_report_error() {
     fi || {
         local STATUS=$? IFS=' '
         [ ! -s "${STDERR-}" ] || cat "$STDERR" >&2
-        lk_console_error "Exit status $STATUS:" "$*"
+        lk_tty_error "Exit status $STATUS:" "$*"
         return $STATUS
     }
 }
@@ -45,7 +45,7 @@ function lk_keep_trying() {
         "$@" && return 0 || {
             local STATUS=$? IFS=' '
             ((++i < MAX_ATTEMPTS)) || break
-            lk_console_log "Failed (attempt $i of $MAX_ATTEMPTS):" "$*"
+            lk_tty_log "Failed (attempt $i of $MAX_ATTEMPTS):" "$*"
             lk_tty_detail "Trying again in $(lk_plural -v $WAIT second)"
             sleep "$WAIT"
             ((NEXT = WAIT + PREV, PREV = WAIT, WAIT = NEXT))
@@ -63,7 +63,7 @@ function lk_keep_trying() {
 function lk_require_output() { (
     unset QUIET
     [ "${1-}" != -q ] || { QUIET=1 && shift; }
-    FILE=$(lk_mktemp_file) && lk_delete_on_exit "$FILE" &&
+    FILE=$(lk_mktemp) && lk_delete_on_exit "$FILE" &&
         if [ -z "${QUIET-}" ]; then
             "$@" | tee "$FILE"
         else
@@ -84,48 +84,11 @@ function lk_env_clean() {
     fi
 }
 
-# lk_mktemp_with [-c|-r] VAR [COMMAND [ARG...]]
-#
-# Set VAR to the name of a new temporary file that optionally contains the
-# output of COMMAND. If VAR is already set to the path of an existing file:
-# - do nothing if -c ("cache") is set, or
-# - proceed without creating a new file if -r ("reuse") is set.
-function lk_mktemp_with() {
-    local IFS _CACHE _REUSE
-    { [ "${1-}" = -c ] && _CACHE=1 && shift; } ||
-        { [ "${1-}" = -r ] && _REUSE=1 && shift; } || true
-    [ $# -ge 1 ] || lk_usage "\
-Usage: $FUNCNAME [-c|-r] VAR [COMMAND [ARG...]]" || return
-    [ -z "${_CACHE-}" ] || [ ! -f "${!1-}" ] || return 0
-    local _VAR=$1 _LK_STACK_DEPTH=1
-    shift
-    [ -n "${_REUSE-}" ] && [ -f "${!1-}" ] ||
-        { eval "$_VAR=\$(lk_mktemp_file)" &&
-            lk_delete_on_exit "${!_VAR}"; } || return
-    { [ $# -eq 0 ] || "$@" >"${!_VAR}"; }
-}
-
-# lk_mktemp_dir_with [-c] VAR [COMMAND [ARG...]]
-#
-# Set VAR to the name of a new temporary directory and optionally use it as the
-# working directory to run COMMAND. If -c ("cache") is set, do nothing if VAR
-# already contains the path of an existing directory.
-function lk_mktemp_dir_with() {
-    local IFS _CACHE
-    [ "${1-}" != -c ] || { _CACHE=1 && shift; }
-    [ $# -ge 1 ] || lk_usage "\
-Usage: $FUNCNAME [-c] VAR [COMMAND [ARG...]]" || return
-    [ -z "${_CACHE-}" ] || [ ! -d "${!1-}" ] || return 0
-    local _VAR=$1 _LK_STACK_DEPTH=1
-    shift
-    eval "$_VAR=\$(lk_mktemp_dir)" &&
-        lk_delete_on_exit "${!_VAR}" &&
-        { [ $# -eq 0 ] || (cd "${!_VAR}" && "$@"); }
-}
-
 #### Other command wrappers:
 #### - lk_pass
 #### - lk_elevate
+#### - lk_mktemp_with
+#### - lk_mktemp_dir_with
 #### - lk_sudo
 #### - lk_unbuffer
 #### - lk_maybe
