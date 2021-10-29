@@ -47,6 +47,27 @@ function lk_wp_get_table_prefix() {
     lk_wp config get table_prefix
 }
 
+# lk_wp_option_upsert KEY KEY_PATH... VALUE
+function lk_wp_option_upsert() {
+    local IFS i
+    unset IFS
+    ! lk_wp option pluck "${@:1:$#-1}" &>/dev/null || {
+        lk_wp option patch update "$@" ||
+            lk_warn "unable to update value in option '$1': ${*:2}"
+        return
+    }
+    lk_wp option get "$1" &>/dev/null ||
+        lk_wp option add "$1" "{}" --format=json
+    for ((i = 2; i < $# - 1; i++)); do
+        lk_wp option pluck "${@:1:i}" &>/dev/null ||
+            lk_wp option patch insert "${@:1:i}" "{}" --format=json ||
+            lk_warn "unable to insert value in option '$1': ${*:2:i-1}" ||
+            return
+    done
+    lk_wp option patch insert "$@" ||
+        lk_warn "unable to set value in option '$1': $*"
+}
+
 function lk_wp_package_install() {
     [ $# -eq 1 ] ||
         lk_usage "Usage: $FUNCNAME PACKAGE[:<VERSION|@stable>]" || return
@@ -88,8 +109,8 @@ function lk_wp_json_encode() {
 
 function _lk_wp_maybe_reapply() {
     lk_is_false LK_WP_REAPPLY ||
-        [ -n "${LK_WP_REAPPLY+1}" ] ||
-        ! lk_confirm "Reapply WordPress settings and rebuild indexes?" Y ||
+        { [ -z "${LK_WP_REAPPLY+1}" ] &&
+            ! lk_confirm "Reapply WordPress settings and rebuild indexes?" Y; } ||
         lk_wp_reapply_config ||
         return
     _lk_wp_maybe_flush
@@ -97,8 +118,8 @@ function _lk_wp_maybe_reapply() {
 
 function _lk_wp_maybe_flush() {
     lk_is_false LK_WP_FLUSH ||
-        [ -n "${LK_WP_FLUSH+1}" ] ||
-        ! lk_confirm "Flush WordPress rewrite rules and caches?" Y ||
+        { [ -z "${LK_WP_FLUSH+1}" ] &&
+            ! lk_confirm "Flush WordPress rewrite rules and caches?" Y; } ||
         lk_wp_flush
 }
 
@@ -141,8 +162,8 @@ function lk_wp_rename_site() {
         lk_wp option update home "$NEW_URL" &&
         lk_wp option update siteurl "$NEW_SITE_URL" || return
     lk_is_false LK_WP_REPLACE ||
-        [ -n "${LK_WP_REPLACE+1}" ] ||
-        ! lk_confirm "Replace the previous URL in all tables?" Y ||
+        { [ -z "${LK_WP_REPLACE+1}" ] &&
+            ! lk_confirm "Replace the previous URL in all tables?" Y; } ||
         lk_wp_replace_url "$OLD_URL" "$NEW_URL" ||
         return
     _lk_wp_maybe_reapply || return
@@ -480,7 +501,7 @@ Usage: $FUNCNAME SSH_HOST [REMOTE_PATH [LOCAL_PATH [RSYNC_ARG...]]]" || return
         "php_error*.log"
         {"error*",debug}"?log"
         /wp-content/{backup,cache,upgrade,updraft}/
-        /wp-content/uploads/{backup,cache}/
+        /wp-content/uploads/{backup,cache,wp-file-manager-pro/fm_backup}/
         ${LK_WP_SYNC_EXCLUDE[@]+"${LK_WP_SYNC_EXCLUDE[@]}"}
     )
     LOCAL_PATH=${3:-$(lk_wp_get_site_root 2>/dev/null)} ||

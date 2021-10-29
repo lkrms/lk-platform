@@ -51,7 +51,7 @@ Maintenance modes (for remote system only):
   permanent     activate during migration, do not deactivate
 
 On the local system, maintenance mode is always active during migration, and is
-always deactivated after a successful migration.
+restored after a successful migration.
 
 For minimal downtime, complete one or more migrations without activating
 maintenance mode on the remote system, then run the final migration with
@@ -174,7 +174,7 @@ lk_confirm "Proceed?" Y
 
 lk_console_message "Enabling WordPress maintenance mode"
 lk_console_detail "[local] Creating" "$LOCAL_PATH/.maintenance"
-lk_wp_maintenance_get_php >"$LOCAL_PATH/.maintenance"
+lk_wp_maintenance_enable "$LOCAL_PATH"
 if [[ $MAINTENANCE =~ ^(on|permanent)$ ]]; then
     lk_console_detail "[remote] Creating" "$SSH_HOST:$REMOTE_PATH/.maintenance"
     ssh "$SSH_HOST" '/bin/sh -c '\''cat >"$1/.maintenance"'\''' sh \
@@ -246,12 +246,9 @@ else
     lk_wp_disable_cron
 fi
 
-lk_console_message "[local] Disabling maintenance mode"
-lk_console_detail "Deleting" "$LOCAL_PATH/.maintenance"
-rm "$LOCAL_PATH/.maintenance" ||
-    lk_warn "\
-Error deleting $LOCAL_PATH/.maintenance
-Maintenance mode may have been disabled early by another process"
+lk_console_message "[local] Restoring maintenance mode"
+lk_wp_maintenance_maybe_disable "$LOCAL_PATH" ||
+    lk_warn "Error restoring previous maintenance mode"
 
 (exit "$STATUS") &&
     lk_console_success "Migration completed successfully" ||

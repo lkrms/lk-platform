@@ -121,7 +121,7 @@ get_state
 # Check plugins
 TO_DEACTIVATE=($(
     comm -12 \
-        <(lk_echo_array ACTIVE_PLUGINS) \
+        <(lk_echo_array ACTIVE_PLUGINS | sort -u) \
         <(lk_echo_array DEFAULT_DEACTIVATE DEACTIVATE | sort -u)
 ))
 
@@ -281,15 +281,12 @@ fi
 
 if lk_wp plugin is-active woocommerce; then
     lk_tty_print "WooCommerce: disabling live payments for known gateways"
-    lk_run_detail lk_wp option patch update \
-        woocommerce_paypal_settings testmode yes
+    lk_wp_option_upsert woocommerce_paypal_settings testmode yes
     if lk_wp plugin is-active woocommerce-gateway-stripe; then
-        lk_run_detail lk_wp option patch update \
-            woocommerce_stripe_settings testmode yes
+        lk_wp_option_upsert woocommerce_stripe_settings testmode yes
     fi
     if lk_wp plugin is-active woocommerce-gateway-eway; then
-        lk_run_detail lk_wp option patch update \
-            woocommerce_eway_settings testmode yes
+        lk_wp_option_upsert woocommerce_eway_settings testmode yes
     fi
 
     if wp cli has-command "wc webhook list"; then

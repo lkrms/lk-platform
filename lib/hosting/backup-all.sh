@@ -76,6 +76,7 @@ lk_start_trace
         }
         install -d -m 02770 -g "$GROUP" "$BACKUP_ROOT/archive/${SOURCE##*/}"
         lk_symlink "$BACKUP_ROOT/snapshot/${SOURCE##*/}" "$SOURCE/backup"
+        lk_symlink "$BACKUP_ROOT/archive/${SOURCE##*/}" "$SOURCE/backup-archive"
     done
 
     lk_console_message "Backing up system files"

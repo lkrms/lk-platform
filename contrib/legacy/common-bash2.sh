@@ -89,7 +89,7 @@ s/^/${_LK_TTY_SPACES-  }/" <<<"$1$MESSAGE2")$LK_RESET" >&2
 }
 
 function lk_tty_detail() {
-    local _LK_TTY_PREFIX="   -> " _LK_TTY_SPACES="    " \
+    local _LK_TTY_PREFIX=" -> " _LK_TTY_SPACES="    " \
         _LK_TTY_COLOUR=$LK_YELLOW _LK_TTY_MESSAGE_COLOUR=
     lk_tty_print "$1" "${2-}"
 }
