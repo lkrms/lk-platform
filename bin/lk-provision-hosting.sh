@@ -671,7 +671,7 @@ $IPV6_ADDRESS $HOST_NAMES}" &&
     fi
 
     lk_console_message "Checking hosting base directories"
-    lk_install -d -m 00751 -g adm /srv/www{,/.tmp,/.opcache}
+    lk_install -d -m 00751 -g adm /srv/{www{,/.tmp,/.opcache},backup{,/archive}}
 
     lk_console_blank
     LK_NO_LOG=1 \

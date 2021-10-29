@@ -263,7 +263,7 @@ HOMEBREW_KEEP_CASKS+=(
 )
 
 LOGIN_ITEMS+=(
-    "/Applications/AltTab.app"
+    #"/Applications/AltTab.app"
     "/Applications/Flycut.app"
     "/Applications/Hammerspoon.app"
     "/Applications/Lightshot Screenshot.app"

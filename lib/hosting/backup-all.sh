@@ -24,7 +24,7 @@ lk_start_trace
 
 {
     BACKUP_ROOT=${LK_BACKUP_ROOT:-/srv/backup}
-    install -d -m 00751 -g adm "$BACKUP_ROOT"
+    install -d -m 00751 -g adm "$BACKUP_ROOT"{,/archive}
 
     # Use one timestamp for all snapshots in this batch
     LK_BACKUP_TIMESTAMP=${LK_BACKUP_TIMESTAMP:-$(date +"%Y-%m-%d-%H%M%S")}
@@ -74,6 +74,7 @@ lk_start_trace
                 "$SOURCE"
             continue
         }
+        install -d -m 02770 -g "$GROUP" "$BACKUP_ROOT/archive/${SOURCE##*/}"
         lk_symlink "$BACKUP_ROOT/snapshot/${SOURCE##*/}" "$SOURCE/backup"
     done
 

@@ -63,6 +63,7 @@ APT_PACKAGES=(
     pv
     rdfind
     rsync
+    s3cmd
     sed
     software-properties-common
     sqlite3
