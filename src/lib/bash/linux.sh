@@ -596,7 +596,7 @@ function lk_xfce4_xfconf_dump() {
 function lk_file_acl_list_with_extended() {
     [ $# -gt 0 ] || set -- "$PWD" || return
     getfacl -Rsp "$@" | sed -En 's/^# file: //p'
-}
+} #### Reviewed: 2021-05-28
 
 # lk_file_acl_remove_extended [STARTING_POINT...]
 #
@@ -610,7 +610,7 @@ function lk_file_acl_remove_extended() {
         # Print filenames to stderr
         tee >(tr '\n\0' ' \n' >&2) |
         gnu_xargs -0r setfacl -b --
-}
+} #### Reviewed: 2021-05-28
 
 lk_provide linux
 

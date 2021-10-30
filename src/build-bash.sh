@@ -1,14 +1,19 @@
 #!/bin/bash
 
+export shfmt_minify=${shfmt_minify:-0} shfmt_simplify=${shfmt_simplify:-0}
+
 set -euo pipefail
+head=$(mktemp)
+tail=$(mktemp)
 out=$(mktemp)
 die() { echo "${BASH_SOURCE-$0}: $1" >&2 && rm -f "$out" && false || exit; }
 
 _dir=${BASH_SOURCE%${BASH_SOURCE##*/}}
 _dir=${_dir:-$PWD}
-cd "$_dir"
+_dir=$(cd "$_dir" && pwd -P)
+cd "$_dir/.."
 
-[ $# -gt 0 ] || set -- *.d
+set -- $(printf '%s\n' src/lib/bash/*.{sh,sh.d} | sed -E 's/\.d$//' | sort -u)
 
 export LC_ALL=C
 
@@ -41,24 +46,34 @@ done
     trash_cmd=trash
 }
 
+IFS=
+
 while [ $# -gt 0 ]; do
-    d=${1##*/}
-    d=${d%.d}
-    d=${d%.sh}.sh.d
-    [ -d "$d" ] || die "not a directory: $PWD/$d"
-    echo "Building: $d" >&2
+    name=${1##*/}
+    file=$1
+    dir=$1.d
+    dest=lib/bash/include/$name
+    echo "Building: $dest" >&2
     {
         embed=0
-        f=../include/${d%.d}
-        if [ -e "$f" ] && grep -Fxq "#### BEGIN $d" "$f"; then
+        parts=("$file")
+        if [ -e "$file" ] && grep -Eq "^#### (BEGIN|INCLUDE) $name.d\$" "$file"; then
             embed=1
-            awk -v "until=#### BEGIN $d" \
-                'f{next}{print}$0==until{f=1;print""}' "$f"
-        elif ((!minify)); then
-            printf '%s\n\n' "#!/bin/bash"
+            awk -v "until=^#### (BEGIN|INCLUDE) $name.d\$" \
+                '$0~until{f=1}f{next}{print}' \
+                "$file" >"$head"
+            awk -v "from=^#### (END|INCLUDE) $name.d\$" \
+                '$0~from{f=1;next}!f{next}{print}END{if(!f)exit 1}' \
+                "$file" >"$tail" ||
+                die "not found in $PWD/$file: #### END $name.d"
+            parts=("$head")
         fi
+        ((minify)) || printf '%s\n\n' "#!/bin/bash"
+        parts+=("$dir"/*)
+        ((!embed)) || parts+=("$tail")
         i=0
-        for part in "$d"/*; do
+        for part in "${parts[@]}"; do
+            [ -f "$part" ] || continue
             echo "  Processing: $part" >&2
             ((!i || (!embed && minify))) || echo
             if [ -x "$part" ]; then
@@ -85,29 +100,26 @@ END                     {if (last) print last}' |
                     shfmt "${shfmt_args[@]}" | shfmt "${shfmt_args[@]}"
                 else
                     cat
-                fi
-            ((++i))
+                fi | awk '{print}f{next}/^./{f=2}END{exit 2-f}' && ((++i)) ||
+                [[ ${PIPESTATUS[*]} =~ ^0+2$ ]]
         done
-        ((!embed)) || awk -v "from=#### END $d" \
-            '$0==from{if(!f)print"";f=1}!f{next}{print}END{if(!f)exit 1}' \
-            "$f" || die "not found in $PWD/$f: #### END $d"
     } >"$out"
     args=(-i "${shfmt_indent:-4}")
     ((embed || !format)) ||
         args=("${shfmt_args[@]}")
     ! type -P shfmt >/dev/null ||
         shfmt "${args[@]}" -d "$out" >&2 ||
-        die "incorrect formatting in part(s): $PWD/$d"
+        die "incorrect formatting in part(s): $PWD/$file"
     if [ -s "$out" ] &&
-        ! diff -q --unidirectional-new-file "$f" "$out" >/dev/null; then
-        [ ! -s "$f" ] || "$trash_cmd" "$f"
-        cp -v "$out" "$f"
-        echo "Updated: $f" >&2
+        ! diff -q --unidirectional-new-file "$dest" "$out" >/dev/null; then
+        [ ! -s "$dest" ] || "$trash_cmd" "$dest"
+        cp -v "$out" "$dest"
+        echo "Updated: $dest" >&2
     else
-        echo "Already up to date: $f" >&2
+        echo "Already up to date: $dest" >&2
     fi
     shift
     ! (($#)) || echo
 done
 
-rm -f "$out"
+rm -f "$head" "$tail" "$out"

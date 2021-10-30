@@ -24,7 +24,7 @@ function _lk_git() {
     else
         lk_maybe_sudo "$@"
     fi
-}
+} #### Reviewed: 2021-05-25
 
 function _lk_git_cd() {
     [ $# -eq 0 ] || cd "$1"
@@ -317,7 +317,7 @@ Options:
     else
         lk_git_config core.sharedRepository 0664
     fi
-}
+} #### Reviewed: 2021-05-25
 
 function _lk_git_branch_check_diverged() {
     git merge-base --is-ancestor "$1" "$2" || {
@@ -330,7 +330,7 @@ function _lk_git_branch_check_diverged() {
         lk_console_error "$1 has diverged from $2"
         return "$STATUS"
     }
-}
+} #### Reviewed: 2021-05-30
 
 # lk_git_fast_forward_branch [-f] BRANCH UPSTREAM
 function lk_git_fast_forward_branch() {
@@ -365,7 +365,7 @@ function lk_git_fast_forward_branch() {
         _lk_git ${FORCE-fetch . "$2:$1"}${FORCE+branch -f "$1" "$2"} \
             ${QUIET+--quiet}
     fi
-}
+} #### Reviewed: 2021-05-25
 
 # lk_git_push_branch BRANCH DOWNSTREAM
 function lk_git_push_branch() {
@@ -851,7 +851,7 @@ Usage: $FUNCNAME [-o] [--type=TYPE] NAME VALUE
         else
             "${COMMAND[@]}"
         fi
-}
+} #### Reviewed: 2021-05-29
 
 # lk_git_config_remote_push_all [REMOTE]
 #

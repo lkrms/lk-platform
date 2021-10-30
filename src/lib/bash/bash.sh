@@ -213,7 +213,7 @@ Usage: $FUNCNAME [-g] SCRIPT [SOURCE...]" || return
     PACKAGES=($(lk_echo_array PACKAGES | cut -d: -f1 | sort -u))
     [ -n "$QUIET" ] ||
         lk_echo_array PACKAGES | lk_console_list "Packages:"
-}
+} #### Reviewed: 2021-09-06
 
 # lk_bash_audit_tree [-g] [DIR]
 function lk_bash_audit_tree() {
