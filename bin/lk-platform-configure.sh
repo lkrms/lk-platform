@@ -394,7 +394,7 @@ lk_log_start
             "+$DIR_MODE" "+$FILE_MODE" \
             '\./(etc|var)/' \
             "$DIR_MODE" "" \
-            '\./(etc/sites|var/run(/dirty)?)/' \
+            '\./(etc(/lk-platform)?/sites|var/run(/dirty)?)/' \
             "$PRIVILEGED_DIR_MODE" "" \
             '\./var/(log|backup)/' \
             "" "" \

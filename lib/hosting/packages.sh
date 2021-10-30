@@ -45,11 +45,13 @@ APT_PACKAGES=(
     iptables-persistent
     iputils-ping
     iputils-tracepath
+    #jc
     jq
     less
     libc-bin
     logrotate
     lsof
+    mutt
     nano
     ncurses-bin
     net-tools

@@ -1473,50 +1473,6 @@ function lk_user_in_group() {
     lk_user_groups ${2+"$2"} | grep -Fx "$1" >/dev/null
 }
 
-# lk_test_many TEST [VALUE...]
-#
-# Return true if every VALUE passes TEST, otherwise:
-# - return 1 if there are no VALUE arguments;
-# - return 2 if at least one VALUE passes TEST; or
-# - return 3 if no VALUE passes TEST
-function lk_test_many() {
-    local TEST=${1-} PASSED=0 FAILED=0
-    [ -n "$TEST" ] || lk_warn "no test command" || return
-    shift
-    [ $# -gt 0 ] || return 1
-    while [ $# -gt 0 ] && ((PASSED + FAILED < 2)); do
-        eval "($TEST \"\$1\")" &&
-            PASSED=1 ||
-            FAILED=1
-        shift
-    done
-    [ $# -eq 0 ] && [ "$FAILED" -eq 0 ] || {
-        [ "$PASSED" -eq 0 ] &&
-            return 3 ||
-            return 2
-    }
-}
-
-function lk_paths_exist() {
-    lk_test_many "lk_maybe_sudo test -e" "$@"
-}
-
-function lk_files_exist() {
-    lk_test_many "lk_maybe_sudo test -f" "$@"
-}
-
-function lk_dirs_exist() {
-    lk_test_many "lk_maybe_sudo test -d" "$@"
-}
-
-function lk_fifos_exist() {
-    lk_test_many "lk_maybe_sudo test -p" "$@"
-}
-
-function lk_files_not_empty() {
-    lk_test_many "lk_maybe_sudo test -s" "$@"
-}
-
 # lk_dir_parents [-u UNTIL] DIR...
 function lk_dir_parents() {
     local UNTIL=/

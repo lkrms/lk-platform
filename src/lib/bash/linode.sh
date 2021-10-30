@@ -405,7 +405,6 @@ function lk_linode_hosting_update_stackscript() {
         --label hosting.sh \
         --images linode/ubuntu20.04 \
         --images linode/ubuntu18.04 \
-        --images linode/ubuntu16.04lts \
         --script "$SCRIPT" \
         --description "Provision a new Linode configured for hosting" \
         --is_public false \
@@ -590,7 +589,7 @@ Usage: $FUNCNAME DIR HOST..." || return
         done
         FILES=$(ssh "$SSH_HOST" realpath -eq \
             /etc/default/lk-platform \
-            /opt/{lk-,"$PREFIX"}platform/etc/{"sites/*.conf",lk-platform/lk-platform.conf} \
+            /opt/{lk-,"$PREFIX"}platform/etc/{{lk-platform/,}"sites/*.conf",lk-platform/lk-platform.conf} \
             /etc/memcached.conf \
             "/etc/apache2/sites-available/*.conf" \
             "/etc/mysql/mariadb.conf.d/*$PREFIX*.cnf" \

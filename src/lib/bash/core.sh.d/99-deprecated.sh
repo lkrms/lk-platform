@@ -31,6 +31,7 @@ lk_mktemp_file() { _LK_STACK_DEPTH=$((1 + ${_LK_STACK_DEPTH:-0})) lk_mktemp; }
 lk_regex_implode() { lk_ere_implode_args -- "$@"; }
 lk_run_detail() { lk_tty_run_detail "$@"; }
 lk_run() { lk_tty_run "$@"; }
+lk_test_many() { lk_test "$@"; }
 lk_tty_detail_pairs() { lk_tty_pairs_detail "$@"; }
 
 #### Reviewed: 2021-10-30

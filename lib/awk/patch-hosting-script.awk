@@ -1,4 +1,4 @@
-/"https:\/\/github\.com\/lkrms\/lk-platform\.git"/ {
+/(^|[[:blank:]]|")https:\/\/github\.com\/lkrms\/lk-platform\.git/ {
     found = 1
 }
 found && /([^\\]|^)$/ {

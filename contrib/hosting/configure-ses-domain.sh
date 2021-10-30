@@ -14,10 +14,10 @@ Each DOMAIN must resolve to a hosting server, and https://<DOMAIN>/php-sysinfo
 must be reachable.
 
 Environment:
-  1. AWS_PROFILE must contain the name of an AWS CLI profile with a default
-     region and access to Amazon SES (see \`aws help configure\`).
-  2. LINODE_USER may be set, in which case Amazon SES DNS records will be added
-     to any domains found in the associated Linode account.
+  AWS_PROFILE   Must contain the name of an AWS CLI profile with a default
+                region and access to Amazon SES (see \`aws help configure\`).
+  LINODE_USER   If set, Amazon SES DNS records will be added to any domains
+                found in the user's Linode account.
 EOF
 }
 

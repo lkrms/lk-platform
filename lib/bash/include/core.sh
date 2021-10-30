@@ -143,6 +143,45 @@ function lk_false() {
     [[ $1 =~ $REGEX ]] || [[ ${1:+${!1-}} =~ $REGEX ]]
 }
 
+# lk_test TEST [VALUE...]
+#
+# Return true if every VALUE passes TEST, otherwise return false. If there are
+# no VALUE arguments, return false.
+function lk_test() {
+    local IFS=$' \t\n' COMMAND
+    COMMAND=($1)
+    shift
+    [ -n "${COMMAND+1}" ] && [ $# -gt 0 ] || return
+    while [ $# -gt 0 ]; do
+        "${COMMAND[@]}" "$1" || break
+        shift
+    done
+    [ $# -eq 0 ]
+}
+
+# lk_test_any TEST [VALUE...]
+#
+# Return true if at least one VALUE passes TEST, otherwise return false.
+function lk_test_any() {
+    local IFS=$' \t\n' COMMAND
+    COMMAND=($1)
+    shift
+    [ -n "${COMMAND+1}" ] && [ $# -gt 0 ] || return
+    while [ $# -gt 0 ]; do
+        ! "${COMMAND[@]}" "$1" || break
+        shift
+    done
+    [ $# -gt 0 ]
+}
+
+function lk_paths_exist() { lk_test "lk_sudo test -e" "$@"; }
+
+function lk_files_exist() { lk_test "lk_sudo test -f" "$@"; }
+
+function lk_dirs_exist() { lk_test "lk_sudo test -d" "$@"; }
+
+function lk_files_not_empty() { lk_test "lk_sudo test -s" "$@"; }
+
 # lk_pass [-STATUS] COMMAND [ARG...]
 #
 # Run COMMAND without changing the previous command's exit status, or run
@@ -661,7 +700,7 @@ function lk_filter_fqdn() {
 # Print a Bash variable assignment for each REGEX. If no REGEX is specified,
 # print all available regular expressions.
 function lk_get_regex() {
-    [ $# -gt 0 ] || set -- DOMAIN_PART_REGEX DOMAIN_NAME_REGEX EMAIL_ADDRESS_REGEX IPV4_REGEX IPV4_OPT_PREFIX_REGEX IPV6_REGEX IPV6_OPT_PREFIX_REGEX IP_REGEX IP_OPT_PREFIX_REGEX HOST_NAME_REGEX HOST_REGEX HOST_OPT_PREFIX_REGEX URI_REGEX URI_REGEX_REQ_SCHEME_HOST HTTP_HEADER_NAME LINUX_USERNAME_REGEX MYSQL_USERNAME_REGEX DPKG_SOURCE_REGEX IDENTIFIER_REGEX PHP_SETTING_NAME_REGEX PHP_SETTING_REGEX READLINE_NON_PRINTING_REGEX CONTROL_SEQUENCE_REGEX ESCAPE_SEQUENCE_REGEX NON_PRINTING_REGEX IPV4_PRIVATE_FILTER_REGEX IPV6_PRIVATE_FILTER_REGEX IP_PRIVATE_FILTER_REGEX BACKUP_TIMESTAMP_FINDUTILS_REGEX
+    [ $# -gt 0 ] || set -- DOMAIN_PART_REGEX DOMAIN_NAME_REGEX EMAIL_ADDRESS_REGEX DOMAIN_PART_LOWER_REGEX DOMAIN_NAME_LOWER_REGEX IPV4_REGEX IPV4_OPT_PREFIX_REGEX IPV6_REGEX IPV6_OPT_PREFIX_REGEX IP_REGEX IP_OPT_PREFIX_REGEX HOST_NAME_REGEX HOST_REGEX HOST_OPT_PREFIX_REGEX URI_REGEX URI_REGEX_REQ_SCHEME_HOST HTTP_HEADER_NAME LINUX_USERNAME_REGEX MYSQL_USERNAME_REGEX DPKG_SOURCE_REGEX IDENTIFIER_REGEX PHP_SETTING_NAME_REGEX PHP_SETTING_REGEX READLINE_NON_PRINTING_REGEX CONTROL_SEQUENCE_REGEX ESCAPE_SEQUENCE_REGEX NON_PRINTING_REGEX IPV4_PRIVATE_FILTER_REGEX IPV6_PRIVATE_FILTER_REGEX IP_PRIVATE_FILTER_REGEX BACKUP_TIMESTAMP_FINDUTILS_REGEX
     local STATUS=0
     while [ $# -gt 0 ]; do
         printf 'declare '
@@ -674,6 +713,12 @@ function lk_get_regex() {
             ;;
         EMAIL_ADDRESS_REGEX)
             printf '%s=%q\n' EMAIL_ADDRESS_REGEX '[-a-zA-Z0-9!#$%&'\''*+/=?^_`{|}~]([-a-zA-Z0-9.!#$%&'\''*+/=?^_`{|}~]{,62}[-a-zA-Z0-9!#$%&'\''*+/=?^_`{|}~])?@[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)+'
+            ;;
+        DOMAIN_PART_LOWER_REGEX)
+            printf '%s=%q\n' DOMAIN_PART_LOWER_REGEX '[a-z0-9]([-a-z0-9]*[a-z0-9])?'
+            ;;
+        DOMAIN_NAME_LOWER_REGEX)
+            printf '%s=%q\n' DOMAIN_NAME_LOWER_REGEX '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)+'
             ;;
         IPV4_REGEX)
             printf '%s=%q\n' IPV4_REGEX '((25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])'
@@ -1821,6 +1866,39 @@ function lk_var_readonly() {
     lk_var_has_attr "$1" r
 }
 
+# lk_var_not_null VAR...
+#
+# Return false if any VAR is unset or set to the empty string.
+function lk_var_not_null() {
+    while [ $# -gt 0 ]; do
+        [ -n "${!1:+1}" ] || return
+        shift
+    done
+}
+
+# lk_var_to_bool VAR [TRUE FALSE]
+#
+# If the value of VAR is 'Y', 'yes', '1', 'true' or 'on' (not case-sensitive),
+# assign TRUE (default: Y) to VAR, otherwise assign FALSE (default: N).
+function lk_var_to_bool() {
+    [ $# -eq 3 ] || set -- "$1" Y N
+    if lk_true "$1"; then
+        eval "$1=\$2"
+    else
+        eval "$1=\$3"
+    fi
+}
+
+# lk_var_to_int VAR [NULL]
+#
+# Convert the value of VAR to an integer. If VAR is unset, empty or invalid,
+# assign NULL (default: 0).
+function lk_var_to_int() {
+    [ $# -eq 2 ] || set -- "$1" 0
+    [[ ! ${!1-} =~ ^0*([0-9]+)(\.[0-9]*)?$ ]] || set -- "$1" "${BASH_REMATCH[1]}"
+    eval "$1=\$2"
+}
+
 # lk_no_input
 #
 # Check LK_NO_INPUT and LK_FORCE_INPUT, and return true if user input should not
@@ -2130,6 +2208,25 @@ function _lk_log_install_file() {
     fi
 }
 
+# lk_dir_is_empty [DIR]
+#
+# Return true if DIR is empty.
+function lk_dir_is_empty() {
+    ! lk_sudo ls -A "$1" 2>/dev/null | grep . >/dev/null &&
+        [ "${PIPESTATUS[0]}${PIPESTATUS[1]}" = 01 ]
+}
+
+# lk_file_maybe_move OLD_PATH CURRENT_PATH
+#
+# If OLD_PATH exists and CURRENT_PATH doesn't, move OLD_PATH to CURRENT_PATH.
+function lk_file_maybe_move() {
+    lk_sudo -f test ! -e "$1" ||
+        lk_sudo -f test -e "$2" || {
+        lk_sudo mv -nv "$1" "$2" &&
+            LK_FILE_NO_CHANGE=0
+    }
+}
+
 # lk_file_list_duplicates [DIR]
 #
 # Print a list of files in DIR or the current directory that would be considered
@@ -2269,6 +2366,41 @@ function lk_jq() {
     jq -L"$LK_BASE/lib"/{jq,json} "$@"
 }
 
+# lk_jq_var <JQ_ARG...> -- <VAR...>
+#
+# Run jq with the value of each VAR passed to the jq filter as a variable with
+# the equivalent camelCase name.
+#
+# Example:
+#
+#     $ lk_jq_var -n '{$bashVersion,path:$path|split(":")}' -- BASH_VERSION PATH
+#     {
+#       "bashVersion": "5.1.16(1)-release",
+#       "path": [
+#         "/usr/local/bin",
+#         "/usr/local/sbin",
+#         "/usr/bin",
+#         "/bin",
+#         "/usr/sbin",
+#         "/sbin"
+#       ]
+#     }
+function lk_jq_var() {
+    local _ARGS=() _VAR _ARG _CMD=()
+    while [ $# -gt 0 ]; do
+        [ "$1" = -- ] || { _ARGS[${#_ARGS[@]}]=$1 && shift && continue; }
+        shift && break
+    done
+    while IFS=$'\t' read -r _VAR _ARG; do
+        _CMD+=(--arg "$_ARG" "${!_VAR-}")
+    done < <(((!$#)) || printf '%s\n' "$@" | awk -F_ '
+{ l = $0; sub("^_+", ""); v = tolower($1)
+  for(i = 2; i <= NF; i++)
+    { v = v toupper(substr($i,1,1)) tolower(substr($i,2)) }
+  print l "\t" v }')
+    lk_jq ${_CMD+"${_CMD[@]}"} ${_ARGS+"${_ARGS[@]}"}
+}
+
 # lk_json_mapfile <ARRAY> [JQ_FILTER]
 #
 # Apply JQ_FILTER (default: '.[]') to the input and populate ARRAY with the
@@ -2335,6 +2467,7 @@ lk_mktemp_file() { _LK_STACK_DEPTH=$((1 + ${_LK_STACK_DEPTH:-0})) lk_mktemp; }
 lk_regex_implode() { lk_ere_implode_args -- "$@"; }
 lk_run_detail() { lk_tty_run_detail "$@"; }
 lk_run() { lk_tty_run "$@"; }
+lk_test_many() { lk_test "$@"; }
 lk_tty_detail_pairs() { lk_tty_pairs_detail "$@"; }
 
 # lk_path_edit REMOVE_REGEX [MOVE_REGEX [PATH]]
@@ -3806,50 +3939,6 @@ function lk_user_groups() {
 # lk_user_in_group GROUP [USER]
 function lk_user_in_group() {
     lk_user_groups ${2+"$2"} | grep -Fx "$1" >/dev/null
-}
-
-# lk_test_many TEST [VALUE...]
-#
-# Return true if every VALUE passes TEST, otherwise:
-# - return 1 if there are no VALUE arguments;
-# - return 2 if at least one VALUE passes TEST; or
-# - return 3 if no VALUE passes TEST
-function lk_test_many() {
-    local TEST=${1-} PASSED=0 FAILED=0
-    [ -n "$TEST" ] || lk_warn "no test command" || return
-    shift
-    [ $# -gt 0 ] || return 1
-    while [ $# -gt 0 ] && ((PASSED + FAILED < 2)); do
-        eval "($TEST \"\$1\")" &&
-            PASSED=1 ||
-            FAILED=1
-        shift
-    done
-    [ $# -eq 0 ] && [ "$FAILED" -eq 0 ] || {
-        [ "$PASSED" -eq 0 ] &&
-            return 3 ||
-            return 2
-    }
-}
-
-function lk_paths_exist() {
-    lk_test_many "lk_maybe_sudo test -e" "$@"
-}
-
-function lk_files_exist() {
-    lk_test_many "lk_maybe_sudo test -f" "$@"
-}
-
-function lk_dirs_exist() {
-    lk_test_many "lk_maybe_sudo test -d" "$@"
-}
-
-function lk_fifos_exist() {
-    lk_test_many "lk_maybe_sudo test -p" "$@"
-}
-
-function lk_files_not_empty() {
-    lk_test_many "lk_maybe_sudo test -s" "$@"
 }
 
 # lk_dir_parents [-u UNTIL] DIR...

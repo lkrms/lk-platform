@@ -25,6 +25,7 @@ shopt -s nullglob
 lk_require debian git hosting linux mysql provision validate
 
 LK_VERBOSE=${LK_VERBOSE-1}
+_LK_VERBOSE=$LK_VERBOSE
 
 function no_upgrade() {
     lk_has_arg --no-upgrade
@@ -51,13 +52,14 @@ function maybe_restore_original() {
 }
 
 function get_before_file() {
-    unset LK_FILE_REPLACE_NO_CHANGE
+    unset LK_FILE_REPLACE_NO_CHANGE LK_VERBOSE
     AFTER_FILE=$1
     [ -e "$1" ] || set -- /dev/null
     lk_mktemp_with -r BEFORE_FILE cat "$1"
 }
 
 function check_after_file() {
+    LK_VERBOSE=$_LK_VERBOSE
     diff -q "$BEFORE_FILE" "$AFTER_FILE" >/dev/null ||
         lk_tty_diff -L "$AFTER_FILE" "$BEFORE_FILE" "$AFTER_FILE"
 }
@@ -278,32 +280,16 @@ APT_REMOVE=(
 APT_REPOS=()
 APT_SUPPRESS=()
 APT_FILTER=()
-APT_ADD_REPOSITORY_ARGS=(-yn)
 APACHE_MODS_SUPPRESS=()
 PHPVER=$(lk_hosting_php_get_default_version)
 
 CERTBOT_REPO=ppa:certbot/certbot
 case "$DISTRIB_RELEASE" in
-16.04)
-    # Ubuntu 16.04's ubuntu-minimal package "Depends" on rsyslog
-    lk_arr_remove APT_REMOVE rsyslog
-    APT_REPOS+=("$CERTBOT_REPO")
-    APT_SUPPRESS+=(
-        icdiff
-        php-apcu-bc
-        php-yaml
-        xxhash
-    )
-    APT_ADD_REPOSITORY_ARGS=(-y)
-    APACHE_MODS_SUPPRESS+=(http2)
-    ;;
 18.04)
     APT_REPOS+=("$CERTBOT_REPO")
     ;;
 20.04)
-    APT_SUPPRESS+=(
-        php-gettext
-    )
+    APT_SUPPRESS+=(php-gettext)
     ;;
 *)
     lk_die "Ubuntu release not supported: $DISTRIB_RELEASE"
@@ -323,28 +309,33 @@ if ! lk_is_bootstrap; then
 fi
 
 {
-    lk_console_log "Provisioning Ubuntu for hosting"
+    lk_tty_log "Provisioning Ubuntu for hosting"
 
-    install -d -m 02775 -g adm "$LK_BASE"/{etc,var}
+    install -d -m 02775 -g adm "$LK_BASE"/{etc{,/lk-platform},var}
     install -d -m 02770 -g adm "$LK_BASE/var/run"{,/dirty}
 
-    lk_is_bootstrap || [ -d "$LK_BASE/etc/sites" ] ||
+    lk_is_bootstrap ||
+        [ -d "$LK_BASE/etc/lk-platform/sites" ] ||
+        [ -d "$LK_BASE/etc/sites" ] ||
         lk_mark_dirty "legacy-sites.migration"
 
-    install -d -m 02770 -g adm "$LK_BASE/etc/sites"
+    install -d -m 02770 -g adm "$LK_BASE/etc/lk-platform/sites"
 
-    lk_console_message "Checking system timezone"
+    ! lk_dir_is_empty "$LK_BASE/etc/sites" ||
+        rmdir "$LK_BASE/etc/sites"
+
+    lk_tty_print "Checking system timezone"
     TIMEZONE=$(lk_system_timezone)
     [ "$TIMEZONE" = "$LK_NODE_TIMEZONE" ] ||
         lk_run_detail timedatectl set-timezone "$LK_NODE_TIMEZONE"
 
-    lk_console_message "Checking system hostname"
+    lk_tty_print "Checking system hostname"
     [ "$(hostname -s)" = "$LK_NODE_HOSTNAME" ] || {
         lk_run_detail hostnamectl set-hostname "$LK_NODE_HOSTNAME"
         REBOOT=1
     }
 
-    lk_console_message "Checking hosts file"
+    lk_tty_print "Checking hosts file"
     FILE=/etc/hosts
     IPV4_ADDRESS=$(_LK_IP_PUBLIC_ONLY=1 lk_node_ipv4) || IPV4_ADDRESS=
     IPV6_ADDRESS=$(_LK_IP_PUBLIC_ONLY=1 lk_node_ipv6) || IPV6_ADDRESS=
@@ -361,7 +352,7 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
     lk_file_keep_original "$FILE"
     lk_file_replace -i "^(#|$S*\$)" "$FILE" "$_FILE"
 
-    lk_console_message "Checking systemd journal"
+    lk_tty_print "Checking systemd journal"
     unset LK_FILE_REPLACE_NO_CHANGE
     FILE=/etc/systemd/journald.conf.d/90${LK_PATH_PREFIX}default
     lk_install -d -m 00755 "${FILE%/*}"
@@ -374,12 +365,12 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
         ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
         lk_run_detail systemctl restart systemd-journald.service
 
-    lk_console_message "Checking root account"
+    lk_tty_print "Checking root account"
     STATUS=$(lk_user_passwd_status root)
     [ "$STATUS" = P ] ||
-        lk_console_error "No root password has been set"
+        lk_tty_error "No root password has been set"
 
-    lk_console_message "Checking sudo"
+    lk_tty_print "Checking sudo"
     FILE=/etc/sudoers.d/${LK_PATH_PREFIX}default-hosting
     OLD_FILE=/etc/sudoers.d/${LK_PATH_PREFIX}mysql-self-service
     maybe_move_old "$OLD_FILE" "$FILE"
@@ -388,7 +379,7 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
         lk_expand_template "$LK_BASE/share/sudoers.d/default-hosting"
     )"
 
-    lk_console_message "Checking kernel parameters"
+    lk_tty_print "Checking kernel parameters"
     unset LK_FILE_REPLACE_NO_CHANGE
     FILE=/etc/sysctl.d/90-${LK_PATH_PREFIX}default.conf
     OLD_FILE=/etc/sysctl.d/90-${LK_PATH_PREFIX}defaults.conf
@@ -401,15 +392,15 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
     ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
         lk_run_detail sysctl --system
 
-    lk_console_message "Checking kernel modules"
+    lk_tty_print "Checking kernel modules"
     lk_run_detail modprobe nf_conntrack_ftp ||
         lk_die "error loading kernel modules"
     FILE=/etc/modules-load.d/${LK_PATH_PREFIX}nf_conntrack.conf
     lk_install -m 00644 "$FILE"
     lk_file_replace "$FILE" "nf_conntrack_ftp"
 
-    lk_console_message "Checking APT"
-    lk_console_detail "Checking sources"
+    lk_tty_print "Checking APT"
+    lk_tty_detail "Checking sources"
     unset LK_FILE_REPLACE_NO_CHANGE
     FILE=/etc/apt/sources.list
     # Disable source packages, multiverse sources
@@ -430,9 +421,8 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
                 apt-cache policy | grep -E \
                     "\\<https?://ppa\.launchpad\.net/${REPO#ppa:}\\>" \
                     >/dev/null || {
-                    lk_console_detail "Adding repository:" "$REPO"
-                    lk_keep_trying add-apt-repository \
-                        "${APT_ADD_REPOSITORY_ARGS[@]}" "$REPO" &&
+                    lk_tty_detail "Adding repository:" "$REPO"
+                    lk_keep_trying add-apt-repository -yn "$REPO" &&
                         LK_FILE_REPLACE_NO_CHANGE=0
                 }
                 ;;
@@ -477,7 +467,7 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
     lk_file_replace "$FILE" "$_FILE"
 
     # See `man invoke-rc.d` for more information
-    lk_console_detail \
+    lk_tty_detail \
         "Disabling immediate activation of services installed while provisioning"
     FILE=/usr/sbin/policy-rc.d
     lk_install -m 00755 "$FILE"
@@ -492,7 +482,7 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
 
     if [ -x /usr/local/bin/pip3 ] && ! lk_dpkg_installed python3-pip; then
         PIP3=/usr/local/bin/pip3
-        lk_console_message "Removing standalone pip3"
+        lk_tty_print "Removing standalone pip3"
         function pip3_args() {
             python3 \
                 -c 'import site; print("\n".join(site.getsitepackages()))' |
@@ -537,7 +527,7 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
         lk_keep_trying lk_apt_install "${APT_PACKAGES[@]}"
     lk_apt_purge "${APT_REMOVE[@]}"
 
-    lk_console_message "Checking services"
+    lk_tty_print "Checking services"
     DISABLE_SERVICES=(
         motd-news.timer
     )
@@ -549,7 +539,7 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
     done
 
     if lk_dpkg_installed logrotate; then
-        lk_console_message "Checking logrotate"
+        lk_tty_print "Checking logrotate"
         _LK_CONF_DELIM=" " \
             lk_conf_set_option su "root adm" /etc/logrotate.conf
         FILE=/etc/logrotate.d/lk-platform
@@ -573,7 +563,7 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
     fi
 
     if lk_dpkg_installed apt-listchanges apticron; then
-        lk_console_message "Checking apticron"
+        lk_tty_print "Checking apticron"
         FILE=/etc/apt/listchanges.conf
         ORIG=$FILE
         [ ! -e "$FILE.orig" ] || ORIG=$FILE.orig
@@ -603,7 +593,7 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
         check_after_file
     fi
 
-    lk_console_message "Checking update-motd scripts"
+    lk_tty_print "Checking update-motd scripts"
     DIR=/etc/update-motd.d
     for FILE in \
         "$DIR"/*-{fsck-at-reboot,help-text,livepatch,motd-news,release-upgrade}; do
@@ -617,8 +607,7 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
     done
 
     DIR=/etc/skel.${LK_PATH_PREFIX%-}
-    lk_console_item \
-        "Checking skeleton directory for hosting accounts:" "$DIR"
+    lk_tty_print "Checking skeleton directory for hosting accounts:" "$DIR"
     cp -naTv /etc/skel "$DIR"
     DIR=$DIR/.ssh
     FILE=$DIR/authorized_keys_${LK_PATH_PREFIX%-}
@@ -658,15 +647,13 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
         fi
     fi
 
-    lk_console_message "Checking hosting base directories"
+    lk_tty_print "Checking hosting base directories"
     lk_install -d -m 00751 -g adm /srv/{www{,/.tmp,/.opcache},backup{,/archive}}
 
-    lk_console_blank
     LK_NO_LOG=1 \
         lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" \
         $(! no_upgrade || printf '%s\n' --no-upgrade)
 
-    lk_console_blank
     if lk_is_bootstrap && [ -n "$LK_ADMIN_USERS" ]; then
         IFS=,
         ADMIN_USERS=($LK_ADMIN_USERS)
@@ -679,9 +666,10 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
         done
     fi
 
-    lk_console_message "Checking SSH server"
+    lk_tty_print "Checking SSH server"
     unset LK_FILE_REPLACE_NO_CHANGE
     LK_CONF_OPTION_FILE=/etc/ssh/sshd_config
+    get_before_file "$LK_CONF_OPTION_FILE"
     ! lk_is_bootstrap ||
         [ -z "$LK_ADMIN_USERS" ] ||
         lk_ssh_set_option PermitRootLogin "no"
@@ -698,30 +686,18 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
             lk_file_replace "$FILE" < <(sed -E \
                 "s/^$S*Port$S+22$S*\$/&\\"$'\n'"Port $LK_SSH_TRUSTED_PORT/" "$FILE")
     }
+    check_after_file
     # TODO: restore original configuration if restart fails
     lk_is_bootstrap && ! lk_systemctl_running ssh ||
         ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
         lk_run_detail systemctl restart ssh.service
 
     if lk_dpkg_installed postfix; then
-        function lk_postconf_get() {
-            # `postconf -nh` prints a newline if the parameter has an empty
-            # value, and nothing at all if the parameter is not set in main.cf
-            (($(postconf -nh "$1" | wc -c))) && postconf -nh "$1"
-        }
-        function lk_postconf_set() {
-            lk_postconf_get "$1" | grep -Fx "$2" >/dev/null ||
-                { postconf -e "$1 = $2" &&
-                    lk_mark_dirty "postfix.service"; }
-        }
-        function lk_postconf_unset() {
-            ! lk_postconf_get "$1" >/dev/null ||
-                { postconf -X "$1" &&
-                    lk_mark_dirty "postfix.service"; }
-        }
         lk_tty_print "Checking Postfix"
         get_before_file /etc/postfix/main.cf
         lk_postconf_set inet_interfaces loopback-only
+        lk_postconf_set header_size_limit 409600
+        lk_postconf_set smtp_tls_security_level may
         FILE=/etc/aliases
         ALIASES=(
             postmaster root
@@ -738,18 +714,14 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
         lk_file_replace "$FILE" < <(printf '%s:\t%s\n' "${ALIASES[@]}")
         ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
             postalias "$FILE"
-        ! lk_is_dirty "postfix.service" ||
-            { lk_is_bootstrap && ! lk_systemctl_running postfix ||
-                lk_run_detail systemctl reload postfix.service; }
-        lk_mark_clean "postfix.service"
     fi
 
     if lk_dpkg_installed apache2; then
-        lk_console_message "Checking Apache"
+        lk_tty_print "Checking Apache"
         unset LK_FILE_REPLACE_NO_CHANGE LK_SYMLINK_NO_CHANGE
         DEFAULT_SITES=(/etc/apache2/sites-enabled/{,000-}default*.conf)
         [ ${#DEFAULT_SITES[@]} -eq "0" ] || {
-            lk_console_detail "Disabling sites:" \
+            lk_tty_detail "Disabling sites:" \
                 $'\n'"$(lk_echo_array DEFAULT_SITES | lk_basename)"
             lk_file_keep_original "${DEFAULT_SITES[@]}" &&
                 rm "${DEFAULT_SITES[@]}" &&
@@ -809,13 +781,13 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
             <(lk_echo_array APACHE_MODS | sort -u) \
             <(sort -u <<<"$APACHE_MODS_ENABLED")))
         [ ${#APACHE_MODS_DISABLE[@]} -eq 0 ] || {
-            lk_console_detail "Disabling Apache modules:" \
+            lk_tty_detail "Disabling Apache modules:" \
                 $'\n'"$(lk_echo_array APACHE_MODS_DISABLE)"
             a2dismod --force "${APACHE_MODS_DISABLE[@]}" &&
                 LK_FILE_REPLACE_NO_CHANGE=0
         }
         [ ${#APACHE_MODS_ENABLE[@]} -eq 0 ] || {
-            lk_console_detail "Enabling Apache modules:" \
+            lk_tty_detail "Enabling Apache modules:" \
                 $'\n'"$(lk_echo_array APACHE_MODS_ENABLE)"
             a2enmod --force "${APACHE_MODS_ENABLE[@]}" &&
                 LK_FILE_REPLACE_NO_CHANGE=0
@@ -823,7 +795,7 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
 
         FILE=/etc/apache2/conf-available/${LK_PATH_PREFIX}default.conf
         if ! lk_is_bootstrap; then
-            lk_console_detail "Checking configuration files"
+            lk_tty_detail "Checking configuration files"
             OLD_SYMLINK=/etc/apache2/sites-enabled/000-${LK_PATH_PREFIX}default.conf
             [ ! -e "$OLD_SYMLINK" ] || {
                 lk_file_backup "$OLD_SYMLINK" &&
@@ -881,7 +853,7 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
             "../${DIR##*/}/${FILE##*/}" "${FILE/-available\//-enabled\/}"
         FILE=/etc/letsencrypt/options-ssl-apache.conf
         if [ -s "$FILE" ]; then
-            lk_console_detail "Truncating" "$FILE"
+            lk_tty_detail "Truncating" "$FILE"
             lk_file_keep_original "$FILE"
             : >"$FILE"
             LK_FILE_REPLACE_NO_CHANGE=0
@@ -893,9 +865,9 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
     fi
 
     if lk_dpkg_installed php-fpm; then
-        lk_console_message "Checking PHP-FPM"
+        lk_tty_print "Checking PHP-FPM"
         if ! lk_is_bootstrap; then
-            lk_console_detail "Checking configuration files"
+            lk_tty_detail "Checking configuration files"
             OLD_POOLS=(/etc/php/*/fpm/pool.d.orig/*.conf)
             [ ${#OLD_POOLS[@]} -eq 0 ] || {
                 lk_file_keep_original "${OLD_POOLS[@]}" &&
@@ -913,7 +885,7 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
             lk_mapfile DEFAULT_POOLS \
                 <(grep -Pl "^listen$S*=(.(?!\\\$pool\\b))*\$" "${POOLS[@]}")
             [ ${#DEFAULT_POOLS[@]} -eq 0 ] || {
-                lk_console_detail "Disabling pools:" \
+                lk_tty_detail "Disabling pools:" \
                     $'\n'"$(lk_echo_array DEFAULT_POOLS | lk_basename)"
                 lk_file_keep_original "${DEFAULT_POOLS[@]}" &&
                     rm "${DEFAULT_POOLS[@]}" &&
@@ -935,13 +907,13 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
                 lk_mark_dirty "php$PHPVER-fpm.service"
         }
 
-        lk_console_message "Checking WP-CLI"
+        lk_tty_print "Checking WP-CLI"
         FILE=/usr/local/bin/wp
         lk_install -m 00755 "$FILE"
         if [ -s "$FILE" ]; then
             lk_run_detail "$FILE" cli update --yes
         else
-            lk_console_detail "Installing WP-CLI to" "$FILE"
+            lk_tty_detail "Installing WP-CLI to" "$FILE"
             _FILE=$(lk_mktemp_file)
             lk_delete_on_exit "$_FILE"
             URL=https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
@@ -958,7 +930,7 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
     fi
 
     if lk_dpkg_installed mariadb-server; then
-        lk_console_message "Checking MariaDB (MySQL)"
+        lk_tty_print "Checking MariaDB (MySQL)"
         unset LK_FILE_REPLACE_NO_CHANGE
         FILE=/etc/mysql/mariadb.conf.d/90-${LK_PATH_PREFIX}default.cnf
         OLD_FILE=/etc/mysql/mariadb.conf.d/90-${LK_PATH_PREFIX}defaults.cnf
@@ -977,9 +949,8 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
         )
         lk_file_replace "$FILE" "$_FILE"
         if lk_is_bootstrap; then
-            # Ubuntu 16.04's MariaDB packages don't install `mariadb.service`
-            # and later versions install a `mysql.service` alias, so use
-            # `mysql.service` for maximum portability
+            # MariaDB packages provide a `mysql.service` alias for
+            # `mariadb.service`, so use `mysql.service` for maximum portability
             lk_run_detail systemctl start mysql.service
             if [ -n "$LK_MYSQL_USERNAME" ]; then
                 lk_tty_detail "Creating MariaDB administrator:" \
@@ -998,7 +969,7 @@ EOF
     fi
 
     if lk_dpkg_installed memcached; then
-        lk_console_message "Checking Memcached"
+        lk_tty_print "Checking Memcached"
         LK_CONF_OPTION_FILE=/etc/memcached.conf
         get_before_file "$LK_CONF_OPTION_FILE"
         _LK_CONF_DELIM=" " \
@@ -1013,49 +984,30 @@ EOF
         lk_hosting_user_add "$LK_HOST_ACCOUNT"
         if [ -n "$LK_HOST_DOMAIN" ]; then
             [ "$LK_HOST_SITE_ENABLE" = Y ] || {
-                FILE=$LK_BASE/etc/sites/${LK_HOST_DOMAIN,,}.conf
+                FILE=$LK_BASE/etc/lk-platform/sites/${LK_HOST_DOMAIN,,}.conf
                 lk_install -m 00660 -g adm "$FILE" &&
                     lk_file_replace "$FILE" \
                         "$(SITE_ENABLE=N lk_var_sh SITE_ENABLE)"
             }
             HOST_SITE_ROOT=$(lk_expand_path "~$LK_HOST_ACCOUNT")
-            lk_hosting_site_configure "$LK_HOST_DOMAIN" "$HOST_SITE_ROOT"
+            lk_hosting_site_provision "$LK_HOST_DOMAIN" "$HOST_SITE_ROOT"
         fi
     fi
 
-    ! lk_is_dirty "legacy-sites.migration" ||
-        lk_hosting_site_migrate_legacy
-
-    if ! lk_hosting_site_list | wc -l | tr -d ' ' | grep -Fxq 0; then
-        lk_console_blank
-        lk_hosting_site_configure_all
+    if lk_is_dirty "legacy-sites.migration"; then
+        lk_hosting_migrate_legacy_sites
+        lk_mark_clean "legacy-sites.migration"
     fi
 
-    unset SKIP_TEST
-    if lk_dpkg_installed php-fpm apache2; then
-        if lk_is_dirty "php$PHPVER-fpm.service" ||
-            lk_is_dirty "apache2.service"; then
-            lk_console_message "Checking hosting services"
-            lk_hosting_php_fpm_config_test &&
-                lk_hosting_httpd_config_test ||
-                lk_console_error -r "Resolve invalid settings and try again" ||
-                lk_die ""
-            SKIP_TEST=1
+    if lk_test_any lk_systemctl_exists apache2 "php$PHPVER-fpm" postfix; then
+        if lk_hosting_list_sites | grep . >/dev/null; then
+            lk_hosting_site_configure_all
         fi
-    fi
-
-    if lk_dpkg_installed php-fpm &&
-        lk_is_dirty "php$PHPVER-fpm.service"; then
-        lk_hosting_php_fpm_config_apply ${SKIP_TEST+-s} "$PHPVER"
-    fi
-
-    if lk_dpkg_installed apache2 &&
-        lk_is_dirty "apache2.service"; then
-        lk_hosting_httpd_config_apply ${SKIP_TEST+-s}
+        lk_hosting_apply_config
     fi
 
     if lk_dpkg_installed fail2ban; then
-        lk_console_message "Checking Fail2ban"
+        lk_tty_print "Checking Fail2ban"
         unset LK_FILE_REPLACE_NO_CHANGE
         FILE=/etc/fail2ban/jail.d/${LK_PATH_PREFIX}default.local
         lk_install -m 00644 "$FILE"
@@ -1070,7 +1022,7 @@ EOF
             lk_run_detail systemctl restart fail2ban.service
     fi
 
-    lk_console_message "Checking firewall (iptables)"
+    lk_tty_print "Checking firewall (iptables)"
     unset LK_FILE_REPLACE_NO_CHANGE
     if [ "$LK_REJECT_OUTPUT" != N ]; then
         HOSTS=($(
@@ -1127,7 +1079,7 @@ EOF
 
     lk_hosting_configure_backup
 
-    lk_console_message "Cleaning up"
+    lk_tty_print "Cleaning up"
     no_upgrade ||
         lk_apt_purge_removed
     [ ! -e /etc/glances ] ||
@@ -1136,8 +1088,7 @@ EOF
         lk_dpkg_installed apt-listchanges ||
         lk_run_detail rm -f /etc/apt/listchanges.conf.orig
 
-    lk_console_blank
-    lk_console_success "Provisioning complete"
+    lk_tty_success "Provisioning complete"
 
     exit
 }

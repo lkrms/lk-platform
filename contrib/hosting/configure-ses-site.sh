@@ -10,8 +10,8 @@ Usage:
   ${0##*/} <SSH_HOST> <SMTP_USER> <DOMAIN> <SOURCE_IP>...
 
 Environment:
-  AWS_PROFILE must contain the name of an AWS CLI profile with a default region
-  and access to Amazon SES (see \`aws help configure\`).
+  AWS_PROFILE   Must contain the name of an AWS CLI profile with a default
+                region and access to Amazon SES (see \`aws help configure\`).
 EOF
 }
 
@@ -122,12 +122,44 @@ SOURCE_IP=("${@:4}")
     <"$NEW_KEY") && eval "$SH"
   lk_tty_success "Access key created:" "$ACCESS_KEY_ID"
   lk_tty_detail \
-    "Converting secret access key to SMTP credential for region:" "$AWS_REGION"
+    "Converting access key to SMTP credentials for region:" "$AWS_REGION"
   SMTP_PASSWORD=$("$LK_BASE/lib/vendor/aws/smtp_credentials_generate.py" \
     "$SECRET_ACCESS_KEY" "$AWS_REGION")
+  SMTP_CREDENTIALS=${ACCESS_KEY_ID}:${SMTP_PASSWORD}
 
-  lk_tty_print "Credentials for Postfix:" \
-    $'\n'"${ACCESS_KEY_ID}:${SMTP_PASSWORD}"
+  if [[ ${SSH_HOST:--} == - ]]; then
+    lk_tty_print "Credentials for Postfix:" "$SMTP_CREDENTIALS"
+    exit
+  fi
+
+  # Deploy the latest version of lk_hosting_site_configure etc.
+  lk_tty_run_detail "$LK_BASE/contrib/hosting/update-server.sh" \
+    --no-tls \
+    --no-wordpress \
+    --no-test \
+    "$SSH_HOST"
+
+  function set-site-smtp-settings() {
+    . /opt/lk-platform/lib/bash/rc.sh &&
+      lk_require hosting || return
+    lk_hosting_site_configure \
+      -s SITE_SMTP_RELAY="[email-smtp.$AWS_REGION.amazonaws.com]:587" \
+      -s SITE_SMTP_CREDENTIALS="$SMTP_CREDENTIALS" \
+      -s SITE_SMTP_SENDERS= \
+      "$DOMAIN"
+  }
+
+  lk_mktemp_with SCRIPT
+  {
+    declare -f set-site-smtp-settings
+    declare -p AWS_REGION DOMAIN SMTP_CREDENTIALS
+    lk_quote_args set-site-smtp-settings
+  } >"$SCRIPT"
+  COMMAND=$(lk_quote_args \
+    bash -c 't=$(mktemp) && cat >"$t" && sudo -HE bash "$t"')
+
+  ssh -o ControlPath=none -o LogLevel=QUIET -t "$SSH_HOST" \
+    LK_VERBOSE=${LK_VERBOSE-1} "$COMMAND" <"$SCRIPT"
 
   exit
 }
