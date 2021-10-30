@@ -78,3 +78,5 @@ function lk_whiptail_checklist() {
 }
 
 lk_provide whiptail
+
+#### Reviewed: 2021-09-22

@@ -142,142 +142,7 @@ function lk_hosting_httpd_config_apply() {
     lk_hosting_service_apply apache2.service
 }
 
-function _lk_hosting_check() {
-    lk_is_ubuntu &&
-        lk_dirs_exist /srv/www{,/.tmp,/.opcache} ||
-        lk_warn "system not configured for hosting"
-}
-
-# _lk_hosting_site_list_settings [FORMAT [EXTRA_SETTING...]]
-function _lk_hosting_site_list_settings() {
-    local FORMAT=${1:-'%s\n'}
-    printf "$FORMAT" \
-        SITE_ALIASES \
-        SITE_ROOT \
-        SITE_ENABLE \
-        SITE_ORDER \
-        SITE_DISABLE_{WWW,HTTPS} \
-        SITE_ENABLE_STAGING \
-        SITE_SSL_{CERT,KEY,CHAIN}_FILE \
-        SITE_PHP_FPM_{POOL,USER,MAX_CHILDREN,TIMEOUT,OPCACHE_SIZE} \
-        SITE_PHP_FPM_{{ADMIN_,}SETTINGS,ENV} \
-        SITE_PHP_VERSION \
-        SITE_DOWNSTREAM_{FROM,FORCE} \
-        "${@:2}"
-}
-
-# _lk_hosting_site_check_root
-#
-# - Resolve and validate SITE_ROOT
-# - Set _SITE_USER and _SITE_IS_CHILD from SITE_ROOT's owner and path
-# - LINUX_USERNAME_REGEX must be set
-function _lk_hosting_site_check_root() {
-    [ -n "${LINUX_USERNAME_REGEX:+1}" ] || return
-    [ -n "${SITE_ROOT-}" ] &&
-        SITE_ROOT=$(lk_elevate realpath "$SITE_ROOT") &&
-        _SITE_USER=$(LK_SUDO=1 lk_file_owner "$SITE_ROOT") &&
-        [[ $SITE_ROOT =~ ^/srv/www/$_SITE_USER(/$LINUX_USERNAME_REGEX)?$ ]] &&
-        _SITE_IS_CHILD=${BASH_REMATCH[1]:+1}
-}
-
-# lk_hosting_site_list [-e]
-#
-# For each configured site, print the fields below (tab-delimited, one site per
-# line, sorted by IS_CHILD, ORDER, DOMAIN). If -e is set, limit output to
-# enabled sites.
-#
-# 1. DOMAIN
-# 2. ENABLED
-# 3. SITE_ROOT
-# 4. INODE
-# 5. OWNER
-# 6. IS_CHILD
-# 7. PHP_FPM_POOL
-# 8. PHP_FPM_USER
-# 9. ORDER
-# 10. ALL_DOMAINS (sorted, comma-separated)
-# 11. DISABLE_HTTPS
-function lk_hosting_site_list() { (
-    unset ENABLED
-    [ "${1-}" != -e ] || ENABLED=1
-    shopt -s nullglob
-    eval "$(lk_get_regex DOMAIN_NAME_REGEX LINUX_USERNAME_REGEX)"
-    for FILE in "$LK_BASE/etc/sites"/*.conf; do
-        [[ $FILE =~ /($DOMAIN_NAME_REGEX)\.conf$ ]] ||
-            lk_warn "invalid domain in filename: $FILE" || continue
-        DOMAIN=${BASH_REMATCH[1],,}
-        unset "${!SITE_@}" "${!_SITE_@}"
-        SH=$(
-            . "$FILE" && _lk_hosting_site_check_root ||
-                lk_warn "invalid settings: $FILE" || return
-            SITE_ORDER=${SITE_ORDER:--1}
-            SITE_PHP_FPM_POOL=${SITE_PHP_FPM_POOL:-$_SITE_USER}
-            [ -n "${SITE_PHP_FPM_USER-}" ] ||
-                if lk_user_in_group adm "$_SITE_USER"; then
-                    SITE_PHP_FPM_USER=www-data
-                else
-                    SITE_PHP_FPM_USER=$_SITE_USER
-                fi
-            lk_get_quoted_var SITE_ENABLE SITE_ROOT SITE_ORDER SITE_ALIASES \
-                _SITE_IS_CHILD SITE_PHP_FPM_POOL SITE_PHP_FPM_USER \
-                SITE_DISABLE_WWW SITE_DISABLE_HTTPS
-        ) && eval "$SH" || continue
-        lk_is_true SITE_ENABLE && SITE_ENABLE=Y ||
-            { [ -z "${ENABLED-}" ] && SITE_ENABLE=N || continue; }
-        lk_is_true _SITE_IS_CHILD && _SITE_IS_CHILD_H=Y || _SITE_IS_CHILD_H=N
-        DOMAINS=$({
-            IFS=,
-            echo "$DOMAIN"
-            SITE_DISABLE_WWW=${SITE_DISABLE_WWW:-${LK_SITE_DISABLE_WWW:-N}}
-            lk_is_true SITE_DISABLE_WWW ||
-                echo "www.$DOMAIN"
-            [ -z "$SITE_ALIASES" ] ||
-                printf '%s\n' $SITE_ALIASES
-        } | sort -u | lk_implode_input ",")
-        SITE_DISABLE_HTTPS=${SITE_DISABLE_HTTPS:-${LK_SITE_DISABLE_HTTPS:-N}}
-        lk_is_true SITE_DISABLE_HTTPS &&
-            SITE_DISABLE_HTTPS=Y || SITE_DISABLE_HTTPS=N
-        lk_elevate gnu_stat -L \
-            --printf "$DOMAIN\\t$SITE_ENABLE\\t%n\\t%i\\t%U\\t$_SITE_IS_CHILD_H\\t$SITE_PHP_FPM_POOL\\t$SITE_PHP_FPM_USER\\t$SITE_ORDER\\t$DOMAINS\\t$SITE_DISABLE_HTTPS\\n" \
-            "$SITE_ROOT" || return
-    done | sort -t$'\t' -k6 -k9n -k1
-); }
-
-# lk_hosting_php_get_settings PREFIX SETTING=VALUE...
-#
-# Print each PHP setting as a PHP-FPM pool directive. If the same SETTING is
-# given more than once, only use the first VALUE.
-#
-# Example:
-#
-#     $ lk_hosting_php_get_settings php_admin_ log_errors=On memory_limit=80M
-#     php_admin_flag[log_errors] = On
-#     php_admin_value[memory_limit] = 80M
-function lk_hosting_php_get_settings() {
-    [ $# -gt 1 ] || lk_warn "no settings" || return
-    printf '%s\n' "${@:2}" | awk -F= -v prefix="$1" -v null='""' '
-/^[^[:space:]=]+=/ {
-  setting = $1
-  if(!arr[setting]) {
-    sub("^[^=]+=", "")
-    arr[setting] = $0 ? $0 : null
-    keys[i++] = setting }
-  next }
-{ status = 2 }
-END {
-  for (i = 0; i < length(keys); i++) {
-    setting = keys[i]
-    if(prefix == "env") {
-      suffix = "" }
-    else if(tolower(arr[setting]) ~ "^(on|true|yes|off|false|no)$") {
-      suffix = "flag" }
-    else {
-      suffix = "value" }
-    if (arr[setting] == null) {
-      arr[setting] = "" }
-    printf("%s%s[%s] = %s\n", prefix, suffix, setting, arr[setting]) }
-  exit status }'
-}
+#### INCLUDE hosting.sh.d
 
 function lk_hosting_site_migrate_legacy() { (
     shopt -s nullglob
@@ -333,7 +198,7 @@ function lk_hosting_site_migrate_legacy() { (
     done
     lk_console_success "Legacy sites migrated successfully"
     lk_mark_clean "legacy-sites.migration"
-); }
+); } #### Reviewed: 2021-06-20
 
 # _lk_hosting_site_read_settings DOMAIN
 #
@@ -346,14 +211,14 @@ function _lk_hosting_site_read_settings() { (
     [ ! -e "$_SITE_FILE" ] || . "$_SITE_FILE" || return
     _LK_STACK_DEPTH=1 lk_get_quoted_var \
         $(_lk_hosting_site_list_settings "" _SITE_FILE "${!SITE_@}" | sort -u)
-); }
+); } #### Reviewed: 2021-07-12
 
 # _lk_hosting_site_write_settings DOMAIN
 function _lk_hosting_site_write_settings() {
     local FILE=$LK_BASE/etc/sites/${1,,}.conf
     lk_install -m 00660 -g adm "$FILE" &&
         lk_file_replace -lp "$FILE" "$(lk_get_shell_var "${!SITE_@}")"
-}
+} #### Reviewed: 2021-07-12
 
 # lk_hosting_site_set_settings [-n] DOMAIN
 function lk_hosting_site_set_settings() {
@@ -398,7 +263,7 @@ END                     { print max + 1 }' $SAME_ROOT)} || return
     unset IFS
     [ -z "$WRITE" ] ||
         _lk_hosting_site_write_settings "$1"
-}
+} #### Reviewed: 2021-07-12
 
 function _lk_hosting_site_check_settings() {
     local OLD_SITE_NAME OLD_FILE NEW_FILE PHPVER=${SITE_PHP_VERSION-} PHP_POOLS
@@ -464,7 +329,7 @@ function _lk_hosting_site_check_settings() {
                 _SITE_PHP_FPM_PM=ondemand ||
                 _SITE_PHP_FPM_PM=dynamic; }
     fi
-}
+} #### Reviewed: 2021-06-19
 
 # lk_hosting_site_configure [-w] DOMAIN [SITE_ROOT [ALIAS...]]
 function lk_hosting_site_configure() { (

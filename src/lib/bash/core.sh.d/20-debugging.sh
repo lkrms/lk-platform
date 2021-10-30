@@ -25,7 +25,7 @@ function lk_stack_trace() {
     # _D = maximum DEPTH, _R = maximum rows of output (DEPTH=0 is always skipped
     # to exclude lk_stack_trace)
     ((_R = _D - DEPTH, ROWS = ROWS ? (ROWS > _R ? _R : ROWS) : _R, ROWS)) ||
-        lk_warn "invalid arguments" || return
+        lk_err "invalid arguments" || return
     WIDTH=${#_R}
     while ((ROW++ < ROWS)) && ((DEPTH++ < _D)); do
         FUNC=${FUNCNAME[DEPTH]-"{main}"}

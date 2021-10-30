@@ -8,7 +8,7 @@ function _lk_sudo_check() {
     [ "${LK_EXEC:+e}${LK_SUDO_ON_FAIL:+f}" != ef ] ||
         lk_err "LK_EXEC and LK_SUDO_ON_FAIL are mutually exclusive" || return
     [ -z "$LK_SUDO_ON_FAIL" ] || [ $# -gt 0 ] ||
-        lk_warn "command required if LK_SUDO_ON_FAIL is set" || return
+        lk_err "command required if LK_SUDO_ON_FAIL is set" || return
     declare -p LK_EXEC LK_SUDO_ON_FAIL
     ((!SHIFT)) || printf 'shift %s\n' "$SHIFT"
 }

@@ -6,10 +6,11 @@ die() { echo "${BASH_SOURCE-$0}: $1" >&2 && rm -f "$out" && false || exit; }
 
 _dir=${BASH_SOURCE%${BASH_SOURCE##*/}}
 _dir=${_dir:-$PWD}
-cd "$_dir"
+_dir=$(cd "$_dir" && pwd -P)
+cd "$_dir/.."
 
-[ $# -gt 0 ] ||
-    set -- core.sh.d/[0-9][0-9]-regular-expressions.sh ../../json/regex.json
+set -- src/lib/bash/core.sh.d/[0-9][0-9]-regular-expressions.sh \
+    lib/json/regex.json
 
 while [ $# -ge 2 ]; do
     s=$1

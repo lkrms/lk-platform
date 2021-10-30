@@ -2,7 +2,9 @@
 - /.trash
 - /.wp-cli
 - /backup
+- /backup-archive
 - /log
 - /*/log
 - /staging
 - public_html/wp-content/updraft
+- public_html/wp-content/uploads/wp-file-manager-pro/fm_backup

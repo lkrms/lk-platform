@@ -1,5 +1,7 @@
 #!/bin/bash
 
+#### Reviewed: 2021-05-11
+
 function _lk_prompt_debug_trap() {
     local IFS
     [ "${_LK_PROMPT_DISPLAYED:-0}" -eq 0 ] ||

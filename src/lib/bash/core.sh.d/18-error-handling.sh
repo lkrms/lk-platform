@@ -28,7 +28,7 @@ function _lk_caller() {
 # Print "<CALLER>: MESSAGE" as a warning and return the most recent exit status.
 function lk_warn() {
     lk_pass -$? \
-        lk_console_warning "$(LK_VERBOSE= _lk_caller): ${1-command failed}"
+        lk_tty_warning "$(LK_VERBOSE= _lk_caller): ${1-command failed}"
 }
 
 #### Reviewed: 2021-10-17

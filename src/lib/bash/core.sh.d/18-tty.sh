@@ -90,7 +90,7 @@ function _lk_tty_margin_add() {
 function lk_tty_add_margin() { (
     { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     [ $# -gt 1 ] && ((_MARGIN = $1)) ||
-        lk_warn "invalid arguments" || eval "$_lk_x_return"
+        lk_err "invalid arguments" || eval "$_lk_x_return"
     shift
     ((_MARGIN > 0)) && _TTY=$(lk_get_tty) || {
         _lk_tty_margin_add "$@"
@@ -276,7 +276,7 @@ function lk_tty_list() {
     }
     if [ "$_ARRAY" = - ]; then
         [ ! -t 0 ] && lk_mapfile _ITEMS ||
-            lk_warn "no input" || eval "$_lk_x_return"
+            lk_err "no input" || eval "$_lk_x_return"
     else
         _ARRAY="${_ARRAY}[@]"
         _ITEMS=(${!_ARRAY+"${!_ARRAY}"}) || eval "$_lk_x_return"
@@ -343,7 +343,7 @@ function lk_tty_dump() {
             ;;
         0- | *-1- | *-0)
             if [ -t 0 ]; then
-                lk_warn "input is a terminal"
+                lk_err "input is a terminal"
                 false
             else
                 ${_CMD+"${_CMD[@]}"} cat
@@ -375,7 +375,7 @@ function lk_tty_dump_detail() {
 function lk_tty_file() {
     { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     [ -n "${1-}" ] && lk_sudo -f test -r "${1-}" ||
-        lk_warn "file not found: ${1-}" || eval "$_lk_x_return"
+        lk_err "file not found: ${1-}" || eval "$_lk_x_return"
     local IFS MESSAGE2
     unset IFS
     ! lk_verbose || { MESSAGE2=$(lk_sudo -f ls -ld "$1") &&
@@ -407,7 +407,7 @@ function lk_tty_run() {
         { [[ $1 =~ ^-(([0-9]+)(:($REGEX(:$REGEX)*))?|($REGEX(:$REGEX)*))$ ]] &&
             SHIFT=${BASH_REMATCH[2]} &&
             TRANSFORM=${BASH_REMATCH[4]:-${BASH_REMATCH[1]}} &&
-            shift; } || lk_warn "invalid arguments" || eval "$_lk_x_return"
+            shift; } || lk_err "invalid arguments" || eval "$_lk_x_return"
     CMD=("$@")
     [ -z "$SHIFT" ] || shift "$SHIFT"
     while [[ $TRANSFORM =~ ^$REGEX:?(.*) ]]; do
@@ -483,7 +483,7 @@ function lk_tty_pairs() {
     else if ($i == "]") { first = "]" }
     else { middle = middle $i } }
   print first middle last }') ||
-        lk_warn "invalid arguments" || eval "$_lk_x_return"
+        lk_err "invalid arguments" || eval "$_lk_x_return"
     if [ $# -gt 0 ]; then
         local SEP=${IFS::1}
         lk_mktemp_with TEMP printf "%s${SEP//%/%%}%s\n" "$@"
@@ -525,7 +525,7 @@ function lk_tty_diff() {
     local LABEL1 LABEL2
     [ "${1-}" != -L ] || { LABEL1=$2 && shift 2; }
     [ "${1-}" != -L ] || { LABEL2=$2 && shift 2; }
-    [ $# -gt 0 ] || lk_warn "invalid arguments" || eval "$_lk_x_return"
+    [ $# -gt 0 ] || lk_err "invalid arguments" || eval "$_lk_x_return"
     [ $# -gt 1 ] ||
         if lk_sudo -f test -s "$1.orig"; then
             set -- "$1.orig" "$@"
@@ -535,11 +535,11 @@ function lk_tty_diff() {
         fi
     local FILE1=${1:--} FILE2=${2:--} MESSAGE=${3-}
     [ "$FILE1:$FILE2" != -:- ] ||
-        lk_warn "FILE1 and FILE2 cannot both be read from input" ||
+        lk_err "FILE1 and FILE2 cannot both be read from input" ||
         eval "$_lk_x_return"
     [[ :${#FILE1}${FILE1:0:1}:${#FILE2}${FILE2:0:1}: != *:1-:* ]] ||
         [ ! -t 0 ] ||
-        lk_warn "input is a terminal" || eval "$_lk_x_return"
+        lk_err "input is a terminal" || eval "$_lk_x_return"
     [ "$FILE1" != - ] || { FILE1=/dev/stdin && LABEL1="${LABEL1:-<input>}"; }
     [ "$FILE2" != - ] || { FILE2=/dev/stdin && LABEL2="${LABEL2:-<input>}"; }
     lk_tty_dump - \
@@ -554,4 +554,34 @@ function lk_tty_diff_detail() {
     eval "$_lk_x_return"
 }
 
-#### Reviewed: 2021-10-23
+function _lk_tty_log() {
+    local STATUS=$? IFS=' '
+    [ "${1-}" = -r ] && shift || STATUS=0
+    local _LK_TTY_PREFIX=${_LK_TTY_PREFIX-$1} _LK_TTY_MESSAGE_COLOUR=$2 \
+        MESSAGE2=${4-} _LK_TTY_COLOUR2=${_LK_TTY_COLOUR2-}
+    [ -z "${MESSAGE2:+1}" ] || _lk_tty_format -b MESSAGE2
+    lk_tty_print "${3-}" "$MESSAGE2${5+ ${*:5}}" "$2"
+    return "$STATUS"
+}
+
+# lk_tty_success [-r] MESSAGE [MESSAGE2...]
+function lk_tty_success() {
+    _lk_tty_log " ^^ " "$_LK_SUCCESS_COLOUR" "$@"
+}
+
+# lk_tty_log [-r] MESSAGE [MESSAGE2...]
+function lk_tty_log() {
+    _lk_tty_log " :: " "${_LK_TTY_COLOUR-$_LK_COLOUR}" "$@"
+}
+
+# lk_tty_warning [-r] MESSAGE [MESSAGE2...]
+function lk_tty_warning() {
+    _lk_tty_log "  ! " "$_LK_WARNING_COLOUR" "$@"
+}
+
+# lk_tty_error [-r] MESSAGE [MESSAGE2...]
+function lk_tty_error() {
+    _lk_tty_log " !! " "$_LK_ERROR_COLOUR" "$@"
+}
+
+#### Reviewed: 2021-10-30

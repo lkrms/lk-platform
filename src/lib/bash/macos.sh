@@ -45,7 +45,7 @@ function lk_macos_version() {
     VERSION=$(sw_vers -productVersion) &&
         [[ $VERSION =~ ^([0-9]+\.[0-9]+)(\.[0-9]+)?$ ]] || return
     echo "${BASH_REMATCH[1]}"
-}
+} #### Reviewed: 2021-06-28
 
 function lk_macos_version_name() {
     local VERSION
@@ -77,7 +77,7 @@ function lk_macos_version_name() {
         return 1
         ;;
     esac
-}
+} #### Reviewed: 2021-06-28
 
 function lk_macos_set_hostname() {
     lk_elevate scutil --set ComputerName "$1" &&
@@ -86,15 +86,15 @@ function lk_macos_set_hostname() {
         lk_elevate defaults write \
             /Library/Preferences/SystemConfiguration/com.apple.smb.server \
             NetBIOSName "$1"
-}
+} #### Reviewed: 2021-06-28
 
 function lk_macos_command_line_tools_path() {
     xcode-select --print-path
-}
+} #### Reviewed: 2021-06-28
 
 function lk_macos_command_line_tools_installed() {
     lk_macos_command_line_tools_path &>/dev/null
-}
+} #### Reviewed: 2021-06-28
 
 # lk_macos_update_list_available
 #
@@ -129,7 +129,7 @@ label {
   }
   label = ""
 }'
-}
+} #### Reviewed: 2021-06-28
 
 function lk_macos_install_command_line_tools() {
     local FILE LABEL
@@ -148,7 +148,7 @@ $5 == "Y" && $1 ~ "^Command Line Tools"W && $1 !~ W"(beta|seed)"W {print $1}' |
         softwareupdate --install "$LABEL" >/dev/null || return
     lk_macos_command_line_tools_installed || return
     rm -f "$FILE" || true
-}
+} #### Reviewed: 2021-06-28
 
 function lk_macos_install_rosetta2() {
     ! pkgutil --pkgs='com\.apple\.pkg\.RosettaUpdateAuto' &>/dev/null ||
@@ -156,7 +156,7 @@ function lk_macos_install_rosetta2() {
     lk_console_message "Installing Rosetta 2"
     lk_run_detail lk_elevate caffeinate -d \
         softwareupdate --install-rosetta --agree-to-license
-}
+} #### Reviewed: 2021-06-28
 
 function lk_macos_xcode_maybe_accept_license() {
     if [ -e /Applications/Xcode.app ] &&
@@ -164,7 +164,7 @@ function lk_macos_xcode_maybe_accept_license() {
         lk_console_message "Accepting Xcode license"
         lk_run_detail lk_elevate xcodebuild -license accept
     fi
-}
+} #### Reviewed: 2021-06-28
 
 # lk_macos_kb_add_shortcut DOMAIN MENU_TITLE SHORTCUT
 #

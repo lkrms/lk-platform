@@ -2,16 +2,14 @@
 
 # lk_arr [ARRAY...]
 function lk_arr() {
-    local _SH _i=0
-    _SH="printf '%s\n'"
+    local _sh _SH=
     while [ $# -gt 0 ]; do
-        # Count array members until one is found
-        ((_i)) || eval "\${$1+let _i+=\${#$1[@]}}"
-        ((!_i)) || _SH+=" \${$1+\"\${$1[@]}\"}"
+        _sh=" \"\${$1[@]}\""
+        _SH+=${!1+$_sh}
         shift
     done
     # Print nothing if no array members were found
-    ((!_i)) || eval "$_SH"
+    [ -z "${_SH:+1}" ] || eval "printf '%s\n'$_SH"
 }
 
 # lk_implode_arr GLUE [ARRAY_NAME...]

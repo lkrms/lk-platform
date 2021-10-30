@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# shellcheck disable=SC1083,SC1087
-
 if [[ ! ${1-} =~ ^(--new|--old)$ ]]; then
 
     lk_bin_depth=1 . lk-bash-load.sh || exit
@@ -150,7 +148,7 @@ $1$LK_RESET${_LK_TTY_COLOUR2-${_LK_TTY_COLOUR-$LK_CYAN}}$(
 }
 
 function lk_console_detail() {
-    local _LK_TTY_PREFIX="   -> " _LK_TTY_SPACES="    " \
+    local _LK_TTY_PREFIX=" -> " _LK_TTY_SPACES="    " \
         _LK_TTY_COLOUR=$LK_YELLOW _LK_TTY_MESSAGE_COLOUR=
     [ $# -le 1 ] &&
         lk_console_message "$1" ||
