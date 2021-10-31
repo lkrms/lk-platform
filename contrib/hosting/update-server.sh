@@ -7,21 +7,21 @@
         local OUT_FILE
         # To make the running script resistant to broken connections (SIGHUP),
         # Ctrl+C (SIGINT) and kill signals (SIGTERM):
-        # 0. Invoke Bash with SIGHUP, SIGINT and SIGTERM already ignored
-        #    (otherwise child processes will be able to receive them)
         # 1. Copy stdout and stderr to FD 6 and FD 7
         # 2. Redirect stdout and stderr to OUT_FILE
         # 3. Redirect stdin from /dev/null
         # 4. Run `tail -f OUT_FILE` in the background to display the script's
         #    output on FD 6 without tying it to a possibly fragile TTY
+        # 5. Ignore SIGHUP, SIGINT and SIGTERM (ignored signals cannot be
+        #    trapped by child processes)
         OUT_FILE=$(mktemp -- \
             ~/update-server.sh-keep-alive.nohup.out.XXXXXXXXXX) &&
             echo "Redirecting output to $OUT_FILE" >&2 &&
             exec 6>&1 7>&2 8>"$OUT_FILE" &&
             exec >&8 2>&1 </dev/null || return
-        (trap - SIGHUP SIGINT SIGTERM &&
-            exec tail -fn+1 "$OUT_FILE") >&6 2>&7 &
+        tail -fn+1 "$OUT_FILE" >&6 2>&7 &
         trap "kill $!" EXIT
+        trap "" SIGHUP SIGINT SIGTERM
     }
 
     # update-server BRANCH [--set SETTING]...
@@ -152,7 +152,8 @@
     function do-update-server() {
         local STATUS=0
         keep-alive || return
-        update-server "$@" || STATUS=$?
+        update-server "$@" &
+        wait $! || STATUS=$?
         echo "update-server exit status: $STATUS" >&2
         return "$STATUS"
     }
@@ -169,9 +170,15 @@
     }
 
     ARGS=()
-    while [[ ${1-} =~ ^(-[saru]|--(set|add|remove|unset|no-upgrade))$ ]]; do
+    UPGRADE=
+    while [[ ${1-} =~ ^(-[saru]|--(set|add|remove|unset|(no-)?upgrade))$ ]]; do
         [ "$1" != --no-upgrade ] || {
-            ARGS+=("$1")
+            UPGRADE=
+            shift
+            continue
+        }
+        [ "$1" != --upgrade ] || {
+            UPGRADE=1
             shift
             continue
         }
@@ -181,32 +188,39 @@
         ARGS+=("${@:1:SHIFT}")
         shift "$SHIFT"
     done
+    [ -n "$UPGRADE" ] ||
+        ARGS+=(--no-upgrade)
 
-    TLD_REGEX=$(curl -fsSL \
+    TLD_REGEX=$(lk_cache curl -fsSL \
         "https://data.iana.org/TLD/tlds-alpha-by-domain.txt" |
         sed -E '/^(#|$)/d' | tr '[:upper:]' '[:lower:]' |
         lk_ere_implode_input -e)
-    COMMAND=(sudo -HE bash -c "$(lk_quote_args "$(
+    TMP=$(lk_mktemp -d)
+    lk_tty_print "Generating scripts in" "$TMP"
+    SCRIPT=$TMP/do-update-server.sh
+    {
         declare -f keep-alive update-server do-update-server
         declare -p TLD_REGEX
-        lk_quote_args trap "" SIGHUP SIGINT SIGTERM
-        lk_quote_args set -m
         lk_quote_args do-update-server \
             "${UPDATE_SERVER_BRANCH:-master}" \
             "${UPDATE_SERVER_REPO:-https://github.com/lkrms/lk-platform.git}" \
             "${UPDATE_SERVER_HOSTING_KEYS-}" \
             ${ARGS[@]+"${ARGS[@]}"}
-    ) & wait \$! 2>/dev/null")")
+    } >"$SCRIPT"
+    COMMAND=$(lk_quote_args \
+        bash -c 't=$(mktemp) && cat >"$t" && sudo -HE bash "$t"')
 
-    COMMAND2=(bash -c "$(lk_quote_args "$(
+    SCRIPT2=$TMP/do-query-server.sh
+    {
         declare -f do-query-server
         lk_quote_args do-query-server
-    )")")
+    } >"$SCRIPT2"
+    COMMAND2=$(lk_quote_args \
+        bash -c 't=$(mktemp) && cat >"$t" && bash "$t"')
 
-    TEMP=$(lk_mktemp_file)
-    UPDATED=$(lk_mktemp_file)
-    FAILED=$(lk_mktemp_file)
-    lk_delete_on_exit "$TEMP" "$UPDATED" "$FAILED"
+    UPDATED=$TMP/updated-servers.txt
+    FAILED=$TMP/failed-servers.txt
+    touch "$UPDATED" "$FAILED"
     i=0
     while [ $# -gt 0 ]; do
 
@@ -216,8 +230,6 @@
         lk_tty_print "Updating" "$1"
 
         (
-            trap "" SIGHUP SIGINT SIGTERM
-
             _LK_LOG_CMDLINE=("$0-$1")
             lk_log_start
 
@@ -225,10 +237,10 @@
                 lk_log_tty_off -a
 
             STATUS=0
-            ssh -o ControlPath=none -o LogLevel=QUIET -tt "$1" \
-                LK_VERBOSE=${LK_VERBOSE-1} "${COMMAND[@]}" || STATUS=$?
+            ssh -o ControlPath=none -o LogLevel=QUIET -t "$1" \
+                LK_VERBOSE=${LK_VERBOSE-1} "$COMMAND" <"$SCRIPT" || STATUS=$?
             SH=$(ssh -o ControlPath=none -o LogLevel=QUIET "$1" \
-                "${COMMAND2[@]}") &&
+                "$COMMAND2" <"$SCRIPT2") &&
                 eval "$SH" && {
                 lk_tty_print
                 lk_tty_print "Testing HTTPS access to hosted domains:" "$1"
@@ -238,7 +250,7 @@
                     OLD_STATUS=$STATUS
                     while :; do
                         HTTP=$(curl -sSI \
-                            -o "$TEMP" \
+                            -o "$TMP/curl-$DOMAIN.http" \
                             -H "Cache-Control: no-cache" \
                             -H "Pragma: no-cache" \
                             --connect-to "$DOMAIN::$PUBLIC_IP:" \
@@ -247,9 +259,9 @@
                             "https://$DOMAIN" 2>&1 >/dev/null | head -n1) &&
                             HTTP=$(awk \
                                 'NR == 1 || tolower($1) == "location:" {print}' \
-                                "$TEMP") &&
+                                "$TMP/curl-$DOMAIN.http") &&
                             [[ $HTTP =~ ^HTTP/$NS+$S+([0-9]+) ]] &&
-                            [ ${BASH_REMATCH[1]} -lt 400 ] &&
+                            ((rc = BASH_REMATCH[1], rc < 400 || rc == 403)) &&
                             lk_console_success \
                                 "OK:" "https://$DOMAIN$INVALID_TLS" &&
                             lk_tty_detail "$HTTP" &&
