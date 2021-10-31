@@ -750,11 +750,11 @@ function lk_ere_implode_args() {
 }
 
 function lk_sed_escape() {
-    _lk_stream_args 3 sed -E "s/[]\$()*+./?\\^{|}[]/\\\\&/g" "$@"
+    _lk_stream_args 3 sed -E 's/[]$()*+./?\^{|}[]/\\&/g' "$@"
 }
 
 function lk_sed_escape_replace() {
-    _lk_stream_args 3 sed -E "s/[&/\\]/\\\\&/g" "$@"
+    _lk_stream_args 3 sed -E 's/[&/\]/\\&/g' "$@"
 }
 
 function lk_strip_cr() {
@@ -1365,7 +1365,7 @@ function lk_tty_run() {
     [ -z "$SHIFT" ] || shift "$SHIFT"
     while [[ $TRANSFORM =~ ^$REGEX:?(.*) ]]; do
         i=${BASH_REMATCH[1]}
-        [[ -z "${BASH_REMATCH[2]}" ]] &&
+        [[ -z ${BASH_REMATCH[2]} ]] &&
             set -- "${@:1:i-1}" "${@:i+1}" ||
             set -- "${@:1:i-1}" "${BASH_REMATCH[2]}" "${@:i+1}"
         TRANSFORM=${BASH_REMATCH[3]}
@@ -1920,7 +1920,7 @@ function _lk_usage_format() {
     sed -E \
         -e "s/^($S*(([uU]sage|[oO]r):$S+)?(sudo )?)($CMD)($S|\$)/\1$BOLD\5$RESET\6/" \
         -e "s/^([a-zA-Z0-9][a-zA-Z0-9 ]*:|[A-Z0-9][A-Z0-9 ]*)\$/$BOLD&$RESET/" \
-        -e "s/^\\\\(.)/\\1/" <<<"$1"
+        -e 's/^\\(.)/\1/' <<<"$1"
 }
 
 function lk_usage() {
@@ -2136,7 +2136,7 @@ function lk_regex_case_insensitive() {
     [ $# -gt 0 ] || lk_warn "no string" || return
     [ -n "$1" ] || return 0
     for i in $(seq 0 $((${#1} - 1))); do
-        l=${1:$i:1}
+        l=${1:i:1}
         [[ ! $l =~ [[:alpha:]] ]] || {
             LOWER=$(lk_lower "$l")
             UPPER=$(lk_upper "$l")
@@ -2694,7 +2694,7 @@ function lk_pv() {
 
 function _lk_tee() {
     local PRESERVE
-    [[ ! "$1" =~ ^-[0-9]+$ ]] || { PRESERVE=${1#-} && shift; }
+    [[ ! $1 =~ ^-[0-9]+$ ]] || { PRESERVE=${1#-} && shift; }
     lk_ignore_SIGINT && eval exec "$(_lk_log_close_fd ${PRESERVE-})" || return
     exec tee "$@"
 }
@@ -3752,7 +3752,7 @@ function lk_expand_path() {
     # If the path is double- or single-quoted, remove enclosing quotes and
     # unescape
     if [[ $_PATH =~ ^\"(.*)\"$ ]]; then
-        _PATH=${BASH_REMATCH[1]//"\\\""/"\""}
+        _PATH=${BASH_REMATCH[1]//'\"'/'"'}
     elif [[ $_PATH =~ ^\'(.*)\'$ ]]; then
         _PATH=${BASH_REMATCH[1]//"\\'"/"'"}
     fi
@@ -3885,7 +3885,7 @@ function lk_random_password() {
             sed -E 's/[lIO01\n]+//g') || return
         PASSWORD=${PASSWORD//$'\n'/}
     done
-    printf '%s' "${PASSWORD:0:$LENGTH}"
+    printf '%s' "${PASSWORD:0:LENGTH}"
 }
 
 # lk_base64 [-d]
@@ -4214,7 +4214,7 @@ Options:
         ! lk_maybe_sudo test -s "$1" || unset NEW VERB
         lk_maybe_sudo test -L "$1" || ! diff \
             <(TARGET=$1 _lk_maybe_filter "$IGNORE" "$FILTER" \
-                lk_maybe_sudo cat "\"\$TARGET\"") \
+                lk_maybe_sudo cat '"$TARGET"') \
             <([ -z "${CONTENT:+1}" ] || _lk_maybe_filter "$IGNORE" "$FILTER" \
                 echo "\"\${CONTENT%\$'\\n'}\"") >/dev/null || {
             ! lk_verbose 2 || lk_console_detail "Not changed:" "$1"

@@ -226,7 +226,7 @@ lk_log_start
 
         # Keep snapshots with non-standard names
         for SNAPSHOT in "${SNAPSHOTS_CLEAN[@]}"; do
-            [[ "$SNAPSHOT" =~ ^$BACKUP_TIMESTAMP_FINDUTILS_REGEX$ ]] ||
+            [[ $SNAPSHOT =~ ^$BACKUP_TIMESTAMP_FINDUTILS_REGEX$ ]] ||
                 KEEP[${#KEEP[@]}]="$SNAPSHOT"
         done
 

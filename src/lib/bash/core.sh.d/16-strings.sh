@@ -61,11 +61,11 @@ function lk_ere_implode_args() {
 }
 
 function lk_sed_escape() {
-    _lk_stream_args 3 sed -E "s/[]\$()*+./?\\^{|}[]/\\\\&/g" "$@"
+    _lk_stream_args 3 sed -E 's/[]$()*+./?\^{|}[]/\\&/g' "$@"
 }
 
 function lk_sed_escape_replace() {
-    _lk_stream_args 3 sed -E "s/[&/\\]/\\\\&/g" "$@"
+    _lk_stream_args 3 sed -E 's/[&/\]/\\&/g' "$@"
 }
 
 function lk_strip_cr() {

@@ -32,7 +32,7 @@ set -x
 shopt -s nullglob
 
 DEFAULT_CMDLINE="quiet loglevel=3 audit=0$(! grep -q \
-    "^flags[[:blank:]]*:.*\\bhypervisor\\b" /proc/cpuinfo &>/dev/null ||
+    '^flags[[:blank:]]*:.*\bhypervisor\b' /proc/cpuinfo &>/dev/null ||
     echo " console=tty0 console=ttyS0")"
 BOOTSTRAP_PING_HOST=${BOOTSTRAP_PING_HOST:-one.one.one.one}  # https://blog.cloudflare.com/dns-resolver-1-1-1-1/
 BOOTSTRAP_MOUNT_OPTIONS=${BOOTSTRAP_MOUNT_OPTIONS:-defaults} # On VMs with TRIM support, "discard" is added automatically

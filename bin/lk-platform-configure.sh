@@ -391,13 +391,13 @@ lk_log_start
             lk_dir_set_modes "$LK_BASE" \
             "" \
             "+$DIR_MODE" "+$FILE_MODE" \
-            "\\./(etc|var)/" \
+            '\./(etc|var)/' \
             "$DIR_MODE" "" \
-            "\\./(etc/sites|var/run(/dirty)?)/" \
+            '\./(etc/sites|var/run(/dirty)?)/' \
             "$PRIVILEGED_DIR_MODE" "" \
-            "\\./var/(log|backup)/" \
+            '\./var/(log|backup)/' \
             "" "" \
-            "\\./\\.git/objects/([0-9a-f]{2}|pack)/.*" \
+            '\./\.git/objects/([0-9a-f]{2}|pack)/.*' \
             0555 0444
         umask "$UMASK"
     fi
@@ -484,7 +484,7 @@ lk_log_start
             PROFILES+=("$FILE")
             install -m 00644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
         }
-        grep -q "\\.bashrc" "${PROFILES[@]}" || {
+        grep -q '\.bashrc' "${PROFILES[@]}" || {
             FILE=${PROFILES[0]}
             lk_file_get_text "$FILE" CONTENT &&
                 lk_file_replace -l "$FILE" "$CONTENT$_BASHRC"

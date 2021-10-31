@@ -522,7 +522,7 @@ if [ -n "$STACKSCRIPT" ]; then
     TAG=0
     for SS_TAG in ${SS_TAGS[@]+"${SS_TAGS[@]}"}; do
         ((++TAG))
-        lk_mapfile SS_ATTRIBS <(grep -Eo "[a-z]+=\"[^\"]*\"" <<<"$SS_TAG")
+        lk_mapfile SS_ATTRIBS <(grep -Eo '[a-z]+="[^"]*"' <<<"$SS_TAG")
         unset NAME LABEL DEFAULT SELECT_OPTIONS SELECT_TEXT VALIDATE_COMMAND
         _LK_REQUIRED=1
         REQUIRED_TEXT=required
@@ -1032,7 +1032,7 @@ dns-nameservers $VM_IPV4_GATEWAY" '{
             '.capabilities.guest[].arch|select(.["@name"] == $arch)' |
             lk_jq -r 'include "core"; .domain | to_array[]["@type"]' |
             grep -Fxv qemu ||
-        { [[ "${PIPESTATUS[*]}" =~ ^0+1$ ]] && echo qemu; })
+        { [[ ${PIPESTATUS[*]} =~ ^0+1$ ]] && echo qemu; })
 
     FILE=$(lk_mktemp_file)
     lk_delete_on_exit "$FILE"

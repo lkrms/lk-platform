@@ -169,10 +169,10 @@ FIELD_ERRORS=$'\n'$(
     lk_validate_list LK_TRUSTED_IP_ADDRESSES "^$IP_OPT_PREFIX_REGEX\$"
     _LK_REQUIRED=0
     lk_validate_one_of LK_SSH_TRUSTED_ONLY Y N
-    lk_validate LK_SSH_TRUSTED_PORT "^(102[4-9]|10[3-9][0-9]|1[1-9][0-9]{2}|[2-9][0-9]{3}|[1-9][0-9]{4,})\$"
+    lk_validate LK_SSH_TRUSTED_PORT '^(102[4-9]|10[3-9][0-9]|1[1-9][0-9]{2}|[2-9][0-9]{3}|[1-9][0-9]{4,})$'
     lk_validate LK_SSH_JUMP_HOST "^$HOST_REGEX\$"
     lk_validate LK_SSH_JUMP_USER "^$LINUX_USERNAME_REGEX\$"
-    lk_validate LK_SSH_JUMP_KEY "^[-a-zA-Z0-9_]+\$"
+    lk_validate LK_SSH_JUMP_KEY '^[-a-zA-Z0-9_]+$'
     lk_validate_one_of LK_REJECT_OUTPUT Y N
     # TODO: allow "URL|JQ_FILTER"
     lk_validate_list LK_ACCEPT_OUTPUT_HOSTS "^$HOST_OPT_PREFIX_REGEX\$"
@@ -181,21 +181,21 @@ FIELD_ERRORS=$'\n'$(
         [ -z "$LK_MYSQL_USERNAME" ] ||
             lk_validate_not_null LK_MYSQL_PASSWORD
     }
-    lk_validate LK_INNODB_BUFFER_SIZE "^[0-9]+[kmgtpeKMGTPE]?\$"
-    lk_validate LK_OPCACHE_MEMORY_CONSUMPTION "^[0-9]+\$"
+    lk_validate LK_INNODB_BUFFER_SIZE '^[0-9]+[kmgtpeKMGTPE]?$'
+    lk_validate LK_OPCACHE_MEMORY_CONSUMPTION '^[0-9]+$'
     lk_validate_list LK_PHP_SETTINGS "^$PHP_SETTING_REGEX\$"
     lk_validate_list LK_PHP_ADMIN_SETTINGS "^$PHP_SETTING_REGEX\$"
-    lk_validate LK_MEMCACHED_MEMORY_LIMIT "^[0-9]+\$"
+    lk_validate LK_MEMCACHED_MEMORY_LIMIT '^[0-9]+$'
     lk_validate LK_SMTP_RELAY "^($HOST_REGEX|\\[$HOST_REGEX\\])(:[0-9]+)?\$"
     lk_validate LK_UPGRADE_EMAIL "^$EMAIL_ADDRESS_REGEX\$"
     [ ! "$LK_AUTO_REBOOT" = Y ] || _LK_REQUIRED=1
-    lk_validate LK_AUTO_REBOOT_TIME "^(([01][0-9]|2[0-3]):[0-5][0-9]|now)\$"
+    lk_validate LK_AUTO_REBOOT_TIME '^(([01][0-9]|2[0-3]):[0-5][0-9]|now)$'
     _LK_REQUIRED=0
-    lk_validate LK_SNAPSHOT_HOURLY_MAX_AGE "^(-1|[0-9]+)\$"
-    lk_validate LK_SNAPSHOT_DAILY_MAX_AGE "^(-1|[0-9]+)\$"
-    lk_validate LK_SNAPSHOT_WEEKLY_MAX_AGE "^(-1|[0-9]+)\$"
-    lk_validate LK_SNAPSHOT_FAILED_MAX_AGE "^(-1|[0-9]+)\$"
-    lk_validate LK_PATH_PREFIX "^[a-zA-Z0-9]{2,3}-\$"
+    lk_validate LK_SNAPSHOT_HOURLY_MAX_AGE '^(-1|[0-9]+)$'
+    lk_validate LK_SNAPSHOT_DAILY_MAX_AGE '^(-1|[0-9]+)$'
+    lk_validate LK_SNAPSHOT_WEEKLY_MAX_AGE '^(-1|[0-9]+)$'
+    lk_validate LK_SNAPSHOT_FAILED_MAX_AGE '^(-1|[0-9]+)$'
+    lk_validate LK_PATH_PREFIX '^[a-zA-Z0-9]{2,3}-$'
     lk_validate_one_of LK_DEBUG Y N
     ! lk_is_bootstrap ||
         lk_validate_one_of LK_SHUTDOWN_ACTION reboot poweroff
@@ -1125,7 +1125,7 @@ EOF
             bootstrap.pypa.io
             files.pythonhosted.org
 
-            "https://api.github.com/meta|.web[]\\,.api[]\\,.git[]"
+            'https://api.github.com/meta|.web[]\,.api[]\,.git[]'
         )
         if lk_node_service_enabled php-fpm; then
             HOSTS+=(

@@ -165,7 +165,7 @@ function lk_console_log() {
 
 function lk_ellipsis() {
     [ "$1" -gt 3 ] &&
-        [[ "$2" =~ ^(.{$(($1 - 3))}).{4,} ]] &&
+        [[ $2 =~ ^(.{$(($1 - 3))}).{4,} ]] &&
         echo "${BASH_REMATCH[1]}..." ||
         echo "$2"
 }

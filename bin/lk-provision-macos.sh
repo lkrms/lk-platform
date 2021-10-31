@@ -244,7 +244,7 @@ EOF
     # switch to Xcode or commands like opendiff won't work
     if [ -e /Applications/Xcode.app ]; then
         TOOLS_PATH=$(lk_macos_command_line_tools_path)
-        if [[ "$TOOLS_PATH" != /Applications/Xcode.app* ]]; then
+        if [[ $TOOLS_PATH != /Applications/Xcode.app* ]]; then
             lk_tty_print "Configuring Xcode"
             lk_run_detail sudo xcode-select --switch /Applications/Xcode.app
             OLD_TOOLS_PATH=$TOOLS_PATH
@@ -287,9 +287,9 @@ EOF
         local i SH BREW BREW_NAME
         for i in "${!BREW_PATH[@]}"; do
             if ! ((i)); then
-                SH=$(_lk_macos_env "^/usr/local(/|\$)")
+                SH=$(_lk_macos_env '^/usr/local(/|$)')
             else
-                SH=$(_lk_macos_env "^/opt/homebrew(/|\$)")
+                SH=$(_lk_macos_env '^/opt/homebrew(/|$)')
             fi && BREW=(
                 env "PATH=$(eval "$SH" && echo "$PATH")"
                 ${BREW_ARCH[i]:+arch "-${BREW_ARCH[i]}"}
@@ -318,7 +318,7 @@ EOF
         lk_brew_tap "${HOMEBREW_TAPS[@]}" ||
             lk_die "unable to tap formula repositories"
         lk_brew_enable_autoupdate ${BREW_ARCH[i]:+"${BREW_ARCH[i]}"} ||
-            lk_die "unable to enable automatic \`brew update\`"
+            lk_die 'unable to enable automatic `brew update`'
         [ "$LK_BREW_NEW_INSTALL" -eq 1 ] || {
             lk_tty_print "Updating formulae"
             brew update --quiet
@@ -386,13 +386,13 @@ EOF
     brew_loop check_homebrew
 
     lk_tty_print "Applying user defaults"
-    XQ="\
+    XQ='
 .plist.dict.key |
     [ .[] |
-        select(test(\"^seed-numNotifications-.*\")) |
-        sub(\"-numNotifications-\"; \"-viewed-\") ] -
+        select(test("^seed-numNotifications-.*")) |
+        sub("-numNotifications-"; "-viewed-") ] -
     [ .[] |
-        select(test(\"^seed-viewed-.*\")) ] | .[]"
+        select(test("^seed-viewed-.*")) ] | .[]'
     for DOMAIN in com.apple.touristd com.apple.tourist; do
         [ -e ~/Library/Preferences/"$DOMAIN.plist" ] || continue
         KEYS=$(plutil -convert xml1 -o - \
@@ -435,10 +435,10 @@ EOF
         OUTDATED=$(brew outdated --json=v2) &&
             UPGRADE_FORMULAE=($(jq -r \
                 ".formulae[]|select(.pinned|not).name" <<<"$OUTDATED")) &&
-            lk_mapfile "UPGRADE_FORMULAE_TEXT_$i" <(jq <<<"$OUTDATED" -r "\
+            lk_mapfile "UPGRADE_FORMULAE_TEXT_$i" <(jq <<<"$OUTDATED" -r '
 .formulae[] | select(.pinned | not) |
-    .name + \" (\" + (.installed_versions | join(\" \")) + \" -> \" +
-        .current_version + \")\"") || return
+    .name + " (" + (.installed_versions | join(" ")) + " -> " +
+        .current_version + ")"') || return
         eval "UPGRADE_FORMULAE_$i=(\${UPGRADE_FORMULAE[@]+\"\${UPGRADE_FORMULAE[@]}\"})"
     }
     brew_loop check_updates
@@ -457,10 +457,10 @@ EOF
         UPGRADE_CASKS=($(jq -r \
             ".casks[]|select(.pinned|not).name" <<<"$OUTDATED"))
         [ ${#UPGRADE_CASKS[@]} -eq 0 ] || {
-            jq <<<"$OUTDATED" -r "\
+            jq <<<"$OUTDATED" -r '
 .casks[] | select(.pinned | not) |
-    .name + \" (\" + .installed_versions + \" -> \" +
-        .current_version + \")\"" |
+    .name + " (" + .installed_versions + " -> " +
+        .current_version + ")"' |
                 lk_console_detail_list "$(
                     lk_plural ${#UPGRADE_CASKS[@]} Update Updates
                 ) available:" cask casks
@@ -470,10 +470,10 @@ EOF
     fi
 
     function get_arch_formulae() {
-        local COUNT JQ="\
+        local COUNT JQ='
 def is_native:
     (.versions.bottle | not) or
-        ([.bottle[].files | keys[] | select(match(\"^(all\$|arm64_)\"))] | length > 0);"
+        ([.bottle[].files | keys[] | select(match("^(all$|arm64_)"))] | length > 0);'
         # Exclude formulae with no arm64 bottle on Apple Silicon unless using
         # `arch -x86_64`
         if [ -z "${BREW_ARCH[i]}" ]; then
@@ -521,11 +521,11 @@ def is_native:
         FORMULAE=()
         for FORMULA in "${INSTALL_FORMULAE[@]}"; do
             FORMULA_DESC="$(jq <<<"$HOMEBREW_FORMULAE_JSON" -r \
-                --arg formula "$FORMULA" "\
-.formulae[] | select(.full_name == \$formula) |
-    \"\\(.full_name)@\\(.versions.stable): \\(
-        if .desc != null then \": \" + .desc else \"\" end
-    )\"")"
+                --arg formula "$FORMULA" '
+.formulae[] | select(.full_name == $formula) |
+    "\(.full_name)@\(.versions.stable): \(
+        if .desc != null then ": " + .desc else "" end
+    )"')"
             FORMULAE+=(
                 "$FORMULA"
                 "$FORMULA_DESC"
@@ -550,11 +550,11 @@ def is_native:
         CASKS=()
         for CASK in "${INSTALL_CASKS[@]}"; do
             CASK_DESC="$(jq <<<"$HOMEBREW_CASKS_JSON" -r \
-                --arg cask "${CASK##*/}" "\
-.casks[] | select(.token == \$cask) |
-    \"\\(.name[0]//.token) \\(.version)\\(
-        if .desc != null then \": \" + .desc else \"\" end
-    )\"")"
+                --arg cask "${CASK##*/}" '
+.casks[] | select(.token == $cask) |
+    "\(.name[0]//.token) \(.version)\(
+        if .desc != null then ": " + .desc else "" end
+    )"')"
             CASKS+=(
                 "$CASK"
                 "$CASK_DESC"

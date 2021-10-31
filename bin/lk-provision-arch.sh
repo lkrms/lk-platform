@@ -354,7 +354,7 @@ lk_start_trace
         FILE=/etc/conf.d/wireless-regdom
         lk_file_keep_original "$FILE"
         lk_file_replace "$FILE" < <(sed -E \
-            -e "s/^[#[:blank:]]*(WIRELESS_REGDOM=)/#\\1/" \
+            -e 's/^[#[:blank:]]*(WIRELESS_REGDOM=)/#\1/' \
             -e "s/^#(WIRELESS_REGDOM=)([\"']?)(${LK_WIFI_REGDOM-})\\2$S*\$/\\1\"\\3\"/" \
             "$FILE") || return
     fi
