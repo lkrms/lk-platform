@@ -412,7 +412,7 @@ function lk_tty_run() {
     [ -z "$SHIFT" ] || shift "$SHIFT"
     while [[ $TRANSFORM =~ ^$REGEX:?(.*) ]]; do
         i=${BASH_REMATCH[1]}
-        [[ -z "${BASH_REMATCH[2]}" ]] &&
+        [[ -z ${BASH_REMATCH[2]} ]] &&
             set -- "${@:1:i-1}" "${@:i+1}" ||
             set -- "${@:1:i-1}" "${BASH_REMATCH[2]}" "${@:i+1}"
         TRANSFORM=${BASH_REMATCH[3]}

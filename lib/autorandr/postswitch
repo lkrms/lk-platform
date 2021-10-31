@@ -4,7 +4,7 @@ set -euo pipefail
 
 if [ -f "$AUTORANDR_PROFILE_FOLDER/dpi" ] &&
     DPI="$(cat "$AUTORANDR_PROFILE_FOLDER/dpi")" &&
-    [[ "$DPI" =~ ^[0-9]+$ ]]; then
+    [[ $DPI =~ ^[0-9]+$ ]]; then
 
     xrandr --dpi "$DPI"
 

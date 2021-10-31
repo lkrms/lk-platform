@@ -125,11 +125,11 @@ function lk_bash_command_literals() {
 function lk_bash_array_literals() {
     cat ${1+"$1"} |
         shfmt -tojson |
-        jq -r "\
-..|select(type==\"object\" and .Array!=null).Array.Elems[].Value.Parts[]|(
-    select(.Type==\"Lit\" or .Type==\"SglQuoted\"),
-    select(.Type==\"DblQuoted\" and (.Parts|length)==1 and .Parts[0].Type==\"Lit\").Parts[0]
-).Value"
+        jq -r '
+..|select(type=="object" and .Array!=null).Array.Elems[].Value.Parts[]|(
+    select(.Type=="Lit" or .Type=="SglQuoted"),
+    select(.Type=="DblQuoted" and (.Parts|length)==1 and .Parts[0].Type=="Lit").Parts[0]
+).Value'
 }
 
 # lk_bash_find_scripts [-d DIR] [FIND_ACTION...]
@@ -252,7 +252,7 @@ function lk_linode_get_udf_vars() {
     REGEX="^.*<($REGEX:)?UDF name=\"([^\"]+)\".*"
     REGEX_DEFAULT="$REGEX default=\"([^\"]+)\".*"
     OUTPUT=$(
-        [ -z "${EXPORT+1}" ] || echo "export -n \\"
+        [ -z "${EXPORT+1}" ] || echo 'export -n \'
         cat ${1+"$1"} | sed -En "\
 s/$REGEX_DEFAULT/${EXPORT+    }\2=\${\2:-\3}${EXPORT+ \\\\}/p
 s/$REGEX/${EXPORT+    }\2=\${\2-}${EXPORT+ \\\\}/p"

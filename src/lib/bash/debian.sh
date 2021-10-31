@@ -299,7 +299,7 @@ function _lk_apt_sources_get_mirror() {
         _MIRROR=$MIRROR
     lk_require_output awk \
         -v "s=$1" \
-        -v "r=-security/?\$" \
+        -v 'r=-security/?$' \
         -v "m=$_MIRROR" \
         '!$2{next}$3==s{print$2;m="";exit}$2!~r&&$3!~r{m=$2;next}END{if(m)print m}'
 }

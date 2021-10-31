@@ -46,15 +46,15 @@ eval "set -- $LK_GETOPT"
 # 3. SUDO_USER is not "root"
 #
 # Otherwise, assume the invoking user has root access to MySQL
-REGEX="^[-a-zA-Z0-9_]+\$"
+REGEX='^[-a-zA-Z0-9_]+$'
 if lk_root && [ -n "${SUDO_USER-}" ] && [ "$SUDO_USER" != "root" ]; then
-    [[ "$USERNAME" =~ $REGEX ]] ||
+    [[ $USERNAME =~ $REGEX ]] ||
         lk_die "$USERNAME: not a valid database identifier"
     REGEX="^$USERNAME(_[-a-zA-Z0-9_]*)?\$"
 fi
 
-[[ "$1" =~ $REGEX ]] || lk_usage
-[[ "$2" =~ $REGEX ]] || lk_usage
+[[ $1 =~ $REGEX ]] || lk_usage
+[[ $2 =~ $REGEX ]] || lk_usage
 [ -n "$3" ] || lk_die "password cannot be empty"
 
 HOST="${LK_MYSQL_HOST:-localhost}"

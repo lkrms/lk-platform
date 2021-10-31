@@ -29,7 +29,7 @@ function lk_mysql_escape_cnf() {
 }
 
 function lk_mysql_quote_identifier() {
-    local IDENTIFIER=${1//"\`"/\`\`}
+    local IDENTIFIER=${1//'`'/\`\`}
     echo "\`$IDENTIFIER\`"
 }
 

@@ -13,22 +13,22 @@ if lk_is_apple_silicon; then
     }
     function lk_x86() {
         local SH
-        SH=$(_lk_macos_env "" "^/opt/homebrew(/|\$)") && eval "$SH" &&
+        SH=$(_lk_macos_env "" '^/opt/homebrew(/|$)') && eval "$SH" &&
             arch -x86_64 "$@"
     }
     function lk_x86_only() {
         local SH
-        SH=$(_lk_macos_env "^/opt/homebrew(/|\$)") && eval "$SH" &&
+        SH=$(_lk_macos_env '^/opt/homebrew(/|$)') && eval "$SH" &&
             arch -x86_64 "$@"
     }
     function brew() {
         local SH
-        SH=$(_lk_macos_env "^/usr/local(/|\$)") && eval "$SH" &&
+        SH=$(_lk_macos_env '^/usr/local(/|$)') && eval "$SH" &&
             /opt/homebrew/bin/brew "$@"
     }
     function ibrew() {
         local SH
-        SH=$(_lk_macos_env "^/opt/homebrew(/|\$)") && eval "$SH" &&
+        SH=$(_lk_macos_env '^/opt/homebrew(/|$)') && eval "$SH" &&
             arch -x86_64 /usr/local/bin/brew "$@"
     }
     function ibash() { lk_x86 bash "$@"; }
@@ -327,7 +327,7 @@ function lk_macos_defaults_dump() {
     }
     DIR=$(lk_tty_path "$DIR")
     lk_console_log \
-        "Output of \"defaults [-currentHost] export \$DOMAIN\" dumped to:" \
+        'Output of "defaults [-currentHost] export $DOMAIN" dumped to:' \
         "$(for d in "$DIR" ${_LK_MACOS_DEFAULTS_DUMP_SUDO:+"$DIR/system"}; do
             lk_echo_args \
                 "$d" "$d/currentHost"

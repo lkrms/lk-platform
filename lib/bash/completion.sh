@@ -126,7 +126,7 @@ function __lk_wp() {
             --line="$COMP_LINE" \
             --point=$((point > ${#1} ? point : ${#1} + 1))
     ))
-    if [[ ${opts-} = "<file>" ]]; then
+    if [[ ${opts-} == "<file>" ]]; then
         _filedir
     else
         COMPREPLY=($(compgen -W '${opts[*]}' -- "$cur"))

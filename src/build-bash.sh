@@ -1,7 +1,5 @@
 #!/bin/bash
 
-export shfmt_minify=${shfmt_minify:-0} shfmt_simplify=${shfmt_simplify:-0}
-
 set -euo pipefail
 head=$(mktemp)
 tail=$(mktemp)
@@ -68,14 +66,15 @@ while [ $# -gt 0 ]; do
                 die "not found in $PWD/$file: #### END $name.d"
             parts=("$head")
         fi
-        ((minify)) || printf '%s\n\n' "#!/bin/bash"
+        echo "#!/bin/bash"
+        ((minify)) || echo
         parts+=("$dir"/*)
         ((!embed)) || parts+=("$tail")
         i=0
         for part in "${parts[@]}"; do
             [ -f "$part" ] || continue
             echo "  Processing: $part" >&2
-            ((!i || (!embed && minify))) || echo
+            ((!i || minify)) || echo
             if [ -x "$part" ]; then
                 "$part"
             else
@@ -96,19 +95,31 @@ skip                    {next}
 NR > f && last $0 != "" {print last}
                         {last = $0}
 END                     {if (last) print last}' |
-                if ((!embed && format)) && type -P shfmt >/dev/null; then
+                if ((format)) && type -P shfmt >/dev/null; then
                     shfmt "${shfmt_args[@]}" | shfmt "${shfmt_args[@]}"
                 else
                     cat
-                fi | awk '{print}f{next}/^./{f=2}END{exit 2-f}' && ((++i)) ||
+                fi | awk '
+# Absorb empty shfmt output (it prints a newline even if there is no input), and
+# return with exit status 2 if only whitespace lines were output
+NR == 1 {first = $0; next}
+NR == 2 {print first}
+        {print}
+f       {next}
+/^./    {f = 2}
+END     {if (NR == 1 && first) print first; exit 2 - f}' && ((++i)) ||
                 [[ ${PIPESTATUS[*]} =~ ^0+2$ ]]
         done
     } >"$out"
     args=(-i "${shfmt_indent:-4}")
-    ((embed || !format)) ||
+    ((!format)) ||
         args=("${shfmt_args[@]}")
     ! type -P shfmt >/dev/null ||
-        shfmt "${args[@]}" -d "$out" >&2 ||
+        if ((minify)); then
+            shfmt "${args[@]}" -d <(sed 1d "$out")
+        else
+            shfmt "${args[@]}" -d "$out"
+        fi >&2 ||
         die "incorrect formatting in part(s): $PWD/$file"
     if [ -s "$out" ] &&
         ! diff -q --unidirectional-new-file "$dest" "$out" >/dev/null; then

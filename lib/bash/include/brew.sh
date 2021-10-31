@@ -78,7 +78,7 @@ function lk_brew_enable_autoupdate() {
     local LABEL=com.github.domt4.homebrew-autoupdate
     { launchctl list "$LABEL" || { LABEL+=.${1-$(uname -m)} &&
         launchctl list "$LABEL"; }; } &>/dev/null || {
-        lk_tty_print "Enabling daily \`brew update\`"
+        lk_tty_print 'Enabling daily `brew update`'
         install -d -m 00755 ~/Library/LaunchAgents &&
             brew autoupdate start --cleanup
     }
@@ -94,12 +94,12 @@ function lk_brew_formulae_list_native() {
             jq -r '.formulae[].full_name'
     else
         brew info --json=v2 --formula "${@---all}" |
-            jq -r --argjson native "$NATIVE" "\
+            jq -r --argjson native "$NATIVE" '
 def is_native:
     (.versions.bottle | not) or
         ([.bottle[].files | keys[] |
-            select(match(\"^(all\$|arm64_)\"))] | length > 0);
-.formulae[] | select(is_native == \$native).full_name"
+            select(match("^(all$|arm64_)"))] | length > 0);
+.formulae[] | select(is_native == $native).full_name'
     fi
 }
 

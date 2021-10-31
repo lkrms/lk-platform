@@ -6,7 +6,7 @@ function add_regex() {
 }
 
 function quote() {
-    if [[ "$1" =~ [^[:print:]] ]]; then
+    if [[ $1 =~ [^[:print:]] ]]; then
         printf '%q\n' "$1"
     else
         local r="'\\''"
@@ -49,7 +49,7 @@ add_regex URI_REGEX_REQ_SCHEME_HOST "(($_S):)(//(($_U)(:($_P))?@)?$_H(:($_O))?)(
 
 add_regex HTTP_HEADER_NAME "[-a-zA-Z0-9!#\$%&'*+.^_\`|~]+"
 
-add_regex LINUX_USERNAME_REGEX "[a-z_]([-a-z0-9_]{0,31}|[-a-z0-9_]{0,30}\\\$)"
+add_regex LINUX_USERNAME_REGEX '[a-z_]([-a-z0-9_]{0,31}|[-a-z0-9_]{0,30}\$)'
 add_regex MYSQL_USERNAME_REGEX "[a-zA-Z0-9_]+"
 
 # https://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-source
@@ -67,7 +67,7 @@ add_regex NON_PRINTING_REGEX $'(\x01[^\x02]*\x02|\x1b(\\\x5b[\x30-\x3f]*[\x20-\x
 # *_FILTER_REGEX expressions are:
 # 1. anchored
 # 2. not intended for validation
-add_regex IPV4_PRIVATE_FILTER_REGEX "^(10\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|192\\.168\\.|127\\.)"
+add_regex IPV4_PRIVATE_FILTER_REGEX '^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.)'
 
 # *_FINDUTILS_REGEX expressions work with `find` commands that don't recognise
 # the -regextype primary (e.g. BSD/macOS `find`)

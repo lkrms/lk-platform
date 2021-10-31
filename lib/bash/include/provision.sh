@@ -1047,7 +1047,7 @@ function lk_ssh_list_hosts() {
                 sed -E \
                     -e "s/^$S*$INCLUDE$S+(.+)$S*\$/\\1/" \
                     -e "s/$S+/\n/g" |
-                    sed -E "s/^(\"?)([^~/])/\\1~\\/.ssh\\/\\2/")
+                    sed -E 's/^("?)([^~/])/\1~\/.ssh\/\2/')
         ) || true
         unset IFS
         lk_expand_paths FILES &&
@@ -1063,7 +1063,7 @@ function lk_ssh_list_hosts() {
                 -e "s/^$S*$HOST$S+(.+)$S*\$/\\1/" \
                 -e "s/$S+/\n/g" |
             sed -E \
-                -e "s/\"(.+)\"/\\1/g" \
+                -e 's/"(.+)"/\1/g' \
                 -e "/[*?]/d" |
             sort -u
     }
@@ -1150,7 +1150,7 @@ Usage: $FUNCNAME [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
         # If KEY_FILE doesn't exist but matches the regex below, check
         # ~/.ssh/authorized_keys for exactly one public key with the comment
         # field set to KEY_FILE
-        { [[ "$KEY_FILE" =~ ^[-a-zA-Z0-9_]+$ ]] && { KEY=$(grep -E \
+        { [[ $KEY_FILE =~ ^[-a-zA-Z0-9_]+$ ]] && { KEY=$(grep -E \
             "$S$KEY_FILE\$" "$h/.ssh/authorized_keys" 2>/dev/null) &&
             [ "$(wc -l <<<"$KEY")" -eq 1 ] &&
             KEY_FILE=- || KEY_FILE=; }; } ||
@@ -1254,7 +1254,7 @@ function lk_ssh_configure() {
     for h in "${HOMES[@]}"; do
         [ ! -e "$h/.${LK_PATH_PREFIX}ignore" ] &&
             [ ! -e "$h/.ssh/.${LK_PATH_PREFIX}ignore" ] || continue
-        if [[ $h = ~ ]]; then
+        if [[ $h == ~ ]]; then
             OWNER=$USER
         elif [[ $h =~ ^/etc/skel(\.${LK_PATH_PREFIX%-})?$ ]]; then
             OWNER=root

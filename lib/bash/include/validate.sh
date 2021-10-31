@@ -40,7 +40,7 @@ function lk_validate_not_null() {
 function lk_validate() {
     ! { [ "${_LK_REQUIRED:-0}" -eq 0 ] || lk_validate_not_null "$1"; } ||
         [ -z "${!1-}" ] || {
-        [[ "${!1}" =~ $2 ]] ||
+        [[ ${!1} =~ $2 ]] ||
             _lk_validate_fail "Invalid %s: %q\n" "$1" "${!1}"
     }
 }

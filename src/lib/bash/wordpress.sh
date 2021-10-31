@@ -661,7 +661,7 @@ function lk_wp_set_permissions() {
         "${LK_WP_MODE_DIR:-0750}" "${LK_WP_MODE_FILE:-0640}" \
         ".*/wp-content/(cache|uploads|w3tc-config)" \
         "${LK_WP_MODE_WRITABLE_DIR:-2770}" "${LK_WP_MODE_WRITABLE_FILE:-0660}" \
-        ".*/\\.git/objects/([0-9a-f]{2}|pack)/.*" \
+        '.*/\.git/objects/([0-9a-f]{2}|pack)/.*' \
         0555 0444
 }
 
