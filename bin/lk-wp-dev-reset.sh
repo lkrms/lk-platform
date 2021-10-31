@@ -300,6 +300,21 @@ if lk_wp plugin is-active woocommerce; then
                 lk_run_detail wp --user=1 \
                     wc webhook update "$WEBHOOK_ID" --status=disabled
             done
+            # WooCommerce has been known to confirm webhooks are disabled
+            # without actually disabling them, so just to be safe...
+            lk_mysql "$DB_NAME" <<SQL
+DELIMITER //
+IF (
+    SELECT COUNT(*)
+    FROM information_schema.TABLES
+    WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = '${TABLE_PREFIX}wc_webhooks'
+) > 0 THEN
+    UPDATE ${TABLE_PREFIX}wc_webhooks
+    SET status = 'disabled'
+    WHERE status <> 'disabled';
+END IF//
+SQL
         }
     fi
 fi
