@@ -120,13 +120,13 @@ function lk_maybe_local() {
         esac
 }
 
-# lk_x_off
+# lk_x_off [STATUS_VAR]
 #
-# Output Bash commands that disable xtrace temporarily and prevent themselves
-# from appearing in trace output.
+# Output Bash commands that disable xtrace temporarily, prevent themselves from
+# appearing in trace output, and assign the previous command's exit status to
+# _lk_x_status or STATUS_VAR.
 #
-# Recommended usage, assuming Bash could be writing trace output to either FD 2
-# or FD 4:
+# Recommended usage, if FD 2 or FD 4 may already be receiving trace output:
 #
 #     function quiet() {
 #         { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
@@ -139,16 +139,16 @@ function lk_maybe_local() {
 #     { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
 #     eval "$_lk_x_restore"
 function lk_x_off() {
-    echo 'eval "{ declare _lk_x_restore= _lk_x_return=\"return \\\$?\"; [ \"\${-/x/}\" = \"\$-\" ] || { _lk_x_restore=\"set -x\"; _lk_x_return=\"eval \\\"{ local _lk_x_status=\\\\\\\$?; set -x; return \\\\\\\$_lk_x_status; } \\\${BASH_XTRACEFD:-2}>/dev/null\\\"\"; set +x; }; } ${BASH_XTRACEFD:-2}>/dev/null"'
+    echo 'eval "{ declare '"${1:-_lk_x_status}=$?"' _lk_x_restore= _lk_x_return=\"return \\\$?\"; [ \"\${-/x/}\" = \"\$-\" ] || { _lk_x_restore=\"set -x\"; _lk_x_return=\"eval \\\"{ local _lk_x_status=\\\\\\\$?; set -x; return \\\\\\\$_lk_x_status; } \\\${BASH_XTRACEFD:-2}>/dev/null\\\"\"; set +x; }; } ${BASH_XTRACEFD:-2}>/dev/null"'
 }
 
 function lk_x_no_off() {
     function lk_x_off() {
-        echo 'declare _lk_x_restore= _lk_x_return="return \$?"'
+        echo 'declare '"${1:-_lk_x_status}=$?"' _lk_x_restore= _lk_x_return="return \$?"'
     }
     export _LK_NO_X_OFF=1
 }
 
 [ -z "${_LK_NO_X_OFF-}" ] || lk_x_no_off
 
-#### Reviewed: 2021-10-21
+#### Reviewed: 2021-11-01

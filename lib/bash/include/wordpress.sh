@@ -5,7 +5,7 @@ lk_include mysql provision
 function wp() {
     WP_CLI_CONFIG_PATH=$LK_BASE/share/wp-cli/config.yml \
         HTTP_CLIENT_IP=127.0.1.1 \
-        command wp "$@"
+        command wp ${_LK_WP_PATH+--path="$_LK_WP_PATH"} "$@"
 }
 
 function lk_wp() {
@@ -33,22 +33,41 @@ recurse(. as $c | .subcommands[]? | .name |= "\($c.name) \(.)") |
 
 function lk_wp_get_site_root() {
     local SITE_ROOT
-    SITE_ROOT=$(lk_wp eval "echo ABSPATH;" --skip-wordpress) &&
+    SITE_ROOT=${_LK_WP_PATH:-$(lk_wp eval "echo ABSPATH;" --skip-wordpress)} &&
         [ "$SITE_ROOT" != / ] &&
         echo "${SITE_ROOT%/}" ||
         lk_err "WordPress installation not found"
 }
 
+# _lk_wp_set_path [SITE_ROOT]
+#
+# Invocation options:
+# - eval "$(_lk_wp_set_path "$@")"
+# - [ $# -eq 0 ] || eval "$(_lk_wp_set_path "$@")"
+# - [ "${1-}" != -s ] || { eval "$(_lk_wp_set_path "$2")" && shift 2; }
+function _lk_wp_set_path() {
+    local _LK_WP_PATH
+    _LK_WP_PATH=${1:-$(lk_wp_get_site_root)} &&
+        { [ -d "$_LK_WP_PATH" ] || lk_warn "not a directory: $_LK_WP_PATH"; } ||
+        lk_pass echo "return 1" || return
+    declare -p _LK_WP_PATH
+}
+
+# lk_wp_get_site_address [SITE_ROOT]
 function lk_wp_get_site_address() {
+    [ $# -eq 0 ] || eval "$(_lk_wp_set_path "$@")"
     lk_wp option get home
 }
 
+# lk_wp_get_table_prefix [SITE_ROOT]
 function lk_wp_get_table_prefix() {
+    [ $# -eq 0 ] || eval "$(_lk_wp_set_path "$@")"
     lk_wp config get table_prefix
 }
 
-# lk_wp_option_upsert KEY KEY_PATH... VALUE
+# lk_wp_option_upsert [-s SITE_ROOT] KEY KEY_PATH... VALUE
 function lk_wp_option_upsert() {
+    [ "${1-}" != -s ] || { eval "$(_lk_wp_set_path "$2")" && shift 2; }
     local IFS i
     unset IFS
     ! lk_wp option pluck "${@:1:$#-1}" &>/dev/null || {
@@ -77,7 +96,9 @@ function lk_wp_package_install() {
     }
 }
 
+# lk_wp_flush [SITE_ROOT]
 function lk_wp_flush() {
+    [ $# -eq 0 ] || eval "$(_lk_wp_set_path "$@")"
     lk_tty_print "Flushing WordPress rewrite rules and caches"
     lk_tty_detail "Flushing object cache"
     lk_report_error -q wp cache flush || return
@@ -123,7 +144,7 @@ function _lk_wp_maybe_flush() {
         lk_wp_flush
 }
 
-# lk_wp_rename_site NEW_URL
+# lk_wp_rename_site [-s SITE_ROOT] NEW_URL
 #
 # Change the WordPress site address to NEW_URL.
 #
@@ -140,9 +161,10 @@ function _lk_wp_maybe_flush() {
 # - LK_WP_FLUSH: flush rewrite rules, caches and transients after renaming
 #   (default: 1)
 function lk_wp_rename_site() {
+    [ "${1-}" != -s ] || { eval "$(_lk_wp_set_path "$2")" && shift 2; }
     local NEW_URL=${1-} OLD_URL=${LK_WP_OLD_URL-} \
         SITE_ROOT OLD_SITE_URL NEW_SITE_URL
-    [ $# -eq 1 ] || lk_usage "Usage: $FUNCNAME NEW_URL" || return
+    [ $# -eq 1 ] || lk_usage "Usage: $FUNCNAME [-s SITE_ROOT] NEW_URL" || return
     lk_is_uri "$1" || lk_warn "invalid URL: $1" || return
     OLD_URL=${OLD_URL:-$(lk_wp_get_site_address)} || return
     [ "$NEW_URL" != "$OLD_URL" ] ||
@@ -200,10 +222,12 @@ function _lk_wp_replace() {
         lk_warn "WordPress search/replace failed"
 }
 
-# lk_wp_replace_url OLD_URL NEW_URL
+# lk_wp_replace_url [-s SITE_ROOT] OLD_URL NEW_URL
 function lk_wp_replace_url() {
+    [ "${1-}" != -s ] || { eval "$(_lk_wp_set_path "$2")" && shift 2; }
     local OLD_URL=${1-} NEW_URL=${2-} REPLACE STDERR IFS _SEARCH _REPLACE
-    [ $# -eq 2 ] || lk_usage "Usage: $FUNCNAME OLD_URL NEW_URL" || return
+    [ $# -eq 2 ] ||
+        lk_usage "Usage: $FUNCNAME [-s SITE_ROOT] OLD_URL NEW_URL" || return
     lk_test_many lk_is_uri "$@" || lk_warn "invalid URL" || return
     lk_tty_print "Performing WordPress search/replace"
     REPLACE=(
@@ -296,10 +320,11 @@ Usage: $FUNCNAME SSH_HOST [REMOTE_PATH]" || return
 
 # lk_wp_db_dump [SITE_ROOT]
 function lk_wp_db_dump() {
+    [ $# -eq 0 ] || eval "$(_lk_wp_set_path "$@")"
     local SITE_ROOT OUTPUT_FILE \
         DB_NAME DB_USER DB_PASSWORD DB_HOST
-    SITE_ROOT=${1:-$(lk_wp_get_site_root)} || lk_usage "\
-Usage: $FUNCNAME [SITE_ROOT]" || return
+    SITE_ROOT=$(lk_wp_get_site_root) ||
+        lk_usage "Usage: $FUNCNAME [SITE_ROOT]" || return
     [ ! -t 1 ] || {
         OUTPUT_FILE=$(lk_replace ~/ "" "$SITE_ROOT")
         OUTPUT_FILE=localhost-${OUTPUT_FILE//\//_}-$(lk_date_ymdhms).sql.gz
@@ -328,11 +353,12 @@ Usage: $FUNCNAME [SITE_ROOT]" || return
 # lk_wp_db_get_vars [-p PREFIX] [SITE_ROOT]
 function lk_wp_db_get_vars() {
     local SITE_ROOT SH PREFIX=
-    [ "${1-}" != -p ] || { PREFIX=$2 && shift 2 || return; }
-    SITE_ROOT=${1:-$(lk_wp_get_site_root)} || return
+    [ "${1-}" != -p ] || { PREFIX=$2 && shift 2; }
+    [ $# -eq 0 ] || eval "$(_lk_wp_set_path "$@")"
+    SITE_ROOT=$(lk_wp_get_site_root) || return
     SH=$(
         for OPTION in DB_NAME DB_USER DB_PASSWORD DB_HOST; do
-            VALUE=$(lk_wp --path="$SITE_ROOT" config get "$OPTION") || exit
+            VALUE=$(lk_wp config get "$OPTION") || exit
             [ "${FUNCNAME[1]-}" = lk_wp_db_set_local ] ||
                 lk_maybe_local
             printf '%s=%q\n' "$PREFIX$OPTION" "$VALUE"
@@ -350,8 +376,9 @@ function lk_wp_db_get_vars() {
 #
 # If new credentials are generated, they are not applied to the MySQL server.
 function lk_wp_db_set_local() {
+    eval "$(_lk_wp_set_path "$@")"
     local SITE_ROOT SH DEFAULT_IDENTIFIER
-    SITE_ROOT=${1:-$(lk_wp_get_site_root)} || return
+    SITE_ROOT=$(lk_wp_get_site_root) || return
     LOCAL_DB_NAME=
     LOCAL_DB_USER=
     LOCAL_DB_PASSWORD=
@@ -390,12 +417,13 @@ ${LOCAL_DB_USER:+1}${LOCAL_DB_PASSWORD:+1}" = 111 ]; then
             "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD" "$LOCAL_DB_HOST"
 }
 
-# lk_wp_db_restore_local SQL_PATH [DB_NAME [DB_USER]]
+# lk_wp_db_restore_local [-s SITE_ROOT] SQL_PATH [DB_NAME [DB_USER]]
 function lk_wp_db_restore_local() {
+    [ "${1-}" != -s ] || { eval "$(_lk_wp_set_path "$2")" && shift 2; }
     local LOCAL_DB_NAME LOCAL_DB_USER LOCAL_DB_PASSWORD LOCAL_DB_HOST \
         SITE_ROOT SH CONST LOCAL ACTIONS=() ACTION i=0 SUDO=1
     [ -f "$1" ] || lk_usage "\
-Usage: $FUNCNAME SQL_PATH [DB_NAME [DB_USER]]" || return
+Usage: $FUNCNAME [-s SITE_ROOT] SQL_PATH [DB_NAME [DB_USER]]" || return
     SITE_ROOT=$(lk_wp_get_site_root) &&
         SH=$(lk_wp_db_get_vars "$SITE_ROOT") && eval "$SH" &&
         lk_wp_db_set_local "$SITE_ROOT" "${@:2}" || return
@@ -497,7 +525,9 @@ Usage: $FUNCNAME SSH_HOST [REMOTE_PATH [LOCAL_PATH [RSYNC_ARG...]]]" || return
         ${LK_WP_SYNC_KEEP_LOCAL[@]+"${LK_WP_SYNC_KEEP_LOCAL[@]}"}
     )
     EXCLUDE=(
+        /**/.git
         /.maintenance
+        /.tmb
         "php_error*.log"
         {"error*",debug}"?log"
         /wp-content/{backup,cache,upgrade,updraft}/
@@ -560,8 +590,9 @@ function lk_wp_reapply_config() {
     return "$STATUS"
 }
 
-# lk_wp_enable_system_cron [INTERVAL]
+# lk_wp_enable_system_cron [-s SITE_ROOT] [INTERVAL]
 function lk_wp_enable_system_cron() {
+    [ "${1-}" != -s ] || { eval "$(_lk_wp_set_path "$2")" && shift 2; }
     local INTERVAL=${1:-5} SITE_ROOT LOG_FILE ARGS ARGS_RE COMMAND REGEX CRONTAB
     SITE_ROOT=$(lk_wp_get_site_root) || return
     LOG_FILE=${SITE_ROOT%/*}/log/cron.log
@@ -592,8 +623,9 @@ ${ARGS_RE[0]} .+ ${ARGS_RE[1]} cron event run --due-now( |\$)")
     lk_crontab_apply "$REGEX" "$CRONTAB"
 }
 
-# lk_wp_disable_cron
+# lk_wp_disable_cron [-s SITE_ROOT]
 function lk_wp_disable_cron() {
+    [ "${1-}" != -s ] || { eval "$(_lk_wp_set_path "$2")" && shift 2; }
     local SITE_ROOT
     SITE_ROOT=$(lk_wp_get_site_root) || return
     lk_tty_print "Disabling WP-Cron in" "$SITE_ROOT"
@@ -611,8 +643,9 @@ function lk_wp_maintenance_get_php() {
 
 # lk_wp_maintenance_enable [SITE_ROOT]
 function lk_wp_maintenance_enable() {
+    [ $# -eq 0 ] || eval "$(_lk_wp_set_path "$@")"
     local SITE_ROOT ACTIVE=1
-    SITE_ROOT=${1:-$(lk_wp_get_site_root)} || return
+    SITE_ROOT=$(lk_wp_get_site_root) || return
     lk_wp maintenance-mode is-active &>/dev/null || ACTIVE=0
     [ -n "${_LK_WP_MAINTENANCE_ON-}" ] ||
         _LK_WP_MAINTENANCE_ON=$ACTIVE
@@ -624,8 +657,9 @@ function lk_wp_maintenance_enable() {
 
 # lk_wp_maintenance_disable [SITE_ROOT]
 function lk_wp_maintenance_disable() {
+    [ $# -eq 0 ] || eval "$(_lk_wp_set_path "$@")"
     local SITE_ROOT
-    SITE_ROOT=${1:-$(lk_wp_get_site_root)} || return
+    SITE_ROOT=$(lk_wp_get_site_root) || return
     ! lk_wp maintenance-mode is-active &>/dev/null ||
         lk_tty_print "Disabling maintenance mode"
     rm -f "$SITE_ROOT/.maintenance"
@@ -639,8 +673,9 @@ function lk_wp_maintenance_maybe_disable() {
 
 # lk_wp_set_permissions [SITE_ROOT]
 function lk_wp_set_permissions() {
+    [ $# -eq 0 ] || eval "$(_lk_wp_set_path "$@")"
     local SITE_ROOT OWNER LOG_FILE CHANGES
-    SITE_ROOT=${1:-$(lk_wp_get_site_root)} &&
+    SITE_ROOT=$(lk_wp_get_site_root) &&
         SITE_ROOT=$(_lk_realpath "$SITE_ROOT") || return
     if lk_will_elevate; then
         OWNER=$(lk_file_owner "$SITE_ROOT/..") &&

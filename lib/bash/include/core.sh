@@ -250,13 +250,13 @@ function lk_maybe_local() {
         esac
 }
 
-# lk_x_off
+# lk_x_off [STATUS_VAR]
 #
-# Output Bash commands that disable xtrace temporarily and prevent themselves
-# from appearing in trace output.
+# Output Bash commands that disable xtrace temporarily, prevent themselves from
+# appearing in trace output, and assign the previous command's exit status to
+# _lk_x_status or STATUS_VAR.
 #
-# Recommended usage, assuming Bash could be writing trace output to either FD 2
-# or FD 4:
+# Recommended usage, if FD 2 or FD 4 may already be receiving trace output:
 #
 #     function quiet() {
 #         { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
@@ -269,12 +269,12 @@ function lk_maybe_local() {
 #     { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
 #     eval "$_lk_x_restore"
 function lk_x_off() {
-    echo 'eval "{ declare _lk_x_restore= _lk_x_return=\"return \\\$?\"; [ \"\${-/x/}\" = \"\$-\" ] || { _lk_x_restore=\"set -x\"; _lk_x_return=\"eval \\\"{ local _lk_x_status=\\\\\\\$?; set -x; return \\\\\\\$_lk_x_status; } \\\${BASH_XTRACEFD:-2}>/dev/null\\\"\"; set +x; }; } ${BASH_XTRACEFD:-2}>/dev/null"'
+    echo 'eval "{ declare '"${1:-_lk_x_status}=$?"' _lk_x_restore= _lk_x_return=\"return \\\$?\"; [ \"\${-/x/}\" = \"\$-\" ] || { _lk_x_restore=\"set -x\"; _lk_x_return=\"eval \\\"{ local _lk_x_status=\\\\\\\$?; set -x; return \\\\\\\$_lk_x_status; } \\\${BASH_XTRACEFD:-2}>/dev/null\\\"\"; set +x; }; } ${BASH_XTRACEFD:-2}>/dev/null"'
 }
 
 function lk_x_no_off() {
     function lk_x_off() {
-        echo 'declare _lk_x_restore= _lk_x_return="return \$?"'
+        echo 'declare '"${1:-_lk_x_status}=$?"' _lk_x_restore= _lk_x_return="return \$?"'
     }
     export _LK_NO_X_OFF=1
 }
@@ -1509,33 +1509,44 @@ function lk_tty_diff_detail() {
 }
 
 function _lk_tty_log() {
-    local STATUS=$? IFS=' '
+    local STATUS=${_lk_x_status:-$?} IFS=' ' \
+        _LK_TTY_PREFIX=${_LK_TTY_PREFIX-$1} \
+        _LK_TTY_MESSAGE_COLOUR=$2 _LK_TTY_COLOUR2=${_LK_TTY_COLOUR2-}
+    shift 2
     [ "${1-}" = -r ] && shift || STATUS=0
-    local _LK_TTY_PREFIX=${_LK_TTY_PREFIX-$1} _LK_TTY_MESSAGE_COLOUR=$2 \
-        MESSAGE2=${4-} _LK_TTY_COLOUR2=${_LK_TTY_COLOUR2-}
+    local MESSAGE=${1-} MESSAGE2=${2-}
+    [ -z "${MESSAGE:+1}" ] || _lk_tty_format -b MESSAGE
     [ -z "${MESSAGE2:+1}" ] || _lk_tty_format -b MESSAGE2
-    lk_tty_print "${3-}" "$MESSAGE2${5+ ${*:5}}" "$2"
+    lk_tty_print "$MESSAGE" "$MESSAGE2${3+ ${*:3}}" "$_LK_TTY_MESSAGE_COLOUR"
     return "$STATUS"
 }
 
 # lk_tty_success [-r] MESSAGE [MESSAGE2...]
 function lk_tty_success() {
-    _lk_tty_log " ^^ " "$_LK_SUCCESS_COLOUR" "$@"
+    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
+    _lk_tty_log "^^^ " "$_LK_SUCCESS_COLOUR" "$@"
+    eval "$_lk_x_return"
 }
 
 # lk_tty_log [-r] MESSAGE [MESSAGE2...]
 function lk_tty_log() {
+    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _lk_tty_log " :: " "${_LK_TTY_COLOUR-$_LK_COLOUR}" "$@"
+    eval "$_lk_x_return"
 }
 
 # lk_tty_warning [-r] MESSAGE [MESSAGE2...]
 function lk_tty_warning() {
+    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _lk_tty_log "  ! " "$_LK_WARNING_COLOUR" "$@"
+    eval "$_lk_x_return"
 }
 
 # lk_tty_error [-r] MESSAGE [MESSAGE2...]
 function lk_tty_error() {
+    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _lk_tty_log " !! " "$_LK_ERROR_COLOUR" "$@"
+    eval "$_lk_x_return"
 }
 
 function _lk_tty_prompt() {
