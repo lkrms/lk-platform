@@ -555,33 +555,44 @@ function lk_tty_diff_detail() {
 }
 
 function _lk_tty_log() {
-    local STATUS=$? IFS=' '
+    local STATUS=${_lk_x_status:-$?} IFS=' ' \
+        _LK_TTY_PREFIX=${_LK_TTY_PREFIX-$1} \
+        _LK_TTY_MESSAGE_COLOUR=$2 _LK_TTY_COLOUR2=${_LK_TTY_COLOUR2-}
+    shift 2
     [ "${1-}" = -r ] && shift || STATUS=0
-    local _LK_TTY_PREFIX=${_LK_TTY_PREFIX-$1} _LK_TTY_MESSAGE_COLOUR=$2 \
-        MESSAGE2=${4-} _LK_TTY_COLOUR2=${_LK_TTY_COLOUR2-}
+    local MESSAGE=${1-} MESSAGE2=${2-}
+    [ -z "${MESSAGE:+1}" ] || _lk_tty_format -b MESSAGE
     [ -z "${MESSAGE2:+1}" ] || _lk_tty_format -b MESSAGE2
-    lk_tty_print "${3-}" "$MESSAGE2${5+ ${*:5}}" "$2"
+    lk_tty_print "$MESSAGE" "$MESSAGE2${3+ ${*:3}}" "$_LK_TTY_MESSAGE_COLOUR"
     return "$STATUS"
 }
 
 # lk_tty_success [-r] MESSAGE [MESSAGE2...]
 function lk_tty_success() {
-    _lk_tty_log " ^^ " "$_LK_SUCCESS_COLOUR" "$@"
+    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
+    _lk_tty_log "^^^ " "$_LK_SUCCESS_COLOUR" "$@"
+    eval "$_lk_x_return"
 }
 
 # lk_tty_log [-r] MESSAGE [MESSAGE2...]
 function lk_tty_log() {
+    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _lk_tty_log " :: " "${_LK_TTY_COLOUR-$_LK_COLOUR}" "$@"
+    eval "$_lk_x_return"
 }
 
 # lk_tty_warning [-r] MESSAGE [MESSAGE2...]
 function lk_tty_warning() {
+    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _lk_tty_log "  ! " "$_LK_WARNING_COLOUR" "$@"
+    eval "$_lk_x_return"
 }
 
 # lk_tty_error [-r] MESSAGE [MESSAGE2...]
 function lk_tty_error() {
+    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _lk_tty_log " !! " "$_LK_ERROR_COLOUR" "$@"
+    eval "$_lk_x_return"
 }
 
-#### Reviewed: 2021-10-30
+#### Reviewed: 2021-11-01

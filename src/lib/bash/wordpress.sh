@@ -525,7 +525,9 @@ Usage: $FUNCNAME SSH_HOST [REMOTE_PATH [LOCAL_PATH [RSYNC_ARG...]]]" || return
         ${LK_WP_SYNC_KEEP_LOCAL[@]+"${LK_WP_SYNC_KEEP_LOCAL[@]}"}
     )
     EXCLUDE=(
+        /**/.git
         /.maintenance
+        /.tmb
         "php_error*.log"
         {"error*",debug}"?log"
         /wp-content/{backup,cache,upgrade,updraft}/
