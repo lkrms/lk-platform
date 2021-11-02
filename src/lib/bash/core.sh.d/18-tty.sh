@@ -570,7 +570,7 @@ function _lk_tty_log() {
 # lk_tty_success [-r] MESSAGE [MESSAGE2...]
 function lk_tty_success() {
     { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
-    _lk_tty_log "^^^ " "$_LK_SUCCESS_COLOUR" "$@"
+    _lk_tty_log " ++ " "$_LK_SUCCESS_COLOUR" "$@"
     eval "$_lk_x_return"
 }
 
@@ -595,4 +595,4 @@ function lk_tty_error() {
     eval "$_lk_x_return"
 }
 
-#### Reviewed: 2021-11-01
+#### Reviewed: 2021-11-02

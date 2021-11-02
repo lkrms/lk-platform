@@ -100,6 +100,7 @@ PAC_PACKAGES+=(
     ffmpeg
     rtmpdump
     youtube-dl
+    yt-dlp
 
     #
     nodejs
@@ -112,9 +113,6 @@ PAC_PACKAGES+=(
 AUR_PACKAGES+=(
     # Networking
     vpn-slice
-
-    # Multimedia
-    yt-dlp
 
     #
     demjson
