@@ -84,7 +84,6 @@ lk_require arch
     xfce4-panel-profiles \
     xiccd \
     xrandr-invert-colors \
-    yt-dlp \
     zoom \
     zuki-themes
 

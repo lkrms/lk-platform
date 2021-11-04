@@ -858,6 +858,22 @@ function lk_warn() {
         lk_tty_warning "$(LK_VERBOSE= _lk_caller): ${1-command failed}"
 }
 
+# lk_die [MESSAGE]
+#
+# Print "<CALLER>: MESSAGE" as an error and return or exit non-zero with the
+# most recent exit status or 1. If MESSAGE is the empty string, suppress output.
+function lk_die() {
+    local STATUS=$?
+    ((STATUS)) || STATUS=1
+    [ "${1+1}${1:+2}" = 1 ] ||
+        lk_tty_error "$(_lk_caller): ${1:-command failed}"
+    if [[ $- != *i* ]]; then
+        exit "$STATUS"
+    else
+        return "$STATUS"
+    fi
+}
+
 function lk_mktemp() {
     local TMPDIR=${TMPDIR:-/tmp} FUNC=${FUNCNAME[1 + ${_LK_STACK_DEPTH:-0}]-}
     mktemp "$@" ${_LK_MKTEMP_ARGS-} \
@@ -1524,7 +1540,7 @@ function _lk_tty_log() {
 # lk_tty_success [-r] MESSAGE [MESSAGE2...]
 function lk_tty_success() {
     { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
-    _lk_tty_log "^^^ " "$_LK_SUCCESS_COLOUR" "$@"
+    _lk_tty_log " ++ " "$_LK_SUCCESS_COLOUR" "$@"
     eval "$_lk_x_return"
 }
 

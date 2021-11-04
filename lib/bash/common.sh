@@ -40,21 +40,6 @@ set -E
 
 lk_include assert
 
-# lk_die [MESSAGE]
-#
-# Output "<context>: MESSAGE" using lk_console_error and exit non-zero with the
-# previous command's exit status (if available).
-#
-# To suppress output, set MESSAGE to the empty string.
-function lk_die() {
-    local EXIT_STATUS=$?
-    [ "$EXIT_STATUS" -ne 0 ] || EXIT_STATUS=1
-    if [ $# -eq 0 ] || [ -n "$1" ]; then
-        lk_console_error "$(_lk_caller): ${1:-execution failed}"
-    fi
-    exit "$EXIT_STATUS"
-}
-
 function lk_is_dry_run() {
     [ -n "${LK_DRY_RUN-}" ]
 }

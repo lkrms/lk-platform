@@ -188,6 +188,7 @@ HOMEBREW_FORMULAE+=(
 )
 
 FORCE_IBREW+=(
+    composer
     php
     php@7.2
     php@7.3

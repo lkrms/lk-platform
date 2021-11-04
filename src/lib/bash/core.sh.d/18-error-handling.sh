@@ -31,4 +31,20 @@ function lk_warn() {
         lk_tty_warning "$(LK_VERBOSE= _lk_caller): ${1-command failed}"
 }
 
-#### Reviewed: 2021-10-17
+# lk_die [MESSAGE]
+#
+# Print "<CALLER>: MESSAGE" as an error and return or exit non-zero with the
+# most recent exit status or 1. If MESSAGE is the empty string, suppress output.
+function lk_die() {
+    local STATUS=$?
+    ((STATUS)) || STATUS=1
+    [ "${1+1}${1:+2}" = 1 ] ||
+        lk_tty_error "$(_lk_caller): ${1:-command failed}"
+    if [[ $- != *i* ]]; then
+        exit "$STATUS"
+    else
+        return "$STATUS"
+    fi
+}
+
+#### Reviewed: 2021-11-02

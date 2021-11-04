@@ -182,6 +182,7 @@ PAC_PACKAGES+=(
     mpv
     openshot
     youtube-dl
+    yt-dlp
 
     # system
     dconf-editor
@@ -222,7 +223,6 @@ AUR_PACKAGES+=(
     # multimedia - video
     makemkv
     video-trimmer
-    yt-dlp
 
     # system
     hfsprogs

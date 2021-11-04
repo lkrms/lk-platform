@@ -120,7 +120,7 @@ function exit_trap() {
             [[ ! $FILE_PATH =~ /include/[a-z0-9_]+\.sh$ ]] ||
                 . "$FILE"
         done
-        SUDOERS=$_DIR/default
+        SUDOERS=$_DIR/share__sudoers.d__default
     fi
 
     ! lk_is_system_apple_silicon || lk_is_apple_silicon ||
@@ -696,7 +696,8 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
         lk_echo_array INSTALL_UPDATES |
             lk_console_list "Installing system software updates:"
         lk_faketty caffeinate -d \
-            softwareupdate --install "${INSTALL_UPDATES[@]}" || STATUS=$?
+            sudo softwareupdate --no-scan \
+            --install "${INSTALL_UPDATES[@]}" --restart || STATUS=$?
     }
 
     lk_macos_xcode_maybe_accept_license

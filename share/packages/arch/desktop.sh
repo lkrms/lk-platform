@@ -117,6 +117,7 @@ PAC_PACKAGES+=(
     handbrake-cli
     mpv
     youtube-dl
+    yt-dlp
 
     # system
     dconf-editor
@@ -149,9 +150,6 @@ AUR_PACKAGES+=(
     #ttf-apple-emoji
     ttf-twemoji
     typora
-
-    # multimedia - video
-    yt-dlp
 
     # system
     hfsprogs
