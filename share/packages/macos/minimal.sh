@@ -14,6 +14,10 @@ HOMEBREW_TAPS+=(
     homebrew/cask-fonts
 )
 
+HOMEBREW_FORMULAE+=(
+    qpdf
+)
+
 HOMEBREW_CASKS+=(
     adobe-acrobat-reader
     firefox
@@ -28,4 +32,8 @@ HOMEBREW_CASKS+=(
 
     # Non-free
     microsoft-office
+)
+
+HOMEBREW_KEEP_CASKS+=(
+    pdf-expert
 )
