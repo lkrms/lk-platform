@@ -136,12 +136,6 @@ function exit_trap() {
 
     lk_sudo_offer_nopasswd || lk_die "unable to run commands as root"
 
-    [ -d ~/".${LK_PATH_PREFIX}defaults" ] ||
-        ! lk_confirm "Save current macOS settings to files?" N || {
-        lk_tty_print "Dumping defaults to domain files"
-        lk_macos_defaults_dump
-    }
-
     sudo systemsetup -getremotelogin | grep -Ei '\<On$' >/dev/null || {
         [ "${PIPESTATUS[0]}${PIPESTATUS[1]}" = 01 ] || lk_die ""
         ! lk_confirm "Enable remote access to this computer via SSH?" N || {

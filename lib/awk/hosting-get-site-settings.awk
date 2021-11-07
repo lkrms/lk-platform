@@ -200,6 +200,10 @@ is_php && $1 == "pm.max_children" {
     max_children = php_value()
 }
 
+is_php && $1 == "pm.max_requests" {
+    max_requests = php_value()
+}
+
 is_php && $1 == "user" {
     fpm_user = php_value()
     if (fpm_user == "$pool")
@@ -269,6 +273,7 @@ END {
     maybe_print("SITE_PHP_FPM_SETTINGS", join_settings(",", php_settings))
     maybe_print("SITE_PHP_FPM_ENV", join_settings(",", env))
     maybe_print("SITE_PHP_FPM_MAX_CHILDREN", max_children)
+    maybe_print("SITE_PHP_FPM_MAX_REQUESTS", max_requests)
     maybe_print("SITE_PHP_FPM_USER", fpm_user)
     maybe_print("SITE_PHP_FPM_TIMEOUT", timeout)
     maybe_print("SITE_PHP_FPM_OPCACHE_SIZE", opcache_size)
