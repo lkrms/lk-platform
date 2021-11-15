@@ -260,6 +260,25 @@ IPTABLES_TCP_LISTEN=()
 IPTABLES_UDP_LISTEN=()
 CURL_OPTIONS=(-fsSLH "Cache-Control: no-cache" -H "Pragma: no-cache" --retry 2)
 
+APT_REMOVE=(
+    # Recommended by ubuntu-minimal
+    rsyslog
+
+    # Recommended by ubuntu-standard
+    mlocate
+
+    # Recommended by ubuntu-server
+    landscape-common
+    lxd
+    lxd-agent-loader
+    snapd
+)
+[ -n "$LK_UPGRADE_EMAIL" ] ||
+    APT_REMOVE+=(
+        apt-listchanges
+        apticron
+    )
+
 APT_REPOS=()
 APT_SUPPRESS=()
 APT_FILTER=()
@@ -270,6 +289,8 @@ PHPVER=$(lk_hosting_php_get_default_version)
 CERTBOT_REPO=ppa:certbot/certbot
 case "$DISTRIB_RELEASE" in
 16.04)
+    # Ubuntu 16.04's ubuntu-minimal package "Depends" on rsyslog
+    lk_array_remove_value APT_REMOVE rsyslog
     APT_REPOS+=("$CERTBOT_REPO")
     APT_SUPPRESS+=(
         icdiff
@@ -513,25 +534,6 @@ $IPV6_ADDRESS $HOST_NAMES}" &&
         LK_NO_INPUT=1 \
             lk_apt_reinstall_damaged
     fi
-
-    APT_REMOVE=(
-        # Recommended by ubuntu-minimal
-        rsyslog
-
-        # Recommended by ubuntu-standard
-        mlocate
-
-        # Recommended by ubuntu-server
-        landscape-common
-        lxd
-        lxd-agent-loader
-        snapd
-    )
-    [ -n "$LK_UPGRADE_EMAIL" ] ||
-        APT_REMOVE+=(
-            apt-listchanges
-            apticron
-        )
 
     IFS=,
     APT_PACKAGES=($LK_NODE_PACKAGES)

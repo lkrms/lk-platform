@@ -74,6 +74,7 @@ APT_PACKAGES=(
     time
     tzdata
     unattended-upgrades
+    unzip
     util-linux
     uuid-runtime
     vim

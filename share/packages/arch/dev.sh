@@ -17,6 +17,7 @@ PAC_KEEP=(
     expect
     linux-headers
     offlineimap
+    stripe-cli
     subversion
     zoom
 
@@ -85,6 +86,7 @@ PAC_PACKAGES+=(
 
     # networking
     iperf3
+    net-tools # for x11vnc
     networkmanager-l2tp
     networkmanager-openconnect
 
@@ -298,11 +300,11 @@ PAC_PACKAGES+=(
     php7-xsl       # for phpdoc-phar
 
     #
-    mysql-python
     python
     python-acme     # Let's Encrypt CLI
     python-dateutil #
     python-magic    # for s3cmd
+    python-mysqlclient
     python-pip
     python-requests
     python-virtualenv
