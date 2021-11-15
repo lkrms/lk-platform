@@ -139,7 +139,7 @@ fi
 if [ -z "$NEW_SITE_ADDR" ] &&
     { lk_tty_detail "Checking site address:" "$SITE_ADDR" &&
         { ! IP=$(_LK_DNS_SERVER=1.1.1.1 \
-            lk_dns_get_records A,AAAA "$SITE_HOST") && IP=; } ||
+            lk_dns_get_records -A,AAAA "$SITE_HOST") && IP=; } ||
         { [ -n "$IP" ] && ! lk_node_is_host "$SITE_HOST"; }; }; then
     SUGGEST=https://${SITE_DOMAIN%%.*}.test
     while :; do

@@ -100,11 +100,19 @@ function lk_grep_regex() {
     grep -Ex${v:+v} "${!1}"
 }\n\n'
 
-printf '# lk_is_regex REGEX VALUE
+printf '# lk_is_regex REGEX [VALUE...]
+#
+# Return true if every VALUE is a match for REGEX.
+#
+# Returns false if there are no values to check.
 function lk_is_regex() {
-    local SH
+    [ $# -gt 1 ] || return
+    local REGEX=$1 SH
     SH=$(lk_get_regex "$1") && eval "$SH" || return 2
-    [[ $2 =~ ^${!1}$ ]]
+    while [ $# -gt 1 ]; do
+        shift
+        [[ $1 =~ ^${!REGEX}$ ]] || return
+    done
 }\n\n'
 
 FUNCTIONS=(
@@ -138,9 +146,9 @@ for i in "${!FUNCTIONS[@]}"; do
     FUNCTION=${FUNCTIONS[i]}
     REGEX=${PATTERNS[i]}
     DESC=${DESCRIPTIONS[i]}
-    printf '# %s VALUE
+    printf '# %s VALUE...
 #
-# Return true if VALUE is a valid %s.
+# Return true if every VALUE is a valid %s.
 function %s() {\n    lk_is_regex %s "$@"\n}\n\n' \
         "$FUNCTION" "$DESC" "$FUNCTION" "$REGEX"
 done

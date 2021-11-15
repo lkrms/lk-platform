@@ -384,7 +384,7 @@ Usage: $FUNCNAME [-w] DOMAIN [SITE_ROOT [ALIAS...]]" || return
         # Use a Let's Encrypt certificate if one is available
         IFS=$'\n'
         SSL_FILES=($(IFS=, &&
-            lk_certbot_list_certificates "${DOMAINS[@]}" 2>/dev/null |
+            lk_certbot_list "${DOMAINS[@]}" 2>/dev/null |
             awk -F$'\t' -v "domains=${DOMAINS[*]}" \
                 '!p && $2 == domains {print $4; print $5; p = 1}')) ||
             SSL_FILES=()

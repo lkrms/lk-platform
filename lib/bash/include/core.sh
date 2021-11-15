@@ -314,7 +314,7 @@ function _lk_sudo_check() {
 # set, attempt without `sudo` first and only run as root if the first attempt
 # fails.
 function lk_elevate() {
-    local _SH _COMMAND
+    local _SH _COMMAND _LK_STACK_DEPTH=$((1 + ${_LK_STACK_DEPTH:-0}))
     _SH=$(_lk_sudo_check "$@") && eval "$_SH" || return
     if [ "$EUID" -eq 0 ]; then
         [ $# -eq 0 ] ||
@@ -347,7 +347,7 @@ function lk_elevate() {
 # be used, attempt without `sudo` first and only run as root if the first
 # attempt fails.
 function lk_sudo() {
-    local _SH
+    local _SH _LK_STACK_DEPTH=$((1 + ${_LK_STACK_DEPTH:-0}))
     _SH=$(_lk_sudo_check "$@") && eval "$_SH" || return
     if [ -n "${LK_SUDO-}" ]; then
         lk_elevate "$@"
@@ -514,44 +514,52 @@ function lk_grep_regex() {
     grep -Ex${v:+v} "${!1}"
 }
 
-# lk_is_regex REGEX VALUE
+# lk_is_regex REGEX [VALUE...]
+#
+# Return true if every VALUE is a match for REGEX.
+#
+# Returns false if there are no values to check.
 function lk_is_regex() {
-    local SH
+    [ $# -gt 1 ] || return
+    local REGEX=$1 SH
     SH=$(lk_get_regex "$1") && eval "$SH" || return 2
-    [[ $2 =~ ^${!1}$ ]]
+    while [ $# -gt 1 ]; do
+        shift
+        [[ $1 =~ ^${!REGEX}$ ]] || return
+    done
 }
 
-# lk_is_cidr VALUE
+# lk_is_cidr VALUE...
 #
-# Return true if VALUE is a valid IP address or CIDR.
+# Return true if every VALUE is a valid IP address or CIDR.
 function lk_is_cidr() {
     lk_is_regex IP_OPT_PREFIX_REGEX "$@"
 }
 
-# lk_is_fqdn VALUE
+# lk_is_fqdn VALUE...
 #
-# Return true if VALUE is a valid domain name.
+# Return true if every VALUE is a valid domain name.
 function lk_is_fqdn() {
     lk_is_regex DOMAIN_NAME_REGEX "$@"
 }
 
-# lk_is_email VALUE
+# lk_is_email VALUE...
 #
-# Return true if VALUE is a valid email address.
+# Return true if every VALUE is a valid email address.
 function lk_is_email() {
     lk_is_regex EMAIL_ADDRESS_REGEX "$@"
 }
 
-# lk_is_uri VALUE
+# lk_is_uri VALUE...
 #
-# Return true if VALUE is a valid URI with a scheme and host.
+# Return true if every VALUE is a valid URI with a scheme and host.
 function lk_is_uri() {
     lk_is_regex URI_REGEX_REQ_SCHEME_HOST "$@"
 }
 
-# lk_is_identifier VALUE
+# lk_is_identifier VALUE...
 #
-# Return true if VALUE is a valid Bash identifier.
+# Return true if every VALUE is a valid Bash identifier.
 function lk_is_identifier() {
     lk_is_regex IDENTIFIER_REGEX "$@"
 }
@@ -689,6 +697,45 @@ function lk_get_regex() {
     return "$STATUS"
 }
 
+# lk_date FORMAT [TIMESTAMP]
+function lk_date() {
+    # Take advantage of printf support for strftime in Bash 4.2+
+    if lk_bash_at_least 4 2; then
+        function lk_date() {
+            printf "%($1)T\n" "${2:--1}"
+        }
+    elif ! lk_is_macos; then
+        function lk_date() {
+            if [ $# -lt 2 ]; then
+                date "+$1"
+            else
+                date -d "@$2" "+$1"
+            fi
+        }
+    else
+        function lk_date() {
+            if [ $# -lt 2 ]; then
+                date "+$1"
+            else
+                date -jf '%s' "$2" "+$1"
+            fi
+        }
+    fi
+    lk_date "$@"
+}
+
+# lk_date_log [TIMESTAMP]
+function lk_date_log() { lk_date "%Y-%m-%d %H:%M:%S %z" "$@"; }
+
+# lk_date_ymdhms [TIMESTAMP]
+function lk_date_ymdhms() { lk_date "%Y%m%d%H%M%S" "$@"; }
+
+# lk_date_ymd [TIMESTAMP]
+function lk_date_ymd() { lk_date "%Y%m%d" "$@"; }
+
+# lk_timestamp
+function lk_timestamp() { lk_date "%s"; }
+
 # _lk_stream_args COMMAND_ARGS COMMAND... [ARG...]
 function _lk_stream_args() {
     local IFS
@@ -812,15 +859,22 @@ function lk_arr() {
     [ -z "${_SH:+1}" ] || eval "printf '%s\n'$_SH"
 }
 
-# lk_implode_arr GLUE [ARRAY_NAME...]
+# lk_implode_arr GLUE [ARRAY...]
 function lk_implode_arr() {
     local IFS
     unset IFS
     lk_arr "${@:2}" | lk_implode_input "$1"
 }
 
-# lk_array_remove_value ARRAY VALUE
-function lk_array_remove_value() {
+# lk_ere_implode_arr [-e] [ARRAY...]
+function lk_ere_implode_arr() {
+    local ARGS
+    [ "${1-}" != -e ] || { ARGS=(-e) && shift; }
+    lk_arr "$@" | lk_ere_implode_input ${ARGS+"${ARGS[@]}"}
+}
+
+# lk_arr_remove ARRAY VALUE
+function lk_arr_remove() {
     local _SH
     _SH=$(eval "for _i in \${$1+\"\${!$1[@]}\"}; do
     [ \"\${$1[_i]}\" != \"\$2\" ] || echo \"unset \\\"$1[\$_i]\\\"\"
@@ -965,7 +1019,7 @@ function lk_delete_on_exit() {
 # lk_delete_on_exit_withdraw FILE...
 function lk_delete_on_exit_withdraw() {
     while [ $# -gt 0 ]; do
-        lk_array_remove_value "_LK_EXIT_DELETE_$BASH_SUBSHELL" "$1" || return
+        lk_arr_remove "_LK_EXIT_DELETE_$BASH_SUBSHELL" "$1" || return
         shift
     done
 }
@@ -1227,13 +1281,23 @@ function _lk_tty_detail2() {
         lk_tty_print "$@"
 }
 
-# - lk_tty_list [- [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
+# - lk_tty_list - [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]
+# - lk_tty_list @ [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]] [-- [ARG...]]
 # - lk_tty_list [ARRAY [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
 function lk_tty_list() {
     { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
+    [ "${1-}" != @ ] || {
+        local IFS=' ' _ITEMS=()
+        for ((i = 2; i <= $#; i++)); do
+            [ "${!i}" = -- ] || continue
+            _ITEMS=("${@:i+1}")
+            set -- "${@:1:i-1}"
+            break
+        done
+    }
     local _ARRAY=${1:--} _MESSAGE=${2-List:} _SINGLE _PLURAL _COLOUR \
         _PREFIX=${_LK_TTY_PREFIX-${_LK_TTY_PREFIX1-==> }} \
-        _ITEMS _INDENT _COLUMNS _LIST
+        _ITEMS _INDENT _COLUMNS _LIST=
     [ $# -ge 2 ] || {
         _SINGLE=item
         _PLURAL=items
@@ -1247,7 +1311,7 @@ function lk_tty_list() {
     if [ "$_ARRAY" = - ]; then
         [ ! -t 0 ] && lk_mapfile _ITEMS ||
             lk_err "no input" || eval "$_lk_x_return"
-    else
+    elif [ "$_ARRAY" != @ ]; then
         _ARRAY="${_ARRAY}[@]"
         _ITEMS=(${!_ARRAY+"${!_ARRAY}"}) || eval "$_lk_x_return"
     fi
@@ -1258,15 +1322,16 @@ function lk_tty_list() {
     fi
     _INDENT=${_LK_TTY_INDENT:-$_INDENT}
     _COLUMNS=$(($(lk_tty_columns) - _INDENT - ${_LK_TTY_GROUP:-0} * 4))
-    _LIST=$([ -z "${_ITEMS+1}" ] ||
-        printf '%s\n' "${_ITEMS[@]}")
-    ! lk_command_exists column expand ||
-        _LIST=$(COLUMNS=$((_COLUMNS > 0 ? _COLUMNS : 0)) \
-            column <<<"$_LIST" | expand) || eval "$_lk_x_return"
+    [ -z "${_ITEMS+1}" ] || {
+        _LIST=$(printf '\n%s' "${_ITEMS[@]}")
+        ! lk_command_exists column expand ||
+            _LIST=$'\n'$(COLUMNS=$((_COLUMNS > 0 ? _COLUMNS : 0)) \
+                column <<<"$_LIST" | expand) || eval "$_lk_x_return"
+    }
     echo "$(
         _LK_FD=1
         ${_LK_TTY_COMMAND:-lk_tty_print} \
-            "$_MESSAGE" $'\n'"$_LIST" ${!_COLOUR+"${!_COLOUR}"}
+            "$_MESSAGE" "$_LIST" ${!_COLOUR+"${!_COLOUR}"}
         [ -z "${_SINGLE:+${_PLURAL:+1}}" ] ||
             _LK_TTY_PREFIX=$(printf "%$((_INDENT > 0 ? _INDENT : 0))s") \
                 lk_tty_detail "($(lk_plural -v _ITEMS "$_SINGLE" "$_PLURAL"))"
@@ -1274,7 +1339,8 @@ function lk_tty_list() {
     eval "$_lk_x_return"
 }
 
-# - lk_tty_list_detail [- [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
+# - lk_tty_list_detail - [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]
+# - lk_tty_list_detail @ [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]] [-- [ARG...]]
 # - lk_tty_list_detail [ARRAY [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
 function lk_tty_list_detail() {
     { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
@@ -1964,54 +2030,6 @@ function lk_usage() {
     fi
 }
 
-if lk_bash_at_least 4 2; then
-    # lk_date FORMAT [TIMESTAMP]
-    function lk_date() {
-        # Take advantage of printf support for strftime in Bash 4.2+
-        printf "%($1)T\n" "${2:--1}"
-    }
-else
-    if ! lk_is_macos; then
-        # lk_date FORMAT [TIMESTAMP]
-        function lk_date() {
-            if [ $# -lt 2 ]; then
-                gnu_date "+$1"
-            else
-                gnu_date -d "@$2" "+$1"
-            fi
-        }
-    else
-        # lk_date FORMAT [TIMESTAMP]
-        function lk_date() {
-            if [ $# -lt 2 ]; then
-                date "+$1"
-            else
-                date -jf '%s' "$2" "+$1"
-            fi
-        }
-    fi
-fi
-
-# lk_date_log [TIMESTAMP]
-function lk_date_log() {
-    lk_date "%Y-%m-%d %H:%M:%S %z" "$@"
-}
-
-# lk_date_ymdhms [TIMESTAMP]
-function lk_date_ymdhms() {
-    lk_date "%Y%m%d%H%M%S" "$@"
-}
-
-# lk_date_ymd [TIMESTAMP]
-function lk_date_ymd() {
-    lk_date "%Y%m%d" "$@"
-}
-
-# lk_timestamp
-function lk_timestamp() {
-    lk_date "%s"
-}
-
 if lk_bash_at_least 4 1; then
     function lk_pause() {
         local REPLY
@@ -2222,22 +2240,6 @@ END     {
     print s_out
 }'
     fi
-}
-
-# lk_replace FIND REPLACE STRING
-#
-# Replace all occurrences of FIND in STRING with REPLACE.
-function lk_replace() {
-    local STRING
-    STRING=${3//"$1"/$2}
-    echo "$STRING"
-}
-
-# lk_in_string NEEDLE HAYSTACK
-#
-# True if NEEDLE is a substring of HAYSTACK.
-function lk_in_string() {
-    [ "$(lk_replace "$1" "" "$2.")" != "$2." ]
 }
 
 function lk_has_newline() {
@@ -3730,7 +3732,7 @@ substr($0 "/", 1, l) == u "/" {
 function lk_remove_false() {
     local _LK_TEMP_ARRAY _LK_TEST _LK_VAL _lk_i=0
     _lk_array_fill_temp "$2" || return
-    _LK_TEST="($(lk_replace '{}' '$_LK_VAL' "$1"))"
+    _LK_TEST="(${1//{\}/\$_LK_VAL})"
     eval "$2=()"
     for _LK_VAL in ${_LK_TEMP_ARRAY[@]+"${_LK_TEMP_ARRAY[@]}"}; do
         ! eval "$_LK_TEST" || eval "$2[$((_lk_i++))]=\$_LK_VAL"

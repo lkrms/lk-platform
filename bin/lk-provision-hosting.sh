@@ -290,7 +290,7 @@ CERTBOT_REPO=ppa:certbot/certbot
 case "$DISTRIB_RELEASE" in
 16.04)
     # Ubuntu 16.04's ubuntu-minimal package "Depends" on rsyslog
-    lk_array_remove_value APT_REMOVE rsyslog
+    lk_arr_remove APT_REMOVE rsyslog
     APT_REPOS+=("$CERTBOT_REPO")
     APT_SUPPRESS+=(
         icdiff

@@ -25,54 +25,6 @@ function lk_usage() {
     fi
 }
 
-if lk_bash_at_least 4 2; then
-    # lk_date FORMAT [TIMESTAMP]
-    function lk_date() {
-        # Take advantage of printf support for strftime in Bash 4.2+
-        printf "%($1)T\n" "${2:--1}"
-    }
-else
-    if ! lk_is_macos; then
-        # lk_date FORMAT [TIMESTAMP]
-        function lk_date() {
-            if [ $# -lt 2 ]; then
-                gnu_date "+$1"
-            else
-                gnu_date -d "@$2" "+$1"
-            fi
-        }
-    else
-        # lk_date FORMAT [TIMESTAMP]
-        function lk_date() {
-            if [ $# -lt 2 ]; then
-                date "+$1"
-            else
-                date -jf '%s' "$2" "+$1"
-            fi
-        }
-    fi
-fi #### Reviewed: 2021-04-30
-
-# lk_date_log [TIMESTAMP]
-function lk_date_log() {
-    lk_date "%Y-%m-%d %H:%M:%S %z" "$@"
-} #### Reviewed: 2021-03-26
-
-# lk_date_ymdhms [TIMESTAMP]
-function lk_date_ymdhms() {
-    lk_date "%Y%m%d%H%M%S" "$@"
-} #### Reviewed: 2021-03-26
-
-# lk_date_ymd [TIMESTAMP]
-function lk_date_ymd() {
-    lk_date "%Y%m%d" "$@"
-} #### Reviewed: 2021-03-26
-
-# lk_timestamp
-function lk_timestamp() {
-    lk_date "%s"
-} #### Reviewed: 2021-03-26
-
 if lk_bash_at_least 4 1; then
     function lk_pause() {
         local REPLY
@@ -283,22 +235,6 @@ END     {
     print s_out
 }'
     fi
-}
-
-# lk_replace FIND REPLACE STRING
-#
-# Replace all occurrences of FIND in STRING with REPLACE.
-function lk_replace() {
-    local STRING
-    STRING=${3//"$1"/$2}
-    echo "$STRING"
-}
-
-# lk_in_string NEEDLE HAYSTACK
-#
-# True if NEEDLE is a substring of HAYSTACK.
-function lk_in_string() {
-    [ "$(lk_replace "$1" "" "$2.")" != "$2." ]
 }
 
 function lk_has_newline() {
@@ -1791,7 +1727,7 @@ substr($0 "/", 1, l) == u "/" {
 function lk_remove_false() {
     local _LK_TEMP_ARRAY _LK_TEST _LK_VAL _lk_i=0
     _lk_array_fill_temp "$2" || return
-    _LK_TEST="($(lk_replace '{}' '$_LK_VAL' "$1"))"
+    _LK_TEST="(${1//{\}/\$_LK_VAL})"
     eval "$2=()"
     for _LK_VAL in ${_LK_TEMP_ARRAY[@]+"${_LK_TEMP_ARRAY[@]}"}; do
         ! eval "$_LK_TEST" || eval "$2[$((_lk_i++))]=\$_LK_VAL"

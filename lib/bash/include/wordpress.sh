@@ -326,9 +326,9 @@ function lk_wp_db_dump() {
     SITE_ROOT=$(lk_wp_get_site_root) ||
         lk_usage "Usage: $FUNCNAME [SITE_ROOT]" || return
     [ ! -t 1 ] || {
-        OUTPUT_FILE=$(lk_replace ~/ "" "$SITE_ROOT")
+        OUTPUT_FILE=${SITE_ROOT#~/}
         OUTPUT_FILE=localhost-${OUTPUT_FILE//\//_}-$(lk_date_ymdhms).sql.gz
-        ! lk_in_string "$SITE_ROOT" "$PWD" &&
+        [ "$SITE_ROOT" = "${SITE_ROOT#$PWD}" ] &&
             OUTPUT_FILE=$PWD/$OUTPUT_FILE || {
             OUTPUT_FILE=~/.lk-platform/cache/db/$OUTPUT_FILE
             install -d -m 00700 "${OUTPUT_FILE%/*}" || return

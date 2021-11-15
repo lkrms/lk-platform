@@ -257,13 +257,23 @@ function _lk_tty_detail2() {
         lk_tty_print "$@"
 }
 
-# - lk_tty_list [- [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
+# - lk_tty_list - [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]
+# - lk_tty_list @ [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]] [-- [ARG...]]
 # - lk_tty_list [ARRAY [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
 function lk_tty_list() {
     { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
+    [ "${1-}" != @ ] || {
+        local IFS=' ' _ITEMS=()
+        for ((i = 2; i <= $#; i++)); do
+            [ "${!i}" = -- ] || continue
+            _ITEMS=("${@:i+1}")
+            set -- "${@:1:i-1}"
+            break
+        done
+    }
     local _ARRAY=${1:--} _MESSAGE=${2-List:} _SINGLE _PLURAL _COLOUR \
         _PREFIX=${_LK_TTY_PREFIX-${_LK_TTY_PREFIX1-==> }} \
-        _ITEMS _INDENT _COLUMNS _LIST
+        _ITEMS _INDENT _COLUMNS _LIST=
     [ $# -ge 2 ] || {
         _SINGLE=item
         _PLURAL=items
@@ -277,7 +287,7 @@ function lk_tty_list() {
     if [ "$_ARRAY" = - ]; then
         [ ! -t 0 ] && lk_mapfile _ITEMS ||
             lk_err "no input" || eval "$_lk_x_return"
-    else
+    elif [ "$_ARRAY" != @ ]; then
         _ARRAY="${_ARRAY}[@]"
         _ITEMS=(${!_ARRAY+"${!_ARRAY}"}) || eval "$_lk_x_return"
     fi
@@ -288,15 +298,16 @@ function lk_tty_list() {
     fi
     _INDENT=${_LK_TTY_INDENT:-$_INDENT}
     _COLUMNS=$(($(lk_tty_columns) - _INDENT - ${_LK_TTY_GROUP:-0} * 4))
-    _LIST=$([ -z "${_ITEMS+1}" ] ||
-        printf '%s\n' "${_ITEMS[@]}")
-    ! lk_command_exists column expand ||
-        _LIST=$(COLUMNS=$((_COLUMNS > 0 ? _COLUMNS : 0)) \
-            column <<<"$_LIST" | expand) || eval "$_lk_x_return"
+    [ -z "${_ITEMS+1}" ] || {
+        _LIST=$(printf '\n%s' "${_ITEMS[@]}")
+        ! lk_command_exists column expand ||
+            _LIST=$'\n'$(COLUMNS=$((_COLUMNS > 0 ? _COLUMNS : 0)) \
+                column <<<"$_LIST" | expand) || eval "$_lk_x_return"
+    }
     echo "$(
         _LK_FD=1
         ${_LK_TTY_COMMAND:-lk_tty_print} \
-            "$_MESSAGE" $'\n'"$_LIST" ${!_COLOUR+"${!_COLOUR}"}
+            "$_MESSAGE" "$_LIST" ${!_COLOUR+"${!_COLOUR}"}
         [ -z "${_SINGLE:+${_PLURAL:+1}}" ] ||
             _LK_TTY_PREFIX=$(printf "%$((_INDENT > 0 ? _INDENT : 0))s") \
                 lk_tty_detail "($(lk_plural -v _ITEMS "$_SINGLE" "$_PLURAL"))"
@@ -304,7 +315,8 @@ function lk_tty_list() {
     eval "$_lk_x_return"
 }
 
-# - lk_tty_list_detail [- [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
+# - lk_tty_list_detail - [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]
+# - lk_tty_list_detail @ [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]] [-- [ARG...]]
 # - lk_tty_list_detail [ARRAY [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
 function lk_tty_list_detail() {
     { eval "$(lk_x_off)"; } 2>/dev/null 4>&2

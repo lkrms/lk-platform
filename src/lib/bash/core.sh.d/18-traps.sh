@@ -50,7 +50,7 @@ function lk_delete_on_exit() {
 # lk_delete_on_exit_withdraw FILE...
 function lk_delete_on_exit_withdraw() {
     while [ $# -gt 0 ]; do
-        lk_array_remove_value "_LK_EXIT_DELETE_$BASH_SUBSHELL" "$1" || return
+        lk_arr_remove "_LK_EXIT_DELETE_$BASH_SUBSHELL" "$1" || return
         shift
     done
 }

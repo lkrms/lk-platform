@@ -1,56 +1,69 @@
 #!/bin/bash
 
-# lk_dns_get_records [+FIELD[,FIELD...]] TYPE[,TYPE...] NAME...
+# lk_dns_get_records [+FIELD[,FIELD...]] [-TYPE[,TYPE...]] NAME...
 #
-# For each NAME, print space-delimited resource records that match one of the
-# given record types, optionally limiting the output to one more fields.
+# For each NAME, print space-delimited resource records, optionally matching one
+# or more record types and limiting the output to one or more fields.
 #
 # FIELD must be one of 'NAME', 'TTL', 'CLASS', 'TYPE', 'RDATA' or 'VALUE'.
-# 'RDATA' and 'VALUE' are equivalent. If multiple fields are specified, they are
-# printed in resource record order.
+# 'RDATA' and 'VALUE' are equivalent. Fields are printed in the specified order.
 function lk_dns_get_records() {
-    local FIELDS='$1, $2, $3, $4, $5' IFS TYPES TYPE NAME COMMAND=(
+    local IFS FIELDS= TYPES=("") i TYPE NAME COMMAND=(
         dig +noall +answer
         ${_LK_DIG_OPTIONS+"${_LK_DIG_OPTIONS[@]}"}
         ${_LK_DNS_SERVER:+@"$_LK_DNS_SERVER"}
     )
-    [[ ${1-} != +* ]] || {
-        FIELDS=$(tr ',' '\n' <<<"${1:1}" | awk '
-BEGIN { t["NAME"] = 1; t["TTL"] = 2; t["CLASS"] = 3; t["TYPE"] = 4; t["RDATA"] = 5; t["VALUE"] = 5 }
-t[$0] { f[t[$0]] = 1; next }
-      { exit 1 }
-END   { for (i = 1; i < 6; i++)
-        if (f[i]) printf "%s", (j++ ? ", " : "") "$" i }') &&
-            [ -n "$FIELDS" ] || lk_warn "invalid field list: $1" || return
-        shift
-    }
-    IFS=,
-    TYPES=($(lk_upper "$1"))
-    [ ${#TYPES[@]} -gt 0 ] || lk_warn "invalid record type list: $1" || return
-    for TYPE in "${TYPES[@]}"; do
-        [[ $TYPE =~ ^[A-Z]+$ ]] ||
-            lk_warn "invalid record type: $TYPE" || return
-        for NAME in "${@:2}"; do
-            COMMAND+=("$NAME" "$TYPE")
+    [[ ${1-} != +* ]] || { FIELDS=${1:1} && shift; }
+    [[ ${1-} != -* ]] || { IFS=, && TYPES=($(lk_upper "${1:1}")) && shift; }
+    unset IFS
+    lk_is_fqdn "$@" || lk_warn "invalid arguments" || return
+    for i in "${!TYPES[@]}"; do
+        TYPE=${TYPES[i]}
+        [ "$TYPE" != ANY ] || TYPES[i]=
+        for NAME in "$@"; do
+            COMMAND+=("$NAME" ${TYPE:+"$TYPE"})
         done
     done
-    "${COMMAND[@]}" | awk -v "r=^$(lk_regex_implode "${TYPES[@]}")\$" \
-        "\$4 ~ r { print $FIELDS }"
+    "${COMMAND[@]}" | awk \
+        -v fields="$FIELDS" \
+        -v type_re="$(lk_ere_implode_arr -e TYPES)" '
+BEGIN { f["NAME"]  = 1;     f["CLASS"] = 3;     f["RDATA"] = 5
+        f["TTL"]   = 2;     f["TYPE"]  = 4;     f["VALUE"] = 5
+        k = split(fields, a, ",")
+        for (i = 1; i <= k; i++) {
+          if (field = f[a[i]]) { col[++cols] = field; v = v || (field > 4) }
+        } }
+!cols { print
+        next }
+!type_re || $4 ~ "^" type_re "$" {
+  if (v) {
+    l = $0; for (i = 1; i < 5; i++) { $i = "" } _v = substr($0, 5); $0 = l }
+  for (i = 1; i <= cols; i++) {
+    j = col[i]; if ($j) { printf (i > 1 ? " %s" : "%s"), (j > 4 ? _v : $j) } }
+  print "" }'
 }
 
-# lk_dns_get_records_first_parent TYPE[,TYPE...] DOMAIN
+# lk_dns_get_records_first_parent [+FIELD[,FIELD...]] [-TYPE[,TYPE...]] NAME
 function lk_dns_get_records_first_parent() {
-    lk_is_fqdn "$2" || lk_warn "invalid domain: $2" || return
-    local DOMAIN=$2 ANSWER
+    local IFS DOMAIN=${*: -1} ANSWER
+    unset IFS
+    lk_is_fqdn "$DOMAIN" || lk_warn "invalid domain: $DOMAIN" || return
     while :; do
-        ANSWER=$(lk_dns_get_records "$1" "$DOMAIN") || return
-        [ -z "$ANSWER" ] || {
+        ANSWER=$(lk_dns_get_records "${@:1:$#-1}" "$DOMAIN") || return
+        [ -z "${ANSWER:+1}" ] || {
             echo "$ANSWER"
             break
         }
         DOMAIN=${DOMAIN#*.}
         lk_is_fqdn "$DOMAIN" || lk_warn "$1 lookup failed: $2" || return
     done
+}
+
+# lk_dns_soa [+FIELD[,FIELD...]] NAME
+function lk_dns_soa() {
+    local _LK_DIG_OPTIONS=(+nssearch)
+    lk_require_output lk_dns_get_records_first_parent "$@" ||
+        lk_warn "SOA lookup failed: ${*: -1}"
 }
 
 # lk_dns_resolve_names [-d] FQDN...
@@ -74,7 +87,7 @@ $3          { host = $3 }
 /^ip(v6)?_address:/ && !a[$2,host]  { print $2, host; a[$2,host] = 1 }'
         ;;
     *)
-        lk_dns_get_records +NAME,VALUE A,AAAA "$@" |
+        lk_dns_get_records +NAME,VALUE -A,AAAA "$@" |
             awk '{ sub("\\.$", "", $1); print $2, $1 }'
         ;;
     esac
@@ -102,4 +115,4 @@ function lk_dns_resolve_hosts() { {
         lk_dns_resolve_names ${USE_DNS:+-d} "${HOSTS[@]}" | awk '{print $1}'
 } | sort -u; }
 
-#### Reviewed: 2021-10-05
+#### Reviewed: 2021-11-17
