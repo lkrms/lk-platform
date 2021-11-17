@@ -5,15 +5,25 @@ lk_double_quote() {
     echo "\"${1%.}\""
 }
 
-lk_application_suppress() {
+maybe_create_file() {
+    [ -e "$1" ] ||
+        { install -d -m 00755 "${1%/*}" &&
+            install -m 00644 /dev/null "$1"; }
+}
+
+suppress_autostart() {
     FILE=~/.config/autostart/$1.desktop
-    [ -e "$FILE" ] ||
-        { install -d -m 00755 "${FILE%/*}" &&
-            install -m 00644 /dev/null "$FILE"; } || return
+    maybe_create_file "$FILE"
     echo "\
 [Desktop Entry]
 Hidden=true
 " >"$FILE"
+}
+
+suppress_appimage_integration() {
+    # See https://github.com/AppImage/AppImageSpec/blob/master/draft.md#desktop-integration
+    maybe_create_file ~/.local/share/appimagekit/no_desktopintegration
+    export DESKTOPINTEGRATION=no
 }
 
 [ -n "${LK_BASE-}" ] || { SH=$(
@@ -50,15 +60,15 @@ export LK_BASE
         eval "$SH"
     ! type xiccd >/dev/null 2>&1 || {
         xiccd &
-        lk_application_suppress xiccd
+        suppress_autostart xiccd
     } || true
     ! type displaycal-apply-profiles >/dev/null 2>&1 ||
-        lk_application_suppress z-displaycal-apply-profiles || true
+        suppress_autostart z-displaycal-apply-profiles || true
     ! type autorandr >/dev/null 2>&1 ||
         { { autorandr --change --force ||
             AUTORANDR_PROFILE_FOLDER=~/.config/autorandr/default \
                 "$LK_BASE/lib/autorandr/postswitch"; } &&
-            lk_application_suppress autorandr; } || true
+            suppress_autostart autorandr; } || true
     QT_FONT_DPI=$(xdpyinfo |
         grep -Eo '^[[:blank:]]+resolution:[[:blank:]]*[0-9]+x[0-9]+' |
         grep -Eo '[0-9]+' | head -n1) &&
@@ -97,5 +107,7 @@ xfconf-query -c xfce4-power-manager \
     -p /xfce4-power-manager/presentation-mode -n -t bool -s false
 xfconf-query -c xfce4-notifyd \
     -p /do-not-disturb -n -t bool -s false
+
+suppress_appimage_integration
 
 exec /usr/bin/startxfce4 "$@"
