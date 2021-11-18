@@ -22,7 +22,7 @@ function _lk_sudo_check() {
 # set, attempt without `sudo` first and only run as root if the first attempt
 # fails.
 function lk_elevate() {
-    local _SH _COMMAND
+    local _SH _COMMAND _LK_STACK_DEPTH=$((1 + ${_LK_STACK_DEPTH:-0}))
     _SH=$(_lk_sudo_check "$@") && eval "$_SH" || return
     if [ "$EUID" -eq 0 ]; then
         [ $# -eq 0 ] ||
@@ -55,7 +55,7 @@ function lk_elevate() {
 # be used, attempt without `sudo` first and only run as root if the first
 # attempt fails.
 function lk_sudo() {
-    local _SH
+    local _SH _LK_STACK_DEPTH=$((1 + ${_LK_STACK_DEPTH:-0}))
     _SH=$(_lk_sudo_check "$@") && eval "$_SH" || return
     if [ -n "${LK_SUDO-}" ]; then
         lk_elevate "$@"

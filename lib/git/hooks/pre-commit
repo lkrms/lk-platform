@@ -1,0 +1,28 @@
+#!/bin/bash
+
+LK_TTY_NO_COLOUR=1 \
+    . lk-bash-load.sh || exit
+lk_include git
+
+s=/
+
+HOOK=$0
+[ "${HOOK#/}" != "$HOOK" ] || HOOK=$PWD/$HOOK
+LOG_FILE=/tmp/${HOOK//"$s"/__}.log
+printf '\n====> %s invoked\nArguments:\n%s\nEnvironment:\n%s\n' "$HOOK" \
+    "$(lk_echo_args "$@" | sed 's/^/  /')" \
+    "$(printenv | sed 's/^/  /')" |
+    lk_log >>"$LOG_FILE"
+exec > >(tee >(lk_log >>"$LOG_FILE")) 2>&1
+
+cd "${PWD%/.git}"
+lk_mktemp_with INVALID shfmt -l -i 4 -s .
+shfmt -w -i 4 -s .
+
+! grep -q . "$INVALID" || {
+    lk_tty_error -r "Invalid formatting:" $'\n'"$(lk_pass cat "$INVALID")" ||
+        lk_die ""
+}
+
+./src/build-all.sh
+git add lib/bash/include/*.sh lib/json/regex.json

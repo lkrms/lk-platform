@@ -324,7 +324,7 @@ lk_log_start
                 -e 's/^([a-zA-Z_][a-zA-Z0-9_]*)=.*/\1/p' "$CONF_FILE"; } |
             sort -u) \
         <(lk_echo_array KNOWN_SETTINGS | sort)))
-    lk_file_replace "$CONF_FILE" "$(lk_get_shell_var \
+    lk_file_replace "$CONF_FILE" "$(lk_var_sh \
         "${KNOWN_SETTINGS[@]}" \
         ${OTHER_SETTINGS[@]+"${OTHER_SETTINGS[@]}"})"
 

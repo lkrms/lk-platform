@@ -211,7 +211,7 @@ lk_lock LOCK_FILE LOCK_FD "${LK_PATH_PREFIX}install"
 if lk_is_bootstrap; then
     FILE=$LK_BASE/etc/lk-platform/lk-platform.conf
     install -m 00664 -g adm /dev/null "$FILE"
-    LK_SSH_JUMP_KEY=${LK_SSH_JUMP_KEY:+jump} lk_get_shell_var \
+    LK_SSH_JUMP_KEY=${LK_SSH_JUMP_KEY:+jump} lk_var_sh \
         LK_BASE \
         LK_PATH_PREFIX \
         LK_NODE_HOSTNAME \
@@ -260,6 +260,25 @@ IPTABLES_TCP_LISTEN=()
 IPTABLES_UDP_LISTEN=()
 CURL_OPTIONS=(-fsSLH "Cache-Control: no-cache" -H "Pragma: no-cache" --retry 2)
 
+APT_REMOVE=(
+    # Recommended by ubuntu-minimal
+    rsyslog
+
+    # Recommended by ubuntu-standard
+    mlocate
+
+    # Recommended by ubuntu-server
+    landscape-common
+    lxd
+    lxd-agent-loader
+    snapd
+)
+[ -n "$LK_UPGRADE_EMAIL" ] ||
+    APT_REMOVE+=(
+        apt-listchanges
+        apticron
+    )
+
 APT_REPOS=()
 APT_SUPPRESS=()
 APT_FILTER=()
@@ -270,6 +289,8 @@ PHPVER=$(lk_hosting_php_get_default_version)
 CERTBOT_REPO=ppa:certbot/certbot
 case "$DISTRIB_RELEASE" in
 16.04)
+    # Ubuntu 16.04's ubuntu-minimal package "Depends" on rsyslog
+    lk_arr_remove APT_REMOVE rsyslog
     APT_REPOS+=("$CERTBOT_REPO")
     APT_SUPPRESS+=(
         icdiff
@@ -514,25 +535,6 @@ $IPV6_ADDRESS $HOST_NAMES}" &&
             lk_apt_reinstall_damaged
     fi
 
-    APT_REMOVE=(
-        # Recommended by ubuntu-minimal
-        rsyslog
-
-        # Recommended by ubuntu-standard
-        mlocate
-
-        # Recommended by ubuntu-server
-        landscape-common
-        lxd
-        lxd-agent-loader
-        snapd
-    )
-    [ -n "$LK_UPGRADE_EMAIL" ] ||
-        APT_REMOVE+=(
-            apt-listchanges
-            apticron
-        )
-
     IFS=,
     APT_PACKAGES=($LK_NODE_PACKAGES)
     unset IFS
@@ -566,8 +568,7 @@ $IPV6_ADDRESS $HOST_NAMES}" &&
         FILE=/etc/logrotate.d/lk-platform
         OLD_FILE=/etc/logrotate.d/${LK_PATH_PREFIX}log
         maybe_move_old "$OLD_FILE" "$FILE"
-        DIR=$LK_BASE/var/log
-        [[ $DIR =~ ^[-a-zA-Z0-9/._]+$ ]] || DIR=$(lk_double_quote "$DIR")
+        DIR=$(lk_double_quote "$LK_BASE/var/log")
         GROUP=$(lk_file_group "$LK_BASE")
         lk_install -m 00644 "$FILE"
         lk_file_replace "$FILE" < <(LK_PLATFORM_LOGS="$DIR/*.log" \
@@ -610,7 +611,7 @@ $IPV6_ADDRESS $HOST_NAMES}" &&
         get_before_file "$LK_CONF_OPTION_FILE"
         lk_conf_set_option DIFF_ONLY '"1"'
         lk_conf_set_option EMAIL \
-            "$(lk_double_quote "${LK_UPGRADE_EMAIL:-root}")"
+            "$(lk_double_quote -f "${LK_UPGRADE_EMAIL:-root}")"
         lk_conf_set_option LISTCHANGES_PROFILE '"apt"'
         check_after_file
     fi
@@ -1053,7 +1054,7 @@ EOF
                 FILE=$LK_BASE/etc/sites/${LK_HOST_DOMAIN,,}.conf
                 lk_install -m 00660 -g adm "$FILE" &&
                     lk_file_replace "$FILE" \
-                        "$(SITE_ENABLE=N lk_get_shell_var SITE_ENABLE)"
+                        "$(SITE_ENABLE=N lk_var_sh SITE_ENABLE)"
             }
             HOST_SITE_ROOT=$(lk_expand_path "~$LK_HOST_ACCOUNT")
             lk_hosting_site_configure "$LK_HOST_DOMAIN" "$HOST_SITE_ROOT"

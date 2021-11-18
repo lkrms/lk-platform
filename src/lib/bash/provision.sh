@@ -325,7 +325,7 @@ function lk_ssh_add_host() {
     [ $# -ge 3 ] || lk_usage "\
 Usage: $FUNCNAME [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
         return
-    NAME=${NAME#$SSH_PREFIX}
+    NAME=${NAME#"$SSH_PREFIX"}
     [ "${KEY_FILE:--}" = - ] ||
         [ -f "$KEY_FILE" ] ||
         [ -f "$h/.ssh/$KEY_FILE" ] ||
@@ -357,7 +357,7 @@ Usage: $FUNCNAME [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
         HOST=${BASH_REMATCH[1]}
         PORT=${BASH_REMATCH[2]}
     }
-    JUMP_HOST_NAME=${JUMP_HOST_NAME:+$SSH_PREFIX${JUMP_HOST_NAME#$SSH_PREFIX}}
+    JUMP_HOST_NAME=${JUMP_HOST_NAME:+$SSH_PREFIX${JUMP_HOST_NAME#"$SSH_PREFIX"}}
     ! lk_is_true TEST || {
         if [ -z "$JUMP_HOST_NAME" ]; then
             lk_ssh_is_reachable "$HOST" "${PORT:-22}"
@@ -394,7 +394,7 @@ HostName        $HOST${PORT:+
 Port            $PORT}${SSH_USER:+
 User            $SSH_USER}${KEY_FILE:+
 IdentityFile    "$KEY_FILE"}${JUMP_HOST_NAME:+
-ProxyJump       $SSH_PREFIX${JUMP_HOST_NAME#$SSH_PREFIX}}
+ProxyJump       $SSH_PREFIX${JUMP_HOST_NAME#"$SSH_PREFIX"}}
 EOF
     )
     CONF_FILE=$h/.ssh/${SSH_PREFIX}config.d/${LK_SSH_PRIORITY:-60}-$NAME
@@ -575,37 +575,6 @@ function lk_node_public_ipv6() {
     } | sort -u
 }
 
-function lk_host_soa() {
-    local IFS ANSWER APEX NAMESERVERS NAMESERVER SOA
-    unset IFS
-    ANSWER=$(lk_dns_get_records_first_parent NS "$1") || return
-    ! lk_verbose 2 ||
-        lk_console_detail "Looking up SOA for domain:" "$1"
-    APEX=$(awk '{sub("\\.$", "", $1); print $1}' <<<"$ANSWER" | sort -u)
-    [ "$(wc -l <<<"$APEX")" -eq 1 ] ||
-        lk_warn "invalid response to NS lookup" || return
-    NAMESERVERS=($(awk '{sub("\\.$", "", $5); print $5}' <<<"$ANSWER" | sort))
-    ! lk_verbose 2 || {
-        lk_console_detail "Domain apex:" "$APEX"
-        lk_console_detail "Name servers:" "$(lk_implode_arr ", " NAMESERVERS)"
-    }
-    for NAMESERVER in "${NAMESERVERS[@]}"; do
-        if SOA=$(
-            _LK_DNS_SERVER=$NAMESERVER
-            _LK_DIG_OPTIONS=(+norecurse)
-            lk_require_output lk_dns_get_records SOA "$APEX"
-        ); then
-            ! lk_verbose 2 ||
-                lk_console_detail "SOA from $NAMESERVER for $APEX:" $'\n'"$SOA"
-            echo "$SOA"
-            break
-        else
-            unset SOA
-        fi
-    done
-    [ -n "${SOA-}" ] || lk_warn "SOA lookup failed: $1"
-} #### Reviewed: 2021-03-30
-
 function lk_host_ns_resolve() {
     local IFS NAMESERVER IP CNAME _LK_DNS_SERVER _LK_DIG_OPTIONS \
         _LK_CNAME_DEPTH=${_LK_CNAME_DEPTH:-0}
@@ -620,13 +589,13 @@ function lk_host_ns_resolve() {
         lk_console_detail "Using name server:" "$NAMESERVER"
         lk_console_detail "Looking up A and AAAA records for:" "$1"
     }
-    IP=($(lk_dns_get_records +VALUE A,AAAA "$1")) || return
+    IP=($(lk_dns_get_records +VALUE -A,AAAA "$1")) || return
     if [ ${#IP[@]} -eq 0 ]; then
         ! lk_verbose 2 || {
             lk_console_detail "No A or AAAA records returned"
             lk_console_detail "Looking up CNAME record for:" "$1"
         }
-        CNAME=($(lk_dns_get_records +VALUE CNAME "$1")) || return
+        CNAME=($(lk_dns_get_records +VALUE -CNAME "$1")) || return
         if [ ${#CNAME[@]} -eq 1 ]; then
             ! lk_verbose 2 ||
                 lk_console_detail "CNAME value from $NAMESERVER for $1:" \
@@ -686,65 +655,6 @@ function lk_tcp_next_port() {
 function lk_tcp_is_reachable() {
     nc -z -w "${3:-5}" "$1" "$2" &>/dev/null
 }
-
-# lk_certbot_install [-w WEBROOT_PATH] DOMAIN... [-- CERTBOT_ARG...]
-function lk_certbot_install() {
-    local WEBROOT WEBROOT_PATH ERRORS=0 \
-        EMAIL=${LK_LETSENCRYPT_EMAIL-${LK_ADMIN_EMAIL-}} DOMAIN DOMAINS=()
-    unset WEBROOT
-    [ "${1-}" != -w ] || { WEBROOT= && WEBROOT_PATH=$2 && shift 2; }
-    while [ $# -gt 0 ]; do
-        [ "$1" != -- ] || {
-            shift
-            break
-        }
-        DOMAINS+=("$1")
-        shift
-    done
-    [ ${#DOMAINS[@]} -gt 0 ] || lk_usage "\
-Usage: $FUNCNAME [-w WEBROOT_PATH] DOMAIN... [-- CERTBOT_ARG...]" || return
-    lk_test_many lk_is_fqdn "${DOMAINS[@]}" ||
-        lk_warn "invalid domain(s): ${DOMAINS[*]}" || return
-    [ -z "${WEBROOT+1}" ] || lk_elevate test -d "$WEBROOT_PATH" ||
-        lk_warn "directory not found: $WEBROOT_PATH" || return
-    [ -n "$EMAIL" ] || lk_warn "no email address in environment" || return
-    lk_is_email "$EMAIL" || lk_warn "invalid email address: $EMAIL" || return
-    for DOMAIN in "${DOMAINS[@]}"; do
-        lk_node_is_host "$DOMAIN" &&
-            lk_console_log "Domain resolves to this system:" "$DOMAIN" ||
-            lk_console_warning -r \
-                "Domain does not resolve to this system:" "$DOMAIN" ||
-            ((++ERRORS))
-    done
-    [ "$ERRORS" -eq 0 ] ||
-        lk_is_true LK_LETSENCRYPT_IGNORE_DNS ||
-        lk_confirm "Ignore domain resolution errors?" N || return
-    lk_run_detail lk_elevate certbot \
-        ${WEBROOT-run} \
-        ${WEBROOT+certonly} \
-        --non-interactive \
-        --keep-until-expiring \
-        --expand \
-        --agree-tos \
-        --email "$EMAIL" \
-        --no-eff-email \
-        ${WEBROOT---no-redirect} \
-        ${WEBROOT---"${LK_CERTBOT_PLUGIN:-apache}"} \
-        ${WEBROOT+--webroot} \
-        ${WEBROOT+--webroot-path "$WEBROOT_PATH"} \
-        --domains "$(lk_implode_args "," "${DOMAINS[@]}")" \
-        ${LK_CERTBOT_OPTIONS[@]:+"${LK_CERTBOT_OPTIONS[@]}"} \
-        "$@"
-} #### Reviewed: 2021-03-31
-
-# lk_certbot_list_certificates [DOMAIN...]
-function lk_certbot_list_certificates() {
-    local ARGS IFS=,
-    [ $# -eq 0 ] ||
-        ARGS=(--domains "$*")
-    lk_elevate certbot certificates ${ARGS[@]+"${ARGS[@]}"} |
-        awk -f "$LK_BASE/lib/awk/certbot-parse-certificates.awk"
-} #### Reviewed: 2021-04-22
 
 function _lk_option_check() {
     { { [ $# -gt 0 ] &&

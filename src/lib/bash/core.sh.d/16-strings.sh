@@ -17,6 +17,18 @@ function lk_uniq() {
     _lk_stream_args 2 awk '!seen[$0]++ { print }' "$@"
 }
 
+# lk_double_quote [-f] [STRING...]
+#
+# If -f is set, add double quotes even if STRING only contains letters, numbers
+# and safe punctuation (i.e. + - . / @ _).
+function lk_double_quote() {
+    local FORCE
+    unset FORCE
+    [ "${1-}" != -f ] || { FORCE= && shift; }
+    _lk_stream_args 3 sed -E \
+        ${FORCE-$'/^[a-zA-Z0-9+./@_-]*$/b\n'}'s/["$\`]/\\&/g; s/.*/"&"/' "$@"
+}
+
 # lk_implode_args GLUE [ARG...]
 function lk_implode_args() {
     local IFS GLUE=${1//\\/\\\\}

@@ -1,7 +1,8 @@
-// Adapted from the output of `setxkbmap -print`
+// Adapted from the output of `setxkbmap -layout us -option; setxkbmap -print`
 xkb_keymap {
 	xkb_keycodes  { include "evdev+aliases(qwerty)"	};
-	xkb_types     { include "complete+command_option"	};
+	// See https://gitlab.freedesktop.org/xorg/xserver/-/issues/1249
+	xkb_types     { include "command_option+complete"	};
 	xkb_compat    { include "complete"	};
 	xkb_symbols   { include "pc+us+inet(evdev)+lk_platform+macos+tenkeyless"	};
 	xkb_geometry  { include "pc(pc105)"	};

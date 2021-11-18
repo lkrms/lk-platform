@@ -25,54 +25,6 @@ function lk_usage() {
     fi
 }
 
-if lk_bash_at_least 4 2; then
-    # lk_date FORMAT [TIMESTAMP]
-    function lk_date() {
-        # Take advantage of printf support for strftime in Bash 4.2+
-        printf "%($1)T\n" "${2:--1}"
-    }
-else
-    if ! lk_is_macos; then
-        # lk_date FORMAT [TIMESTAMP]
-        function lk_date() {
-            if [ $# -lt 2 ]; then
-                gnu_date "+$1"
-            else
-                gnu_date -d "@$2" "+$1"
-            fi
-        }
-    else
-        # lk_date FORMAT [TIMESTAMP]
-        function lk_date() {
-            if [ $# -lt 2 ]; then
-                date "+$1"
-            else
-                date -jf '%s' "$2" "+$1"
-            fi
-        }
-    fi
-fi #### Reviewed: 2021-04-30
-
-# lk_date_log [TIMESTAMP]
-function lk_date_log() {
-    lk_date "%Y-%m-%d %H:%M:%S %z" "$@"
-} #### Reviewed: 2021-03-26
-
-# lk_date_ymdhms [TIMESTAMP]
-function lk_date_ymdhms() {
-    lk_date "%Y%m%d%H%M%S" "$@"
-} #### Reviewed: 2021-03-26
-
-# lk_date_ymd [TIMESTAMP]
-function lk_date_ymd() {
-    lk_date "%Y%m%d" "$@"
-} #### Reviewed: 2021-03-26
-
-# lk_timestamp
-function lk_timestamp() {
-    lk_date "%s"
-} #### Reviewed: 2021-03-26
-
 if lk_bash_at_least 4 1; then
     function lk_pause() {
         local REPLY
@@ -89,76 +41,6 @@ else
         lk_console_blank
     }
 fi
-
-function lk_double_quote() {
-    if [ $# -gt 0 ]; then
-        printf '%s\n' "$@" | lk_double_quote
-    else
-        sed -E 's/["$\`]/\\&/g; s/.*/"&"/'
-    fi
-}
-
-# lk_get_shell_var [VAR...]
-#
-# Output a shell variable assignment for each declared VAR.
-function lk_get_shell_var() {
-    while [ $# -gt 0 ]; do
-        if [ -n "${!1:+1}" ]; then
-            printf '%s=%s\n' "$1" "$(lk_double_quote "${!1}")"
-        elif [ -n "${!1+1}" ]; then
-            printf '%s=\n' "$1"
-        fi
-        shift
-    done
-}
-
-function lk_get_quoted_var() {
-    while [ $# -gt 0 ]; do
-        lk_maybe_local
-        if [ -n "${!1-}" ]; then
-            printf '%s=%q\n' "$1" "${!1}"
-        else
-            printf '%s=\n' "$1"
-        fi
-        shift
-    done
-}
-
-# lk_get_env [-n] [VAR...]
-function lk_get_env() {
-    local _LK_VAR_LIST=
-    [ "${1-}" != -n ] || { _LK_VAR_LIST=1 && shift; }
-    if [ -n "${_LK_ENV+1}" ]; then
-        echo "$_LK_ENV"
-    else
-        declare -x
-    fi | awk \
-        -v var="$(lk_regex_implode "$@")" \
-        -v var_list="$_LK_VAR_LIST" \
-        -v prefix="$(lk_maybe_local)" \
-        'BEGIN {
-    declare = "^declare -[^ ]+ "
-    any_var = "[a-zA-Z_][a-zA-Z0-9_]*"
-    var = var ? var : any_var
-    val = "([^\"\\\\]+|\\.)*"
-}
-function print_line() {
-    l = c ? l : $0
-    sub(declare, "", l)
-    if (var_list)
-        sub("=\".*", "", l)
-    else
-        l = prefix l
-    print l
-}
-!c && $0 ~ declare any_var "$" { next }
-!c && $0 ~ declare var "=\"" val "\"$" { print_line(); next }
-!c && $0 ~ declare var "=\"" val "$" { c = 1; l = $0; next }
-var != any_var && !c && $0 ~ declare any_var "=\"" val "\"$" { next }
-var != any_var && !c && $0 ~ declare any_var "=\"" val "$" { c = 2; next }
-c == 1 { l = l "\"$\47\\n\47\"" $0 }
-c && $0 ~ "^" val "\"$" { if (c == 1) print_line(); c = 0 }'
-} #### Reviewed: 2021-06-07
 
 # lk_path_edit REMOVE_REGEX [MOVE_REGEX [PATH]]
 function lk_path_edit() {
@@ -283,22 +165,6 @@ END     {
     print s_out
 }'
     fi
-}
-
-# lk_replace FIND REPLACE STRING
-#
-# Replace all occurrences of FIND in STRING with REPLACE.
-function lk_replace() {
-    local STRING
-    STRING=${3//"$1"/$2}
-    echo "$STRING"
-}
-
-# lk_in_string NEEDLE HAYSTACK
-#
-# True if NEEDLE is a substring of HAYSTACK.
-function lk_in_string() {
-    [ "$(lk_replace "$1" "" "$2.")" != "$2." ]
 }
 
 function lk_has_newline() {
@@ -1283,7 +1149,7 @@ function lk_file_add_suffix() {
     [[ $1 =~ [^/]((\.tar)?\.[-a-zA-Z0-9_]+/*|/*)$ ]] &&
         EXT=${BASH_REMATCH[1]} ||
         EXT=
-    echo "${1%$EXT}$2$EXT"
+    echo "${1%"$EXT"}$2$EXT"
 }
 
 # lk_file_maybe_add_extension FILENAME EXT
@@ -1791,7 +1657,7 @@ substr($0 "/", 1, l) == u "/" {
 function lk_remove_false() {
     local _LK_TEMP_ARRAY _LK_TEST _LK_VAL _lk_i=0
     _lk_array_fill_temp "$2" || return
-    _LK_TEST="($(lk_replace '{}' '$_LK_VAL' "$1"))"
+    _LK_TEST="(${1//{\}/\$_LK_VAL})"
     eval "$2=()"
     for _LK_VAL in ${_LK_TEMP_ARRAY[@]+"${_LK_TEMP_ARRAY[@]}"}; do
         ! eval "$_LK_TEST" || eval "$2[$((_lk_i++))]=\$_LK_VAL"
@@ -1857,7 +1723,7 @@ function lk_expand_path() {
     # Expand globs
     if [[ $_PATH =~ [*?] ]]; then
         # Escape characters that have special meanings within double quotes
-        _PATH=$(lk_double_quote "$_PATH")
+        _PATH=$(lk_double_quote -f "$_PATH")
         _PATH=${_PATH:1:${#_PATH}-2}
         # Add quotes around glob sequences so that when the whole path is
         # quoted, they will be unquoted
@@ -2182,7 +2048,7 @@ function lk_file_backup() {
                         OWNER_HOME=$(_lk_realpath "$OWNER_HOME")
                 } 2>/dev/null || OWNER_HOME=
                 if [ -d "${_LK_INST:-${LK_BASE-}}" ] &&
-                    lk_will_elevate && [ "${FILE#$OWNER_HOME}" = "$FILE" ]; then
+                    lk_will_elevate && [ "${FILE#"$OWNER_HOME"}" = "$FILE" ]; then
                     lk_install -d \
                         -m "$([ -g "${_LK_INST:-$LK_BASE}" ] &&
                             echo 02775 ||

@@ -6,7 +6,7 @@ tail=$(mktemp)
 out=$(mktemp)
 die() { echo "${BASH_SOURCE-$0}: $1" >&2 && rm -f "$out" && false || exit; }
 
-_dir=${BASH_SOURCE%${BASH_SOURCE##*/}}
+_dir=${BASH_SOURCE%"${BASH_SOURCE##*/}"}
 _dir=${_dir:-$PWD}
 _dir=$(cd "$_dir" && pwd -P)
 cd "$_dir/.."

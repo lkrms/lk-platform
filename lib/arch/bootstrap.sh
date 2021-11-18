@@ -430,7 +430,7 @@ in_target install -d -m 01777 -g adm "$LK_BASE"/var/log
 in_target install -d -m 00750 -g adm "$LK_BASE"/var/backup
 FILE=$LK_BASE/etc/lk-platform/lk-platform.conf
 in_target install -m 00664 -g adm /dev/null "$FILE"
-lk_get_shell_var \
+lk_var_sh \
     LK_BASE \
     LK_PATH_PREFIX \
     LK_NODE_HOSTNAME \

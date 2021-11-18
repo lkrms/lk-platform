@@ -75,7 +75,7 @@ function exit_trap() {
             FILE=${FILE#packages-macos-}
             FILE=${FILE%.sh}
             FILE=$LK_BASE/share/packages/macos/$FILE.sh
-            [ -f "$FILE" ] || PACKAGES_REL=${FILE#$LK_BASE/}
+            [ -f "$FILE" ] || PACKAGES_REL=${FILE#"$LK_BASE/"}
             LK_PACKAGES_FILE=$FILE
         }
         SETTINGS_SH=$(
@@ -258,7 +258,7 @@ EOF
         sudo install -d -m 00750 -g admin "$LK_BASE"/var/backup
         FILE=$LK_BASE/etc/lk-platform/lk-platform.conf
         sudo install -m 00664 -g admin /dev/null "$FILE"
-        lk_get_shell_var \
+        lk_var_sh \
             LK_BASE \
             LK_PATH_PREFIX \
             LK_PLATFORM_BRANCH \
