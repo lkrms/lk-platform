@@ -4,7 +4,7 @@ function _lk_log_install_file() {
     local GID
     if [ ! -w "$1" ]; then
         if [ ! -e "$1" ]; then
-            local LOG_DIR=${1%${1##*/}}
+            local LOG_DIR=${1%"${1##*/}"}
             [ -d "${LOG_DIR:=$PWD}" ] ||
                 install -d -m 00755 "$LOG_DIR" 2>/dev/null ||
                 sudo install -d -m 01777 "$LOG_DIR" || return

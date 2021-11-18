@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+_LK_ENV=$(declare -x)
+
 lk_bin_depth=1 . lk-bash-load.sh || exit
 lk_include validate
 
@@ -139,6 +141,7 @@ allow-url:,no-log,no-reject"
 eval "set -- $LK_GETOPT"
 
 UBUNTU_HOST=${LK_UBUNTU_CLOUDIMG_HOST:-cloud-images.ubuntu.com}
+UBUNTU_SHA_URL=${LK_UBUNTU_CLOUDIMG_SHA_URL:-https://cloud-images.ubuntu.com}
 UBUNTU_MIRROR=${LK_UBUNTU_MIRROR:-http://archive.ubuntu.com/ubuntu}
 
 SYSTEM_SOCKET=
@@ -442,45 +445,51 @@ case "$IMAGE" in
 *20.04*minimal)
     IMAGE_NAME=ubuntu-20.04-minimal
     IMAGE_URL=http://$UBUNTU_HOST/minimal/releases/focal/release/ubuntu-20.04-minimal-cloudimg-$IMAGE_ARCH.img
-    SHA_URLS=(https://cloud-images.ubuntu.com/minimal/releases/focal/release/SHA256SUMS.gpg)
+    SHA_URLS=(
+        "$UBUNTU_SHA_URL"/minimal/releases/focal/release/SHA256SUMS.gpg
+    )
     OS_VARIANT=ubuntu20.04
     ;;
 *20.04*)
     IMAGE_NAME=ubuntu-20.04
     IMAGE_URL=http://$UBUNTU_HOST/focal/current/focal-server-cloudimg-$IMAGE_ARCH.img
     SHA_URLS=(
-        https://cloud-images.ubuntu.com/focal/current/SHA256SUMS.gpg
-        https://cloud-images.ubuntu.com/focal/current/SHA256SUMS
+        "$UBUNTU_SHA_URL"/focal/current/SHA256SUMS.gpg
+        "$UBUNTU_SHA_URL"/focal/current/SHA256SUMS
     )
     OS_VARIANT=ubuntu20.04
     ;;
 *18.04*minimal)
     IMAGE_NAME=ubuntu-18.04-minimal
     IMAGE_URL=http://$UBUNTU_HOST/minimal/releases/bionic/release/ubuntu-18.04-minimal-cloudimg-$IMAGE_ARCH.img
-    SHA_URLS=(https://cloud-images.ubuntu.com/minimal/releases/bionic/release/SHA256SUMS.gpg)
+    SHA_URLS=(
+        "$UBUNTU_SHA_URL"/minimal/releases/bionic/release/SHA256SUMS.gpg
+    )
     OS_VARIANT=ubuntu18.04
     ;;
 *18.04*)
     IMAGE_NAME=ubuntu-18.04
     IMAGE_URL=http://$UBUNTU_HOST/bionic/current/bionic-server-cloudimg-$IMAGE_ARCH.img
     SHA_URLS=(
-        https://cloud-images.ubuntu.com/bionic/current/SHA256SUMS.gpg
-        https://cloud-images.ubuntu.com/bionic/current/SHA256SUMS
+        "$UBUNTU_SHA_URL"/bionic/current/SHA256SUMS.gpg
+        "$UBUNTU_SHA_URL"/bionic/current/SHA256SUMS
     )
     OS_VARIANT=ubuntu18.04
     ;;
 *16.04*minimal)
     IMAGE_NAME=ubuntu-16.04-minimal
     IMAGE_URL=http://$UBUNTU_HOST/minimal/releases/xenial/release/ubuntu-16.04-minimal-cloudimg-$IMAGE_ARCH-disk1.img
-    SHA_URLS=(https://cloud-images.ubuntu.com/minimal/releases/xenial/release/SHA256SUMS.gpg)
+    SHA_URLS=(
+        "$UBUNTU_SHA_URL"/minimal/releases/xenial/release/SHA256SUMS.gpg
+    )
     OS_VARIANT=ubuntu16.04
     ;;
 *16.04*)
     IMAGE_NAME=ubuntu-16.04
     IMAGE_URL=http://$UBUNTU_HOST/xenial/current/xenial-server-cloudimg-$IMAGE_ARCH-disk1.img
     SHA_URLS=(
-        https://cloud-images.ubuntu.com/xenial/current/SHA256SUMS.gpg
-        https://cloud-images.ubuntu.com/xenial/current/SHA256SUMS
+        "$UBUNTU_SHA_URL"/xenial/current/SHA256SUMS.gpg
+        "$UBUNTU_SHA_URL"/xenial/current/SHA256SUMS
     )
     OS_VARIANT=ubuntu16.04
     ;;
@@ -488,8 +497,8 @@ case "$IMAGE" in
     IMAGE_NAME=ubuntu-14.04
     IMAGE_URL=http://$UBUNTU_HOST/trusty/current/trusty-server-cloudimg-$IMAGE_ARCH-disk1.img
     SHA_URLS=(
-        https://cloud-images.ubuntu.com/trusty/current/SHA256SUMS.gpg
-        https://cloud-images.ubuntu.com/trusty/current/SHA256SUMS
+        "$UBUNTU_SHA_URL"/trusty/current/SHA256SUMS.gpg
+        "$UBUNTU_SHA_URL"/trusty/current/SHA256SUMS
     )
     OS_VARIANT=ubuntu14.04
     ;;
@@ -497,8 +506,8 @@ case "$IMAGE" in
     IMAGE_NAME=ubuntu-12.04
     IMAGE_URL=http://$UBUNTU_HOST/precise/current/precise-server-cloudimg-$IMAGE_ARCH-disk1.img
     SHA_URLS=(
-        https://cloud-images.ubuntu.com/precise/current/SHA256SUMS.gpg
-        https://cloud-images.ubuntu.com/precise/current/SHA256SUMS
+        "$UBUNTU_SHA_URL"/precise/current/SHA256SUMS.gpg
+        "$UBUNTU_SHA_URL"/precise/current/SHA256SUMS
     )
     OS_VARIANT=ubuntu12.04
     ;;
@@ -566,9 +575,7 @@ if [ -n "$STACKSCRIPT" ]; then
             lk_console_detail_list "$SELECT_TEXT:"
         [ -z "${DEFAULT-}" ] ||
             lk_console_detail "Default value:" "$DEFAULT"
-        VALUE=$(SH=$(_LK_CAN_FAIL=1 &&
-            _LK_STACK_DEPTH=1 lk_require_output lk_get_env "$NAME") &&
-            eval "$SH && echo \"\$$NAME\"") || unset VALUE
+        VALUE=$(lk_var_env "$NAME") || unset VALUE
         i=0
         while ((++i)); do
             NO_ERROR_DISPLAYED=1
@@ -667,17 +674,17 @@ lk_confirm "OK to proceed?" Y || lk_die ""
     IMG_NAME=${FILENAME%.*}
     if [ ! -f "$FILENAME" ] || lk_is_true REFRESH_CLOUDIMG; then
         lk_console_item "Downloading" "$FILENAME"
-        wget --timestamping "$IMAGE_URL" || {
+        wget --no-cache --timestamping "$IMAGE_URL" || {
             rm -f "$FILENAME"
             lk_die "error downloading $IMAGE_URL"
         }
         if [ ${#SHA_URLS[@]} -eq 1 ]; then
-            SHA_SUMS=$(curl "${SHA_URLS[0]}" |
+            SHA_SUMS=$(lk_curl "${SHA_URLS[0]}" |
                 gpg --no-default-keyring --keyring "$SHA_KEYRING" --decrypt)
         else
-            SHA_SUMS=$(curl "${SHA_URLS[1]}") &&
+            SHA_SUMS=$(lk_curl "${SHA_URLS[1]}") &&
                 gpg --no-default-keyring --keyring "$SHA_KEYRING" --verify \
-                    <(curl "${SHA_URLS[0]}") <(echo "$SHA_SUMS")
+                    <(lk_curl "${SHA_URLS[0]}") <(echo "$SHA_SUMS")
         fi || lk_die "error verifying ${SHA_URLS[0]}"
         echo "$SHA_SUMS" >"SHASUMS-$IMAGE_NAME" ||
             lk_die "error writing to SHASUMS-$IMAGE_NAME"

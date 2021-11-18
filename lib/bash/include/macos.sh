@@ -82,6 +82,32 @@ function lk_macos_version_name() {
     esac
 }
 
+# lk_macos_setenv VARIABLE VALUE
+function lk_macos_setenv() {
+    lk_is_identifier "${1-}" ||
+        lk_warn "not a valid identifier: ${1-}" || return
+    local LK_SUDO=1 _LABEL=setenv.$1 _FILE _TEMP
+    _FILE=/Library/LaunchAgents/$_LABEL.plist
+    _TEMP=$(lk_mktemp_dir)/$_LABEL.plist &&
+        lk_delete_on_exit "${_TEMP%/*}" || return
+    defaults write "$_TEMP" Label -string "$_LABEL" &&
+        defaults write "$_TEMP" ProgramArguments -array \
+            /bin/launchctl setenv "$1" "${2-}" &&
+        defaults write "$_TEMP" RunAtLoad -bool true || return
+    if ! diff \
+        <(plutil -convert xml1 -o - "$_FILE" 2>/dev/null) \
+        <(plutil -convert xml1 -o - "$_TEMP") >/dev/null; then
+        lk_root || launchctl unload "$_FILE" &>/dev/null || true
+        lk_elevate install -m 00644 "$_TEMP" "$_FILE" || return
+        lk_root || launchctl load -w "$_FILE" || return
+    fi
+    grep -Eq "\<$1\>" /etc/profile &>/dev/null || {
+        lk_file_keep_original "$_FILE" && lk_elevate tee -a \
+            /etc/profile <<<"export $1=$(lk_double_quote "${2-}")" >/dev/null
+    } || return
+    export "$1=${2-}"
+}
+
 function lk_macos_set_hostname() {
     lk_elevate scutil --set ComputerName "$1" &&
         lk_elevate scutil --set HostName "$1" &&

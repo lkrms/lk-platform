@@ -42,76 +42,6 @@ else
     }
 fi
 
-function lk_double_quote() {
-    if [ $# -gt 0 ]; then
-        printf '%s\n' "$@" | lk_double_quote
-    else
-        sed -E 's/["$\`]/\\&/g; s/.*/"&"/'
-    fi
-}
-
-# lk_get_shell_var [VAR...]
-#
-# Output a shell variable assignment for each declared VAR.
-function lk_get_shell_var() {
-    while [ $# -gt 0 ]; do
-        if [ -n "${!1:+1}" ]; then
-            printf '%s=%s\n' "$1" "$(lk_double_quote "${!1}")"
-        elif [ -n "${!1+1}" ]; then
-            printf '%s=\n' "$1"
-        fi
-        shift
-    done
-}
-
-function lk_get_quoted_var() {
-    while [ $# -gt 0 ]; do
-        lk_maybe_local
-        if [ -n "${!1-}" ]; then
-            printf '%s=%q\n' "$1" "${!1}"
-        else
-            printf '%s=\n' "$1"
-        fi
-        shift
-    done
-}
-
-# lk_get_env [-n] [VAR...]
-function lk_get_env() {
-    local _LK_VAR_LIST=
-    [ "${1-}" != -n ] || { _LK_VAR_LIST=1 && shift; }
-    if [ -n "${_LK_ENV+1}" ]; then
-        echo "$_LK_ENV"
-    else
-        declare -x
-    fi | awk \
-        -v var="$(lk_regex_implode "$@")" \
-        -v var_list="$_LK_VAR_LIST" \
-        -v prefix="$(lk_maybe_local)" \
-        'BEGIN {
-    declare = "^declare -[^ ]+ "
-    any_var = "[a-zA-Z_][a-zA-Z0-9_]*"
-    var = var ? var : any_var
-    val = "([^\"\\\\]+|\\.)*"
-}
-function print_line() {
-    l = c ? l : $0
-    sub(declare, "", l)
-    if (var_list)
-        sub("=\".*", "", l)
-    else
-        l = prefix l
-    print l
-}
-!c && $0 ~ declare any_var "$" { next }
-!c && $0 ~ declare var "=\"" val "\"$" { print_line(); next }
-!c && $0 ~ declare var "=\"" val "$" { c = 1; l = $0; next }
-var != any_var && !c && $0 ~ declare any_var "=\"" val "\"$" { next }
-var != any_var && !c && $0 ~ declare any_var "=\"" val "$" { c = 2; next }
-c == 1 { l = l "\"$\47\\n\47\"" $0 }
-c && $0 ~ "^" val "\"$" { if (c == 1) print_line(); c = 0 }'
-} #### Reviewed: 2021-06-07
-
 # lk_path_edit REMOVE_REGEX [MOVE_REGEX [PATH]]
 function lk_path_edit() {
     [ $# -gt 0 ] || lk_usage "\
@@ -1219,7 +1149,7 @@ function lk_file_add_suffix() {
     [[ $1 =~ [^/]((\.tar)?\.[-a-zA-Z0-9_]+/*|/*)$ ]] &&
         EXT=${BASH_REMATCH[1]} ||
         EXT=
-    echo "${1%$EXT}$2$EXT"
+    echo "${1%"$EXT"}$2$EXT"
 }
 
 # lk_file_maybe_add_extension FILENAME EXT
@@ -1793,7 +1723,7 @@ function lk_expand_path() {
     # Expand globs
     if [[ $_PATH =~ [*?] ]]; then
         # Escape characters that have special meanings within double quotes
-        _PATH=$(lk_double_quote "$_PATH")
+        _PATH=$(lk_double_quote -f "$_PATH")
         _PATH=${_PATH:1:${#_PATH}-2}
         # Add quotes around glob sequences so that when the whole path is
         # quoted, they will be unquoted
@@ -2118,7 +2048,7 @@ function lk_file_backup() {
                         OWNER_HOME=$(_lk_realpath "$OWNER_HOME")
                 } 2>/dev/null || OWNER_HOME=
                 if [ -d "${_LK_INST:-${LK_BASE-}}" ] &&
-                    lk_will_elevate && [ "${FILE#$OWNER_HOME}" = "$FILE" ]; then
+                    lk_will_elevate && [ "${FILE#"$OWNER_HOME"}" = "$FILE" ]; then
                     lk_install -d \
                         -m "$([ -g "${_LK_INST:-$LK_BASE}" ] &&
                             echo 02775 ||

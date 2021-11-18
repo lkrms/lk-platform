@@ -168,7 +168,7 @@ function lk_git_remote_head() {
     REMOTE=${1:-$(lk_git_remote_singleton)} || lk_warn "no remote" || return
     HEAD=$(git rev-parse --verify --abbrev-ref "$REMOTE/HEAD" 2>/dev/null) &&
         [ "$HEAD" != "$REMOTE/HEAD" ] &&
-        echo "${HEAD#$REMOTE/}"
+        echo "${HEAD#"$REMOTE/"}"
 }
 
 function lk_git_branch_current() {

@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-_dir=${BASH_SOURCE%${BASH_SOURCE##*/}}
+_dir=${BASH_SOURCE%"${BASH_SOURCE##*/}"}
 _dir=${_dir:-$PWD}
 _dir=$(cd "$_dir" && pwd -P)
 

@@ -1,7 +1,5 @@
 #!/bin/bash
 
-[ -n "${_LK_ENV+1}" ] || _LK_ENV=$(declare -x)
-
 [ -n "${_LK_INST-}" ] || { SH=$(
     set -u
     lk_die() { echo "${BASH_SOURCE-$0}: $1" >&2 && false || exit; }

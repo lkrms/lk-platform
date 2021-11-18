@@ -43,7 +43,7 @@ function first_snapshot_in_hour() {
 function prune_snapshot() {
     local PRUNE=$SNAPSHOT_ROOT/$1
     lk_console_item \
-        "Pruning (${2:-expired}):" "${PRUNE#$BACKUP_ROOT/snapshot/}"
+        "Pruning (${2:-expired}):" "${PRUNE#"$BACKUP_ROOT/snapshot/"}"
     lk_maybe -p touch "$PRUNE/.pruning" &&
         lk_maybe -p rm -Rf "$PRUNE"
 }

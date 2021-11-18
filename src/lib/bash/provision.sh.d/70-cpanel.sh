@@ -72,7 +72,7 @@ function lk_cpanel_server_set() {
                 lk_warn "unable to create API token" || return
             ;;
         esac
-    lk_file_replace "$FILE" < <(lk_get_shell_var "${!_LK_CPANEL_@}") &&
+    lk_file_replace "$FILE" < <(lk_var_sh "${!_LK_CPANEL_@}") &&
         lk_symlink "${FILE##*/}" "${FILE%/*}/cpanel-current"
 }
 
@@ -167,7 +167,7 @@ function lk_whm_server_set() {
                 lk_warn "unable to create API token" || return
             ;;
         esac
-    lk_file_replace "$FILE" < <(lk_get_shell_var "${!_LK_WHM_@}") &&
+    lk_file_replace "$FILE" < <(lk_var_sh "${!_LK_WHM_@}") &&
         lk_symlink "${FILE##*/}" "${FILE%/*}/whm-current"
 }
 

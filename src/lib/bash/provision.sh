@@ -325,7 +325,7 @@ function lk_ssh_add_host() {
     [ $# -ge 3 ] || lk_usage "\
 Usage: $FUNCNAME [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
         return
-    NAME=${NAME#$SSH_PREFIX}
+    NAME=${NAME#"$SSH_PREFIX"}
     [ "${KEY_FILE:--}" = - ] ||
         [ -f "$KEY_FILE" ] ||
         [ -f "$h/.ssh/$KEY_FILE" ] ||
@@ -357,7 +357,7 @@ Usage: $FUNCNAME [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
         HOST=${BASH_REMATCH[1]}
         PORT=${BASH_REMATCH[2]}
     }
-    JUMP_HOST_NAME=${JUMP_HOST_NAME:+$SSH_PREFIX${JUMP_HOST_NAME#$SSH_PREFIX}}
+    JUMP_HOST_NAME=${JUMP_HOST_NAME:+$SSH_PREFIX${JUMP_HOST_NAME#"$SSH_PREFIX"}}
     ! lk_is_true TEST || {
         if [ -z "$JUMP_HOST_NAME" ]; then
             lk_ssh_is_reachable "$HOST" "${PORT:-22}"
@@ -394,7 +394,7 @@ HostName        $HOST${PORT:+
 Port            $PORT}${SSH_USER:+
 User            $SSH_USER}${KEY_FILE:+
 IdentityFile    "$KEY_FILE"}${JUMP_HOST_NAME:+
-ProxyJump       $SSH_PREFIX${JUMP_HOST_NAME#$SSH_PREFIX}}
+ProxyJump       $SSH_PREFIX${JUMP_HOST_NAME#"$SSH_PREFIX"}}
 EOF
     )
     CONF_FILE=$h/.ssh/${SSH_PREFIX}config.d/${LK_SSH_PRIORITY:-60}-$NAME

@@ -211,7 +211,7 @@ lk_lock LOCK_FILE LOCK_FD "${LK_PATH_PREFIX}install"
 if lk_is_bootstrap; then
     FILE=$LK_BASE/etc/lk-platform/lk-platform.conf
     install -m 00664 -g adm /dev/null "$FILE"
-    LK_SSH_JUMP_KEY=${LK_SSH_JUMP_KEY:+jump} lk_get_shell_var \
+    LK_SSH_JUMP_KEY=${LK_SSH_JUMP_KEY:+jump} lk_var_sh \
         LK_BASE \
         LK_PATH_PREFIX \
         LK_NODE_HOSTNAME \
@@ -568,8 +568,7 @@ $IPV6_ADDRESS $HOST_NAMES}" &&
         FILE=/etc/logrotate.d/lk-platform
         OLD_FILE=/etc/logrotate.d/${LK_PATH_PREFIX}log
         maybe_move_old "$OLD_FILE" "$FILE"
-        DIR=$LK_BASE/var/log
-        [[ $DIR =~ ^[-a-zA-Z0-9/._]+$ ]] || DIR=$(lk_double_quote "$DIR")
+        DIR=$(lk_double_quote "$LK_BASE/var/log")
         GROUP=$(lk_file_group "$LK_BASE")
         lk_install -m 00644 "$FILE"
         lk_file_replace "$FILE" < <(LK_PLATFORM_LOGS="$DIR/*.log" \
@@ -612,7 +611,7 @@ $IPV6_ADDRESS $HOST_NAMES}" &&
         get_before_file "$LK_CONF_OPTION_FILE"
         lk_conf_set_option DIFF_ONLY '"1"'
         lk_conf_set_option EMAIL \
-            "$(lk_double_quote "${LK_UPGRADE_EMAIL:-root}")"
+            "$(lk_double_quote -f "${LK_UPGRADE_EMAIL:-root}")"
         lk_conf_set_option LISTCHANGES_PROFILE '"apt"'
         check_after_file
     fi
@@ -1055,7 +1054,7 @@ EOF
                 FILE=$LK_BASE/etc/sites/${LK_HOST_DOMAIN,,}.conf
                 lk_install -m 00660 -g adm "$FILE" &&
                     lk_file_replace "$FILE" \
-                        "$(SITE_ENABLE=N lk_get_shell_var SITE_ENABLE)"
+                        "$(SITE_ENABLE=N lk_var_sh SITE_ENABLE)"
             }
             HOST_SITE_ROOT=$(lk_expand_path "~$LK_HOST_ACCOUNT")
             lk_hosting_site_configure "$LK_HOST_DOMAIN" "$HOST_SITE_ROOT"

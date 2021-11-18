@@ -83,7 +83,7 @@ function lk_bak_diff() {
     }
     while IFS= read -rd '' BACKUP; do
         [[ $BACKUP =~ ${_LK_DIFF_REGEX:-$REGEX} ]] || continue
-        FILE=${BACKUP%${BASH_REMATCH[1]}}
+        FILE=${BACKUP%"${BASH_REMATCH[1]}"}
         [ -e "$FILE" ] || {
             FILE2=${FILE##*/}
             FILE=${FILE2//"__"/\/}

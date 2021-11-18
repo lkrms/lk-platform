@@ -559,7 +559,7 @@ Usage: $FUNCNAME DIR HOST..." || return
     for HOST in "${@:2}"; do
         _DIR=$DIR/$HOST
         lk_install -d -m 00755 "$_DIR" || return
-        SSH_HOST=$PREFIX${HOST#$PREFIX}
+        SSH_HOST=$PREFIX${HOST#"$PREFIX"}
         FILE=$_DIR/StackScript-$HOST
         [ -e "$FILE" ] || {
             ssh "$SSH_HOST" \

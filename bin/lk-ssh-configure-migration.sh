@@ -105,7 +105,7 @@ STAGE=${STAGE#--}
 if [ "$STAGE" = "local" ]; then
     SSH_PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX}
     NEW_HOST_NAME=${_NEW_HOST_NAME:-${NEW_USER:-$NEW_HOST}}
-    NEW_HOST_NAME=${_NEW_HOST_NAME:-$SSH_PREFIX${NEW_HOST_NAME#$SSH_PREFIX}}
+    NEW_HOST_NAME=${_NEW_HOST_NAME:-$SSH_PREFIX${NEW_HOST_NAME#"$SSH_PREFIX"}}
 elif [ "$STAGE" = "new" ]; then
     . lk-bash-load.sh || exit
     lk_include provision
@@ -119,7 +119,7 @@ elif [ "$STAGE" = "new" ]; then
     OLD_PASSWORD={{OLD_PASSWORD}}
     _OLD_HOST_NAME={{_OLD_HOST_NAME}}
     OLD_HOST_NAME=${_OLD_HOST_NAME:-${OLD_USER:-$OLD_HOST}-old}
-    OLD_HOST_NAME=${_OLD_HOST_NAME:-$SSH_PREFIX${OLD_HOST_NAME#$SSH_PREFIX}}
+    OLD_HOST_NAME=${_OLD_HOST_NAME:-$SSH_PREFIX${OLD_HOST_NAME#"$SSH_PREFIX"}}
 else
     set -euo pipefail
     LK_BOLD={{LK_BOLD}}
@@ -194,7 +194,7 @@ local)
     lk_console_message "Configuring SSH"
     lk_ssh_configure
     lk_ssh_host_exists "$NEW_HOST_NAME" || {
-        NEW_HOST_NAME=$SSH_PREFIX${NEW_HOST_NAME#$SSH_PREFIX}
+        NEW_HOST_NAME=$SSH_PREFIX${NEW_HOST_NAME#"$SSH_PREFIX"}
         lk_console_detail \
             "Adding host:" "$NEW_HOST_NAME (${NEW_USER:+$NEW_USER@}$NEW_HOST)"
         lk_ssh_add_host -t \
@@ -217,7 +217,7 @@ new)
     [ -z "$NEW_KEY" ] ||
         add_authorized_key "$NEW_KEY"
     lk_ssh_host_exists "$OLD_HOST_NAME" || {
-        OLD_HOST_NAME=$SSH_PREFIX${OLD_HOST_NAME#$SSH_PREFIX}
+        OLD_HOST_NAME=$SSH_PREFIX${OLD_HOST_NAME#"$SSH_PREFIX"}
         lk_console_detail \
             "Adding host:" "$OLD_HOST_NAME (${OLD_USER:+$OLD_USER@}$OLD_HOST)"
         [ -n "$OLD_KEY" ] &&

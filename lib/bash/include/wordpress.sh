@@ -328,7 +328,7 @@ function lk_wp_db_dump() {
     [ ! -t 1 ] || {
         OUTPUT_FILE=${SITE_ROOT#~/}
         OUTPUT_FILE=localhost-${OUTPUT_FILE//\//_}-$(lk_date_ymdhms).sql.gz
-        [ "$SITE_ROOT" = "${SITE_ROOT#$PWD}" ] &&
+        [ "$SITE_ROOT" = "${SITE_ROOT#"$PWD"}" ] &&
             OUTPUT_FILE=$PWD/$OUTPUT_FILE || {
             OUTPUT_FILE=~/.lk-platform/cache/db/$OUTPUT_FILE
             install -d -m 00700 "${OUTPUT_FILE%/*}" || return

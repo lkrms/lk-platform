@@ -3,7 +3,7 @@
 set -euo pipefail
 lk_die() { echo "${BASH_SOURCE-$0}: $1" >&2 && false || exit; }
 
-_DIR=${BASH_SOURCE%${BASH_SOURCE##*/}}
+_DIR=${BASH_SOURCE%"${BASH_SOURCE##*/}"}
 LK_BASE=$(cd "${_DIR:-.}/../.." && pwd -P) &&
     [ "$LK_BASE/lib/platform/${BASH_SOURCE##*/}" -ef "$BASH_SOURCE" ] &&
     export LK_BASE || lk_die "LK_BASE not found"

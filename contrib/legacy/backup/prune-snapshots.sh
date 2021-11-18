@@ -52,7 +52,7 @@ function first_snapshot_in_hour() {
 function prune_snapshot() {
     local PRUNE=$SNAPSHOT_ROOT/$1
     lk_tty_print \
-        "Pruning (${2:-expired}):" "${PRUNE#$BACKUP_ROOT/snapshot/}"
+        "Pruning (${2:-expired}):" "${PRUNE#"$BACKUP_ROOT/snapshot/"}"
     touch "$PRUNE/.pruning" &&
         rm -Rf "$PRUNE"
 }

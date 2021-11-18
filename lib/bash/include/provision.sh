@@ -334,7 +334,7 @@ function lk_settings_persist() {
                 <(printf '%s\n' "${!LK_@}" | sort -u) \
                 <({ _lk_settings_list_known &&
                     _lk_settings_list_legacy; } | sort -u)))
-        lk_get_shell_var "${VARS[@]}"
+        lk_var_sh "${VARS[@]}"
     ) >"$_FILE" || return
     lk_file_replace -m -f "$_FILE" "$2" &&
         lk_file_backup -m ${DELETE+"${DELETE[@]}"} &&
@@ -782,7 +782,7 @@ function lk_cpanel_server_set() {
                 lk_warn "unable to create API token" || return
             ;;
         esac
-    lk_file_replace "$FILE" < <(lk_get_shell_var "${!_LK_CPANEL_@}") &&
+    lk_file_replace "$FILE" < <(lk_var_sh "${!_LK_CPANEL_@}") &&
         lk_symlink "${FILE##*/}" "${FILE%/*}/cpanel-current"
 }
 
@@ -877,7 +877,7 @@ function lk_whm_server_set() {
                 lk_warn "unable to create API token" || return
             ;;
         esac
-    lk_file_replace "$FILE" < <(lk_get_shell_var "${!_LK_WHM_@}") &&
+    lk_file_replace "$FILE" < <(lk_var_sh "${!_LK_WHM_@}") &&
         lk_symlink "${FILE##*/}" "${FILE%/*}/whm-current"
 }
 
@@ -1273,7 +1273,7 @@ function lk_ssh_add_host() {
     [ $# -ge 3 ] || lk_usage "\
 Usage: $FUNCNAME [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
         return
-    NAME=${NAME#$SSH_PREFIX}
+    NAME=${NAME#"$SSH_PREFIX"}
     [ "${KEY_FILE:--}" = - ] ||
         [ -f "$KEY_FILE" ] ||
         [ -f "$h/.ssh/$KEY_FILE" ] ||
@@ -1305,7 +1305,7 @@ Usage: $FUNCNAME [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
         HOST=${BASH_REMATCH[1]}
         PORT=${BASH_REMATCH[2]}
     }
-    JUMP_HOST_NAME=${JUMP_HOST_NAME:+$SSH_PREFIX${JUMP_HOST_NAME#$SSH_PREFIX}}
+    JUMP_HOST_NAME=${JUMP_HOST_NAME:+$SSH_PREFIX${JUMP_HOST_NAME#"$SSH_PREFIX"}}
     ! lk_is_true TEST || {
         if [ -z "$JUMP_HOST_NAME" ]; then
             lk_ssh_is_reachable "$HOST" "${PORT:-22}"
@@ -1342,7 +1342,7 @@ HostName        $HOST${PORT:+
 Port            $PORT}${SSH_USER:+
 User            $SSH_USER}${KEY_FILE:+
 IdentityFile    "$KEY_FILE"}${JUMP_HOST_NAME:+
-ProxyJump       $SSH_PREFIX${JUMP_HOST_NAME#$SSH_PREFIX}}
+ProxyJump       $SSH_PREFIX${JUMP_HOST_NAME#"$SSH_PREFIX"}}
 EOF
     )
     CONF_FILE=$h/.ssh/${SSH_PREFIX}config.d/${LK_SSH_PRIORITY:-60}-$NAME

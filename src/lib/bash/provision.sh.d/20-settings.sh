@@ -161,7 +161,7 @@ function lk_settings_persist() {
                 <(printf '%s\n' "${!LK_@}" | sort -u) \
                 <({ _lk_settings_list_known &&
                     _lk_settings_list_legacy; } | sort -u)))
-        lk_get_shell_var "${VARS[@]}"
+        lk_var_sh "${VARS[@]}"
     ) >"$_FILE" || return
     lk_file_replace -m -f "$_FILE" "$2" &&
         lk_file_backup -m ${DELETE+"${DELETE[@]}"} &&

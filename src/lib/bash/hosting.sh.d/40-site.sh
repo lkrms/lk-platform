@@ -70,7 +70,7 @@ function lk_hosting_site_list() { (
                 else
                     SITE_PHP_FPM_USER=$_SITE_USER
                 fi
-            lk_get_quoted_var SITE_ENABLE SITE_ROOT SITE_ORDER SITE_ALIASES \
+            lk_var_sh_q SITE_ENABLE SITE_ROOT SITE_ORDER SITE_ALIASES \
                 _SITE_IS_CHILD SITE_PHP_FPM_POOL SITE_PHP_FPM_USER \
                 SITE_DISABLE_WWW SITE_DISABLE_HTTPS
         ) && eval "$SH" || continue

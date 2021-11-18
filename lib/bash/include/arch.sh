@@ -93,7 +93,7 @@ Server = $SERVER"
 function lk_arch_configure_grub() {
     local CMDLINE FILE _FILE LK_SUDO=1
     CMDLINE=${LK_GRUB_CMDLINE+"$(lk_escape_ere_replace \
-        "$(lk_double_quote "$LK_GRUB_CMDLINE")")"}
+        "$(lk_double_quote -f "$LK_GRUB_CMDLINE")")"}
     CMDLINE=${CMDLINE:-\\1}
     FILE=$(lk_arch_path /etc/default/grub)
     _FILE=$(sed -E \

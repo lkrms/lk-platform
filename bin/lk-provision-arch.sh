@@ -752,8 +752,7 @@ $LK_NODE_HOSTNAME" &&
 
     if lk_pac_installed logrotate; then
         FILE=/etc/logrotate.d/lk-platform
-        DIR=$LK_BASE/var/log
-        [[ $DIR =~ ^[-a-zA-Z0-9/._]+$ ]] || DIR=$(lk_double_quote "$DIR")
+        DIR=$(lk_double_quote "$LK_BASE/var/log")
         GROUP=$(lk_file_group "$LK_BASE")
         lk_install -m 00644 "$FILE"
         lk_file_replace "$FILE" < <(LK_PLATFORM_LOGS="$DIR/*.log" \

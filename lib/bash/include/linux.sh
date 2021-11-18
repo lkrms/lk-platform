@@ -71,7 +71,7 @@ function lk_systemctl_get_property() {
         _lk_systemctl_args "$@") && eval "$SH" || return
     VALUE=$("${COMMAND[@]}" show --property "$1" "$2") &&
         [ -n "$VALUE" ] &&
-        echo "${VALUE#$1=}"
+        echo "${VALUE#"$1="}"
 }
 
 function lk_systemctl_property_is() {
@@ -81,7 +81,7 @@ function lk_systemctl_property_is() {
     ONE_OF=("${@:2:$#-2}")
     VALUE=$("${COMMAND[@]}" show --property "$1" "${*: -1}") &&
         [ -n "$VALUE" ] &&
-        lk_in_array "${VALUE#$1=}" ONE_OF
+        lk_in_array "${VALUE#"$1="}" ONE_OF
 }
 
 function lk_systemctl_enabled() {

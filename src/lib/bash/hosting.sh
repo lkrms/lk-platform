@@ -209,7 +209,7 @@ function _lk_hosting_site_read_settings() { (
     unset "${!SITE_@}"
     readonly _SITE_FILE=$LK_BASE/etc/sites/${1,,}.conf
     [ ! -e "$_SITE_FILE" ] || . "$_SITE_FILE" || return
-    _LK_STACK_DEPTH=1 lk_get_quoted_var \
+    _LK_STACK_DEPTH=1 lk_var_sh_q \
         $(_lk_hosting_site_list_settings "" _SITE_FILE "${!SITE_@}" | sort -u)
 ); } #### Reviewed: 2021-07-12
 
@@ -217,7 +217,7 @@ function _lk_hosting_site_read_settings() { (
 function _lk_hosting_site_write_settings() {
     local FILE=$LK_BASE/etc/sites/${1,,}.conf
     lk_install -m 00660 -g adm "$FILE" &&
-        lk_file_replace -lp "$FILE" "$(lk_get_shell_var "${!SITE_@}")"
+        lk_file_replace -lp "$FILE" "$(lk_var_sh "${!SITE_@}")"
 } #### Reviewed: 2021-07-12
 
 # lk_hosting_site_set_settings [-n] DOMAIN
