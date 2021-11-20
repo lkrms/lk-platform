@@ -188,7 +188,7 @@ Usage: $FUNCNAME [-g] SCRIPT [SOURCE...]" || return
     for COMMAND in "${COMMANDS[@]}"; do
         [[ ! $COMMAND =~ ^(lk_|\./) ]] || continue
         _PATH=$(type -P "$COMMAND") &&
-            _PATH=$(_lk_realpath "$_PATH") &&
+            _PATH=$(lk_realpath "$_PATH") &&
             COMMAND_FILES[${#COMMAND_FILES[@]}]=$_PATH ||
             MISSING_COMMANDS[${#MISSING_COMMANDS[@]}]=$COMMAND
     done

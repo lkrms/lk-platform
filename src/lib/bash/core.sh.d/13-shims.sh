@@ -45,6 +45,59 @@ function lk_sed_i() {
     fi
 }
 
+function _lk_realpath() {
+    local FILE=$1 i=0 COMPONENT LN RESOLVED=
+    lk_sudo test -e "$FILE" || return
+    [ "${FILE:0:1}" = / ] || FILE=${PWD%/}/$FILE
+    while [ -n "$FILE" ]; do
+        ((i++)) || {
+            # 1. Replace "/./" with "/"
+            # 2. Replace subsequent "/"s with one "/"
+            # 3. Remove trailing "/"
+            FILE=$(sed -E 's#/\./#/#g; s#/+#/#g; s#/$##' <<<"$FILE") || return
+            FILE=${FILE:1}
+        }
+        COMPONENT=${FILE%%/*}
+        [ "$COMPONENT" != "$FILE" ] ||
+            FILE=
+        FILE=${FILE#*/}
+        case "$COMPONENT" in
+        '' | .)
+            continue
+            ;;
+        ..)
+            RESOLVED=${RESOLVED%/*}
+            continue
+            ;;
+        esac
+        RESOLVED=$RESOLVED/$COMPONENT
+        ! lk_sudo test -L "$RESOLVED" || {
+            LN=$(lk_sudo readlink "$RESOLVED") || return
+            [ "${LN:0:1}" = / ] || LN=${RESOLVED%/*}/$LN
+            FILE=$LN${FILE:+/$FILE}
+            RESOLVED=
+            i=0
+        }
+    done
+    echo "$RESOLVED"
+}
+
+# lk_realpath FILE...
+#
+# Print the resolved absolute path of each FILE.
+function lk_realpath() {
+    local STATUS=0
+    if lk_command_exists realpath; then
+        lk_sudo realpath "$@"
+    else
+        while [ $# -gt 0 ]; do
+            _lk_realpath "$1" || STATUS=$?
+            shift
+        done
+        return "$STATUS"
+    fi
+}
+
 # lk_unbuffer [exec] COMMAND [ARG...]
 #
 # Run COMMAND with unbuffered input and line-buffered output (if supported by

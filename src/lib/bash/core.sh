@@ -1633,10 +1633,10 @@ function lk_files_not_empty() {
 function lk_dir_parents() {
     local UNTIL=/
     [ "${1-}" != -u ] || {
-        UNTIL=$(_lk_realpath "$2") || return
+        UNTIL=$(lk_realpath "$2") || return
         shift 2
     }
-    _lk_realpath "$@" | awk -v "u=$UNTIL" 'BEGIN {
+    lk_realpath "$@" | awk -v "u=$UNTIL" 'BEGIN {
     l = length(u) + 1
 }
 substr($0 "/", 1, l) == u "/" {
@@ -1941,59 +1941,6 @@ else
     }
 fi
 
-function lk_realpath() {
-    local FILE=$1 i=0 COMPONENT LN RESOLVED=
-    lk_maybe_sudo test -e "$FILE" || return
-    [ "${FILE:0:1}" = / ] || FILE=${PWD%/}/$FILE
-    while [ -n "$FILE" ]; do
-        ((i++)) || {
-            # 1. Replace "/./" with "/"
-            # 2. Replace subsequent "/"s with one "/"
-            # 3. Remove trailing "/"
-            FILE=$(sed -E \
-                -e 's/\/\.\//\//g' \
-                -e 's/\/+/\//g' \
-                -e 's/\/$//' <<<"$FILE") || return
-            FILE=${FILE:1}
-        }
-        COMPONENT=${FILE%%/*}
-        [ "$COMPONENT" != "$FILE" ] ||
-            FILE=
-        FILE=${FILE#*/}
-        case "$COMPONENT" in
-        '' | .)
-            continue
-            ;;
-        ..)
-            RESOLVED=${RESOLVED%/*}
-            continue
-            ;;
-        esac
-        RESOLVED=$RESOLVED/$COMPONENT
-        ! lk_maybe_sudo test -L "$RESOLVED" || {
-            LN=$(lk_maybe_sudo readlink "$RESOLVED") || return
-            [ "${LN:0:1}" = / ] || LN=${RESOLVED%/*}/$LN
-            FILE=$LN${FILE:+/$FILE}
-            RESOLVED=
-            i=0
-        }
-    done
-    echo "$RESOLVED"
-}
-
-function _lk_realpath() {
-    local STATUS=0
-    if lk_command_exists realpath; then
-        lk_maybe_sudo realpath "$@"
-    else
-        while [ $# -gt 0 ]; do
-            lk_realpath "$1" || STATUS=$?
-            shift
-        done
-        return "$STATUS"
-    fi
-}
-
 # lk_file_get_text FILE VAR
 #
 # Read the entire FILE into variable VAR, adding a newline at the end unless
@@ -2041,11 +1988,11 @@ function lk_file_backup() {
             lk_maybe_sudo test -f "$1" || lk_warn "not a file: $1" || return
             lk_maybe_sudo test -s "$1" || return 0
             ! lk_is_true MOVE || {
-                FILE=$(_lk_realpath "$1") || return
+                FILE=$(lk_realpath "$1") || return
                 {
                     OWNER=$(lk_file_owner "$FILE") &&
                         OWNER_HOME=$(lk_expand_path "~$OWNER") &&
-                        OWNER_HOME=$(_lk_realpath "$OWNER_HOME")
+                        OWNER_HOME=$(lk_realpath "$OWNER_HOME")
                 } 2>/dev/null || OWNER_HOME=
                 if [ -d "${_LK_INST:-${LK_BASE-}}" ] &&
                     lk_will_elevate && [ "${FILE#"$OWNER_HOME"}" = "$FILE" ]; then
@@ -2163,7 +2110,7 @@ Options:
     LK_FILE_REPLACE_DECLINED=0
     if lk_maybe_sudo test -e "$1"; then
         ! lk_is_true LINK || {
-            TEMP=$(_lk_realpath "$1") || return
+            TEMP=$(lk_realpath "$1") || return
             set -- "$TEMP"
         }
         lk_maybe_sudo test -f "$1" || lk_warn "not a file: $1" || return

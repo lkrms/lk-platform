@@ -548,7 +548,7 @@ lk_log_start
     unset LK_FILE_BACKUP_TAKE
 
     # Leave ~root/.ssh alone
-    lk_remove_false "$(printf '[ "{}" != %q ]' "$(_lk_realpath ~root)")" _LK_HOMES
+    lk_remove_false "$(printf '[ "{}" != %q ]' "$(lk_realpath ~root)")" _LK_HOMES
     if [ -n "${LK_SSH_JUMP_HOST-}" ]; then
         lk_ssh_configure "$LK_SSH_JUMP_HOST" \
             "${LK_SSH_JUMP_USER-}" \
