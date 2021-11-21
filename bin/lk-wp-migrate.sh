@@ -222,11 +222,10 @@ if [ ${#DEACTIVATE[@]} -gt 0 ]; then
 fi
 
 [ -z "$RENAME" ] ||
-    LK_WP_REPLACE=1 LK_WP_REAPPLY=0 LK_WP_FLUSH=0 \
+    LK_WP_REPLACE=1 LK_WP_APPLY=0 LK_WP_FLUSH=0 LK_WP_MIGRATE=0 \
         _LK_WP_QUIET=1 _LK_WP_REPLACE_COMMAND=wp \
         lk_wp_rename_site "$RENAME"
-lk_wp_reapply_config || STATUS=$?
-lk_wp_flush || STATUS=$?
+lk_wp_apply || STATUS=$?
 
 if [ "$SSL" -eq 1 ]; then
     eval "$(lk_get_regex DOMAIN_NAME_REGEX)" &&
@@ -247,7 +246,7 @@ else
 fi
 
 lk_console_message "[local] Restoring maintenance mode"
-lk_wp_maintenance_maybe_disable "$LOCAL_PATH" ||
+lk_wp_maintenance_maybe_disable ||
     lk_warn "Error restoring previous maintenance mode"
 
 (exit "$STATUS") &&
