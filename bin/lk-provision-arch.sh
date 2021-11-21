@@ -453,11 +453,14 @@ $LK_NODE_HOSTNAME" &&
         unset LK_FILE_REPLACE_NO_CHANGE
         FILE=/etc/tlp.d/90-${LK_PATH_PREFIX}default.conf
         lk_install -m 00644 "$FILE"
-        lk_file_replace "$FILE" < <(cat \
-            "$LK_BASE/share/tlp.d/default.conf" \
-            "$LK_BASE/share/tlp.d/rotational.conf")
+        FILES=("$LK_BASE/share/tlp.d"/*-{stable,quiet}-*.conf)
+        ! lk_is_portable ||
+            FILES+=("$LK_BASE/share/tlp.d"/*-battery-thresholds.conf)
+        lk_file_replace "$FILE" \
+            < <(lk_arr FILES | sort | tr '\n' '\0' | xargs -0 cat)
         systemctl_mask systemd-rfkill.service
         systemctl_mask systemd-rfkill.socket
+        systemctl_mask power-profiles-daemon.service
         file_delete "/etc/tlp.d/90-${LK_PATH_PREFIX}defaults.conf"
         SERVICE_ENABLE+=(
             NetworkManager-dispatcher "Network Manager dispatcher"

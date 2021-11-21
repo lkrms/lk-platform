@@ -1055,7 +1055,7 @@ function lk_dir_set_modes() {
 Usage: $FUNCNAME DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..."
     [ $# -ge 4 ] && ! ((($# - 1) % 3)) || lk_usage || return
     lk_maybe_sudo test -d "$1" || lk_warn "not a directory: $1" || return
-    DIR=$(_lk_realpath "$1") || return
+    DIR=$(lk_realpath "$1") || return
     shift
     while [ $# -gt 0 ]; do
         [[ $2 =~ ^(\+?[0-7]+)?$ ]] || lk_warn "invalid mode: $2" || return

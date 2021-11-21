@@ -209,8 +209,8 @@ lk_console_log "Resetting WordPress for local development"
 lk_wp_maintenance_enable
 
 if [ -n "$NEW_SITE_ADDR" ]; then
-    _LK_WP_QUIET=1 LK_WP_REPLACE=1 LK_WP_REAPPLY=0 LK_WP_FLUSH=0 \
-        _LK_WP_REPLACE_COMMAND=wp \
+    LK_WP_REPLACE=1 LK_WP_APPLY=0 LK_WP_FLUSH=0 LK_WP_MIGRATE=0 \
+        _LK_WP_QUIET=1 _LK_WP_REPLACE_COMMAND=wp \
         lk_wp_rename_site "$NEW_SITE_ADDR"
 fi
 
@@ -319,8 +319,7 @@ SQL
     fi
 fi
 
-lk_wp_reapply_config
-lk_wp_flush
+lk_wp_apply
 
 [ -z "${HOSTS+1}" ] ||
     lk_hosts_file_add 127.0.0.1 "${HOSTS[@]}"

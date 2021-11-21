@@ -111,7 +111,7 @@ function lk_wp_flush() {
         lk_report_error -q wp w3-total-cache flush all || true
     fi
     if lk_wp plugin is-active wp-rocket; then
-        lk_tty_detail "Clearing WP Rocket cache"
+        lk_tty_detail "Flushing WP Rocket cache"
         { wp cli has-command "rocket clean" 2>/dev/null ||
             lk_wp_package_install wp-media/wp-rocket-cli:@stable; } &&
             lk_report_error -q wp rocket clean --confirm || true
@@ -128,20 +128,29 @@ function lk_wp_json_encode() {
         'echo substr(json_encode(stream_get_contents(STDIN)), 1, -1);'
 }
 
-function _lk_wp_maybe_reapply() {
-    lk_is_false LK_WP_REAPPLY ||
-        { [ -z "${LK_WP_REAPPLY+1}" ] &&
-            ! lk_confirm "Reapply WordPress settings and rebuild indexes?" Y; } ||
-        lk_wp_reapply_config ||
-        return
-    _lk_wp_maybe_flush
+function _lk_wp_maybe_apply() {
+    local _LK_WP_MAYBE=1
+    if lk_is_false LK_WP_APPLY || { [ -z "${LK_WP_APPLY+1}" ] &&
+        ! lk_confirm \
+            "Run database updates and [re]apply WordPress settings?" Y; }; then
+        _lk_wp_maybe_flush &&
+            _lk_wp_maybe_migrate
+    else
+        lk_wp_apply
+    fi
 }
 
 function _lk_wp_maybe_flush() {
-    lk_is_false LK_WP_FLUSH ||
-        { [ -z "${LK_WP_FLUSH+1}" ] &&
-            ! lk_confirm "Flush WordPress rewrite rules and caches?" Y; } ||
+    lk_is_false LK_WP_FLUSH || { [ -z "${LK_WP_FLUSH+1}" ] &&
+        ! lk_confirm "Flush WordPress rewrite rules and caches?" Y; } ||
         lk_wp_flush
+}
+
+function _lk_wp_maybe_migrate() {
+    lk_is_false LK_WP_MIGRATE || { [ -z "${LK_WP_MIGRATE+1}" ] &&
+        ! lk_confirm \
+            "Run WordPress data migrations and [re]build indexes?" Y; } ||
+        lk_wp_migrate
 }
 
 # lk_wp_rename_site [-s SITE_ROOT] NEW_URL
@@ -156,10 +165,12 @@ function _lk_wp_maybe_flush() {
 #   URL without a scheme component ("http*://" or "//"), e.g. if renaming
 #   "http://domain.com" to "https://new.domain.com", replace "domain.com" with
 #   "new.domain.com" (default: 0)
-# - LK_WP_REAPPLY: regenerate configuration files and rebuild indexes after
+# - LK_WP_APPLY: run pending database updates and regenerate config files after
 #   renaming (default: 1)
 # - LK_WP_FLUSH: flush rewrite rules, caches and transients after renaming
 #   (default: 1)
+# - LK_WP_MIGRATE: run pending data migrations and rebuild indexes after
+#   renaming (default: 1)
 function lk_wp_rename_site() {
     [ "${1-}" != -s ] || { eval "$(_lk_wp_set_path "$2")" && shift 2; }
     local NEW_URL=${1-} OLD_URL=${LK_WP_OLD_URL-} \
@@ -188,7 +199,7 @@ function lk_wp_rename_site() {
             ! lk_confirm "Replace the previous URL in all tables?" Y; } ||
         lk_wp_replace_url "$OLD_URL" "$NEW_URL" ||
         return
-    _lk_wp_maybe_reapply || return
+    _lk_wp_maybe_apply || return
     lk_console_success "Site renamed successfully"
 }
 
@@ -562,12 +573,20 @@ Usage: $FUNCNAME SSH_HOST [REMOTE_PATH [LOCAL_PATH [RSYNC_ARG...]]]" || return
     return "$STATUS"
 }
 
-# lk_wp_reapply_config
+# lk_wp_apply [SITE_ROOT]
 #
-# Regenerate configuration files and rebuild indexes. Recommended after
-# migrating WordPress.
-function lk_wp_reapply_config() {
+# Run pending database updates, regenerate config files, flush caches (see
+# lk_wp_flush), and run pending data migrations (see lk_wp_migrate). Recommended
+# after moving or updating WordPress.
+function lk_wp_apply() {
+    [ $# -eq 0 ] || eval "$(_lk_wp_set_path "$@")"
     local FILE STATUS=0
+    lk_tty_detail "Checking for WordPress database updates"
+    lk_report_error lk_wp core update-db || return
+    if wp cli has-command "wp wc update" 2>/dev/null; then
+        lk_tty_detail "Checking for WooCommerce database updates"
+        lk_report_error -q wp wc update || return
+    fi
     if lk_wp plugin is-active wp-rocket; then
         lk_tty_detail "Regenerating WP Rocket files"
         lk_wp cli has-command "rocket regenerate" ||
@@ -578,14 +597,37 @@ function lk_wp_reapply_config() {
             lk_report_error -q wp rocket regenerate --file="$FILE" || true
         done
     fi
+    # Updating `email-log` without reactivating can leave it non-operational
     if lk_wp plugin is-active email-log; then
         lk_tty_detail "Re-activating Email Log"
         lk_report_error lk_wp plugin deactivate email-log &&
             lk_report_error lk_wp plugin activate email-log || STATUS=$?
     fi
+    if [ -z "${_LK_WP_MAYBE-}" ]; then
+        lk_wp_flush "$@" &&
+            lk_wp_migrate "$@"
+    else
+        _lk_wp_maybe_flush &&
+            _lk_wp_maybe_migrate
+    fi && ((!STATUS))
+}
+
+# lk_wp_migrate [SITE_ROOT]
+function lk_wp_migrate() {
+    eval "$(_lk_wp_set_path "$@")"
+    local STATUS=0 COMMAND
     if wp cli has-command "yoast index" 2>/dev/null; then
         lk_tty_detail "Building Yoast index"
         lk_report_error -q wp yoast index || STATUS=$?
+    fi
+    if wp cli has-command "action-scheduler migrate" 2>/dev/null; then
+        COMMAND="wp --path=$(lk_ere_escape \
+            "$_LK_WP_PATH") action-scheduler migrate" || return
+        pgrep -fu "$USER" "([^[:alnum:]_]|^)$COMMAND" >/dev/null &&
+            lk_warn "Scheduled actions are already being migrated" || {
+            lk_tty_detail "Migrating scheduled actions"
+            lk_report_error -q wp action-scheduler migrate || STATUS=$?
+        }
     fi
     return "$STATUS"
 }
@@ -676,7 +718,7 @@ function lk_wp_set_permissions() {
     [ $# -eq 0 ] || eval "$(_lk_wp_set_path "$@")"
     local SITE_ROOT OWNER LOG_FILE CHANGES
     SITE_ROOT=$(lk_wp_get_site_root) &&
-        SITE_ROOT=$(_lk_realpath "$SITE_ROOT") || return
+        SITE_ROOT=$(lk_realpath "$SITE_ROOT") || return
     if lk_will_elevate; then
         OWNER=$(lk_file_owner "$SITE_ROOT/..") &&
             LOG_FILE=$(lk_mktemp_file) || return

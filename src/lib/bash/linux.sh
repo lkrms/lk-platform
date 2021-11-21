@@ -205,7 +205,8 @@ function lk_systemctl_mask() {
     local SH
     SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
     lk_systemctl_stop ${ARGS[@]+"${ARGS[@]}"} "$1" || return
-    lk_systemctl_masked ${ARGS[@]+"${ARGS[@]}"} "$1" || {
+    lk_systemctl_masked ${ARGS[@]+"${ARGS[@]}"} "$1" ||
+        ! lk_systemctl_exists ${ARGS[@]+"${ARGS[@]}"} "$1" || {
         lk_console_detail "Masking service:" "$NAME"
         ${_USER-lk_elevate} "${COMMAND[@]}" mask "$1"
     }

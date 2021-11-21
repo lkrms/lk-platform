@@ -30,7 +30,7 @@ function lk_mail_attach() {
     _lk_mail_ready || return
     [ -f "$1" ] || lk_warn "file not found: $1" || return
     FILE_NAME=${2:-${1##*/}}
-    MIME_TYPE=${3:-$(file --brief --mime-type "$(_lk_realpath "$1")")} ||
+    MIME_TYPE=${3:-$(file --brief --mime-type "$(lk_realpath "$1")")} ||
         MIME_TYPE=application/octet-stream
     _LK_MAIL_ATTACH+=("$1")
     _LK_MAIL_ATTACH_NAME+=("$FILE_NAME")
