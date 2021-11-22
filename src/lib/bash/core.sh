@@ -1577,7 +1577,7 @@ function lk_user_home() {
 
 # lk_user_groups [USER]
 function lk_user_groups() {
-    id -Gn | tr -s '[:blank:]' '\n'
+    id -Gn ${1+"$1"} | tr -s '[:blank:]' '\n'
 }
 
 # lk_user_in_group GROUP [USER]
