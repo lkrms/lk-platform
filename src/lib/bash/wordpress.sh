@@ -129,15 +129,15 @@ function lk_wp_json_encode() {
 }
 
 function _lk_wp_maybe_apply() {
-    local _LK_WP_MAYBE=1
+    local _LK_WP_MAYBE=1 STATUS=0
     if lk_is_false LK_WP_APPLY || { [ -z "${LK_WP_APPLY+1}" ] &&
         ! lk_confirm \
             "Run database updates and [re]apply WordPress settings?" Y; }; then
-        _lk_wp_maybe_flush &&
-            _lk_wp_maybe_migrate
+        _lk_wp_maybe_flush || STATUS=$?
+        _lk_wp_maybe_migrate
     else
         lk_wp_apply
-    fi
+    fi && ((!STATUS))
 }
 
 function _lk_wp_maybe_flush() {
@@ -581,10 +581,11 @@ Usage: $FUNCNAME SSH_HOST [REMOTE_PATH [LOCAL_PATH [RSYNC_ARG...]]]" || return
 function lk_wp_apply() {
     [ $# -eq 0 ] || eval "$(_lk_wp_set_path "$@")"
     local FILE STATUS=0
-    lk_tty_detail "Checking for WordPress database updates"
+    lk_tty_print "Running database updates and [re]applying WordPress settings"
+    lk_tty_detail "Updating core database"
     lk_report_error lk_wp core update-db || return
-    if wp cli has-command "wp wc update" 2>/dev/null; then
-        lk_tty_detail "Checking for WooCommerce database updates"
+    if wp cli has-command "wc update" 2>/dev/null; then
+        lk_tty_detail "Updating WooCommerce tables"
         lk_report_error -q wp wc update || return
     fi
     if lk_wp plugin is-active wp-rocket; then
@@ -604,11 +605,11 @@ function lk_wp_apply() {
             lk_report_error lk_wp plugin activate email-log || STATUS=$?
     fi
     if [ -z "${_LK_WP_MAYBE-}" ]; then
-        lk_wp_flush "$@" &&
-            lk_wp_migrate "$@"
+        lk_wp_flush "$@" || STATUS=$?
+        lk_wp_migrate "$@"
     else
-        _lk_wp_maybe_flush &&
-            _lk_wp_maybe_migrate
+        _lk_wp_maybe_flush || STATUS=$?
+        _lk_wp_maybe_migrate
     fi && ((!STATUS))
 }
 
@@ -616,6 +617,7 @@ function lk_wp_apply() {
 function lk_wp_migrate() {
     eval "$(_lk_wp_set_path "$@")"
     local STATUS=0 COMMAND
+    lk_tty_print "Running WordPress data migrations and [re]building indexes"
     if wp cli has-command "yoast index" 2>/dev/null; then
         lk_tty_detail "Building Yoast index"
         lk_report_error -q wp yoast index || STATUS=$?
