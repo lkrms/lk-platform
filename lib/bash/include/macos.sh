@@ -4,11 +4,10 @@ if lk_is_apple_silicon; then
     function _lk_macos_env() {
         local _LK_VAR _LK_VARS=(PATH MANPATH INFOPATH) _LK_VAL
         for _LK_VAR in "${_LK_VARS[@]}"; do
-            [ -n "${!_LK_VAR-}" ] || continue
+            [ -n "${!_LK_VAR:+1}" ] || continue
             _LK_VAL=$(lk_path_edit "$1" "${2-}" "${!_LK_VAR}") || return
-            lk_maybe_local
-            printf '%s\n' "$_LK_VAR"
-            printf 'export %s=%q\n' "$_LK_VAR" "$_LK_VAL"
+            printf 'declare %s=%q\n' "$_LK_VAR" "$_LK_VAL"
+            printf 'export %s\n' "$_LK_VAR"
         done
     }
     function lk_x86() {

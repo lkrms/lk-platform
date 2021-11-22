@@ -194,7 +194,7 @@ function lk_get_regex() {
     [ $# -gt 0 ] || set -- %s
     local STATUS=0
     while [ $# -gt 0 ]; do
-        lk_maybe_local
+        printf '\''declare '\''
         case "$1" in' \
     "${ALL[*]}"
 for REGEX in "${ALL[@]}"; do

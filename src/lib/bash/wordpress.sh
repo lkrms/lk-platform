@@ -371,7 +371,7 @@ function lk_wp_db_get_vars() {
         for OPTION in DB_NAME DB_USER DB_PASSWORD DB_HOST; do
             VALUE=$(lk_wp config get "$OPTION") || exit
             [ "${FUNCNAME[1]-}" = lk_wp_db_set_local ] ||
-                lk_maybe_local
+                printf 'declare '
             printf '%s=%q\n' "$PREFIX$OPTION" "$VALUE"
         done
     ) && echo "$SH"
