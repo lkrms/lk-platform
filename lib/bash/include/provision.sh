@@ -405,10 +405,10 @@ function lk_dns_get_records_first_parent() {
     done
 }
 
-# lk_dns_soa [+FIELD[,FIELD...]] NAME
+# lk_dns_soa NAME
 function lk_dns_soa() {
     local _LK_DIG_OPTIONS=(+nssearch)
-    lk_require_output lk_dns_get_records_first_parent "$@" ||
+    lk_require_output lk_dns_get_records_first_parent "$1" ||
         lk_warn "SOA lookup failed: ${*: -1}"
 }
 
@@ -989,8 +989,6 @@ function lk_mark_clean() {
     done
 }
 
-lk_host_soa() { lk_dns_soa "$@"; }
-
 # lk_symlink_bin TARGET [ALIAS]
 function lk_symlink_bin() {
     local TARGET LINK EXIT_STATUS vv='' \
@@ -1529,8 +1527,8 @@ function lk_host_ns_resolve() {
     unset IFS
     [ "$_LK_CNAME_DEPTH" -lt 7 ] || lk_warn "too much recursion" || return
     ((++_LK_CNAME_DEPTH))
-    NAMESERVER=$(lk_host_soa "$1" |
-        awk '{sub("\\.$", "", $5); print $5}') || return
+    NAMESERVER=$(lk_dns_soa "$1" |
+        awk 'NR == 1 {sub("\\.$", "", $2); print $2}') || return
     _LK_DNS_SERVER=$NAMESERVER
     _LK_DIG_OPTIONS=(+norecurse)
     ! lk_verbose 2 || {

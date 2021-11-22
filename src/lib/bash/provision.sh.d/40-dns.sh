@@ -59,10 +59,10 @@ function lk_dns_get_records_first_parent() {
     done
 }
 
-# lk_dns_soa [+FIELD[,FIELD...]] NAME
+# lk_dns_soa NAME
 function lk_dns_soa() {
     local _LK_DIG_OPTIONS=(+nssearch)
-    lk_require_output lk_dns_get_records_first_parent "$@" ||
+    lk_require_output lk_dns_get_records_first_parent "$1" ||
         lk_warn "SOA lookup failed: ${*: -1}"
 }
 

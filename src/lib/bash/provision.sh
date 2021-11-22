@@ -581,8 +581,8 @@ function lk_host_ns_resolve() {
     unset IFS
     [ "$_LK_CNAME_DEPTH" -lt 7 ] || lk_warn "too much recursion" || return
     ((++_LK_CNAME_DEPTH))
-    NAMESERVER=$(lk_host_soa "$1" |
-        awk '{sub("\\.$", "", $5); print $5}') || return
+    NAMESERVER=$(lk_dns_soa "$1" |
+        awk 'NR == 1 {sub("\\.$", "", $2); print $2}') || return
     _LK_DNS_SERVER=$NAMESERVER
     _LK_DIG_OPTIONS=(+norecurse)
     ! lk_verbose 2 || {
