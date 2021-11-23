@@ -157,6 +157,14 @@ function lk_systemctl_reload() {
         lk_warn "could not reload service: $_NAME"
 }
 
+function lk_systemctl_reload_or_restart() {
+    local SH
+    SH=$(_lk_systemctl_args "$@") && eval "$SH" || return
+    lk_console_detail "Restarting or reloading service:" "$NAME"
+    ${_USER-lk_elevate} "${COMMAND[@]}" reload-or-restart "$1" ||
+        lk_warn "could not restart or reload service: $_NAME"
+}
+
 function lk_systemctl_enable() {
     local SH
     SH=$(_lk_systemctl_args "$@") && eval "$SH" || return

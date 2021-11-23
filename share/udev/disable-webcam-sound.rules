@@ -1,0 +1,3 @@
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ENV{ID_USB_INTERFACES}=="*:0e????:*", ENV{LK_IS_WEBCAM}="1"
+SUBSYSTEMS=="usb", DRIVER=="snd-usb-audio", IMPORT{parent}="LK_IS_WEBCAM"
+SUBSYSTEMS=="usb", DRIVER=="snd-usb-audio", ENV{LK_IS_WEBCAM}=="1", ATTR{authorized}="0"
