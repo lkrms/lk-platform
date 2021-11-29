@@ -929,6 +929,7 @@ EOF
         lk_httpd_enable_option LoadModule "alias_module modules/mod_alias.so"
         lk_httpd_enable_option LoadModule "dir_module modules/mod_dir.so"
         lk_httpd_enable_option LoadModule "headers_module modules/mod_headers.so"
+        lk_httpd_enable_option LoadModule "http2_module modules/mod_http2.so"
         lk_httpd_enable_option LoadModule "info_module modules/mod_info.so"
         lk_httpd_enable_option LoadModule "rewrite_module modules/mod_rewrite.so"
         lk_httpd_enable_option LoadModule "status_module modules/mod_status.so"
