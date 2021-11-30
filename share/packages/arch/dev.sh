@@ -240,6 +240,8 @@ lk_is_bootstrap ||
 # development
 PAC_PACKAGES+=(
     autopep8
+    babel-cli
+    babel-core
     bash-language-server
     cloc
     cmake
@@ -250,7 +252,6 @@ PAC_PACKAGES+=(
     eslint
     geckodriver
     gobject-introspection
-    prettier
     python-pylint
     qcachegrind
     tidy
@@ -331,32 +332,36 @@ PAC_PACKAGES+=(
 )
 
 AUR_PACKAGES+=(
+    babel-preset-env
     demjson
-    httptoolkit
     lua-posix
     nodejs-less
     nvm
     php-sqlsrv
     phpdoc-phar
-    prettier-plugin-php
-    robo3t-bin
     ruby-rubocop
     ruby-rubocop-performance
     ruby-rubocop-rails
-    sublime-merge
-    sublime-text
+    standard
+    terser
     trickle
-    vscodium-bin
 
     #
     git-cola
+    httptoolkit
+    robo3t-bin
+    sublime-merge
+    sublime-text
+    vscodium-bin
 
     # platforms
     azure-cli
     azure-functions-core-tools-bin
     linode-cli
-    storageexplorer
     wp-cli
+
+    #
+    storageexplorer
 )
 
 # development services

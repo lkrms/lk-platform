@@ -46,11 +46,13 @@ AUR_PACKAGES+=(
 PAC_PACKAGES+=(
     # networking
     iperf3
+    net-tools # for x11vnc
     networkmanager-l2tp
     networkmanager-openconnect
 )
 
 AUR_PACKAGES+=(
+    csvkit
     pacman-cleanup-hook
     vpn-slice
 )
