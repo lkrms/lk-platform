@@ -9,83 +9,90 @@
 lk_require arch
 
 # Default to AUR packages provisioned by lk-platform
-[ $# -gt 1 ] || set -- \
-    aur \
-    aha \
-    apachedirectorystudio \
-    aurutils \
-    aurutils-git \
-    azure-cli \
-    azure-functions-core-tools-bin \
-    bluez-git \
-    brother-hl5450dn \
-    brother-hll3230cdw \
-    csvkit \
-    demjson \
-    elementary-xfce-icons \
-    emote \
-    espanso \
-    geekbench \
-    git-cola \
-    google-chrome \
-    hfsprogs \
-    httptoolkit \
-    icdiff \
-    linode-cli \
-    lua-posix \
-    makemkv \
-    masterpdfeditor-free \
-    memtest86-efi \
-    mongodb-bin \
-    mongodb-tools-bin \
-    mugshot \
-    networkmanager-dispatcher-ntpd \
-    nodejs-less \
-    numix-gtk-theme-git \
-    nvm \
-    pacman-cleanup-hook \
-    pencil \
-    php-sqlsrv \
-    phpdoc-phar \
-    powercap \
-    powerpanel \
-    powershell-bin \
-    prettier-plugin-php \
-    quicktile-git \
-    r8152-dkms \
-    raidar \
-    rasdaemon \
-    rdfind \
-    robo3t-bin \
-    ryzenadj-git \
-    skypeforlinux-stable-bin \
-    sound-theme-smooth \
-    spotify \
-    standard \
-    storageexplorer \
-    stretchly-bin \
-    stretchly-git \
-    teams \
-    teamviewer \
-    timer-for-harvest \
-    todoist-appimage \
-    trickle \
-    trickle-git \
-    trimage \
-    ttf-apple-emoji \
-    ttf-ms-win10 \
-    ttf-twemoji \
-    typora \
-    video-trimmer \
-    vpn-slice \
-    vscodium-bin \
-    wp-cli \
-    xfce-theme-greybird \
-    xfce4-panel-profiles \
-    xiccd \
-    xrandr-invert-colors \
-    zoom \
-    zuki-themes
+[ $# -gt 1 ] || {
+    PACKAGES=(
+        aha
+        apachedirectorystudio
+        aurutils
+        aurutils-git
+        autorandr-git
+        azure-cli
+        azure-functions-core-tools-bin
+        babel-preset-env
+        bluez-git
+        brother-hl5450dn
+        brother-hll3230cdw
+        csvkit
+        demjson
+        devilspie2
+        elementary-xfce-icons
+        emote
+        espanso
+        geekbench
+        git-cola
+        google-chrome
+        hfsprogs
+        httptoolkit
+        icdiff
+        linode-cli
+        lua-posix
+        makemkv
+        masterpdfeditor-free
+        memtest86-efi
+        mongodb-bin
+        mongodb-tools-bin
+        mugshot
+        networkmanager-dispatcher-ntpd
+        nodejs-less
+        numix-gtk-theme-git
+        nvm
+        pacman-cleanup-hook
+        pencil
+        php-sqlsrv
+        phpdoc-phar
+        powercap
+        powerpanel
+        powershell-bin
+        quicktile-git
+        r8152-dkms
+        raidar
+        rasdaemon
+        rdfind
+        robo3t-bin
+        ryzenadj-git
+        skypeforlinux-stable-bin
+        sound-theme-smooth
+        spotify
+        standard
+        storageexplorer
+        stretchly-bin
+        stretchly-git
+        stripe-cli
+        teams
+        teamviewer
+        terser
+        timer-for-harvest
+        todoist-appimage
+        trickle
+        trickle-git
+        trimage
+        ttf-apple-emoji
+        ttf-ms-win10
+        ttf-twemoji
+        typora
+        video-trimmer
+        vpn-slice
+        vscodium-bin
+        wp-cli
+        xfce-theme-greybird
+        xfce4-panel-profiles
+        xiccd
+        xrandr-invert-colors
+        zoom
+        zuki-themes
+    )
+    set -- aur "${PACKAGES[@]}"
+}
 
 REPO=$1
 shift

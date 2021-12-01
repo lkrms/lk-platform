@@ -237,19 +237,6 @@ function lk_assign() {
     IFS= read -rd '' "$1" || true
 }
 
-# lk_maybe_local
-#
-# Print 'local ' with no line break if the caller was called by a function.
-# Useful when emitting variable declarations.
-function lk_maybe_local() {
-    local DEPTH=${1:-${_LK_STACK_DEPTH:-0}}
-    ((DEPTH < 0)) ||
-        case "${FUNCNAME[DEPTH + 2]-}" in
-        '' | source | main) ;;
-        *) printf 'local ' ;;
-        esac
-}
-
 # lk_x_off [STATUS_VAR]
 #
 # Output Bash commands that disable xtrace temporarily, prevent themselves from
@@ -657,7 +644,7 @@ function lk_get_regex() {
     [ $# -gt 0 ] || set -- DOMAIN_PART_REGEX DOMAIN_NAME_REGEX EMAIL_ADDRESS_REGEX IPV4_REGEX IPV4_OPT_PREFIX_REGEX IPV6_REGEX IPV6_OPT_PREFIX_REGEX IP_REGEX IP_OPT_PREFIX_REGEX HOST_NAME_REGEX HOST_REGEX HOST_OPT_PREFIX_REGEX URI_REGEX URI_REGEX_REQ_SCHEME_HOST HTTP_HEADER_NAME LINUX_USERNAME_REGEX MYSQL_USERNAME_REGEX DPKG_SOURCE_REGEX IDENTIFIER_REGEX PHP_SETTING_NAME_REGEX PHP_SETTING_REGEX READLINE_NON_PRINTING_REGEX CONTROL_SEQUENCE_REGEX ESCAPE_SEQUENCE_REGEX NON_PRINTING_REGEX IPV4_PRIVATE_FILTER_REGEX BACKUP_TIMESTAMP_FINDUTILS_REGEX
     local STATUS=0
     while [ $# -gt 0 ]; do
-        lk_maybe_local
+        printf 'declare '
         case "$1" in
         DOMAIN_PART_REGEX)
             printf '%s=%q\n' DOMAIN_PART_REGEX '[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?'
@@ -1718,11 +1705,10 @@ function lk_var_sh() {
 # that are undeclared.
 function lk_var_sh_q() {
     while [ $# -gt 0 ]; do
-        lk_maybe_local
         if [ -n "${!1:+1}" ]; then
-            printf '%s=%q\n' "$1" "${!1}"
+            printf 'declare %s=%q\n' "$1" "${!1}"
         else
-            printf '%s=\n' "$1"
+            printf 'declare %s=\n' "$1"
         fi
         shift
     done
@@ -2436,7 +2422,7 @@ function _lk_get_colour() {
 # lk_get_colours [PREFIX]
 function lk_get_colours() {
     local PREFIX
-    PREFIX=$(lk_maybe_local)${1-LK_}
+    PREFIX="declare ${1-LK_}"
     _lk_get_colour \
         BLACK "setaf 0" \
         RED "setaf 1" \
@@ -2696,8 +2682,7 @@ function lk_get_outputs_of() {
         unset _LK_FD
         "$@" >"$_LK_STDOUT" 2>"$_LK_STDERR" || EXIT_STATUS=$?
         for i in _LK_STDOUT _LK_STDERR; do
-            lk_maybe_local
-            printf '%s=%q\n' "${i#_LK}" "$(cat "${!i}" |
+            printf 'declare %s=%q\n' "${i#_LK}" "$(cat "${!i}" |
                 lk_strip_non_printing)"
         done
         exit "${EXIT_STATUS:-0}"
@@ -3335,8 +3320,7 @@ function lk_uri_parts() {
             return 1
             ;;
         esac
-        lk_maybe_local
-        printf '%s=%q\n' "$PART" "$VALUE"
+        printf 'declare %s=%q\n' "$PART" "$VALUE"
     done
 }
 
@@ -3920,10 +3904,9 @@ function lk_jq_get_shell_var() {
     done
     [ $# -gt 0 ] && ! (($# % 2)) || lk_warn "invalid arguments" || return
     JQ=$(printf '"%s":(%s),' "$@")
-    JQ='include "core"; {'${JQ%,}'} | to_sh($_prefix)'
+    JQ='include "core"; {'${JQ%,}'} | to_sh("declare ")'
     lk_jq -r \
         ${ARGS[@]+"${ARGS[@]}"} \
-        --arg _prefix "$(lk_maybe_local)" \
         "$JQ"
 }
 

@@ -107,19 +107,6 @@ function lk_assign() {
     IFS= read -rd '' "$1" || true
 }
 
-# lk_maybe_local
-#
-# Print 'local ' with no line break if the caller was called by a function.
-# Useful when emitting variable declarations.
-function lk_maybe_local() {
-    local DEPTH=${1:-${_LK_STACK_DEPTH:-0}}
-    ((DEPTH < 0)) ||
-        case "${FUNCNAME[DEPTH + 2]-}" in
-        '' | source | main) ;;
-        *) printf 'local ' ;;
-        esac
-}
-
 # lk_x_off [STATUS_VAR]
 #
 # Output Bash commands that disable xtrace temporarily, prevent themselves from
@@ -151,4 +138,4 @@ function lk_x_no_off() {
 
 [ -z "${_LK_NO_X_OFF-}" ] || lk_x_no_off
 
-#### Reviewed: 2021-11-01
+#### Reviewed: 2021-11-22

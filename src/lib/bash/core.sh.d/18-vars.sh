@@ -21,11 +21,10 @@ function lk_var_sh() {
 # that are undeclared.
 function lk_var_sh_q() {
     while [ $# -gt 0 ]; do
-        lk_maybe_local
         if [ -n "${!1:+1}" ]; then
-            printf '%s=%q\n' "$1" "${!1}"
+            printf 'declare %s=%q\n' "$1" "${!1}"
         else
-            printf '%s=\n' "$1"
+            printf 'declare %s=\n' "$1"
         fi
         shift
     done

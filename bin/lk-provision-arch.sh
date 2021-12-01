@@ -361,11 +361,17 @@ lk_start_trace
 
     lk_tty_print "Checking udev rules"
     unset LK_FILE_REPLACE_NO_CHANGE
-    FILE=/etc/udev/rules.d/82-${LK_PATH_PREFIX}keyboard-event.rules
-    _FILE=$(lk_expand_template \
-        "$LK_BASE/share/udev/keyboard-event.template.rules")
-    lk_install -m 00644 "$FILE"
-    lk_file_replace "$FILE" "$_FILE"
+    for _FILE in \
+        "$LK_BASE/share/udev"/{keyboard-event,disable-webcam-sound}*.rules; do
+        FILE=${_FILE##*/}
+        FILE=/etc/udev/rules.d/82-${LK_PATH_PREFIX}${FILE/.template./.}
+        lk_install -m 00644 "$FILE"
+        if [[ $_FILE == *.template.* ]]; then
+            lk_file_replace "$FILE" < <(lk_expand_template "$_FILE")
+        else
+            lk_file_replace -f "$_FILE" "$FILE"
+        fi
+    done
     ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
         lk_run_detail sudo udevadm control --reload
 
@@ -923,6 +929,7 @@ EOF
         lk_httpd_enable_option LoadModule "alias_module modules/mod_alias.so"
         lk_httpd_enable_option LoadModule "dir_module modules/mod_dir.so"
         lk_httpd_enable_option LoadModule "headers_module modules/mod_headers.so"
+        lk_httpd_enable_option LoadModule "http2_module modules/mod_http2.so"
         lk_httpd_enable_option LoadModule "info_module modules/mod_info.so"
         lk_httpd_enable_option LoadModule "rewrite_module modules/mod_rewrite.so"
         lk_httpd_enable_option LoadModule "status_module modules/mod_status.so"
@@ -1009,6 +1016,7 @@ done\""
             sudo usermod --append --groups proxy "$USER"
         SERVICE_ENABLE+=(
             squid "Squid proxy server"
+            squid-rotate.timer "Squid log rotation"
         )
         ! lk_is_false LK_FILE_REPLACE_NO_CHANGE || {
             lk_systemctl_stop squid &&

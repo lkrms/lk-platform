@@ -323,7 +323,7 @@ function _lk_get_colour() {
 # lk_get_colours [PREFIX]
 function lk_get_colours() {
     local PREFIX
-    PREFIX=$(lk_maybe_local)${1-LK_}
+    PREFIX="declare ${1-LK_}"
     _lk_get_colour \
         BLACK "setaf 0" \
         RED "setaf 1" \
@@ -583,8 +583,7 @@ function lk_get_outputs_of() {
         unset _LK_FD
         "$@" >"$_LK_STDOUT" 2>"$_LK_STDERR" || EXIT_STATUS=$?
         for i in _LK_STDOUT _LK_STDERR; do
-            lk_maybe_local
-            printf '%s=%q\n' "${i#_LK}" "$(cat "${!i}" |
+            printf 'declare %s=%q\n' "${i#_LK}" "$(cat "${!i}" |
                 lk_strip_non_printing)"
         done
         exit "${EXIT_STATUS:-0}"
@@ -1222,8 +1221,7 @@ function lk_uri_parts() {
             return 1
             ;;
         esac
-        lk_maybe_local
-        printf '%s=%q\n' "$PART" "$VALUE"
+        printf 'declare %s=%q\n' "$PART" "$VALUE"
     done
 }
 
@@ -1807,10 +1805,9 @@ function lk_jq_get_shell_var() {
     done
     [ $# -gt 0 ] && ! (($# % 2)) || lk_warn "invalid arguments" || return
     JQ=$(printf '"%s":(%s),' "$@")
-    JQ='include "core"; {'${JQ%,}'} | to_sh($_prefix)'
+    JQ='include "core"; {'${JQ%,}'} | to_sh("declare ")'
     lk_jq -r \
         ${ARGS[@]+"${ARGS[@]}"} \
-        --arg _prefix "$(lk_maybe_local)" \
         "$JQ"
 }
 
