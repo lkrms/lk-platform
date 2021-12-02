@@ -565,7 +565,8 @@ def is_native:
     UPGRADE_APPS=()
     if [ ${#MAS_APPS[@]} -gt "0" ] && lk_command_exists mas; then
         lk_tty_print "Checking Mac App Store apps"
-        while ! APPLE_ID=$(mas account 2>/dev/null); do
+        while ! lk_version_at_least "$MACOS_VERSION" 12.0 &&
+            ! APPLE_ID=$(mas account 2>/dev/null); do
             APPLE_ID=
             lk_tty_detail "\
 Unable to retrieve Apple ID
@@ -573,8 +574,9 @@ Please open the Mac App Store and sign in"
             lk_confirm "Try again?" Y || break
         done
 
-        if [ -n "$APPLE_ID" ]; then
-            lk_tty_detail "Apple ID:" "$APPLE_ID"
+        if lk_version_at_least "$MACOS_VERSION" 12.0 ||
+            [ -n "$APPLE_ID" ]; then
+            lk_tty_detail "Apple ID:" "${APPLE_ID:-<unknown>}"
 
             OUTDATED=$(mas outdated)
             if UPGRADE_APPS=($(grep -Eo '^[0-9]+' <<<"$OUTDATED")); then
