@@ -83,8 +83,9 @@ MAS_APPS+=(
     409201541 # Pages
 
     #
-    526298438 # Lightshot Screenshot
-    441258766 # Magnet
+    1502839586 # Hand Mirror
+    526298438  # Lightshot Screenshot
+    441258766  # Magnet
 
     #
     1295203466 # Microsoft Remote Desktop

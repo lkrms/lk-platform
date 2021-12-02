@@ -129,10 +129,9 @@ function lk_linode_ssh_add_all() {
 # lk_linode_hosting_ssh_add_all [LINODE_ARG...]
 function lk_linode_hosting_ssh_add_all() {
     local GET_USERS_SH JSON LINODES LINODE SH IFS USERS USERNAME ALL_USERS=()
-    GET_USERS_SH="$(declare -f \
-        lk_get_users_in_group \
-        lk_get_standard_users); lk_get_standard_users" &&
-        GET_USERS_SH=$(printf '%q' "$GET_USERS_SH") || return
+    GET_USERS_SH=$(printf '%q\n' \
+        "$(declare -f lk_get_users_in_group lk_get_standard_users &&
+            lk_quote_args lk_get_standard_users /srv/www)") || return
     JSON=$(lk_linode_linodes "$@" | _lk_linode_filter) &&
         lk_jq_get_array LINODES <<<"$JSON" &&
         [ ${#LINODES[@]} -gt 0 ] || lk_warn "no Linodes found" || return
