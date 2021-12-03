@@ -534,12 +534,18 @@ function lk_has_arg() {
 }
 
 function _lk_cache_dir() {
-    echo "${_LK_OUTPUT_CACHE:=$(
+    local VAR=_LK_OUTPUT_CACHE DIR SUBDIR=
+    [ -z "${_LK_CACHE_NAMESPACE:+1}" ] || {
+        VAR+=_$_LK_CACHE_NAMESPACE
+        SUBDIR=/$_LK_CACHE_NAMESPACE
+    }
+    # "${!VAR:=...}" doesn't work in Bash 3.2
+    DIR=${!VAR:-$(
         TMPDIR=${TMPDIR:-/tmp}
-        DIR=${TMPDIR%/}/_lk_output_cache_$EUID
+        DIR=${TMPDIR%/}/_lk_output_cache_$EUID$SUBDIR
         install -d -m 00700 "$DIR" && echo "$DIR"
-    )}"
-} #### Reviewed: 2021-03-25
+    )} && eval "$VAR=\$DIR" && echo "$DIR"
+}
 
 # lk_cache [-t TTL] COMMAND [ARG...]
 #

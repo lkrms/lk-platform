@@ -72,25 +72,25 @@ AUR_PACKAGES+=(
 )
 
 PAC_PACKAGES+=(
-    # shells
+    # Shells
     asciinema
     dash
     ksh
     zsh
 
-    # utilities
+    # Utilities
     cdrtools
     ext4magic
     fatresize
     partclone
 
-    # networking
+    # Networking
     iperf3
-    net-tools # for x11vnc
+    net-tools # Optional x11vnc dependency
     networkmanager-l2tp
     networkmanager-openconnect
 
-    # system
+    # System
     acme.sh
     arch-install-scripts
     at
@@ -113,7 +113,7 @@ AUR_PACKAGES+=(
     vpn-slice
 )
 
-# desktop
+# Desktop
 PAC_PACKAGES+=(
     caprine
     copyq
@@ -143,39 +143,39 @@ PAC_PACKAGES+=(
     transmission-gtk
 
     # PDF
-    ghostscript  # PDF/PostScript processor
-    mupdf-tools  # PDF manipulation tools
-    pandoc       # text conversion tool (e.g. Markdown to PDF)
-    poppler      # PDF tools like pdfimages
-    pstoedit     # converts PDF/PostScript to vector formats
-    qpdf         # e.g. --underlay
-    texlive-core # required for PDF output from pandoc
+    ghostscript  # PDF/PostScript processing
+    mupdf-tools  # PDF manipulation
+    pandoc       # Text conversion (e.g. Markdown to PDF)
+    poppler      # Provides pdfimages
+    pstoedit     # PDF/PostScript conversion to vector formats
+    qpdf         # PDF manipulation (e.g. add underlay)
+    texlive-core # PDF support for pandoc
 
-    # photography
+    # Photography
     geeqie
     rapid-photo-downloader
 
-    # search (Recoll)
+    # Search (Recoll)
     antiword            # Word
     aspell-en           # English stemming
     catdoc              # Excel, Powerpoint
     perl-image-exiftool # EXIF metadata
-    python-lxml         # spreadsheets
-    python-mutagen      # audio metadata
+    python-lxml         # Spreadsheets
+    python-mutagen      # Audio metadata
     recoll
     unrtf
 
-    # multimedia - playback
+    # Multimedia - playback
     clementine
     gst-plugins-bad
 
-    # multimedia - audio
+    # Multimedia - audio
     abcde
     audacity
     python-eyed3
     sox
 
-    # multimedia - video
+    # Multimedia - video
     ffmpeg
     handbrake
     handbrake-cli
@@ -186,17 +186,17 @@ PAC_PACKAGES+=(
     youtube-dl
     yt-dlp
 
-    # system
+    # System
     dconf-editor
     fontconfig
     gparted
     guake
-    libsecret   # secret-tool
-    libva-utils # vainfo
+    libsecret   # Provides secret-tool
+    libva-utils # Provides vainfo
     syslinux
     vdpauinfo
 
-    # automation
+    # Automation
     evtest
     sxhkd
     wmctrl
@@ -222,14 +222,14 @@ AUR_PACKAGES+=(
     ttf-twemoji
     typora
 
-    # multimedia - video
+    # Multimedia - video
     makemkv
     video-trimmer
 
-    # system
+    # System
     hfsprogs
 
-    # automation
+    # Automation
     devilspie2
     quicktile-git
 )
@@ -237,7 +237,7 @@ AUR_PACKAGES+=(
 lk_is_bootstrap ||
     AUR_PACKAGES+=(ttf-ms-win10)
 
-# development
+# Development
 PAC_PACKAGES+=(
     autopep8
     babel-cli
@@ -259,10 +259,10 @@ PAC_PACKAGES+=(
     ttf-ionicons
     uglify-js
 
-    # email
+    # Email
     msmtp     # SMTP client
     msmtp-mta # sendmail alias for msmtp
-    s-nail    # mail and mailx commands
+    s-nail    # Provides mail and mailx
 
     #
     git-filter-repo
@@ -325,7 +325,7 @@ PAC_PACKAGES+=(
     lua
     lua-penlight
 
-    # platforms
+    # Platforms
     aws-cli
     python-boto
     s3cmd
@@ -354,7 +354,7 @@ AUR_PACKAGES+=(
     sublime-text
     vscodium-bin
 
-    # platforms
+    # Platforms
     azure-cli
     azure-functions-core-tools-bin
     linode-cli
@@ -364,11 +364,14 @@ AUR_PACKAGES+=(
     storageexplorer
 )
 
-# development services
+# Development services
 PAC_PACKAGES+=(
     apache
     mariadb
     php-fpm
+
+    #
+    fcgi # Provides cgi-fcgi
 )
 
 # VMs and containers

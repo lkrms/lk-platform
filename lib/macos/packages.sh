@@ -17,7 +17,7 @@ HOMEBREW_FORMULAE=(
     gawk
     gnu-getopt
     grep
-    inetutils
+    inetutils # Provides telnet
     gnu-sed
     gnu-tar
     wget
@@ -46,12 +46,22 @@ HOMEBREW_FORMULAE+=(
     media-info
     ncdu
     p7zip
-    pstree
     watch
 )
 
+HOMEBREW_UNLINK_FORMULAE=(
+    bash-completion
+
+    #
+    ${HOMEBREW_UNLINK_FORMULAE[@]+"${HOMEBREW_UNLINK_FORMULAE[@]}"}
+)
+
+HOMEBREW_LINK_KEGS=(
+    ${HOMEBREW_LINK_KEGS[@]+"${HOMEBREW_LINK_KEGS[@]}"}
+)
+
 HOMEBREW_CASKS=(
-    #iterm2
+    iterm2
 
     #
     ${HOMEBREW_CASKS[@]+"${HOMEBREW_CASKS[@]}"}
@@ -69,7 +79,6 @@ MAS_APPS=(
 HOMEBREW_KEEP_FORMULAE=(
     bash
     bash-completion@2
-    gdb
 
     #
     ${HOMEBREW_KEEP_FORMULAE[@]+"${HOMEBREW_KEEP_FORMULAE[@]}"}
@@ -79,8 +88,8 @@ HOMEBREW_KEEP_CASKS=(
     ${HOMEBREW_KEEP_CASKS[@]+"${HOMEBREW_KEEP_CASKS[@]}"}
 )
 
-FORCE_IBREW=(
-    ${FORCE_IBREW[@]+"${FORCE_IBREW[@]}"}
+HOMEBREW_FORCE_INTEL=(
+    ${HOMEBREW_FORCE_INTEL[@]+"${HOMEBREW_FORCE_INTEL[@]}"}
 )
 
 LOGIN_ITEMS=(
