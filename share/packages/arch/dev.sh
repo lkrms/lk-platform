@@ -211,6 +211,7 @@ AUR_PACKAGES+=(
     espanso
     masterpdfeditor-free
     pencil
+    rescuetime2
     skypeforlinux-stable-bin
     spotify
     stretchly-git
@@ -353,6 +354,10 @@ AUR_PACKAGES+=(
     sublime-merge
     sublime-text
     vscodium-bin
+
+    #
+    nodejs-generator-code
+    vsce
 
     # Platforms
     azure-cli

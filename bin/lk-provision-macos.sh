@@ -144,14 +144,6 @@ function exit_trap() {
         }
     }
 
-    sudo systemsetup -getcomputersleep | grep -Ei '\<Never$' >/dev/null || {
-        [ "${PIPESTATUS[0]}${PIPESTATUS[1]}" = 01 ] || lk_die ""
-        ! lk_confirm "Prevent sleep when display is off?" N || {
-            lk_tty_print "Disabling computer sleep"
-            lk_run_detail sudo systemsetup -setcomputersleep off
-        }
-    }
-
     scutil --get HostName &>/dev/null || {
         [ -n "${LK_NODE_HOSTNAME-}" ] ||
             lk_tty_read "System hostname (optional):" LK_NODE_HOSTNAME ||
@@ -225,10 +217,14 @@ EOF
     path_add "${PATH_ADD[@]}" ||
         PATH=$_PATH
 
-    # Disable sleep when charging
+    # Disable sleep when plugged in
     sudo pmset -c sleep 0
 
-    # Always restart on power loss
+    # Sleep after 10 minutes on battery ('displaysleep' is separate; 2 minutes
+    # by default)
+    sudo pmset -b sleep 10
+
+    # Always restart after power loss
     sudo pmset -a autorestart 1
 
     lk_macos_xcode_maybe_accept_license

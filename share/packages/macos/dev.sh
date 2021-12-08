@@ -84,6 +84,7 @@ HOMEBREW_CASKS+=(
     mysides
     nextcloud
     pencil
+    rescuetime
     scribus-dev
     skype
     spotify
@@ -126,7 +127,6 @@ MAS_APPS+=(
     420212497  # Byword
     404705039  # Graphic
     1295203466 # Microsoft Remote Desktop
-    1303222628 # Paprika
     1055273043 # PDF Expert
 
     #
