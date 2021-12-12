@@ -93,7 +93,7 @@ GS_OPTIONS+=(
     -c "33554432 setvmthreshold << ${DISTILLER_PARAMS[*]} >> setdistillerparams"
 )
 
-lk_console_detail "Command line:" "$(lk_quote_args_folded \
+lk_console_detail "Command line:" "$(lk_fold_quote_args \
     gs "${GS_OPTIONS[@]}")"
 
 ERRORS=()

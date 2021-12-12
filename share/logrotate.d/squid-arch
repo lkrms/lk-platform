@@ -1,0 +1,13 @@
+/var/log/squid/*.log {
+    daily
+    missingok
+    rotate 14
+    compress
+    delaycompress
+    notifempty
+    sharedscripts
+    postrotate
+        ! systemctl is-active squid >/dev/null 2>&1 ||
+            systemctl start squid-rotate.service
+    endscript
+}

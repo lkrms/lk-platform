@@ -2,11 +2,13 @@
 
 HOMEBREW_TAPS=()
 HOMEBREW_FORMULAE=()
+HOMEBREW_UNLINK_FORMULAE=()
+HOMEBREW_LINK_KEGS=()
 HOMEBREW_CASKS=()
 MAS_APPS=()
 HOMEBREW_KEEP_FORMULAE=()
 HOMEBREW_KEEP_CASKS=()
-FORCE_IBREW=()
+HOMEBREW_FORCE_INTEL=()
 LOGIN_ITEMS=()
 
 HOMEBREW_TAPS+=(
@@ -68,6 +70,7 @@ HOMEBREW_CASKS+=(
     alt-tab
     chromium
     firefox
+    flameshot
     flycut
     hammerspoon
     imageoptim
@@ -81,6 +84,7 @@ HOMEBREW_CASKS+=(
     mysides
     nextcloud
     pencil
+    rescuetime
     scribus-dev
     skype
     spotify
@@ -116,14 +120,13 @@ MAS_APPS+=(
     409201541 # Pages
 
     #
-    526298438 # Lightshot Screenshot
-    441258766 # Magnet
+    1502839586 # Hand Mirror
+    441258766  # Magnet
 
     #
     420212497  # Byword
     404705039  # Graphic
     1295203466 # Microsoft Remote Desktop
-    1303222628 # Paprika
     1055273043 # PDF Expert
 
     #
@@ -142,7 +145,6 @@ HOMEBREW_FORMULAE+=(
     autopep8
     cmake
     emscripten
-    #gdb
 
     # Email
     msmtp  # SMTP client
@@ -160,7 +162,7 @@ HOMEBREW_FORMULAE+=(
 
     #
     composer
-    php
+    php@8.0
 
     #
     python
@@ -187,12 +189,21 @@ HOMEBREW_FORMULAE+=(
     wp-cli
 )
 
-FORCE_IBREW+=(
+HOMEBREW_UNLINK_FORMULAE+=(
+    php
+)
+
+HOMEBREW_LINK_KEGS+=(
+    php@8.0
+)
+
+HOMEBREW_FORCE_INTEL+=(
     composer
     php
     php@7.2
     php@7.3
     php@7.4
+    php@8.0
 )
 
 HOMEBREW_CASKS+=(
@@ -223,9 +234,11 @@ HOMEBREW_CASKS+=(
 
 HOMEBREW_KEEP_FORMULAE+=(
     #
+    php
     php@7.2
     php@7.3
     php@7.4
+    php@8.0
 
     #
     microsoft/mssql-release/msodbcsql17
@@ -246,6 +259,7 @@ HOMEBREW_KEEP_CASKS+=(
     key-codes
     lingon-x
     microsoft-azure-storage-explorer
+    sfdx
     shortcutdetective
     teamviewer
 
@@ -265,9 +279,9 @@ HOMEBREW_KEEP_CASKS+=(
 
 LOGIN_ITEMS+=(
     #"/Applications/AltTab.app"
+    "/Applications/flameshot.app"
     "/Applications/Flycut.app"
     "/Applications/Hammerspoon.app"
-    "/Applications/Lightshot Screenshot.app"
     "/Applications/Magnet.app"
     "/Applications/Mail.app"
     "/Applications/Messenger.app"

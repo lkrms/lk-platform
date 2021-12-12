@@ -2,46 +2,6 @@
 
 #### INCLUDE core.sh.d
 
-function _lk_usage_format() {
-    local CMD BOLD RESET
-    CMD=$(lk_escape_ere "$(lk_caller_name 1)")
-    BOLD=$(lk_escape_ere_replace "$LK_BOLD")
-    RESET=$(lk_escape_ere_replace "$LK_RESET")
-    sed -E \
-        -e "s/^($S*(([uU]sage|[oO]r):$S+)?(sudo )?)($CMD)($S|\$)/\1$BOLD\5$RESET\6/" \
-        -e "s/^([a-zA-Z0-9][a-zA-Z0-9 ]*:|[A-Z0-9][A-Z0-9 ]*)\$/$BOLD&$RESET/" \
-        -e 's/^\\(.)/\1/' <<<"$1"
-}
-
-function lk_usage() {
-    local EXIT_STATUS=$? MESSAGE=${1:-${LK_USAGE-}}
-    [ -z "$MESSAGE" ] || MESSAGE=$(_lk_usage_format "$MESSAGE")
-    _LK_TTY_NO_FOLD=1 \
-        lk_console_log "${MESSAGE:-$(LK_VERBOSE= _lk_caller): invalid arguments}"
-    if [[ $- != *i* ]]; then
-        exit "$EXIT_STATUS"
-    else
-        return "$EXIT_STATUS"
-    fi
-}
-
-if lk_bash_at_least 4 1; then
-    function lk_pause() {
-        local REPLY
-        # A homage to MS-DOS
-        read -rs -N 1 \
-            -p "$(lk_readline_format "${1:-Press any key to continue . . . }")"
-        lk_console_blank
-    }
-else
-    function lk_pause() {
-        local REPLY
-        read -rs \
-            -p "$(lk_readline_format "${1:-Press return to continue . . . }")"
-        lk_console_blank
-    }
-fi
-
 # lk_path_edit REMOVE_REGEX [MOVE_REGEX [PATH]]
 function lk_path_edit() {
     [ $# -gt 0 ] || lk_usage "\
@@ -352,11 +312,6 @@ function lk_get_colours() {
         RESET "sgr0"
 }
 
-function lk_maybe_bold() {
-    [[ ${1/"$LK_BOLD"/} != "$1" ]] ||
-        echo "$LK_BOLD"
-}
-
 # _lk_array_fill_temp ARRAY...
 #
 # Create new array _LK_TEMP_ARRAY and copy the elements of each ARRAY to it.
@@ -370,17 +325,6 @@ function _lk_array_fill_temp() {
         _LK_TEMP_ARRAY+=(${!_LK_ARRAY+"${!_LK_ARRAY}"})
         shift
     done
-}
-
-# _lk_array_action COMMAND ARRAY...
-#
-# Run COMMAND with the combined elements of each ARRAY as arguments. COMMAND is
-# executed once and any fixed arguments must be quoted.
-function _lk_array_action() {
-    local _LK_COMMAND _LK_TEMP_ARRAY
-    eval "_LK_COMMAND=($1)"
-    _lk_array_fill_temp "${@:2}" &&
-        "${_LK_COMMAND[@]}" ${_LK_TEMP_ARRAY[@]+"${_LK_TEMP_ARRAY[@]}"}
 }
 
 # lk_echo_args [-z] [ARG...]
@@ -397,41 +341,6 @@ function lk_array_merge() {
     eval "$1=($(for i in "${@:2}"; do
         printf '${%s[@]+"${%s[@]}"}\n' "$i" "$i"
     done))"
-}
-
-# lk_quote_args [ARG...]
-#
-# Use `printf %q` to output each ARG on a single space-delimited line.
-#
-# Example:
-#
-#     $ lk_quote_args printf '%s\n' "Hello, world."
-#     printf %s\\n Hello\,\ world.
-function lk_quote_args() {
-    [ $# -eq 0 ] || printf '%q' "$1"
-    [ $# -le 1 ] || printf ' %q' "${@:2}"
-    printf '\n'
-}
-
-# lk_quote_args_folded [ARG...]
-#
-# Same as lk_quote_args, but start each ARG on a new line.
-#
-# Example:
-#
-#     $ lk_quote_args_folded printf '%s\n' "Hello, world."
-#     printf \
-#         %s\\n \
-#         Hello\,\ world.
-function lk_quote_args_folded() {
-    [ $# -eq 0 ] || printf '%q' "$1"
-    [ $# -le 1 ] || printf ' \\\n    %q' "${@:2}"
-    printf '\n'
-}
-
-# lk_quote [ARRAY...]
-function lk_quote() {
-    _lk_array_action lk_quote_args "$@"
 }
 
 # lk_in_array VALUE ARRAY [ARRAY...]
@@ -534,12 +443,18 @@ function lk_has_arg() {
 }
 
 function _lk_cache_dir() {
-    echo "${_LK_OUTPUT_CACHE:=$(
+    local VAR=_LK_OUTPUT_CACHE DIR SUBDIR=
+    [ -z "${_LK_CACHE_NAMESPACE:+1}" ] || {
+        VAR+=_$_LK_CACHE_NAMESPACE
+        SUBDIR=/$_LK_CACHE_NAMESPACE
+    }
+    # "${!VAR:=...}" doesn't work in Bash 3.2
+    DIR=${!VAR:-$(
         TMPDIR=${TMPDIR:-/tmp}
-        DIR=${TMPDIR%/}/_lk_output_cache_$EUID
+        DIR=${TMPDIR%/}/_lk_output_cache_$EUID$SUBDIR
         install -d -m 00700 "$DIR" && echo "$DIR"
-    )}"
-} #### Reviewed: 2021-03-25
+    )} && eval "$VAR=\$DIR" && echo "$DIR"
+}
 
 # lk_cache [-t TTL] COMMAND [ARG...]
 #
@@ -1332,7 +1247,7 @@ function lk_download() {
             COMMAND_ARGS+=("${DOWNLOAD_ARGS[@]}")
             continue
         }
-        COMMANDS+=("$(lk_quote CURL_COMMAND DOWNLOAD_ARGS)")
+        COMMANDS+=("$(lk_quote_arr CURL_COMMAND DOWNLOAD_ARGS)")
     done < <([ $# -gt 0 ] &&
         lk_echo_args "$@" ||
         cat)
@@ -1342,7 +1257,7 @@ function lk_download() {
             CURL_COMMAND+=(--parallel)
         ! lk_version_at_least "$CURL_VERSION" 7.68.0 ||
             CURL_COMMAND+=(--parallel-immediate)
-        COMMANDS+=("$(lk_quote CURL_COMMAND COMMAND_ARGS)")
+        COMMANDS+=("$(lk_quote_arr CURL_COMMAND COMMAND_ARGS)")
     }
     for COMMAND in ${COMMANDS[@]+"${COMMANDS[@]}"}; do
         eval "$COMMAND" || return
@@ -1891,7 +1806,7 @@ else
         [ $# -ne 1 ] || set -- "/Users/$USER" "$1"
         [ $# -eq 2 ] || lk_warn "invalid arguments" || return
         dscl . -read "$@" |
-            sed -E "1s/^$(lk_escape_ere "$2")://;s/^ //;/^\$/d"
+            sed -E "1s/^$(lk_sed_escape "$2")://;s/^ //;/^\$/d"
     }
     function lk_full_name() {
         lk_dscl_read RealName

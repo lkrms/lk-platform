@@ -92,8 +92,7 @@ function lk_linode_ssh_add() {
         eval "LABEL=${1-}"
         LABEL=${LABEL:-${LINODE_LABEL%%.*}}
         eval "USERNAME=${2-}"
-        _LK_TTY_NO_FOLD=1 \
-            lk_console_detail "Adding SSH host:" \
+        lk_console_detail "Adding SSH host:" \
             $'\n'"${LK_SSH_PREFIX-$LK_PATH_PREFIX}$LABEL ($(lk_implode_args \
                 " + " \
                 ${LINODE_IPV4_PRIVATE:+"$LK_BOLD$LINODE_IPV4_PRIVATE$LK_RESET"} \
@@ -129,10 +128,9 @@ function lk_linode_ssh_add_all() {
 # lk_linode_hosting_ssh_add_all [LINODE_ARG...]
 function lk_linode_hosting_ssh_add_all() {
     local GET_USERS_SH JSON LINODES LINODE SH IFS USERS USERNAME ALL_USERS=()
-    GET_USERS_SH="$(declare -f \
-        lk_get_users_in_group \
-        lk_get_standard_users); lk_get_standard_users" &&
-        GET_USERS_SH=$(printf '%q' "$GET_USERS_SH") || return
+    GET_USERS_SH=$(printf '%q\n' \
+        "$(declare -f lk_get_users_in_group lk_get_standard_users &&
+            lk_quote_args lk_get_standard_users /srv/www)") || return
     JSON=$(lk_linode_linodes "$@" | _lk_linode_filter) &&
         lk_jq_get_array LINODES <<<"$JSON" &&
         [ ${#LINODES[@]} -gt 0 ] || lk_warn "no Linodes found" || return
@@ -516,7 +514,7 @@ Example:
         ${REBUILD:+"$LINODE_ID"}
     )
     lk_console_item "Running:" \
-        $'\n'"$(lk_quote_args_folded linode-cli "${ARGS[@]##ssh-??? * }")"
+        $'\n'"$(lk_fold_quote_args linode-cli "${ARGS[@]##ssh-??? * }")"
     lk_confirm "Proceed?" Y || return
     lk_console_message "${VERBS[0]} Linode"
     FILE=/tmp/$FUNCNAME-$1-$(lk_date %s).json

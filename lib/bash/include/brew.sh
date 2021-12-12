@@ -1,5 +1,13 @@
 #!/bin/bash
 
+function lk_brew_flush_cache() {
+    lk_cache_mark_dirty
+}
+
+function lk_brew_info() {
+    lk_cache brew info "$@"
+}
+
 # lk_brew_install_homebrew [TARGET_DIR]
 function lk_brew_install_homebrew() {
     local TARGET_DIR=${1-} COMMAND=(caffeinate -d) REFRESH_ENV NAME BREW \
@@ -45,31 +53,30 @@ function lk_brew_install_homebrew() {
 
 # lk_brew_tap [TAP...]
 function lk_brew_tap() {
-    local TAPS TAP DIR URL
-    TAPS=($(comm -13 \
+    local TAP DIR URL
+    while IFS= read -r TAP; do
+        lk_tty_detail "Tapping" "$TAP"
+        unset URL
+        if lk_is_system_apple_silicon &&
+            [ "$(brew --prefix 2>/dev/null)" != /opt/homebrew ] &&
+            [[ $TAP =~ ^[^/]+/[^/]+$ ]] &&
+            DIR=/opt/homebrew/Library/Taps/${TAP%/*}/homebrew-${TAP#*/} &&
+            [ -d "$DIR" ]; then
+            URL=$DIR
+        fi
+        brew tap --quiet "$TAP" ${URL+"$URL"} &&
+            lk_brew_flush_cache || return
+    done < <(comm -13 \
         <(brew tap | sort -u) \
-        <(printf '%s\n' "$@" | sort -u))) || return
-    [ ${#TAPS[@]} -eq 0 ] ||
-        for TAP in "${TAPS[@]}"; do
-            lk_tty_detail "Tapping" "$TAP"
-            unset URL
-            if lk_is_system_apple_silicon &&
-                [ "$(brew --prefix 2>/dev/null)" != /opt/homebrew ] &&
-                [[ $TAP =~ ^[^/]+/[^/]+$ ]] &&
-                DIR=/opt/homebrew/Library/Taps/${TAP%/*}/homebrew-${TAP#*/} &&
-                [ -d "$DIR" ]; then
-                URL=$DIR
-            fi
-            brew tap --quiet "$TAP" ${URL+"$URL"} || return
-        done
+        <(printf '%s\n' "$@" | sort -u))
 }
 
 function lk_brew_list_formulae() {
-    brew list --formula --full-name
+    lk_cache brew list --formula --full-name
 }
 
 function lk_brew_list_casks() {
-    brew list --cask --full-name
+    lk_cache brew list --cask --full-name
 }
 
 # lk_brew_enable_autoupdate [ARCH]
@@ -90,10 +97,10 @@ function lk_brew_formulae_list_native() {
     [ "${1-}" != -n ] || { NATIVE=false && shift; }
     if ! lk_is_system_apple_silicon; then
         [ "$NATIVE" = false ] ||
-            brew info --json=v2 --formula "${@---all}" |
+            lk_brew_info --json=v2 --formula "${@---all}" |
             jq -r '.formulae[].full_name'
     else
-        brew info --json=v2 --formula "${@---all}" |
+        lk_brew_info --json=v2 --formula "${@---all}" |
             jq -r --argjson native "$NATIVE" '
 def is_native:
     (.versions.bottle | not) or

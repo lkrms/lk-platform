@@ -53,8 +53,8 @@ SERVICE"
     NAME=${NAME:-$1}
     printf 'local LK_USAGE=%q COMMAND=(%s) ARGS=(%s) _USER%s _MACHINE%s NAME=%q _NAME=%q\n' \
         "$LK_USAGE" \
-        "$(lk_quote COMMAND)" \
-        "$(lk_quote ARGS)" \
+        "$(lk_quote_arr COMMAND)" \
+        "$(lk_quote_arr ARGS)" \
         "${_USER+=}" \
         "${_MACHINE+=}" \
         "$NAME" \
@@ -458,11 +458,12 @@ function lk_get_users_in_group() {
         sort -u || true
 }
 
+# lk_get_standard_users [HOME_BASE_DIR]
 function lk_get_standard_users() {
     local ADM_USERS USERS
     ADM_USERS=($(lk_get_users_in_group adm sudo wheel))
-    USERS=($(getent passwd |
-        awk -F: '$3 >= 1000 && $3 < 65534 { print $1 }'))
+    USERS=($(getent passwd | awk -F: -v "h=${1-}" \
+        '$3 >= 1000 && $3 < 65534 && index($6, h) == 1 { print $1 }'))
     # lk_linode_hosting_ssh_add_all relies on this being a standalone function,
     # so don't use lk_echo_array
     comm -13 \

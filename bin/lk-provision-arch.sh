@@ -562,7 +562,7 @@ $LK_NODE_HOSTNAME" &&
                 . "$FILE"
                 MODULES+=(amdgpu)
                 sed -E 's/^(MODULES=\().*(\))/\1'"$(lk_escape_ere_replace \
-                    "$(lk_quote MODULES)")"'\2/' "$FILE"
+                    "$(lk_quote_arr MODULES)")"'\2/' "$FILE"
             ) >"$TEMP_FILE"
             lk_file_keep_original "$FILE"
             lk_file_replace -f "$TEMP_FILE" "$FILE"
@@ -1016,7 +1016,6 @@ done\""
             sudo usermod --append --groups proxy "$USER"
         SERVICE_ENABLE+=(
             squid "Squid proxy server"
-            squid-rotate.timer "Squid log rotation"
         )
         ! lk_is_false LK_FILE_REPLACE_NO_CHANGE || {
             lk_systemctl_stop squid &&
@@ -1024,6 +1023,11 @@ done\""
                 "error creating Squid swap directories and cache_dir structures"
             SERVICE_RESTART+=(squid)
         }
+        lk_is_bootstrap ||
+            lk_systemctl_disable_now squid-rotate.timer
+        FILE=/etc/logrotate.d/squid
+        lk_install -m 00644 "$FILE"
+        lk_file_replace -f "$LK_BASE/share/logrotate.d/squid-arch" "$FILE"
     fi
 
     if lk_pac_installed bluez; then

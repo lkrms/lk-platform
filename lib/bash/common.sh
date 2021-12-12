@@ -126,5 +126,5 @@ function lk_getopt() {
     done
     [ "$ARGC" -gt 0 ] || shift
     OPTS+=("$@")
-    LK_GETOPT=$(lk_quote OPTS)
+    LK_GETOPT=$(lk_quote_arr OPTS)
 }

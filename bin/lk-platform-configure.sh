@@ -357,8 +357,7 @@ lk_log_start
         check_repo_config "merge.ff" "only"
         check_repo_config "pull.ff" "only"
         for COMMAND in ${CONFIG_COMMANDS[@]+"${CONFIG_COMMANDS[@]}"}; do
-            _LK_TTY_NO_FOLD=1 \
-                lk_console_detail "Running:" "$(lk_quote_args git $COMMAND)"
+            lk_console_detail "Running:" "$(lk_quote_args git $COMMAND)"
             lk_run_as "$REPO_OWNER" git $COMMAND
         done
         REMOTE=$(lk_git_branch_upstream_remote) ||

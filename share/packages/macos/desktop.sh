@@ -2,11 +2,13 @@
 
 HOMEBREW_TAPS=()
 HOMEBREW_FORMULAE=()
+HOMEBREW_UNLINK_FORMULAE=()
+HOMEBREW_LINK_KEGS=()
 HOMEBREW_CASKS=()
 MAS_APPS=()
 HOMEBREW_KEEP_FORMULAE=()
 HOMEBREW_KEEP_CASKS=()
-FORCE_IBREW=()
+HOMEBREW_FORCE_INTEL=()
 LOGIN_ITEMS=()
 
 HOMEBREW_TAPS+=(
@@ -54,6 +56,7 @@ HOMEBREW_CASKS+=(
     bbedit
     chromium
     firefox
+    flameshot
     flycut
     imageoptim
     iterm2
@@ -83,8 +86,8 @@ MAS_APPS+=(
     409201541 # Pages
 
     #
-    526298438 # Lightshot Screenshot
-    441258766 # Magnet
+    1502839586 # Hand Mirror
+    441258766  # Magnet
 
     #
     1295203466 # Microsoft Remote Desktop
@@ -117,8 +120,8 @@ HOMEBREW_KEEP_CASKS+=(
 )
 
 LOGIN_ITEMS+=(
+    "/Applications/flameshot.app"
     "/Applications/Flycut.app"
-    "/Applications/Lightshot Screenshot.app"
     "/Applications/Magnet.app"
     "/Applications/Nextcloud.app"
     "/Applications/Skype.app"

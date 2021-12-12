@@ -29,6 +29,24 @@ function lk_double_quote() {
         ${FORCE-$'/^[a-zA-Z0-9+./@_-]*$/b\n'}'s/["$\`]/\\&/g; s/.*/"&"/' "$@"
 }
 
+# lk_quote_args [ARG...]
+#
+# Use `printf %q` to print the arguments on a space-delimited line.
+function lk_quote_args() {
+    [ $# -eq 0 ] || { printf '%q' "$1" && shift; }
+    [ $# -eq 0 ] || printf ' %q' "$@"
+    printf '\n'
+}
+
+# lk_fold_quote_args [ARG...]
+#
+# Same as lk_quote_args, but print each argument on a new line.
+function lk_fold_quote_args() {
+    [ $# -eq 0 ] || { printf '%q' "$1" && shift; }
+    [ $# -eq 0 ] || printf ' \\\n    %q' "$@"
+    printf '\n'
+}
+
 # lk_implode_args GLUE [ARG...]
 function lk_implode_args() {
     local IFS GLUE=${1//\\/\\\\}

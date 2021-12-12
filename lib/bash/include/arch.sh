@@ -290,7 +290,7 @@ function lk_makepkg() {
             lk_delete_on_exit "$BUILD_DIR" &&
             git clone "$AUR_URL" "$BUILD_DIR" &&
             SH=$({ cd "$BUILD_DIR" && lk_makepkg "$@"; } >&2 &&
-                echo "LK_MAKEPKG_LIST=($(lk_quote LK_MAKEPKG_LIST))") &&
+                echo "LK_MAKEPKG_LIST=($(lk_quote_arr LK_MAKEPKG_LIST))") &&
             eval "$SH"
     else
         lk_pac_sync &&
