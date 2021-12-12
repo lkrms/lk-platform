@@ -545,7 +545,6 @@ function _lk_git_do_with_repo() {
         eval "$SH" || return
         _lk_git_is_quiet && [ "$STATUS" -eq 0 ] || echo "$(
             unset _LK_FD
-            _LK_TTY_NO_FOLD=1
             {
                 if [ "$STATUS" -eq 0 ]; then
                     _LK_TTY_PREFIX_COLOUR=$LK_BOLD$LK_GREEN \
@@ -671,10 +670,8 @@ directory of a working tree" || return
     fi
     _lk_git_is_quiet || {
         [ "$ERR_COUNT" -eq 0 ] &&
-            _LK_TTY_NO_FOLD=1 \
-                lk_console_success "Command succeeded in $NOUN" ||
-            _LK_TTY_NO_FOLD=1 \
-                lk_console_error "Command failed in $ERR_COUNT of $NOUN:" \
+            lk_console_success "Command succeeded in $NOUN" ||
+            lk_console_error "Command failed in $ERR_COUNT of $NOUN:" \
                 "$(lk_echo_array ERR_REPOS)"
     }
     _LK_GIT_REPO_ERRORS=(${ERR_REPOS[@]+"${ERR_REPOS[@]}"})
@@ -727,17 +724,13 @@ function lk_git_audit_repos() {
     lk_console_message "Audit complete"
     lk_is_true SKIP_FETCH || {
         [ ${#FETCH_ERRORS[@]} -eq 0 ] &&
-            _LK_TTY_NO_FOLD=1 \
-                lk_console_success "Fetch succeeded in $NOUN" ||
-            _LK_TTY_NO_FOLD=1 \
-                lk_console_error "Fetch failed in ${#FETCH_ERRORS[@]} of $NOUN:" \
+            lk_console_success "Fetch succeeded in $NOUN" ||
+            lk_console_error "Fetch failed in ${#FETCH_ERRORS[@]} of $NOUN:" \
                 "$(lk_echo_array FETCH_ERRORS)"
     }
     [ ${#AUDIT_ERRORS[@]} -eq 0 ] &&
-        _LK_TTY_NO_FOLD=1 \
-            lk_console_success "Checks passed in $NOUN" ||
-        _LK_TTY_NO_FOLD=1 \
-            lk_console_error "Checks failed in ${#AUDIT_ERRORS[@]} of $NOUN:" \
+        lk_console_success "Checks passed in $NOUN" ||
+        lk_console_error "Checks failed in ${#AUDIT_ERRORS[@]} of $NOUN:" \
             "$(lk_echo_array AUDIT_ERRORS)"
     [[ $((${#FETCH_ERRORS[@]} + ${#AUDIT_ERRORS[@]})) -eq 0 ]]
 }

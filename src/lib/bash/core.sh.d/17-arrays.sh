@@ -1,15 +1,21 @@
 #!/bin/bash
 
-# lk_arr [ARRAY...]
+# lk_arr [-COMMAND] [ARRAY...]
 function lk_arr() {
-    local _sh _SH=
+    local _CMD="printf '%s\n'" _sh _SH=
+    [[ ${1-} != -* ]] || { _CMD=${1#-} && shift; }
     while [ $# -gt 0 ]; do
         _sh=" \"\${$1[@]}\""
         _SH+=${!1+$_sh}
         shift
     done
     # Print nothing if no array members were found
-    [ -z "${_SH:+1}" ] || eval "printf '%s\n'$_SH"
+    [ -z "${_SH:+1}" ] || eval "$_CMD$_SH"
+}
+
+# lk_quote_arr [ARRAY...]
+function lk_quote_arr() {
+    lk_arr -lk_quote_args "$@"
 }
 
 # lk_implode_arr GLUE [ARRAY...]

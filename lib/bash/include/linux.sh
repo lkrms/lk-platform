@@ -53,8 +53,8 @@ SERVICE"
     NAME=${NAME:-$1}
     printf 'local LK_USAGE=%q COMMAND=(%s) ARGS=(%s) _USER%s _MACHINE%s NAME=%q _NAME=%q\n' \
         "$LK_USAGE" \
-        "$(lk_quote COMMAND)" \
-        "$(lk_quote ARGS)" \
+        "$(lk_quote_arr COMMAND)" \
+        "$(lk_quote_arr ARGS)" \
         "${_USER+=}" \
         "${_MACHINE+=}" \
         "$NAME" \

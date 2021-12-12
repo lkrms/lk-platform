@@ -92,8 +92,7 @@ function lk_linode_ssh_add() {
         eval "LABEL=${1-}"
         LABEL=${LABEL:-${LINODE_LABEL%%.*}}
         eval "USERNAME=${2-}"
-        _LK_TTY_NO_FOLD=1 \
-            lk_console_detail "Adding SSH host:" \
+        lk_console_detail "Adding SSH host:" \
             $'\n'"${LK_SSH_PREFIX-$LK_PATH_PREFIX}$LABEL ($(lk_implode_args \
                 " + " \
                 ${LINODE_IPV4_PRIVATE:+"$LK_BOLD$LINODE_IPV4_PRIVATE$LK_RESET"} \
@@ -515,7 +514,7 @@ Example:
         ${REBUILD:+"$LINODE_ID"}
     )
     lk_console_item "Running:" \
-        $'\n'"$(lk_quote_args_folded linode-cli "${ARGS[@]##ssh-??? * }")"
+        $'\n'"$(lk_fold_quote_args linode-cli "${ARGS[@]##ssh-??? * }")"
     lk_confirm "Proceed?" Y || return
     lk_console_message "${VERBS[0]} Linode"
     FILE=/tmp/$FUNCNAME-$1-$(lk_date %s).json

@@ -259,6 +259,7 @@ HOMEBREW_KEEP_CASKS+=(
     key-codes
     lingon-x
     microsoft-azure-storage-explorer
+    sfdx
     shortcutdetective
     teamviewer
 

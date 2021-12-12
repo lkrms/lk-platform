@@ -562,7 +562,7 @@ $LK_NODE_HOSTNAME" &&
                 . "$FILE"
                 MODULES+=(amdgpu)
                 sed -E 's/^(MODULES=\().*(\))/\1'"$(lk_escape_ere_replace \
-                    "$(lk_quote MODULES)")"'\2/' "$FILE"
+                    "$(lk_quote_arr MODULES)")"'\2/' "$FILE"
             ) >"$TEMP_FILE"
             lk_file_keep_original "$FILE"
             lk_file_replace -f "$TEMP_FILE" "$FILE"

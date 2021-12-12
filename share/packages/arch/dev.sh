@@ -17,6 +17,7 @@ PAC_KEEP=(
     expect
     linux-headers
     offlineimap
+    sfdx-cli
     stripe-cli
     subversion
     zoom

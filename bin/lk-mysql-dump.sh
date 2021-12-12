@@ -1,7 +1,7 @@
 #!/bin/bash
 
 lk_bin_depth=1 . lk-bash-load.sh || exit
-lk_include mysql
+lk_include mysql provision
 
 DB_NAME=
 DB_USER=
@@ -12,30 +12,35 @@ ALL=0
 EXCLUDE=0
 DEST=$PWD
 DEST_GROUP=
-TIMESTAMP=${LK_BACKUP_TIMESTAMP-}
+TIMESTAMP=${LK_BACKUP_TIMESTAMP:-$(lk_date "%Y-%m-%d-%H%M%S")}
 NO_TIMESTAMP=0
 DB_INCLUDE=()
 DB_EXCLUDE=(information_schema performance_schema sys)
 
-LK_USAGE="\
-Usage: ${0##*/} [OPTION...] DB_NAME...
-   or: ${0##*/} [OPTION...] --exclude DB_NAME...
-   or: ${0##*/} [OPTION...] --all
+function __usage() {
+    cat <<EOF
+Back up one or more MySQL databases.
 
-Use mysqldump to back up one or more MySQL databases.
+Usage:
+  ${0##*/} [options] <DB_NAME>...
+  ${0##*/} [options] --exclude <DB_NAME>...
+  ${0##*/} [options] --all
 
 Options:
-  -a, --all                 dump all databases
-  -x, --exclude             dump all databases except DB_NAME...
-  -d, --dest=DIR            create each backup file in DIR
-                            (default: current directory)
-  -t, --timestamp=VALUE     use VALUE as backup file timestamp
-                            (default: LK_BACKUP_TIMESTAMP from environment
-                            or output of \`date +%Y-%m-%d-%H%M%S\`)
-  -s, --no-timestamp        don't add backup file timestamp
-  -g, --group GROUP         create backup files with group GROUP"
+  -a, --all                 Dump all databases.
+  -x, --exclude             Dump all databases except <DB_NAME>...
+  -d, --dest=<DIR>          Create each backup file in <DIR> [default: ./]
+  -t, --timestamp=<VALUE>   Use <VALUE> as the backup timestamp.
+                            Overrides environment variable LK_BACKUP_TIMESTAMP.
+                            [format: YYYY-MM-DD-HHMMSS]
+                            [default: $TIMESTAMP]
+  -s, --no-timestamp        Don't add a timestamp to backup files.
+  -g, --group=<GROUP>       Create backup files owned by <GROUP>
+EOF
+}
 
-lk_getopt "axd:t:sg:" \
+lk_getopt \
+    "axd:t:sg:" \
     "all,exclude,dest:,timestamp:,no-timestamp,group:"
 eval "set -- $LK_GETOPT"
 
@@ -52,14 +57,14 @@ while :; do
         ALL=0
         ;;
     -d | --dest)
-        [ -d "$1" ] || lk_warn "directory not found: $1" || lk_usage
-        [ -w "$1" ] || lk_warn "directory not writable: $1" || lk_usage
+        [ -d "$1" ] || lk_usage -e "directory not found: $1"
+        [ -w "$1" ] || lk_usage -e "directory not writable: $1"
         DEST=$(realpath "$1")
         shift
         ;;
     -t | --timestamp)
         [[ $1 =~ ^[0-9]{4}(-[0-9]{2}){2}-[0-9]{6}$ ]] ||
-            lk_warn "invalid timestamp: $1" || lk_usage
+            lk_usage -e "invalid timestamp: $1"
         TIMESTAMP=$1
         NO_TIMESTAMP=0
         shift
@@ -68,9 +73,8 @@ while :; do
         NO_TIMESTAMP=1
         ;;
     -g | --group)
-        # TODO: add macOS-friendly test
-        getent group "$1" &>/dev/null ||
-            lk_die "group not found: $1"
+        lk_group_exists "$1" ||
+            lk_usage -e "group not found: $1"
         DEST_GROUP=$1
         shift
         ;;
@@ -84,13 +88,12 @@ done
 lk_is_true ALL || {
     [ $# -gt 0 ] || lk_usage
     ! grep -E '[[:blank:]]$' <(printf '%s\n' "$@") >/dev/null ||
-        lk_warn "invalid arguments" || lk_usage
+        lk_usage -e "invalid arguments"
 }
 
-EXIT_STATUS=0
+STATUS=0
 
 _LK_MYSQL_QUIET=1
-_LK_TTY_NO_FOLD=1
 
 lk_log_start
 lk_start_trace
@@ -117,7 +120,7 @@ else
             }
         done
         [ ${#DB_MISSING[@]} -eq 0 ] || {
-            EXIT_STATUS=1
+            STATUS=1
             lk_console_warning "${#DB_MISSING[@]} requested $(
                 lk_plural ${#DB_MISSING[@]} database databases
             ) not available on this host:" "$(lk_echo_array DB_MISSING)"
@@ -160,7 +163,7 @@ for DB_NAME in "${DB_INCLUDE[@]}"; do
     FILE=$FILE.sql.gz
     lk_console_detail "Backup file:" "$FILE"
     [ ! -e "$FILE" ] || {
-        EXIT_STATUS=1
+        STATUS=1
         lk_console_error "Skipping (backup already exists)"
         continue
     }
@@ -171,9 +174,9 @@ for DB_NAME in "${DB_INCLUDE[@]}"; do
         mv -f "$FILE.pending" "$FILE"; then
         lk_console_success "Database dump completed successfully"
     else
-        EXIT_STATUS=$?
-        lk_console_error "Database dump failed (exit status $EXIT_STATUS)"
+        STATUS=$?
+        lk_console_error "Database dump failed (exit status $STATUS)"
     fi
 done
 
-(exit "$EXIT_STATUS") || lk_die ""
+(exit "$STATUS") || lk_die ""

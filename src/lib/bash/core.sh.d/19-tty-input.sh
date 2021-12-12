@@ -9,6 +9,12 @@ function _lk_tty_prompt() {
     echo "$PREFIX$PROMPT "
 }
 
+function lk_tty_pause() {
+    local REPLY
+    read -rsp "${1:-Press return to continue . . . }"
+    lk_tty_print
+}
+
 # lk_tty_read PROMPT NAME [DEFAULT [READ_ARG...]]
 function lk_tty_read() {
     [ $# -ge 2 ] || lk_usage "\
