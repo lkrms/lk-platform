@@ -44,11 +44,18 @@ AUR_PACKAGES+=(
 )
 
 PAC_PACKAGES+=(
-    # networking
+    # Shell
+    shfmt
+
+    # Utilities
+    glances
+
+    # Network
     iperf3
-    net-tools # for x11vnc
+    net-tools # Optional x11vnc dependency
     networkmanager-l2tp
     networkmanager-openconnect
+    samba
 )
 
 AUR_PACKAGES+=(
@@ -57,11 +64,13 @@ AUR_PACKAGES+=(
     vpn-slice
 )
 
-# desktop
+# Desktop
 PAC_PACKAGES+=(
     caprine
+    chromium
     copyq
     filezilla
+    firefox
     firefox-i18n-en-gb
     flameshot
     freerdp
@@ -70,6 +79,7 @@ PAC_PACKAGES+=(
     gnome-font-viewer
     gucharmap
     keepassxc
+    libreoffice-fresh
     libreoffice-fresh-en-gb
     nextcloud-client
     nomacs
