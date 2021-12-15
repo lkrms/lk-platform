@@ -63,8 +63,10 @@ PATH=$(path_add_to_front \
         echo 'export DYLD_FALLBACK_LIBRARY_PATH=${DYLD_FALLBACK_LIBRARY_PATH-${HOME:+$HOME/lib:}/opt/homebrew/lib:/usr/local/lib:/usr/lib}'
 }
 
-! type brew >/dev/null 2>&1 ||
-    ! BREW_SH=$(brew shellenv 2>/dev/null |
+unset -f brew
+
+! BREW=$(command -v brew) ||
+    ! BREW_SH=$(PATH=/usr/bin:/bin:/usr/sbin:/sbin "$BREW" shellenv 2>/dev/null |
         grep -E '\<HOMEBREW_(PREFIX|CELLAR|REPOSITORY|SHELLENV_PREFIX)=') || {
     eval "$BREW_SH"
     cat <<EOF

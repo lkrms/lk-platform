@@ -150,19 +150,17 @@ POOL_ROOT=/var/lib/libvirt/images
 IMAGE_ARCH=amd64
 QEMU_ARCH=x86_64
 QEMU_MACHINE=
-QEMU_CPU=
 ! lk_is_macos || {
     # Use explicit sockets to ensure x86_64 virt-install connects to native
     # libvirtd on arm64
     SYSTEM_SOCKET=$HOMEBREW_PREFIX/var/run/libvirt/libvirt-sock
     SESSION_SOCKET=${XDG_RUNTIME_DIR:-~/.cache}/libvirt/libvirt-sock
     POOL_ROOT=$HOMEBREW_PREFIX/var/lib/libvirt/images
-    QEMU_MACHINE=q35,accel=hvf
-    QEMU_CPU=host
+    QEMU_MACHINE=q35
     ! lk_is_apple_silicon || {
         IMAGE_ARCH=arm64
         QEMU_ARCH=aarch64
-        QEMU_MACHINE=virt,accel=hvf,highmem=off
+        QEMU_MACHINE=virt
     }
 }
 [ "$IMAGE_ARCH" = amd64 ] ||
@@ -441,6 +439,8 @@ VM_HOSTNAME=${1-}
 SHA_KEYRING=/usr/share/keyrings/ubuntu-cloudimage-keyring.gpg
 [ -r "$SHA_KEYRING" ] ||
     SHA_KEYRING=$LK_BASE/share/keys/ubuntu-cloudimage-keyring.gpg
+[[ $IMAGE_ARCH == amd64 ]] || [[ $IMAGE != *minimal ]] ||
+    lk_die "minimal images are not available for $IMAGE_ARCH"
 case "$IMAGE" in
 *20.04*minimal)
     IMAGE_NAME=ubuntu-20.04-minimal
@@ -760,14 +760,12 @@ lk_confirm "OK to proceed?" Y || lk_die ""
     VIRT_OPTIONS=()
     QEMU_COMMANDLINE=()
 
-    [ -z "${QEMU_MACHINE:+1}" ] || {
-        VIRT_OPTIONS+=(--machine "${QEMU_MACHINE%%,*}")
-        QEMU_COMMANDLINE+=(-machine "$QEMU_MACHINE")
-    }
-    [ -z "${QEMU_CPU:+1}" ] ||
-        QEMU_COMMANDLINE+=(-cpu "$QEMU_CPU")
-    ! lk_is_macos ||
-        VIRT_OPTIONS+=(--rng none)
+    [ -z "${QEMU_MACHINE:+1}" ] ||
+        VIRT_OPTIONS+=(--machine "$QEMU_MACHINE")
+    ! lk_is_macos || VIRT_OPTIONS+=(
+        --rng none
+        --xml ./devices/emulator="$LK_BASE/share/qemu/qemu-system-hvf"
+    )
 
     add_json NETWORK_CONFIG --arg mac "$VM_MAC_ADDRESS" '{
   "version": 1,
