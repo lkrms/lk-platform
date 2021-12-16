@@ -179,6 +179,7 @@ if lk_node_service_enabled desktop; then
         lightdm-gtk-greeter-settings
 
         #
+        autorandr
         cups
         gnome-keyring
         gvfs
@@ -245,7 +246,6 @@ if lk_node_service_enabled desktop; then
     fi
 
     AUR_PACKAGES+=(
-        autorandr-git
         networkmanager-dispatcher-ntpd
         xrandr-invert-colors
 
