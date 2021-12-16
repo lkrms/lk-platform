@@ -11,10 +11,6 @@ if [ -f "$AUTORANDR_PROFILE_FOLDER/dpi" ] &&
     case "${XDG_CURRENT_DESKTOP-}" in
     XFCE)
         "$LK_BASE/bin/lk-xfce4-apply-dpi.sh" "$DPI"
-        ! pgrep -x xfce4-panel >/dev/null || {
-            echo "Restarting xfce4-panel" >&2
-            xfce4-panel -r
-        }
         ;;&
     *)
         echo "Xft.dpi: $DPI" | xrdb -merge
