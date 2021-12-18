@@ -28,6 +28,7 @@ HOMEBREW_CASKS+=(
     iterm2
     keepassxc
     keepingyouawake
+    keyboard-cleaner
     skype
     teamviewer
     the-unarchiver

@@ -968,7 +968,7 @@ dns-nameservers $VM_IPV4_GATEWAY" '{
         >"$NOCLOUD_META_DIR/meta-data"
 
     if lk_confirm "Customise cloud-init data source?" N -t 10; then
-        ! OPEN=$(lk_command_first_existing xdg-open open) ||
+        ! OPEN=$(lk_first_command xdg-open open) ||
             "$OPEN" "$NOCLOUD_META_DIR" || true
         lk_tty_pause "Press return to continue after making changes in $NOCLOUD_META_DIR . . . "
     fi

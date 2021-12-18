@@ -62,6 +62,7 @@ HOMEBREW_CASKS+=(
     iterm2
     keepassxc
     keepingyouawake
+    keyboard-cleaner
     messenger
     mysides
     nextcloud

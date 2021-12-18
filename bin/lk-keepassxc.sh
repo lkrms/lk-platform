@@ -18,7 +18,7 @@ lk_include secret
 
 lk_assert_not_root
 lk_assert_not_wsl
-KEEPASSXC=$(lk_command_first_existing \
+KEEPASSXC=$(lk_first_command \
     keepassxc \
     /Applications/KeePassXC.app/Contents/MacOS/KeePassXC) ||
     lk_die "KeePassXC not found"

@@ -2153,7 +2153,6 @@ function lk_uri_encode() {
             '[$ARGS.named|to_entries[]|"\(.key)=\(.value|@uri)"]|join("&")'
 }
 
-lk_command_first_existing() { lk_first_command "$@"; }
 lk_confirm() { lk_tty_yn "$@"; }
 lk_console_blank() { lk_tty_print; }
 lk_console_detail_diff() { lk_tty_diff_detail "$@"; }
@@ -3209,7 +3208,7 @@ function lk_clip() {
     local OUTPUT COMMAND LINES MESSAGE DISPLAY_LINES=${LK_CLIP_LINES:-5}
     [ ! -t 0 ] || lk_warn "no input" || return
     OUTPUT=$(cat && printf .) && OUTPUT=${OUTPUT%.}
-    if COMMAND=$(lk_command_first_existing \
+    if COMMAND=$(lk_first_command \
         "xclip -selection clipboard" \
         pbcopy) &&
         echo -n "$OUTPUT" | $COMMAND &>/dev/null; then
@@ -3232,7 +3231,7 @@ function lk_clip() {
 # Paste the user's clipboard to output, if possible.
 function lk_paste() {
     local COMMAND
-    COMMAND=$(lk_command_first_existing \
+    COMMAND=$(lk_first_command \
         "xclip -selection clipboard -out" \
         pbpaste) &&
         $COMMAND ||
