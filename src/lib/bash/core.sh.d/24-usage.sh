@@ -20,8 +20,8 @@ function _lk_usage() {
         echo "$2"
     elif [[ $(type -t __usage) == function ]]; then
         __usage
-    elif [[ $(type -t "$1_usage") =~ ^(function|file)$ ]]; then
-        "$1_usage"
+    elif [[ $(type -t "_$1_usage") =~ ^(function|file)$ ]]; then
+        "_$1_usage" "$1"
     else
         echo "${LK_USAGE:-$1: invalid arguments}"
     fi
@@ -36,7 +36,8 @@ function _lk_usage() {
 # The usage message is taken from one of the following:
 # 1. USAGE parameter
 # 2. output of `__usage` (if `__usage` is a function)
-# 3. output of `<CALLER>_usage` (if `<CALLER>_usage` is a function or disk file)
+# 3. output of `_<CALLER>_usage <CALLER>` (if `_<CALLER>_usage` is a function or
+#    disk file)
 # 4. LK_USAGE variable (deprecated)
 function lk_usage() {
     local STATUS=$? CALLER
