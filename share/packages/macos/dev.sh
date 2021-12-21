@@ -78,6 +78,7 @@ HOMEBREW_CASKS+=(
     iterm2
     keepassxc
     keepingyouawake
+    keyboard-cleaner
     libreoffice
     messenger
     microsoft-teams
@@ -278,11 +279,9 @@ HOMEBREW_KEEP_CASKS+=(
 )
 
 LOGIN_ITEMS+=(
-    #"/Applications/AltTab.app"
     "/Applications/flameshot.app"
     "/Applications/Flycut.app"
     "/Applications/Hammerspoon.app"
-    "/Applications/Magnet.app"
     "/Applications/Mail.app"
     "/Applications/Messenger.app"
     "/Applications/Microsoft Teams.app"

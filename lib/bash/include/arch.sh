@@ -114,7 +114,8 @@ lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
 [ "$EUID" -eq 0 ] || lk_die "not running as root"
 
 [[ ! ${1-} =~ ^(-i|--install)$ ]] ||
-    grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
+    grub-install --target=x86_64-efi \
+        --efi-directory=/boot --bootloader-id=GRUB --removable
 grub-mkconfig -o /boot/grub/grub.cfg
 EOF
     )

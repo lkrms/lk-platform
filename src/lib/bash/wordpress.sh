@@ -88,12 +88,14 @@ function lk_wp_option_upsert() {
 }
 
 function lk_wp_package_install() {
-    [ $# -eq 1 ] ||
-        lk_usage "Usage: $FUNCNAME PACKAGE[:<VERSION|@stable>]" || return
-    lk_wp package list --format=ids | grep -Fx "${1%%:*}" >/dev/null || {
-        lk_tty_detail "Installing WP-CLI package:" "$1"
-        lk_wp package install "$1"
-    }
+    [ $# -ge 1 ] ||
+        lk_usage "Usage: $FUNCNAME PACKAGE[:<VERSION|@stable>]..." || return
+    while IFS= read -r PACKAGE; do
+        lk_tty_detail "Installing WP-CLI package:" "$PACKAGE"
+        lk_wp package install "$PACKAGE"
+    done < <(printf '%s\n' "$@" | grep -Ev \
+        "^$(lk_wp package list --format=ids | tr -s '[:blank:]' '\n' |
+            lk_ere_implode_input -e)(:.+)?\$")
 }
 
 # lk_wp_flush [SITE_ROOT]

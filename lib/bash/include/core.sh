@@ -1916,8 +1916,8 @@ function _lk_usage() {
         echo "$2"
     elif [[ $(type -t __usage) == function ]]; then
         __usage
-    elif [[ $(type -t "$1_usage") =~ ^(function|file)$ ]]; then
-        "$1_usage"
+    elif [[ $(type -t "_$1_usage") =~ ^(function|file)$ ]]; then
+        "_$1_usage" "$1"
     else
         echo "${LK_USAGE:-$1: invalid arguments}"
     fi
@@ -1932,7 +1932,8 @@ function _lk_usage() {
 # The usage message is taken from one of the following:
 # 1. USAGE parameter
 # 2. output of `__usage` (if `__usage` is a function)
-# 3. output of `<CALLER>_usage` (if `<CALLER>_usage` is a function or disk file)
+# 3. output of `_<CALLER>_usage <CALLER>` (if `_<CALLER>_usage` is a function or
+#    disk file)
 # 4. LK_USAGE variable (deprecated)
 function lk_usage() {
     local STATUS=$? CALLER
@@ -2153,7 +2154,6 @@ function lk_uri_encode() {
             '[$ARGS.named|to_entries[]|"\(.key)=\(.value|@uri)"]|join("&")'
 }
 
-lk_command_first_existing() { lk_first_command "$@"; }
 lk_confirm() { lk_tty_yn "$@"; }
 lk_console_blank() { lk_tty_print; }
 lk_console_detail_diff() { lk_tty_diff_detail "$@"; }
@@ -3209,7 +3209,7 @@ function lk_clip() {
     local OUTPUT COMMAND LINES MESSAGE DISPLAY_LINES=${LK_CLIP_LINES:-5}
     [ ! -t 0 ] || lk_warn "no input" || return
     OUTPUT=$(cat && printf .) && OUTPUT=${OUTPUT%.}
-    if COMMAND=$(lk_command_first_existing \
+    if COMMAND=$(lk_first_command \
         "xclip -selection clipboard" \
         pbcopy) &&
         echo -n "$OUTPUT" | $COMMAND &>/dev/null; then
@@ -3232,7 +3232,7 @@ function lk_clip() {
 # Paste the user's clipboard to output, if possible.
 function lk_paste() {
     local COMMAND
-    COMMAND=$(lk_command_first_existing \
+    COMMAND=$(lk_first_command \
         "xclip -selection clipboard -out" \
         pbpaste) &&
         $COMMAND ||

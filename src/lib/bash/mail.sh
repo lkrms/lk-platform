@@ -134,7 +134,7 @@ function lk_mail_send() {
     _lk_mail_ready || return
     [ $# -ge 2 ] || lk_usage "\
 Usage: $FUNCNAME SUBJECT TO [FROM [HEADERS...]]" || return
-    MTA=$(lk_command_first_existing sendmail msmtp) ||
+    MTA=$(lk_first_command sendmail msmtp) ||
         lk_warn "MTA not found" || return
     lk_mail_get_mime "$@" | "$MTA" -oi -t
 }

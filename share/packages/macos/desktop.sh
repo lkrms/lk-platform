@@ -62,6 +62,7 @@ HOMEBREW_CASKS+=(
     iterm2
     keepassxc
     keepingyouawake
+    keyboard-cleaner
     messenger
     mysides
     nextcloud
@@ -122,7 +123,6 @@ HOMEBREW_KEEP_CASKS+=(
 LOGIN_ITEMS+=(
     "/Applications/flameshot.app"
     "/Applications/Flycut.app"
-    "/Applications/Magnet.app"
     "/Applications/Nextcloud.app"
     "/Applications/Skype.app"
 )

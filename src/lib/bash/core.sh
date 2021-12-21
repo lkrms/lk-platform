@@ -1025,7 +1025,7 @@ function lk_clip() {
     local OUTPUT COMMAND LINES MESSAGE DISPLAY_LINES=${LK_CLIP_LINES:-5}
     [ ! -t 0 ] || lk_warn "no input" || return
     OUTPUT=$(cat && printf .) && OUTPUT=${OUTPUT%.}
-    if COMMAND=$(lk_command_first_existing \
+    if COMMAND=$(lk_first_command \
         "xclip -selection clipboard" \
         pbcopy) &&
         echo -n "$OUTPUT" | $COMMAND &>/dev/null; then
@@ -1048,7 +1048,7 @@ function lk_clip() {
 # Paste the user's clipboard to output, if possible.
 function lk_paste() {
     local COMMAND
-    COMMAND=$(lk_command_first_existing \
+    COMMAND=$(lk_first_command \
         "xclip -selection clipboard -out" \
         pbpaste) &&
         $COMMAND ||

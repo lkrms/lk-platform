@@ -1,10 +1,7 @@
 #!/bin/bash
 
 PAC_REPOS=(
-    "sublime-text|\
-http://sublimetext.mirror/arch/stable/\$arch|\
-http://sublimetext.mirror/sublimehq-pub.gpg|\
-8A8F901A"
+    'sublime-text|http://sublimetext.mirror/arch/stable/$arch|http://sublimetext.mirror/sublimehq-pub.gpg|8A8F901A'
 )
 
 PAC_PACKAGES=()
@@ -15,6 +12,7 @@ PAC_KEEP=(
     ant
     apachedirectorystudio
     expect
+    geteltorito # ThinkPad UEFI firmware update conversion
     linux-headers
     offlineimap
     sfdx-cli
@@ -73,23 +71,27 @@ AUR_PACKAGES+=(
 )
 
 PAC_PACKAGES+=(
-    # Shells
+    # Shell
     asciinema
     dash
     ksh
+    shfmt
     zsh
 
     # Utilities
     cdrtools
     ext4magic
     fatresize
+    glances
     partclone
+    unison
 
-    # Networking
+    # Network
     iperf3
     net-tools # Optional x11vnc dependency
     networkmanager-l2tp
     networkmanager-openconnect
+    samba
 
     # System
     acme.sh
@@ -117,8 +119,10 @@ AUR_PACKAGES+=(
 # Desktop
 PAC_PACKAGES+=(
     caprine
+    chromium
     copyq
     filezilla
+    firefox
     firefox-i18n-en-gb
     flameshot
     freerdp
@@ -128,6 +132,7 @@ PAC_PACKAGES+=(
     gucharmap
     inkscape
     keepassxc
+    libreoffice-fresh
     libreoffice-fresh-en-gb
     nextcloud-client
     nomacs
@@ -241,6 +246,8 @@ lk_is_bootstrap ||
 
 # Development
 PAC_PACKAGES+=(
+    autoconf
+    autoconf-archive
     autopep8
     babel-cli
     babel-core
@@ -341,6 +348,7 @@ AUR_PACKAGES+=(
     nvm
     php-sqlsrv
     phpdoc-phar
+    rollup
     ruby-rubocop
     ruby-rubocop-performance
     ruby-rubocop-rails

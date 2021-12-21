@@ -1,6 +1,5 @@
 #!/bin/bash
 
-lk_command_first_existing() { lk_first_command "$@"; }
 lk_confirm() { lk_tty_yn "$@"; }
 lk_console_blank() { lk_tty_print; }
 lk_console_detail_diff() { lk_tty_diff_detail "$@"; }

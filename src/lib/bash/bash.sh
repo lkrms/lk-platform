@@ -126,10 +126,11 @@ function lk_bash_array_literals() {
     cat ${1+"$1"} |
         shfmt -tojson |
         jq -r '
-..|select(type=="object" and .Array!=null).Array.Elems[].Value.Parts[]|(
-    select(.Type=="Lit" or .Type=="SglQuoted"),
-    select(.Type=="DblQuoted" and (.Parts|length)==1 and .Parts[0].Type=="Lit").Parts[0]
-).Value'
+..|select(type=="object" and .Array!=null).Array.Elems[].Value|
+    select((.Parts|length)==1).Parts[0]|(
+        select(.Type=="Lit" or .Type=="SglQuoted"),
+        select(.Type=="DblQuoted" and (.Parts|length)==1 and .Parts[0].Type=="Lit").Parts[0]
+    ).Value'
 }
 
 # lk_bash_find_scripts [-d DIR] [FIND_ACTION...]

@@ -10,88 +10,17 @@ lk_require arch
 
 # Default to AUR packages provisioned by lk-platform
 [ $# -gt 1 ] || {
-    PACKAGES=(
-        aha
-        apachedirectorystudio
-        aurutils
-        aurutils-git
-        autorandr-git
-        azure-cli
-        azure-functions-core-tools-bin
-        babel-preset-env
-        bluez-git
-        brother-hl5450dn
-        brother-hll3230cdw
-        csvkit
-        demjson
-        devilspie2
-        elementary-xfce-icons
-        emote
-        espanso
-        geekbench
-        git-cola
-        google-chrome
-        hfsprogs
-        httptoolkit
-        icdiff
-        linode-cli
-        lua-posix
-        makemkv
-        masterpdfeditor-free
-        memtest86-efi
-        mongodb-bin
-        mongodb-tools-bin
-        mugshot
-        networkmanager-dispatcher-ntpd
-        nodejs-less
-        numix-gtk-theme-git
-        nvm
-        pacman-cleanup-hook
-        pencil
-        php-sqlsrv
-        phpdoc-phar
-        powercap
-        powerpanel
-        powershell-bin
-        quicktile-git
-        r8152-dkms
-        raidar
-        rasdaemon
-        rdfind
-        robo3t-bin
-        ryzenadj-git
-        skypeforlinux-stable-bin
-        sound-theme-smooth
-        spotify
-        standard
-        storageexplorer
-        stretchly-bin
-        stretchly-git
-        stripe-cli
-        teams
-        teamviewer
-        terser
-        timer-for-harvest
-        todoist-appimage
-        trickle
-        trickle-git
-        trimage
-        ttf-apple-emoji
-        ttf-ms-win10
-        ttf-twemoji
-        typora
-        video-trimmer
-        vpn-slice
-        vscodium-bin
-        wp-cli
-        xfce-theme-greybird
-        xfce4-panel-profiles
-        xiccd
-        xrandr-invert-colors
-        zoom
-        zuki-themes
-    )
-    set -- aur "${PACKAGES[@]}"
+    lk_require bash
+    lk_pac_sync
+    set -- "${1:-aur}" $(comm -23 \
+        <(cat \
+            "$LK_BASE/share/packages/arch"/* \
+            "$LK_BASE/lib/arch/packages.sh" |
+            lk_bash_array_literals |
+            sed -E '/^[-a-zA-Z0-9+.@_]+$/!d' | sort -u) \
+        <(expac -S '%r %n %G' |
+            sed -En 's/^(core|extra|community|multilib) //p' |
+            tr ' ' '\n' | sort -u))
 }
 
 REPO=$1
@@ -167,7 +96,11 @@ END {
 EOF
 
 lk_mktemp_with ERRORS
-lk_mktemp_with OFFICIAL lk_pac_repo_available_list $(lk_pac_official_repo_list)
+lk_mktemp_with OFFICIAL
+# For each package in an official repo, print 'name' and 'provides'
+expac -S '%r %n %S' |
+    sed -En 's/^(core|extra|community|multilib) //p' |
+    tr ' ' '\n' | sort -u >"$OFFICIAL"
 lk_mktemp_dir_with PKGBUILDS download_sources "$@"
 
 cd "$PKGBUILDS"

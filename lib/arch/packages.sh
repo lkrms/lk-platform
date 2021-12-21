@@ -21,7 +21,7 @@ PAC_PACKAGES=(
     efibootmgr
     kernel-modules-hook
 
-    #### lk-platform requirements
+    #### Bootstrap prerequisites
     #
     sudo
     networkmanager
@@ -29,7 +29,7 @@ PAC_PACKAGES=(
     openssh
     perl
 
-    ### Services
+    ### Essential services
     #
     atop
     logrotate
@@ -45,13 +45,11 @@ PAC_PACKAGES=(
     rsync
     time
     trash-cli
-    unison
 
     # Shell
     bash-completion
     byobu
-    libnewt # whiptail
-    shfmt
+    libnewt # Provides whiptail
 
     # Documentation
     man-db
@@ -64,7 +62,6 @@ PAC_PACKAGES=(
 
     # System
     dmidecode
-    glances
     htop
     hwinfo
     iotop
@@ -77,18 +74,17 @@ PAC_PACKAGES=(
     sysstat
 
     # Network
-    bind # dig
+    bind # Provides dig
     conntrack-tools
     curl
-    inetutils # hostname, telnet
+    inetutils # Provides hostname, telnet
     iptables-nft
     lftp
     lynx
-    ndisc6 # rdisc6 (IPv6 router discovery)
+    ndisc6 # Provides rdisc6
     nfs-utils
     nmap
     openbsd-netcat
-    samba
     tcpdump
     traceroute
     wget
@@ -96,9 +92,9 @@ PAC_PACKAGES=(
     wol
 
     # Network monitoring
-    iftop   # traffic by service and host
-    nethogs # traffic by process ('nettop')
-    nload   # traffic by interface
+    iftop   # Reports on traffic by service and host
+    nethogs # Reports on traffic by process ('nettop')
+    nload   # Reports on traffic by interface
 
     # 7z/zip/wimextract
     p7zip
@@ -160,7 +156,7 @@ if lk_node_service_enabled libvirt; then
         libvirt
         qemu
         dnsmasq
-        edk2-ovmf
+        edk2-ovmf # UEFI firmware
         libguestfs
         cpio
         virt-install
@@ -183,11 +179,12 @@ if lk_node_service_enabled desktop; then
         lightdm-gtk-greeter-settings
 
         #
+        autorandr
         cups
         gnome-keyring
         gvfs
         gvfs-afc # Apple devices
-        gvfs-mtp # Other devices
+        gvfs-mtp # Others
         gvfs-nfs
         gvfs-smb
         network-manager-applet
@@ -221,13 +218,10 @@ if lk_node_service_enabled desktop; then
         libdvdcss
 
         #
-        chromium
         epiphany
-        firefox
 
         #
         evince
-        libreoffice-fresh
 
         #
         noto-fonts
@@ -252,7 +246,6 @@ if lk_node_service_enabled desktop; then
     fi
 
     AUR_PACKAGES+=(
-        autorandr-git
         networkmanager-dispatcher-ntpd
         xrandr-invert-colors
 
@@ -279,7 +272,7 @@ if lk_node_service_enabled xfce4; then
         xss-lock
     )
     PAC_REJECT+=(
-        xfce4-screensaver # Buggy and insecure
+        xfce4-screensaver
     )
     AUR_PACKAGES+=(
         mugshot
@@ -315,7 +308,7 @@ else
         tlp-rdw
 
         #
-        gptfdisk # sgdisk
+        gptfdisk # Provides sgdisk
         lvm2
         mdadm
         parted
@@ -393,14 +386,14 @@ lk_mktemp_with _PAC_UNOFFICIAL sort -u \
 # If any AUR_PACKAGES now appear in core, extra, community or multilib, move
 # them to PAC_PACKAGES and notify the user
 if AUR_MOVED=$(grep -Fxf <(lk_arr AUR_PACKAGES) "$_PAC_OFFICIAL"); then
-    lk_console_warning "Moved from AUR to official repos:" "$AUR_MOVED"
+    lk_tty_warning "Moved from AUR to official repos:" "$AUR_MOVED"
     PAC_PACKAGES+=($AUR_MOVED)
 fi
 
 # Check for PAC_PACKAGES removed from official repos
 if PAC_MOVED=$(lk_arr PAC_PACKAGES |
     grep -Fxvf "$_PAC_OFFICIAL" -f "$_PAC_GROUPS"); then
-    lk_console_warning "Removed from official repos:" "$PAC_MOVED"
+    lk_tty_warning "Removed from official repos:" "$PAC_MOVED"
     AUR_PACKAGES+=($PAC_MOVED)
 fi
 
@@ -480,7 +473,7 @@ if [ ${#AUR_PACKAGES[@]} -gt 0 ] ||
         grep -E '^file://'; } &>/dev/null; then
     PAC_BASE_DEVEL=($(lk_pac_groups base-devel))
     PAC_PACKAGES+=("${PAC_BASE_DEVEL[@]}" devtools pacutils vifm)
-    PAC_KEEP+=(aurutils{,-git}{,"$SUFFIX"})
+    PAC_KEEP+=(aurutils aurutils-git aurutils{,-git}"$SUFFIX")
 fi
 
 # Reduce PAC_KEEP to packages not present in PAC_PACKAGES
