@@ -32,7 +32,7 @@
                 . /opt/lk-platform/lib/bash/rc.sh || return
             lk_tty_print "Checking WordPress at" "$1"
             if CRONTAB=$(crontab -l 2>/dev/null | grep -F "$(printf \
-                ' -- wp --path=%q cron event run --due-now' "$1")" |
+                ' -- wp_if_running --path=%q cron event run --due-now' "$1")" |
                 grep -F _LK_LOG_FILE) &&
                 DISABLE_WP_CRON=$(lk_wp \
                     config get DISABLE_WP_CRON --type=constant) &&

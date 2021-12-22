@@ -12,6 +12,24 @@ function lk_wp() {
     wp --skip-plugins --skip-themes "$@"
 }
 
+function wp_if_running() {
+    [ $# -gt 0 ] || lk_warn "invalid arguments" || return
+    local ARGV=("$@") ARGS=()
+    while [[ ${1-} == -* ]]; do
+        [[ $1 =~ ^--skip-(themes|plugins)$ ]] ||
+            ARGS[${#ARGS[@]}]=$1
+        shift
+    done
+    ! lk_wp ${ARGS+"${ARGS[@]}"} maintenance-mode is-active &>/dev/null ||
+        lk_warn "Skipping (maintenance mode enabled): wp $*" ||
+        return 0
+    wp "${ARGV[@]}"
+}
+
+function lk_wp_if_running() {
+    wp_if_running --skip-plugins --skip-themes "$@"
+}
+
 function _lk_wp_is_quiet() {
     [ -n "${_LK_WP_QUIET-}" ] && ! lk_verbose
 }
@@ -675,7 +693,7 @@ function lk_wp_enable_system_cron() {
     lk_mapfile ARGS <(printf '%q\n' \
         "$LK_BASE/lib/platform/log.sh" "--path=$SITE_ROOT")
     COMMAND=$(printf "_LK_LOG_FILE=%q %s -i wordpress -- \
-wp %s cron event run --due-now" "$LOG_FILE" "${ARGS[@]::2}")
+wp_if_running %s cron event run --due-now" "$LOG_FILE" "${ARGS[@]::2}")
     lk_tty_print "Using crontab to schedule WP-Cron in" "$SITE_ROOT"
     lk_wp config get DISABLE_WP_CRON --type=constant 2>/dev/null |
         grep -Fx 1 >/dev/null ||
