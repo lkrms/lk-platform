@@ -261,6 +261,7 @@ PAC_PACKAGES+=(
     eslint
     geckodriver
     gobject-introspection
+    gperftools
     python-pylint
     qcachegrind
     tidy

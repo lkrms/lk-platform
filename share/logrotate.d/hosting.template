@@ -1,13 +1,13 @@
 /var/log/apache2/*.log /srv/www/*/log/*.log {
 	daily
-	missingok
 	rotate 14
 	compress
+	create
 	delaycompress
+	missingok
 	notifempty
 	sharedscripts
 	su root adm
-	create
 	postrotate
 		! invoke-rc.d apache2 status >/dev/null 2>&1 ||
 			invoke-rc.d apache2 reload

@@ -881,18 +881,18 @@ EOF
 /var/log/php-fpm/*.access.log {
     missingok
     sharedscripts
+    su root root
     postrotate
         /usr/bin/systemctl kill --kill-who=main --signal=SIGUSR1 php-fpm.service 2>/dev/null || true
     endscript
-    su root root
 }
 /var/log/php-fpm/*.error.log {
     missingok
     sharedscripts
+    su http http
     postrotate
         /usr/bin/systemctl kill --kill-who=main --signal=SIGUSR1 php-fpm.service 2>/dev/null || true
     endscript
-    su http http
 }
 EOF
         LK_CONF_OPTION_FILE=/etc/php/php-fpm.d/www.conf

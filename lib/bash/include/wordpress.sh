@@ -686,7 +686,7 @@ function lk_wp_migrate() {
 # lk_wp_enable_system_cron [-s SITE_ROOT] [INTERVAL]
 function lk_wp_enable_system_cron() {
     [ "${1-}" != -s ] || { eval "$(_lk_wp_set_path "$2")" && shift 2; }
-    local INTERVAL=${1:-5} SITE_ROOT LOG_FILE ARGS ARGS_RE COMMAND REGEX CRONTAB
+    local INTERVAL=${1:-1} SITE_ROOT LOG_FILE ARGS ARGS_RE COMMAND REGEX CRONTAB
     SITE_ROOT=$(lk_wp_get_site_root) || return
     LOG_FILE=${SITE_ROOT%/*}/log/cron.log
     [ -w "$LOG_FILE" ] || LOG_FILE=~/cron.log

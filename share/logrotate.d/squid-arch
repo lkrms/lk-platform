@@ -1,9 +1,9 @@
 /var/log/squid/*.log {
     daily
-    missingok
     rotate 14
     compress
     delaycompress
+    missingok
     notifempty
     sharedscripts
     postrotate

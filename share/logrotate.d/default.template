@@ -1,9 +1,9 @@
 {{LK_PLATFORM_LOGS}} {
 	weekly
-	missingok
 	rotate 12
 	compress
 	delaycompress
+	missingok
 	notifempty
 	su {{LK_PLATFORM_OWNER}}
 }
