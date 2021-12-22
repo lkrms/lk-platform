@@ -240,6 +240,7 @@ lk_log_start
                 sort gnu_sort 0
                 stat gnu_stat 1
                 tar gnu_tar 0
+                uniq gnu_uniq 1
                 xargs gnu_xargs 1
             )
         else
@@ -252,7 +253,7 @@ lk_log_start
                 gdate gnu_date 1
                 gdd gnu_dd 1
                 gdf gnu_df 1
-                "${HOMEBREW_PREFIX:-$_LK_HOMEBREW_PREFIX}/bin/diff" gnu_diff 1
+                "${HOMEBREW_PREFIX:-$_LK_HOMEBREW_PREFIX}/opt/diffutils/bin/diff" gnu_diff 1
                 gdu gnu_du 0
                 gfind gnu_find 1
                 "${HOMEBREW_PREFIX:-$_LK_HOMEBREW_PREFIX}/opt/gnu-getopt/bin/getopt" gnu_getopt 1
@@ -265,6 +266,7 @@ lk_log_start
                 gsort gnu_sort 0
                 gstat gnu_stat 1
                 gtar gnu_tar 0
+                guniq gnu_uniq 1
                 gxargs gnu_xargs 1
             )
         fi

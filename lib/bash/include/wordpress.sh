@@ -12,6 +12,24 @@ function lk_wp() {
     wp --skip-plugins --skip-themes "$@"
 }
 
+function wp_if_running() {
+    [ $# -gt 0 ] || lk_warn "invalid arguments" || return
+    local ARGV=("$@") ARGS=()
+    while [[ ${1-} == -* ]]; do
+        [[ $1 =~ ^--skip-(themes|plugins)$ ]] ||
+            ARGS[${#ARGS[@]}]=$1
+        shift
+    done
+    ! lk_wp ${ARGS+"${ARGS[@]}"} maintenance-mode is-active &>/dev/null ||
+        lk_warn "Skipping (maintenance mode enabled): wp $*" ||
+        return 0
+    wp "${ARGV[@]}"
+}
+
+function lk_wp_if_running() {
+    wp_if_running --skip-plugins --skip-themes "$@"
+}
+
 function _lk_wp_is_quiet() {
     [ -n "${_LK_WP_QUIET-}" ] && ! lk_verbose
 }
@@ -41,7 +59,15 @@ function lk_wp_get_site_root() {
 
 # _lk_wp_set_path [SITE_ROOT]
 #
-# Invocation options:
+# Used when the current directory must be part of WordPress unless the optional
+# SITE_ROOT argument is set. Outputs Bash code that either:
+# 1. returns non-zero if SITE_ROOT is not set and the current directory is not
+#    part of WordPress, or if SITE_ROOT is set and is not a directory (a warning
+#    is printed in either case); or
+# 2. assigns the relevant site root to `_LK_WP_PATH`, effectively adding
+#    `--path=<_LK_WP_PATH>` to every `wp` invocation in the current scope.
+#
+# Usage:
 # - eval "$(_lk_wp_set_path "$@")"
 # - [ $# -eq 0 ] || eval "$(_lk_wp_set_path "$@")"
 # - [ "${1-}" != -s ] || { eval "$(_lk_wp_set_path "$2")" && shift 2; }
@@ -98,9 +124,30 @@ function lk_wp_package_install() {
             lk_ere_implode_input -e)(:.+)?\$")
 }
 
+# lk_wp_flush_opcache [SITE_ROOT]
+function lk_wp_flush_opcache() {
+    [ $# -eq 0 ] || eval "$(_lk_wp_set_path "$@")"
+    local URL RESULT
+    lk_tty_print "Flushing WordPress OPcache"
+    URL=$(lk_wp_get_site_address) &&
+        RESULT=$(curl -fsS "${URL%/}/php-opcache-flush") || return
+    case "$RESULT" in
+    DISABLED)
+        lk_tty_detail "OPcache not enabled:" "$URL"
+        ;;
+    OK)
+        lk_tty_detail "OPcache flushed successfully:" "$URL"
+        ;;
+    *)
+        false || lk_warn "Result not recognised:" "$RESULT"
+        ;;
+    esac
+}
+
 # lk_wp_flush [SITE_ROOT]
 function lk_wp_flush() {
     [ $# -eq 0 ] || eval "$(_lk_wp_set_path "$@")"
+    lk_wp_flush_opcache || true
     lk_tty_print "Flushing WordPress rewrite rules and caches"
     lk_tty_detail "Flushing object cache"
     lk_report_error -q wp cache flush || return
@@ -646,7 +693,7 @@ function lk_wp_enable_system_cron() {
     lk_mapfile ARGS <(printf '%q\n' \
         "$LK_BASE/lib/platform/log.sh" "--path=$SITE_ROOT")
     COMMAND=$(printf "_LK_LOG_FILE=%q %s -i wordpress -- \
-wp %s cron event run --due-now" "$LOG_FILE" "${ARGS[@]::2}")
+wp_if_running %s cron event run --due-now" "$LOG_FILE" "${ARGS[@]::2}")
     lk_tty_print "Using crontab to schedule WP-Cron in" "$SITE_ROOT"
     lk_wp config get DISABLE_WP_CRON --type=constant 2>/dev/null |
         grep -Fx 1 >/dev/null ||
