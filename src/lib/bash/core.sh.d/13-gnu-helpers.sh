@@ -31,6 +31,7 @@ REQUIRED_COMMANDS=(
     realpath
     sed
     stat
+    uniq
     xargs
 )
 

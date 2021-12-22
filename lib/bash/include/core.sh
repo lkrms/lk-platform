@@ -384,6 +384,7 @@ if ! lk_is_macos; then
     function gnu_sort() { lk_sudo sort "$@"; }
     function gnu_stat() { lk_sudo stat "$@"; }
     function gnu_tar() { lk_sudo tar "$@"; }
+    function gnu_uniq() { lk_sudo uniq "$@"; }
     function gnu_xargs() { lk_sudo xargs "$@"; }
 else
     lk_is_apple_silicon &&
@@ -410,6 +411,7 @@ else
     function gnu_sort() { lk_sudo gsort "$@"; }
     function gnu_stat() { lk_sudo gstat "$@"; }
     function gnu_tar() { lk_sudo gtar "$@"; }
+    function gnu_uniq() { lk_sudo guniq "$@"; }
     function gnu_xargs() { lk_sudo gxargs "$@"; }
 fi
 
@@ -2030,6 +2032,15 @@ function _lk_log_install_file() {
                 sudo chown "$UID" "$1"
         fi
     fi
+}
+
+# lk_file_list_duplicates [DIR]
+#
+# Print a list of files in DIR or the current directory that would be considered
+# duplicates on a case-insensitive filesystem. Only useful on case-sensitive
+# filesystems.
+function lk_file_list_duplicates() {
+    find "${1:-.}" -print0 | sort -zf | gnu_uniq -zDi | tr '\0' '\n'
 }
 
 # lk_hash [ARG...]
