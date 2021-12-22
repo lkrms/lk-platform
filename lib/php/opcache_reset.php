@@ -2,7 +2,10 @@
 
 if (false === opcache_reset())
 {
-    throw new RuntimeException("Unable to flush OPcache");
+    echo "DISABLED";
+}
+else
+{
+    echo "OK";
 }
 
-echo "OK";
