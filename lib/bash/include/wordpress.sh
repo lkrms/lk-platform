@@ -676,8 +676,14 @@ function lk_wp_migrate() {
             "$_LK_WP_PATH") action-scheduler migrate" || return
         pgrep -fu "$USER" "([^[:alnum:]_]|^)$COMMAND" >/dev/null &&
             lk_warn "Scheduled actions are already being migrated" || {
-            lk_tty_detail "Migrating scheduled actions"
-            lk_report_error -q wp action-scheduler migrate || STATUS=$?
+            local LOG_FILE=${_LK_WP_PATH%/*}/log/cron.log
+            [ -w "$LOG_FILE" ] || lk_mktemp_with LOG_FILE
+            lk_tty_detail "Migrating scheduled actions in the background"
+            lk_tty_log "Background task output will be logged to:" "$LOG_FILE"
+            _LK_LOG_FILE=$LOG_FILE \
+                nohup "$LK_BASE/lib/platform/log.sh" -i wordpress -- \
+                wp --path="$_LK_WP_PATH" action-scheduler migrate &>/dev/null &
+            disown
         }
     fi
     return "$STATUS"
