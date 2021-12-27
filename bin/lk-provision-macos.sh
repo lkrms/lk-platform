@@ -161,14 +161,16 @@ function exit_trap() {
 
     lk_tty_print "Configuring sudo"
     FILE=/etc/sudoers.d/${LK_PATH_PREFIX}default
-    sudo test ! -e "${FILE}s" || sudo test -e "$FILE" ||
+    sudo test ! -e "${FILE}s" -o -e "$FILE" ||
         sudo mv -v "${FILE}s" "$FILE"
+    LK_SUDO=1
     for SUFFIX in "" -macos; do
         [ -z "$SUFFIX" ] || FILE=${FILE%/*}/zz-${FILE##*/}
         sudo test -e "$FILE$SUFFIX" ||
             sudo install -m 00440 /dev/null "$FILE$SUFFIX"
-        (LK_SUDO=1 && lk_file_replace -f "$SUDOERS$SUFFIX" "$FILE$SUFFIX")
+        lk_file_replace -f "$SUDOERS$SUFFIX" "$FILE$SUFFIX"
     done
+    unset LK_SUDO
 
     lk_tty_print "Configuring default umask"
     { defaults read /var/db/com.apple.xpc.launchd/config/user.plist Umask |
