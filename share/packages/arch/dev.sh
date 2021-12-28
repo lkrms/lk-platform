@@ -76,10 +76,10 @@ PAC_PACKAGES+=(
     dash
     ksh
     shfmt
-    zsh
 
     # Utilities
     cdrtools
+    csvkit
     ext4magic
     fatresize
     glances
@@ -110,7 +110,6 @@ PAC_PACKAGES+=(
 
 AUR_PACKAGES+=(
     aha
-    csvkit
     pacman-cleanup-hook
     powershell-bin
     vpn-slice
@@ -220,7 +219,7 @@ AUR_PACKAGES+=(
     rescuetime2
     skypeforlinux-stable-bin
     spotify
-    stretchly-git
+    stretchly-bin
     teams
     teamviewer
     todoist-appimage
@@ -255,8 +254,6 @@ PAC_PACKAGES+=(
     cloc
     cmake
     dbeaver
-    dbeaver-plugin-sshj
-    dbeaver-plugin-sshj-lib
     emscripten
     eslint
     geckodriver
@@ -298,23 +295,13 @@ PAC_PACKAGES+=(
     php-memcache
     php-memcached
     php-sqlite
+    php-xsl # Optional phpdoc-phar dependency
     xdebug
-
-    #
-    php7           # for wp-cli
-    php7-gd        #
-    php7-imap      #
-    php7-intl      #
-    php7-memcache  #
-    php7-memcached #
-    php7-sqlite    #
-    php7-xsl       # for phpdoc-phar
 
     #
     python
     python-acme     # Let's Encrypt CLI
     python-dateutil #
-    python-magic    # for s3cmd
     python-mysqlclient
     python-pip
     python-requests
@@ -337,18 +324,19 @@ PAC_PACKAGES+=(
 
     # Platforms
     aws-cli
-    python-boto
+    python-boto # Optional linode-cli dependency
     s3cmd
 )
 
 AUR_PACKAGES+=(
     babel-preset-env
-    demjson
     lua-posix
     nodejs-less
     nvm
+    php-memprof
     php-sqlsrv
     phpdoc-phar
+    python-demjson3
     rollup
     ruby-rubocop
     ruby-rubocop-performance

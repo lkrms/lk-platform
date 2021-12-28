@@ -48,6 +48,7 @@ PAC_PACKAGES+=(
     shfmt
 
     # Utilities
+    csvkit
     glances
 
     # Network
@@ -56,10 +57,12 @@ PAC_PACKAGES+=(
     networkmanager-l2tp
     networkmanager-openconnect
     samba
+
+    # System
+    mlocate
 )
 
 AUR_PACKAGES+=(
-    csvkit
     pacman-cleanup-hook
     vpn-slice
 )
@@ -78,6 +81,7 @@ PAC_PACKAGES+=(
     gimp
     gnome-font-viewer
     gucharmap
+    inkscape
     keepassxc
     libreoffice-fresh
     libreoffice-fresh-en-gb
@@ -86,6 +90,7 @@ PAC_PACKAGES+=(
     qalculate-gtk
     qpdfview
     remmina
+    scribus
     simplescreenrecorder
     speedcrunch
     system-config-printer
@@ -94,36 +99,36 @@ PAC_PACKAGES+=(
     transmission-gtk
 
     # PDF
-    ghostscript  # PDF/PostScript processor
-    mupdf-tools  # PDF manipulation tools
-    pandoc       # text conversion tool (e.g. Markdown to PDF)
-    poppler      # PDF tools like pdfimages
-    pstoedit     # converts PDF/PostScript to vector formats
-    qpdf         # e.g. --underlay
-    texlive-core # required for PDF output from pandoc
+    ghostscript  # PDF/PostScript processing
+    mupdf-tools  # PDF manipulation
+    pandoc       # Text conversion (e.g. Markdown to PDF)
+    poppler      # Provides pdfimages
+    pstoedit     # PDF/PostScript conversion to vector formats
+    qpdf         # PDF manipulation (e.g. add underlay)
+    texlive-core # PDF support for pandoc
 
-    # photography
+    # Photography
     geeqie
     rapid-photo-downloader
 
-    # search (Recoll)
+    # Search (Recoll)
     antiword            # Word
     aspell-en           # English stemming
     catdoc              # Excel, Powerpoint
     perl-image-exiftool # EXIF metadata
-    python-lxml         # spreadsheets
-    python-mutagen      # audio metadata
+    python-lxml         # Spreadsheets
+    python-mutagen      # Audio metadata
     recoll
     unrtf
 
-    # multimedia - playback
+    # Multimedia - playback
     clementine
     gst-plugins-bad
 
-    # multimedia - audio
+    # Multimedia - audio
     audacity
 
-    # multimedia - video
+    # Multimedia - video
     ffmpeg
     handbrake
     handbrake-cli
@@ -131,15 +136,15 @@ PAC_PACKAGES+=(
     youtube-dl
     yt-dlp
 
-    # system
+    # System
     dconf-editor
     gparted
     guake
-    libsecret   # secret-tool
-    libva-utils # vainfo
+    libsecret   # Provides secret-tool
+    libva-utils # Provides vainfo
     vdpauinfo
 
-    # automation
+    # Automation
     evtest
     sxhkd
     wmctrl
@@ -153,9 +158,10 @@ AUR_PACKAGES+=(
     emote
     espanso
     masterpdfeditor-free
+    rescuetime2
     skypeforlinux-stable-bin
     spotify
-    stretchly-git
+    stretchly-bin
     teams
     todoist-appimage
     trimage
@@ -163,10 +169,10 @@ AUR_PACKAGES+=(
     ttf-twemoji
     typora
 
-    # system
+    # System
     hfsprogs
 
-    # automation
+    # Automation
     devilspie2
     quicktile-git
 )
@@ -174,7 +180,7 @@ AUR_PACKAGES+=(
 lk_is_bootstrap ||
     AUR_PACKAGES+=(ttf-ms-win10)
 
-# development
+# Development
 PAC_PACKAGES+=(
     meld
 
@@ -206,6 +212,6 @@ PAC_PACKAGES+=(
 )
 
 AUR_PACKAGES+=(
-    demjson
     lua-posix
+    python-demjson3
 )

@@ -21,7 +21,7 @@ PAC_PACKAGES=(
     efibootmgr
     kernel-modules-hook
 
-    #### Bootstrap prerequisites
+    #### Bootstrap requirements
     #
     sudo
     networkmanager
@@ -50,6 +50,7 @@ PAC_PACKAGES=(
     bash-completion
     byobu
     libnewt # Provides whiptail
+    zsh
 
     # Documentation
     man-db
