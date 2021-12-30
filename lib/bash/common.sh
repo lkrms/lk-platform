@@ -38,62 +38,61 @@ set -E
 
 lk_include assert
 
-function lk_is_dry_run() {
-    [ -n "${LK_DRY_RUN-}" ]
-}
+function _lk_getopt_usage_available() {
+    [[ $(type -t __usage) == "function" ]] ||
+        [ -n "${LK_USAGE:+1}" ]
+} #### Reviewed: 2021-12-30
 
-# lk_maybe [-p] COMMAND [ARG...]
-function lk_maybe() {
-    local PRINT=
-    [ "${1-}" != -p ] || { PRINT=1 && shift; }
-    if lk_is_dry_run; then
-        ! lk_is_true PRINT && ! lk_verbose ||
-            lk_console_item \
-                "[DRY RUN] Not running:" $'\n'"$(lk_quote_args "$@")"
-    else
-        "$@"
-    fi
-}
+function _lk_getopt_version_available() {
+    [[ $(type -t __version) == "function" ]] ||
+        [ -n "${LK_VERSION:+1}" ]
+} #### Reviewed: 2021-12-30
 
-function _lk_getopt_maybe_add_long() {
+function _lk_getopt_add_long() {
     [[ ,$LONG, == *,$1,* ]] ||
-        { [ $# -gt 1 ] && [ -z "${!2-}" ]; } ||
         LONG=${LONG:+$LONG,}$1
-}
+} #### Reviewed: 2021-12-30
 
 function lk_getopt() {
     local SHIFT=0
     [[ ${1-} != -* ]] || { SHIFT=${1#-} && shift; }
-    local SHORT=${1-} LONG=${2-} ARGC=$# _OPTS HAS_ARG OPT OPTS=()
-    _lk_getopt_maybe_add_long help LK_USAGE
-    _lk_getopt_maybe_add_long version LK_VERSION
-    _lk_getopt_maybe_add_long dry-run
-    _lk_getopt_maybe_add_long yes
-    _lk_getopt_maybe_add_long no-log
-    _OPTS=$(gnu_getopt --options "$SHORT" \
+    local SHORT=${1-} LONG=${2-} ARGC=$# GETOPT OPT OPTS=()
+    ! _lk_getopt_usage_available || _lk_getopt_add_long "help"
+    ! _lk_getopt_version_available || _lk_getopt_add_long version
+    _lk_getopt_add_long dry-run
+    _lk_getopt_add_long run
+    _lk_getopt_add_long yes
+    _lk_getopt_add_long no-log
+    GETOPT=$(gnu_getopt \
+        --options "$SHORT" \
         --longoptions "$LONG" \
         --name "${0##*/}" \
         -- ${_LK_ARGV[@]+"${_LK_ARGV[@]:SHIFT}"}) || lk_usage
-    eval "set -- $_OPTS"
+    eval "set -- $GETOPT"
     while :; do
         case "$1" in
         --help)
-            [ -z "${LK_USAGE-}" ] || {
-                sed -E 's/^\\(.)/\1/' <<<"$LK_USAGE"
+            ! _lk_getopt_usage_available || {
+                _lk_usage ""
                 exit
             }
             ;;
         --version)
-            [ -z "${LK_VERSION-}" ] || {
-                echo "$LK_VERSION"
+            ! _lk_getopt_version_available || {
+                _lk_version ""
                 exit
             }
             ;;
         esac
-        HAS_ARG=0
+        SHIFT=1
         case "$1" in
         --dry-run)
             LK_DRY_RUN=1
+            shift
+            continue
+            ;;
+        --run)
+            unset LK_DRY_RUN
             shift
             continue
             ;;
@@ -112,19 +111,19 @@ function lk_getopt() {
             ;;
         --*)
             OPT=${1:2}
-            [[ ,$LONG, == *,$OPT,* ]] || HAS_ARG=1
+            [[ ,$LONG, == *,$OPT,* ]] || ((SHIFT++))
             ;;
         -*)
             OPT=${1:1}
-            [[ $SHORT != *$OPT:* ]] || HAS_ARG=1
+            [[ $SHORT != *$OPT:* ]] || ((SHIFT++))
             ;;
         esac
-        while [ $((HAS_ARG--)) -ge 0 ]; do
-            OPTS+=("$1")
+        while ((SHIFT--)); do
+            OPTS[${#OPTS[@]}]=$1
             shift
         done
     done
-    [ "$ARGC" -gt 0 ] || shift
+    ((ARGC)) || shift
     OPTS+=("$@")
     LK_GETOPT=$(lk_quote_arr OPTS)
-}
+} #### Reviewed: 2021-12-30

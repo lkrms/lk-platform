@@ -1287,16 +1287,6 @@ function lk_curl() {
     curl ${CURL_OPTIONS[@]+"${CURL_OPTIONS[@]}"} "$@"
 }
 
-# lk_run_as USER COMMAND [ARG...]
-function lk_run_as() {
-    [ $# -ge 2 ] || lk_warn "invalid arguments" || return
-    if lk_is_linux; then
-        lk_elevate runuser -u "$1" -- "${@:2}"
-    else
-        sudo -u "$1" -- "${@:2}"
-    fi
-}
-
 function lk_maybe_drop() {
     if ! lk_root; then
         "$@"

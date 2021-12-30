@@ -1,5 +1,17 @@
 #!/bin/bash
 
+# lk_no_input
+#
+# Check LK_NO_INPUT and LK_FORCE_INPUT, and return true if user input should not
+# be requested.
+function lk_no_input() {
+    if [ "${LK_FORCE_INPUT-}" = 1 ]; then
+        { [ -t 0 ] || lk_err "/dev/stdin is not a terminal"; } && false
+    else
+        [ ! -t 0 ] || [ "${LK_NO_INPUT-}" = 1 ]
+    fi
+}
+
 function _lk_tty_prompt() {
     unset IFS
     PREFIX=" :: "

@@ -1,15 +1,17 @@
 #!/bin/bash
 
+# lk_script_running
+#
+# Return true if a script file is running. If reading commands from a named pipe
+# (e.g. `bash <(list)`), the standard input (`bash -i` or `list | bash`), or the
+# command line (`bash -c "string"`), return false.
 function lk_script_running() {
-    [ "${BASH_SOURCE+${BASH_SOURCE[*]: -1}}" = "$0" ]
+    [ "${BASH_SOURCE+${BASH_SOURCE[*]: -1}}" = "$0" ] && [ -f "$0" ]
 }
 
 # lk_verbose [LEVEL]
 #
-# Return true if LK_VERBOSE is at least LEVEL, or at least 1 if LEVEL is not
-# specified.
-#
-# The default value of LK_VERBOSE is 0.
+# Return true if LK_VERBOSE [default: 0] is at least LEVEL [default: 1].
 function lk_verbose() {
     [ "${LK_VERBOSE:-0}" -ge "${1-1}" ]
 }
@@ -21,8 +23,19 @@ function lk_debug() {
     [ "${LK_DEBUG-}" = Y ]
 }
 
+# lk_root
+#
+# Return true if running as the root user.
 function lk_root() {
     [ "$EUID" -eq 0 ]
+}
+
+# lk_dry_run
+#
+# Return true if LK_DRY_RUN is set.
+function lk_dry_run() {
+    [ "${LK_DRY_RUN:-0}" -eq 1 ]
+
 }
 
 # lk_true VAR
@@ -43,4 +56,4 @@ function lk_false() {
     [[ $1 =~ $REGEX ]] || [[ ${1:+${!1-}} =~ $REGEX ]]
 }
 
-#### Reviewed: 2021-11-22
+#### Reviewed: 2021-12-29

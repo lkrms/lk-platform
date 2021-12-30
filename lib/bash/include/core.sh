@@ -87,16 +87,18 @@ function lk_version_at_least() {
     printf '%s\n' "$@" | sort -V | head -n1 | grep -Fx "$2" >/dev/null
 }
 
+# lk_script_running
+#
+# Return true if a script file is running. If reading commands from a named pipe
+# (e.g. `bash <(list)`), the standard input (`bash -i` or `list | bash`), or the
+# command line (`bash -c "string"`), return false.
 function lk_script_running() {
-    [ "${BASH_SOURCE+${BASH_SOURCE[*]: -1}}" = "$0" ]
+    [ "${BASH_SOURCE+${BASH_SOURCE[*]: -1}}" = "$0" ] && [ -f "$0" ]
 }
 
 # lk_verbose [LEVEL]
 #
-# Return true if LK_VERBOSE is at least LEVEL, or at least 1 if LEVEL is not
-# specified.
-#
-# The default value of LK_VERBOSE is 0.
+# Return true if LK_VERBOSE [default: 0] is at least LEVEL [default: 1].
 function lk_verbose() {
     [ "${LK_VERBOSE:-0}" -ge "${1-1}" ]
 }
@@ -108,8 +110,19 @@ function lk_debug() {
     [ "${LK_DEBUG-}" = Y ]
 }
 
+# lk_root
+#
+# Return true if running as the root user.
 function lk_root() {
     [ "$EUID" -eq 0 ]
+}
+
+# lk_dry_run
+#
+# Return true if LK_DRY_RUN is set.
+function lk_dry_run() {
+    [ "${LK_DRY_RUN:-0}" -eq 1 ]
+
 }
 
 # lk_true VAR
@@ -268,17 +281,6 @@ function lk_x_no_off() {
 
 [ -z "${_LK_NO_X_OFF-}" ] || lk_x_no_off
 
-# lk_no_input
-#
-# Return true if user input should not be requested.
-function lk_no_input() {
-    if [ "${LK_FORCE_INPUT-}" = 1 ]; then
-        { [ -t 0 ] || lk_err "/dev/stdin is not a terminal"; } && false
-    else
-        [ ! -t 0 ] || [ "${LK_NO_INPUT-}" = 1 ]
-    fi
-}
-
 function _lk_sudo_check() {
     local LK_SUDO_ON_FAIL=${LK_SUDO_ON_FAIL-} LK_EXEC=${LK_EXEC-} SHIFT=0 \
         _LK_STACK_DEPTH=1
@@ -357,6 +359,22 @@ function lk_will_elevate() {
 # false if Bash is already running with root privileges or LK_SUDO is not set.
 function lk_will_sudo() {
     [ "$EUID" -ne 0 ] && [ -n "${LK_SUDO-}" ]
+}
+
+# lk_run_as USER COMMAND [ARG...]
+function lk_run_as() {
+    [ $# -ge 2 ] || lk_err "invalid arguments" || return
+    local _USER
+    _USER=$(id -u "$1" 2>/dev/null) || lk_err "user not found: $1" || return
+    shift
+    if [[ $EUID -eq $_USER ]]; then
+        "$@"
+    elif lk_is_linux; then
+        _USER=$(id -un "$_USER")
+        lk_elevate runuser -u "$_USER" -- "$@"
+    else
+        sudo -u "$_USER" -- "$@"
+    fi
 }
 
 # Define wrapper functions (e.g. `gnu_find`) to invoke the GNU version of
@@ -1752,6 +1770,18 @@ function lk_var_env() { (
         awk 'NR == 1 && $2 ~ "x"' | grep . >/dev/null && echo "${!1-}"
 ); }
 
+# lk_no_input
+#
+# Check LK_NO_INPUT and LK_FORCE_INPUT, and return true if user input should not
+# be requested.
+function lk_no_input() {
+    if [ "${LK_FORCE_INPUT-}" = 1 ]; then
+        { [ -t 0 ] || lk_err "/dev/stdin is not a terminal"; } && false
+    else
+        [ ! -t 0 ] || [ "${LK_NO_INPUT-}" = 1 ]
+    fi
+}
+
 function _lk_tty_prompt() {
     unset IFS
     PREFIX=" :: "
@@ -1916,12 +1946,27 @@ s/^\\\\(.)/\\1/"
 function _lk_usage() {
     if [[ -n ${2+1} ]]; then
         echo "$2"
-    elif [[ $(type -t __usage) == function ]]; then
+    elif [[ $(type -t __usage) == "function" ]]; then
         __usage
-    elif [[ $(type -t "_$1_usage") =~ ^(function|file)$ ]]; then
+    elif [[ -n ${1:+1} ]] &&
+        [[ $(type -t "_$1_usage") =~ ^(function|file)$ ]]; then
         "_$1_usage" "$1"
     else
         echo "${LK_USAGE:-$1: invalid arguments}"
+    fi
+}
+
+# _lk_version <CALLER>
+function _lk_version() {
+    if [[ $(type -t __version) == "function" ]]; then
+        __version
+    elif [[ -n ${1:+1} ]] &&
+        [[ $(type -t "_$1_version") =~ ^(function|file)$ ]]; then
+        "_$1_version" "$1"
+    elif [[ -n ${LK_VERSION:+1} ]]; then
+        echo "$LK_VERSION"
+    else
+        false || lk_err "no version defined: ${1-}"
     fi
 }
 
@@ -2066,6 +2111,23 @@ function lk_md5() {
     _LK_HASH_COMMAND=$(lk_first_command md5sum md5) ||
         lk_err "md5 command not found" || return
     lk_hash "$@"
+}
+
+# lk_maybe [-p] COMMAND [ARG...]
+#
+# Run COMMAND unless LK_DRY_RUN is set. If -p is set, print COMMAND if not
+# running it.
+function lk_maybe() {
+    local PRINT
+    [ "${1-}" != -p ] || { PRINT=1 && shift; }
+    if lk_dry_run; then
+        [ -z "${PRINT-}" ] && ! lk_verbose ||
+            lk_console_log \
+                "${LK_YELLOW}[DRY RUN]${LK_RESET} Not running:" \
+                "$(lk_quote_args "$@")"
+    else
+        "$@"
+    fi
 }
 
 # lk_report_error [-q] COMMAND [ARG...]
@@ -3480,16 +3542,6 @@ function lk_curl() {
         --silent
     )
     curl ${CURL_OPTIONS[@]+"${CURL_OPTIONS[@]}"} "$@"
-}
-
-# lk_run_as USER COMMAND [ARG...]
-function lk_run_as() {
-    [ $# -ge 2 ] || lk_warn "invalid arguments" || return
-    if lk_is_linux; then
-        lk_elevate runuser -u "$1" -- "${@:2}"
-    else
-        sudo -u "$1" -- "${@:2}"
-    fi
 }
 
 function lk_maybe_drop() {
