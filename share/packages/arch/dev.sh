@@ -344,6 +344,7 @@ AUR_PACKAGES+=(
     standard
     terser
     trickle
+    zeal-git
 
     #
     git-cola

@@ -209,6 +209,7 @@ HOMEBREW_FORCE_INTEL+=(
 
 HOMEBREW_CASKS+=(
     android-studio
+    dash
     dbeaver-community
     font-jetbrains-mono
     http-toolkit
