@@ -253,6 +253,7 @@ if lk_node_service_enabled desktop; then
         #
         numix-gtk-theme-git
         sound-theme-smooth
+        wiki-loves-earth-wallpapers
         zuki-themes
     )
 fi

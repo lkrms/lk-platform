@@ -321,6 +321,7 @@ PAC_PACKAGES+=(
     #
     lua
     lua-penlight
+    lua-posix
 
     # Platforms
     aws-cli
@@ -330,7 +331,6 @@ PAC_PACKAGES+=(
 
 AUR_PACKAGES+=(
     babel-preset-env
-    lua-posix
     nodejs-less
     nvm
     php-memprof

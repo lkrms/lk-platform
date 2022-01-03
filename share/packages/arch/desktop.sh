@@ -209,9 +209,9 @@ PAC_PACKAGES+=(
     #
     lua
     lua-penlight
+    lua-posix
 )
 
 AUR_PACKAGES+=(
-    lua-posix
     python-demjson3
 )
