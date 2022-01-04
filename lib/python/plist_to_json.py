@@ -1,23 +1,30 @@
 #!/usr/bin/env python3
 
 import base64
+from datetime import datetime
 import json
 import plistlib
 import sys
 
 
 def get_serializable(obj):
+    if (isinstance(obj, datetime)):
+        return obj.isoformat()
+
+    if (isinstance(obj, plistlib.UID)):
+        return obj.data
+
     try:
         return {"@type": "plist",
                 "__plist": plistlib.loads(obj)}
-    except:
+    except BaseException:
         pass
 
     try:
         return {"@type": "bytes",
-                "__bytes": base64.b64encode(obj).decode('ascii')}
-    except:
-        raise TypeError('Unable to serialize object in plist')
+                "__bytes": base64.b64encode(obj).decode("ascii")}
+    except BaseException:
+        raise TypeError("Unable to serialize object in plist")
 
 
 def plist_to_json(in_file, out_file):
@@ -27,14 +34,14 @@ def plist_to_json(in_file, out_file):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2 or sys.argv[1] == "-":
-        in_file = sys.stdin
+        in_file = sys.stdin.buffer
     else:
-        in_file = open(sys.argv[1], 'rb')
+        in_file = open(sys.argv[1], "rb")
 
     if len(sys.argv) < 3 or sys.argv[2] == "-":
         out_file = sys.stdout
     else:
-        out_file = open(sys.argv[2], 'w')
+        out_file = open(sys.argv[2], "w")
 
     plist_to_json(in_file, out_file)
 
