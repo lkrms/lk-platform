@@ -362,7 +362,9 @@ EOF
             lk_brew_flush_cache
     }
 
-    FOREIGN=($(lk_brew_formulae_list_not_native "${HOMEBREW_FORMULAE[@]}"))
+    FOREIGN=($({ lk_brew_formulae_list_not_native "${HOMEBREW_FORMULAE[@]}" &&
+        comm -12 <(lk_arr HOMEBREW_FORMULAE) <(lk_arr HOMEBREW_FORCE_INTEL); } |
+        sort -u))
     if lk_is_apple_silicon && {
         [ -e /usr/local/bin/brew ] || { [ ${#FOREIGN[@]} -gt 0 ] &&
             lk_echo_array FOREIGN | lk_console_list \

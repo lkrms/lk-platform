@@ -211,6 +211,7 @@ HOMEBREW_FORCE_INTEL+=(
     php@7.3
     php@7.4
     php@8.0
+    wp-cli
 )
 
 HOMEBREW_CASKS+=(
