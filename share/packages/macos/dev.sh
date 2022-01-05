@@ -147,6 +147,12 @@ HOMEBREW_FORMULAE+=(
     cmake
     emscripten
 
+    #
+    libvirt
+    qemu
+    lkrms/virt-manager/virt-manager
+    lkrms/virt-manager/virt-viewer
+
     # Email
     msmtp  # SMTP client
     s-nail # `mail` and `mailx` commands
@@ -247,9 +253,7 @@ HOMEBREW_KEEP_FORMULAE+=(
     microsoft/mssql-release/mssql-tools
 
     #
-    libvirt
-    qemu
-    lkrms/virt-manager/virt-manager
+    lkrms/virt-manager/libvirt
 
     #
     ddcctl

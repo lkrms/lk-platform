@@ -754,9 +754,12 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
   select(.token | IN($ARGS.positional[]))] }' --args $(<"$NEW_CASKS")
             } | jq --slurp '{ "formulae": [ .[].formulae[] ],
   "casks": [ .[].casks[] ] }' >"$NEW_JSON" || return
-            { cat "$LAST_FORMULAE" && jq -r \
-                ".formulae[].dependencies[]?,.casks[].depends_on.formula[]?" \
-                <"$NEW_JSON"; } | sort -u >"$ALL_FORMULAE" || return
+            { cat "$LAST_FORMULAE" && jq -r '
+.formulae[].dependencies[]?,
+.casks[].depends_on.formula[]?,
+(.formulae[] |
+  select(([.installed[] | select(.poured_from_bottle | not)] | length) > 0) |
+  .build_dependencies[]?)' <"$NEW_JSON"; } | sort -u >"$ALL_FORMULAE" || return
             ((i > 0)) || { cat "$LAST_CASKS" && jq -r \
                 ".casks[].depends_on.cask[]?" <"$NEW_JSON"; } |
                 sort -u >"$ALL_CASKS" || return
