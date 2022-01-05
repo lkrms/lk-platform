@@ -92,7 +92,7 @@ function lk_run_as() {
         _USER=$(id -un "$_USER")
         lk_elevate runuser -u "$_USER" -- "$@"
     else
-        sudo -u "$_USER" -- "$@"
+        sudo -u "#$_USER" -- "$@"
     fi
 }
 

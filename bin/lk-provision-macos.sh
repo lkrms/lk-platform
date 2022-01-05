@@ -295,7 +295,11 @@ EOF
 
     function brew() {
         if [ "$BASH_SUBSHELL" -eq 0 ]; then
-            lk_faketty caffeinate -d "${BREW[@]:-brew}" "$@"
+            # `script` flushes stdin to stdout, breaking the `while read` loop
+            # in `lk_brew_tap`, so use /dev/tty or /dev/null as input
+            local STDIN
+            STDIN=$(lk_get_tty) || STDIN=/dev/null
+            lk_faketty caffeinate -d "${BREW[@]:-brew}" "$@" <"$STDIN"
         else
             command "${BREW[@]:-brew}" "$@"
         fi
