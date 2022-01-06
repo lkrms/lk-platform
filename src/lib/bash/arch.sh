@@ -113,9 +113,13 @@ lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
 
 [ "$EUID" -eq 0 ] || lk_die "not running as root"
 
-[[ ! ${1-} =~ ^(-i|--install)$ ]] ||
-    grub-install --target=x86_64-efi \
-        --efi-directory=/boot --bootloader-id=GRUB --removable
+if [[ ${1-} =~ ^(-i|--install)$ ]]; then
+    grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
+    # On some systems, GRUB must be installed at the default/fallpack boot path
+    cp -afv /boot/EFI/{GRUB/grubx64.efi,BOOT/BOOTX64.EFI} >&2
+else
+    echo "${0##*/}: skipping grub-install (--install not set)" >&2
+fi
 grub-mkconfig -o /boot/grub/grub.cfg
 EOF
     )
