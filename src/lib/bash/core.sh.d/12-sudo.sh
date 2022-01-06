@@ -80,4 +80,20 @@ function lk_will_sudo() {
     [ "$EUID" -ne 0 ] && [ -n "${LK_SUDO-}" ]
 }
 
+# lk_run_as USER COMMAND [ARG...]
+function lk_run_as() {
+    [ $# -ge 2 ] || lk_err "invalid arguments" || return
+    local _USER
+    _USER=$(id -u "$1" 2>/dev/null) || lk_err "user not found: $1" || return
+    shift
+    if [[ $EUID -eq $_USER ]]; then
+        "$@"
+    elif lk_is_linux; then
+        _USER=$(id -un "$_USER")
+        lk_elevate runuser -u "$_USER" -- "$@"
+    else
+        sudo -u "#$_USER" -- "$@"
+    fi
+}
+
 #### Reviewed: 2021-10-24

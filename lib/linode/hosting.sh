@@ -232,4 +232,4 @@ if [ ${#ADMIN_USERS[@]} -gt 0 ]; then
     lk_run_detail rm -v "$KEYS_FILE"
 fi
 
-lk_run_detail shutdown "--$LK_SHUTDOWN_ACTION" +1
+lk_run_detail shutdown "--$LK_SHUTDOWN_ACTION" now

@@ -851,18 +851,7 @@ $LK_NODE_HOSTNAME" &&
                 )
             fi
         done
-        # Mitigate PHP 8 bugs in wp-cli search-replace
-        FILE=${LK_BIN_PATH:-/usr/local/bin}/wp
-        if lk_pac_installed php7 wp-cli; then
-            lk_install -m 00755 "$FILE"
-            lk_file_replace "$FILE" <<EOF
-#!/bin/sh
-$(command -pv php7) $(command -pv wp) "\$@"
-EOF
-        else
-            [ ! -f "$FILE" ] ||
-                lk_rm "$FILE"
-        fi
+        file_delete "${LK_BIN_PATH:-/usr/local/bin}/wp"
     fi
 
     if lk_pac_installed php-fpm apache; then
@@ -881,18 +870,18 @@ EOF
 /var/log/php-fpm/*.access.log {
     missingok
     sharedscripts
+    su root root
     postrotate
         /usr/bin/systemctl kill --kill-who=main --signal=SIGUSR1 php-fpm.service 2>/dev/null || true
     endscript
-    su root root
 }
 /var/log/php-fpm/*.error.log {
     missingok
     sharedscripts
+    su http http
     postrotate
         /usr/bin/systemctl kill --kill-who=main --signal=SIGUSR1 php-fpm.service 2>/dev/null || true
     endscript
-    su http http
 }
 EOF
         LK_CONF_OPTION_FILE=/etc/php/php-fpm.d/www.conf

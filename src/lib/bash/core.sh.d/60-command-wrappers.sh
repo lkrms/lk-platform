@@ -1,5 +1,22 @@
 #!/bin/bash
 
+# lk_maybe [-p] COMMAND [ARG...]
+#
+# Run COMMAND unless LK_DRY_RUN is set. If -p is set, print COMMAND if not
+# running it.
+function lk_maybe() {
+    local PRINT
+    [ "${1-}" != -p ] || { PRINT=1 && shift; }
+    if lk_dry_run; then
+        [ -z "${PRINT-}" ] && ! lk_verbose ||
+            lk_console_log \
+                "${LK_YELLOW}[DRY RUN]${LK_RESET} Not running:" \
+                "$(lk_quote_args "$@")"
+    else
+        "$@"
+    fi
+}
+
 # lk_report_error [-q] COMMAND [ARG...]
 #
 # Run COMMAND and print an error message if it exits non-zero. If -q is set,
@@ -84,14 +101,20 @@ function lk_env_clean() {
     fi
 }
 
-#### Other command wrappers:
+#### Other command wrappers in core.sh:
 #### - lk_pass
 #### - lk_elevate
-#### - lk_mktemp_with
-#### - lk_mktemp_dir_with
 #### - lk_sudo
 #### - lk_unbuffer
-#### - lk_maybe
+#### - lk_mktemp_with
+#### - lk_mktemp_dir_with
+#### - lk_trap_add
+#### - lk_tty_add_margin
+#### - lk_tty_dump
+#### - lk_tty_run
+#### - lk_tty_run_detail
+####
+#### And elsewhere:
 #### - lk_git_with_repos
 #### - _lk_apt_flock
 

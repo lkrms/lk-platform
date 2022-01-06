@@ -6,32 +6,31 @@ AUR_PACKAGES=()
 PAC_REJECT=()
 
 PAC_KEEP=(
-    #
+    # Utilities
     expect
     geekbench
+    glances
     handbrake-cli
     mlocate
-    mongodb-bin
-    mongodb-tools-bin
     offlineimap
     pacman-cleanup-hook
     powershell-bin
     transmission-cli
 
-    #
-    ghostscript
-    mupdf-tools
-    pandoc
-    poppler
-    pstoedit
-    texlive-core
+    # PDF
+    ghostscript  # PDF/PostScript processing
+    mupdf-tools  # PDF manipulation
+    pandoc       # Text conversion (e.g. Markdown to PDF)
+    poppler      # Provides pdfimages
+    pstoedit     # PDF/PostScript conversion to vector formats
+    qpdf         # PDF manipulation (e.g. add underlay)
+    texlive-core # PDF support for pandoc
 
-    #
+    # Platforms
     aws-cli
     azure-cli
     linode-cli
-    python-boto  # for linode-cli
-    python-magic # for s3cmd
+    python-boto # Optional linode-cli dependency
     s3cmd
     wp-cli
 
@@ -69,10 +68,11 @@ lk_is_virtual || {
 }
 
 PAC_PACKAGES+=(
-    # Shells
+    # Shell
     asciinema
     dash
     ksh
+    shfmt
     zsh
 
     # Utilities
@@ -84,6 +84,7 @@ PAC_PACKAGES+=(
     stow
     syslinux
     ubuntu-keyring
+    unison
 
     # Networking
     iperf3
@@ -115,6 +116,6 @@ AUR_PACKAGES+=(
     vpn-slice
 
     #
-    demjson
+    python-demjson3
     ruby-erubis
 )

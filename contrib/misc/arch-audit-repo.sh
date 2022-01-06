@@ -8,16 +8,18 @@
 
 lk_require arch
 
-# Default to AUR packages provisioned by lk-platform
+# Default to AUR packages provisioned by lk-platform and/or maintained by lkrms
 [ $# -gt 1 ] || {
     lk_require bash
     lk_pac_sync
     set -- "${1:-aur}" $(comm -23 \
-        <(cat \
+        <({ cat \
             "$LK_BASE/share/packages/arch"/* \
             "$LK_BASE/lib/arch/packages.sh" |
             lk_bash_array_literals |
-            sed -E '/^[-a-zA-Z0-9+.@_]+$/!d' | sort -u) \
+            sed -E '/^[-a-zA-Z0-9+.@_]+$/!d' &&
+            curl -fsSL 'https://aur.archlinux.org/rpc/?v=5&type=search&by=maintainer&arg=lkrms' |
+            jq -r '.results[].Name'; } | sort -u) \
         <(expac -S '%r %n %G' |
             sed -En 's/^(core|extra|community|multilib) //p' |
             tr ' ' '\n' | sort -u))

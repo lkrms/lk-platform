@@ -486,6 +486,10 @@ Usage: $FUNCNAME [-w] DOMAIN [SITE_ROOT [ALIAS...]]" || return
                 error_log="$LOG_DIR/php$SITE_PHP_VERSION-fpm.error.log" \
                 ${LK_PHP_ADMIN_SETTINGS-} \
                 ${SITE_PHP_FPM_ADMIN_SETTINGS-} \
+                opcache.interned_strings_buffer=16 \
+                opcache.max_accelerated_files=20000 \
+                opcache.validate_timestamps=On \
+                opcache.revalidate_freq=0 \
                 opcache.file_cache=/srv/www/.opcache/\$pool \
                 error_reporting="E_ALL & ~E_WARNING & ~E_NOTICE & ~E_USER_WARNING & ~E_USER_NOTICE & ~E_STRICT & ~E_DEPRECATED & ~E_USER_DEPRECATED" \
                 disable_functions="error_reporting" \

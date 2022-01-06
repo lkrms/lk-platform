@@ -539,7 +539,9 @@ lk_log_start
             # Use Ctrl+A to go to beginning of line
             replace_byobu "$DIR/keybindings.tmux" \
                 "set -g prefix F12" \
-                "unbind-key -n C-a"
+                "unbind-key -n C-a" \
+                "unbind-key -n M-Left" \
+                "unbind-key -n M-Right"
             # Fix output issue when connecting from OpenSSH on Windows
             replace_byobu "$DIR/.tmux.conf" \
                 "set -s escape-time 50"

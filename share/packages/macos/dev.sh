@@ -147,6 +147,12 @@ HOMEBREW_FORMULAE+=(
     cmake
     emscripten
 
+    #
+    libvirt
+    qemu
+    lkrms/virt-manager/virt-manager
+    lkrms/virt-manager/virt-viewer
+
     # Email
     msmtp  # SMTP client
     s-nail # `mail` and `mailx` commands
@@ -205,10 +211,12 @@ HOMEBREW_FORCE_INTEL+=(
     php@7.3
     php@7.4
     php@8.0
+    wp-cli
 )
 
 HOMEBREW_CASKS+=(
     android-studio
+    dash
     dbeaver-community
     font-jetbrains-mono
     http-toolkit
@@ -246,9 +254,7 @@ HOMEBREW_KEEP_FORMULAE+=(
     microsoft/mssql-release/mssql-tools
 
     #
-    libvirt
-    qemu
-    lkrms/virt-manager/virt-manager
+    lkrms/virt-manager/libvirt
 
     #
     ddcctl
@@ -286,7 +292,6 @@ LOGIN_ITEMS+=(
     "/Applications/Messenger.app"
     "/Applications/Microsoft Teams.app"
     "/Applications/Nextcloud.app"
-    "/Applications/Skype.app"
     "/Applications/Todoist.app"
     "/System/Applications/Mail.app"
 )

@@ -124,5 +124,4 @@ LOGIN_ITEMS+=(
     "/Applications/flameshot.app"
     "/Applications/Flycut.app"
     "/Applications/Nextcloud.app"
-    "/Applications/Skype.app"
 )

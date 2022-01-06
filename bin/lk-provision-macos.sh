@@ -161,14 +161,16 @@ function exit_trap() {
 
     lk_tty_print "Configuring sudo"
     FILE=/etc/sudoers.d/${LK_PATH_PREFIX}default
-    sudo test ! -e "${FILE}s" || sudo test -e "$FILE" ||
+    sudo test ! -e "${FILE}s" -o -e "$FILE" ||
         sudo mv -v "${FILE}s" "$FILE"
+    LK_SUDO=1
     for SUFFIX in "" -macos; do
         [ -z "$SUFFIX" ] || FILE=${FILE%/*}/zz-${FILE##*/}
         sudo test -e "$FILE$SUFFIX" ||
             sudo install -m 00440 /dev/null "$FILE$SUFFIX"
-        (LK_SUDO=1 && lk_file_replace -f "$SUDOERS$SUFFIX" "$FILE$SUFFIX")
+        lk_file_replace -f "$SUDOERS$SUFFIX" "$FILE$SUFFIX"
     done
+    unset LK_SUDO
 
     lk_tty_print "Configuring default umask"
     { defaults read /var/db/com.apple.xpc.launchd/config/user.plist Umask |
@@ -293,7 +295,11 @@ EOF
 
     function brew() {
         if [ "$BASH_SUBSHELL" -eq 0 ]; then
-            lk_faketty caffeinate -d "${BREW[@]:-brew}" "$@"
+            # `script` flushes stdin to stdout, breaking the `while read` loop
+            # in `lk_brew_tap`, so use /dev/tty or /dev/null as input
+            local STDIN
+            STDIN=$(lk_get_tty) || STDIN=/dev/null
+            lk_faketty caffeinate -d "${BREW[@]:-brew}" "$@" <"$STDIN"
         else
             command "${BREW[@]:-brew}" "$@"
         fi
@@ -356,7 +362,9 @@ EOF
             lk_brew_flush_cache
     }
 
-    FOREIGN=($(lk_brew_formulae_list_not_native "${HOMEBREW_FORMULAE[@]}"))
+    FOREIGN=($({ lk_brew_formulae_list_not_native "${HOMEBREW_FORMULAE[@]}" &&
+        comm -12 <(lk_arr HOMEBREW_FORMULAE) <(lk_arr HOMEBREW_FORCE_INTEL); } |
+        sort -u))
     if lk_is_apple_silicon && {
         [ -e /usr/local/bin/brew ] || { [ ${#FOREIGN[@]} -gt 0 ] &&
             lk_echo_array FOREIGN | lk_console_list \
@@ -752,9 +760,12 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
   select(.token | IN($ARGS.positional[]))] }' --args $(<"$NEW_CASKS")
             } | jq --slurp '{ "formulae": [ .[].formulae[] ],
   "casks": [ .[].casks[] ] }' >"$NEW_JSON" || return
-            { cat "$LAST_FORMULAE" && jq -r \
-                ".formulae[].dependencies[]?,.casks[].depends_on.formula[]?" \
-                <"$NEW_JSON"; } | sort -u >"$ALL_FORMULAE" || return
+            { cat "$LAST_FORMULAE" && jq -r '
+.formulae[].dependencies[]?,
+.casks[].depends_on.formula[]?,
+(.formulae[] |
+  select(([.installed[] | select(.poured_from_bottle | not)] | length) > 0) |
+  .build_dependencies[]?)' <"$NEW_JSON"; } | sort -u >"$ALL_FORMULAE" || return
             ((i > 0)) || { cat "$LAST_CASKS" && jq -r \
                 ".casks[].depends_on.cask[]?" <"$NEW_JSON"; } |
                 sort -u >"$ALL_CASKS" || return

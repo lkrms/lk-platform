@@ -18,12 +18,27 @@ s/^\\\\(.)/\\1/"
 function _lk_usage() {
     if [[ -n ${2+1} ]]; then
         echo "$2"
-    elif [[ $(type -t __usage) == function ]]; then
+    elif [[ $(type -t __usage) == "function" ]]; then
         __usage
-    elif [[ $(type -t "_$1_usage") =~ ^(function|file)$ ]]; then
+    elif [[ -n ${1:+1} ]] &&
+        [[ $(type -t "_$1_usage") =~ ^(function|file)$ ]]; then
         "_$1_usage" "$1"
     else
         echo "${LK_USAGE:-$1: invalid arguments}"
+    fi
+}
+
+# _lk_version <CALLER>
+function _lk_version() {
+    if [[ $(type -t __version) == "function" ]]; then
+        __version
+    elif [[ -n ${1:+1} ]] &&
+        [[ $(type -t "_$1_version") =~ ^(function|file)$ ]]; then
+        "_$1_version" "$1"
+    elif [[ -n ${LK_VERSION:+1} ]]; then
+        echo "$LK_VERSION"
+    else
+        false || lk_err "no version defined: ${1-}"
     fi
 }
 
