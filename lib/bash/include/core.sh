@@ -1728,31 +1728,48 @@ function lk_tty_error() {
     eval "$_lk_x_return"
 }
 
-# lk_var_sh [-f] [VAR...]
+# _lk_var [STACK_DEPTH]
 #
-# Print a variable assignment statement for each declared VAR. If -f is set, it
-# is passed to `lk_double_quote`.
+# Print 'declare ' if the command that called the caller belongs to a function.
+# In this context, declarations printed for `eval` should create local variables
+# rather than globals.
+function _lk_var() {
+    local DEPTH=${1:-0} _LK_STACK_DEPTH=${_LK_STACK_DEPTH:-0}
+    ((DEPTH += _LK_STACK_DEPTH, _LK_STACK_DEPTH < 0 || DEPTH < 0)) ||
+        [[ ${FUNCNAME[DEPTH + 2]-} =~ ^(^|source|main)$ ]] ||
+        printf 'declare '
+}
+
+# lk_var_sh [-a] [VAR...]
+#
+# Print a variable assignment statement for each declared VAR. If -a is set,
+# include undeclared variables.
 function lk_var_sh() {
-    local FORCE
-    unset FORCE
-    [ "${1-}" != -f ] || { FORCE= && shift; }
+    local ALL=0
+    [ "${1-}" != -a ] || { ALL=1 && shift; }
     while [ $# -gt 0 ]; do
-        [ -z "${!1+1}" ] ||
-            printf '%s=%s\n' "$1" "$(lk_double_quote ${FORCE+-f} "${!1-}")"
+        if [ -n "${!1+1}" ]; then
+            printf '%s=%s\n' "$1" "$(lk_double_quote "${!1-}")"
+        elif ((ALL)); then
+            printf '%s=\n' "$1"
+        fi
         shift
     done
 }
 
-# lk_var_sh_q [VAR...]
+# lk_var_sh_q [-a] [VAR...]
 #
-# Print Bash-compatible assignment statements for each VAR, including any
-# that are undeclared.
+# Print Bash-compatible assignment statements for each declared VAR. If -a is
+# set, include undeclared variables.
 function lk_var_sh_q() {
+    local ALL=0
+    [ "${1-}" != -a ] || { ALL=1 && shift; }
     while [ $# -gt 0 ]; do
+        _lk_var
         if [ -n "${!1:+1}" ]; then
-            printf 'declare %s=%q\n' "$1" "${!1}"
-        else
-            printf 'declare %s=\n' "$1"
+            printf '%s=%q\n' "$1" "${!1}"
+        elif ((ALL)) || [ -n "${!1+1}" ]; then
+            printf '%s=\n' "$1"
         fi
         shift
     done
@@ -1763,7 +1780,7 @@ function lk_var_sh_q() {
 # Print the original value of VAR if it was in the environment when Bash was
 # invoked. Requires `_LK_ENV=$(declare -x)` at or near the top of the script.
 function lk_var_env() { (
-    [ -n "${_LK_ENV+1}" ] || lk_warn "_LK_ENV not set" || return
+    [ -n "${_LK_ENV+1}" ] || lk_err "_LK_ENV not set" || return
     unset "$1" || return
     eval "$_LK_ENV" 2>/dev/null || true
     declare -p "$1" 2>/dev/null |
@@ -2214,6 +2231,32 @@ function lk_env_clean() {
     fi
 }
 
+function lk_jq() {
+    jq -L"$LK_BASE/lib"/{jq,json} "$@"
+}
+
+# lk_json_mapfile <ARRAY> [JQ_FILTER]
+#
+# Apply JQ_FILTER (default: '.[]') to the input and populate ARRAY with the
+# output, using JSON encoding if necessary.
+function lk_json_mapfile() {
+    local IFS _SH
+    unset IFS
+    _SH="$1=($(lk_jq -r "${2:-.[]} | tostring | @sh"))" &&
+        eval "$_SH"
+}
+
+# lk_json_sh (<VAR> <JQ_FILTER>)...
+function lk_json_sh() {
+    (($# && !($# % 2))) || lk_err "invalid arguments" || return
+    local IFS
+    unset IFS
+    lk_jq -r --arg prefix "$(_lk_var)" 'include "core"; {'"$(
+        printf '"%s":(%s)' "${@:1:2}"
+        (($# < 3)) || printf ',"%s":(%s)' "${@:3}"
+    )"'} | to_sh($prefix)'
+}
+
 # lk_uri_encode PARAMETER=VALUE...
 function lk_uri_encode() {
     local ARGS=()
@@ -2251,6 +2294,7 @@ lk_first_existing() { lk_first_file "$@"; }
 lk_include() { lk_require "$@"; }
 lk_is_false() { lk_false "$@"; }
 lk_is_true() { lk_true "$@"; }
+lk_jq_get_array() { lk_json_mapfile "$@"; }
 lk_maybe_sudo() { lk_sudo "$@"; }
 lk_mktemp_dir() { _LK_STACK_DEPTH=$((1 + ${_LK_STACK_DEPTH:-0})) lk_mktemp -d; }
 lk_mktemp_file() { _LK_STACK_DEPTH=$((1 + ${_LK_STACK_DEPTH:-0})) lk_mktemp; }
@@ -3940,37 +3984,6 @@ function lk_is_readonly() {
 function lk_is_exported() {
     local REGEX="^declare -$NS*x$NS*"
     [[ $(declare -p "$1" 2>/dev/null) =~ $REGEX ]]
-}
-
-function lk_jq() {
-    jq -L"${_LK_INST:-$LK_BASE}"/lib/{jq,json} "$@"
-}
-
-# lk_jq_get_array ARRAY [FILTER]
-#
-# Apply FILTER (default: ".[]") to the input and populate ARRAY with the
-# JSON-encoded value of each result.
-function lk_jq_get_array() {
-    local SH
-    lk_is_identifier "$1" || lk_warn "not a valid identifier: $1" || return
-    SH="$1=($(jq -r "${2:-.[]} | tostring | @sh"))" &&
-        eval "$SH"
-}
-
-# lk_jq_get_shell_var [--arg NAME VALUE]... VAR FILTER [VAR FILTER]...
-function lk_jq_get_shell_var() {
-    local JQ ARGS=()
-    while [ "${1-}" = --arg ]; do
-        [ $# -ge 5 ] || lk_warn "invalid arguments" || return
-        ARGS+=("${@:1:3}")
-        shift 3
-    done
-    [ $# -gt 0 ] && ! (($# % 2)) || lk_warn "invalid arguments" || return
-    JQ=$(printf '"%s":(%s),' "$@")
-    JQ='include "core"; {'${JQ%,}'} | to_sh("declare ")'
-    lk_jq -r \
-        ${ARGS[@]+"${ARGS[@]}"} \
-        "$JQ"
 }
 
 function lk_json_from_xml_schema() {

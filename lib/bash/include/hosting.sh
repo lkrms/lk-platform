@@ -218,7 +218,7 @@ function lk_hosting_site_list() { (
                 else
                     SITE_PHP_FPM_USER=$_SITE_USER
                 fi
-            lk_var_sh_q SITE_ENABLE SITE_ROOT SITE_ORDER SITE_ALIASES \
+            lk_var_sh_q -a SITE_ENABLE SITE_ROOT SITE_ORDER SITE_ALIASES \
                 _SITE_IS_CHILD SITE_PHP_FPM_POOL SITE_PHP_FPM_USER \
                 SITE_DISABLE_WWW SITE_DISABLE_HTTPS
         ) && eval "$SH" || continue
@@ -344,7 +344,7 @@ function _lk_hosting_site_read_settings() { (
     unset "${!SITE_@}"
     readonly _SITE_FILE=$LK_BASE/etc/sites/${1,,}.conf
     [ ! -e "$_SITE_FILE" ] || . "$_SITE_FILE" || return
-    _LK_STACK_DEPTH=1 lk_var_sh_q \
+    _LK_STACK_DEPTH=1 lk_var_sh_q -a \
         $(_lk_hosting_site_list_settings "" _SITE_FILE "${!SITE_@}" | sort -u)
 ); }
 
