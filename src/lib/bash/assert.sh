@@ -1,6 +1,6 @@
 #!/bin/bash
 
-function lk_assert_is_root() {
+function lk_assert_root() {
     lk_root || lk_die "not running as root"
 }
 
@@ -9,7 +9,9 @@ function lk_assert_not_root() {
 }
 
 function lk_assert_command_exists() {
-    lk_command_exists "$1" || lk_die "command not found: $1"
+    local IFS=' '
+    lk_command_exists "$@" ||
+        lk_die "$(lk_plural $# "command" commands) not found: $*"
 }
 
 function lk_assert_is_linux() {

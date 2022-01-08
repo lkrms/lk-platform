@@ -15,7 +15,7 @@ export LK_BASE
 
 . "$LK_BASE/lib/bash/common.sh"
 
-lk_assert_is_root
+lk_assert_root
 
 IFS=$'\n'
 SESSION_USERS=($(pgrep -x libvirtd |

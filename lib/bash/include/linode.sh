@@ -179,7 +179,7 @@ function lk_linode_domain() {
         lk_warn "no domain" || return
     JSON=$(lk_linode_domains "${@:2}" | jq -er --arg d "$1" \
         '[.[]|select((.id|tostring==$d) or .domain==$d)]|if length==1 then .[0] else empty end') ||
-        lk_warn "domain not found: $1" || return
+        lk_warn "domain not found in Linode account: $1" || return
     if [ -n "$_JSON" ]; then
         cat <<<"$JSON"
     else

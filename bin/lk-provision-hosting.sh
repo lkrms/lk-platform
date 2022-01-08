@@ -89,7 +89,7 @@ if ! lk_is_bootstrap; then
 Usage: ${0##*/} [--set|--add|--remove|--unset SETTING[=VALUE]]... [--no-upgrade]"
 fi
 
-lk_assert_is_root
+lk_assert_root
 lk_assert_is_linux
 lk_assert_is_ubuntu
 
