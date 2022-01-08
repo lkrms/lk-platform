@@ -209,7 +209,7 @@ function _lk_hosting_site_read_settings() { (
     unset "${!SITE_@}"
     readonly _SITE_FILE=$LK_BASE/etc/sites/${1,,}.conf
     [ ! -e "$_SITE_FILE" ] || . "$_SITE_FILE" || return
-    _LK_STACK_DEPTH=1 lk_var_sh_q \
+    _LK_STACK_DEPTH=1 lk_var_sh_q -a \
         $(_lk_hosting_site_list_settings "" _SITE_FILE "${!SITE_@}" | sort -u)
 ); } #### Reviewed: 2021-07-12
 

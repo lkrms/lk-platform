@@ -1685,37 +1685,6 @@ function lk_is_exported() {
     [[ $(declare -p "$1" 2>/dev/null) =~ $REGEX ]]
 }
 
-function lk_jq() {
-    jq -L"${_LK_INST:-$LK_BASE}"/lib/{jq,json} "$@"
-}
-
-# lk_jq_get_array ARRAY [FILTER]
-#
-# Apply FILTER (default: ".[]") to the input and populate ARRAY with the
-# JSON-encoded value of each result.
-function lk_jq_get_array() {
-    local SH
-    lk_is_identifier "$1" || lk_warn "not a valid identifier: $1" || return
-    SH="$1=($(jq -r "${2:-.[]} | tostring | @sh"))" &&
-        eval "$SH"
-}
-
-# lk_jq_get_shell_var [--arg NAME VALUE]... VAR FILTER [VAR FILTER]...
-function lk_jq_get_shell_var() {
-    local JQ ARGS=()
-    while [ "${1-}" = --arg ]; do
-        [ $# -ge 5 ] || lk_warn "invalid arguments" || return
-        ARGS+=("${@:1:3}")
-        shift 3
-    done
-    [ $# -gt 0 ] && ! (($# % 2)) || lk_warn "invalid arguments" || return
-    JQ=$(printf '"%s":(%s),' "$@")
-    JQ='include "core"; {'${JQ%,}'} | to_sh("declare ")'
-    lk_jq -r \
-        ${ARGS[@]+"${ARGS[@]}"} \
-        "$JQ"
-}
-
 function lk_json_from_xml_schema() {
     [ $# -gt 0 ] && [ $# -le 2 ] && lk_files_exist "$@" || lk_usage "\
 Usage: $FUNCNAME XSD_FILE [XML_FILE]" || return

@@ -10,6 +10,7 @@ def to_bool:
 
 def _to_sh:
   if type == "array" then "(\(@sh))"
+  elif type == "object" then tostring | @sh
   elif type == "boolean" then if . then "1" else "0" end
   else @sh end;
 

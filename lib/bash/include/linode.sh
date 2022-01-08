@@ -64,7 +64,7 @@ function lk_linode_stackscripts() {
 }
 
 function lk_linode_get_shell_var() {
-    lk_jq_get_shell_var \
+    lk_json_sh \
         LINODE_ID .id \
         LINODE_LABEL .label \
         LINODE_TAGS .tags \
@@ -162,7 +162,7 @@ function lk_linode_hosting_ssh_add_all() {
 
 function _lk_linode_domain() {
     local SH _LK_STACK_DEPTH=-1
-    SH=$(lk_jq_get_shell_var \
+    SH=$(lk_json_sh \
         DOMAIN_ID .id \
         DOMAIN .domain) && eval "$SH"
 }
@@ -179,7 +179,7 @@ function lk_linode_domain() {
         lk_warn "no domain" || return
     JSON=$(lk_linode_domains "${@:2}" | jq -er --arg d "$1" \
         '[.[]|select((.id|tostring==$d) or .domain==$d)]|if length==1 then .[0] else empty end') ||
-        lk_warn "domain not found: $1" || return
+        lk_warn "domain not found in Linode account: $1" || return
     if [ -n "$_JSON" ]; then
         cat <<<"$JSON"
     else

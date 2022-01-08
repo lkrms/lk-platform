@@ -24,6 +24,7 @@ lk_first_existing() { lk_first_file "$@"; }
 lk_include() { lk_require "$@"; }
 lk_is_false() { lk_false "$@"; }
 lk_is_true() { lk_true "$@"; }
+lk_jq_get_array() { lk_json_mapfile "$@"; }
 lk_maybe_sudo() { lk_sudo "$@"; }
 lk_mktemp_dir() { _LK_STACK_DEPTH=$((1 + ${_LK_STACK_DEPTH:-0})) lk_mktemp -d; }
 lk_mktemp_file() { _LK_STACK_DEPTH=$((1 + ${_LK_STACK_DEPTH:-0})) lk_mktemp; }

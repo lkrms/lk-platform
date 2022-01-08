@@ -10,7 +10,7 @@ LK_BASE=$(cd "${_DIR:-.}/../.." && pwd -P) &&
 
 . "$LK_BASE/lib/bash/common.sh"
 
-lk_assert_is_root
+lk_assert_root
 
 DEVICE=${1-}
 [[ $DEVICE =~ ^([0-9a-f]{4}(:|$)){2}$ ]] || lk_usage
