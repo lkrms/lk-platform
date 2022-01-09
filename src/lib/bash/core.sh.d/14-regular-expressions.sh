@@ -68,6 +68,8 @@ add_regex NON_PRINTING_REGEX $'(\x01[^\x02]*\x02|\x1b(\\\x5b[\x30-\x3f]*[\x20-\x
 # 1. anchored
 # 2. not intended for validation
 add_regex IPV4_PRIVATE_FILTER_REGEX '^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.)'
+add_regex IPV6_PRIVATE_FILTER_REGEX '^([fF][cdCD]|[fF][eE]80::|::1(/128|$))'
+add_regex IP_PRIVATE_FILTER_REGEX '^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.|[fF][cdCD]|[fF][eE]80::|::1(/128|$))'
 
 # *_FINDUTILS_REGEX expressions work with `find` commands that don't recognise
 # the -regextype primary (e.g. BSD/macOS `find`)
