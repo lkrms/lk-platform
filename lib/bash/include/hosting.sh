@@ -1,6 +1,6 @@
 #!/bin/bash
 
-lk_include debian git linux provision
+lk_require debian git linux provision
 
 # lk_hosting_user_add_admin LOGIN [AUTHORIZED_KEY...]
 function lk_hosting_user_add_admin() {

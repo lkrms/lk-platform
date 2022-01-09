@@ -14,7 +14,7 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
 export LK_BASE
 
 . "$LK_BASE/lib/bash/common.sh"
-lk_include backup
+lk_require backup
 
 function find_snapshots() {
     lk_backup_snapshot_list "$1" "$SNAPSHOT_ROOT" "${@:2}"

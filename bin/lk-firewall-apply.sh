@@ -14,7 +14,7 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
 export LK_BASE
 
 . "$LK_BASE/lib/bash/common.sh"
-lk_include iptables provision
+lk_require iptables provision
 
 lk_elevate
 

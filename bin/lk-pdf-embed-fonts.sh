@@ -1,7 +1,7 @@
 #!/bin/bash
 
 . lk-bash-load.sh || exit
-lk_include provision
+lk_require provision
 
 lk_assert_command_exists gs
 

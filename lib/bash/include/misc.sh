@@ -1,6 +1,6 @@
 #!/bin/bash
 
-lk_include secret
+lk_require secret
 
 # lk_openconnect USER HOST [ROUTE...]
 function lk_openconnect() {

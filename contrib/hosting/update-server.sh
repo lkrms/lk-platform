@@ -162,7 +162,7 @@
         local IFS PUBLIC_IP HOSTED_DOMAIN
         unset IFS
         . /opt/lk-platform/lib/bash/rc.sh &&
-            lk_include provision hosting &&
+            lk_require provision hosting &&
             PUBLIC_IP=$(lk_node_ipv4 | head -n1) &&
             HOSTED_DOMAIN=($(lk_hosting_site_list -e |
                 awk '{print $10}' | tr ',' '\n')) &&

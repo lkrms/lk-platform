@@ -7,7 +7,7 @@
 # is the number of directories between LK_BASE and the script:
 #
 #     lk_bin_depth=DEPTH . lk-bash-load.sh || exit
-#     [lk_include LIBRARY...]
+#     [lk_require LIBRARY...]
 #
 # If lk_bin_depth is set, LK_BASE will be determined from the invoking script's
 # pathname, regardless of lk-bash-load.sh's location.
@@ -19,7 +19,7 @@
 # method for using lk-platform's Bash functions elsewhere:
 #
 #     . lk-bash-load.sh || exit
-#     [lk_include LIBRARY...]
+#     [lk_require LIBRARY...]
 #
 
 set -euo pipefail

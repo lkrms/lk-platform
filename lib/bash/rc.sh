@@ -169,16 +169,16 @@ function find_all() {
     gnu_find . -xdev -iname "*$1*" "${@:2}"
 }
 
-[ ! -d /srv/www ] || lk_include hosting
-[ ! -d /srv/backup ] || lk_include backup
-lk_include bash git linode misc provision wordpress
+[ ! -d /srv/www ] || lk_require hosting
+[ ! -d /srv/backup ] || lk_require backup
+lk_require bash git linode misc provision wordpress
 
 if lk_is_linux; then
-    lk_include iptables linux
-    ! lk_is_arch || lk_include arch
-    ! lk_is_ubuntu || lk_include debian
+    lk_require iptables linux
+    ! lk_is_arch || lk_require arch
+    ! lk_is_ubuntu || lk_require debian
 elif lk_is_macos; then
-    lk_include macos
+    lk_require macos
     export BASH_SILENCE_DEPRECATION_WARNING=1
 fi
 
@@ -215,7 +215,7 @@ fi
     ) && eval "$SH"; }
 
     lk_is_false LK_PROMPT || {
-        lk_include prompt
+        lk_require prompt
         lk_prompt_enable
     }
 

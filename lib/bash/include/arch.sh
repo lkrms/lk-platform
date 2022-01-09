@@ -1,6 +1,6 @@
 #!/bin/bash
 
-lk_include linux provision
+lk_require linux provision
 
 function lk_arch_chroot() {
     [ "${1-}" != -u ] || {

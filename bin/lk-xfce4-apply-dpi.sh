@@ -1,7 +1,7 @@
 #!/bin/bash
 
 lk_bin_depth=1 . lk-bash-load.sh || exit
-lk_include linux
+lk_require linux
 
 shopt -s nullglob
 

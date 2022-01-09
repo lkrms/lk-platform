@@ -1,6 +1,6 @@
 #!/bin/bash
 
-lk_include provision
+lk_require provision
 
 function lk_atop_ps_mem() {
     lk_elevate atop -R -PCPL,MEM,SWP,PAG,PRM "$@" |

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 lk_bin_depth=1 . lk-bash-load.sh || exit
-lk_include mysql provision
+lk_require mysql provision
 
 DB_NAME=
 DB_USER=

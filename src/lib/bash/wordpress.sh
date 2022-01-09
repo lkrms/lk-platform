@@ -1,6 +1,6 @@
 #!/bin/bash
 
-lk_include mysql provision
+lk_require mysql provision
 
 function wp() {
     WP_CLI_CONFIG_PATH=$LK_BASE/share/wp-cli/config.yml \
