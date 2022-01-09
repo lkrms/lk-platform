@@ -37,6 +37,21 @@ function lk_validate_not_null() {
         _lk_validate_fail "Required: %s\n" "$1"
 }
 
+function lk_validate_not_equal() {
+    local CASE=1 VAL1 VAL2
+    [ "${1-}" != -i ] || { CASE=0 && shift; }
+    ! { [ "${_LK_REQUIRED:-0}" -eq 0 ] || lk_validate_not_null "$1"; } || {
+        VAL1=${!1-}
+        VAL2=${!2-}
+        ((CASE)) || {
+            VAL1=$(lk_lower "$VAL1")
+            VAL2=$(lk_lower "$VAL2")
+        }
+        [ "$VAL1" != "$VAL2" ] ||
+            _lk_validate_fail "Cannot equal %s: %s\n" "$2" "$1"
+    }
+}
+
 function lk_validate() {
     ! { [ "${_LK_REQUIRED:-0}" -eq 0 ] || lk_validate_not_null "$1"; } ||
         [ -z "${!1-}" ] || {
