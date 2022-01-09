@@ -950,6 +950,12 @@ function lk_arr() {
     [ -z "${_SH:+1}" ] || eval "$_CMD$_SH"
 }
 
+# lk_in_array VALUE ARRAY...
+function lk_in_array() {
+    local IFS=$' \t\n'
+    lk_arr "${@:2}" | grep -Fx -- "$1" >/dev/null
+}
+
 # lk_quote_arr [ARRAY...]
 function lk_quote_arr() {
     lk_arr -lk_quote_args "$@"
@@ -957,8 +963,7 @@ function lk_quote_arr() {
 
 # lk_implode_arr GLUE [ARRAY...]
 function lk_implode_arr() {
-    local IFS
-    unset IFS
+    local IFS=$' \t\n'
     lk_arr "${@:2}" | lk_implode_input "$1"
 }
 
@@ -1745,12 +1750,12 @@ function _lk_var() {
 # Print a variable assignment statement for each declared VAR. If -a is set,
 # include undeclared variables.
 function lk_var_sh() {
-    local ALL=0
-    [ "${1-}" != -a ] || { ALL=1 && shift; }
+    local __ALL=0
+    [ "${1-}" != -a ] || { __ALL=1 && shift; }
     while [ $# -gt 0 ]; do
         if [ -n "${!1+1}" ]; then
             printf '%s=%s\n' "$1" "$(lk_double_quote "${!1-}")"
-        elif ((ALL)); then
+        elif ((__ALL)); then
             printf '%s=\n' "$1"
         fi
         shift
@@ -1762,13 +1767,15 @@ function lk_var_sh() {
 # Print Bash-compatible assignment statements for each declared VAR. If -a is
 # set, include undeclared variables.
 function lk_var_sh_q() {
-    local ALL=0
-    [ "${1-}" != -a ] || { ALL=1 && shift; }
+    local __ALL=0
+    [ "${1-}" != -a ] || { __ALL=1 && shift; }
     while [ $# -gt 0 ]; do
         _lk_var
-        if [ -n "${!1:+1}" ]; then
+        if lk_var_array "$1"; then
+            printf '%s=(%s)\n' "$1" "$(lk_quote_arr "$1")"
+        elif [ -n "${!1:+1}" ]; then
             printf '%s=%q\n' "$1" "${!1}"
-        elif ((ALL)) || [ -n "${!1+1}" ]; then
+        elif ((__ALL)) || [ -n "${!1+1}" ]; then
             printf '%s=\n' "$1"
         fi
         shift
@@ -1786,6 +1793,27 @@ function lk_var_env() { (
     declare -p "$1" 2>/dev/null |
         awk 'NR == 1 && $2 ~ "x"' | grep . >/dev/null && echo "${!1-}"
 ); }
+
+function lk_var_has_attr() {
+    local REGEX="^declare -$NS*$2"
+    [[ $(declare -p "$1" 2>/dev/null) =~ $REGEX ]]
+}
+
+function lk_var_declared() {
+    declare -p "$1" &>/dev/null
+}
+
+function lk_var_array() {
+    lk_var_has_attr "$1" a
+}
+
+function lk_var_exported() {
+    lk_var_has_attr "$1" x
+}
+
+function lk_var_readonly() {
+    lk_var_has_attr "$1" r
+}
 
 # lk_no_input
 #
@@ -2642,21 +2670,6 @@ function lk_array_merge() {
     eval "$1=($(for i in "${@:2}"; do
         printf '${%s[@]+"${%s[@]}"}\n' "$i" "$i"
     done))"
-}
-
-# lk_in_array VALUE ARRAY [ARRAY...]
-#
-# Return true if VALUE exists in any ARRAY, otherwise return false.
-function lk_in_array() {
-    local _LK_ARRAY _LK_VAL
-    for _LK_ARRAY in "${@:2}"; do
-        _LK_ARRAY="${_LK_ARRAY}[@]"
-        for _LK_VAL in ${!_LK_ARRAY+"${!_LK_ARRAY}"}; do
-            [ "$_LK_VAL" = "$1" ] || continue
-            return 0
-        done
-    done
-    false
 }
 
 # lk_array_search PATTERN ARRAY
@@ -3970,20 +3983,6 @@ function lk_filter() {
     shift
     DELIM=${LK_Z:+'\0'}
     ! eval "($TEST \"\$1\")" || printf "%s${DELIM:-\\n}" "$1"
-}
-
-function lk_is_declared() {
-    declare -p "$1" &>/dev/null
-}
-
-function lk_is_readonly() {
-    (unset "$1" 2>/dev/null) || return 0
-    false
-}
-
-function lk_is_exported() {
-    local REGEX="^declare -$NS*x$NS*"
-    [[ $(declare -p "$1" 2>/dev/null) =~ $REGEX ]]
 }
 
 function lk_json_from_xml_schema() {

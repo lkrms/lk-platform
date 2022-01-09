@@ -17,12 +17,12 @@ function _lk_var() {
 # Print a variable assignment statement for each declared VAR. If -a is set,
 # include undeclared variables.
 function lk_var_sh() {
-    local ALL=0
-    [ "${1-}" != -a ] || { ALL=1 && shift; }
+    local __ALL=0
+    [ "${1-}" != -a ] || { __ALL=1 && shift; }
     while [ $# -gt 0 ]; do
         if [ -n "${!1+1}" ]; then
             printf '%s=%s\n' "$1" "$(lk_double_quote "${!1-}")"
-        elif ((ALL)); then
+        elif ((__ALL)); then
             printf '%s=\n' "$1"
         fi
         shift
@@ -34,13 +34,15 @@ function lk_var_sh() {
 # Print Bash-compatible assignment statements for each declared VAR. If -a is
 # set, include undeclared variables.
 function lk_var_sh_q() {
-    local ALL=0
-    [ "${1-}" != -a ] || { ALL=1 && shift; }
+    local __ALL=0
+    [ "${1-}" != -a ] || { __ALL=1 && shift; }
     while [ $# -gt 0 ]; do
         _lk_var
-        if [ -n "${!1:+1}" ]; then
+        if lk_var_array "$1"; then
+            printf '%s=(%s)\n' "$1" "$(lk_quote_arr "$1")"
+        elif [ -n "${!1:+1}" ]; then
             printf '%s=%q\n' "$1" "${!1}"
-        elif ((ALL)) || [ -n "${!1+1}" ]; then
+        elif ((__ALL)) || [ -n "${!1+1}" ]; then
             printf '%s=\n' "$1"
         fi
         shift
@@ -58,3 +60,24 @@ function lk_var_env() { (
     declare -p "$1" 2>/dev/null |
         awk 'NR == 1 && $2 ~ "x"' | grep . >/dev/null && echo "${!1-}"
 ); }
+
+function lk_var_has_attr() {
+    local REGEX="^declare -$NS*$2"
+    [[ $(declare -p "$1" 2>/dev/null) =~ $REGEX ]]
+}
+
+function lk_var_declared() {
+    declare -p "$1" &>/dev/null
+}
+
+function lk_var_array() {
+    lk_var_has_attr "$1" a
+}
+
+function lk_var_exported() {
+    lk_var_has_attr "$1" x
+}
+
+function lk_var_readonly() {
+    lk_var_has_attr "$1" r
+}

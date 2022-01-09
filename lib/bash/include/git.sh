@@ -9,7 +9,7 @@ function _lk_git() {
         set -- git "$@"
     fi
     for VAR in "${!GIT_@}"; do
-        ! lk_is_exported "$VAR" || ENV[${#ENV[@]}]="$VAR=${!VAR}"
+        ! lk_var_exported "$VAR" || ENV[${#ENV[@]}]="$VAR=${!VAR}"
     done
     [ "${SSH_AUTH_SOCK:+1}${_LK_GIT_USER:+1}" != 11 ] ||
         ! SOCK_OWNER=$(lk_file_owner "$SSH_AUTH_SOCK" 2>/dev/null) ||

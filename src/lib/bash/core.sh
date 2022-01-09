@@ -343,21 +343,6 @@ function lk_array_merge() {
     done))"
 }
 
-# lk_in_array VALUE ARRAY [ARRAY...]
-#
-# Return true if VALUE exists in any ARRAY, otherwise return false.
-function lk_in_array() {
-    local _LK_ARRAY _LK_VAL
-    for _LK_ARRAY in "${@:2}"; do
-        _LK_ARRAY="${_LK_ARRAY}[@]"
-        for _LK_VAL in ${!_LK_ARRAY+"${!_LK_ARRAY}"}; do
-            [ "$_LK_VAL" = "$1" ] || continue
-            return 0
-        done
-    done
-    false
-}
-
 # lk_array_search PATTERN ARRAY
 #
 # Search ARRAY for PATTERN and output the key of the first match if found,
@@ -1669,20 +1654,6 @@ function lk_filter() {
     shift
     DELIM=${LK_Z:+'\0'}
     ! eval "($TEST \"\$1\")" || printf "%s${DELIM:-\\n}" "$1"
-}
-
-function lk_is_declared() {
-    declare -p "$1" &>/dev/null
-}
-
-function lk_is_readonly() {
-    (unset "$1" 2>/dev/null) || return 0
-    false
-}
-
-function lk_is_exported() {
-    local REGEX="^declare -$NS*x$NS*"
-    [[ $(declare -p "$1" 2>/dev/null) =~ $REGEX ]]
 }
 
 function lk_json_from_xml_schema() {
