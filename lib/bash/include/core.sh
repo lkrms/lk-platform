@@ -565,13 +565,13 @@ function lk_unbuffer() {
     lk_sudo "$@"
 }
 
-# lk_grep_regex [-v] REGEX
+# lk_grep_regex [-GREP_ARG] REGEX
 function lk_grep_regex() {
-    local v SH
-    [ "${1-}" != -v ] || { v=1 && shift; }
+    local ARG SH
+    [[ ${1-} != -* ]] || { ARG=${1#-} && shift; }
     [ $# -eq 1 ] || lk_err "invalid arguments" || return 2
     SH=$(lk_get_regex "$1") && eval "$SH" || return 2
-    grep -Ex${v:+v} "${!1}"
+    grep -"${ARG-}E" "${!1}"
 }
 
 # lk_is_regex REGEX [VALUE...]
@@ -629,7 +629,7 @@ function lk_is_identifier() {
 # Print each input line that is a valid dotted-decimal IPv4 address or CIDR. If
 # -v is set, print each line that is not valid.
 function lk_filter_ipv4() {
-    _LK_STACK_DEPTH=1 lk_grep_regex "$@" IPV4_OPT_PREFIX_REGEX || true
+    _LK_STACK_DEPTH=1 lk_grep_regex "-x${1:+${1#-}}" IPV4_OPT_PREFIX_REGEX || true
 }
 
 # lk_filter_ipv6 [-v]
@@ -637,7 +637,7 @@ function lk_filter_ipv4() {
 # Print each input line that is a valid 8-hextet IPv6 address or CIDR. If -v is
 # set, print each line that is not valid.
 function lk_filter_ipv6() {
-    _LK_STACK_DEPTH=1 lk_grep_regex "$@" IPV6_OPT_PREFIX_REGEX || true
+    _LK_STACK_DEPTH=1 lk_grep_regex "-x${1:+${1#-}}" IPV6_OPT_PREFIX_REGEX || true
 }
 
 # lk_filter_cidr [-v]
@@ -645,7 +645,7 @@ function lk_filter_ipv6() {
 # Print each input line that is a valid IP address or CIDR. If -v is set, print
 # each line that is not valid.
 function lk_filter_cidr() {
-    _LK_STACK_DEPTH=1 lk_grep_regex "$@" IP_OPT_PREFIX_REGEX || true
+    _LK_STACK_DEPTH=1 lk_grep_regex "-x${1:+${1#-}}" IP_OPT_PREFIX_REGEX || true
 }
 
 # lk_filter_fqdn [-v]
@@ -653,7 +653,7 @@ function lk_filter_cidr() {
 # Print each input line that is a valid domain name. If -v is set, print each
 # line that is not valid.
 function lk_filter_fqdn() {
-    _LK_STACK_DEPTH=1 lk_grep_regex "$@" DOMAIN_NAME_REGEX || true
+    _LK_STACK_DEPTH=1 lk_grep_regex "-x${1:+${1#-}}" DOMAIN_NAME_REGEX || true
 }
 
 # lk_get_regex [REGEX...]

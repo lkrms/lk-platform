@@ -93,13 +93,13 @@ case "${1+${1:-null}}" in
     ;;
 esac
 
-printf '# lk_grep_regex [-v] REGEX
+printf '# lk_grep_regex [-GREP_ARG] REGEX
 function lk_grep_regex() {
-    local v SH
-    [ "${1-}" != -v ] || { v=1 && shift; }
+    local ARG SH
+    [[ ${1-} != -* ]] || { ARG=${1#-} && shift; }
     [ $# -eq 1 ] || lk_err "invalid arguments" || return 2
     SH=$(lk_get_regex "$1") && eval "$SH" || return 2
-    grep -Ex${v:+v} "${!1}"
+    grep -"${ARG-}E" "${!1}"
 }\n\n'
 
 printf '# lk_is_regex REGEX [VALUE...]
@@ -184,7 +184,7 @@ for i in "${!FUNCTIONS[@]}"; do
     printf '# %s [-v]
 #
 %s
-function %s() {\n    _LK_STACK_DEPTH=1 lk_grep_regex "$@" %s || true\n}\n\n' \
+function %s() {\n    _LK_STACK_DEPTH=1 lk_grep_regex "-x${1:+${1#-}}" %s || true\n}\n\n' \
         "$FUNCTION" "$DESC" "$FUNCTION" "$REGEX"
 done
 
