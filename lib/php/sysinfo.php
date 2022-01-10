@@ -4,7 +4,7 @@ function ip_addr()
 {
     $sh =
 <<<'SH'
-{ /usr/bin/ip addr || /sbin/ifconfig; } 2>/dev/null |
+{ /usr/bin/ip addr || /sbin/ip addr || /sbin/ifconfig; } 2>/dev/null |
     awk '
 $1 ~ /^inet6?$/ {
   sub(FS "addr:", FS)
