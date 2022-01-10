@@ -80,7 +80,8 @@ elif [ -n "${LK_ACCEPT_OUTPUT_HOSTS:+1}" ]; then
     IFS=$'\n'
     HOSTS=($(sed -E \
         's/(^|[^\]),/\1\n/g; s/\\,/,/g' <<<"$LK_ACCEPT_OUTPUT_HOSTS")) &&
-        HOSTS=($(lk_dns_resolve_hosts "${HOSTS[@]}" | lk_filter_ipv6)) || exit
+        HOSTS=($(lk_dns_resolve_hosts "${HOSTS[@]}" | lk_filter_ipv6)) ||
+        lk_warn "one or more LK_ACCEPT_OUTPUT_HOSTS did not resolve" || true
     [ -z "${HOSTS+1}" ] ||
         printf -- '-A lk_output -d %s -j ACCEPT\n' "${HOSTS[@]}"
     unset IFS
