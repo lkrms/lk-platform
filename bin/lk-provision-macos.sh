@@ -502,7 +502,7 @@ def is_native:
             get_arch_formulae
         }
         lk_mapfile "INSTALL_FORMULAE_$i" <(comm -13 \
-            <(lk_brew_list_formulae | sort -u) \
+            <(lk_brew_list_formulae | sed -En 'p; s/.*\///p' | sort -u) \
             <(lk_echo_array HOMEBREW_FORMULAE | sort -u))
     }
     function check_selected() {
