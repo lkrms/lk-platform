@@ -51,26 +51,15 @@ function maybe_restore_original() {
 }
 
 function get_before_file() {
-    local CLEAR_VERBOSE=
-    [ "${1-}" != -v ] || { unset CLEAR_VERBOSE && shift; }
-    _LK_VERBOSE=${LK_VERBOSE-}
-    unset LK_FILE_REPLACE_NO_CHANGE ${CLEAR_VERBOSE+LK_VERBOSE}
-    [ -n "${BEFORE_FILE-}" ] || {
-        BEFORE_FILE=$(lk_mktemp_file) &&
-            lk_delete_on_exit "$BEFORE_FILE" || return
-    }
+    unset LK_FILE_REPLACE_NO_CHANGE
     AFTER_FILE=$1
-    if [ -e "$1" ]; then
-        cp "$1" "$BEFORE_FILE"
-    else
-        : >"$BEFORE_FILE"
-    fi
+    [ -e "$1" ] || set -- /dev/null
+    lk_mktemp_with -r BEFORE_FILE cat "$1"
 }
 
 function check_after_file() {
     diff -q "$BEFORE_FILE" "$AFTER_FILE" >/dev/null ||
-        lk_console_diff "$BEFORE_FILE" "$AFTER_FILE"
-    [ -z "$_LK_VERBOSE" ] || LK_VERBOSE=$_LK_VERBOSE
+        lk_tty_diff -L "$AFTER_FILE" "$BEFORE_FILE" "$AFTER_FILE"
 }
 
 if ! lk_is_bootstrap; then
@@ -114,7 +103,7 @@ export -n \
     LK_PHP_ADMIN_SETTINGS=${LK_PHP_ADMIN_SETTINGS-} \
     LK_MEMCACHED_MEMORY_LIMIT=${LK_MEMCACHED_MEMORY_LIMIT-} \
     LK_SMTP_RELAY=${LK_SMTP_RELAY-} \
-    LK_EMAIL_BLACKHOLE=${LK_EMAIL_BLACKHOLE-} \
+    LK_EMAIL_DESTINATION=${LK_EMAIL_DESTINATION-} \
     LK_UPGRADE_EMAIL=${LK_UPGRADE_EMAIL-} \
     LK_AUTO_REBOOT=${LK_AUTO_REBOOT-} \
     LK_AUTO_REBOOT_TIME=${LK_AUTO_REBOOT_TIME-} \
@@ -241,7 +230,7 @@ if lk_is_bootstrap; then
         LK_PHP_ADMIN_SETTINGS \
         LK_MEMCACHED_MEMORY_LIMIT \
         LK_SMTP_RELAY \
-        LK_EMAIL_BLACKHOLE \
+        LK_EMAIL_DESTINATION \
         LK_UPGRADE_EMAIL \
         LK_AUTO_REBOOT \
         LK_AUTO_REBOOT_TIME \
@@ -715,69 +704,44 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
         lk_run_detail systemctl restart ssh.service
 
     if lk_dpkg_installed postfix; then
-        function get_postconf() {
-            lk_require_output postconf -np "$1" |
-                sed -E 's/^[^ =]+ ?= ?//'
+        function lk_postconf_get() {
+            # `postconf -nh` prints a newline if the parameter has an empty
+            # value, and nothing at all if the parameter is not set in main.cf
+            (($(postconf -nh "$1" | wc -c))) && postconf -nh "$1"
         }
-        function set_postconf() {
-            local VALUE
-            VALUE=$(get_postconf "$1") && [ "$VALUE" = "$2" ] || {
-                lk_run_detail postconf -e "$1 = $2" &&
-                    POSTCONF_CHANGE=1
-            }
+        function lk_postconf_set() {
+            lk_postconf_get "$1" | grep -Fx "$2" >/dev/null ||
+                { postconf -e "$1 = $2" &&
+                    lk_mark_dirty "postfix.service"; }
         }
-        function unset_postconf() {
-            ! get_postconf "$1" >/dev/null || {
-                lk_run_detail postconf -X "$1" &&
-                    POSTCONF_CHANGE=1
-            }
+        function lk_postconf_unset() {
+            ! lk_postconf_get "$1" >/dev/null ||
+                { postconf -X "$1" &&
+                    lk_mark_dirty "postfix.service"; }
         }
-        lk_console_message "Checking Postfix"
-        unset POSTCONF_CHANGE
-        get_before_file -v /etc/postfix/main.cf
-        set_postconf inet_interfaces loopback-only
+        lk_tty_print "Checking Postfix"
+        get_before_file /etc/postfix/main.cf
+        lk_postconf_set inet_interfaces loopback-only
         FILE=/etc/aliases
-        if [ -n "$LK_EMAIL_BLACKHOLE" ]; then
-            set_postconf recipient_canonical_maps static:blackhole
-            _FILE=$(awk -v "S=$S" -v "blackhole=$LK_EMAIL_BLACKHOLE" '
-function maybe_print() {
-    if (!printed) {
-        print "blackhole:\t" blackhole
-        printed = 1
-    }
-    just_printed = 1
-}
-tolower($0) ~ "^(blackhole|\"blackhole\")" S "*:" {
-    maybe_print()
-    next
-}
-! just_printed || /^[^[:blank:]#]/ {
-    print
-    just_printed = 0
-}
-END {
-    maybe_print()
-}' "$FILE")
+        ALIASES=(
+            postmaster root
+            root "$LK_ADMIN_EMAIL"
+        )
+        if [ -n "$LK_EMAIL_DESTINATION" ]; then
+            ALIASES+=(noreply "$LK_EMAIL_DESTINATION")
+            lk_postconf_set recipient_canonical_maps static:noreply
         else
-            unset_postconf recipient_canonical_maps
-            _FILE=$(awk -v "S=$S" '
-tolower($0) ~ "^(blackhole|\"blackhole\")" S "*:" {
-    just_skipped = 1
-    next
-}
-! just_skipped || /^[^[:blank:]#]/ {
-    print
-    just_skipped = 0
-}' "$FILE")
+            lk_postconf_unset recipient_canonical_maps
         fi
         check_after_file
-        lk_file_replace "$FILE" "$_FILE"
+        unset LK_FILE_REPLACE_NO_CHANGE
+        lk_file_replace "$FILE" < <(printf '%s:\t%s\n' "${ALIASES[@]}")
         ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
-            lk_run_detail postalias "$FILE"
-        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE &&
-            ! lk_is_true POSTCONF_CHANGE ||
+            postalias "$FILE"
+        ! lk_is_dirty "postfix.service" ||
             { lk_is_bootstrap && ! lk_systemctl_running postfix ||
                 lk_run_detail systemctl reload postfix.service; }
+        lk_mark_clean "postfix.service"
     fi
 
     if lk_dpkg_installed apache2; then

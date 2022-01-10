@@ -256,7 +256,7 @@
                             --connect-to "$DOMAIN::$PUBLIC_IP:" \
                             --connect-timeout 5 \
                             ${ARGS+"${ARGS[@]}"} \
-                            "https://$DOMAIN" 2>&1 >/dev/null | head -n1) &&
+                            "https://$DOMAIN/php-fpm-ping" 2>&1 >/dev/null | head -n1) &&
                             HTTP=$(awk \
                                 'NR == 1 || tolower($1) == "location:" {print}' \
                                 "$TMP/curl-$DOMAIN.http") &&

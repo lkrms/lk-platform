@@ -91,7 +91,7 @@ SETTINGS=(
     LK_PHP_ADMIN_SETTINGS
     LK_MEMCACHED_MEMORY_LIMIT
     LK_SMTP_RELAY
-    LK_EMAIL_BLACKHOLE
+    LK_EMAIL_DESTINATION
     LK_UPGRADE_EMAIL
     LK_AUTO_REBOOT
     LK_AUTO_REBOOT_TIME
@@ -322,7 +322,7 @@ lk_log_start
     OTHER_SETTINGS=($(comm -23 \
         <({ lk_echo_array NEW_SETTINGS &&
             sed -En \
-                -e '/^(LK_PATH_PREFIX_ALPHA|LK_SCRIPT_DEBUG)=/d' \
+                -e '/^LK_(PATH_PREFIX_ALPHA|SCRIPT_DEBUG|EMAIL_BLACKHOLE)=/d' \
                 -e 's/^([a-zA-Z_][a-zA-Z0-9_]*)=.*/\1/p' "$CONF_FILE"; } |
             sort -u) \
         <(lk_echo_array KNOWN_SETTINGS | sort)))

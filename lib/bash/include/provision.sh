@@ -197,7 +197,7 @@ function _lk_settings_list_known() {
         LK_PHP_SETTINGS LK_PHP_ADMIN_SETTINGS \
         LK_MEMCACHED_MEMORY_LIMIT \
         LK_SMTP_RELAY \
-        LK_EMAIL_BLACKHOLE \
+        LK_EMAIL_DESTINATION \
         LK_UPGRADE_EMAIL \
         LK_AUTO_REBOOT LK_AUTO_REBOOT_TIME \
         LK_AUTO_BACKUP_SCHEDULE \
@@ -213,11 +213,12 @@ function _lk_settings_list_known() {
 
 # _lk_settings_list_legacy
 #
-# Print the name of each setting that is no longer used.
+# Print the names of settings that are no longer used.
 function _lk_settings_list_legacy() {
     printf '%s\n' \
         LK_PATH_PREFIX_ALPHA \
-        LK_SCRIPT_DEBUG
+        LK_SCRIPT_DEBUG \
+        LK_EMAIL_BLACKHOLE
 }
 
 function _lk_settings_writable_files() {
@@ -255,14 +256,44 @@ function _lk_settings_writable_files() {
     }
 }
 
+# _lk_settings_migrate SETTING OLD_SETTING...
+function _lk_settings_migrate() {
+    # It's quicker to assign and unset everything than to limit output based on
+    # runtime variables
+    printf '%s=%s\n' "$1" "$(
+        SH=
+        while [ $# -gt 0 ]; do
+            printf '${%s-' "$1"
+            SH+="}"
+            shift
+        done
+        echo "$SH"
+    )"
+    shift
+    UNSET+=("$@")
+}
+
 # lk_settings_getopt [ARG...]
 #
 # Output Bash commands that
+# - migrate legacy settings to their new names
 # - apply any --set, --add, --remove, or --unset arguments to the running shell
 # - set _LK_SHIFT to the number of arguments consumed
 function lk_settings_getopt() {
-    local IFS SHIFT=0 _SHIFT REGEX='^(LK_[a-zA-Z0-9_]*[a-zA-Z0-9])(=(.*))?$'
-    unset IFS
+    local IFS=$' \t\n' s o SHIFT=0 _SHIFT \
+        UNSET=() REGEX='^(LK_[a-zA-Z0-9_]*[a-zA-Z0-9])(=(.*))?$'
+    _lk_settings_migrate LK_DEBUG {LK_,}SCRIPT_DEBUG
+    _lk_settings_migrate LK_EMAIL_DESTINATION {LK_,}EMAIL_BLACKHOLE
+    for s in $(_lk_settings_list_known | grep -Fxv LK_BASE); do
+        o=()
+        [[ $s == LK_NODE_* ]] || {
+            o[${#o[@]}]=LK_NODE_${s#LK_}
+            o[${#o[@]}]=LK_DEFAULT_${s#LK_}
+        }
+        o[${#o[@]}]=${s#LK_}
+        _lk_settings_migrate "$s" "${o[@]}"
+    done
+    echo "unset$(printf ' %s' $(printf '%s\n' "${UNSET[@]}" | sed '/^LK_/!d'))"
     while [[ ${1-} =~ ^(-[saru]|--(set|add|remove|unset))$ ]]; do
         [[ ${2-} =~ $REGEX ]] ||
             lk_warn "$1: invalid argument: ${2-}" || return
@@ -328,7 +359,14 @@ function lk_settings_persist() {
         for ((i = $#; i > 1; i--)); do
             [ ! -f "${!i}" ] || . "${!i}" || return
         done
+        CONFIGURED=("${!LK_@}")
         eval "$1" || return
+        # Exclude empty variables unless they have been explicitly configured
+        unset $(comm -13 \
+            <(printf '%s\n' "${CONFIGURED[@]}" | sort -u) \
+            <(for s in "${!LK_@}"; do
+                [ -n "${!s:+1}" ] || echo "$s"
+            done | sort -u))
         VARS=($(_lk_settings_list_known &&
             comm -23 \
                 <(printf '%s\n' "${!LK_@}" | sort -u) \

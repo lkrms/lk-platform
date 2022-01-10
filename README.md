@@ -24,6 +24,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_AUTO_BACKUP_SCHEDULE`
 - `LK_AUTO_REBOOT`
 - `LK_AUTO_REBOOT_TIME`
+- `LK_AWS_PROFILE`
 - `LK_BACKUP_BASE_DIRS`
 - `LK_BACKUP_MAIL`
 - `LK_BACKUP_MAIL_ERROR_ONLY`
@@ -43,7 +44,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_DNS_SEARCH`
 - `LK_DNS_SERVERS`
 - `LK_DRY_RUN`
-- `LK_EMAIL_BLACKHOLE`
+- `LK_EMAIL_DESTINATION`
 - `LK_EXEC`
 - `LK_FILE_BACKUP_MOVE`
 - `LK_FILE_BACKUP_TAKE`
@@ -53,6 +54,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_GIT_REF`
 - `LK_GIT_REPOS`
 - `LK_GRUB_CMDLINE`
+- `LK_HANDBRAKE_TARGET`
 - `LK_HASH_COMMAND`
 - `LK_INNODB_BUFFER_SIZE`
 - `LK_IPV4_ADDRESS`
@@ -66,12 +68,12 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_MEDIAINFO_LABEL`
 - `LK_MEDIAINFO_NO_VALUE`
 - `LK_MEMCACHED_MEMORY_LIMIT`
+- `LK_MY_CNF`
+- `LK_MY_CNF_OPTIONS`
 - `LK_MYSQL_ELEVATE`
 - `LK_MYSQL_ELEVATE_USER`
 - `LK_MYSQL_HOST`
 - `LK_MYSQL_MAX_CONNECTIONS`
-- `LK_MY_CNF`
-- `LK_MY_CNF_OPTIONS`
 - `LK_NODE_FQDN`
 - `LK_NODE_HOSTNAME`
 - `LK_NODE_LANGUAGE`
@@ -82,6 +84,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_NO_INPUT`
 - `LK_NO_LOG`
 - `LK_NO_STACK_TRACE`
+- `LK_NOTE_DIR`
 - `LK_NTP_SERVER`
 - `LK_OPCACHE_MEMORY_CONSUMPTION`
 - `LK_OPENCONNECT_PROTOCOL`
