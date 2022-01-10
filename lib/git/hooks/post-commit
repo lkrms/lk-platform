@@ -2,7 +2,7 @@
 
 LK_TTY_NO_COLOUR=1 \
     . lk-bash-load.sh || exit
-lk_include git
+lk_require git
 
 s=/
 

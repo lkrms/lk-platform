@@ -565,13 +565,13 @@ function lk_unbuffer() {
     lk_sudo "$@"
 }
 
-# lk_grep_regex [-v] REGEX
+# lk_grep_regex [-GREP_ARG] REGEX
 function lk_grep_regex() {
-    local v SH
-    [ "${1-}" != -v ] || { v=1 && shift; }
+    local ARG SH
+    [[ ${1-} != -* ]] || { ARG=${1#-} && shift; }
     [ $# -eq 1 ] || lk_err "invalid arguments" || return 2
     SH=$(lk_get_regex "$1") && eval "$SH" || return 2
-    grep -Ex${v:+v} "${!1}"
+    grep -"${ARG-}E" "${!1}"
 }
 
 # lk_is_regex REGEX [VALUE...]
@@ -629,7 +629,7 @@ function lk_is_identifier() {
 # Print each input line that is a valid dotted-decimal IPv4 address or CIDR. If
 # -v is set, print each line that is not valid.
 function lk_filter_ipv4() {
-    _LK_STACK_DEPTH=1 lk_grep_regex "$@" IPV4_OPT_PREFIX_REGEX || true
+    _LK_STACK_DEPTH=1 lk_grep_regex "-x${1:+${1#-}}" IPV4_OPT_PREFIX_REGEX || true
 }
 
 # lk_filter_ipv6 [-v]
@@ -637,7 +637,7 @@ function lk_filter_ipv4() {
 # Print each input line that is a valid 8-hextet IPv6 address or CIDR. If -v is
 # set, print each line that is not valid.
 function lk_filter_ipv6() {
-    _LK_STACK_DEPTH=1 lk_grep_regex "$@" IPV6_OPT_PREFIX_REGEX || true
+    _LK_STACK_DEPTH=1 lk_grep_regex "-x${1:+${1#-}}" IPV6_OPT_PREFIX_REGEX || true
 }
 
 # lk_filter_cidr [-v]
@@ -645,7 +645,7 @@ function lk_filter_ipv6() {
 # Print each input line that is a valid IP address or CIDR. If -v is set, print
 # each line that is not valid.
 function lk_filter_cidr() {
-    _LK_STACK_DEPTH=1 lk_grep_regex "$@" IP_OPT_PREFIX_REGEX || true
+    _LK_STACK_DEPTH=1 lk_grep_regex "-x${1:+${1#-}}" IP_OPT_PREFIX_REGEX || true
 }
 
 # lk_filter_fqdn [-v]
@@ -653,7 +653,7 @@ function lk_filter_cidr() {
 # Print each input line that is a valid domain name. If -v is set, print each
 # line that is not valid.
 function lk_filter_fqdn() {
-    _LK_STACK_DEPTH=1 lk_grep_regex "$@" DOMAIN_NAME_REGEX || true
+    _LK_STACK_DEPTH=1 lk_grep_regex "-x${1:+${1#-}}" DOMAIN_NAME_REGEX || true
 }
 
 # lk_get_regex [REGEX...]
@@ -661,7 +661,7 @@ function lk_filter_fqdn() {
 # Print a Bash variable assignment for each REGEX. If no REGEX is specified,
 # print all available regular expressions.
 function lk_get_regex() {
-    [ $# -gt 0 ] || set -- DOMAIN_PART_REGEX DOMAIN_NAME_REGEX EMAIL_ADDRESS_REGEX IPV4_REGEX IPV4_OPT_PREFIX_REGEX IPV6_REGEX IPV6_OPT_PREFIX_REGEX IP_REGEX IP_OPT_PREFIX_REGEX HOST_NAME_REGEX HOST_REGEX HOST_OPT_PREFIX_REGEX URI_REGEX URI_REGEX_REQ_SCHEME_HOST HTTP_HEADER_NAME LINUX_USERNAME_REGEX MYSQL_USERNAME_REGEX DPKG_SOURCE_REGEX IDENTIFIER_REGEX PHP_SETTING_NAME_REGEX PHP_SETTING_REGEX READLINE_NON_PRINTING_REGEX CONTROL_SEQUENCE_REGEX ESCAPE_SEQUENCE_REGEX NON_PRINTING_REGEX IPV4_PRIVATE_FILTER_REGEX BACKUP_TIMESTAMP_FINDUTILS_REGEX
+    [ $# -gt 0 ] || set -- DOMAIN_PART_REGEX DOMAIN_NAME_REGEX EMAIL_ADDRESS_REGEX IPV4_REGEX IPV4_OPT_PREFIX_REGEX IPV6_REGEX IPV6_OPT_PREFIX_REGEX IP_REGEX IP_OPT_PREFIX_REGEX HOST_NAME_REGEX HOST_REGEX HOST_OPT_PREFIX_REGEX URI_REGEX URI_REGEX_REQ_SCHEME_HOST HTTP_HEADER_NAME LINUX_USERNAME_REGEX MYSQL_USERNAME_REGEX DPKG_SOURCE_REGEX IDENTIFIER_REGEX PHP_SETTING_NAME_REGEX PHP_SETTING_REGEX READLINE_NON_PRINTING_REGEX CONTROL_SEQUENCE_REGEX ESCAPE_SEQUENCE_REGEX NON_PRINTING_REGEX IPV4_PRIVATE_FILTER_REGEX IPV6_PRIVATE_FILTER_REGEX IP_PRIVATE_FILTER_REGEX BACKUP_TIMESTAMP_FINDUTILS_REGEX
     local STATUS=0
     while [ $# -gt 0 ]; do
         printf 'declare '
@@ -743,6 +743,12 @@ function lk_get_regex() {
             ;;
         IPV4_PRIVATE_FILTER_REGEX)
             printf '%s=%q\n' IPV4_PRIVATE_FILTER_REGEX '^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.)'
+            ;;
+        IPV6_PRIVATE_FILTER_REGEX)
+            printf '%s=%q\n' IPV6_PRIVATE_FILTER_REGEX '^([fF][cdCD]|[fF][eE]80::|::1(/128|$))'
+            ;;
+        IP_PRIVATE_FILTER_REGEX)
+            printf '%s=%q\n' IP_PRIVATE_FILTER_REGEX '^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.|[fF][cdCD]|[fF][eE]80::|::1(/128|$))'
             ;;
         BACKUP_TIMESTAMP_FINDUTILS_REGEX)
             printf '%s=%q\n' BACKUP_TIMESTAMP_FINDUTILS_REGEX '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]'
@@ -950,6 +956,12 @@ function lk_arr() {
     [ -z "${_SH:+1}" ] || eval "$_CMD$_SH"
 }
 
+# lk_in_array VALUE ARRAY...
+function lk_in_array() {
+    local IFS=$' \t\n'
+    lk_arr "${@:2}" | grep -Fx -- "$1" >/dev/null
+}
+
 # lk_quote_arr [ARRAY...]
 function lk_quote_arr() {
     lk_arr -lk_quote_args "$@"
@@ -957,8 +969,7 @@ function lk_quote_arr() {
 
 # lk_implode_arr GLUE [ARRAY...]
 function lk_implode_arr() {
-    local IFS
-    unset IFS
+    local IFS=$' \t\n'
     lk_arr "${@:2}" | lk_implode_input "$1"
 }
 
@@ -1745,12 +1756,12 @@ function _lk_var() {
 # Print a variable assignment statement for each declared VAR. If -a is set,
 # include undeclared variables.
 function lk_var_sh() {
-    local ALL=0
-    [ "${1-}" != -a ] || { ALL=1 && shift; }
+    local __ALL=0
+    [ "${1-}" != -a ] || { __ALL=1 && shift; }
     while [ $# -gt 0 ]; do
         if [ -n "${!1+1}" ]; then
             printf '%s=%s\n' "$1" "$(lk_double_quote "${!1-}")"
-        elif ((ALL)); then
+        elif ((__ALL)); then
             printf '%s=\n' "$1"
         fi
         shift
@@ -1762,13 +1773,15 @@ function lk_var_sh() {
 # Print Bash-compatible assignment statements for each declared VAR. If -a is
 # set, include undeclared variables.
 function lk_var_sh_q() {
-    local ALL=0
-    [ "${1-}" != -a ] || { ALL=1 && shift; }
+    local __ALL=0
+    [ "${1-}" != -a ] || { __ALL=1 && shift; }
     while [ $# -gt 0 ]; do
         _lk_var
-        if [ -n "${!1:+1}" ]; then
+        if lk_var_array "$1"; then
+            printf '%s=(%s)\n' "$1" "$(lk_quote_arr "$1")"
+        elif [ -n "${!1:+1}" ]; then
             printf '%s=%q\n' "$1" "${!1}"
-        elif ((ALL)) || [ -n "${!1+1}" ]; then
+        elif ((__ALL)) || [ -n "${!1+1}" ]; then
             printf '%s=\n' "$1"
         fi
         shift
@@ -1786,6 +1799,27 @@ function lk_var_env() { (
     declare -p "$1" 2>/dev/null |
         awk 'NR == 1 && $2 ~ "x"' | grep . >/dev/null && echo "${!1-}"
 ); }
+
+function lk_var_has_attr() {
+    local REGEX="^declare -$NS*$2"
+    [[ $(declare -p "$1" 2>/dev/null) =~ $REGEX ]]
+}
+
+function lk_var_declared() {
+    declare -p "$1" &>/dev/null
+}
+
+function lk_var_array() {
+    lk_var_has_attr "$1" a
+}
+
+function lk_var_exported() {
+    lk_var_has_attr "$1" x
+}
+
+function lk_var_readonly() {
+    lk_var_has_attr "$1" r
+}
 
 # lk_no_input
 #
@@ -2642,21 +2676,6 @@ function lk_array_merge() {
     eval "$1=($(for i in "${@:2}"; do
         printf '${%s[@]+"${%s[@]}"}\n' "$i" "$i"
     done))"
-}
-
-# lk_in_array VALUE ARRAY [ARRAY...]
-#
-# Return true if VALUE exists in any ARRAY, otherwise return false.
-function lk_in_array() {
-    local _LK_ARRAY _LK_VAL
-    for _LK_ARRAY in "${@:2}"; do
-        _LK_ARRAY="${_LK_ARRAY}[@]"
-        for _LK_VAL in ${!_LK_ARRAY+"${!_LK_ARRAY}"}; do
-            [ "$_LK_VAL" = "$1" ] || continue
-            return 0
-        done
-    done
-    false
 }
 
 # lk_array_search PATTERN ARRAY
@@ -3970,20 +3989,6 @@ function lk_filter() {
     shift
     DELIM=${LK_Z:+'\0'}
     ! eval "($TEST \"\$1\")" || printf "%s${DELIM:-\\n}" "$1"
-}
-
-function lk_is_declared() {
-    declare -p "$1" &>/dev/null
-}
-
-function lk_is_readonly() {
-    (unset "$1" 2>/dev/null) || return 0
-    false
-}
-
-function lk_is_exported() {
-    local REGEX="^declare -$NS*x$NS*"
-    [[ $(declare -p "$1" 2>/dev/null) =~ $REGEX ]]
 }
 
 function lk_json_from_xml_schema() {

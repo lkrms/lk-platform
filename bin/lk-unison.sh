@@ -6,11 +6,11 @@ shopt -s nullglob
 
 UNISON=~/.unison
 if lk_is_linux; then
-    lk_include linux
+    lk_require linux
 elif lk_is_macos; then
     [ -d "$UNISON" ] ||
         UNISON=~/"Library/Application Support/Unison"
-    lk_include macos
+    lk_require macos
 else
     lk_die "${0##*/} not implemented on this platform"
 fi

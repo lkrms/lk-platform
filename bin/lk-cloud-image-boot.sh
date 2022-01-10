@@ -3,7 +3,7 @@
 _LK_ENV=$(declare -x)
 
 lk_bin_depth=1 . lk-bash-load.sh || exit
-lk_include validate
+lk_require validate
 
 # `local -n` was added in Bash 4.3
 lk_bash_at_least 4 3 || lk_die "Bash 4.3 or higher required"

@@ -36,7 +36,7 @@ unset SH
 . "${_LK_INST:-$LK_BASE}/lib/bash/include/core.sh" || return
 set -E
 
-lk_include assert
+lk_require assert
 
 function _lk_getopt_usage_available() {
     [[ $(type -t __usage) == "function" ]] ||

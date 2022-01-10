@@ -4,7 +4,8 @@ set -euo pipefail
 head=$(mktemp)
 tail=$(mktemp)
 out=$(mktemp)
-die() { echo "${BASH_SOURCE-$0}: $1" >&2 && rm -f "$out" && false || exit; }
+trap 'rm -f "$head" "$tail" "$out"' EXIT
+die() { echo "${BASH_SOURCE-$0}: $1" >&2 && false || exit; }
 
 _dir=${BASH_SOURCE%"${BASH_SOURCE##*/}"}
 _dir=${_dir:-$PWD}
@@ -73,7 +74,7 @@ while [ $# -gt 0 ]; do
         i=0
         for part in "${parts[@]}"; do
             [ -f "$part" ] || continue
-            echo "  Processing: $part" >&2
+            echo "  - $part" >&2
             ((!i || minify)) || echo
             if [ -x "$part" ]; then
                 "$part"
@@ -107,7 +108,7 @@ NR == 2 {print first}
         {print}
 f       {next}
 /^./    {f = 2}
-END     {if (NR == 1 && first) print first; exit 2 - f}' && ((++i)) ||
+END     {if (NR == 1 && first) {print first; f = 2}; exit 2 - f}' && ((++i)) ||
                 [[ ${PIPESTATUS[*]} =~ ^0+2$ ]]
         done
     } >"$out"
@@ -124,13 +125,11 @@ END     {if (NR == 1 && first) print first; exit 2 - f}' && ((++i)) ||
     if [ -s "$out" ] &&
         ! diff -q --unidirectional-new-file "$dest" "$out" >/dev/null; then
         [ ! -s "$dest" ] || "$trash_cmd" "$dest"
-        cp -v "$out" "$dest"
-        echo "Updated: $dest" >&2
+        cp "$out" "$dest"
+        echo "  Target file replaced" >&2
     else
-        echo "Already up to date: $dest" >&2
+        echo "  Target file not changed" >&2
     fi
     shift
     ! (($#)) || echo
 done
-
-rm -f "$head" "$tail" "$out"

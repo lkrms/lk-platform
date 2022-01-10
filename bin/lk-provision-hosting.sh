@@ -22,7 +22,7 @@ export LK_BASE
 shopt -s nullglob
 
 . "$LK_BASE/lib/bash/common.sh"
-lk_include debian git hosting linux mysql provision validate
+lk_require debian git hosting linux mysql provision validate
 
 LK_VERBOSE=${LK_VERBOSE-1}
 

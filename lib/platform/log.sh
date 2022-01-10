@@ -19,7 +19,7 @@ or function.
 
 OPTIONS
 
-    -i, --include=LIBRARY   call \`lk_include LIBRARY\` before running COMMAND
+    -i, --include=LIBRARY   call \`lk_require LIBRARY\` before running COMMAND
                             (may be given multiple times)"
 
 lk_getopt "i:" "include:"
@@ -30,7 +30,7 @@ while :; do
     shift
     case "$OPT" in
     -i | --include)
-        lk_include "$1" || lk_warn "invalid library: $1" || lk_usage
+        lk_require "$1" || lk_warn "invalid library: $1" || lk_usage
         shift
         ;;
     --)

@@ -16,7 +16,7 @@ export LK_BASE
 shopt -s nullglob
 
 . "$LK_BASE/lib/bash/common.sh"
-lk_include arch git linux provision whiptail
+lk_require arch git linux provision whiptail
 
 ! lk_in_chroot || _LK_BOOTSTRAP=1
 

@@ -2,7 +2,7 @@
 
 if lk_is_linux; then
 
-    lk_include linux
+    lk_require linux
 
     if lk_systemctl_exists libvirtd && lk_systemctl_enabled libvirtd; then
         lk_console_message "Checking libvirt"

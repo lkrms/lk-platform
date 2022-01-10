@@ -14,7 +14,7 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
 export LK_BASE
 
 . "$LK_BASE/lib/bash/common.sh"
-lk_include secret
+lk_require secret
 
 lk_assert_not_root
 lk_assert_not_wsl

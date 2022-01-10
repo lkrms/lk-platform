@@ -1,6 +1,6 @@
 #!/bin/bash
 
-lk_include git provision
+lk_require git provision
 
 function linode-cli() {
     # Suppress "Unable to determine if a new linode-cli package is available in

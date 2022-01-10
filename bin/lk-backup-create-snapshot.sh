@@ -14,9 +14,9 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
 export LK_BASE
 
 . "$LK_BASE/lib/bash/common.sh"
-lk_include backup mail mysql
+lk_require backup mail mysql
 ! lk_is_linux ||
-    lk_include linux
+    lk_require linux
 
 function exit_trap() {
     local STATUS=$? MESSAGE TAR SUBJECT

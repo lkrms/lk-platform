@@ -1,33 +1,39 @@
 <?php
 
-function ip_addr()
+header("Content-Type: application/json; charset=UTF-8");
+
+$hostname = gethostname();
+$fqdn     = gethostbyaddr('127.0.1.1');
+$alt_fqdn = [];
+$ip_addr  = [];
+
+if ($interfaces = net_get_interfaces())
 {
-    $sh =
-<<<'SH'
-{ /usr/bin/ip addr || /sbin/ifconfig; } 2>/dev/null |
-    awk '
-$1 ~ /^inet6?$/ {
-  sub(FS "addr:", FS)
-  sub("[/%].*", "", $2)
-  if ($2 !~ /^(127\.|::1$)/) {
-    print $2
-    i++
-  } }
-END { exit (i == 0) }'
-SH;
-
-    exec($sh, $output, $result);
-
-    if ($result)
+    foreach ($interfaces as $interface)
     {
-        throw new RuntimeException("Local IP address check failed");
-    }
+        foreach ($interface["unicast"] as $unicast)
+        {
+            if ($address = $unicast["address"] ?? null)
+            {
+                if (!preg_match('/^(127\.|::1$)/', $address))
+                {
+                    $ip_addr[] = $address;
+                }
 
-    return $output;
+                if (($host = gethostbyaddr($address)) &&
+                    strpos($host, ".") !== false &&
+                    !in_array($host, [$hostname, $fqdn]) && !in_array($host, $alt_fqdn))
+                {
+                    $alt_fqdn[] = $host;
+                }
+            }
+        }
+    }
 }
 
 echo json_encode([
-    "hostname" => gethostname(),
-    "fqdn"     => gethostbyaddr('127.0.1.1'),
-    "ip_addr"  => ip_addr(),
+    "hostname" => $hostname,
+    "fqdn"     => $fqdn,
+    "alt_fqdn" => $alt_fqdn,
+    "ip_addr"  => $ip_addr,
 ]);

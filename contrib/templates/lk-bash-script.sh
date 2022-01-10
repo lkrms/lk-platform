@@ -8,7 +8,7 @@
 # found in PATH:
 #
 #   lk_bin_depth=DEPTH . lk-bash-load.sh || exit
-#   [lk_include LIBRARY...]
+#   [lk_require LIBRARY...]
 #
 
 ##

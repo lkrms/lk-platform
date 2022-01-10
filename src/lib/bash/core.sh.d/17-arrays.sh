@@ -13,6 +13,12 @@ function lk_arr() {
     [ -z "${_SH:+1}" ] || eval "$_CMD$_SH"
 }
 
+# lk_in_array VALUE ARRAY...
+function lk_in_array() {
+    local IFS=$' \t\n'
+    lk_arr "${@:2}" | grep -Fx -- "$1" >/dev/null
+}
+
 # lk_quote_arr [ARRAY...]
 function lk_quote_arr() {
     lk_arr -lk_quote_args "$@"
@@ -20,8 +26,7 @@ function lk_quote_arr() {
 
 # lk_implode_arr GLUE [ARRAY...]
 function lk_implode_arr() {
-    local IFS
-    unset IFS
+    local IFS=$' \t\n'
     lk_arr "${@:2}" | lk_implode_input "$1"
 }
 

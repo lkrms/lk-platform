@@ -42,7 +42,7 @@ SH=$(
     [ -z "${VARS:+1}" ] ||
         declare -p $VARS
 ) && eval "$SH" && . "$_LK_INST/lib/bash/common.sh" || exit
-lk_include git provision
+lk_require git provision
 
 shopt -s nullglob
 

@@ -14,7 +14,7 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
 export LK_BASE
 
 . "$LK_BASE/lib/bash/common.sh"
-lk_include mysql
+lk_require mysql
 
 lk_log_start
 lk_start_trace

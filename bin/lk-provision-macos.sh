@@ -86,7 +86,7 @@ function exit_trap() {
 
     if [ -f "$LK_BASE/lib/bash/include/core.sh" ]; then
         . "$LK_BASE/lib/bash/include/core.sh"
-        lk_include brew macos provision whiptail
+        lk_require brew macos provision whiptail
         SUDOERS=$LK_BASE/share/sudoers.d/default
         load_settings "$@"
         ${PACKAGES_REL:+. "$LK_BASE/$PACKAGES_REL"}
