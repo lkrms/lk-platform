@@ -115,7 +115,8 @@
             lk_file_replace -m "$KEYS_FILE" "$3" || return
 
         ./bin/lk-provision-hosting.sh \
-            "${@:4}" --set LK_PLATFORM_BRANCH="$1" || return
+            --set LK_PLATFORM_BRANCH="$1" \
+            "${@:4}" || return
 
         lk_console_message "Checking TLS certificates"
         local IFS=$'\n'
