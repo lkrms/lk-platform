@@ -16,7 +16,7 @@ _LK_ARGV=("$@")
 # COMMAND and return STATUS.
 function lk_pass() {
     local STATUS=$?
-    [[ ! ${1-} =~ ^-[0-9]+$ ]] || { STATUS=${1:1} && shift; }
+    [[ $1 != -* ]] || { STATUS=${1:1} && shift; }
     "$@" || true
     return "$STATUS"
 }
@@ -50,43 +50,41 @@ function lk_caller_name() {
     echo "${NAME:-${0##*/}}"
 }
 
-# lk_first_command [COMMAND...]
+# lk_first_command ["COMMAND [ARG...]"...]
 #
-# Print the first executable COMMAND in PATH or return false if no COMMAND was
-# found. To allow the inclusion of arguments, word splitting is performed on
-# each COMMAND after resetting IFS.
+# Print the first command line where COMMAND is in PATH or return false if no
+# COMMAND is found.
 function lk_first_command() {
-    local IFS CMD
-    unset IFS
-    while [ $# -gt 0 ]; do
+    local IFS=$' \t\n' CMD
+    while (($#)); do
         CMD=($1)
-        ! type -P "${CMD[0]}" >/dev/null || break
+        ! type -P "$CMD" >/dev/null || break
         shift
     done
-    [ $# -gt 0 ] && echo "$1"
+    (($#)) && echo "$1"
 }
 
 # lk_first_file [FILE...]
 #
-# Print the first FILE that exists or return false if no FILE was found.
+# Print the first FILE that exists or return false if no FILE is found.
 function lk_first_file() {
-    while [ $# -gt 0 ]; do
-        [ ! -e "$1" ] || break
+    while (($#)); do
+        [[ ! -e $1 ]] || break
         shift
     done
-    [ $# -gt 0 ] && echo "$1"
+    (($#)) && echo "$1"
 }
 
-# lk_first_open [PATH...]
+# lk_first_writable_char [PATH...]
 #
 # Print the first PATH that is a writable character special file, or return
-# false if no such PATH was found.
-function lk_first_open() {
-    while [ $# -gt 0 ]; do
-        { [ ! -c "$1" ] || ! : >"$1"; } 2>/dev/null || break
+# false if no such PATH is found.
+function lk_first_writable_char() {
+    while (($#)); do
+        { [[ ! -c $1 ]] || ! : >"$1"; } 2>/dev/null || break
         shift
     done
-    [ $# -gt 0 ] && echo "$1"
+    (($#)) && echo "$1"
 }
 
 # lk_get_tty
@@ -94,21 +92,28 @@ function lk_first_open() {
 # Print "/dev/tty" if Bash has a controlling terminal, otherwise print
 # "/dev/console" if it is open for writing, or return false.
 function lk_get_tty() {
-    lk_first_open /dev/tty /dev/console
+    lk_first_writable_char /dev/tty /dev/console
 }
 
-# lk_plural [-v] VALUE SINGLE [PLURAL]
+# lk_reopen_tty_in
 #
-# Print SINGLE if VALUE is 1 or the name of an array with 1 element, PLURAL
-# otherwise. If PLURAL is omitted, print "${SINGLE}s" instead. If -v is set,
-# include VALUE in the output.
+# Reopen /dev/stdin from /dev/tty if possible.
+function lk_reopen_tty_in() {
+    [[ ! -c /dev/tty ]] || [[ ! -r /dev/tty ]] || exec </dev/tty
+}
+
+# lk_plural [-v] <VALUE|ARRAY> SINGLE [PLURAL]
+#
+# Print SINGLE if VALUE or the length of ARRAY is 1, otherwise print PLURAL (or
+# "${SINGLE}s" if PLURAL is omitted). If -v is set, include VALUE in the output.
 function lk_plural() {
-    local VALUE
-    [ "${1-}" != -v ] || { VALUE=1 && shift; }
-    local COUNT=$1
-    [[ ! $1 =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] || eval "COUNT=\${#$1[@]}" || return
-    VALUE="${VALUE:+$COUNT }"
-    [ "$COUNT" = 1 ] && echo "$VALUE$2" || echo "$VALUE${3-$2s}"
+    local _VALUE _COUNT
+    [[ $1 != -v ]] || { _VALUE=1 && shift; }
+    [[ $1 =~ ^-?[0-9]+$ ]] && _COUNT=$1 ||
+        { declare -p "$1" &>/dev/null && eval "_COUNT=\${#$1[@]}"; } ||
+        lk_bad_args || return
+    _VALUE="${_VALUE:+$_COUNT }"
+    ((_COUNT == 1)) && echo "$_VALUE$2" || echo "$_VALUE${3-$2s}"
 }
 
 # lk_assign VAR
@@ -131,42 +136,26 @@ function lk_safe_grep() {
     grep "$@" || [[ $? -eq 1 ]] || return 2
 }
 
-# lk_x_off [STATUS_VAR]
+# lk_counter_init [VAR...]
 #
-# Output Bash commands that disable xtrace temporarily, prevent themselves from
-# appearing in trace output, and assign the previous command's exit status to
-# _lk_x_status or STATUS_VAR.
-#
-# Recommended usage, if FD 2 or FD 4 may already be receiving trace output:
-#
-#     function quiet() {
-#         { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
-#         # Can also be used in a && or || list
-#         eval "$_lk_x_return"
-#     }
-#
-# Or, outside of a function:
-#
-#     { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
-#     eval "$_lk_x_restore"
-function lk_x_off() {
-    echo 'eval "{ declare '"${1:-_lk_x_status}=$?"' _lk_x_restore= _lk_x_return=\"return \\\$?\"; [ \"\${-/x/}\" = \"\$-\" ] || { _lk_x_restore=\"set -x\"; _lk_x_return=\"eval \\\"{ local _lk_x_status=\\\\\\\$?; set -x; return \\\\\\\$_lk_x_status; } \\\${BASH_XTRACEFD:-2}>/dev/null\\\"\"; set +x; }; } ${BASH_XTRACEFD:-2}>/dev/null"'
+# Set each VAR in the caller's scope to whichever integer is greater:
+# - The current value of VAR
+# - 0 (zero)
+function lk_counter_init() {
+    while (($#)); do
+        if [[ -n ${!1-} ]]; then
+            eval "$1=\$(($1 < 0 ? 0 : $1))"
+        else
+            unset -v "$1" || lk_bad_args || return
+            eval "$1=0"
+        fi
+        shift
+    done
 }
-
-function lk_x_no_off() {
-    function lk_x_off() {
-        echo 'declare '"${1:-_lk_x_status}=$?"' _lk_x_restore= _lk_x_return="return \$?"'
-    }
-    export _LK_NO_X_OFF=1
-}
-
-[ -z "${_LK_NO_X_OFF-}" ] || lk_x_no_off
 
 # lk_bash_at_least MAJOR [MINOR]
 function lk_bash_at_least() {
-    [ "${BASH_VERSINFO[0]}" -eq "$1" ] &&
-        [ "${BASH_VERSINFO[1]}" -ge "${2:-0}" ] ||
-        [ "${BASH_VERSINFO[0]}" -gt "$1" ]
+    ((BASH_VERSINFO[0] * 100 + BASH_VERSINFO[1] >= $1 * 100 + ${2-0}))
 }
 
 function lk_is_arm() {
@@ -179,8 +168,7 @@ function lk_is_macos() {
 
 # lk_is_apple_silicon
 #
-# Return true if running natively on Apple Silicon, otherwise return false.
-# Returns false when running as a translated Intel binary on Apple Silicon.
+# Return true if running natively on Apple Silicon.
 function lk_is_apple_silicon() {
     lk_is_macos && lk_is_arm
 }
@@ -191,7 +179,7 @@ function lk_is_apple_silicon() {
 # Intel binary.
 function lk_is_system_apple_silicon() {
     lk_is_macos && { lk_is_arm ||
-        [ "$(sysctl -n sysctl.proc_translated 2>/dev/null)" = 1 ]; }
+        [[ $(sysctl -n sysctl.proc_translated 2>/dev/null) == 1 ]]; }
 }
 
 function lk_is_linux() {
@@ -199,18 +187,12 @@ function lk_is_linux() {
 }
 
 function lk_is_arch() {
-    lk_is_linux && [ -f /etc/arch-release ]
+    lk_is_linux && [[ -f /etc/arch-release ]]
 }
 
 function lk_is_ubuntu() {
-    lk_is_linux && [ -r /etc/os-release ] &&
-        (. /etc/os-release && [ "$NAME" = Ubuntu ])
-}
-
-function lk_ubuntu_at_least() {
-    lk_is_linux && [ -r /etc/os-release ] &&
-        (. /etc/os-release && [ "$NAME" = Ubuntu ] &&
-            lk_version_at_least "$VERSION_ID" "$1")
+    lk_is_linux && [[ -r /etc/os-release ]] &&
+        (. /etc/os-release && [[ $NAME == Ubuntu ]])
 }
 
 function lk_is_wsl() {
@@ -218,7 +200,8 @@ function lk_is_wsl() {
 }
 
 function lk_is_virtual() {
-    lk_is_linux && grep -Eq '^flags[[:blank:]]*:.*\<hypervisor\>' /proc/cpuinfo
+    lk_is_linux &&
+        grep -Eq "^flags$S*:.*\\<hypervisor\\>" /proc/cpuinfo
 }
 
 function lk_is_qemu() {
@@ -228,8 +211,8 @@ function lk_is_qemu() {
 
 # lk_command_exists COMMAND...
 function lk_command_exists() {
-    [ $# -gt 0 ] || return
-    while [ $# -gt 0 ]; do
+    (($#)) || return
+    while (($#)); do
         type -P "$1" >/dev/null || return
         shift
     done
@@ -246,48 +229,50 @@ function lk_version_at_least() {
 # (e.g. `bash <(list)`), the standard input (`bash -i` or `list | bash`), or the
 # command line (`bash -c "string"`), return false.
 function lk_script_running() {
-    [ "${BASH_SOURCE+${BASH_SOURCE[*]: -1}}" = "$0" ] && [ -f "$0" ]
+    [[ ${BASH_SOURCE+${BASH_SOURCE[*]: -1}} == "$0" ]] && [[ -f $0 ]]
 }
 
 # lk_verbose [LEVEL]
 #
-# Return true if LK_VERBOSE [default: 0] is at least LEVEL [default: 1].
+# Return true if LK_VERBOSE (default: 0) is at least LEVEL (default: 1).
 function lk_verbose() {
-    [ "${LK_VERBOSE:-0}" -ge "${1-1}" ]
+    ((${LK_VERBOSE:-0} >= ${1-1}))
 }
 
 # lk_no_input
 #
-# Check LK_NO_INPUT and LK_FORCE_INPUT, and return true if user input should not
-# be requested.
+# Return true if the user should not be prompted for input.
+#
+# Returns false if:
+# - LK_FORCE_INPUT is set, or
+# - /dev/stdin is a terminal and LK_NO_INPUT is not set
 function lk_no_input() {
-    if [ "${LK_FORCE_INPUT-}" = 1 ]; then
-        { [ -t 0 ] || lk_err "/dev/stdin is not a terminal"; } && false
-    else
-        [ ! -t 0 ] || [ "${LK_NO_INPUT-}" = 1 ]
-    fi
+    [[ ${LK_FORCE_INPUT-} != Y ]] || {
+        { [[ -t 0 ]] ||
+            lk_err "/dev/stdin is not a terminal"; } && false || return
+    }
+    [[ ! -t 0 ]] || [[ ${LK_NO_INPUT-} == Y ]]
 }
 
 # lk_debug
 #
 # Return true if LK_DEBUG is set.
 function lk_debug() {
-    [ "${LK_DEBUG-}" = Y ]
+    [[ ${LK_DEBUG-} == Y ]]
 }
 
 # lk_root
 #
 # Return true if running as the root user.
 function lk_root() {
-    [ "$EUID" -eq 0 ]
+    [[ $EUID -eq 0 ]]
 }
 
 # lk_dry_run
 #
 # Return true if LK_DRY_RUN is set.
 function lk_dry_run() {
-    [ "${LK_DRY_RUN:-0}" -eq 1 ]
-
+    [[ ${LK_DRY_RUN-} == Y ]]
 }
 
 # lk_true VAR
@@ -295,8 +280,8 @@ function lk_dry_run() {
 # Return true if VAR or ${!VAR} is 'Y', 'yes', '1', 'true', or 'on' (not
 # case-sensitive).
 function lk_true() {
-    local REGEX='^([yY]([eE][sS])?|1|[tT][rR][uU][eE]|[oO][nN])$'
-    [[ $1 =~ $REGEX ]] || [[ ${1:+${!1-}} =~ $REGEX ]]
+    [[ $1 =~ ^([yY]([eE][sS])?|1|[tT][rR][uU][eE]|[oO][nN])$ ]] ||
+        [[ ${1:+${!1-}} =~ ^([yY]([eE][sS])?|1|[tT][rR][uU][eE]|[oO][nN])$ ]]
 }
 
 # lk_false VAR
@@ -304,8 +289,8 @@ function lk_true() {
 # Return true if VAR or ${!VAR} is 'N', 'no', '0', 'false', or 'off' (not
 # case-sensitive).
 function lk_false() {
-    local REGEX='^([nN][oO]?|0|[fF][aA][lL][sS][eE]|[oO][fF][fF])$'
-    [[ $1 =~ $REGEX ]] || [[ ${1:+${!1-}} =~ $REGEX ]]
+    [[ $1 =~ ^([nN][oO]?|0|[fF][aA][lL][sS][eE]|[oO][fF][fF])$ ]] ||
+        [[ ${1:+${!1-}} =~ ^([nN][oO]?|0|[fF][aA][lL][sS][eE]|[oO][fF][fF])$ ]]
 }
 
 # lk_test TEST [VALUE...]
@@ -316,12 +301,12 @@ function lk_test() {
     local IFS=$' \t\n' COMMAND
     COMMAND=($1)
     shift
-    [ -n "${COMMAND+1}" ] && [ $# -gt 0 ] || return
-    while [ $# -gt 0 ]; do
+    [[ -n ${COMMAND+1} ]] && (($#)) || return
+    while (($#)); do
         "${COMMAND[@]}" "$1" || break
         shift
     done
-    [ $# -eq 0 ]
+    ((!$#))
 }
 
 # lk_test_any TEST [VALUE...]
@@ -331,12 +316,12 @@ function lk_test_any() {
     local IFS=$' \t\n' COMMAND
     COMMAND=($1)
     shift
-    [ -n "${COMMAND+1}" ] && [ $# -gt 0 ] || return
-    while [ $# -gt 0 ]; do
+    [[ -n ${COMMAND+1} ]] && (($#)) || return
+    while (($#)); do
         ! "${COMMAND[@]}" "$1" || break
         shift
     done
-    [ $# -gt 0 ]
+    (($#))
 }
 
 function lk_paths_exist() { lk_test "lk_sudo test -e" "$@"; }
@@ -425,6 +410,22 @@ function lk_will_elevate() {
 # false if Bash is already running with root privileges or LK_SUDO is not set.
 function lk_will_sudo() {
     [ "$EUID" -ne 0 ] && [ -n "${LK_SUDO-}" ]
+}
+
+# lk_sudo_on_fail COMMAND [ARG...]
+#
+# If `lk_sudo COMMAND` would invoke `sudo COMMAND`:
+# 1. Run `COMMAND` without sudo, redirecting any error output to /dev/null
+# 2. If COMMAND fails, run `sudo COMMAND`
+#
+# If `lk_sudo COMMAND` would invoke `COMMAND` without sudo:
+# 1. Run `COMMAND` without sudo
+function lk_sudo_on_fail() {
+    if lk_will_sudo; then
+        "$@" 2>/dev/null || sudo -H "$@"
+    else
+        "$@"
+    fi
 }
 
 # lk_can_sudo COMMAND
@@ -1467,20 +1468,19 @@ function _lk_tty_margin_add() {
 # Run COMMAND and add MARGIN spaces before each line of output, trapping
 # SIGWINCH and using stty to adjust the reported terminal size.
 function lk_tty_add_margin() { (
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     [ $# -gt 1 ] && ((_MARGIN = $1)) ||
-        lk_err "invalid arguments" || eval "$_lk_x_return"
+        lk_err "invalid arguments" || return
     shift
     ((_MARGIN > 0)) && _TTY=$(lk_get_tty) || {
         _lk_tty_margin_add "$@"
-        eval "$_lk_x_return"
+        return
     }
     _RESIZED=
     _CLEAR_SH="trap - SIGWINCH; _lk_tty_margin_clear $_MARGIN"
     _SIGNAL=$(kill -L SIGWINCH) &&
         trap "_lk_tty_margin_apply $_MARGIN resize" SIGWINCH &&
         _lk_tty_margin_apply "$_MARGIN" start &&
-        trap "$_CLEAR_SH" EXIT || eval "$_lk_x_return"
+        trap "$_CLEAR_SH" EXIT || return
     # Run the command in the background because only the foreground process
     # receives SIGWINCH, but remain interactive by redirecting terminal input to
     # the background process
@@ -1497,13 +1497,11 @@ function lk_tty_add_margin() { (
         # Continue if interrupted by SIGWINCH
         [ "$STATUS" -eq $((128 + _SIGNAL)) ] || break
     done
-    (exit "$STATUS")
-    eval "$_lk_x_return"
+    exit "$STATUS"
 ); }
 
 # lk_tty_group [[-n] MESSAGE [MESSAGE2 [COLOUR]]]
 function lk_tty_group() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     local NEST=
     [ "${1-}" != -n ] || { NEST=1 && shift; }
     _LK_TTY_GROUP=$((${_LK_TTY_GROUP:--1} + 1))
@@ -1513,15 +1511,12 @@ function lk_tty_group() {
         lk_tty_print "$@"
         _LK_TTY_NEST[_LK_TTY_GROUP]=$NEST
     }
-    eval "$_lk_x_return"
 }
 
 # lk_tty_group_end [COUNT]
 function lk_tty_group_end() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _LK_TTY_GROUP=$((${_LK_TTY_GROUP:-0} - ${1:-1}))
     ((_LK_TTY_GROUP > -1)) || unset _LK_TTY_GROUP _LK_TTY_NEST
-    eval "$_lk_x_return"
 }
 
 # lk_tty_print [MESSAGE [MESSAGE2 [COLOUR]]]
@@ -1546,11 +1541,10 @@ function lk_tty_group_end() {
 # - _LK_TTY_MESSAGE_COLOUR: override MESSAGE colour
 # - _LK_TTY_COLOUR2: override MESSAGE2 colour (supersedes _LK_TTY_COLOUR)
 function lk_tty_print() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     # Print a blank line and return if nothing was passed
     [ $# -gt 0 ] || {
         echo >&"${_LK_FD-2}"
-        eval "$_lk_x_return"
+        return
     }
     # If nested grouping is active and lk_tty_print isn't already in its own
     # call stack, bump lk_tty_print -> lk_tty_detail and lk_tty_detail ->
@@ -1566,7 +1560,7 @@ function lk_tty_print() {
         esac
         [ -z "${FUNC-}" ] || {
             "$FUNC" "$@"
-            eval "$_lk_x_return"
+            return
         }
     }
     local MESSAGE=${1-} MESSAGE2=${2-} \
@@ -1622,18 +1616,15 @@ function lk_tty_print() {
             _lk_tty_hostname_apply
         echo "$_LK_TTY_HOSTNAME${MESSAGE//$'\n'/$_LK_TTY_HOSTNAME_INDENT}"
     fi >&"${_LK_FD-2}"
-    eval "$_lk_x_return"
 }
 
 # lk_tty_detail MESSAGE [MESSAGE2 [COLOUR]]
 function lk_tty_detail() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     local _LK_TTY_COLOUR_ORIG=${_LK_COLOUR-}
     _LK_TTY_PREFIX1=${_LK_TTY_PREFIX2- -> } \
         _LK_COLOUR=${_LK_ALT_COLOUR-} \
         _LK_TTY_MESSAGE_COLOUR=${_LK_TTY_MESSAGE_COLOUR-} \
         lk_tty_print "$@"
-    eval "$_lk_x_return"
 }
 
 function _lk_tty_detail2() {
@@ -1647,7 +1638,6 @@ function _lk_tty_detail2() {
 # - lk_tty_list @ [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]] [-- [ARG...]]
 # - lk_tty_list [ARRAY [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
 function lk_tty_list() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     [ "${1-}" != @ ] || {
         local IFS=' ' _ITEMS=()
         for ((i = 2; i <= $#; i++)); do
@@ -1672,10 +1662,10 @@ function lk_tty_list() {
     }
     if [ "$_ARRAY" = - ]; then
         [ ! -t 0 ] && lk_mapfile _ITEMS ||
-            lk_err "no input" || eval "$_lk_x_return"
+            lk_err "no input" || return
     elif [ "$_ARRAY" != @ ]; then
         _ARRAY="${_ARRAY}[@]"
-        _ITEMS=(${!_ARRAY+"${!_ARRAY}"}) || eval "$_lk_x_return"
+        _ITEMS=(${!_ARRAY+"${!_ARRAY}"}) || return
     fi
     if [[ $_MESSAGE != *$'\n'* ]]; then
         _INDENT=$((${#_PREFIX} - 2))
@@ -1688,7 +1678,7 @@ function lk_tty_list() {
         _LIST=$(printf '\n%s' "${_ITEMS[@]}")
         ! lk_command_exists column expand ||
             _LIST=$'\n'$(COLUMNS=$((_COLUMNS > 0 ? _COLUMNS : 0)) \
-                column <<<"$_LIST" | expand) || eval "$_lk_x_return"
+                column <<<"$_LIST" | expand) || return
     }
     echo "$(
         _LK_FD=1
@@ -1698,16 +1688,13 @@ function lk_tty_list() {
             _LK_TTY_PREFIX=$(printf "%$((_INDENT > 0 ? _INDENT : 0))s") \
                 lk_tty_detail "($(lk_plural -v _ITEMS "$_SINGLE" "$_PLURAL"))"
     )" >&"${_LK_FD-2}"
-    eval "$_lk_x_return"
 }
 
 # - lk_tty_list_detail - [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]
 # - lk_tty_list_detail @ [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]] [-- [ARG...]]
 # - lk_tty_list_detail [ARRAY [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
 function lk_tty_list_detail() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _LK_STACK_DEPTH=1 _LK_TTY_COMMAND=lk_tty_detail lk_tty_list "$@"
-    eval "$_lk_x_return"
 }
 
 # lk_tty_dump OUTPUT MESSAGE1 MESSAGE2 COLOUR OUTPUT_COLOUR COMMAND [ARG...]
@@ -1720,7 +1707,6 @@ function lk_tty_list_detail() {
 # _LK_TTY_COLOUR and _LK_TTY_OUTPUT_COLOUR to specify an empty colour for COLOUR
 # and OUTPUT_COLOUR respectively.
 function lk_tty_dump() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     local _MESSAGE1=${2-} _MESSAGE2=${3-} _INDENT _CMD \
         _COLOUR=${_LK_TTY_OUTPUT_COLOUR-${_LK_TTY_MESSAGE_COLOUR-${5-}}}
     unset LK_TTY_DUMP_STATUS
@@ -1750,43 +1736,36 @@ function lk_tty_dump() {
         *)
             ${_CMD+"${_CMD[@]}"} cat <<<"${1%$'\n'}"
             ;;
-        esac || eval "$_lk_x_return"
+        esac || return
         printf '%s' "$LK_RESET"
     } >&"${_LK_FD-2}"
     _LK_TTY_PREFIX1=${_LK_TTY_SUFFIX1-<<< } \
         _LK_TTY_PREFIX2=${_LK_TTY_SUFFIX2- << } \
         _LK_TTY_PREFIX3=${_LK_TTY_SUFFIX3-  < } \
         ${_LK_TTY_COMMAND:-lk_tty_print} "" "$_MESSAGE2" ${4:+"$4"}
-    eval "$_lk_x_return"
 }
 
 # lk_tty_dump_detail [OPTIONS]
 #
 # See lk_tty_dump for details.
 function lk_tty_dump_detail() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _LK_STACK_DEPTH=1 _LK_TTY_COMMAND=lk_tty_detail lk_tty_dump "$@"
-    eval "$_lk_x_return"
 }
 
 # lk_tty_file FILE [COLOUR [FILE_COLOUR]]
 function lk_tty_file() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     [ -n "${1-}" ] && lk_sudo -f test -r "${1-}" ||
-        lk_err "file not found: ${1-}" || eval "$_lk_x_return"
+        lk_err "file not found: ${1-}" || return
     local IFS MESSAGE2
     unset IFS
     ! lk_verbose || { MESSAGE2=$(lk_sudo -f ls -ld "$1") &&
-        MESSAGE2=${MESSAGE2/"$1"/$LK_BOLD$1$LK_RESET}; } || eval "$_lk_x_return"
+        MESSAGE2=${MESSAGE2/"$1"/$LK_BOLD$1$LK_RESET}; } || return
     lk_sudo -f cat "$1" | lk_tty_dump - "$1" "${MESSAGE2-}" "${@:2}"
-    eval "$_lk_x_return"
 }
 
 # lk_tty_file_detail FILE [COLOUR [FILE_COLOUR]]
 function lk_tty_file_detail() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _LK_STACK_DEPTH=1 _LK_TTY_COMMAND=lk_tty_detail lk_tty_file "$@"
-    eval "$_lk_x_return"
 }
 
 # - lk_tty_run [-SHIFT]                         COMMAND [ARG...]
@@ -1798,14 +1777,13 @@ function lk_tty_file_detail() {
 # ARG is the 1-based argument to remove or REPLACE (starting with COMMAND or the
 # first argument not removed by SHIFT).
 function lk_tty_run() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     local IFS SHIFT= TRANSFORM= CMD i REGEX='([0-9]+)=([^:]*)'
     unset IFS
     [[ ${1-} != -* ]] ||
         { [[ $1 =~ ^-(([0-9]+)(:($REGEX(:$REGEX)*))?|($REGEX(:$REGEX)*))$ ]] &&
             SHIFT=${BASH_REMATCH[2]} &&
             TRANSFORM=${BASH_REMATCH[4]:-${BASH_REMATCH[1]}} &&
-            shift; } || lk_err "invalid arguments" || eval "$_lk_x_return"
+            shift; } || lk_err "invalid arguments" || return
     CMD=("$@")
     [ -z "$SHIFT" ] || shift "$SHIFT"
     while [[ $TRANSFORM =~ ^$REGEX:?(.*) ]]; do
@@ -1836,7 +1814,6 @@ function lk_tty_run() {
     done
     ${_LK_TTY_COMMAND:-lk_tty_print} \
         "Running:" "$(lk_fold_quote_options -120 "$@")"
-    eval "$_lk_x_restore"
     "${CMD[@]}"
 }
 
@@ -1844,9 +1821,7 @@ function lk_tty_run() {
 #
 # See lk_tty_run for details.
 function lk_tty_run_detail() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _LK_STACK_DEPTH=1 _LK_TTY_COMMAND=lk_tty_detail lk_tty_run "$@"
-    eval "$_lk_x_return"
 }
 
 # - lk_tty_pairs [-d DELIM] [COLOUR [--] [KEY VALUE...]]
@@ -1861,7 +1836,6 @@ function lk_tty_run_detail() {
 # default value is used. Characters in DELIM and IFS must not appear in any KEY
 # or VALUE.
 function lk_tty_pairs() { (
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     local IFS=${IFS:-$'\t'} LF COLOUR ARGS= _IFS TEMP LEN KEY VALUE
     unset LF COLOUR
     [ "${1-}" != -d ] || { LF=${2::1} && shift 2; }
@@ -1882,7 +1856,7 @@ function lk_tty_pairs() { (
     else if ($i == "]") { first = "]" }
     else { middle = middle $i } }
   printf("%s%s%s.\n", first, middle, last) }') && IFS=${_IFS%.} ||
-        lk_err "invalid arguments" || eval "$_lk_x_return"
+        lk_err "invalid arguments" || return
     if [ $# -gt 0 ]; then
         local SEP=${IFS::1}
         lk_mktemp_with TEMP printf "%s${SEP//%/%%}%s\n" "$@"
@@ -1890,18 +1864,16 @@ function lk_tty_pairs() { (
         lk_mktemp_with TEMP cat
     else
         true
-        eval "$_lk_x_return"
-    fi || eval "$_lk_x_return"
+        return
+    fi || return
     # Align the length of the longest KEY to the nearest tab
     LEN=$(awk -F"[$IFS]+" -v "RS=${LF:-\\0}" -v m=2 '
     { if ((l = length($1)) > m) m = l }
-END { g = (m + 2) % 4; print (g ? m + 4 - g : m) + 1 }' "$TEMP") ||
-        eval "$_lk_x_return"
+END { g = (m + 2) % 4; print (g ? m + 4 - g : m) + 1 }' "$TEMP") || return
     while read -r -d "$LF" KEY VALUE; do
         _LK_TTY_ONE_LINE=1 ${_LK_TTY_COMMAND:-lk_tty_print} \
             "$(printf "%-${LEN}s" "$KEY:")" "$VALUE" ${COLOUR+"$COLOUR"}
     done <"$TEMP"
-    eval "$_lk_x_return"
 ); }
 
 # - lk_tty_pairs_detail [-d DELIM] [COLOUR [--] [KEY VALUE...]]
@@ -1909,9 +1881,7 @@ END { g = (m + 2) % 4; print (g ? m + 4 - g : m) + 1 }' "$TEMP") ||
 #
 # See lk_tty_pairs for details.
 function lk_tty_pairs_detail() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _LK_STACK_DEPTH=1 _LK_TTY_COMMAND=lk_tty_detail lk_tty_pairs "$@"
-    eval "$_lk_x_return"
 }
 
 # lk_tty_diff [-L LABEL1 [-L LABEL2]] [FILE1] FILE2 [MESSAGE]
@@ -1920,41 +1890,36 @@ function lk_tty_pairs_detail() {
 # from input. If FILE2 is the only argument, use FILE2.orig as FILE1 if it
 # exists and has a size greater than zero, otherwise call lk_tty_file FILE2.
 function lk_tty_diff() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     local LABEL1 LABEL2
     [ "${1-}" != -L ] || { LABEL1=$2 && shift 2; }
     [ "${1-}" != -L ] || { LABEL2=$2 && shift 2; }
-    [ $# -gt 0 ] || lk_err "invalid arguments" || eval "$_lk_x_return"
+    [ $# -gt 0 ] || lk_err "invalid arguments" || return
     [ $# -gt 1 ] ||
         if lk_sudo -f test -s "$1.orig"; then
             set -- "$1.orig" "$@"
         else
             lk_tty_file "$1"
-            eval "$_lk_x_return"
+            return
         fi
     local FILE1=${1:--} FILE2=${2:--} MESSAGE=${3-}
     [ "$FILE1:$FILE2" != -:- ] ||
-        lk_err "FILE1 and FILE2 cannot both be read from input" ||
-        eval "$_lk_x_return"
+        lk_err "FILE1 and FILE2 cannot both be read from input" || return
     [[ :${#FILE1}${FILE1:0:1}:${#FILE2}${FILE2:0:1}: != *:1-:* ]] ||
         [ ! -t 0 ] ||
-        lk_err "input is a terminal" || eval "$_lk_x_return"
+        lk_err "input is a terminal" || return
     [ "$FILE1" != - ] || { FILE1=/dev/stdin && LABEL1="${LABEL1:-<input>}"; }
     [ "$FILE2" != - ] || { FILE2=/dev/stdin && LABEL2="${LABEL2:-<input>}"; }
     lk_tty_dump - \
         "${MESSAGE:-${LABEL1:-$FILE1}$LK_BOLD -> ${LABEL2:-$FILE2}$LK_RESET}" \
         "" "" "" lk_diff "$FILE1" "$FILE2"
-    eval "$_lk_x_return"
 }
 
 function lk_tty_diff_detail() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _LK_STACK_DEPTH=1 _LK_TTY_COMMAND=lk_tty_detail lk_tty_diff "$@"
-    eval "$_lk_x_return"
 }
 
 function _lk_tty_log() {
-    local STATUS=${_lk_x_status:-$?} BOLD= IFS=' ' \
+    local STATUS=$? BOLD= IFS=' ' \
         _LK_TTY_PREFIX=${_LK_TTY_PREFIX-$1} \
         _LK_TTY_MESSAGE_COLOUR=$2 _LK_TTY_COLOUR2=${_LK_TTY_COLOUR2-}
     shift 2
@@ -1969,30 +1934,22 @@ function _lk_tty_log() {
 
 # lk_tty_success [-r] [-n] MESSAGE [MESSAGE2...]
 function lk_tty_success() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _lk_tty_log " // " "$_LK_SUCCESS_COLOUR" "$@"
-    eval "$_lk_x_return"
 }
 
 # lk_tty_log [-r] [-n] MESSAGE [MESSAGE2...]
 function lk_tty_log() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _lk_tty_log " :: " "${_LK_TTY_COLOUR-$_LK_COLOUR}" "$@"
-    eval "$_lk_x_return"
 }
 
 # lk_tty_warning [-r] [-n] MESSAGE [MESSAGE2...]
 function lk_tty_warning() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _lk_tty_log "  ! " "$_LK_WARNING_COLOUR" "$@"
-    eval "$_lk_x_return"
 }
 
 # lk_tty_error [-r] [-n] MESSAGE [MESSAGE2...]
 function lk_tty_error() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _lk_tty_log " !! " "$_LK_ERROR_COLOUR" "$@"
-    eval "$_lk_x_return"
 }
 
 # _lk_usage_format <CALLER>
@@ -2477,12 +2434,66 @@ EOF
     fi
 }
 
-# lk_dir_is_empty [DIR]
+function lk_file_owner() {
+    if ! lk_is_macos; then
+        function lk_file_owner() { lk_sudo_on_fail stat -c '%U' -- "$@"; }
+    else
+        function lk_file_owner() { lk_sudo_on_fail stat -f '%Su' -- "$@"; }
+    fi
+    lk_file_owner "$@"
+}
+
+function lk_file_group() {
+    if ! lk_is_macos; then
+        function lk_file_group() { lk_sudo_on_fail stat -c '%G' -- "$@"; }
+    else
+        function lk_file_group() { lk_sudo_on_fail stat -f '%Sg' -- "$@"; }
+    fi
+    lk_file_group "$@"
+}
+
+function lk_file_mode() {
+    if ! lk_is_macos; then
+        function lk_file_mode() { lk_sudo_on_fail stat -c '%04a' -- "$@"; }
+    else
+        function lk_file_mode() { lk_sudo_on_fail stat -f '%OMp%03OLp' -- "$@"; }
+    fi
+    lk_file_mode "$@"
+}
+
+function lk_file_owner_mode() {
+    if ! lk_is_macos; then
+        function lk_file_owner_mode() { lk_sudo_on_fail stat -c '%U:%G %04a' -- "$@"; }
+    else
+        function lk_file_owner_mode() { lk_sudo_on_fail stat -f '%Su:%Sg %OMp%03OLp' -- "$@"; }
+    fi
+    lk_file_owner_mode "$@"
+}
+
+function lk_file_modified() {
+    if ! lk_is_macos; then
+        function lk_file_modified() { lk_sudo_on_fail stat -c '%Y' -- "$@"; }
+    else
+        function lk_file_modified() { lk_sudo_on_fail stat -t '%s' -f '%Sm' -- "$@"; }
+    fi
+    lk_file_modified "$@"
+}
+
+function lk_file_sort_modified() {
+    if ! lk_is_macos; then
+        function lk_file_sort_modified() { lk_sudo_on_fail stat -c '%Y :%n' -- "$@" | sort -n | cut -d: -f2-; }
+    else
+        function lk_file_sort_modified() { lk_sudo_on_fail stat -t '%s' -f '%Sm :%N' -- "$@" | sort -n | cut -d: -f2-; }
+    fi
+    lk_file_sort_modified "$@"
+}
+
+# lk_file_is_empty_dir FILE
 #
-# Return true if DIR is empty.
-function lk_dir_is_empty() {
-    ! lk_sudo ls -A "$1" 2>/dev/null | grep . >/dev/null &&
-        [ "${PIPESTATUS[0]}${PIPESTATUS[1]}" = 01 ]
+# Return true if FILE exists and is an empty directory.
+function lk_file_is_empty_dir() {
+    ! lk_sudo -f ls -A "$1" 2>/dev/null | grep . >/dev/null &&
+        [[ ${PIPESTATUS[0]}${PIPESTATUS[1]} == 01 ]]
 }
 
 # lk_file_maybe_move OLD_PATH CURRENT_PATH
@@ -2553,6 +2564,95 @@ EOF
     SH="printf '%s\\n' $(_lk_stream_args 3 awk -f "$AWK" "$@" | tr '\n' ' ')" &&
         eval "$SH"
 ); }
+
+# lk_file [-i REGEX] [-dpbr] [-m MODE] [-o USER] [-g GROUP] [-v] FILE
+#
+# Create or update FILE if its content or permissions differ from the input.
+#
+# Options:
+#
+#     -i REGEX    Ignore REGEX when comparing
+#     -d          Print a diff between FILE and its replacement
+#     -p          Prompt before replacing FILE (implies -d)
+#     -b          Create a backup of FILE before replacing it
+#     -r          Preserve the original FILE as FILE.orig
+#     -m MODE     Specify the file mode
+#     -o USER     Specify the owner
+#     -g GROUP    Specify the group
+#     -v          Be verbose
+#
+# If -p is set and the user opts out of replacing FILE, return false and
+# increment LK_FILE_DECLINED.
+function lk_file() {
+    local OPTIND OPTARG OPT \
+        DIFF=0 PROMPT=0 BACKUP=0 ORIG=0 MODE OWNER GROUP VERBOSE=0 \
+        GREP_ARGS=() TEMP
+    lk_counter_init LK_FILE_DECLINED
+    while getopts ":i:dpbrm:o:g:v" OPT; do
+        case "$OPT" in
+        i)
+            GREP_ARGS+=(-e "$OPTARG")
+            ;;
+        d)
+            DIFF=1
+            ;;
+        p)
+            PROMPT=1
+            DIFF=1
+            ;;
+        b)
+            BACKUP=1
+            ;;
+        r)
+            ORIG=1
+            ;;
+        m)
+            MODE=$OPTARG
+            ;;
+        o)
+            OWNER=$(id -u "$OPTARG") || return
+            ((OWNER == EUID)) || lk_will_elevate ||
+                lk_err "not allowed: -o $OPTARG" || return
+            OWNER=$OPTARG
+            ;;
+        g)
+            GROUP=$OPTARG
+            [[ $GROUP =~ [^0-9] ]] ||
+                lk_err "invalid group: $GROUP" || return
+            lk_will_elevate ||
+                id -Gn | tr -s '[:blank:]' '\n' | grep -Fx "$GROUP" >/dev/null ||
+                lk_err "not allowed: -g $GROUP"
+            ;;
+        v)
+            VERBOSE=1
+            ;;
+        \? | :)
+            lk_bad_args
+            return 1
+            ;;
+        esac
+    done
+    shift $((OPTIND - 1))
+    (($# == 1)) || lk_bad_args || return
+    [[ ! -t 0 ]] || lk_err "no input" || return
+    lk_mktemp_with TEMP cat &&
+        lk_reopen_tty_in || return
+    # If the file doesn't exist, use `install` to create it
+    if [[ ! -e $1 ]] && ! { lk_will_sudo && sudo test -e "$1"; }; then
+        ((!DIFF)) || lk_tty_diff_detail -L "" -L "$1" /dev/null "$TEMP"
+        ((!PROMPT)) || lk_tty_yn "Install $1 as above?" Y || {
+            ((++LK_FILE_DECLINED))
+            return 1
+        }
+        lk_sudo_on_fail install -m "${MODE:-0644}" \
+            ${OWNER:+-o="$OWNER"} ${GROUP:+-g="$GROUP"} \
+            "$TEMP" "$1" || lk_err "error installing $1" || return
+        return
+    fi
+    # Otherwise, update permissions if needed
+    OWNER_MODE=$(lk_file_owner_mode)
+
+}
 
 # lk_hash [ARG...]
 #
@@ -2790,6 +2890,8 @@ lk_echo_array() { lk_arr "$@"; }
 lk_ellipsis() { lk_ellipsise "$@"; }
 lk_escape_ere_replace() { lk_sed_escape_replace "$@"; }
 lk_escape_ere() { lk_sed_escape "$@"; }
+lk_file_security() { lk_file_owner_mode "$@"; }
+lk_file_sort_by_date() { lk_file_sort_modified "$@"; }
 lk_first_existing() { lk_first_file "$@"; }
 lk_is_false() { lk_false "$@"; }
 lk_is_true() { lk_true "$@"; }
@@ -4245,29 +4347,7 @@ function lk_base64() {
     fi
 }
 
-function _lk_file_sort() {
-    sort "${@:--n}" | sed -E 's/^[0-9]+ ://'
-}
-
 if ! lk_is_macos; then
-    function lk_file_sort_by_date() {
-        lk_maybe_sudo stat -c '%Y :%n' -- "$@" | _lk_file_sort
-    }
-    function lk_file_modified() {
-        lk_maybe_sudo stat -c '%Y' -- "$@"
-    }
-    function lk_file_owner() {
-        lk_maybe_sudo stat -c '%U' -- "$@"
-    }
-    function lk_file_group() {
-        lk_maybe_sudo stat -c '%G' -- "$@"
-    }
-    function lk_file_mode() {
-        lk_maybe_sudo stat -c '%04a' -- "$@"
-    }
-    function lk_file_security() {
-        lk_maybe_sudo stat -c '%U:%G %04a' -- "$@"
-    }
     function lk_full_name() {
         getent passwd "${1:-$UID}" | cut -d: -f5 | cut -d, -f1
     }
@@ -4281,27 +4361,6 @@ else
     }
     function lk_full_name() {
         lk_dscl_read RealName
-    }
-    function lk_file_sort_by_date() {
-        lk_maybe_sudo stat -t '%s' -f '%Sm :%N' -- "$@" | _lk_file_sort
-    }
-    function lk_file_modified() {
-        lk_maybe_sudo stat -t '%s' -f '%Sm' -- "$@"
-    }
-    function lk_file_owner() {
-        lk_maybe_sudo stat -f '%Su' -- "$@"
-    }
-    function lk_file_group() {
-        lk_maybe_sudo stat -f '%Sg' -- "$@"
-    }
-    function lk_file_mode() {
-        # Output octal (O) file mode (p) twice, first for the suid, sgid, and
-        # sticky bits (M), then with zero-padding (03) for the user, group, and
-        # other bits (L)
-        lk_maybe_sudo stat -f '%OMp%03OLp' -- "$@"
-    }
-    function lk_file_security() {
-        lk_maybe_sudo stat -f '%Su:%Sg %OMp%03OLp' -- "$@"
     }
 fi
 

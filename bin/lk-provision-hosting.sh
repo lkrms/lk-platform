@@ -341,7 +341,7 @@ fi
     install -d -m 02770 -g adm "$LK_BASE/var/lib/lk-platform"/{dirty,sites}
 
     if ! lk_is_bootstrap && [[ -d $LK_BASE/var/run/dirty ]]; then
-        lk_dir_is_empty "$LK_BASE/var/run/dirty" ||
+        lk_file_is_empty_dir "$LK_BASE/var/run/dirty" ||
             mv -fv "$LK_BASE/var/run/dirty"/* \
                 "$LK_BASE/var/lib/lk-platform/dirty/"
         rmdir "$LK_BASE/var/run/dirty"
@@ -354,7 +354,7 @@ fi
 
     install -d -m 02770 -g adm "$LK_BASE/etc/lk-platform/sites"
 
-    ! lk_dir_is_empty "$LK_BASE/etc/sites" ||
+    ! lk_file_is_empty_dir "$LK_BASE/etc/sites" ||
         rmdir "$LK_BASE/etc/sites"
 
     lk_tty_print "Checking system timezone"
@@ -599,7 +599,7 @@ EOF
         UNINSTALL=($(pip3_list))
         pip3_uninstall
         # Restore any packages "upgraded" by standalone pip3
-        LK_NO_INPUT=1 \
+        LK_NO_INPUT=Y \
             lk_apt_reinstall_damaged
     fi
 
@@ -1258,7 +1258,7 @@ EOF
     lk_hosting_configure_backup
 
     lk_tty_print "Cleaning up"
-    LK_NO_INPUT=1 \
+    LK_NO_INPUT=Y \
         lk_apt_purge_removed
     ! lk_is_dirty opcache.file_cache.path || {
         DIR=/srv/www/.opcache

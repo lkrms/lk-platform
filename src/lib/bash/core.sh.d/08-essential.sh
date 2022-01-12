@@ -6,7 +6,7 @@
 # COMMAND and return STATUS.
 function lk_pass() {
     local STATUS=$?
-    [[ ! ${1-} =~ ^-[0-9]+$ ]] || { STATUS=${1:1} && shift; }
+    [[ $1 != -* ]] || { STATUS=${1:1} && shift; }
     "$@" || true
     return "$STATUS"
 }
@@ -40,43 +40,41 @@ function lk_caller_name() {
     echo "${NAME:-${0##*/}}"
 }
 
-# lk_first_command [COMMAND...]
+# lk_first_command ["COMMAND [ARG...]"...]
 #
-# Print the first executable COMMAND in PATH or return false if no COMMAND was
-# found. To allow the inclusion of arguments, word splitting is performed on
-# each COMMAND after resetting IFS.
+# Print the first command line where COMMAND is in PATH or return false if no
+# COMMAND is found.
 function lk_first_command() {
-    local IFS CMD
-    unset IFS
-    while [ $# -gt 0 ]; do
+    local IFS=$' \t\n' CMD
+    while (($#)); do
         CMD=($1)
-        ! type -P "${CMD[0]}" >/dev/null || break
+        ! type -P "$CMD" >/dev/null || break
         shift
     done
-    [ $# -gt 0 ] && echo "$1"
+    (($#)) && echo "$1"
 }
 
 # lk_first_file [FILE...]
 #
-# Print the first FILE that exists or return false if no FILE was found.
+# Print the first FILE that exists or return false if no FILE is found.
 function lk_first_file() {
-    while [ $# -gt 0 ]; do
-        [ ! -e "$1" ] || break
+    while (($#)); do
+        [[ ! -e $1 ]] || break
         shift
     done
-    [ $# -gt 0 ] && echo "$1"
+    (($#)) && echo "$1"
 }
 
-# lk_first_open [PATH...]
+# lk_first_writable_char [PATH...]
 #
 # Print the first PATH that is a writable character special file, or return
-# false if no such PATH was found.
-function lk_first_open() {
-    while [ $# -gt 0 ]; do
-        { [ ! -c "$1" ] || ! : >"$1"; } 2>/dev/null || break
+# false if no such PATH is found.
+function lk_first_writable_char() {
+    while (($#)); do
+        { [[ ! -c $1 ]] || ! : >"$1"; } 2>/dev/null || break
         shift
     done
-    [ $# -gt 0 ] && echo "$1"
+    (($#)) && echo "$1"
 }
 
 # lk_get_tty
@@ -84,21 +82,28 @@ function lk_first_open() {
 # Print "/dev/tty" if Bash has a controlling terminal, otherwise print
 # "/dev/console" if it is open for writing, or return false.
 function lk_get_tty() {
-    lk_first_open /dev/tty /dev/console
+    lk_first_writable_char /dev/tty /dev/console
 }
 
-# lk_plural [-v] VALUE SINGLE [PLURAL]
+# lk_reopen_tty_in
 #
-# Print SINGLE if VALUE is 1 or the name of an array with 1 element, PLURAL
-# otherwise. If PLURAL is omitted, print "${SINGLE}s" instead. If -v is set,
-# include VALUE in the output.
+# Reopen /dev/stdin from /dev/tty if possible.
+function lk_reopen_tty_in() {
+    [[ ! -c /dev/tty ]] || [[ ! -r /dev/tty ]] || exec </dev/tty
+}
+
+# lk_plural [-v] <VALUE|ARRAY> SINGLE [PLURAL]
+#
+# Print SINGLE if VALUE or the length of ARRAY is 1, otherwise print PLURAL (or
+# "${SINGLE}s" if PLURAL is omitted). If -v is set, include VALUE in the output.
 function lk_plural() {
-    local VALUE
-    [ "${1-}" != -v ] || { VALUE=1 && shift; }
-    local COUNT=$1
-    [[ ! $1 =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] || eval "COUNT=\${#$1[@]}" || return
-    VALUE="${VALUE:+$COUNT }"
-    [ "$COUNT" = 1 ] && echo "$VALUE$2" || echo "$VALUE${3-$2s}"
+    local _VALUE _COUNT
+    [[ $1 != -v ]] || { _VALUE=1 && shift; }
+    [[ $1 =~ ^-?[0-9]+$ ]] && _COUNT=$1 ||
+        { declare -p "$1" &>/dev/null && eval "_COUNT=\${#$1[@]}"; } ||
+        lk_bad_args || return
+    _VALUE="${_VALUE:+$_COUNT }"
+    ((_COUNT == 1)) && echo "$_VALUE$2" || echo "$_VALUE${3-$2s}"
 }
 
 # lk_assign VAR
@@ -121,35 +126,21 @@ function lk_safe_grep() {
     grep "$@" || [[ $? -eq 1 ]] || return 2
 }
 
-# lk_x_off [STATUS_VAR]
+# lk_counter_init [VAR...]
 #
-# Output Bash commands that disable xtrace temporarily, prevent themselves from
-# appearing in trace output, and assign the previous command's exit status to
-# _lk_x_status or STATUS_VAR.
-#
-# Recommended usage, if FD 2 or FD 4 may already be receiving trace output:
-#
-#     function quiet() {
-#         { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
-#         # Can also be used in a && or || list
-#         eval "$_lk_x_return"
-#     }
-#
-# Or, outside of a function:
-#
-#     { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
-#     eval "$_lk_x_restore"
-function lk_x_off() {
-    echo 'eval "{ declare '"${1:-_lk_x_status}=$?"' _lk_x_restore= _lk_x_return=\"return \\\$?\"; [ \"\${-/x/}\" = \"\$-\" ] || { _lk_x_restore=\"set -x\"; _lk_x_return=\"eval \\\"{ local _lk_x_status=\\\\\\\$?; set -x; return \\\\\\\$_lk_x_status; } \\\${BASH_XTRACEFD:-2}>/dev/null\\\"\"; set +x; }; } ${BASH_XTRACEFD:-2}>/dev/null"'
+# Set each VAR in the caller's scope to whichever integer is greater:
+# - The current value of VAR
+# - 0 (zero)
+function lk_counter_init() {
+    while (($#)); do
+        if [[ -n ${!1-} ]]; then
+            eval "$1=\$(($1 < 0 ? 0 : $1))"
+        else
+            unset -v "$1" || lk_bad_args || return
+            eval "$1=0"
+        fi
+        shift
+    done
 }
 
-function lk_x_no_off() {
-    function lk_x_off() {
-        echo 'declare '"${1:-_lk_x_status}=$?"' _lk_x_restore= _lk_x_return="return \$?"'
-    }
-    export _LK_NO_X_OFF=1
-}
-
-[ -z "${_LK_NO_X_OFF-}" ] || lk_x_no_off
-
-#### Reviewed: 2021-11-22
+#### Reviewed: 2022-08-12

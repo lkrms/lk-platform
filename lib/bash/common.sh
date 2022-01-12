@@ -87,7 +87,7 @@ function lk_getopt() {
         SHIFT=1
         case "$1" in
         --dry-run)
-            LK_DRY_RUN=1
+            LK_DRY_RUN=Y
             shift
             continue
             ;;
@@ -97,7 +97,7 @@ function lk_getopt() {
             continue
             ;;
         --yes)
-            LK_NO_INPUT=1
+            LK_NO_INPUT=Y
             shift
             continue
             ;;

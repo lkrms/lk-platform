@@ -2,11 +2,11 @@
 
 # To provision macOS using the script below:
 #
-#     [LK_NO_INPUT=1] bash -c "$(curl -fsSL http://lkr.ms/macos)"
+#     [LK_NO_INPUT=Y] bash -c "$(curl -fsSL http://lkr.ms/macos)"
 #
 # Or, to test the 'develop' branch:
 #
-#     [LK_NO_INPUT=1] LK_PLATFORM_BRANCH=develop _LK_FD=3 \
+#     [LK_NO_INPUT=Y] LK_PLATFORM_BRANCH=develop _LK_FD=3 \
 #         bash -xc "$(curl -fsSL http://lkr.ms/macos-dev)" 3>&2 2>~/lk-install.err
 
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}

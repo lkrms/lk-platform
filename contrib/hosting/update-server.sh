@@ -328,7 +328,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
       _LK_LOG_CMDLINE=("$0-$1")
       lk_log_start
 
-      [ "${LK_NO_INPUT-}" != 1 ] ||
+      [ "${LK_NO_INPUT-}" != Y ] ||
         lk_log_tty_off -a
 
       STATUS=0
@@ -387,12 +387,12 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
         }
       }
 
-      [ "${LK_NO_INPUT-}" != 1 ] ||
+      [ "${LK_NO_INPUT-}" != Y ] ||
         lk_log_tty_on
 
       (exit "$STATUS") &&
         { FILE=$UPDATED &&
-          [ "${LK_NO_INPUT-}" != 1 ] ||
+          [ "${LK_NO_INPUT-}" != Y ] ||
           lk_tty_print "Update completed:" "$1" \
             "$LK_BOLD$_LK_SUCCESS_COLOUR" || :; } ||
         { FILE=$FAILED &&

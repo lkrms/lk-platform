@@ -248,6 +248,32 @@ you're doing.
 
 ## Conventions
 
+### Command usage template
+
+There must be at least two spaces between a command-line option and its
+definition.
+
+It isn't mandatory to use a full stop (period) at the end of each definition,
+but all definitions must be consistent.
+
+```
+What the command does, in one or two lines.
+
+Usage:
+  ${0##*/} [options] <ARG>...
+  ${0##*/} [options] --exclude <ARG>...
+
+Options:
+  -f, --flag            A setting that can be enabled.
+  -v, --value=<VALUE>   A value that can be set.
+
+Environment:
+  ENV_VARIABLE    Something different happens if this variable is in the
+                  environment.
+
+A further explanation of the command, possibly including example invocations.
+```
+
 ### Parameter expansion
 
 Bash 3.2 expands `"${@:2}"` to the equivalent of `"$(IFS=" "; echo "${*:2}")"`

@@ -397,7 +397,7 @@ function lk_hosting_site_configure_all() {
     DOMAINS=($(lk_hosting_list_sites | awk '{print $1}')) || return
     for DOMAIN in ${DOMAINS+"${DOMAINS[@]}"}; do
         lk_tty_log "Checking site $((++i)) of ${#DOMAINS[@]}"
-        LK_NO_INPUT=1 \
+        LK_NO_INPUT=Y \
             lk_hosting_site_provision "$DOMAIN" || STATUS=$?
     done
     [ "$STATUS" -eq 0 ] || lk_warn "one or more sites could not be configured"

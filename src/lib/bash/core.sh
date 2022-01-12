@@ -1446,29 +1446,7 @@ function lk_base64() {
     fi
 }
 
-function _lk_file_sort() {
-    sort "${@:--n}" | sed -E 's/^[0-9]+ ://'
-}
-
 if ! lk_is_macos; then
-    function lk_file_sort_by_date() {
-        lk_maybe_sudo stat -c '%Y :%n' -- "$@" | _lk_file_sort
-    }
-    function lk_file_modified() {
-        lk_maybe_sudo stat -c '%Y' -- "$@"
-    }
-    function lk_file_owner() {
-        lk_maybe_sudo stat -c '%U' -- "$@"
-    }
-    function lk_file_group() {
-        lk_maybe_sudo stat -c '%G' -- "$@"
-    }
-    function lk_file_mode() {
-        lk_maybe_sudo stat -c '%04a' -- "$@"
-    }
-    function lk_file_security() {
-        lk_maybe_sudo stat -c '%U:%G %04a' -- "$@"
-    }
     function lk_full_name() {
         getent passwd "${1:-$UID}" | cut -d: -f5 | cut -d, -f1
     }
@@ -1482,27 +1460,6 @@ else
     }
     function lk_full_name() {
         lk_dscl_read RealName
-    }
-    function lk_file_sort_by_date() {
-        lk_maybe_sudo stat -t '%s' -f '%Sm :%N' -- "$@" | _lk_file_sort
-    }
-    function lk_file_modified() {
-        lk_maybe_sudo stat -t '%s' -f '%Sm' -- "$@"
-    }
-    function lk_file_owner() {
-        lk_maybe_sudo stat -f '%Su' -- "$@"
-    }
-    function lk_file_group() {
-        lk_maybe_sudo stat -f '%Sg' -- "$@"
-    }
-    function lk_file_mode() {
-        # Output octal (O) file mode (p) twice, first for the suid, sgid, and
-        # sticky bits (M), then with zero-padding (03) for the user, group, and
-        # other bits (L)
-        lk_maybe_sudo stat -f '%OMp%03OLp' -- "$@"
-    }
-    function lk_file_security() {
-        lk_maybe_sudo stat -f '%Su:%Sg %OMp%03OLp' -- "$@"
     }
 fi
 
