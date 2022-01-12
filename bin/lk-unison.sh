@@ -87,7 +87,5 @@ done
     ! ((i++)) || lk_tty_print
     lk_tty_list FAILED "Failed:" profile profiles \
         "$LK_BOLD$LK_RED"
-    lk_tty_print
-    lk_tty_pause
     lk_die ""
 }
