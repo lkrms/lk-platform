@@ -25,6 +25,7 @@ HOMEBREW_FORMULAE=(
     #
     bash-completion
     icdiff
+    jc
     jq
     newt
     pv
