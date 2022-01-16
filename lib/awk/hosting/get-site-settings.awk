@@ -33,7 +33,7 @@ function join_keys(sep, arr, _k, _i, _out) {
 function join_settings(sep, arr, _k, _i, _out) {
     for (_k in arr) {
         if (index(arr[_k], sep)) {
-            print "hosting-get-site-settings.awk: cannot serialize '" arr[_k] "' in " FILENAME > "/dev/stderr"
+            print "get-site-settings.awk: cannot serialize '" arr[_k] "' in " FILENAME > "/dev/stderr"
             e = 1
             continue
         }
@@ -192,7 +192,7 @@ is_apache && tolower($1) == "sslengine" && tolower($2) == "on" {
 }
 
 is_php && $1 ~ "^\\[[^][]+\\]$" {
-    gsub(/[][]/, "", $1)
+    gsub("[][]", "", $1)
     poolname = $1
 }
 
@@ -262,24 +262,26 @@ END {
     maybe_print("SITE_ROOT", site_root)
     maybe_print("SITE_DISABLE_WWW", disable_www)
     maybe_print("SITE_DISABLE_HTTPS", disable_https)
+    maybe_print("SITE_ENABLE_STAGING", enable_staging)
     maybe_print("SITE_SSL_CERT_FILE", ssl_cert_file)
     maybe_print("SITE_SSL_KEY_FILE", ssl_key_file)
     maybe_print("SITE_SSL_CHAIN_FILE", ssl_chain_file)
-    maybe_print("SITE_ENABLE_STAGING", enable_staging)
-    maybe_print("SITE_DOWNSTREAM_FROM", downstream_from)
-    maybe_print("SITE_DOWNSTREAM_FORCE", downstream_force)
     maybe_print("SITE_PHP_FPM_POOL", poolname)
+    maybe_print("SITE_PHP_FPM_USER", fpm_user)
+    maybe_print("SITE_PHP_FPM_MAX_CHILDREN", max_children)
+    maybe_print("SITE_PHP_FPM_MAX_REQUESTS", max_requests)
+    maybe_print("SITE_PHP_FPM_TIMEOUT", timeout)
+    maybe_print("SITE_PHP_FPM_OPCACHE_SIZE", opcache_size)
     maybe_print("SITE_PHP_FPM_ADMIN_SETTINGS", join_settings(",", php_admin_settings))
     maybe_print("SITE_PHP_FPM_SETTINGS", join_settings(",", php_settings))
     maybe_print("SITE_PHP_FPM_ENV", join_settings(",", env))
-    maybe_print("SITE_PHP_FPM_MAX_CHILDREN", max_children)
-    maybe_print("SITE_PHP_FPM_MAX_REQUESTS", max_requests)
-    maybe_print("SITE_PHP_FPM_USER", fpm_user)
-    maybe_print("SITE_PHP_FPM_TIMEOUT", timeout)
-    maybe_print("SITE_PHP_FPM_OPCACHE_SIZE", opcache_size)
     maybe_print("SITE_PHP_VERSION", phpversion)
-    maybe_print("_SITE_CHILDNAME", childname)
-    maybe_print("_SITE_CUSTOMROOT", customroot)
+    maybe_print("SITE_DOWNSTREAM_FROM", downstream_from)
+    maybe_print("SITE_DOWNSTREAM_FORCE", downstream_force)
+    #maybe_print("_SITE_CHILDNAME", childname)
+    #maybe_print("_SITE_CUSTOMROOT", customroot)
     maybe_print("_SITE_SITENAME", sitename)
     exit e
 }
+
+#### Reviewed: 2022-01-11

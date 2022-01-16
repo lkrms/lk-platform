@@ -1,16 +1,46 @@
 #!/bin/bash
 
-# lk_hosting_php_get_settings PREFIX SETTING=VALUE...
+function lk_hosting_php_get_default_version() { (
+    . /etc/lsb-release || return
+    case "$DISTRIB_RELEASE" in
+    18.04)
+        echo "7.2"
+        ;;
+    20.04)
+        echo "7.4"
+        ;;
+    *)
+        false
+        ;;
+    esac || lk_warn "Ubuntu release not supported: $DISTRIB_RELEASE"
+); }
+
+function lk_hosting_php_get_versions() {
+    systemctl --full --no-legend --no-pager list-units --all "php*.service" |
+        awk '{print $1}' |
+        sed -En 's/^php([0-9.]+)-fpm.service$/\1/p' | sort -V
+}
+
+# _lk_hosting_php_test_config [PHP_VERSION]
+function _lk_hosting_php_test_config() {
+    local PHPVER
+    PHPVER=${1:-$(lk_hosting_php_get_default_version)} || return
+    lk_tty_detail "Testing PHP-FPM $PHPVER configuration"
+    lk_elevate "php-fpm$PHPVER" --test ||
+        lk_warn "invalid configuration"
+}
+
+# _lk_hosting_php_get_settings PREFIX SETTING=VALUE...
 #
 # Print each PHP setting as a PHP-FPM pool directive. If the same SETTING is
 # given more than once, only use the first VALUE.
 #
 # Example:
 #
-#     $ lk_hosting_php_get_settings php_admin_ log_errors=On memory_limit=80M
+#     $ _lk_hosting_php_get_settings php_admin_ log_errors=On memory_limit=80M
 #     php_admin_flag[log_errors] = On
 #     php_admin_value[memory_limit] = 80M
-function lk_hosting_php_get_settings() {
+function _lk_hosting_php_get_settings() {
     [ $# -gt 1 ] || lk_warn "no settings" || return
     printf '%s\n' "${@:2}" | awk -F= -v prefix="$1" -v null='""' '
 /^[^[:space:]=]+=/ {

@@ -56,4 +56,43 @@ function lk_false() {
     [[ $1 =~ $REGEX ]] || [[ ${1:+${!1-}} =~ $REGEX ]]
 }
 
+# lk_test TEST [VALUE...]
+#
+# Return true if every VALUE passes TEST, otherwise return false. If there are
+# no VALUE arguments, return false.
+function lk_test() {
+    local IFS=$' \t\n' COMMAND
+    COMMAND=($1)
+    shift
+    [ -n "${COMMAND+1}" ] && [ $# -gt 0 ] || return
+    while [ $# -gt 0 ]; do
+        "${COMMAND[@]}" "$1" || break
+        shift
+    done
+    [ $# -eq 0 ]
+}
+
+# lk_test_any TEST [VALUE...]
+#
+# Return true if at least one VALUE passes TEST, otherwise return false.
+function lk_test_any() {
+    local IFS=$' \t\n' COMMAND
+    COMMAND=($1)
+    shift
+    [ -n "${COMMAND+1}" ] && [ $# -gt 0 ] || return
+    while [ $# -gt 0 ]; do
+        ! "${COMMAND[@]}" "$1" || break
+        shift
+    done
+    [ $# -gt 0 ]
+}
+
+function lk_paths_exist() { lk_test "lk_sudo test -e" "$@"; }
+
+function lk_files_exist() { lk_test "lk_sudo test -f" "$@"; }
+
+function lk_dirs_exist() { lk_test "lk_sudo test -d" "$@"; }
+
+function lk_files_not_empty() { lk_test "lk_sudo test -s" "$@"; }
+
 #### Reviewed: 2021-12-29

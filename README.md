@@ -6,7 +6,7 @@ Settings are loaded in the following order, with later values overriding earlier
 ones. If `lk-platform.conf` exists, it is expected to contain a series of shell
 variable assignments compatible with Bash and POSIX `sh`.
 
-1. `$LK_BASE/etc/lk-platform/lk-platform.conf`
+1. `<LK_BASE>/etc/lk-platform/lk-platform.conf`
 2. `~/.config/lk-platform/lk-platform.conf`
 3. Environment variables
 
@@ -24,6 +24,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_AUTO_BACKUP_SCHEDULE`
 - `LK_AUTO_REBOOT`
 - `LK_AUTO_REBOOT_TIME`
+- `LK_AWS_PROFILE`
 - `LK_BACKUP_BASE_DIRS`
 - `LK_BACKUP_MAIL`
 - `LK_BACKUP_MAIL_ERROR_ONLY`
@@ -43,7 +44,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_DNS_SEARCH`
 - `LK_DNS_SERVERS`
 - `LK_DRY_RUN`
-- `LK_EMAIL_BLACKHOLE`
+- `LK_EMAIL_DESTINATION`
 - `LK_EXEC`
 - `LK_FILE_BACKUP_MOVE`
 - `LK_FILE_BACKUP_TAKE`
@@ -53,6 +54,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_GIT_REF`
 - `LK_GIT_REPOS`
 - `LK_GRUB_CMDLINE`
+- `LK_HANDBRAKE_TARGET`
 - `LK_HASH_COMMAND`
 - `LK_INNODB_BUFFER_SIZE`
 - `LK_IPV4_ADDRESS`
@@ -66,12 +68,12 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_MEDIAINFO_LABEL`
 - `LK_MEDIAINFO_NO_VALUE`
 - `LK_MEMCACHED_MEMORY_LIMIT`
+- `LK_MY_CNF`
+- `LK_MY_CNF_OPTIONS`
 - `LK_MYSQL_ELEVATE`
 - `LK_MYSQL_ELEVATE_USER`
 - `LK_MYSQL_HOST`
 - `LK_MYSQL_MAX_CONNECTIONS`
-- `LK_MY_CNF`
-- `LK_MY_CNF_OPTIONS`
 - `LK_NODE_FQDN`
 - `LK_NODE_HOSTNAME`
 - `LK_NODE_LANGUAGE`
@@ -82,6 +84,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_NO_INPUT`
 - `LK_NO_LOG`
 - `LK_NO_STACK_TRACE`
+- `LK_NOTE_DIR`
 - `LK_NTP_SERVER`
 - `LK_OPCACHE_MEMORY_CONSUMPTION`
 - `LK_OPENCONNECT_PROTOCOL`
@@ -144,7 +147,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 
 #### Check code for settings used
 
-To generate the list above, run the following in `$LK_BASE`:
+To generate the list above, run the following in `<LK_BASE>`:
 
 ```bash
 lk_bash_find_scripts -print0 |
@@ -156,27 +159,65 @@ lk_bash_find_scripts -print0 |
 ### Site settings
 
 Each site on a [hosting server](bin/lk-provision-hosting.sh) is configured in
-`$LK_BASE/etc/sites/DOMAIN.conf`, where `DOMAIN` is the site's primary domain.
-Available settings:
+`<LK_BASE>/etc/lk-platform/sites/<DOMAIN>.conf`, where `<DOMAIN>` is the site's
+primary domain. Available settings:
 
 - **`SITE_ALIASES`** (comma-separated secondary domains; do not use for
   `www.DOMAIN`)
-- **`SITE_ROOT`** (`/srv/www/USER` or `/srv/www/USER/CHILD`)
+- **`SITE_ROOT`** (either `/srv/www/<USER>` or `/srv/www/<USER>/<CHILD>`)
 - **`SITE_ENABLE`** (`Y` or `N`; default: `Y`)
 - **`SITE_ORDER`** (default: `-1`)
 - **`SITE_DISABLE_WWW`** (`Y` or `N`; default: `N`)
 - **`SITE_DISABLE_HTTPS`** (`Y` or `N`; default: `N`)
 - **`SITE_ENABLE_STAGING`** (`Y` or `N`; default: `N`)
-- **`SITE_PHP_FPM_POOL`** (default: `USER`)
-- **`SITE_PHP_FPM_USER`** (usually `www-data` or `USER`; default: `www-data` if
-  `USER` is an administrator, otherwise `USER`)
+- **`SITE_SSL_CERT_FILE`** (obtained automatically unless `SITE_DISABLE_HTTPS`
+  is set)
+- **`SITE_SSL_KEY_FILE`**
+- **`SITE_SSL_CHAIN_FILE`** (only required if `SITE_SSL_CERT_FILE` doesn't
+  contain a valid certificate chain)
+- **`SITE_PHP_FPM_POOL`** (default: `<USER>`)
+- **`SITE_PHP_FPM_USER`** (usually `www-data` or `<USER>`; default: `www-data`
+  if `<USER>` is an administrator, otherwise `<USER>`)
 - **`SITE_PHP_FPM_MAX_CHILDREN`**
+- **`SITE_PHP_FPM_MAX_REQUESTS`**
 - **`SITE_PHP_FPM_TIMEOUT`** (in seconds; default: `300`)
 - **`SITE_PHP_FPM_OPCACHE_SIZE`** (in MiB; default: `128`)
 - **`SITE_PHP_FPM_ADMIN_SETTINGS`**
 - **`SITE_PHP_FPM_SETTINGS`**
 - **`SITE_PHP_FPM_ENV`**
 - **`SITE_PHP_VERSION`** (e.g. `7.0`, `7.2`, `7.4`; default: *system-dependent*)
+- **`SITE_DOWNSTREAM_FROM`** (`cloudflare` or
+  `<HTTP_HEADER>:<PROXY_CIDR>[,<PROXY_CIDR>...]`, e.g.
+  `X-Forwarded-For:172.105.171.229,103.31.4.0/22`)
+- **`SITE_DOWNSTREAM_FORCE`** (`Y` or `N`; default: `N`; if set, requests are
+  rejected except from an upstream proxy)
+
+#### Internal variables
+
+The following variables are used by various `lk_hosting_*` functions. They can't
+be set via `<DOMAIN>.conf`. Don't change them unless you know exactly what
+you're doing.
+
+1. Set via `_lk_hosting_site_settings_sh`:
+   - **`_SITE_DOMAIN`**
+   - **`_SITE_FILE`**
+2. Set by `_lk_hosting_site_check_root`:
+   - **`_SITE_INODE`**
+   - **`_SITE_USER`**
+   - **`_SITE_GROUP`**
+   - **`_SITE_CHILD`**
+   - **`_SITE_IS_CHILD`** (`Y` or `N`)
+   - **`_SITE_NAME`**
+3. Set by `_lk_hosting_site_load_settings`:
+   - **`_SITE_ORDER`**
+   - **`_SITE_PHP_FPM_USER`**
+   - **`_SITE_PHP_FPM_MAX_CHILDREN`**
+   - **`_SITE_PHP_FPM_MAX_REQUESTS`**
+   - **`_SITE_PHP_FPM_TIMEOUT`**
+   - **`_SITE_PHP_FPM_OPCACHE_SIZE`**
+   - **`_SITE_PHP_VERSION`**
+4. Set by `_lk_hosting_site_load_dynamic_settings`:
+   - **`_SITE_PHP_FPM_PM`** (`static`, `ondemand` or `dynamic`)
 
 ## Conventions
 
@@ -187,8 +228,7 @@ unless `IFS` contains a space. The following workaround should generally be
 used:
 
 ```bash
-local IFS
-unset IFS
+local IFS=$' \t\n'
 some_command "${@:2}"
 ```
 

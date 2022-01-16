@@ -29,7 +29,7 @@ lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
 # <UDF name="LK_PHP_ADMIN_SETTINGS" label="Enforced php.ini settings (comma-delimited)" example="post_max_size=50M,log_errors=Off" default="" />
 # <UDF name="LK_MEMCACHED_MEMORY_LIMIT" label="Memcached size" oneof="64,128,256,512,768,1024" default="256" />
 # <UDF name="LK_SMTP_RELAY" label="SMTP relay (system-wide)" example="[mail.clientname.com.au]:587" default="" />
-# <UDF name="LK_EMAIL_BLACKHOLE" label="Email black hole (system-wide, STAGING ONLY)" example="/dev/null" default="" />
+# <UDF name="LK_EMAIL_DESTINATION" label="Only deliver email to this location (system-wide, STAGING ONLY)" example="/dev/null" default="" />
 # <UDF name="LK_UPGRADE_EMAIL" label="Email address for unattended upgrade notifications" example="unattended-upgrades@linode.linacreative.com" default="" />
 # <UDF name="LK_AUTO_REBOOT" label="Reboot automatically after unattended upgrades" oneof="Y,N" />
 # <UDF name="LK_AUTO_REBOOT_TIME" label="Preferred automatic reboot time" oneof="02:00,03:00,04:00,05:00,06:00,07:00,08:00,09:00,10:00,11:00,12:00,13:00,14:00,15:00,16:00,17:00,18:00,19:00,20:00,21:00,22:00,23:00,00:00,01:00,now" default="02:00" />
@@ -79,7 +79,7 @@ LK_PHP_SETTINGS=${LK_PHP_SETTINGS-}
 LK_PHP_ADMIN_SETTINGS=${LK_PHP_ADMIN_SETTINGS-}
 LK_MEMCACHED_MEMORY_LIMIT=${LK_MEMCACHED_MEMORY_LIMIT:-256}
 LK_SMTP_RELAY=${LK_SMTP_RELAY-}
-LK_EMAIL_BLACKHOLE=${LK_EMAIL_BLACKHOLE-}
+LK_EMAIL_DESTINATION=${LK_EMAIL_DESTINATION-}
 LK_UPGRADE_EMAIL=${LK_UPGRADE_EMAIL-}
 LK_AUTO_REBOOT=${LK_AUTO_REBOOT-}
 LK_AUTO_REBOOT_TIME=${LK_AUTO_REBOOT_TIME:-02:00}

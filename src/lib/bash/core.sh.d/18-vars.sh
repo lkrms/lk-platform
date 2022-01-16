@@ -81,3 +81,36 @@ function lk_var_exported() {
 function lk_var_readonly() {
     lk_var_has_attr "$1" r
 }
+
+# lk_var_not_null VAR...
+#
+# Return false if any VAR is unset or set to the empty string.
+function lk_var_not_null() {
+    while [ $# -gt 0 ]; do
+        [ -n "${!1:+1}" ] || return
+        shift
+    done
+}
+
+# lk_var_to_bool VAR [TRUE FALSE]
+#
+# If the value of VAR is 'Y', 'yes', '1', 'true' or 'on' (not case-sensitive),
+# assign TRUE (default: Y) to VAR, otherwise assign FALSE (default: N).
+function lk_var_to_bool() {
+    [ $# -eq 3 ] || set -- "$1" Y N
+    if lk_true "$1"; then
+        eval "$1=\$2"
+    else
+        eval "$1=\$3"
+    fi
+}
+
+# lk_var_to_int VAR [NULL]
+#
+# Convert the value of VAR to an integer. If VAR is unset, empty or invalid,
+# assign NULL (default: 0).
+function lk_var_to_int() {
+    [ $# -eq 2 ] || set -- "$1" 0
+    [[ ! ${!1-} =~ ^0*([0-9]+)(\.[0-9]*)?$ ]] || set -- "$1" "${BASH_REMATCH[1]}"
+    eval "$1=\$2"
+}

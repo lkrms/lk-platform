@@ -139,6 +139,7 @@ AUR_PACKAGES=(
 
     # Utilities
     icdiff
+    jc
 
     #
     ${AUR_PACKAGES[@]+"${AUR_PACKAGES[@]}"}

@@ -20,6 +20,9 @@ add_regex DOMAIN_PART_REGEX "[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
 add_regex DOMAIN_NAME_REGEX "$DOMAIN_PART_REGEX(\\.$DOMAIN_PART_REGEX)+"
 add_regex EMAIL_ADDRESS_REGEX "[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@$DOMAIN_NAME_REGEX"
 
+add_regex DOMAIN_PART_LOWER_REGEX "[a-z0-9]([-a-z0-9]*[a-z0-9])?"
+add_regex DOMAIN_NAME_LOWER_REGEX "$DOMAIN_PART_LOWER_REGEX(\\.$DOMAIN_PART_LOWER_REGEX)+"
+
 _O="(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])"
 add_regex IPV4_REGEX "($_O\\.){3}$_O"
 add_regex IPV4_OPT_PREFIX_REGEX "$IPV4_REGEX(/(3[0-2]|[12][0-9]|[1-9]))?"
