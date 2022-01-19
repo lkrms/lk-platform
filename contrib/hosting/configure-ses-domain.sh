@@ -1,6 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-. lk-bash-load.sh || exit
+lk_bin_depth=2 . lk-bash-load.sh || exit
 lk_require linode
 
 function __usage() {
@@ -8,7 +8,10 @@ function __usage() {
 Provision Amazon SES as an SMTP relay for one or more domains.
 
 Usage:
-  ${0##*/} <DOMAIN>...
+  ${0##*/} [options] <DOMAIN>...
+
+Options:
+  -k, --insecure    Proceed even if <DOMAIN>'s TLS certificate is invalid.
 
 Each DOMAIN must resolve to a hosting server, and https://<DOMAIN>/php-sysinfo
 must be reachable.
@@ -21,10 +24,26 @@ Environment:
 EOF
 }
 
+lk_bash_at_least 4 || lk_die "Bash 4 or higher required"
 lk_assert_command_exists aws linode-cli
 
-lk_getopt
+CURL_OPTIONS=(-fsSL)
+
+lk_getopt "k" "insecure"
 eval "set -- $LK_GETOPT"
+
+while :; do
+  OPT=$1
+  shift
+  case "$OPT" in
+  -k | --insecure)
+    CURL_OPTIONS+=("$OPT")
+    ;;
+  --)
+    break
+    ;;
+  esac
+done
 
 lk_is_fqdn "$@" || lk_usage
 
@@ -52,26 +71,33 @@ AWS_REGION=$(aws configure get region) ||
     lk_linode_flush_cache
 
   while (($#)); do
-    DOMAIN=$1
+    _DOMAIN=$1
+    SES_DOMAIN=$1
     VERIFIED=
     shift
 
-    # `lk_linode_domain -s` sets DOMAIN and DOMAIN_ID
-    if is_linode && lk_linode_domain -s "$DOMAIN" "${LINODE_ARGS[@]}"; then
-      lk_tty_print "Adding Linode domain '$DOMAIN' to Amazon SES"
-    else
-      DOMAIN_ID=
-      lk_tty_print "Adding unmanaged domain '$DOMAIN' to Amazon SES"
-    fi
+    lk_tty_print "Provisioning '$_DOMAIN' with Amazon SES"
 
-    { lk_mktemp_with -r IDENTITY \
-      aws sesv2 get-email-identity \
-      --email-identity "$DOMAIN" 2>/dev/null &&
-      lk_tty_detail "Email identity already exists"; } ||
+    while :; do
+      lk_tty_detail "Checking" "$SES_DOMAIN"
+      lk_mktemp_with -r IDENTITY \
+        aws sesv2 get-email-identity \
+        --email-identity "$SES_DOMAIN" 2>/dev/null &&
+        lk_tty_log "Email identity found:" "$SES_DOMAIN" || {
+        SES_DOMAIN=${SES_DOMAIN#*.}
+        ! lk_is_fqdn "$SES_DOMAIN" || lk_is_tld "$SES_DOMAIN" || continue
+        SES_DOMAIN=
+      }
+      break
+    done
+
+    if [ -z "$SES_DOMAIN" ]; then
+      SES_DOMAIN=$_DOMAIN
       lk_mktemp_with -r IDENTITY lk_tty_run_detail \
         aws sesv2 create-email-identity \
-        --email-identity "$DOMAIN" \
+        --email-identity "$SES_DOMAIN" \
         --dkim-signing-attributes NextSigningKeyLength="$DKIM_KEY_LENGTH"
+    fi
 
     if jq -e '.VerifiedForSendingStatus' <"$IDENTITY" >/dev/null; then
 
@@ -84,10 +110,12 @@ AWS_REGION=$(aws configure get region) ||
       [ ${#TOKENS[@]} -eq 3 ] ||
         lk_die "unexpected value in .DkimAttributes.Tokens[]"
 
-      if [ -n "$DOMAIN_ID" ]; then
+      # `lk_linode_domain -s` sets DOMAIN and DOMAIN_ID
+      if is_linode &&
+        lk_linode_domain -s "$SES_DOMAIN" "${LINODE_ARGS[@]}"; then
 
         lk_mktemp_with RECORDS \
-          lk_linode_domain_records "$DOMAIN_ID" ${LINODE+"${LINODE_ARGS[@]}"}
+          lk_linode_domain_records "$DOMAIN_ID" "${LINODE_ARGS[@]}"
 
         for TOKEN in "${TOKENS[@]}"; do
 
@@ -104,14 +132,14 @@ AWS_REGION=$(aws configure get region) ||
             ;;
 
           *,*)
-            lk_tty_run_detail linode-cli ${LINODE+"${LINODE_ARGS[@]}"} \
+            lk_tty_run_detail linode-cli "${LINODE_ARGS[@]}" \
               domains records-update \
               --target "$TARGET" \
               "$DOMAIN_ID" "${RECORD%%,*}"
             ;;
 
           "")
-            lk_tty_run_detail linode-cli ${LINODE+"${LINODE_ARGS[@]}"} \
+            lk_tty_run_detail linode-cli "${LINODE_ARGS[@]}" \
               domains records-create \
               --type CNAME \
               --name "$NAME" \
@@ -127,7 +155,7 @@ AWS_REGION=$(aws configure get region) ||
 
         lk_tty_detail "The following DNS records must be visible to SES:" \
           "$(for TOKEN in "${TOKENS[@]}"; do
-            NAME=$TOKEN._domainkey.$DOMAIN.
+            NAME=$TOKEN._domainkey.$SES_DOMAIN.
             TARGET=$TOKEN.dkim.amazonses.com.
             printf "%s IN CNAME %s\n" "$NAME" "$TARGET"
           done)"
@@ -137,8 +165,8 @@ AWS_REGION=$(aws configure get region) ||
     fi
 
     lk_mktemp_with -r SYSINFO lk_tty_run_detail \
-      curl -fsSL "https://$DOMAIN/php-sysinfo" ||
-      lk_die "unable to retrieve system information from host: $DOMAIN"
+      curl "${CURL_OPTIONS[@]}" "https://$_DOMAIN/php-sysinfo" ||
+      lk_die "unable to retrieve system information from host: $_DOMAIN"
 
     SH=$(lk_json_sh \
       HOST_NAME .hostname \
@@ -148,10 +176,15 @@ AWS_REGION=$(aws configure get region) ||
     lk_is_fqdn "$HOST_FQDN" ||
       lk_die "host reported invalid FQDN: $HOST_FQDN"
 
+    SMTP_USER=$_DOMAIN@$HOST_FQDN
+    [[ $_DOMAIN != "$HOST_FQDN" ]] && [[ $_DOMAIN == "$SES_DOMAIN" ]] ||
+      SMTP_USER=${_DOMAIN%".$SES_DOMAIN"}@$SES_DOMAIN
+
     lk_tty_run_detail "$LK_BASE/contrib/hosting/configure-ses-site.sh" \
       "${LK_SSH_PREFIX-$LK_PATH_PREFIX}$HOST_NAME" \
-      "$DOMAIN@$HOST_FQDN" \
-      "$DOMAIN" \
+      "$SMTP_USER" \
+      "$_DOMAIN" \
+      "$SES_DOMAIN" \
       "${HOST_IP[@]}"
 
   done
