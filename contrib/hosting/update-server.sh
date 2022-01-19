@@ -33,7 +33,7 @@
 #    that don't have one.
 # 7. Enable system cron on any WordPress sites that aren't using it.
 
-. lk-bash-load.sh || exit
+lk_bin_depth=2 . lk-bash-load.sh || exit
 
 {
   function keep-alive() {
@@ -83,7 +83,8 @@
 
     set -uo pipefail
 
-    local INSTALL KEYS_FILE NO_CERTBOT WP OWNER STATUS=0
+    local INSTALL KEYS_FILE HEAD_FILE LAST_HEAD HEAD SH \
+      NO_CERTBOT WP OWNER STATUS=0
 
     cd /opt/lk-platform 2>/dev/null ||
       cd /opt/*-platform ||
@@ -148,9 +149,21 @@
         /etc/skel.*/.ssh/{authorized_keys_*,authorized_keys}) ||
       lk_file_replace -m "$KEYS_FILE" "$3" || return
 
-    ./bin/lk-provision-hosting.sh \
-      --set LK_PLATFORM_BRANCH="$1" \
-      "${@:4}" || return
+    HEAD_FILE=.git/update-server-head
+    LAST_HEAD=
+    { [ ! -e "$HEAD_FILE" ] || LAST_HEAD=$(<"$HEAD_FILE"); } &&
+      HEAD=$(lk_git_ref) || return
+    if [[ $HEAD != "$LAST_HEAD" ]]; then
+      ./bin/lk-provision-hosting.sh \
+        --set LK_PLATFORM_BRANCH="$1" \
+        "${@:4}" &&
+        echo "$HEAD" >"$HEAD_FILE"
+    else
+      lk_tty_log "System already provisioned by lk-platform revision $HEAD"
+      lk_tty_print "Checking settings"
+      SH=$(lk_settings_getopt "${@:4}") &&
+        lk_settings_persist "$SH"
+    fi || return
 
     ((!TLS)) || {
       lk_tty_print "Checking TLS certificates"

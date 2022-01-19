@@ -29,6 +29,9 @@ function _lk_hosting_postfix_provision() {
                 printf '%s\t%s\n' "$SENDER" "$RELAY"
             done
             unset IFS
+        else
+            RELAY=${RELAY:-smtp:}
+            printf '%s\t%s\n' "@${LK_NODE_FQDN-}" "$RELAY"
         fi
 
         # For each domain and sender configured, add an `smtp:` entry to deliver
@@ -37,18 +40,15 @@ function _lk_hosting_postfix_provision() {
         # - SITE_SMTP_RELAY is not configured
         #
         # Otherwise, add a `relay:<SMTP_RELAY>` entry.
-        jq -r \
-            --arg relayhost "${RELAY:-smtp:}" \
-            --arg fqdn "${LK_NODE_FQDN-}" '
-([ "@\($fqdn)", $relayhost ]),
-(sort_by(.domain)[] |
+        jq -r --arg relayhost "$RELAY" '
+sort_by(.domain)[] |
   [ [ ( .domain,
       if .www_enabled then "www.\(.domain)" else empty end,
       .alias_domains[] ) | "@\(.)" ],
     if .smtp_relay.host
     then "relay:\(.smtp_relay.host)"
     else $relayhost end ] as [ $domains, $host ] |
-  .smtp_relay | .senders // $domains | .[] | [ ., $host ]) | @tsv' <"$SITES"
+  .smtp_relay | .senders // $domains | .[] | [ ., $host ] | @tsv' <"$SITES"
     } | awk -F '\t' \
         'seen[$1]++{print"Duplicate key: "$0>"/dev/stderr";next}{print}' \
         >"$TEMP" &&
@@ -71,9 +71,7 @@ function _lk_hosting_postfix_provision() {
             unset IFS
         fi
 
-        jq -r \
-            --arg relayhost "${RELAY:-smtp:}" \
-            --arg fqdn "${LK_NODE_FQDN-}" '
+        jq -r '
 sort_by(.domain)[] | select(.smtp_relay.credentials != null) |
   [ [ ( .domain,
       if .www_enabled then "www.\(.domain)" else empty end,

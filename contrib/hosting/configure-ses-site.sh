@@ -1,13 +1,15 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-. lk-bash-load.sh || exit
+lk_bin_depth=2 . lk-bash-load.sh || exit
 
 function __usage() {
   cat <<EOF
 Configure a hosting server to send email from the given domain via Amazon SES.
 
 Usage:
-  ${0##*/} <SSH_HOST> <SMTP_USER> <DOMAIN> <SOURCE_IP>...
+  ${0##*/} <SSH_HOST> <SMTP_USER> <DOMAIN> <SES_DOMAIN> <SOURCE_IP>...
+
+If <SES_DOMAIN> is -, its value is taken from DOMAIN.
 
 Environment:
   AWS_PROFILE   Must contain the name of an AWS CLI profile with a default
@@ -15,15 +17,17 @@ Environment:
 EOF
 }
 
+lk_bash_at_least 4 || lk_die "Bash 4 or higher required"
 lk_assert_command_exists aws
 
 lk_getopt
 eval "set -- $LK_GETOPT"
 
-[ $# -ge 4 ] || lk_usage
+[ $# -ge 5 ] || lk_usage
 lk_is_fqdn "$3" || lk_usage -e "invalid domain: $3"
-lk_is_regex IP_REGEX "${@:4}" &&
-  ! printf '%s\n' "${@:4}" |
+[[ $4 == - ]] || lk_is_fqdn "$4" || lk_usage -e "invalid domain: $4"
+lk_is_regex IP_REGEX "${@:5}" &&
+  ! printf '%s\n' "${@:5}" |
   lk_grep_regex IP_PRIVATE_FILTER_REGEX >/dev/null ||
   lk_usage -e "invalid source IP"
 
@@ -35,8 +39,11 @@ AWS_REGION=$(aws configure get region) ||
 
 SSH_HOST=$1
 SMTP_USER=$2
-DOMAIN=$3
-SOURCE_IP=("${@:4}")
+DOMAIN=${3,,}
+SES_DOMAIN=${4,,}
+SOURCE_IP=("${@:5}")
+[[ $SES_DOMAIN != - ]] ||
+  SES_DOMAIN=$DOMAIN
 
 {
   lk_tty_list SOURCE_IP \
@@ -47,9 +54,9 @@ SOURCE_IP=("${@:4}")
   AWS_ACCOUNT_ID=$(aws sts get-caller-identity | jq -r '.Account')
   ARN_PREFIX=arn:aws:ses:$AWS_REGION:$AWS_ACCOUNT_ID:identity
 
-  lk_tty_detail "Checking Amazon SES email identity:" "$DOMAIN"
+  lk_tty_detail "Checking Amazon SES email identity:" "$SES_DOMAIN"
   aws sesv2 get-email-identity \
-    --email-identity "$DOMAIN" >/dev/null
+    --email-identity "$SES_DOMAIN" >/dev/null
 
   { lk_mktemp_with IAM_USER \
     aws iam get-user \
@@ -60,7 +67,7 @@ SOURCE_IP=("${@:4}")
       --user-name "$SMTP_USER"
 
   POLICY=$(jq \
-    --arg resource "$ARN_PREFIX/$DOMAIN" '
+    --arg resource "$ARN_PREFIX/$SES_DOMAIN" '
 .Statement[0].Resource = $resource |
   .Statement[0]
     .Condition["ForAnyValue:IpAddress"]["aws:SourceIp"] = $ARGS.positional' \
@@ -142,17 +149,35 @@ SOURCE_IP=("${@:4}")
   function set-site-smtp-settings() {
     . /opt/lk-platform/lib/bash/rc.sh &&
       lk_require hosting || return
-    lk_hosting_site_configure \
-      -s SITE_SMTP_RELAY="[email-smtp.$AWS_REGION.amazonaws.com]:587" \
-      -s SITE_SMTP_CREDENTIALS="$SMTP_CREDENTIALS" \
-      -s SITE_SMTP_SENDERS= \
-      "$DOMAIN"
+    local i=0 REGEX="(^|\\.)${DOMAIN//./\\.}\$" _DOMAIN SH
+    while read -r _DOMAIN && [ -n "$_DOMAIN" ]; do
+      ((++i))
+      lk_hosting_site_configure -n \
+        -s SITE_SMTP_RELAY="[email-smtp.$AWS_REGION.amazonaws.com]:587" \
+        -s SITE_SMTP_CREDENTIALS="$SMTP_CREDENTIALS" \
+        -s SITE_SMTP_SENDERS= \
+        "$_DOMAIN" || return
+    done < <(lk_hosting_list_sites |
+      awk -v re="$REGEX" '$1 ~ re { print $1 }')
+    if [[ $LK_NODE_FQDN =~ $REGEX ]]; then
+      ((++i))
+      SH=$(lk_settings_getopt \
+        --set LK_SMTP_RELAY "[email-smtp.$AWS_REGION.amazonaws.com]:587" \
+        --set LK_SMTP_CREDENTIALS "$SMTP_CREDENTIALS" \
+        --set LK_SMTP_SENDERS "$(
+          [[ $SES_DOMAIN == "$DOMAIN" ]] || SES_DOMAIN+=,@$DOMAIN
+          echo "@$SES_DOMAIN"
+        )") && eval "$SH" &&
+        lk_settings_persist "$SH" || return
+    fi
+    ((i)) || lk_warn "site not found: $DOMAIN" || return
+    lk_hosting_apply_config
   }
 
   lk_mktemp_with SCRIPT
   {
     declare -f set-site-smtp-settings
-    declare -p AWS_REGION DOMAIN SMTP_CREDENTIALS
+    declare -p AWS_REGION DOMAIN SES_DOMAIN SMTP_CREDENTIALS
     lk_quote_args set-site-smtp-settings
   } >"$SCRIPT"
   COMMAND=$(lk_quote_args \

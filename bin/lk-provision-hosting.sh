@@ -484,9 +484,11 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
     debconf-set-selections < <(lk_expand_template \
         "$LK_BASE/share/apt/hosting.template.debconf")
 
-    lk_keep_trying lk_apt_update
+    no_upgrade ||
+        lk_keep_trying lk_apt_update
 
-    if [ -x /usr/local/bin/pip3 ] && ! lk_dpkg_installed python3-pip; then
+    if ! no_upgrade &&
+        [ -x /usr/local/bin/pip3 ] && ! lk_dpkg_installed python3-pip; then
         PIP3=/usr/local/bin/pip3
         lk_tty_print "Removing standalone pip3"
         function pip3_args() {
@@ -518,20 +520,22 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
             lk_apt_reinstall_damaged
     fi
 
-    IFS=,
-    APT_PACKAGES=($LK_NODE_PACKAGES)
-    unset IFS
-    . "$LK_BASE/lib/hosting/packages.sh"
-    APT_PACKAGES=($(comm -13 \
-        <(lk_echo_array APT_SUPPRESS APT_REMOVE | sort -u) \
-        <(lk_echo_array APT_PACKAGES | sort -u)))
-    [ ${#APT_FILTER[@]} -eq 0 ] ||
-        APT_PACKAGES=($(lk_echo_array APT_PACKAGES |
-            eval "sed -E$(printf ' -e %q' "${APT_FILTER[@]}")"))
+    if ! no_upgrade; then
+        IFS=,
+        APT_PACKAGES=($LK_NODE_PACKAGES)
+        unset IFS
+        . "$LK_BASE/lib/hosting/packages.sh"
+        APT_PACKAGES=($(comm -13 \
+            <(lk_echo_array APT_SUPPRESS APT_REMOVE | sort -u) \
+            <(lk_echo_array APT_PACKAGES | sort -u)))
+        [ ${#APT_FILTER[@]} -eq 0 ] ||
+            APT_PACKAGES=($(lk_echo_array APT_PACKAGES |
+                eval "sed -E$(printf ' -e %q' "${APT_FILTER[@]}")"))
 
-    [ ${#APT_PACKAGES[@]} -eq 0 ] ||
-        lk_keep_trying lk_apt_install "${APT_PACKAGES[@]}"
-    lk_apt_purge "${APT_REMOVE[@]}"
+        [ ${#APT_PACKAGES[@]} -eq 0 ] ||
+            lk_keep_trying lk_apt_install "${APT_PACKAGES[@]}"
+        lk_apt_purge "${APT_REMOVE[@]}"
+    fi
 
     lk_tty_print "Checking services"
     DISABLE_SERVICES=(
@@ -913,26 +917,28 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
                 lk_mark_dirty "php$PHPVER-fpm.service"
         }
 
-        lk_tty_print "Checking WP-CLI"
-        FILE=/usr/local/bin/wp
-        lk_install -m 00755 "$FILE"
-        if [ -s "$FILE" ]; then
-            lk_run_detail "$FILE" cli update --yes
-        else
-            lk_tty_detail "Installing WP-CLI to" "$FILE"
-            _FILE=$(lk_mktemp_file)
-            lk_delete_on_exit "$_FILE"
-            URL=https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
-            curl "${CURL_OPTIONS[@]}" --output "$_FILE" "$URL" ||
-                lk_die "unable to download: $URL"
-            cp "$_FILE" "$FILE"
-        fi
+        if ! no_upgrade; then
+            lk_tty_print "Checking WP-CLI"
+            FILE=/usr/local/bin/wp
+            lk_install -m 00755 "$FILE"
+            if [ -s "$FILE" ]; then
+                lk_run_detail "$FILE" cli update --yes
+            else
+                lk_tty_detail "Installing WP-CLI to" "$FILE"
+                _FILE=$(lk_mktemp_file)
+                lk_delete_on_exit "$_FILE"
+                URL=https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+                curl "${CURL_OPTIONS[@]}" --output "$_FILE" "$URL" ||
+                    lk_die "unable to download: $URL"
+                cp "$_FILE" "$FILE"
+            fi
 
-        lk_keep_trying lk_git_provision_repo -fs \
-            -o :adm \
-            -n opcache-gui \
-            https://github.com/lkrms/opcache-gui.git \
-            /opt/opcache-gui
+            lk_keep_trying lk_git_provision_repo -fs \
+                -o :adm \
+                -n opcache-gui \
+                https://github.com/lkrms/opcache-gui.git \
+                /opt/opcache-gui
+        fi
     fi
 
     if lk_dpkg_installed mariadb-server; then
