@@ -153,7 +153,7 @@ AWS_REGION=$(aws configure get region) ||
 
       else
 
-        lk_tty_detail "The following DNS records must be visible to SES:" \
+        lk_tty_print "The following DNS records must be visible to SES:" \
           "$(for TOKEN in "${TOKENS[@]}"; do
             NAME=$TOKEN._domainkey.$SES_DOMAIN.
             TARGET=$TOKEN.dkim.amazonses.com.
@@ -180,12 +180,21 @@ AWS_REGION=$(aws configure get region) ||
     [[ $_DOMAIN != "$HOST_FQDN" ]] && [[ $_DOMAIN == "$SES_DOMAIN" ]] ||
       SMTP_USER=${_DOMAIN%".$SES_DOMAIN"}@$SES_DOMAIN
 
-    lk_tty_run_detail "$LK_BASE/contrib/hosting/configure-ses-site.sh" \
-      "${LK_SSH_PREFIX-$LK_PATH_PREFIX}$HOST_NAME" \
-      "$SMTP_USER" \
-      "$_DOMAIN" \
-      "$SES_DOMAIN" \
-      "${HOST_IP[@]}"
+    COMMAND=("$LK_BASE/contrib/hosting/configure-ses-site.sh"
+      "${LK_SSH_PREFIX-$LK_PATH_PREFIX}$HOST_NAME"
+      "$SMTP_USER"
+      "$_DOMAIN"
+      "$SES_DOMAIN"
+      "${HOST_IP[@]}")
+
+    if [ -n "$VERIFIED" ]; then
+      lk_tty_run_detail "${COMMAND[@]}"
+    else
+      lk_tty_print \
+        "Run one of the following after Amazon SES verifies $SES_DOMAIN:"
+      lk_tty_detail "${0##*/} $_DOMAIN"
+      lk_tty_detail "$(COMMAND[0]=${COMMAND##*/} && lk_quote_arr COMMAND)"
+    fi
 
   done
 
