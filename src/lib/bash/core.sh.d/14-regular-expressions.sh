@@ -14,6 +14,8 @@ function quote() {
     fi
 }
 
+set -euo pipefail
+
 ALL=()
 
 add_regex DOMAIN_PART_REGEX "[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
@@ -22,6 +24,20 @@ add_regex EMAIL_ADDRESS_REGEX "[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$
 
 add_regex DOMAIN_PART_LOWER_REGEX "[a-z0-9]([-a-z0-9]*[a-z0-9])?"
 add_regex DOMAIN_NAME_LOWER_REGEX "$DOMAIN_PART_LOWER_REGEX(\\.$DOMAIN_PART_LOWER_REGEX)+"
+
+s=/
+_TLD=/tmp/tlds-alpha-by-domain-${0//"$s"/__}-$EUID
+[ -s "$_TLD" ] ||
+    curl -fL "https://data.iana.org/TLD/tlds-alpha-by-domain.txt" |
+    sed -E '/^(#|$)/d' |
+        tr '[:upper:]' '[:lower:]' |
+        awk '{gsub("\\.","\\.")}NR==1{printf("(%s",$0)}NR>1{printf("|%s",$0)}END{print")"}' \
+            >"$_TLD" ||
+    {
+        rm -f "$_TLD"
+        exit 1
+    }
+add_regex TOP_LEVEL_DOMAIN_REGEX "$(<"$_TLD")"
 
 _O="(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])"
 add_regex IPV4_REGEX "($_O\\.){3}$_O"
@@ -125,6 +141,7 @@ FUNCTIONS=(
     #lk_is_host
     lk_is_cidr
     lk_is_fqdn
+    lk_is_tld
     lk_is_email
     lk_is_uri
     lk_is_identifier
@@ -134,6 +151,7 @@ PATTERNS=(
     #HOST_REGEX
     IP_OPT_PREFIX_REGEX
     DOMAIN_NAME_REGEX
+    TOP_LEVEL_DOMAIN_REGEX
     EMAIL_ADDRESS_REGEX
     URI_REGEX_REQ_SCHEME_HOST
     IDENTIFIER_REGEX
@@ -143,6 +161,7 @@ DESCRIPTIONS=(
     #"IP address, hostname or domain name"
     "IP address or CIDR"
     "domain name"
+    "top-level domain"
     "email address"
     "URI with a scheme and host"
     "Bash identifier"
