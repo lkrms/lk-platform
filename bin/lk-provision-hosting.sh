@@ -188,7 +188,7 @@ FIELD_ERRORS=$'\n'$(
     lk_validate LK_MEMCACHED_MEMORY_LIMIT '^[0-9]+$'
     lk_validate LK_SMTP_RELAY "^($HOST_REGEX|\\[$HOST_REGEX\\])(:[0-9]+)?\$"
     lk_validate LK_SMTP_CREDENTIALS '^.+:.+$'
-    lk_validate_list LK_SMTP_SENDERS "^($DOMAIN_NAME_REGEX|$EMAIL_ADDRESS_REGEX)\$"
+    lk_validate_list LK_SMTP_SENDERS "^(@$DOMAIN_NAME_REGEX|$EMAIL_ADDRESS_REGEX)\$"
     lk_validate LK_UPGRADE_EMAIL "^$EMAIL_ADDRESS_REGEX\$"
     [ ! "$LK_AUTO_REBOOT" = Y ] || _LK_REQUIRED=1
     lk_validate LK_AUTO_REBOOT_TIME '^(([01][0-9]|2[0-3]):[0-5][0-9]|now)$'
