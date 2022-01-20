@@ -472,7 +472,7 @@ StrictHostKeyChecking   accept-new
 ControlMaster           auto
 ControlPath             /tmp/ssh_%C-%u
 ControlPersist          120
-SendEnv                 LANG LC_*
+SendEnv                 LC_BYOBU
 ServerAliveInterval     30
 EOF
         )
