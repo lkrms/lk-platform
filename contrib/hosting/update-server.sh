@@ -4,6 +4,7 @@
 #   update-server.sh [options] <SSH_HOST>...
 #
 # Options:
+#   --force-provision           Run provisioning script without revision change.
 #   --upgrade                   Upgrade apt packages on each host.
 #   --no-tls                    Skip TLS certificate checks.
 #   --no-wordpress              Skip WordPress checks.
@@ -83,6 +84,8 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
 
     set -uo pipefail
 
+    export LC_ALL=C
+
     local INSTALL KEYS_FILE HEAD_FILE LAST_HEAD HEAD SH \
       NO_CERTBOT WP OWNER STATUS=0
 
@@ -153,7 +156,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
     LAST_HEAD=
     { [ ! -e "$HEAD_FILE" ] || LAST_HEAD=$(<"$HEAD_FILE"); } &&
       HEAD=$(lk_git_ref) || return
-    if [[ $HEAD != "$LAST_HEAD" ]]; then
+    if ((FORCE_PROVISION)) || [[ $HEAD != "$LAST_HEAD" ]]; then
       ./bin/lk-provision-hosting.sh \
         --set LK_PLATFORM_BRANCH="$1" \
         "${@:4}" &&
@@ -219,11 +222,14 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
   }
 
   ARGS=()
+  FORCE_PROVISION=0
   UPGRADE=0
   TLS=1
   WORDPRESS=1
   TEST=1
-  while [[ ${1-} =~ ^(-[saru]|--(set|add|remove|unset|(no-)?(upgrade|tls|wordpress|test)))$ ]]; do
+  while [[ ${1-} =~ ^(-[saru]|--(set|add|remove|unset|(no-)?(force-provision|upgrade|tls|wordpress|test)))$ ]]; do
+    [[ $1 != --no-force-provision ]] || FORCE_PROVISION=0
+    [[ $1 != --force-provision ]] || FORCE_PROVISION=1
     [[ $1 != --no-upgrade ]] || UPGRADE=0
     [[ $1 != --upgrade ]] || UPGRADE=1
     [[ $1 != --no-tls ]] || TLS=0
@@ -232,7 +238,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
     [[ $1 != --wordpress ]] || WORDPRESS=1
     [[ $1 != --no-test ]] || TEST=0
     [[ $1 != --test ]] || TEST=1
-    [[ ! $1 =~ ^--(no-)?(upgrade|tls|wordpress|test)$ ]] || { shift && continue; }
+    [[ ! $1 =~ ^--(no-)?(force-provision|upgrade|tls|wordpress|test)$ ]] || { shift && continue; }
     SHIFT=2
     [[ ${2-} == *=* ]] || [[ $1 =~ ^--?u ]] ||
       ((SHIFT++))
@@ -252,7 +258,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
   SCRIPT=$TMP/do-update-server.sh
   {
     declare -f keep-alive update-server do-update-server
-    declare -p TLS WORDPRESS TLD_REGEX
+    declare -p FORCE_PROVISION TLS WORDPRESS TLD_REGEX
     lk_quote_args do-update-server \
       "${UPDATE_SERVER_BRANCH:-master}" \
       "${UPDATE_SERVER_REPO:-https://github.com/lkrms/lk-platform.git}" \
