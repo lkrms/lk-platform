@@ -370,6 +370,9 @@ function _lk_plist_buddy() {
     [ -n "${_LK_PLIST-}" ] ||
         lk_warn "lk_plist_set_file must be called before ${FUNCNAME[1]}" ||
         return
+    # Create the plist file without "File Doesn't Exist, Will Create"
+    [ -e "$_LK_PLIST" ] ||
+        PlistBuddy -c "Save" "$_LK_PLIST" >/dev/null || return
     PlistBuddy -c "$1" "$_LK_PLIST" || return
 }
 
@@ -443,6 +446,39 @@ function lk_plist_exists() {
 function lk_plist_maybe_add() {
     lk_plist_exists "$1" ||
         lk_plist_add "$@"
+}
+
+# lk_macos_launch_agent_install [-p PROCESS_TYPE] LABEL COMMAND [ARG...]
+#
+# Create and load a launchd user agent that runs COMMAND when the user logs in.
+# If PROCESS_TYPE is set to the empty string, the launchd default ('Standard')
+# will be used, otherwise 'Interactive' will be used.
+function lk_macos_launch_agent_install() {
+    local PROCESS_TYPE=Interactive
+    [ "${1-}" != -p ] || { PROCESS_TYPE=$2 && shift 2; }
+    local LABEL=$1 FILE=~/Library/LaunchAgents/$1.plist _DIR _FILE ARG _PATH
+    shift
+    lk_mktemp_dir_with _DIR || return
+    _FILE=$_DIR/$LABEL.plist
+    lk_plist_set_file "$_FILE" &&
+        lk_plist_add ":Disabled" bool false &&
+        lk_plist_add ":Label" string "$LABEL" &&
+        lk_plist_add ":ProcessType" string "${PROCESS_TYPE:-Standard}" &&
+        lk_plist_add ":RunAtLoad" bool true &&
+        lk_plist_add ":ProgramArguments" array || return
+    for ARG in "$@"; do
+        lk_plist_add ":ProgramArguments:" string "$ARG" || return
+    done
+    if _PATH=$(defaults read /var/db/com.apple.xpc.launchd/config/user.plist \
+        PathEnvironmentVariable 2>/dev/null | grep .); then
+        lk_plist_add ":EnvironmentVariables" dict &&
+            lk_plist_add ":EnvironmentVariables:PATH" string "$_PATH" || return
+    fi
+    lk_install -d -m 00755 "${FILE%/*}" &&
+        lk_install -m 00644 "$FILE" &&
+        cp "$_FILE" "$FILE" || return
+    launchctl unload "$FILE" &>/dev/null || true
+    launchctl load -w "$FILE"
 }
 
 lk_provide macos

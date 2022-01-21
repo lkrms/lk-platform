@@ -121,7 +121,6 @@ HOMEBREW_KEEP_CASKS+=(
 )
 
 LOGIN_ITEMS+=(
-    "/Applications/flameshot.app"
     "/Applications/Flycut.app"
     "/Applications/Nextcloud.app"
 )
