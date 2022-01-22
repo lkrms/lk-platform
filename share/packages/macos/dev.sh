@@ -285,9 +285,7 @@ HOMEBREW_KEEP_CASKS+=(
 )
 
 LOGIN_ITEMS+=(
-    "/Applications/flameshot.app"
     "/Applications/Flycut.app"
-    "/Applications/Hammerspoon.app"
     "/Applications/Mail.app"
     "/Applications/Messenger.app"
     "/Applications/Microsoft Teams.app"

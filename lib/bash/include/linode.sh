@@ -1,24 +1,21 @@
 #!/bin/bash
 
-lk_require git provision
+lk_require git
+lk_require provision
 
-function linode-cli() {
-    # Suppress "Unable to determine if a new linode-cli package is available in
-    # pypi"
-    command linode-cli --suppress-warnings "$@"
-}
-
-function linode-cli-json {
+function _lk_linode_cli_json {
     local JSON PAGE=0 COUNT
-    JSON=$(lk_mktemp_file) &&
-        lk_delete_on_exit "$JSON" || return
     while :; do
         ((++PAGE))
-        linode-cli --json --page "$PAGE" "$@" >"$JSON" &&
-            COUNT=$(jq 'length' "$JSON") &&
+        lk_mktemp_with -r JSON linode-cli --json --page "$PAGE" "$@" &&
+            COUNT=$(jq -r 'length' "$JSON") &&
             jq '.[]' "$JSON" || return
         ((COUNT == 100)) || break
     done | jq --slurp
+}
+
+function linode-cli-json {
+    lk_cache _lk_linode_cli_json "$@"
 }
 
 function lk_linode_flush_cache() {
@@ -26,42 +23,21 @@ function lk_linode_flush_cache() {
 }
 
 function _lk_linode_filter() {
-    local REGEX=${LK_LINODE_SKIP_REGEX-^jump\\b}
+    local REGEX=${LK_LINODE_SKIP_REGEX-'^jump\b'}
     if [ -n "$REGEX" ]; then
-        jq --arg skipRegex "$REGEX" \
-            '[.[]|select(.label|test($skipRegex)==false)]'
+        jq --arg re "$REGEX" '[ .[] | select(.label | test($re) | not) ]'
     else
         cat
     fi
 }
 
-function lk_linode_linodes() {
-    lk_cache linode-cli-json linodes list "$@"
-}
-
-function lk_linode_ips() {
-    lk_cache linode-cli-json networking ips-list "$@"
-}
-
-function lk_linode_domains() {
-    lk_cache linode-cli-json domains list "$@"
-}
-
-function lk_linode_domain_records() {
-    lk_cache linode-cli-json domains records-list "$@"
-}
-
-function lk_linode_firewalls() {
-    lk_cache linode-cli-json firewalls list "$@"
-}
-
-function lk_linode_firewall_devices() {
-    lk_cache linode-cli-json firewalls devices-list "$@"
-}
-
-function lk_linode_stackscripts() {
-    lk_cache linode-cli-json stackscripts list --is_public false "$@"
-}
+lk_linode_linodes() { linode-cli-json linodes list "$@"; }
+lk_linode_ips() { linode-cli-json networking ips-list "$@"; }
+lk_linode_domains() { linode-cli-json domains list "$@"; }
+lk_linode_domain_records() { linode-cli-json domains records-list "$@"; }
+lk_linode_firewalls() { linode-cli-json firewalls list "$@"; }
+lk_linode_firewall_devices() { linode-cli-json firewalls devices-list "$@"; }
+lk_linode_stackscripts() { linode-cli-json stackscripts list --is_public false "$@"; }
 
 function lk_linode_get_shell_var() {
     lk_json_sh \
@@ -73,7 +49,7 @@ function lk_linode_get_shell_var() {
         LINODE_VPCUS .specs.vcpus \
         LINODE_MEMORY .specs.memory \
         LINODE_IMAGE .image \
-        LINODE_IPV4_PUBLIC '[.ipv4[]|select(test(regex.ipv4PrivateFilter)==false)]|first' \
+        LINODE_IPV4_PUBLIC '[.ipv4[]|select(test(regex.ipv4PrivateFilter)|not)]|first' \
         LINODE_IPV4_PRIVATE '[.ipv4[]|select(test(regex.ipv4PrivateFilter))]|first' \
         LINODE_IPV6 '.ipv6|split("/")[0]'
 }
@@ -160,37 +136,52 @@ function lk_linode_hosting_ssh_add_all() {
     lk_console_success "SSH configuration complete"
 }
 
-function _lk_linode_domain() {
-    local SH _LK_STACK_DEPTH=-1
-    SH=$(lk_json_sh \
-        DOMAIN_ID .id \
-        DOMAIN .domain) && eval "$SH"
-}
-
-# lk_linode_domain [-s] [DOMAIN_ID|DOMAIN_NAME [LINODE_ARG...]]
+# lk_linode_domain [-s] <DOMAIN_ID|DOMAIN_NAME> [LINODE_ARG...]
 #
 # If -s is set, assign values to DOMAIN_ID and DOMAIN in the caller's scope,
-# otherwise print the JSON representation of the resolved domain.
+# otherwise print the JSON-encoded domain object.
 function lk_linode_domain() {
-    local _JSON=1 JSON
-    [ "${1-}" != -s ] || { _JSON= && shift; }
-    [ -n "${1-}" ] ||
-        lk_linode_domain_singleton "${@:2}" ||
-        lk_warn "no domain" || return
-    JSON=$(lk_linode_domains "${@:2}" | jq -er --arg d "$1" \
-        '[.[]|select((.id|tostring==$d) or .domain==$d)]|if length==1 then .[0] else empty end') ||
-        lk_warn "domain not found in Linode account: $1" || return
-    if [ -n "$_JSON" ]; then
-        cat <<<"$JSON"
+    local IFS=$' \t\n' _LK_STACK_DEPTH=-1
+    [[ ${1-} != -s ]] || {
+        shift
+        SH=$(lk_linode_domain "$@" | lk_json_sh \
+            DOMAIN_ID .id \
+            DOMAIN .domain) && eval "$SH"
+        return
+    }
+    [[ -n ${1-} ]] || lk_warn "invalid arguments" || return
+    if [[ $1 =~ ^[1-9][0-9]*$ ]]; then
+        lk_cache linode-cli --json domains view "$@"
     else
-        _lk_linode_domain <<<"$JSON"
+        lk_linode_domains "${@:2}" |
+            jq -e --arg d "$1" '.[] | select(.domain == $d)' ||
+            lk_warn "domain not found in Linode account: $1" || return
     fi
 }
 
-# lk_linode_domain_singleton [LINODE_ARG...]
-function lk_linode_domain_singleton() {
-    lk_linode_domains "$@" | jq -er \
-        'if length==1 then .[0] else empty end'
+# lk_linode_dns_dump [LINODE_ARG...]
+#
+# Print the following tab-separated fields for every DNS record in every Linode
+# domain:
+#
+# 1. Domain ID
+# 2. Record ID
+# 3. Record type
+# 4. Record name
+# 5. Domain name
+# 6. Record priority
+# 7. Record TTL
+# 8. Record target
+function lk_linode_dns_dump() {
+    lk_linode_domains "$@" |
+        jq -r '.[] | [ .id, .domain ] | @tsv' |
+        while IFS=$'\t' read -r DOMAIN_ID DOMAIN; do
+            lk_linode_domain_records "$DOMAIN_ID" "$@" |
+                jq -r \
+                    --arg id "$DOMAIN_ID" \
+                    --arg domain "$DOMAIN" '
+.[] | [ $id, .id, .type, .name, $domain, .priority, .ttl_sec, .target ] | @tsv'
+        done
 }
 
 function lk_linode_domain_cleanup() {
@@ -237,12 +228,12 @@ function _lk_linode_dns_records() {
         <<<"$LINODES"
 }
 
-# lk_linode_dns_check [-t] [LINODES_JSON [DOMAIN [LINODE_ARG...]]]
+# lk_linode_dns_check [-t] [LINODES_JSON DOMAIN [LINODE_ARG...]]
 #
 # For each linode object in LINODES_JSON, check DOMAIN for each of the following
 # DNS records, create any that are missing, and if LK_VERBOSE >= 1, report any
 # unmatched records. If -t is set, create additional records for each unique
-# tag. If DOMAIN is not specified, use lk_linode_domain_singleton.
+# tag.
 #
 # - {LABEL}             A       {IPV4_PUBLIC}
 # - {LABEL}.PRIVATE     A       {IPV4_PRIVATE}

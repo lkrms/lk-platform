@@ -4,7 +4,7 @@ def to_part:
   sub("^(?<part>\(regex.domainPart)).*"; "\(.part)");
 
 def to_spf($ip):
-  "v=spf1 ip4:\($ip.ip4) ip6:\($ip.ip6) -all";
+  "v=spf1 ip4:\($ip.ip4) ip6:\($ip.ip6) include:amazonses.com -all";
 
 .[] | {
   "ip4": [ .ipv4[] | select(test(regex.ipv4PrivateFilter) | not) ] | first,
