@@ -11,6 +11,7 @@ Usage:
   ${0##*/} [options] <DOMAIN>...
 
 Options:
+  -s, --skip-host   Only configure SES and DNS.
   -k, --insecure    Proceed even if <DOMAIN>'s TLS certificate is invalid.
 
 Each DOMAIN must resolve to a hosting server, and https://<DOMAIN>/php-sysinfo
@@ -27,15 +28,19 @@ EOF
 lk_bash_at_least 4 || lk_die "Bash 4 or higher required"
 lk_assert_command_exists aws linode-cli
 
+SKIP_HOST=0
 CURL_OPTIONS=(-fsSL)
 
-lk_getopt "k" "insecure"
+lk_getopt "sk" "skip-host,insecure"
 eval "set -- $LK_GETOPT"
 
 while :; do
   OPT=$1
   shift
   case "$OPT" in
+  -s | --skip-host)
+    SKIP_HOST=1
+    ;;
   -k | --insecure)
     CURL_OPTIONS+=("$OPT")
     ;;
@@ -73,7 +78,8 @@ AWS_REGION=$(aws configure get region) ||
   while (($#)); do
     _DOMAIN=$1
     SES_DOMAIN=$1
-    VERIFIED=
+    VERIFIED=0
+    FROM_VERIFIED=0
     shift
 
     lk_tty_print "Provisioning '$_DOMAIN' with Amazon SES"
@@ -110,13 +116,38 @@ AWS_REGION=$(aws configure get region) ||
       [ ${#TOKENS[@]} -eq 3 ] ||
         lk_die "unexpected value in .DkimAttributes.Tokens[]"
 
-      # `lk_linode_domain -s` sets DOMAIN and DOMAIN_ID
-      if is_linode &&
-        lk_linode_domain -s "$SES_DOMAIN" "${LINODE_ARGS[@]}"; then
+    fi
 
-        lk_mktemp_with RECORDS \
-          lk_linode_domain_records "$DOMAIN_ID" "${LINODE_ARGS[@]}"
+    FROM_DOMAIN=amazonses.$SES_DOMAIN
+    SH=$(jq .MailFromAttributes <"$IDENTITY" | lk_json_sh \
+      MAIL_FROM_DOMAIN '.MailFromDomain? // ""' \
+      MAIL_FROM_ON_FAILURE '.BehaviorOnMxFailure? // ""' \
+      MAIL_FROM_STATUS '.MailFromDomainStatus? // ""') && eval "$SH"
 
+    if [[ $MAIL_FROM_DOMAIN != "$FROM_DOMAIN" ]] ||
+      [[ $MAIL_FROM_ON_FAILURE != USE_DEFAULT_VALUE ]]; then
+
+      lk_tty_run_detail \
+        aws sesv2 put-email-identity-mail-from-attributes \
+        --email-identity "$SES_DOMAIN" \
+        --mail-from-domain "$FROM_DOMAIN" \
+        --behavior-on-mx-failure USE_DEFAULT_VALUE
+
+    elif [[ $MAIL_FROM_STATUS == SUCCESS ]]; then
+
+      lk_tty_success "Custom MAIL FROM domain has been confirmed by Amazon SES"
+      FROM_VERIFIED=1
+
+    fi
+
+    # `lk_linode_domain -s` sets DOMAIN and DOMAIN_ID
+    if ((!VERIFIED || !FROM_VERIFIED)) && is_linode &&
+      lk_linode_domain -s "$SES_DOMAIN" "${LINODE_ARGS[@]}"; then
+
+      lk_mktemp_with RECORDS \
+        lk_linode_domain_records "$DOMAIN_ID" "${LINODE_ARGS[@]}"
+
+      if ((!VERIFIED)); then
         for TOKEN in "${TOKENS[@]}"; do
 
           NAME=$TOKEN._domainkey
@@ -146,23 +177,94 @@ AWS_REGION=$(aws configure get region) ||
               --target "$TARGET" \
               "$DOMAIN_ID"
             ;;
-
           esac >/dev/null
 
         done
-
-      else
-
-        lk_tty_print "The following DNS records must be visible to SES:" \
-          "$(for TOKEN in "${TOKENS[@]}"; do
-            NAME=$TOKEN._domainkey.$SES_DOMAIN.
-            TARGET=$TOKEN.dkim.amazonses.com.
-            printf "%s IN CNAME %s\n" "$NAME" "$TARGET"
-          done)"
-
       fi
 
+      if ((!FROM_VERIFIED)); then
+        NAME=amazonses
+        TARGET=feedback-smtp.$AWS_REGION.amazonses.com
+        PRIORITY=10
+        RECORD=$(jq -r --arg name "$NAME" '
+[ .[] | select(.type == "MX" and .name == $name) ] |
+    first // empty | [ .id, .target, .priority ] | join(",")' <"$RECORDS") ||
+          return
+        case "$RECORD" in
+        *,"$TARGET","$PRIORITY")
+          lk_tty_detail "MX already added:" "$NAME.$DOMAIN"
+          ;;
+
+        *,*,*)
+          lk_tty_run_detail linode-cli "${LINODE_ARGS[@]}" \
+            domains records-update \
+            --target "$TARGET" \
+            --priority "$PRIORITY" \
+            "$DOMAIN_ID" "${RECORD%%,*}"
+          ;;
+
+        "")
+          lk_tty_run_detail linode-cli "${LINODE_ARGS[@]}" \
+            domains records-create \
+            --type MX \
+            --name "$NAME" \
+            --target "$TARGET" \
+            --priority "$PRIORITY" \
+            "$DOMAIN_ID"
+          ;;
+        esac >/dev/null
+
+        TARGET="v=spf1 include:amazonses.com ~all"
+        RECORD=$(jq -r --arg name "$NAME" '
+[ .[] | select(.type == "TXT" and .name == $name) ] |
+    first // empty | [ .id, .target ] | join(",")' <"$RECORDS") || return
+        case "$RECORD" in
+        *,"$TARGET")
+          lk_tty_detail "SPF already added:" "$NAME.$DOMAIN"
+          ;;
+
+        *,"v=spf1 "*)
+          lk_tty_run_detail linode-cli "${LINODE_ARGS[@]}" \
+            domains records-update \
+            --target "$TARGET" \
+            "$DOMAIN_ID" "${RECORD%%,*}"
+          ;;
+
+        *,*)
+          lk_die "invalid TXT record at $NAME.$DOMAIN: ${RECORD//,/ }"
+          ;;
+
+        "")
+          lk_tty_run_detail linode-cli "${LINODE_ARGS[@]}" \
+            domains records-create \
+            --type TXT \
+            --name "$NAME" \
+            --target "$TARGET" \
+            "$DOMAIN_ID"
+          ;;
+        esac >/dev/null
+      fi
+
+    elif ((!VERIFIED || !FROM_VERIFIED)); then
+
+      lk_tty_print "The following DNS records must be visible to SES:" "$(
+        if ((!VERIFIED)); then
+          for TOKEN in "${TOKENS[@]}"; do
+            NAME=$TOKEN._domainkey.$SES_DOMAIN.
+            TARGET=$TOKEN.dkim.amazonses.com.
+            printf '%s IN CNAME %s\n' "$NAME" "$TARGET"
+          done
+        fi
+        NAME=$FROM_DOMAIN.
+        printf '%s IN MX %s %s\n' \
+          "$NAME" 10 "feedback-smtp.$AWS_REGION.amazonses.com."
+        printf '%s IN TXT "%s"\n' \
+          "$NAME" "v=spf1 include:amazonses.com ~all"
+      )"
+
     fi
+
+    ((!SKIP_HOST)) || continue
 
     lk_mktemp_with -r SYSINFO lk_tty_run_detail \
       curl "${CURL_OPTIONS[@]}" "https://$_DOMAIN/php-sysinfo" ||
@@ -187,7 +289,7 @@ AWS_REGION=$(aws configure get region) ||
       "$SES_DOMAIN"
       "${HOST_IP[@]}")
 
-    if [ -n "$VERIFIED" ]; then
+    if ((VERIFIED)); then
       lk_tty_run_detail "${COMMAND[@]}"
     else
       lk_tty_print \
