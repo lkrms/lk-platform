@@ -118,7 +118,7 @@ export -n \
     LK_SNAPSHOT_FAILED_MAX_AGE=${LK_SNAPSHOT_FAILED_MAX_AGE-} \
     LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-} \
     LK_DEBUG=${LK_DEBUG:-N} \
-    LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
+    LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-main}
 
 ! lk_is_bootstrap ||
     export -n \

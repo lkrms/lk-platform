@@ -15,7 +15,7 @@
 #   --unset <SETTING>           }
 #
 # Environment:
-#   UPDATE_SERVER_BRANCH        Override 'master'.
+#   UPDATE_SERVER_BRANCH        Override 'main'.
 #   UPDATE_SERVER_REPO          Override the default GitHub web URL.
 #   UPDATE_SERVER_HOSTING_KEYS  Update the SSH keys used to authorise provider
 #                               access to hosting accounts.
@@ -110,6 +110,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
         git remote add origin "$2"
       fi &&
       # Retrieve latest commits from origin
+      git remote set-head origin --auto &&
       git fetch --prune origin &&
       # Stash local changes
       { git stash --include-untracked ||
@@ -260,7 +261,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
     declare -f keep-alive update-server do-update-server
     declare -p FORCE_PROVISION TLS WORDPRESS TLD_REGEX
     lk_quote_args do-update-server \
-      "${UPDATE_SERVER_BRANCH:-master}" \
+      "${UPDATE_SERVER_BRANCH:-main}" \
       "${UPDATE_SERVER_REPO:-https://github.com/lkrms/lk-platform.git}" \
       "${UPDATE_SERVER_HOSTING_KEYS-}" \
       ${ARGS[@]+"${ARGS[@]}"}

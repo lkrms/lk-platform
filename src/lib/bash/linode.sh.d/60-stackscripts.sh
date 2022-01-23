@@ -19,7 +19,7 @@ function lk_linode_hosting_update_stackscript() {
     cd "$REPO" || return
     HASH=$(git rev-parse --verify "$REF") &&
         BASED_ON=($(LK_GIT_REF=$HASH \
-            lk_git_ancestors master develop | head -n1)) ||
+            lk_git_ancestors main develop | head -n1)) ||
         lk_warn "invalid ref: $REF" || return
     SCRIPT=$(git show "$HASH:lib/linode/hosting.sh") || return
     if STACKSCRIPT=$(lk_linode_hosting_get_stackscript "${@:3}"); then

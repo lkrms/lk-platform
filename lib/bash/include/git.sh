@@ -413,7 +413,8 @@ function lk_git_fetch() {
     [ $# -gt 0 ] || REMOTES=$(git remote) || return
     for REMOTE in $REMOTES; do
         [ $# -gt 0 ] || ! lk_git_remote_is_skipped "$REMOTE" || continue
-        _lk_git fetch --quiet --prune "$REMOTE" || {
+        _lk_git remote set-head "$REMOTE" --auto &&
+            _lk_git fetch --quiet --prune "$REMOTE" || {
             [ -n "${QUIET-}" ] || lk_console_error \
                 "Unable to fetch from remote:" "$REMOTE"
             ((++ERRORS))
@@ -484,7 +485,8 @@ function lk_git_update_repo_to() {
     [ "${1-}" != -f ] || { FORCE= && shift; }
     [ $# -ge 1 ] || lk_usage "Usage: $FUNCNAME [-f] REMOTE [BRANCH]" || return
     REMOTE=$1
-    _lk_git fetch --quiet --prune "$REMOTE" ||
+    _lk_git remote set-head "$REMOTE" --auto ||
+        _lk_git fetch --quiet --prune "$REMOTE" ||
         lk_warn "unable to fetch from remote: $REMOTE" ||
         return
     _BRANCH=$(lk_git_branch_current) || _BRANCH=
