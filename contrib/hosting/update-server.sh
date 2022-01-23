@@ -110,8 +110,9 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
         git remote add origin "$2"
       fi &&
       # Retrieve latest commits from origin
+      git fetch origin &&
       git remote set-head origin --auto &&
-      git fetch --prune origin &&
+      git remote prune origin &&
       # Stash local changes
       { git stash --include-untracked ||
         { git config user.name "$USER" &&
