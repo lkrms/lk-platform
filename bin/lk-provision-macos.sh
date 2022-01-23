@@ -10,7 +10,7 @@
 #         bash -xc "$(curl -fsSL http://lkr.ms/macos-dev)" 3>&2 2>~/lk-install.err
 
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
-LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
+LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-main}
 export LK_BASE=${LK_BASE:-/opt/lk-platform}
 
 set -euo pipefail

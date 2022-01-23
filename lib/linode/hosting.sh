@@ -43,7 +43,7 @@ lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
 # <UDF name="LK_PATH_PREFIX" label="Prefix for files installed by lk-platform" default="lk-" />
 # <UDF name="LK_DEBUG" label="Create trace output from provisioning script" oneof="Y,N" default="N" />
 # <UDF name="LK_SHUTDOWN_ACTION" label="Reboot or power down after provisioning" oneof="reboot,poweroff" default="reboot" />
-# <UDF name="LK_PLATFORM_BRANCH" label="lk-platform tracking branch" oneof="master,develop" default="master" />
+# <UDF name="LK_PLATFORM_BRANCH" label="lk-platform tracking branch" oneof="main,develop,master" default="main" />
 
 # Redirect output to /dev/console if there is no controlling terminal
 { : >/dev/tty ||
@@ -95,7 +95,7 @@ LK_SNAPSHOT_FAILED_MAX_AGE=${LK_SNAPSHOT_FAILED_MAX_AGE:-28}
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
 LK_DEBUG=${LK_DEBUG:-N}
 LK_SHUTDOWN_ACTION=${LK_SHUTDOWN_ACTION:-reboot}
-LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-master}
+LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-main}
 
 [ "$EUID" -eq 0 ] || lk_die "not running as root"
 [ "$OSTYPE" = linux-gnu ] || lk_die "not running on Linux"
