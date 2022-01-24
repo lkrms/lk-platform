@@ -456,6 +456,8 @@ function lk_plist_maybe_add() {
 function lk_macos_launch_agent_install() {
     local PROCESS_TYPE=Interactive
     [ "${1-}" != -p ] || { PROCESS_TYPE=$2 && shift 2; }
+    (($# > 1)) && [[ $1 != */* ]] || lk_usage "\
+Usage: $FUNCNAME [-p PROCESS_TYPE] LABEL COMMAND [ARG...]" || return
     local LABEL=$1 FILE=~/Library/LaunchAgents/$1.plist _DIR _FILE ARG _PATH
     shift
     lk_mktemp_dir_with _DIR || return

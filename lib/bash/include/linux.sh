@@ -464,7 +464,7 @@ EOF
 function lk_user_passwd_status() {
     [ -n "${1-}" ] || lk_warn "no user" || return
     lk_user_exists "$1" || lk_warn "user not found: $1" || return
-    lk_elevate passwd -S "$1" | awk '{print$2}'
+    lk_elevate passwd -S "$1" | awk '{print $2}'
 }
 
 # lk_user_lock_passwd USER

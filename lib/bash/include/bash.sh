@@ -185,7 +185,7 @@ Usage: $FUNCNAME [-g] SCRIPT [SOURCE...]" || return
     }
     [ -n "$QUIET" ] ||
         lk_echo_array COMMANDS | sort |
-        lk_console_list "External commands used${FILE:+ in $1}:"
+        lk_tty_list - "External commands used${FILE:+ in $1}:"
     for COMMAND in "${COMMANDS[@]}"; do
         [[ ! $COMMAND =~ ^(lk_|\./) ]] || continue
         _PATH=$(type -P "$COMMAND") &&
@@ -195,8 +195,7 @@ Usage: $FUNCNAME [-g] SCRIPT [SOURCE...]" || return
     done
     [ -n "$QUIET" ] ||
         [ ${#MISSING_COMMANDS[@]} -eq 0 ] ||
-        lk_echo_array MISSING_COMMANDS |
-        lk_console_detail_list "Not installed:"
+        lk_tty_list_detail MISSING_COMMANDS "Not installed:"
     [ ${#COMMAND_FILES[@]} -gt 0 ] || return 0
     COMMAND_FILES=($(lk_echo_array COMMAND_FILES | sort -u))
     PACKAGES=($(
@@ -210,10 +209,10 @@ Usage: $FUNCNAME [-g] SCRIPT [SOURCE...]" || return
     ))
     [ ${#PACKAGES[@]} -gt 0 ] || return 0
     [ -n "$QUIET" ] ||
-        lk_echo_array PACKAGES | lk_console_list "Command owners:"
+        lk_tty_list PACKAGES "Command owners:"
     PACKAGES=($(lk_echo_array PACKAGES | cut -d: -f1 | sort -u))
     [ -n "$QUIET" ] ||
-        lk_echo_array PACKAGES | lk_console_list "Packages:"
+        lk_tty_list PACKAGES "Packages:"
 }
 
 # lk_bash_audit_tree [-g] [DIR]
@@ -227,7 +226,7 @@ function lk_bash_audit_tree() {
             declare -p FILES
     }) && eval "$SH" || return
     lk_echo_args "${FILES[@]#${DIR:-.}/}" |
-        lk_console_list "Auditing:" script scripts
+        lk_tty_list - "Auditing:" script scripts
     lk_bash_audit ${GLOBALS+-g} <(cat "${FILES[@]}")
 }
 

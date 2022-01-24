@@ -126,7 +126,7 @@ TO_DEACTIVATE=($(
 ))
 
 if [ ${#TO_DEACTIVATE[@]} -gt 0 ]; then
-    lk_echo_array TO_DEACTIVATE | lk_console_detail_list \
+    lk_tty_list_detail TO_DEACTIVATE \
         "$(lk_plural -v TO_DEACTIVATE plugin) to deactivate before continuing:"
     lk_confirm "Proceed?" Y || lk_die ""
     lk_wp plugin deactivate "${TO_DEACTIVATE[@]}"
@@ -170,8 +170,7 @@ lk_tty_detail "Site address:" "${NEW_SITE_ADDR:+$SITE_ADDR -> $LK_BOLD}${NEW_SIT
 lk_tty_detail "Installed at:" "$SITE_ROOT"
 [ ${#ACTIVE_PLUGINS[@]} -eq 0 ] &&
     lk_tty_detail "Active plugins:" "<none>" ||
-    lk_echo_array ACTIVE_PLUGINS |
-    lk_console_detail_list "Active $(
+    lk_tty_list_detail ACTIVE_PLUGINS "Active $(
         lk_plural ACTIVE_PLUGINS plugin "plugins (${#ACTIVE_PLUGINS[@]})"
     ):"
 
@@ -193,7 +192,7 @@ lk_tty_detail "Maintenance mode will be enabled while processing"
     lk_tty_detail "WP Mail SMTP will be configured to disable outgoing email"
 if lk_wp plugin is-active woocommerce; then
     printf '%s\n' PayPal Stripe eWAY |
-        lk_console_detail_list \
+        lk_tty_list_detail - \
             "Test mode will be enabled for known WooCommerce gateways:"
     lk_tty_detail "WooCommerce webhooks will be disabled"
 fi

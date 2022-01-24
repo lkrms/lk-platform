@@ -218,7 +218,7 @@ function lk_linode_dns_check_all() {
     lk_jq_get_array LABELS '.[]|"\(.label) (\(.tags|join(", ")))"' <<<"$LINODES"
     [ ${#LABELS[@]} -gt 0 ] || lk_warn "no Linodes found" || return
     lk_echo_array LABELS | sort |
-        lk_console_list "Checking DNS and RDNS records for:" Linode Linodes
+        lk_tty_list - "Checking DNS and RDNS records for:" Linode Linodes
     lk_confirm "Proceed?" Y || return
     LK_VERBOSE=1 \
         lk_linode_dns_check ${USE_TAGS:+-t} "$LINODES" "$1" "${@:2}" || return

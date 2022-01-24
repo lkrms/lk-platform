@@ -137,15 +137,13 @@ if [ ${#DB_EXCLUDE[@]} -gt 0 ]; then
         }
     done
     [ ${#DB_EXCLUDED[@]} -eq 0 ] || {
-        lk_echo_array DB_EXCLUDED |
-            lk_console_detail_list "Excluded:"
+        lk_tty_list_detail DB_EXCLUDED "Excluded:"
     }
 fi
 
 [ ${#DB_INCLUDE[@]} -gt 0 ] || lk_die "nothing to dump"
 
-lk_echo_array DB_INCLUDE |
-    lk_console_detail_list "Ready to dump:" database databases
+lk_tty_list_detail DB_INCLUDE "Ready to dump:" database databases
 
 lk_confirm "Proceed?" Y || lk_die ""
 

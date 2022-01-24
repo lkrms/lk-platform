@@ -16,7 +16,7 @@ TEMP=$(lk_file_prepare_temp -n "$FILE")
 lk_delete_on_exit "$TEMP"
 
 lk_echo_args "$@" |
-    lk_console_list "Combining:" "PDF" "PDFs"
+    lk_tty_list - "Combining:" "PDF" "PDFs"
 
 mutool merge -o "$TEMP" -- "$@"
 touch -r "$NEWEST" -- "$TEMP"

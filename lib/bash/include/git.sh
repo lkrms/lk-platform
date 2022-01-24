@@ -414,7 +414,7 @@ function lk_git_fetch() {
     for REMOTE in $REMOTES; do
         (($#)) || ! _lk_git_is_remote_skipped "$REMOTE" || continue
         _lk_git fetch --quiet "$REMOTE" &&
-            _lk_git remote set-head "$REMOTE" --auto &&
+            _lk_git remote set-head "$REMOTE" --auto >/dev/null &&
             _lk_git remote prune "$REMOTE" || {
             ((QUIET)) || lk_tty_error "Unable to fetch from remote:" "$REMOTE"
             ((++ERRORS))
@@ -486,7 +486,7 @@ function lk_git_update_repo_to() {
     [ $# -ge 1 ] || lk_usage "Usage: $FUNCNAME [-f] REMOTE [BRANCH]" || return
     REMOTE=$1
     _lk_git fetch --quiet "$REMOTE" &&
-        _lk_git remote set-head "$REMOTE" --auto &&
+        _lk_git remote set-head "$REMOTE" --auto >/dev/null &&
         _lk_git remote prune "$REMOTE" ||
         lk_warn "unable to fetch from remote: $REMOTE" ||
         return
@@ -629,7 +629,7 @@ directory of a working tree" || return
     fi
     [ -z "${PROMPT-}" ] || lk_no_input || {
         lk_echo_array REPOS | lk_tty_path |
-            lk_console_list "Repositories:" repo repos
+            lk_tty_list - "Repositories:" repo repos
         lk_console_item "Command to run:" \
             $'\n'"$(lk_quote_args "${REPO_COMMAND[@]}")"
         lk_confirm "Proceed?" Y || return
@@ -712,14 +712,12 @@ function lk_git_audit_repos() {
     [ ${#LK_GIT_REPOS[@]} -gt 0 ] || lk_warn "no repos found" || return
     NOUN="${#LK_GIT_REPOS[@]} $(lk_plural ${#LK_GIT_REPOS[@]} repo repos)"
     if ! lk_is_true SKIP_FETCH; then
-        lk_echo_array LK_GIT_REPOS |
-            lk_console_list "Fetching all remotes:" repo repos
+        lk_tty_list LK_GIT_REPOS "Fetching all remotes:" repo repos
         lk_console_blank
         lk_git_with_repos -py lk_git_fetch ||
             FETCH_ERRORS=(${_LK_GIT_REPO_ERRORS[@]+"${_LK_GIT_REPO_ERRORS[@]}"})
     else
-        lk_echo_array LK_GIT_REPOS |
-            lk_console_list "Auditing:" repo repos
+        lk_tty_list LK_GIT_REPOS "Auditing:" repo repos
         lk_console_blank
     fi
     lk_git_with_repos -ty lk_git_audit_repo -s ||

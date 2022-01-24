@@ -445,10 +445,9 @@ EOF
     lk_mapfile UPGRADE_FORMULAE_TEXT \
         <(lk_echo_array "${!UPGRADE_FORMULAE_TEXT_@}" | sort -u)
     [ ${#UPGRADE_FORMULAE_TEXT[@]} -eq 0 ] || {
-        lk_echo_array UPGRADE_FORMULAE_TEXT |
-            lk_console_detail_list "$(
-                lk_plural ${#UPGRADE_FORMULAE_TEXT[@]} Update Updates
-            ) available:" formula formulae
+        lk_tty_list_detail UPGRADE_FORMULAE_TEXT "$(
+            lk_plural ${#UPGRADE_FORMULAE_TEXT[@]} Update Updates
+        ) available:" formula formulae
         lk_confirm "OK to upgrade outdated formulae?" Y ||
             unset "${!UPGRADE_FORMULAE_@}"
     }
@@ -461,7 +460,7 @@ EOF
 .casks[] | select(.pinned | not) |
     .name + " (" + .installed_versions + " -> " +
         .current_version + ")"' |
-                lk_console_detail_list "$(
+                lk_tty_list_detail - "$(
                     lk_plural ${#UPGRADE_CASKS[@]} Update Updates
                 ) available:" cask casks
             lk_confirm "OK to upgrade outdated casks?" Y ||
@@ -587,7 +586,7 @@ Please open the Mac App Store and sign in"
             OUTDATED=$(mas outdated)
             if UPGRADE_APPS=($(grep -Eo '^[0-9]+' <<<"$OUTDATED")); then
                 sed -E "s/^[0-9]+$S+(.*$NS)$S+\(/\1 (/" <<<"$OUTDATED" |
-                    lk_console_detail_list "$(
+                    lk_tty_list_detail - "$(
                         lk_plural ${#UPGRADE_APPS[@]} Update Updates
                     ) available:" app apps
                 lk_confirm "OK to upgrade outdated apps?" Y ||
@@ -660,8 +659,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
         [ ${#ARR[@]} -eq 0 ] || {
             local s='{}' MESSAGE
             MESSAGE=${3//"$s"/$BREW_NAME}
-            lk_echo_array ARR |
-                lk_console_list "$MESSAGE" formula formulae
+            lk_tty_list ARR "$MESSAGE" formula formulae
             brew "$1" --formula "${ARR[@]}" &&
                 lk_brew_flush_cache || STATUS=$?
         }
@@ -678,8 +676,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
     }
 
     [ ${#INSTALL_CASKS[@]} -eq 0 ] || {
-        lk_echo_array INSTALL_CASKS |
-            lk_console_list "Installing new casks:"
+        lk_tty_list INSTALL_CASKS "Installing new casks:"
         brew install --cask "${INSTALL_CASKS[@]}" &&
             lk_brew_flush_cache || STATUS=$?
     }
@@ -691,15 +688,13 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
     }
 
     [ ${#INSTALL_APPS[@]} -eq 0 ] || {
-        lk_echo_array APP_NAMES |
-            lk_console_list "Installing new apps:"
+        lk_tty_list APP_NAMES "Installing new apps:"
         lk_faketty caffeinate -d \
             mas install "${INSTALL_APPS[@]}" || STATUS=$?
     }
 
     [ ${#INSTALL_UPDATES[@]} -eq 0 ] || {
-        lk_echo_array INSTALL_UPDATES |
-            lk_console_list "Installing system software updates:"
+        lk_tty_list INSTALL_UPDATES "Installing system software updates:"
         lk_faketty caffeinate -d \
             sudo softwareupdate --no-scan \
             --install "${INSTALL_UPDATES[@]}" --restart || STATUS=$?
@@ -847,8 +842,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
                     "Selected items will open automatically when you log in:" \
                     "${LOGIN_ITEMS[@]}"); } ||
                 [ ${#LOGIN_ITEMS[@]} -eq 0 ] || {
-                lk_echo_array LOGIN_ITEMS |
-                    lk_console_list "Adding to Login Items:" app apps
+                lk_tty_list LOGIN_ITEMS "Adding to Login Items:" app apps
                 "$LK_BASE/lib/macos/login-items-add.js" "${LOGIN_ITEMS[@]}"
             }
         }

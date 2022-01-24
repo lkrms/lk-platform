@@ -4,12 +4,10 @@ lk_confirm() { lk_tty_yn "$@"; }
 lk_console_blank() { lk_tty_print; }
 lk_console_detail_diff() { lk_tty_diff_detail "$@"; }
 lk_console_detail_file() { lk_tty_file_detail "$@"; }
-lk_console_detail_list() { lk_tty_list_detail - "$@"; }
 lk_console_detail() { lk_tty_detail "$@"; }
 lk_console_diff() { lk_tty_diff "$@"; }
 lk_console_error() { lk_tty_error "$@"; }
 lk_console_item() { lk_tty_print "$1" "$2" "${3-${_LK_TTY_COLOUR-$_LK_COLOUR}}"; }
-lk_console_list() { lk_tty_list - "$@"; }
 lk_console_log() { lk_tty_log "$@"; }
 lk_console_message() { lk_tty_print "${1-}" "${3+$2}" "${3-${2-${_LK_TTY_COLOUR-$_LK_COLOUR}}}"; }
 lk_console_read_secret() { local IFS r && unset IFS && lk_tty_read_silent "$1" r "${@:2}" && echo "$r"; }
