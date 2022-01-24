@@ -130,6 +130,7 @@ function exit_trap() {
     LK_FILE_BACKUP_MOVE=1
 
     lk_log_start ~/"${LK_PATH_PREFIX}install"
+    lk_start_trace
     lk_trap_add EXIT exit_trap
 
     lk_console_log "Provisioning macOS"
@@ -362,26 +363,24 @@ EOF
             lk_brew_flush_cache
     }
 
-    FOREIGN=($({ lk_brew_formulae_list_not_native "${HOMEBREW_FORMULAE[@]}" &&
-        comm -12 <(lk_arr HOMEBREW_FORMULAE) <(lk_arr HOMEBREW_FORCE_INTEL); } |
-        sort -u))
-    if lk_is_apple_silicon && {
-        [ -e /usr/local/bin/brew ] || { [ ${#FOREIGN[@]} -gt 0 ] &&
-            lk_echo_array FOREIGN | lk_console_list \
-                "Not supported on Apple Silicon:" formula formulae &&
-            lk_confirm \
-                "Install an Intel instance of Homebrew for the above?" Y; }
-    }; then
-        lk_macos_install_rosetta2
-        BREW_PATH=(/opt/homebrew/bin/brew /usr/local/bin/brew)
-        BREW_ARCH=("" x86_64)
-        BREW_NAMES=("Homebrew (native)" "Homebrew (Intel)")
-    elif [ ${#FOREIGN[@]} -gt 0 ]; then
-        lk_console_warning "Skipping unsupported formulae"
-        HOMEBREW_FORMULAE=($(comm -23 \
-            <(lk_echo_array HOMEBREW_FORMULAE | sort -u) \
-            <(lk_echo_array FOREIGN | sort -u)))
-        FOREIGN=()
+    if lk_is_apple_silicon; then
+        FOREIGN=($({ lk_brew_formulae_list_not_native "${HOMEBREW_FORMULAE[@]}" &&
+            comm -12 \
+                <(lk_arr HOMEBREW_FORMULAE) \
+                <(lk_arr HOMEBREW_FORCE_INTEL); } | sort -u))
+        if [ -e /usr/local/bin/brew ] || { [ ${#FOREIGN[@]} -gt 0 ] &&
+            lk_tty_list FOREIGN "Not supported on Apple Silicon:" formula formulae &&
+            lk_tty_yn "Install an Intel instance of Homebrew for the above?" Y; }; then
+            lk_macos_install_rosetta2
+            BREW_PATH=(/opt/homebrew/bin/brew /usr/local/bin/brew)
+            BREW_ARCH=("" x86_64)
+            BREW_NAMES=("Homebrew (native)" "Homebrew (Intel)")
+        elif [ ${#FOREIGN[@]} -gt 0 ]; then
+            lk_tty_warning "Skipping unsupported formulae"
+            HOMEBREW_FORMULAE=($(comm -23 \
+                <(lk_arr HOMEBREW_FORMULAE | sort -u) \
+                <(lk_arr FOREIGN | sort -u)))
+        fi
     fi
 
     brew_loop check_homebrew
