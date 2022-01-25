@@ -94,7 +94,7 @@ function lk_tty_detail() {
     lk_tty_print "$1" "${2-}"
 }
 
-function lk_tty_detail_list() {
+function lk_tty_list_detail() {
     lk_tty_detail \
         "$1" "$(COLUMNS=${COLUMNS+$((COLUMNS - 4))} column | expand)"
 }

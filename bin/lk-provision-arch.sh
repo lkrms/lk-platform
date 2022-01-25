@@ -67,8 +67,8 @@ function service_apply() {
         done
     lk_is_bootstrap || [ ${#SERVICE_RESTART[@]} -eq 0 ] || {
         SERVICE_RESTART=($(comm -23 \
-            <(lk_echo_array SERVICE_RESTART | sort -u) \
-            <(lk_echo_array SERVICE_STARTED | sort -u))) && {
+            <(lk_arr SERVICE_RESTART | sort -u) \
+            <(lk_arr SERVICE_STARTED | sort -u))) && {
             [ ${#SERVICE_RESTART[@]} -eq 0 ] || {
                 lk_console_message "Restarting services with changed settings"
                 for SERVICE in "${SERVICE_RESTART[@]}"; do
@@ -312,7 +312,7 @@ lk_start_trace
         done
     fi
     FILE=/etc/udev/rules.d/10-${LK_PATH_PREFIX}local.rules
-    _FILE=$(lk_echo_array UDEV_RULES)
+    _FILE=$(lk_arr UDEV_RULES)
     lk_install -m 00644 "$FILE"
     lk_file_replace "$FILE" "$_FILE"
     if ! lk_is_bootstrap && lk_is_false LK_FILE_REPLACE_NO_CHANGE; then
@@ -328,15 +328,15 @@ lk_start_trace
                     unset "IF_RENAME[i]"
                 done
                 IF_RENAME=($(comm -12 \
-                    <(lk_echo_array IF_RENAME | sort) \
-                    <(lk_echo_array ETHERNET | sort)))
+                    <(lk_arr IF_RENAME | sort) \
+                    <(lk_arr ETHERNET | sort)))
                 [ ${#IF_RENAME[@]} -gt 0 ] || exit 0
                 lk_console_detail \
                     "Waiting for renamed Ethernet interfaces to settle"
                 while :; do
                     sleep 2
                     ! lk_system_list_ethernet_links -u |
-                        grep -Fxc -f <(lk_echo_array IF_RENAME) |
+                        grep -Fxc -f <(lk_arr IF_RENAME) |
                         grep -Fx ${#IF_RENAME[@]} &>/dev/null ||
                         break
                 done
@@ -664,7 +664,7 @@ $LK_NODE_HOSTNAME" &&
                 ERRORS+=("Failed to sync from AUR: ${FAILED[*]}")
             ! lk_aur_can_chroot || lk_pac_sync -f
             PAC_PACKAGES+=($(comm -12 \
-                <({ echo aurutils && lk_echo_array AUR_PACKAGES; } | sort -u) \
+                <({ echo aurutils && lk_arr AUR_PACKAGES; } | sort -u) \
                 <(lk_pac_repo_available_list aur | sort -u)))
             AUR_PACKAGES=()
         fi
@@ -674,13 +674,13 @@ $LK_NODE_HOSTNAME" &&
     if [ ${#PAC_KEEP[@]} -gt 0 ]; then
         PAC_KEEP=($(lk_pac_installed_list "${PAC_KEEP[@]}"))
     fi
-    _PAC_KEEP=($(lk_echo_array PAC_KEEP | sed -E '/^aurutils$/d'))
+    _PAC_KEEP=($(lk_arr PAC_KEEP | sed -E '/^aurutils$/d'))
 
     lk_console_message "Checking install reasons"
-    PAC_EXPLICIT=($(lk_echo_array PAC_PACKAGES AUR_PACKAGES PAC_KEEP | sort -u))
+    PAC_EXPLICIT=($(lk_arr PAC_PACKAGES AUR_PACKAGES PAC_KEEP | sort -u))
     PAC_MARK_EXPLICIT=($(lk_pac_installed_not_explicit "${PAC_EXPLICIT[@]}"))
     PAC_UNMARK_EXPLICIT=($(comm -13 \
-        <(lk_echo_array PAC_EXPLICIT) \
+        <(lk_arr PAC_EXPLICIT) \
         <(lk_pac_installed_explicit | sort -u)))
     [ ${#PAC_MARK_EXPLICIT[@]} -eq 0 ] ||
         lk_log_bypass lk_faketty \
@@ -695,8 +695,7 @@ $LK_NODE_HOSTNAME" &&
         lk_mapfile PAC_REMOVE <(lk_whiptail_checklist "Orphaned packages" \
             "Selected packages will be removed:" "${PAC_REMOVE[@]}" off)
         [ ${#PAC_REMOVE[@]} -eq 0 ] || {
-            lk_echo_array PAC_REMOVE |
-                lk_console_list "Orphaned:" package packages
+            lk_tty_list PAC_REMOVE "Orphaned:" package packages
             REMOVE_MESSAGE+=("orphaned")
         }
     fi
@@ -713,10 +712,9 @@ $LK_NODE_HOSTNAME" &&
     }
 
     [ ${#_PAC_KEEP[@]} -eq 0 ] ||
-        lk_echo_array _PAC_KEEP |
-        lk_console_list "Not uninstalling:" package packages
+        lk_tty_list _PAC_KEEP "Not uninstalling:" package packages
     PAC_INSTALL=($(comm -23 \
-        <(lk_echo_array PAC_PACKAGES | sort -u) \
+        <(lk_arr PAC_PACKAGES | sort -u) \
         <(lk_pac_installed_list | sort -u)))
     if [ ${#PAC_INSTALL[@]} -gt 0 ]; then
         PAC_INSTALL=(
@@ -727,24 +725,26 @@ $LK_NODE_HOSTNAME" &&
         lk_mapfile PAC_INSTALL <(lk_whiptail_checklist "Installing packages" \
             "Selected packages will be installed:" "${PAC_INSTALL[@]}")
         [ ${#PAC_INSTALL[@]} -eq 0 ] ||
-            lk_echo_array PAC_INSTALL |
-            lk_console_list "Installing:" package packages
+            lk_tty_list PAC_INSTALL "Installing:" package packages
     fi
-    PAC_UPGRADE=($(pacman -Sup --print-format "%n %r/%n-%v" | sort))
-    if [ ${#PAC_UPGRADE[@]} -gt 0 ]; then
+    _PAC_UPGRADE=($(pacman -Suup --print-format "%n %r/%n-%v" | sort))
+    PAC_UPGRADE=()
+    if [ ${#_PAC_UPGRADE[@]} -gt 0 ]; then
         lk_mapfile PAC_UPGRADE <(lk_whiptail_checklist "Upgrading packages" \
-            "Selected packages will be upgraded:" "${PAC_UPGRADE[@]}")
+            "Selected packages will be upgraded:" "${_PAC_UPGRADE[@]}")
+        PAC_IGNORE=($(comm -23 \
+            <(lk_arr _PAC_UPGRADE | awk 'NR % 2' | sort -u) \
+            <(lk_arr PAC_UPGRADE | sort -u)))
         [ ${#PAC_UPGRADE[@]} -eq 0 ] ||
-            lk_echo_array PAC_UPGRADE |
-            lk_console_list "Upgrading:" package packages
+            lk_tty_list PAC_UPGRADE "Upgrading:" package packages
+        [ ${#PAC_IGNORE[@]} -eq 0 ] ||
+            lk_tty_list PAC_IGNORE "Not upgrading:" package packages
     fi
-    [ ${#PAC_INSTALL[@]}${#PAC_UPGRADE[@]} = 00 ] ||
-        for v in "" v; do
-            # Sync the package with keys used to sign other packages first
-            ! SYNC=($(lk_echo_array PAC_INSTALL PAC_UPGRADE |
-                grep -Fx"$v" archlinux-keyring)) ||
-                lk_log_bypass lk_faketty pacman -S --noconfirm "${SYNC[@]}"
-        done
+    [ ${#PAC_INSTALL[@]}${#PAC_UPGRADE[@]} = 00 ] || (
+        IFS=,
+        lk_log_bypass lk_faketty \
+            pacman -Suu --noconfirm --ignore "${PAC_IGNORE[*]-}" "${PAC_INSTALL[@]}"
+    )
 
     lk_symlink_bin codium code || true
     lk_symlink_bin vim vi || true

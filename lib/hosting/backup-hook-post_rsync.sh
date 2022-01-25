@@ -31,9 +31,8 @@ else
         return
 
     if [ ${#MYSQL_DUMP_ARGS[@]} -gt 0 ]; then
-        lk_echo_array MYSQL_DUMP_ARGS |
-            lk_console_detail_list \
-                "MySQL databases found for user '$OWNER':" database databases
+        lk_tty_list_detail MYSQL_DUMP_ARGS \
+            "MySQL databases found for user '$OWNER':" database databases
     else
         lk_console_detail "No MySQL databases found for user '$OWNER'"
         return

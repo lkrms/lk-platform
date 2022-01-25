@@ -111,7 +111,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
       fi &&
       # Retrieve latest commits from origin
       git fetch origin &&
-      git remote set-head origin --auto &&
+      git remote set-head origin --auto >/dev/null &&
       git remote prune origin &&
       # Stash local changes
       { git stash --include-untracked ||

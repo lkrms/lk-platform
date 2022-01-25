@@ -181,7 +181,7 @@ lk_console_message "Checking system state"
 lk_console_detail "Environment:" "$SCRIPT_ENV"
 [ "$LK_DEBUG" != Y ] ||
     lk_console_detail "Variables:" "$SCRIPT_VARS"
-lk_console_detail_list \
+lk_tty_list_detail \
     "Pre-installed packages marked as 'manually installed':" \
     <"$IMAGE_BASE_PACKAGES"
 lk_console_detail "All pre-installed packages:" \

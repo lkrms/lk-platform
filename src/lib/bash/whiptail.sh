@@ -1,8 +1,15 @@
 #!/bin/bash
 
-function _lk_whiptail() {
+function _lk_whiptail() { (
+    [[ $- != *x* ]] ||
+        lk_bash_at_least 4 1 ||
+        [[ ! /dev/fd/2 -ef /dev/fd/4 ]] ||
+        ! STDERR=$(lk_get_tty) || {
+        set +x
+        exec 2>"$STDERR" || return
+    }
     whiptail "$@" 3>&1 1>&2 2>&3
-}
+); }
 
 function lk_whiptail() {
     lk_log_bypass_stderr _lk_whiptail "$@"

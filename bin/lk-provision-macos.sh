@@ -130,6 +130,7 @@ function exit_trap() {
     LK_FILE_BACKUP_MOVE=1
 
     lk_log_start ~/"${LK_PATH_PREFIX}install"
+    lk_start_trace
     lk_trap_add EXIT exit_trap
 
     lk_console_log "Provisioning macOS"
@@ -362,26 +363,24 @@ EOF
             lk_brew_flush_cache
     }
 
-    FOREIGN=($({ lk_brew_formulae_list_not_native "${HOMEBREW_FORMULAE[@]}" &&
-        comm -12 <(lk_arr HOMEBREW_FORMULAE) <(lk_arr HOMEBREW_FORCE_INTEL); } |
-        sort -u))
-    if lk_is_apple_silicon && {
-        [ -e /usr/local/bin/brew ] || { [ ${#FOREIGN[@]} -gt 0 ] &&
-            lk_echo_array FOREIGN | lk_console_list \
-                "Not supported on Apple Silicon:" formula formulae &&
-            lk_confirm \
-                "Install an Intel instance of Homebrew for the above?" Y; }
-    }; then
-        lk_macos_install_rosetta2
-        BREW_PATH=(/opt/homebrew/bin/brew /usr/local/bin/brew)
-        BREW_ARCH=("" x86_64)
-        BREW_NAMES=("Homebrew (native)" "Homebrew (Intel)")
-    elif [ ${#FOREIGN[@]} -gt 0 ]; then
-        lk_console_warning "Skipping unsupported formulae"
-        HOMEBREW_FORMULAE=($(comm -23 \
-            <(lk_echo_array HOMEBREW_FORMULAE | sort -u) \
-            <(lk_echo_array FOREIGN | sort -u)))
-        FOREIGN=()
+    if lk_is_apple_silicon; then
+        FOREIGN=($({ lk_brew_formulae_list_not_native "${HOMEBREW_FORMULAE[@]}" &&
+            comm -12 \
+                <(lk_arr HOMEBREW_FORMULAE) \
+                <(lk_arr HOMEBREW_FORCE_INTEL); } | sort -u))
+        if [ -e /usr/local/bin/brew ] || { [ ${#FOREIGN[@]} -gt 0 ] &&
+            lk_tty_list FOREIGN "Not supported on Apple Silicon:" formula formulae &&
+            lk_tty_yn "Install an Intel instance of Homebrew for the above?" Y; }; then
+            lk_macos_install_rosetta2
+            BREW_PATH=(/opt/homebrew/bin/brew /usr/local/bin/brew)
+            BREW_ARCH=("" x86_64)
+            BREW_NAMES=("Homebrew (native)" "Homebrew (Intel)")
+        elif [ ${#FOREIGN[@]} -gt 0 ]; then
+            lk_tty_warning "Skipping unsupported formulae"
+            HOMEBREW_FORMULAE=($(comm -23 \
+                <(lk_arr HOMEBREW_FORMULAE | sort -u) \
+                <(lk_arr FOREIGN | sort -u)))
+        fi
     fi
 
     brew_loop check_homebrew
@@ -446,10 +445,9 @@ EOF
     lk_mapfile UPGRADE_FORMULAE_TEXT \
         <(lk_echo_array "${!UPGRADE_FORMULAE_TEXT_@}" | sort -u)
     [ ${#UPGRADE_FORMULAE_TEXT[@]} -eq 0 ] || {
-        lk_echo_array UPGRADE_FORMULAE_TEXT |
-            lk_console_detail_list "$(
-                lk_plural ${#UPGRADE_FORMULAE_TEXT[@]} Update Updates
-            ) available:" formula formulae
+        lk_tty_list_detail UPGRADE_FORMULAE_TEXT "$(
+            lk_plural ${#UPGRADE_FORMULAE_TEXT[@]} Update Updates
+        ) available:" formula formulae
         lk_confirm "OK to upgrade outdated formulae?" Y ||
             unset "${!UPGRADE_FORMULAE_@}"
     }
@@ -462,7 +460,7 @@ EOF
 .casks[] | select(.pinned | not) |
     .name + " (" + .installed_versions + " -> " +
         .current_version + ")"' |
-                lk_console_detail_list "$(
+                lk_tty_list_detail - "$(
                     lk_plural ${#UPGRADE_CASKS[@]} Update Updates
                 ) available:" cask casks
             lk_confirm "OK to upgrade outdated casks?" Y ||
@@ -588,7 +586,7 @@ Please open the Mac App Store and sign in"
             OUTDATED=$(mas outdated)
             if UPGRADE_APPS=($(grep -Eo '^[0-9]+' <<<"$OUTDATED")); then
                 sed -E "s/^[0-9]+$S+(.*$NS)$S+\(/\1 (/" <<<"$OUTDATED" |
-                    lk_console_detail_list "$(
+                    lk_tty_list_detail - "$(
                         lk_plural ${#UPGRADE_APPS[@]} Update Updates
                     ) available:" app apps
                 lk_confirm "OK to upgrade outdated apps?" Y ||
@@ -661,8 +659,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
         [ ${#ARR[@]} -eq 0 ] || {
             local s='{}' MESSAGE
             MESSAGE=${3//"$s"/$BREW_NAME}
-            lk_echo_array ARR |
-                lk_console_list "$MESSAGE" formula formulae
+            lk_tty_list ARR "$MESSAGE" formula formulae
             brew "$1" --formula "${ARR[@]}" &&
                 lk_brew_flush_cache || STATUS=$?
         }
@@ -679,8 +676,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
     }
 
     [ ${#INSTALL_CASKS[@]} -eq 0 ] || {
-        lk_echo_array INSTALL_CASKS |
-            lk_console_list "Installing new casks:"
+        lk_tty_list INSTALL_CASKS "Installing new casks:"
         brew install --cask "${INSTALL_CASKS[@]}" &&
             lk_brew_flush_cache || STATUS=$?
     }
@@ -692,15 +688,13 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
     }
 
     [ ${#INSTALL_APPS[@]} -eq 0 ] || {
-        lk_echo_array APP_NAMES |
-            lk_console_list "Installing new apps:"
+        lk_tty_list APP_NAMES "Installing new apps:"
         lk_faketty caffeinate -d \
             mas install "${INSTALL_APPS[@]}" || STATUS=$?
     }
 
     [ ${#INSTALL_UPDATES[@]} -eq 0 ] || {
-        lk_echo_array INSTALL_UPDATES |
-            lk_console_list "Installing system software updates:"
+        lk_tty_list INSTALL_UPDATES "Installing system software updates:"
         lk_faketty caffeinate -d \
             sudo softwareupdate --no-scan \
             --install "${INSTALL_UPDATES[@]}" --restart || STATUS=$?
@@ -848,8 +842,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
                     "Selected items will open automatically when you log in:" \
                     "${LOGIN_ITEMS[@]}"); } ||
                 [ ${#LOGIN_ITEMS[@]} -eq 0 ] || {
-                lk_echo_array LOGIN_ITEMS |
-                    lk_console_list "Adding to Login Items:" app apps
+                lk_tty_list LOGIN_ITEMS "Adding to Login Items:" app apps
                 "$LK_BASE/lib/macos/login-items-add.js" "${LOGIN_ITEMS[@]}"
             }
         }

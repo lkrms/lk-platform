@@ -44,8 +44,7 @@ lk_start_trace
         <(find "${BASE_DIRS[@]}" -mindepth 1 -maxdepth 1 -type d | sort |
             sed -E '/^\/(proc|sys|dev|run|tmp)$/d'))
     [ ${#SOURCES[@]} -eq 0 ] ||
-        lk_echo_array SOURCES |
-        lk_console_list "Backing up:" account accounts
+        lk_tty_list SOURCES "Backing up:" account accounts
 
     RSYNC_FILTER_ARGS=()
     EXIT_STATUS=0

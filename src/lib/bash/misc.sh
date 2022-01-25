@@ -163,8 +163,7 @@ function lk_nextcloud_get_excluded() {
         [ ${#FILES[@]} -eq 0 ] &&
             lk_console_message \
                 "No files excluded by $(lk_tty_path "$EXCLUDE_FILE")" ||
-            lk_echo_array FILES |
-            lk_console_list \
+            lk_tty_list FILES \
                 "Excluded by $(lk_tty_path "$EXCLUDE_FILE"):" file files
     )
 }

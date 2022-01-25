@@ -41,7 +41,7 @@ function lk_linode_ssh_add_all() {
     lk_jq_get_array LABELS ".[].label" <<<"$JSON" &&
         [ ${#LABELS[@]} -gt 0 ] || lk_warn "no Linodes found" || return
     lk_echo_array LABELS | sort |
-        lk_console_list "Adding to SSH configuration:" Linode Linodes
+        lk_tty_list - "Adding to SSH configuration:" Linode Linodes
     lk_confirm "Proceed?" Y || return
     lk_linode_ssh_add <<<"$JSON"
     lk_console_success "SSH configuration complete"
@@ -56,7 +56,7 @@ function lk_linode_hosting_ssh_add_all() {
     JSON=$(lk_linode_linodes "$@" | _lk_linode_filter) &&
         lk_jq_get_array LINODES <<<"$JSON" &&
         [ ${#LINODES[@]} -gt 0 ] || lk_warn "no Linodes found" || return
-    jq -r '.[].label' <<<"$JSON" | sort | lk_console_list \
+    jq -r '.[].label' <<<"$JSON" | sort | lk_tty_list - \
         "Adding hosting accounts to SSH configuration:" Linode Linodes
     lk_confirm "Proceed?" Y || return
     for LINODE in "${LINODES[@]}"; do

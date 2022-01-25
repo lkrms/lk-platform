@@ -571,8 +571,7 @@ if [ -n "$STACKSCRIPT" ]; then
             "Checking field $TAG of ${#SS_TAGS[@]}:" \
             "$NAME"
         [ -z "${SELECT_TEXT-}" ] ||
-            lk_echo_array SELECT_OPTIONS |
-            lk_console_detail_list "$SELECT_TEXT:"
+            lk_tty_list_detail SELECT_OPTIONS "$SELECT_TEXT:"
         [ -z "${DEFAULT-}" ] ||
             lk_console_detail "Default value:" "$DEFAULT"
         VALUE=$(lk_var_env "$NAME") || unset VALUE

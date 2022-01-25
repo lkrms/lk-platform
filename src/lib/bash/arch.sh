@@ -330,7 +330,7 @@ function lk_aur_sync() {
     unset CHROOT
     ! lk_aur_can_chroot || CHROOT=
     lk_echo_args "$@" |
-        lk_console_list "Syncing from AUR:" package packages
+        lk_tty_list - "Syncing from AUR:" package packages
     lk_makepkg_setup
     for PKG in "$@"; do
         lk_run_detail aur sync --database aur --no-view --noconfirm \
@@ -341,12 +341,10 @@ function lk_aur_sync() {
             SYNCED+=("$PKG") ||
             FAILED+=("$PKG")
     done
-    [ ${#SYNCED[@]} -eq 0 ] || lk_echo_array SYNCED |
-        lk_console_list "Synced from AUR:" package packages \
-            "$_LK_SUCCESS_COLOUR"
-    [ ${#FAILED[@]} -eq 0 ] || lk_echo_array FAILED |
-        lk_console_list "Failed to sync:" package packages \
-            "$_LK_ERROR_COLOUR"
+    [ ${#SYNCED[@]} -eq 0 ] ||
+        lk_tty_list SYNCED "Synced from AUR:" package{,s} "$_LK_SUCCESS_COLOUR"
+    [ ${#FAILED[@]} -eq 0 ] ||
+        lk_tty_list FAILED "Failed to sync:" package{,s} "$_LK_ERROR_COLOUR"
     [ ${#FAILED[@]} -eq 0 ]
 }
 

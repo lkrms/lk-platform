@@ -124,8 +124,7 @@ function lk_apt_install() {
     [ $# -gt 0 ] || lk_warn "no package" || return
     INSTALL=($(lk_apt_not_marked_manual_list "$@")) || return
     [ ${#INSTALL[@]} -eq 0 ] || {
-        lk_echo_array INSTALL |
-            lk_console_list "Installing:" "APT package" "APT packages"
+        lk_tty_list INSTALL "Installing:" "APT package" "APT packages"
         lk_apt_update &&
             _lk_apt_flock apt-get -yq \
                 --no-install-recommends --no-install-suggests \
@@ -141,9 +140,8 @@ function lk_apt_remove() {
     [ $# -gt 0 ] || lk_warn "no package" || return
     REMOVE=($(lk_dpkg_installed_list "$@")) || return
     [ ${#REMOVE[@]} -eq 0 ] || {
-        lk_echo_array REMOVE |
-            lk_console_list "${_LK_APT_REMOVE_MESSAGE:-Removing}:" \
-                "APT package" "APT packages"
+        lk_tty_list REMOVE "${_LK_APT_REMOVE_MESSAGE:-Removing}:" \
+            "APT package" "APT packages"
         _lk_apt_flock apt-get -yq \
             "${_LK_APT_REMOVE_COMMAND:-remove}" --auto-remove "${REMOVE[@]}"
     }
@@ -169,9 +167,8 @@ function lk_apt_purge_removed() {
         '${db:Status-Status}\t${binary:Package}\n' |
         awk '$1 == "config-files" { print $2 }')) || return
     [ ${#PURGE[@]} -eq 0 ] || {
-        lk_echo_array PURGE |
-            lk_console_list "Purging previously removed packages:" \
-                "APT package" "APT packages"
+        lk_tty_list PURGE "Purging previously removed packages:" \
+            "APT package" "APT packages"
         lk_confirm "Proceed?" Y || return
         _lk_apt_flock apt-get -yq purge "${PURGE[@]}"
     }
@@ -259,11 +256,10 @@ function lk_apt_reinstall_damaged() {
         REINSTALL=($(xargs dpkg -S <"$_MISSING" | cut -d: -f1 | sort -u)) &&
             [ ${#REINSTALL[@]} -gt 0 ] ||
             lk_warn "unable to find packages for missing files" || return
-        lk_echo_array REINSTALL |
-            lk_console_detail_list \
-                "Reinstalling to restore $MISSING_COUNT $(lk_plural \
-                    "$MISSING_COUNT" file files):" \
-                "APT package" "APT packages"
+        lk_tty_list_detail REINSTALL \
+            "Reinstalling to restore $MISSING_COUNT $(lk_plural \
+                "$MISSING_COUNT" file files):" \
+            "APT package" "APT packages"
         lk_confirm "Proceed?" Y || return
         # apt-get doesn't set reinstalled packages to manually installed
         lk_apt_update &&
