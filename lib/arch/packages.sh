@@ -198,16 +198,16 @@ if lk_node_service_enabled desktop; then
         #
         adapta-gtk-theme
         arc-gtk-theme
-        arc-icon-theme
+        #arc-icon-theme
         arc-solid-gtk-theme
-        breeze-gtk
-        breeze-icons
-        elementary-icon-theme
-        elementary-wallpapers
+        #breeze-gtk
+        #breeze-icons
+        #elementary-icon-theme
+        #elementary-wallpapers
         gtk-engine-murrine # GTK 2 support
-        gtk-theme-elementary
+        #gtk-theme-elementary
         papirus-icon-theme
-        sound-theme-elementary
+        #sound-theme-elementary
 
         #
         galculator
@@ -226,6 +226,7 @@ if lk_node_service_enabled desktop; then
         evince
 
         #
+        inter-font
         noto-fonts
         noto-fonts-cjk
         terminus-font
@@ -252,10 +253,10 @@ if lk_node_service_enabled desktop; then
         xrandr-invert-colors
 
         #
-        numix-gtk-theme-git
-        sound-theme-smooth
+        #numix-gtk-theme-git
+        #sound-theme-smooth
         wiki-loves-earth-wallpapers
-        zuki-themes
+        #zuki-themes
     )
 fi
 
@@ -282,8 +283,8 @@ if lk_node_service_enabled xfce4; then
         xfce4-panel-profiles
 
         #
-        elementary-xfce-icons
-        xfce-theme-greybird
+        #elementary-xfce-icons
+        #xfce-theme-greybird
     )
 fi
 
