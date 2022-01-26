@@ -69,7 +69,7 @@ function lk_user_add_sftp_only() {
 Usage: $FUNCNAME USERNAME [SOURCE_DIR TARGET_DIR]..." || return
     lk_group_exists "$SFTP_ONLY" || {
         lk_tty_print "Creating group:" "$SFTP_ONLY"
-        lk_run_detail lk_elevate groupadd "$SFTP_ONLY" || return
+        lk_tty_run_detail lk_elevate groupadd "$SFTP_ONLY" || return
     }
     lk_tty_print "Checking SSH server"
     FILE=/etc/ssh/sshd_config
@@ -86,17 +86,17 @@ ChrootDirectory %h"
         -v "BREAK=$MATCH" \
         -f "$LK_BASE/lib/awk/block-replace.awk" "$FILE")
     ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
-        lk_run_detail lk_elevate systemctl restart ssh.service
+        lk_tty_run_detail lk_elevate systemctl restart ssh.service
     if lk_user_exists "$1"; then
         lk_confirm "Configure existing user '$1' for SFTP-only access?" Y &&
-            lk_run_detail lk_elevate \
+            lk_tty_run_detail lk_elevate \
                 usermod --shell /bin/false --groups "$SFTP_ONLY" --append "$1"
     else
         lk_tty_print "Creating user:" "$1"
-        lk_run_detail lk_elevate \
+        lk_tty_run_detail lk_elevate \
             useradd --create-home --shell /bin/false --groups "$SFTP_ONLY" "$1"
     fi || return
-    _HOME=$(lk_user_home "$1") && lk_elevate_if_error test -d "$_HOME" ||
+    _HOME=$(lk_user_home "$1") && lk_elevate -f test -d "$_HOME" ||
         lk_warn "invalid home directory: $_HOME" || return
     [ $# -lt 3 ] ||
         _LK_USER_HOME=$_HOME lk_user_bind_dir "$@" || return
@@ -112,7 +112,7 @@ ChrootDirectory %h"
         ssh-keygen -t rsa -b 4096 -N "" -q -C "$1@$(lk_hostname)" -f "$TEMP" &&
             lk_elevate cp "$TEMP.pub" "$FILE" &&
             lk_tty_file "$TEMP" || return
-        lk_console_warning "${LK_BOLD}WARNING:$LK_RESET \
+        lk_tty_warning "${LK_BOLD}WARNING:$LK_RESET \
 this private key ${LK_BOLD}WILL NOT BE DISPLAYED AGAIN$LK_RESET"
     }
 }
@@ -123,7 +123,7 @@ function lk_user_bind_dir() {
     # Skip these checks if _LK_USER_HOME is set
     [ -n "$_HOME" ] || {
         lk_user_exists "$_USER" || lk_warn "user not found: $_USER" || return
-        _HOME=$(lk_user_home "$1") && lk_elevate_if_error test -d "$_HOME" ||
+        _HOME=$(lk_user_home "$1") && lk_elevate -f test -d "$_HOME" ||
             lk_warn "invalid home directory: $_HOME" || return
     }
     shift
@@ -131,7 +131,7 @@ function lk_user_bind_dir() {
     lk_command_exists findmnt || lk_warn "command not found: findmnt" || return
     TEMP=$(lk_mktemp_file) && TEMP2=$(lk_mktemp_file) &&
         lk_delete_on_exit "$TEMP" "$TEMP2" || return
-    lk_elevate_if_error cp /etc/fstab "$TEMP"
+    lk_elevate -f cp /etc/fstab "$TEMP"
     while [ $# -ge 2 ]; do
         SOURCE=$1
         TARGET=$2
@@ -139,16 +139,16 @@ function lk_user_bind_dir() {
         [[ $TARGET == /* ]] || TARGET=$_HOME/$TARGET
         [[ $TARGET == $_HOME/* ]] ||
             lk_warn "target not in $_HOME: $TARGET" || return
-        lk_elevate_if_error test -d "$SOURCE" ||
+        lk_elevate -f test -d "$SOURCE" ||
             lk_warn "source directory not found: $SOURCE" || return
         while :; do
             FSROOT=$(lk_elevate findmnt -no FSROOT -M "$TARGET") ||
                 { FSROOT= && break; }
             lk_elevate test ! "$FSROOT" -ef "$SOURCE" || break
-            lk_console_warning "Already mounted at $TARGET:" \
+            lk_tty_warning "Already mounted at $TARGET:" \
                 "$(lk_elevate findmnt -no SOURCE -M "$TARGET")"
             lk_confirm "OK to unmount?" Y &&
-                lk_run_detail lk_elevate umount "$TARGET" || return
+                lk_tty_run_detail lk_elevate umount "$TARGET" || return
         done
         [ -n "$FSROOT" ] || {
             lk_install -d -m 00755 -o root -g root "$TARGET" || return
@@ -169,7 +169,7 @@ END { maybe_print() }' "$TEMP" >"$TEMP2" && cp "$TEMP2" "$TEMP" || return
         lk_warn "invalid fstab: $TEMP" || return
     lk_file_replace -m -f "$TEMP" /etc/fstab
     for TARGET in ${TARGETS+"${TARGETS[@]}"}; do
-        lk_run_detail lk_elevate mount --target "$TARGET" || STATUS=$?
+        lk_tty_run_detail lk_elevate mount --target "$TARGET" || STATUS=$?
     done
 }
 
@@ -716,7 +716,7 @@ function lk_certbot_install() {
         ((!ERRORS)) || lk_confirm "Ignore DNS errors?" N || return
     }
     local IFS=,
-    lk_run lk_elevate certbot \
+    lk_tty_run lk_elevate certbot \
         ${WEBROOT-run} \
         ${WEBROOT+certonly} \
         --non-interactive \
@@ -1149,17 +1149,17 @@ Usage: $FUNCNAME DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..."
         shift 3
     done
     LOG_FILE=$(lk_mktemp_file) || return
-    ! lk_verbose || lk_console_message \
+    ! lk_verbose || lk_tty_print \
         "Updating file modes in $(lk_tty_path "$DIR")"
     for i in "${!MATCH[@]}"; do
         [ -n "${DIR_MODE[$i]:+1}${FILE_MODE[$i]:+1}" ] || continue
-        ! lk_verbose 2 || lk_console_item "Checking:" "${MATCH[$i]}"
+        ! lk_verbose 2 || lk_tty_print "Checking:" "${MATCH[$i]}"
         CHANGES=0
         for TYPE in DIR_MODE FILE_MODE; do
             MODE=${TYPE}"[$i]"
             MODE=${!MODE}
             [ -n "$MODE" ] || continue
-            ! lk_verbose 2 || lk_console_detail "$([ "$TYPE" = DIR_MODE ] &&
+            ! lk_verbose 2 || lk_tty_detail "$([ "$TYPE" = DIR_MODE ] &&
                 echo Directory ||
                 echo File) mode:" "$MODE"
             ARGS=(-regextype posix-egrep)
@@ -1188,19 +1188,19 @@ Usage: $FUNCNAME DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..."
                 tee -a "$LOG_FILE" | wc -l) || return
             ((CHANGES += _CHANGES)) || true
         done
-        ! lk_verbose 2 || lk_console_detail "Changes:" "$LK_BOLD$CHANGES"
+        ! lk_verbose 2 || lk_tty_detail "Changes:" "$LK_BOLD$CHANGES"
         ((TOTAL += CHANGES)) || true
     done
     ! lk_verbose && ! ((TOTAL)) ||
         $(lk_verbose &&
-            echo "lk_console_message" ||
-            echo "lk_console_detail") \
+            echo "lk_tty_print" ||
+            echo "lk_tty_detail") \
             "$TOTAL file $(lk_plural \
                 "$TOTAL" mode modes) updated$(lk_verbose ||
                     echo " in $(lk_tty_path "$DIR")")"
     ! ((TOTAL)) &&
         lk_delete_on_exit "$LOG_FILE" ||
-        lk_console_detail "Changes logged to:" "$LOG_FILE"
+        lk_tty_detail "Changes logged to:" "$LOG_FILE"
 }
 
 function lk_sudo_add_nopasswd() {
@@ -1226,7 +1226,7 @@ function lk_sudo_offer_nopasswd() {
             "Allow '$USER' to run commands as root with no password?" N ||
             return 0
         lk_sudo_add_nopasswd "$USER" &&
-            lk_console_message \
+            lk_tty_print \
                 "User '$USER' may now run any command as any user"
     }
 }
@@ -1373,7 +1373,7 @@ Usage: $FUNCNAME [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
         ssh-keygen -l -f "$KEY_FILE" &>/dev/null || {
             # `ssh-keygen -l -f FILE` exits without error if FILE contains an
             # OpenSSH public key
-            lk_console_log "Reading $KEY_FILE to create public key file"
+            lk_tty_log "Reading $KEY_FILE to create public key file"
             KEY=$(unset DISPLAY && ssh-keygen -y -f "$KEY_FILE") &&
                 lk_install -m 00600 "$KEY_FILE.pub" &&
                 lk_file_replace "$KEY_FILE.pub" "$KEY" || return
@@ -1541,10 +1541,10 @@ function lk_hosts_file_add() {
         lk_file_keep_original "$FILE" &&
             lk_file_replace "$FILE" "$_FILE"
     else
-        lk_console_item "You do not have permission to edit" "$FILE"
+        lk_tty_print "You do not have permission to edit" "$FILE"
         FILE=$(lk_mktemp_file) &&
             echo "$_FILE" >"$FILE" &&
-            lk_console_detail "Updated hosts file written to:" "$FILE"
+            lk_tty_detail "Updated hosts file written to:" "$FILE"
     fi
 }
 
@@ -1612,19 +1612,19 @@ function lk_host_ns_resolve() {
     _LK_DNS_SERVER=$NAMESERVER
     _LK_DIG_OPTIONS=(+norecurse)
     ! lk_verbose 2 || {
-        lk_console_detail "Using name server:" "$NAMESERVER"
-        lk_console_detail "Looking up A and AAAA records for:" "$1"
+        lk_tty_detail "Using name server:" "$NAMESERVER"
+        lk_tty_detail "Looking up A and AAAA records for:" "$1"
     }
     IP=($(lk_dns_get_records +VALUE -A,AAAA "$1")) || return
     if [ ${#IP[@]} -eq 0 ]; then
         ! lk_verbose 2 || {
-            lk_console_detail "No A or AAAA records returned"
-            lk_console_detail "Looking up CNAME record for:" "$1"
+            lk_tty_detail "No A or AAAA records returned"
+            lk_tty_detail "Looking up CNAME record for:" "$1"
         }
         CNAME=($(lk_dns_get_records +VALUE -CNAME "$1")) || return
         if [ ${#CNAME[@]} -eq 1 ]; then
             ! lk_verbose 2 ||
-                lk_console_detail "CNAME value from $NAMESERVER for $1:" \
+                lk_tty_detail "CNAME value from $NAMESERVER for $1:" \
                     "${CNAME[0]}"
             lk_host_ns_resolve "${CNAME[0]%.}" || return
             return
@@ -1632,7 +1632,7 @@ function lk_host_ns_resolve() {
     fi
     [ ${#IP[@]} -gt 0 ] || lk_warn "could not resolve $1: $NAMESERVER" || return
     ! lk_verbose 2 ||
-        lk_console_detail "A and AAAA values from $NAMESERVER for $1:" \
+        lk_tty_detail "A and AAAA values from $NAMESERVER for $1:" \
             "$(lk_echo_array IP)"
     lk_echo_array IP
 }
@@ -1941,13 +1941,13 @@ function _lk_crontab() {
     esac || return
     if [ -z "$NEW_CRONTAB" ]; then
         [ -n "${NEW+1}" ] || {
-            lk_console_message "Removing empty crontab for user '$(lk_me)'"
+            lk_tty_print "Removing empty crontab for user '$(lk_me)'"
             lk_maybe_sudo crontab -r
         }
     else
         [ "$NEW_CRONTAB" = "$CRONTAB" ] || {
             local VERB=
-            lk_console_diff \
+            lk_tty_diff \
                 <([ -z "$CRONTAB" ] || cat <<<"$CRONTAB") \
                 <(cat <<<"$NEW_CRONTAB") \
                 "${NEW+Creating}${NEW-Updating} crontab for user '$(lk_me)'"

@@ -80,13 +80,13 @@ function lk_backup_snapshot_to_archive() { (
         nice -n 10 xz -cT0 >"$XZ.pending" &&
         touch -r "$SNAPSHOT/.finished" "$XZ.pending" &&
         mv -n "$XZ"{.pending,} || return
-    lk_console_success "Files compressed successfully"
+    lk_tty_success "Files compressed successfully"
     [ ${#DB[@]} -eq 0 ] || {
         lk_tty_list DB_NEW "Copying database $(lk_plural ${#DB[@]} backup) to:"
         cp -an "${DB[@]}" "$ARCHIVE_ROOT/" || return
     }
     SIZE=$(gnu_du -hsc "$XZ" ${DB_NEW+"${DB_NEW[@]}"} | awk 'END{print $1}') &&
-        lk_console_success "Archive created successfully" &&
+        lk_tty_success "Archive created successfully" &&
         lk_tty_detail "Compressed size:" "$SIZE"
 ); }
 

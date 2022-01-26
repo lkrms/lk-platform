@@ -203,7 +203,7 @@ lk_tty_detail "Plugin code will be allowed to run where necessary"
 lk_confirm "Proceed?" Y || lk_pass lk_wp_maintenance_maybe_disable || lk_die ""
 
 lk_tty_print
-lk_console_log "Resetting WordPress for local development"
+lk_tty_log "Resetting WordPress for local development"
 
 lk_wp_maintenance_enable
 
@@ -215,7 +215,7 @@ fi
 
 ((!SHUFFLE_SALTS)) || {
     lk_tty_print "Refreshing salts defined in wp-config.php"
-    lk_run_detail lk_wp config shuffle-salts
+    lk_tty_run_detail lk_wp config shuffle-salts
 }
 
 ((!UPDATE_EMAIL)) || {
@@ -259,17 +259,17 @@ SQL
 
 if lk_wp config has WP_CACHE --type=constant; then
     lk_tty_print "Disabling WP_CACHE"
-    lk_run_detail lk_wp config set WP_CACHE false --type=constant --raw
+    lk_tty_run_detail lk_wp config set WP_CACHE false --type=constant --raw
 fi
 
 ((!DISABLE_EMAIL)) || {
     lk_tty_print "Disabling outgoing email"
     if ! lk_wp plugin is-installed wp-mail-smtp; then
         lk_tty_detail "Installing and activating WP Mail SMTP"
-        lk_run_detail lk_wp plugin install wp-mail-smtp --activate
+        lk_tty_run_detail lk_wp plugin install wp-mail-smtp --activate
     elif ! lk_wp plugin is-active wp-mail-smtp; then
         lk_tty_detail "Activating WP Mail SMTP"
-        lk_run_detail lk_wp plugin activate wp-mail-smtp
+        lk_tty_run_detail lk_wp plugin activate wp-mail-smtp
     fi
     lk_wp option patch insert wp_mail_smtp general '{
   "do_not_send": true,
@@ -296,7 +296,7 @@ if lk_wp plugin is-active woocommerce; then
         [ ${#TO_DEACTIVATE[@]} -eq 0 ] || {
             lk_tty_print "WooCommerce: disabling webhooks"
             for WEBHOOK_ID in "${TO_DEACTIVATE[@]}"; do
-                lk_run_detail wp --user=1 \
+                lk_tty_run_detail wp --user=1 \
                     wc webhook update "$WEBHOOK_ID" --status=disabled
             done
             # WooCommerce has been known to confirm webhooks are disabled
@@ -325,4 +325,4 @@ lk_wp_apply
 
 lk_wp_maintenance_maybe_disable
 
-lk_console_success "WordPress successfully reset for local development"
+lk_tty_success "WordPress successfully reset for local development"

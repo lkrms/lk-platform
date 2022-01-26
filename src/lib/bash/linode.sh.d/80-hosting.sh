@@ -52,14 +52,14 @@ Example:
             lk_warn "Linode not found: $REBUILD" || return
         SH=$(lk_linode_get_shell_var <<<"$LINODE") &&
             eval "$SH" || return
-        lk_console_item "Rebuilding:" \
+        lk_tty_print "Rebuilding:" \
             "$LINODE_LABEL ($(lk_implode_arr ", " LINODE_TAGS))"
-        lk_console_detail "Linode ID:" "$LINODE_ID"
-        lk_console_detail "Linode type:" "$LINODE_TYPE"
-        lk_console_detail "CPU count:" "$LINODE_VPCUS"
-        lk_console_detail "Memory:" "$LINODE_MEMORY"
-        lk_console_detail "Storage:" "$((LINODE_DISK / 1024))G"
-        lk_console_detail "IP addresses:" $'\n'"$(lk_echo_args \
+        lk_tty_detail "Linode ID:" "$LINODE_ID"
+        lk_tty_detail "Linode type:" "$LINODE_TYPE"
+        lk_tty_detail "CPU count:" "$LINODE_VPCUS"
+        lk_tty_detail "Memory:" "$LINODE_MEMORY"
+        lk_tty_detail "Storage:" "$((LINODE_DISK / 1024))G"
+        lk_tty_detail "IP addresses:" $'\n'"$(lk_echo_args \
             $LINODE_IPV4_PUBLIC $LINODE_IPV6 $LINODE_IPV4_PRIVATE)"
         lk_confirm "Destroy the existing Linode and start over?" N || return
     }
@@ -96,27 +96,27 @@ Example:
         "${@:5}"
         ${REBUILD:+"$LINODE_ID"}
     )
-    lk_console_item "Running:" \
+    lk_tty_print "Running:" \
         $'\n'"$(lk_fold_quote_args linode-cli "${ARGS[@]##ssh-??? * }")"
     lk_confirm "Proceed?" Y || return
-    lk_console_message "${VERBS[0]} Linode"
+    lk_tty_print "${VERBS[0]} Linode"
     FILE=/tmp/$FUNCNAME-$1-$(lk_date %s).json
     LINODES=$(linode-cli "${ARGS[@]}" | tee "$FILE") ||
         lk_pass rm -f "$FILE" || return
     lk_linode_flush_cache
     LINODE=$(jq -c '.[0]' <<<"$LINODES")
-    lk_console_message "Linode ${VERBS[1]} successfully"
-    lk_console_detail "Root password:" "$ROOT_PASS"
-    lk_console_detail "Response written to:" "$FILE"
+    lk_tty_print "Linode ${VERBS[1]} successfully"
+    lk_tty_detail "Root password:" "$ROOT_PASS"
+    lk_tty_detail "Response written to:" "$FILE"
     SH=$(lk_linode_get_shell_var <<<"$LINODE") &&
         eval "$SH" || return
-    lk_console_detail "Linode ID:" "$LINODE_ID"
-    lk_console_detail "Linode type:" "$LINODE_TYPE"
-    lk_console_detail "CPU count:" "$LINODE_VPCUS"
-    lk_console_detail "Memory:" "$LINODE_MEMORY"
-    lk_console_detail "Storage:" "$((LINODE_DISK / 1024))G"
-    lk_console_detail "Image:" "$LINODE_IMAGE"
-    lk_console_detail "IP addresses:" $'\n'"$(lk_echo_args \
+    lk_tty_detail "Linode ID:" "$LINODE_ID"
+    lk_tty_detail "Linode type:" "$LINODE_TYPE"
+    lk_tty_detail "CPU count:" "$LINODE_VPCUS"
+    lk_tty_detail "Memory:" "$LINODE_MEMORY"
+    lk_tty_detail "Storage:" "$((LINODE_DISK / 1024))G"
+    lk_tty_detail "Image:" "$LINODE_IMAGE"
+    lk_tty_detail "IP addresses:" $'\n'"$(lk_echo_args \
         $LINODE_IPV4_PUBLIC $LINODE_IPV6 $LINODE_IPV4_PRIVATE)"
     lk_linode_ssh_add <<<"$LINODES"
     [ -z "$HOST_ACCOUNT" ] || {

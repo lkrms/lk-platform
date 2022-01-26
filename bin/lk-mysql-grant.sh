@@ -59,10 +59,10 @@ fi
 
 HOST="${LK_MYSQL_HOST:-localhost}"
 
-lk_console_message "Setting MySQL credentials and granting privileges"
-lk_console_detail "MySQL database:" "$1"
-lk_console_detail "MySQL account:" "$2"
-lk_console_detail "MySQL server:" "$HOST"
+lk_tty_print "Setting MySQL credentials and granting privileges"
+lk_tty_detail "MySQL database:" "$1"
+lk_tty_detail "MySQL account:" "$2"
+lk_tty_detail "MySQL server:" "$HOST"
 
 LK_MYSQL_USERNAME="${LK_MYSQL_USERNAME-root}"
 lk_elevate mysql ${LK_MYSQL_USERNAME+-u"$LK_MYSQL_USERNAME"} <<EOF

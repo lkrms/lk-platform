@@ -234,7 +234,7 @@ function lk_user_lock_passwd() {
     local STATUS
     STATUS=$(lk_user_passwd_status "$@") || return
     [ "$STATUS" = L ] || {
-        lk_console_detail "Locking user password:" "$1"
+        lk_tty_detail "Locking user password:" "$1"
         lk_elevate passwd -l "$1"
     }
 }
@@ -307,11 +307,11 @@ function lk_fs_ext4_check() {
         "Check interval" \
         "Lifetime writes"
     for SOURCE in "${SOURCES[@]}"; do
-        lk_console_item "Checking:" "$SOURCE"
+        lk_tty_print "Checking:" "$SOURCE"
         lk_elevate tune2fs -l "$SOURCE" |
             sed -En "s/^($(lk_regex_implode "$@")):$S*/\1\t/p" |
             IFS=$'\t' lk_tty_detail_pairs || return
-        lk_console_blank
+        lk_tty_print
     done
 }
 
@@ -355,7 +355,7 @@ function lk_fc_charset() {
     MATCH=$(fc-match "$1" family charset) && [ -n "$MATCH" ] &&
         FAMILY=$(cut -d: -f1 <<<"$MATCH") ||
         lk_warn "match not found" || return
-    lk_console_detail "Loading glyphs from" "$FAMILY"
+    lk_tty_detail "Loading glyphs from" "$FAMILY"
     SH=$(cut -d: -f2 <<<"$MATCH" |
         cut -d= -f2 |
         sed 's/ /\n/g' |
@@ -373,7 +373,7 @@ function lk_fc_glyphs() {
             printf '%08x \\U%08x\\n' "$GLYPH" "$GLYPH"
         done)'" ||
         return
-    lk_console_detail "Glyphs found:" "${#CHARSET[@]}"
+    lk_tty_detail "Glyphs found:" "${#CHARSET[@]}"
     echo "$GLYPHS"
 }
 

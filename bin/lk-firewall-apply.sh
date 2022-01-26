@@ -26,7 +26,7 @@ lk_start_trace
 . "$LK_BASE/etc/firewall.conf"
 
 if [ -n "${ACCEPT_OUTPUT_CHAIN-}" ]; then
-    lk_console_message "Applying outgoing traffic policy to firewall"
+    lk_tty_print "Applying outgoing traffic policy to firewall"
     IFS=,
     OUTPUT_ALLOW=(
         ${LK_ACCEPT_OUTPUT_HOSTS-}
@@ -34,7 +34,7 @@ if [ -n "${ACCEPT_OUTPUT_CHAIN-}" ]; then
     )
     unset IFS
     [ ${#OUTPUT_ALLOW[@]} -eq 0 ] ||
-        lk_console_detail "Added to whitelist from firewall.conf:" \
+        lk_tty_detail "Added to whitelist from firewall.conf:" \
             "$(lk_implode_arr $'\n' OUTPUT_ALLOW)"
     if lk_is_ubuntu; then
         APT_SOURCE_HOSTS=($(
@@ -42,7 +42,7 @@ if [ -n "${ACCEPT_OUTPUT_CHAIN-}" ]; then
                 sed -E 's/^.*:\/\///' | sort -u
         )) || lk_die "no active package sources in /etc/apt/sources.list"
         OUTPUT_ALLOW+=("${APT_SOURCE_HOSTS[@]}")
-        lk_console_detail "Added to whitelist from APT source list:" \
+        lk_tty_detail "Added to whitelist from APT source list:" \
             "$(lk_implode_arr $'\n' APT_SOURCE_HOSTS)"
     fi
     # TODO: add temporary entry for api.github.com to /etc/hosts and flush
@@ -52,9 +52,9 @@ if [ -n "${ACCEPT_OUTPUT_CHAIN-}" ]; then
         if GITHUB_META="$(curl --fail --silent --show-error "https://api.github.com/meta")" &&
             GITHUB_IPS=($(jq -r ".web[],.api[]" <<<"$GITHUB_META" | sort -u)); then
             OUTPUT_ALLOW+=("${GITHUB_IPS[@]}")
-            lk_console_detail "Added to whitelist from GitHub API:" "${#GITHUB_IPS[@]} IP $(lk_plural ${#GITHUB_IPS[@]} range ranges)"
+            lk_tty_detail "Added to whitelist from GitHub API:" "${#GITHUB_IPS[@]} IP $(lk_plural ${#GITHUB_IPS[@]} range ranges)"
         else
-            lk_console_warning "Unable to retrieve IP ranges from GitHub API"
+            lk_tty_warning "Unable to retrieve IP ranges from GitHub API"
             unset GITHUB_IPS
         fi
     fi
@@ -66,15 +66,15 @@ if [ -n "${ACCEPT_OUTPUT_CHAIN-}" ]; then
         OUTPUT_ALLOW_IPV4=($(echo "$OUTPUT_ALLOW_RESOLVED" | lk_filter_ipv4))
         OUTPUT_ALLOW_IPV6=($(echo "$OUTPUT_ALLOW_RESOLVED" | lk_filter_ipv6))
     fi
-    lk_console_detail "Flushing iptables chain:" "$ACCEPT_OUTPUT_CHAIN"
+    lk_tty_detail "Flushing iptables chain:" "$ACCEPT_OUTPUT_CHAIN"
     lk_iptables_flush_chain -b "$ACCEPT_OUTPUT_CHAIN"
     [ ${#OUTPUT_ALLOW_IPV4[@]} -eq 0 ] ||
-        lk_console_detail "Adding" "${#OUTPUT_ALLOW_IPV4[@]} IP $(lk_plural ${#OUTPUT_ALLOW_IPV4[@]} rule rules)"
+        lk_tty_detail "Adding" "${#OUTPUT_ALLOW_IPV4[@]} IP $(lk_plural ${#OUTPUT_ALLOW_IPV4[@]} rule rules)"
     for IPV4 in ${OUTPUT_ALLOW_IPV4[@]+"${OUTPUT_ALLOW_IPV4[@]}"}; do
         iptables -A "$ACCEPT_OUTPUT_CHAIN" -d "$IPV4" -j ACCEPT
     done
     [ ${#OUTPUT_ALLOW_IPV6[@]} -eq 0 ] ||
-        lk_console_detail "Adding" "${#OUTPUT_ALLOW_IPV6[@]} IPv6 $(lk_plural ${#OUTPUT_ALLOW_IPV6[@]} rule rules)"
+        lk_tty_detail "Adding" "${#OUTPUT_ALLOW_IPV6[@]} IPv6 $(lk_plural ${#OUTPUT_ALLOW_IPV6[@]} rule rules)"
     for IPV6 in ${OUTPUT_ALLOW_IPV6[@]+"${OUTPUT_ALLOW_IPV6[@]}"}; do
         ip6tables -A "$ACCEPT_OUTPUT_CHAIN" -d "$IPV6" -j ACCEPT
     done

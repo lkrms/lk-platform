@@ -22,7 +22,7 @@ function lk_arch_path() {
 function lk_arch_configure_pacman() {
     local LK_CONF_OPTION_FILE _LK_CONF_DELIM=" = " LK_SUDO=1
     LK_CONF_OPTION_FILE=$(lk_arch_path /etc/pacman.conf)
-    lk_console_item "Checking pacman options in" "$LK_CONF_OPTION_FILE"
+    lk_tty_print "Checking pacman options in" "$LK_CONF_OPTION_FILE"
     lk_conf_enable_row -s options Color
     lk_conf_remove_row -s options TotalDownload
     lk_conf_set_option -s options ParallelDownloads 5
@@ -62,7 +62,7 @@ function lk_arch_add_repo() {
         declare -f add_key
         echo 'add_key "$1"'
     )
-    lk_console_item "Checking repositories in" "$FILE"
+    lk_tty_print "Checking repositories in" "$FILE"
     for i in "$@"; do
         r=($i)
         REPO=${r[0]}
@@ -72,7 +72,7 @@ function lk_arch_add_repo() {
         KEY_URL=${r[2]-}
         KEY_ID=${r[3]-}
         SIG_LEVEL=${r[4]-}
-        lk_console_detail "Adding '$REPO':" "$SERVER"
+        lk_tty_detail "Adding '$REPO':" "$SERVER"
         if [ -n "$KEY_URL" ]; then
             lk_arch_chroot bash -c "$SH" bash "$KEY_URL"
         elif [ -n "$KEY_ID" ]; then
@@ -179,7 +179,7 @@ function lk_pac_not_installed_list() {
 function lk_pac_sync() {
     ! lk_root && ! lk_can_sudo pacman ||
         { lk_is_false _LK_PACMAN_SYNC && [ "${1-}" != -f ]; } ||
-        { lk_console_message "Refreshing package databases" &&
+        { lk_tty_print "Refreshing package databases" &&
             lk_elevate pacman -Sy >/dev/null &&
             _LK_PACMAN_SYNC=0; }
 }
@@ -322,7 +322,7 @@ function lk_aur_sync() {
     SYNCED=()
     FAILED=()
     [ $# -gt 0 ] || {
-        lk_console_message "Checking for updates to AUR packages"
+        lk_tty_print "Checking for updates to AUR packages"
         OUTDATED=($(lk_aur_outdated)) || return
         set -- ${OUTDATED[@]+"${OUTDATED[@]}"}
     }
@@ -333,7 +333,7 @@ function lk_aur_sync() {
         lk_tty_list - "Syncing from AUR:" package packages
     lk_makepkg_setup
     for PKG in "$@"; do
-        lk_run_detail aur sync --database aur --no-view --noconfirm \
+        lk_tty_run_detail aur sync --database aur --no-view --noconfirm \
             ${CHROOT+--chroot} \
             ${CHROOT+--makepkg-conf=/etc/makepkg.conf} \
             ${GPGKEY+--sign} \

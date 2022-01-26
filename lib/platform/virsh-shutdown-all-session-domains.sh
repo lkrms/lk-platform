@@ -26,8 +26,8 @@ SESSION_USERS=($(pgrep -x libvirtd |
 STATUS=0
 i=0
 for _USER in ${SESSION_USERS[@]+"${SESSION_USERS[@]}"}; do
-    ! ((i)) || lk_console_blank
-    lk_console_item "Shutting down libvirt session domains for user:" "$_USER"
+    ! ((i)) || lk_tty_print
+    lk_tty_print "Shutting down libvirt session domains for user:" "$_USER"
     lk_run_as "$_USER" "$LK_BASE/bin/lk-virsh-shutdown-all.sh" ||
         lk_warn "shutdown command failed" || STATUS=$?
     ((++i))

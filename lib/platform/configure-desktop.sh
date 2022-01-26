@@ -5,17 +5,17 @@ if lk_is_linux; then
     lk_require linux
 
     if lk_systemctl_exists libvirtd && lk_systemctl_enabled libvirtd; then
-        lk_console_message "Checking libvirt"
+        lk_tty_print "Checking libvirt"
         if ! virsh net-list --name | grep -Fxq default; then
-            lk_console_detail "Starting network:" "default"
+            lk_tty_detail "Starting network:" "default"
             virsh net-start default || true
         fi
         if ! virsh net-list --name --autostart | grep -Fxq default; then
-            lk_console_detail "Enabling network autostart:" "default"
+            lk_tty_detail "Enabling network autostart:" "default"
             virsh net-autostart default || true
         fi
         if ! virsh net-list --name --all | grep -Fxq isolated; then
-            lk_console_detail "Adding network:" "isolated"
+            lk_tty_detail "Adding network:" "isolated"
             virsh net-define <(
                 cat <<"EOF"
 <network>
@@ -33,7 +33,7 @@ EOF
     fi
 
     if lk_command_exists autorandr; then
-        lk_console_message "Checking autorandr"
+        lk_tty_print "Checking autorandr"
         DIR=/etc/xdg/autorandr
         lk_install -d -m 00755 "$DIR"
         for FILE in postsave postswitch predetect; do

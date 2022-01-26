@@ -68,7 +68,7 @@ function lk_linode_ssh_add() {
         eval "LABEL=${1-}"
         LABEL=${LABEL:-${LINODE_LABEL%%.*}}
         eval "USERNAME=${2-}"
-        lk_console_detail "Adding SSH host:" \
+        lk_tty_detail "Adding SSH host:" \
             $'\n'"${LK_SSH_PREFIX-$LK_PATH_PREFIX}$LABEL ($(lk_implode_args \
                 " + " \
                 ${LINODE_IPV4_PRIVATE:+"$LK_BOLD$LINODE_IPV4_PRIVATE$LK_RESET"} \
@@ -98,7 +98,7 @@ function lk_linode_ssh_add_all() {
         lk_tty_list - "Adding to SSH configuration:" Linode Linodes
     lk_confirm "Proceed?" Y || return
     lk_linode_ssh_add <<<"$JSON"
-    lk_console_success "SSH configuration complete"
+    lk_tty_success "SSH configuration complete"
 }
 
 # lk_linode_hosting_ssh_add_all [LINODE_ARG...]
@@ -116,14 +116,14 @@ function lk_linode_hosting_ssh_add_all() {
     for LINODE in "${LINODES[@]}"; do
         SH=$(lk_linode_get_shell_var <<<"$LINODE") &&
             eval "$SH" || return
-        lk_console_item "Retrieving hosting accounts from" "$LINODE_LABEL"
+        lk_tty_print "Retrieving hosting accounts from" "$LINODE_LABEL"
         IFS=$'\n'
         USERS=($(ssh "${LK_SSH_PREFIX-$LK_PATH_PREFIX}${LINODE_LABEL%%.*}" \
             "bash -c $GET_USERS_SH")) || return
         unset IFS
         for USERNAME in ${USERS[@]+"${USERS[@]}"}; do
             ! lk_in_array "$USERNAME" ALL_USERS || {
-                lk_console_warning "Skipping $USERNAME (already used)"
+                lk_tty_warning "Skipping $USERNAME (already used)"
                 continue
             }
             ALL_USERS+=("$USERNAME")
@@ -133,7 +133,7 @@ function lk_linode_hosting_ssh_add_all() {
                 lk_linode_ssh_add "$USERNAME-admin" "" <<<"[$LINODE]"
         done
     done
-    lk_console_success "SSH configuration complete"
+    lk_tty_success "SSH configuration complete"
 }
 
 # lk_linode_domain [-s] <DOMAIN_ID|DOMAIN_NAME> [LINODE_ARG...]
@@ -215,7 +215,7 @@ END {
     lk_confirm "OK to delete $(lk_plural -v \
         $(wc -l <<<"$DUP") record records)?" Y || return
     lk_linode_flush_cache
-    lk_xargs lk_run_detail \
+    lk_xargs lk_tty_run_detail \
         linode-cli domains records-delete "$DOMAIN_ID" < <(cut -f1 <<<"$DUP")
 }
 
@@ -330,7 +330,7 @@ include "core";
             lk_warn "unable to add RDNS record" || return
         lk_linode_flush_cache
         ((++NEW_REVERSE_RECORD_COUNT))
-        lk_console_detail "Record added"
+        lk_tty_detail "Record added"
     done < <(comm -23 \
         <(sort <<<"$_REVERSE") \
         <(sort <<<"$REVERSE"))
@@ -358,7 +358,7 @@ function lk_linode_dns_check_all() {
     lk_confirm "Proceed?" Y || return
     LK_VERBOSE=1 \
         lk_linode_dns_check ${USE_TAGS:+-t} "$LINODES" "$1" "${@:2}" || return
-    lk_console_success "DNS check complete"
+    lk_tty_success "DNS check complete"
 }
 
 function lk_linode_hosting_get_stackscript() {
@@ -386,11 +386,11 @@ function lk_linode_hosting_update_stackscript() {
     if STACKSCRIPT=$(lk_linode_hosting_get_stackscript "${@:3}"); then
         ARGS=(update "$STACKSCRIPT")
         MESSAGE="updated to"
-        lk_console_item "Updating StackScript" "$STACKSCRIPT"
+        lk_tty_print "Updating StackScript" "$STACKSCRIPT"
     else
         ARGS=(create)
         MESSAGE="created with"
-        lk_console_message "Creating StackScript"
+        lk_tty_print "Creating StackScript"
     fi
     OUTPUT=$(linode-cli --json stackscripts "${ARGS[@]}" \
         --label hosting.sh \
@@ -404,7 +404,7 @@ function lk_linode_hosting_update_stackscript() {
         lk_warn "unable to ${ARGS[0]} StackScript" || return
     lk_linode_flush_cache
     STACKSCRIPT=$(jq -r '.[0].id' <<<"$OUTPUT") &&
-        lk_console_detail "StackScript $STACKSCRIPT $MESSAGE" "${HASH:0:7}:hosting.sh"
+        lk_tty_detail "StackScript $STACKSCRIPT $MESSAGE" "${HASH:0:7}:hosting.sh"
 }
 
 function lk_linode_provision_hosting() {
@@ -459,14 +459,14 @@ Example:
             lk_warn "Linode not found: $REBUILD" || return
         SH=$(lk_linode_get_shell_var <<<"$LINODE") &&
             eval "$SH" || return
-        lk_console_item "Rebuilding:" \
+        lk_tty_print "Rebuilding:" \
             "$LINODE_LABEL ($(lk_implode_arr ", " LINODE_TAGS))"
-        lk_console_detail "Linode ID:" "$LINODE_ID"
-        lk_console_detail "Linode type:" "$LINODE_TYPE"
-        lk_console_detail "CPU count:" "$LINODE_VPCUS"
-        lk_console_detail "Memory:" "$LINODE_MEMORY"
-        lk_console_detail "Storage:" "$((LINODE_DISK / 1024))G"
-        lk_console_detail "IP addresses:" $'\n'"$(lk_echo_args \
+        lk_tty_detail "Linode ID:" "$LINODE_ID"
+        lk_tty_detail "Linode type:" "$LINODE_TYPE"
+        lk_tty_detail "CPU count:" "$LINODE_VPCUS"
+        lk_tty_detail "Memory:" "$LINODE_MEMORY"
+        lk_tty_detail "Storage:" "$((LINODE_DISK / 1024))G"
+        lk_tty_detail "IP addresses:" $'\n'"$(lk_echo_args \
             $LINODE_IPV4_PUBLIC $LINODE_IPV6 $LINODE_IPV4_PRIVATE)"
         lk_confirm "Destroy the existing Linode and start over?" N || return
     }
@@ -503,27 +503,27 @@ Example:
         "${@:5}"
         ${REBUILD:+"$LINODE_ID"}
     )
-    lk_console_item "Running:" \
+    lk_tty_print "Running:" \
         $'\n'"$(lk_fold_quote_args linode-cli "${ARGS[@]##ssh-??? * }")"
     lk_confirm "Proceed?" Y || return
-    lk_console_message "${VERBS[0]} Linode"
+    lk_tty_print "${VERBS[0]} Linode"
     FILE=/tmp/$FUNCNAME-$1-$(lk_date %s).json
     LINODES=$(linode-cli "${ARGS[@]}" | tee "$FILE") ||
         lk_pass rm -f "$FILE" || return
     lk_linode_flush_cache
     LINODE=$(jq -c '.[0]' <<<"$LINODES")
-    lk_console_message "Linode ${VERBS[1]} successfully"
-    lk_console_detail "Root password:" "$ROOT_PASS"
-    lk_console_detail "Response written to:" "$FILE"
+    lk_tty_print "Linode ${VERBS[1]} successfully"
+    lk_tty_detail "Root password:" "$ROOT_PASS"
+    lk_tty_detail "Response written to:" "$FILE"
     SH=$(lk_linode_get_shell_var <<<"$LINODE") &&
         eval "$SH" || return
-    lk_console_detail "Linode ID:" "$LINODE_ID"
-    lk_console_detail "Linode type:" "$LINODE_TYPE"
-    lk_console_detail "CPU count:" "$LINODE_VPCUS"
-    lk_console_detail "Memory:" "$LINODE_MEMORY"
-    lk_console_detail "Storage:" "$((LINODE_DISK / 1024))G"
-    lk_console_detail "Image:" "$LINODE_IMAGE"
-    lk_console_detail "IP addresses:" $'\n'"$(lk_echo_args \
+    lk_tty_detail "Linode ID:" "$LINODE_ID"
+    lk_tty_detail "Linode type:" "$LINODE_TYPE"
+    lk_tty_detail "CPU count:" "$LINODE_VPCUS"
+    lk_tty_detail "Memory:" "$LINODE_MEMORY"
+    lk_tty_detail "Storage:" "$((LINODE_DISK / 1024))G"
+    lk_tty_detail "Image:" "$LINODE_IMAGE"
+    lk_tty_detail "IP addresses:" $'\n'"$(lk_echo_args \
         $LINODE_IPV4_PUBLIC $LINODE_IPV6 $LINODE_IPV4_PRIVATE)"
     lk_linode_ssh_add <<<"$LINODES"
     [ -z "$HOST_ACCOUNT" ] || {

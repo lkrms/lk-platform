@@ -9,7 +9,7 @@ function lk_maybe() {
     [ "${1-}" != -p ] || { PRINT=1 && shift; }
     if lk_dry_run; then
         [ -z "${PRINT-}" ] && ! lk_verbose ||
-            lk_console_log \
+            lk_tty_log \
                 "${LK_YELLOW}[DRY RUN]${LK_RESET} Not running:" \
                 "$(lk_quote_args "$@")"
     else

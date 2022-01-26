@@ -156,10 +156,10 @@ WHERE TABLE_TYPE = 'BASE TABLE'
             table tables <"$TABLES"
         sed -E 's/.*/ALTER TABLE & ENGINE=InnoDB;/' "$TABLES" |
             lk_mysql "$1" &&
-            lk_console_success "Tables converted successfully" ||
-            lk_console_error -r "Table conversion failed"
+            lk_tty_success "Tables converted successfully" ||
+            lk_tty_error -r "Table conversion failed"
     else
-        lk_console_success "No MyISAM tables in database:" "$1"
+        lk_tty_success "No MyISAM tables in database:" "$1"
     fi
 ); }
 
@@ -232,12 +232,12 @@ Usage: $FUNCNAME DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
         lk_tty_print "Deleting mysqldump configuration file"
         rm -f "$LK_MY_CNF" &&
             lk_tty_detail "Deleted" "$LK_MY_CNF" ||
-            lk_console_warning "Error deleting" "$LK_MY_CNF"
+            lk_tty_warning "Error deleting" "$LK_MY_CNF"
     }
     lk_mysql_is_quiet || {
         [ "$EXIT_STATUS" -eq 0 ] &&
-            lk_console_success "Database dump completed successfully" ||
-            lk_console_error "Database dump failed"
+            lk_tty_success "Database dump completed successfully" ||
+            lk_tty_error "Database dump failed"
     }
     return "$EXIT_STATUS"
 }
@@ -283,10 +283,10 @@ exit \${PIPESTATUS[0]}' bash $(printf '%q' "$DB_NAME")" |
     lk_tty_print "Deleting mysqldump configuration file"
     ssh "$SSH_HOST" "bash -c 'rm -f .lk_mysqldump.cnf'" &&
         lk_tty_detail "Deleted" "$SSH_HOST:.lk_mysqldump.cnf" ||
-        lk_console_warning "Error deleting" "$SSH_HOST:.lk_mysqldump.cnf"
+        lk_tty_warning "Error deleting" "$SSH_HOST:.lk_mysqldump.cnf"
     [ "$EXIT_STATUS" -eq 0 ] &&
-        lk_console_success "Database dump completed successfully" ||
-        lk_console_error "Database dump failed"
+        lk_tty_success "Database dump completed successfully" ||
+        lk_tty_error "Database dump failed"
     return "$EXIT_STATUS"
 }
 
@@ -306,7 +306,7 @@ function lk_mysql_restore_local() {
     )
     _SQL=$(printf '%s;\n' "${SQL[@]}")
     lk_tty_detail "Local database will be reset with:" "$_SQL"
-    lk_console_warning \
+    lk_tty_warning \
         "All data in local database '$DB_NAME' will be permanently destroyed"
     lk_confirm "Proceed?" Y || return
     lk_tty_print "Restoring database to local system"
@@ -318,8 +318,8 @@ function lk_mysql_restore_local() {
     else
         lk_pv "$FILE"
     fi | lk_mysql "$DB_NAME" ||
-        lk_console_error -r "Restore operation failed" || return
-    lk_console_success "Database restored successfully"
+        lk_tty_error -r "Restore operation failed" || return
+    lk_tty_success "Database restored successfully"
 }
 
 lk_provide mysql

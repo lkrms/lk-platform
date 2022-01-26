@@ -287,13 +287,13 @@ Options:
     lk_install -d -m ${SHARE+02775} ${SHARE-00755} \
         ${OWNER:+-o "$OWNER"} ${GROUP:+-g "$GROUP"} "$2" || return
     if [ -z "$(ls -A "$2")" ]; then
-        lk_console_item "Installing $NAME to" "$2"
+        lk_tty_print "Installing $NAME to" "$2"
         (umask ${SHARE+002} ${SHARE-022} &&
             _lk_git clone \
                 ${BRANCH:+-b "$BRANCH"} ${REMOTE:+-o "$REMOTE"} \
                 "$1" "$2")
     else
-        lk_console_item "Updating $NAME in" "$2"
+        lk_tty_print "Updating $NAME in" "$2"
         (
             OWNER=${OWNER-}${GROUP:+:${GROUP-}}
             if [ -n "$OWNER" ]; then
@@ -345,15 +345,15 @@ function lk_git_fast_forward_branch() {
         [ -n "${FORCE+1}" ] || return
         if lk_git_is_clean; then
             TAG=diverged-$1-$(lk_git_ref) &&
-                lk_console_detail "Tagging local HEAD:" "$TAG" &&
+                lk_tty_detail "Tagging local HEAD:" "$TAG" &&
                 _lk_git tag -f "$TAG" || return
         else
-            lk_console_detail "Stashing local changes" &&
+            lk_tty_detail "Stashing local changes" &&
                 _lk_git stash ${QUIET+--quiet} || return
         fi
     }
     _BRANCH=$(lk_git_branch_current) || return
-    lk_console_detail \
+    lk_tty_detail \
         "${FORCE-Updating}${FORCE+Resetting}" "$1 ($BEHIND $(lk_plural \
             "$BEHIND" commit commits) behind${FORCE+, diverged})"
     LK_GIT_REPO_UPDATED=1
@@ -389,13 +389,13 @@ function lk_git_push_branch() {
         "($AHEAD $(lk_plural "$AHEAD" commit commits))"
     lk_mapfile PUSH_URLS <(lk_git_list_push_urls "$REMOTE" 2>/dev/null)
     [ ${#PUSH_URLS[@]} -eq 0 ] ||
-        lk_console_detail "Push $(lk_plural \
+        lk_tty_detail "Push $(lk_plural \
             ${#PUSH_URLS[@]} URL URLs):" \
             $'\n'"$(lk_echo_array PUSH_URLS)"
     lk_confirm "In $LK_BOLD$_PATH$LK_RESET, \
 push $LK_BOLD$1$LK_RESET to $LK_BOLD$2$LK_RESET?" "${_LK_GIT_ANSWER-Y}" ||
         return 0
-    lk_console_detail \
+    lk_tty_detail \
         "Pushing to $2 ($AHEAD $(lk_plural \
             "$AHEAD" commit commits) ahead)"
     _lk_git push --tags "$REMOTE" "$1:$REMOTE_BRANCH" &&
@@ -431,12 +431,12 @@ function lk_git_update_repo() {
     local FETCH=1 ERRORS=0 REMOTE BRANCH UPSTREAM
     [ "${1-}" != -s ] || { FETCH= && shift; }
     [ -z "$FETCH" ] || {
-        lk_console_message "Fetching from all remotes"
+        lk_tty_print "Fetching from all remotes"
         lk_git_fetch || ((++ERRORS))
     }
     for BRANCH in $(lk_git_branch_list_local); do
         UPSTREAM=$(lk_git_branch_upstream "$BRANCH") ||
-            lk_console_warning -r -n "No upstream:" "$BRANCH" ||
+            lk_tty_warning -r -n "No upstream:" "$BRANCH" ||
             continue
         lk_git_fast_forward_branch "$BRANCH" "$UPSTREAM" ||
             ((++ERRORS))
@@ -452,7 +452,7 @@ function lk_git_update_remote() {
     for BRANCH in $BRANCHES; do
         _PUSH=$(lk_git_branch_push "$BRANCH") || {
             [ -n "${QUIET-}" ] ||
-                lk_console_warning -n "No push destination:" "$BRANCH"
+                lk_tty_warning -n "No push destination:" "$BRANCH"
             continue
         }
         PUSH[${#PUSH[@]}]=$(lk_quote_args "$BRANCH" "$_PUSH")
@@ -500,17 +500,17 @@ function lk_git_update_repo_to() {
         grep -Fx "$BRANCH" >/dev/null; then
         lk_git_fast_forward_branch ${FORCE+-f} "$BRANCH" "$UPSTREAM" || return
         [ "$_BRANCH" = "$BRANCH" ] || {
-            lk_console_detail "Switching ${_BRANCH:+from $_BRANCH }to $BRANCH"
+            lk_tty_detail "Switching ${_BRANCH:+from $_BRANCH }to $BRANCH"
             LK_GIT_REPO_UPDATED=1
             _lk_git checkout "$BRANCH" || return
         }
         _UPSTREAM=$(lk_git_branch_upstream) || _UPSTREAM=
         [ "$_UPSTREAM" = "$UPSTREAM" ] || {
-            lk_console_detail "Updating remote-tracking branch for $BRANCH"
+            lk_tty_detail "Updating remote-tracking branch for $BRANCH"
             _lk_git branch --set-upstream-to "$UPSTREAM"
         }
     else
-        lk_console_detail \
+        lk_tty_detail \
             "Switching ${_BRANCH:+from $_BRANCH }to $REMOTE/$BRANCH"
         LK_GIT_REPO_UPDATED=1
         _lk_git checkout -b "$BRANCH" --track "$UPSTREAM"
@@ -551,18 +551,18 @@ function _lk_git_do_with_repo() {
             {
                 if [ "$STATUS" -eq 0 ]; then
                     _LK_TTY_PREFIX_COLOUR=$LK_BOLD$LK_GREEN \
-                        lk_console_message "$_REPO"
+                        lk_tty_print "$_REPO"
                 else
-                    lk_console_message "$_REPO" "$LK_BOLD$LK_RED"
+                    lk_tty_print "$_REPO" "$LK_BOLD$LK_RED"
                 fi
                 [ -z "$_STDOUT" ] ||
                     _LK_TTY_COLOUR2=$LK_GREEN \
-                        lk_console_detail "Output:" $'\n'"$_STDOUT"
+                        lk_tty_detail "Output:" $'\n'"$_STDOUT"
                 [ -z "$_STDERR" ] ||
                     _LK_TTY_COLOUR2=$([ "$STATUS" -eq 0 ] &&
                         echo "$LK_YELLOW" ||
                         echo "$LK_RED") \
-                        lk_console_detail "Error output:" $'\n'"$_STDERR"
+                        lk_tty_detail "Error output:" $'\n'"$_STDERR"
                 [ "$STATUS" -eq 0 ] ||
                     [ "${FUNCNAME[2]-}" = lk_git_audit_repos ] ||
                     lk_tty_error "Exit status $STATUS"
@@ -570,13 +570,13 @@ function _lk_git_do_with_repo() {
         )"$'\n'
     else
         _LK_TTY_PREFIX_COLOUR=$LK_BOLD$LK_GREEN \
-            lk_console_message "$_REPO"
+            lk_tty_print "$_REPO"
         "${REPO_COMMAND[@]}" || {
             STATUS=$?
             [ "${FUNCNAME[2]-}" = lk_git_audit_repos ] ||
                 lk_tty_error "Exit status $STATUS"
         }
-        lk_console_blank
+        lk_tty_print
     fi
     return "$STATUS"
 }
@@ -630,7 +630,7 @@ directory of a working tree" || return
     [ -z "${PROMPT-}" ] || lk_no_input || {
         lk_echo_array REPOS | lk_tty_path |
             lk_tty_list - "Repositories:" repo repos
-        lk_console_item "Command to run:" \
+        lk_tty_print "Command to run:" \
             $'\n'"$(lk_quote_args "${REPO_COMMAND[@]}")"
         lk_confirm "Proceed?" Y || return
     }
@@ -638,7 +638,7 @@ directory of a working tree" || return
     NOUN="${#REPOS[@]} $(lk_plural ${#REPOS[@]} repo repos)"
     if lk_is_true PARALLEL; then
         _lk_git_is_quiet ||
-            lk_console_log "Processing $NOUN in parallel"
+            lk_tty_log "Processing $NOUN in parallel"
         FD=$(lk_fd_next) &&
             eval "exec $FD>&2 2>/dev/null" &&
             ERR_FILE=$(lk_mktemp_file) &&
@@ -660,7 +660,7 @@ directory of a working tree" || return
         lk_mapfile ERR_REPOS "$ERR_FILE"
     else
         _lk_git_is_quiet ||
-            lk_console_log "Processing $NOUN"
+            lk_tty_log "Processing $NOUN"
         for REPO in "${REPOS[@]}"; do
             _REPO=$(lk_tty_path "$REPO")
             (
@@ -673,7 +673,7 @@ directory of a working tree" || return
     fi
     _lk_git_is_quiet || {
         [ "$ERR_COUNT" -eq 0 ] &&
-            lk_console_success "Command succeeded in $NOUN" ||
+            lk_tty_success "Command succeeded in $NOUN" ||
             lk_tty_error "Command failed in $ERR_COUNT of $NOUN:" \
                 "$(lk_echo_array ERR_REPOS)"
     }
@@ -713,24 +713,24 @@ function lk_git_audit_repos() {
     NOUN="${#LK_GIT_REPOS[@]} $(lk_plural ${#LK_GIT_REPOS[@]} repo repos)"
     if ! lk_is_true SKIP_FETCH; then
         lk_tty_list LK_GIT_REPOS "Fetching all remotes:" repo repos
-        lk_console_blank
+        lk_tty_print
         lk_git_with_repos -py lk_git_fetch ||
             FETCH_ERRORS=(${_LK_GIT_REPO_ERRORS[@]+"${_LK_GIT_REPO_ERRORS[@]}"})
     else
         lk_tty_list LK_GIT_REPOS "Auditing:" repo repos
-        lk_console_blank
+        lk_tty_print
     fi
     lk_git_with_repos -ty lk_git_audit_repo -s ||
         AUDIT_ERRORS=(${_LK_GIT_REPO_ERRORS[@]+"${_LK_GIT_REPO_ERRORS[@]}"})
-    lk_console_message "Audit complete"
+    lk_tty_print "Audit complete"
     lk_is_true SKIP_FETCH || {
         [ ${#FETCH_ERRORS[@]} -eq 0 ] &&
-            lk_console_success "Fetch succeeded in $NOUN" ||
+            lk_tty_success "Fetch succeeded in $NOUN" ||
             lk_tty_error "Fetch failed in ${#FETCH_ERRORS[@]} of $NOUN:" \
                 "$(lk_echo_array FETCH_ERRORS)"
     }
     [ ${#AUDIT_ERRORS[@]} -eq 0 ] &&
-        lk_console_success "Checks passed in $NOUN" ||
+        lk_tty_success "Checks passed in $NOUN" ||
         lk_tty_error "Checks failed in ${#AUDIT_ERRORS[@]} of $NOUN:" \
             "$(lk_echo_array AUDIT_ERRORS)"
     [[ $((${#FETCH_ERRORS[@]} + ${#AUDIT_ERRORS[@]})) -eq 0 ]]
@@ -856,8 +856,8 @@ function lk_git_config_remote_push_all() {
     UPSTREAM=${1:-$(lk_git_branch_upstream_remote)} &&
         REMOTE_URL=$(git config "remote.$UPSTREAM.url") &&
         [ -n "$REMOTE_URL" ] || lk_warn "remote URL not found" || return
-    lk_console_item "Configuring" "remote.$UPSTREAM.pushUrl"
-    lk_console_detail "Adding:" "$REMOTE_URL"
+    lk_tty_print "Configuring" "remote.$UPSTREAM.pushUrl"
+    lk_tty_detail "Adding:" "$REMOTE_URL"
     _lk_git config push.default current &&
         _lk_git config remote.pushDefault "$UPSTREAM" &&
         _lk_git config --replace-all "remote.$UPSTREAM.pushUrl" "$REMOTE_URL" &&
@@ -865,23 +865,23 @@ function lk_git_config_remote_push_all() {
             REMOTE_URL=$(git config "remote.$REMOTE.url") &&
                 [ -n "$REMOTE_URL" ] ||
                 lk_warn "URL not found for remote $REMOTE" || continue
-            lk_console_detail "Adding:" "$REMOTE_URL"
+            lk_tty_detail "Adding:" "$REMOTE_URL"
             _lk_git config --add "remote.$UPSTREAM.pushUrl" "$REMOTE_URL"
         done
 }
 
 function lk_git_recheckout() {
     local REPO_ROOT COMMIT
-    lk_console_message "Preparing to delete the index and check out HEAD again"
+    lk_tty_print "Preparing to delete the index and check out HEAD again"
     REPO_ROOT=$(git rev-parse --show-toplevel) &&
         COMMIT=$(git rev-list -1 --oneline HEAD) || return
-    lk_console_detail "Repository:" "$REPO_ROOT"
-    lk_console_detail "HEAD refers to:" "$COMMIT"
+    lk_tty_detail "Repository:" "$REPO_ROOT"
+    lk_tty_detail "HEAD refers to:" "$COMMIT"
     lk_no_input || lk_confirm \
         "Uncommitted changes will be permanently deleted. Proceed?" N || return
     _lk_git -1 rm -fv "$REPO_ROOT/.git/index" &&
         _lk_git checkout --force --no-overlay HEAD -- "$REPO_ROOT" &&
-        lk_console_success "Checkout completed successfully"
+        lk_tty_success "Checkout completed successfully"
 }
 
 lk_provide git

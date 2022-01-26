@@ -2280,7 +2280,7 @@ function lk_maybe() {
     [ "${1-}" != -p ] || { PRINT=1 && shift; }
     if lk_dry_run; then
         [ -z "${PRINT-}" ] && ! lk_verbose ||
-            lk_console_log \
+            lk_tty_log \
                 "${LK_YELLOW}[DRY RUN]${LK_RESET} Not running:" \
                 "$(lk_quote_args "$@")"
     else
@@ -2447,25 +2447,10 @@ function lk_uri_encode() {
 }
 
 lk_confirm() { lk_tty_yn "$@"; }
-lk_console_blank() { lk_tty_print; }
-lk_console_detail_diff() { lk_tty_diff_detail "$@"; }
-lk_console_detail_file() { lk_tty_file_detail "$@"; }
-lk_console_detail() { lk_tty_detail "$@"; }
-lk_console_diff() { lk_tty_diff "$@"; }
-lk_console_error() { lk_tty_error "$@"; }
-lk_console_item() { lk_tty_print "$1" "$2" "${3-${_LK_TTY_COLOUR-$_LK_COLOUR}}"; }
-lk_console_log() { lk_tty_log "$@"; }
-lk_console_message() { lk_tty_print "${1-}" "${3+$2}" "${3-${2-${_LK_TTY_COLOUR-$_LK_COLOUR}}}"; }
-lk_console_read_secret() { local IFS r && unset IFS && lk_tty_read_silent "$1" r "${@:2}" && echo "$r"; }
-lk_console_read() { local IFS r && unset IFS && lk_tty_read "$1" r "${@:2}" && echo "$r"; }
-lk_console_success() { lk_tty_success "$@"; }
-lk_console_warning() { lk_tty_warning "$@"; }
 lk_echo_array() { lk_arr "$@"; }
-lk_elevate_if_error() { lk_elevate -f "$@"; }
 lk_escape_ere_replace() { lk_sed_escape_replace "$@"; }
 lk_escape_ere() { lk_sed_escape "$@"; }
 lk_first_existing() { lk_first_file "$@"; }
-lk_include() { lk_require "$@"; }
 lk_is_false() { lk_false "$@"; }
 lk_is_true() { lk_true "$@"; }
 lk_jq_get_array() { lk_json_mapfile "$@"; }
@@ -2473,8 +2458,6 @@ lk_maybe_sudo() { lk_sudo "$@"; }
 lk_mktemp_dir() { _LK_STACK_DEPTH=$((1 + ${_LK_STACK_DEPTH:-0})) lk_mktemp -d; }
 lk_mktemp_file() { _LK_STACK_DEPTH=$((1 + ${_LK_STACK_DEPTH:-0})) lk_mktemp; }
 lk_regex_implode() { lk_ere_implode_args -- "$@"; }
-lk_run_detail() { lk_tty_run_detail "$@"; }
-lk_run() { lk_tty_run "$@"; }
 lk_test_many() { lk_test "$@"; }
 lk_tty_detail_pairs() { lk_tty_pairs_detail "$@"; }
 
@@ -2971,7 +2954,7 @@ function lk_get_outputs_of() {
 function _lk_lock_check_args() {
     lk_is_linux || lk_command_exists flock || {
         [ "${FUNCNAME[1]-}" = lk_lock_drop ] ||
-            lk_console_warning "File locking is not supported on this platform"
+            lk_tty_warning "File locking is not supported on this platform"
         return 2
     }
     case $# in
@@ -3067,17 +3050,17 @@ function lk_log_create_file() {
         # Find the first LOG_DIR in which the user can write to LOG_FILE,
         # installing LOG_DIR (world-writable) and LOG_FILE (owner-only) if
         # needed, running commands via sudo only if they fail without it
-        [ -d "$LOG_DIR" ] || lk_elevate_if_error \
+        [ -d "$LOG_DIR" ] || lk_elevate -f \
             lk_install -d -m 01777 "$LOG_DIR" 2>/dev/null || continue
         LOG_PATH=$LOG_DIR/${_LK_LOG_BASENAME:-${CMD##*/}}-$UID.${EXT:-log}
         if [ -f "$LOG_PATH" ]; then
             [ -w "$LOG_PATH" ] || {
-                lk_elevate_if_error chmod 00600 "$LOG_PATH" || continue
+                lk_elevate -f chmod 00600 "$LOG_PATH" || continue
                 [ -w "$LOG_PATH" ] ||
                     lk_elevate chown "$OWNER:$GROUP" "$LOG_PATH" || continue
             }
         else
-            lk_elevate_if_error \
+            lk_elevate -f \
                 lk_install -m 00600 -o "$OWNER" -g "$GROUP" "$LOG_PATH" ||
                 continue
         fi 2>/dev/null
@@ -3496,10 +3479,10 @@ function lk_clip() {
                 echo "$LK_BOLD$LK_MAGENTA...$LK_RESET")
             MESSAGE="$LINES lines copied"
         }
-        lk_console_item "${MESSAGE:-Copied} to clipboard:" \
+        lk_tty_print "${MESSAGE:-Copied} to clipboard:" \
             $'\n'"$LK_GREEN$OUTPUT$LK_RESET" "$LK_MAGENTA"
     else
-        lk_console_error "Unable to copy input to clipboard"
+        lk_tty_error "Unable to copy input to clipboard"
         echo -n "$OUTPUT"
     fi
 }
@@ -3513,7 +3496,7 @@ function lk_paste() {
         "xclip -selection clipboard -out" \
         pbpaste) &&
         $COMMAND ||
-        lk_console_error "Unable to paste clipboard to output"
+        lk_tty_error "Unable to paste clipboard to output"
 }
 
 # lk_file_add_suffix FILENAME SUFFIX
@@ -4394,11 +4377,11 @@ Options:
                 lk_maybe_sudo cat '"$TARGET"') \
             <([ -z "${CONTENT:+1}" ] || _lk_maybe_filter "$IGNORE" "$FILTER" \
                 echo "\"\${CONTENT%\$'\\n'}\"") >/dev/null || {
-            ! lk_verbose 2 || lk_console_detail "Not changed:" "$1"
+            ! lk_verbose 2 || lk_tty_detail "Not changed:" "$1"
             return 0
         }
         ! lk_is_true ASK || lk_is_true NEW || {
-            lk_console_diff "$1" "" <<<"${CONTENT%$'\n'}" || return
+            lk_tty_diff "$1" "" <<<"${CONTENT%$'\n'}" || return
             lk_confirm "Replace $1 as above?" Y || {
                 LK_FILE_REPLACE_DECLINED=1
                 return 1
@@ -4417,11 +4400,11 @@ Options:
         LK_FILE_REPLACE_NO_CHANGE=0 || return
     ! lk_verbose || {
         if lk_is_true LK_FILE_NO_DIFF || lk_is_true ASK; then
-            lk_console_detail "${VERB:-Updated}:" "$1"
+            lk_tty_detail "${VERB:-Updated}:" "$1"
         elif [ -n "${PREVIOUS+1}" ]; then
-            echo -n "$PREVIOUS" | lk_console_detail_diff "" "$1"
+            echo -n "$PREVIOUS" | lk_tty_diff_detail "" "$1"
         else
-            lk_console_detail_file "$1"
+            lk_tty_file_detail "$1"
         fi
     }
 }
@@ -4454,7 +4437,7 @@ function lk_nohup() { (
         _LK_MKTEMP_EXT=.nohup.out lk_mktemp_file) &&
         OUT_FD=$(lk_fd_next) &&
         eval "exec $OUT_FD"'>"$OUT_FILE"' || return
-    ! lk_verbose || lk_console_item "Redirecting output to" "$OUT_FILE"
+    ! lk_verbose || lk_tty_print "Redirecting output to" "$OUT_FILE"
     if lk_log_is_open; then
         TTY_OUT_FD=$_LK_TTY_OUT_FD &&
             TTY_ERR_FD=$_LK_TTY_ERR_FD &&
@@ -4492,7 +4475,7 @@ function _lk_exit_trap() {
     [ $STATUS -eq 0 ] || [ "${_LK_CAN_FAIL-}" = 1 ] ||
         [[ ${FUNCNAME[1]-} =~ ^_?lk_(die|usage)$ ]] ||
         { [[ $- == *i* ]] && [ $BASH_SUBSHELL -eq 0 ]; } ||
-        lk_console_error \
+        lk_tty_error \
             "$(LK_VERBOSE=1 \
                 _lk_caller "${_LK_ERR_TRAP_CALLER:-$1}"): unhandled error" \
             "$(lk_stack_trace \

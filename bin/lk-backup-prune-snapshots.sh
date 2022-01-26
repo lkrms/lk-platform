@@ -42,7 +42,7 @@ function first_snapshot_in_hour() {
 
 function prune_snapshot() {
     local PRUNE=$SNAPSHOT_ROOT/$1
-    lk_console_item \
+    lk_tty_print \
         "Pruning (${2:-expired}):" "${PRUNE#"$BACKUP_ROOT/snapshot/"}"
     lk_maybe -p touch "$PRUNE/.pruning" &&
         lk_maybe -p rm -Rf "$PRUNE"
@@ -55,15 +55,15 @@ function get_usage() {
 function print_max_age() {
     case "$1" in
     "")
-        lk_console_detail "$2 snapshots" \
+        lk_tty_detail "$2 snapshots" \
             "do not expire"
         ;;
     0)
-        lk_console_detail "$2 snapshots" \
+        lk_tty_detail "$2 snapshots" \
             "expire immediately"
         ;;
     *)
-        lk_console_detail "$2 snapshots" \
+        lk_tty_detail "$2 snapshots" \
             "expire after $1 $(lk_plural "$1" "$3" "$4")"
         ;;
     esac
@@ -110,7 +110,7 @@ BACKUP_ROOT=$1
 
 [ -d "$BACKUP_ROOT" ] || lk_die "directory not found: $BACKUP_ROOT"
 [ -d "$BACKUP_ROOT/snapshot" ] || {
-    lk_console_log "Nothing to prune"
+    lk_tty_log "Nothing to prune"
     exit
 }
 
@@ -127,8 +127,8 @@ lk_log_start
 
 {
     USAGE_START=($(get_usage "$BACKUP_ROOT"))
-    lk_console_log "Pruning backups at $BACKUP_ROOT on $FQDN (storage used: ${USAGE_START[0]}/${USAGE_START[1]})"
-    lk_console_message "Settings:"
+    lk_tty_log "Pruning backups at $BACKUP_ROOT on $FQDN (storage used: ${USAGE_START[0]}/${USAGE_START[1]})"
+    lk_tty_print "Settings:"
     print_max_age "$HOURLY_MAX_AGE" Hourly hour hours
     print_max_age "$DAILY_MAX_AGE" Daily day days
     print_max_age "$WEEKLY_MAX_AGE" Weekly week weeks
@@ -136,25 +136,25 @@ lk_log_start
     lk_mapfile SOURCE_NAMES <(find "$BACKUP_ROOT/snapshot" -mindepth 1 -maxdepth 1 \
         -type d -printf '%f\n' | sort)
     for SOURCE_NAME in ${SOURCE_NAMES[@]+"${SOURCE_NAMES[@]}"}; do
-        lk_console_message "Checking '$SOURCE_NAME' snapshots"
+        lk_tty_print "Checking '$SOURCE_NAME' snapshots"
         SNAPSHOT_ROOT=$BACKUP_ROOT/snapshot/$SOURCE_NAME
 
         find_snapshots SNAPSHOTS_CLEAN \
             -execdir test -e '{}/.finished' \; \
             ! -execdir test -e '{}/.pruning' \;
         [ "$SNAPSHOTS_CLEAN_COUNT" -gt 0 ] ||
-            lk_console_warning -r "Skipping $SOURCE_NAME (no clean snapshots)" ||
+            lk_tty_warning -r "Skipping $SOURCE_NAME (no clean snapshots)" ||
             continue
         LATEST_CLEAN=$(snapshot_date "${SNAPSHOTS_CLEAN[0]}")
         OLDEST_CLEAN=$(snapshot_date \
             "${SNAPSHOTS_CLEAN[$((SNAPSHOTS_CLEAN_COUNT - 1))]}")
-        lk_console_detail "Clean:" \
+        lk_tty_detail "Clean:" \
             "$SNAPSHOTS_CLEAN_COUNT ($([ "$LATEST_CLEAN" = "$OLDEST_CLEAN" ] ||
                 echo "$OLDEST_CLEAN to ")$LATEST_CLEAN)"
 
         find_snapshots SNAPSHOTS_PRUNING -execdir test -e '{}/.pruning' \;
         [ "$SNAPSHOTS_PRUNING_COUNT" -eq 0 ] ||
-            lk_console_detail \
+            lk_tty_detail \
                 "Partially pruned:" "$SNAPSHOTS_PRUNING_COUNT"
 
         if [ -n "$FAILED_MAX_AGE" ]; then
@@ -168,7 +168,7 @@ lk_log_start
                 -execdir sh -c 'test "${1##*/}" \< "$2"' sh \
                 '{}' "$PRUNE_FAILED_BEFORE_DATE" \;
             [ "$SNAPSHOTS_FAILED_COUNT" -eq 0 ] ||
-                lk_console_detail "Failed >$FAILED_MAX_AGE days ago:" \
+                lk_tty_detail "Failed >$FAILED_MAX_AGE days ago:" \
                     "$SNAPSHOTS_FAILED_COUNT"
         fi
 
@@ -240,9 +240,9 @@ lk_log_start
             <(lk_echo_array SNAPSHOTS_KEEP | sort))
         SNAPSHOTS_PRUNE_COUNT=${#SNAPSHOTS_PRUNE[@]}
 
-        lk_console_detail \
+        lk_tty_detail \
             "Expired:" "$SNAPSHOTS_PRUNE_COUNT"
-        lk_console_detail \
+        lk_tty_detail \
             "Fresh:" "$SNAPSHOTS_KEEP_COUNT" "$LK_BOLD$LK_GREEN"
 
         [ "$SNAPSHOTS_PRUNING_COUNT" -eq 0 ] || {
@@ -262,7 +262,7 @@ lk_log_start
         }
     done
     USAGE_END=($(get_usage "$BACKUP_ROOT"))
-    lk_console_success \
+    lk_tty_success \
         "Pruning complete (storage used: ${USAGE_END[0]}/${USAGE_END[1]})"
     exit
 }

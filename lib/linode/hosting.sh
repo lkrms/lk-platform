@@ -176,15 +176,15 @@ if [ "$LK_DEBUG" = Y ]; then
         lk_start_trace
 fi
 
-lk_console_log "Bootstrapping Ubuntu for hosting"
-lk_console_message "Checking system state"
-lk_console_detail "Environment:" "$SCRIPT_ENV"
+lk_tty_log "Bootstrapping Ubuntu for hosting"
+lk_tty_print "Checking system state"
+lk_tty_detail "Environment:" "$SCRIPT_ENV"
 [ "$LK_DEBUG" != Y ] ||
-    lk_console_detail "Variables:" "$SCRIPT_VARS"
+    lk_tty_detail "Variables:" "$SCRIPT_VARS"
 lk_tty_list_detail \
     "Pre-installed packages marked as 'manually installed':" \
     <"$IMAGE_BASE_PACKAGES"
-lk_console_detail "All pre-installed packages:" \
+lk_tty_detail "All pre-installed packages:" \
     "$(wc -l <"$IMAGE_INITIAL_PACKAGE_STATE") (see $LK_BASE/etc/packages.conf)"
 
 lk_keep_trying lk_git_provision_repo -s \
@@ -218,7 +218,7 @@ if [[ $LK_SSH_JUMP_KEY =~ ^[-a-zA-Z0-9_]+$ ]] &&
     JUMP_KEY=$(grep -E "$S$LK_SSH_JUMP_KEY\$" "$KEYS_FILE") &&
     [ "$(wc -l <<<"$JUMP_KEY")" -eq 1 ]; then
     FILE=/etc/skel/.ssh/${LK_PATH_PREFIX}keys/jump
-    lk_console_item "Installing default key for SSH jump proxy:" "$FILE"
+    lk_tty_print "Installing default key for SSH jump proxy:" "$FILE"
     install -d -m 00700 /etc/skel/.ssh{,"/${LK_PATH_PREFIX}keys"} &&
         install -m 00600 /dev/null "$FILE" &&
         echo "$JUMP_KEY" >"$FILE"
@@ -229,11 +229,11 @@ _LK_ADMIN_USER_KEYS=$ADMIN_USER_KEYS \
     LK_NO_LOG=1 \
     lk_maybe_trace "$LK_BASE/bin/lk-provision-hosting.sh" || lk_die ""
 
-lk_console_blank
-lk_console_message "Finalising bootstrap"
+lk_tty_print
+lk_tty_print "Finalising bootstrap"
 
 if [ ${#ADMIN_USERS[@]} -gt 0 ]; then
-    lk_run_detail rm -v "$KEYS_FILE"
+    lk_tty_run_detail rm -v "$KEYS_FILE"
 fi
 
-lk_run_detail shutdown "--$LK_SHUTDOWN_ACTION" now
+lk_tty_run_detail shutdown "--$LK_SHUTDOWN_ACTION" now

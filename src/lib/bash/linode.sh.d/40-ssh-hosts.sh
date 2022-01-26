@@ -14,7 +14,7 @@ function lk_linode_ssh_add() {
         eval "LABEL=${1-}"
         LABEL=${LABEL:-${LINODE_LABEL%%.*}}
         eval "USERNAME=${2-}"
-        lk_console_detail "Adding SSH host:" \
+        lk_tty_detail "Adding SSH host:" \
             $'\n'"${LK_SSH_PREFIX-$LK_PATH_PREFIX}$LABEL ($(lk_implode_args \
                 " + " \
                 ${LINODE_IPV4_PRIVATE:+"$LK_BOLD$LINODE_IPV4_PRIVATE$LK_RESET"} \
@@ -44,7 +44,7 @@ function lk_linode_ssh_add_all() {
         lk_tty_list - "Adding to SSH configuration:" Linode Linodes
     lk_confirm "Proceed?" Y || return
     lk_linode_ssh_add <<<"$JSON"
-    lk_console_success "SSH configuration complete"
+    lk_tty_success "SSH configuration complete"
 }
 
 # lk_linode_hosting_ssh_add_all [LINODE_ARG...]
@@ -62,14 +62,14 @@ function lk_linode_hosting_ssh_add_all() {
     for LINODE in "${LINODES[@]}"; do
         SH=$(lk_linode_get_shell_var <<<"$LINODE") &&
             eval "$SH" || return
-        lk_console_item "Retrieving hosting accounts from" "$LINODE_LABEL"
+        lk_tty_print "Retrieving hosting accounts from" "$LINODE_LABEL"
         IFS=$'\n'
         USERS=($(ssh "${LK_SSH_PREFIX-$LK_PATH_PREFIX}${LINODE_LABEL%%.*}" \
             "bash -c $GET_USERS_SH")) || return
         unset IFS
         for USERNAME in ${USERS[@]+"${USERS[@]}"}; do
             ! lk_in_array "$USERNAME" ALL_USERS || {
-                lk_console_warning "Skipping $USERNAME (already used)"
+                lk_tty_warning "Skipping $USERNAME (already used)"
                 continue
             }
             ALL_USERS+=("$USERNAME")
@@ -79,5 +79,5 @@ function lk_linode_hosting_ssh_add_all() {
                 lk_linode_ssh_add "$USERNAME-admin" "" <<<"[$LINODE]"
         done
     done
-    lk_console_success "SSH configuration complete"
+    lk_tty_success "SSH configuration complete"
 }

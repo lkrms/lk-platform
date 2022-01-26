@@ -113,7 +113,7 @@ while PKG=($(parse_SRCINFO '.[].pkgname | @tsv')) &&
     set -- $(lk_arr PKG DEPS | sort -u)
 done
 
-lk_console_success "Download complete"
+lk_tty_success "Download complete"
 lk_tty_print
 
 printf '%s\n' "$@" | sort -u |

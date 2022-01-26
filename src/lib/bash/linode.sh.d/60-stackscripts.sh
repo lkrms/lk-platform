@@ -25,11 +25,11 @@ function lk_linode_hosting_update_stackscript() {
     if STACKSCRIPT=$(lk_linode_hosting_get_stackscript "${@:3}"); then
         ARGS=(update "$STACKSCRIPT")
         MESSAGE="updated to"
-        lk_console_item "Updating StackScript" "$STACKSCRIPT"
+        lk_tty_print "Updating StackScript" "$STACKSCRIPT"
     else
         ARGS=(create)
         MESSAGE="created with"
-        lk_console_message "Creating StackScript"
+        lk_tty_print "Creating StackScript"
     fi
     OUTPUT=$(linode-cli --json stackscripts "${ARGS[@]}" \
         --label hosting.sh \
@@ -43,5 +43,5 @@ function lk_linode_hosting_update_stackscript() {
         lk_warn "unable to ${ARGS[0]} StackScript" || return
     lk_linode_flush_cache
     STACKSCRIPT=$(jq -r '.[0].id' <<<"$OUTPUT") &&
-        lk_console_detail "StackScript $STACKSCRIPT $MESSAGE" "${HASH:0:7}:hosting.sh"
+        lk_tty_detail "StackScript $STACKSCRIPT $MESSAGE" "${HASH:0:7}:hosting.sh"
 }
