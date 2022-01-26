@@ -261,15 +261,6 @@ lk_log_start "$LOG_FILE"
 lk_log_tty_off
 lk_trap_add EXIT exit_trap
 
-lk_tty_log "Setting up live environment"
-lk_arch_configure_pacman
-if [ -n "$LK_ARCH_MIRROR" ]; then
-    lk_systemctl_disable_now reflector || true
-    echo "Server=$LK_ARCH_MIRROR" >/etc/pacman.d/mirrorlist
-fi
-
-. "$_DIR/packages.sh"
-
 # Clean up after failed attempts
 if [ -d /mnt/boot ]; then
     OTHER_OS_MOUNTS=(/mnt/mnt/*)
@@ -281,14 +272,30 @@ if [ -d /mnt/boot ]; then
     umount /mnt
 fi
 
+lk_tty_log "Setting up live environment"
+FILES=(/etc/pacman.conf{.orig,})
+! lk_files_exist "${FILES[@]}" ||
+    mv -fv "${FILES[@]}"
+lk_arch_configure_pacman
+if [ -n "$LK_ARCH_MIRROR" ]; then
+    lk_systemctl_disable_now reflector || true
+    echo "Server=$LK_ARCH_MIRROR" >/etc/pacman.d/mirrorlist
+fi
+
 lk_tty_print "Checking network connection"
 ping -c 1 "$BOOTSTRAP_PING_HOST" || lk_die "no network"
+
+lk_tty_print "Checking pacman keyring"
+lk_arch_reset_pacman_keyring
+lk_log_bypass -o lk_faketty pacman -Sy --noconfirm --needed archlinux-keyring
+
+. "$_DIR/packages.sh"
 
 if [ -n "$LK_NTP_SERVER" ]; then
     lk_tty_print "Synchronising system time with" "$LK_NTP_SERVER"
     if ! lk_command_exists ntpd; then
         lk_tty_detail "Installing ntp"
-        lk_log_bypass -o lk_faketty pacman -Sy --noconfirm ntp ||
+        lk_log_bypass -o lk_faketty pacman -S --noconfirm ntp ||
             lk_die "unable to install ntp"
     fi
     lk_tty_run_detail ntpd -qgx "$LK_NTP_SERVER" ||

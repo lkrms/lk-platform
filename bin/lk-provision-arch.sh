@@ -999,8 +999,8 @@ done\""
     if lk_pac_installed squid; then
         unset LK_FILE_REPLACE_NO_CHANGE
         FILE=/etc/squid/squid.conf
-        grep -Eq "^$S*cache_dir$S+" "$FILE" ||
-            lk_squid_set_option cache_dir "aufs /var/cache/squid 20000 16 256"
+        grep -Eq "^$S*cache_dir$S+" "$FILE" || lk_squid_set_option \
+            cache_dir "aufs /var/cache/squid 20000 16 256" "$FILE"
         lk_user_in_group proxy ||
             sudo usermod --append --groups proxy "$USER"
         SERVICE_ENABLE+=(

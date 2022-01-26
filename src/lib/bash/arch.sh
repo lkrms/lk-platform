@@ -19,6 +19,13 @@ function lk_arch_path() {
     echo "${_LK_ARCH_ROOT:+${_LK_ARCH_ROOT%/}}$1"
 }
 
+function lk_arch_reset_pacman_keyring() {
+    lk_elevate find "$(lk_arch_path /etc/pacman.d/gnupg)" \
+        -mindepth 1 -maxdepth 1 ! -type s -print0 | xargs -0 rm -Rf || return
+    lk_arch_chroot pacman-key --init &&
+        lk_arch_chroot pacman-key --populate archlinux
+}
+
 function lk_arch_configure_pacman() {
     local LK_CONF_OPTION_FILE _LK_CONF_DELIM=" = " LK_SUDO=1
     LK_CONF_OPTION_FILE=$(lk_arch_path /etc/pacman.conf)
@@ -116,6 +123,7 @@ lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
 if [[ ${1-} =~ ^(-i|--install)$ ]]; then
     grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
     # On some systems, GRUB must be installed at the default/fallpack boot path
+    install -d /boot/EFI/BOOT
     cp -afv /boot/EFI/{GRUB/grubx64.efi,BOOT/BOOTX64.EFI} >&2
 else
     echo "${0##*/}: skipping grub-install (--install not set)" >&2
