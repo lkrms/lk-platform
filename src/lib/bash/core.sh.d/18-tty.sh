@@ -475,7 +475,7 @@ function lk_tty_run_detail() {
 # or VALUE.
 function lk_tty_pairs() {
     { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
-    local IFS=${IFS:-$'\t'} LF COLOUR ARGS= TEMP LEN KEY VALUE
+    local IFS=${IFS:-$'\t'} LF COLOUR ARGS= _IFS TEMP LEN KEY VALUE
     unset LF COLOUR
     [ "${1-}" != -d ] || { LF=${2::1} && shift 2; }
     [ "${1-}" = -- ] || [ $# -eq 0 ] || { COLOUR=$1 && shift; }
@@ -486,7 +486,7 @@ function lk_tty_pairs() {
     # regex bracket expression below
     (($# % 2 == 0)) && { [ -z "$LF" ] ||
         { [ -n "$LF" ] && [[ $IFS != *$LF* ]]; }; } &&
-        IFS=$(LF=${LF:-\\0} && printf "%s${LF//%/%%}" "$IFS" |
+        _IFS=$(LF=${LF:-\\0} && printf "%s${LF//%/%%}" "$IFS" |
             awk -v "RS=$LF" '
 { FS = ORS = RS
   gsub(/./, "&" RS)
@@ -494,7 +494,7 @@ function lk_tty_pairs() {
     if ($i == "-") { last = "-" }
     else if ($i == "]") { first = "]" }
     else { middle = middle $i } }
-  print first middle last }') ||
+  printf("%s%s%s.\n", first, middle, last) }') && IFS=${_IFS%.} ||
         lk_err "invalid arguments" || eval "$_lk_x_return"
     if [ $# -gt 0 ]; then
         local SEP=${IFS::1}

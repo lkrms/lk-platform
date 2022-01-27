@@ -105,7 +105,7 @@ function run_custom_hook() {
     if SCRIPTS=($(find_custom "hook-$HOOK")); then
         mark_stage_complete "hook-$HOOK-started"
         for SOURCE_SCRIPT in "${SCRIPTS[@]}"; do
-            lk_console_item "Running hook script:" "$SOURCE_SCRIPT"
+            lk_tty_print "Running hook script:" "$SOURCE_SCRIPT"
             (
                 STATUS=0
                 (. "$SOURCE_SCRIPT") || STATUS=$?
@@ -121,11 +121,11 @@ function run_custom_hook() {
             [ ${#LINES[@]} -eq 0 ] || {
                 SH=$(lk_echo_array LINES)
                 eval "$SH" ||
-                    _LK_TTY_COLOUR2='' lk_console_error -r "\
+                    _LK_TTY_COLOUR2='' lk_tty_error -r "\
 Shell commands emitted by hook script failed (exit status $?):" $'\n'"$SH" ||
                     lk_die ""
             }
-            lk_console_log "Hook script finished"
+            lk_tty_log "Hook script finished"
         done
         mark_stage_complete "hook-$HOOK-finished"
     fi
@@ -162,7 +162,7 @@ function run_rsync() {
         SRC=${SOURCE%/}/
         DEST=$LK_SNAPSHOT_FS/
     }
-    lk_run rsync "${RSYNC_ARGS[@]}" "$SRC" "$DEST" \
+    lk_tty_run rsync "${RSYNC_ARGS[@]}" "$SRC" "$DEST" \
         > >(lk_log_bypass_stdout tee -a "$RSYNC_OUT_FILE") \
         2> >(lk_log_bypass_stdout tee -a "$RSYNC_ERR_FILE")
 }
@@ -349,27 +349,27 @@ RSYNC_STAGE_SUFFIX=
 lk_trap_add EXIT exit_trap
 
 {
-    lk_console_message "Backing up $SOURCE_NAME to $HN:$BACKUP_ROOT"
-    lk_console_detail "Source:" "$SOURCE"
-    lk_console_detail "Destination:" "$BACKUP_ROOT on $FQDN"
-    lk_console_detail "Transport:" "$SOURCE_TYPE"
-    lk_console_detail "Snapshot:" "$LK_SNAPSHOT_TIMESTAMP"
-    lk_console_detail "Status:" "$(get_stage)"
+    lk_tty_print "Backing up $SOURCE_NAME to $HN:$BACKUP_ROOT"
+    lk_tty_detail "Source:" "$SOURCE"
+    lk_tty_detail "Destination:" "$BACKUP_ROOT on $FQDN"
+    lk_tty_detail "Transport:" "$SOURCE_TYPE"
+    lk_tty_detail "Snapshot:" "$LK_SNAPSHOT_TIMESTAMP"
+    lk_tty_detail "Status:" "$(get_stage)"
 
     if [ -d "$SOURCE_LATEST/fs" ] &&
         ! is_stage_complete previous-copy-finished; then
         LATEST=$(realpath "$SOURCE_LATEST/fs")
         [ "$LATEST" != "$(realpath "$LK_SNAPSHOT_FS")" ] ||
             lk_die "latest and pending snapshots cannot be the same"
-        lk_console_message "Duplicating previous snapshot using hard links"
+        lk_tty_print "Duplicating previous snapshot using hard links"
         ! is_stage_complete previous-copy-started || {
-            lk_console_detail "Deleting incomplete replica from previous run"
+            lk_tty_detail "Deleting incomplete replica from previous run"
             rm -Rf "$LK_SNAPSHOT_FS"
         }
         [ ! -e "$LK_SNAPSHOT_FS" ] ||
             lk_die "directory already exists: $LK_SNAPSHOT_FS"
-        lk_console_detail "Snapshot:" "$LATEST"
-        lk_console_detail "Replica:" "$LK_SNAPSHOT_FS"
+        lk_tty_detail "Snapshot:" "$LATEST"
+        lk_tty_detail "Replica:" "$LK_SNAPSHOT_FS"
         mark_stage_complete previous-copy-started
         # Prevent unwelcome set-group-ID propagation
         install -d -m 00700 "$LK_SNAPSHOT_FS"
@@ -381,17 +381,17 @@ lk_trap_add EXIT exit_trap
         gnu_cp -alT "$LATEST" "$LK_SNAPSHOT_FS"
         lk_lock_drop COPY_LOCK_FILE COPY_LOCK_FD
         mark_stage_complete previous-copy-finished
-        lk_console_log "Copy complete"
+        lk_tty_log "Copy complete"
     else
         mark_stage_complete previous-copy-finished
     fi
 
-    lk_console_item "Creating snapshot at" "$LK_SNAPSHOT"
-    lk_console_detail "Log files:" "$(lk_echo_args \
+    lk_tty_print "Creating snapshot at" "$LK_SNAPSHOT"
+    lk_tty_detail "Log files:" "$(lk_echo_args \
         "$SNAPSHOT_LOG_FILE" "$RSYNC_OUT_FILE" "$RSYNC_ERR_FILE")"
     RSYNC_ARGS=(-vrlpt --delete --stats "$@")
     ! RSYNC_FILTERS=($(find_custom filter-rsync | tac)) || {
-        lk_console_detail "Rsync filter:" \
+        lk_tty_detail "Rsync filter:" \
             "$(lk_echo_args "${RSYNC_FILTERS[@]/#/. }")"
         RSYNC_ARGS+=(--delete-excluded)
         for RSYNC_FILTER in "${RSYNC_FILTERS[@]}"; do
@@ -427,12 +427,12 @@ lk_trap_add EXIT exit_trap
     [ "${DRY_RUN:-0}" -ne 0 ] || [ "$STATUS" -ne 0 ] ||
         mark_stage_complete \
             "rsync${RSYNC_STAGE_SUFFIX:+-$RSYNC_STAGE_SUFFIX}-finished"
-    lk_console_log "rsync $RSYNC_RESULT (exit status $RSYNC_STATUS)"
+    lk_tty_log "rsync $RSYNC_RESULT (exit status $RSYNC_STATUS)"
 
     run_custom_hook post_rsync
 
     [ "${DRY_RUN:-0}" -ne 0 ] || [ "$STATUS" -ne 0 ] || {
-        lk_console_message "Updating latest snapshot symlink for $SOURCE_NAME"
+        lk_tty_print "Updating latest snapshot symlink for $SOURCE_NAME"
         ln -sfnv "$LK_SNAPSHOT" "$BACKUP_ROOT/latest/$SOURCE_NAME"
         mark_stage_complete finished
     }

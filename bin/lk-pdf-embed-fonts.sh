@@ -10,7 +10,7 @@ Usage: ${0##*/} PDF..."
 
 lk_log_start
 
-lk_console_message "Embedding fonts in $# $(lk_plural $# file files)"
+lk_tty_print "Embedding fonts in $# $(lk_plural $# file files)"
 
 ! lk_is_macos ||
     export GS_FONTPATH=${GS_FONTPATH-~/Library/Fonts:/Library/Fonts:/System/Library/Fonts}
@@ -40,14 +40,14 @@ GS_OPTIONS=(
     -c "33554432 setvmthreshold << ${DISTILLER_PARAMS[*]} >> setdistillerparams"
 )
 
-lk_console_detail "Command line:" "$(lk_fold_quote_args \
+lk_tty_detail "Command line:" "$(lk_fold_quote_args \
     gs "${GS_OPTIONS[@]}")"
 
 ERRORS=()
 
 i=0
 for FILE in "$@"; do
-    lk_console_item "Processing $((++i)) of $#:" "$FILE"
+    lk_tty_print "Processing $((++i)) of $#:" "$FILE"
     TEMP=$(lk_file_prepare_temp -n "$FILE")
     lk_delete_on_exit "$TEMP"
     gs -q -o "$TEMP" "${GS_OPTIONS[@]}" -f "$FILE" &&
@@ -57,11 +57,11 @@ for FILE in "$@"; do
     }
     lk_rm -- "$FILE"
     mv -- "$TEMP" "$FILE"
-    lk_console_detail "Fonts embedded successfully:" "$FILE"
+    lk_tty_detail "Fonts embedded successfully:" "$FILE"
 done
 
 [ ${#ERRORS[@]} -eq 0 ] ||
-    lk_console_error -r \
+    lk_tty_error -r \
         "Unable to process ${#ERRORS[@]} $(lk_plural \
             ${#ERRORS[@]} file files):" $'\n'"$(lk_echo_array ERRORS)" ||
     lk_die ""

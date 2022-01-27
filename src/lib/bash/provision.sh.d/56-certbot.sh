@@ -43,7 +43,7 @@ function lk_certbot_install() {
         ((!ERRORS)) || lk_confirm "Ignore DNS errors?" N || return
     }
     local IFS=,
-    lk_run lk_elevate certbot \
+    lk_tty_run lk_elevate certbot \
         ${WEBROOT-run} \
         ${WEBROOT+certonly} \
         --non-interactive \

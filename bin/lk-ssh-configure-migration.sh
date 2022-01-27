@@ -129,38 +129,32 @@ else
     LK_RESET={{LK_RESET}}
 fi
 
-function lk_console_message() {
+function lk_tty_print() {
+    local MESSAGE2=
+    [ -z "${2:+1}" ] ||
+        MESSAGE2=$LK_RESET${_LK_TTY_COLOUR2-${_LK_TTY_COLOUR-$LK_CYAN}}$(
+            [[ $2 != *$'\n'* ]] &&
+                echo " $2" ||
+                echo $'\n'"${2#$'\n'}"
+        )
     echo "\
-$LK_GREY[ $H ] \
+${LK_GREY}[ $H ] \
 $LK_RESET$LK_BOLD${_LK_TTY_COLOUR-$LK_CYAN}${_LK_TTY_PREFIX-==> }\
 $LK_RESET${_LK_TTY_MESSAGE_COLOUR-$LK_BOLD}\
 $(sed "1b
-s/^/$H_SPACES${_LK_TTY_SPACES-  }/" <<<"$1")$LK_RESET" >&2
+s/^/$H_SPACES${_LK_TTY_SPACES-  }/" <<<"$1$MESSAGE2")$LK_RESET" >&2
 }
 
-function lk_console_item() {
-    lk_console_message "\
-$1$LK_RESET${_LK_TTY_COLOUR2-${_LK_TTY_COLOUR-$LK_CYAN}}$(
-        [ "${2/$'\n'/}" = "$2" ] &&
-            echo " $2" ||
-            echo $'\n'"${2#$'\n'}"
-    )"
-}
-
-function lk_console_detail() {
+function lk_tty_detail() {
     local _LK_TTY_PREFIX=" -> " _LK_TTY_SPACES="    " \
         _LK_TTY_COLOUR=$LK_YELLOW _LK_TTY_MESSAGE_COLOUR=
-    [ $# -le 1 ] &&
-        lk_console_message "$1" ||
-        lk_console_item "$1" "$2"
+    lk_tty_print "$1" "${2-}"
 }
 
-function lk_console_log() {
+function lk_tty_log() {
     local _LK_TTY_PREFIX=" :: " _LK_TTY_SPACES="    " \
         _LK_TTY_COLOUR2=${_LK_TTY_COLOUR2-$LK_BOLD}
-    [ $# -le 1 ] &&
-        lk_console_message "${_LK_TTY_COLOUR-$LK_CYAN}$1" ||
-        lk_console_item "${_LK_TTY_COLOUR-$LK_CYAN}$1" "$2"
+    lk_tty_print "${_LK_TTY_COLOUR-$LK_CYAN}$1" "${2-}"
 }
 
 function lk_ellipsis() {
@@ -175,11 +169,11 @@ function add_authorized_key() {
     FILE=~/.ssh/authorized_keys
     DIR=~/.ssh
     if ! grep -Fxq "$1" "$FILE" 2>/dev/null; then
-        lk_console_item "Adding public key to" "$FILE"
+        lk_tty_print "Adding public key to" "$FILE"
         mkdir -p "$DIR" &&
             cat >>"$FILE" <<<"$1" || return
     else
-        lk_console_item "Public key already present in" "$FILE"
+        lk_tty_print "Public key already present in" "$FILE"
     fi
     chmod 700 "$DIR" &&
         chmod 600 "$FILE"
@@ -191,11 +185,11 @@ H_SPACES="               "
 
 case "$STAGE" in
 local)
-    lk_console_message "Configuring SSH"
+    lk_tty_print "Configuring SSH"
     lk_ssh_configure
     lk_ssh_host_exists "$NEW_HOST_NAME" || {
         NEW_HOST_NAME=$SSH_PREFIX${NEW_HOST_NAME#"$SSH_PREFIX"}
-        lk_console_detail \
+        lk_tty_detail \
             "Adding host:" "$NEW_HOST_NAME (${NEW_USER:+$NEW_USER@}$NEW_HOST)"
         lk_ssh_add_host -t \
             "$NEW_HOST_NAME" \
@@ -205,20 +199,20 @@ local)
             "${LK_SSH_JUMP_HOST:+jump}"
     }
 
-    lk_console_item "Connecting to" "$NEW_HOST_NAME"
+    lk_tty_print "Connecting to" "$NEW_HOST_NAME"
     ssh -o LogLevel=QUIET -t \
         "${NEW_USER:+$NEW_USER@}$NEW_HOST_NAME" \
         "bash -c$(printf ' %q' "$(lk_expand_template -q "$0")" bash --new)"
     ;;
 
 new)
-    lk_console_message "Configuring SSH"
+    lk_tty_print "Configuring SSH"
     lk_ssh_configure
     [ -z "$NEW_KEY" ] ||
         add_authorized_key "$NEW_KEY"
     lk_ssh_host_exists "$OLD_HOST_NAME" || {
         OLD_HOST_NAME=$SSH_PREFIX${OLD_HOST_NAME#"$SSH_PREFIX"}
-        lk_console_detail \
+        lk_tty_detail \
             "Adding host:" "$OLD_HOST_NAME (${OLD_USER:+$OLD_USER@}$OLD_HOST)"
         [ -n "$OLD_KEY" ] &&
             KEY_FILE=- ||
@@ -235,10 +229,10 @@ new)
     KEY=$(lk_ssh_get_public_key "$KEY_FILE") ||
         lk_die "no public key for $KEY_FILE"
 
-    lk_console_item "Connecting to" "$OLD_HOST_NAME"
+    lk_tty_print "Connecting to" "$OLD_HOST_NAME"
     if [ -n "$OLD_PASSWORD" ]; then
         SSH_ASKPASS=$(mktemp)
-        lk_console_detail "Creating temporary SSH_ASKPASS script:" "$SSH_ASKPASS"
+        lk_tty_detail "Creating temporary SSH_ASKPASS script:" "$SSH_ASKPASS"
         cat <<EOF >"$SSH_ASKPASS"
 #!/bin/bash
 echo $(printf '%q' "$OLD_PASSWORD")
@@ -247,7 +241,7 @@ EOF
         export SSH_ASKPASS
         export DISPLAY=not_really
     else
-        lk_console_detail \
+        lk_tty_detail \
             "Password will be requested if public key not already installed"
     fi
     ${OLD_PASSWORD:+setsid -w} ssh -o LogLevel=QUIET -t \
@@ -255,9 +249,9 @@ EOF
         "bash -c$(printf ' %q' "$BASH_EXECUTION_STRING" bash --old "$KEY")" ||
         lk_die "ssh command failed (exit status $?)"
     if [ -n "${SSH_ASKPASS-}" ]; then
-        lk_console_detail "Deleting:" "$SSH_ASKPASS"
+        lk_tty_detail "Deleting:" "$SSH_ASKPASS"
         rm "$SSH_ASKPASS"
-    fi && lk_console_log "\
+    fi && lk_tty_log "\
 SSH host '$OLD_HOST_NAME' configured on '$NEW_HOST_NAME' for key-based
 access using an authentication agent"
     exit
@@ -269,7 +263,7 @@ old)
     exit
     ;;
 *)
-    lk_console_item "Invalid arguments:" "$*"
+    lk_tty_print "Invalid arguments:" "$*"
     exit 1
     ;;
 esac

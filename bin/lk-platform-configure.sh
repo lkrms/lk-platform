@@ -151,14 +151,14 @@ lk_lock
 lk_log_start
 
 {
-    lk_console_log "Configuring lk-platform"
+    lk_tty_log "Configuring lk-platform"
 
     if [[ ${_LK_INST##*/} =~ ^([a-zA-Z0-9]{2,3}-)platform$ ]] &&
         [ "${BASH_REMATCH[1]}" != lk- ]; then
         ORIGINAL_PATH_PREFIX=${BASH_REMATCH[1]}
         OLD_LK_INST=$_LK_INST
         _LK_INST=${_LK_INST%/*}/lk-platform
-        lk_console_message "Renaming installation directory"
+        lk_tty_print "Renaming installation directory"
         if [ -e "$_LK_INST" ] && [ ! -L "$_LK_INST" ]; then
             BACKUP_DIR=$_LK_INST$(lk_file_get_backup_suffix)
             [ ! -e "$BACKUP_DIR" ] || lk_die "$BACKUP_DIR already exists"
@@ -169,17 +169,17 @@ lk_log_start
         lk_symlink lk-platform "$OLD_LK_INST"
     fi
 
-    lk_console_message "Checking environment"
+    lk_tty_print "Checking environment"
     LK_PATH_PREFIX=${LK_PATH_PREFIX:-${PATH_PREFIX:-${ORIGINAL_PATH_PREFIX-}}}
     [ -n "$LK_PATH_PREFIX" ] || lk_no_input || {
-        lk_console_detail "LK_PATH_PREFIX is not set"
-        lk_console_detail \
+        lk_tty_detail "LK_PATH_PREFIX is not set"
+        lk_tty_detail \
             "Value must be 2-3 alphanumeric characters followed by a hyphen"
-        lk_console_detail "Default value:" "lk-"
+        lk_tty_detail "Default value:" "lk-"
         while [[ ! $LK_PATH_PREFIX =~ ^[a-zA-Z0-9]{2,3}-$ ]]; do
             [ -z "$LK_PATH_PREFIX" ] ||
-                lk_console_error "Invalid LK_PATH_PREFIX:" "$LK_PATH_PREFIX"
-            LK_PATH_PREFIX=$(lk_console_read "Path prefix (required):")
+                lk_tty_error "Invalid LK_PATH_PREFIX:" "$LK_PATH_PREFIX"
+            lk_tty_read "Path prefix (required):" LK_PATH_PREFIX
         done
     }
     [ -n "$LK_PATH_PREFIX" ] || lk_die "LK_PATH_PREFIX not set"
@@ -188,7 +188,7 @@ lk_log_start
         [ "$LK_BASE" = "${OLD_LK_INST-}" ] ||
         [ ! -d "$LK_BASE" ] ||
         {
-            lk_console_item "Existing installation found at" "$LK_BASE"
+            lk_tty_print "Existing installation found at" "$LK_BASE"
             lk_confirm "Reconfigure system?" Y || lk_die ""
         }
     export LK_BASE=$_LK_INST
@@ -208,7 +208,7 @@ lk_log_start
             _BYOBURC='[[ $OSTYPE != darwin* ]] || ! type -P gdf >/dev/null || df() { gdf "$@"; }'
     fi
 
-    lk_console_message "Checking sudo"
+    lk_tty_print "Checking sudo"
     FILE=/etc/sudoers.d/${LK_PATH_PREFIX}default
     [ ! -e "${FILE}s" ] || [ -e "$FILE" ] ||
         mv -fv "${FILE}s" "$FILE"
@@ -216,7 +216,7 @@ lk_log_start
         install -m 00440 /dev/null "$FILE"
     lk_file_replace "$FILE" "$(cat "$LK_BASE/share/sudoers.d/default")"
 
-    lk_console_message "Checking GNU utilities"
+    lk_tty_print "Checking GNU utilities"
     function install_gnu_commands() {
         local GNU_COMMANDS i STATUS=0
         if ! lk_is_macos; then
@@ -281,7 +281,7 @@ lk_log_start
     }
     install_gnu_commands
 
-    lk_console_message "Checking lk-platform settings"
+    lk_tty_print "Checking lk-platform settings"
     [ -e "$CONF_FILE" ] || {
         install -d -m "$DIR_MODE" "${CONF_FILE%/*}" "${CONF_FILE%/*/*}" &&
             install -m "$FILE_MODE" /dev/null "$CONF_FILE"
@@ -334,7 +334,7 @@ lk_log_start
 
     function restart_script() {
         lk_lock_drop
-        lk_console_message "Restarting ${0##*/}"
+        lk_tty_print "Restarting ${0##*/}"
         lk_maybe_trace "$0" --no-log "$@"
         exit
     }
@@ -352,7 +352,7 @@ lk_log_start
         }
         UMASK=$(umask)
         umask 002
-        lk_console_message "Checking repository"
+        lk_tty_print "Checking repository"
         cd "$LK_BASE"
         REPO_OWNER=$(lk_file_owner "$LK_BASE")
         CONFIG_COMMANDS=()
@@ -361,7 +361,7 @@ lk_log_start
         check_repo_config "merge.ff" "only"
         check_repo_config "pull.ff" "only"
         for COMMAND in ${CONFIG_COMMANDS[@]+"${CONFIG_COMMANDS[@]}"}; do
-            lk_console_detail "Running:" "$(lk_quote_args git $COMMAND)"
+            lk_tty_detail "Running:" "$(lk_quote_args git $COMMAND)"
             lk_run_as "$REPO_OWNER" git $COMMAND
         done
         REMOTE=$(lk_git_branch_upstream_remote) ||
@@ -370,7 +370,7 @@ lk_log_start
             lk_die "no branch checked out"
         LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-$BRANCH}
         if [ "$LK_PLATFORM_BRANCH" != "$BRANCH" ]; then
-            lk_console_error "$(printf \
+            lk_tty_error "$(printf \
                 "%s is set to %s, but %s is checked out" \
                 "LK_PLATFORM_BRANCH" \
                 "$LK_BOLD$LK_PLATFORM_BRANCH$LK_RESET" \
@@ -381,7 +381,7 @@ lk_log_start
             FETCH_TIME=$(lk_file_modified ".git/FETCH_HEAD" 2>/dev/null) ||
                 FETCH_TIME=0
             if [ $(($(lk_timestamp) - FETCH_TIME)) -gt 300 ]; then
-                lk_console_detail "Checking for changes"
+                lk_tty_detail "Checking for changes"
                 ! update_repo ||
                     ! lk_is_true LK_GIT_REPO_UPDATED ||
                     restart_script "$@"
@@ -405,7 +405,7 @@ lk_log_start
         umask "$UMASK"
     fi
 
-    lk_console_message "Checking symbolic links"
+    lk_tty_print "Checking symbolic links"
     lk_symlink_bin "$LK_BASE/bin/lk-bash-load.sh"
 
     if lk_is_true ELEVATED; then
@@ -425,7 +425,7 @@ lk_log_start
     lk_remove_missing _LK_HOMES
     lk_resolve_files _LK_HOMES
     [ ${#_LK_HOMES[@]} -gt 0 ] || lk_die "No home directories found"
-    lk_console_message "Checking startup scripts and SSH config files"
+    lk_tty_print "Checking startup scripts and SSH config files"
 
     # Prepare awk to update ~/.bashrc
     LK_BASE_QUOTED=$(printf '%q' "$LK_BASE")
@@ -507,7 +507,7 @@ lk_log_start
             FILE=$h/.byoburc
             if [ -n "$_BYOBURC" ] &&
                 ! grep -q '\bdf()' "$FILE" 2>/dev/null; then
-                lk_console_detail "Adding df wrapper to" "$FILE"
+                lk_tty_detail "Adding df wrapper to" "$FILE"
                 if [ ! -e "$FILE" ]; then
                     install -m 00644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
                     CONTENT=$'#!/bin/bash\n\n'
@@ -566,7 +566,7 @@ lk_log_start
         . "$LK_BASE/lib/platform/configure-desktop.sh"
     fi
 
-    lk_console_success "lk-platform successfully configured"
+    lk_tty_success "lk-platform successfully configured"
 
     exit
 }

@@ -49,7 +49,7 @@ while [ $((SECONDS + 5)) -lt 120 ] || (((i - 1) % 5)); do
             printf '.' >&"${_LK_FD-2}"
         else
             ! ((i)) || printf '\r' >&"${_LK_FD-2}"
-            lk_console_detail \
+            lk_tty_detail \
                 "Shutdown pending:" "$(lk_implode_arr ", " PENDING_DOMAINS)"
         fi
     else
@@ -61,5 +61,5 @@ done
 printf '\r' >&"${_LK_FD-2}"
 
 ! ((PENDING)) &&
-    lk_console_success "All libvirt domains shut down successfully" ||
-    lk_console_error -r "Unable to shut down all libvirt domains" || lk_die ""
+    lk_tty_success "All libvirt domains shut down successfully" ||
+    lk_tty_error -r "Unable to shut down all libvirt domains" || lk_die ""

@@ -129,8 +129,8 @@ function is_final() {
 function maybe_disable_remote_maintenance() {
     if [ "$MAINTENANCE" = on ]; then
         MAINTENANCE=
-        lk_console_message "[remote] Disabling maintenance mode"
-        lk_console_detail "Deleting" "$SSH_HOST:$REMOTE_PATH/.maintenance"
+        lk_tty_print "[remote] Disabling maintenance mode"
+        lk_tty_detail "Deleting" "$SSH_HOST:$REMOTE_PATH/.maintenance"
         ssh "$SSH_HOST" \
             '/bin/sh -c '\''rm "$1/.maintenance"'\''' sh "$REMOTE_PATH" ||
             lk_warn "\
@@ -148,41 +148,41 @@ _LK_WP_QUIET=1
 lk_log_start
 lk_start_trace
 
-lk_console_message "Preparing WordPress migration"
-lk_console_detail "[remote] Source:" "$SSH_HOST:$REMOTE_PATH"
-lk_console_detail "[local] Destination:" "$LOCAL_PATH"
-lk_console_detail "Remote maintenance mode:" "${MAINTENANCE:-ignore}"
-lk_console_detail "Plugins to deactivate:" "$([ ${#DEACTIVATE[@]} -eq 0 ] &&
+lk_tty_print "Preparing WordPress migration"
+lk_tty_detail "[remote] Source:" "$SSH_HOST:$REMOTE_PATH"
+lk_tty_detail "[local] Destination:" "$LOCAL_PATH"
+lk_tty_detail "Remote maintenance mode:" "${MAINTENANCE:-ignore}"
+lk_tty_detail "Plugins to deactivate:" "$([ ${#DEACTIVATE[@]} -eq 0 ] &&
     echo "<none>" ||
     lk_echo_array DEACTIVATE)"
 [ -z "$RENAME" ] ||
-    lk_console_detail "Rename site to:" "$RENAME"
-lk_console_detail "Copy remote TLS certificate:" \
+    lk_tty_detail "Rename site to:" "$RENAME"
+lk_tty_detail "Copy remote TLS certificate:" \
     "$( ((SSL)) && echo yes || echo no)"
-lk_console_detail "Refresh salts in local wp-config.php:" \
+lk_tty_detail "Refresh salts in local wp-config.php:" \
     "$( ((SHUFFLE_SALTS)) && echo yes || echo no)"
-lk_console_detail "Convert local MyISAM tables to InnoDB:" \
+lk_tty_detail "Convert local MyISAM tables to InnoDB:" \
     "$( ((INNODB)) && echo yes || echo no)"
-lk_console_detail "Local WP-Cron:" \
+lk_tty_detail "Local WP-Cron:" \
     "$([ "$MAINTENANCE" = permanent ] && echo enable || echo disable)"
 
-lk_console_detail "Exclude files:" "$([ ${#EXCLUDE[@]} -eq 0 ] &&
+lk_tty_detail "Exclude files:" "$([ ${#EXCLUDE[@]} -eq 0 ] &&
     echo "<none>" ||
     lk_echo_array EXCLUDE)"
 
 lk_confirm "Proceed?" Y
 
-lk_console_message "Enabling WordPress maintenance mode"
-lk_console_detail "[local] Creating" "$LOCAL_PATH/.maintenance"
+lk_tty_print "Enabling WordPress maintenance mode"
+lk_tty_detail "[local] Creating" "$LOCAL_PATH/.maintenance"
 lk_wp_maintenance_enable "$LOCAL_PATH"
 if [[ $MAINTENANCE =~ ^(on|permanent)$ ]]; then
-    lk_console_detail "[remote] Creating" "$SSH_HOST:$REMOTE_PATH/.maintenance"
+    lk_tty_detail "[remote] Creating" "$SSH_HOST:$REMOTE_PATH/.maintenance"
     ssh "$SSH_HOST" '/bin/sh -c '\''cat >"$1/.maintenance"'\''' sh \
         "$REMOTE_PATH" < <(lk_wp_maintenance_get_php)
 fi
 
 ! is_final || [ -n "$NO_WAIT" ] || {
-    lk_console_message "Waiting 60 seconds for active requests to complete"
+    lk_tty_print "Waiting 60 seconds for active requests to complete"
     sleep 60
 }
 
@@ -206,7 +206,7 @@ if [ "$INNODB" -eq 1 ]; then
     lk_wp_db_myisam_to_innodb -n
 fi
 if [ "$SHUFFLE_SALTS" -eq 1 ]; then
-    lk_console_message "Refreshing salts defined in wp-config.php"
+    lk_tty_print "Refreshing salts defined in wp-config.php"
     lk_wp config shuffle-salts
 fi
 if [ ${#DEACTIVATE[@]} -gt 0 ]; then
@@ -215,7 +215,7 @@ if [ ${#DEACTIVATE[@]} -gt 0 ]; then
         <(lk_echo_array ACTIVE_PLUGINS | sort -u) \
         <(lk_echo_array DEACTIVATE | sort -u)))
     [ ${#DEACTIVATE[@]} -eq 0 ] || {
-        lk_console_item \
+        lk_tty_print \
             "Deactivating plugins:" $'\n'"$(lk_echo_array DEACTIVATE)"
         lk_wp plugin deactivate "${DEACTIVATE[@]}"
     }
@@ -238,17 +238,17 @@ if [ "$SSL" -eq 1 ]; then
 fi || true
 
 if is_final; then
-    lk_console_warning "Enabling WP-Cron"
+    lk_tty_warning "Enabling WP-Cron"
     lk_wp_enable_system_cron
 else
-    lk_console_warning "Disabling WP-Cron (remote site still online)"
+    lk_tty_warning "Disabling WP-Cron (remote site still online)"
     lk_wp_disable_cron
 fi
 
-lk_console_message "[local] Restoring maintenance mode"
+lk_tty_print "[local] Restoring maintenance mode"
 lk_wp_maintenance_maybe_disable ||
     lk_warn "Error restoring previous maintenance mode"
 
 (exit "$STATUS") &&
-    lk_console_success "Migration completed successfully" ||
-    lk_console_error -r "Migration completed with errors" || lk_die ""
+    lk_tty_success "Migration completed successfully" ||
+    lk_tty_error -r "Migration completed with errors" || lk_die ""

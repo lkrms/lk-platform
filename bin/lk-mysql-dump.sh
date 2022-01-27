@@ -98,10 +98,10 @@ _LK_MYSQL_QUIET=1
 lk_log_start
 lk_start_trace
 
-lk_console_message "Preparing database backup"
-lk_console_detail "Retrieving list of databases on" "$DB_HOST"
+lk_tty_print "Preparing database backup"
+lk_tty_detail "Retrieving list of databases on" "$DB_HOST"
 lk_mysql_mapfile DB_ALL -h"$DB_HOST" <<<"SHOW DATABASES" || lk_die ""
-lk_console_detail "${#DB_ALL[@]} $(lk_plural \
+lk_tty_detail "${#DB_ALL[@]} $(lk_plural \
     ${#DB_ALL[@]} database databases) found"
 
 if lk_is_true ALL; then
@@ -121,7 +121,7 @@ else
         done
         [ ${#DB_MISSING[@]} -eq 0 ] || {
             STATUS=1
-            lk_console_warning "${#DB_MISSING[@]} requested $(
+            lk_tty_warning "${#DB_MISSING[@]} requested $(
                 lk_plural ${#DB_MISSING[@]} database databases
             ) not available on this host:" "$(lk_echo_array DB_MISSING)"
         }
@@ -154,15 +154,15 @@ DEST_MODE=00600
 [ -z "$DEST_GROUP" ] ||
     DEST_MODE=00640
 for DB_NAME in "${DB_INCLUDE[@]}"; do
-    lk_console_item "Dumping database:" "$DB_NAME"
+    lk_tty_print "Dumping database:" "$DB_NAME"
     FILE=$DEST/$DB_NAME
     lk_is_true NO_TIMESTAMP ||
         FILE=$FILE-${TIMESTAMP:-$(lk_date "%Y-%m-%d-%H%M%S")}
     FILE=$FILE.sql.gz
-    lk_console_detail "Backup file:" "$FILE"
+    lk_tty_detail "Backup file:" "$FILE"
     [ ! -e "$FILE" ] || {
         STATUS=1
-        lk_console_error "Skipping (backup already exists)"
+        lk_tty_error "Skipping (backup already exists)"
         continue
     }
     install -m "$DEST_MODE" ${DEST_GROUP:+-g "$DEST_GROUP"} \
@@ -170,10 +170,10 @@ for DB_NAME in "${DB_INCLUDE[@]}"; do
     if lk_mysql_dump \
         "$DB_NAME" "$DB_USER" "$DB_PASSWORD" "$DB_HOST" >"$FILE.pending" &&
         mv -f "$FILE.pending" "$FILE"; then
-        lk_console_success "Database dump completed successfully"
+        lk_tty_success "Database dump completed successfully"
     else
         STATUS=$?
-        lk_console_error "Database dump failed (exit status $STATUS)"
+        lk_tty_error "Database dump failed (exit status $STATUS)"
     fi
 done
 

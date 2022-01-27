@@ -81,7 +81,6 @@ function lk_bash_command_literals() {
         exec
         lk_cache
         lk_elevate
-        lk_elevate_if_error
         lk_env_clean
         lk_faketty
         lk_get_outputs_of
@@ -104,9 +103,7 @@ function lk_bash_command_literals() {
         lk_pass
         lk_report_error
         lk_require_output
-        lk_run
         lk_run_as
-        lk_run_detail
         lk_sudo
         lk_tty_run
         lk_tty_run_detail
@@ -180,7 +177,7 @@ Usage: $FUNCNAME [-g] SCRIPT [SOURCE...]" || return
     PACKAGES=()
     [ -n "${COMMANDS+1}" ] || {
         [ -n "$QUIET" ] ||
-            lk_console_message "No external commands used${FILE:+ in $1}"
+            lk_tty_print "No external commands used${FILE:+ in $1}"
         return
     }
     [ -n "$QUIET" ] ||

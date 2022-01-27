@@ -46,7 +46,7 @@ function maybe_restore_original() {
     ! lk_files_exist "$@" ||
         diff -q "$@" >/dev/null || {
         lk_file_backup "$2" &&
-            lk_run_detail mv -fv "$@" &&
+            lk_tty_run_detail mv -fv "$@" &&
             LK_FILE_REPLACE_NO_CHANGE=0
     }
 }
@@ -333,11 +333,11 @@ fi
     lk_tty_print "Checking system timezone"
     TIMEZONE=$(lk_system_timezone)
     [ "$TIMEZONE" = "$LK_NODE_TIMEZONE" ] ||
-        lk_run_detail timedatectl set-timezone "$LK_NODE_TIMEZONE"
+        lk_tty_run_detail timedatectl set-timezone "$LK_NODE_TIMEZONE"
 
     lk_tty_print "Checking system hostname"
     [ "$(hostname -s)" = "$LK_NODE_HOSTNAME" ] || {
-        lk_run_detail hostnamectl set-hostname "$LK_NODE_HOSTNAME"
+        lk_tty_run_detail hostnamectl set-hostname "$LK_NODE_HOSTNAME"
         REBOOT=1
     }
 
@@ -369,7 +369,7 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
     maybe_restore_original /etc/systemd/journald.conf
     lk_is_bootstrap && ! lk_systemctl_running systemd-journald ||
         ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
-        lk_run_detail systemctl restart systemd-journald.service
+        lk_tty_run_detail systemctl restart systemd-journald.service
 
     lk_tty_print "Checking root account"
     STATUS=$(lk_user_passwd_status root)
@@ -396,10 +396,10 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
         -f "$LK_BASE/share/sysctl.d/default.conf" \
         "$FILE"
     ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
-        lk_run_detail sysctl --system
+        lk_tty_run_detail sysctl --system
 
     lk_tty_print "Checking kernel modules"
-    lk_run_detail modprobe nf_conntrack_ftp ||
+    lk_tty_run_detail modprobe nf_conntrack_ftp ||
         lk_die "error loading kernel modules"
     FILE=/etc/modules-load.d/${LK_PATH_PREFIX}nf_conntrack.conf
     lk_install -m 00644 "$FILE"
@@ -504,7 +504,7 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
         }
         function pip3_uninstall() {
             [ ${#UNINSTALL[@]} -eq 0 ] ||
-                lk_run_detail \
+                lk_tty_run_detail \
                     sudo "$PIP3" uninstall --yes "${UNINSTALL[@]}"
         }
         ARGS=($(pip3_args)) ||
@@ -565,11 +565,11 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
         # Don't run `invoke-rc.d apache2 reload` twice per logrotate
         FILE=/etc/logrotate.d/apache2
         [ ! -e "$FILE" ] ||
-            lk_run_detail mv -f "$FILE"{,.disabled}
+            lk_tty_run_detail mv -f "$FILE"{,.disabled}
         # Restore php-fpm options if disabled previously
         FILE=/etc/logrotate.d/php$PHPVER-fpm
         [ ! -e "$FILE.disabled" ] || [ -e "$FILE" ] ||
-            lk_run_detail mv -n "$FILE"{.disabled,}
+            lk_tty_run_detail mv -n "$FILE"{.disabled,}
     fi
 
     if lk_dpkg_installed apt-listchanges apticron; then
@@ -700,7 +700,7 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
     # TODO: restore original configuration if restart fails
     lk_is_bootstrap && ! lk_systemctl_running ssh ||
         ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
-        lk_run_detail systemctl restart ssh.service
+        lk_tty_run_detail systemctl restart ssh.service
 
     if lk_dpkg_installed postfix; then
         lk_tty_print "Checking Postfix"
@@ -913,7 +913,7 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
             -f "$LK_BASE/share/systemd/php-fpm.service" \
             "$FILE"
         ! lk_is_false LK_FILE_REPLACE_NO_CHANGE || {
-            lk_run_detail systemctl daemon-reload &&
+            lk_tty_run_detail systemctl daemon-reload &&
                 lk_mark_dirty "php$PHPVER-fpm.service"
         }
 
@@ -922,7 +922,7 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
             FILE=/usr/local/bin/wp
             lk_install -m 00755 "$FILE"
             if [ -s "$FILE" ]; then
-                lk_run_detail "$FILE" cli update --yes
+                lk_tty_run_detail "$FILE" cli update --yes
             else
                 lk_tty_detail "Installing WP-CLI to" "$FILE"
                 _FILE=$(lk_mktemp_file)
@@ -963,7 +963,7 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
         if lk_is_bootstrap; then
             # MariaDB packages provide a `mysql.service` alias for
             # `mariadb.service`, so use `mysql.service` for maximum portability
-            lk_run_detail systemctl start mysql.service
+            lk_tty_run_detail systemctl start mysql.service
             if [ -n "$LK_MYSQL_USERNAME" ]; then
                 lk_tty_detail "Creating MariaDB administrator:" \
                     "$LK_MYSQL_USERNAME"
@@ -976,7 +976,7 @@ EOF
             fi
         else
             ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
-                lk_run_detail systemctl restart mysql.service
+                lk_tty_run_detail systemctl restart mysql.service
         fi
     fi
 
@@ -989,7 +989,7 @@ EOF
         check_after_file
         lk_is_bootstrap && ! lk_systemctl_running memcached ||
             ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
-            lk_run_detail systemctl restart memcached.service
+            lk_tty_run_detail systemctl restart memcached.service
     fi
 
     if lk_is_bootstrap && [ -n "$LK_HOST_ACCOUNT" ]; then
@@ -1031,7 +1031,7 @@ EOF
         maybe_restore_original /etc/fail2ban/jail.conf
         lk_is_bootstrap && ! lk_systemctl_running fail2ban ||
             ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
-            lk_run_detail systemctl restart fail2ban.service
+            lk_tty_run_detail systemctl restart fail2ban.service
     fi
 
     lk_tty_print "Checking firewall (iptables)"
@@ -1082,8 +1082,8 @@ EOF
             lk_die "error updating iptables"
     done
     ! lk_is_false LK_FILE_REPLACE_NO_CHANGE || {
-        lk_run_detail iptables-restore </etc/iptables/rules.v4 &&
-            lk_run_detail ip6tables-restore </etc/iptables/rules.v6
+        lk_tty_run_detail iptables-restore </etc/iptables/rules.v4 &&
+            lk_tty_run_detail ip6tables-restore </etc/iptables/rules.v6
     } || lk_die "error applying iptables rules"
 
     no_upgrade ||
@@ -1095,10 +1095,10 @@ EOF
     no_upgrade ||
         lk_apt_purge_removed
     [ ! -e /etc/glances ] ||
-        lk_run_detail rm -Rf /etc/glances
+        lk_tty_run_detail rm -Rf /etc/glances
     [ ! -e /etc/apt/listchanges.conf.orig ] ||
         lk_dpkg_installed apt-listchanges ||
-        lk_run_detail rm -f /etc/apt/listchanges.conf.orig
+        lk_tty_run_detail rm -f /etc/apt/listchanges.conf.orig
 
     lk_tty_success "Provisioning complete"
 

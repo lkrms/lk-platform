@@ -162,8 +162,8 @@ label {
 function lk_macos_install_command_line_tools() {
     local FILE LABEL
     ! lk_macos_command_line_tools_installed || return 0
-    lk_console_message "Installing command line tools"
-    lk_console_detail "Searching for the latest Command Line Tools for Xcode"
+    lk_tty_print "Installing command line tools"
+    lk_tty_detail "Searching for the latest Command Line Tools for Xcode"
     FILE=/tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress
     touch "$FILE" && LABEL=$(lk_macos_update_list_available |
         awk -F$'\t' -v 'W=([^[:alnum:]_]|^|$)' '
@@ -172,7 +172,7 @@ $5 == "Y" && $1 ~ "^Command Line Tools"W && $1 !~ W"(beta|seed)"W {print $1}' |
         [ -n "${LABEL:+1}" ] ||
         lk_warn "unable to determine item name for Command Line Tools" ||
         return
-    lk_run_detail lk_elevate caffeinate -d \
+    lk_tty_run_detail lk_elevate caffeinate -d \
         softwareupdate --install "$LABEL" >/dev/null || return
     lk_macos_command_line_tools_installed || return
     rm -f "$FILE" || true
@@ -181,16 +181,16 @@ $5 == "Y" && $1 ~ "^Command Line Tools"W && $1 !~ W"(beta|seed)"W {print $1}' |
 function lk_macos_install_rosetta2() {
     ! pkgutil --pkgs='com\.apple\.pkg\.RosettaUpdateAuto' &>/dev/null ||
         return 0
-    lk_console_message "Installing Rosetta 2"
-    lk_run_detail lk_elevate caffeinate -d \
+    lk_tty_print "Installing Rosetta 2"
+    lk_tty_run_detail lk_elevate caffeinate -d \
         softwareupdate --install-rosetta --agree-to-license
 } #### Reviewed: 2021-06-28
 
 function lk_macos_xcode_maybe_accept_license() {
     if [ -e /Applications/Xcode.app ] &&
         ! xcodebuild -license check &>/dev/null; then
-        lk_console_message "Accepting Xcode license"
-        lk_run_detail lk_elevate xcodebuild -license accept
+        lk_tty_print "Accepting Xcode license"
+        lk_tty_run_detail lk_elevate xcodebuild -license accept
     fi
 } #### Reviewed: 2021-06-28
 
@@ -230,14 +230,14 @@ function lk_macos_unmount() {
 
 function lk_macos_install_pkg() {
     [ -f "$1" ] || lk_warn "file not found: $1" || return
-    lk_console_detail "Installing:" "${1##*/}"
+    lk_tty_detail "Installing:" "${1##*/}"
     lk_elevate installer -allowUntrusted -pkg "$1" -target / || return
 }
 
 function lk_macos_install_dmg() {
     local IFS MOUNT_ROOT MOUNT_POINTS EXIT_STATUS=0
     [ -f "$1" ] || lk_warn "file not found: $1" || return
-    lk_console_detail "Attaching:" "${1##*/}"
+    lk_tty_detail "Attaching:" "${1##*/}"
     MOUNT_ROOT=$(lk_mktemp_dir) &&
         IFS=$'\n' &&
         MOUNT_POINTS=($(hdiutil attach -mountroot "$MOUNT_ROOT" "$1" |
@@ -280,13 +280,13 @@ function lk_macos_install() {
 function lk_macos_maybe_install_pkg_url() {
     local PKGID=$1 PKG_URL=$2 PKG_NAME=${3:-$1}
     pkgutil --pkgs | grep -Fx "$PKGID" >/dev/null || (
-        lk_console_item "Installing package:" "$PKG_NAME"
-        lk_console_detail "Downloading:" "$PKG_URL"
+        lk_tty_print "Installing package:" "$PKG_NAME"
+        lk_tty_detail "Downloading:" "$PKG_URL"
         DIR=$(lk_mktemp_dir) &&
             cd "$DIR" &&
             FILE=$(lk_download "$PKG_URL") &&
             lk_macos_install "$FILE" &&
-            lk_console_message "Package installed successfully" || exit
+            lk_tty_print "Package installed successfully" || exit
     )
 }
 
@@ -319,7 +319,7 @@ function lk_macos_defaults_maybe_write() {
     shift
     if ! CURRENT=$(defaults read "$1" "$2" 2>/dev/null) ||
         [ "$CURRENT" != "$EXPECTED" ]; then
-        lk_console_detail "Configuring '$2' in" "$1"
+        lk_tty_detail "Configuring '$2' in" "$1"
         defaults write "$@"
     fi
 }
@@ -354,7 +354,7 @@ function lk_macos_defaults_dump() {
             lk_macos_defaults_dump || return
     }
     DIR=$(lk_tty_path "$DIR")
-    lk_console_log \
+    lk_tty_log \
         'Output of "defaults [-currentHost] export $DOMAIN" dumped to:' \
         "$(for d in "$DIR" ${_LK_MACOS_DEFAULTS_DUMP_SUDO:+"$DIR/system"}; do
             lk_echo_args \

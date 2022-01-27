@@ -28,7 +28,7 @@ function lk_user_add_sftp_only() {
 Usage: $FUNCNAME USERNAME [SOURCE_DIR TARGET_DIR]..." || return
     lk_group_exists "$SFTP_ONLY" || {
         lk_tty_print "Creating group:" "$SFTP_ONLY"
-        lk_run_detail lk_elevate groupadd "$SFTP_ONLY" || return
+        lk_tty_run_detail lk_elevate groupadd "$SFTP_ONLY" || return
     }
     lk_tty_print "Checking SSH server"
     FILE=/etc/ssh/sshd_config
@@ -45,17 +45,17 @@ ChrootDirectory %h"
         -v "BREAK=$MATCH" \
         -f "$LK_BASE/lib/awk/block-replace.awk" "$FILE")
     ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
-        lk_run_detail lk_elevate systemctl restart ssh.service
+        lk_tty_run_detail lk_elevate systemctl restart ssh.service
     if lk_user_exists "$1"; then
         lk_confirm "Configure existing user '$1' for SFTP-only access?" Y &&
-            lk_run_detail lk_elevate \
+            lk_tty_run_detail lk_elevate \
                 usermod --shell /bin/false --groups "$SFTP_ONLY" --append "$1"
     else
         lk_tty_print "Creating user:" "$1"
-        lk_run_detail lk_elevate \
+        lk_tty_run_detail lk_elevate \
             useradd --create-home --shell /bin/false --groups "$SFTP_ONLY" "$1"
     fi || return
-    _HOME=$(lk_user_home "$1") && lk_elevate_if_error test -d "$_HOME" ||
+    _HOME=$(lk_user_home "$1") && lk_elevate -f test -d "$_HOME" ||
         lk_warn "invalid home directory: $_HOME" || return
     [ $# -lt 3 ] ||
         _LK_USER_HOME=$_HOME lk_user_bind_dir "$@" || return
@@ -71,7 +71,7 @@ ChrootDirectory %h"
         ssh-keygen -t rsa -b 4096 -N "" -q -C "$1@$(lk_hostname)" -f "$TEMP" &&
             lk_elevate cp "$TEMP.pub" "$FILE" &&
             lk_tty_file "$TEMP" || return
-        lk_console_warning "${LK_BOLD}WARNING:$LK_RESET \
+        lk_tty_warning "${LK_BOLD}WARNING:$LK_RESET \
 this private key ${LK_BOLD}WILL NOT BE DISPLAYED AGAIN$LK_RESET"
     }
 }
@@ -82,7 +82,7 @@ function lk_user_bind_dir() {
     # Skip these checks if _LK_USER_HOME is set
     [ -n "$_HOME" ] || {
         lk_user_exists "$_USER" || lk_warn "user not found: $_USER" || return
-        _HOME=$(lk_user_home "$1") && lk_elevate_if_error test -d "$_HOME" ||
+        _HOME=$(lk_user_home "$1") && lk_elevate -f test -d "$_HOME" ||
             lk_warn "invalid home directory: $_HOME" || return
     }
     shift
@@ -90,7 +90,7 @@ function lk_user_bind_dir() {
     lk_command_exists findmnt || lk_warn "command not found: findmnt" || return
     TEMP=$(lk_mktemp_file) && TEMP2=$(lk_mktemp_file) &&
         lk_delete_on_exit "$TEMP" "$TEMP2" || return
-    lk_elevate_if_error cp /etc/fstab "$TEMP"
+    lk_elevate -f cp /etc/fstab "$TEMP"
     while [ $# -ge 2 ]; do
         SOURCE=$1
         TARGET=$2
@@ -98,16 +98,16 @@ function lk_user_bind_dir() {
         [[ $TARGET == /* ]] || TARGET=$_HOME/$TARGET
         [[ $TARGET == $_HOME/* ]] ||
             lk_warn "target not in $_HOME: $TARGET" || return
-        lk_elevate_if_error test -d "$SOURCE" ||
+        lk_elevate -f test -d "$SOURCE" ||
             lk_warn "source directory not found: $SOURCE" || return
         while :; do
             FSROOT=$(lk_elevate findmnt -no FSROOT -M "$TARGET") ||
                 { FSROOT= && break; }
             lk_elevate test ! "$FSROOT" -ef "$SOURCE" || break
-            lk_console_warning "Already mounted at $TARGET:" \
+            lk_tty_warning "Already mounted at $TARGET:" \
                 "$(lk_elevate findmnt -no SOURCE -M "$TARGET")"
             lk_confirm "OK to unmount?" Y &&
-                lk_run_detail lk_elevate umount "$TARGET" || return
+                lk_tty_run_detail lk_elevate umount "$TARGET" || return
         done
         [ -n "$FSROOT" ] || {
             lk_install -d -m 00755 -o root -g root "$TARGET" || return
@@ -128,6 +128,6 @@ END { maybe_print() }' "$TEMP" >"$TEMP2" && cp "$TEMP2" "$TEMP" || return
         lk_warn "invalid fstab: $TEMP" || return
     lk_file_replace -m -f "$TEMP" /etc/fstab
     for TARGET in ${TARGETS+"${TARGETS[@]}"}; do
-        lk_run_detail lk_elevate mount --target "$TARGET" || STATUS=$?
+        lk_tty_run_detail lk_elevate mount --target "$TARGET" || STATUS=$?
     done
 }

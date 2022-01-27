@@ -31,10 +31,10 @@ function exit_trap() {
             _LOG_FILE=${!_LOG_FILE} &&
             LOG_FILE=$(lk_log_create_file -e "$EXT") &&
             [ "$LOG_FILE" != "$_LOG_FILE" ] || continue
-        lk_console_log "Moving:" "$_LOG_FILE -> $LOG_FILE"
+        lk_tty_log "Moving:" "$_LOG_FILE -> $LOG_FILE"
         cat "$_LOG_FILE" >>"$LOG_FILE" &&
             rm "$_LOG_FILE" ||
-            lk_console_warning "Error moving" "$_LOG_FILE"
+            lk_tty_warning "Error moving" "$_LOG_FILE"
     done
 }
 
@@ -133,7 +133,7 @@ function exit_trap() {
     lk_start_trace
     lk_trap_add EXIT exit_trap
 
-    lk_console_log "Provisioning macOS"
+    lk_tty_log "Provisioning macOS"
 
     lk_sudo_offer_nopasswd || lk_die "unable to run commands as root"
 
@@ -141,7 +141,7 @@ function exit_trap() {
         [ "${PIPESTATUS[0]}${PIPESTATUS[1]}" = 01 ] || lk_die ""
         ! lk_confirm "Enable remote access to this computer via SSH?" N || {
             lk_tty_print "Enabling Remote Login (SSH)"
-            lk_run_detail sudo systemsetup -setremotelogin on
+            lk_tty_run_detail sudo systemsetup -setremotelogin on
         }
     }
 
@@ -157,7 +157,7 @@ function exit_trap() {
     [[ $CURRENT_SHELL == */bash ]] ||
         ! lk_confirm "Use Bash as the default shell for user '$USER'?" N || {
         lk_tty_print "Setting default shell"
-        lk_run_detail sudo chsh -s /bin/bash "$USER"
+        lk_tty_run_detail sudo chsh -s /bin/bash "$USER"
     }
 
     lk_tty_print "Configuring sudo"
@@ -176,7 +176,7 @@ function exit_trap() {
     lk_tty_print "Configuring default umask"
     { defaults read /var/db/com.apple.xpc.launchd/config/user.plist Umask |
         grep -Fx 2; } &>/dev/null ||
-        lk_run_detail sudo launchctl config user umask 002 >/dev/null
+        lk_tty_run_detail sudo launchctl config user umask 002 >/dev/null
     FILE=/etc/profile
     [ ! -r "$FILE" ] || grep -Eq '\<umask\>' "$FILE" || {
         lk_tty_detail "Setting umask in" "$FILE"
@@ -215,7 +215,7 @@ EOF
         /var/db/com.apple.xpc.launchd/config/user.plist \
         PathEnvironmentVariable 2>/dev/null) || _PATH=
     path_add "${PATH_ADD[@]}" ||
-        lk_run_detail sudo launchctl config user path "$_PATH" >/dev/null
+        lk_tty_run_detail sudo launchctl config user path "$_PATH" >/dev/null
     _PATH=$PATH
     path_add "${PATH_ADD[@]}" ||
         PATH=$_PATH
@@ -239,7 +239,7 @@ EOF
         TOOLS_PATH=$(lk_macos_command_line_tools_path)
         if [[ $TOOLS_PATH != /Applications/Xcode.app* ]]; then
             lk_tty_print "Configuring Xcode"
-            lk_run_detail sudo xcode-select --switch /Applications/Xcode.app
+            lk_tty_run_detail sudo xcode-select --switch /Applications/Xcode.app
             OLD_TOOLS_PATH=$TOOLS_PATH
             TOOLS_PATH=$(lk_macos_command_line_tools_path)
             lk_tty_detail "Development tools directory:" \
@@ -263,7 +263,7 @@ EOF
             LK_PLATFORM_BRANCH \
             LK_PACKAGES_FILE |
             sudo tee "$FILE" >/dev/null
-        lk_console_detail_file "$FILE"
+        lk_tty_file_detail "$FILE"
     fi
 
     (
@@ -420,12 +420,12 @@ EOF
     fi
 
     LK_SUDO=1
-    lk_console_blank
+    lk_tty_print
     LK_NO_LOG=1 \
         lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh"
     unset LK_SUDO
 
-    lk_console_blank
+    lk_tty_print
     lk_tty_print "Checking Homebrew packages"
     UPGRADE_CASKS=()
     function check_updates() {
@@ -620,7 +620,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
                     APP_NAMES+=("$APP_NAME")
                     continue
                 fi
-                lk_console_warning "Unknown App ID:" "$APP_ID"
+                lk_tty_warning "Unknown App ID:" "$APP_ID"
                 unset "INSTALL_APPS[i]"
             done
             if [ ${#INSTALL_APPS[@]} -gt 0 ]; then
@@ -801,7 +801,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
   .linked_keg != null).full_name' \
             --args "${HOMEBREW_UNLINK_FORMULAE[@]}" >"$UNLINK" || return
         [ ! -s "$UNLINK" ] || {
-            lk_run_detail brew unlink $(<"$UNLINK") &&
+            lk_tty_run_detail brew unlink $(<"$UNLINK") &&
                 lk_brew_flush_cache
         }
     }
@@ -818,7 +818,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
   .linked_keg == null).full_name' \
             --args "${HOMEBREW_LINK_KEGS[@]}" >"$LINK" || return
         [ ! -s "$LINK" ] || {
-            lk_run_detail brew link $(<"$LINK") &&
+            lk_tty_run_detail brew link $(<"$LINK") &&
                 lk_brew_flush_cache
         }
     }
@@ -849,9 +849,9 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
     fi
 
     if [ "$STATUS" -eq 0 ]; then
-        lk_console_success "Provisioning complete"
+        lk_tty_success "Provisioning complete"
     else
-        lk_console_error "Provisioning completed with errors"
+        lk_tty_error "Provisioning completed with errors"
         (exit "$STATUS") || lk_die ""
     fi
 }

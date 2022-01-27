@@ -370,11 +370,11 @@ function _lk_hosting_site_provision() {
             lk_is_true LK_FILE_REPLACE_DECLINED || return
         lk_is_true LK_FILE_REPLACE_DECLINED ||
             if lk_is_true SITE_ENABLE && ! a2query -q -s "$_SITE_NAME"; then
-                lk_console_success "Enabling Apache site:" "$_SITE_NAME"
+                lk_tty_success "Enabling Apache site:" "$_SITE_NAME"
                 lk_elevate a2ensite "$_SITE_NAME"
                 LK_FILE_REPLACE_NO_CHANGE=0
             elif ! lk_is_true SITE_ENABLE && a2query -q -s "$_SITE_NAME"; then
-                lk_console_warning "Disabling Apache site:" "$_SITE_NAME"
+                lk_tty_warning "Disabling Apache site:" "$_SITE_NAME"
                 lk_elevate a2dissite "$_SITE_NAME"
                 LK_FILE_REPLACE_NO_CHANGE=0
             fi
@@ -415,7 +415,7 @@ function lk_hosting_configure_backup() {
         sort -u | lk_ere_implode_input -e)
     lk_tty_print "Configuring automatic backups"
     if lk_is_false LK_AUTO_BACKUP; then
-        lk_console_error \
+        lk_tty_error \
             "Automatic backups are disabled (LK_AUTO_BACKUP=$LK_AUTO_BACKUP)"
         lk_crontab_remove "$REGEX"
     else

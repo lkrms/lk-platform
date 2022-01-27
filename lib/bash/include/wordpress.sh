@@ -249,7 +249,7 @@ function lk_wp_rename_site() {
         lk_wp_replace_url "$OLD_URL" "$NEW_URL" ||
         return
     _lk_wp_maybe_apply || return
-    lk_console_success "Site renamed successfully"
+    lk_tty_success "Site renamed successfully"
 }
 
 function _lk_wp_replace() {
@@ -541,8 +541,8 @@ SQL
     else
         lk_pv "$1"
     fi | lk_mysql "$LOCAL_DB_NAME" ||
-        lk_console_error -r "Restore operation failed" || return
-    lk_console_success "Database restored successfully"
+        lk_tty_error -r "Restore operation failed" || return
+    lk_tty_success "Database restored successfully"
 }
 
 # lk_wp_db_myisam_to_innodb [-n]
@@ -559,9 +559,9 @@ function lk_wp_db_myisam_to_innodb() { (
         lk_warn "no MyISAM tables in database '$DB_NAME'" || return 0
     _lk_wp_is_quiet || {
         if [ -z "$BACKUP" ]; then
-            lk_console_warning "Data loss may occur if conversion fails"
+            lk_tty_warning "Data loss may occur if conversion fails"
         else
-            lk_console_log "The database will be backed up before conversion"
+            lk_tty_log "The database will be backed up before conversion"
         fi
         lk_confirm "Proceed?" Y || return
     }
@@ -617,8 +617,8 @@ Usage: $FUNCNAME SSH_HOST [REMOTE_PATH [LOCAL_PATH [RSYNC_ARG...]]]" || return
     [ -d "$LOCAL_PATH" ] || mkdir -p "$LOCAL_PATH" || return
     rsync "${ARGS[@]}" || STATUS=$?
     [ "$STATUS" -eq 0 ] &&
-        lk_console_success "File sync completed successfully" ||
-        lk_console_error "File sync failed"
+        lk_tty_success "File sync completed successfully" ||
+        lk_tty_error "File sync failed"
     return "$STATUS"
 }
 
@@ -788,7 +788,7 @@ function lk_wp_set_permissions() {
             lk_delete_on_exit "$LOG_FILE" ||
             lk_tty_detail "Changes logged to:" "$LOG_FILE"
     else
-        lk_console_warning "Unable to set owner (not running as root)"
+        lk_tty_warning "Unable to set owner (not running as root)"
     fi
     lk_dir_set_modes "$SITE_ROOT" \
         "" \

@@ -197,23 +197,23 @@ LK_NODE_HOSTNAME=${LK_NODE_FQDN%%.*}
 LK_NODE_SERVICES=$(IFS=, &&
     lk_echo_args $LK_NODE_SERVICES | sort -u | lk_implode_input ",")
 
-PASSWORD_GENERATED=
+PASSWORD_GENERATED=0
 if [ -z "$BOOTSTRAP_KEY" ]; then
     if [ -z "$BOOTSTRAP_PASSWORD" ] && lk_no_input; then
-        lk_console_item \
+        lk_tty_print \
             "Generating a random password for user" "$BOOTSTRAP_USERNAME"
         BOOTSTRAP_PASSWORD=$(lk_random_password 7)
         PASSWORD_GENERATED=1
-        lk_console_detail "Password:" "$BOOTSTRAP_PASSWORD"
-        lk_console_log "The password above will be repeated when ${0##*/} exits"
+        lk_tty_detail "Password:" "$BOOTSTRAP_PASSWORD"
+        lk_tty_log "The password above will be repeated when ${0##*/} exits"
     fi
     while [ -z "$BOOTSTRAP_PASSWORD" ]; do
-        BOOTSTRAP_PASSWORD=$(lk_console_read_secret \
-            "Password for $BOOTSTRAP_USERNAME:")
+        lk_tty_read_silent \
+            "Password for $BOOTSTRAP_USERNAME:" BOOTSTRAP_PASSWORD
         [ -n "$BOOTSTRAP_PASSWORD" ] ||
             lk_warn "Password cannot be empty" || continue
-        CONFIRM_PASSWORD=$(lk_console_read_secret \
-            "Password for $BOOTSTRAP_USERNAME (again):")
+        lk_tty_read_silent \
+            "Password for $BOOTSTRAP_USERNAME (again):" CONFIRM_PASSWORD
         [ "$BOOTSTRAP_PASSWORD" = "$CONFIRM_PASSWORD" ] || {
             BOOTSTRAP_PASSWORD=
             lk_warn "Passwords do not match"
@@ -223,7 +223,7 @@ if [ -z "$BOOTSTRAP_KEY" ]; then
     done
 fi
 
-lk_console_blank
+lk_tty_print
 
 function exit_trap() {
     if [ "$BASH_SUBSHELL" -gt 0 ]; then
@@ -241,8 +241,8 @@ function exit_trap() {
                 cp -v --preserve=timestamps "$LOG" "/mnt/${FILE#/}" || break
         done
     }
-    ! lk_is_true PASSWORD_GENERATED ||
-        lk_console_log \
+    ((!PASSWORD_GENERATED)) ||
+        lk_tty_log \
             "The random password generated for user '$BOOTSTRAP_USERNAME' is" \
             "$BOOTSTRAP_PASSWORD"
 }
@@ -261,15 +261,6 @@ lk_log_start "$LOG_FILE"
 lk_log_tty_off
 lk_trap_add EXIT exit_trap
 
-lk_console_log "Setting up live environment"
-lk_arch_configure_pacman
-if [ -n "$LK_ARCH_MIRROR" ]; then
-    lk_systemctl_disable_now reflector || true
-    echo "Server=$LK_ARCH_MIRROR" >/etc/pacman.d/mirrorlist
-fi
-
-. "$_DIR/packages.sh"
-
 # Clean up after failed attempts
 if [ -d /mnt/boot ]; then
     OTHER_OS_MOUNTS=(/mnt/mnt/*)
@@ -281,27 +272,43 @@ if [ -d /mnt/boot ]; then
     umount /mnt
 fi
 
-lk_console_message "Checking network connection"
+lk_tty_log "Setting up live environment"
+FILES=(/etc/pacman.conf{.orig,})
+! lk_files_exist "${FILES[@]}" ||
+    mv -fv "${FILES[@]}"
+lk_arch_configure_pacman
+if [ -n "$LK_ARCH_MIRROR" ]; then
+    lk_systemctl_disable_now reflector || true
+    echo "Server=$LK_ARCH_MIRROR" >/etc/pacman.d/mirrorlist
+fi
+
+lk_tty_print "Checking network connection"
 ping -c 1 "$BOOTSTRAP_PING_HOST" || lk_die "no network"
 
+lk_tty_print "Checking pacman keyring"
+lk_arch_reset_pacman_keyring
+lk_log_bypass -o lk_faketty pacman -Sy --noconfirm --needed archlinux-keyring
+
+. "$_DIR/packages.sh"
+
 if [ -n "$LK_NTP_SERVER" ]; then
-    lk_console_item "Synchronising system time with" "$LK_NTP_SERVER"
+    lk_tty_print "Synchronising system time with" "$LK_NTP_SERVER"
     if ! lk_command_exists ntpd; then
-        lk_console_detail "Installing ntp"
-        lk_log_bypass -o lk_faketty pacman -Sy --noconfirm ntp ||
+        lk_tty_detail "Installing ntp"
+        lk_log_bypass -o lk_faketty pacman -S --noconfirm ntp ||
             lk_die "unable to install ntp"
     fi
-    lk_run_detail ntpd -qgx "$LK_NTP_SERVER" ||
+    lk_tty_run_detail ntpd -qgx "$LK_NTP_SERVER" ||
         lk_die "unable to sync system time"
 fi
 
-lk_console_blank
-lk_console_log "Checking disk partitions"
-REPARTITIONED=
+lk_tty_print
+lk_tty_log "Checking disk partitions"
+REPARTITIONED=0
 if [ -n "$INSTALL_DISK" ]; then
-    lk_confirm "Repartition $INSTALL_DISK? ALL DATA WILL BE LOST." Y
-    lk_console_item "Partitioning:" "$INSTALL_DISK"
-    lk_run_detail parted --script "$INSTALL_DISK" \
+    lk_tty_yn "Repartition $INSTALL_DISK? ALL DATA WILL BE LOST." Y
+    lk_tty_print "Partitioning:" "$INSTALL_DISK"
+    lk_tty_run_detail parted --script "$INSTALL_DISK" \
         "mklabel gpt" \
         "mkpart fat32 2048s 260MiB" \
         "mkpart ext4 260MiB 100%" \
@@ -313,8 +320,8 @@ if [ -n "$INSTALL_DISK" ]; then
     [ ${#PARTITIONS[@]} -eq 2 ] &&
         ROOT_PART=${PARTITIONS[1]} &&
         BOOT_PART=${PARTITIONS[0]} || lk_die "invalid partition table"
-    lk_run_detail wipefs -a "$ROOT_PART"
-    lk_run_detail wipefs -a "$BOOT_PART"
+    lk_tty_run_detail wipefs -a "$ROOT_PART"
+    lk_tty_run_detail wipefs -a "$BOOT_PART"
     REPARTITIONED=1
 fi
 
@@ -327,79 +334,79 @@ SH="BOOT_TYPE=($(_lk_lsblk -q FSTYPE,FSVER,PARTTYPE "$BOOT_PART"))" &&
 FORMAT_BOOT=1
 if [ "${BOOT_TYPE[0]}" = vfat ] &&
     [ "${BOOT_TYPE[2]}" = c12a7328-f81f-11d2-ba4b-00a0c93ec93b ]; then
-    lk_console_message \
+    lk_tty_print \
         "ESP at $BOOT_PART already formatted as ${BOOT_TYPE[1]}; leaving as-is"
     FORMAT_BOOT=
 else
     [ -z "${BOOT_TYPE[0]}" ] ||
         lk_warn "Unexpected ${BOOT_TYPE[0]} filesystem at $BOOT_PART" || true
-    lk_is_true REPARTITIONED ||
-        lk_confirm "OK to format ESP at $BOOT_PART as fat32?" Y ||
+    ((REPARTITIONED)) ||
+        lk_tty_yn "OK to format ESP at $BOOT_PART as fat32?" Y ||
         lk_die ""
 fi
 
 [ -z "$ROOT_FSTYPE" ] ||
     lk_warn "Unexpected $ROOT_FSTYPE filesystem at $ROOT_PART" || true
-lk_is_true REPARTITIONED ||
-    lk_confirm "OK to format $ROOT_PART as ext4?" Y ||
+((REPARTITIONED)) ||
+    lk_tty_yn "OK to format $ROOT_PART as ext4?" Y ||
     lk_die ""
 
-lk_console_item "Formatting:" "${FORMAT_BOOT:+$BOOT_PART }$ROOT_PART"
-! lk_is_true FORMAT_BOOT ||
-    lk_run_detail mkfs.fat -vn ESP -F 32 "$BOOT_PART"
-lk_run_detail mkfs.ext4 -vL root "$ROOT_PART"
+lk_tty_print "Formatting:" "${FORMAT_BOOT:+$BOOT_PART }$ROOT_PART"
+((!${FORMAT_BOOT:-0})) ||
+    lk_tty_run_detail mkfs.fat -vn ESP -F 32 "$BOOT_PART"
+lk_tty_run_detail mkfs.ext4 -vL root "$ROOT_PART"
 
 if lk_is_virtual; then
     ! lk_block_device_is_ssd "$ROOT_PART" || ROOT_EXTRA=,discard
     ! lk_block_device_is_ssd "$BOOT_PART" || BOOT_EXTRA=,discard
 fi
-lk_run_detail mount \
+lk_tty_run_detail mount \
     -o "$BOOTSTRAP_MOUNT_OPTIONS${ROOT_EXTRA-}" \
     "$ROOT_PART" /mnt
 install -d -m 00755 /mnt/boot
-lk_run_detail mount \
+lk_tty_run_detail mount \
     -o "$BOOTSTRAP_MOUNT_OPTIONS${BOOT_EXTRA-}" \
     "$BOOT_PART" /mnt/boot
 
-if ! lk_is_true FORMAT_BOOT; then
-    lk_console_message "Removing files from previous installations in ESP"
+if ((!${FORMAT_BOOT:-0})); then
+    lk_tty_print "Removing files from previous installations in ESP"
     rm -Rfv /mnt/boot/{syslinux,intel-ucode.img,amd-ucode.img}
 fi
 
-lk_console_blank
-lk_console_log "Installing system"
+lk_tty_print
+lk_tty_log "Installing system"
 lk_log_bypass -o lk_faketty pacstrap /mnt "${PAC_PACKAGES[@]}"
 
-lk_console_blank
-lk_console_log "Setting up installed system"
+lk_tty_print
+lk_tty_log "Setting up installed system"
 _LK_ARCH_ROOT=/mnt
 
-lk_console_message "Generating /etc/fstab"
+lk_tty_print "Generating /etc/fstab"
 FILE=/mnt/etc/fstab
 lk_install -m 00644 "$FILE"
 lk_file_keep_original "$FILE"
 genfstab -U /mnt >>"$FILE"
 
-lk_console_message "Setting system time zone"
+lk_tty_print "Setting system time zone"
 FILE=/usr/share/zoneinfo/$LK_NODE_TIMEZONE
 LK_VERBOSE=1 \
     lk_symlink "$FILE" /mnt/etc/localtime
 
-lk_console_message "Setting locales"
+lk_tty_print "Setting locales"
 _LK_PROVISION_ROOT=/mnt
 lk_configure_locales
-lk_run_detail -1 in_target locale-gen
+lk_tty_run_detail -1 in_target locale-gen
 
-lk_console_message "Configuring sudo"
+lk_tty_print "Configuring sudo"
 FILE=/mnt/etc/sudoers.d/${LK_PATH_PREFIX}default
 install -m 00440 /dev/null "$FILE"
 lk_file_replace -f "$_DIR/default" "$FILE"
 
-lk_console_item "Creating administrator account:" "$BOOTSTRAP_USERNAME"
+lk_tty_print "Creating administrator account:" "$BOOTSTRAP_USERNAME"
 FILE=/mnt/etc/skel/.ssh/authorized_keys
-lk_run_detail install -d -m 00700 "${FILE%/*}"
-lk_run_detail install -m 00600 /dev/null "$FILE"
-lk_run_detail -1 in_target useradd \
+lk_tty_run_detail install -d -m 00700 "${FILE%/*}"
+lk_tty_run_detail install -m 00600 /dev/null "$FILE"
+lk_tty_run_detail -1 in_target useradd \
     --groups adm,wheel \
     --create-home \
     --shell /bin/bash \
@@ -419,7 +426,7 @@ echo "$BOOTSTRAP_USERNAME ALL=(ALL) NOPASSWD:ALL" >"$FILE"
 
 export _LK_BOOTSTRAP=1
 
-lk_console_item "Installing lk-platform to" "$LK_BASE"
+lk_tty_print "Installing lk-platform to" "$LK_BASE"
 in_target install -d -m 02775 -o "$BOOTSTRAP_USERNAME" -g adm "$LK_BASE"
 (umask 002 &&
     in_target -u "$BOOTSTRAP_USERNAME" \
@@ -454,45 +461,45 @@ lk_var_sh \
     LK_PACKAGES_FILE >"/mnt$FILE"
 
 lk_log_tty_on
-PROVISIONED=
+PROVISIONED=0
 in_target -u "$BOOTSTRAP_USERNAME" \
     env BASH_XTRACEFD=$BASH_XTRACEFD SHELLOPTS=xtrace LK_NO_LOG=1 \
     "$LK_BASE/bin/lk-provision-arch.sh" --yes && PROVISIONED=1 ||
-    lk_console_error "Provisioning failed"
+    lk_tty_error "Provisioning failed"
 lk_log_tty_off
 
-lk_console_message "Installing boot loader"
+lk_tty_print "Installing boot loader"
 i=0
 for PART in ${OTHER_OS_PARTITIONS[@]+"${OTHER_OS_PARTITIONS[@]}"}; do
     DIR=/mnt/mnt/temp$i
-    ((i++)) || lk_console_detail "Mounting other operating systems"
+    ((i++)) || lk_tty_detail "Mounting other operating systems"
     install -d -m 00755 "$DIR" &&
         mount "$PART" "$DIR" ||
         lk_warn "unable to mount at $DIR: $PART" ||
         true
 done
 lk_arch_configure_grub
-GRUB_INSTALLED=
+GRUB_INSTALLED=0
 i=0
 while :; do
     ((++i))
     in_target update-grub --install && GRUB_INSTALLED=1 && break
-    lk_console_error "Boot loader installation failed"
+    lk_tty_error "Boot loader installation failed"
     ! lk_no_input || { [ "$i" -lt 2 ] &&
-        { lk_console_detail "Trying again in 5 seconds" &&
+        { lk_tty_detail "Trying again in 5 seconds" &&
             sleep 5 &&
             continue; } || break; }
-    lk_confirm "Try again?" Y || break
+    lk_tty_yn "Try again?" Y || break
 done
-lk_is_true GRUB_INSTALLED ||
-    lk_console_item "To install the boot loader manually:" \
+((GRUB_INSTALLED)) ||
+    lk_tty_print "To install the boot loader manually:" \
         $'\n'"arch-chroot /mnt update-grub --install"
 
-lk_is_true PROVISIONED ||
-    lk_console_item "To provision the system manually:" \
+((PROVISIONED)) ||
+    lk_tty_print "To provision the system manually:" \
         $'\n'"$(printf \
             'arch-chroot /mnt runuser -u %q -- %q/bin/lk-provision-arch.sh' \
             "$BOOTSTRAP_USERNAME" \
             "$LK_BASE")"
 
-lk_console_success "Bootstrap complete"
+lk_tty_success "Bootstrap complete"

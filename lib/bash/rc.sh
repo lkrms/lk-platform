@@ -89,7 +89,7 @@ function lk_bak_diff() {
             FILE=${FILE2//"__"/\/}
             [ "$FILE" != "$FILE2" ] && [ -e "$FILE" ] || continue
         }
-        lk_console_diff "$BACKUP" "$FILE" || true
+        lk_tty_diff "$BACKUP" "$FILE" || true
     done < <(gnu_find / -xdev -regextype posix-egrep \
         ! \( -type d -path /srv/backup/snapshot -prune \) \
         -regex "${_LK_DIFF_REGEX:-$REGEX}" ${@+\( "$@" \)} -print0 | sort -z)

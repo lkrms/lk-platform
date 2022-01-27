@@ -25,20 +25,20 @@ BRANCH=$(lk_git_branch_current)
 [ "$BRANCH" = "$SOURCE_BRANCH" ] ||
     lk_warn "repo at $DEST not on branch $SOURCE_BRANCH" || exit 0
 
-lk_console_log "Updating repo at" "$DEST"
+lk_tty_log "Updating repo at" "$DEST"
 REMOTE=$(lk_git_remote_from_url -E \
     "^(file://)?${SOURCE#file://}/?\$" | tail -n1) ||
     { REMOTE=local &&
-        { lk_run_detail git remote add "$REMOTE" "$SOURCE" ||
-            lk_run_detail git remote set-url "$REMOTE" "$SOURCE"; }; } ||
+        { lk_tty_run_detail git remote add "$REMOTE" "$SOURCE" ||
+            lk_tty_run_detail git remote set-url "$REMOTE" "$SOURCE"; }; } ||
     lk_die "unable to add or update remote: $REMOTE"
 
-lk_run_detail git fetch "$REMOTE"
-lk_run_detail git merge --ff-only "$REMOTE/$BRANCH" || {
-    lk_git_is_clean || { lk_console_log "Stashing changes" &&
-        lk_run_detail git stash || lk_die "unable to stash changes: $DEST"; }
-    lk_run_detail git reset --hard "$REMOTE/$BRANCH"
+lk_tty_run_detail git fetch "$REMOTE"
+lk_tty_run_detail git merge --ff-only "$REMOTE/$BRANCH" || {
+    lk_git_is_clean || { lk_tty_log "Stashing changes" &&
+        lk_tty_run_detail git stash || lk_die "unable to stash changes: $DEST"; }
+    lk_tty_run_detail git reset --hard "$REMOTE/$BRANCH"
 }
-lk_run_detail git branch --set-upstream-to="$REMOTE/$BRANCH"
+lk_tty_run_detail git branch --set-upstream-to="$REMOTE/$BRANCH"
 
-lk_console_log "Done"
+lk_tty_log "Done"

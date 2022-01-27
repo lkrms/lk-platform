@@ -125,7 +125,7 @@ ERROR_FILES=()
             lk_die "could not create directory: $TARGET_DIR"
         LOG_FILE=${SOURCE_FILE%/*}/.${SOURCE_FILE##*/}-HandBrakeCLI.log
         STATUS=0
-        if ! lk_run HandBrakeCLI --preset-import-gui --preset "$PRESET" \
+        if ! lk_tty_run HandBrakeCLI --preset-import-gui --preset "$PRESET" \
             --input "$SOURCE_FILE" --output "$TARGET_FILE" \
             2> >(tee "$LOG_FILE" >&2); then
             STATUS=$?

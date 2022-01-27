@@ -24,4 +24,4 @@ touch -r "$NEWEST" -- "$TEMP"
 lk_rm -- "$@"
 
 mv -- "$TEMP" "$FILE"
-lk_console_item "Successfully combined to:" "$FILE"
+lk_tty_print "Successfully combined to:" "$FILE"

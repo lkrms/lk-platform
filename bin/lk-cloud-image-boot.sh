@@ -518,12 +518,12 @@ case "$IMAGE" in
 esac
 
 [[ $VM_NETWORK != user=* ]] || [ -n "${HOSTFWD+1}" ] ||
-    lk_console_warning -r \
+    lk_tty_warning -r \
         "--forward is required for access to services on usermode guests" ||
     lk_confirm "Proceed without forwarding any ports?" Y || lk_die ""
 
 if [ -n "$STACKSCRIPT" ]; then
-    lk_console_log "Processing StackScript"
+    lk_tty_log "Processing StackScript"
     lk_mapfile SS_TAGS <(grep -Eo \
         "<(lk:)?[uU][dD][fF]($S+[a-zA-Z]+=\"[^\"]*\")*$S*/>" \
         "$STACKSCRIPT")
@@ -567,13 +567,13 @@ if [ -n "$STACKSCRIPT" ]; then
         ! lk_is_true _LK_REQUIRED ||
             [ -n "${VALIDATE_COMMAND+1}" ] ||
             VALIDATE_COMMAND=(lk_validate_not_null VALUE)
-        lk_console_item \
+        lk_tty_print \
             "Checking field $TAG of ${#SS_TAGS[@]}:" \
             "$NAME"
         [ -z "${SELECT_TEXT-}" ] ||
             lk_tty_list_detail SELECT_OPTIONS "$SELECT_TEXT:"
         [ -z "${DEFAULT-}" ] ||
-            lk_console_detail "Default value:" "$DEFAULT"
+            lk_tty_detail "Default value:" "$DEFAULT"
         VALUE=$(lk_var_env "$NAME") || unset VALUE
         i=0
         while ((++i)); do
@@ -586,16 +586,16 @@ if [ -n "$STACKSCRIPT" ]; then
             INITIAL_VALUE=${VALUE-${DEFAULT-}}
             lk_is_true IS_VALID ||
                 ! { lk_no_input || [ "$i" -gt 1 ]; } || {
-                lk_console_warning "$FIELD_ERROR"
+                lk_tty_warning "$FIELD_ERROR"
                 unset NO_ERROR_DISPLAYED
             }
             if lk_is_true IS_VALID && { lk_no_input || [ "$i" -gt 1 ]; }; then
-                lk_console_detail "Using value:" "$INITIAL_VALUE" "$LK_GREEN"
+                lk_tty_detail "Using value:" "$INITIAL_VALUE" "$LK_GREEN"
                 break
             else
-                VALUE=$(LK_FORCE_INPUT=1 lk_console_read \
-                    "$LABEL${NO_ERROR_DISPLAYED+ ($REQUIRED_TEXT)}:" \
-                    "" ${INITIAL_VALUE:+-i "$INITIAL_VALUE"})
+                LK_FORCE_INPUT=1 lk_tty_read \
+                    "$LABEL${NO_ERROR_DISPLAYED+ ($REQUIRED_TEXT)}:" VALUE \
+                    "" ${INITIAL_VALUE:+-i "$INITIAL_VALUE"}
             fi
         done
         [ "${VALUE:=}" != "${DEFAULT-}" ] ||
@@ -618,7 +618,7 @@ SSH_AUTHORIZED_KEYS=$(grep -Ev "^(#|$S*\$)" "$KEYS_FILE" |
 
 while VM_STATE=$(lk_maybe_sudo virsh domstate "$VM_HOSTNAME" 2>/dev/null); do
     [ "$VM_STATE" != "shut off" ] || unset VM_STATE
-    lk_console_error "Domain already exists:" "$VM_HOSTNAME"
+    lk_tty_error "Domain already exists:" "$VM_HOSTNAME"
     PROMPT=(
         "OK to"
         ${VM_STATE+"force off,"}
@@ -633,7 +633,7 @@ while VM_STATE=$(lk_maybe_sudo virsh domstate "$VM_HOSTNAME" 2>/dev/null); do
         --remove-all-storage "$VM_HOSTNAME" || true
 done
 
-lk_console_message "Provisioning:"
+lk_tty_print "Provisioning:"
 _VM_PACKAGES=${VM_PACKAGES//,/, }
 _VM_IPV4_ADDRESS=${VM_IPV4_CIDR:+$VM_IPV4_CIDR (gateway: $VM_IPV4_GATEWAY)}
 _VM_NETWORK=$VM_NETWORK
@@ -657,14 +657,14 @@ printf '%s\t%s\n' \
     "Libvirt service" "$LIBVIRT_URI" \
     "Disk image path" "$POOL_ROOT" | IFS=$'\t' lk_tty_detail_pairs
 [ -z "$STACKSCRIPT" ] ||
-    lk_console_detail "StackScript environment:" \
+    lk_tty_detail "StackScript environment:" \
         $'\n'"$([ ${#SS_FIELDS[@]} -eq 0 ] && echo "<empty>" ||
             lk_echo_array SS_FIELDS | sort)"
-lk_console_blank
+lk_tty_print
 lk_confirm "OK to proceed?" Y || lk_die ""
 
 {
-    lk_elevate_if_error install -d -m 01777 \
+    lk_elevate -f install -d -m 01777 \
         "$LK_BASE/var/cache"{,/cloud-images,/NoCloud} 2>/dev/null &&
         cd "$LK_BASE/var/cache/cloud-images" ||
         lk_die "error creating cache directories"
@@ -672,7 +672,7 @@ lk_confirm "OK to proceed?" Y || lk_die ""
     FILENAME=${IMAGE_URL##*/}
     IMG_NAME=${FILENAME%.*}
     if [ ! -f "$FILENAME" ] || lk_is_true REFRESH_CLOUDIMG; then
-        lk_console_item "Downloading" "$FILENAME"
+        lk_tty_print "Downloading" "$FILENAME"
         wget --no-cache --timestamping "$IMAGE_URL" || {
             rm -f "$FILENAME"
             lk_die "error downloading $IMAGE_URL"
@@ -694,29 +694,29 @@ lk_confirm "OK to proceed?" Y || lk_die ""
     TIMESTAMP=$(lk_file_modified "$FILENAME")
     CLOUDIMG_PATH=$CLOUDIMG_ROOT/$IMG_NAME-$TIMESTAMP.qcow2
     if lk_maybe_sudo test -f "$CLOUDIMG_PATH"; then
-        lk_console_item "Backing file already available:" "$CLOUDIMG_PATH"
+        lk_tty_print "Backing file already available:" "$CLOUDIMG_PATH"
     else
         awk -F '[*U^[:blank:]]+' -v "f=$FILENAME" \
             '$2 == f { print }' "SHASUMS-$IMAGE_NAME" |
             lk_require_output tail -n1 |
             shasum -a "${SHA_ALGORITHM:-256}" -c &&
-            lk_console_success "Verified" "$FILENAME" ||
+            lk_tty_success "Verified" "$FILENAME" ||
             lk_die "verification failed: $PWD/$FILENAME"
         CLOUDIMG_FORMAT=$(qemu-img info --output=json "$FILENAME" |
             jq -r .format)
         if [ "$CLOUDIMG_FORMAT" != qcow2 ]; then
-            lk_console_message \
+            lk_tty_print \
                 "Converting $CLOUDIMG_FORMAT image to $CLOUDIMG_PATH"
             lk_maybe_sudo \
                 qemu-img convert -pO qcow2 "$FILENAME" "$CLOUDIMG_PATH"
         else
-            lk_console_message \
+            lk_tty_print \
                 "Copying $CLOUDIMG_FORMAT image to $CLOUDIMG_PATH"
             lk_maybe_sudo cp -v "$FILENAME" "$CLOUDIMG_PATH"
         fi
         lk_maybe_sudo touch -r "$FILENAME" "$CLOUDIMG_PATH" &&
             lk_maybe_sudo chmod -v 444 "$CLOUDIMG_PATH" &&
-            lk_console_item "Backing file installed successfully:" \
+            lk_tty_print "Backing file installed successfully:" \
                 "$CLOUDIMG_PATH"
     fi
 
@@ -724,7 +724,7 @@ lk_confirm "OK to proceed?" Y || lk_die ""
     DISK_PATH=$POOL_ROOT/$IMAGE_BASENAME.qcow2
     NOCLOUD_PATH=$POOL_ROOT/$IMAGE_BASENAME-cloud-init.qcow2
     if [ -e "$DISK_PATH" ]; then
-        lk_console_error "Disk image already exists:" "$DISK_PATH"
+        lk_tty_error "Disk image already exists:" "$DISK_PATH"
         lk_is_true FORCE_DELETE || LK_FORCE_INPUT=1 lk_confirm \
             "Destroy the existing image and start over?" N ||
             lk_die ""
@@ -989,13 +989,13 @@ dns-nameservers $VM_IPV4_GATEWAY" '{
     lk_maybe_sudo install -m 00644 /dev/null "$NOCLOUD_PATH"
     lk_maybe_sudo qemu-img convert -O qcow2 "$FILE" "$NOCLOUD_PATH"
 
-    lk_console_message "Creating virtual machine"
-    lk_run_detail lk_maybe_sudo qemu-img create \
+    lk_tty_print "Creating virtual machine"
+    lk_tty_run_detail lk_maybe_sudo qemu-img create \
         -f "qcow2" \
         -b "$CLOUDIMG_PATH" \
         -F "qcow2" \
         "$DISK_PATH"
-    lk_run_detail lk_maybe_sudo qemu-img resize \
+    lk_tty_run_detail lk_maybe_sudo qemu-img resize \
         -f "qcow2" \
         "$DISK_PATH" \
         "$VM_DISK_SIZE" || lk_die ""
@@ -1040,7 +1040,7 @@ dns-nameservers $VM_IPV4_GATEWAY" '{
 
     FILE=$(lk_mktemp_file)
     lk_delete_on_exit "$FILE"
-    lk_run_detail lk_maybe_sudo virt-install \
+    lk_tty_run_detail lk_maybe_sudo virt-install \
         --connect "$LIBVIRT_URI" \
         --name "$VM_HOSTNAME" \
         --memory "$VM_MEMORY" \
@@ -1053,16 +1053,16 @@ dns-nameservers $VM_IPV4_GATEWAY" '{
         ${VIRT_OPTIONS[@]+"${VIRT_OPTIONS[@]}"} \
         --virt-type "$VIRT_TYPE" \
         --print-xml >"$FILE"
-    lk_run_detail lk_maybe_sudo virsh --connect "$LIBVIRT_URI" \
+    lk_tty_run_detail lk_maybe_sudo virsh --connect "$LIBVIRT_URI" \
         define "$FILE"
     for i in $(
         [ ${#METADATA[@]} -eq 0 ] ||
             seq 0 3 $((${#METADATA[@]} - 1))
     ); do
-        lk_run_detail lk_maybe_sudo virsh --connect "$LIBVIRT_URI" \
+        lk_tty_run_detail lk_maybe_sudo virsh --connect "$LIBVIRT_URI" \
             metadata "$VM_HOSTNAME" "${METADATA[@]:i:3}"
     done
-    lk_run_detail lk_maybe_sudo virsh --connect "$LIBVIRT_URI" \
+    lk_tty_run_detail lk_maybe_sudo virsh --connect "$LIBVIRT_URI" \
         start "$VM_HOSTNAME" --console
 
     exit

@@ -123,17 +123,17 @@ Usage: $FUNCNAME DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..."
         shift 3
     done
     LOG_FILE=$(lk_mktemp_file) || return
-    ! lk_verbose || lk_console_message \
+    ! lk_verbose || lk_tty_print \
         "Updating file modes in $(lk_tty_path "$DIR")"
     for i in "${!MATCH[@]}"; do
         [ -n "${DIR_MODE[$i]:+1}${FILE_MODE[$i]:+1}" ] || continue
-        ! lk_verbose 2 || lk_console_item "Checking:" "${MATCH[$i]}"
+        ! lk_verbose 2 || lk_tty_print "Checking:" "${MATCH[$i]}"
         CHANGES=0
         for TYPE in DIR_MODE FILE_MODE; do
             MODE=${TYPE}"[$i]"
             MODE=${!MODE}
             [ -n "$MODE" ] || continue
-            ! lk_verbose 2 || lk_console_detail "$([ "$TYPE" = DIR_MODE ] &&
+            ! lk_verbose 2 || lk_tty_detail "$([ "$TYPE" = DIR_MODE ] &&
                 echo Directory ||
                 echo File) mode:" "$MODE"
             ARGS=(-regextype posix-egrep)
@@ -162,19 +162,19 @@ Usage: $FUNCNAME DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..."
                 tee -a "$LOG_FILE" | wc -l) || return
             ((CHANGES += _CHANGES)) || true
         done
-        ! lk_verbose 2 || lk_console_detail "Changes:" "$LK_BOLD$CHANGES"
+        ! lk_verbose 2 || lk_tty_detail "Changes:" "$LK_BOLD$CHANGES"
         ((TOTAL += CHANGES)) || true
     done
     ! lk_verbose && ! ((TOTAL)) ||
         $(lk_verbose &&
-            echo "lk_console_message" ||
-            echo "lk_console_detail") \
+            echo "lk_tty_print" ||
+            echo "lk_tty_detail") \
             "$TOTAL file $(lk_plural \
                 "$TOTAL" mode modes) updated$(lk_verbose ||
                     echo " in $(lk_tty_path "$DIR")")"
     ! ((TOTAL)) &&
         lk_delete_on_exit "$LOG_FILE" ||
-        lk_console_detail "Changes logged to:" "$LOG_FILE"
+        lk_tty_detail "Changes logged to:" "$LOG_FILE"
 }
 
 function lk_sudo_add_nopasswd() {
@@ -200,7 +200,7 @@ function lk_sudo_offer_nopasswd() {
             "Allow '$USER' to run commands as root with no password?" N ||
             return 0
         lk_sudo_add_nopasswd "$USER" &&
-            lk_console_message \
+            lk_tty_print \
                 "User '$USER' may now run any command as any user"
     }
 }
@@ -347,7 +347,7 @@ Usage: $FUNCNAME [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
         ssh-keygen -l -f "$KEY_FILE" &>/dev/null || {
             # `ssh-keygen -l -f FILE` exits without error if FILE contains an
             # OpenSSH public key
-            lk_console_log "Reading $KEY_FILE to create public key file"
+            lk_tty_log "Reading $KEY_FILE to create public key file"
             KEY=$(unset DISPLAY && ssh-keygen -y -f "$KEY_FILE") &&
                 lk_install -m 00600 "$KEY_FILE.pub" &&
                 lk_file_replace "$KEY_FILE.pub" "$KEY" || return
@@ -515,10 +515,10 @@ function lk_hosts_file_add() {
         lk_file_keep_original "$FILE" &&
             lk_file_replace "$FILE" "$_FILE"
     else
-        lk_console_item "You do not have permission to edit" "$FILE"
+        lk_tty_print "You do not have permission to edit" "$FILE"
         FILE=$(lk_mktemp_file) &&
             echo "$_FILE" >"$FILE" &&
-            lk_console_detail "Updated hosts file written to:" "$FILE"
+            lk_tty_detail "Updated hosts file written to:" "$FILE"
     fi
 }
 
@@ -586,19 +586,19 @@ function lk_host_ns_resolve() {
     _LK_DNS_SERVER=$NAMESERVER
     _LK_DIG_OPTIONS=(+norecurse)
     ! lk_verbose 2 || {
-        lk_console_detail "Using name server:" "$NAMESERVER"
-        lk_console_detail "Looking up A and AAAA records for:" "$1"
+        lk_tty_detail "Using name server:" "$NAMESERVER"
+        lk_tty_detail "Looking up A and AAAA records for:" "$1"
     }
     IP=($(lk_dns_get_records +VALUE -A,AAAA "$1")) || return
     if [ ${#IP[@]} -eq 0 ]; then
         ! lk_verbose 2 || {
-            lk_console_detail "No A or AAAA records returned"
-            lk_console_detail "Looking up CNAME record for:" "$1"
+            lk_tty_detail "No A or AAAA records returned"
+            lk_tty_detail "Looking up CNAME record for:" "$1"
         }
         CNAME=($(lk_dns_get_records +VALUE -CNAME "$1")) || return
         if [ ${#CNAME[@]} -eq 1 ]; then
             ! lk_verbose 2 ||
-                lk_console_detail "CNAME value from $NAMESERVER for $1:" \
+                lk_tty_detail "CNAME value from $NAMESERVER for $1:" \
                     "${CNAME[0]}"
             lk_host_ns_resolve "${CNAME[0]%.}" || return
             return
@@ -606,7 +606,7 @@ function lk_host_ns_resolve() {
     fi
     [ ${#IP[@]} -gt 0 ] || lk_warn "could not resolve $1: $NAMESERVER" || return
     ! lk_verbose 2 ||
-        lk_console_detail "A and AAAA values from $NAMESERVER for $1:" \
+        lk_tty_detail "A and AAAA values from $NAMESERVER for $1:" \
             "$(lk_echo_array IP)"
     lk_echo_array IP
 } #### Reviewed: 2021-03-30
@@ -915,13 +915,13 @@ function _lk_crontab() {
     esac || return
     if [ -z "$NEW_CRONTAB" ]; then
         [ -n "${NEW+1}" ] || {
-            lk_console_message "Removing empty crontab for user '$(lk_me)'"
+            lk_tty_print "Removing empty crontab for user '$(lk_me)'"
             lk_maybe_sudo crontab -r
         }
     else
         [ "$NEW_CRONTAB" = "$CRONTAB" ] || {
             local VERB=
-            lk_console_diff \
+            lk_tty_diff \
                 <([ -z "$CRONTAB" ] || cat <<<"$CRONTAB") \
                 <(cat <<<"$NEW_CRONTAB") \
                 "${NEW+Creating}${NEW-Updating} crontab for user '$(lk_me)'"

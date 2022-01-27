@@ -47,12 +47,12 @@ function lk_mediainfo_check() {
         LK_MEDIAINFO_VALUES+=("$VALUE")
         if [ -n "${VALUE// /}" ]; then
             lk_script_running && ! lk_verbose ||
-                lk_console_log "${FILE#./}:" \
+                lk_tty_log "${FILE#./}:" \
                     "$LK_MEDIAINFO_LABEL$VALUE"
         else
             LK_MEDIAINFO_EMPTY_FILES+=("$FILE")
             lk_script_running && ! lk_verbose ||
-                lk_console_warning "${FILE#./}:" \
+                lk_tty_warning "${FILE#./}:" \
                     "$LK_MEDIAINFO_LABEL$LK_MEDIAINFO_NO_VALUE"
         fi
     done < <(
@@ -61,12 +61,12 @@ function lk_mediainfo_check() {
             find -L . -type f ! -name '.*' -print0
     )
     lk_script_running && ! lk_verbose 2 || {
-        lk_console_message \
+        lk_tty_print \
             "$COUNT $(lk_plural "$COUNT" file files) checked"
-        lk_console_detail \
+        lk_tty_detail \
             "File names and mediainfo output saved at same indices in arrays:" \
             $'LK_MEDIAINFO_FILES\nLK_MEDIAINFO_VALUES'
-        lk_console_detail \
+        lk_tty_detail \
             "Names of files where mediainfo output was empty saved in array:" \
             $'\nLK_MEDIAINFO_EMPTY_FILES'
     }
@@ -108,7 +108,7 @@ function lk_vscode_extension_disable() {
             '[.[]|select(.id==$id)]|length' <<<"$JSON") ||
         return
     [ "$DISABLED" -gt 0 ] || {
-        lk_console_detail "Disabling VS Code extension:" "$1"
+        lk_tty_detail "Disabling VS Code extension:" "$1"
         JSON=$(jq -c --arg id "$1" '.+[{"id":$id}]' <<<"$JSON") &&
             lk_vscode_state_set_item "$KEY" "$JSON"
     }
@@ -161,7 +161,7 @@ function lk_nextcloud_get_excluded() {
         FIND=(find . \( "${FIND[@]}" \) -print0)
         lk_mapfile -z FILES <("${FIND[@]}" | sort -zu)
         [ ${#FILES[@]} -eq 0 ] &&
-            lk_console_message \
+            lk_tty_print \
                 "No files excluded by $(lk_tty_path "$EXCLUDE_FILE")" ||
             lk_tty_list FILES \
                 "Excluded by $(lk_tty_path "$EXCLUDE_FILE"):" file files

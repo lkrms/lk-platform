@@ -25,19 +25,19 @@ if lk_is_bootstrap; then
         [[ $1 == *.* ]] || set -- "$1.service" "${@:2}"
         [ ! -e "/usr/lib/systemd/system/$1" ] &&
             [ ! -e "/etc/systemd/system/$1" ] || {
-            lk_console_detail "Enabling service:" "${2:-$1}"
+            lk_tty_detail "Enabling service:" "${2:-$1}"
             sudo systemctl enable "$1"
         }
     }
     function systemctl_mask() {
         [[ $1 == *.* ]] || set -- "$1.service" "${@:2}"
-        lk_console_detail "Masking service:" "${2:-$1}"
+        lk_tty_detail "Masking service:" "${2:-$1}"
         sudo systemctl mask "$1"
     }
     function lk_systemctl_stop() {
         true
     }
-    lk_console_blank
+    lk_tty_print
 else
     function systemctl_enable() {
         local NO_START_REGEX='\<NetworkManager-dispatcher\>'
@@ -56,9 +56,9 @@ fi
 
 function service_apply() {
     local i _ERRORS=${#ERRORS[@]}
-    lk_console_message "Checking services"
+    lk_tty_print "Checking services"
     lk_is_bootstrap || ! lk_is_true DAEMON_RELOAD ||
-        lk_run_detail sudo systemctl daemon-reload ||
+        lk_tty_run_detail sudo systemctl daemon-reload ||
         ERRORS+=("Command failed: systemctl daemon-reload")
     [ ${#SERVICE_ENABLE[@]} -eq 0 ] ||
         for i in $(seq 0 2 $((${#SERVICE_ENABLE[@]} - 1))); do
@@ -70,7 +70,7 @@ function service_apply() {
             <(lk_arr SERVICE_RESTART | sort -u) \
             <(lk_arr SERVICE_STARTED | sort -u))) && {
             [ ${#SERVICE_RESTART[@]} -eq 0 ] || {
-                lk_console_message "Restarting services with changed settings"
+                lk_tty_print "Restarting services with changed settings"
                 for SERVICE in "${SERVICE_RESTART[@]}"; do
                     lk_systemctl_restart "$SERVICE" ||
                         ERRORS+=("Could not restart service: $SERVICE")
@@ -114,14 +114,14 @@ function process_interface() {
 
 function link_rename() {
     . "$LK_BASE/lib/bash/include/core.sh"
-    lk_run_detail udevadm control --reload
+    lk_tty_run_detail udevadm control --reload
     while [ $# -ge 2 ]; do
         { ! lk_require_output -q \
             nmcli -g GENERAL.CONNECTION device show "$1" 2>/dev/null ||
-            lk_run_detail nmcli device disconnect "$1"; } &&
-            lk_run_detail ip link set "$1" down &&
-            lk_run_detail ip link set "$1" name "$2" &&
-            lk_run_detail ip link set "$2" up ||
+            lk_tty_run_detail nmcli device disconnect "$1"; } &&
+            lk_tty_run_detail ip link set "$1" down &&
+            lk_tty_run_detail ip link set "$1" name "$2" &&
+            lk_tty_run_detail ip link set "$2" up ||
             return
         shift 2
     done
@@ -174,12 +174,12 @@ lk_log_tty_stdout_off
 lk_start_trace
 
 {
-    lk_console_log "Provisioning Arch Linux"
+    lk_tty_log "Provisioning Arch Linux"
     lk_sudo_offer_nopasswd || lk_die "unable to run commands as root"
-    ! lk_is_bootstrap || lk_console_detail "Bootstrap environment detected"
+    ! lk_is_bootstrap || lk_tty_detail "Bootstrap environment detected"
     GROUP=$(id -gn)
     MEMORY=$(lk_system_memory 2)
-    lk_console_detail "System memory:" "${MEMORY}M"
+    lk_tty_detail "System memory:" "${MEMORY}M"
 
     LK_SUDO=1
     LK_FILE_BACKUP_TAKE=${LK_FILE_BACKUP_TAKE-$(lk_is_bootstrap || echo 1)}
@@ -195,20 +195,20 @@ lk_start_trace
     DAEMON_RELOAD=
 
     if [ -n "${LK_NODE_TIMEZONE-}" ]; then
-        lk_console_message "Checking system time zone"
+        lk_tty_print "Checking system time zone"
         FILE=/usr/share/zoneinfo/$LK_NODE_TIMEZONE
         lk_symlink "$FILE" /etc/localtime
     fi
 
     if [ ! -e /etc/adjtime ]; then
-        lk_console_message "Setting hardware clock"
-        lk_run_detail sudo hwclock --systohc
+        lk_tty_print "Setting hardware clock"
+        lk_tty_run_detail sudo hwclock --systohc
     fi
 
-    lk_console_message "Checking locales"
+    lk_tty_print "Checking locales"
     lk_configure_locales
 
-    lk_console_message "Checking interfaces"
+    lk_tty_print "Checking interfaces"
     systemctl_enable NetworkManager "Network Manager"
     unset LK_FILE_REPLACE_NO_CHANGE
     NM_DIR=/etc/NetworkManager/system-connections
@@ -241,7 +241,7 @@ lk_start_trace
                 PREV_FILE=$NM_DIR/$IF$NM_EXT
                 ! sudo test -e "$PREV_FILE" -a ! -e "$FILE" || {
                     LK_FILE_REPLACE_NO_CHANGE=0
-                    lk_run_detail sudo mv -n "$PREV_FILE" "$FILE"
+                    lk_tty_run_detail sudo mv -n "$PREV_FILE" "$FILE"
                 }
             }
             # Install a connection profile for this interface and/or the bridge
@@ -283,7 +283,7 @@ lk_start_trace
             [ ${#NM_FILES[@]} -eq 0 ] || {
                 LK_FILE_REPLACE_NO_CHANGE=0
                 lk_file_backup "${NM_FILES[@]}" &&
-                    lk_run_detail sudo rm "${NM_FILES[@]}"
+                    lk_tty_run_detail sudo rm "${NM_FILES[@]}"
             }
         done
     fi
@@ -304,7 +304,7 @@ lk_start_trace
                 [ ${#NM_FILES[@]} -eq 0 ] || {
                     LK_FILE_REPLACE_NO_CHANGE=0
                     lk_file_backup "${NM_FILES[@]}" &&
-                        lk_run_detail lk_sudo sed -Ei \
+                        lk_tty_run_detail lk_sudo sed -Ei \
                             "s/^(interface-name=)$IF\$/\\1$IF_NAME/" \
                             "${NM_FILES[@]}"
                 }
@@ -331,7 +331,7 @@ lk_start_trace
                     <(lk_arr IF_RENAME | sort) \
                     <(lk_arr ETHERNET | sort)))
                 [ ${#IF_RENAME[@]} -gt 0 ] || exit 0
-                lk_console_detail \
+                lk_tty_detail \
                     "Waiting for renamed Ethernet interfaces to settle"
                 while :; do
                     sleep 2
@@ -348,7 +348,7 @@ lk_start_trace
 
     if lk_require_output -q lk_system_list_wifi_links &&
         lk_pac_installed crda; then
-        lk_console_message "Checking wireless regulatory domain"
+        lk_tty_print "Checking wireless regulatory domain"
         [[ ${LK_WIFI_REGDOM-} =~ ^(00|[A-Z]{2})?$ ]] ||
             lk_die "invalid regulatory domain: $LK_WIFI_REGDOM"
         FILE=/etc/conf.d/wireless-regdom
@@ -373,15 +373,15 @@ lk_start_trace
         fi
     done
     ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
-        lk_run_detail sudo udevadm control --reload
+        lk_tty_run_detail sudo udevadm control --reload
 
     if [ -n "${LK_NODE_HOSTNAME-}" ]; then
-        lk_console_message "Checking system hostname"
+        lk_tty_print "Checking system hostname"
         FILE=/etc/hostname
         lk_install -m 00644 "$FILE"
         lk_file_replace "$FILE" "$LK_NODE_HOSTNAME"
 
-        lk_console_message "Checking hosts file"
+        lk_tty_print "Checking hosts file"
         FILE=/etc/hosts
         IP_ADDRESS=127.0.1.1
         [ ${#ETHERNET[@]} -eq 0 ] || {
@@ -406,33 +406,33 @@ $LK_NODE_HOSTNAME" &&
         lk_file_keep_original "$FILE"
         lk_file_replace -i "^(#|$S*\$)" "$FILE" "$_FILE"
     else
-        lk_console_error \
+        lk_tty_error \
             "Cannot check hostname or /etc/hosts: LK_NODE_HOSTNAME is not set"
     fi
 
-    lk_console_message "Checking systemd default target"
+    lk_tty_print "Checking systemd default target"
     lk_is_desktop &&
         DEFAULT_TARGET=graphical.target ||
         DEFAULT_TARGET=multi-user.target
     CURRENT_DEFAULT_TARGET=$(${_LK_BOOTSTRAP:+sudo} systemctl get-default)
     [ "$CURRENT_DEFAULT_TARGET" = "$DEFAULT_TARGET" ] ||
-        lk_run_detail sudo systemctl set-default "$DEFAULT_TARGET"
+        lk_tty_run_detail sudo systemctl set-default "$DEFAULT_TARGET"
 
-    lk_console_message "Checking root account"
+    lk_tty_print "Checking root account"
     lk_user_lock_passwd root
 
-    lk_console_message "Checking sudo"
+    lk_tty_print "Checking sudo"
     FILE=/etc/sudoers.d/${LK_PATH_PREFIX}default-arch
     lk_install -m 00440 "$FILE"
     lk_file_replace -f "$LK_BASE/share/sudoers.d/default-arch" "$FILE"
 
-    lk_console_message "Checking default umask"
+    lk_tty_print "Checking default umask"
     FILE=/etc/profile.d/Z90-${LK_PATH_PREFIX}umask.sh
     lk_install -m 00644 "$FILE"
     lk_file_replace -f "$LK_BASE/share/profile.d/umask.sh" "$FILE"
 
     if [ -d /etc/polkit-1/rules.d ]; then
-        lk_console_message "Checking polkit rules"
+        lk_tty_print "Checking polkit rules"
         FILE=/etc/polkit-1/rules.d/49-wheel.rules
         # polkit fails with "error compiling script" unless file mode is 644
         lk_install -m 00644 "$FILE"
@@ -441,7 +441,7 @@ $LK_NODE_HOSTNAME" &&
             "$FILE"
     fi
 
-    lk_console_message "Checking kernel parameters"
+    lk_tty_print "Checking kernel parameters"
     unset LK_FILE_REPLACE_NO_CHANGE
     for FILE in default.conf \
         $(! lk_node_is_router || echo router.conf) \
@@ -455,7 +455,7 @@ $LK_NODE_HOSTNAME" &&
         sudo sysctl --system
 
     if lk_pac_installed tlp; then
-        lk_console_message "Checking TLP"
+        lk_tty_print "Checking TLP"
         unset LK_FILE_REPLACE_NO_CHANGE
         FILE=/etc/tlp.d/90-${LK_PATH_PREFIX}default.conf
         lk_install -m 00644 "$FILE"
@@ -476,7 +476,7 @@ $LK_NODE_HOSTNAME" &&
             SERVICE_RESTART+=(tlp)
     fi
 
-    lk_console_message "Checking console display power management"
+    lk_tty_print "Checking console display power management"
     unset LK_FILE_REPLACE_NO_CHANGE
     FILE=/etc/systemd/system/setterm-enable-blanking.service
     lk_install -m 00644 "$FILE"
@@ -493,7 +493,7 @@ $LK_NODE_HOSTNAME" &&
 
     ROOT_DEVICE=$(findmnt --noheadings --target / --output SOURCE)
     if lk_block_device_is_ssd "$ROOT_DEVICE"; then
-        lk_console_message "Checking fstrim"
+        lk_tty_print "Checking fstrim"
         unset LK_FILE_REPLACE_NO_CHANGE
         FILE=/etc/systemd/system/fstrim.timer
         lk_install -m 00644 "$FILE"
@@ -506,7 +506,7 @@ $LK_NODE_HOSTNAME" &&
     fi
 
     if [ -n "${LK_NTP_SERVER-}" ]; then
-        lk_console_message "Checking NTP"
+        lk_tty_print "Checking NTP"
         unset LK_FILE_REPLACE_NO_CHANGE
         FILE=/etc/ntp.conf
         lk_file_keep_original "$FILE"
@@ -522,7 +522,7 @@ $LK_NODE_HOSTNAME" &&
         ntpd "NTP"
     )
 
-    lk_console_message "Checking SSH server"
+    lk_tty_print "Checking SSH server"
     unset LK_FILE_REPLACE_NO_CHANGE
     LK_CONF_OPTION_FILE=/etc/ssh/sshd_config
     lk_ssh_set_option PermitRootLogin "no"
@@ -542,7 +542,7 @@ $LK_NODE_HOSTNAME" &&
     service_apply
 
     if ! lk_is_bootstrap && lk_pac_installed grub; then
-        lk_console_message "Checking boot loader"
+        lk_tty_print "Checking boot loader"
         unset LK_FILE_REPLACE_NO_CHANGE
         lk_arch_configure_grub
         ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
@@ -571,12 +571,12 @@ $LK_NODE_HOSTNAME" &&
         fi
     fi
 
-    lk_console_blank
+    lk_tty_print
     LK_NO_LOG=1 \
         lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh"
 
-    lk_console_blank
-    lk_console_log "Checking packages"
+    lk_tty_print
+    lk_tty_log "Checking packages"
     lk_arch_configure_pacman
     [ -z "$LK_PACKAGES_FILE" ] ||
         . "$LK_PACKAGES_FILE"
@@ -597,15 +597,15 @@ $LK_NODE_HOSTNAME" &&
     LK_SUDO=1
 
     if lk_command_exists aur ||
-        { [ ${#AUR_PACKAGES[@]} -gt 0 ] && lk_confirm \
+        { [ ${#AUR_PACKAGES[@]} -gt 0 ] && lk_tty_yn \
             "OK to install aurutils for AUR package management?" Y; }; then
         lk_log_tty_on
-        lk_console_message "Checking AUR packages"
+        lk_tty_print "Checking AUR packages"
         PAC_INSTALL=($(lk_pac_not_installed_list \
             ${PAC_BASE_DEVEL+"${PAC_BASE_DEVEL[@]}"} \
             devtools pacutils vifm))
         [ ${#PAC_INSTALL[@]} -eq 0 ] || {
-            lk_console_detail "Installing aurutils dependencies"
+            lk_tty_detail "Installing aurutils dependencies"
             lk_faketty pacman -S --noconfirm "${PAC_INSTALL[@]}"
         }
 
@@ -615,7 +615,7 @@ $LK_NODE_HOSTNAME" &&
             sed 's#^file://##'; } 2>/dev/null) && [ -d "$DIR" ] ||
             DIR=/srv/repo/aur
         FILE=$DIR/aur.db.tar.xz
-        lk_console_detail "Checking pacman repo at" "$DIR"
+        lk_tty_detail "Checking pacman repo at" "$DIR"
         lk_install -d -m 00755 -o "$USER" -g "$GROUP" "$DIR"
         [ -e "$FILE" ] ||
             (LK_SUDO= && lk_faketty repo-add "$FILE")
@@ -630,7 +630,7 @@ $LK_NODE_HOSTNAME" &&
         if ! lk_command_exists aur ||
             ! lk_pac_repo_available_list aur |
             grep -Fx aurutils >/dev/null; then
-            lk_console_detail "Installing aurutils"
+            lk_tty_detail "Installing aurutils"
             PKGDEST=$DIR lk_makepkg -a aurutils --force
             lk_files_exist "${LK_MAKEPKG_LIST[@]}" ||
                 lk_die "not found: ${LK_MAKEPKG_LIST[*]}"
@@ -676,7 +676,7 @@ $LK_NODE_HOSTNAME" &&
     fi
     _PAC_KEEP=($(lk_arr PAC_KEEP | sed -E '/^aurutils$/d'))
 
-    lk_console_message "Checking install reasons"
+    lk_tty_print "Checking install reasons"
     PAC_EXPLICIT=($(lk_arr PAC_PACKAGES AUR_PACKAGES PAC_KEEP | sort -u))
     PAC_MARK_EXPLICIT=($(lk_pac_installed_not_explicit "${PAC_EXPLICIT[@]}"))
     PAC_UNMARK_EXPLICIT=($(comm -13 \
@@ -706,7 +706,7 @@ $LK_NODE_HOSTNAME" &&
         PAC_REMOVE+=("${PAC_REJECT[@]}")
     }
     [ ${#PAC_REMOVE[@]} -eq 0 ] || {
-        lk_console_message \
+        lk_tty_print \
             "Removing $(lk_implode_arr " and " REMOVE_MESSAGE) packages"
         lk_log_bypass lk_faketty pacman -Rdds --noconfirm "${PAC_REMOVE[@]}"
     }
@@ -750,8 +750,8 @@ $LK_NODE_HOSTNAME" &&
     lk_symlink_bin vim vi || true
     lk_symlink_bin xfce4-terminal xterm || true
 
-    lk_console_blank
-    lk_console_log "Checking installed packages and services"
+    lk_tty_print
+    lk_tty_log "Checking installed packages and services"
     SERVICE_ENABLE+=(
         lightdm "LightDM"
         cups "CUPS"
@@ -999,8 +999,8 @@ done\""
     if lk_pac_installed squid; then
         unset LK_FILE_REPLACE_NO_CHANGE
         FILE=/etc/squid/squid.conf
-        grep -Eq "^$S*cache_dir$S+" "$FILE" ||
-            lk_squid_set_option cache_dir "aufs /var/cache/squid 20000 16 256"
+        grep -Eq "^$S*cache_dir$S+" "$FILE" || lk_squid_set_option \
+            cache_dir "aufs /var/cache/squid 20000 16 256" "$FILE"
         lk_user_in_group proxy ||
             sudo usermod --append --groups proxy "$USER"
         SERVICE_ENABLE+=(
@@ -1087,7 +1087,7 @@ done\""
         ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
             SERVICE_RESTART+=(smb nmb)
         sudo pdbedit -L | cut -d: -f1 | grep -Fx "$USER" >/dev/null ||
-            lk_console_detail \
+            lk_tty_detail \
                 "User '$USER' not found in Samba user database. To fix, run:" \
                 $'\n'"sudo smbpasswd -a $USER"
     fi
@@ -1095,19 +1095,19 @@ done\""
     service_apply || true
 
     if [ ${#ERRORS[@]} -eq 0 ]; then
-        lk_console_success "Provisioning complete"
+        lk_tty_success "Provisioning complete"
     else
-        lk_console_error "Provisioning completed with errors"
+        lk_tty_error "Provisioning completed with errors"
         for ERROR in "${ERRORS[@]}"; do
-            lk_console_detail "$ERROR"
+            lk_tty_detail "$ERROR"
         done
         lk_die ""
     fi
 
     ! lk_arch_reboot_required || {
-        lk_console_blank
-        lk_console_warning "Reboot required"
-        lk_confirm "Reboot now?" N -t 5 || exit 0
+        lk_tty_print
+        lk_tty_warning "Reboot required"
+        lk_tty_yn "Reboot now?" N -t 5 || exit 0
         sudo shutdown -r now
     }
 

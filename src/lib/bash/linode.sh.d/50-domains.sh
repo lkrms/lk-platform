@@ -79,7 +79,7 @@ END {
     lk_confirm "OK to delete $(lk_plural -v \
         $(wc -l <<<"$DUP") record records)?" Y || return
     lk_linode_flush_cache
-    lk_xargs lk_run_detail \
+    lk_xargs lk_tty_run_detail \
         linode-cli domains records-delete "$DOMAIN_ID" < <(cut -f1 <<<"$DUP")
 }
 
@@ -194,7 +194,7 @@ include "core";
             lk_warn "unable to add RDNS record" || return
         lk_linode_flush_cache
         ((++NEW_REVERSE_RECORD_COUNT))
-        lk_console_detail "Record added"
+        lk_tty_detail "Record added"
     done < <(comm -23 \
         <(sort <<<"$_REVERSE") \
         <(sort <<<"$REVERSE"))
@@ -222,5 +222,5 @@ function lk_linode_dns_check_all() {
     lk_confirm "Proceed?" Y || return
     LK_VERBOSE=1 \
         lk_linode_dns_check ${USE_TAGS:+-t} "$LINODES" "$1" "${@:2}" || return
-    lk_console_success "DNS check complete"
+    lk_tty_success "DNS check complete"
 }

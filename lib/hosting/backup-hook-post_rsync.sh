@@ -6,11 +6,11 @@ for MYSQL_SERVICE in mariadb mysql mysqld; do
 done
 
 [ -n "$MYSQL_SERVICE" ] || {
-    lk_console_message "Skipping database backup (no running MySQL service)"
+    lk_tty_print "Skipping database backup (no running MySQL service)"
     return 0
 }
 
-[ "$STATUS" -eq 0 ] || lk_console_warning \
+[ "$STATUS" -eq 0 ] || lk_tty_warning \
     "WARNING: because rsync failed to complete, database backups may only be \
 useful for diagnostic purposes"
 
@@ -34,7 +34,7 @@ else
         lk_tty_list_detail MYSQL_DUMP_ARGS \
             "MySQL databases found for user '$OWNER':" database databases
     else
-        lk_console_detail "No MySQL databases found for user '$OWNER'"
+        lk_tty_detail "No MySQL databases found for user '$OWNER'"
         return
     fi
 fi
@@ -49,6 +49,6 @@ LK_BACKUP_TIMESTAMP='' \
     --dest "$LK_SNAPSHOT_DB" \
     ${SNAPSHOT_GROUP:+--group "$SNAPSHOT_GROUP"} \
     "${MYSQL_DUMP_ARGS[@]}" || return
-lk_console_message \
+lk_tty_print \
     "Running rsync again in case of filesystem changes since first rsync"
 run_rsync || return

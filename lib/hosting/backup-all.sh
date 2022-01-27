@@ -66,9 +66,9 @@ lk_start_trace
             --group \
             --chown="root:$GROUP" \
             "$@" &&
-            lk_console_success "${MESSAGE}completed successfully:" "$SOURCE" || {
+            lk_tty_success "${MESSAGE}completed successfully:" "$SOURCE" || {
             EXIT_STATUS=$?
-            lk_console_error \
+            lk_tty_error \
                 "${MESSAGE}failed to complete (exit status $EXIT_STATUS):" \
                 "$SOURCE"
             continue
@@ -78,7 +78,7 @@ lk_start_trace
         lk_symlink "$BACKUP_ROOT/archive/${SOURCE##*/}" "$SOURCE/backup-archive"
     done
 
-    lk_console_message "Backing up system files"
+    lk_tty_print "Backing up system files"
     lk_log_bypass \
         lk_maybe_trace "$LK_BASE/bin/lk-backup-create-snapshot.sh" \
         --filter "$LK_BASE/lib/hosting/backup-filter-system_rsync" \
@@ -88,9 +88,9 @@ lk_start_trace
         --owner \
         --group \
         ${RSYNC_FILTER_ARGS[@]+"${RSYNC_FILTER_ARGS[@]}"} &&
-        lk_console_success "System backup completed successfully" || {
+        lk_tty_success "System backup completed successfully" || {
         EXIT_STATUS=$?
-        lk_console_error \
+        lk_tty_error \
             "System backup failed to complete (exit status $EXIT_STATUS)"
     }
 

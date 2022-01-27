@@ -24,9 +24,9 @@ _48=$(bc <<<"v = 48 * $_M / 1; v - v % 2")
 _128=$(bc <<<"v = 128 * $_M / 1; v - v % 2")
 _GAP=$(bc <<<"v = 4 * $_M / 1 - 2; if (v < 2) v = 2; v - v % 2")
 
-lk_console_message "Configuring Xfce4"
-lk_console_detail "Display resolution:" "$DPI DPI"
-lk_console_detail "Multiplier:" "$(sed -E 's/\.?0+$//' <<<"$_M")"
+lk_tty_print "Configuring Xfce4"
+lk_tty_detail "Display resolution:" "$DPI DPI"
+lk_tty_detail "Multiplier:" "$(sed -E 's/\.?0+$//' <<<"$_M")"
 
 if [ "$_Mx10" -le 10 ]; then
     # scaling <= 1

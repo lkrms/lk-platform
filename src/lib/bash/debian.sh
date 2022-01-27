@@ -90,7 +90,7 @@ function lk_apt_not_marked_manual_list() {
 # Retrieve the latest APT package indexes.
 function lk_apt_update() {
     [ "${_LK_APT_DIRTY:-1}" -eq 0 ] || {
-        lk_console_message "Updating APT package indexes"
+        lk_tty_print "Updating APT package indexes"
         _lk_apt_flock apt-get -q update &&
             _LK_APT_DIRTY=0
     }
@@ -157,7 +157,7 @@ function lk_apt_purge() {
 }
 
 function lk_apt_autoremove() {
-    lk_console_message "Removing unused dependencies"
+    lk_tty_print "Removing unused dependencies"
     _lk_apt_flock apt-get -yq autoremove
 }
 
@@ -185,13 +185,13 @@ function lk_apt_upgrade_all() {
                 -f "$LK_BASE/lib/awk/apt-get-parse-dry-run.awk") &&
         eval "$SH" || return
     [ "$CHANGES" -gt 0 ] || return 0
-    lk_console_message "Upgrading APT packages"
-    [ ${#INST[@]} -eq 0 ] || lk_console_detail "Upgrade:" $'\n'"${INST[*]}"
+    lk_tty_print "Upgrading APT packages"
+    [ ${#INST[@]} -eq 0 ] || lk_tty_detail "Upgrade:" $'\n'"${INST[*]}"
     CONF=($(comm -23 \
         <(lk_echo_array CONF | sort -u) \
         <(lk_echo_array INST | sort -u)))
-    [ ${#CONF[@]} -eq 0 ] || lk_console_detail "Configure:" $'\n'"${CONF[*]}"
-    [ ${#REMV[@]} -eq 0 ] || lk_console_detail "Remove:" $'\n'"${REMV[*]}"
+    [ ${#CONF[@]} -eq 0 ] || lk_tty_detail "Configure:" $'\n'"${CONF[*]}"
+    [ ${#REMV[@]} -eq 0 ] || lk_tty_detail "Remove:" $'\n'"${REMV[*]}"
     _lk_apt_flock apt-get -yq --fix-broken dist-upgrade || return
     lk_apt_autoremove
 }
@@ -206,7 +206,7 @@ function lk_apt_list_missing_recommends() { (
         lk_delete_on_exit "$DIR" &&
         install -d -m 00755 "$DIR/var/lib" &&
         lk_apt_update >&2 || return
-    lk_console_message "Checking recommended APT packages"
+    lk_tty_print "Checking recommended APT packages"
     lk_lock -f /var/lib/dpkg/lock || return
     FILES=(
         /var/lib/apt/lists/*_Packages
@@ -233,7 +233,7 @@ function lk_apt_list_missing_recommends() { (
 
 function lk_apt_reinstall_damaged() {
     local _DPKG _REAL _MISSING FILE_COUNT DIRS MISSING_COUNT REINSTALL
-    lk_console_message "Checking APT package files"
+    lk_tty_print "Checking APT package files"
     _DPKG=$(lk_mktemp_file) &&
         _REAL=$(lk_mktemp_file) &&
         _MISSING=$(lk_mktemp_file) &&
@@ -245,12 +245,12 @@ function lk_apt_reinstall_damaged() {
             awk -f "$LK_BASE/lib/awk/paths-get-unique-roots.awk" | sort -u) ||
         return
     ! lk_verbose ||
-        lk_console_detail "Files managed by dpkg:" "$FILE_COUNT"
+        lk_tty_detail "Files managed by dpkg:" "$FILE_COUNT"
     lk_elevate find -H $DIRS -type f -print | sort -u >"$_REAL"
     comm -23 "$_DPKG" "$_REAL" >"$_MISSING" &&
         MISSING_COUNT=$(wc -l <"$_MISSING") || return
     ! lk_verbose ||
-        lk_console_detail "Missing files:" "$MISSING_COUNT"
+        lk_tty_detail "Missing files:" "$MISSING_COUNT"
     [ "$MISSING_COUNT" -eq 0 ] || {
         local IFS=$'\n'
         REINSTALL=($(xargs dpkg -S <"$_MISSING" | cut -d: -f1 | sort -u)) &&
