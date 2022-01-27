@@ -3,6 +3,12 @@
 lk_require git
 lk_require provision
 
+function linode-cli() {
+    # Suppress "Unable to determine if a new linode-cli package is available in
+    # pypi"
+    command linode-cli --suppress-warnings "$@"
+}
+
 function _lk_linode_cli_json {
     local JSON PAGE=0 COUNT
     while :; do
