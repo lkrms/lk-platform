@@ -181,7 +181,7 @@ lk_tty_print "Checking system state"
 lk_tty_detail "Environment:" "$SCRIPT_ENV"
 [ "$LK_DEBUG" != Y ] ||
     lk_tty_detail "Variables:" "$SCRIPT_VARS"
-lk_tty_list_detail \
+lk_tty_list_detail - \
     "Pre-installed packages marked as 'manually installed':" \
     <"$IMAGE_BASE_PACKAGES"
 lk_tty_detail "All pre-installed packages:" \
