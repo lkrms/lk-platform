@@ -59,7 +59,11 @@ function lk_implode_args() {
 
 # lk_implode_input GLUE
 function lk_implode_input() {
-    awk -v "OFS=$1" 'NR > 1 { printf "%s", OFS } { printf "%s", $0 }'
+    [ -z "${_LK_INPUT_DELIM+1}" ] ||
+        local _LK_INPUT_DELIM=${_LK_INPUT_DELIM:-\\0}
+    awk -v "OFS=$1" \
+        -v "RS=${_LK_INPUT_DELIM-\\n}" \
+        'NR > 1 { printf "%s", OFS } { printf "%s", $0 }'
 }
 
 function lk_ere_escape() {

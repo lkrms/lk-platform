@@ -26,8 +26,9 @@ function lk_quote_arr() {
 
 # lk_implode_arr GLUE [ARRAY...]
 function lk_implode_arr() {
-    local IFS=$' \t\n'
-    lk_arr "${@:2}" | lk_implode_input "$1"
+    local GLUE=$1
+    shift
+    lk_arr -"printf '%s\0'" "$@" | _LK_INPUT_DELIM= lk_implode_input "$GLUE"
 }
 
 # lk_ere_implode_arr [-e] [ARRAY...]

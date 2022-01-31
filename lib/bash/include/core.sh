@@ -916,7 +916,11 @@ function lk_implode_args() {
 
 # lk_implode_input GLUE
 function lk_implode_input() {
-    awk -v "OFS=$1" 'NR > 1 { printf "%s", OFS } { printf "%s", $0 }'
+    [ -z "${_LK_INPUT_DELIM+1}" ] ||
+        local _LK_INPUT_DELIM=${_LK_INPUT_DELIM:-\\0}
+    awk -v "OFS=$1" \
+        -v "RS=${_LK_INPUT_DELIM-\\n}" \
+        'NR > 1 { printf "%s", OFS } { printf "%s", $0 }'
 }
 
 function lk_ere_escape() {
@@ -1024,8 +1028,9 @@ function lk_quote_arr() {
 
 # lk_implode_arr GLUE [ARRAY...]
 function lk_implode_arr() {
-    local IFS=$' \t\n'
-    lk_arr "${@:2}" | lk_implode_input "$1"
+    local GLUE=$1
+    shift
+    lk_arr -"printf '%s\0'" "$@" | _LK_INPUT_DELIM= lk_implode_input "$GLUE"
 }
 
 # lk_ere_implode_arr [-e] [ARRAY...]
