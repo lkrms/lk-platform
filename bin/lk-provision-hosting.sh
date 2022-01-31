@@ -22,7 +22,7 @@ export LK_BASE
 shopt -s nullglob
 
 . "$LK_BASE/lib/bash/common.sh"
-lk_require debian git hosting linux mysql provision validate
+lk_require debian git hosting linux mysql provision validate wordpress
 
 LK_VERBOSE=${LK_VERBOSE-1}
 _LK_VERBOSE=$LK_VERBOSE
@@ -520,22 +520,20 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
             lk_apt_reinstall_damaged
     fi
 
-    if ! no_upgrade; then
-        IFS=,
-        APT_PACKAGES=($LK_NODE_PACKAGES)
-        unset IFS
-        . "$LK_BASE/lib/hosting/packages.sh"
-        APT_PACKAGES=($(comm -13 \
-            <(lk_echo_array APT_SUPPRESS APT_REMOVE | sort -u) \
-            <(lk_echo_array APT_PACKAGES | sort -u)))
-        [ ${#APT_FILTER[@]} -eq 0 ] ||
-            APT_PACKAGES=($(lk_echo_array APT_PACKAGES |
-                eval "sed -E$(printf ' -e %q' "${APT_FILTER[@]}")"))
+    IFS=,
+    APT_PACKAGES=($LK_NODE_PACKAGES)
+    unset IFS
+    . "$LK_BASE/lib/hosting/packages.sh"
+    APT_PACKAGES=($(comm -13 \
+        <(lk_echo_array APT_SUPPRESS APT_REMOVE | sort -u) \
+        <(lk_echo_array APT_PACKAGES | sort -u)))
+    [ ${#APT_FILTER[@]} -eq 0 ] ||
+        APT_PACKAGES=($(lk_echo_array APT_PACKAGES |
+            eval "sed -E$(printf ' -e %q' "${APT_FILTER[@]}")"))
 
-        [ ${#APT_PACKAGES[@]} -eq 0 ] ||
-            lk_keep_trying lk_apt_install "${APT_PACKAGES[@]}"
-        lk_apt_purge "${APT_REMOVE[@]}"
-    fi
+    [ ${#APT_PACKAGES[@]} -eq 0 ] ||
+        lk_keep_trying lk_apt_install "${APT_PACKAGES[@]}"
+    lk_apt_purge "${APT_REMOVE[@]}"
 
     lk_tty_print "Checking services"
     DISABLE_SERVICES=(
@@ -658,7 +656,7 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
     fi
 
     lk_tty_print "Checking hosting base directories"
-    lk_install -d -m 00751 -g adm /srv/{www{,/.tmp,/.opcache},backup{,/archive}}
+    lk_install -d -m 00751 -g adm /srv/{www/{,.tmp,.opcache},backup/{,archive,latest,snapshot}}
 
     LK_NO_LOG=1 \
         lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" \
@@ -917,28 +915,38 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
                 lk_mark_dirty "php$PHPVER-fpm.service"
         }
 
-        if ! no_upgrade; then
-            lk_tty_print "Checking WP-CLI"
-            FILE=/usr/local/bin/wp
-            lk_install -m 00755 "$FILE"
-            if [ -s "$FILE" ]; then
-                lk_tty_run_detail "$FILE" cli update --yes
-            else
-                lk_tty_detail "Installing WP-CLI to" "$FILE"
-                _FILE=$(lk_mktemp_file)
-                lk_delete_on_exit "$_FILE"
-                URL=https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
-                curl "${CURL_OPTIONS[@]}" --output "$_FILE" "$URL" ||
-                    lk_die "unable to download: $URL"
-                cp "$_FILE" "$FILE"
-            fi
+        lk_tty_print "Checking WP-CLI"
+        FILE=/usr/local/bin/wp
+        lk_install -m 00755 "$FILE"
+        if [ -s "$FILE" ]; then
+            no_upgrade || lk_tty_run_detail "$FILE" cli update --yes
+        else
+            lk_tty_detail "Installing WP-CLI to" "$FILE"
+            _FILE=$(lk_mktemp_file)
+            lk_delete_on_exit "$_FILE"
+            URL=https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+            curl "${CURL_OPTIONS[@]}" --output "$_FILE" "$URL" ||
+                lk_die "unable to download: $URL"
+            cp "$_FILE" "$FILE"
+        fi
 
+        DIR=/usr/local/lib/wp-cli-packages
+        lk_install -d -m 02775 -g adm "$DIR"
+        export WP_CLI_PACKAGES_DIR=$DIR
+        if ! no_upgrade; then
+            lk_tty_detail "Updating WP-CLI packages"
+            lk_wp package update --quiet
+        fi
+        lk_wp_package_install \
+            aaemnnosttv/wp-cli-login-command
+
+        DIR=/opt/opcache-gui
+        no_upgrade && [ -e "$DIR" ] ||
             lk_keep_trying lk_git_provision_repo -fs \
                 -o :adm \
                 -n opcache-gui \
                 https://github.com/lkrms/opcache-gui.git \
-                /opt/opcache-gui
-        fi
+                "$DIR"
     fi
 
     if lk_dpkg_installed mariadb-server; then
@@ -1092,8 +1100,7 @@ EOF
     lk_hosting_configure_backup
 
     lk_tty_print "Cleaning up"
-    no_upgrade ||
-        lk_apt_purge_removed
+    lk_apt_purge_removed
     [ ! -e /etc/glances ] ||
         lk_tty_run_detail rm -Rf /etc/glances
     [ ! -e /etc/apt/listchanges.conf.orig ] ||
