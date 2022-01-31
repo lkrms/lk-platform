@@ -126,7 +126,7 @@ CURL_OPTIONS=(-fsSLH "Cache-Control: no-cache" -H "Pragma: no-cache" --retry 2)
 YELLOW=$'\E[33m'
 CYAN=$'\E[36m'
 BOLD=$'\E[1m'
-RESET=$'\E[m\017'
+RESET=$'\E[m'
 echo "$BOLD$CYAN==> $RESET${BOLD}Checking prerequisites$RESET" >&2
 REPO_URL=https://raw.githubusercontent.com/lkrms/lk-platform
 for FILE_PATH in \

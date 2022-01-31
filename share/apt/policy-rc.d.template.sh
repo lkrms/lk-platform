@@ -14,7 +14,7 @@ print strftime( "%Y-%m-%d %H:%M:%S.$ms %z ", localtime($s) );' >>/var/log/{{LK_P
 }
 
 LK_BOLD=$'\E[1m'
-LK_RESET=$'\E[m\017'
+LK_RESET=$'\E[m'
 
 lk_log <<<"====> $LK_BOLD${0##*/}$LK_RESET invoked$(
     [ $# -eq 0 ] || {
