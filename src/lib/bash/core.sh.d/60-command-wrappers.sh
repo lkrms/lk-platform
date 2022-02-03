@@ -115,7 +115,22 @@ function lk_env_clean() {
 #### - lk_tty_run_detail
 ####
 #### And elsewhere:
+#### - lk_cache
+#### - lk_get_outputs_of
 #### - lk_git_with_repos
+#### - lk_log_bypass
+#### - lk_log_bypass_stderr
+#### - lk_log_bypass_stdout
+#### - lk_log_bypass_tty
+#### - lk_log_bypass_tty_stderr
+#### - lk_log_bypass_tty_stdout
+#### - lk_log_no_bypass
+#### - lk_maybe_drop
+#### - lk_maybe_sudo
+#### - lk_maybe_trace
+#### - lk_nohup
+#### - lk_run_as
+#### - lk_xargs
 #### - _lk_apt_flock
 
 #### Reviewed: 2021-08-28

@@ -206,9 +206,9 @@ Hook scripts are sourced in a Bash subshell. If they return zero, any output on
 file descriptor 8 is eval'd in the global scope of ${0##*/}.
 
 Options:
-  -g, --group GROUP             create snapshot directories with group GROUP
-  -f, --filter RSYNC_FILTER     add filtering rules from file RSYNC_FILTER
-  -h, --hook HOOK:BASH_SCRIPT   register BASH_SCRIPT with HOOK
+  -g, --group=GROUP             create snapshot directories with group GROUP
+  -f, --filter=RSYNC_FILTER     add filtering rules from file RSYNC_FILTER
+  -h, --hook=HOOK:BASH_SCRIPT   register BASH_SCRIPT with HOOK
 
 Sources:
   SSH_HOST:SOURCE_PATH
