@@ -117,9 +117,6 @@ lk_log_start
     lk_tty_run_detail aws iam delete-access-key \
       --user-name "$SMTP_USER" \
       --access-key-id "$KEY_ID"
-    lk_mktemp_with -r KEYS \
-      aws iam list-access-keys \
-      --user-name "$SMTP_USER"
   fi
 
   lk_mktemp_with NEW_KEY lk_tty_run_detail \
@@ -187,7 +184,19 @@ lk_log_start
     bash -c 't=$(mktemp) && cat >"$t" && sudo -HE bash "$t"')
 
   ssh -o ControlPath=none -o LogLevel=QUIET "$SSH_HOST" \
-    LK_VERBOSE=${LK_VERBOSE-1} "$COMMAND" <"$SCRIPT"
+    LK_VERBOSE=${LK_VERBOSE-1} "$COMMAND" <"$SCRIPT" || lk_die ""
+
+  if KEY_ID=$(aws iam list-access-keys \
+    --user-name "$SMTP_USER" |
+    jq -re \
+      --arg keyId "$ACCESS_KEY_ID" '
+.AccessKeyMetadata[] |
+  select(.AccessKeyId != $keyId) | .AccessKeyId') &&
+    lk_tty_yn "OK to delete previous key '$KEY_ID'?" Y; then
+    lk_tty_run_detail aws iam delete-access-key \
+      --user-name "$SMTP_USER" \
+      --access-key-id "$KEY_ID"
+  fi
 
   exit
 }
