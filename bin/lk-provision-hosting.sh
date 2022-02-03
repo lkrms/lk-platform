@@ -930,6 +930,12 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
             cp "$_FILE" "$FILE"
         fi
 
+        _LK_WP_USER=${_LK_WP_USER-$(getent group adm |
+            cut -d: -f4 | tr ',' '\n' | xargs -r getent passwd | awk -F: '
+$3 >= 1000 { u[$3] = $1; m = m ? (m > $3 ? $3 : m) : $3 }
+END        { if (m) { print u[m] } else { exit 1 } }')} ||
+            lk_die "no users in 'adm' group"
+
         DIR=/usr/local/lib/wp-cli-packages
         lk_install -d -m 02775 -g adm "$DIR"
         export WP_CLI_PACKAGES_DIR=$DIR
