@@ -243,7 +243,7 @@ function lk_user_lock_passwd() {
 function lk_get_users_in_group() {
     getent group "$@" 2>/dev/null |
         cut -d: -f4 |
-        sed 's/,/\n/' |
+        tr ',' '\n' |
         sort -u || true
 }
 

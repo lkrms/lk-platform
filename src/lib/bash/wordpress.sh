@@ -3,9 +3,19 @@
 lk_require mysql provision
 
 function wp() {
-    WP_CLI_CONFIG_PATH=$LK_BASE/share/wp-cli/config.yml \
+    local \
+        WP_CLI_CONFIG_PATH=$LK_BASE/share/wp-cli/config.yml \
         HTTP_CLIENT_IP=127.0.1.1 \
-        command wp ${_LK_WP_PATH+--path="$_LK_WP_PATH"} "$@"
+        WP_CLI_PACKAGES_DIR=${WP_CLI_PACKAGES_DIR-/usr/local/lib/wp-cli-packages}
+    export WP_CLI_CONFIG_PATH HTTP_CLIENT_IP
+    [ -d "$WP_CLI_PACKAGES_DIR" ] && export WP_CLI_PACKAGES_DIR ||
+        unset -v WP_CLI_PACKAGES_DIR
+    set -- ${_LK_WP_PATH+--path="$_LK_WP_PATH"} "$@"
+    if [ -n "${_LK_WP_USER-}" ]; then
+        lk_run_as "$_LK_WP_USER" wp "$@"
+    else
+        command wp "$@"
+    fi
 }
 
 function lk_wp() {
@@ -223,15 +233,18 @@ function _lk_wp_maybe_migrate() {
 function lk_wp_rename_site() {
     [ "${1-}" != -s ] || { eval "$(_lk_wp_set_path "$2")" && shift 2; }
     local NEW_URL=${1-} OLD_URL=${LK_WP_OLD_URL-} \
-        SITE_ROOT OLD_SITE_URL NEW_SITE_URL
+        SITE_ROOT OLD_SITE_URL NEW_SITE_URL FILE CONST
     [ $# -eq 1 ] || lk_usage "Usage: $FUNCNAME [-s SITE_ROOT] NEW_URL" || return
     lk_is_uri "$1" || lk_warn "invalid URL: $1" || return
-    OLD_URL=${OLD_URL:-$(lk_wp_get_site_address)} || return
+    SITE_ROOT=$(lk_wp_get_site_root) || return
+    FILE=$SITE_ROOT/.lk-settings
+    OLD_URL=${OLD_URL:-$(sed -n 's/^OLD_WP_HOME=//p' "$FILE" 2>/dev/null |
+        grep -m1 . || lk_wp_get_site_address)} || return
     [ "$NEW_URL" != "$OLD_URL" ] ||
         lk_warn "site address not changed (set LK_WP_OLD_URL to override)" ||
         return
-    SITE_ROOT=$(lk_wp_get_site_root) &&
-        OLD_SITE_URL=$(lk_wp option get siteurl) || return
+    OLD_SITE_URL=$(sed -n 's/^OLD_WP_SITEURL=//p' "$FILE" 2>/dev/null |
+        grep -m1 . || lk_wp option get siteurl) || return
     NEW_SITE_URL=${OLD_SITE_URL/"$OLD_URL"/$NEW_URL}
     lk_tty_print "Renaming WordPress installation at" "$SITE_ROOT"
     lk_tty_detail \
@@ -239,9 +252,14 @@ function lk_wp_rename_site() {
     lk_tty_detail \
         "WordPress address:" "$OLD_SITE_URL -> $LK_BOLD$NEW_SITE_URL$LK_RESET"
     _lk_wp_is_quiet || lk_confirm "Proceed?" Y || return
-    { ! lk_wp config has WP_HOME || lk_wp config delete WP_HOME; } &&
-        { ! lk_wp config has WP_SITEURL || lk_wp config delete WP_SITEURL; } &&
-        lk_wp option update home "$NEW_URL" &&
+    for CONST in WP_HOME WP_SITEURL; do
+        ! lk_wp config has "$CONST" || {
+            lk_sed_i '' "/^OLD_${CONST}=/d" "$FILE" 2>/dev/null || true
+            lk_wp config get "$CONST" | sed "s/^/OLD_${CONST}=/" >>"$FILE" &&
+                lk_wp config delete "$CONST" || return
+        }
+    done
+    lk_wp option update home "$NEW_URL" &&
         lk_wp option update siteurl "$NEW_SITE_URL" || return
     lk_is_false LK_WP_REPLACE ||
         { [ -z "${LK_WP_REPLACE+1}" ] &&

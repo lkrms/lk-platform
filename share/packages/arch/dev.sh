@@ -44,6 +44,7 @@ lk_is_virtual || {
     )
     AUR_PACKAGES+=(
         geekbench
+        glmark2
     )
     ! lk_system_has_intel_graphics || PAC_PACKAGES+=(
         clinfo

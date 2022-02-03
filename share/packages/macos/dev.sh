@@ -69,6 +69,7 @@ HOMEBREW_CASKS+=(
     adobe-acrobat-reader
     alt-tab
     chromium
+    copyq
     firefox
     flameshot
     flycut
@@ -285,7 +286,6 @@ HOMEBREW_KEEP_CASKS+=(
 )
 
 LOGIN_ITEMS+=(
-    "/Applications/Flycut.app"
     "/Applications/Mail.app"
     "/Applications/Messenger.app"
     "/Applications/Microsoft Teams.app"

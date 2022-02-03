@@ -94,7 +94,7 @@ function exit_trap() {
         YELLOW=$'\E[33m'
         CYAN=$'\E[36m'
         BOLD=$'\E[1m'
-        RESET=$'\E[m\017'
+        RESET=$'\E[m'
         echo "$BOLD$CYAN==> $RESET${BOLD}Checking prerequisites$RESET" >&2
         REPO_URL=https://raw.githubusercontent.com/lkrms/lk-platform
         for FILE_PATH in \
@@ -693,13 +693,6 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
             mas install "${INSTALL_APPS[@]}" || STATUS=$?
     }
 
-    [ ${#INSTALL_UPDATES[@]} -eq 0 ] || {
-        lk_tty_list INSTALL_UPDATES "Installing system software updates:"
-        lk_faketty caffeinate -d \
-            sudo softwareupdate --no-scan \
-            --install "${INSTALL_UPDATES[@]}" --restart || STATUS=$?
-    }
-
     lk_macos_xcode_maybe_accept_license
 
     # `brew deps` is buggy AF, so find dependencies recursively via `brew info`
@@ -847,6 +840,13 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
             }
         }
     fi
+
+    [ ${#INSTALL_UPDATES[@]} -eq 0 ] || {
+        lk_tty_list INSTALL_UPDATES "Installing system software updates:"
+        lk_faketty caffeinate -d \
+            sudo softwareupdate --no-scan \
+            --install "${INSTALL_UPDATES[@]}" || STATUS=$?
+    }
 
     if [ "$STATUS" -eq 0 ]; then
         lk_tty_success "Provisioning complete"
