@@ -151,10 +151,11 @@ function lk_hosting_site_provision() { (
 # 3. Update Apache and PHP-FPM's config files, marking services "dirty" if their
 #    configuration has changed
 function _lk_hosting_site_provision() {
+    _lk_hosting_is_quiet ||
+        lk_tty_print "Provisioning site:" "$_SITE_DOMAIN"
     _lk_hosting_site_load_settings &&
         _lk_hosting_site_load_dynamic_settings || return
     _lk_hosting_is_quiet || {
-        lk_tty_print "Provisioning site:" "$_SITE_DOMAIN"
         [ -z "$SITE_ALIASES" ] ||
             lk_tty_detail "Aliases:" "${SITE_ALIASES//,/, }"
         lk_tty_detail "Site root:" \
