@@ -45,6 +45,8 @@ SOURCE_IP=("${@:5}")
 [[ $SES_DOMAIN != - ]] ||
   SES_DOMAIN=$DOMAIN
 
+lk_log_start
+
 {
   lk_tty_list SOURCE_IP \
     "Configuring IAM user '$SMTP_USER' for SMTP access to Amazon SES from:" \
@@ -115,9 +117,6 @@ SOURCE_IP=("${@:5}")
     lk_tty_run_detail aws iam delete-access-key \
       --user-name "$SMTP_USER" \
       --access-key-id "$KEY_ID"
-    lk_mktemp_with -r KEYS \
-      aws iam list-access-keys \
-      --user-name "$SMTP_USER"
   fi
 
   lk_mktemp_with NEW_KEY lk_tty_run_detail \
@@ -147,6 +146,7 @@ SOURCE_IP=("${@:5}")
     "$SSH_HOST"
 
   function set-site-smtp-settings() {
+    export LC_ALL=C
     . /opt/lk-platform/lib/bash/rc.sh &&
       lk_require hosting || return
     local i=0 REGEX="(^|\\.)${DOMAIN//./\\.}\$" _DOMAIN SH
@@ -158,7 +158,7 @@ SOURCE_IP=("${@:5}")
         -s SITE_SMTP_SENDERS= \
         "$_DOMAIN" || return
     done < <(lk_hosting_list_sites |
-      awk -v re="$REGEX" '$1 ~ re { print $1 }')
+      awk -v re="${REGEX//\\/\\\\}" '$1 ~ re { print $1 }')
     if [[ $LK_NODE_FQDN =~ $REGEX ]]; then
       ((++i))
       SH=$(lk_settings_getopt \
@@ -183,8 +183,20 @@ SOURCE_IP=("${@:5}")
   COMMAND=$(lk_quote_args \
     bash -c 't=$(mktemp) && cat >"$t" && sudo -HE bash "$t"')
 
-  ssh -o ControlPath=none -o LogLevel=QUIET -t "$SSH_HOST" \
-    LK_VERBOSE=${LK_VERBOSE-1} "$COMMAND" <"$SCRIPT"
+  ssh -o ControlPath=none -o LogLevel=QUIET "$SSH_HOST" \
+    LK_VERBOSE=${LK_VERBOSE-1} "$COMMAND" <"$SCRIPT" || lk_die ""
+
+  if KEY_ID=$(aws iam list-access-keys \
+    --user-name "$SMTP_USER" |
+    jq -re \
+      --arg keyId "$ACCESS_KEY_ID" '
+.AccessKeyMetadata[] |
+  select(.AccessKeyId != $keyId) | .AccessKeyId') &&
+    lk_tty_yn "OK to delete previous key '$KEY_ID'?" Y; then
+    lk_tty_run_detail aws iam delete-access-key \
+      --user-name "$SMTP_USER" \
+      --access-key-id "$KEY_ID"
+  fi
 
   exit
 }

@@ -300,7 +300,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
         lk_log_tty_off -a
 
       STATUS=0
-      ssh -o ControlPath=none -o LogLevel=QUIET -t "$1" \
+      ssh -o ControlPath=none -o LogLevel=QUIET "$1" \
         LK_VERBOSE=${LK_VERBOSE-1} "$COMMAND" <"$SCRIPT" || STATUS=$?
       ((!TEST)) || {
         SH=$(ssh -o ControlPath=none -o LogLevel=QUIET "$1" \

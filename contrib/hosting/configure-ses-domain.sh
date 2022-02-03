@@ -58,6 +58,8 @@ export AWS_PROFILE=${AWS_PROFILE-${LK_AWS_PROFILE-}}
 AWS_REGION=$(aws configure get region) ||
   lk_usage -e "AWS region not set for profile '$AWS_PROFILE'"
 
+lk_log_start
+
 {
   function is_linode() {
     [ -n "${LINODE+1}" ]
