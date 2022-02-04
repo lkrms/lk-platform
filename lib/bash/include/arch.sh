@@ -19,12 +19,13 @@ function lk_arch_path() {
     echo "${_LK_ARCH_ROOT:+${_LK_ARCH_ROOT%/}}$1"
 }
 
-function lk_arch_reset_pacman_keyring() {
-    lk_elevate find "$(lk_arch_path /etc/pacman.d/gnupg)" \
-        -mindepth 1 -maxdepth 1 ! -type s -print0 | xargs -0 rm -Rf || return
-    lk_arch_chroot pacman-key --init &&
-        lk_arch_chroot pacman-key --populate archlinux
-}
+function lk_arch_reset_pacman_keyring() { (
+    shopt -s dotglob
+    lk_elevate gpgconf --homedir /etc/pacman.d/gnupg --kill gpg-agent &&
+        lk_elevate rm -Rf /etc/pacman.d/gnupg/* &&
+        lk_elevate pacman-key --init &&
+        lk_elevate pacman-key --populate archlinux
+); }
 
 function lk_arch_configure_pacman() {
     local LK_CONF_OPTION_FILE _LK_CONF_DELIM=" = " LK_SUDO=1

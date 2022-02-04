@@ -352,7 +352,7 @@ else
     if grep -Eq '\<GenuineIntel\>' /proc/cpuinfo; then
         PAC_PACKAGES+=(intel-ucode)
     elif grep -Eq '\<AuthenticAMD\>' /proc/cpuinfo; then
-        PAC_PACKAGES+=(amd-ucode)
+        PAC_PACKAGES+=(amd-ucode linux-headers)
         AUR_PACKAGES+=(zenpower-dkms)
         ! grep -Eq '\<Ryzen\>' /proc/cpuinfo ||
             AUR_PACKAGES+=(ryzenadj-git)

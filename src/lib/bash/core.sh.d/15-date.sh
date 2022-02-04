@@ -36,6 +36,9 @@ function lk_date_ymdhms() { lk_date "%Y%m%d%H%M%S" "$@"; }
 # lk_date_ymd [TIMESTAMP]
 function lk_date_ymd() { lk_date "%Y%m%d" "$@"; }
 
+# lk_date_http [TIMESTAMP]
+function lk_date_http() { TZ=UTC lk_date "%a, %d %b %Y %H:%M:%S %Z" "$@"; }
+
 # lk_timestamp
 function lk_timestamp() { lk_date "%s"; }
 

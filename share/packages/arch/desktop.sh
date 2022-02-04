@@ -17,6 +17,7 @@ lk_is_virtual || {
     )
     AUR_PACKAGES+=(
         geekbench
+        glmark2
     )
     ! lk_system_has_intel_graphics || PAC_PACKAGES+=(
         clinfo
@@ -98,6 +99,12 @@ PAC_PACKAGES+=(
     thunderbird-i18n-en-gb
     transmission-gtk
 
+    # For LibreOffice
+    hunspell
+    hunspell-en_au
+    hyphen
+    hyphen-en
+
     # PDF
     ghostscript  # PDF/PostScript processing
     mupdf-tools  # PDF manipulation
@@ -157,6 +164,7 @@ PAC_PACKAGES+=(
 AUR_PACKAGES+=(
     emote
     espanso
+    libreoffice-extension-languagetool
     masterpdfeditor-free
     rescuetime2
     skypeforlinux-stable-bin
