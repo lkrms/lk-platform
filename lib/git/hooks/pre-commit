@@ -1,7 +1,6 @@
 #!/bin/bash
 
-LK_TTY_NO_COLOUR=1 \
-    . lk-bash-load.sh || exit
+. lk-bash-load.sh || exit
 lk_require git
 
 s=/
@@ -24,5 +23,5 @@ lk_mktemp_with INVALID gnu_xargs -0r shfmt -l -i 2 -s \
         lk_die ""
 }
 
-./src/build-all.sh
-git add lib/bash/include/*.sh lib/json/regex.json
+./src/build-all.sh --no-write ||
+    lk_die "Rebuild required before committing changes"

@@ -1,7 +1,6 @@
 #!/bin/bash
 
-LK_TTY_NO_COLOUR=1 \
-    . lk-bash-load.sh || exit
+. lk-bash-load.sh || exit
 lk_require git
 
 s=/

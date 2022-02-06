@@ -2156,6 +2156,10 @@ function lk_fifo_flush() {
         status=none &>/dev/null || true
 }
 
+function lk_ps_parent_command() {
+    ps -o comm= -p "$PPID"
+}
+
 # lk_ps_recurse_children [-p] PPID...
 #
 # Print the process ID of all processes descended from PPID. If -p is set,
@@ -4501,7 +4505,7 @@ set -o pipefail
 lk_trap_add EXIT '_lk_exit_trap "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'
 lk_trap_add ERR '_lk_err_trap "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'
 
-if lk_is_true LK_TTY_NO_COLOUR; then
+if [[ -n ${LK_TTY_NO_COLOUR-} ]] || ! lk_get_tty >/dev/null; then
     declare \
         LK_BLACK= \
         LK_RED= \

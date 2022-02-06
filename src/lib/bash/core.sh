@@ -2034,7 +2034,7 @@ set -o pipefail
 lk_trap_add EXIT '_lk_exit_trap "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'
 lk_trap_add ERR '_lk_err_trap "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'
 
-if lk_is_true LK_TTY_NO_COLOUR; then
+if [[ -n ${LK_TTY_NO_COLOUR-} ]] || ! lk_get_tty >/dev/null; then
     declare \
         LK_BLACK= \
         LK_RED= \

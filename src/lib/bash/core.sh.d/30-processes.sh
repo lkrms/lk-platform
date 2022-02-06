@@ -1,5 +1,9 @@
 #!/bin/bash
 
+function lk_ps_parent_command() {
+    ps -o comm= -p "$PPID"
+}
+
 # lk_ps_recurse_children [-p] PPID...
 #
 # Print the process ID of all processes descended from PPID. If -p is set,
