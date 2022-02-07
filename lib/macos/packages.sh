@@ -47,6 +47,7 @@ HOMEBREW_FORMULAE+=(
     ncdu
     p7zip
     watch
+    zenity
 )
 
 HOMEBREW_UNLINK_FORMULAE=(
