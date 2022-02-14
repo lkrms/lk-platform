@@ -208,7 +208,7 @@ FIELD_ERRORS=$'\n'$(
 
 . /etc/lsb-release
 
-lk_lock LOCK_FILE LOCK_FD "${LK_PATH_PREFIX}install"
+lk_lock LOCK_FILE LOCK_FD "${0##*/}"
 
 if lk_is_bootstrap; then
     FILE=$LK_BASE/etc/lk-platform/lk-platform.conf
@@ -658,7 +658,7 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
     lk_tty_print "Checking hosting base directories"
     lk_install -d -m 00751 -g adm /srv/{www/{,.tmp,.opcache},backup/{,archive,latest,snapshot}}
 
-    LK_NO_LOG=1 \
+    _LK_NO_LOG=1 \
         lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" \
         $(! no_upgrade || printf '%s\n' --no-upgrade)
 

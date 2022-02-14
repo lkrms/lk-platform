@@ -21,6 +21,9 @@ PAC_KEEP=(
     zoom
 
     #
+    falkon # Uses qt5-webengine
+
+    #
     displaycal
     xiccd
 
@@ -305,6 +308,9 @@ PAC_PACKAGES+=(
     php-sqlite
     php-xsl # Optional phpdoc-phar dependency
     xdebug
+
+    #
+    php7
 
     #
     python

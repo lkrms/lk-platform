@@ -331,8 +331,8 @@ if [ -n "$INSTALL_DISK" ]; then
     lk_tty_print "Partitioning:" "$INSTALL_DISK"
     lk_tty_run_detail parted --script "$INSTALL_DISK" \
         "mklabel gpt" \
-        "mkpart fat32 2048s 260MiB" \
-        "mkpart ext4 260MiB 100%" \
+        "mkpart fat32 2048s 300MiB" \
+        "mkpart ext4 300MiB 100%" \
         "set 1 boot on"
     partprobe "$INSTALL_DISK"
     sleep 1
@@ -357,7 +357,7 @@ if [ "${BOOT_TYPE[0]}" = vfat ] &&
     [ "${BOOT_TYPE[2]}" = c12a7328-f81f-11d2-ba4b-00a0c93ec93b ]; then
     lk_tty_print \
         "ESP at $BOOT_PART already formatted as ${BOOT_TYPE[1]}; leaving as-is"
-    FORMAT_BOOT=
+    FORMAT_BOOT=0
 else
     [ -z "${BOOT_TYPE[0]}" ] ||
         lk_warn "Unexpected ${BOOT_TYPE[0]} filesystem at $BOOT_PART" || true
@@ -372,8 +372,9 @@ fi
     lk_tty_yn "OK to format $ROOT_PART as ext4?" Y ||
     lk_die ""
 
-lk_tty_print "Formatting:" "${FORMAT_BOOT:+$BOOT_PART }$ROOT_PART"
-((!${FORMAT_BOOT:-0})) ||
+lk_tty_print "Formatting:" \
+    "$( ((!FORMAT_BOOT)) || echo "$BOOT_PART ")$ROOT_PART"
+((!FORMAT_BOOT)) ||
     lk_tty_run_detail mkfs.fat -vn ESP -F 32 "$BOOT_PART"
 lk_tty_run_detail mkfs.ext4 -vL root "$ROOT_PART"
 
@@ -389,7 +390,7 @@ lk_tty_run_detail mount \
     -o "$BOOTSTRAP_MOUNT_OPTIONS${BOOT_EXTRA-}" \
     "$BOOT_PART" /mnt/boot
 
-if ((!${FORMAT_BOOT:-0})); then
+if ((!FORMAT_BOOT)); then
     lk_tty_print "Removing files from previous installations in ESP"
     rm -Rfv /mnt/boot/{syslinux,intel-ucode.img,amd-ucode.img}
 fi
@@ -484,7 +485,7 @@ lk_var_sh \
 lk_log_tty_on
 PROVISIONED=0
 in_target -u "$BOOTSTRAP_USERNAME" \
-    env BASH_XTRACEFD=$BASH_XTRACEFD SHELLOPTS=xtrace LK_NO_LOG=1 \
+    env BASH_XTRACEFD=$BASH_XTRACEFD SHELLOPTS=xtrace _LK_NO_LOG=1 \
     "$LK_BASE/bin/lk-provision-arch.sh" --yes && PROVISIONED=1 ||
     lk_tty_error "Provisioning failed"
 lk_log_tty_off

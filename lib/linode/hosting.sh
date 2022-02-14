@@ -226,7 +226,7 @@ fi
 
 _LK_ADMIN_USER_KEYS=$ADMIN_USER_KEYS \
     _LK_HOST_KEYS=$HOST_KEYS \
-    LK_NO_LOG=1 \
+    _LK_NO_LOG=1 \
     lk_maybe_trace "$LK_BASE/bin/lk-provision-hosting.sh" || lk_die ""
 
 lk_tty_print
