@@ -26,10 +26,15 @@ LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-} &&
 
 set -euo pipefail
 lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
-lk_log() { trap "" SIGINT && exec perl -pe '$| = 1;
-BEGIN { use POSIX qw{strftime}; use Time::HiRes qw{gettimeofday}; }
-( $s, $ms ) = Time::HiRes::gettimeofday(); $ms = sprintf( "%06i", $ms );
-print strftime( "%Y-%m-%d %H:%M:%S.$ms %z ", localtime($s) );'; }
+lk_log() { trap "" SIGINT && exec perl -pe 'BEGIN {
+  $| = 1;
+  use POSIX qw{strftime};
+  use Time::HiRes qw{gettimeofday};
+}
+( $s, $ms ) = Time::HiRes::gettimeofday();
+$ms = sprintf( "%06i", $ms );
+print strftime( "%Y-%m-%d %H:%M:%S.$ms %z ", localtime($s) );
+s/.*\r(.)/\1/;'; }
 
 LOG_FILE=$_DIR/install.$(date +%s)
 exec 4> >(lk_log >"$LOG_FILE.trace")

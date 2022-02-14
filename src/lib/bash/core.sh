@@ -554,29 +554,6 @@ function _lk_tee() {
     exec tee "$@"
 }
 
-# lk_log [PREFIX]
-#
-# Add PREFIX and a microsecond-resolution timestamp to the beginning of each
-# line of input.
-#
-# Example:
-#
-#     $ echo "Hello, world." | lk_log '!!'
-#     !!2021-05-13 18:01:53.860513 +1000 Hello, world.
-function lk_log() {
-    local PREFIX=${1-}
-    lk_ignore_SIGINT && eval exec "$(_lk_log_close_fd)" || return
-    PREFIX=${PREFIX//"%"/"%%"} exec perl -pe '$| = 1;
-BEGIN {
-    use POSIX qw{strftime};
-    use Time::HiRes qw{gettimeofday};
-}
-( $s, $ms ) = Time::HiRes::gettimeofday();
-$ms = sprintf( "%06i", $ms );
-print strftime( "$ENV{PREFIX}%Y-%m-%d %H:%M:%S.$ms %z ", localtime($s) );
-s/.*\r(.)/\1/;'
-} #### Reviewed: 2021-05-13
-
 # lk_log_create_file [-e EXT] [DIR...]
 function lk_log_create_file() {
     local OWNER=$UID GROUP EXT CMD LOG_DIRS=() LOG_DIR LOG_PATH
