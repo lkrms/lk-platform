@@ -107,7 +107,7 @@ function __lk_generic() {
     lk-xkb-load.sh
 
 function __lk_backup_create_snapshot() {
-    local cur prev words cword split cpos pwords BASH_REMATCH
+    local cur prev words cword split cpos pwords
     _init_completion -s -n : || return
     __lk_get_cpos -g --group -f --filter -h --hook
     ((!cpos)) && [[ $prev == -* ]] &&
@@ -153,7 +153,7 @@ function __lk_mysql_dump() {
 } && complete -F __lk_mysql_dump lk-mysql-dump.sh
 
 function __lk_wp_migrate() {
-    local cur prev words cword split BASH_REMATCH
+    local cur prev words cword split
     _init_completion -s -n : || return
     case "$prev" in
     -s | --source | -d | --dest) _filedir -d ;;
