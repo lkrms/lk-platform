@@ -80,4 +80,7 @@ while [ $# -gt 0 ]; do
     shift
 done
 
+((accel)) ||
+    addArg -accel hvf
+
 run
