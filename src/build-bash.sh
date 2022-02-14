@@ -12,6 +12,9 @@ _dir=${_dir:-$PWD}
 _dir=$(cd "$_dir" && pwd -P)
 cd "$_dir/.."
 
+write=1
+[[ ${1-} != --no-write ]] || write=0
+
 set -- $(printf '%s\n' src/lib/bash/*.{sh,sh.d} | sed -E 's/\.d$//' | sort -u)
 
 export LC_ALL=C
@@ -46,6 +49,7 @@ done
 }
 
 IFS=
+status=0
 
 while [ $# -gt 0 ]; do
     name=${1##*/}
@@ -124,12 +128,19 @@ END     {if (NR == 1 && first) {print first; f = 2}; exit 2 - f}' && ((++i)) ||
         die "incorrect formatting in part(s): $PWD/$file"
     if [ -s "$out" ] &&
         ! diff -q --unidirectional-new-file "$dest" "$out" >/dev/null; then
-        [ ! -s "$dest" ] || "$trash_cmd" "$dest"
-        cp "$out" "$dest"
-        echo "  Target file replaced" >&2
+        if ((write)); then
+            [ ! -s "$dest" ] || "$trash_cmd" "$dest"
+            cp "$out" "$dest"
+            echo "  Target file replaced" >&2
+        else
+            echo "  REBUILD REQUIRED" >&2
+            status=1
+        fi
     else
         echo "  Target file not changed" >&2
     fi
     shift
     ! (($#)) || echo
 done
+
+exit "$status"

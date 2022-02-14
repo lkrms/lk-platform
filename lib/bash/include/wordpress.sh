@@ -4,13 +4,14 @@ lk_require mysql provision
 
 function wp() {
     local \
-        WP_CLI_CONFIG_PATH=$LK_BASE/share/wp-cli/config.yml \
         HTTP_CLIENT_IP=127.0.1.1 \
+        WP_CLI_CONFIG_PATH=$LK_BASE/share/wp-cli/config.yml \
         WP_CLI_PACKAGES_DIR=${WP_CLI_PACKAGES_DIR-/usr/local/lib/wp-cli-packages}
-    export WP_CLI_CONFIG_PATH HTTP_CLIENT_IP
+    export HTTP_CLIENT_IP WP_CLI_CONFIG_PATH
     [ -d "$WP_CLI_PACKAGES_DIR" ] && export WP_CLI_PACKAGES_DIR ||
         unset -v WP_CLI_PACKAGES_DIR
-    set -- ${_LK_WP_PATH+--path="$_LK_WP_PATH"} "$@"
+    set -- ${_LK_WP_ARGS[@]+"${_LK_WP_ARGS[@]}"} \
+        ${_LK_WP_PATH+--path="$_LK_WP_PATH"} "$@"
     if [ -n "${_LK_WP_USER-}" ]; then
         lk_run_as "$_LK_WP_USER" wp "$@"
     else
@@ -89,6 +90,25 @@ function _lk_wp_set_path() {
     declare -p _LK_WP_PATH
 }
 
+# _lk_wp_set_admin_url
+#
+# Output Bash code that configures subsequent `wp` invocations in the current
+# scope to masquerade as admin user requests for the WordPress dashboard.
+#
+# Necessary for plugins that misbehave outside of wp-admin (e.g. hide-my-wp,
+# which doesn't apply its rewrite rules when `wp rewrite flush` is called).
+function _lk_wp_set_admin_url() {
+    [ -z "${_LK_WP_ADMIN_URL_SET-}" ] || return 0
+    local ADMIN_URL ADMIN_USER
+    ADMIN_URL=$(lk_wp eval "echo get_admin_url();") &&
+        ADMIN_USER=$(lk_wp user list --field=id --role=administrator |
+            sort -n | head -n1) || lk_pass echo "return 1" || return
+    local _LK_WP_ADMIN_URL_SET=1 \
+        _LK_WP_ARGS=(${_LK_WP_ARGS[@]+"${_LK_WP_ARGS[@]}"}
+            --url="$ADMIN_URL" ${ADMIN_USER:+--user="$ADMIN_USER"})
+    declare -p _LK_WP_ARGS _LK_WP_ADMIN_URL_SET
+}
+
 # lk_wp_get_site_address [SITE_ROOT]
 function lk_wp_get_site_address() {
     [ $# -eq 0 ] || eval "$(_lk_wp_set_path "$@")"
@@ -140,7 +160,8 @@ function lk_wp_flush_opcache() {
     local URL RESULT
     lk_tty_print "Flushing WordPress OPcache"
     URL=$(lk_wp_get_site_address) &&
-        RESULT=$(curl -fsS "${URL%/}/php-opcache-flush") || return
+        RESULT=$(curl -fsS \
+            --connect-to "::127.0.0.1:" "${URL%/}/php-opcache-flush") || return
     case "$RESULT" in
     DISABLED)
         lk_tty_detail "OPcache not enabled:" "$URL"
@@ -157,6 +178,7 @@ function lk_wp_flush_opcache() {
 # lk_wp_flush [SITE_ROOT]
 function lk_wp_flush() {
     [ $# -eq 0 ] || eval "$(_lk_wp_set_path "$@")"
+    eval "$(_lk_wp_set_admin_url)"
     lk_wp_flush_opcache || true
     lk_tty_print "Flushing WordPress rewrite rules and caches"
     lk_tty_detail "Flushing object cache"
@@ -169,12 +191,13 @@ function lk_wp_flush() {
         lk_tty_detail "Flushing W3 Total Cache"
         lk_report_error -q wp w3-total-cache flush all || true
     fi
-    if lk_wp plugin is-active wp-rocket; then
+    if lk_wp plugin is-active wp-rocket; then (
+        WP_CLI_PACKAGES_DIR=
         lk_tty_detail "Flushing WP Rocket cache"
         { wp cli has-command "rocket clean" 2>/dev/null ||
             lk_wp_package_install wp-media/wp-rocket-cli:@stable; } &&
             lk_report_error -q wp rocket clean --confirm || true
-    fi
+    ); fi
 }
 
 function lk_wp_url_encode() {
@@ -647,6 +670,7 @@ Usage: $FUNCNAME SSH_HOST [REMOTE_PATH [LOCAL_PATH [RSYNC_ARG...]]]" || return
 # after moving or updating WordPress.
 function lk_wp_apply() {
     [ $# -eq 0 ] || eval "$(_lk_wp_set_path "$@")"
+    eval "$(_lk_wp_set_admin_url)"
     local FILE STATUS=0
     lk_tty_print "Running database updates and [re]applying WordPress settings"
     lk_tty_detail "Updating core database"
@@ -655,7 +679,8 @@ function lk_wp_apply() {
         lk_tty_detail "Updating WooCommerce tables"
         lk_report_error -q wp wc update || return
     fi
-    if lk_wp plugin is-active wp-rocket; then
+    if lk_wp plugin is-active wp-rocket; then (
+        WP_CLI_PACKAGES_DIR=
         lk_tty_detail "Regenerating WP Rocket files"
         lk_wp cli has-command "rocket regenerate" ||
             lk_wp_package_install wp-media/wp-rocket-cli:@stable || return
@@ -664,7 +689,7 @@ function lk_wp_apply() {
             # successfully, so ignore any errors
             lk_report_error -q wp rocket regenerate --file="$FILE" || true
         done
-    fi
+    ); fi
     # Updating `email-log` without reactivating can leave it non-operational
     if lk_wp plugin is-active email-log; then
         lk_tty_detail "Re-activating Email Log"
@@ -683,6 +708,7 @@ function lk_wp_apply() {
 # lk_wp_migrate [SITE_ROOT]
 function lk_wp_migrate() {
     eval "$(_lk_wp_set_path "$@")"
+    eval "$(_lk_wp_set_admin_url)"
     local STATUS=0 COMMAND
     lk_tty_print "Running WordPress data migrations and [re]building indexes"
     if wp cli has-command "yoast index" 2>/dev/null; then

@@ -21,6 +21,9 @@ PAC_KEEP=(
     zoom
 
     #
+    falkon # Uses qt5-webengine
+
+    #
     displaycal
     xiccd
 
@@ -148,6 +151,12 @@ PAC_PACKAGES+=(
     transmission-cli
     transmission-gtk
 
+    # For LibreOffice
+    hunspell
+    hunspell-en_au
+    hyphen
+    hyphen-en
+
     # PDF
     ghostscript  # PDF/PostScript processing
     mupdf-tools  # PDF manipulation
@@ -215,6 +224,7 @@ PAC_PACKAGES+=(
 AUR_PACKAGES+=(
     emote
     espanso
+    libreoffice-extension-languagetool
     masterpdfeditor-free
     pencil
     rescuetime2
@@ -300,6 +310,9 @@ PAC_PACKAGES+=(
     xdebug
 
     #
+    php7
+
+    #
     python
     python-acme     # Let's Encrypt CLI
     python-dateutil #
@@ -334,6 +347,7 @@ AUR_PACKAGES+=(
     babel-preset-env
     nodejs-less
     nvm
+    php-ibm_db2
     php-memprof
     php-sqlsrv
     phpdoc-phar

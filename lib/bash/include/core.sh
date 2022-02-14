@@ -854,6 +854,9 @@ function lk_date_ymdhms() { lk_date "%Y%m%d%H%M%S" "$@"; }
 # lk_date_ymd [TIMESTAMP]
 function lk_date_ymd() { lk_date "%Y%m%d" "$@"; }
 
+# lk_date_http [TIMESTAMP]
+function lk_date_http() { TZ=UTC lk_date "%a, %d %b %Y %H:%M:%S %Z" "$@"; }
+
 # lk_timestamp
 function lk_timestamp() { lk_date "%s"; }
 
@@ -2153,6 +2156,10 @@ function lk_fifo_flush() {
         status=none &>/dev/null || true
 }
 
+function lk_ps_parent_command() {
+    ps -o comm= -p "$PPID"
+}
+
 # lk_ps_recurse_children [-p] PPID...
 #
 # Print the process ID of all processes descended from PPID. If -p is set,
@@ -2203,23 +2210,51 @@ function lk_fd_next() {
     echo "$FD"
 }
 
+# _lk_log_install_file FILE
+#
+# If the parent directory of FILE doesn't exist, use root privileges to create
+# it with file mode 01777. Then, if FILE doesn't exist or isn't writable, create
+# it or change its permissions and ownership as needed.
 function _lk_log_install_file() {
-    local GID
-    if [ ! -w "$1" ]; then
-        if [ ! -e "$1" ]; then
-            local LOG_DIR=${1%"${1##*/}"}
-            [ -d "${LOG_DIR:=$PWD}" ] ||
-                install -d -m 00755 "$LOG_DIR" 2>/dev/null ||
-                sudo install -d -m 01777 "$LOG_DIR" || return
-            install -m 00600 /dev/null "$1" 2>/dev/null ||
-                { GID=$(id -g) &&
-                    sudo install -m 00600 -o "$UID" -g "$GID" /dev/null "$1"; }
+    if [[ ! -f $1 ]] || [[ ! -w $1 ]]; then
+        if [[ ! -e $1 ]]; then
+            local DIR=${1%"${1##*/}"} GID
+            [[ -d ${DIR:=$PWD} ]] ||
+                lk_elevate install -d -m 01777 "$DIR" || return
+            GID=$(id -g) &&
+                lk_elevate -f \
+                    install -m 00600 -o "$UID" -g "$GID" /dev/null "$1"
         else
-            chmod 00600 "$1" 2>/dev/null ||
-                sudo chmod 0600 "$1" || return
+            lk_elevate -f chmod 00600 "$1" || return
             [ -w "$1" ] ||
-                sudo chown "$UID" "$1"
+                lk_elevate chown "$UID" "$1"
         fi
+    fi
+}
+
+# lk_log
+#
+# For each line of input, add a microsecond-resolution timestamp and remove
+# characters before any carriage returns that aren't part of the line ending.
+function lk_log() {
+    local PL=${LK_BASE:+$LK_BASE/lib/perl/log.pl}
+    trap "" SIGINT
+    if [[ -x $PL ]]; then
+        exec "$PL"
+    else
+        # Don't use exec because without Bash, $PL won't be deleted on exit
+        lk_mktemp_with PL cat <<"EOF" && chmod u+x "$PL" && "$PL"
+#!/usr/bin/perl -p
+BEGIN {
+  $| = 1;
+  use POSIX qw{strftime};
+  use Time::HiRes qw{gettimeofday};
+}
+( $s, $ms ) = Time::HiRes::gettimeofday();
+$ms = sprintf( "%06i", $ms );
+print strftime( "%Y-%m-%d %H:%M:%S.$ms %z ", localtime($s) );
+s/.*\r(.)/\1/;
+EOF
     fi
 }
 
@@ -3018,29 +3053,6 @@ function _lk_tee() {
     exec tee "$@"
 }
 
-# lk_log [PREFIX]
-#
-# Add PREFIX and a microsecond-resolution timestamp to the beginning of each
-# line of input.
-#
-# Example:
-#
-#     $ echo "Hello, world." | lk_log '!!'
-#     !!2021-05-13 18:01:53.860513 +1000 Hello, world.
-function lk_log() {
-    local PREFIX=${1-}
-    lk_ignore_SIGINT && eval exec "$(_lk_log_close_fd)" || return
-    PREFIX=${PREFIX//"%"/"%%"} exec perl -pe '$| = 1;
-BEGIN {
-    use POSIX qw{strftime};
-    use Time::HiRes qw{gettimeofday};
-}
-( $s, $ms ) = Time::HiRes::gettimeofday();
-$ms = sprintf( "%06i", $ms );
-print strftime( "$ENV{PREFIX}%Y-%m-%d %H:%M:%S.$ms %z ", localtime($s) );
-s/.*\r(.)/\1/;'
-}
-
 # lk_log_create_file [-e EXT] [DIR...]
 function lk_log_create_file() {
     local OWNER=$UID GROUP EXT CMD LOG_DIRS=() LOG_DIR LOG_PATH
@@ -3090,7 +3102,7 @@ function lk_start_trace() {
         exec 2>&4 &&
             { ! lk_log_is_open || _LK_TRACE_FD=4; } &&
             { [ "${_LK_FD-2}" -ne 2 ] ||
-                { exec 3>/dev/tty && export _LK_FD=3; }; }
+                { exec 3>/dev/tty && _LK_FD=3; }; }
     fi || lk_warn "unable to open trace file" || return
     set -x
 }
@@ -3109,7 +3121,7 @@ function _lk_log_close_fd() {
 # lk_log_start [TEMP_LOG_FILE]
 function lk_log_start() {
     local ARG0 HEADER EXT _FILE FILE LOG_FILE OUT_FILE FIFO
-    if [ "${LK_NO_LOG-}" = 1 ] || lk_log_is_open ||
+    if [ "${_LK_NO_LOG-}" = 1 ] || lk_log_is_open ||
         { [[ $- == *i* ]] && ! lk_script_running; }; then
         return
     fi
@@ -3166,8 +3178,7 @@ function lk_log_start() {
         LK_EXEC=1 lk_strip_non_printing <"$FIFO" >>"$OUT_FILE") &
     unset _LK_LOG2_FD
     [ -z "${_LK_SECONDARY_LOG_FILE-}" ] || { _LK_LOG2_FD=$(lk_fd_next) &&
-        eval "exec $_LK_LOG2_FD"'>>"$_LK_SECONDARY_LOG_FILE"' &&
-        export _LK_LOG2_FD; } || return
+        eval "exec $_LK_LOG2_FD"'>>"$_LK_SECONDARY_LOG_FILE"'; } || return
     _LK_TTY_OUT_FD=$(lk_fd_next) &&
         eval "exec $_LK_TTY_OUT_FD>&1" &&
         _LK_TTY_ERR_FD=$(lk_fd_next) &&
@@ -3181,7 +3192,6 @@ function lk_log_start() {
         else
             eval "exec $_LK_LOG_FD"'> >(lk_log > >(_lk_tee -a "$LOG_FILE" >&"$_LK_LOG2_FD"))'
         fi; } || return
-    export _LK_FD _LK_{{TTY,LOG}_{OUT,ERR},LOG}_FD
     [ "${_LK_FD-2}" -ne 2 ] || {
         _LK_FD=3
         _LK_FD_LOGGED=1
@@ -4498,7 +4508,7 @@ set -o pipefail
 lk_trap_add EXIT '_lk_exit_trap "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'
 lk_trap_add ERR '_lk_err_trap "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'
 
-if lk_is_true LK_TTY_NO_COLOUR; then
+if [[ -n ${LK_TTY_NO_COLOUR-} ]] || ! lk_get_tty >/dev/null; then
     declare \
         LK_BLACK= \
         LK_RED= \

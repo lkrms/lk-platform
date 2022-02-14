@@ -1,38 +1,36 @@
+#!/bin/awk -f
+
 BEGIN {
-    S = "[[:blank:]]"
-    section_prefix_re = section_prefix_re ? section_prefix_re : "^" S "*\\[" S "*"
-    section_suffix_re = section_suffix_re ? section_suffix_re : S "*\\]" S "*$"
-    section_name_re = section_name_re ? section_name_re : "[-[:alnum:]./_]+"
-    section_re = section_prefix_re section_name_re section_suffix_re
-    skip = 1
-}
-
-function maybe_print(str) {
-    if (str) {
-        printf "%s", str
+  if (!section) {
+    section = ARGV[1]
+    ARGV[1] = ""
+    if (!section) {
+      printf("Usage: %s ([-v] section=<SECTION>|<SECTION>) ...\n",
+        ARGV[0]) > "/dev/stderr"
+      exit 1
     }
+  }
+  S = "[[:blank:]]"
+  prefix = "^" S "*\\[" S "*"
+  suffix = S "*\\]" S "*$"
+  name   = "[-[:alnum:]./_]+"
+  re     = prefix name suffix
+  skip = 1
 }
 
-!skip && $0 ~ section_re {
-    skip = 1
+!skip && $0 ~ re {
+  exit
 }
 
-$0 ~ section_re {
-    sub(section_prefix_re, "")
-    sub(section_suffix_re, "")
-    if ($0 ~ section_name_re && $0 == section) {
-        skip = 0
-        next
-    }
-}
-
-!skip && $0 ~ "^" S "*$" {
-    pending_empty = pending_empty $0 "\n"
+$0 ~ re {
+  sub(prefix, "")
+  sub(suffix, "")
+  if ($0 ~ name && $0 == section) {
+    skip = 0
     next
+  }
 }
 
 !skip {
-    maybe_print(pending_empty)
-    pending_empty = ""
-    print
+  print
 }

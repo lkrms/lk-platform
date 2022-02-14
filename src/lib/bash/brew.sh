@@ -81,10 +81,14 @@ function lk_brew_list_casks() {
 
 # lk_brew_enable_autoupdate [ARCH]
 function lk_brew_enable_autoupdate() {
-    lk_is_macos || return 0
-    local LABEL=com.github.domt4.homebrew-autoupdate
-    { launchctl list "$LABEL" || { LABEL+=.${1-$(uname -m)} &&
-        launchctl list "$LABEL"; }; } &>/dev/null || {
+    lk_is_macos || lk_warn "not supported on this platform" || return
+    local LABEL
+    ! brew tap | grep -Fx homebrew/autoupdate >/dev/null ||
+        { brew autoupdate delete &&
+            brew untap homebrew/autoupdate || return; }
+    LABEL=com.github.domt4.homebrew-autoupdate.${1-$(uname -m)}
+    brew tap lkrms/autoupdate
+    launchctl list "$LABEL" &>/dev/null || {
         lk_tty_print 'Enabling daily `brew update`'
         install -d -m 00755 ~/Library/LaunchAgents &&
             brew autoupdate start --cleanup

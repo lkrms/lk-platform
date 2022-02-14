@@ -14,16 +14,28 @@
 #         bash -c "$(curl -fsSL http://lkr.ms/bs-dev)" \
 #         bootstrap.sh -xu susan -k desktop /dev/vda archlinux
 
+LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-} &&
+    _DIR=/tmp/${LK_PATH_PREFIX}install &&
+    mkdir -p "$_DIR" || exit
+
+[[ $- != *c* ]] ||
+    { _FILE="$_DIR/bootstrap.sh" &&
+        echo "$BASH_EXECUTION_STRING" >"$_FILE" &&
+        { [[ $- != *x* ]] || export SHELLOPTS=xtrace; } &&
+        exec "$BASH" "$_FILE" "$@" || exit; }
+
 set -euo pipefail
 lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
-lk_log() { trap "" SIGINT && exec perl -pe '$| = 1;
-BEGIN { use POSIX qw{strftime}; use Time::HiRes qw{gettimeofday}; }
-( $s, $ms ) = Time::HiRes::gettimeofday(); $ms = sprintf( "%06i", $ms );
-print strftime( "$ENV{p}%Y-%m-%d %H:%M:%S.$ms %z ", localtime($s) );'; }
+lk_log() { trap "" SIGINT && exec perl -pe 'BEGIN {
+  $| = 1;
+  use POSIX qw{strftime};
+  use Time::HiRes qw{gettimeofday};
+}
+( $s, $ms ) = Time::HiRes::gettimeofday();
+$ms = sprintf( "%06i", $ms );
+print strftime( "%Y-%m-%d %H:%M:%S.$ms %z ", localtime($s) );
+s/.*\r(.)/\1/;'; }
 
-LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
-_DIR=/tmp/${LK_PATH_PREFIX}install
-mkdir -p "$_DIR"
 LOG_FILE=$_DIR/install.$(date +%s)
 exec 4> >(lk_log >"$LOG_FILE.trace")
 BASH_XTRACEFD=4
@@ -34,27 +46,28 @@ shopt -s nullglob
 DEFAULT_CMDLINE="quiet loglevel=3 audit=0$(! grep -q \
     '^flags[[:blank:]]*:.*\bhypervisor\b' /proc/cpuinfo &>/dev/null ||
     echo " console=tty0 console=ttyS0")"
-BOOTSTRAP_PING_HOST=${BOOTSTRAP_PING_HOST:-one.one.one.one}  # https://blog.cloudflare.com/dns-resolver-1-1-1-1/
-BOOTSTRAP_MOUNT_OPTIONS=${BOOTSTRAP_MOUNT_OPTIONS:-defaults} # On VMs with TRIM support, "discard" is added automatically
-BOOTSTRAP_USERNAME=${BOOTSTRAP_USERNAME:-arch}               #
-BOOTSTRAP_PASSWORD=${BOOTSTRAP_PASSWORD-}                    #
-BOOTSTRAP_KEY=${BOOTSTRAP_KEY-}                              #
-BOOTSTRAP_FULL_NAME=${BOOTSTRAP_FULL_NAME:-Arch Linux}       #
-LK_IPV4_ADDRESS=${LK_IPV4_ADDRESS-}                          #
-LK_IPV4_GATEWAY=${LK_IPV4_GATEWAY-}                          #
-LK_DNS_SERVERS=${LK_DNS_SERVERS-}                            # Space- or semicolon-delimited
-LK_DNS_SEARCH=${LK_DNS_SEARCH-}                              #
-LK_BRIDGE_INTERFACE=${LK_BRIDGE_INTERFACE-}                  #
-LK_WIFI_REGDOM=${LK_WIFI_REGDOM-}                            # e.g. "AU"
-LK_NODE_TIMEZONE=${LK_NODE_TIMEZONE:-UTC}                    # See `timedatectl list-timezones`
-LK_NODE_SERVICES=${LK_NODE_SERVICES-}                        #
-LK_NODE_LOCALES=${LK_NODE_LOCALES-en_AU.UTF-8 en_GB.UTF-8}   # "en_US.UTF-8" is added automatically
-LK_NODE_LANGUAGE=${LK_NODE_LANGUAGE-en_AU:en_GB:en}          #
-LK_SAMBA_WORKGROUP=${LK_SAMBA_WORKGROUP-}                    #
-LK_GRUB_CMDLINE=${LK_GRUB_CMDLINE-$DEFAULT_CMDLINE}          #
-LK_NTP_SERVER=${LK_NTP_SERVER-time.apple.com}                #
-LK_ARCH_MIRROR=${LK_ARCH_MIRROR-}                            #
-LK_ARCH_REPOS=${LK_ARCH_REPOS-}                              # REPO|SERVER|KEY_URL|KEY_ID|SIG_LEVEL,...
+BOOTSTRAP_PING_HOST=${BOOTSTRAP_PING_HOST:-one.one.one.one}            # https://blog.cloudflare.com/dns-resolver-1-1-1-1/
+BOOTSTRAP_TIME_URL=${BOOTSTRAP_TIME_URL:-https://$BOOTSTRAP_PING_HOST} #
+BOOTSTRAP_MOUNT_OPTIONS=${BOOTSTRAP_MOUNT_OPTIONS:-defaults}           # On VMs with TRIM support, "discard" is added automatically
+BOOTSTRAP_USERNAME=${BOOTSTRAP_USERNAME:-arch}                         #
+BOOTSTRAP_PASSWORD=${BOOTSTRAP_PASSWORD-}                              #
+BOOTSTRAP_KEY=${BOOTSTRAP_KEY-}                                        #
+BOOTSTRAP_FULL_NAME=${BOOTSTRAP_FULL_NAME:-Arch Linux}                 #
+LK_IPV4_ADDRESS=${LK_IPV4_ADDRESS-}                                    #
+LK_IPV4_GATEWAY=${LK_IPV4_GATEWAY-}                                    #
+LK_DNS_SERVERS=${LK_DNS_SERVERS-}                                      # Space- or semicolon-delimited
+LK_DNS_SEARCH=${LK_DNS_SEARCH-}                                        #
+LK_BRIDGE_INTERFACE=${LK_BRIDGE_INTERFACE-}                            #
+LK_WIFI_REGDOM=${LK_WIFI_REGDOM-}                                      # e.g. "AU"
+LK_NODE_TIMEZONE=${LK_NODE_TIMEZONE:-UTC}                              # See `timedatectl list-timezones`
+LK_NODE_SERVICES=${LK_NODE_SERVICES-}                                  #
+LK_NODE_LOCALES=${LK_NODE_LOCALES-en_AU.UTF-8 en_GB.UTF-8}             # "en_US.UTF-8" is added automatically
+LK_NODE_LANGUAGE=${LK_NODE_LANGUAGE-en_AU:en_GB:en}                    #
+LK_SAMBA_WORKGROUP=${LK_SAMBA_WORKGROUP-}                              #
+LK_GRUB_CMDLINE=${LK_GRUB_CMDLINE-$DEFAULT_CMDLINE}                    #
+LK_NTP_SERVER=${LK_NTP_SERVER-time.apple.com}                          #
+LK_ARCH_MIRROR=${LK_ARCH_MIRROR-}                                      #
+LK_ARCH_REPOS=${LK_ARCH_REPOS-}                                        # REPO|SERVER|KEY_URL|KEY_ID|SIG_LEVEL,...
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-main}
 LK_PACKAGES_FILE=${LK_PACKAGES_FILE-}
 export LK_BASE=${LK_BASE:-/opt/lk-platform}
@@ -257,6 +270,10 @@ function in_target() {
     fi
 }
 
+function system_time() {
+    date "$@" +"%a, %d %b %Y %H:%M:%S %Z"
+}
+
 lk_log_start "$LOG_FILE"
 lk_log_tty_off
 lk_trap_add EXIT exit_trap
@@ -285,22 +302,31 @@ fi
 lk_tty_print "Checking network connection"
 ping -c 1 "$BOOTSTRAP_PING_HOST" || lk_die "no network"
 
+lk_tty_print "Syncing system time"
+lk_tty_detail "Before syncing:" "$(system_time)"
+NOW=$(curl -fsSI "$BOOTSTRAP_TIME_URL" | awk '
+    { $1 = tolower($1); if(sub(/^date:[[:blank:]]*/, "")) { d = $0 } }
+END { if (d) { print d } else { exit 1 } }') &&
+    NOW=$(system_time --set "$NOW") ||
+    lk_die "unable to sync system time with $BOOTSTRAP_TIME_URL"
+lk_tty_detail "After syncing with $BOOTSTRAP_TIME_URL:" "$NOW"
+
 lk_tty_print "Checking pacman keyring"
-lk_arch_reset_pacman_keyring
-lk_log_bypass -o lk_faketty pacman -Sy --noconfirm --needed archlinux-keyring
+DIR=/etc/pacman.d/gnupg/private-keys-v1.d
+if ! MODIFIED=$(lk_file_modified "$DIR" 2>/dev/null); then
+    lk_tty_detail "Initialising keyring"
+    lk_arch_reset_pacman_keyring
+elif [[ $(lk_timestamp) -lt $MODIFIED ]]; then
+    lk_tty_warning "Master key was created in the future"
+    lk_tty_detail "Resetting keyring"
+    lk_arch_reset_pacman_keyring
+fi
+lk_pac_sync
+if pacman -Sup --print-format "%n" | grep -Fx archlinux-keyring >/dev/null; then
+    lk_log_bypass -o lk_faketty pacman -S --noconfirm archlinux-keyring
+fi
 
 . "$_DIR/packages.sh"
-
-if [ -n "$LK_NTP_SERVER" ]; then
-    lk_tty_print "Synchronising system time with" "$LK_NTP_SERVER"
-    if ! lk_command_exists ntpd; then
-        lk_tty_detail "Installing ntp"
-        lk_log_bypass -o lk_faketty pacman -S --noconfirm ntp ||
-            lk_die "unable to install ntp"
-    fi
-    lk_tty_run_detail ntpd -qgx "$LK_NTP_SERVER" ||
-        lk_die "unable to sync system time"
-fi
 
 lk_tty_print
 lk_tty_log "Checking disk partitions"
@@ -310,8 +336,8 @@ if [ -n "$INSTALL_DISK" ]; then
     lk_tty_print "Partitioning:" "$INSTALL_DISK"
     lk_tty_run_detail parted --script "$INSTALL_DISK" \
         "mklabel gpt" \
-        "mkpart fat32 2048s 260MiB" \
-        "mkpart ext4 260MiB 100%" \
+        "mkpart fat32 2048s 300MiB" \
+        "mkpart ext4 300MiB 100%" \
         "set 1 boot on"
     partprobe "$INSTALL_DISK"
     sleep 1
@@ -336,7 +362,7 @@ if [ "${BOOT_TYPE[0]}" = vfat ] &&
     [ "${BOOT_TYPE[2]}" = c12a7328-f81f-11d2-ba4b-00a0c93ec93b ]; then
     lk_tty_print \
         "ESP at $BOOT_PART already formatted as ${BOOT_TYPE[1]}; leaving as-is"
-    FORMAT_BOOT=
+    FORMAT_BOOT=0
 else
     [ -z "${BOOT_TYPE[0]}" ] ||
         lk_warn "Unexpected ${BOOT_TYPE[0]} filesystem at $BOOT_PART" || true
@@ -351,8 +377,9 @@ fi
     lk_tty_yn "OK to format $ROOT_PART as ext4?" Y ||
     lk_die ""
 
-lk_tty_print "Formatting:" "${FORMAT_BOOT:+$BOOT_PART }$ROOT_PART"
-((!${FORMAT_BOOT:-0})) ||
+lk_tty_print "Formatting:" \
+    "$( ((!FORMAT_BOOT)) || echo "$BOOT_PART ")$ROOT_PART"
+((!FORMAT_BOOT)) ||
     lk_tty_run_detail mkfs.fat -vn ESP -F 32 "$BOOT_PART"
 lk_tty_run_detail mkfs.ext4 -vL root "$ROOT_PART"
 
@@ -368,7 +395,7 @@ lk_tty_run_detail mount \
     -o "$BOOTSTRAP_MOUNT_OPTIONS${BOOT_EXTRA-}" \
     "$BOOT_PART" /mnt/boot
 
-if ((!${FORMAT_BOOT:-0})); then
+if ((!FORMAT_BOOT)); then
     lk_tty_print "Removing files from previous installations in ESP"
     rm -Rfv /mnt/boot/{syslinux,intel-ucode.img,amd-ucode.img}
 fi
@@ -463,7 +490,7 @@ lk_var_sh \
 lk_log_tty_on
 PROVISIONED=0
 in_target -u "$BOOTSTRAP_USERNAME" \
-    env BASH_XTRACEFD=$BASH_XTRACEFD SHELLOPTS=xtrace LK_NO_LOG=1 \
+    env BASH_XTRACEFD=$BASH_XTRACEFD SHELLOPTS=xtrace _LK_NO_LOG=1 \
     "$LK_BASE/bin/lk-provision-arch.sh" --yes && PROVISIONED=1 ||
     lk_tty_error "Provisioning failed"
 lk_log_tty_off

@@ -193,7 +193,7 @@ HOMEBREW_FORMULAE+=(
     # Platforms
     awscli
     azure-cli
-    azure-functions-core-tools@3
+    azure-functions-core-tools@4
     wp-cli
 )
 
@@ -249,6 +249,9 @@ HOMEBREW_KEEP_FORMULAE+=(
     php@7.3
     php@7.4
     php@8.0
+
+    #
+    rust
 
     #
     microsoft/mssql-release/msodbcsql17

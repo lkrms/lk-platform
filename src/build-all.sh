@@ -8,8 +8,8 @@ _dir=$(cd "$_dir" && pwd -P)
 
 shfmt_minify=${shfmt_minify:-0} \
     shfmt_simplify=${shfmt_simplify:-1} \
-    "$_dir/build-bash.sh"
+    "$_dir/build-bash.sh" "$@"
 
 echo >&2
 
-"$_dir/build-json.sh"
+"$_dir/build-json.sh" "$@"

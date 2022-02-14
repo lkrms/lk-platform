@@ -421,7 +421,7 @@ EOF
 
     LK_SUDO=1
     lk_tty_print
-    LK_NO_LOG=1 \
+    _LK_NO_LOG=1 \
         lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh"
     unset LK_SUDO
 

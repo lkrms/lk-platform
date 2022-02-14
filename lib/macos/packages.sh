@@ -2,7 +2,6 @@
 
 HOMEBREW_TAPS=(
     homebrew/cask
-    lkrms/autoupdate
 
     #
     ${HOMEBREW_TAPS[@]+"${HOMEBREW_TAPS[@]}"}
@@ -48,6 +47,7 @@ HOMEBREW_FORMULAE+=(
     ncdu
     p7zip
     watch
+    zenity
 )
 
 HOMEBREW_UNLINK_FORMULAE=(

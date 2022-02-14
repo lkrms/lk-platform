@@ -554,29 +554,6 @@ function _lk_tee() {
     exec tee "$@"
 }
 
-# lk_log [PREFIX]
-#
-# Add PREFIX and a microsecond-resolution timestamp to the beginning of each
-# line of input.
-#
-# Example:
-#
-#     $ echo "Hello, world." | lk_log '!!'
-#     !!2021-05-13 18:01:53.860513 +1000 Hello, world.
-function lk_log() {
-    local PREFIX=${1-}
-    lk_ignore_SIGINT && eval exec "$(_lk_log_close_fd)" || return
-    PREFIX=${PREFIX//"%"/"%%"} exec perl -pe '$| = 1;
-BEGIN {
-    use POSIX qw{strftime};
-    use Time::HiRes qw{gettimeofday};
-}
-( $s, $ms ) = Time::HiRes::gettimeofday();
-$ms = sprintf( "%06i", $ms );
-print strftime( "$ENV{PREFIX}%Y-%m-%d %H:%M:%S.$ms %z ", localtime($s) );
-s/.*\r(.)/\1/;'
-} #### Reviewed: 2021-05-13
-
 # lk_log_create_file [-e EXT] [DIR...]
 function lk_log_create_file() {
     local OWNER=$UID GROUP EXT CMD LOG_DIRS=() LOG_DIR LOG_PATH
@@ -626,7 +603,7 @@ function lk_start_trace() {
         exec 2>&4 &&
             { ! lk_log_is_open || _LK_TRACE_FD=4; } &&
             { [ "${_LK_FD-2}" -ne 2 ] ||
-                { exec 3>/dev/tty && export _LK_FD=3; }; }
+                { exec 3>/dev/tty && _LK_FD=3; }; }
     fi || lk_warn "unable to open trace file" || return
     set -x
 }
@@ -645,7 +622,7 @@ function _lk_log_close_fd() {
 # lk_log_start [TEMP_LOG_FILE]
 function lk_log_start() {
     local ARG0 HEADER EXT _FILE FILE LOG_FILE OUT_FILE FIFO
-    if [ "${LK_NO_LOG-}" = 1 ] || lk_log_is_open ||
+    if [ "${_LK_NO_LOG-}" = 1 ] || lk_log_is_open ||
         { [[ $- == *i* ]] && ! lk_script_running; }; then
         return
     fi
@@ -702,8 +679,7 @@ function lk_log_start() {
         LK_EXEC=1 lk_strip_non_printing <"$FIFO" >>"$OUT_FILE") &
     unset _LK_LOG2_FD
     [ -z "${_LK_SECONDARY_LOG_FILE-}" ] || { _LK_LOG2_FD=$(lk_fd_next) &&
-        eval "exec $_LK_LOG2_FD"'>>"$_LK_SECONDARY_LOG_FILE"' &&
-        export _LK_LOG2_FD; } || return
+        eval "exec $_LK_LOG2_FD"'>>"$_LK_SECONDARY_LOG_FILE"'; } || return
     _LK_TTY_OUT_FD=$(lk_fd_next) &&
         eval "exec $_LK_TTY_OUT_FD>&1" &&
         _LK_TTY_ERR_FD=$(lk_fd_next) &&
@@ -717,7 +693,6 @@ function lk_log_start() {
         else
             eval "exec $_LK_LOG_FD"'> >(lk_log > >(_lk_tee -a "$LOG_FILE" >&"$_LK_LOG2_FD"))'
         fi; } || return
-    export _LK_FD _LK_{{TTY,LOG}_{OUT,ERR},LOG}_FD
     [ "${_LK_FD-2}" -ne 2 ] || {
         _LK_FD=3
         _LK_FD_LOGGED=1
@@ -2034,7 +2009,7 @@ set -o pipefail
 lk_trap_add EXIT '_lk_exit_trap "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'
 lk_trap_add ERR '_lk_err_trap "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'
 
-if lk_is_true LK_TTY_NO_COLOUR; then
+if [[ -n ${LK_TTY_NO_COLOUR-} ]] || ! lk_get_tty >/dev/null; then
     declare \
         LK_BLACK= \
         LK_RED= \
