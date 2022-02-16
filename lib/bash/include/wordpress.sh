@@ -635,7 +635,7 @@ Usage: $FUNCNAME SSH_HOST [REMOTE_PATH [LOCAL_PATH [RSYNC_ARG...]]]" || return
         /.tmb
         "php_error*.log"
         {"error*",debug}"?log"
-        /wp-content/{backup,cache,upgrade,updraft}/
+        /wp-content/{backup,cache,litespeed,upgrade,updraft}/
         /wp-content/uploads/{backup,cache,wp-file-manager-pro/fm_backup}/
         ${LK_WP_SYNC_EXCLUDE[@]+"${LK_WP_SYNC_EXCLUDE[@]}"}
     )
