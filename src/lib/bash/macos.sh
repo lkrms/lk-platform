@@ -101,7 +101,7 @@ function lk_macos_setenv() {
         lk_root || launchctl load -w "$_FILE" || return
     fi
     grep -Eq "\<$1\>" /etc/profile &>/dev/null || {
-        lk_file_keep_original "$_FILE" && lk_elevate tee -a \
+        lk_file_keep_original /etc/profile && lk_elevate tee -a \
             /etc/profile <<<"export $1=$(lk_double_quote "${2-}")" >/dev/null
     } || return
     export "$1=${2-}"
@@ -123,6 +123,17 @@ function lk_macos_command_line_tools_path() {
 function lk_macos_command_line_tools_installed() {
     lk_macos_command_line_tools_path &>/dev/null
 } #### Reviewed: 2021-06-28
+
+function lk_macos_bundle_is_installed() {
+    mdfind -onlyin / "kMDItemCFBundleIdentifier == '$1'" | grep . >/dev/null
+}
+
+function lk_macos_bundle_list() {
+    mdfind -0 -onlyin / 'kMDItemContentType == "com.apple.application-bundle" && kMDItemCFBundleIdentifier == "*"' |
+        xargs -0 mdls -r -name kMDItemCFBundleIdentifier -name kMDItemPath |
+        tr '\0' '\n' |
+        awk '{ b = $0; if (getline > 0) { print b, $0 } else { exit 1 } }'
+}
 
 # lk_macos_update_list_available
 #
