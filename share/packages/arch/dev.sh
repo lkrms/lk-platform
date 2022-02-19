@@ -356,6 +356,7 @@ AUR_PACKAGES+=(
     ruby-rubocop
     ruby-rubocop-performance
     ruby-rubocop-rails
+    ruby-ruby-debug-ide
     standard
     terser
     trickle

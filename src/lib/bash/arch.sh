@@ -315,13 +315,13 @@ function lk_makepkg() {
 }
 
 function lk_aur_can_chroot() {
-    [ -f /etc/aurutils/pacman-aur.conf ] &&
+    [[ -f /etc/aurutils/pacman-${LK_ARCH_AUR_REPO_NAME:-aur}.conf ]] &&
         lk_pac_installed devtools &&
         ! lk_in_chroot
 }
 
 function lk_aur_outdated() {
-    aur repo --database aur --list |
+    aur repo --database "${LK_ARCH_AUR_REPO_NAME:-aur}" --list |
         aur vercmp -q
 }
 
@@ -342,7 +342,10 @@ function lk_aur_sync() {
         lk_tty_list - "Syncing from AUR:" package packages
     lk_makepkg_setup
     for PKG in "$@"; do
-        lk_tty_run_detail aur sync --database aur --no-view --noconfirm \
+        lk_tty_run_detail aur sync \
+            --database "${LK_ARCH_AUR_REPO_NAME:-aur}" \
+            --no-view \
+            --noconfirm \
             ${CHROOT+--chroot} \
             ${CHROOT+--makepkg-conf=/etc/makepkg.conf} \
             ${GPGKEY+--sign} \

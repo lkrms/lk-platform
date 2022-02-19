@@ -597,6 +597,7 @@ $LK_NODE_HOSTNAME" &&
     LK_SUDO=1
 
     if lk_command_exists aur ||
+        [ -n "${LK_ARCH_AUR_REPO_NAME-}" ] ||
         { [ ${#AUR_PACKAGES[@]} -gt 0 ] && lk_tty_yn \
             "OK to install aurutils for AUR package management?" Y; }; then
         lk_log_tty_on
@@ -609,18 +610,19 @@ $LK_NODE_HOSTNAME" &&
             lk_faketty pacman -S --noconfirm "${PAC_INSTALL[@]}"
         }
 
-        DIR=$({ pacman-conf --repo=aur |
+        REPO=${LK_ARCH_AUR_REPO_NAME:-aur}
+        DIR=$({ pacman-conf --repo="$REPO" |
             awk -F"$S*=$S*" '$1=="Server"{print$2}' |
             grep '^file://' |
             sed 's#^file://##'; } 2>/dev/null) && [ -d "$DIR" ] ||
-            DIR=/srv/repo/aur
-        FILE=$DIR/aur.db.tar.xz
+            DIR=/srv/repo/$REPO
+        FILE=$DIR/$REPO.db.tar.xz
         lk_tty_detail "Checking pacman repo at" "$DIR"
         lk_install -d -m 00755 -o "$USER" -g "$GROUP" "$DIR"
         [ -e "$FILE" ] ||
             (LK_SUDO= && lk_faketty repo-add "$FILE")
 
-        lk_arch_add_repo "aur|file://$DIR|||Optional TrustAll"
+        lk_arch_add_repo "$REPO|file://$DIR|||Optional TrustAll"
         LK_CONF_OPTION_FILE=/etc/pacman.conf
         lk_conf_enable_row -s options "CacheDir = /var/cache/pacman/pkg/"
         lk_conf_enable_row -s options "CacheDir = $DIR/"
@@ -628,22 +630,23 @@ $LK_NODE_HOSTNAME" &&
             lk_conf_set_option -s options CleanMethod KeepCurrent
 
         if ! lk_command_exists aur ||
-            ! lk_pac_repo_available_list aur |
+            ! lk_pac_repo_available_list "$REPO" |
             grep -Fx aurutils >/dev/null; then
-            lk_tty_detail "Installing aurutils"
+            lk_tty_detail "Building aurutils"
             PKGDEST=$DIR lk_makepkg -a aurutils --force
             lk_files_exist "${LK_MAKEPKG_LIST[@]}" ||
                 lk_die "not found: ${LK_MAKEPKG_LIST[*]}"
             (LK_SUDO= &&
                 lk_faketty repo-add --remove "$FILE" "${LK_MAKEPKG_LIST[@]}")
+            lk_tty_detail "Installing aurutils"
             lk_pac_sync -f
-            lk_faketty pacman -S --noconfirm aur/aurutils
+            lk_faketty pacman -S --noconfirm "$REPO/aurutils"
         fi
 
-        FILE=/etc/aurutils/pacman-aur.conf
+        FILE=/etc/aurutils/pacman-$REPO.conf
         _FILE=$(cat /usr/share/devtools/pacman-extra.conf &&
-            printf '\n[%s]\n' aur &&
-            pacman-conf --repo=aur)
+            printf '\n[%s]\n' "$REPO" &&
+            pacman-conf --repo="$REPO")
         lk_install -m 00644 "$FILE"
         lk_file_replace "$FILE" "$_FILE"
 
@@ -665,7 +668,7 @@ $LK_NODE_HOSTNAME" &&
             ! lk_aur_can_chroot || lk_pac_sync -f
             PAC_PACKAGES+=($(comm -12 \
                 <({ echo aurutils && lk_arr AUR_PACKAGES; } | sort -u) \
-                <(lk_pac_repo_available_list aur | sort -u)))
+                <(lk_pac_repo_available_list "$REPO" | sort -u)))
             AUR_PACKAGES=()
         fi
         lk_log_tty_stdout_off

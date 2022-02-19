@@ -11,7 +11,7 @@ lk_require arch
 [ $# -gt 1 ] || {
     lk_require bash
     lk_pac_sync
-    set -- "${1:-aur}" $(comm -23 \
+    set -- "${1:-${LK_ARCH_AUR_REPO_NAME:-aur}}" $(comm -23 \
         <({ cat \
             "$LK_BASE/share/packages/arch"/* \
             "$LK_BASE/lib/arch/packages.sh" |
