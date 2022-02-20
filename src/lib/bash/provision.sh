@@ -177,34 +177,6 @@ Usage: $FUNCNAME DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..."
         lk_tty_detail "Changes logged to:" "$LOG_FILE"
 }
 
-function lk_sudo_add_nopasswd() {
-    local LK_SUDO=1 FILE
-    [ -n "${1-}" ] || lk_warn "no user" || return
-    lk_user_exists "$1" || lk_warn "user not found: $1" || return
-    FILE=/etc/sudoers.d/nopasswd-$1
-    lk_install -m 00440 "$FILE" &&
-        lk_file_replace "$FILE" "$1 ALL=(ALL) NOPASSWD:ALL"
-}
-
-# lk_sudo_offer_nopasswd
-#
-# Invite the current user to add themselves to the system's sudoers policy with
-# unlimited access and no password prompts.
-function lk_sudo_offer_nopasswd() {
-    local FILE
-    ! lk_root || lk_warn "cannot run as root" || return
-    FILE=/etc/sudoers.d/nopasswd-$USER
-    sudo -n test -e "$FILE" 2>/dev/null || {
-        lk_can_sudo install || return
-        lk_confirm \
-            "Allow '$USER' to run commands as root with no password?" N ||
-            return 0
-        lk_sudo_add_nopasswd "$USER" &&
-            lk_tty_print \
-                "User '$USER' may now run any command as any user"
-    }
-}
-
 # lk_ssh_set_option OPTION VALUE [FILE]
 function lk_ssh_set_option() {
     local OPTION VALUE FILE=${3:-$LK_CONF_OPTION_FILE}

@@ -135,7 +135,7 @@ function exit_trap() {
 
     lk_tty_log "Provisioning macOS"
 
-    lk_sudo_offer_nopasswd || lk_die "unable to run commands as root"
+    lk_sudo_nopasswd_offer || lk_die "unable to run commands as root"
 
     sudo systemsetup -getremotelogin | grep -Ei '\<On$' >/dev/null || {
         [ "${PIPESTATUS[0]}${PIPESTATUS[1]}" = 01 ] || lk_die ""

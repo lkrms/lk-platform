@@ -175,7 +175,7 @@ lk_start_trace
 
 {
     lk_tty_log "Provisioning Arch Linux"
-    lk_sudo_offer_nopasswd || lk_die "unable to run commands as root"
+    lk_sudo_nopasswd_offer || lk_die "unable to run commands as root"
     ! lk_is_bootstrap || lk_tty_detail "Bootstrap environment detected"
     GROUP=$(id -gn)
     MEMORY=$(lk_system_memory 2)

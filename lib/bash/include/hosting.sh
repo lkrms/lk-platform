@@ -27,7 +27,7 @@ Usage: $FUNCNAME LOGIN" || return
         lk_install -m 00600 -o "$1" -g "$_GROUP" "$FILE"
         lk_file_replace "$FILE" "$(lk_echo_args "${@:2}")"
     }
-    lk_sudo_add_nopasswd "$1"
+    lk_sudo_nopasswd_add "$1"
 }
 
 # lk_hosting_user_add LOGIN
