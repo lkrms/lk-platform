@@ -2,13 +2,13 @@
 
 # _lk_stream_args COMMAND_ARGS COMMAND... [ARG...]
 function _lk_stream_args() {
-    local IFS
-    unset IFS
+    local IFS=$' \t\n'
     if (($# > $1 + 1)); then
         printf '%s\n' "${@:$1+2}" | "${@:2:$1}"
     else
-        [ "$(type -t "$2")" = file ] || local LK_EXEC
-        ${LK_EXEC:+exec} "${@:2:$1}"
+        local EXEC=1
+        [ "$(type -t "$2")" = file ] || EXEC=
+        ${EXEC:+${LK_EXEC:+exec}} "${@:2:$1}"
     fi
 }
 
@@ -49,8 +49,7 @@ function lk_fold_quote_args() {
 
 # lk_implode_args GLUE [ARG...]
 function lk_implode_args() {
-    local IFS GLUE=${1//\\/\\\\}
-    unset IFS
+    local IFS=$' \t\n' GLUE=${1//\\/\\\\}
     GLUE=${GLUE//%/%%}
     [ $# -eq 1 ] || printf '%s' "$2"
     [ $# -le 2 ] || printf -- "$GLUE%s" "${@:3}"
