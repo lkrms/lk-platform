@@ -16,7 +16,7 @@ export LK_BASE=${LK_BASE:-/opt/lk-platform}
 set -euo pipefail
 lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
 
-[ "$EUID" -ne 0 ] || lk_die "cannot run as root"
+[[ $EUID -ne 0 ]] || lk_die "cannot run as root"
 [[ $OSTYPE == darwin* ]] || lk_die "not running on macOS"
 [[ $- != *s* ]] || lk_die "cannot run from standard input"
 
@@ -136,6 +136,7 @@ function exit_trap() {
     lk_tty_log "Provisioning macOS"
 
     lk_sudo_nopasswd_offer || lk_die "unable to run commands as root"
+    lk_sudo_keep_alive 50
 
     sudo systemsetup -getremotelogin | grep -Ei '\<On$' >/dev/null || {
         [ "${PIPESTATUS[0]}${PIPESTATUS[1]}" = 01 ] || lk_die ""

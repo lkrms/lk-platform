@@ -173,6 +173,27 @@ END { maybe_print() }' "$TEMP" >"$TEMP2" && cp "$TEMP2" "$TEMP" || return
     done
 }
 
+# lk_sudo_keep_alive [INTERVAL]
+#
+# Update the user's cached sudo credentials, prompting for a password if
+# necessary, then extend the sudo timeout in the background every INTERVAL
+# seconds (240 by default) until the (sub)shell exits or `sudo -nv` fails.
+function lk_sudo_keep_alive() {
+    ! lk_root || return 0
+    # Use `sudo bash -c 'exec true'` because `sudo -v` prompts NOPASSWD:ALL
+    # users for a password, and succeeds regardless of the user's privileges
+    sudo bash -c 'exec true' && lk_set_bashpid || return
+    # Killing the background loop on exit should be sufficient to prevent it
+    # running indefinitely, but as an additional safeguard, exit the loop if the
+    # current shell has exited
+    local PID=$BASHPID
+    while kill -0 "$PID" 2>/dev/null; do
+        sudo -nv &>/dev/null || break
+        sleep "${1:-240}"
+    done &
+    lk_kill_on_exit $!
+}
+
 # lk_sudo_nopasswd_add <USER>
 #
 # Add or update /etc/sudoers.d/nopasswd-<USER> with the following policy:
