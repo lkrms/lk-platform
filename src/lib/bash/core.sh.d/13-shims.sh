@@ -107,7 +107,14 @@ function lk_unbuffer() {
     local CMD=$1
     shift
     case "$CMD" in
-    sed | gsed | gnu_sed)
+    sed)
+        if lk_is_macos; then
+            set -- "$CMD" -l "$@"
+        else
+            set -- "$CMD" -u "$@"
+        fi
+        ;;
+    gsed | gnu_sed)
         set -- "$CMD" -u "$@"
         ;;
     grep | ggrep | gnu_grep)

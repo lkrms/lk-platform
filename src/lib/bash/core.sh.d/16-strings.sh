@@ -116,8 +116,8 @@ function lk_strip_non_printing() {
     local DELETE
     [ "${1-}" != -d ] || { DELETE=$2 && shift 2; }
     eval "$(lk_get_regex NON_PRINTING_REGEX)"
-    LC_ALL=C _lk_stream_args 3 \
-        sed -Eu "s/$NON_PRINTING_REGEX//g; "$'s/.*\r(.)/\\1/' "$@" |
+    LC_ALL=C _lk_stream_args 4 \
+        lk_unbuffer sed -E "s/$NON_PRINTING_REGEX//g; "$'s/.*\r(.)/\\1/' "$@" |
         lk_unbuffer tr -d '\0-\10\16-\37\177'"${DELETE-}"
 }
 

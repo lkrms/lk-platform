@@ -603,7 +603,14 @@ function lk_unbuffer() {
     local CMD=$1
     shift
     case "$CMD" in
-    sed | gsed | gnu_sed)
+    sed)
+        if lk_is_macos; then
+            set -- "$CMD" -l "$@"
+        else
+            set -- "$CMD" -u "$@"
+        fi
+        ;;
+    gsed | gnu_sed)
         set -- "$CMD" -u "$@"
         ;;
     grep | ggrep | gnu_grep)
@@ -1000,8 +1007,8 @@ function lk_strip_non_printing() {
     local DELETE
     [ "${1-}" != -d ] || { DELETE=$2 && shift 2; }
     eval "$(lk_get_regex NON_PRINTING_REGEX)"
-    LC_ALL=C _lk_stream_args 3 \
-        sed -Eu "s/$NON_PRINTING_REGEX//g; "$'s/.*\r(.)/\\1/' "$@" |
+    LC_ALL=C _lk_stream_args 4 \
+        lk_unbuffer sed -E "s/$NON_PRINTING_REGEX//g; "$'s/.*\r(.)/\\1/' "$@" |
         lk_unbuffer tr -d '\0-\10\16-\37\177'"${DELETE-}"
 }
 
@@ -1294,8 +1301,8 @@ function _lk_tty_margin_add() {
     if ((_MARGIN > 0)); then
         _SPACES=$(printf "%${_MARGIN}s")
         "$@" \
-            > >(LC_ALL=C sed -Eu "s/(^|($_R)(.))/\2$_SPACES\3/") \
-            2> >(LC_ALL=C sed -Eu "s/(^|($_R)(.))/\2$_SPACES\3/" >&2)
+            > >(LC_ALL=C lk_unbuffer sed -E "s/(^|($_R)(.))/\2$_SPACES\3/") \
+            2> >(LC_ALL=C lk_unbuffer sed -E "s/(^|($_R)(.))/\2$_SPACES\3/" >&2)
     else
         "$@"
     fi
