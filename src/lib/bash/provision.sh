@@ -177,34 +177,6 @@ Usage: $FUNCNAME DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..."
         lk_tty_detail "Changes logged to:" "$LOG_FILE"
 }
 
-function lk_sudo_add_nopasswd() {
-    local LK_SUDO=1 FILE
-    [ -n "${1-}" ] || lk_warn "no user" || return
-    lk_user_exists "$1" || lk_warn "user not found: $1" || return
-    FILE=/etc/sudoers.d/nopasswd-$1
-    lk_install -m 00440 "$FILE" &&
-        lk_file_replace "$FILE" "$1 ALL=(ALL) NOPASSWD:ALL"
-}
-
-# lk_sudo_offer_nopasswd
-#
-# Invite the current user to add themselves to the system's sudoers policy with
-# unlimited access and no password prompts.
-function lk_sudo_offer_nopasswd() {
-    local FILE
-    ! lk_root || lk_warn "cannot run as root" || return
-    FILE=/etc/sudoers.d/nopasswd-$USER
-    sudo -n test -e "$FILE" 2>/dev/null || {
-        lk_can_sudo install || return
-        lk_confirm \
-            "Allow '$USER' to run commands as root with no password?" N ||
-            return 0
-        lk_sudo_add_nopasswd "$USER" &&
-            lk_tty_print \
-                "User '$USER' may now run any command as any user"
-    }
-}
-
 # lk_ssh_set_option OPTION VALUE [FILE]
 function lk_ssh_set_option() {
     local OPTION VALUE FILE=${3:-$LK_CONF_OPTION_FILE}
@@ -496,30 +468,78 @@ EOF
     done
 }
 
-# lk_hosts_file_add IP NAME...
+function _lk_hosts_file_add() {
+    lk_mktemp_with TEMP awk \
+        -v replace="$REPLACE" \
+        -v block="$BLOCK" \
+        -v block_re="${BLOCK_RE//\\/\\\\}" '
+BEGIN {
+  S  = "[[:blank:]]"
+  re = S "*##" S "*" block_re S "*##" S "*$"
+}
+replace && FILENAME != "-" && $0 ~ re {
+  next
+}
+FILENAME == "-" || $0 ~ re {
+  gsub("(^" S "+|" re ")", "")
+  if (!$0) { next }
+  gsub(S "+", " ")
+  if (!seen[$0]++) {
+    max_length  = length > max_length ? length : max_length
+    blocks[i++] = $0
+  }
+  next
+}
+$0 ~ "^" S "*$" {
+  last_blank = 1
+  next
+}
+{
+  if (last_blank && printed) { print "" }
+  last_blank = 0
+  print $0
+  printed++
+}
+END {
+  if (i) { print "" }
+  for (i in blocks) {
+    printf("%-" (max_length + 1) "s## %s ##\n", blocks[i], block)
+  }
+}' /etc/hosts -
+}
+
+# lk_hosts_file_add [-r] [-b <BLOCK>] [<IP> <NAME>...]
+#
+# Add '<IP> <NAME>... ## <BLOCK> ##' to `/etc/hosts`. If no host arguments are
+# given, read entries from input, one per line. If -r is set, remove existing
+# entries with a matching <BLOCK>, otherwise move matching entries to the end of
+# the file and remove any duplicates.
+#
+# The default value of <BLOCK> is the caller's name.
 function lk_hosts_file_add() {
-    local LK_SUDO=1 FILE=/etc/hosts BLOCK_ID SH REGEX HOSTS _FILE
-    BLOCK_ID=$(lk_caller_name) &&
-        SH=$(lk_get_regex IP_REGEX HOST_NAME_REGEX) &&
-        eval "$SH" || return
-    REGEX="^$S*(#$S*)?$IP_REGEX($S+$HOST_NAME_REGEX)+$S+##$S*$BLOCK_ID$S*##"
-    _FILE=$(HOSTS=$({ sed -E "/$REGEX/!d" "$FILE" &&
-        printf '%s %s\t## %s ##\n' "$1" "${*:2}" "$BLOCK_ID"; } |
-        sort -u) &&
-        awk \
-            -v "BLOCK=$HOSTS" \
-            -v "FIRST=##$S*$BLOCK_ID$S*##" \
-            -f "$LK_BASE/lib/awk/block-replace.awk" \
-            "$FILE") || return
-    if lk_can_sudo install; then
-        lk_file_keep_original "$FILE" &&
-            lk_file_replace "$FILE" "$_FILE"
+    local REPLACE=0 BLOCK BLOCK_RE TEMP FILE=/etc/hosts
+    while [[ ${1-} == -[br] ]]; do
+        [[ $1 != -r ]] || { REPLACE=1 && shift; }
+        [[ $1 != -b ]] || { BLOCK=$2 && shift 2; }
+    done
+    BLOCK=${BLOCK:-$(lk_caller_name)} &&
+        BLOCK_RE=$(lk_ere_escape "$BLOCK") || return
+    if (($#)); then
+        _lk_hosts_file_add < <(echo "$@")
+    else
+        _lk_hosts_file_add
+    fi || return
+    if [[ -w $FILE ]]; then
+        local LK_SUDO
+    elif lk_can_sudo install; then
+        local LK_SUDO=1
     else
         lk_tty_print "You do not have permission to edit" "$FILE"
-        FILE=$(lk_mktemp_file) &&
-            echo "$_FILE" >"$FILE" &&
-            lk_tty_detail "Updated hosts file written to:" "$FILE"
+        lk_tty_detail "Updated hosts file written to:" "$TEMP"
+        lk_delete_on_exit_withdraw "$TEMP"
+        return
     fi
+    lk_file_replace -f "$TEMP" "$FILE"
 }
 
 function _lk_node_ip() {

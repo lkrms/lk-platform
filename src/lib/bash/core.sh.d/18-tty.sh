@@ -76,8 +76,8 @@ function _lk_tty_margin_add() {
     if ((_MARGIN > 0)); then
         _SPACES=$(printf "%${_MARGIN}s")
         "$@" \
-            > >(LC_ALL=C sed -Eu "s/(^|($_R)(.))/\2$_SPACES\3/") \
-            2> >(LC_ALL=C sed -Eu "s/(^|($_R)(.))/\2$_SPACES\3/" >&2)
+            > >(LC_ALL=C lk_unbuffer sed -E "s/(^|($_R)(.))/\2$_SPACES\3/") \
+            2> >(LC_ALL=C lk_unbuffer sed -E "s/(^|($_R)(.))/\2$_SPACES\3/" >&2)
     else
         "$@"
     fi

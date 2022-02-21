@@ -1257,37 +1257,6 @@ function lk_maybe_drop() {
     fi
 }
 
-# lk_can_sudo COMMAND [USERNAME]
-#
-# Return true if the current user is allowed to execute COMMAND via sudo.
-#
-# Specify USERNAME to override the default target user (usually root). Set
-# LK_NO_INPUT to return false if sudo requires a password.
-#
-# If the current user has no sudo privileges at all, they will not be prompted
-# for a password.
-function lk_can_sudo() {
-    local COMMAND=${1-} USERNAME=${2-} ERROR
-    [ -n "$COMMAND" ] || lk_warn "no command" || return
-    [ -z "$USERNAME" ] || lk_user_exists "$USERNAME" ||
-        lk_warn "user not found: $USERNAME" || return
-    # 1. sudo exists
-    lk_command_exists sudo && {
-        # 2. The current user (or one of their groups) appears in sudo's
-        #    security policy
-        ERROR=$(sudo -nv 2>&1) ||
-            # "sudo: a password is required" means the user can sudo
-            grep -i password <<<"$ERROR" >/dev/null
-    } && {
-        # 3. The current user is allowed to execute COMMAND as USERNAME (attempt
-        #    with prompting disabled first)
-        sudo -n ${USERNAME:+-u "$USERNAME"} -l "$COMMAND" &>/dev/null || {
-            ! lk_no_input &&
-                sudo ${USERNAME:+-u "$USERNAME"} -l "$COMMAND" >/dev/null
-        }
-    }
-}
-
 function lk_me() {
     lk_maybe_sudo id -un
 }

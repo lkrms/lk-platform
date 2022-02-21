@@ -400,6 +400,30 @@ function lk_will_sudo() {
     [ "$EUID" -ne 0 ] && [ -n "${LK_SUDO-}" ]
 }
 
+# lk_can_sudo COMMAND
+#
+# Return true if the current user has permission to run COMMAND via sudo,
+# prompting for a password unless the current user:
+# - matches a NOPASSWD entry in sudoers;
+# - doesn't match any entries in sudoers; or
+# - authenticated with sudo in the current terminal less than 5 minutes ago.
+#
+# Returns false if LK_NO_INPUT is set and sudo can't check the security policy
+# without asking the user to authenticate.
+function lk_can_sudo() {
+    [[ -n ${1-} ]] || lk_warn "invalid arguments" || return
+    if lk_no_input; then
+        sudo -nl "$1" &>/dev/null
+    else
+        # Return without allowing sudo to prompt for a password if the user has
+        # no matching sudoers entries ("sudo: a password is required" indicates
+        # the user can sudo)
+        LC_ALL=C sudo -nv 2>&1 | grep -i password >/dev/null ||
+            [[ ${PIPESTATUS[0]}${PIPESTATUS[1]} == *0* ]] || return
+        sudo -l "$1" >/dev/null
+    fi
+}
+
 # lk_run_as USER COMMAND [ARG...]
 function lk_run_as() {
     [ $# -ge 2 ] || lk_err "invalid arguments" || return
@@ -579,7 +603,14 @@ function lk_unbuffer() {
     local CMD=$1
     shift
     case "$CMD" in
-    sed | gsed | gnu_sed)
+    sed)
+        if lk_is_macos; then
+            set -- "$CMD" -l "$@"
+        else
+            set -- "$CMD" -u "$@"
+        fi
+        ;;
+    gsed | gnu_sed)
         set -- "$CMD" -u "$@"
         ;;
     grep | ggrep | gnu_grep)
@@ -862,13 +893,13 @@ function lk_timestamp() { lk_date "%s"; }
 
 # _lk_stream_args COMMAND_ARGS COMMAND... [ARG...]
 function _lk_stream_args() {
-    local IFS
-    unset IFS
+    local IFS=$' \t\n'
     if (($# > $1 + 1)); then
         printf '%s\n' "${@:$1+2}" | "${@:2:$1}"
     else
-        [ "$(type -t "$2")" = file ] || local LK_EXEC
-        ${LK_EXEC:+exec} "${@:2:$1}"
+        local EXEC=1
+        [ "$(type -t "$2")" = file ] || EXEC=
+        ${EXEC:+${LK_EXEC:+exec}} "${@:2:$1}"
     fi
 }
 
@@ -909,8 +940,7 @@ function lk_fold_quote_args() {
 
 # lk_implode_args GLUE [ARG...]
 function lk_implode_args() {
-    local IFS GLUE=${1//\\/\\\\}
-    unset IFS
+    local IFS=$' \t\n' GLUE=${1//\\/\\\\}
     GLUE=${GLUE//%/%%}
     [ $# -eq 1 ] || printf '%s' "$2"
     [ $# -le 2 ] || printf -- "$GLUE%s" "${@:3}"
@@ -976,8 +1006,8 @@ function lk_strip_non_printing() {
     local DELETE
     [ "${1-}" != -d ] || { DELETE=$2 && shift 2; }
     eval "$(lk_get_regex NON_PRINTING_REGEX)"
-    LC_ALL=C _lk_stream_args 3 \
-        sed -Eu "s/$NON_PRINTING_REGEX//g; "$'s/.*\r(.)/\\1/' "$@" |
+    LC_ALL=C _lk_stream_args 4 \
+        lk_unbuffer sed -E "s/$NON_PRINTING_REGEX//g; "$'s/.*\r(.)/\\1/' "$@" |
         lk_unbuffer tr -d '\0-\10\16-\37\177'"${DELETE-}"
 }
 
@@ -1270,8 +1300,8 @@ function _lk_tty_margin_add() {
     if ((_MARGIN > 0)); then
         _SPACES=$(printf "%${_MARGIN}s")
         "$@" \
-            > >(LC_ALL=C sed -Eu "s/(^|($_R)(.))/\2$_SPACES\3/") \
-            2> >(LC_ALL=C sed -Eu "s/(^|($_R)(.))/\2$_SPACES\3/" >&2)
+            > >(LC_ALL=C lk_unbuffer sed -E "s/(^|($_R)(.))/\2$_SPACES\3/") \
+            2> >(LC_ALL=C lk_unbuffer sed -E "s/(^|($_R)(.))/\2$_SPACES\3/" >&2)
     else
         "$@"
     fi
@@ -3754,37 +3784,6 @@ function lk_maybe_drop() {
     else
         sudo -u nobody -- "$@"
     fi
-}
-
-# lk_can_sudo COMMAND [USERNAME]
-#
-# Return true if the current user is allowed to execute COMMAND via sudo.
-#
-# Specify USERNAME to override the default target user (usually root). Set
-# LK_NO_INPUT to return false if sudo requires a password.
-#
-# If the current user has no sudo privileges at all, they will not be prompted
-# for a password.
-function lk_can_sudo() {
-    local COMMAND=${1-} USERNAME=${2-} ERROR
-    [ -n "$COMMAND" ] || lk_warn "no command" || return
-    [ -z "$USERNAME" ] || lk_user_exists "$USERNAME" ||
-        lk_warn "user not found: $USERNAME" || return
-    # 1. sudo exists
-    lk_command_exists sudo && {
-        # 2. The current user (or one of their groups) appears in sudo's
-        #    security policy
-        ERROR=$(sudo -nv 2>&1) ||
-            # "sudo: a password is required" means the user can sudo
-            grep -i password <<<"$ERROR" >/dev/null
-    } && {
-        # 3. The current user is allowed to execute COMMAND as USERNAME (attempt
-        #    with prompting disabled first)
-        sudo -n ${USERNAME:+-u "$USERNAME"} -l "$COMMAND" &>/dev/null || {
-            ! lk_no_input &&
-                sudo ${USERNAME:+-u "$USERNAME"} -l "$COMMAND" >/dev/null
-        }
-    }
 }
 
 function lk_me() {

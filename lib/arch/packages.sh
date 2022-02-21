@@ -458,9 +458,10 @@ if [ -s "$PAC_REPLACE" ]; then
     lk_mktemp_with SED \
         awk -v "suffix=$SUFFIX" \
         '{print "s/^" $1 "(-git)?(" suffix ")?$/" $2 "/"}' "$PAC_REPLACE"
+    PAC_REJECT+=($(lk_arr PAC_PACKAGES AUR_PACKAGES |
+        grep -Fxf <(awk '{print $1}' "$PAC_REPLACE")))
     PAC_PACKAGES=($(lk_arr PAC_PACKAGES | sed -Ef "$SED" | sort -u))
     AUR_PACKAGES=($(lk_arr AUR_PACKAGES | sed -Ef "$SED" | sort -u))
-    PAC_REJECT+=($(awk '{print $1}' "$PAC_REPLACE"))
 fi
 
 # Move any AUR_PACKAGES that can be installed from a repo to PAC_PACKAGES, and
@@ -473,7 +474,8 @@ PAC_PACKAGES=($(lk_arr ALL_PACKAGES | grep -Fxf "$_PAC_PACKAGES" || true))
 AUR_PACKAGES=($(lk_arr ALL_PACKAGES | grep -Fxvf "$_PAC_PACKAGES" || true))
 
 if [ ${#AUR_PACKAGES[@]} -gt 0 ] ||
-    { pacman-conf --repo=aur |
+    [ -n "${LK_ARCH_AUR_REPO_NAME-}" ] ||
+    { pacman-conf --repo="${LK_ARCH_AUR_REPO_NAME:-aur}" |
         awk -F"$S*=$S*" '$1=="Server"{print$2}' |
         grep -E '^file://'; } &>/dev/null; then
     PAC_BASE_DEVEL=($(lk_pac_groups base-devel))

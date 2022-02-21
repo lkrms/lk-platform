@@ -160,7 +160,7 @@ function lk_wp_flush_opcache() {
     local URL RESULT
     lk_tty_print "Flushing WordPress OPcache"
     URL=$(lk_wp_get_site_address) &&
-        RESULT=$(curl -fsS \
+        RESULT=$(curl -fsS --insecure \
             --connect-to "::127.0.0.1:" "${URL%/}/php-opcache-flush") || return
     case "$RESULT" in
     DISABLED)
@@ -190,6 +190,10 @@ function lk_wp_flush() {
     if wp cli has-command "w3-total-cache flush" 2>/dev/null; then
         lk_tty_detail "Flushing W3 Total Cache"
         lk_report_error -q wp w3-total-cache flush all || true
+    fi
+    if wp cli has-command "litespeed-purge all" 2>/dev/null; then
+        lk_tty_detail "Flushing LiteSpeed Cache"
+        lk_report_error -q wp litespeed-purge all || true
     fi
     if lk_wp plugin is-active wp-rocket; then (
         WP_CLI_PACKAGES_DIR=
@@ -631,7 +635,7 @@ Usage: $FUNCNAME SSH_HOST [REMOTE_PATH [LOCAL_PATH [RSYNC_ARG...]]]" || return
         /.tmb
         "php_error*.log"
         {"error*",debug}"?log"
-        /wp-content/{backup,cache,upgrade,updraft}/
+        /wp-content/{backup,cache,litespeed,upgrade,updraft}/
         /wp-content/uploads/{backup,cache,wp-file-manager-pro/fm_backup}/
         ${LK_WP_SYNC_EXCLUDE[@]+"${LK_WP_SYNC_EXCLUDE[@]}"}
     )

@@ -6,5 +6,11 @@
 - /log
 - /*/log
 - /staging
+- public_html/wp-content/backup
+- public_html/wp-content/cache
+- public_html/wp-content/litespeed
 - public_html/wp-content/updraft
+- public_html/wp-content/upgrade
+- public_html/wp-content/uploads/backup
+- public_html/wp-content/uploads/cache
 - public_html/wp-content/uploads/wp-file-manager-pro/fm_backup

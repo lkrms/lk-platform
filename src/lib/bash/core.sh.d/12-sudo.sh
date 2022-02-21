@@ -80,6 +80,30 @@ function lk_will_sudo() {
     [ "$EUID" -ne 0 ] && [ -n "${LK_SUDO-}" ]
 }
 
+# lk_can_sudo COMMAND
+#
+# Return true if the current user has permission to run COMMAND via sudo,
+# prompting for a password unless the current user:
+# - matches a NOPASSWD entry in sudoers;
+# - doesn't match any entries in sudoers; or
+# - authenticated with sudo in the current terminal less than 5 minutes ago.
+#
+# Returns false if LK_NO_INPUT is set and sudo can't check the security policy
+# without asking the user to authenticate.
+function lk_can_sudo() {
+    [[ -n ${1-} ]] || lk_warn "invalid arguments" || return
+    if lk_no_input; then
+        sudo -nl "$1" &>/dev/null
+    else
+        # Return without allowing sudo to prompt for a password if the user has
+        # no matching sudoers entries ("sudo: a password is required" indicates
+        # the user can sudo)
+        LC_ALL=C sudo -nv 2>&1 | grep -i password >/dev/null ||
+            [[ ${PIPESTATUS[0]}${PIPESTATUS[1]} == *0* ]] || return
+        sudo -l "$1" >/dev/null
+    fi
+}
+
 # lk_run_as USER COMMAND [ARG...]
 function lk_run_as() {
     [ $# -ge 2 ] || lk_err "invalid arguments" || return

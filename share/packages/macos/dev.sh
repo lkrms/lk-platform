@@ -289,10 +289,6 @@ HOMEBREW_KEEP_CASKS+=(
 )
 
 LOGIN_ITEMS+=(
-    "/Applications/Mail.app"
-    "/Applications/Messenger.app"
-    "/Applications/Microsoft Teams.app"
     "/Applications/Nextcloud.app"
     "/Applications/Todoist.app"
-    "/System/Applications/Mail.app"
 )

@@ -2,13 +2,13 @@
 
 # _lk_stream_args COMMAND_ARGS COMMAND... [ARG...]
 function _lk_stream_args() {
-    local IFS
-    unset IFS
+    local IFS=$' \t\n'
     if (($# > $1 + 1)); then
         printf '%s\n' "${@:$1+2}" | "${@:2:$1}"
     else
-        [ "$(type -t "$2")" = file ] || local LK_EXEC
-        ${LK_EXEC:+exec} "${@:2:$1}"
+        local EXEC=1
+        [ "$(type -t "$2")" = file ] || EXEC=
+        ${EXEC:+${LK_EXEC:+exec}} "${@:2:$1}"
     fi
 }
 
@@ -49,8 +49,7 @@ function lk_fold_quote_args() {
 
 # lk_implode_args GLUE [ARG...]
 function lk_implode_args() {
-    local IFS GLUE=${1//\\/\\\\}
-    unset IFS
+    local IFS=$' \t\n' GLUE=${1//\\/\\\\}
     GLUE=${GLUE//%/%%}
     [ $# -eq 1 ] || printf '%s' "$2"
     [ $# -le 2 ] || printf -- "$GLUE%s" "${@:3}"
@@ -116,8 +115,8 @@ function lk_strip_non_printing() {
     local DELETE
     [ "${1-}" != -d ] || { DELETE=$2 && shift 2; }
     eval "$(lk_get_regex NON_PRINTING_REGEX)"
-    LC_ALL=C _lk_stream_args 3 \
-        sed -Eu "s/$NON_PRINTING_REGEX//g; "$'s/.*\r(.)/\\1/' "$@" |
+    LC_ALL=C _lk_stream_args 4 \
+        lk_unbuffer sed -E "s/$NON_PRINTING_REGEX//g; "$'s/.*\r(.)/\\1/' "$@" |
         lk_unbuffer tr -d '\0-\10\16-\37\177'"${DELETE-}"
 }
 
