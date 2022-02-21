@@ -113,32 +113,52 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
       git fetch --tags origin &&
       git remote set-head origin --auto >/dev/null &&
       git remote prune origin &&
+      # If target branch is 'main', reset origin/main to the most recent
+      # annotated tag's commit
+      if [[ $1 == main ]] &&
+        TAG=$(git describe origin/main 2>/dev/null) &&
+        REF=$(git rev-parse --verify --short "$TAG^{commit}"); then
+        git update-ref refs/remotes/origin/main "$REF" &&
+          echo "Updating lk-platform to $TAG ($REF)" >&2
+      fi &&
       # Stash local changes
-      { git stash --include-untracked ||
-        { git config user.name "$USER" &&
+      if ! git stash --include-untracked; then
+        git config user.name "$USER" &&
           git config user.email "$USER@$(hostname -f)" &&
-          git stash --include-untracked; }; } &&
-      if git rev-parse --verify --abbrev-ref HEAD |
-        grep -Fx "$1" >/dev/null; then
-        # If the branch is already checked out, merge upstream changes
+          git stash --include-untracked
+      fi &&
+      BRANCH=$(git rev-parse --verify --abbrev-ref HEAD) &&
+      BRANCHES=$(git for-each-ref --format="%(refname:short)" refs/heads |
+        awk 'NR > 1 { printf(",%s", $0); next } { printf("%s", $0) }') &&
+      if [[ ,$BRANCHES, == *,master,* ]] && [[ ,$BRANCHES, != *,main,* ]]; then
+        # Rename 'master' to 'main'
+        git branch --move master main &&
+          git branch --set-upstream-to origin/main main
+      fi &&
+      if [[ $BRANCH == "$1" ]]; then
+        # If the target branch is already checked out, merge upstream changes
         git merge --ff-only "origin/$1" ||
           git reset --hard "origin/$1"
-      elif git for-each-ref --format="%(refname:short)" refs/heads |
-        grep -Fx "$1" >/dev/null; then
-        # If the branch exists but isn't checked out, merge upstream changes,
-        # then switch
+      elif [[ ,$BRANCHES, == *,"$1",* ]]; then
+        # If the target branch exists but isn't checked out, merge upstream
+        # changes, then switch
         { git merge-base --is-ancestor "$1" "origin/$1" &&
           git fetch . "origin/$1:$1" ||
-          git branch -f "$1" "origin/$1"; } &&
+          git branch --force "$1" "origin/$1"; } &&
           git checkout "$1"
       else
         # Otherwise, create a new branch from origin/<branch>
-        git checkout -b "$1" --track "origin/$1"
+        git checkout -b "$1" "origin/$1"
       fi &&
       # Set remote-tracking branch to origin/<branch> if needed
       { git rev-parse --verify --abbrev-ref "@{upstream}" 2>/dev/null |
         grep -Fx "origin/$1" >/dev/null ||
-        git branch --set-upstream-to "origin/$1"; }) || return
+        git branch --set-upstream-to "origin/$1"; } &&
+      if [[ ,$BRANCHES, == *,master,* ]] && [[ ,$BRANCHES, == *,main,* ]]; then
+        # Delete 'master'
+        git merge-base --is-ancestor master origin/main &&
+          git branch --delete --force master
+      fi) || return
 
     . ./lib/bash/rc.sh || return
 
