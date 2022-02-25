@@ -127,7 +127,6 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
           git config user.email "$USER@$(hostname -f)" &&
           git stash --include-untracked
       fi &&
-      BRANCH=$(git rev-parse --verify --abbrev-ref HEAD) &&
       BRANCHES=$(git for-each-ref --format="%(refname:short)" refs/heads |
         awk 'NR > 1 { printf(",%s", $0); next } { printf("%s", $0) }') &&
       if [[ ,$BRANCHES, == *,master,* ]] && [[ ,$BRANCHES, != *,main,* ]]; then
@@ -135,6 +134,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
         git branch --move master main &&
           git branch --set-upstream-to origin/main main
       fi &&
+      BRANCH=$(git rev-parse --verify --abbrev-ref HEAD) &&
       if [[ $BRANCH == "$1" ]]; then
         # If the target branch is already checked out, merge upstream changes
         git merge --ff-only "origin/$1" ||
