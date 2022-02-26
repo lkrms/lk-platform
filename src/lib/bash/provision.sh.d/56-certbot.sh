@@ -1,6 +1,13 @@
 #!/bin/bash
 
 # lk_certbot_list [DOMAIN...]
+#
+# Parse `certbot certificates` output to tab-separated fields as follows:
+# 1. Certificate name
+# 2. Domains (format: <name>[,www.<name>][,<other_domain>...])
+# 3. Expiry date (format: %Y-%m-%d %H:%M:%S%z)
+# 4. Certificate path
+# 5. Private key path
 function lk_certbot_list() {
     local ARGS IFS=,
     [ $# -eq 0 ] ||

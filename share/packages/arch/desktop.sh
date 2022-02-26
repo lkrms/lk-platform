@@ -169,7 +169,7 @@ AUR_PACKAGES+=(
     rescuetime2
     skypeforlinux-stable-bin
     spotify
-    stretchly
+    stretchly-bin
     teams
     todoist-appimage
     trimage
