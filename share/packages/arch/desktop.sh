@@ -10,6 +10,10 @@ PAC_KEEP=(
     zoom
 )
 
+PAC_NO_REPLACE=(
+    stretchly
+)
+
 lk_is_virtual || {
     PAC_PACKAGES+=(
         guvcview # Webcam utility
@@ -169,7 +173,7 @@ AUR_PACKAGES+=(
     rescuetime2
     skypeforlinux-stable-bin
     spotify
-    stretchly-bin
+    stretchly
     teams
     todoist-appimage
     trimage

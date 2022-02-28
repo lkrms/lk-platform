@@ -133,6 +133,11 @@ PAC_KEEP=(
     ${PAC_KEEP[@]+"${PAC_KEEP[@]}"}
 )
 
+PAC_NO_REPLACE=(
+    #
+    ${PAC_NO_REPLACE[@]+"${PAC_NO_REPLACE[@]}"}
+)
+
 AUR_PACKAGES=(
     # System
     rdfind
@@ -423,8 +428,10 @@ if [ -n "${PAC_REJECT+1}" ]; then
 fi
 
 # Use unofficial packages named PACKAGE-git, PACKAGE-lk or PACKAGE-git-lk
-# instead of PACKAGE
-lk_mktemp_with PAC_REPLACE awk -v "suffix=$SUFFIX\$" '
+# instead of PACKAGE, unless PACKAGE appears in PAC_NO_REPLACE
+lk_mktemp_with PAC_REPLACE awk \
+    -v "suffix=$SUFFIX\$" \
+    -v "no_replace=$(lk_ere_implode_arr PAC_NO_REPLACE)" '
 function save(_p) {
     if (_prio[pkg] < prio) {
         if (_replace[pkg]) {
@@ -451,7 +458,9 @@ $0 ~ suffix || /-git$/ {
 }
 END {
     for (pkg in _replace) {
-        print pkg, _replace[pkg]
+        if (!no_replace || pkg !~ no_replace) {
+            print pkg, _replace[pkg]
+        }
     }
 }' "$_PAC_UNOFFICIAL"
 if [ -s "$PAC_REPLACE" ]; then
