@@ -226,6 +226,7 @@ PAC_PACKAGES+=(
 )
 
 AUR_PACKAGES+=(
+    clockify-desktop
     emote
     espanso
     libreoffice-extension-languagetool
@@ -356,6 +357,7 @@ AUR_PACKAGES+=(
     php-sqlsrv
     phpdoc-phar
     python-demjson3
+    python39 # azure-functions-core-tools-bin dependency
     rollup
     ruby-rubocop
     ruby-rubocop-performance

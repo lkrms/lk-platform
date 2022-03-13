@@ -166,6 +166,7 @@ PAC_PACKAGES+=(
 )
 
 AUR_PACKAGES+=(
+    clockify-desktop
     emote
     espanso
     libreoffice-extension-languagetool
