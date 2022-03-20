@@ -275,6 +275,8 @@ PAC_PACKAGES+=(
     geckodriver
     gobject-introspection
     gperftools
+    imagemagick
+    imagemagick-doc
     python-pylint
     qcachegrind
     tidy
