@@ -4,10 +4,13 @@ function lk_hosting_php_get_default_version() { (
     . /etc/lsb-release || return
     case "$DISTRIB_RELEASE" in
     18.04)
-        echo "7.2"
+        echo 7.2
         ;;
     20.04)
-        echo "7.4"
+        echo 7.4
+        ;;
+    22.04)
+        echo 8.1
         ;;
     *)
         false
