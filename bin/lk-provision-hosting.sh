@@ -247,7 +247,6 @@ if lk_is_bootstrap; then
         LK_SNAPSHOT_DAILY_MAX_AGE \
         LK_SNAPSHOT_WEEKLY_MAX_AGE \
         LK_SNAPSHOT_FAILED_MAX_AGE \
-        LK_DEBUG \
         LK_PLATFORM_BRANCH >"$FILE"
 else
     LK_FILE_BACKUP_TAKE=${LK_FILE_BACKUP_TAKE-1}
