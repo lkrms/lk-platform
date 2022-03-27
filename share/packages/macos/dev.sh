@@ -69,6 +69,7 @@ HOMEBREW_CASKS+=(
     adobe-acrobat-reader
     alt-tab
     chromium
+    clockify
     copyq
     firefox
     flameshot
@@ -132,7 +133,6 @@ MAS_APPS+=(
     1055273043 # PDF Expert
 
     #
-    506189836 # Harvest
     585829637 # Todoist
 )
 
@@ -249,6 +249,10 @@ HOMEBREW_KEEP_FORMULAE+=(
     php@7.3
     php@7.4
     php@8.0
+
+    #
+    autoconf
+    automake
 
     #
     rust

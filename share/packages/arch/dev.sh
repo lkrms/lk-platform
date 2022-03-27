@@ -36,6 +36,10 @@ PAC_KEEP=(
     raidar
 )
 
+PAC_NO_REPLACE=(
+    stretchly
+)
+
 lk_is_virtual || {
     PAC_PACKAGES+=(
         guvcview # Webcam utility
@@ -222,6 +226,7 @@ PAC_PACKAGES+=(
 )
 
 AUR_PACKAGES+=(
+    clockify-desktop
     emote
     espanso
     libreoffice-extension-languagetool
@@ -230,7 +235,7 @@ AUR_PACKAGES+=(
     rescuetime2
     skypeforlinux-stable-bin
     spotify
-    stretchly-bin
+    stretchly
     teams
     teamviewer
     todoist-appimage
@@ -270,6 +275,8 @@ PAC_PACKAGES+=(
     geckodriver
     gobject-introspection
     gperftools
+    imagemagick
+    imagemagick-doc
     python-pylint
     qcachegrind
     tidy
@@ -352,6 +359,7 @@ AUR_PACKAGES+=(
     php-sqlsrv
     phpdoc-phar
     python-demjson3
+    python39 # azure-functions-core-tools-bin dependency
     rollup
     ruby-rubocop
     ruby-rubocop-performance

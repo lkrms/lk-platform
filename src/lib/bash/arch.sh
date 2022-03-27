@@ -349,7 +349,7 @@ function lk_aur_sync() {
             ${CHROOT+--chroot} \
             ${CHROOT+--makepkg-conf=/etc/makepkg.conf} \
             ${GPGKEY+--sign} \
-            ${_LK_AUR_ARGS[@]+"${_LK_AUR_ARGS[@]}"} "$PKG" &&
+            "$PKG" &&
             SYNCED+=("$PKG") ||
             FAILED+=("$PKG")
     done
@@ -361,9 +361,33 @@ function lk_aur_sync() {
 }
 
 function lk_aur_rebuild() {
-    local _LK_AUR_ARGS=(--rebuild --force)
-    [ $# -gt 0 ] || return
-    lk_aur_sync "$@"
+    (($#)) || lk_warn "invalid arguments" || return
+    local SYNC_DIR=${XDG_CACHE_HOME:-~/.cache}/aurutils/sync \
+        PKG PKGS=() ARG_FILE CHROOT
+    while (($#)); do
+        PKG=${1%PKGBUILD}
+        PKG=${PKG%/}
+        PKG=$(lk_first_file "$PWD/$PKG/PKGBUILD" "$SYNC_DIR/$PKG/PKGBUILD") ||
+            lk_warn "PKGBUILD not found: $1" || return
+        PKGS[${#PKGS[@]}]=$PKG
+        shift
+    done
+    lk_mktemp_with ARG_FILE &&
+        lk_realpath "${PKGS[@]}" | sed -En 's/\/PKGBUILD$//p' >"$ARG_FILE" ||
+        return
+    [ -s "$ARG_FILE" ] || lk_warn "no PKGBUILD files found" || return
+    unset CHROOT
+    ! lk_aur_can_chroot || CHROOT=
+    lk_tty_list - "Rebuilding:" package packages <"$ARG_FILE"
+    lk_makepkg_setup
+    lk_tty_run_detail aur build \
+        --database "${LK_ARCH_AUR_REPO_NAME:-aur}" \
+        --force \
+        --noconfirm \
+        ${CHROOT+--chroot} \
+        ${CHROOT+--makepkg-conf=/etc/makepkg.conf} \
+        ${GPGKEY+--sign} \
+        --arg-file "$ARG_FILE"
 }
 
 function lk_arch_reboot_required() {

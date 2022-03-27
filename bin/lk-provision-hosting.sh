@@ -297,6 +297,9 @@ case "$DISTRIB_RELEASE" in
 20.04)
     APT_SUPPRESS+=(php-gettext)
     ;;
+22.04)
+    APT_SUPPRESS+=(php-apcu-bc php-gettext)
+    ;;
 *)
     lk_die "Ubuntu release not supported: $DISTRIB_RELEASE"
     ;;

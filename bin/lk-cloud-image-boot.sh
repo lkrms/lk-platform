@@ -79,6 +79,7 @@ If --isolate is set:
 
 SUPPORTED IMAGES
 
+    ubuntu-22.04        ubuntu-22.04-minimal
     ubuntu-20.04        ubuntu-20.04-minimal
     ubuntu-18.04        ubuntu-18.04-minimal
     ubuntu-16.04        ubuntu-16.04-minimal
@@ -442,6 +443,24 @@ SHA_KEYRING=/usr/share/keyrings/ubuntu-cloudimage-keyring.gpg
 [[ $IMAGE_ARCH == amd64 ]] || [[ $IMAGE != *minimal ]] ||
     lk_die "minimal images are not available for $IMAGE_ARCH"
 case "$IMAGE" in
+*22.04*minimal)
+    IMAGE_NAME=ubuntu-22.04-minimal
+    IMAGE_URL=http://$UBUNTU_HOST/minimal/daily/jammy/current/jammy-minimal-cloudimg-$IMAGE_ARCH.img
+    SHA_URLS=(
+        "$UBUNTU_SHA_URL"/minimal/daily/jammy/current/SHA256SUMS.gpg
+        "$UBUNTU_SHA_URL"/minimal/daily/jammy/current/SHA256SUMS
+    )
+    OS_VARIANT=ubuntu21.10
+    ;;
+*22.04*)
+    IMAGE_NAME=ubuntu-22.04
+    IMAGE_URL=http://$UBUNTU_HOST/jammy/current/jammy-server-cloudimg-$IMAGE_ARCH.img
+    SHA_URLS=(
+        "$UBUNTU_SHA_URL"/jammy/current/SHA256SUMS.gpg
+        "$UBUNTU_SHA_URL"/jammy/current/SHA256SUMS
+    )
+    OS_VARIANT=ubuntu21.10
+    ;;
 *20.04*minimal)
     IMAGE_NAME=ubuntu-20.04-minimal
     IMAGE_URL=http://$UBUNTU_HOST/minimal/releases/focal/release/ubuntu-20.04-minimal-cloudimg-$IMAGE_ARCH.img
