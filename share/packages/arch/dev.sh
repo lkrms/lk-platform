@@ -144,7 +144,6 @@ PAC_PACKAGES+=(
     nextcloud-client
     nomacs
     qalculate-gtk
-    qpdfview
     remmina
     scribus
     simplescreenrecorder
@@ -189,7 +188,6 @@ PAC_PACKAGES+=(
     gst-plugins-bad
 
     # Multimedia - audio
-    abcde
     audacity
     python-eyed3
     sox
@@ -232,6 +230,7 @@ AUR_PACKAGES+=(
     libreoffice-extension-languagetool
     masterpdfeditor-free
     pencil
+    qpdfview
     rescuetime2
     skypeforlinux-stable-bin
     spotify
@@ -243,6 +242,9 @@ AUR_PACKAGES+=(
     #ttf-apple-emoji
     ttf-twemoji
     typora
+
+    # Multimedia - audio
+    abcde
 
     # Multimedia - video
     makemkv

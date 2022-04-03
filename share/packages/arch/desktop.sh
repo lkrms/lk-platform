@@ -93,7 +93,6 @@ PAC_PACKAGES+=(
     nextcloud-client
     nomacs
     qalculate-gtk
-    qpdfview
     remmina
     scribus
     simplescreenrecorder
@@ -171,6 +170,7 @@ AUR_PACKAGES+=(
     espanso
     libreoffice-extension-languagetool
     masterpdfeditor-free
+    qpdfview
     rescuetime2
     skypeforlinux-stable-bin
     spotify
