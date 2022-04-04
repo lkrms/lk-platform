@@ -323,11 +323,11 @@ else
         parted
 
         #
-        crda
         ethtool
         hdparm
         nvme-cli
         smartmontools
+        wireless-regdb
 
         #
         fwupd
