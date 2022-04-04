@@ -279,6 +279,7 @@ function _lk_hosting_site_provision() {
                 error_log="$LOG_DIR/php$SITE_PHP_VERSION-fpm.error.log" \
                 ${LK_PHP_ADMIN_SETTINGS-} \
                 ${SITE_PHP_FPM_ADMIN_SETTINGS-} \
+                user_ini.filename= \
                 opcache.interned_strings_buffer=16 \
                 opcache.max_accelerated_files=20000 \
                 opcache.validate_timestamps=On \
