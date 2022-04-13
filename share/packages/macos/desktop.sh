@@ -30,13 +30,7 @@ HOMEBREW_FORMULAE+=(
 )
 
 # Desktop
-HOMEBREW_TAPS+=(
-    federico-terzi/espanso
-)
-
 HOMEBREW_FORMULAE+=(
-    federico-terzi/espanso/espanso
-
     # PDF
     ghostscript
     mupdf-tools
@@ -55,6 +49,7 @@ HOMEBREW_CASKS+=(
     alt-tab
     bbedit
     chromium
+    espanso
     firefox
     flameshot
     flycut
