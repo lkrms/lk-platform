@@ -142,6 +142,8 @@ HOMEBREW_FORMULAE+=(
     autopep8
     cmake
     emscripten
+    graphviz # Optional phpdoc dependency
+    plantuml # Optional phpdoc dependency
 
     #
     libvirt

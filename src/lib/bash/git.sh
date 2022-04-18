@@ -34,6 +34,19 @@ function _lk_git_is_quiet() {
     [ -n "${_LK_GIT_QUIET-}" ]
 }
 
+# lk_git_maybe_add_safe_directory [--system] [DIR]
+function lk_git_maybe_add_safe_directory() { (
+    SCOPE=global
+    [[ ${1-} != --system ]] || { declare LK_SUDO=1 SCOPE=system && shift; }
+    _lk_git_cd "$@" && [[ -d .git ]] ||
+        lk_warn "not the top-level directory of a working tree: $PWD" || return
+    { { git config --system --get-all safe.directory || true; } &&
+        { [[ $SCOPE == system ]] || git config --global --get-all safe.directory || true; }; } |
+        sed -E 's/\/+$//' |
+        grep -Fx "$PWD" >/dev/null ||
+        lk_sudo git config --"$SCOPE" --add safe.directory "$PWD"
+); }
+
 # lk_git_is_work_tree [DIR]
 function lk_git_is_work_tree() {
     local RESULT
