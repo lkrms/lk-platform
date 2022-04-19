@@ -277,8 +277,10 @@ PAC_PACKAGES+=(
     geckodriver
     gobject-introspection
     gperftools
+    graphviz # Optional phpdoc dependency
     imagemagick
     imagemagick-doc
+    plantuml # Optional phpdoc dependency
     python-pylint
     qcachegrind
     tidy
@@ -320,6 +322,14 @@ PAC_PACKAGES+=(
 
     #
     php7
+    php7-gd
+    php7-imagick
+    php7-imap
+    php7-intl
+    php7-memcache
+    php7-memcached
+    php7-sqlite
+    php7-xsl # Optional phpdoc-phar dependency
 
     #
     python

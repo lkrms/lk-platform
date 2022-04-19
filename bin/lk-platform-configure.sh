@@ -353,6 +353,7 @@ lk_log_start
         umask 002
         lk_tty_print "Checking repository"
         cd "$LK_BASE"
+        lk_git_maybe_add_safe_directory --system
         REPO_OWNER=$(lk_file_owner "$LK_BASE")
         CONFIG_COMMANDS=()
         [ ! -g "$LK_BASE" ] ||
