@@ -16,12 +16,22 @@ PAC_KEEP=(
     linux-headers
     offlineimap
     sfdx-cli
+    stretchly-bin
     stripe-cli
     subversion
+    teams
     zoom
 
     #
     falkon # Uses qt5-webengine
+    google-chrome
+    microsoft-edge-stable-bin
+
+    #
+    numix-gtk-theme-git
+    ttf-apple-emoji
+    xfce-theme-greybird
+    zuki-themes
 
     #
     displaycal
@@ -32,8 +42,10 @@ PAC_KEEP=(
     mongodb-tools-bin
 
     #
+    memtest86-efi
     powerpanel
     raidar
+    rasdaemon
 )
 
 PAC_NO_REPLACE=(
@@ -235,7 +247,7 @@ AUR_PACKAGES+=(
     skypeforlinux-stable-bin
     spotify
     stretchly
-    teams
+    teams-insiders
     teamviewer
     todoist-appimage
     trimage
@@ -379,7 +391,7 @@ AUR_PACKAGES+=(
     ruby-ruby-debug-ide
     standard
     terser
-    trickle
+    trickle-git
     zeal-git
 
     #

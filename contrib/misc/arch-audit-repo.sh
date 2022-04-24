@@ -4,7 +4,7 @@
 #
 # Checks pacman repository REPO for each PACKAGE and its AUR dependencies.
 
-. lk-bash-load.sh || exit
+lk_bin_depth=2 . lk-bash-load.sh || exit
 lk_require arch
 
 # Default to AUR packages provisioned by lk-platform and/or maintained by lkrms
