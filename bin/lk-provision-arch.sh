@@ -799,60 +799,67 @@ $LK_NODE_HOSTNAME" &&
     if lk_pac_installed php || lk_pac_installed php7; then
         for DIR in /etc/php7 /etc/php; do
             unset LK_FILE_REPLACE_NO_CHANGE
-            LK_CONF_OPTION_FILE=$DIR/php.ini
-            [ -f "$LK_CONF_OPTION_FILE" ] || continue
-            PHP_EXT=(
-                bcmath
-                curl
-                exif
-                gd
-                gettext
-                iconv
-                imap
-                intl
-                mysqli
-                pdo_sqlite
-                soap
-                sqlite3
-                zip
-            )
-            for EXT in ${PHP_EXT+"${PHP_EXT[@]}"}; do
-                lk_php_enable_option extension "$EXT"
-            done
-            STANDALONE_PHP_EXT=(
-                imagick
-                memcache.so
-                memcached.so
-            )
-            for EXT in ${STANDALONE_PHP_EXT+"${STANDALONE_PHP_EXT[@]}"}; do
-                FILE=$DIR/conf.d/${EXT%.*}.ini
-                [ -f "$FILE" ] || continue
-                lk_php_enable_option extension "$EXT" "$FILE"
-            done
-            FILE=$DIR/conf.d/imagick.ini
-            [ ! -f "$FILE" ] || lk_php_set_option \
-                imagick.skip_version_check 1 "$FILE"
-            if lk_is_desktop; then
-                lk_php_set_option error_reporting E_ALL
-                lk_php_set_option display_errors On
-                lk_php_set_option display_startup_errors On
-                lk_php_set_option log_errors On
-                lk_php_set_option error_log syslog
-
-                (
-                    LK_CONF_OPTION_FILE=$DIR/conf.d/xdebug.ini
-                    [ -f "$LK_CONF_OPTION_FILE" ] || exit 0
-                    lk_install -d -m 01777 ~/.xdebug
-                    lk_php_set_option xdebug.output_dir ~/.xdebug
-                    # Alternative values: profile, trace
-                    lk_php_set_option xdebug.mode debug
-                    lk_php_set_option xdebug.start_with_request trigger
-                    lk_php_set_option xdebug.profiler_output_name callgrind.out.%H.%R.%u
-                    lk_php_set_option xdebug.collect_return On
-                    lk_php_set_option xdebug.trace_output_name trace.%H.%R.%u
-                    lk_php_enable_option zend_extension xdebug.so
+            FILE=$DIR/php.ini
+            CLI_FILE=$DIR/php-cli.ini
+            [ -f "$FILE" ] || continue
+            [ -f "$CLI_FILE" ] ||
+                sudo cp -a "$(lk_first_file "$FILE.orig" "$FILE")" "$CLI_FILE"
+            for LK_CONF_OPTION_FILE in "$FILE" "$CLI_FILE"; do
+                [[ $LK_CONF_OPTION_FILE != "$CLI_FILE" ]] ||
+                    lk_php_set_option memory_limit -1
+                PHP_EXT=(
+                    bcmath
+                    curl
+                    exif
+                    gd
+                    gettext
+                    iconv
+                    imap
+                    intl
+                    mysqli
+                    pdo_sqlite
+                    soap
+                    sqlite3
+                    zip
                 )
-            fi
+                for EXT in ${PHP_EXT+"${PHP_EXT[@]}"}; do
+                    lk_php_enable_option extension "$EXT"
+                done
+                STANDALONE_PHP_EXT=(
+                    imagick
+                    memcache.so
+                    memcached.so
+                )
+                for EXT in ${STANDALONE_PHP_EXT+"${STANDALONE_PHP_EXT[@]}"}; do
+                    FILE=$DIR/conf.d/${EXT%.*}.ini
+                    [ -f "$FILE" ] || continue
+                    lk_php_enable_option extension "$EXT" "$FILE"
+                done
+                FILE=$DIR/conf.d/imagick.ini
+                [ ! -f "$FILE" ] || lk_php_set_option \
+                    imagick.skip_version_check 1 "$FILE"
+                if lk_is_desktop; then
+                    lk_php_set_option error_reporting E_ALL
+                    lk_php_set_option display_errors On
+                    lk_php_set_option display_startup_errors On
+                    lk_php_set_option log_errors On
+                    lk_php_set_option error_log syslog
+
+                    (
+                        LK_CONF_OPTION_FILE=$DIR/conf.d/xdebug.ini
+                        [ -f "$LK_CONF_OPTION_FILE" ] || exit 0
+                        lk_install -d -m 01777 ~/.xdebug
+                        lk_php_set_option xdebug.output_dir ~/.xdebug
+                        # Alternative values: profile, trace
+                        lk_php_set_option xdebug.mode debug
+                        lk_php_set_option xdebug.start_with_request trigger
+                        lk_php_set_option xdebug.profiler_output_name callgrind.out.%H.%R.%u
+                        lk_php_set_option xdebug.collect_return On
+                        lk_php_set_option xdebug.trace_output_name trace.%H.%R.%u
+                        lk_php_enable_option zend_extension xdebug.so
+                    )
+                fi
+            done
         done
         file_delete "${LK_BIN_PATH:-/usr/local/bin}/wp"
     fi
