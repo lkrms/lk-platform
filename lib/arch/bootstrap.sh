@@ -25,7 +25,7 @@ LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-} &&
         exec "$BASH" "$_FILE" "$@" || exit; }
 
 set -euo pipefail
-lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
+lk_die() { s=$? && echo "$0: ${1-error $s}" >&2 && (exit $s) && false || exit; }
 lk_log() { trap "" SIGINT && exec perl -pe 'BEGIN {
   $| = 1;
   use POSIX qw{strftime};

@@ -40,6 +40,7 @@ PAC_PACKAGES=(
     bc
     diffutils
     file
+    jc
     mediainfo
     pv
     rsync
@@ -144,7 +145,6 @@ AUR_PACKAGES=(
 
     # Utilities
     icdiff
-    jc
 
     #
     ${AUR_PACKAGES[@]+"${AUR_PACKAGES[@]}"}

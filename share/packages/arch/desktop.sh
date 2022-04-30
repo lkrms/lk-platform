@@ -6,6 +6,7 @@ AUR_PACKAGES=()
 PAC_REJECT=()
 
 PAC_KEEP=(
+    teams
     teamviewer
     zoom
 )
@@ -175,7 +176,7 @@ AUR_PACKAGES+=(
     skypeforlinux-stable-bin
     spotify
     stretchly
-    teams
+    teams-insiders
     todoist-appimage
     trimage
     #ttf-apple-emoji

@@ -2,7 +2,7 @@
 
 set -euo pipefail
 shopt -s nullglob
-lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
+lk_die() { s=$? && echo "$0: ${1-error $s}" >&2 && (exit $s) && false || exit; }
 
 # <UDF name="LK_NODE_FQDN" label="Host FQDN" example="web01-dev-syd.linode.linacreative.com" />
 # <UDF name="LK_NODE_TIMEZONE" label="System timezone" default="Australia/Sydney" />

@@ -14,7 +14,7 @@ LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-main}
 export LK_BASE=${LK_BASE:-/opt/lk-platform}
 
 set -euo pipefail
-lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
+lk_die() { s=$? && echo "$0: ${1-error $s}" >&2 && (exit $s) && false || exit; }
 
 [[ $EUID -ne 0 ]] || lk_die "cannot run as root"
 [[ $OSTYPE == darwin* ]] || lk_die "not running on macOS"

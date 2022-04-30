@@ -117,7 +117,7 @@ function lk_arch_configure_grub() {
 #!/bin/bash
 
 set -euo pipefail
-lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
+lk_die() { s=$? && echo "$0: ${1-error $s}" >&2 && (exit $s) && false || exit; }
 
 [ "$EUID" -eq 0 ] || lk_die "not running as root"
 

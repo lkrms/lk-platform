@@ -97,6 +97,12 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
       chmod -c 02775 . ||
       return
 
+    { git config --system --get-all safe.directory || true; } |
+      sed -E 's/\/+$//' |
+      grep -Fx "$PWD" >/dev/null ||
+      git config --system --add safe.directory "$PWD" ||
+      return
+
     (IFS= && umask 002 &&
       # Remove every remote that isn't origin
       { git remote | grep -Fxv origin | tr '\n' '\0' |
