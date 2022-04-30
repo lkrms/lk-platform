@@ -1011,14 +1011,10 @@ EOF
     if lk_is_bootstrap && [ -n "$LK_HOST_ACCOUNT" ]; then
         lk_hosting_user_add "$LK_HOST_ACCOUNT"
         if [ -n "$LK_HOST_DOMAIN" ]; then
-            [ "$LK_HOST_SITE_ENABLE" = Y ] || {
-                FILE=$LK_BASE/etc/lk-platform/sites/${LK_HOST_DOMAIN,,}.conf
-                lk_install -m 00660 -g adm "$FILE" &&
-                    lk_file_replace "$FILE" \
-                        "$(SITE_ENABLE=N lk_var_sh SITE_ENABLE)"
-            }
             HOST_SITE_ROOT=$(lk_expand_path "~$LK_HOST_ACCOUNT")
-            lk_hosting_site_provision "$LK_HOST_DOMAIN" "$HOST_SITE_ROOT"
+            lk_hosting_site_configure -n \
+                -s SITE_ENABLE="$LK_HOST_SITE_ENABLE" \
+                "$LK_HOST_DOMAIN" "$HOST_SITE_ROOT"
         fi
     fi
 

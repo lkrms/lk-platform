@@ -406,7 +406,7 @@ function lk_linode_hosting_update_stackscript() {
         --script "$SCRIPT" \
         --description "Provision a new Linode configured for hosting" \
         --is_public false \
-        --rev_note "commit: ${HASH:0:7} (based on lk-platform/${BASED_ON[2]}@${BASED_ON[1]:0:7}" \
+        --rev_note "commit: ${HASH:0:7} (based on lk-platform/${BASED_ON[2]}@${BASED_ON[1]:0:7})" \
         "${@:3}") ||
         lk_warn "unable to ${ARGS[0]} StackScript" || return
     lk_linode_flush_cache
