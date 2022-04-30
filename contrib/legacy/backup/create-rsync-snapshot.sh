@@ -2,7 +2,7 @@
 
 set -eu
 
-lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
+lk_die() { s=$? && echo "$0: ${1-error $s}" >&2 && (exit $s) && false || exit; }
 _DIR=${0%/*}
 [ "$_DIR" != "$0" ] || _DIR=.
 _DIR=$(cd "$_DIR" && pwd -P) && [ ! -L "$0" ] ||

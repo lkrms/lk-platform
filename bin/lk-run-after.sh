@@ -2,7 +2,7 @@
 
 set -eu
 
-lk_die() { s=$? && echo "${0##*/}: $1" >&2 && (exit $s) && false || exit; }
+lk_die() { s=$? && echo "$0: ${1-error $s}" >&2 && (exit $s) && false || exit; }
 
 [ $# -ge 2 ] || {
     echo "Usage: ${0##*/} DURATION COMMAND [ARG...]" >&2

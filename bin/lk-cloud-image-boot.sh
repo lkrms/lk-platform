@@ -445,10 +445,9 @@ SHA_KEYRING=/usr/share/keyrings/ubuntu-cloudimage-keyring.gpg
 case "$IMAGE" in
 *22.04*minimal)
     IMAGE_NAME=ubuntu-22.04-minimal
-    IMAGE_URL=http://$UBUNTU_HOST/minimal/daily/jammy/current/jammy-minimal-cloudimg-$IMAGE_ARCH.img
+    IMAGE_URL=http://$UBUNTU_HOST/minimal/releases/jammy/release/ubuntu-22.04-minimal-cloudimg-$IMAGE_ARCH.img
     SHA_URLS=(
-        "$UBUNTU_SHA_URL"/minimal/daily/jammy/current/SHA256SUMS.gpg
-        "$UBUNTU_SHA_URL"/minimal/daily/jammy/current/SHA256SUMS
+        "$UBUNTU_SHA_URL"/minimal/releases/jammy/release/SHA256SUMS.gpg
     )
     OS_VARIANT=ubuntu21.10
     ;;
