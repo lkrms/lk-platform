@@ -240,9 +240,8 @@ fi
 lk_tty_print
 
 function exit_trap() {
-    if [ "$BASH_SUBSHELL" -gt 0 ]; then
-        return
-    fi
+    local STATUS=$?
+    [ "$BASH_SUBSHELL" -eq 0 ] || return "$STATUS"
     [ ! -d /mnt/boot ] || {
         set +x
         unset BASH_XTRACEFD
@@ -259,6 +258,7 @@ function exit_trap() {
         lk_tty_log \
             "The random password generated for user '$BOOTSTRAP_USERNAME' is" \
             "$BOOTSTRAP_PASSWORD"
+    return "$STATUS"
 }
 
 function in_target() {

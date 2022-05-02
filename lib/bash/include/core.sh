@@ -1200,11 +1200,13 @@ function _lk_cleanup_on_exit() {
     local ARRAY=$1 COMMAND=$2
     shift 2
     [ -n "${!ARRAY+1}" ] ||
-        { COMMAND="{ [ -z \"\${${ARRAY}+1}\" ] ||
-    $COMMAND \"\${${ARRAY}[@]}\" || [ \"\$EUID\" -eq 0 ] ||
-    sudo $COMMAND \"\${${ARRAY}[@]}\" || true; } 2>/dev/null" &&
-            eval "$ARRAY=()" &&
-            lk_trap_add EXIT "$COMMAND" || return; }
+        eval "function ${ARRAY}_trap() {
+    local STATUS=\$?
+    { [ -z \"\${${ARRAY}+1}\" ] ||
+        $COMMAND \"\${${ARRAY}[@]}\" || [ \"\$EUID\" -eq 0 ] ||
+        sudo $COMMAND \"\${${ARRAY}[@]}\" || true; } 2>/dev/null
+    return \"\$STATUS\"
+} && $ARRAY=() && lk_trap_add EXIT ${ARRAY}_trap" || return
     eval "$ARRAY+=(\"\$@\")"
 }
 
@@ -3071,7 +3073,7 @@ function lk_lock() {
         eval "exec ${!2}>\"\$$1\"" || return
     flock ${_LK_NONBLOCK+-n} "${!2}" ||
         lk_warn "unable to acquire lock: ${!1}" || return
-    lk_trap_add EXIT lk_lock_drop "$@"
+    lk_trap_add EXIT lk_pass lk_lock_drop "$@"
 }
 
 # lk_lock_drop [LOCK_FILE_VAR LOCK_FD_VAR] [LOCK_NAME]
@@ -4511,6 +4513,7 @@ function _lk_exit_trap() {
                 $((1 - ${_LK_STACK_DEPTH:-0})) \
                 "$([ "${LK_NO_STACK_TRACE-}" != 1 ] || echo 1)" \
                 "${_LK_ERR_TRAP_CALLER-}")"
+    return "$STATUS"
 }
 
 function _lk_err_trap() {
