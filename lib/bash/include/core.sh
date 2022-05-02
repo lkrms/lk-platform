@@ -2516,6 +2516,21 @@ function lk_uri_encode() {
             '[$ARGS.named|to_entries[]|"\(.key)=\(.value|@uri)"]|join("&")'
 }
 
+# lk_curl_get_form_args ARRAY [PARAMETER=VALUE...]
+function lk_curl_get_form_args() {
+    (($#)) || lk_warn "invalid arguments" || return
+    eval "$1=()" || return
+    local _NEXT="$1[\${#$1[@]}]"
+    shift
+    # If there are no parameters, -F will not be present to trigger a POST
+    (($#)) || eval "$_NEXT=-X; $_NEXT=POST"
+    while (($#)); do
+        [[ $1 =~ ^([^=]+)=(.*) ]] || lk_err "invalid parameter: $1" || return
+        eval "$_NEXT=-F; $_NEXT=\$1"
+        shift
+    done
+}
+
 lk_confirm() { lk_tty_yn "$@"; }
 lk_echo_array() { lk_arr "$@"; }
 lk_escape_ere_replace() { lk_sed_escape_replace "$@"; }

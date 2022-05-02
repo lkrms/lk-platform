@@ -15,19 +15,15 @@ function _lk_cpanel_get_url() {
     echo
 }
 
-# _lk_cpanel_via_whm_get_url [-u USER] SERVER MODULE FUNC [PARAMETER=VALUE...]
+# _lk_cpanel_via_whm_get_url SERVER USER MODULE FUNC [PARAMETER=VALUE...]
 function _lk_cpanel_via_whm_get_url() {
-    local _USER PORT=2083
-    [ "${1-}" != -u ] || { _USER=$2 && PORT=2087 && shift 2; }
-    [ $# -ge 3 ] || lk_warn "invalid arguments" || return
-    local MODULE=$2 FUNC=$3 PARAMS
-    printf 'https://%s:%s/json-api/cpanel' \
-        "$1" \
-        "${_LK_CPANEL_PORT:-$PORT}"
-    shift 3
+    [[ $# -ge 4 ]] || lk_warn "invalid arguments" || return
+    local _USER=$2 MODULE=$3 FUNC=$4 PARAMS
+    printf 'https://%s:%s/json-api/cpanel' "$1" 2087
+    shift 4
     PARAMS=$(lk_uri_encode \
         "api.version=1" \
-        ${_USER:+"cpanel_jsonapi_user=$_USER"} \
+        "cpanel_jsonapi_user=$_USER" \
         "cpanel_jsonapi_module=$MODULE" \
         "cpanel_jsonapi_func=$FUNC" \
         "cpanel_jsonapi_apiversion=3" \
@@ -106,7 +102,7 @@ function _lk_cpanel_server_check() {
 
 # lk_cpanel_get MODULE FUNC [PARAMETER=VALUE...]
 function lk_cpanel_get() {
-    [ $# -ge 2 ] || lk_usage "\
+    [[ $# -ge 2 ]] || lk_usage "\
 Usage: $FUNCNAME MODULE FUNC [PARAMETER=VALUE...]" || return
     _lk_cpanel_server_check || return
     local IFS
@@ -116,11 +112,10 @@ Usage: $FUNCNAME MODULE FUNC [PARAMETER=VALUE...]" || return
         # {"result":{"data":{}}}
         ssh "$_LK_CPANEL_SERVER" \
             uapi --output=json "$1" "$2" "${@:3}" |
-            jq '.result'
+            jq -cM '.result'
         ;;
     curl)
-        # _lk_cpanel_get_url: {"data":{}}
-        # _lk_cpanel_via_whm_get_url: {"result":{"data":{}}}
+        # {"data":{}}
         local URL
         URL=$(_lk_cpanel_get_url "$_LK_CPANEL_SERVER" "$1" "$2" "${@:3}") &&
             curl -fsSL --insecure \
@@ -128,6 +123,24 @@ Usage: $FUNCNAME MODULE FUNC [PARAMETER=VALUE...]" || return
                 "$URL"
         ;;
     esac
+}
+
+# lk_cpanel_post MODULE FUNC [PARAMETER=VALUE...]
+function lk_cpanel_post() {
+    [[ $# -ge 2 ]] || lk_usage "\
+Usage: $FUNCNAME MODULE FUNC [PARAMETER=VALUE...]" || return
+    _lk_cpanel_server_check || return
+    [[ $_LK_CPANEL_METHOD == curl ]] || {
+        lk_cpanel_get "$@"
+        return
+    }
+    local IFS URL ARGS
+    unset IFS
+    URL=$(_lk_cpanel_get_url "$_LK_CPANEL_SERVER" "$1" "$2") &&
+        lk_curl_get_form_args ARGS "${@:3}" &&
+        curl -fsS --insecure "${ARGS[@]}" \
+            -H "Authorization: cpanel $_LK_CPANEL_TOKEN" \
+            "$URL"
 }
 
 # _lk_whm_get_url SERVER FUNC [PARAMETER=VALUE...]
@@ -196,6 +209,54 @@ Usage: $FUNCNAME FUNC [PARAMETER=VALUE...]" || return
             curl -fsSL --insecure \
                 -H "Authorization: whm $_LK_WHM_TOKEN" \
                 "$URL"
+        ;;
+    esac
+}
+
+# lk_whm_post FUNC [PARAMETER=VALUE...]
+function lk_whm_post() {
+    [[ $# -ge 1 ]] || lk_usage "\
+Usage: $FUNCNAME FUNC [PARAMETER=VALUE...]" || return
+    _lk_whm_server_check || return
+    [[ $_LK_WHM_METHOD == curl ]] || {
+        lk_whm_get "$@"
+        return
+    }
+    local IFS URL ARGS
+    unset IFS
+    URL=$(_lk_whm_get_url "$_LK_WHM_SERVER" "$1")
+    lk_curl_get_form_args ARGS "${@:2}" &&
+        curl -fsS --insecure "${ARGS[@]}" \
+            -H "Authorization: whm $_LK_WHM_TOKEN" \
+            "$URL"
+}
+
+# lk_cpanel_get_via_whm USER MODULE FUNC [PARAMETER=VALUE...]
+function lk_cpanel_get_via_whm() {
+    [[ $# -ge 3 ]] || lk_usage "\
+Usage: $FUNCNAME USER MODULE FUNC [PARAMETER=VALUE...]" || return
+    _lk_whm_server_check || return
+    local IFS
+    unset IFS
+    case "$_LK_WHM_METHOD" in
+    ssh)
+        # Output schema TBC
+        ssh "$_LK_WHM_SERVER" \
+            whmapi1 --output=json \
+            uapi_cpanel \
+            cpanel.user="$1" \
+            cpanel.module="$2" \
+            cpanel.function="$3" \
+            "${@:4}"
+        ;;
+    curl)
+        # {"result":{"data":{}}}
+        local URL
+        URL=$(_lk_cpanel_via_whm_get_url "$_LK_WHM_SERVER" "$1" "$2" "$3" "${@:4}") &&
+            curl -fsSL --insecure \
+                -H "Authorization: whm $_LK_WHM_TOKEN" \
+                "$URL" |
+            jq -cM '.result'
         ;;
     esac
 }
