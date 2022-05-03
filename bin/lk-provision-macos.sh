@@ -23,9 +23,10 @@ lk_die() { s=$? && echo "$0: ${1-error $s}" >&2 && (exit $s) && false || exit; }
 umask 002
 
 function exit_trap() {
-    local EXT _LOG_FILE LOG_FILE _LK_LOG_BASENAME=lk-provision-macos.sh \
+    local STATUS=$? EXT \
+        _LOG_FILE LOG_FILE _LK_LOG_BASENAME=lk-provision-macos.sh \
         _LOG=$_LK_LOG_FILE_LOG _OUT=$_LK_LOG_FILE_OUT
-    lk_log_close || return
+    lk_log_close || return "$STATUS"
     for EXT in log out; do
         _LOG_FILE=_$(lk_upper "$EXT") &&
             _LOG_FILE=${!_LOG_FILE} &&
@@ -36,6 +37,7 @@ function exit_trap() {
             rm "$_LOG_FILE" ||
             lk_tty_warning "Error moving" "$_LOG_FILE"
     done
+    return "$STATUS"
 }
 
 {

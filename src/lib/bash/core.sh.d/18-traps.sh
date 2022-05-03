@@ -31,11 +31,13 @@ function _lk_cleanup_on_exit() {
     local ARRAY=$1 COMMAND=$2
     shift 2
     [ -n "${!ARRAY+1}" ] ||
-        { COMMAND="{ [ -z \"\${${ARRAY}+1}\" ] ||
-    $COMMAND \"\${${ARRAY}[@]}\" || [ \"\$EUID\" -eq 0 ] ||
-    sudo $COMMAND \"\${${ARRAY}[@]}\" || true; } 2>/dev/null" &&
-            eval "$ARRAY=()" &&
-            lk_trap_add EXIT "$COMMAND" || return; }
+        eval "function ${ARRAY}_trap() {
+    local STATUS=\$?
+    { [ -z \"\${${ARRAY}+1}\" ] ||
+        $COMMAND \"\${${ARRAY}[@]}\" || [ \"\$EUID\" -eq 0 ] ||
+        sudo $COMMAND \"\${${ARRAY}[@]}\" || true; } 2>/dev/null
+    return \"\$STATUS\"
+} && $ARRAY=() && lk_trap_add EXIT ${ARRAY}_trap" || return
     eval "$ARRAY+=(\"\$@\")"
 }
 

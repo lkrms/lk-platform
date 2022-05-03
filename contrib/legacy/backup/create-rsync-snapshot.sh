@@ -253,6 +253,7 @@ $(sed \
             lk_mail_send "$SUBJECT" "$LK_BACKUP_MAIL" "$LK_BACKUP_MAIL_FROM" || true
         [ -z "${TAR-}" ] || rm -f "$TAR" || true
     }
+    return "$STATUS"
 }
 
 function find_custom() {

@@ -527,7 +527,7 @@ function lk_lock() {
         eval "exec ${!2}>\"\$$1\"" || return
     flock ${_LK_NONBLOCK+-n} "${!2}" ||
         lk_warn "unable to acquire lock: ${!1}" || return
-    lk_trap_add EXIT lk_lock_drop "$@"
+    lk_trap_add EXIT lk_pass lk_lock_drop "$@"
 } #### Reviewed: 2021-05-23
 
 # lk_lock_drop [LOCK_FILE_VAR LOCK_FD_VAR] [LOCK_NAME]
@@ -1967,6 +1967,7 @@ function _lk_exit_trap() {
                 $((1 - ${_LK_STACK_DEPTH:-0})) \
                 "$([ "${LK_NO_STACK_TRACE-}" != 1 ] || echo 1)" \
                 "${_LK_ERR_TRAP_CALLER-}")"
+    return "$STATUS"
 } #### Reviewed: 2021-05-28
 
 function _lk_err_trap() {

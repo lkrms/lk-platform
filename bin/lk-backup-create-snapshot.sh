@@ -20,7 +20,7 @@ lk_require backup mail mysql
 
 function exit_trap() {
     local STATUS=$? MESSAGE TAR SUBJECT
-    [ "$BASH_SUBSHELL" -eq 0 ] || return
+    [ "$BASH_SUBSHELL" -eq 0 ] || return "$STATUS"
     exec 8>&- &&
         rm -Rf "${FIFO_FILE%/*}" || true
     lk_log_close -r
@@ -81,6 +81,7 @@ $(lk_strip_non_printing -d '\v' <"$SNAPSHOT_LOG_FILE")" &&
             lk_mail_set_text "$MESSAGE" &&
             lk_mail_send "$SUBJECT" "$LK_BACKUP_MAIL" "$LK_BACKUP_MAIL_FROM" || true
     }
+    return "$STATUS"
 }
 
 function find_custom() {

@@ -1200,11 +1200,13 @@ function _lk_cleanup_on_exit() {
     local ARRAY=$1 COMMAND=$2
     shift 2
     [ -n "${!ARRAY+1}" ] ||
-        { COMMAND="{ [ -z \"\${${ARRAY}+1}\" ] ||
-    $COMMAND \"\${${ARRAY}[@]}\" || [ \"\$EUID\" -eq 0 ] ||
-    sudo $COMMAND \"\${${ARRAY}[@]}\" || true; } 2>/dev/null" &&
-            eval "$ARRAY=()" &&
-            lk_trap_add EXIT "$COMMAND" || return; }
+        eval "function ${ARRAY}_trap() {
+    local STATUS=\$?
+    { [ -z \"\${${ARRAY}+1}\" ] ||
+        $COMMAND \"\${${ARRAY}[@]}\" || [ \"\$EUID\" -eq 0 ] ||
+        sudo $COMMAND \"\${${ARRAY}[@]}\" || true; } 2>/dev/null
+    return \"\$STATUS\"
+} && $ARRAY=() && lk_trap_add EXIT ${ARRAY}_trap" || return
     eval "$ARRAY+=(\"\$@\")"
 }
 
@@ -2516,6 +2518,21 @@ function lk_uri_encode() {
             '[$ARGS.named|to_entries[]|"\(.key)=\(.value|@uri)"]|join("&")'
 }
 
+# lk_curl_get_form_args ARRAY [PARAMETER=VALUE...]
+function lk_curl_get_form_args() {
+    (($#)) || lk_warn "invalid arguments" || return
+    eval "$1=()" || return
+    local _NEXT="$1[\${#$1[@]}]"
+    shift
+    # If there are no parameters, -F will not be present to trigger a POST
+    (($#)) || eval "$_NEXT=-X; $_NEXT=POST"
+    while (($#)); do
+        [[ $1 =~ ^([^=]+)=(.*) ]] || lk_err "invalid parameter: $1" || return
+        eval "$_NEXT=-F; $_NEXT=\$1"
+        shift
+    done
+}
+
 lk_confirm() { lk_tty_yn "$@"; }
 lk_echo_array() { lk_arr "$@"; }
 lk_escape_ere_replace() { lk_sed_escape_replace "$@"; }
@@ -3056,7 +3073,7 @@ function lk_lock() {
         eval "exec ${!2}>\"\$$1\"" || return
     flock ${_LK_NONBLOCK+-n} "${!2}" ||
         lk_warn "unable to acquire lock: ${!1}" || return
-    lk_trap_add EXIT lk_lock_drop "$@"
+    lk_trap_add EXIT lk_pass lk_lock_drop "$@"
 }
 
 # lk_lock_drop [LOCK_FILE_VAR LOCK_FD_VAR] [LOCK_NAME]
@@ -4496,6 +4513,7 @@ function _lk_exit_trap() {
                 $((1 - ${_LK_STACK_DEPTH:-0})) \
                 "$([ "${LK_NO_STACK_TRACE-}" != 1 ] || echo 1)" \
                 "${_LK_ERR_TRAP_CALLER-}")"
+    return "$STATUS"
 }
 
 function _lk_err_trap() {
