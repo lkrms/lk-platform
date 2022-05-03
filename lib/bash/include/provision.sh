@@ -1119,6 +1119,19 @@ function lk_cpanel_domain_list() {
         sort -u
 }
 
+# lk_whm_domain_records DOMAIN
+function lk_whm_domain_records() {
+    _lk_whm_server_check || return
+    lk_whm_get parse_dns_zone zone="$1" |
+        lk_jq -r 'include "core";
+[ .data.payload[] |
+    select(.type == "record" and (.record_type | in_arr(["SOA", "NS"]) | not)) |
+    .name = (.dname_b64 | @base64d) ] |
+  sort_by(.record_type, .name)[] |
+  (.data_b64[] | @base64d) as $data |
+  [.line_index, .name, .record_type, $data, .ttl] | @tsv'
+}
+
 # lk_cpanel_ssl_get_for_domain DOMAIN [TARGET_DIR]
 function lk_cpanel_ssl_get_for_domain() {
     lk_is_fqdn "${1-}" && { [ $# -lt 2 ] || [ -d "$2" ]; } ||
