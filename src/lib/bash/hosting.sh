@@ -60,7 +60,7 @@ Usage: $FUNCNAME LOGIN" || return
 
 # lk_hosting_site_configure [options] <DOMAIN> [SITE_ROOT]
 function lk_hosting_site_configure() { (
-    declare LK_SUDO=1 LK_VERBOSE=${LK_VERBOSE-1} \
+    declare LK_VERBOSE=${LK_VERBOSE-1} \
         NO_WWW=0 WWW=0 ALIASES=() CLEAR_ALIASES=0 SETTINGS=() SKIP_APPLY=0
     LK_USAGE="\
 Usage:
@@ -161,7 +161,7 @@ function _lk_hosting_site_provision() {
         lk_tty_detail "Site root:" \
             "$SITE_ROOT$([[ $_SITE_IS_CHILD == N ]] || echo " (child site)")"
     }
-    local IFS=$' \t\n' LOG_DIR=$SITE_ROOT/log \
+    local LK_SUDO=1 IFS=$' \t\n' LOG_DIR=$SITE_ROOT/log \
         DOMAINS APACHE ALIAS OLD_SITE_NAME OLD_FILE SSL SSL_FILES SSL_TMP \
         LK_FILE_REPLACE_NO_CHANGE LK_FILE_REPLACE_DECLINED
     lk_install -d -m 00750 -o "$_SITE_USER" -g "$_SITE_GROUP" \

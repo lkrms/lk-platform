@@ -272,7 +272,7 @@ function _lk_hosting_site_load_dynamic_settings() {
 # Defaults that shouldn't be saved are commented out, and if a config file for
 # the site is found at a deprecated path, it's moved before being updated.
 function _lk_hosting_site_write_settings() {
-    local REGEX STATUS=0 \
+    local LK_SUDO=1 REGEX STATUS=0 \
         FILE=$LK_BASE/etc/lk-platform/sites/$_SITE_DOMAIN.conf \
         OLD_FILE=$LK_BASE/etc/sites/$_SITE_DOMAIN.conf
     REGEX=$(_lk_hosting_site_assign_defaults &&
@@ -767,7 +767,7 @@ function lk_hosting_apply_config() {
 
 # lk_hosting_site_configure [options] <DOMAIN> [SITE_ROOT]
 function lk_hosting_site_configure() { (
-    declare LK_SUDO=1 LK_VERBOSE=${LK_VERBOSE-1} \
+    declare LK_VERBOSE=${LK_VERBOSE-1} \
         NO_WWW=0 WWW=0 ALIASES=() CLEAR_ALIASES=0 SETTINGS=() SKIP_APPLY=0
     LK_USAGE="\
 Usage:
@@ -868,7 +868,7 @@ function _lk_hosting_site_provision() {
         lk_tty_detail "Site root:" \
             "$SITE_ROOT$([[ $_SITE_IS_CHILD == N ]] || echo " (child site)")"
     }
-    local IFS=$' \t\n' LOG_DIR=$SITE_ROOT/log \
+    local LK_SUDO=1 IFS=$' \t\n' LOG_DIR=$SITE_ROOT/log \
         DOMAINS APACHE ALIAS OLD_SITE_NAME OLD_FILE SSL SSL_FILES SSL_TMP \
         LK_FILE_REPLACE_NO_CHANGE LK_FILE_REPLACE_DECLINED
     lk_install -d -m 00750 -o "$_SITE_USER" -g "$_SITE_GROUP" \
