@@ -234,7 +234,7 @@ function _lk_hosting_site_provision() {
     _lk_hosting_site_write_settings || return
     ! lk_is_true SITE_ENABLE_STAGING ||
         APACHE+=(Use Staging)
-    [ -z "${SITE_DOWNSTREAM_FROM-}" ] || {
+    [[ -z $SITE_DOWNSTREAM_FROM ]] || {
         MACRO=${SITE_DOWNSTREAM_FROM,,}
         PARAMS=
         case "$MACRO" in
@@ -254,22 +254,22 @@ function _lk_hosting_site_provision() {
             APACHE+=(Use "Require${MACRO^}$PARAMS") ||
             APACHE+=(Use "Trust${MACRO^}$PARAMS")
     }
-    [ -z "${_SITE_PHP_FPM_PM-}" ] ||
-        # Configure PHP-FPM if this is the first site using this pool
-        ! lk_hosting_list_sites | awk \
+    # Configure PHP-FPM if this is the first enabled site using this pool
+    [[ $SITE_PHP_VERSION == -1 ]] ||
+        ! lk_hosting_list_sites -e | awk \
             -v "d=$_SITE_DOMAIN" \
+            -v "v=$SITE_PHP_VERSION" \
             -v "p=$SITE_PHP_FPM_POOL" \
-            '$7 == p && !f {f = 1; if ($1 == d) s = 1} END {exit 1 - s}' || (
-        lk_install -d -m 02750 \
-            -o "$SITE_PHP_FPM_USER" -g "$_SITE_GROUP" "/srv/www/.opcache/$SITE_PHP_FPM_POOL"
-        lk_install -d -m 02770 \
-            -o "$SITE_PHP_FPM_USER" -g "$_SITE_GROUP" "/srv/www/.tmp/$SITE_PHP_FPM_POOL"
-        lk_install -m 00640 \
-            -o root -g "$_SITE_GROUP" "$LOG_DIR/php$SITE_PHP_VERSION-fpm.access.log"
-        lk_install -m 00640 \
-            -o "$SITE_PHP_FPM_USER" -g "$_SITE_GROUP" \
-            "$LOG_DIR/php$SITE_PHP_VERSION-fpm.error.log" \
-            "$LOG_DIR/php$SITE_PHP_VERSION-fpm.xdebug.log"
+            '$12 == v && $7 == p && !f {f = 1; if ($1 == d) s = 1} END {exit 1 - s}' || (
+        lk_install -d -m 02750 -o "$SITE_PHP_FPM_USER" -g "$_SITE_GROUP" \
+            "/srv/www/.opcache/$SITE_PHP_VERSION/$SITE_PHP_FPM_POOL" &&
+            lk_install -d -m 02770 -o "$SITE_PHP_FPM_USER" -g "$_SITE_GROUP" \
+                "/srv/www/.tmp/$SITE_PHP_VERSION/$SITE_PHP_FPM_POOL" &&
+            lk_install -m 00640 -o root -g "$_SITE_GROUP" \
+                "$LOG_DIR/php$SITE_PHP_VERSION-fpm.access.log" &&
+            lk_install -m 00640 -o "$SITE_PHP_FPM_USER" -g "$_SITE_GROUP" \
+                "$LOG_DIR/php$SITE_PHP_VERSION-fpm.error.log" \
+                "$LOG_DIR/php$SITE_PHP_VERSION-fpm.xdebug.log"
         SITE_PHP_FPM_PM=${SITE_PHP_FPM_PM:-$_SITE_PHP_FPM_PM}
         PHP_SETTINGS=$(
             IFS=,
@@ -284,7 +284,7 @@ function _lk_hosting_site_provision() {
                 opcache.max_accelerated_files=20000 \
                 opcache.validate_timestamps=On \
                 opcache.revalidate_freq=0 \
-                opcache.file_cache=/srv/www/.opcache/\$pool \
+                opcache.file_cache="/srv/www/.opcache/$SITE_PHP_VERSION/\$pool" \
                 error_reporting="E_ALL & ~E_WARNING & ~E_NOTICE & ~E_USER_WARNING & ~E_USER_NOTICE & ~E_STRICT & ~E_DEPRECATED & ~E_USER_DEPRECATED" \
                 disable_functions="error_reporting" \
                 log_errors=On \
@@ -297,7 +297,7 @@ function _lk_hosting_site_provision() {
                 upload_max_filesize=24M \
                 post_max_size=50M
             _lk_hosting_php_get_settings env \
-                TMPDIR=/srv/www/.tmp/\$pool \
+                TMPDIR="/srv/www/.tmp/$SITE_PHP_VERSION/\$pool" \
                 ${SITE_PHP_FPM_ENV-}
         )
         unset LK_FILE_REPLACE_NO_CHANGE LK_FILE_REPLACE_DECLINED

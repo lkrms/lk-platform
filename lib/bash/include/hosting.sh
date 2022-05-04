@@ -246,9 +246,15 @@ function _lk_hosting_site_load_dynamic_settings() {
     .alias_domains[] )' <"$_SITE_LIST" | sort -u))) || return
     [ -z "${SAME_DOMAIN+1}" ] ||
         lk_warn "domains already in use: ${SAME_DOMAIN[*]}" || return
-    PHP_FPM_POOLS=$(jq -r --arg pool "$SITE_PHP_FPM_POOL" '
-( [ .[] | select(.php_fpm.pool != $pool) | .php_fpm.pool ] |
-    unique | length ) + 1' <"$_SITE_LIST") || return
+    PHP_FPM_POOLS=$(jq -r \
+        --arg domain "$_SITE_DOMAIN" \
+        --arg version "$SITE_PHP_VERSION" \
+        --arg pool "$SITE_PHP_FPM_POOL" \
+        --argjson enabled "$(lk_json_bool SITE_ENABLE)" '
+{"php_fpm": {"php_version": $version, "pool": $pool}, "enabled": $enabled} as $update |
+  [ (.[], $update) | if .domain == $domain then . *= $update else . end |
+    select(.enabled) | [.php_fpm.php_version, .php_fpm.pool] ] | unique | length' \
+        <"$_SITE_LIST") || return
     # Rationale:
     # - `dynamic` responds to bursts in traffic by spawning one child per
     #   second--appropriate for staging servers
@@ -257,7 +263,7 @@ function _lk_hosting_site_load_dynamic_settings() {
     # - `static` spawns every child at startup, sacrificing idle capacity for
     #   burst performance--recommended for single-site production servers
     _SITE_PHP_FPM_PM=static
-    [ "$PHP_FPM_POOLS" -eq 1 ] ||
+    [[ $PHP_FPM_POOLS -eq 1 ]] && lk_true SITE_ENABLE ||
         { ! lk_is_true SITE_ENABLE_STAGING &&
             ! lk_is_true LK_SITE_ENABLE_STAGING &&
             _SITE_PHP_FPM_PM=ondemand ||
@@ -404,6 +410,7 @@ function _lk_hosting_list_domains() { (
 # 9. ORDER
 # 10. ALL_DOMAINS (sorted, comma-separated)
 # 11. DISABLE_HTTPS
+# 12. PHP_VERSION
 function lk_hosting_list_sites() { (
     declare ENABLED_ONLY=0 JSON=0
     while (($#)); do
@@ -424,7 +431,7 @@ function lk_hosting_list_sites() { (
             WWW=
             [[ $SITE_DISABLE_WWW == Y ]] || WWW=,www.$DOMAIN
             DOMAINS=$DOMAIN$WWW${SITE_ALIASES:+,$SITE_ALIASES}
-            printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+            printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
                 "$DOMAIN" \
                 "$SITE_ENABLE" \
                 "$SITE_ROOT" \
@@ -435,7 +442,8 @@ function lk_hosting_list_sites() { (
                 "$SITE_PHP_FPM_USER" \
                 "$SITE_ORDER" \
                 "$DOMAINS" \
-                "$SITE_DISABLE_HTTPS"
+                "$SITE_DISABLE_HTTPS" \
+                "$SITE_PHP_VERSION"
         else
             _lk_hosting_site_json
         fi
@@ -534,10 +542,33 @@ function lk_hosting_php_get_default_version() { (
 ); }
 
 function lk_hosting_php_get_versions() {
-    systemctl --full --no-legend --no-pager list-units --all "php*.service" |
-        awk '{print $1}' |
-        sed -En 's/^php([0-9.]+)-fpm.service$/\1/p' | sort -V
+    basename -a /lib/systemd/system/php*-fpm.service |
+        lk_safe_grep -Eo '[0-9][0-9.]*' | sort -V
 }
+
+function _lk_hosting_php_check_pools() { (
+    shopt -s nullglob
+    lk_mktemp_with _SITE_LIST lk_hosting_list_sites || return
+    for PHPVER in $(lk_hosting_php_get_versions); do
+        POOLS=(/etc/php/"$PHPVER"/fpm/pool.d/*.conf)
+        [[ -n ${POOLS+1} ]] || continue
+        POOLS=("${POOLS[@]##*/}")
+        POOLS=("${POOLS[@]%.conf}")
+        DISABLE=($(comm -23 \
+            <(lk_arr POOLS | sort -u) \
+            <(awk -v version="$PHPVER" \
+                '$2 == "Y" && $12 == version { print $7 }' <"$_SITE_LIST" |
+                sort -u))) || return
+        [[ -n ${DISABLE+1} ]] || continue
+        lk_tty_detail "Disabling inactive PHP-FPM $PHPVER pools:" \
+            $'\n'"$(lk_arr DISABLE)"
+        for POOL in "${DISABLE[@]}"; do
+            lk_elevate mv -f "/etc/php/$PHPVER/fpm/pool.d/$POOL.conf"{,.bak} ||
+                return
+        done
+        lk_mark_dirty "php$PHPVER-fpm.service"
+    done
+); }
 
 # _lk_hosting_php_test_config [PHP_VERSION]
 function _lk_hosting_php_test_config() {
@@ -724,15 +755,17 @@ function _lk_hosting_service_disable() {
 }
 
 function lk_hosting_apply_config() {
-    local IFS=$' \t\n' PHP_VER VER SERVICE APPLY=() DISABLE=()
+    local IFS=$' \t\n' PHP_VERSIONS PHPVER SERVICE APPLY=() DISABLE=()
     lk_tty_log "Checking hosting services"
     _lk_hosting_check &&
-        PHP_VER=($(lk_hosting_php_get_versions)) || return
-    for VER in ${PHP_VER+"${PHP_VER[@]}"}; do
-        lk_tty_print "PHP-FPM $VER"
-        SERVICE=php$VER-fpm.service
+        PHP_VERSIONS=($(lk_hosting_php_get_versions)) || return
+    lk_tty_print "PHP-FPM pools"
+    _lk_hosting_php_check_pools || return
+    for PHPVER in ${PHP_VERSIONS+"${PHP_VERSIONS[@]}"}; do
+        lk_tty_print "PHP-FPM $PHPVER"
+        SERVICE=php$PHPVER-fpm.service
         if lk_is_dirty "$SERVICE"; then
-            if lk_files_exist "/etc/php/$VER/fpm/pool.d"/*.conf; then
+            if lk_files_exist "/etc/php/$PHPVER/fpm/pool.d"/*.conf; then
                 _lk_hosting_php_test_config "$PHPVER" || return
                 APPLY+=("$SERVICE")
             else
@@ -941,7 +974,7 @@ function _lk_hosting_site_provision() {
     _lk_hosting_site_write_settings || return
     ! lk_is_true SITE_ENABLE_STAGING ||
         APACHE+=(Use Staging)
-    [ -z "${SITE_DOWNSTREAM_FROM-}" ] || {
+    [[ -z $SITE_DOWNSTREAM_FROM ]] || {
         MACRO=${SITE_DOWNSTREAM_FROM,,}
         PARAMS=
         case "$MACRO" in
@@ -961,22 +994,22 @@ function _lk_hosting_site_provision() {
             APACHE+=(Use "Require${MACRO^}$PARAMS") ||
             APACHE+=(Use "Trust${MACRO^}$PARAMS")
     }
-    [ -z "${_SITE_PHP_FPM_PM-}" ] ||
-        # Configure PHP-FPM if this is the first site using this pool
-        ! lk_hosting_list_sites | awk \
+    # Configure PHP-FPM if this is the first enabled site using this pool
+    [[ $SITE_PHP_VERSION == -1 ]] ||
+        ! lk_hosting_list_sites -e | awk \
             -v "d=$_SITE_DOMAIN" \
+            -v "v=$SITE_PHP_VERSION" \
             -v "p=$SITE_PHP_FPM_POOL" \
-            '$7 == p && !f {f = 1; if ($1 == d) s = 1} END {exit 1 - s}' || (
-        lk_install -d -m 02750 \
-            -o "$SITE_PHP_FPM_USER" -g "$_SITE_GROUP" "/srv/www/.opcache/$SITE_PHP_FPM_POOL"
-        lk_install -d -m 02770 \
-            -o "$SITE_PHP_FPM_USER" -g "$_SITE_GROUP" "/srv/www/.tmp/$SITE_PHP_FPM_POOL"
-        lk_install -m 00640 \
-            -o root -g "$_SITE_GROUP" "$LOG_DIR/php$SITE_PHP_VERSION-fpm.access.log"
-        lk_install -m 00640 \
-            -o "$SITE_PHP_FPM_USER" -g "$_SITE_GROUP" \
-            "$LOG_DIR/php$SITE_PHP_VERSION-fpm.error.log" \
-            "$LOG_DIR/php$SITE_PHP_VERSION-fpm.xdebug.log"
+            '$12 == v && $7 == p && !f {f = 1; if ($1 == d) s = 1} END {exit 1 - s}' || (
+        lk_install -d -m 02750 -o "$SITE_PHP_FPM_USER" -g "$_SITE_GROUP" \
+            "/srv/www/.opcache/$SITE_PHP_VERSION/$SITE_PHP_FPM_POOL" &&
+            lk_install -d -m 02770 -o "$SITE_PHP_FPM_USER" -g "$_SITE_GROUP" \
+                "/srv/www/.tmp/$SITE_PHP_VERSION/$SITE_PHP_FPM_POOL" &&
+            lk_install -m 00640 -o root -g "$_SITE_GROUP" \
+                "$LOG_DIR/php$SITE_PHP_VERSION-fpm.access.log" &&
+            lk_install -m 00640 -o "$SITE_PHP_FPM_USER" -g "$_SITE_GROUP" \
+                "$LOG_DIR/php$SITE_PHP_VERSION-fpm.error.log" \
+                "$LOG_DIR/php$SITE_PHP_VERSION-fpm.xdebug.log"
         SITE_PHP_FPM_PM=${SITE_PHP_FPM_PM:-$_SITE_PHP_FPM_PM}
         PHP_SETTINGS=$(
             IFS=,
@@ -991,7 +1024,7 @@ function _lk_hosting_site_provision() {
                 opcache.max_accelerated_files=20000 \
                 opcache.validate_timestamps=On \
                 opcache.revalidate_freq=0 \
-                opcache.file_cache=/srv/www/.opcache/\$pool \
+                opcache.file_cache="/srv/www/.opcache/$SITE_PHP_VERSION/\$pool" \
                 error_reporting="E_ALL & ~E_WARNING & ~E_NOTICE & ~E_USER_WARNING & ~E_USER_NOTICE & ~E_STRICT & ~E_DEPRECATED & ~E_USER_DEPRECATED" \
                 disable_functions="error_reporting" \
                 log_errors=On \
@@ -1004,7 +1037,7 @@ function _lk_hosting_site_provision() {
                 upload_max_filesize=24M \
                 post_max_size=50M
             _lk_hosting_php_get_settings env \
-                TMPDIR=/srv/www/.tmp/\$pool \
+                TMPDIR="/srv/www/.tmp/$SITE_PHP_VERSION/\$pool" \
                 ${SITE_PHP_FPM_ENV-}
         )
         unset LK_FILE_REPLACE_NO_CHANGE LK_FILE_REPLACE_DECLINED

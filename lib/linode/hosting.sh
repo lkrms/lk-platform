@@ -25,6 +25,7 @@ lk_die() { s=$? && echo "$0: ${1-error $s}" >&2 && (exit $s) && false || exit; }
 # <UDF name="LK_MYSQL_PASSWORD" label="MySQL admin password (ignored if username not set)" default="" />
 # <UDF name="LK_INNODB_BUFFER_SIZE" label="InnoDB buffer size (~80% of RAM for MySQL-only servers)" oneof="128M,256M,512M,768M,1024M,1536M,2048M,2560M,3072M,4096M,5120M,6144M,7168M,8192M" default="256M" />
 # <UDF name="LK_OPCACHE_MEMORY_CONSUMPTION" label="PHP OPcache size" oneof="128,256,512,768,1024" default="256" />
+# <UDF name="LK_PHP_VERSIONS" label="PHP versions to install (apache+php required, official packages removed if set)" manyof="5.6,7.0,7.1,7.2,7.3,7.4,8.0,8.1" default="" />
 # <UDF name="LK_PHP_SETTINGS" label="php.ini settings (user can overwrite, comma-delimited, flag assumed if value is On/True/Yes or Off/False/No)" example="upload_max_filesize=24M,display_errors=On" default="" />
 # <UDF name="LK_PHP_ADMIN_SETTINGS" label="Enforced php.ini settings (comma-delimited)" example="post_max_size=50M,log_errors=Off" default="" />
 # <UDF name="LK_MEMCACHED_MEMORY_LIMIT" label="Memcached size" oneof="64,128,256,512,768,1024" default="256" />
@@ -40,6 +41,7 @@ lk_die() { s=$? && echo "$0: ${1-error $s}" >&2 && (exit $s) && false || exit; }
 # <UDF name="LK_SNAPSHOT_DAILY_MAX_AGE" label="Backup: daily snapshot max age (days, -1 = no maximum)" example="14" default="7" />
 # <UDF name="LK_SNAPSHOT_WEEKLY_MAX_AGE" label="Backup: weekly snapshot max age (weeks, -1 = no maximum)" example="-1" default="52" />
 # <UDF name="LK_SNAPSHOT_FAILED_MAX_AGE" label="Backup: failed snapshot max age (days, -1 = no maximum)" default="28" />
+# <UDF name="LK_LAUNCHPAD_PPA_MIRROR" label="PPA base URL (default: http://ppa.launchpadcontent.net)" example="http://ppa.mirror" default="" />
 # <UDF name="LK_PATH_PREFIX" label="Prefix for files installed by lk-platform" default="lk-" />
 # <UDF name="LK_DEBUG" label="Create trace output from provisioning script" oneof="Y,N" default="N" />
 # <UDF name="LK_SHUTDOWN_ACTION" label="Reboot or power down after provisioning" oneof="reboot,poweroff" default="reboot" />
@@ -77,6 +79,7 @@ LK_MYSQL_USERNAME=${LK_MYSQL_USERNAME-}
 LK_MYSQL_PASSWORD=${LK_MYSQL_PASSWORD-}
 LK_INNODB_BUFFER_SIZE=${LK_INNODB_BUFFER_SIZE:-256M}
 LK_OPCACHE_MEMORY_CONSUMPTION=${LK_OPCACHE_MEMORY_CONSUMPTION:-256}
+LK_PHP_VERSIONS=${LK_PHP_VERSIONS-}
 LK_PHP_SETTINGS=${LK_PHP_SETTINGS-}
 LK_PHP_ADMIN_SETTINGS=${LK_PHP_ADMIN_SETTINGS-}
 LK_MEMCACHED_MEMORY_LIMIT=${LK_MEMCACHED_MEMORY_LIMIT:-256}
@@ -92,6 +95,7 @@ LK_SNAPSHOT_HOURLY_MAX_AGE=${LK_SNAPSHOT_HOURLY_MAX_AGE:-24}
 LK_SNAPSHOT_DAILY_MAX_AGE=${LK_SNAPSHOT_DAILY_MAX_AGE:-7}
 LK_SNAPSHOT_WEEKLY_MAX_AGE=${LK_SNAPSHOT_WEEKLY_MAX_AGE:-52}
 LK_SNAPSHOT_FAILED_MAX_AGE=${LK_SNAPSHOT_FAILED_MAX_AGE:-28}
+LK_LAUNCHPAD_PPA_MIRROR=${LK_LAUNCHPAD_PPA_MIRROR-}
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
 LK_DEBUG=${LK_DEBUG:-N}
 LK_SHUTDOWN_ACTION=${LK_SHUTDOWN_ACTION:-reboot}
@@ -158,8 +162,8 @@ INSTALL=(
     bsdmainutils
     debconf
     git
+    jq
     perl
-    software-properties-common
     tzdata
     $(lk_apt_available_list icdiff)
 )

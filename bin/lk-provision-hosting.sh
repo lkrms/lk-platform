@@ -101,6 +101,7 @@ export -n \
     LK_ACCEPT_OUTPUT_HOSTS=${LK_ACCEPT_OUTPUT_HOSTS-} \
     LK_INNODB_BUFFER_SIZE=${LK_INNODB_BUFFER_SIZE-} \
     LK_OPCACHE_MEMORY_CONSUMPTION=${LK_OPCACHE_MEMORY_CONSUMPTION-} \
+    LK_PHP_VERSIONS=${LK_PHP_VERSIONS-} \
     LK_PHP_SETTINGS=${LK_PHP_SETTINGS-} \
     LK_PHP_ADMIN_SETTINGS=${LK_PHP_ADMIN_SETTINGS-} \
     LK_MEMCACHED_MEMORY_LIMIT=${LK_MEMCACHED_MEMORY_LIMIT-} \
@@ -116,6 +117,7 @@ export -n \
     LK_SNAPSHOT_DAILY_MAX_AGE=${LK_SNAPSHOT_DAILY_MAX_AGE-} \
     LK_SNAPSHOT_WEEKLY_MAX_AGE=${LK_SNAPSHOT_WEEKLY_MAX_AGE-} \
     LK_SNAPSHOT_FAILED_MAX_AGE=${LK_SNAPSHOT_FAILED_MAX_AGE-} \
+    LK_LAUNCHPAD_PPA_MIRROR=${LK_LAUNCHPAD_PPA_MIRROR-} \
     LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-} \
     LK_DEBUG=${LK_DEBUG:-N} \
     LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-main}
@@ -183,6 +185,7 @@ FIELD_ERRORS=$'\n'$(
     }
     lk_validate LK_INNODB_BUFFER_SIZE '^[0-9]+[kmgtpeKMGTPE]?$'
     lk_validate LK_OPCACHE_MEMORY_CONSUMPTION '^[0-9]+$'
+    lk_validate_many_of LK_PHP_VERSIONS 5.6 7.0 7.1 7.2 7.3 7.4 8.0 8.1
     lk_validate_list LK_PHP_SETTINGS "^$PHP_SETTING_REGEX\$"
     lk_validate_list LK_PHP_ADMIN_SETTINGS "^$PHP_SETTING_REGEX\$"
     lk_validate LK_MEMCACHED_MEMORY_LIMIT '^[0-9]+$'
@@ -197,6 +200,8 @@ FIELD_ERRORS=$'\n'$(
     lk_validate LK_SNAPSHOT_DAILY_MAX_AGE '^(-1|[0-9]+)$'
     lk_validate LK_SNAPSHOT_WEEKLY_MAX_AGE '^(-1|[0-9]+)$'
     lk_validate LK_SNAPSHOT_FAILED_MAX_AGE '^(-1|[0-9]+)$'
+    lk_validate LK_LAUNCHPAD_PPA_MIRROR "^https?://"
+    lk_validate LK_LAUNCHPAD_PPA_MIRROR "^$URI_REGEX_REQ_SCHEME_HOST\$"
     lk_validate LK_PATH_PREFIX '^[a-zA-Z0-9]{2,3}-$'
     lk_validate_one_of LK_DEBUG Y N
     ! lk_is_bootstrap ||
@@ -232,6 +237,7 @@ if lk_is_bootstrap; then
         LK_ACCEPT_OUTPUT_HOSTS \
         LK_INNODB_BUFFER_SIZE \
         LK_OPCACHE_MEMORY_CONSUMPTION \
+        LK_PHP_VERSIONS \
         LK_PHP_SETTINGS \
         LK_PHP_ADMIN_SETTINGS \
         LK_MEMCACHED_MEMORY_LIMIT \
@@ -247,6 +253,7 @@ if lk_is_bootstrap; then
         LK_SNAPSHOT_DAILY_MAX_AGE \
         LK_SNAPSHOT_WEEKLY_MAX_AGE \
         LK_SNAPSHOT_FAILED_MAX_AGE \
+        LK_LAUNCHPAD_PPA_MIRROR \
         LK_PLATFORM_BRANCH >"$FILE"
 else
     LK_FILE_BACKUP_TAKE=${LK_FILE_BACKUP_TAKE-1}
@@ -263,6 +270,7 @@ IPTABLES_TCP_LISTEN=()
 IPTABLES_UDP_LISTEN=()
 CURL_OPTIONS=(-fsSLH "Cache-Control: no-cache" -H "Pragma: no-cache" --retry 2)
 
+APT_REPOS=()
 APT_REMOVE=(
     # Recommended by ubuntu-minimal
     rsyslog
@@ -275,6 +283,9 @@ APT_REMOVE=(
     lxd
     lxd-agent-loader
     snapd
+
+    # Installed by previous versions of lk-platform
+    software-properties-common
 )
 [ -n "$LK_UPGRADE_EMAIL" ] ||
     APT_REMOVE+=(
@@ -282,28 +293,25 @@ APT_REMOVE=(
         apticron
     )
 
-APT_REPOS=()
-APT_SUPPRESS=()
-APT_FILTER=()
-APACHE_MODS_SUPPRESS=()
-PHPVER=$(lk_hosting_php_get_default_version)
+DEFAULT_PHPVER=$(lk_hosting_php_get_default_version)
+PHP_VERSIONS=($(IFS=, &&
+    printf '%s\n' $LK_PHP_VERSIONS "$DEFAULT_PHPVER" | sort -u))
+if [[ -n $LK_PHP_VERSIONS ]] && lk_node_service_enabled php-fpm; then
+    APT_REPOS+=("ppa:ondrej/php")
+    #! lk_node_service_enabled apache2 ||
+    #    APT_REPOS+=("ppa:ondrej/apache2")
+fi
 
-CERTBOT_REPO=ppa:certbot/certbot
 case "$DISTRIB_RELEASE" in
 18.04)
-    APT_REPOS+=("$CERTBOT_REPO")
+    APT_REPOS+=("ppa:certbot/certbot")
     ;;
-20.04)
-    APT_SUPPRESS+=(php-gettext)
-    ;;
-22.04)
-    APT_SUPPRESS+=(php-apcu-bc php-gettext)
-    ;;
+20.04) ;;
+22.04) ;;
 *)
     lk_die "Ubuntu release not supported: $DISTRIB_RELEASE"
     ;;
 esac
-APT_FILTER+=("s/^php-opcache$/php$PHPVER-opcache/")
 
 export DEBIAN_FRONTEND=noninteractive \
     DEBCONF_NONINTERACTIVE_SEEN=true \
@@ -417,22 +425,62 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
         -e "s/^deb$S.*$S$DISTRIB_CODENAME(-(updates|security|backports))?($S+$NS+)*$S+multiverse($S|\$)/#&/" \
         "$FILE")
     # Enable universe (required for certbot), backports
-    COMPONENTS=("$DISTRIB_CODENAME"{,-{updates,security,backports}}" "{main,restricted,universe})
+    IFS=,
+    COMPONENTS=($(printf '%s,' "$DISTRIB_CODENAME"{,-{updates,security,backports}}","{main,restricted,universe}))
+    unset IFS
     _FILE+=$(printf '\n' &&
-        lk_apt_sources_get_missing -l - ${COMPONENTS[*]} <<<"$_FILE")
+        lk_apt_sources_get_missing -l - "${COMPONENTS[@]}" <<<"$_FILE")
     lk_file_keep_original "$FILE"
     lk_file_replace "$FILE" "$_FILE"
     if [ ${#APT_REPOS[@]} -gt 0 ]; then
         for REPO in "${APT_REPOS[@]}"; do
             case "$REPO" in
             ppa:*)
-                apt-cache policy | grep -E \
-                    "\\<https?://ppa\.launchpad\.net/${REPO#ppa:}\\>" \
-                    >/dev/null || {
-                    lk_tty_detail "Adding repository:" "$REPO"
-                    lk_keep_trying add-apt-repository -yn "$REPO" &&
-                        LK_FILE_REPLACE_NO_CHANGE=0
+                PPA=${REPO#ppa:}
+                PPA_OWNER=${PPA%/*}
+                PPA_NAME=${PPA#*/}
+                GPG_FILE=$LK_BASE/share/keys/ppa-${PPA_OWNER}-${PPA_NAME}.gpg
+                if [[ -f $GPG_FILE ]]; then
+                    GPG_FILE=$(lk_realpath "$GPG_FILE")
+                    FILE=/etc/apt/trusted.gpg.d/${GPG_FILE##*/}
+                    [[ -e $FILE ]] && diff -q "$GPG_FILE" "$FILE" >/dev/null ||
+                        lk_tty_run_detail install -m 00644 "$GPG_FILE" "$FILE"
+                else
+                    lk_tty_warning \
+                        "Signing key for '$REPO' not found:" "$GPG_FILE"
+                    GPG_KEY=$(lk_keep_trying lk_curl \
+                        "https://api.launchpad.net/1.0/~${PPA_OWNER}/+archive/ubuntu/${PPA_NAME}" |
+                        jq -r '.signing_key_fingerprint')
+                    apt-key adv --list-keys "$GPG_KEY" &>/dev/null || {
+                        lk_tty_detail "Downloading key:" "$GPG_KEY"
+                        lk_keep_trying apt-key adv \
+                            --keyserver keyserver.ubuntu.com \
+                            --recv-keys "$GPG_KEY"
+                    }
+                fi
+                REPO_PATH=/$PPA/ubuntu
+                REPO_HOST=http://ppa.launchpadcontent.net
+                ARGS=()
+                [[ -z ${LK_LAUNCHPAD_PPA_MIRROR-} ]] || {
+                    # Match the standard PPA URL too
+                    ARGS=(-e "${REPO_HOST#*://}$REPO_PATH" -e)
+                    REPO_HOST=$LK_LAUNCHPAD_PPA_MIRROR
                 }
+                if ! apt-get indextargets --format '$(SITE)' |
+                    sed -En "$(printf '%s\n' \
+                        's/^https?:\/\///' 's/\/+$//' \
+                        't print' 'b' ':print' 'p')" |
+                    grep -Fx ${ARGS+"${ARGS[@]}"} \
+                        "${REPO_HOST#*://}$REPO_PATH" >/dev/null; then
+                    lk_tty_detail "Adding repository:" "$REPO"
+                    FILE=/etc/apt/sources.list.d/ppa-${PPA_OWNER}-${PPA_NAME}.list
+                    lk_install -m 00644 "$FILE"
+                    lk_file_replace "$FILE" <<EOF
+deb $REPO_HOST$REPO_PATH $DISTRIB_CODENAME main
+# deb-src $REPO_HOST$REPO_PATH $DISTRIB_CODENAME main
+EOF
+                    LK_FILE_REPLACE_NO_CHANGE=0
+                fi
                 ;;
             *)
                 lk_die "unknown repo type: $REPO"
@@ -526,15 +574,55 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
     APT_PACKAGES=($LK_NODE_PACKAGES)
     unset IFS
     . "$LK_BASE/lib/hosting/packages.sh"
-    APT_PACKAGES=($(comm -13 \
-        <(lk_echo_array APT_SUPPRESS APT_REMOVE | sort -u) \
-        <(lk_echo_array APT_PACKAGES | sort -u)))
-    [ ${#APT_FILTER[@]} -eq 0 ] ||
-        APT_PACKAGES=($(lk_echo_array APT_PACKAGES |
-            eval "sed -E$(printf ' -e %q' "${APT_FILTER[@]}")"))
 
-    [ ${#APT_PACKAGES[@]} -eq 0 ] ||
-        lk_keep_trying lk_apt_install "${APT_PACKAGES[@]}"
+    # Replace packages with version-specific equivalents if possible
+    function expand_packages() {
+        local PHPVER ADD
+        # Replace "php-json" with "php<version>-json", for example, if the
+        # version-specific package is available
+        lk_mktemp_with -r REMOVE_FILE
+        for PHPVER in "${PHP_VERSIONS[@]}"; do
+            ADD=($(comm -12 \
+                <(lk_arr "$1" | sed -En "s/^php-/php${PHPVER}-/p" | sort -u) \
+                "$APT_AVAILABLE"))
+            eval "$1+=(\${ADD+\"\${ADD[@]}\"})"
+            lk_arr ADD | sed -E 's/^php[^-]+-/php-/' >>"$REMOVE_FILE"
+        done
+        eval "$1=(\$(lk_arr $1 | lk_safe_grep -Fxvf \"$REMOVE_FILE\" | sort -u))"
+    }
+
+    lk_mktemp_with APT_AVAILABLE sort -u <(lk_apt_available_list)
+    expand_packages APT_REMOVE
+    expand_packages APT_PACKAGES
+    # As of Ubuntu 22.04, each of the following has a version-specific package
+    # in ppa:ondrej/php but not in stock Ubuntu, so they need to be explicitly
+    # removed when switching to ppa:ondrej/php, otherwise their (virtual)
+    # counterparts in the PPA will pull in their (virtual) dependencies and an
+    # unwanted PHP version is likely to be installed:
+    # - php-apcu
+    # - php-apcu-bc
+    # - php-igbinary
+    # - php-imagick
+    # - php-memcache
+    # - php-memcached
+    # - php-msgpack
+    # - php-redis
+    # - php-yaml
+    APT_REMOVE_NOW=($(lk_dpkg_installed_list $(sort -u "$REMOVE_FILE")))
+    APT_PACKAGES=($(comm -13 \
+        <(lk_arr APT_REMOVE | sort -u) \
+        <(lk_arr APT_PACKAGES | sort -u)))
+    APT_MISSING=($(lk_arr APT_PACKAGES | lk_safe_grep -Fxvf "$APT_AVAILABLE"))
+    APT_PACKAGES=($(lk_arr APT_PACKAGES | lk_safe_grep -Fxf "$APT_AVAILABLE"))
+    [ ${#APT_MISSING[@]} -eq 0 ] ||
+        lk_tty_warning "Unavailable for installation:" "${APT_MISSING[*]}"
+
+    if [[ ${#APT_PACKAGES[@]} -eq 0 ]]; then
+        APT_REMOVE+=(${APT_REMOVE_NOW+"${APT_REMOVE_NOW[@]}"})
+    else
+        lk_keep_trying lk_apt_install \
+            ${APT_REMOVE_NOW+"${APT_REMOVE_NOW[@]/%/-}"} "${APT_PACKAGES[@]}"
+    fi
     lk_apt_purge "${APT_REMOVE[@]}"
 
     lk_tty_print "Checking services"
@@ -567,7 +655,7 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
         [ ! -e "$FILE" ] ||
             lk_tty_run_detail mv -f "$FILE"{,.disabled}
         # Restore php-fpm options if disabled previously
-        FILE=/etc/logrotate.d/php$PHPVER-fpm
+        FILE=/etc/logrotate.d/php${DEFAULT_PHPVER}-fpm
         [ ! -e "$FILE.disabled" ] || [ -e "$FILE" ] ||
             lk_tty_run_detail mv -n "$FILE"{.disabled,}
     fi
@@ -658,7 +746,9 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
     fi
 
     lk_tty_print "Checking hosting base directories"
-    lk_install -d -m 00751 -g adm /srv/{www/{,.tmp,.opcache},backup/{,archive,latest,snapshot}}
+    lk_install -d -m 00751 -g adm /srv/{www/{,.tmp,.opcache},backup/{,archive,latest,snapshot}} \
+        "${PHP_VERSIONS[@]/#/\/srv\/www\/.tmp\/}" \
+        "${PHP_VERSIONS[@]/#/\/srv\/www\/.opcache\/}"
 
     _LK_NO_LOG=1 \
         lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" \
@@ -726,13 +816,13 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
             postalias "$FILE"
     fi
 
-    if lk_dpkg_installed apache2; then
+    if lk_node_service_enabled apache2; then
         lk_tty_print "Checking Apache"
         unset LK_FILE_REPLACE_NO_CHANGE LK_SYMLINK_NO_CHANGE
         DEFAULT_SITES=(/etc/apache2/sites-enabled/{,000-}default*.conf)
         [ ${#DEFAULT_SITES[@]} -eq "0" ] || {
-            lk_tty_detail "Disabling sites:" \
-                $'\n'"$(lk_echo_array DEFAULT_SITES | lk_basename)"
+            lk_tty_detail "Disabling default sites:" \
+                $'\n'"$(lk_arr DEFAULT_SITES)"
             lk_file_keep_original "${DEFAULT_SITES[@]}" &&
                 rm "${DEFAULT_SITES[@]}" &&
                 LK_FILE_REPLACE_NO_CHANGE=0
@@ -771,7 +861,7 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
             socache_shmcb
             ssl
         )
-        ! lk_dpkg_installed php-fpm || APACHE_MODS+=(
+        ! lk_node_service_enabled php-fpm || APACHE_MODS+=(
             proxy
             proxy_fcgi
         )
@@ -780,25 +870,22 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
                 qos
                 unique_id
             )
-        APACHE_MODS=($(comm -13 \
-            <(lk_echo_array APACHE_MODS_SUPPRESS | sort -u) \
-            <(lk_echo_array APACHE_MODS | sort -u)))
         APACHE_MODS_ENABLED=$(a2query -m | awk '{print $1}')
         APACHE_MODS_DISABLE=($(comm -13 \
-            <(lk_echo_array APACHE_MODS | sort -u) \
+            <(lk_arr APACHE_MODS | sort -u) \
             <(sort -u <<<"$APACHE_MODS_ENABLED")))
         APACHE_MODS_ENABLE=($(comm -23 \
-            <(lk_echo_array APACHE_MODS | sort -u) \
+            <(lk_arr APACHE_MODS | sort -u) \
             <(sort -u <<<"$APACHE_MODS_ENABLED")))
         [ ${#APACHE_MODS_DISABLE[@]} -eq 0 ] || {
             lk_tty_detail "Disabling Apache modules:" \
-                $'\n'"$(lk_echo_array APACHE_MODS_DISABLE)"
+                $'\n'"$(lk_arr APACHE_MODS_DISABLE)"
             a2dismod --force "${APACHE_MODS_DISABLE[@]}" &&
                 LK_FILE_REPLACE_NO_CHANGE=0
         }
         [ ${#APACHE_MODS_ENABLE[@]} -eq 0 ] || {
             lk_tty_detail "Enabling Apache modules:" \
-                $'\n'"$(lk_echo_array APACHE_MODS_ENABLE)"
+                $'\n'"$(lk_arr APACHE_MODS_ENABLE)"
             a2enmod --force "${APACHE_MODS_ENABLE[@]}" &&
                 LK_FILE_REPLACE_NO_CHANGE=0
         }
@@ -874,7 +961,7 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
         IPTABLES_TCP_LISTEN+=(80 443)
     fi
 
-    if lk_dpkg_installed php-fpm; then
+    if lk_node_service_enabled php-fpm; then
         lk_tty_print "Checking PHP-FPM"
         if ! lk_is_bootstrap; then
             lk_tty_detail "Checking configuration files"
@@ -893,29 +980,37 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
         [ ${#POOLS[@]} -eq 0 ] || {
             # The listen directive of a custom pool will always contain "$pool"
             lk_mapfile DEFAULT_POOLS \
-                <(grep -Pl "^listen$S*=(.(?!\\\$pool\\b))*\$" "${POOLS[@]}")
+                <(lk_safe_grep -Pl \
+                    "^$S*listen$S*=(?!.*\\\$pool\\b.*\$)" "${POOLS[@]}")
             [ ${#DEFAULT_POOLS[@]} -eq 0 ] || {
-                lk_tty_detail "Disabling pools:" \
-                    $'\n'"$(lk_echo_array DEFAULT_POOLS | lk_basename)"
+                lk_tty_detail "Disabling default pools:" \
+                    $'\n'"$(lk_arr DEFAULT_POOLS)"
                 lk_file_keep_original "${DEFAULT_POOLS[@]}" &&
                     rm "${DEFAULT_POOLS[@]}" &&
-                    lk_mark_dirty "php$PHPVER-fpm.service"
+                    lk_mark_dirty $(lk_arr DEFAULT_POOLS |
+                        sed -En 's/.*\/([0-9.]+)\/.*/php\1-fpm.service/p' |
+                        sort -u)
             }
         }
 
-        unset LK_FILE_REPLACE_NO_CHANGE
-        FILE=/etc/systemd/system/php$PHPVER-fpm.service.d/90-${LK_PATH_PREFIX}override.conf
-        OLD_FILE=/etc/systemd/system/php$PHPVER-fpm.service.d/override.conf
-        lk_install -d -m 00755 "${FILE%/*}"
-        maybe_move_old "$OLD_FILE" "$FILE"
-        lk_install -m 00644 "$FILE"
-        lk_file_replace \
-            -f "$LK_BASE/share/systemd/php-fpm.service" \
-            "$FILE"
-        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE || {
-            lk_tty_run_detail systemctl daemon-reload &&
+        DAEMON_RELOAD=0
+        for PHPVER in "${PHP_VERSIONS[@]}"; do
+            unset LK_FILE_REPLACE_NO_CHANGE
+            FILE=/etc/systemd/system/php$PHPVER-fpm.service.d/90-${LK_PATH_PREFIX}override.conf
+            OLD_FILE=/etc/systemd/system/php$PHPVER-fpm.service.d/override.conf
+            lk_install -d -m 00755 "${FILE%/*}"
+            maybe_move_old "$OLD_FILE" "$FILE"
+            lk_install -m 00644 "$FILE"
+            lk_file_replace \
+                -f "$LK_BASE/share/systemd/php-fpm.service" \
+                "$FILE"
+            ! lk_is_false LK_FILE_REPLACE_NO_CHANGE || {
+                DAEMON_RELOAD=1
                 lk_mark_dirty "php$PHPVER-fpm.service"
-        }
+            }
+        done
+        ((!DAEMON_RELOAD)) ||
+            lk_tty_run_detail systemctl daemon-reload
 
         lk_tty_print "Checking WP-CLI"
         FILE=/usr/local/bin/wp
@@ -957,7 +1052,7 @@ END        { if (m) { print u[m] } else { exit 1 } }')} ||
                 "$DIR"
     fi
 
-    if lk_dpkg_installed mariadb-server; then
+    if lk_node_service_enabled mariadb; then
         lk_tty_print "Checking MariaDB (MySQL)"
         unset LK_FILE_REPLACE_NO_CHANGE
         FILE=/etc/mysql/mariadb.conf.d/90-${LK_PATH_PREFIX}default.cnf
@@ -996,7 +1091,7 @@ EOF
         fi
     fi
 
-    if lk_dpkg_installed memcached; then
+    if lk_node_service_enabled memcached; then
         lk_tty_print "Checking Memcached"
         LK_CONF_OPTION_FILE=/etc/memcached.conf
         get_before_file "$LK_CONF_OPTION_FILE"
@@ -1023,7 +1118,7 @@ EOF
         lk_mark_clean "legacy-sites.migration"
     fi
 
-    if lk_test_any lk_systemctl_exists apache2 "php$PHPVER-fpm" postfix; then
+    if lk_node_service_enabled apache2 || lk_node_service_enabled php-fpm; then
         if lk_hosting_list_sites | grep . >/dev/null; then
             lk_hosting_site_configure_all
         fi
@@ -1058,7 +1153,9 @@ EOF
             entropy.ubuntu.com
             keyserver.ubuntu.com
             launchpad.net
+            api.launchpad.net
             ppa.launchpad.net
+            ppa.launchpadcontent.net
 
             pypi.org
             bootstrap.pypa.io

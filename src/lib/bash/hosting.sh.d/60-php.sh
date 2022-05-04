@@ -19,10 +19,33 @@ function lk_hosting_php_get_default_version() { (
 ); }
 
 function lk_hosting_php_get_versions() {
-    systemctl --full --no-legend --no-pager list-units --all "php*.service" |
-        awk '{print $1}' |
-        sed -En 's/^php([0-9.]+)-fpm.service$/\1/p' | sort -V
+    basename -a /lib/systemd/system/php*-fpm.service |
+        lk_safe_grep -Eo '[0-9][0-9.]*' | sort -V
 }
+
+function _lk_hosting_php_check_pools() { (
+    shopt -s nullglob
+    lk_mktemp_with _SITE_LIST lk_hosting_list_sites || return
+    for PHPVER in $(lk_hosting_php_get_versions); do
+        POOLS=(/etc/php/"$PHPVER"/fpm/pool.d/*.conf)
+        [[ -n ${POOLS+1} ]] || continue
+        POOLS=("${POOLS[@]##*/}")
+        POOLS=("${POOLS[@]%.conf}")
+        DISABLE=($(comm -23 \
+            <(lk_arr POOLS | sort -u) \
+            <(awk -v version="$PHPVER" \
+                '$2 == "Y" && $12 == version { print $7 }' <"$_SITE_LIST" |
+                sort -u))) || return
+        [[ -n ${DISABLE+1} ]] || continue
+        lk_tty_detail "Disabling inactive PHP-FPM $PHPVER pools:" \
+            $'\n'"$(lk_arr DISABLE)"
+        for POOL in "${DISABLE[@]}"; do
+            lk_elevate mv -f "/etc/php/$PHPVER/fpm/pool.d/$POOL.conf"{,.bak} ||
+                return
+        done
+        lk_mark_dirty "php$PHPVER-fpm.service"
+    done
+); }
 
 # _lk_hosting_php_test_config [PHP_VERSION]
 function _lk_hosting_php_test_config() {

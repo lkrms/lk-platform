@@ -26,15 +26,17 @@ function _lk_hosting_service_disable() {
 }
 
 function lk_hosting_apply_config() {
-    local IFS=$' \t\n' PHP_VER VER SERVICE APPLY=() DISABLE=()
+    local IFS=$' \t\n' PHP_VERSIONS PHPVER SERVICE APPLY=() DISABLE=()
     lk_tty_log "Checking hosting services"
     _lk_hosting_check &&
-        PHP_VER=($(lk_hosting_php_get_versions)) || return
-    for VER in ${PHP_VER+"${PHP_VER[@]}"}; do
-        lk_tty_print "PHP-FPM $VER"
-        SERVICE=php$VER-fpm.service
+        PHP_VERSIONS=($(lk_hosting_php_get_versions)) || return
+    lk_tty_print "PHP-FPM pools"
+    _lk_hosting_php_check_pools || return
+    for PHPVER in ${PHP_VERSIONS+"${PHP_VERSIONS[@]}"}; do
+        lk_tty_print "PHP-FPM $PHPVER"
+        SERVICE=php$PHPVER-fpm.service
         if lk_is_dirty "$SERVICE"; then
-            if lk_files_exist "/etc/php/$VER/fpm/pool.d"/*.conf; then
+            if lk_files_exist "/etc/php/$PHPVER/fpm/pool.d"/*.conf; then
                 _lk_hosting_php_test_config "$PHPVER" || return
                 APPLY+=("$SERVICE")
             else
