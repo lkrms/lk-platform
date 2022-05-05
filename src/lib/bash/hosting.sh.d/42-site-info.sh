@@ -115,6 +115,7 @@ function _lk_hosting_list_domains() { (
 # 9. ORDER
 # 10. ALL_DOMAINS (sorted, comma-separated)
 # 11. DISABLE_HTTPS
+# 12. PHP_VERSION
 function lk_hosting_list_sites() { (
     declare ENABLED_ONLY=0 JSON=0
     while (($#)); do
@@ -135,7 +136,7 @@ function lk_hosting_list_sites() { (
             WWW=
             [[ $SITE_DISABLE_WWW == Y ]] || WWW=,www.$DOMAIN
             DOMAINS=$DOMAIN$WWW${SITE_ALIASES:+,$SITE_ALIASES}
-            printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+            printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
                 "$DOMAIN" \
                 "$SITE_ENABLE" \
                 "$SITE_ROOT" \
@@ -146,7 +147,8 @@ function lk_hosting_list_sites() { (
                 "$SITE_PHP_FPM_USER" \
                 "$SITE_ORDER" \
                 "$DOMAINS" \
-                "$SITE_DISABLE_HTTPS"
+                "$SITE_DISABLE_HTTPS" \
+                "$SITE_PHP_VERSION"
         else
             _lk_hosting_site_json
         fi

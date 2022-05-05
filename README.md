@@ -18,6 +18,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_ADMIN_EMAIL`
 - `LK_APT_DEFAULT_MIRROR`
 - `LK_APT_DEFAULT_SECURITY_MIRROR`
+- `LK_ARCH_AUR_REPO_NAME`
 - `LK_ARCH_MIRROR`
 - `LK_ARCH_REPOS`
 - `LK_AUTO_BACKUP`
@@ -59,6 +60,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_INNODB_BUFFER_SIZE`
 - `LK_IPV4_ADDRESS`
 - `LK_IPV4_GATEWAY`
+- `LK_LAUNCHPAD_PPA_MIRROR`
 - `LK_LETSENCRYPT_EMAIL`
 - `LK_LINODE_SKIP_REGEX`
 - `LK_LINODE_SSH_KEYS`
@@ -82,7 +84,6 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_NODE_SERVICES`
 - `LK_NODE_TIMEZONE`
 - `LK_NO_INPUT`
-- `LK_NO_LOG`
 - `LK_NO_STACK_TRACE`
 - `LK_NOTE_DIR`
 - `LK_NTP_SERVER`
@@ -93,6 +94,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_PATH_PREFIX`
 - `LK_PHP_ADMIN_SETTINGS`
 - `LK_PHP_SETTINGS`
+- `LK_PHP_VERSIONS`
 - `LK_PLATFORM_BRANCH`
 - `LK_PROMPT`
 - `LK_REJECT_OUTPUT`
@@ -188,7 +190,8 @@ primary domain. Available settings:
 - **`SITE_PHP_FPM_ADMIN_SETTINGS`**
 - **`SITE_PHP_FPM_SETTINGS`**
 - **`SITE_PHP_FPM_ENV`**
-- **`SITE_PHP_VERSION`** (e.g. `7.0`, `7.2`, `7.4`; default: *system-dependent*)
+- **`SITE_PHP_VERSION`** (`5.6`, `7.0`, `7.1`, `7.2`, `7.3`, `7.4`, `8.0`,
+  `8.1`, or `-1` to disable; default: *system-dependent*)
 - **`SITE_DOWNSTREAM_FROM`** (`cloudflare` or
   `<HTTP_HEADER>:<PROXY_CIDR>[,<PROXY_CIDR>...]`, e.g.
   `X-Forwarded-For:172.105.171.229,103.31.4.0/22`)

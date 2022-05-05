@@ -115,15 +115,15 @@ process_node_packages apache2 \
     python3-certbot-apache
 
 process_node_packages php-fpm \
-    php-cli \
-    php-fpm \
     php-apcu \
     php-apcu-bc \
     php-bcmath \
     php-cli \
     php-curl \
+    php-fpm \
     php-gd \
     php-gettext \
+    php-igbinary \
     php-imagick \
     php-imap \
     php-intl \
@@ -132,6 +132,7 @@ process_node_packages php-fpm \
     php-mbstring \
     php-memcache \
     php-memcached \
+    php-msgpack \
     php-mysql \
     php-opcache \
     php-pear \

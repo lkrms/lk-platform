@@ -60,3 +60,10 @@ function lk_json_sh() {
         (($# < 3)) || printf ',"%s":(%s)' "${@:3}"
     )"'} | to_sh($prefix)'
 }
+
+# lk_json_bool VAR
+#
+# Print "true" if VAR or ${!VAR} is truthy, otherwise print "false".
+function lk_json_bool() {
+    lk_true "$1" && echo "true" || echo "false"
+}

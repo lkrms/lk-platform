@@ -180,9 +180,15 @@ function _lk_hosting_site_load_dynamic_settings() {
     .alias_domains[] )' <"$_SITE_LIST" | sort -u))) || return
     [ -z "${SAME_DOMAIN+1}" ] ||
         lk_warn "domains already in use: ${SAME_DOMAIN[*]}" || return
-    PHP_FPM_POOLS=$(jq -r --arg pool "$SITE_PHP_FPM_POOL" '
-( [ .[] | select(.php_fpm.pool != $pool) | .php_fpm.pool ] |
-    unique | length ) + 1' <"$_SITE_LIST") || return
+    PHP_FPM_POOLS=$(jq -r \
+        --arg domain "$_SITE_DOMAIN" \
+        --arg version "$SITE_PHP_VERSION" \
+        --arg pool "$SITE_PHP_FPM_POOL" \
+        --argjson enabled "$(lk_json_bool SITE_ENABLE)" '
+{"php_fpm": {"php_version": $version, "pool": $pool}, "enabled": $enabled} as $update |
+  [ (.[], $update) | if .domain == $domain then . *= $update else . end |
+    select(.enabled) | [.php_fpm.php_version, .php_fpm.pool] ] | unique | length' \
+        <"$_SITE_LIST") || return
     # Rationale:
     # - `dynamic` responds to bursts in traffic by spawning one child per
     #   second--appropriate for staging servers
@@ -191,7 +197,7 @@ function _lk_hosting_site_load_dynamic_settings() {
     # - `static` spawns every child at startup, sacrificing idle capacity for
     #   burst performance--recommended for single-site production servers
     _SITE_PHP_FPM_PM=static
-    [ "$PHP_FPM_POOLS" -eq 1 ] ||
+    [[ $PHP_FPM_POOLS -eq 1 ]] && lk_true SITE_ENABLE ||
         { ! lk_is_true SITE_ENABLE_STAGING &&
             ! lk_is_true LK_SITE_ENABLE_STAGING &&
             _SITE_PHP_FPM_PM=ondemand ||
@@ -206,7 +212,7 @@ function _lk_hosting_site_load_dynamic_settings() {
 # Defaults that shouldn't be saved are commented out, and if a config file for
 # the site is found at a deprecated path, it's moved before being updated.
 function _lk_hosting_site_write_settings() {
-    local REGEX STATUS=0 \
+    local LK_SUDO=1 REGEX STATUS=0 \
         FILE=$LK_BASE/etc/lk-platform/sites/$_SITE_DOMAIN.conf \
         OLD_FILE=$LK_BASE/etc/sites/$_SITE_DOMAIN.conf
     REGEX=$(_lk_hosting_site_assign_defaults &&

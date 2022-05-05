@@ -107,6 +107,13 @@ function lk_assign() {
     IFS= read -rd '' "$1" || true
 }
 
+# lk_safe_grep GREP_ARG...
+#
+# Run grep without returning an error if no lines were selected.
+function lk_safe_grep() {
+    grep "$@" || [[ $? -eq 1 ]] || return 2
+}
+
 # lk_x_off [STATUS_VAR]
 #
 # Output Bash commands that disable xtrace temporarily, prevent themselves from
