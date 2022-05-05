@@ -3,19 +3,21 @@
 lk_require mysql provision
 
 function wp() {
-    local \
-        HTTP_CLIENT_IP=127.0.1.1 \
+    local WP=wp HTTP_CLIENT_IP=127.0.1.1 \
         WP_CLI_CONFIG_PATH=$LK_BASE/share/wp-cli/config.yml \
         WP_CLI_PACKAGES_DIR=${WP_CLI_PACKAGES_DIR-/usr/local/lib/wp-cli-packages}
     export HTTP_CLIENT_IP WP_CLI_CONFIG_PATH
-    [ -d "$WP_CLI_PACKAGES_DIR" ] && export WP_CLI_PACKAGES_DIR ||
-        unset -v WP_CLI_PACKAGES_DIR
-    set -- ${_LK_WP_ARGS[@]+"${_LK_WP_ARGS[@]}"} \
-        ${_LK_WP_PATH+--path="$_LK_WP_PATH"} "$@"
-    if [ -n "${_LK_WP_USER-}" ]; then
-        lk_run_as "$_LK_WP_USER" wp "$@"
+    [[ -d $WP_CLI_PACKAGES_DIR ]] &&
+        export WP_CLI_PACKAGES_DIR || unset WP_CLI_PACKAGES_DIR
+    set -- ${_LK_WP_ARGS+"${_LK_WP_ARGS[@]}"} \
+        ${_LK_WP_PATH+--path="$_LK_WP_PATH"} \
+        "$@"
+    [[ -z ${WP_CLI_PHP-} ]] ||
+        WP=$(type -P wp) || return
+    if [[ -n ${_LK_WP_USER-} ]]; then
+        lk_run_as "$_LK_WP_USER" ${WP_CLI_PHP:+"$WP_CLI_PHP"} "$WP" "$@"
     else
-        command wp "$@"
+        command ${WP_CLI_PHP:+"$WP_CLI_PHP"} "$WP" "$@"
     fi
 }
 
@@ -104,7 +106,7 @@ function _lk_wp_set_admin_url() {
         ADMIN_USER=$(lk_wp user list --field=id --role=administrator |
             sort -n | head -n1) || lk_pass echo "return 1" || return
     local _LK_WP_ADMIN_URL_SET=1 \
-        _LK_WP_ARGS=(${_LK_WP_ARGS[@]+"${_LK_WP_ARGS[@]}"}
+        _LK_WP_ARGS=(${_LK_WP_ARGS+"${_LK_WP_ARGS[@]}"}
             --url="$ADMIN_URL" ${ADMIN_USER:+--user="$ADMIN_USER"})
     declare -p _LK_WP_ARGS _LK_WP_ADMIN_URL_SET
 }
@@ -143,6 +145,17 @@ function lk_wp_option_upsert() {
         lk_warn "unable to set value in option '$1': $*"
 }
 
+# lk_wp_curl [-s SITE_ROOT] [CURL_ARG...] PATH
+function lk_wp_curl() {
+    [ "${1-}" != -s ] || { eval "$(_lk_wp_set_path "$2")" && shift 2; }
+    [ $# -ge 1 ] || lk_usage "\
+Usage: $FUNCNAME [-s SITE_ROOT] [CURL_ARG...] PATH" || return
+    local URL IFS=$' \t\n'
+    URL=$(lk_wp_get_site_address) &&
+        curl "${@:1:$#-1}" --insecure --connect-to "::127.0.0.1:" \
+            "${URL%/}${*: -1}"
+}
+
 function lk_wp_package_install() {
     [ $# -ge 1 ] ||
         lk_usage "Usage: $FUNCNAME PACKAGE[:<VERSION|@stable>]..." || return
@@ -157,20 +170,18 @@ function lk_wp_package_install() {
 # lk_wp_flush_opcache [SITE_ROOT]
 function lk_wp_flush_opcache() {
     [ $# -eq 0 ] || eval "$(_lk_wp_set_path "$@")"
-    local URL RESULT
+    local RESULT
     lk_tty_print "Flushing WordPress OPcache"
-    URL=$(lk_wp_get_site_address) &&
-        RESULT=$(curl -fsS --insecure \
-            --connect-to "::127.0.0.1:" "${URL%/}/php-opcache-flush") || return
+    RESULT=$(lk_wp_curl -fsS "/php-opcache-flush") || return
     case "$RESULT" in
     DISABLED)
-        lk_tty_detail "OPcache not enabled:" "$URL"
+        lk_tty_detail "OPcache not enabled"
         ;;
     OK)
-        lk_tty_detail "OPcache flushed successfully:" "$URL"
+        lk_tty_detail "OPcache flushed successfully"
         ;;
     *)
-        false || lk_warn "Result not recognised:" "$RESULT"
+        false || lk_warn "result not recognised:" "$RESULT"
         ;;
     esac
 }
@@ -627,7 +638,7 @@ Usage: $FUNCNAME SSH_HOST [REMOTE_PATH [LOCAL_PATH [RSYNC_ARG...]]]" || return
     KEEP_LOCAL=(
         wp-config.php
         .git
-        ${LK_WP_SYNC_KEEP_LOCAL[@]+"${LK_WP_SYNC_KEEP_LOCAL[@]}"}
+        ${LK_WP_SYNC_KEEP_LOCAL+"${LK_WP_SYNC_KEEP_LOCAL[@]}"}
     )
     EXCLUDE=(
         /**/.git
@@ -637,7 +648,7 @@ Usage: $FUNCNAME SSH_HOST [REMOTE_PATH [LOCAL_PATH [RSYNC_ARG...]]]" || return
         {"error*",debug}"?log"
         /wp-content/{backup,cache,litespeed,upgrade,updraft}/
         /wp-content/uploads/{backup,cache,wp-file-manager-pro/fm_backup}/
-        ${LK_WP_SYNC_EXCLUDE[@]+"${LK_WP_SYNC_EXCLUDE[@]}"}
+        ${LK_WP_SYNC_EXCLUDE+"${LK_WP_SYNC_EXCLUDE[@]}"}
     )
     LOCAL_PATH=${3:-$(lk_wp_get_site_root 2>/dev/null)} ||
         LOCAL_PATH=~/public_html
@@ -740,14 +751,17 @@ function lk_wp_migrate() {
 # lk_wp_enable_system_cron [-s SITE_ROOT] [INTERVAL]
 function lk_wp_enable_system_cron() {
     [ "${1-}" != -s ] || { eval "$(_lk_wp_set_path "$2")" && shift 2; }
-    local INTERVAL=${1:-1} SITE_ROOT LOG_FILE ARGS ARGS_RE COMMAND REGEX CRONTAB
-    SITE_ROOT=$(lk_wp_get_site_root) || return
+    local INTERVAL=${1:-1} SITE_ROOT PHP LOG_FILE ARGS ARGS_RE \
+        COMMAND REGEX CRONTAB
+    SITE_ROOT=$(lk_wp_get_site_root) &&
+        PHP=$(lk_wp_curl -fsS "/php-sysinfo" | jq -r '.php.version') &&
+        PHP=$(type -P "php$PHP") || return
     LOG_FILE=${SITE_ROOT%/*}/log/cron.log
     [ -w "$LOG_FILE" ] || LOG_FILE=~/cron.log
     lk_mapfile ARGS <(printf '%q\n' \
         "$LK_BASE/lib/platform/log.sh" "--path=$SITE_ROOT")
-    COMMAND=$(printf "_LK_LOG_FILE=%q %s -i wordpress -- \
-wp_if_running %s cron event run --due-now" "$LOG_FILE" "${ARGS[@]::2}")
+    COMMAND=$(printf "WP_CLI_PHP=%q _LK_LOG_FILE=%q %s -i wordpress -- \
+wp_if_running %s cron event run --due-now" "$PHP" "$LOG_FILE" "${ARGS[@]::2}")
     lk_tty_print "Using crontab to schedule WP-Cron in" "$SITE_ROOT"
     lk_wp config get DISABLE_WP_CRON --type=constant 2>/dev/null |
         grep -Fx 1 >/dev/null ||
@@ -758,7 +772,7 @@ wp_if_running %s cron event run --due-now" "$LOG_FILE" "${ARGS[@]::2}")
     # Try to keep everything before and after COMMAND, e.g. environment
     # variables and redirections
     lk_mapfile ARGS_RE <(lk_arr ARGS | lk_ere_escape)
-    REGEX=$(lk_regex_expand_whitespace " (_LK_LOG_FILE=$NS+ )?\
+    REGEX=$(lk_regex_expand_whitespace " (WP_CLI_PHP=$NS+ )?(_LK_LOG_FILE=$NS+ )?\
 ${ARGS_RE[0]} .+ ${ARGS_RE[1]} cron event run --due-now( |\$)")
     [ $# -eq 0 ] && CRONTAB=$(lk_crontab_get "^$S*[^#[:blank:]].*$REGEX" |
         head -n1 | awk -v "c=$COMMAND" -v "r=${REGEX//\\/\\\\}" \

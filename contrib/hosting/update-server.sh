@@ -67,7 +67,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
       lk_tty_print "Checking WordPress at" "$1"
       if CRONTAB=$(crontab -l 2>/dev/null | grep -F "$(printf \
         ' -- wp_if_running --path=%q cron event run --due-now' "$1")" |
-        grep -F _LK_LOG_FILE) &&
+        grep -F _LK_LOG_FILE | grep -F WP_CLI_PHP) &&
         DISABLE_WP_CRON=$(lk_wp \
           config get DISABLE_WP_CRON --type=constant) &&
         lk_is_true DISABLE_WP_CRON; then
