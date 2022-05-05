@@ -62,9 +62,9 @@ Example:
         lk_tty_detail "IP addresses:" $'\n'"$(lk_echo_args \
             $LINODE_IPV4_PUBLIC $LINODE_IPV6 $LINODE_IPV4_PRIVATE)"
         lk_confirm "Destroy the existing Linode and start over?" N || return
+        ARGS+=(--image "$LINODE_IMAGE")
     }
     STACKSCRIPT_DATA=$(jq -n \
-        --arg nodeHostname "$NODE_HOSTNAME" \
         --arg nodeFqdn "$NODE_FQDN" \
         --arg hostDomain "$HOST_DOMAIN" \
         --arg hostAccount "$HOST_ACCOUNT" \
