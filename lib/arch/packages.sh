@@ -80,6 +80,7 @@ PAC_PACKAGES=(
     conntrack-tools
     curl
     inetutils # Provides hostname, telnet
+    ipset     # Used in conjunction with iptables by fail2ban
     iptables-nft
     lftp
     lynx
