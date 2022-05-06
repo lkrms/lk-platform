@@ -134,7 +134,7 @@ MAS_APPS+=(
 # Development
 HOMEBREW_TAPS+=(
     adoptopenjdk/openjdk
-    lkrms/virt-manager
+    #lkrms/virt-manager
     #mongodb/brew
 )
 
@@ -148,8 +148,8 @@ HOMEBREW_FORMULAE+=(
     #
     libvirt
     qemu
-    lkrms/virt-manager/virt-manager
-    lkrms/virt-manager/virt-viewer
+    virt-manager
+    #lkrms/virt-manager/virt-viewer
 
     # Email
     msmtp  # SMTP client
