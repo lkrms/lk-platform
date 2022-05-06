@@ -175,6 +175,8 @@ primary domain. Available settings:
 - **`SITE_DISABLE_WWW`** (`Y` or `N`; default: `N`)
 - **`SITE_DISABLE_HTTPS`** (`Y` or `N`; default: `N`)
 - **`SITE_ENABLE_STAGING`** (`Y` or `N`; default: `N`)
+- **`SITE_CANONICAL_DOMAIN`** (`<FQDN>`; if set, requests for other domains will
+  be redirected)
 - **`SITE_SSL_CERT_FILE`** (obtained automatically unless `SITE_DISABLE_HTTPS`
   is set)
 - **`SITE_SSL_KEY_FILE`**

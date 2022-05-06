@@ -325,26 +325,32 @@ function _lk_hosting_site_provision() {
         _FILE=$(
             for PORT in "" ${SSL:+443}; do
                 _APACHE=("${APACHE[@]}")
-                [ -n "$PORT" ] || [ -z "${SSL-}" ] || {
+                [[ -n $PORT ]] || [[ -z ${SSL-} ]] || {
                     _APACHE+=(
                         Use SslRedirect
                     )
                 }
-                [ -z "${_SITE_PHP_FPM_PM-}" ] || _APACHE+=(
+                [[ $SITE_PHP_VERSION == -1 ]] || _APACHE+=(
                     Use "PhpFpmVirtualHost${PORT:+Ssl}${_SITE_CHILD:+Child} $_SITE_USER${_SITE_CHILD:+ $_SITE_CHILD}"
                 )
-                [ -z "$PORT" ] || {
+                [[ -z $PORT ]] || {
                     _APACHE+=(
                         SSLEngine On
                         SSLCertificateFile "${SSL_FILES[0]}"
                         SSLCertificateKeyFile "${SSL_FILES[1]}"
                     )
                 }
+                [[ -z $SITE_CANONICAL_DOMAIN ]] ||
+                    _APACHE+=(
+                        RewriteEngine On
+                        RewriteCond "%{HTTP_HOST} !=$_SITE_DOMAIN"
+                        RewriteRule "^(.*)\$ http${SSL:+s}://$_SITE_DOMAIN\$1 [R=301,L]"
+                    )
                 printf '<VirtualHost *:%s>\n' "${PORT:-80}"
                 printf '    %s %s\n' "${_APACHE[@]}"
                 printf '</VirtualHost>\n'
             done
-            [ -z "${_SITE_PHP_FPM_PM-}" ] || {
+            [[ $SITE_PHP_VERSION == -1 ]] || {
                 printf 'Define fpm_proxy_%s%s %s\n' \
                     "$_SITE_USER" \
                     "${_SITE_CHILD:+/$_SITE_CHILD}/" \

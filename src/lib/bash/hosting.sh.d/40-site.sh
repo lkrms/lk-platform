@@ -12,6 +12,7 @@ function _lk_hosting_site_list_known_settings() {
         SITE_DISABLE_WWW \
         SITE_DISABLE_HTTPS \
         SITE_ENABLE_STAGING \
+        SITE_CANONICAL_DOMAIN \
         SITE_SSL_CERT_FILE \
         SITE_SSL_KEY_FILE \
         SITE_SSL_CHAIN_FILE \
