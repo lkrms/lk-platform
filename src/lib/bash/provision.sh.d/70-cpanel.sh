@@ -270,17 +270,49 @@ function lk_cpanel_domain_list() {
         sort -u
 }
 
-# lk_whm_domain_records DOMAIN
-function lk_whm_domain_records() {
-    _lk_whm_server_check || return
-    lk_whm_get parse_dns_zone zone="$1" |
-        lk_jq -r 'include "core";
-[ .data.payload[] |
-    select(.type == "record" and (.record_type | in_arr(["SOA", "NS"]) | not)) |
+function _lk_cpanel_domain_records() {
+    lk_jq -r 'include "core";
+[ (.data.payload? // .data? // cpanel_error)[] |
+    select(.type == "record" and (.record_type | in_arr(["SOA", "NS", "CAA"]) | not)) |
     .name = (.dname_b64 | @base64d) ] |
   sort_by(.record_type, .name)[] |
-  (.data_b64[] | @base64d) as $data |
-  [.line_index, .name, .record_type, $data, .ttl] | @tsv'
+  [.data_b64[] | @base64d] as $data |
+  if   .record_type == "MX"  then . += {"priority": $data[0], "target": $data[1]}
+  elif .record_type == "SRV" then . += {"priority": $data[0], "weight": $data[1], "port": $data[2], "target": $data[3]}
+  else $data[] as $data | .target = $data end |
+  [.line_index, .name, .ttl, .record_type, .priority, .weight, .port, .target] | @tsv'
+}
+
+# lk_cpanel_domain_records DOMAIN
+#
+# Print tab-separated values for DNS records in the given cPanel DOMAIN:
+# 1. line_index
+# 2. name
+# 3. ttl
+# 4. record_type
+# 5. priority
+# 6. weight
+# 7. port
+# 8. target
+function lk_cpanel_domain_records() {
+    _lk_cpanel_server_check &&
+        lk_cpanel_post DNS parse_zone zone="$1" | _lk_cpanel_domain_records
+}
+
+# lk_whm_domain_records DOMAIN
+#
+# Print tab-separated values for DNS records in the given WHM DOMAIN:
+# 1. line_index
+# 2. name
+# 3. ttl
+# 4. record_type
+# 5. priority
+# 6. weight
+# 7. port
+# 8. target
+function lk_whm_domain_records() {
+    _lk_whm_server_check &&
+        lk_whm_get parse_dns_zone zone="$1" | _lk_cpanel_domain_records
 }
 
 # lk_cpanel_ssl_get_for_domain DOMAIN [TARGET_DIR]

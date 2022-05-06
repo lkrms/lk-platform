@@ -63,3 +63,7 @@ def regex:
 
 def regex($re):
   $regex::regex[][$re];
+
+def cpanel_error:
+  .metadata.reason? // .errors? // "cPanel request failed" | to_array |
+    join("\n") + "\n" | halt_error;
