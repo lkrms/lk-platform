@@ -15,6 +15,7 @@ PAC_KEEP=(
     geteltorito # ThinkPad UEFI firmware update conversion
     linux-headers
     offlineimap
+    ookla-speedtest-bin
     sfdx-cli
     stretchly-bin
     stripe-cli
@@ -315,7 +316,7 @@ PAC_PACKAGES+=(
     jre11-openjdk
 
     #
-    nodejs
+    nodejs-lts-gallium
     npm
     yarn
 

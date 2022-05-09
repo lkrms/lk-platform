@@ -202,7 +202,7 @@ PAC_PACKAGES+=(
     jre11-openjdk
 
     #
-    nodejs
+    nodejs-lts-gallium
     npm
 
     #
