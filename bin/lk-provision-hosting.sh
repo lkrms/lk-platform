@@ -102,6 +102,7 @@ export -n \
     LK_INNODB_BUFFER_SIZE=${LK_INNODB_BUFFER_SIZE-} \
     LK_OPCACHE_MEMORY_CONSUMPTION=${LK_OPCACHE_MEMORY_CONSUMPTION-} \
     LK_PHP_VERSIONS=${LK_PHP_VERSIONS-} \
+    LK_PHP_DEFAULT_VERSION=${LK_PHP_DEFAULT_VERSION-} \
     LK_PHP_SETTINGS=${LK_PHP_SETTINGS-} \
     LK_PHP_ADMIN_SETTINGS=${LK_PHP_ADMIN_SETTINGS-} \
     LK_MEMCACHED_MEMORY_LIMIT=${LK_MEMCACHED_MEMORY_LIMIT-} \
@@ -186,6 +187,7 @@ FIELD_ERRORS=$'\n'$(
     lk_validate LK_INNODB_BUFFER_SIZE '^[0-9]+[kmgtpeKMGTPE]?$'
     lk_validate LK_OPCACHE_MEMORY_CONSUMPTION '^[0-9]+$'
     lk_validate_many_of LK_PHP_VERSIONS 5.6 7.0 7.1 7.2 7.3 7.4 8.0 8.1
+    lk_validate_one_of LK_PHP_DEFAULT_VERSION 5.6 7.0 7.1 7.2 7.3 7.4 8.0 8.1
     lk_validate_list LK_PHP_SETTINGS "^$PHP_SETTING_REGEX\$"
     lk_validate_list LK_PHP_ADMIN_SETTINGS "^$PHP_SETTING_REGEX\$"
     lk_validate LK_MEMCACHED_MEMORY_LIMIT '^[0-9]+$'
@@ -238,6 +240,7 @@ if lk_is_bootstrap; then
         LK_INNODB_BUFFER_SIZE \
         LK_OPCACHE_MEMORY_CONSUMPTION \
         LK_PHP_VERSIONS \
+        LK_PHP_DEFAULT_VERSION \
         LK_PHP_SETTINGS \
         LK_PHP_ADMIN_SETTINGS \
         LK_MEMCACHED_MEMORY_LIMIT \
@@ -294,8 +297,8 @@ APT_REMOVE=(
     )
 
 DEFAULT_PHPVER=$(lk_hosting_php_get_default_version)
-PHP_VERSIONS=($(IFS=, &&
-    printf '%s\n' $LK_PHP_VERSIONS "$DEFAULT_PHPVER" | sort -u))
+PHP_VERSIONS=($(IFS=, && printf '%s\n' \
+    $LK_PHP_VERSIONS $LK_PHP_DEFAULT_VERSION "$DEFAULT_PHPVER" | sort -u))
 if [[ -n $LK_PHP_VERSIONS ]] && lk_node_service_enabled php-fpm; then
     APT_REPOS+=("ppa:ondrej/php")
     #! lk_node_service_enabled apache2 ||
@@ -1012,6 +1015,19 @@ EOF
         ((!DAEMON_RELOAD)) ||
             lk_tty_run_detail systemctl daemon-reload
 
+        # When multiple versions of PHP are installed, `/usr/bin/php` links to
+        # the highest-numbered version by default. To minimise downstream
+        # volatility, use the version originally packaged with Ubuntu as the
+        # default (or LK_PHP_DEFAULT_VERSION if set).
+        if [[ -n $LK_PHP_VERSIONS ]]; then
+            DEFAULT_PHP=/usr/bin/php${LK_PHP_DEFAULT_VERSION:-$DEFAULT_PHPVER}
+            [[ "$(update-alternatives --query php |
+                awk -v "p=$DEFAULT_PHP" \
+                    'tolower($1)$2 ~ "^(status:manual|value:" p ")$"' |
+                grep -c .)" -eq 2 ]] ||
+                lk_tty_run_detail update-alternatives --set php "$DEFAULT_PHP"
+        fi
+
         lk_tty_print "Checking WP-CLI"
         FILE=/usr/local/bin/wp
         lk_install -m 00755 "$FILE"
@@ -1098,9 +1114,12 @@ EOF
         _LK_CONF_DELIM=" " \
             lk_conf_set_option -m "${LK_MEMCACHED_MEMORY_LIMIT:-64}"
         check_after_file
-        lk_is_bootstrap && ! lk_systemctl_running memcached ||
-            ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+        if ! lk_is_bootstrap && ! lk_systemctl_running memcached; then
+            lk_systemctl_reload_or_restart "$1"
+            lk_systemctl_enable "$1"
+        elif lk_is_false LK_FILE_REPLACE_NO_CHANGE; then
             lk_tty_run_detail systemctl restart memcached.service
+        fi
     fi
 
     if lk_is_bootstrap && [ -n "$LK_HOST_ACCOUNT" ]; then
