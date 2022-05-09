@@ -162,7 +162,7 @@ fi
 if lk_node_service_enabled libvirt; then
     PAC_PACKAGES+=(
         libvirt
-        qemu
+        qemu-desktop
         dnsmasq
         edk2-ovmf # UEFI firmware
         libguestfs

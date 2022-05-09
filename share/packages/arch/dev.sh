@@ -435,7 +435,7 @@ PAC_PACKAGES+=(
     iptables-nft
     libguestfs
     libvirt
-    qemu
+    qemu-desktop
     virt-manager
 
     #
