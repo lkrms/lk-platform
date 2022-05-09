@@ -851,6 +851,29 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
             --install "${INSTALL_UPDATES[@]}" || STATUS=$?
     }
 
+    lk_tty_print
+    lk_tty_log "Checking installed packages and services"
+
+    (
+        shopt -s nullglob
+        for DIR in {/usr/local,/opt/homebrew}/etc/php/*/; do
+            FILE=${DIR}php.ini
+            CLI_FILE=${DIR}php-cli.ini
+            [ -f "$FILE" ] || continue
+            [ -f "$CLI_FILE" ] ||
+                cp -a "$(lk_first_file "$FILE.orig" "$FILE")" "$CLI_FILE"
+            for LK_CONF_OPTION_FILE in "$FILE" "$CLI_FILE"; do
+                [[ $LK_CONF_OPTION_FILE != "$CLI_FILE" ]] ||
+                    lk_php_set_option memory_limit -1
+                lk_php_set_option error_reporting E_ALL
+                lk_php_set_option display_errors On
+                lk_php_set_option display_startup_errors On
+                lk_php_set_option log_errors On
+                lk_php_set_option error_log php_errors.log
+            done
+        done
+    )
+
     if [ "$STATUS" -eq 0 ]; then
         lk_tty_success "Provisioning complete"
     else

@@ -13,6 +13,7 @@ PAC_KEEP=(
     handbrake-cli
     mlocate
     offlineimap
+    ookla-speedtest-bin
     pacman-cleanup-hook
     powershell-bin
     transmission-cli
@@ -104,7 +105,7 @@ PAC_PACKAGES+=(
     yt-dlp
 
     #
-    nodejs
+    nodejs-lts-gallium
     npm
     python
     python-pip
