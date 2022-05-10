@@ -61,6 +61,7 @@ lk_start_trace
             --hook post_rsync:"$LK_BASE/lib/hosting/backup-hook-post_rsync.sh" \
             "${SOURCE##*/}" "$SOURCE" "$BACKUP_ROOT" \
             -- \
+            --one-file-system \
             --chmod=go-w,g+r,Dg+x \
             --owner \
             --group \
@@ -85,6 +86,7 @@ lk_start_trace
         --hook post_rsync:"$LK_BASE/lib/hosting/backup-hook-post_rsync.sh" \
         "root" "/" "$BACKUP_ROOT" \
         -- \
+        --one-file-system \
         --owner \
         --group \
         ${RSYNC_FILTER_ARGS[@]+"${RSYNC_FILTER_ARGS[@]}"} &&

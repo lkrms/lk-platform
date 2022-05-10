@@ -3,14 +3,21 @@
 - /root/.cache
 + /root
 
-# These are bound to /srv/www/*/{public_html,log,backup}
+# These are bound to /srv/www/*/{public_html,log,backup,backup-archive}
 - /home/_*/public_html
 - /home/_*/log
 - /home/_*/backup
+- /home/_*/backup-archive
+- /home/_*/staging
+- /home/_*/*/public_html
+- /home/_*/*/log
 
 - /home/*/.cache
+- /home/*/.trash
+- /home/*/.wp-cli
 + /home
 
+- /opt/lk-platform/var
 + /opt
 
 - /srv/backup

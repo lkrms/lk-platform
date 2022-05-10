@@ -15,15 +15,20 @@ lk_tty_print "Checking environment"
 
 PROVISIONING=N
 UPGRADING=N
+# 104 = Action allowed
 STATUS=104
 
 LOCK_FILE=/tmp/lk-provision-hosting.sh.lock
 exec 9>"$LOCK_FILE"
 
+# If provisioning is in progress and packages are being installed rather than
+# upgraded, disallow postinst actions to prevent services starting before
+# they've been configured
 if ! flock -n 9; then
     PROVISIONING=Y
     if [[ -z ${_LK_APT_UPGRADE-} ]]; then
         [[ ${DPKG_MAINTSCRIPT_NAME-} != postinst ]] ||
+            # 101 = Action not allowed
             STATUS=101
     else
         UPGRADING=Y
@@ -34,6 +39,7 @@ else
 fi
 
 printf '%s\t%s\n' \
+    "dpkg script" "${DPKG_MAINTSCRIPT_NAME:-<unknown>}" \
     "Provisioning" "$PROVISIONING" \
     "Upgrading" "$UPGRADING" \
     "Exit status" "$STATUS" | IFS=$'\t' lk_tty_detail_pairs

@@ -21,14 +21,33 @@ function lk_group_exists() {
 }
 
 # lk_user_add_sftp_only USERNAME [SOURCE_DIR TARGET_DIR]...
+#
+# Provision a user account with chroot-jailed SFTP access to its home directory,
+# then bind mount each SOURCE_DIR to TARGET_DIR.
+#
+# A leading underscore will be added to USERNAME unless it matches an existing
+# user or already starts with an underscore. If TARGET_DIR is not an absolute
+# path, it will be taken as relative to the user's home directory.
 function lk_user_add_sftp_only() {
-    local LK_SUDO=1 FILE REGEX MATCH CONFIG _HOME DIR GROUP TEMP \
+    local IFS=$' \t\n' LK_SUDO=1 FILE REGEX MATCH CONFIG _HOME DIR GROUP TEMP \
         LK_FILE_REPLACE_NO_CHANGE SFTP_ONLY=${LK_SFTP_ONLY_GROUP:-sftp-only}
-    [ -n "${1-}" ] || lk_usage "\
-Usage: $FUNCNAME USERNAME [SOURCE_DIR TARGET_DIR]..." || return
+    [[ -n ${1-} ]] || lk_usage "\
+Usage: $FUNCNAME USERNAME [SOURCE_DIR TARGET_DIR]...
+
+Provision a user account with chroot-jailed SFTP access to its home directory,
+then bind mount each SOURCE_DIR to TARGET_DIR.
+
+Example:
+
+  $FUNCNAME _consultant \\
+    /srv/www/clientname/public_html public_html \\
+    /srv/www/clientname/log log \\
+    /srv/www/clientname/ssl ssl \\
+    /srv/backup/snapshot/clientname backup \\
+    /srv/backup/archive/clientname backup-archive" || return
     lk_group_exists "$SFTP_ONLY" || {
         lk_tty_print "Creating group:" "$SFTP_ONLY"
-        lk_tty_run_detail lk_elevate groupadd "$SFTP_ONLY" || return
+        lk_tty_run_detail -1 lk_elevate groupadd "$SFTP_ONLY" || return
     }
     lk_tty_print "Checking SSH server"
     FILE=/etc/ssh/sshd_config
@@ -45,14 +64,15 @@ ChrootDirectory %h"
         -v "BREAK=$MATCH" \
         -f "$LK_BASE/lib/awk/block-replace.awk" "$FILE")
     ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
-        lk_tty_run_detail lk_elevate systemctl restart ssh.service
+        lk_tty_run_detail -1 lk_elevate systemctl restart ssh.service
+    [[ $1 == _* ]] || lk_user_exists "$1" || set -- "_$1" "${@:2}"
     if lk_user_exists "$1"; then
         lk_confirm "Configure existing user '$1' for SFTP-only access?" Y &&
-            lk_tty_run_detail lk_elevate \
+            lk_tty_run_detail -1 lk_elevate \
                 usermod --shell /bin/false --groups "$SFTP_ONLY" --append "$1"
     else
         lk_tty_print "Creating user:" "$1"
-        lk_tty_run_detail lk_elevate \
+        lk_tty_run_detail -1 lk_elevate \
             useradd --create-home --shell /bin/false --groups "$SFTP_ONLY" "$1"
     fi || return
     _HOME=$(lk_user_home "$1") && lk_elevate -f test -d "$_HOME" ||
@@ -68,7 +88,7 @@ ChrootDirectory %h"
     lk_elevate test -s "$FILE" || {
         lk_tty_print "Generating SSH key for user '$1'"
         TEMP=/tmp/$FUNCNAME-$1-id_rsa
-        ssh-keygen -t rsa -b 4096 -N "" -q -C "$1@$(lk_hostname)" -f "$TEMP" &&
+        ssh-keygen -t ed25519 -N "" -q -C "$1@$(lk_hostname)" -f "$TEMP" &&
             lk_elevate cp "$TEMP.pub" "$FILE" &&
             lk_tty_file "$TEMP" || return
         lk_tty_warning "${LK_BOLD}WARNING:$LK_RESET \
@@ -107,7 +127,7 @@ function lk_user_bind_dir() {
             lk_tty_warning "Already mounted at $TARGET:" \
                 "$(lk_elevate findmnt -no SOURCE -M "$TARGET")"
             lk_confirm "OK to unmount?" Y &&
-                lk_tty_run_detail lk_elevate umount "$TARGET" || return
+                lk_tty_run_detail -1 lk_elevate umount "$TARGET" || return
         done
         [ -n "$FSROOT" ] || {
             lk_install -d -m 00755 -o root -g root "$TARGET" || return
@@ -128,6 +148,6 @@ END { maybe_print() }' "$TEMP" >"$TEMP2" && cp "$TEMP2" "$TEMP" || return
         lk_warn "invalid fstab: $TEMP" || return
     lk_file_replace -m -f "$TEMP" /etc/fstab
     for TARGET in ${TARGETS+"${TARGETS[@]}"}; do
-        lk_tty_run_detail lk_elevate mount --target "$TARGET" || STATUS=$?
+        lk_tty_run_detail -1 lk_elevate mount --target "$TARGET" || STATUS=$?
     done
 }

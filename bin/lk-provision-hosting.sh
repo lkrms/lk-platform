@@ -373,7 +373,8 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
 
     lk_tty_print "Checking systemd journal"
     unset LK_FILE_REPLACE_NO_CHANGE
-    FILE=/etc/systemd/journald.conf.d/90${LK_PATH_PREFIX}default
+    FILE=/etc/systemd/journald.conf.d/90${LK_PATH_PREFIX}default.conf
+    maybe_move_old "${FILE%.conf}" "$FILE"
     lk_install -d -m 00755 "${FILE%/*}"
     lk_install -m 00644 "$FILE"
     lk_file_replace \
