@@ -93,6 +93,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_PACKAGES_FILE`
 - `LK_PATH_PREFIX`
 - `LK_PHP_ADMIN_SETTINGS`
+- `LK_PHP_DEFAULT_VERSION`
 - `LK_PHP_SETTINGS`
 - `LK_PHP_VERSIONS`
 - `LK_PLATFORM_BRANCH`
@@ -193,7 +194,8 @@ primary domain. Available settings:
 - **`SITE_PHP_FPM_SETTINGS`**
 - **`SITE_PHP_FPM_ENV`**
 - **`SITE_PHP_VERSION`** (`5.6`, `7.0`, `7.1`, `7.2`, `7.3`, `7.4`, `8.0`,
-  `8.1`, or `-1` to disable; default: *system-dependent*)
+  `8.1`, or `-1` to disable; default: `LK_PHP_DEFAULT_VERSION` if set, otherwise
+  *system-dependent*)
 - **`SITE_DOWNSTREAM_FROM`** (`cloudflare` or
   `<HTTP_HEADER>:<PROXY_CIDR>[,<PROXY_CIDR>...]`, e.g.
   `X-Forwarded-For:172.105.171.229,103.31.4.0/22`)
@@ -225,6 +227,8 @@ you're doing.
    - **`_SITE_PHP_FPM_OPCACHE_SIZE`**
    - **`_SITE_PHP_VERSION`**
 4. Set by `_lk_hosting_site_load_dynamic_settings`:
+   - **`_SITE_ROOT_IS_SHARED`** (`Y` if multiple sites are served from the same
+     `SITE_ROOT`, otherwise `N`)
    - **`_SITE_PHP_FPM_PM`** (`static`, `ondemand` or `dynamic`)
 
 ## Conventions

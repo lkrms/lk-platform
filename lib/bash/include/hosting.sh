@@ -175,7 +175,7 @@ function _lk_hosting_site_assign_defaults() {
     _SITE_PHP_FPM_MAX_REQUESTS=${LK_SITE_PHP_FPM_MAX_REQUESTS:-10000}
     _SITE_PHP_FPM_TIMEOUT=${LK_SITE_PHP_FPM_TIMEOUT:-300}
     _SITE_PHP_FPM_OPCACHE_SIZE=${LK_OPCACHE_MEMORY_CONSUMPTION:-128}
-    _SITE_PHP_VERSION=$(lk_hosting_php_get_default_version)
+    _SITE_PHP_VERSION=${LK_PHP_DEFAULT_VERSION:-$(lk_hosting_php_get_default_version)}
 }
 
 # _lk_hosting_site_load_settings
@@ -230,7 +230,9 @@ function _lk_hosting_site_load_dynamic_settings() {
 [ .[] | select(.domain != $domain and .site_inode == ($inode | tonumber)) ] |
   ( .[].domain, if length > 0 then ([ .[].sort_order ] | max) + 1
                 else empty end )' <"$_SITE_LIST")) || return
+    _SITE_ROOT_IS_SHARED=N
     [ -z "${SAME_ROOT+1}" ] || {
+        _SITE_ROOT_IS_SHARED=Y
         lk_tty_detail "Other sites with the same site root:" \
             $'\n'"$(printf '%s\n' "${SAME_ROOT[@]:0:${#SAME_ROOT[@]}-1}")" \
             "$LK_BOLD$LK_MAGENTA"
@@ -281,19 +283,25 @@ function _lk_hosting_site_load_dynamic_settings() {
 function _lk_hosting_site_write_settings() {
     local LK_SUDO=1 REGEX STATUS=0 \
         FILE=$LK_BASE/etc/lk-platform/sites/$_SITE_DOMAIN.conf \
-        OLD_FILE=$LK_BASE/etc/sites/$_SITE_DOMAIN.conf
+        OLD_FILE=$LK_BASE/etc/sites/$_SITE_DOMAIN.conf \
+        USER_FILE=$SITE_ROOT/public_html/.lk-settings
+    USER_FILE+=$(printf -- '-%02d-%s\n' "$SITE_ORDER" "$_SITE_DOMAIN")
     REGEX=$(_lk_hosting_site_assign_defaults &&
         for SETTING in \
-            SITE_PHP_FPM_{POOL,USER,MAX_CHILDREN,MAX_REQUESTS,TIMEOUT,OPCACHE_SIZE} \
-            SITE_PHP_VERSION; do
+            SITE_PHP_FPM_{POOL,USER,MAX_CHILDREN,MAX_REQUESTS,TIMEOUT,OPCACHE_SIZE}; do
             DEFAULT=_$SETTING
             [[ ${!SETTING-} != "${!DEFAULT-}" ]] || echo "$SETTING"
         done | lk_ere_implode_input) || return
     lk_file_maybe_move "$OLD_FILE" "$FILE" &&
         lk_install -m 00660 -g adm "$FILE" &&
         lk_file_replace -lp "$FILE" \
-            "$(lk_var_sh "${!SITE_@}" | sed -E "s/^$REGEX=/#&/")" || STATUS=$?
-    return "$STATUS"
+            "$(lk_var_sh "${!SITE_@}" | sed -E "s/^$REGEX=/#&/")" || return
+    lk_install -m 00440 -o "$_SITE_USER" -g "$_SITE_GROUP" "$USER_FILE" &&
+        LK_VERBOSE= LK_FILE_BACKUP_TAKE= \
+            lk_file_replace "$USER_FILE" < <(sed -E "1i\\
+## $_SITE_DOMAIN
+s/^([^=]+_(PASSWORD|CREDENTIALS?))=.+/#\\1=<suppressed>/i; t
+s/^#//" "$FILE")
 }
 
 function _lk_hosting_site_json() {
