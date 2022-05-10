@@ -309,8 +309,10 @@ Options:
         lk_tty_print "Updating $NAME in" "$2"
         (
             OWNER=${OWNER-}${GROUP:+:${GROUP-}}
-            if [ -n "$OWNER" ]; then
+            if [[ -n $OWNER ]]; then
                 lk_elevate chown -R "$OWNER" "$2" || exit
+            elif [[ ! -O $2 ]]; then
+                _LK_GIT_USER=$(lk_file_owner "$2")
             fi
             umask ${SHARE+002} ${SHARE-022} &&
                 cd "$2" || exit
