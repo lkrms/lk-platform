@@ -110,6 +110,9 @@ function _lk_hosting_site_assign_defaults() {
     _SITE_PHP_FPM_TIMEOUT=${LK_SITE_PHP_FPM_TIMEOUT:-300}
     _SITE_PHP_FPM_OPCACHE_SIZE=${LK_OPCACHE_MEMORY_CONSUMPTION:-128}
     _SITE_PHP_VERSION=${LK_PHP_DEFAULT_VERSION:-$(lk_hosting_php_get_default_version)}
+    _SITE_SMTP_RELAY=${LK_SITE_SMTP_RELAY-}
+    _SITE_SMTP_CREDENTIALS=${LK_SITE_SMTP_CREDENTIALS-}
+    _SITE_SMTP_SENDERS=${LK_SITE_SMTP_SENDERS-}
 }
 
 # _lk_hosting_site_load_settings
@@ -148,7 +151,10 @@ function _lk_hosting_site_load_settings() {
     ((SITE_PHP_FPM_OPCACHE_SIZE >= 8)) || SITE_PHP_FPM_OPCACHE_SIZE=8
     SITE_PHP_VERSION=${SITE_PHP_VERSION:-$_SITE_PHP_VERSION}
     [ -d "/etc/php/$SITE_PHP_VERSION/fpm/pool.d" ] ||
-        lk_warn "PHP version not available: $SITE_PHP_VERSION"
+        lk_warn "PHP version not available: $SITE_PHP_VERSION" || return
+    SITE_SMTP_RELAY=${SITE_SMTP_RELAY:-$_SITE_SMTP_RELAY}
+    SITE_SMTP_CREDENTIALS=${SITE_SMTP_CREDENTIALS:-$_SITE_SMTP_CREDENTIALS}
+    SITE_SMTP_SENDERS=${SITE_SMTP_SENDERS:-$_SITE_SMTP_SENDERS}
 }
 
 # _lk_hosting_site_load_dynamic_settings
@@ -215,21 +221,25 @@ function _lk_hosting_site_load_dynamic_settings() {
 # Defaults that shouldn't be saved are commented out, and if a config file for
 # the site is found at a deprecated path, it's moved before being updated.
 function _lk_hosting_site_write_settings() {
-    local LK_SUDO=1 REGEX STATUS=0 \
+    local LK_SUDO=1 LK_FILE_NO_CHANGE LK_FILE_REPLACE_NO_CHANGE REGEX STATUS=0 \
         FILE=$LK_BASE/etc/lk-platform/sites/$_SITE_DOMAIN.conf \
         OLD_FILE=$LK_BASE/etc/sites/$_SITE_DOMAIN.conf \
         USER_FILE=$SITE_ROOT/public_html/.lk-settings
     USER_FILE+=$(printf -- '-%02d-%s\n' "$SITE_ORDER" "$_SITE_DOMAIN")
     REGEX=$(_lk_hosting_site_assign_defaults &&
         for SETTING in \
-            SITE_PHP_FPM_{POOL,USER,MAX_CHILDREN,MAX_REQUESTS,TIMEOUT,OPCACHE_SIZE}; do
+            SITE_PHP_FPM_{POOL,USER,MAX_CHILDREN,MAX_REQUESTS,TIMEOUT,OPCACHE_SIZE} \
+            SITE_SMTP_{RELAY,CREDENTIALS,SENDERS}; do
             DEFAULT=_$SETTING
             [[ ${!SETTING-} != "${!DEFAULT-}" ]] || echo "$SETTING"
         done | lk_ere_implode_input) || return
+    unset LK_FILE_NO_CHANGE LK_FILE_REPLACE_NO_CHANGE
     lk_file_maybe_move "$OLD_FILE" "$FILE" &&
         lk_install -m 00660 -g adm "$FILE" &&
         lk_file_replace -lp "$FILE" \
             "$(lk_var_sh "${!SITE_@}" | sed -E "s/^$REGEX=/#&/")" || return
+    ! lk_false LK_FILE_NO_CHANGE && ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+        lk_hosting_flush_cache || return
     lk_install -m 00440 -o "$_SITE_USER" -g "$_SITE_GROUP" "$USER_FILE" &&
         LK_VERBOSE= LK_FILE_BACKUP_TAKE= \
             lk_file_replace "$USER_FILE" < <(sed -E "1i\\

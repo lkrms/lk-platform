@@ -9,3 +9,7 @@ function _lk_hosting_check() {
         lk_dirs_exist /srv/www/{.tmp,.opcache} ||
         lk_warn "system not configured for hosting"
 }
+
+function lk_hosting_flush_cache() {
+    lk_cache_mark_dirty
+}
