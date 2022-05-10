@@ -418,6 +418,17 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
     lk_install -m 00644 "$FILE"
     lk_file_replace "$FILE" "nf_conntrack_ftp"
 
+    lk_tty_print "Checking alternatives"
+    # Ensure any new PHP versions don't become the default during installation
+    if [[ -n $LK_PHP_VERSIONS ]] && lk_node_service_enabled php-fpm &&
+        ! lk_is_bootstrap && CURRENT_PHP=$(type -P php) &&
+        ! update-alternatives --query php |
+        awk 'tolower($1)$2 == "status:manual"' |
+            grep . >/dev/null; then
+        CURRENT_PHP=$(lk_realpath "$CURRENT_PHP")
+        lk_tty_run_detail update-alternatives --set php "$CURRENT_PHP"
+    fi
+
     lk_tty_print "Checking APT"
     lk_tty_detail "Checking sources"
     unset LK_FILE_REPLACE_NO_CHANGE

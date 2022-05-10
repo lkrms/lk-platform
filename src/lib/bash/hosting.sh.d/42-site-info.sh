@@ -116,7 +116,11 @@ function _lk_hosting_list_domains() { (
 # 10. ALL_DOMAINS (sorted, comma-separated)
 # 11. DISABLE_HTTPS
 # 12. PHP_VERSION
-function lk_hosting_list_sites() { (
+function lk_hosting_list_sites() {
+    lk_cache _lk_hosting_list_sites "$@"
+}
+
+function _lk_hosting_list_sites() { (
     declare ENABLED_ONLY=0 JSON=0
     while (($#)); do
         [ "${1-}" != -e ] || ENABLED_ONLY=1
