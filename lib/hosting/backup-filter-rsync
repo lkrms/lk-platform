@@ -1,3 +1,4 @@
+- /.byobu/.ssh-agent
 - /.cache
 - /.trash
 - /.wp-cli
@@ -14,3 +15,4 @@
 - public_html/wp-content/uploads/backup
 - public_html/wp-content/uploads/cache
 - public_html/wp-content/uploads/wp-file-manager-pro/fm_backup
+- public_html/wp-content/uploads/wpall??port

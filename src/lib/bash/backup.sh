@@ -77,7 +77,7 @@ function lk_backup_snapshot_to_archive() { (
         "Database $(lk_plural ${#DB[@]} backup) will be copied separately"
     nice -n 10 tar -c -- * |
         lk_pv -s "$BYTES" |
-        nice -n 10 xz -cT0 >"$XZ.pending" &&
+        nice -n 10 xz -cT1 >"$XZ.pending" &&
         touch -r "$SNAPSHOT/.finished" "$XZ.pending" &&
         mv -n "$XZ"{.pending,} || return
     lk_tty_success "Files compressed successfully"

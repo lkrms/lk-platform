@@ -12,6 +12,7 @@
 - /home/_*/*/public_html
 - /home/_*/*/log
 
+- /home/*/.byobu/.ssh-agent
 - /home/*/.cache
 - /home/*/.trash
 - /home/*/.wp-cli
