@@ -449,8 +449,8 @@ function lk_tty_run() {
         break
     done
     ${_LK_TTY_COMMAND:-lk_tty_print} "Running:" "$(lk_quote_args "$@")"
+    eval "$_lk_x_restore"
     "${CMD[@]}"
-    eval "$_lk_x_return"
 }
 
 # lk_tty_run_detail [OPTIONS] COMMAND [ARG...]

@@ -432,8 +432,16 @@ function lk_can_sudo() {
 }
 
 # lk_run_as USER COMMAND [ARG...]
+#
+# Use `runuser` or `sudo` to run COMMAND as USER. If USER is empty or "-", use
+# `lk_sudo` to run the command instead.
 function lk_run_as() {
-    [ $# -ge 2 ] || lk_err "invalid arguments" || return
+    [[ $# -ge 2 ]] || lk_err "invalid arguments" || return
+    [[ ${1:--} != - ]] || {
+        shift
+        lk_sudo "$@"
+        return
+    }
     local _USER
     _USER=$(id -u "$1" 2>/dev/null) || lk_err "user not found: $1" || return
     shift
@@ -1682,8 +1690,8 @@ function lk_tty_run() {
         break
     done
     ${_LK_TTY_COMMAND:-lk_tty_print} "Running:" "$(lk_quote_args "$@")"
+    eval "$_lk_x_restore"
     "${CMD[@]}"
-    eval "$_lk_x_return"
 }
 
 # lk_tty_run_detail [OPTIONS] COMMAND [ARG...]
