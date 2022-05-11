@@ -41,7 +41,9 @@ lk_start_trace
     unset IFS
     lk_mapfile SOURCES <(comm -12 \
         <(getent passwd | cut -d: -f6 | sort -u) \
-        <(find "${BASE_DIRS[@]}" -mindepth 1 -maxdepth 1 -type d | sort |
+        <(find "${BASE_DIRS[@]}" \
+            -mindepth 1 -maxdepth 1 -type d \
+            -execdir test ! -e '{}/.lk-archived' \; -print | sort |
             sed -E '/^\/(proc|sys|dev|run|tmp)$/d'))
     [ ${#SOURCES[@]} -eq 0 ] ||
         lk_tty_list SOURCES "Backing up:" account accounts
