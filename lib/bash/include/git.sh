@@ -1,37 +1,51 @@
 #!/bin/bash
 
 function _lk_git() {
-    local VAR ENV=() SOCK_OWNER SSH_OPTIONS=(ClearAllForwardings=yes
-        ${_LK_GIT_SSH_OPTIONS+"${_LK_GIT_SSH_OPTIONS[@]}"})
-    if [ "${1-}" = -1 ]; then
-        set -- "${@:2}"
-    else
-        set -- git "$@"
-    fi
+    local VAR ENV=() SSH_SOCK_OWNER SSH_OPTIONS=(
+        ClearAllForwardings=yes
+        ${_LK_GIT_SSH_OPTIONS+"${_LK_GIT_SSH_OPTIONS[@]}"}
+    )
     for VAR in "${!GIT_@}"; do
         ! lk_var_exported "$VAR" || ENV[${#ENV[@]}]="$VAR=${!VAR}"
     done
-    [ "${SSH_AUTH_SOCK:+1}${_LK_GIT_USER:+1}" != 11 ] ||
-        ! SOCK_OWNER=$(lk_file_owner "$SSH_AUTH_SOCK" 2>/dev/null) ||
-        [ "$SOCK_OWNER" != "$_LK_GIT_USER" ] ||
-        ENV[${#ENV[@]}]="SSH_AUTH_SOCK=$SSH_AUTH_SOCK"
-    set -- env \
-        ${ENV+"${ENV[@]}"} \
+    [[ ${SSH_AUTH_SOCK:+1}${_LK_GIT_USER:+1} != 11 ]] ||
+        ! SSH_SOCK_OWNER=$(lk_file_owner "$SSH_AUTH_SOCK" 2>/dev/null) ||
+        [[ $SSH_SOCK_OWNER != "$_LK_GIT_USER" ]] ||
+        ENV[${#ENV[@]}]=SSH_AUTH_SOCK=$SSH_AUTH_SOCK
+    set -- env ${ENV+"${ENV[@]}"} \
         GIT_SSH_COMMAND="ssh$(printf ' -o %s' "${SSH_OPTIONS[@]}")" \
-        "$@"
-    if [ -n "${_LK_GIT_USER-}" ]; then
-        lk_run_as "$_LK_GIT_USER" "$@"
-    else
-        lk_maybe_sudo "$@"
-    fi
+        git "$@"
+    lk_run_as "${_LK_GIT_USER-}" "$@"
 }
 
 function _lk_git_cd() {
+    # shellcheck disable=SC2164
     [ $# -eq 0 ] || cd "$1"
 }
 
 function _lk_git_is_quiet() {
     [ -n "${_LK_GIT_QUIET-}" ]
+}
+
+function lk_git() {
+    [[ -z ${_LK_GIT_USER-} ]] || {
+        _lk_git "$@"
+        return
+    }
+    local ROOT _LK_GIT_USER
+    ROOT=$(pwd -P) || return
+    while :; do
+        [[ ! -e $ROOT/.git ]] || break
+        ROOT=${ROOT%/*}
+        [[ $ROOT != / ]] && [[ -r $ROOT ]] ||
+            lk_warn "not a repo: $PWD" || return
+    done
+    if [[ -O $ROOT ]]; then
+        git "$@"
+    else
+        _LK_GIT_USER=$(lk_file_owner "$ROOT") &&
+            _lk_git "$@"
+    fi
 }
 
 # lk_git_maybe_add_safe_directory [--system] [DIR]
@@ -51,7 +65,7 @@ function lk_git_maybe_add_safe_directory() { (
 function lk_git_is_work_tree() {
     local RESULT
     RESULT=$(_lk_git_cd "$@" &&
-        git rev-parse --is-inside-work-tree 2>/dev/null) &&
+        _lk_git rev-parse --is-inside-work-tree 2>/dev/null) &&
         lk_is_true RESULT
 }
 
@@ -59,14 +73,15 @@ function lk_git_is_work_tree() {
 function lk_git_is_submodule() {
     local RESULT
     RESULT=$(_lk_git_cd "$@" &&
-        git rev-parse --show-superproject-working-tree) &&
+        _lk_git rev-parse --show-superproject-working-tree) &&
         [ -n "$RESULT" ]
 }
 
 # lk_git_is_top_level [DIR]
 function lk_git_is_top_level() {
     local RESULT
-    RESULT=$(_lk_git_cd "$@" && git rev-parse --show-prefix) &&
+    RESULT=$(_lk_git_cd "$@" &&
+        _lk_git rev-parse --show-prefix) &&
         [ -z "$RESULT" ]
 }
 
@@ -86,7 +101,7 @@ function lk_git_is_clean() {
     (_lk_git_cd "$@" &&
         { [ -n "${NO_REFRESH-}" ] ||
             _lk_git update-index --refresh; } &&
-        git diff-index --quiet HEAD --) >/dev/null
+        _lk_git diff-index --quiet HEAD --) >/dev/null
 }
 
 # lk_git_list_changes [-n] [DIR]
@@ -99,13 +114,13 @@ function lk_git_list_changes() {
     (_lk_git_cd "$@" &&
         { [ -n "${NO_REFRESH-}" ] ||
             _lk_git update-index --refresh >/dev/null || true; } &&
-        git diff-index --name-status HEAD --)
+        _lk_git diff-index --name-status HEAD --)
 }
 
 # lk_git_list_untracked [DIR]
 function lk_git_list_untracked() {
     (_lk_git_cd "$@" &&
-        git ls-files --others --exclude-standard \
+        _lk_git ls-files --others --exclude-standard \
             --directory --no-empty-directory)
 }
 
@@ -117,7 +132,7 @@ function lk_git_has_untracked() {
 # lk_git_stash_list [DIR]
 function lk_git_stash_list() {
     (_lk_git_cd "$@" &&
-        git stash list --format="%gd")
+        _lk_git stash list --format="%gd")
 }
 
 # lk_git_has_stash [DIR]
@@ -128,8 +143,8 @@ function lk_git_has_stash() {
 # _lk_git_is_remote_skipped REMOTE
 function _lk_git_is_remote_skipped() {
     {
-        git config --type=bool "remote.$1.skipDefaultUpdate" || true
-        git config --type=bool "remote.$1.skipFetchAll" || true
+        _lk_git config --type=bool "remote.$1.skipDefaultUpdate" || true
+        _lk_git config --type=bool "remote.$1.skipFetchAll" || true
     } | grep -Fx true >/dev/null
 }
 
@@ -143,7 +158,7 @@ function lk_git_skip_remote() {
 
 function lk_git_remote_singleton() {
     local REMOTES
-    REMOTES=($(git remote)) && [ ${#REMOTES[@]} -eq 1 ] || return
+    REMOTES=($(_lk_git remote)) && [ ${#REMOTES[@]} -eq 1 ] || return
     echo "${REMOTES[0]}"
 }
 
@@ -157,19 +172,19 @@ function lk_git_remote_from_url() {
     [ "${1-}" != -E ] || { shift && VALUE=${1-}; }
     [ $# -gt 0 ] || lk_usage "Usage: $FUNCNAME [-E] URL" || return
     VALUE=${VALUE-$(lk_escape_ere "${1-}")} &&
-        git config --local --name-only --get-regexp "$REGEX" "$VALUE" |
+        _lk_git config --local --name-only --get-regexp "$REGEX" "$VALUE" |
         lk_require_output sed -E "s/$REGEX/\1/"
 }
 
 # lk_git_list_push_urls REMOTE
 function lk_git_list_push_urls() {
-    git remote get-url --push --all "$1"
+    _lk_git remote get-url --push --all "$1"
 }
 
 # lk_git_list_push_remotes REMOTE
 function lk_git_list_push_remotes() {
-    { { git config --get-all "remote.$1.pushurl" ||
-        git config --get "remote.$1.url"; } |
+    { { _lk_git config --get-all "remote.$1.pushurl" ||
+        _lk_git config --get "remote.$1.url"; } |
         lk_xargs lk_git_remote_from_url || true; } |
         lk_require_output cat
 }
@@ -180,20 +195,20 @@ function lk_git_list_push_remotes() {
 function lk_git_remote_head() {
     local REMOTE HEAD
     REMOTE=${1:-$(lk_git_remote_singleton)} || lk_warn "no remote" || return
-    HEAD=$(git rev-parse --verify --abbrev-ref "$REMOTE/HEAD" 2>/dev/null) &&
+    HEAD=$(_lk_git rev-parse --verify --abbrev-ref "$REMOTE/HEAD" 2>/dev/null) &&
         [ "$HEAD" != "$REMOTE/HEAD" ] &&
         echo "${HEAD#"$REMOTE/"}"
 }
 
 function lk_git_branch_current() {
     local BRANCH
-    BRANCH=$(git rev-parse --verify --abbrev-ref HEAD) && [ "$BRANCH" != HEAD ] &&
+    BRANCH=$(_lk_git rev-parse --verify --abbrev-ref HEAD) && [ "$BRANCH" != HEAD ] &&
         echo "$BRANCH"
 }
 
 function lk_git_branch_list_local() {
     lk_require_output \
-        git for-each-ref --format="%(refname:short)" refs/heads
+        _lk_git for-each-ref --format="%(refname:short)" refs/heads
 }
 
 # lk_git_branch_list_remote [REMOTE]
@@ -201,7 +216,7 @@ function lk_git_branch_list_remote() {
     local REMOTE _REMOTE
     REMOTE=${1:-$(lk_git_remote_singleton)} || lk_warn "no remote" || return
     _REMOTE=$(lk_escape_ere "$REMOTE")
-    git for-each-ref --format="%(refname:short)" "refs/remotes/$REMOTE" |
+    _lk_git for-each-ref --format="%(refname:short)" "refs/remotes/$REMOTE" |
         lk_require_output \
             sed -E -e "/^$_REMOTE\/HEAD\$/d" -e "s/^$_REMOTE\///"
 }
@@ -211,7 +226,7 @@ function lk_git_branch_list_remote() {
 # Output upstream ("pull") <REMOTE>/<REMOTE_BRANCH> for BRANCH or the current
 # branch.
 function lk_git_branch_upstream() {
-    git rev-parse --verify --abbrev-ref "${1-}@{upstream}" 2>/dev/null
+    _lk_git rev-parse --verify --abbrev-ref "${1-}@{upstream}" 2>/dev/null
 }
 
 # lk_git_branch_upstream_remote [BRANCH]
@@ -229,7 +244,7 @@ function lk_git_branch_upstream_remote() {
 # Output downstream ("push") <REMOTE>/<REMOTE_BRANCH> for BRANCH or the current
 # branch.
 function lk_git_branch_push() {
-    git rev-parse --verify --abbrev-ref "${1-}@{push}" 2>/dev/null ||
+    _lk_git rev-parse --verify --abbrev-ref "${1-}@{push}" 2>/dev/null ||
         lk_git_branch_upstream "$@"
 }
 
@@ -244,7 +259,7 @@ function lk_git_branch_push_remote() {
 }
 
 function lk_git_ref() {
-    git rev-parse --verify --short HEAD
+    _lk_git rev-parse --verify --short HEAD
 }
 
 # lk_git_provision_repo [OPTIONS] REMOTE_URL DIR
@@ -307,18 +322,18 @@ Options:
                 "$1" "$2")
     else
         lk_tty_print "Updating $NAME in" "$2"
+        [[ -n $OWNER ]] || [[ -O $2 ]] ||
+            _LK_GIT_USER=$(lk_file_owner "$2") || return
         (
             OWNER=${OWNER-}${GROUP:+:${GROUP-}}
             if [[ -n $OWNER ]]; then
                 lk_elevate chown -R "$OWNER" "$2" || exit
-            elif [[ ! -O $2 ]]; then
-                _LK_GIT_USER=$(lk_file_owner "$2")
             fi
             umask ${SHARE+002} ${SHARE-022} &&
                 cd "$2" || exit
             _REMOTE=$(lk_git_remote_from_url "$1" | head -n1) ||
                 { _REMOTE=${REMOTE:-origin} &&
-                    if git remote | grep -Fx "$_REMOTE" >/dev/null; then
+                    if _lk_git remote | grep -Fx "$_REMOTE" >/dev/null; then
                         _lk_git remote set-url "$_REMOTE" "$1"
                     else
                         _lk_git remote add "$_REMOTE" "$1"
@@ -336,7 +351,7 @@ Options:
 }
 
 function _lk_git_branch_check_diverged() {
-    git merge-base --is-ancestor "$1" "$2" || {
+    _lk_git merge-base --is-ancestor "$1" "$2" || {
         local STATUS=$?
         [ -z "${_LK_GIT_ALREADY_WARNED+1}" ] || {
             [[ ,${_LK_GIT_ALREADY_WARNED-}, != *,$1-$2-diverged,* ]] ||
@@ -354,7 +369,7 @@ function lk_git_fast_forward_branch() {
     unset FORCE QUIET
     [ "${1-}" != -f ] || { FORCE= && shift; }
     ! _lk_git_is_quiet || QUIET=
-    BEHIND=$(git rev-list --count "$1..$2") || return
+    BEHIND=$(_lk_git rev-list --count "$1..$2") || return
     [ "$BEHIND" -gt 0 ] || return 0
     _lk_git_branch_check_diverged "$1" "$2" && unset FORCE || {
         [ -n "${FORCE+1}" ] || return
@@ -390,13 +405,13 @@ function lk_git_push_branch() {
         lk_warn "invalid downstream: $2" || return
     REMOTE=${BASH_REMATCH[1]}
     REMOTE_BRANCH=${BASH_REMATCH[2]}
-    AHEAD=$(git rev-list --count "$2..$1") &&
+    AHEAD=$(_lk_git rev-list --count "$2..$1") &&
         _PATH=$(pwd | lk_tty_path) || return
     [ "$AHEAD" -gt 0 ] || return 0
     ! lk_no_input ||
         lk_warn "in $_PATH, cannot push to $2: user input disabled" || return 0
     _lk_git_branch_check_diverged "$2" "$1" || return
-    LOG=$(git log --reverse \
+    LOG=$(_lk_git log --reverse \
         --oneline --decorate --color=always "$2..$1") || return
     lk_tty_dump \
         "$LOG" \
@@ -425,7 +440,7 @@ push $LK_BOLD$1$LK_RESET to $LK_BOLD$2$LK_RESET?" "${_LK_GIT_ANSWER-Y}" ||
 function lk_git_fetch() {
     local IFS=$' \t\n' QUIET=0 ERRORS=0 REMOTES REMOTE
     [[ ${1-} != -q ]] || { QUIET=1 && shift; }
-    (($#)) && REMOTES=$* || REMOTES=$(git remote) || return
+    (($#)) && REMOTES=$* || REMOTES=$(_lk_git remote) || return
     for REMOTE in $REMOTES; do
         (($#)) || ! _lk_git_is_remote_skipped "$REMOTE" || continue
         _lk_git fetch --tags --quiet "$REMOTE" &&
@@ -463,7 +478,7 @@ function lk_git_update_remote() {
     local QUIET ERRORS=0 BRANCHES REMOTES BRANCH _PUSH PUSH=() REMOTE RBRANCHES
     [ "${1-}" != -q ] || { QUIET=1 && shift; }
     BRANCHES=$(lk_git_branch_list_local) &&
-        REMOTES=$(git remote) || return
+        REMOTES=$(_lk_git remote) || return
     for BRANCH in $BRANCHES; do
         _PUSH=$(lk_git_branch_push "$BRANCH") || {
             [ -n "${QUIET-}" ] ||
@@ -763,8 +778,8 @@ function lk_git_audit_repos() {
 function lk_git_ancestors() {
     local i REF HASH BEHIND ANCESTORS=()
     for REF in "$@"; do
-        HASH=$(git merge-base --fork-point "$REF" "${LK_GIT_REF:-HEAD}") &&
-            BEHIND=$(git rev-list --count "$HASH..${LK_GIT_REF:-HEAD}") ||
+        HASH=$(_lk_git merge-base --fork-point "$REF" "${LK_GIT_REF:-HEAD}") &&
+            BEHIND=$(_lk_git rev-list --count "$HASH..${LK_GIT_REF:-HEAD}") ||
             continue
         ANCESTORS+=("$((i++))" "$BEHIND" "$HASH" "$REF")
     done
@@ -821,8 +836,8 @@ function lk_git_patch_base() {
     #    matched until we reach the commit that introduced them
     # 2. Print object IDs referenced by commits that changed one or more of the
     #    patched files.
-    { git rev-list --objects --in-commit-order --no-walk HEAD &&
-        git rev-list --objects --in-commit-order --skip=1 HEAD -- \
+    { _lk_git rev-list --objects --in-commit-order --no-walk HEAD &&
+        _lk_git rev-list --objects --in-commit-order --skip=1 HEAD -- \
             "${FILES[@]}"; } |
         awk -v re="^$REGEX" -v f=${#FILES[@]} '
 NR == 1 || (!$2 && last_path) { commit = $1 }
@@ -843,13 +858,13 @@ Usage: $FUNCNAME [-o] [--type=TYPE] NAME VALUE
    or: $FUNCNAME [-o] [--type=TYPE] --unset[-all] NAME" || return
     case "${*:$#-1:1}" in
     --unset | --unset-all)
-        ! git config --local "${@:1:$#-2}" --get "${*:$#}" >/dev/null ||
+        ! _lk_git config --local "${@:1:$#-2}" --get "${*:$#}" >/dev/null ||
             COMMAND=(_lk_git config --local "$@")
         ;;
 
     *)
         REGEX=$(lk_escape_ere "${*:$#}") || return
-        git config --local \
+        _lk_git config --local \
             "${@:1:$#-2}" --get "${*:$#-1:1}" "$REGEX" >/dev/null ||
             COMMAND=(_lk_git config --local "$@")
         ;;
@@ -869,15 +884,15 @@ Usage: $FUNCNAME [-o] [--type=TYPE] NAME VALUE
 function lk_git_config_remote_push_all() {
     local UPSTREAM REMOTE_URL REMOTE
     UPSTREAM=${1:-$(lk_git_branch_upstream_remote)} &&
-        REMOTE_URL=$(git config "remote.$UPSTREAM.url") &&
+        REMOTE_URL=$(_lk_git config "remote.$UPSTREAM.url") &&
         [ -n "$REMOTE_URL" ] || lk_warn "remote URL not found" || return
     lk_tty_print "Configuring" "remote.$UPSTREAM.pushUrl"
     lk_tty_detail "Adding:" "$REMOTE_URL"
     _lk_git config push.default current &&
         _lk_git config remote.pushDefault "$UPSTREAM" &&
         _lk_git config --replace-all "remote.$UPSTREAM.pushUrl" "$REMOTE_URL" &&
-        for REMOTE in $(git remote | grep -Fxv "$UPSTREAM"); do
-            REMOTE_URL=$(git config "remote.$REMOTE.url") &&
+        for REMOTE in $(_lk_git remote | grep -Fxv "$UPSTREAM"); do
+            REMOTE_URL=$(_lk_git config "remote.$REMOTE.url") &&
                 [ -n "$REMOTE_URL" ] ||
                 lk_warn "URL not found for remote $REMOTE" || continue
             lk_tty_detail "Adding:" "$REMOTE_URL"
@@ -888,13 +903,13 @@ function lk_git_config_remote_push_all() {
 function lk_git_recheckout() {
     local REPO_ROOT COMMIT
     lk_tty_print "Preparing to delete the index and check out HEAD again"
-    REPO_ROOT=$(git rev-parse --show-toplevel) &&
-        COMMIT=$(git rev-list -1 --oneline HEAD) || return
+    REPO_ROOT=$(_lk_git rev-parse --show-toplevel) &&
+        COMMIT=$(_lk_git rev-list -1 --oneline HEAD) || return
     lk_tty_detail "Repository:" "$REPO_ROOT"
     lk_tty_detail "HEAD refers to:" "$COMMIT"
     lk_no_input || lk_confirm \
         "Uncommitted changes will be permanently deleted. Proceed?" N || return
-    _lk_git -1 rm -fv "$REPO_ROOT/.git/index" &&
+    lk_run_as "${_LK_GIT_USER-}" rm -fv "$REPO_ROOT/.git/index" &&
         _lk_git checkout --force --no-overlay HEAD -- "$REPO_ROOT" &&
         lk_tty_success "Checkout completed successfully"
 }

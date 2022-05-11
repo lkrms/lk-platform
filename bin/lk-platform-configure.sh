@@ -344,12 +344,12 @@ lk_log_start
     if [ -d "$LK_BASE/.git" ]; then
         function check_repo_config() {
             local VALUE
-            VALUE=$(git config --local "$1") &&
+            VALUE=$(lk_git config --local "$1") &&
                 [ "$VALUE" = "$2" ] ||
                 CONFIG_COMMANDS+=("$(printf 'config %q %q' "$1" "$2")")
         }
         function update_repo() {
-            local BRANCH=${1:-$BRANCH} _LK_GIT_USER=$REPO_OWNER
+            local BRANCH=${1:-$BRANCH}
             lk_git_update_repo_to -f "$REMOTE" "$BRANCH"
         }
         UMASK=$(umask)
@@ -357,15 +357,14 @@ lk_log_start
         lk_tty_print "Checking repository"
         cd "$LK_BASE"
         lk_git_maybe_add_safe_directory --system
-        REPO_OWNER=$(lk_file_owner "$LK_BASE")
+        _LK_GIT_USER=$(lk_file_owner "$LK_BASE")
         CONFIG_COMMANDS=()
         [ ! -g "$LK_BASE" ] ||
             check_repo_config "core.sharedRepository" "0664"
         check_repo_config "merge.ff" "only"
         check_repo_config "pull.ff" "only"
         for COMMAND in ${CONFIG_COMMANDS[@]+"${CONFIG_COMMANDS[@]}"}; do
-            lk_tty_detail "Running:" "$(lk_quote_args git $COMMAND)"
-            lk_run_as "$REPO_OWNER" git $COMMAND
+            lk_tty_run_detail -1=git lk_git $COMMAND
         done
         REMOTE=$(lk_git_branch_upstream_remote) ||
             lk_die "no upstream remote for current branch"
@@ -390,6 +389,7 @@ lk_log_start
                     restart_script "$@"
             fi
         fi
+        unset _LK_GIT_USER
         install -d -m 01777 "$LK_BASE/var/log"
         install -d -m 00750 "$LK_BASE/var/backup"
         install -d -m "$PRIVILEGED_DIR_MODE" "$LK_BASE/var/run"{,/dirty}
