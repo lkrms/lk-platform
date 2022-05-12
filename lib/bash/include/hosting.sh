@@ -334,15 +334,18 @@ s/^#//" "$FILE")
 # Cache the current values of every SITE_* and _SITE_* variable in the caller's
 # scope.
 function _lk_hosting_site_cache_settings() {
-    local STATIC
+    local STATIC LK_FILE_REPLACE_NO_CHANGE
     [[ ${1-} != -s ]] || { STATIC=1 && shift; }
     local FILE=$LK_BASE/var/lib/lk-platform/sites/$_SITE_DOMAIN.conf${STATIC:+.static}
     [[ -w ${FILE%/*} ]] || return 0
+    unset LK_FILE_REPLACE_NO_CHANGE
     lk_install -m 00660 -g adm "$FILE" &&
         LK_VERBOSE= LK_FILE_BACKUP_TAKE= \
             lk_file_replace "$FILE" \
             < <(_LK_STACK_DEPTH=-1 \
-                lk_var_sh_q "${!SITE_@}" "${!_SITE_@}")
+                lk_var_sh_q "${!SITE_@}" "${!_SITE_@}") || return
+    # Ensure the cache file is newer than the site file
+    lk_false LK_FILE_REPLACE_NO_CHANGE || touch "$FILE"
 }
 
 # _lk_hosting_site_assign_cached_settings [-s] DOMAIN
@@ -505,7 +508,7 @@ function _lk_hosting_list_sites() { (
     unset IFS
     for DOMAIN in $(_lk_hosting_list_domains); do
         unset "${!SITE_@}" "${!_SITE_@}"
-        _lk_hosting_site_assign_cached_settings "$DOMAIN" ||
+        _lk_hosting_site_assign_cached_settings -s "$DOMAIN" ||
             lk_warn "unable to load settings: $DOMAIN" || return
         ((!ENABLED_ONLY)) || [[ $SITE_ENABLE == Y ]] || continue
         if ((!JSON)); then

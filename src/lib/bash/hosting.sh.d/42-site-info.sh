@@ -133,7 +133,7 @@ function _lk_hosting_list_sites() { (
     unset IFS
     for DOMAIN in $(_lk_hosting_list_domains); do
         unset "${!SITE_@}" "${!_SITE_@}"
-        _lk_hosting_site_assign_cached_settings "$DOMAIN" ||
+        _lk_hosting_site_assign_cached_settings -s "$DOMAIN" ||
             lk_warn "unable to load settings: $DOMAIN" || return
         ((!ENABLED_ONLY)) || [[ $SITE_ENABLE == Y ]] || continue
         if ((!JSON)); then
