@@ -1960,7 +1960,8 @@ function lk_var_to_bool() {
 # assign NULL (default: 0).
 function lk_var_to_int() {
     [ $# -eq 2 ] || set -- "$1" 0
-    [[ ! ${!1-} =~ ^0*([0-9]+)(\.[0-9]*)?$ ]] || set -- "$1" "${BASH_REMATCH[1]}"
+    [[ ! ${!1-} =~ ^(-)?0*([0-9]+)(\.[0-9]*)?$ ]] ||
+        set -- "$1" "${BASH_REMATCH[1]}${BASH_REMATCH[2]}"
     eval "$1=\$2"
 }
 
@@ -2002,7 +2003,7 @@ Usage: $FUNCNAME PROMPT NAME [DEFAULT [READ_ARG...]]" || return
     else
         local _PROMPT=("$1")
         [ -z "${3:+1}" ] || _PROMPT+=("[$3]")
-        read -rep "$(_lk_tty_prompt)" "${@:4}" "$2" 2>&"${_LK_FD-2}" || return
+        IFS= read -rep "$(_lk_tty_prompt)" "${@:4}" "$2" 2>&"${_LK_FD-2}" || return
         [ -n "${!2}" ] || eval "$2=\${3-}"
     fi
 }
@@ -2053,7 +2054,7 @@ Usage: $FUNCNAME PROMPT [DEFAULT [READ_ARG...]]" || return
         fi
         PROMPT=$(_lk_tty_prompt)
         while :; do
-            read -rep "$PROMPT" "${@:3}" REPLY 2>&"${_LK_FD-2}" || return
+            IFS= read -rep "$PROMPT" "${@:3}" REPLY 2>&"${_LK_FD-2}" || return
             [ -n "$REPLY" ] || REPLY=$DEFAULT
             [[ ! $REPLY =~ ^$YES$ ]] || return 0
             [[ ! $REPLY =~ ^$NO$ ]] || return 1
@@ -2109,7 +2110,7 @@ function lk_require() {
     local FILE
     while [ $# -gt 0 ]; do
         [[ ,$_LK_PROVIDED, == *,$1,* ]] || {
-            FILE=${_LK_INST:-$LK_BASE}/lib/bash/include/$1.sh
+            FILE=$LK_BASE/lib/bash/include/$1.sh
             [ -r "$FILE" ] || lk_err "file not found: $FILE" || return
             . "$FILE" || return
         }
@@ -3128,9 +3129,9 @@ function lk_log_create_file() {
     GROUP=$(id -gn) || return
     [ "${1-}" != -e ] || { EXT=$2 && shift 2; }
     CMD=${_LK_LOG_CMDLINE:-$0}
-    [ ! -d "${_LK_INST:-${LK_BASE-}}" ] ||
-        [ -z "$(ls -A "${_LK_INST:-$LK_BASE}")" ] ||
-        LOG_DIRS=("${_LK_INST:-$LK_BASE}/var/log")
+    [ ! -d "${LK_BASE-}" ] ||
+        [ -z "$(ls -A "$LK_BASE")" ] ||
+        LOG_DIRS=("$LK_BASE/var/log")
     LOG_DIRS+=("$@")
     for LOG_DIR in ${LOG_DIRS[@]+"${LOG_DIRS[@]}"}; do
         # Find the first LOG_DIR in which the user can write to LOG_FILE,
@@ -4304,14 +4305,14 @@ function lk_file_backup() {
                         OWNER_HOME=$(lk_expand_path "~$OWNER") &&
                         OWNER_HOME=$(lk_realpath "$OWNER_HOME")
                 } 2>/dev/null || OWNER_HOME=
-                if [ -d "${_LK_INST:-${LK_BASE-}}" ] &&
+                if [ -d "${LK_BASE-}" ] &&
                     lk_will_elevate && [ "${FILE#"$OWNER_HOME"}" = "$FILE" ]; then
                     lk_install -d \
-                        -m "$([ -g "${_LK_INST:-$LK_BASE}" ] &&
+                        -m "$([ -g "$LK_BASE" ] &&
                             echo 02775 ||
                             echo 00755)" \
-                        "${_LK_INST:-$LK_BASE}/var" || return
-                    DEST=${_LK_INST:-$LK_BASE}/var/backup
+                        "$LK_BASE/var" || return
+                    DEST=$LK_BASE/var/backup
                     unset OWNER
                 elif lk_will_elevate; then
                     DEST=$OWNER_HOME/.lk-platform/backup

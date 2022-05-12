@@ -331,8 +331,15 @@ fi
 {
     lk_tty_log "Provisioning Ubuntu for hosting"
 
-    install -d -m 02775 -g adm "$LK_BASE"/{etc{,/lk-platform},var}
-    install -d -m 02770 -g adm "$LK_BASE/var/run"{,/dirty}
+    install -d -m 02775 -g adm "$LK_BASE"/{etc,var/{cache,lib}}/lk-platform
+    install -d -m 02770 -g adm "$LK_BASE/var/lib/lk-platform"/{dirty,sites}
+
+    if ! lk_is_bootstrap && [[ -d $LK_BASE/var/run/dirty ]]; then
+        lk_dir_is_empty "$LK_BASE/var/run/dirty" ||
+            mv -fv "$LK_BASE/var/run/dirty"/* \
+                "$LK_BASE/var/lib/lk-platform/dirty/"
+        rmdir "$LK_BASE/var/run/dirty"
+    fi
 
     lk_is_bootstrap ||
         [ -d "$LK_BASE/etc/lk-platform/sites" ] ||
@@ -763,12 +770,11 @@ EOF
     fi
 
     lk_tty_print "Checking hosting base directories"
-    lk_install -d -m 00751 -g adm /srv/{www/{,.tmp,.opcache},backup/{,archive,latest,snapshot}} \
-        "${PHP_VERSIONS[@]/#/\/srv\/www\/.tmp\/}" \
-        "${PHP_VERSIONS[@]/#/\/srv\/www\/.opcache\/}"
+    lk_install -d -m 00751 -g adm /srv/{www/{,.tmp},backup/{,archive,latest,snapshot}} \
+        "${PHP_VERSIONS[@]/#/\/srv\/www\/.tmp\/}"
 
     _LK_NO_LOG=1 \
-        lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" \
+        lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" --rename \
         $(! no_upgrade || printf '%s\n' --no-upgrade)
 
     if lk_is_bootstrap && [ -n "$LK_ADMIN_USERS" ]; then
@@ -1153,10 +1159,10 @@ EOF
     fi
 
     if lk_node_service_enabled apache2 || lk_node_service_enabled php-fpm; then
-        if lk_hosting_list_sites | grep . >/dev/null; then
-            lk_hosting_site_configure_all
-        fi
+        lk_hosting_site_configure_all
         lk_hosting_apply_config
+        [[ ! -d /srv/www/.opcache ]] ||
+            lk_mark_dirty opcache.file_cache.path
     fi
 
     if lk_dpkg_installed fail2ban; then
@@ -1235,7 +1241,16 @@ EOF
     lk_hosting_configure_backup
 
     lk_tty_print "Cleaning up"
-    lk_apt_purge_removed
+    LK_NO_INPUT=1 \
+        lk_apt_purge_removed
+    ! lk_is_dirty opcache.file_cache.path || {
+        DIR=/srv/www/.opcache
+        SIZE=$(du -ms "$DIR" | awk '{print $1}') &&
+            lk_tty_detail \
+                "Deleting inactive PHP OPcache file_cache:" "$DIR (${SIZE}M)" &&
+            rm -Rf /srv/www/.opcache &&
+            lk_mark_clean opcache.file_cache.path
+    }
     [ ! -e /etc/glances ] ||
         lk_tty_run_detail rm -Rf /etc/glances
     [ ! -e /etc/apt/listchanges.conf.orig ] ||

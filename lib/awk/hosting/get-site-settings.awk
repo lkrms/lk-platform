@@ -250,6 +250,12 @@ END {
         delete domains["www." domain]
     }
     opcache_size = get_php_setting("opcache.memory_consumption")
+    memory_limit = get_php_setting("memory_limit")
+    if (memory_limit ~ /^(-1|[0-9]+[mM])$/) {
+        sub(/[mM]$/, "", memory_limit)
+    } else {
+        memory_limit = ""
+    }
     delete_php_setting("opcache.file_cache")
     delete_php_setting("opcache.validate_permission")
     delete_php_setting("error_log")
@@ -269,6 +275,7 @@ END {
     maybe_print("SITE_PHP_FPM_POOL", poolname)
     maybe_print("SITE_PHP_FPM_USER", fpm_user)
     maybe_print("SITE_PHP_FPM_MAX_CHILDREN", max_children)
+    maybe_print("SITE_PHP_FPM_MEMORY_LIMIT", memory_limit)
     maybe_print("SITE_PHP_FPM_MAX_REQUESTS", max_requests)
     maybe_print("SITE_PHP_FPM_TIMEOUT", timeout)
     maybe_print("SITE_PHP_FPM_OPCACHE_SIZE", opcache_size)

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-[ -n "${_LK_INST-}" ] || { SH=$(
+[[ -n ${_LK_CONFIG_LOADED-} ]] || { SH=$(
     set -u
     lk_die() { echo "${BASH_SOURCE-$0}: $1" >&2 && false || exit; }
     _FILE=$BASH_SOURCE && [ -f "$_FILE" ] && [ ! -L "$_FILE" ] ||
@@ -30,10 +30,10 @@
     [ -z "${VARS:+1}" ] ||
         declare -p $VARS
 ) && eval "$SH" || return; }
-SH=$(. "${_LK_INST:-$LK_BASE}/lib/bash/env.sh") && eval "$SH" || return
+SH=$(. "$LK_BASE/lib/bash/env.sh") && eval "$SH" || return
 unset SH
 
-. "${_LK_INST:-$LK_BASE}/lib/bash/include/core.sh" || return
+. "$LK_BASE/lib/bash/include/core.sh" || return
 set -E
 
 lk_require assert

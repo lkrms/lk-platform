@@ -560,9 +560,9 @@ function lk_log_create_file() {
     GROUP=$(id -gn) || return
     [ "${1-}" != -e ] || { EXT=$2 && shift 2; }
     CMD=${_LK_LOG_CMDLINE:-$0}
-    [ ! -d "${_LK_INST:-${LK_BASE-}}" ] ||
-        [ -z "$(ls -A "${_LK_INST:-$LK_BASE}")" ] ||
-        LOG_DIRS=("${_LK_INST:-$LK_BASE}/var/log")
+    [ ! -d "${LK_BASE-}" ] ||
+        [ -z "$(ls -A "$LK_BASE")" ] ||
+        LOG_DIRS=("$LK_BASE/var/log")
     LOG_DIRS+=("$@")
     for LOG_DIR in ${LOG_DIRS[@]+"${LOG_DIRS[@]}"}; do
         # Find the first LOG_DIR in which the user can write to LOG_FILE,
@@ -1736,14 +1736,14 @@ function lk_file_backup() {
                         OWNER_HOME=$(lk_expand_path "~$OWNER") &&
                         OWNER_HOME=$(lk_realpath "$OWNER_HOME")
                 } 2>/dev/null || OWNER_HOME=
-                if [ -d "${_LK_INST:-${LK_BASE-}}" ] &&
+                if [ -d "${LK_BASE-}" ] &&
                     lk_will_elevate && [ "${FILE#"$OWNER_HOME"}" = "$FILE" ]; then
                     lk_install -d \
-                        -m "$([ -g "${_LK_INST:-$LK_BASE}" ] &&
+                        -m "$([ -g "$LK_BASE" ] &&
                             echo 02775 ||
                             echo 00755)" \
-                        "${_LK_INST:-$LK_BASE}/var" || return
-                    DEST=${_LK_INST:-$LK_BASE}/var/backup
+                        "$LK_BASE/var" || return
+                    DEST=$LK_BASE/var/backup
                     unset OWNER
                 elif lk_will_elevate; then
                     DEST=$OWNER_HOME/.lk-platform/backup

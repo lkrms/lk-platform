@@ -111,6 +111,7 @@ function lk_var_to_bool() {
 # assign NULL (default: 0).
 function lk_var_to_int() {
     [ $# -eq 2 ] || set -- "$1" 0
-    [[ ! ${!1-} =~ ^0*([0-9]+)(\.[0-9]*)?$ ]] || set -- "$1" "${BASH_REMATCH[1]}"
+    [[ ! ${!1-} =~ ^(-)?0*([0-9]+)(\.[0-9]*)?$ ]] ||
+        set -- "$1" "${BASH_REMATCH[1]}${BASH_REMATCH[2]}"
     eval "$1=\$2"
 }

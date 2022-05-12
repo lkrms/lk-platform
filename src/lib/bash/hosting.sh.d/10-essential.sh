@@ -6,7 +6,7 @@ function _lk_hosting_is_quiet() {
 
 function _lk_hosting_check() {
     lk_is_ubuntu &&
-        lk_dirs_exist /srv/www/{.tmp,.opcache} ||
+        lk_dirs_exist /srv/{www/.tmp,backup/{archive,latest,snapshot}} ||
         lk_warn "system not configured for hosting"
 }
 

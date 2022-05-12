@@ -30,6 +30,7 @@ function _lk_hosting_site_json() {
     "pool":                 ($sitePhpFpmPool),
     "user":                 ($sitePhpFpmUser),
     "max_children":         ($sitePhpFpmMaxChildren     | to_number),
+    "memory_limit":         ($sitePhpFpmMemoryLimit     | to_number),
     "max_requests":         ($sitePhpFpmMaxRequests     | to_number),
     "timeout":              ($sitePhpFpmTimeout         | to_number),
     "opcache_size":         ($sitePhpFpmOpcacheSize     | to_number),
@@ -67,6 +68,7 @@ EOF
         SITE_PHP_FPM_ADMIN_SETTINGS \
         SITE_PHP_FPM_ENV \
         SITE_PHP_FPM_MAX_CHILDREN \
+        SITE_PHP_FPM_MEMORY_LIMIT \
         SITE_PHP_FPM_MAX_REQUESTS \
         SITE_PHP_FPM_OPCACHE_SIZE \
         SITE_PHP_FPM_POOL \
@@ -131,9 +133,7 @@ function _lk_hosting_list_sites() { (
     unset IFS
     for DOMAIN in $(_lk_hosting_list_domains); do
         unset "${!SITE_@}" "${!_SITE_@}"
-        SH=$(_lk_hosting_site_settings_sh "$DOMAIN") && eval "$SH" &&
-            _lk_hosting_site_check_root &&
-            _lk_hosting_site_load_settings ||
+        _lk_hosting_site_assign_cached_settings "$DOMAIN" ||
             lk_warn "unable to load settings: $DOMAIN" || return
         ((!ENABLED_ONLY)) || [[ $SITE_ENABLE == Y ]] || continue
         if ((!JSON)); then

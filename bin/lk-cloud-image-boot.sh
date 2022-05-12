@@ -683,8 +683,8 @@ lk_confirm "OK to proceed?" Y || lk_die ""
 
 {
     lk_elevate -f install -d -m 01777 \
-        "$LK_BASE/var/cache"{,/cloud-images,/NoCloud} 2>/dev/null &&
-        cd "$LK_BASE/var/cache/cloud-images" ||
+        "$LK_BASE/var/cache/lk-platform"{,/cloud-images,/NoCloud} 2>/dev/null &&
+        cd "$LK_BASE/var/cache/lk-platform/cloud-images" ||
         lk_die "error creating cache directories"
 
     FILENAME=${IMAGE_URL##*/}
@@ -974,7 +974,7 @@ dns-nameservers $VM_IPV4_GATEWAY" '{
   "network-interfaces": $interfaces
 }'
 
-    NOCLOUD_META_DIR=$LK_BASE/var/cache/NoCloud/$(lk_hostname)-$VM_HOSTNAME-$(lk_date_ymdhms)
+    NOCLOUD_META_DIR=$LK_BASE/var/cache/lk-platform/NoCloud/$(lk_hostname)-$VM_HOSTNAME-$(lk_date_ymdhms)
     install -d -m 00755 "$NOCLOUD_META_DIR"
 
     yq -y <<<"$NETWORK_CONFIG" \

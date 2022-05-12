@@ -19,6 +19,7 @@ function _lk_hosting_site_list_known_settings() {
         SITE_PHP_FPM_POOL \
         SITE_PHP_FPM_USER \
         SITE_PHP_FPM_MAX_CHILDREN \
+        SITE_PHP_FPM_MEMORY_LIMIT \
         SITE_PHP_FPM_MAX_REQUESTS \
         SITE_PHP_FPM_TIMEOUT \
         SITE_PHP_FPM_OPCACHE_SIZE \
@@ -44,24 +45,24 @@ function _lk_hosting_site_assign_file() {
         "$LK_BASE/etc/sites/$1.conf") || _SITE_FILE=$DEFAULT_FILE
 }
 
-# _lk_hosting_site_settings_sh DOMAIN
+# _lk_hosting_site_assign_settings DOMAIN
 #
-# Print Bash variable assignments for _SITE_DOMAIN, _SITE_FILE, and each SITE_*
-# setting for DOMAIN.
+# In the caller's scope, assign values for the given DOMAIN to _SITE_DOMAIN,
+# _SITE_FILE, and every known or configured SITE_* variable.
 #
-# Output from this function should be evaluated before calling other
+# This function should be called in a subshell before calling other
 # site-specific _lk_hosting_* functions.
-function _lk_hosting_site_settings_sh() { (
+function _lk_hosting_site_assign_settings() { local SH && SH=$(
     unset "${!SITE_@}"
     _SITE_DOMAIN=${1,,}
     _lk_hosting_site_assign_file "$_SITE_DOMAIN"
     readonly _SITE_DOMAIN _SITE_FILE
     [ ! -e "$_SITE_FILE" ] ||
-        . "$_SITE_FILE" || return
-    _LK_STACK_DEPTH=1 lk_var_sh_q -a _SITE_DOMAIN _SITE_FILE \
+        . "$_SITE_FILE" >&2 || return
+    _LK_STACK_DEPTH=-1 lk_var_sh_q -a _SITE_DOMAIN _SITE_FILE \
         $({ _lk_hosting_site_list_known_settings &&
             printf '%s\n' "${!SITE_@}"; } | sort -u)
-); }
+) && eval "$SH"; }
 
 # _lk_hosting_site_check_root
 #
@@ -98,7 +99,7 @@ function _lk_hosting_site_check_root() {
 #
 # These values should not be saved in site config files.
 function _lk_hosting_site_assign_defaults() {
-    _SITE_ORDER=0
+    _SITE_ORDER=-1
     _SITE_PHP_FPM_POOL=$_SITE_USER
     if lk_user_in_group adm "$_SITE_USER"; then
         _SITE_PHP_FPM_USER=www-data
@@ -106,6 +107,7 @@ function _lk_hosting_site_assign_defaults() {
         _SITE_PHP_FPM_USER=$_SITE_USER
     fi
     _SITE_PHP_FPM_MAX_CHILDREN=${LK_SITE_PHP_FPM_MAX_CHILDREN:-30}
+    _SITE_PHP_FPM_MEMORY_LIMIT=${LK_SITE_PHP_FPM_MEMORY_LIMIT:-80}
     _SITE_PHP_FPM_MAX_REQUESTS=${LK_SITE_PHP_FPM_MAX_REQUESTS:-10000}
     _SITE_PHP_FPM_TIMEOUT=${LK_SITE_PHP_FPM_TIMEOUT:-300}
     _SITE_PHP_FPM_OPCACHE_SIZE=${LK_OPCACHE_MEMORY_CONSUMPTION:-128}
@@ -143,6 +145,13 @@ function _lk_hosting_site_load_settings() {
     SITE_PHP_FPM_USER=${SITE_PHP_FPM_USER:-$_SITE_PHP_FPM_USER}
     lk_var_to_int SITE_PHP_FPM_MAX_CHILDREN "$_SITE_PHP_FPM_MAX_CHILDREN"
     ((SITE_PHP_FPM_MAX_CHILDREN > 0)) || SITE_PHP_FPM_MAX_CHILDREN=1
+    if [[ -z $SITE_PHP_FPM_MEMORY_LIMIT ]] &&
+        [[ "$SITE_PHP_FPM_SETTINGS,$SITE_PHP_FPM_ADMIN_SETTINGS" =~ .*(,|^)memory_limit=(-1|([0-9]+)[mM])(,|$) ]]; then
+        SITE_PHP_FPM_MEMORY_LIMIT=${BASH_REMATCH[3]:-${BASH_REMATCH[2]}}
+    fi
+    lk_var_to_int SITE_PHP_FPM_MEMORY_LIMIT "$_SITE_PHP_FPM_MEMORY_LIMIT"
+    ((SITE_PHP_FPM_MEMORY_LIMIT > 0 || SITE_PHP_FPM_MEMORY_LIMIT == -1)) ||
+        SITE_PHP_FPM_MEMORY_LIMIT=8
     lk_var_to_int SITE_PHP_FPM_MAX_REQUESTS "$_SITE_PHP_FPM_MAX_REQUESTS"
     ((SITE_PHP_FPM_MAX_REQUESTS >= 0)) || SITE_PHP_FPM_MAX_REQUESTS=0
     lk_var_to_int SITE_PHP_FPM_TIMEOUT "$_SITE_PHP_FPM_TIMEOUT"
@@ -171,13 +180,15 @@ function _lk_hosting_site_load_dynamic_settings() {
   ( .[].domain, if length > 0 then ([ .[].sort_order ] | max) + 1
                 else empty end )' <"$_SITE_LIST")) || return
     _SITE_ROOT_IS_SHARED=N
-    [ -z "${SAME_ROOT+1}" ] || {
+    if [[ -n ${SAME_ROOT+1} ]]; then
         _SITE_ROOT_IS_SHARED=Y
         lk_tty_detail "Other sites with the same site root:" \
             $'\n'"$(printf '%s\n' "${SAME_ROOT[@]:0:${#SAME_ROOT[@]}-1}")" \
             "$LK_BOLD$LK_MAGENTA"
-        ((SITE_ORDER > 0)) || SITE_ORDER=${SAME_ROOT[${#SAME_ROOT[@]} - 1]}
-    }
+        ((SITE_ORDER > -1)) || SITE_ORDER=${SAME_ROOT[${#SAME_ROOT[@]} - 1]}
+    else
+        ((SITE_ORDER > -1)) || SITE_ORDER=0
+    fi
     SAME_DOMAIN=($(comm -12 \
         <({ echo "$_SITE_DOMAIN" &&
             { [[ $SITE_DISABLE_WWW == Y ]] || echo "www.$_SITE_DOMAIN"; } &&
@@ -244,6 +255,49 @@ function _lk_hosting_site_write_settings() {
         LK_VERBOSE= LK_FILE_BACKUP_TAKE= \
             lk_file_replace "$USER_FILE" < <(sed -E "1i\\
 ## $_SITE_DOMAIN
-s/^([^=]+_(PASSWORD|CREDENTIALS?))=.+/#\\1=<suppressed>/i; t
+s/^#?([^#=]+_(PASSWORD|CREDENTIALS?))=.+/#\\1=<hidden>/i; t
 s/^#//" "$FILE")
+}
+
+# _lk_hosting_site_cache_settings [-s]
+#
+# Cache the current values of every SITE_* and _SITE_* variable in the caller's
+# scope.
+function _lk_hosting_site_cache_settings() {
+    local STATIC
+    [[ ${1-} != -s ]] || { STATIC=1 && shift; }
+    local FILE=$LK_BASE/var/lib/lk-platform/sites/$_SITE_DOMAIN.conf${STATIC:+.static}
+    [[ -w ${FILE%/*} ]] || return 0
+    lk_install -m 00660 -g adm "$FILE" &&
+        LK_VERBOSE= LK_FILE_BACKUP_TAKE= \
+            lk_file_replace "$FILE" \
+            < <(_LK_STACK_DEPTH=-1 \
+                lk_var_sh_q "${!SITE_@}" "${!_SITE_@}")
+}
+
+# _lk_hosting_site_assign_cached_settings [-s] DOMAIN
+#
+# Assign values previously cached for DOMAIN to variables in the caller's scope,
+# or load DOMAIN's configuration and cache it before returning.
+#
+# If -s is set and no values have been cached, skip dynamic settings when
+# loading DOMAIN's configuration.
+function _lk_hosting_site_assign_cached_settings() {
+    local STATIC
+    [[ ${1-} != -s ]] || { STATIC=1 && shift; }
+    local FILE=$LK_BASE/var/lib/lk-platform/sites/${1,,}.conf \
+        MAIN_FILE=$LK_BASE/etc/lk-platform/sites/${1,,}.conf
+    [[ -f $MAIN_FILE ]] ||
+        lk_warn "no site configured for domain: ${1,,}" || return
+    [[ -f $FILE ]] || FILE+=${STATIC:+.static}
+    [[ -f $FILE ]] && [[ ! $FILE -ot $MAIN_FILE ]] || {
+        _lk_hosting_site_assign_settings "$1" &&
+            _lk_hosting_site_check_root &&
+            _lk_hosting_site_load_settings || return
+        [[ -n ${STATIC-} ]] ||
+            _lk_hosting_site_load_dynamic_settings || return
+        _lk_hosting_site_cache_settings ${STATIC:+-s}
+        return
+    }
+    . "$FILE"
 }

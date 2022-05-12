@@ -107,6 +107,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_SITE_ENABLE_STAGING`
 - `LK_SITE_PHP_FPM_MAX_CHILDREN`
 - `LK_SITE_PHP_FPM_MAX_REQUESTS`
+- `LK_SITE_PHP_FPM_MEMORY_LIMIT`
 - `LK_SITE_PHP_FPM_TIMEOUT`
 - `LK_SITE_SMTP_CREDENTIALS`
 - `LK_SITE_SMTP_RELAY`
@@ -189,8 +190,9 @@ primary domain. Available settings:
 - **`SITE_PHP_FPM_POOL`** (default: `<USER>`)
 - **`SITE_PHP_FPM_USER`** (usually `www-data` or `<USER>`; default: `www-data`
   if `<USER>` is an administrator, otherwise `<USER>`)
-- **`SITE_PHP_FPM_MAX_CHILDREN`**
-- **`SITE_PHP_FPM_MAX_REQUESTS`**
+- **`SITE_PHP_FPM_MAX_CHILDREN`** (default: `30`)
+- **`SITE_PHP_FPM_MEMORY_LIMIT`** (in MiB; default: `80`)
+- **`SITE_PHP_FPM_MAX_REQUESTS`** (default: `10000`)
 - **`SITE_PHP_FPM_TIMEOUT`** (in seconds; default: `300`)
 - **`SITE_PHP_FPM_OPCACHE_SIZE`** (in MiB; default: `128`)
 - **`SITE_PHP_FPM_ADMIN_SETTINGS`**
@@ -211,7 +213,7 @@ The following variables are used by various `lk_hosting_*` functions. They can't
 be set via `<DOMAIN>.conf`. Don't change them unless you know exactly what
 you're doing.
 
-1. Set via `_lk_hosting_site_settings_sh`:
+1. Set by `_lk_hosting_site_assign_settings`:
    - **`_SITE_DOMAIN`**
    - **`_SITE_FILE`**
 2. Set by `_lk_hosting_site_check_root`:
@@ -223,12 +225,17 @@ you're doing.
    - **`_SITE_NAME`**
 3. Set by `_lk_hosting_site_load_settings`:
    - **`_SITE_ORDER`**
+   - **`_SITE_PHP_FPM_POOL`**
    - **`_SITE_PHP_FPM_USER`**
    - **`_SITE_PHP_FPM_MAX_CHILDREN`**
+   - **`_SITE_PHP_FPM_MEMORY_LIMIT`**
    - **`_SITE_PHP_FPM_MAX_REQUESTS`**
    - **`_SITE_PHP_FPM_TIMEOUT`**
    - **`_SITE_PHP_FPM_OPCACHE_SIZE`**
    - **`_SITE_PHP_VERSION`**
+   - **`_SITE_SMTP_RELAY`**
+   - **`_SITE_SMTP_CREDENTIALS`**
+   - **`_SITE_SMTP_SENDERS`**
 4. Set by `_lk_hosting_site_load_dynamic_settings`:
    - **`_SITE_ROOT_IS_SHARED`** (`Y` if multiple sites are served from the same
      `SITE_ROOT`, otherwise `N`)

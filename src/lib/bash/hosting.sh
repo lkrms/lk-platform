@@ -110,7 +110,7 @@ Options:
     lk_is_fqdn "$1" || lk_usage -e "invalid domain: $1" || return
     _lk_hosting_check || return
     unset IFS "${!SITE_@}" "${!_SITE_@}"
-    SH=$(_lk_hosting_site_settings_sh "${1#www.}") && eval "$SH" || return
+    _lk_hosting_site_assign_settings "${1#www.}" || return
     if [ -z "${2-}" ]; then
         [ -f "$_SITE_FILE" ] ||
             lk_warn "file not found: $_SITE_FILE" || return
@@ -136,7 +136,7 @@ function lk_hosting_site_provision() { (
     [ -n "${1-}" ] || lk_warn "invalid arguments" || return
     _lk_hosting_check || return
     unset "${!SITE_@}" "${!_SITE_@}"
-    SH=$(_lk_hosting_site_settings_sh "$1") && eval "$SH" || return
+    _lk_hosting_site_assign_settings "$1" || return
     [ -f "$_SITE_FILE" ] || [ -n "${2-}" ] ||
         lk_warn "file not found: $_SITE_FILE" || return
     SITE_ROOT=${SITE_ROOT:-${2-}}
@@ -231,7 +231,8 @@ function _lk_hosting_site_provision() {
         [ -n "${SSL_FILES[2]:+1}" ] ||
             SITE_SSL_CHAIN_FILE=
     }
-    _lk_hosting_site_write_settings || return
+    _lk_hosting_site_write_settings &&
+        _lk_hosting_site_cache_settings || return
     ! lk_is_true SITE_ENABLE_STAGING ||
         APACHE+=(Use Staging)
     [[ -z $SITE_DOWNSTREAM_FROM ]] || {
@@ -261,10 +262,8 @@ function _lk_hosting_site_provision() {
             -v "v=$SITE_PHP_VERSION" \
             -v "p=$SITE_PHP_FPM_POOL" \
             '$12 == v && $7 == p && !f {f = 1; if ($1 == d) s = 1} END {exit 1 - s}' || (
-        lk_install -d -m 02750 -o "$SITE_PHP_FPM_USER" -g "$_SITE_GROUP" \
-            "/srv/www/.opcache/$SITE_PHP_VERSION/$SITE_PHP_FPM_POOL" &&
-            lk_install -d -m 02770 -o "$SITE_PHP_FPM_USER" -g "$_SITE_GROUP" \
-                "/srv/www/.tmp/$SITE_PHP_VERSION/$SITE_PHP_FPM_POOL" &&
+        lk_install -d -m 02770 -o "$SITE_PHP_FPM_USER" -g "$_SITE_GROUP" \
+            "/srv/www/.tmp/$SITE_PHP_VERSION/$SITE_PHP_FPM_POOL" &&
             lk_install -m 00640 -o root -g "$_SITE_GROUP" \
                 "$LOG_DIR/php$SITE_PHP_VERSION-fpm.access.log" &&
             lk_install -m 00640 -o "$SITE_PHP_FPM_USER" -g "$_SITE_GROUP" \
@@ -276,6 +275,8 @@ function _lk_hosting_site_provision() {
             # The numeric form of the error_reporting value below is 4597
             _lk_hosting_php_get_settings php_admin_ \
                 opcache.memory_consumption="$SITE_PHP_FPM_OPCACHE_SIZE" \
+                opcache.file_cache= \
+                memory_limit="${SITE_PHP_FPM_MEMORY_LIMIT}M" \
                 error_log="$LOG_DIR/php$SITE_PHP_VERSION-fpm.error.log" \
                 ${LK_PHP_ADMIN_SETTINGS-} \
                 ${SITE_PHP_FPM_ADMIN_SETTINGS-} \
@@ -284,11 +285,11 @@ function _lk_hosting_site_provision() {
                 opcache.max_accelerated_files=20000 \
                 opcache.validate_timestamps=On \
                 opcache.revalidate_freq=0 \
-                opcache.file_cache="/srv/www/.opcache/$SITE_PHP_VERSION/\$pool" \
+                opcache.enable_file_override=On \
+                opcache.log_verbosity_level=2 \
                 error_reporting="E_ALL & ~E_WARNING & ~E_NOTICE & ~E_USER_WARNING & ~E_USER_NOTICE & ~E_STRICT & ~E_DEPRECATED & ~E_USER_DEPRECATED" \
                 disable_functions="error_reporting" \
-                log_errors=On \
-                memory_limit=80M
+                log_errors=On
             _lk_hosting_php_get_settings php_ \
                 ${LK_PHP_SETTINGS-} \
                 ${SITE_PHP_FPM_SETTINGS-} \
