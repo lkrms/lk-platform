@@ -38,7 +38,7 @@ Usage: $FUNCNAME PROMPT NAME [DEFAULT [READ_ARG...]]" || return
     else
         local _PROMPT=("$1")
         [ -z "${3:+1}" ] || _PROMPT+=("[$3]")
-        read -rep "$(_lk_tty_prompt)" "${@:4}" "$2" 2>&"${_LK_FD-2}" || return
+        IFS= read -rep "$(_lk_tty_prompt)" "${@:4}" "$2" 2>&"${_LK_FD-2}" || return
         [ -n "${!2}" ] || eval "$2=\${3-}"
     fi
 }
@@ -89,7 +89,7 @@ Usage: $FUNCNAME PROMPT [DEFAULT [READ_ARG...]]" || return
         fi
         PROMPT=$(_lk_tty_prompt)
         while :; do
-            read -rep "$PROMPT" "${@:3}" REPLY 2>&"${_LK_FD-2}" || return
+            IFS= read -rep "$PROMPT" "${@:3}" REPLY 2>&"${_LK_FD-2}" || return
             [ -n "$REPLY" ] || REPLY=$DEFAULT
             [[ ! $REPLY =~ ^$YES$ ]] || return 0
             [[ ! $REPLY =~ ^$NO$ ]] || return 1

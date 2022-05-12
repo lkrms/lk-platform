@@ -48,7 +48,7 @@ PATH=${PATH-}
 OLD_PATH=$PATH
 PATH=$(path_add \
     /usr/bin /bin /usr/sbin /sbin \
-    ${_LK_INST:-$LK_BASE}/bin \
+    $LK_BASE/bin \
     ${LK_ADD_TO_PATH-})
 PATH=$(path_add_to_front \
     /usr/local/bin /usr/local/sbin \

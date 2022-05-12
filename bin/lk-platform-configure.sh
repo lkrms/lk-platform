@@ -1,60 +1,48 @@
 #!/bin/bash
 
-set -o pipefail
+set -euo pipefail
 
-[ "$EUID" -eq 0 ] || {
-    # See: https://bugzilla.sudo.ws/show_bug.cgi?id=950
-    SUDO_MIN=3
-    ! VER=$(sudo -V | awk 'NR == 1 { print $NF }') ||
-        printf '%s\n' "$VER" 1.8.9 1.8.32 1.9.0 1.9.4p1 | sort -V |
-        awk -v "v=$VER" '$0 == v { l = NR } END { exit 1 - l % 2 }' ||
-        SUDO_MIN=4
-    sudo -H -E \
-        -C "$(($(printf '%s\n' $((SUDO_MIN - 1)) \
-            $((_LK_FD ? _LK_FD : 2)) $((BASH_XTRACEFD)) $((_LK_TRACE_FD)) \
-            $((_LK_TTY_OUT_FD)) $((_LK_TTY_ERR_FD)) \
-            $((_LK_LOG_OUT_FD)) $((_LK_LOG_ERR_FD)) \
-            $((_LK_LOG_FD)) | sort -n | tail -n1) + 1))" \
-        "$0" "$@" --elevated
-    exit
-}
+lk_die() { s=$? && echo "$0: ${1-error $s}" >&2 && (exit $s) && false || exit; }
 
-set -eu
 SH=$(
-    lk_die() { echo "${BASH_SOURCE-$0}: $1" >&2 && false || exit; }
-    _FILE=$BASH_SOURCE && [ -f "$_FILE" ] && [ ! -L "$_FILE" ] ||
+    _file=$BASH_SOURCE && [[ -f $_file ]] && [[ ! -L $_file ]] ||
         lk_die "script must be invoked directly"
-    [[ $_FILE == */* ]] || _FILE=./$_FILE
-    _DIR=$(cd "${_FILE%/*}" && pwd -P) &&
-        printf 'export _LK_INST=%q\n' "${_DIR%/bin}" ||
+    [[ $_file == */* ]] || _file=./$_file
+    _dir=$(cd "${_file%/*}" && pwd -P) && _dir=${_dir%/bin} ||
         lk_die "base directory not found"
     # Override LK_* environment variables with the same name as settings in
     # $LK_BASE/etc/lk-platform/lk-platform.conf
-    vars() { printf '%s\n' "${!LK_@}"; }
-    unset IFS
-    VARS=$(vars)
-    unset $VARS
-    [ ! -r /etc/default/lk-platform ] ||
-        . /etc/default/lk-platform
-    [ ! -r "${_DIR%/bin}/etc/lk-platform/lk-platform.conf" ] ||
-        . "${_DIR%/bin}/etc/lk-platform/lk-platform.conf"
-    VARS=$(vars)
-    [ -z "${VARS:+1}" ] ||
-        declare -p $VARS
-) && eval "$SH" && . "$_LK_INST/lib/bash/common.sh" || exit
+    unset "${!LK_@}"
+    readonly _dir _conf=$_dir/etc/lk-platform/lk-platform.conf
+    for _file in /etc/default/lk-platform "$_conf"; do
+        [[ ! -r $_file ]] || . "$_file" || lk_die "error loading configuration"
+    done >&2
+    export LK_BASE=$_dir &&
+        declare -p "${!LK_@}" &&
+        printf 'CONF_FILE=%q\n' "$_conf"
+) && eval "$SH" || exit
+
+_LK_CONFIG_LOADED=1 \
+    . "$LK_BASE/lib/bash/common.sh"
 lk_require git provision
+
+lk_assert_root
 
 shopt -s nullglob
 
-CONF_FILE=$_LK_INST/etc/lk-platform/lk-platform.conf
-
+unset IS_ARCH IS_GIT_REPO
 DIR_MODE=0755
 FILE_MODE=0644
 PRIVILEGED_DIR_MODE=0700
-[ ! -g "$_LK_INST" ] || {
-    DIR_MODE=2775
-    FILE_MODE=0664
-    PRIVILEGED_DIR_MODE=2770
+
+lk_is_arch && IS_ARCH=
+[[ ! -d $LK_BASE/.git ]] || {
+    IS_GIT_REPO=
+    [[ ! -g $LK_BASE ]] || {
+        DIR_MODE=2775
+        FILE_MODE=0664
+        PRIVILEGED_DIR_MODE=2770
+    }
 }
 
 SETTINGS=(
@@ -121,24 +109,19 @@ LK_FILE_BACKUP_MOVE=1
 LK_VERBOSE=${LK_VERBOSE-1}
 
 NEW_SETTINGS=()
-unset ELEVATED NO_UPGRADE
+unset RENAME PREVIOUS_PREFIX
+NO_UPGRADE=1
 
-lk_getopt "s:" "elevated,set:,no-upgrade"
+lk_getopt "r::" "rename::,no-upgrade"
 eval "set -- $LK_GETOPT"
 
 while :; do
     OPT=$1
     shift
     case "$OPT" in
-    -s | --set)
-        [[ $1 =~ ^(LK_[a-zA-Z0-9_]*[a-zA-Z0-9])=(.*) ]] ||
-            lk_die "invalid argument: $1"
-        NEW_SETTINGS+=("${BASH_REMATCH[1]}")
-        eval "${BASH_REMATCH[1]}=\${BASH_REMATCH[2]}"
+    -r | --rename)
+        RENAME=${1:-lk-platform}
         shift
-        ;;
-    --elevated)
-        ELEVATED=1
         ;;
     --no-upgrade)
         NO_UPGRADE=1
@@ -156,47 +139,37 @@ lk_log_start
 {
     lk_tty_log "Configuring lk-platform"
 
-    if [[ ${_LK_INST##*/} =~ ^([a-zA-Z0-9]{2,3}-)platform$ ]] &&
-        [ "${BASH_REMATCH[1]}" != lk- ]; then
-        ORIGINAL_PATH_PREFIX=${BASH_REMATCH[1]}
-        OLD_LK_INST=$_LK_INST
-        _LK_INST=${_LK_INST%/*}/lk-platform
+    if [[ -n ${RENAME-} ]] &&
+        [[ ${LK_BASE##*/} != "$RENAME" ]] &&
+        [[ -n ${IS_GIT_REPO+1} ]]; then
+        [[ ! ${LK_BASE##*/} =~ (^[a-zA-Z0-9]{2,3}-)?platform ]] ||
+            PREVIOUS_PREFIX=${BASH_REMATCH[1]}
+        PREVIOUS_BASE=$LK_BASE
+        LK_BASE=${LK_BASE%/*}/$RENAME
         lk_tty_print "Renaming installation directory"
-        if [ -e "$_LK_INST" ] && [ ! -L "$_LK_INST" ]; then
-            BACKUP_DIR=$_LK_INST$(lk_file_get_backup_suffix)
-            [ ! -e "$BACKUP_DIR" ] || lk_die "$BACKUP_DIR already exists"
-            mv -fv "$_LK_INST" "$BACKUP_DIR"
-        fi
-        rm -fv "$_LK_INST"
-        mv -v "$OLD_LK_INST" "$_LK_INST"
-        lk_symlink lk-platform "$OLD_LK_INST"
+        [[ ! -e $LK_BASE ]] || [[ -L $LK_BASE ]] ||
+            lk_die "$LK_BASE already exists"
+        rm -fv "$LK_BASE"
+        mv -v "$PREVIOUS_BASE" "$LK_BASE"
+        ln -s "$RENAME" "$PREVIOUS_BASE"
     fi
 
     lk_tty_print "Checking environment"
-    LK_PATH_PREFIX=${LK_PATH_PREFIX:-${PATH_PREFIX:-${ORIGINAL_PATH_PREFIX-}}}
-    [ -n "$LK_PATH_PREFIX" ] || lk_no_input || {
-        lk_tty_detail "LK_PATH_PREFIX is not set"
-        lk_tty_detail \
-            "Value must be 2-3 alphanumeric characters followed by a hyphen"
-        lk_tty_detail "Default value:" "lk-"
-        while [[ ! $LK_PATH_PREFIX =~ ^[a-zA-Z0-9]{2,3}-$ ]]; do
-            [ -z "$LK_PATH_PREFIX" ] ||
-                lk_tty_error "Invalid LK_PATH_PREFIX:" "$LK_PATH_PREFIX"
-            lk_tty_read "Path prefix (required):" LK_PATH_PREFIX
-        done
-    }
-    [ -n "$LK_PATH_PREFIX" ] || lk_die "LK_PATH_PREFIX not set"
-    [ -z "${LK_BASE-}" ] ||
-        [ "$LK_BASE" = "$_LK_INST" ] ||
-        [ "$LK_BASE" = "${OLD_LK_INST-}" ] ||
-        [ ! -d "$LK_BASE" ] ||
-        {
-            lk_tty_print "Existing installation found at" "$LK_BASE"
-            lk_confirm "Reconfigure system?" Y || lk_die ""
-        }
-    export LK_BASE=$_LK_INST
+    LK_PATH_PREFIX=${LK_PATH_PREFIX:-${PREVIOUS_PREFIX-}}
+    [[ -n $LK_PATH_PREFIX ]] ||
+        if ! lk_no_input; then
+            lk_tty_detail "LK_PATH_PREFIX is not set"
+            lk_tty_detail \
+                "Value must be 2-3 alphanumeric characters followed by a hyphen"
+            while [[ ! $LK_PATH_PREFIX =~ ^[a-zA-Z0-9]{2,3}-$ ]]; do
+                [[ -z $LK_PATH_PREFIX ]] ||
+                    lk_tty_error "Invalid LK_PATH_PREFIX:" "$LK_PATH_PREFIX"
+                lk_tty_read "Path prefix:" LK_PATH_PREFIX lk-
+            done
+        else
+            lk_warn "LK_PATH_PREFIX not set, using 'lk-'" || LK_PATH_PREFIX=lk-
+        fi
 
-    lk_is_arch && _IS_ARCH=1 || _IS_ARCH=
     _BASHRC='[ -z "${BASH_VERSION-}" ] || [ ! -f ~/.bashrc ] || . ~/.bashrc'
     _BYOBU=
     _BYOBURC=
@@ -392,14 +365,14 @@ lk_log_start
         unset _LK_GIT_USER
         install -d -m 01777 "$LK_BASE/var/log"
         install -d -m 00750 "$LK_BASE/var/backup"
-        install -d -m "$PRIVILEGED_DIR_MODE" "$LK_BASE/var/run"{,/dirty}
+        install -d -m "$PRIVILEGED_DIR_MODE" "$LK_BASE/var/lib/lk-platform/dirty"
         LK_VERBOSE='' \
             lk_dir_set_modes "$LK_BASE" \
             "" \
             "+$DIR_MODE" "+$FILE_MODE" \
             '\./(etc|var)/' \
             "$DIR_MODE" "" \
-            '\./(etc(/lk-platform)?/sites|var/run(/dirty)?)/' \
+            '\./(etc(/lk-platform)?/sites|var/(run|lib/lk-platform)/(dirty|sites))/' \
             "$PRIVILEGED_DIR_MODE" "" \
             '\./var/(log|backup)/' \
             "" "" \
@@ -411,19 +384,15 @@ lk_log_start
     lk_tty_print "Checking symbolic links"
     lk_symlink_bin "$LK_BASE/bin/lk-bash-load.sh"
 
-    if lk_is_true ELEVATED; then
-        _LK_HOMES=(${SUDO_USER:+"$(lk_expand_path "~$SUDO_USER")"})
-    else
-        # If invoked by root, include all standard home directories
-        lk_mapfile _LK_HOMES <(comm -12 \
-            <(lk_echo_args /home/* /srv/www/* /Users/* ~root |
-                lk_filter 'test -d' | sort -u) \
-            <(if ! lk_is_macos; then
-                getent passwd | cut -d: -f6
-            else
-                dscl . list /Users NFSHomeDirectory | awk '{print $2}'
-            fi | sort -u))
-    fi
+    # Include all standard home directories
+    lk_mapfile _LK_HOMES <(comm -12 \
+        <(lk_echo_args /home/* /srv/www/* /Users/* ~root |
+            lk_filter 'test -d' | sort -u) \
+        <(if ! lk_is_macos; then
+            getent passwd | cut -d: -f6
+        else
+            dscl . list /Users NFSHomeDirectory | awk '{print $2}'
+        fi | sort -u))
     _LK_HOMES+=(/etc/skel{,".${LK_PATH_PREFIX%-}"})
     lk_remove_missing _LK_HOMES
     lk_resolve_files _LK_HOMES
@@ -539,7 +508,7 @@ lk_log_start
                 'BYOBU_TIME="%H:%M:%S%z"'
             # Turn off UTF-8 support
             replace_byobu "$DIR/statusrc" \
-                ${_IS_ARCH:+'[ ! -f "/etc/arch-release" ] || RELEASE_ABBREVIATED=1'} \
+                ${IS_ARCH+'[ ! -f "/etc/arch-release" ] || RELEASE_ABBREVIATED=1'} \
                 "BYOBU_CHARMAP=x"
             # Use Ctrl+A to go to beginning of line
             replace_byobu "$DIR/keybindings.tmux" \

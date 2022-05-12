@@ -62,7 +62,7 @@ function _lk_hosting_is_quiet() {
 
 function _lk_hosting_check() {
     lk_is_ubuntu &&
-        lk_dirs_exist /srv/www/{.tmp,.opcache} ||
+        lk_dirs_exist /srv/{www/.tmp,backup/{archive,latest,snapshot}} ||
         lk_warn "system not configured for hosting"
 }
 
@@ -89,6 +89,7 @@ function _lk_hosting_site_list_known_settings() {
         SITE_PHP_FPM_POOL \
         SITE_PHP_FPM_USER \
         SITE_PHP_FPM_MAX_CHILDREN \
+        SITE_PHP_FPM_MEMORY_LIMIT \
         SITE_PHP_FPM_MAX_REQUESTS \
         SITE_PHP_FPM_TIMEOUT \
         SITE_PHP_FPM_OPCACHE_SIZE \
@@ -114,24 +115,24 @@ function _lk_hosting_site_assign_file() {
         "$LK_BASE/etc/sites/$1.conf") || _SITE_FILE=$DEFAULT_FILE
 }
 
-# _lk_hosting_site_settings_sh DOMAIN
+# _lk_hosting_site_assign_settings DOMAIN
 #
-# Print Bash variable assignments for _SITE_DOMAIN, _SITE_FILE, and each SITE_*
-# setting for DOMAIN.
+# In the caller's scope, assign values for the given DOMAIN to _SITE_DOMAIN,
+# _SITE_FILE, and every known or configured SITE_* variable.
 #
-# Output from this function should be evaluated before calling other
+# This function should be called in a subshell before calling other
 # site-specific _lk_hosting_* functions.
-function _lk_hosting_site_settings_sh() { (
+function _lk_hosting_site_assign_settings() { local SH && SH=$(
     unset "${!SITE_@}"
     _SITE_DOMAIN=${1,,}
     _lk_hosting_site_assign_file "$_SITE_DOMAIN"
     readonly _SITE_DOMAIN _SITE_FILE
     [ ! -e "$_SITE_FILE" ] ||
-        . "$_SITE_FILE" || return
-    _LK_STACK_DEPTH=1 lk_var_sh_q -a _SITE_DOMAIN _SITE_FILE \
+        . "$_SITE_FILE" >&2 || return
+    _LK_STACK_DEPTH=-1 lk_var_sh_q -a _SITE_DOMAIN _SITE_FILE \
         $({ _lk_hosting_site_list_known_settings &&
             printf '%s\n' "${!SITE_@}"; } | sort -u)
-); }
+) && eval "$SH"; }
 
 # _lk_hosting_site_check_root
 #
@@ -168,7 +169,7 @@ function _lk_hosting_site_check_root() {
 #
 # These values should not be saved in site config files.
 function _lk_hosting_site_assign_defaults() {
-    _SITE_ORDER=0
+    _SITE_ORDER=-1
     _SITE_PHP_FPM_POOL=$_SITE_USER
     if lk_user_in_group adm "$_SITE_USER"; then
         _SITE_PHP_FPM_USER=www-data
@@ -176,6 +177,7 @@ function _lk_hosting_site_assign_defaults() {
         _SITE_PHP_FPM_USER=$_SITE_USER
     fi
     _SITE_PHP_FPM_MAX_CHILDREN=${LK_SITE_PHP_FPM_MAX_CHILDREN:-30}
+    _SITE_PHP_FPM_MEMORY_LIMIT=${LK_SITE_PHP_FPM_MEMORY_LIMIT:-80}
     _SITE_PHP_FPM_MAX_REQUESTS=${LK_SITE_PHP_FPM_MAX_REQUESTS:-10000}
     _SITE_PHP_FPM_TIMEOUT=${LK_SITE_PHP_FPM_TIMEOUT:-300}
     _SITE_PHP_FPM_OPCACHE_SIZE=${LK_OPCACHE_MEMORY_CONSUMPTION:-128}
@@ -213,6 +215,13 @@ function _lk_hosting_site_load_settings() {
     SITE_PHP_FPM_USER=${SITE_PHP_FPM_USER:-$_SITE_PHP_FPM_USER}
     lk_var_to_int SITE_PHP_FPM_MAX_CHILDREN "$_SITE_PHP_FPM_MAX_CHILDREN"
     ((SITE_PHP_FPM_MAX_CHILDREN > 0)) || SITE_PHP_FPM_MAX_CHILDREN=1
+    if [[ -z $SITE_PHP_FPM_MEMORY_LIMIT ]] &&
+        [[ "$SITE_PHP_FPM_SETTINGS,$SITE_PHP_FPM_ADMIN_SETTINGS" =~ .*(,|^)memory_limit=(-1|([0-9]+)[mM])(,|$) ]]; then
+        SITE_PHP_FPM_MEMORY_LIMIT=${BASH_REMATCH[3]:-${BASH_REMATCH[2]}}
+    fi
+    lk_var_to_int SITE_PHP_FPM_MEMORY_LIMIT "$_SITE_PHP_FPM_MEMORY_LIMIT"
+    ((SITE_PHP_FPM_MEMORY_LIMIT > 0 || SITE_PHP_FPM_MEMORY_LIMIT == -1)) ||
+        SITE_PHP_FPM_MEMORY_LIMIT=8
     lk_var_to_int SITE_PHP_FPM_MAX_REQUESTS "$_SITE_PHP_FPM_MAX_REQUESTS"
     ((SITE_PHP_FPM_MAX_REQUESTS >= 0)) || SITE_PHP_FPM_MAX_REQUESTS=0
     lk_var_to_int SITE_PHP_FPM_TIMEOUT "$_SITE_PHP_FPM_TIMEOUT"
@@ -241,13 +250,15 @@ function _lk_hosting_site_load_dynamic_settings() {
   ( .[].domain, if length > 0 then ([ .[].sort_order ] | max) + 1
                 else empty end )' <"$_SITE_LIST")) || return
     _SITE_ROOT_IS_SHARED=N
-    [ -z "${SAME_ROOT+1}" ] || {
+    if [[ -n ${SAME_ROOT+1} ]]; then
         _SITE_ROOT_IS_SHARED=Y
         lk_tty_detail "Other sites with the same site root:" \
             $'\n'"$(printf '%s\n' "${SAME_ROOT[@]:0:${#SAME_ROOT[@]}-1}")" \
             "$LK_BOLD$LK_MAGENTA"
-        ((SITE_ORDER > 0)) || SITE_ORDER=${SAME_ROOT[${#SAME_ROOT[@]} - 1]}
-    }
+        ((SITE_ORDER > -1)) || SITE_ORDER=${SAME_ROOT[${#SAME_ROOT[@]} - 1]}
+    else
+        ((SITE_ORDER > -1)) || SITE_ORDER=0
+    fi
     SAME_DOMAIN=($(comm -12 \
         <({ echo "$_SITE_DOMAIN" &&
             { [[ $SITE_DISABLE_WWW == Y ]] || echo "www.$_SITE_DOMAIN"; } &&
@@ -314,8 +325,51 @@ function _lk_hosting_site_write_settings() {
         LK_VERBOSE= LK_FILE_BACKUP_TAKE= \
             lk_file_replace "$USER_FILE" < <(sed -E "1i\\
 ## $_SITE_DOMAIN
-s/^([^=]+_(PASSWORD|CREDENTIALS?))=.+/#\\1=<suppressed>/i; t
+s/^#?([^#=]+_(PASSWORD|CREDENTIALS?))=.+/#\\1=<hidden>/i; t
 s/^#//" "$FILE")
+}
+
+# _lk_hosting_site_cache_settings [-s]
+#
+# Cache the current values of every SITE_* and _SITE_* variable in the caller's
+# scope.
+function _lk_hosting_site_cache_settings() {
+    local STATIC
+    [[ ${1-} != -s ]] || { STATIC=1 && shift; }
+    local FILE=$LK_BASE/var/lib/lk-platform/sites/$_SITE_DOMAIN.conf${STATIC:+.static}
+    [[ -w ${FILE%/*} ]] || return 0
+    lk_install -m 00660 -g adm "$FILE" &&
+        LK_VERBOSE= LK_FILE_BACKUP_TAKE= \
+            lk_file_replace "$FILE" \
+            < <(_LK_STACK_DEPTH=-1 \
+                lk_var_sh_q "${!SITE_@}" "${!_SITE_@}")
+}
+
+# _lk_hosting_site_assign_cached_settings [-s] DOMAIN
+#
+# Assign values previously cached for DOMAIN to variables in the caller's scope,
+# or load DOMAIN's configuration and cache it before returning.
+#
+# If -s is set and no values have been cached, skip dynamic settings when
+# loading DOMAIN's configuration.
+function _lk_hosting_site_assign_cached_settings() {
+    local STATIC
+    [[ ${1-} != -s ]] || { STATIC=1 && shift; }
+    local FILE=$LK_BASE/var/lib/lk-platform/sites/${1,,}.conf \
+        MAIN_FILE=$LK_BASE/etc/lk-platform/sites/${1,,}.conf
+    [[ -f $MAIN_FILE ]] ||
+        lk_warn "no site configured for domain: ${1,,}" || return
+    [[ -f $FILE ]] || FILE+=${STATIC:+.static}
+    [[ -f $FILE ]] && [[ ! $FILE -ot $MAIN_FILE ]] || {
+        _lk_hosting_site_assign_settings "$1" &&
+            _lk_hosting_site_check_root &&
+            _lk_hosting_site_load_settings || return
+        [[ -n ${STATIC-} ]] ||
+            _lk_hosting_site_load_dynamic_settings || return
+        _lk_hosting_site_cache_settings ${STATIC:+-s}
+        return
+    }
+    . "$FILE"
 }
 
 function _lk_hosting_site_json() {
@@ -348,6 +402,7 @@ function _lk_hosting_site_json() {
     "pool":                 ($sitePhpFpmPool),
     "user":                 ($sitePhpFpmUser),
     "max_children":         ($sitePhpFpmMaxChildren     | to_number),
+    "memory_limit":         ($sitePhpFpmMemoryLimit     | to_number),
     "max_requests":         ($sitePhpFpmMaxRequests     | to_number),
     "timeout":              ($sitePhpFpmTimeout         | to_number),
     "opcache_size":         ($sitePhpFpmOpcacheSize     | to_number),
@@ -385,6 +440,7 @@ EOF
         SITE_PHP_FPM_ADMIN_SETTINGS \
         SITE_PHP_FPM_ENV \
         SITE_PHP_FPM_MAX_CHILDREN \
+        SITE_PHP_FPM_MEMORY_LIMIT \
         SITE_PHP_FPM_MAX_REQUESTS \
         SITE_PHP_FPM_OPCACHE_SIZE \
         SITE_PHP_FPM_POOL \
@@ -449,9 +505,7 @@ function _lk_hosting_list_sites() { (
     unset IFS
     for DOMAIN in $(_lk_hosting_list_domains); do
         unset "${!SITE_@}" "${!_SITE_@}"
-        SH=$(_lk_hosting_site_settings_sh "$DOMAIN") && eval "$SH" &&
-            _lk_hosting_site_check_root &&
-            _lk_hosting_site_load_settings ||
+        _lk_hosting_site_assign_cached_settings "$DOMAIN" ||
             lk_warn "unable to load settings: $DOMAIN" || return
         ((!ENABLED_ONLY)) || [[ $SITE_ENABLE == Y ]] || continue
         if ((!JSON)); then
@@ -877,7 +931,7 @@ Options:
     lk_is_fqdn "$1" || lk_usage -e "invalid domain: $1" || return
     _lk_hosting_check || return
     unset IFS "${!SITE_@}" "${!_SITE_@}"
-    SH=$(_lk_hosting_site_settings_sh "${1#www.}") && eval "$SH" || return
+    _lk_hosting_site_assign_settings "${1#www.}" || return
     if [ -z "${2-}" ]; then
         [ -f "$_SITE_FILE" ] ||
             lk_warn "file not found: $_SITE_FILE" || return
@@ -903,7 +957,7 @@ function lk_hosting_site_provision() { (
     [ -n "${1-}" ] || lk_warn "invalid arguments" || return
     _lk_hosting_check || return
     unset "${!SITE_@}" "${!_SITE_@}"
-    SH=$(_lk_hosting_site_settings_sh "$1") && eval "$SH" || return
+    _lk_hosting_site_assign_settings "$1" || return
     [ -f "$_SITE_FILE" ] || [ -n "${2-}" ] ||
         lk_warn "file not found: $_SITE_FILE" || return
     SITE_ROOT=${SITE_ROOT:-${2-}}
@@ -998,7 +1052,8 @@ function _lk_hosting_site_provision() {
         [ -n "${SSL_FILES[2]:+1}" ] ||
             SITE_SSL_CHAIN_FILE=
     }
-    _lk_hosting_site_write_settings || return
+    _lk_hosting_site_write_settings &&
+        _lk_hosting_site_cache_settings || return
     ! lk_is_true SITE_ENABLE_STAGING ||
         APACHE+=(Use Staging)
     [[ -z $SITE_DOWNSTREAM_FROM ]] || {
@@ -1028,10 +1083,8 @@ function _lk_hosting_site_provision() {
             -v "v=$SITE_PHP_VERSION" \
             -v "p=$SITE_PHP_FPM_POOL" \
             '$12 == v && $7 == p && !f {f = 1; if ($1 == d) s = 1} END {exit 1 - s}' || (
-        lk_install -d -m 02750 -o "$SITE_PHP_FPM_USER" -g "$_SITE_GROUP" \
-            "/srv/www/.opcache/$SITE_PHP_VERSION/$SITE_PHP_FPM_POOL" &&
-            lk_install -d -m 02770 -o "$SITE_PHP_FPM_USER" -g "$_SITE_GROUP" \
-                "/srv/www/.tmp/$SITE_PHP_VERSION/$SITE_PHP_FPM_POOL" &&
+        lk_install -d -m 02770 -o "$SITE_PHP_FPM_USER" -g "$_SITE_GROUP" \
+            "/srv/www/.tmp/$SITE_PHP_VERSION/$SITE_PHP_FPM_POOL" &&
             lk_install -m 00640 -o root -g "$_SITE_GROUP" \
                 "$LOG_DIR/php$SITE_PHP_VERSION-fpm.access.log" &&
             lk_install -m 00640 -o "$SITE_PHP_FPM_USER" -g "$_SITE_GROUP" \
@@ -1043,6 +1096,8 @@ function _lk_hosting_site_provision() {
             # The numeric form of the error_reporting value below is 4597
             _lk_hosting_php_get_settings php_admin_ \
                 opcache.memory_consumption="$SITE_PHP_FPM_OPCACHE_SIZE" \
+                opcache.file_cache= \
+                memory_limit="${SITE_PHP_FPM_MEMORY_LIMIT}M" \
                 error_log="$LOG_DIR/php$SITE_PHP_VERSION-fpm.error.log" \
                 ${LK_PHP_ADMIN_SETTINGS-} \
                 ${SITE_PHP_FPM_ADMIN_SETTINGS-} \
@@ -1051,11 +1106,11 @@ function _lk_hosting_site_provision() {
                 opcache.max_accelerated_files=20000 \
                 opcache.validate_timestamps=On \
                 opcache.revalidate_freq=0 \
-                opcache.file_cache="/srv/www/.opcache/$SITE_PHP_VERSION/\$pool" \
+                opcache.enable_file_override=On \
+                opcache.log_verbosity_level=2 \
                 error_reporting="E_ALL & ~E_WARNING & ~E_NOTICE & ~E_USER_WARNING & ~E_USER_NOTICE & ~E_STRICT & ~E_DEPRECATED & ~E_USER_DEPRECATED" \
                 disable_functions="error_reporting" \
-                log_errors=On \
-                memory_limit=80M
+                log_errors=On
             _lk_hosting_php_get_settings php_ \
                 ${LK_PHP_SETTINGS-} \
                 ${SITE_PHP_FPM_SETTINGS-} \
