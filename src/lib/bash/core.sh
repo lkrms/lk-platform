@@ -327,14 +327,6 @@ function _lk_array_fill_temp() {
     done
 }
 
-# lk_echo_args [-z] [ARG...]
-function lk_echo_args() {
-    local DELIM=${LK_Z:+'\0'}
-    [ "${1-}" != -z ] || { DELIM='\0' && shift; }
-    [ $# -eq 0 ] ||
-        printf "%s${DELIM:-\\n}" "$@"
-}
-
 # lk_array_merge NEW_ARRAY [ARRAY...]
 function lk_array_merge() {
     [ $# -ge 2 ] || return

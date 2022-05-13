@@ -1063,6 +1063,13 @@ function lk_arr() {
     [ -z "${_SH:+1}" ] || eval "$_CMD$_SH"
 }
 
+# lk_args [-COMMAND|--] [ARG...]
+function lk_args() {
+    local _CMD="printf '%s\n'"
+    [[ ${1-} != -* ]] || { { [[ $1 == -- ]] || _CMD=${1#-}; } && shift; }
+    ((!$#)) || eval "$_CMD \"\$@\""
+}
+
 # lk_in_array VALUE ARRAY...
 function lk_in_array() {
     local IFS=$' \t\n'
@@ -2557,6 +2564,7 @@ function lk_curl_get_form_args() {
 }
 
 lk_confirm() { lk_tty_yn "$@"; }
+lk_echo_args() { lk_args "$@"; }
 lk_echo_array() { lk_arr "$@"; }
 lk_escape_ere_replace() { lk_sed_escape_replace "$@"; }
 lk_escape_ere() { lk_sed_escape "$@"; }
@@ -2894,14 +2902,6 @@ function _lk_array_fill_temp() {
         _LK_TEMP_ARRAY+=(${!_LK_ARRAY+"${!_LK_ARRAY}"})
         shift
     done
-}
-
-# lk_echo_args [-z] [ARG...]
-function lk_echo_args() {
-    local DELIM=${LK_Z:+'\0'}
-    [ "${1-}" != -z ] || { DELIM='\0' && shift; }
-    [ $# -eq 0 ] ||
-        printf "%s${DELIM:-\\n}" "$@"
 }
 
 # lk_array_merge NEW_ARRAY [ARRAY...]

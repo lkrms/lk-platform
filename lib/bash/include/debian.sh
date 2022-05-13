@@ -2,28 +2,25 @@
 
 # lk_dpkg_installed PACKAGE...
 #
-# Return true if each PACKAGE is installed.
+# Return true if every PACKAGE is installed.
 function lk_dpkg_installed() {
-    local STATUS
-    [ $# -gt 0 ] || lk_warn "no package" || return
-    STATUS=$(dpkg-query \
-        --show --showformat '${db:Status-Status}\n' "$@" 2>/dev/null |
+    local ARGS COUNT
+    ARGS=$(lk_args "$@" | sort -u) && set -- $ARGS || return
+    (($#)) || lk_warn "no package" || return
+    COUNT=$(dpkg-query --show \
+        --showformat '${db:Status-Status}\n' \
+        "$@" 2>/dev/null |
         grep -Fx --count "installed") &&
-        [ "$STATUS" -eq $# ]
+        ((COUNT == $#))
 }
 
 # lk_dpkg_installed_list [PACKAGE...]
 #
 # Output each currently installed PACKAGE, or list all installed packages.
 function lk_dpkg_installed_list() {
-    [ $# -eq 0 ] || {
-        comm -12 \
-            <(lk_dpkg_installed_list | sort -u) \
-            <(lk_echo_args "$@" | sort -u)
-        return
-    }
-    dpkg-query --show --showformat \
-        '${db:Status-Status}\t${binary:Package}\n' |
+    { dpkg-query --show \
+        --showformat '${db:Status-Status}\t${binary:Package}\n' \
+        "$@" 2>/dev/null || (($? == 1)); } |
         awk '$1 == "installed" { print $2 }'
 }
 
@@ -31,10 +28,10 @@ function lk_dpkg_installed_list() {
 #
 # Output each PACKAGE that isn't currently installed.
 function lk_dpkg_not_installed_list() {
-    [ $# -gt 0 ] || lk_warn "no package" || return
+    (($#)) || lk_warn "no package" || return
     comm -13 \
         <(lk_dpkg_installed_list "$@" | sort -u) \
-        <(lk_echo_args "$@" | sort -u)
+        <(lk_args "$@" | sort -u)
 }
 
 # lk_dpkg_installed_versions [PACKAGE...]
@@ -75,14 +72,28 @@ function lk_apt_marked_manual_list() {
     apt-mark showmanual "$@"
 }
 
+# lk_apt_marked_auto_list [PACKAGE...]
+#
+# Output each PACKAGE currently marked as "automatically installed", or list all
+# automatically installed packages.
+function lk_apt_marked_auto_list() {
+    apt-mark showauto "$@"
+}
+
+# lk_apt_mark (auto|manual) PACKAGE...
+function lk_apt_mark() {
+    (($# > 1)) || lk_warn "no package" || return
+    _lk_apt_flock apt-mark "$@"
+}
+
 # lk_apt_not_marked_manual_list PACKAGE...
 #
 # Output each PACKAGE that isn't currently marked as "manually installed".
 function lk_apt_not_marked_manual_list() {
-    [ $# -gt 0 ] || lk_warn "no package" || return
+    (($#)) || lk_warn "no package" || return
     comm -13 \
         <(lk_apt_marked_manual_list "$@" | sort -u) \
-        <(lk_echo_args "$@" | sort -u)
+        <(lk_args "$@" | sort -u)
 }
 
 # lk_apt_update
@@ -100,10 +111,10 @@ function lk_apt_update() {
 #
 # Output each PACKAGE that doesn't appear in APT's package index.
 function lk_apt_unavailable_list() {
-    [ $# -gt 0 ] || lk_warn "no package" || return
+    (($#)) || lk_warn "no package" || return
     comm -13 \
         <(lk_apt_available_list | sort -u) \
-        <(lk_echo_args "$@" | sort -u)
+        <(lk_args "$@" | sort -u)
 }
 
 # lk_apt_installed PACKAGE...
@@ -111,7 +122,7 @@ function lk_apt_unavailable_list() {
 # Return true if each PACKAGE is marked as "manually installed".
 function lk_apt_installed() {
     local NOT_INSTALLED
-    [ $# -gt 0 ] || lk_warn "no package" || return
+    (($#)) || lk_warn "no package" || return
     NOT_INSTALLED=$(lk_apt_not_marked_manual_list "$@" | wc -l) &&
         [ "$NOT_INSTALLED" -eq 0 ]
 }
@@ -120,15 +131,23 @@ function lk_apt_installed() {
 #
 # Install each PACKAGE.
 function lk_apt_install() {
-    local INSTALL
-    [ $# -gt 0 ] || lk_warn "no package" || return
-    INSTALL=($(lk_apt_not_marked_manual_list "$@")) || return
-    [ ${#INSTALL[@]} -eq 0 ] || {
-        lk_tty_list INSTALL "Installing:" "APT package" "APT packages"
-        lk_apt_update &&
-            _lk_apt_flock apt-get -yq \
+    local INSTALL REMOVE MARK
+    (($#)) || lk_warn "no package" || return
+    INSTALL=($(lk_args "$@" | sed -E '/-$/d'))
+    REMOVE=($(lk_args "$@" | sed -En '/-$/p'))
+    [[ -z ${INSTALL+1} ]] || {
+        MARK=($(lk_apt_marked_auto_list "${INSTALL[@]}")) &&
+            INSTALL=($(lk_dpkg_not_installed_list "${INSTALL[@]}")) || return
+    }
+    [[ -z ${MARK+1}${INSTALL+1}${REMOVE+1} ]] || {
+        lk_arr MARK INSTALL REMOVE | lk_tty_list - \
+            "Installing${REMOVE+/removing}:" "APT package" "APT packages"
+        [[ -z ${MARK+1} ]] ||
+            lk_apt_mark manual "${MARK[@]}" || return
+        [[ -z ${INSTALL+1}${REMOVE+1} ]] ||
+            { lk_apt_update && _lk_apt_flock apt-get -yq \
                 --no-install-recommends --no-install-suggests \
-                install "${INSTALL[@]}"
+                install ${INSTALL+"${INSTALL[@]}"} ${REMOVE+"${REMOVE[@]}"}; }
     }
 }
 
@@ -137,7 +156,7 @@ function lk_apt_install() {
 # Remove each installed PACKAGE and any unused dependencies.
 function lk_apt_remove() {
     local REMOVE
-    [ $# -gt 0 ] || lk_warn "no package" || return
+    (($#)) || lk_warn "no package" || return
     REMOVE=($(lk_dpkg_installed_list "$@")) || return
     [ ${#REMOVE[@]} -eq 0 ] || {
         lk_tty_list REMOVE "${_LK_APT_REMOVE_MESSAGE:-Removing}:" \

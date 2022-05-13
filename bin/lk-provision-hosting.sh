@@ -275,6 +275,10 @@ IPTABLES_UDP_LISTEN=()
 CURL_OPTIONS=(-fsSLH "Cache-Control: no-cache" -H "Pragma: no-cache" --retry 2)
 
 APT_REPOS=()
+APT_UNMARK=(
+    # Installed by previous versions of lk-platform
+    software-properties-common
+)
 APT_REMOVE=(
     # Recommended by ubuntu-minimal
     rsyslog
@@ -287,9 +291,6 @@ APT_REMOVE=(
     lxd
     lxd-agent-loader
     snapd
-
-    # Installed by previous versions of lk-platform
-    software-properties-common
 )
 [ -n "$LK_UPGRADE_EMAIL" ] ||
     APT_REMOVE+=(
@@ -640,6 +641,12 @@ EOF
     APT_PACKAGES=($(lk_arr APT_PACKAGES | lk_safe_grep -Fxf "$APT_AVAILABLE"))
     [ ${#APT_MISSING[@]} -eq 0 ] ||
         lk_tty_warning "Unavailable for installation:" "${APT_MISSING[*]}"
+
+    if [[ ${#APT_UNMARK[@]} -gt 0 ]]; then
+        APT_UNMARK=($(lk_apt_marked_manual_list "${APT_UNMARK[@]}"))
+        [[ ${#APT_UNMARK[@]} -eq 0 ]] ||
+            lk_apt_mark auto "${APT_UNMARK[@]}"
+    fi
 
     if [[ ${#APT_PACKAGES[@]} -eq 0 ]]; then
         APT_REMOVE+=(${APT_REMOVE_NOW+"${APT_REMOVE_NOW[@]}"})
