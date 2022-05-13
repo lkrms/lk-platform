@@ -80,6 +80,12 @@ function lk_apt_marked_auto_list() {
     apt-mark showauto "$@"
 }
 
+# lk_apt_mark (auto|manual) PACKAGE...
+function lk_apt_mark() {
+    (($# > 1)) || lk_warn "no package" || return
+    _lk_apt_flock apt-mark "$@"
+}
+
 # lk_apt_not_marked_manual_list PACKAGE...
 #
 # Output each PACKAGE that isn't currently marked as "manually installed".
@@ -137,7 +143,7 @@ function lk_apt_install() {
         lk_arr MARK INSTALL REMOVE | lk_tty_list - \
             "Installing${REMOVE+/removing}:" "APT package" "APT packages"
         [[ -z ${MARK+1} ]] ||
-            _lk_apt_flock apt-mark manual "${MARK[@]}" || return
+            lk_apt_mark manual "${MARK[@]}" || return
         [[ -z ${INSTALL+1}${REMOVE+1} ]] ||
             { lk_apt_update && _lk_apt_flock apt-get -yq \
                 --no-install-recommends --no-install-suggests \

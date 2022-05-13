@@ -67,7 +67,6 @@ APT_PACKAGES=(
     rsync
     s3cmd
     sed
-    software-properties-common
     sqlite3
     sudo
     tar
