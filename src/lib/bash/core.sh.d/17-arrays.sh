@@ -13,6 +13,13 @@ function lk_arr() {
     [ -z "${_SH:+1}" ] || eval "$_CMD$_SH"
 }
 
+# lk_args [-COMMAND|--] [ARG...]
+function lk_args() {
+    local _CMD="printf '%s\n'"
+    [[ ${1-} != -* ]] || { { [[ $1 == -- ]] || _CMD=${1#-}; } && shift; }
+    ((!$#)) || eval "$_CMD \"\$@\""
+}
+
 # lk_in_array VALUE ARRAY...
 function lk_in_array() {
     local IFS=$' \t\n'
