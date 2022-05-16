@@ -25,6 +25,7 @@ REQUIRED_COMMANDS=(
     dd
     df
     diff
+    du
     find
     getopt
     grep
@@ -57,6 +58,8 @@ COMMANDS=(
     sort
     stat
     tar
+    timeout
+    uniq
     xargs
 )
 

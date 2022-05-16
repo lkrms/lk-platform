@@ -74,7 +74,7 @@ function lk_configure_locales() {
     unset IFS
     lk_is_linux || lk_warn "platform not supported" || return
     LOCALES=(${LK_NODE_LOCALES-} en_US.UTF-8)
-    _LOCALES=$(lk_echo_array LOCALES |
+    _LOCALES=$(lk_arr LOCALES |
         lk_escape_ere |
         lk_implode_input "|")
     [ ${#LOCALES[@]} -lt 2 ] || _LOCALES="($_LOCALES)"
@@ -595,42 +595,6 @@ function lk_node_public_ipv6() {
     } | sort -u
 }
 
-function lk_host_ns_resolve() {
-    local IFS NAMESERVER IP CNAME _LK_DNS_SERVER _LK_DIG_OPTIONS \
-        _LK_CNAME_DEPTH=${_LK_CNAME_DEPTH:-0}
-    unset IFS
-    [ "$_LK_CNAME_DEPTH" -lt 7 ] || lk_warn "too much recursion" || return
-    ((++_LK_CNAME_DEPTH))
-    NAMESERVER=$(lk_dns_soa "$1" |
-        awk 'NR == 1 {sub("\\.$", "", $2); print $2}') || return
-    _LK_DNS_SERVER=$NAMESERVER
-    _LK_DIG_OPTIONS=(+norecurse)
-    ! lk_verbose 2 || {
-        lk_tty_detail "Using name server:" "$NAMESERVER"
-        lk_tty_detail "Looking up A and AAAA records for:" "$1"
-    }
-    IP=($(lk_dns_get_records +VALUE -A,AAAA "$1")) || return
-    if [ ${#IP[@]} -eq 0 ]; then
-        ! lk_verbose 2 || {
-            lk_tty_detail "No A or AAAA records returned"
-            lk_tty_detail "Looking up CNAME record for:" "$1"
-        }
-        CNAME=($(lk_dns_get_records +VALUE -CNAME "$1")) || return
-        if [ ${#CNAME[@]} -eq 1 ]; then
-            ! lk_verbose 2 ||
-                lk_tty_detail "CNAME value from $NAMESERVER for $1:" \
-                    "${CNAME[0]}"
-            lk_host_ns_resolve "${CNAME[0]%.}" || return
-            return
-        fi
-    fi
-    [ ${#IP[@]} -gt 0 ] || lk_warn "could not resolve $1: $NAMESERVER" || return
-    ! lk_verbose 2 ||
-        lk_tty_detail "A and AAAA values from $NAMESERVER for $1:" \
-            "$(lk_echo_array IP)"
-    lk_echo_array IP
-} #### Reviewed: 2021-03-30
-
 # lk_node_is_host DOMAIN
 #
 # Return true if at least one public IP address matches an authoritative A or
@@ -643,12 +607,12 @@ function lk_node_is_host() {
     NODE_IP=($(lk_node_public_ipv4 && lk_node_public_ipv6)) &&
         [ ${#NODE_IP} -gt 0 ] ||
         lk_warn "public IP address not found" || return
-    HOST_IP=($(lk_host_ns_resolve "$1")) ||
+    HOST_IP=($(lk_dns_resolve_name_from_ns "$1")) ||
         lk_warn "unable to retrieve authoritative DNS records for $1" || return
     lk_require_output -q comm -12 \
-        <(lk_echo_array HOST_IP | sort -u) \
-        <(lk_echo_array NODE_IP | sort -u)
-} #### Reviewed: 2021-03-30
+        <(lk_arr HOST_IP | sort -u) \
+        <(lk_arr NODE_IP | sort -u)
+}
 
 if lk_is_macos; then
     function lk_tcp_listening_ports() {

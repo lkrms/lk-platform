@@ -480,6 +480,7 @@ if ! lk_is_macos; then
     function gnu_sort() { lk_sudo sort "$@"; }
     function gnu_stat() { lk_sudo stat "$@"; }
     function gnu_tar() { lk_sudo tar "$@"; }
+    function gnu_timeout() { lk_sudo timeout "$@"; }
     function gnu_uniq() { lk_sudo uniq "$@"; }
     function gnu_xargs() { lk_sudo xargs "$@"; }
 else
@@ -507,6 +508,7 @@ else
     function gnu_sort() { lk_sudo gsort "$@"; }
     function gnu_stat() { lk_sudo gstat "$@"; }
     function gnu_tar() { lk_sudo gtar "$@"; }
+    function gnu_timeout() { lk_sudo gtimeout "$@"; }
     function gnu_uniq() { lk_sudo guniq "$@"; }
     function gnu_xargs() { lk_sudo gxargs "$@"; }
 fi
