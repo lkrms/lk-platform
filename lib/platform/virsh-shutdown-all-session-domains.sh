@@ -19,9 +19,9 @@ lk_assert_root
 
 IFS=$'\n'
 SESSION_USERS=($(pgrep -x libvirtd |
-    xargs ps -o user= |
+    xargs -r ps -o user= -p |
     sort -u |
-    sed '/^root$/d'))
+    sed '/^root$/d')) || lk_die ""
 
 STATUS=0
 i=0

@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+. "$LK_BASE/lib/bash/common.sh"
+
 if [ -f "$AUTORANDR_PROFILE_FOLDER/dpi" ] &&
     DPI="$(cat "$AUTORANDR_PROFILE_FOLDER/dpi")" &&
     [[ $DPI =~ ^[0-9]+$ ]]; then
@@ -11,6 +13,10 @@ if [ -f "$AUTORANDR_PROFILE_FOLDER/dpi" ] &&
     case "${XDG_CURRENT_DESKTOP-}" in
     XFCE)
         "$LK_BASE/bin/lk-xfce4-apply-dpi.sh" "$DPI"
+        sleep 1
+        ! RUNNING=$(pgrep -xu "$USER" xfce4-panel | tail -n1 |
+            lk_ps_running_seconds) ||
+            ((RUNNING < 10)) || lk_tty_run xfce4-panel -r || true
         ;;&
     *)
         echo "Xft.dpi: $DPI" | xrdb -merge

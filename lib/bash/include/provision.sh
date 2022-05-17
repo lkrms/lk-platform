@@ -458,70 +458,120 @@ function lk_node_is_router() {
         lk_node_service_enabled router
 }
 
-# lk_dns_get_records [+FIELD[,FIELD...]] [-TYPE[,TYPE...]] NAME...
+# lk_dns_get_records [-TYPE[,TYPE...]] [+FIELD[,FIELD...]] NAME...
 #
-# For each NAME, print space-delimited resource records, optionally matching one
-# or more record types and limiting the output to one or more fields.
+# For each NAME, look up DNS resource records of the given TYPE (default: `A`)
+# and if any matching records are found, print whitespace-delimited values for
+# each requested FIELD (default: `NAME,TTL,CLASS,TYPE,RDATA`).
 #
-# FIELD must be one of 'NAME', 'TTL', 'CLASS', 'TYPE', 'RDATA' or 'VALUE'.
-# 'RDATA' and 'VALUE' are equivalent. Fields are printed in the specified order.
+# Field names (not case-sensitive):
+# - `NAME`
+# - `TTL`
+# - `CLASS`
+# - `TYPE`
+# - `RDATA`
+# - `VALUE` (alias for `RDATA`)
+#
+# Returns false only if an error occurs.
 function lk_dns_get_records() {
-    local IFS FIELDS= TYPES=("") i TYPE NAME COMMAND=(
-        dig +noall +answer
-        ${_LK_DIG_OPTIONS+"${_LK_DIG_OPTIONS[@]}"}
-        ${_LK_DNS_SERVER:+@"$_LK_DNS_SERVER"}
-    )
-    [[ ${1-} != +* ]] || { FIELDS=${1:1} && shift; }
-    [[ ${1-} != -* ]] || { IFS=, && TYPES=($(lk_upper "${1:1}")) && shift; }
-    unset IFS
+    local IFS=$' \t\n' FIELDS TYPES TYPE NAME QUERY=()
+    while [[ ${1-} == [+-]* ]]; do
+        [[ ${1-} != -* ]] || {
+            TYPES=($(IFS=, && lk_upper ${1:1} | sort -u)) || return
+        }
+        [[ ${1-} != +* ]] || {
+            FIELDS=$(IFS=, && lk_upper ${1:1} |
+                awk -v caller="$FUNCNAME" '
+function toexpr(var) { expr = expr (expr ? ", " : "") var; next }
+/^NAME$/ { toexpr("$1") }
+/^TTL$/ { toexpr("$2") }
+/^CLASS$/ { toexpr("$3") }
+/^TYPE$/ { toexpr("$4") }
+/^(RDATA|VALUE)$/ { toexpr("rdata()") }
+{ print caller ": invalid field: " $0 > "/dev/stderr"; status = 1 }
+END { if (status) { exit status } print expr }') || return
+        }
+        shift
+    done
     lk_is_fqdn "$@" || lk_warn "invalid arguments" || return
-    for i in "${!TYPES[@]}"; do
-        TYPE=${TYPES[i]}
-        [ "$TYPE" != ANY ] || TYPES[i]=
+    for TYPE in "${TYPES[@]-}"; do
         for NAME in "$@"; do
-            COMMAND+=("$NAME" ${TYPE:+"$TYPE"})
+            QUERY[${#QUERY[@]}]=$NAME
+            [[ -z $TYPE ]] ||
+                QUERY[${#QUERY[@]}]=$TYPE
         done
     done
-    "${COMMAND[@]}" | awk \
-        -v fields="$FIELDS" \
-        -v type_re="$(lk_ere_implode_arr -e TYPES)" '
-BEGIN { f["NAME"]  = 1;     f["CLASS"] = 3;     f["RDATA"] = 5
-        f["TTL"]   = 2;     f["TYPE"]  = 4;     f["VALUE"] = 5
-        k = split(fields, a, ",")
-        for (i = 1; i <= k; i++) {
-          if (field = f[a[i]]) { col[++cols] = field; v = v || (field > 4) }
-        } }
-!cols { print
-        next }
-!type_re || $4 ~ "^" type_re "$" {
-  if (v) {
-    l = $0; for (i = 1; i < 5; i++) { $i = "" } _v = substr($0, 5); $0 = l }
-  for (i = 1; i <= cols; i++) {
-    j = col[i]; if ($j) { printf (i > 1 ? " %s" : "%s"), (j > 4 ? _v : $j) } }
-  print "" }'
+    dig +noall +answer \
+        ${_LK_DIG_ARGS+"${_LK_DIG_ARGS[@]}"} \
+        ${_LK_DNS_SERVER:+@"$_LK_DNS_SERVER"} \
+        "${QUERY[@]}" |
+        awk -v S="$S" \
+            -v NS="$NS" \
+            -v types=${TYPES+"^$(lk_ere_implode_arr -e TYPES)\$"} "
+function printexpr() { print ${FIELDS-} }"'
+function rdata(r, i) {
+  r = $0
+  for (i = 0; i < 4; i++) { sub("^" S "*" NS "+" S "+", "", r) }
+  return r
+}
+!types || $4 ~ types { printexpr() }'
 }
 
-# lk_dns_get_records_first_parent [+FIELD[,FIELD...]] [-TYPE[,TYPE...]] NAME
+# lk_dns_get_records_first_parent [-TYPE[,TYPE...]] [+FIELD[,FIELD...]] NAME
+#
+# Same as `lk_dns_get_records`, but if no matching records are found, replace
+# NAME with its parent domain and retry, continuing until matching records are
+# found or there are no more parent domains to try.
+#
+# Returns false if no matching records are found.
 function lk_dns_get_records_first_parent() {
-    local IFS DOMAIN=${*: -1} ANSWER
-    unset IFS
-    lk_is_fqdn "$DOMAIN" || lk_warn "invalid domain: $DOMAIN" || return
+    local IFS=$' \t\n' NAME=${*:$#} DOMAIN
+    lk_is_fqdn "$NAME" || lk_warn "invalid domain: $NAME" || return
+    DOMAIN=$NAME
+    set -- "${@:1:$#-1}"
     while :; do
-        ANSWER=$(lk_dns_get_records "${@:1:$#-1}" "$DOMAIN") || return
-        [ -z "${ANSWER:+1}" ] || {
-            echo "$ANSWER"
-            break
-        }
-        DOMAIN=${DOMAIN#*.}
-        lk_is_fqdn "$DOMAIN" || lk_warn "$1 lookup failed: $2" || return
+        lk_dns_get_records "$@" "$NAME" | grep . && break ||
+            [[ ${PIPESTATUS[0]}${PIPESTATUS[1]} == 01 ]] || return
+        NAME=${NAME#*.}
+        lk_is_fqdn "$NAME" || lk_warn "lookup failed: $DOMAIN" || return
     done
 }
 
-# lk_dns_soa NAME
-function lk_dns_soa() {
-    local _LK_DIG_OPTIONS=(+nssearch)
-    lk_require_output lk_dns_get_records_first_parent "$1" ||
-        lk_warn "SOA lookup failed: ${*: -1}"
+# lk_dns_resolve_name_from_ns NAME
+#
+# Look up IP addresses for NAME from its primary nameserver and print them if
+# found, otherwise return false.
+function lk_dns_resolve_name_from_ns() {
+    local IFS=$' \t\n' NAMESERVER IP CNAME _LK_DIG_ARGS _LK_DNS_SERVER
+    NAMESERVER=$(lk_dns_get_records_first_parent -SOA "$1" |
+        awk 'NR == 1 { sub(/\.$/, "", $5); print $5 }') || return
+    _LK_DIG_ARGS=(+norecurse)
+    _LK_DNS_SERVER=$NAMESERVER
+    ! lk_verbose 2 || {
+        lk_tty_detail "Using name server:" "$NAMESERVER"
+        lk_tty_detail "Looking up A and AAAA records for:" "$1"
+    }
+    IP=($(lk_dns_get_records +VALUE -A,AAAA "$1")) || return
+    if [[ ${#IP[@]} -eq 0 ]]; then
+        ! lk_verbose 2 || {
+            lk_tty_detail "No A or AAAA records returned"
+            lk_tty_detail "Looking up CNAME record for:" "$1"
+        }
+        CNAME=($(lk_dns_get_records +VALUE -CNAME "$1")) || return
+        if [[ ${#CNAME[@]} -eq 1 ]]; then
+            ! lk_verbose 2 ||
+                lk_tty_detail "CNAME value from $NAMESERVER for $1:" "$CNAME"
+            unset _LK_DIG_ARGS _LK_DNS_SERVER
+            IP=($(lk_dns_get_records +VALUE -A,AAAA "${CNAME%.}")) || return
+        fi
+    fi
+    [[ ${#IP[@]} -gt 0 ]] ||
+        lk_warn "could not resolve $1${_LK_DNS_SERVER+: $NAMESERVER}" || return
+    ! lk_verbose 2 ||
+        lk_tty_detail \
+            "A and AAAA values${_LK_DNS_SERVER+ from $NAMESERVER} for $1:" \
+            "$(lk_arr IP)"
+    lk_arr IP
 }
 
 # lk_dns_resolve_names [-d] FQDN...
@@ -1296,7 +1346,7 @@ function lk_configure_locales() {
     unset IFS
     lk_is_linux || lk_warn "platform not supported" || return
     LOCALES=(${LK_NODE_LOCALES-} en_US.UTF-8)
-    _LOCALES=$(lk_echo_array LOCALES |
+    _LOCALES=$(lk_arr LOCALES |
         lk_escape_ere |
         lk_implode_input "|")
     [ ${#LOCALES[@]} -lt 2 ] || _LOCALES="($_LOCALES)"
@@ -1817,42 +1867,6 @@ function lk_node_public_ipv6() {
     } | sort -u
 }
 
-function lk_host_ns_resolve() {
-    local IFS NAMESERVER IP CNAME _LK_DNS_SERVER _LK_DIG_OPTIONS \
-        _LK_CNAME_DEPTH=${_LK_CNAME_DEPTH:-0}
-    unset IFS
-    [ "$_LK_CNAME_DEPTH" -lt 7 ] || lk_warn "too much recursion" || return
-    ((++_LK_CNAME_DEPTH))
-    NAMESERVER=$(lk_dns_soa "$1" |
-        awk 'NR == 1 {sub("\\.$", "", $2); print $2}') || return
-    _LK_DNS_SERVER=$NAMESERVER
-    _LK_DIG_OPTIONS=(+norecurse)
-    ! lk_verbose 2 || {
-        lk_tty_detail "Using name server:" "$NAMESERVER"
-        lk_tty_detail "Looking up A and AAAA records for:" "$1"
-    }
-    IP=($(lk_dns_get_records +VALUE -A,AAAA "$1")) || return
-    if [ ${#IP[@]} -eq 0 ]; then
-        ! lk_verbose 2 || {
-            lk_tty_detail "No A or AAAA records returned"
-            lk_tty_detail "Looking up CNAME record for:" "$1"
-        }
-        CNAME=($(lk_dns_get_records +VALUE -CNAME "$1")) || return
-        if [ ${#CNAME[@]} -eq 1 ]; then
-            ! lk_verbose 2 ||
-                lk_tty_detail "CNAME value from $NAMESERVER for $1:" \
-                    "${CNAME[0]}"
-            lk_host_ns_resolve "${CNAME[0]%.}" || return
-            return
-        fi
-    fi
-    [ ${#IP[@]} -gt 0 ] || lk_warn "could not resolve $1: $NAMESERVER" || return
-    ! lk_verbose 2 ||
-        lk_tty_detail "A and AAAA values from $NAMESERVER for $1:" \
-            "$(lk_echo_array IP)"
-    lk_echo_array IP
-}
-
 # lk_node_is_host DOMAIN
 #
 # Return true if at least one public IP address matches an authoritative A or
@@ -1865,11 +1879,11 @@ function lk_node_is_host() {
     NODE_IP=($(lk_node_public_ipv4 && lk_node_public_ipv6)) &&
         [ ${#NODE_IP} -gt 0 ] ||
         lk_warn "public IP address not found" || return
-    HOST_IP=($(lk_host_ns_resolve "$1")) ||
+    HOST_IP=($(lk_dns_resolve_name_from_ns "$1")) ||
         lk_warn "unable to retrieve authoritative DNS records for $1" || return
     lk_require_output -q comm -12 \
-        <(lk_echo_array HOST_IP | sort -u) \
-        <(lk_echo_array NODE_IP | sort -u)
+        <(lk_arr HOST_IP | sort -u) \
+        <(lk_arr NODE_IP | sort -u)
 }
 
 if lk_is_macos; then
