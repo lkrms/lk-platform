@@ -164,5 +164,3 @@ function lk_iptables_save() {
         _lk_iptables_args 0 "" "$@") && eval "$SH" || return
     _lk_iptables_save "$@"
 }
-
-lk_provide iptables

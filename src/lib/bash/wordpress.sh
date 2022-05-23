@@ -860,5 +860,3 @@ function lk_wp_set_permissions() {
         '.*/\.git/objects/([0-9a-f]{2}|pack)/.*' \
         0555 0444
 }
-
-lk_provide wordpress

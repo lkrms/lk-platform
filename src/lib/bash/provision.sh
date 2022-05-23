@@ -984,5 +984,3 @@ function lk_system_memory_free() {
         false
     fi
 }
-
-lk_provide provision

@@ -410,5 +410,3 @@ function lk_file_acl_remove_extended() {
         tee >(tr '\n\0' ' \n' >&2) |
         gnu_xargs -0r setfacl -b --
 } #### Reviewed: 2021-05-28
-
-lk_provide linux

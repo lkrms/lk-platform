@@ -89,5 +89,3 @@ function lk_backup_snapshot_to_archive() { (
         lk_tty_success "Archive created successfully" &&
         lk_tty_detail "Compressed size:" "$SIZE"
 ); }
-
-lk_provide backup

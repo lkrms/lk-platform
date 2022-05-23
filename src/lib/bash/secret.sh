@@ -65,6 +65,4 @@ function lk_secret_remove() {
         lk_tty_print "Password removed:" "$SECRET"
 }
 
-lk_provide secret
-
 #### Reviewed: 2021-10-17

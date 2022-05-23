@@ -33,5 +33,3 @@ function lk_assert_is_macos() {
 function lk_assert_not_wsl() {
     ! lk_is_wsl || lk_die "cannot run on Windows"
 }
-
-lk_provide assert

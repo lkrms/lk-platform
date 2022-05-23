@@ -321,5 +321,3 @@ function lk_mysql_restore_local() {
         lk_tty_error -r "Restore operation failed" || return
     lk_tty_success "Database restored successfully"
 }
-
-lk_provide mysql

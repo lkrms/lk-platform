@@ -50,7 +50,7 @@ Example:
             jq -e --arg id "$REBUILD" \
                 '[.[]|select((.id|tostring==$id) or .label==$id)]|if length==1 then .[0] else empty end') ||
             lk_warn "Linode not found: $REBUILD" || return
-        SH=$(lk_linode_get_shell_var <<<"$LINODE") &&
+        SH=$(lk_linode_linode_sh <<<"$LINODE") &&
             eval "$SH" || return
         lk_tty_print "Rebuilding:" \
             "$LINODE_LABEL ($(lk_implode_arr ", " LINODE_TAGS))"
@@ -108,7 +108,7 @@ Example:
     lk_tty_print "Linode ${VERBS[1]} successfully"
     lk_tty_detail "Root password:" "$ROOT_PASS"
     lk_tty_detail "Response written to:" "$FILE"
-    SH=$(lk_linode_get_shell_var <<<"$LINODE") &&
+    SH=$(lk_linode_linode_sh <<<"$LINODE") &&
         eval "$SH" || return
     lk_tty_detail "Linode ID:" "$LINODE_ID"
     lk_tty_detail "Linode type:" "$LINODE_TYPE"

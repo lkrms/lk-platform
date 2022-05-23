@@ -118,5 +118,3 @@ def is_native:
 function lk_brew_formulae_list_not_native() {
     lk_brew_formulae_list_native -n "$@"
 }
-
-lk_provide brew

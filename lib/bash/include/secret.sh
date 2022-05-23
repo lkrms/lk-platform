@@ -64,5 +64,3 @@ function lk_secret_remove() {
     _lk_secret_forget "$@" >/dev/null &&
         lk_tty_print "Password removed:" "$SECRET"
 }
-
-lk_provide secret

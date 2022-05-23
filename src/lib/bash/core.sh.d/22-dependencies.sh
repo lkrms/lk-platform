@@ -2,19 +2,17 @@
 
 function lk_require() {
     local FILE
-    while [ $# -gt 0 ]; do
-        [[ ,$_LK_PROVIDED, == *,$1,* ]] || {
+    while (($#)); do
+        [[ ,$_LK_SOURCED, == *,$1,* ]] || {
             FILE=$LK_BASE/lib/bash/include/$1.sh
-            [ -r "$FILE" ] || lk_err "file not found: $FILE" || return
+            [[ -r $FILE ]] || lk_err "file not found: $FILE" || return
+            _LK_SOURCED+=,$1
             . "$FILE" || return
         }
         shift
     done
 }
 
-function lk_provide() {
-    [[ ,$_LK_PROVIDED, == *,$1,* ]] ||
-        _LK_PROVIDED=$_LK_PROVIDED,$1
-}
+_LK_SOURCED=core
 
-#### Reviewed: 2021-10-04
+#### Reviewed: 2022-05-23

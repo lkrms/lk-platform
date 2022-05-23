@@ -401,5 +401,3 @@ END { if (p) print p }' /proc/cmdline) && [ -n "$PACKAGE" ] || return
         [[ ${RELEASE//./-} != ${PACKAGE_VER//./-}* ]]
     }
 }
-
-lk_provide arch
