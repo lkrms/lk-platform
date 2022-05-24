@@ -93,6 +93,7 @@ AUR_PACKAGES+=(
 
 PAC_PACKAGES+=(
     # Shell
+    aha
     asciinema
     dash
     ksh
@@ -130,7 +131,6 @@ PAC_PACKAGES+=(
 )
 
 AUR_PACKAGES+=(
-    aha
     pacman-cleanup-hook
     powershell-bin
     vpn-slice

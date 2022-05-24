@@ -190,7 +190,7 @@ HOMEBREW_FORMULAE+=(
     # Platforms
     awscli
     azure-cli
-    azure-functions-core-tools@4
+    azure/functions/azure-functions-core-tools@4
     wp-cli
 )
 
@@ -203,6 +203,7 @@ HOMEBREW_LINK_KEGS+=(
 )
 
 HOMEBREW_FORCE_INTEL+=(
+    azure/functions/azure-functions-core-tools@4
     composer
     php
     php@7.2
