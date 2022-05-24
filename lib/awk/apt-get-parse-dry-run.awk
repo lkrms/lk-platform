@@ -1,9 +1,9 @@
 function sh(op, arr, _i, _j) {
-    printf prefix "%s=(", op
+    printf(prefix "%s=(", op)
     for (_i in arr) {
-        printf (_j++ ? " %s" : "%s"), arr[_i]
+        printf((_j++ ? " %s" : "%s"), arr[_i])
     }
-    printf ")\n"
+    printf(")\n")
 }
 
 $1 == "Inst" {
@@ -22,5 +22,5 @@ END {
     sh("INST", inst)
     sh("CONF", conf)
     sh("REMV", remv)
-    printf prefix "CHANGES=%s", i + c + r
+    printf(prefix "CHANGES=%s", i + c + r)
 }
