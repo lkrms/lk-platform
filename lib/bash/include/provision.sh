@@ -245,6 +245,23 @@ function lk_sudo_nopasswd_offer() {
         lk_tty_print "User '$USER' may now run any command as any user"
 }
 
+# lk_sudo_apply_sudoers ([<prefix>-] <file>)...
+function lk_sudo_apply_sudoers() {
+    local LK_SUDO=1 PREFIX FILE
+    while (($#)); do
+        [[ $1 == *- ]] && PREFIX=$1 && shift || PREFIX=
+        FILE=/etc/sudoers.d/${PREFIX}${LK_PATH_PREFIX}${1##*/}
+        lk_elevate test -e "$FILE" ||
+            lk_elevate install -m 00440 /dev/null "$FILE" || return
+        if [[ $1 == *.template ]]; then
+            lk_file_replace "${FILE%.template}" < <(lk_expand_template "$1")
+        else
+            lk_file_replace -f "$1" "$FILE"
+        fi || return
+        shift
+    done
+}
+
 function _lk_settings_list_known() {
     printf '%s\n' \
         LK_BASE \
@@ -332,8 +349,6 @@ function _lk_settings_writable_files() {
 
 # _lk_settings_migrate SETTING OLD_SETTING...
 function _lk_settings_migrate() {
-    # It's quicker to assign and unset everything than to limit output based on
-    # runtime variables
     printf '%s=%s\n' "$1" "$(
         SH=
         while [ $# -gt 0 ]; do

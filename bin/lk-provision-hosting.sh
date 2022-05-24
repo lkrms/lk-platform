@@ -401,13 +401,10 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
         lk_tty_error "No root password has been set"
 
     lk_tty_print "Checking sudo"
-    FILE=/etc/sudoers.d/${LK_PATH_PREFIX}default-hosting
-    OLD_FILE=/etc/sudoers.d/${LK_PATH_PREFIX}mysql-self-service
-    maybe_move_old "$OLD_FILE" "$FILE"
-    lk_install -m 00440 "$FILE"
-    lk_file_replace "$FILE" "$(
-        lk_expand_template "$LK_BASE/share/sudoers.d/default-hosting"
-    )"
+    maybe_move_old \
+        "/etc/sudoers.d/$LK_PATH_PREFIX"{mysql-self-service,default-hosting}
+    lk_sudo_apply_sudoers \
+        "$LK_BASE/share/sudoers.d"/{default,default-hosting.template}
 
     lk_tty_print "Checking kernel parameters"
     unset LK_FILE_REPLACE_NO_CHANGE
