@@ -448,5 +448,3 @@ function lk_hosting_configure_backup() {
                 "/var/log/${LK_PATH_PREFIX:-lk-}last-backup.log")"
     fi
 }
-
-lk_provide hosting

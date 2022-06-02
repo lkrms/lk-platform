@@ -91,7 +91,7 @@ function _lk_cpanel_server_do_check() {
             [ -f "$FILE" ] &&
             . "$FILE" || break
     done
-    lk_warn "lk_$4_set_server must be called first"
+    lk_warn "lk_$4_server_set must be called first"
     false
 }
 
@@ -270,7 +270,7 @@ function lk_cpanel_domain_list() {
         sort -u
 }
 
-function _lk_cpanel_domain_records() {
+function _lk_cpanel_domain_tsv() {
     lk_jq -r 'include "core";
 [ (.data.payload? // .data? // cpanel_error)[] |
     select(.type == "record" and (.record_type | in_arr(["SOA", "NS", "CAA"]) | not)) |
@@ -283,7 +283,7 @@ function _lk_cpanel_domain_records() {
   [.line_index, .name, .ttl, .record_type, .priority, .weight, .port, .target] | @tsv'
 }
 
-# lk_cpanel_domain_records DOMAIN
+# lk_cpanel_domain_tsv DOMAIN
 #
 # Print tab-separated values for DNS records in the given cPanel DOMAIN:
 # 1. line_index
@@ -294,12 +294,12 @@ function _lk_cpanel_domain_records() {
 # 6. weight
 # 7. port
 # 8. target
-function lk_cpanel_domain_records() {
+function lk_cpanel_domain_tsv() {
     _lk_cpanel_server_check &&
-        lk_cpanel_post DNS parse_zone zone="$1" | _lk_cpanel_domain_records
+        lk_cpanel_post DNS parse_zone zone="$1" | _lk_cpanel_domain_tsv
 }
 
-# lk_whm_domain_records DOMAIN
+# lk_whm_domain_tsv DOMAIN
 #
 # Print tab-separated values for DNS records in the given WHM DOMAIN:
 # 1. line_index
@@ -310,9 +310,9 @@ function lk_cpanel_domain_records() {
 # 6. weight
 # 7. port
 # 8. target
-function lk_whm_domain_records() {
+function lk_whm_domain_tsv() {
     _lk_whm_server_check &&
-        lk_whm_get parse_dns_zone zone="$1" | _lk_cpanel_domain_records
+        lk_whm_get parse_dns_zone zone="$1" | _lk_cpanel_domain_tsv
 }
 
 # lk_cpanel_ssl_get_for_domain DOMAIN [TARGET_DIR]

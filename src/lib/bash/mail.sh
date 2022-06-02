@@ -139,8 +139,6 @@ Usage: $FUNCNAME SUBJECT TO [FROM [HEADERS...]]" || return
     lk_mail_get_mime "$@" | "$MTA" -oi -t
 }
 
-lk_provide mail
-
 true || {
     msmtp
     sendmail

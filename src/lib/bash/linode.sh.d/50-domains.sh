@@ -5,83 +5,76 @@
 # If -s is set, assign values to DOMAIN_ID and DOMAIN in the caller's scope,
 # otherwise print the JSON-encoded domain object.
 function lk_linode_domain() {
-    local IFS=$' \t\n' _LK_STACK_DEPTH=-1
     [[ ${1-} != -s ]] || {
         shift
-        SH=$(lk_linode_domain "$@" | lk_json_sh \
-            DOMAIN_ID .id \
-            DOMAIN .domain) && eval "$SH"
+        local SH
+        SH=$(lk_linode_domain "$@" |
+            _LK_STACK_DEPTH=-1 \
+                lk_json_sh DOMAIN_ID .id DOMAIN .domain) && eval "$SH"
         return
     }
     [[ -n ${1-} ]] || lk_warn "invalid arguments" || return
     if [[ $1 =~ ^[1-9][0-9]*$ ]]; then
-        lk_cache linode-cli --json domains view "$@"
+        linode-cli-json domains view "$@" | jq -e '.[]'
     else
+        local IFS=$' \t\n'
         lk_linode_domains "${@:2}" |
-            jq -e --arg d "$1" '.[] | select(.domain == $d)' ||
-            lk_warn "domain not found in Linode account: $1" || return
-    fi
-} #### Reviewed: 2022-01-22
-
-# lk_linode_dns_dump [LINODE_ARG...]
-#
-# Print the following tab-separated fields for every DNS record in every Linode
-# domain:
-#
-# 1. Domain ID
-# 2. Record ID
-# 3. Record type
-# 4. Record name
-# 5. Domain name
-# 6. Record priority
-# 7. Record TTL
-# 8. Record target
-function lk_linode_dns_dump() {
-    lk_linode_domains "$@" |
-        jq -r '.[] | [ .id, .domain ] | @tsv' |
-        while IFS=$'\t' read -r DOMAIN_ID DOMAIN; do
-            lk_linode_domain_records "$DOMAIN_ID" "$@" |
-                jq -r \
-                    --arg id "$DOMAIN_ID" \
-                    --arg domain "$DOMAIN" '
-.[] | [ $id, .id, .type, .name, $domain, .priority, .ttl_sec, .target ] | @tsv'
-        done
-} #### Reviewed: 2022-01-22
-
-function lk_linode_domain_cleanup() {
-    local DOMAIN_ID DOMAIN DUP
-    [ $# -gt 0 ] ||
-        lk_usage "Usage: $FUNCNAME DOMAIN_ID|DOMAIN_NAME [LINODE_ARG...]" ||
-        return
-    lk_linode_domain -s "$@" || return
-    lk_tty_print "Checking for duplicate DNS records"
-    lk_tty_detail "Domain ID:" "$DOMAIN_ID"
-    lk_tty_detail "Domain name:" "$DOMAIN"
-    DUP=$(lk_linode_domain_records "$DOMAIN_ID" |
-        jq -r '.[] | [.id, .name, .type, .target] | @tsv' |
-        sort -n | awk '
-{
-  r = $2 "\t" $3 "\t" $4
-  if (a[r])
-    d[$1] = r
-  else
-    a[r] = 1
+            jq -e --arg domain "$1" '.[] | select(.domain == $domain)'
+    fi || lk_warn "domain not found in Linode account: $1"
 }
-END {
-  for (i in d)
-    print i "\t" d[i]
-}') || return
-    [ -n "${DUP:+1}" ] || {
-        lk_tty_detail "No duplicate records found"
-        return
-    }
-    lk_tty_detail "Duplicate records:" $'\n'"$DUP"
-    lk_confirm "OK to delete $(lk_plural -v \
-        $(wc -l <<<"$DUP") record records)?" Y || return
-    lk_linode_flush_cache
-    lk_xargs lk_tty_run_detail \
-        linode-cli domains records-delete "$DOMAIN_ID" < <(cut -f1 <<<"$DUP")
+
+function _lk_linode_domain_tsv() {
+    jq -r '.[] |
+  [ .id, .name, .ttl_sec, .type, .priority, .weight, .port, .target ] | @tsv'
 }
+
+# lk_linode_domain_tsv <DOMAIN_ID|DOMAIN_NAME> [LINODE_ARG...]
+#
+# Print tab-separated values for DNS records in the given Linode domain:
+# 1. id
+# 2. name
+# 3. ttl_sec
+# 4. type
+# 5. priority
+# 6. weight
+# 7. port
+# 8. target
+function lk_linode_domain_tsv() {
+    local IFS=$' \t\n' DOMAIN_ID DOMAIN
+    lk_linode_domain -s "$@" &&
+        lk_linode_domain_records "$DOMAIN_ID" "${@:2}" |
+        _lk_linode_domain_tsv
+}
+
+# lk_linode_dump_domains [LINODE_ARG...]
+#
+# Print tab-separated values for DNS records in every Linode domain:
+# 1. id
+# 2. name
+# 3. ttl_sec
+# 4. type
+# 5. priority
+# 6. weight
+# 7. port
+# 8. target
+# 9. domain id
+# 10. domain
+function lk_linode_dump_domains() {
+    local TEMP DOMAIN_ID DOMAIN
+    lk_mktemp_with TEMP &&
+        lk_linode_domains "$@" |
+        jq -r '.[] | [ .id, .domain ] | @tsv' >"$TEMP" || return
+    while IFS=$'\t' read -r DOMAIN_ID DOMAIN; do
+        lk_linode_domain_records "$DOMAIN_ID" "$@" |
+            _lk_linode_domain_tsv |
+            awk -v OFS='\t' -v domain_id="$DOMAIN_ID" -v domain="$DOMAIN" \
+                '{ print $0, domain_id, domain }' || return
+    done <"$TEMP"
+}
+
+#### Reviewed: 2022-05-23
+
+# TODO: break these out into a standalone "apply DNS" utility
 
 function _lk_linode_dns_records() {
     lk_jq -r \

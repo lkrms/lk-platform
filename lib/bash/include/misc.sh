@@ -178,5 +178,3 @@ function lk_squid_get_directive_order() {
     sed -En "s/^#  TAG: ($NS+).*/\1/p" "$ORIG_CONF" |
         grep -Fxf <(awk '$0 !~ "^(#|'"$S"'*$)" {print $1}' "$CONF" | sort -u)
 }
-
-lk_provide misc

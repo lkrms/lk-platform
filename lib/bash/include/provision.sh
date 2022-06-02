@@ -245,6 +245,23 @@ function lk_sudo_nopasswd_offer() {
         lk_tty_print "User '$USER' may now run any command as any user"
 }
 
+# lk_sudo_apply_sudoers ([<prefix>-] <file>)...
+function lk_sudo_apply_sudoers() {
+    local LK_SUDO=1 PREFIX FILE
+    while (($#)); do
+        [[ $1 == *- ]] && PREFIX=$1 && shift || PREFIX=
+        FILE=/etc/sudoers.d/${PREFIX}${LK_PATH_PREFIX}${1##*/}
+        lk_elevate test -e "$FILE" ||
+            lk_elevate install -m 00440 /dev/null "$FILE" || return
+        if [[ $1 == *.template ]]; then
+            lk_file_replace "${FILE%.template}" < <(lk_expand_template "$1")
+        else
+            lk_file_replace -f "$1" "$FILE"
+        fi || return
+        shift
+    done
+}
+
 function _lk_settings_list_known() {
     printf '%s\n' \
         LK_BASE \
@@ -332,8 +349,6 @@ function _lk_settings_writable_files() {
 
 # _lk_settings_migrate SETTING OLD_SETTING...
 function _lk_settings_migrate() {
-    # It's quicker to assign and unset everything than to limit output based on
-    # runtime variables
     printf '%s=%s\n' "$1" "$(
         SH=
         while [ $# -gt 0 ]; do
@@ -1012,7 +1027,7 @@ function _lk_cpanel_server_do_check() {
             [ -f "$FILE" ] &&
             . "$FILE" || break
     done
-    lk_warn "lk_$4_set_server must be called first"
+    lk_warn "lk_$4_server_set must be called first"
     false
 }
 
@@ -1191,7 +1206,7 @@ function lk_cpanel_domain_list() {
         sort -u
 }
 
-function _lk_cpanel_domain_records() {
+function _lk_cpanel_domain_tsv() {
     lk_jq -r 'include "core";
 [ (.data.payload? // .data? // cpanel_error)[] |
     select(.type == "record" and (.record_type | in_arr(["SOA", "NS", "CAA"]) | not)) |
@@ -1204,7 +1219,7 @@ function _lk_cpanel_domain_records() {
   [.line_index, .name, .ttl, .record_type, .priority, .weight, .port, .target] | @tsv'
 }
 
-# lk_cpanel_domain_records DOMAIN
+# lk_cpanel_domain_tsv DOMAIN
 #
 # Print tab-separated values for DNS records in the given cPanel DOMAIN:
 # 1. line_index
@@ -1215,12 +1230,12 @@ function _lk_cpanel_domain_records() {
 # 6. weight
 # 7. port
 # 8. target
-function lk_cpanel_domain_records() {
+function lk_cpanel_domain_tsv() {
     _lk_cpanel_server_check &&
-        lk_cpanel_post DNS parse_zone zone="$1" | _lk_cpanel_domain_records
+        lk_cpanel_post DNS parse_zone zone="$1" | _lk_cpanel_domain_tsv
 }
 
-# lk_whm_domain_records DOMAIN
+# lk_whm_domain_tsv DOMAIN
 #
 # Print tab-separated values for DNS records in the given WHM DOMAIN:
 # 1. line_index
@@ -1231,9 +1246,9 @@ function lk_cpanel_domain_records() {
 # 6. weight
 # 7. port
 # 8. target
-function lk_whm_domain_records() {
+function lk_whm_domain_tsv() {
     _lk_whm_server_check &&
-        lk_whm_get parse_dns_zone zone="$1" | _lk_cpanel_domain_records
+        lk_whm_get parse_dns_zone zone="$1" | _lk_cpanel_domain_tsv
 }
 
 # lk_cpanel_ssl_get_for_domain DOMAIN [TARGET_DIR]
@@ -2256,5 +2271,3 @@ function lk_system_memory_free() {
         false
     fi
 }
-
-lk_provide provision

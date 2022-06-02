@@ -87,8 +87,6 @@ function _lk_settings_writable_files() {
 
 # _lk_settings_migrate SETTING OLD_SETTING...
 function _lk_settings_migrate() {
-    # It's quicker to assign and unset everything than to limit output based on
-    # runtime variables
     printf '%s=%s\n' "$1" "$(
         SH=
         while [ $# -gt 0 ]; do

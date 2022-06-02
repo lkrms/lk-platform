@@ -255,5 +255,3 @@ s/$REGEX_DEFAULT/${EXPORT+    }\2=\${\2:-\3}${EXPORT+ \\\\}/p
 s/$REGEX/${EXPORT+    }\2=\${\2-}${EXPORT+ \\\\}/p"
     ) && echo "${OUTPUT% \\}"
 }
-
-lk_provide bash

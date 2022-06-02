@@ -449,7 +449,7 @@ case "$IMAGE" in
     SHA_URLS=(
         "$UBUNTU_SHA_URL"/minimal/releases/jammy/release/SHA256SUMS.gpg
     )
-    OS_VARIANT=ubuntu21.10
+    OS_VARIANT=ubuntu22.04
     ;;
 *22.04*)
     IMAGE_NAME=ubuntu-22.04
@@ -458,7 +458,7 @@ case "$IMAGE" in
         "$UBUNTU_SHA_URL"/jammy/current/SHA256SUMS.gpg
         "$UBUNTU_SHA_URL"/jammy/current/SHA256SUMS
     )
-    OS_VARIANT=ubuntu21.10
+    OS_VARIANT=ubuntu22.04
     ;;
 *20.04*minimal)
     IMAGE_NAME=ubuntu-20.04-minimal

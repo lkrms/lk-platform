@@ -84,6 +84,4 @@ function lk_whiptail_checklist() {
         "${ITEMS[@]}"
 }
 
-lk_provide whiptail
-
 #### Reviewed: 2021-09-22

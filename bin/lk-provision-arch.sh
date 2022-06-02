@@ -422,9 +422,8 @@ $LK_NODE_HOSTNAME" &&
     lk_user_lock_passwd root
 
     lk_tty_print "Checking sudo"
-    FILE=/etc/sudoers.d/${LK_PATH_PREFIX}default-arch
-    lk_install -m 00440 "$FILE"
-    lk_file_replace -f "$LK_BASE/share/sudoers.d/default-arch" "$FILE"
+    lk_sudo_apply_sudoers \
+        "$LK_BASE/share/sudoers.d"/{default,default-arch}
 
     lk_tty_print "Checking default umask"
     FILE=/etc/profile.d/Z90-${LK_PATH_PREFIX}umask.sh

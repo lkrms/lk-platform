@@ -1,7 +1,6 @@
 #!/bin/bash
 
-lk_require git
-lk_require provision
+lk_require git provision
 
 function linode-cli() {
     # Suppress "Unable to determine if a new linode-cli package is available in
@@ -10,31 +9,22 @@ function linode-cli() {
 }
 
 function _lk_linode_cli_json {
-    local JSON PAGE=0 COUNT
+    local PAGE=1 JSON COUNT
     while :; do
-        ((++PAGE))
-        lk_mktemp_with -r JSON linode-cli --json --page "$PAGE" "$@" &&
+        lk_mktemp_with -r JSON \
+            linode-cli --json --page "$PAGE" "$@" &&
             COUNT=$(jq -r 'length' "$JSON") &&
             jq '.[]' "$JSON" || return
-        ((COUNT == 100)) || break
+        ((PAGE++, COUNT == 100)) || break
     done | jq --slurp
 }
 
 function linode-cli-json {
-    lk_cache _lk_linode_cli_json "$@"
+    lk_cache -t 1200 _lk_linode_cli_json "$@"
 }
 
 function lk_linode_flush_cache() {
     lk_cache_mark_dirty
-}
-
-function _lk_linode_filter() {
-    local REGEX=${LK_LINODE_SKIP_REGEX-'^jump\b'}
-    if [ -n "$REGEX" ]; then
-        jq --arg re "$REGEX" '[ .[] | select(.label | test($re) | not) ]'
-    else
-        cat
-    fi
 }
 
 lk_linode_linodes() { linode-cli-json linodes list "$@"; }
@@ -45,7 +35,16 @@ lk_linode_firewalls() { linode-cli-json firewalls list "$@"; }
 lk_linode_firewall_devices() { linode-cli-json firewalls devices-list "$@"; }
 lk_linode_stackscripts() { linode-cli-json stackscripts list --is_public false "$@"; }
 
-function lk_linode_get_shell_var() {
+function lk_linode_filter_linodes() {
+    local REGEX=${LK_LINODE_IGNORE_REGEX-}
+    if [[ -n $REGEX ]]; then
+        jq --arg re "$REGEX" '[ .[] | select(.label | test($re) | not) ]'
+    else
+        cat
+    fi
+}
+
+function lk_linode_linode_sh() {
     lk_json_sh \
         LINODE_ID .id \
         LINODE_LABEL .label \
@@ -69,7 +68,7 @@ function lk_linode_ssh_add() {
     lk_jq_get_array LINODES &&
         [ ${#LINODES[@]} -gt 0 ] || lk_warn "no Linodes in input" || return
     for LINODE in "${LINODES[@]}"; do
-        SH=$(lk_linode_get_shell_var <<<"$LINODE") &&
+        SH=$(lk_linode_linode_sh <<<"$LINODE") &&
             eval "$SH"
         eval "LABEL=${1-}"
         LABEL=${LABEL:-${LINODE_LABEL%%.*}}
@@ -97,7 +96,7 @@ function lk_linode_ssh_add() {
 # lk_linode_ssh_add_all [LINODE_ARG...]
 function lk_linode_ssh_add_all() {
     local JSON LABELS
-    JSON=$(lk_linode_linodes "$@" | _lk_linode_filter) || return
+    JSON=$(lk_linode_linodes "$@" | lk_linode_filter_linodes) || return
     lk_jq_get_array LABELS ".[].label" <<<"$JSON" &&
         [ ${#LABELS[@]} -gt 0 ] || lk_warn "no Linodes found" || return
     lk_echo_array LABELS | sort |
@@ -113,14 +112,14 @@ function lk_linode_hosting_ssh_add_all() {
     GET_USERS_SH=$(printf '%q\n' \
         "$(declare -f lk_get_users_in_group lk_get_standard_users &&
             lk_quote_args lk_get_standard_users /srv/www)") || return
-    JSON=$(lk_linode_linodes "$@" | _lk_linode_filter) &&
+    JSON=$(lk_linode_linodes "$@" | lk_linode_filter_linodes) &&
         lk_jq_get_array LINODES <<<"$JSON" &&
         [ ${#LINODES[@]} -gt 0 ] || lk_warn "no Linodes found" || return
     jq -r '.[].label' <<<"$JSON" | sort | lk_tty_list - \
         "Adding hosting accounts to SSH configuration:" Linode Linodes
     lk_confirm "Proceed?" Y || return
     for LINODE in "${LINODES[@]}"; do
-        SH=$(lk_linode_get_shell_var <<<"$LINODE") &&
+        SH=$(lk_linode_linode_sh <<<"$LINODE") &&
             eval "$SH" || return
         lk_tty_print "Retrieving hosting accounts from" "$LINODE_LABEL"
         IFS=$'\n'
@@ -147,83 +146,74 @@ function lk_linode_hosting_ssh_add_all() {
 # If -s is set, assign values to DOMAIN_ID and DOMAIN in the caller's scope,
 # otherwise print the JSON-encoded domain object.
 function lk_linode_domain() {
-    local IFS=$' \t\n' _LK_STACK_DEPTH=-1
     [[ ${1-} != -s ]] || {
         shift
-        SH=$(lk_linode_domain "$@" | lk_json_sh \
-            DOMAIN_ID .id \
-            DOMAIN .domain) && eval "$SH"
+        local SH
+        SH=$(lk_linode_domain "$@" |
+            _LK_STACK_DEPTH=-1 \
+                lk_json_sh DOMAIN_ID .id DOMAIN .domain) && eval "$SH"
         return
     }
     [[ -n ${1-} ]] || lk_warn "invalid arguments" || return
     if [[ $1 =~ ^[1-9][0-9]*$ ]]; then
-        lk_cache linode-cli --json domains view "$@"
+        linode-cli-json domains view "$@" | jq -e '.[]'
     else
+        local IFS=$' \t\n'
         lk_linode_domains "${@:2}" |
-            jq -e --arg d "$1" '.[] | select(.domain == $d)' ||
-            lk_warn "domain not found in Linode account: $1" || return
-    fi
+            jq -e --arg domain "$1" '.[] | select(.domain == $domain)'
+    fi || lk_warn "domain not found in Linode account: $1"
 }
 
-# lk_linode_dns_dump [LINODE_ARG...]
-#
-# Print the following tab-separated fields for every DNS record in every Linode
-# domain:
-#
-# 1. Domain ID
-# 2. Record ID
-# 3. Record type
-# 4. Record name
-# 5. Domain name
-# 6. Record priority
-# 7. Record TTL
-# 8. Record target
-function lk_linode_dns_dump() {
-    lk_linode_domains "$@" |
-        jq -r '.[] | [ .id, .domain ] | @tsv' |
-        while IFS=$'\t' read -r DOMAIN_ID DOMAIN; do
-            lk_linode_domain_records "$DOMAIN_ID" "$@" |
-                jq -r \
-                    --arg id "$DOMAIN_ID" \
-                    --arg domain "$DOMAIN" '
-.[] | [ $id, .id, .type, .name, $domain, .priority, .ttl_sec, .target ] | @tsv'
-        done
+function _lk_linode_domain_tsv() {
+    jq -r '.[] |
+  [ .id, .name, .ttl_sec, .type, .priority, .weight, .port, .target ] | @tsv'
 }
 
-function lk_linode_domain_cleanup() {
-    local DOMAIN_ID DOMAIN DUP
-    [ $# -gt 0 ] ||
-        lk_usage "Usage: $FUNCNAME DOMAIN_ID|DOMAIN_NAME [LINODE_ARG...]" ||
-        return
-    lk_linode_domain -s "$@" || return
-    lk_tty_print "Checking for duplicate DNS records"
-    lk_tty_detail "Domain ID:" "$DOMAIN_ID"
-    lk_tty_detail "Domain name:" "$DOMAIN"
-    DUP=$(lk_linode_domain_records "$DOMAIN_ID" |
-        jq -r '.[] | [.id, .name, .type, .target] | @tsv' |
-        sort -n | awk '
-{
-  r = $2 "\t" $3 "\t" $4
-  if (a[r])
-    d[$1] = r
-  else
-    a[r] = 1
+# lk_linode_domain_tsv <DOMAIN_ID|DOMAIN_NAME> [LINODE_ARG...]
+#
+# Print tab-separated values for DNS records in the given Linode domain:
+# 1. id
+# 2. name
+# 3. ttl_sec
+# 4. type
+# 5. priority
+# 6. weight
+# 7. port
+# 8. target
+function lk_linode_domain_tsv() {
+    local IFS=$' \t\n' DOMAIN_ID DOMAIN
+    lk_linode_domain -s "$@" &&
+        lk_linode_domain_records "$DOMAIN_ID" "${@:2}" |
+        _lk_linode_domain_tsv
 }
-END {
-  for (i in d)
-    print i "\t" d[i]
-}') || return
-    [ -n "${DUP:+1}" ] || {
-        lk_tty_detail "No duplicate records found"
-        return
-    }
-    lk_tty_detail "Duplicate records:" $'\n'"$DUP"
-    lk_confirm "OK to delete $(lk_plural -v \
-        $(wc -l <<<"$DUP") record records)?" Y || return
-    lk_linode_flush_cache
-    lk_xargs lk_tty_run_detail \
-        linode-cli domains records-delete "$DOMAIN_ID" < <(cut -f1 <<<"$DUP")
+
+# lk_linode_dump_domains [LINODE_ARG...]
+#
+# Print tab-separated values for DNS records in every Linode domain:
+# 1. id
+# 2. name
+# 3. ttl_sec
+# 4. type
+# 5. priority
+# 6. weight
+# 7. port
+# 8. target
+# 9. domain id
+# 10. domain
+function lk_linode_dump_domains() {
+    local TEMP DOMAIN_ID DOMAIN
+    lk_mktemp_with TEMP &&
+        lk_linode_domains "$@" |
+        jq -r '.[] | [ .id, .domain ] | @tsv' >"$TEMP" || return
+    while IFS=$'\t' read -r DOMAIN_ID DOMAIN; do
+        lk_linode_domain_records "$DOMAIN_ID" "$@" |
+            _lk_linode_domain_tsv |
+            awk -v OFS='\t' -v domain_id="$DOMAIN_ID" -v domain="$DOMAIN" \
+                '{ print $0, domain_id, domain }' || return
+    done <"$TEMP"
 }
+
+# TODO: break these out into a standalone "apply DNS" utility
 
 function _lk_linode_dns_records() {
     lk_jq -r \
@@ -464,7 +454,7 @@ Example:
             jq -e --arg id "$REBUILD" \
                 '[.[]|select((.id|tostring==$id) or .label==$id)]|if length==1 then .[0] else empty end') ||
             lk_warn "Linode not found: $REBUILD" || return
-        SH=$(lk_linode_get_shell_var <<<"$LINODE") &&
+        SH=$(lk_linode_linode_sh <<<"$LINODE") &&
             eval "$SH" || return
         lk_tty_print "Rebuilding:" \
             "$LINODE_LABEL ($(lk_implode_arr ", " LINODE_TAGS))"
@@ -522,7 +512,7 @@ Example:
     lk_tty_print "Linode ${VERBS[1]} successfully"
     lk_tty_detail "Root password:" "$ROOT_PASS"
     lk_tty_detail "Response written to:" "$FILE"
-    SH=$(lk_linode_get_shell_var <<<"$LINODE") &&
+    SH=$(lk_linode_linode_sh <<<"$LINODE") &&
         eval "$SH" || return
     lk_tty_detail "Linode ID:" "$LINODE_ID"
     lk_tty_detail "Linode type:" "$LINODE_TYPE"
@@ -618,5 +608,3 @@ Usage: $FUNCNAME DIR HOST..." || return
                 "$_DIR/StackScript-env-$HOST" "$_DIR" || return
     done
 }
-
-lk_provide linode

@@ -362,5 +362,3 @@ function lk_apt_sources_get_missing() {
                 "$COMPONENT"
         done
 }
-
-lk_provide debian

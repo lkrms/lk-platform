@@ -3,11 +3,10 @@
 export -n BASH_XTRACEFD SHELLOPTS
 
 USER=${USER:-$(id -un)} &&
-    { [ "${S-}" = "[[:blank:]]" ] || readonly S="[[:blank:]]"; } &&
-    { [ "${NS-}" = "[^[:blank:]]" ] || readonly NS="[^[:blank:]]"; } || return
+    { [[ ${S-} == "[[:blank:]]" ]] || readonly S="[[:blank:]]"; } &&
+    { [[ ${NS-} == "[^[:blank:]]" ]] || readonly NS="[^[:blank:]]"; } || return
 
 _LK_ARGV=("$@")
-_LK_PROVIDED=core
 
 # lk_bash_at_least MAJOR [MINOR]
 function lk_bash_at_least() {
@@ -2117,20 +2116,18 @@ function lk_stack_trace() {
 
 function lk_require() {
     local FILE
-    while [ $# -gt 0 ]; do
-        [[ ,$_LK_PROVIDED, == *,$1,* ]] || {
+    while (($#)); do
+        [[ ,$_LK_SOURCED, == *,$1,* ]] || {
             FILE=$LK_BASE/lib/bash/include/$1.sh
-            [ -r "$FILE" ] || lk_err "file not found: $FILE" || return
+            [[ -r $FILE ]] || lk_err "file not found: $FILE" || return
+            _LK_SOURCED+=,$1
             . "$FILE" || return
         }
         shift
     done
 }
 
-function lk_provide() {
-    [[ ,$_LK_PROVIDED, == *,$1,* ]] ||
-        _LK_PROVIDED=$_LK_PROVIDED,$1
-}
+_LK_SOURCED=core
 
 # _lk_usage_format <CALLER>
 function _lk_usage_format() {

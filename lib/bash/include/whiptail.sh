@@ -83,5 +83,3 @@ function lk_whiptail_checklist() {
         "$LIST_HEIGHT" \
         "${ITEMS[@]}"
 }
-
-lk_provide whiptail

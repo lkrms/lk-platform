@@ -17,7 +17,8 @@ SH=$(
     for _file in /etc/default/lk-platform "$_conf"; do
         [[ ! -r $_file ]] || . "$_file" || lk_die "error loading configuration"
     done >&2
-    export LK_BASE=$_dir &&
+    printf 'export LK_BASE=%q\n' "$_dir" &&
+        unset LK_BASE &&
         declare -p "${!LK_@}" &&
         printf 'CONF_FILE=%q\n' "$_conf"
 ) && eval "$SH" || exit
@@ -45,74 +46,18 @@ lk_is_arch && IS_ARCH=
     }
 }
 
-SETTINGS=(
-    LK_BASE
-    LK_PATH_PREFIX
-    LK_NODE_HOSTNAME
-    LK_NODE_FQDN
-    LK_IPV4_ADDRESS
-    LK_IPV4_GATEWAY
-    LK_DNS_SERVERS
-    LK_DNS_SEARCH
-    LK_BRIDGE_INTERFACE
-    LK_WIFI_REGDOM
-    LK_NODE_TIMEZONE
-    LK_NODE_SERVICES
-    LK_NODE_PACKAGES
-    LK_NODE_LOCALES
-    LK_NODE_LANGUAGE
-    LK_SAMBA_WORKGROUP
-    LK_GRUB_CMDLINE
-    LK_NTP_SERVER
-    LK_ADMIN_EMAIL
-    LK_TRUSTED_IP_ADDRESSES
-    LK_SSH_TRUSTED_ONLY
-    LK_SSH_TRUSTED_PORT
-    LK_SSH_JUMP_HOST
-    LK_SSH_JUMP_USER
-    LK_SSH_JUMP_KEY
-    LK_REJECT_OUTPUT
-    LK_ACCEPT_OUTPUT_HOSTS
-    LK_INNODB_BUFFER_SIZE
-    LK_OPCACHE_MEMORY_CONSUMPTION
-    LK_PHP_VERSIONS
-    LK_PHP_DEFAULT_VERSION
-    LK_PHP_SETTINGS
-    LK_PHP_ADMIN_SETTINGS
-    LK_MEMCACHED_MEMORY_LIMIT
-    LK_SMTP_RELAY
-    LK_SMTP_CREDENTIALS
-    LK_SMTP_SENDERS
-    LK_EMAIL_DESTINATION
-    LK_UPGRADE_EMAIL
-    LK_AUTO_REBOOT
-    LK_AUTO_REBOOT_TIME
-    LK_AUTO_BACKUP_SCHEDULE
-    LK_SNAPSHOT_HOURLY_MAX_AGE
-    LK_SNAPSHOT_DAILY_MAX_AGE
-    LK_SNAPSHOT_WEEKLY_MAX_AGE
-    LK_SNAPSHOT_FAILED_MAX_AGE
-    LK_LAUNCHPAD_PPA_MIRROR
-    LK_SITE_ENABLE
-    LK_SITE_DISABLE_WWW
-    LK_SITE_DISABLE_HTTPS
-    LK_SITE_ENABLE_STAGING
-    LK_ARCH_MIRROR
-    LK_ARCH_REPOS
-    LK_DEBUG
-    LK_PLATFORM_BRANCH
-    LK_PACKAGES_FILE
-)
-
 LK_FILE_BACKUP_TAKE=${LK_FILE_BACKUP_TAKE-1}
 LK_FILE_BACKUP_MOVE=1
 LK_VERBOSE=${LK_VERBOSE-1}
 
-NEW_SETTINGS=()
-unset RENAME PREVIOUS_PREFIX
+unset RENAME SUDOERS PREVIOUS_PREFIX
 NO_UPGRADE=1
 
-lk_getopt "r::" "rename::,no-upgrade"
+SETTINGS_SH=$(lk_settings_getopt "$@")
+eval "$SETTINGS_SH"
+shift "$_LK_SHIFT"
+
+lk_getopt -"$_LK_SHIFT" "r::" "rename::,sudo,no-upgrade"
 eval "set -- $LK_GETOPT"
 
 while :; do
@@ -122,6 +67,9 @@ while :; do
     -r | --rename)
         RENAME=${1:-lk-platform}
         shift
+        ;;
+    --sudo)
+        SUDOERS=1
         ;;
     --no-upgrade)
         NO_UPGRADE=1
@@ -170,6 +118,11 @@ lk_log_start
             lk_warn "LK_PATH_PREFIX not set, using 'lk-'" || LK_PATH_PREFIX=lk-
         fi
 
+    (LK_VERBOSE=1 &&
+        lk_settings_persist "$SETTINGS_SH$(printf '\n%s=%q' \
+            LK_BASE "$LK_BASE" \
+            LK_PATH_PREFIX "$LK_PATH_PREFIX")")
+
     _BASHRC='[ -z "${BASH_VERSION-}" ] || [ ! -f ~/.bashrc ] || . ~/.bashrc'
     _BYOBU=
     _BYOBURC=
@@ -183,13 +136,10 @@ lk_log_start
             _BYOBURC='[[ $OSTYPE != darwin* ]] || ! type -P gdf >/dev/null || df() { gdf "$@"; }'
     fi
 
-    lk_tty_print "Checking sudo"
-    FILE=/etc/sudoers.d/${LK_PATH_PREFIX}default
-    [ ! -e "${FILE}s" ] || [ -e "$FILE" ] ||
-        mv -fv "${FILE}s" "$FILE"
-    [ -e "$FILE" ] ||
-        install -m 00440 /dev/null "$FILE"
-    lk_file_replace "$FILE" "$(cat "$LK_BASE/share/sudoers.d/default")"
+    if [[ -n ${SUDOERS-} ]]; then
+        lk_tty_print "Checking sudo"
+        lk_sudo_apply_sudoers "$LK_BASE/share/sudoers.d/default"
+    fi
 
     lk_tty_print "Checking GNU utilities"
     function install_gnu_commands() {
@@ -257,57 +207,6 @@ lk_log_start
         return "$STATUS"
     }
     install_gnu_commands
-
-    lk_tty_print "Checking lk-platform settings"
-    [ -e "$CONF_FILE" ] || {
-        install -d -m "$DIR_MODE" "${CONF_FILE%/*}" "${CONF_FILE%/*/*}" &&
-            install -m "$FILE_MODE" /dev/null "$CONF_FILE"
-    }
-
-    # Use the opening "Environment:" log entry created by hosting.sh as a last
-    # resort when looking for settings
-    function install_env() {
-        [ -n "${INSTALL_ENV+1}" ] ||
-            INSTALL_ENV=$(
-                FILE=$(lk_first_existing \
-                    /var/log/{"$LK_PATH_PREFIX",lk-platform-}install.log) ||
-                    exit 0
-                awk -f "$LK_BASE/lib/awk/get-install-env.awk" "$FILE"
-            ) || return
-        [ -n "${INSTALL_ENV:+1}" ] || return 0
-        awk -F= \
-            -v "SETTING=$1" \
-            '$1 == SETTING { print $2 }' <<<"$INSTALL_ENV"
-    }
-
-    for i in "${SETTINGS[@]}"; do
-        SH=$(printf \
-            '%s=${%s-${%s-${%s-${%s-$(install_env "(LK_(NODE_|DEFAULT_)?)?%s")}}}}' \
-            "$i" "$i" "LK_NODE_${i#LK_}" "LK_DEFAULT_${i#LK_}" "${i#LK_}" \
-            "${i#LK_}") &&
-            eval "$SH"
-    done
-
-    KNOWN_SETTINGS=()
-    for i in "${SETTINGS[@]}"; do
-        # Don't include null variables unless they already appear in
-        # $LK_BASE/etc/lk-platform/lk-platform.conf
-        [ -n "${!i-}" ] ||
-            grep -Eq "^$i=" "$CONF_FILE" ||
-            lk_in_array "$i" NEW_SETTINGS ||
-            continue
-        KNOWN_SETTINGS+=("$i")
-    done
-    OTHER_SETTINGS=($(comm -23 \
-        <({ lk_echo_array NEW_SETTINGS &&
-            sed -En \
-                -e '/^LK_(PATH_PREFIX_ALPHA|SCRIPT_DEBUG|EMAIL_BLACKHOLE)=/d' \
-                -e 's/^([a-zA-Z_][a-zA-Z0-9_]*)=.*/\1/p' "$CONF_FILE"; } |
-            sort -u) \
-        <(lk_echo_array KNOWN_SETTINGS | sort)))
-    lk_file_replace "$CONF_FILE" "$(lk_var_sh \
-        "${KNOWN_SETTINGS[@]}" \
-        ${OTHER_SETTINGS[@]+"${OTHER_SETTINGS[@]}"})"
 
     function restart_script() {
         lk_lock_drop

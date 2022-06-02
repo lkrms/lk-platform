@@ -493,5 +493,3 @@ Usage: $FUNCNAME [-p PROCESS_TYPE] LABEL COMMAND [ARG...]" || return
     launchctl unload "$FILE" &>/dev/null || true
     launchctl load -w "$FILE"
 }
-
-lk_provide macos
