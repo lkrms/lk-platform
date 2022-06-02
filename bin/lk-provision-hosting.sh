@@ -488,6 +488,7 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
                     ARGS=(-e "${REPO_HOST#*://}$REPO_PATH" -e)
                     REPO_HOST=$LK_LAUNCHPAD_PPA_MIRROR
                 }
+                FILE=/etc/apt/sources.list.d/ppa-${PPA_OWNER}-${PPA_NAME}.list
                 if ! apt-get indextargets --format '$(SITE)' |
                     sed -En "$(printf '%s\n' \
                         's/^https?:\/\///' 's/\/+$//' \
@@ -495,13 +496,17 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
                     grep -Fx ${ARGS+"${ARGS[@]}"} \
                         "${REPO_HOST#*://}$REPO_PATH" >/dev/null; then
                     lk_tty_detail "Adding repository:" "$REPO"
-                    FILE=/etc/apt/sources.list.d/ppa-${PPA_OWNER}-${PPA_NAME}.list
+                elif [[ ! -f $FILE ]]; then
+                    # The repo has been configured, but not by this script
+                    lk_tty_warning "Repository configured incorrectly:" "$REPO"
+                    FILE=
+                fi
+                if [[ -n $FILE ]]; then
                     lk_install -m 00644 "$FILE"
                     lk_file_replace "$FILE" <<EOF
 deb $REPO_HOST$REPO_PATH $DISTRIB_CODENAME main
 # deb-src $REPO_HOST$REPO_PATH $DISTRIB_CODENAME main
 EOF
-                    LK_FILE_REPLACE_NO_CHANGE=0
                 fi
                 ;;
             *)
