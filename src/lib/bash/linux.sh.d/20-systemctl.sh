@@ -236,6 +236,16 @@ function lk_systemctl_mask_now() {
         lk_systemctl_mask ${ARGS+"${ARGS[@]}"} "$1"
 }
 
+function lk_systemctl_unmask() {
+    local SH
+    SH=$(_lk_systemctl "$@") && eval "$SH" || return
+    ! lk_systemctl_masked ${ARGS+"${ARGS[@]}"} "$1" || {
+        lk_tty_detail "Unmasking service:" "$NAME"
+        ${_USER-lk_elevate} "${COMMAND[@]}" unmask "$1" ||
+            lk_warn "could not unmask service: $_NAME"
+    }
+}
+
 true || {
     systemctl
 }

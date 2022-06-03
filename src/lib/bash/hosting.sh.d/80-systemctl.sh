@@ -2,6 +2,7 @@
 
 function _lk_hosting_service_apply() {
     while (($#)); do
+        lk_systemctl_unmask "$1" || return
         if lk_is_bootstrap; then
             lk_systemctl_enable "$1"
         else
@@ -20,6 +21,7 @@ function _lk_hosting_service_disable() {
         else
             lk_systemctl_disable_now "$1"
         fi &&
+            lk_systemctl_mask "$1" &&
             lk_mark_clean "$1" || return
         shift
     done
@@ -35,6 +37,10 @@ function lk_hosting_apply_config() {
     for PHPVER in ${PHP_VERSIONS+"${PHP_VERSIONS[@]}"}; do
         lk_tty_print "PHP-FPM $PHPVER"
         SERVICE=php$PHPVER-fpm.service
+        if ! lk_systemctl_enabled "$SERVICE" &&
+            ! lk_systemctl_masked "$SERVICE"; then
+            lk_mark_dirty "$SERVICE"
+        fi
         if lk_is_dirty "$SERVICE"; then
             if lk_files_exist "/etc/php/$PHPVER/fpm/pool.d"/*.conf; then
                 _lk_hosting_php_test_config "$PHPVER" || return
