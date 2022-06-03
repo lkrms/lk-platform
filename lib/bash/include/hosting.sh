@@ -815,6 +815,7 @@ function _lk_hosting_postfix_test_config() {
 
 function _lk_hosting_service_apply() {
     while (($#)); do
+        lk_systemctl_unmask "$1" || return
         if lk_is_bootstrap; then
             lk_systemctl_enable "$1"
         else
@@ -833,6 +834,7 @@ function _lk_hosting_service_disable() {
         else
             lk_systemctl_disable_now "$1"
         fi &&
+            lk_systemctl_mask "$1" &&
             lk_mark_clean "$1" || return
         shift
     done
