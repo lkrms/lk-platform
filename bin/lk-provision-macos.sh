@@ -860,7 +860,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
                 lk_php_set_option display_errors On
                 lk_php_set_option display_startup_errors On
                 lk_php_set_option log_errors On
-                lk_php_set_option error_log php_errors.log
+                lk_php_set_option error_log ~/Library/Logs/php_errors.log
             done
         done
     )
