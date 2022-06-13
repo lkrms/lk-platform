@@ -316,15 +316,15 @@ function lk_fs_ext4_check() {
 }
 
 function lk_is_portable() {
-    # 8  = Portable
-    # 9  = Laptop
-    # 10 = Notebook
-    # 11 = Hand Held
-    # 12 = Docking Station
-    # 14 = Sub Notebook
-    # 30 = Tablet
-    # 31 = Convertible
-    # 32 = Detachable
+    # - 8  = Portable
+    # - 9  = Laptop
+    # - 10 = Notebook
+    # - 11 = Hand Held
+    # - 12 = Docking Station
+    # - 14 = Sub Notebook
+    # - 30 = Tablet
+    # - 31 = Convertible
+    # - 32 = Detachable
     grep -Eq '^(8|9|10|11|12|14|30|31|32)$' /sys/class/dmi/id/chassis_type
 }
 
@@ -385,6 +385,15 @@ function lk_xfce4_xfconf_dump() {
             printf '%s,%s,%s\n' "$CHANNEL" "$PROPERTY" "$VALUE"
         done < <(xfconf-query -c "$CHANNEL" -lv | sort -f)
     done
+}
+
+# lk_xfce4_panel_list_plugins
+#
+# Print tab-delimited fields PLUGIN_ID and PLUGIN_NAME for each configured Xfce4
+# panel plugin
+function lk_xfce4_panel_list_plugins() {
+    xfconf-query -c xfce4-panel -p /plugins -lv |
+        sed -En 's#^/plugins/plugin-([0-9]+)[[:blank:]]+(.*)#\1\t\2#p'
 }
 
 # lk_file_acl_list_with_extended [STARTING_POINT...]

@@ -187,7 +187,7 @@ AUR_PACKAGES+=(
     hfsprogs
 
     # Automation
-    devilspie2
+    devilspie2-git
     quicktile-git
 )
 
