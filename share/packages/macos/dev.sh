@@ -167,7 +167,7 @@ HOMEBREW_FORMULAE+=(
 
     #
     composer
-    php@8.0
+    php
 
     #
     python
@@ -195,21 +195,16 @@ HOMEBREW_FORMULAE+=(
 )
 
 HOMEBREW_UNLINK_FORMULAE+=(
-    php
 )
 
 HOMEBREW_LINK_KEGS+=(
-    php@8.0
 )
 
 HOMEBREW_FORCE_INTEL+=(
     azure/functions/azure-functions-core-tools@4
     composer
     php
-    php@7.2
-    php@7.3
     php@7.4
-    php@8.0
     wp-cli
 )
 
@@ -232,7 +227,8 @@ HOMEBREW_CASKS+=(
 )
 
 MAS_APPS+=(
-    497799835 # Xcode
+    1499215709 # Pasteboard Viewer
+    497799835  # Xcode
 )
 
 # Hardware-related
@@ -243,10 +239,7 @@ HOMEBREW_CASKS+=(
 HOMEBREW_KEEP_FORMULAE+=(
     #
     php
-    php@7.2
-    php@7.3
     php@7.4
-    php@8.0
 
     #
     autoconf

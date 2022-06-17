@@ -120,7 +120,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
         git remote add origin "$2"
       fi &&
       # Retrieve latest commits from origin
-      git fetch --tags origin &&
+      git fetch --tags --force origin &&
       git remote set-head origin --auto >/dev/null &&
       git remote prune origin &&
       # If target branch is 'main', reset origin/main to the most recent
