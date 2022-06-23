@@ -20,7 +20,6 @@ PAC_KEEP=(
     stretchly-bin
     stripe-cli
     subversion
-    teams
     zoom
 
     #
@@ -41,6 +40,7 @@ PAC_KEEP=(
     #
     mongodb-bin
     mongodb-tools-bin
+    studio-3t
 
     #
     memtest86-efi
@@ -248,7 +248,7 @@ AUR_PACKAGES+=(
     skypeforlinux-stable-bin
     spotify
     stretchly
-    teams-insiders
+    teams
     teamviewer
     todoist-appimage
     trimage
@@ -377,6 +377,7 @@ PAC_PACKAGES+=(
 
 AUR_PACKAGES+=(
     babel-preset-env
+    dotnet-runtime-3.1-bin # storageexplorer dependency
     nodejs-less
     nvm
     php-ibm_db2
@@ -391,6 +392,7 @@ AUR_PACKAGES+=(
     ruby-rubocop-rails
     ruby-ruby-debug-ide
     standard
+    symfony-console-autocomplete
     terser
     trickle-git
     zeal-git

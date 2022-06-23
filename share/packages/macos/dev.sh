@@ -267,6 +267,7 @@ HOMEBREW_KEEP_CASKS+=(
     microsoft-azure-storage-explorer
     sfdx
     shortcutdetective
+    studio-3t
     teamviewer
 
     #
