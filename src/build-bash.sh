@@ -4,7 +4,8 @@ set -euo pipefail
 head=$(mktemp)
 tail=$(mktemp)
 out=$(mktemp)
-trap 'rm -f "$head" "$tail" "$out"' EXIT
+out2=$(mktemp)
+trap 'rm -f "$head" "$tail" "$out" "$out2"' EXIT
 die() { echo "${BASH_SOURCE-$0}: $1" >&2 && false || exit; }
 
 _dir=${BASH_SOURCE%"${BASH_SOURCE##*/}"}
@@ -115,7 +116,19 @@ f       {next}
 END     {if (NR == 1 && first) {print first; f = 2}; exit 2 - f}' && ((++i)) ||
                 [[ ${PIPESTATUS[*]} =~ ^0+2$ ]]
         done
-    } >"$out"
+    } >"$out2"
+    # Add inline awk scripts
+    awk '$1 == "lk_awk_load" && $2 != "-i" {
+  script = "lib/awk/" $3 ".awk"
+  sub(/lk_awk_load/, "& -i")
+  sub(/lk_awk_load -i[ \t]+[^ \t]+[ \t]+[^ \t]+/, "& <<\"EOF\"")
+  print
+  while (getline < script > 0) { if (!match($0, /^[ \t]*(#|$)/)) { print } }
+  close(script)
+  print "EOF"
+  next
+}
+{ print }' "$out2" >"$out"
     args=(-i "${shfmt_indent:-4}")
     ((!format)) ||
         args=("${shfmt_args[@]}")

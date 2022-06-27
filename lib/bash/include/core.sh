@@ -326,6 +326,41 @@ function lk_x_no_off() {
 
 [ -z "${_LK_NO_X_OFF-}" ] || lk_x_no_off
 
+# lk_awk_load VAR SCRIPT
+#
+# Locate an awk script, creating it if necessary, and assign its path to VAR.
+#
+# At build time, calls to `lk_awk_load` serve as script insertion points and
+# must therefore appear first in a self-contained line of code.
+#
+# This is acceptable, for example:
+#
+#     lk_awk_load FILE sh-sanitise-quoted-pathname || return
+#
+# But these are not:
+#
+#     lk_awk_load FILE sh-sanitise-quoted-pathname ||
+#         return
+#
+#     [[ -z ${PATHS-} ]] ||
+#         { lk_awk_load FILE sh-sanitise-quoted-pathname; }
+#
+# <LK_BASE>/lib/awk/<SCRIPT>.awk must exist at build time.
+function lk_awk_load() {
+    local _IN=0
+    [[ $1 != -i ]] || { _IN=1 && shift; }
+    unset -v "$1" || lk_warn "invalid variable: $1" || return
+    local _FILE=${LK_BASE+$LK_BASE/lib/awk/$2.awk}
+    [[ ! -f $_FILE ]] || {
+        # Avoid SIGPIPE
+        ((!_IN)) || cat >/dev/null
+        eval "$1=\$_FILE"
+        return
+    }
+    ((_IN)) || lk_warn "file not found: $_FILE" || return
+    lk_mktemp_with "$1" cat
+}
+
 function _lk_sudo_check() {
     local LK_SUDO_ON_FAIL=${LK_SUDO_ON_FAIL-} LK_EXEC=${LK_EXEC-} SHIFT=0 \
         _LK_STACK_DEPTH=1
