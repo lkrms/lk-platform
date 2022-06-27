@@ -8,179 +8,6 @@ USER=${USER:-$(id -un)} &&
 
 _LK_ARGV=("$@")
 
-# lk_bash_at_least MAJOR [MINOR]
-function lk_bash_at_least() {
-    [ "${BASH_VERSINFO[0]}" -eq "$1" ] &&
-        [ "${BASH_VERSINFO[1]}" -ge "${2:-0}" ] ||
-        [ "${BASH_VERSINFO[0]}" -gt "$1" ]
-}
-
-function lk_is_arm() {
-    [[ $MACHTYPE =~ ^(arm|aarch)64- ]]
-}
-
-function lk_is_macos() {
-    [[ $OSTYPE == darwin* ]]
-}
-
-# lk_is_apple_silicon
-#
-# Return true if running natively on Apple Silicon, otherwise return false.
-# Returns false when running as a translated Intel binary on Apple Silicon.
-function lk_is_apple_silicon() {
-    lk_is_macos && lk_is_arm
-}
-
-# lk_is_system_apple_silicon
-#
-# Return true if running on Apple Silicon, whether natively or as a translated
-# Intel binary.
-function lk_is_system_apple_silicon() {
-    lk_is_macos && { lk_is_arm ||
-        [ "$(sysctl -n sysctl.proc_translated 2>/dev/null)" = 1 ]; }
-}
-
-function lk_is_linux() {
-    [[ $OSTYPE == linux-gnu ]]
-}
-
-function lk_is_arch() {
-    lk_is_linux && [ -f /etc/arch-release ]
-}
-
-function lk_is_ubuntu() {
-    lk_is_linux && [ -r /etc/os-release ] &&
-        (. /etc/os-release && [ "$NAME" = Ubuntu ])
-}
-
-function lk_ubuntu_at_least() {
-    lk_is_linux && [ -r /etc/os-release ] &&
-        (. /etc/os-release && [ "$NAME" = Ubuntu ] &&
-            lk_version_at_least "$VERSION_ID" "$1")
-}
-
-function lk_is_wsl() {
-    lk_is_linux && grep -iq Microsoft /proc/version &>/dev/null
-}
-
-function lk_is_virtual() {
-    lk_is_linux && grep -Eq '^flags[[:blank:]]*:.*\<hypervisor\>' /proc/cpuinfo
-}
-
-function lk_is_qemu() {
-    lk_is_virtual &&
-        grep -iq QEMU /sys/devices/virtual/dmi/id/*_vendor 2>/dev/null
-}
-
-# lk_command_exists COMMAND...
-function lk_command_exists() {
-    [ $# -gt 0 ] || return
-    while [ $# -gt 0 ]; do
-        type -P "$1" >/dev/null || return
-        shift
-    done
-}
-
-# lk_version_at_least INSTALLED MINIMUM
-function lk_version_at_least() {
-    printf '%s\n' "$@" | sort -V | head -n1 | grep -Fx "$2" >/dev/null
-}
-
-# lk_script_running
-#
-# Return true if a script file is running. If reading commands from a named pipe
-# (e.g. `bash <(list)`), the standard input (`bash -i` or `list | bash`), or the
-# command line (`bash -c "string"`), return false.
-function lk_script_running() {
-    [ "${BASH_SOURCE+${BASH_SOURCE[*]: -1}}" = "$0" ] && [ -f "$0" ]
-}
-
-# lk_verbose [LEVEL]
-#
-# Return true if LK_VERBOSE [default: 0] is at least LEVEL [default: 1].
-function lk_verbose() {
-    [ "${LK_VERBOSE:-0}" -ge "${1-1}" ]
-}
-
-# lk_debug
-#
-# Return true if LK_DEBUG is set.
-function lk_debug() {
-    [ "${LK_DEBUG-}" = Y ]
-}
-
-# lk_root
-#
-# Return true if running as the root user.
-function lk_root() {
-    [ "$EUID" -eq 0 ]
-}
-
-# lk_dry_run
-#
-# Return true if LK_DRY_RUN is set.
-function lk_dry_run() {
-    [ "${LK_DRY_RUN:-0}" -eq 1 ]
-
-}
-
-# lk_true VAR
-#
-# Return true if VAR or ${!VAR} is 'Y', 'yes', '1', 'true', or 'on' (not
-# case-sensitive).
-function lk_true() {
-    local REGEX='^([yY]([eE][sS])?|1|[tT][rR][uU][eE]|[oO][nN])$'
-    [[ $1 =~ $REGEX ]] || [[ ${1:+${!1-}} =~ $REGEX ]]
-}
-
-# lk_false VAR
-#
-# Return true if VAR or ${!VAR} is 'N', 'no', '0', 'false', or 'off' (not
-# case-sensitive).
-function lk_false() {
-    local REGEX='^([nN][oO]?|0|[fF][aA][lL][sS][eE]|[oO][fF][fF])$'
-    [[ $1 =~ $REGEX ]] || [[ ${1:+${!1-}} =~ $REGEX ]]
-}
-
-# lk_test TEST [VALUE...]
-#
-# Return true if every VALUE passes TEST, otherwise return false. If there are
-# no VALUE arguments, return false.
-function lk_test() {
-    local IFS=$' \t\n' COMMAND
-    COMMAND=($1)
-    shift
-    [ -n "${COMMAND+1}" ] && [ $# -gt 0 ] || return
-    while [ $# -gt 0 ]; do
-        "${COMMAND[@]}" "$1" || break
-        shift
-    done
-    [ $# -eq 0 ]
-}
-
-# lk_test_any TEST [VALUE...]
-#
-# Return true if at least one VALUE passes TEST, otherwise return false.
-function lk_test_any() {
-    local IFS=$' \t\n' COMMAND
-    COMMAND=($1)
-    shift
-    [ -n "${COMMAND+1}" ] && [ $# -gt 0 ] || return
-    while [ $# -gt 0 ]; do
-        ! "${COMMAND[@]}" "$1" || break
-        shift
-    done
-    [ $# -gt 0 ]
-}
-
-function lk_paths_exist() { lk_test "lk_sudo test -e" "$@"; }
-
-function lk_files_exist() { lk_test "lk_sudo test -f" "$@"; }
-
-function lk_dirs_exist() { lk_test "lk_sudo test -d" "$@"; }
-
-function lk_files_not_empty() { lk_test "lk_sudo test -s" "$@"; }
-
 # lk_pass [-STATUS] COMMAND [ARG...]
 #
 # Run COMMAND without changing the previous command's exit status, or run
@@ -326,40 +153,190 @@ function lk_x_no_off() {
 
 [ -z "${_LK_NO_X_OFF-}" ] || lk_x_no_off
 
-# lk_awk_load VAR SCRIPT
-#
-# Locate an awk script, creating it if necessary, and assign its path to VAR.
-#
-# At build time, calls to `lk_awk_load` serve as script insertion points and
-# must therefore appear first in a self-contained line of code.
-#
-# This is acceptable, for example:
-#
-#     lk_awk_load FILE sh-sanitise-quoted-pathname || return
-#
-# But these are not:
-#
-#     lk_awk_load FILE sh-sanitise-quoted-pathname ||
-#         return
-#
-#     [[ -z ${PATHS-} ]] ||
-#         { lk_awk_load FILE sh-sanitise-quoted-pathname; }
-#
-# <LK_BASE>/lib/awk/<SCRIPT>.awk must exist at build time.
-function lk_awk_load() {
-    local _IN=0
-    [[ $1 != -i ]] || { _IN=1 && shift; }
-    unset -v "$1" || lk_warn "invalid variable: $1" || return
-    local _FILE=${LK_BASE+$LK_BASE/lib/awk/$2.awk}
-    [[ ! -f $_FILE ]] || {
-        # Avoid SIGPIPE
-        ((!_IN)) || cat >/dev/null
-        eval "$1=\$_FILE"
-        return
-    }
-    ((_IN)) || lk_warn "file not found: $_FILE" || return
-    lk_mktemp_with "$1" cat
+# lk_bash_at_least MAJOR [MINOR]
+function lk_bash_at_least() {
+    [ "${BASH_VERSINFO[0]}" -eq "$1" ] &&
+        [ "${BASH_VERSINFO[1]}" -ge "${2:-0}" ] ||
+        [ "${BASH_VERSINFO[0]}" -gt "$1" ]
 }
+
+function lk_is_arm() {
+    [[ $MACHTYPE =~ ^(arm|aarch)64- ]]
+}
+
+function lk_is_macos() {
+    [[ $OSTYPE == darwin* ]]
+}
+
+# lk_is_apple_silicon
+#
+# Return true if running natively on Apple Silicon, otherwise return false.
+# Returns false when running as a translated Intel binary on Apple Silicon.
+function lk_is_apple_silicon() {
+    lk_is_macos && lk_is_arm
+}
+
+# lk_is_system_apple_silicon
+#
+# Return true if running on Apple Silicon, whether natively or as a translated
+# Intel binary.
+function lk_is_system_apple_silicon() {
+    lk_is_macos && { lk_is_arm ||
+        [ "$(sysctl -n sysctl.proc_translated 2>/dev/null)" = 1 ]; }
+}
+
+function lk_is_linux() {
+    [[ $OSTYPE == linux-gnu ]]
+}
+
+function lk_is_arch() {
+    lk_is_linux && [ -f /etc/arch-release ]
+}
+
+function lk_is_ubuntu() {
+    lk_is_linux && [ -r /etc/os-release ] &&
+        (. /etc/os-release && [ "$NAME" = Ubuntu ])
+}
+
+function lk_ubuntu_at_least() {
+    lk_is_linux && [ -r /etc/os-release ] &&
+        (. /etc/os-release && [ "$NAME" = Ubuntu ] &&
+            lk_version_at_least "$VERSION_ID" "$1")
+}
+
+function lk_is_wsl() {
+    lk_is_linux && grep -iq Microsoft /proc/version &>/dev/null
+}
+
+function lk_is_virtual() {
+    lk_is_linux && grep -Eq '^flags[[:blank:]]*:.*\<hypervisor\>' /proc/cpuinfo
+}
+
+function lk_is_qemu() {
+    lk_is_virtual &&
+        grep -iq QEMU /sys/devices/virtual/dmi/id/*_vendor 2>/dev/null
+}
+
+# lk_command_exists COMMAND...
+function lk_command_exists() {
+    [ $# -gt 0 ] || return
+    while [ $# -gt 0 ]; do
+        type -P "$1" >/dev/null || return
+        shift
+    done
+}
+
+# lk_version_at_least INSTALLED MINIMUM
+function lk_version_at_least() {
+    printf '%s\n' "$@" | sort -V | head -n1 | grep -Fx "$2" >/dev/null
+}
+
+# lk_script_running
+#
+# Return true if a script file is running. If reading commands from a named pipe
+# (e.g. `bash <(list)`), the standard input (`bash -i` or `list | bash`), or the
+# command line (`bash -c "string"`), return false.
+function lk_script_running() {
+    [ "${BASH_SOURCE+${BASH_SOURCE[*]: -1}}" = "$0" ] && [ -f "$0" ]
+}
+
+# lk_verbose [LEVEL]
+#
+# Return true if LK_VERBOSE [default: 0] is at least LEVEL [default: 1].
+function lk_verbose() {
+    [ "${LK_VERBOSE:-0}" -ge "${1-1}" ]
+}
+
+# lk_no_input
+#
+# Check LK_NO_INPUT and LK_FORCE_INPUT, and return true if user input should not
+# be requested.
+function lk_no_input() {
+    if [ "${LK_FORCE_INPUT-}" = 1 ]; then
+        { [ -t 0 ] || lk_err "/dev/stdin is not a terminal"; } && false
+    else
+        [ ! -t 0 ] || [ "${LK_NO_INPUT-}" = 1 ]
+    fi
+}
+
+# lk_debug
+#
+# Return true if LK_DEBUG is set.
+function lk_debug() {
+    [ "${LK_DEBUG-}" = Y ]
+}
+
+# lk_root
+#
+# Return true if running as the root user.
+function lk_root() {
+    [ "$EUID" -eq 0 ]
+}
+
+# lk_dry_run
+#
+# Return true if LK_DRY_RUN is set.
+function lk_dry_run() {
+    [ "${LK_DRY_RUN:-0}" -eq 1 ]
+
+}
+
+# lk_true VAR
+#
+# Return true if VAR or ${!VAR} is 'Y', 'yes', '1', 'true', or 'on' (not
+# case-sensitive).
+function lk_true() {
+    local REGEX='^([yY]([eE][sS])?|1|[tT][rR][uU][eE]|[oO][nN])$'
+    [[ $1 =~ $REGEX ]] || [[ ${1:+${!1-}} =~ $REGEX ]]
+}
+
+# lk_false VAR
+#
+# Return true if VAR or ${!VAR} is 'N', 'no', '0', 'false', or 'off' (not
+# case-sensitive).
+function lk_false() {
+    local REGEX='^([nN][oO]?|0|[fF][aA][lL][sS][eE]|[oO][fF][fF])$'
+    [[ $1 =~ $REGEX ]] || [[ ${1:+${!1-}} =~ $REGEX ]]
+}
+
+# lk_test TEST [VALUE...]
+#
+# Return true if every VALUE passes TEST, otherwise return false. If there are
+# no VALUE arguments, return false.
+function lk_test() {
+    local IFS=$' \t\n' COMMAND
+    COMMAND=($1)
+    shift
+    [ -n "${COMMAND+1}" ] && [ $# -gt 0 ] || return
+    while [ $# -gt 0 ]; do
+        "${COMMAND[@]}" "$1" || break
+        shift
+    done
+    [ $# -eq 0 ]
+}
+
+# lk_test_any TEST [VALUE...]
+#
+# Return true if at least one VALUE passes TEST, otherwise return false.
+function lk_test_any() {
+    local IFS=$' \t\n' COMMAND
+    COMMAND=($1)
+    shift
+    [ -n "${COMMAND+1}" ] && [ $# -gt 0 ] || return
+    while [ $# -gt 0 ]; do
+        ! "${COMMAND[@]}" "$1" || break
+        shift
+    done
+    [ $# -gt 0 ]
+}
+
+function lk_paths_exist() { lk_test "lk_sudo test -e" "$@"; }
+
+function lk_files_exist() { lk_test "lk_sudo test -f" "$@"; }
+
+function lk_dirs_exist() { lk_test "lk_sudo test -d" "$@"; }
+
+function lk_files_not_empty() { lk_test "lk_sudo test -s" "$@"; }
 
 function _lk_sudo_check() {
     local LK_SUDO_ON_FAIL=${LK_SUDO_ON_FAIL-} LK_EXEC=${LK_EXEC-} SHIFT=0 \
@@ -452,7 +429,7 @@ function lk_will_sudo() {
 # Returns false if LK_NO_INPUT is set and sudo can't check the security policy
 # without asking the user to authenticate.
 function lk_can_sudo() {
-    [[ -n ${1-} ]] || lk_warn "invalid arguments" || return
+    [[ -n ${1-} ]] || lk_err "invalid arguments" || return
     if lk_no_input; then
         sudo -nl "$1" &>/dev/null
     else
@@ -1137,6 +1114,41 @@ function lk_arr_remove() {
     _SH=$(eval "for _i in \${$1+\"\${!$1[@]}\"}; do
     [ \"\${$1[_i]}\" != \"\$2\" ] || echo \"unset \\\"$1[\$_i]\\\"\"
 done") && eval "$_SH"
+}
+
+# lk_awk_load VAR SCRIPT
+#
+# Locate an awk script, creating it if necessary, and assign its path to VAR.
+#
+# At build time, calls to `lk_awk_load` serve as script insertion points and
+# must therefore appear first in a self-contained line of code.
+#
+# This is acceptable, for example:
+#
+#     lk_awk_load FILE sh-sanitise-quoted-pathname || return
+#
+# But these are not:
+#
+#     lk_awk_load FILE sh-sanitise-quoted-pathname ||
+#         return
+#
+#     [[ -z ${PATHS-} ]] ||
+#         { lk_awk_load FILE sh-sanitise-quoted-pathname; }
+#
+# <LK_BASE>/lib/awk/<SCRIPT>.awk must exist at build time.
+function lk_awk_load() {
+    local _IN=0
+    [[ $1 != -i ]] || { _IN=1 && shift; }
+    unset -v "$1" || lk_err "invalid variable: $1" || return
+    local _FILE=${LK_BASE+$LK_BASE/lib/awk/$2.awk}
+    [[ ! -f $_FILE ]] || {
+        # Avoid SIGPIPE
+        ((!_IN)) || cat >/dev/null
+        eval "$1=\$_FILE"
+        return
+    }
+    ((_IN)) || lk_err "file not found: $_FILE" || return
+    lk_mktemp_with "$1" cat
 }
 
 function _lk_caller() {
@@ -1892,6 +1904,77 @@ function lk_tty_error() {
     eval "$_lk_x_return"
 }
 
+# _lk_usage_format <CALLER>
+function _lk_usage_format() {
+    set -- "$(lk_sed_escape "${1-}")" \
+        "$(lk_sed_escape_replace "$LK_BOLD")" \
+        "$(lk_sed_escape_replace "$LK_RESET")"
+    sed -E "
+# Print the command name in bold
+s/^($S*([uU]sage:|[oO]r:)?$S+(sudo )?)($1)($S|\$)/\1$2\4$3\5/
+# Print all-caps headings in bold
+s/^[A-Z0-9][A-Z0-9 ]*\$/$2&$3/
+# Remove leading backslashes
+s/^\\\\(.)/\\1/"
+}
+
+# _lk_usage <CALLER> [USAGE]
+function _lk_usage() {
+    if [[ -n ${2+1} ]]; then
+        echo "$2"
+    elif [[ $(type -t __usage) == "function" ]]; then
+        __usage
+    elif [[ -n ${1:+1} ]] &&
+        [[ $(type -t "_$1_usage") =~ ^(function|file)$ ]]; then
+        "_$1_usage" "$1"
+    else
+        echo "${LK_USAGE:-$1: invalid arguments}"
+    fi
+}
+
+# _lk_version <CALLER>
+function _lk_version() {
+    if [[ $(type -t __version) == "function" ]]; then
+        __version
+    elif [[ -n ${1:+1} ]] &&
+        [[ $(type -t "_$1_version") =~ ^(function|file)$ ]]; then
+        "_$1_version" "$1"
+    elif [[ -n ${LK_VERSION:+1} ]]; then
+        echo "$LK_VERSION"
+    else
+        false || lk_err "no version defined: ${1-}"
+    fi
+}
+
+# lk_usage [-e <ERROR_MESSAGE>]... [USAGE]
+#
+# Print a usage message and exit non-zero with the most recent exit status or 1.
+# If running interactively, return non-zero instead of exiting. If -e is set,
+# print "<CALLER>: <ERROR_MESSAGE>" as an error before the usage message.
+#
+# The usage message is taken from one of the following:
+# 1. USAGE parameter
+# 2. output of `__usage` (if `__usage` is a function)
+# 3. output of `_<CALLER>_usage <CALLER>` (if `_<CALLER>_usage` is a function or
+#    disk file)
+# 4. LK_USAGE variable (deprecated)
+function lk_usage() {
+    local STATUS=$? CALLER
+    ((STATUS)) || STATUS=1
+    CALLER=$(lk_caller_name) || CALLER=bash
+    while [ "${1-}" = -e ]; do
+        lk_tty_error "$LK_BOLD$CALLER$LK_RESET: $2"
+        shift 2
+    done
+    _lk_usage "$CALLER" "$@" |
+        _lk_usage_format "$CALLER" >&"${_LK_FD-2}" || true
+    if [[ $- != *i* ]]; then
+        exit "$STATUS"
+    else
+        return "$STATUS"
+    fi
+}
+
 # _lk_var [STACK_DEPTH]
 #
 # Print 'declare ' if the command that called the caller belongs to a function.
@@ -2006,18 +2089,6 @@ function lk_var_to_int() {
     [[ ! ${!1-} =~ ^(-)?0*([0-9]+)(\.[0-9]*)?$ ]] ||
         set -- "$1" "${BASH_REMATCH[1]}${BASH_REMATCH[2]}"
     eval "$1=\$2"
-}
-
-# lk_no_input
-#
-# Check LK_NO_INPUT and LK_FORCE_INPUT, and return true if user input should not
-# be requested.
-function lk_no_input() {
-    if [ "${LK_FORCE_INPUT-}" = 1 ]; then
-        { [ -t 0 ] || lk_err "/dev/stdin is not a terminal"; } && false
-    else
-        [ ! -t 0 ] || [ "${LK_NO_INPUT-}" = 1 ]
-    fi
 }
 
 function _lk_tty_prompt() {
@@ -2163,77 +2234,6 @@ function lk_require() {
 }
 
 _LK_SOURCED=core
-
-# _lk_usage_format <CALLER>
-function _lk_usage_format() {
-    set -- "$(lk_sed_escape "${1-}")" \
-        "$(lk_sed_escape_replace "$LK_BOLD")" \
-        "$(lk_sed_escape_replace "$LK_RESET")"
-    sed -E "
-# Print the command name in bold
-s/^($S*([uU]sage:|[oO]r:)?$S+(sudo )?)($1)($S|\$)/\1$2\4$3\5/
-# Print all-caps headings in bold
-s/^[A-Z0-9][A-Z0-9 ]*\$/$2&$3/
-# Remove leading backslashes
-s/^\\\\(.)/\\1/"
-}
-
-# _lk_usage <CALLER> [USAGE]
-function _lk_usage() {
-    if [[ -n ${2+1} ]]; then
-        echo "$2"
-    elif [[ $(type -t __usage) == "function" ]]; then
-        __usage
-    elif [[ -n ${1:+1} ]] &&
-        [[ $(type -t "_$1_usage") =~ ^(function|file)$ ]]; then
-        "_$1_usage" "$1"
-    else
-        echo "${LK_USAGE:-$1: invalid arguments}"
-    fi
-}
-
-# _lk_version <CALLER>
-function _lk_version() {
-    if [[ $(type -t __version) == "function" ]]; then
-        __version
-    elif [[ -n ${1:+1} ]] &&
-        [[ $(type -t "_$1_version") =~ ^(function|file)$ ]]; then
-        "_$1_version" "$1"
-    elif [[ -n ${LK_VERSION:+1} ]]; then
-        echo "$LK_VERSION"
-    else
-        false || lk_err "no version defined: ${1-}"
-    fi
-}
-
-# lk_usage [-e <ERROR_MESSAGE>]... [USAGE]
-#
-# Print a usage message and exit non-zero with the most recent exit status or 1.
-# If running interactively, return non-zero instead of exiting. If -e is set,
-# print "<CALLER>: <ERROR_MESSAGE>" as an error before the usage message.
-#
-# The usage message is taken from one of the following:
-# 1. USAGE parameter
-# 2. output of `__usage` (if `__usage` is a function)
-# 3. output of `_<CALLER>_usage <CALLER>` (if `_<CALLER>_usage` is a function or
-#    disk file)
-# 4. LK_USAGE variable (deprecated)
-function lk_usage() {
-    local STATUS=$? CALLER
-    ((STATUS)) || STATUS=1
-    CALLER=$(lk_caller_name) || CALLER=bash
-    while [ "${1-}" = -e ]; do
-        lk_tty_error "$LK_BOLD$CALLER$LK_RESET: $2"
-        shift 2
-    done
-    _lk_usage "$CALLER" "$@" |
-        _lk_usage_format "$CALLER" >&"${_LK_FD-2}" || true
-    if [[ $- != *i* ]]; then
-        exit "$STATUS"
-    else
-        return "$STATUS"
-    fi
-}
 
 # lk_fifo_flush FIFO_PATH
 function lk_fifo_flush() {
@@ -2596,7 +2596,7 @@ function lk_uri_encode() {
 
 # lk_curl_get_form_args ARRAY [PARAMETER=VALUE...]
 function lk_curl_get_form_args() {
-    (($#)) || lk_warn "invalid arguments" || return
+    (($#)) || lk_err "invalid arguments" || return
     eval "$1=()" || return
     local _NEXT="$1[\${#$1[@]}]"
     shift

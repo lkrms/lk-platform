@@ -16,6 +16,18 @@ function lk_verbose() {
     [ "${LK_VERBOSE:-0}" -ge "${1-1}" ]
 }
 
+# lk_no_input
+#
+# Check LK_NO_INPUT and LK_FORCE_INPUT, and return true if user input should not
+# be requested.
+function lk_no_input() {
+    if [ "${LK_FORCE_INPUT-}" = 1 ]; then
+        { [ -t 0 ] || lk_err "/dev/stdin is not a terminal"; } && false
+    else
+        [ ! -t 0 ] || [ "${LK_NO_INPUT-}" = 1 ]
+    fi
+}
+
 # lk_debug
 #
 # Return true if LK_DEBUG is set.

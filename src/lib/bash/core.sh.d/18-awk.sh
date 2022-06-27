@@ -23,7 +23,7 @@
 function lk_awk_load() {
     local _IN=0
     [[ $1 != -i ]] || { _IN=1 && shift; }
-    unset -v "$1" || lk_warn "invalid variable: $1" || return
+    unset -v "$1" || lk_err "invalid variable: $1" || return
     local _FILE=${LK_BASE+$LK_BASE/lib/awk/$2.awk}
     [[ ! -f $_FILE ]] || {
         # Avoid SIGPIPE
@@ -31,6 +31,6 @@ function lk_awk_load() {
         eval "$1=\$_FILE"
         return
     }
-    ((_IN)) || lk_warn "file not found: $_FILE" || return
+    ((_IN)) || lk_err "file not found: $_FILE" || return
     lk_mktemp_with "$1" cat
 }

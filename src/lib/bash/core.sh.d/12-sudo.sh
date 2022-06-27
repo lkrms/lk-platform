@@ -91,7 +91,7 @@ function lk_will_sudo() {
 # Returns false if LK_NO_INPUT is set and sudo can't check the security policy
 # without asking the user to authenticate.
 function lk_can_sudo() {
-    [[ -n ${1-} ]] || lk_warn "invalid arguments" || return
+    [[ -n ${1-} ]] || lk_err "invalid arguments" || return
     if lk_no_input; then
         sudo -nl "$1" &>/dev/null
     else
