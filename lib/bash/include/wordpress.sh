@@ -596,7 +596,7 @@ SQL
         lk_pv "$1" | gunzip
     else
         lk_pv "$1"
-    fi | lk_mysql "$LOCAL_DB_NAME" ||
+    fi | lk_mysql_restore_filter | lk_mysql "$LOCAL_DB_NAME" ||
         lk_tty_error -r "Restore operation failed" || return
     lk_tty_success "Database restored successfully"
 }

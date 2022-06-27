@@ -247,7 +247,7 @@ function lk_mysql_dump_remote() {
     local SSH_HOST=$1 DB_NAME=$2 \
         DB_USER=${3-${DB_USER-}} DB_PASSWORD=${4-${DB_PASSWORD-}} \
         DB_HOST=${5-${DB_HOST-${LK_MYSQL_HOST:-localhost}}} \
-        OUTPUT_FILE OUTPUT_FD EXIT_STATUS=0
+        OUTPUT_FILE OUTPUT_FD SH EXIT_STATUS=0
     [ $# -ge 2 ] || lk_usage "\
 Usage: $FUNCNAME SSH_HOST DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
         return
@@ -270,13 +270,27 @@ Usage: $FUNCNAME SSH_HOST DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
     [ -z "${OUTPUT_FILE-}" ] ||
         lk_tty_detail "Writing compressed SQL to" "$OUTPUT_FILE"
     # TODO: implement lk_mysql_innodb_only
-    ssh "$SSH_HOST" "bash -c 'mysqldump \\
-    --defaults-file=.lk_mysqldump.cnf \\
-    --single-transaction \\
-    --skip-lock-tables \\
-    --no-tablespaces \\
-    \"\$1\" | gzip
-exit \${PIPESTATUS[0]}' bash $(printf '%q' "$DB_NAME")" |
+    SH=$(
+        function do-mysqldump() {
+            local IFS=
+            # Use `sed` to remove the database name when it appears as a
+            # qualifier, working around this MariaDB bug:
+            # https://jira.mariadb.org/browse/MDEV-22282
+            mysqldump \
+                --defaults-file=.lk_mysqldump.cnf \
+                --single-transaction \
+                --skip-lock-tables \
+                --no-tablespaces \
+                "$1" | sed -E ':repeat
+s/^(\/\*![0-9]+[[:blank:]]+.*)'"$2"'\.(`([^`]+|``)*`)/\1\2/
+t repeat' | gzip && [[ ${PIPESTATUS[*]} == 000 ]]
+        }
+        declare -f do-mysqldump
+        lk_quote_args do-mysqldump \
+            "$DB_NAME" \
+            "$(lk_sed_escape "$(lk_mysql_quote_identifier "$DB_NAME")")"
+    )
+    ssh "$SSH_HOST" "bash -c $(lk_quote_args "$SH")" |
         lk_pv ||
         EXIT_STATUS=$?
     [ -z "${OUTPUT_FILE-}" ] || eval "exec >&$OUTPUT_FD $OUTPUT_FD>&-"
@@ -288,6 +302,17 @@ exit \${PIPESTATUS[0]}' bash $(printf '%q' "$DB_NAME")" |
         lk_tty_success "Database dump completed successfully" ||
         lk_tty_error "Database dump failed"
     return "$EXIT_STATUS"
+}
+
+# lk_mysql_restore_filter [SED_ARG...]
+#
+# Fix known issues in mysqldump-generated SQL.
+#
+# To print changed lines only, call:
+#
+#     lk_mysql_restore_filter -n -e "T; p"
+function lk_mysql_restore_filter() {
+    sed -E -e 's/^(\/\*![0-9]+[[:blank:]]+DEFINER=)`([^`]+|``)*`@`([^`]+|``)*`/\1CURRENT_USER/' "$@"
 }
 
 # lk_mysql_restore_local FILE DB_NAME
@@ -317,7 +342,7 @@ function lk_mysql_restore_local() {
         lk_pv "$FILE" | gunzip
     else
         lk_pv "$FILE"
-    fi | lk_mysql "$DB_NAME" ||
+    fi | lk_mysql_restore_filter | lk_mysql "$DB_NAME" ||
         lk_tty_error -r "Restore operation failed" || return
     lk_tty_success "Database restored successfully"
 }
