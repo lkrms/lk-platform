@@ -3,6 +3,10 @@
 lk_require git provision
 
 function linode-cli() {
+    local LINODE_USER=${LINODE_USER-${LK_LINODE_USER-}}
+    (IFS=, && [[ ,$*, == *,--as-user,* ]]) ||
+        [[ -z $LINODE_USER ]] ||
+        set -- --as-user "$LINODE_USER" "$@"
     # Suppress "Unable to determine if a new linode-cli package is available in
     # pypi"
     command linode-cli --suppress-warnings "$@"

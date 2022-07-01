@@ -65,11 +65,10 @@ lk_log_start
     [ -n "${LINODE+1}" ]
   }
 
+  LINODE_USER=${LINODE_USER-${LK_LINODE_USER-}}
   unset LINODE
-  [ -z "${LINODE_USER:+1}" ] || {
+  [[ -z ${LINODE_USER:+1} ]] ||
     LINODE=
-    LINODE_ARGS=(--as-user "$LINODE_USER")
-  }
 
   unset IDENTITY
   DKIM_KEY_LENGTH=RSA_1024_BIT
