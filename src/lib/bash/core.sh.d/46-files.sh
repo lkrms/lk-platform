@@ -27,3 +27,14 @@ function lk_file_maybe_move() {
 function lk_file_list_duplicates() {
     find "${1:-.}" -print0 | sort -zf | gnu_uniq -zDi | tr '\0' '\n'
 }
+
+# lk_expand_path [PATH...]
+#
+# Remove enclosing quotation marks (if any) and perform tilde and glob expansion
+# on each PATH. Call after `shopt -s globstar` to expand `**` globs.
+function lk_expand_path() { (
+    shopt -s nullglob
+    lk_awk_load AWK sh-sanitise-quoted-pathname || return
+    SH="printf '%s\\n' $(_lk_stream_args 3 awk -f "$AWK" "$@" | tr '\n' ' ')" &&
+        eval "$SH"
+); }

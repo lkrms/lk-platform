@@ -755,7 +755,7 @@ EOF
             LK_FILE_NO_DIFF=1
             USERS=($(lk_get_standard_users))
             for _USER in ${USERS+"${USERS[@]}"}; do
-                _HOME=$(lk_expand_path "~$_USER")
+                _HOME=$(lk_user_home "$_USER")
                 _DIR=$_HOME/.ssh
                 _FILE=$_DIR/authorized_keys_${LK_PATH_PREFIX%-}
                 GROUP=$(id -gn "$_USER")
@@ -1155,7 +1155,7 @@ EOF
     if lk_is_bootstrap && [ -n "$LK_HOST_ACCOUNT" ]; then
         lk_hosting_user_add "$LK_HOST_ACCOUNT"
         if [ -n "$LK_HOST_DOMAIN" ]; then
-            HOST_SITE_ROOT=$(lk_expand_path "~$LK_HOST_ACCOUNT")
+            HOST_SITE_ROOT=$(lk_user_home "$LK_HOST_ACCOUNT")
             lk_hosting_site_configure -n \
                 -s SITE_ENABLE="$LK_HOST_SITE_ENABLE" \
                 "$LK_HOST_DOMAIN" "$HOST_SITE_ROOT"
