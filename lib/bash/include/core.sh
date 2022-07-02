@@ -2235,6 +2235,26 @@ function lk_require() {
 
 _LK_SOURCED=core
 
+# lk_squeeze_whitespace [FILE...]
+function lk_squeeze_whitespace() {
+    local AWK
+    lk_awk_load -i AWK sh-squeeze-whitespace <<"EOF" || return
+/^[ \t]*$/ {
+  if (last_blank) {
+    next
+  }
+  last_blank = 1
+  print ""
+  next
+}
+{
+  last_blank = 0
+  print
+}
+EOF
+    awk -f "$AWK" "$@"
+}
+
 # lk_fifo_flush FIFO_PATH
 function lk_fifo_flush() {
     [ -p "${1-}" ] || lk_err "not a FIFO: ${1-}" || return

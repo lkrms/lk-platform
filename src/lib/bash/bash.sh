@@ -1,9 +1,7 @@
 #!/bin/bash
 
-# shellcheck disable=SC2002
-
 function lk_bash_is_builtin() {
-    [ "$(type -t "$1")" = builtin ]
+    [[ $(type -t "$1") == builtin ]]
 }
 
 # lk_bash_function_names [-H] [FILE...]
@@ -128,6 +126,49 @@ function lk_bash_array_literals() {
         select(.Type=="Lit" or .Type=="SglQuoted"),
         select(.Type=="DblQuoted" and (.Parts|length)==1 and .Parts[0].Type=="Lit").Parts[0]
     ).Value'
+}
+
+# lk_bash_command_type_paths [FILE]
+#
+# Example output:
+#
+#     ...
+#     FuncDecl      Stmts[9].Cmd
+#     Block         Stmts[9].Cmd.Body.Cmd
+#     DeclClause    Stmts[9].Cmd.Body.Cmd.Stmts[0].Cmd
+#     BinaryCmd     Stmts[9].Cmd.Body.Cmd.Stmts[1].Cmd
+#     CallExpr      Stmts[9].Cmd.Body.Cmd.Stmts[1].Cmd.X.Cmd
+#     ...
+function lk_bash_command_type_paths() {
+    cat ${1+"$1"} |
+        shfmt -tojson |
+        jq -r '
+path(..|select(type=="object" and .Cmd.Type)) as $path |
+    [getpath($path).Cmd.Type, (($path|join("."))+".Cmd")] | @tsv' |
+        sed -E 's/\.([0-9]+)/[\1]/g'
+}
+
+# lk_bash_command_cut [-c] [-t <TYPE>] [FILE] [-- <CUT_ARG>...]
+#
+# For example, `lk_bash_command_cut -c FuncDecl core.sh --complement` removes
+# function declarations from `core.sh`, including any comments associated with
+# them.
+function lk_bash_command_cut() {
+    local COMMENTS TYPE=FuncDecl FILE=/dev/stdin
+    [[ ${1-} != -c ]] || { COMMENTS=true && shift; }
+    [[ ${1-} != -t ]] || { TYPE=${2-} && shift 2 || return; }
+    ((!$#)) || [[ $1 == -- ]] || { FILE=${1:-$FILE} && shift; }
+    [[ $1 != -- ]] || shift
+    [[ -f $FILE ]] || { [[ -e $FILE ]] && lk_mktemp_with FILE cat "$FILE"; } ||
+        lk_warn "file not found: $FILE" || return
+    cut "$@" -z -b "$(shfmt -tojson <"$FILE" |
+        jq -r \
+            --arg type "$TYPE" \
+            --argjson comments "${COMMENTS:-false}" '
+[..|select(type=="object" and .Cmd.Type==$type)|
+    (if $comments then .Comments[] else empty end, .Cmd)|
+    "\(.Pos.Offset+1)-\(.End.Offset)" ] | join(",")')" <"$FILE" |
+        lk_squeeze_whitespace
 }
 
 # lk_bash_find_scripts [-d DIR] [FIND_ACTION...]
