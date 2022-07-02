@@ -1,27 +1,23 @@
 #!/bin/bash
 
 function _lk_prompt_debug_trap() {
-    local IFS
-    [ "${_LK_PROMPT_DISPLAYED:-0}" -eq 0 ] ||
-        [ "$BASH_COMMAND" = "$PROMPT_COMMAND" ] || {
-        unset IFS
-        [ -n "${_LK_PROMPT_LAST+1}" ] ||
+    [[ ${_LK_PROMPT_DISPLAYED:-0} -eq 0 ]] ||
+        [[ $BASH_COMMAND == "$PROMPT_COMMAND" ]] || {
+        [[ -n ${_LK_PROMPT_LAST+1} ]] ||
             _LK_PROMPT_LAST_START=$(lk_date %s)
         _LK_PROMPT_LAST=($BASH_COMMAND)
     }
 }
 
 function _lk_prompt_command() {
-    local STATUS=$? DIM=$LK_DIM SECS PS=() STR LEN=25 IFS
-    DIM=${DIM:-$LK_GREY}
+    local STATUS=$? DIM=${LK_DIM:-$LK_GREY} SECS PS=() STR LEN=25 IFS
     history -a
     shopt -u promptvars
-    if [ -n "${_LK_PROMPT_LAST+1}" ]; then
+    if [[ -n ${_LK_PROMPT_LAST+1} ]]; then
         ((SECS = $(lk_date %s) - _LK_PROMPT_LAST_START)) || true
-        if [ "$STATUS" -ne 0 ] ||
-            [ "$SECS" -gt 1 ] ||
-            { [ "$(type -t "${_LK_PROMPT_LAST[0]}")" != builtin ] &&
-                [ "${_LK_PROMPT_LAST[0]}" != ls ]; }; then
+        if ((STATUS || SECS > 1)) ||
+            { [[ $(type -t "$_LK_PROMPT_LAST") != builtin ]] &&
+                [[ $_LK_PROMPT_LAST != ls ]]; }; then
             # "Thu May 06 15:02:32 "
             PS+=("\n\[$DIM\]\d \t\[$LK_RESET\] ")
             if [ "$STATUS" -eq 0 ]; then
@@ -37,7 +33,7 @@ function _lk_prompt_command() {
             STR=" after ${SECS}s "
             PS+=("$STR\[$LK_RESET$DIM\]")
             ((LEN = COLUMNS - LEN - ${#STR})) || true
-            [ "$LEN" -le 0 ] || {
+            [[ $LEN -le 0 ]] || {
                 # "( sleep 12; false )"
                 unset IFS
                 PS+=("( $(lk_strip_non_printing <<<"${_LK_PROMPT_LAST[*]}" |
@@ -48,7 +44,7 @@ function _lk_prompt_command() {
         fi
         _LK_PROMPT_LAST=()
     fi
-    if [ "$EUID" -ne 0 ]; then
+    if ((EUID)); then
         # "ubuntu@"
         PS+=("\[$LK_BOLD$LK_GREEN\]\u@")
     else
@@ -57,11 +53,13 @@ function _lk_prompt_command() {
     fi
     # "host1 ~ "
     PS+=("\h\[$LK_RESET$LK_BOLD$LK_BLUE\] \w \[$LK_RESET\]")
+    [[ -z ${LK_PROMPT_TAG-} ]] ||
+        PS+=("\[$LK_WHITE$LK_MAGENTA_BG\] \[$LK_BOLD\]${LK_PROMPT_TAG}\[$LK_UNBOLD\] \[$LK_RESET\] ")
     IFS=
     # "$ " or "# "
     PS1="${PS[*]}"'\$ '
     _LK_PROMPT_DISPLAYED=1
-    [ "${LC_BYOBU:+1}${BYOBU_RUN_DIR:+2}" != 2 ] || export LC_BYOBU=0
+    [[ ${LC_BYOBU:+1}${BYOBU_RUN_DIR:+2} != 2 ]] || export LC_BYOBU=0
 }
 
 function lk_prompt_enable() {

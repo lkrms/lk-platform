@@ -1221,7 +1221,7 @@ EOF
             )
         fi
         IFS=,
-        LK_ACCEPT_OUTPUT_HOSTS=${HOSTS[*]}${LK_ACCEPT_OUTPUT_HOSTS:+,$LK_ACCEPT_OUTPUT_HOSTS}
+        LK_ACCEPT_OUTPUT_HOSTS="${HOSTS[*]}${LK_ACCEPT_OUTPUT_HOSTS:+,$LK_ACCEPT_OUTPUT_HOSTS}"
         unset IFS
     fi
     FILE=$(lk_mktemp_file)
