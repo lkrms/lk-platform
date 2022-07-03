@@ -1,5 +1,18 @@
 #!/usr/bin/env bash
 
+function argToJson() {
+    local IFS=, jq=()
+    set -- $1
+    unset IFS
+    while (($#)); do
+        [[ $1 =~ ^([^=]+)=(.*) ]] || continue
+        jq+=(--arg "${BASH_REMATCH[@]:1:2}")
+        shift
+    done
+    [[ -z ${jq+1} ]] ||
+        jq --null-input --compact-output "${jq[@]}" '$ARGS.named'
+}
+
 function addArg() {
     while [ $# -gt 0 ]; do
         arg[${#arg[@]}]=$1
@@ -32,6 +45,12 @@ if [ ! -x "$cmd" ]; then
     cmd=${cmd##*/}
 fi
 
+IFS=.
+ver=($("$cmd" --version |
+    /usr/bin/grep -Eo '\<[0-9]+\.[^[:space:]]+' |
+    /usr/bin/head -n1))
+unset IFS
+
 arg=()
 accel=0
 cpu=0
@@ -44,7 +63,7 @@ while [ $# -gt 0 ]; do
     case "$1" in
     -machine)
         machine=$2
-        [[ $machine == *,highmem=* ]] ||
+        [[ $machine == *,highmem=* ]] || ((ver[0] >= 7)) ||
             machine+=",highmem=off"
         # Prevent "madvise doesn't support MADV_DONTDUMP, but
         # dump_guest_core=off specified" errors
@@ -71,6 +90,13 @@ while [ $# -gt 0 ]; do
         ((cpu)) ||
             addArg -cpu host
         cpu=1
+        shift
+        ;;
+    -device)
+        json=$2
+        [[ $2 == "{"* ]] ||
+            json=$(argToJson "driver=$2")
+        addArg "$1" "${json:-$2}"
         shift
         ;;
     *)

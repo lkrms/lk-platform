@@ -15,7 +15,7 @@ function lk_uri_encode() {
 
 # lk_curl_get_form_args ARRAY [PARAMETER=VALUE...]
 function lk_curl_get_form_args() {
-    (($#)) || lk_warn "invalid arguments" || return
+    (($#)) || lk_err "invalid arguments" || return
     eval "$1=()" || return
     local _NEXT="$1[\${#$1[@]}]"
     shift

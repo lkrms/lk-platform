@@ -1,5 +1,26 @@
 #!/bin/bash
 
+# lk_user_exists USER
+function lk_user_exists() {
+    id "$1" &>/dev/null || return
+}
+
+# lk_user_home USER
+function lk_user_home() {
+    [[ $1 =~ ^[a-zA-Z_][-a-zA-Z0-9\$_]*$ ]] || return
+    eval "echo ~${1//\$/\\\$}"
+}
+
+# lk_user_groups [USER]
+function lk_user_groups() {
+    id -Gn ${1+"$1"} | tr -s '[:blank:]' '\n'
+}
+
+# lk_user_in_group GROUP [USER]
+function lk_user_in_group() {
+    lk_user_groups ${2+"$2"} | grep -Fx "$1" >/dev/null
+}
+
 function lk_list_user_homes() {
     if ! lk_is_macos; then
         getent passwd | awk -F: -v OFS=$'\t' '{print $1, $6}'

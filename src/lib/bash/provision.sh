@@ -206,7 +206,7 @@ function lk_ssh_list_hosts() {
                     sed -E 's/^("?)([^~/])/\1~\/.ssh\/\2/')
         ) || true
         unset IFS
-        lk_expand_paths FILES &&
+        lk_mapfile FILES < <(lk_arr FILES | lk_expand_path) &&
             lk_remove_missing FILES &&
             lk_resolve_files FILES || return
     done

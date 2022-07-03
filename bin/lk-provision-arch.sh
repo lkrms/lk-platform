@@ -219,7 +219,7 @@ lk_start_trace
     IF_RENAME=()
     if ! lk_is_portable &&
         lk_require_output -q lk_system_list_ethernet_links -u; then
-        NM_IGNORE="^$S*(#|\$|(uuid|permissions|timestamp)=|\[proxy\])"
+        NM_IGNORE="^$S*(#|\$|(uuid|permissions|timestamp|method)=|\[proxy\])"
         BRIDGE=${LK_BRIDGE_INTERFACE-}
         BRIDGE_FILE=${BRIDGE:+$NM_DIR/$BRIDGE$NM_EXT}
         IPV4_IPV6=(
@@ -533,6 +533,11 @@ $LK_NODE_HOSTNAME" &&
     )
     ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
         SERVICE_RESTART+=(sshd)
+
+    ! lk_pac_installed kernel-modules-hook ||
+        SERVICE_ENABLE+=(
+            linux-modules-cleanup "Kernel modules cleanup"
+        )
 
     SERVICE_ENABLE+=(
         qemu-guest-agent "QEMU Guest Agent"

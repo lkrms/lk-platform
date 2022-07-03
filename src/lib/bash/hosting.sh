@@ -17,7 +17,7 @@ Usage: $FUNCNAME LOGIN" || return
         --key UMASK=027 \
         "$1" &&
         _GROUP=$(id -gn "$1") &&
-        _HOME=$(lk_expand_path "~$1") || return
+        _HOME=$(lk_user_home "$1") || return
     lk_tty_print "Account created successfully"
     lk_tty_detail "Login group:" "$_GROUP"
     lk_tty_detail "Home directory:" "$_HOME"
@@ -50,7 +50,7 @@ Usage: $FUNCNAME LOGIN" || return
         --key UMASK=027 \
         "$1" &&
         _GROUP=$(id -gn "$1") &&
-        _HOME=$(lk_expand_path "~$1") || return
+        _HOME=$(lk_user_home "$1") || return
     lk_tty_print "Account created successfully"
     lk_tty_detail "Login group:" "$_GROUP"
     lk_tty_detail "Home directory:" "$_HOME"

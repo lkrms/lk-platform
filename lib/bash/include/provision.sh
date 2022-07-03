@@ -41,6 +41,27 @@ function lk_node_expand_services() {
     lk_echo_args $SERVICES | sort -u | lk_implode_input ","
 }
 
+# lk_user_exists USER
+function lk_user_exists() {
+    id "$1" &>/dev/null || return
+}
+
+# lk_user_home USER
+function lk_user_home() {
+    [[ $1 =~ ^[a-zA-Z_][-a-zA-Z0-9\$_]*$ ]] || return
+    eval "echo ~${1//\$/\\\$}"
+}
+
+# lk_user_groups [USER]
+function lk_user_groups() {
+    id -Gn ${1+"$1"} | tr -s '[:blank:]' '\n'
+}
+
+# lk_user_in_group GROUP [USER]
+function lk_user_in_group() {
+    lk_user_groups ${2+"$2"} | grep -Fx "$1" >/dev/null
+}
+
 function lk_list_user_homes() {
     if ! lk_is_macos; then
         getent passwd | awk -F: -v OFS=$'\t' '{print $1, $6}'
@@ -471,6 +492,49 @@ function lk_settings_persist() {
 function lk_node_is_router() {
     [ "${LK_IPV4_ADDRESS:+1}${LK_IPV4_GATEWAY:+2}" = 1 ] ||
         lk_node_service_enabled router
+}
+
+# lk_ssh_host_parameter_sh [USER@]<HOST>[:PORT] <VAR_PREFIX> [PARAMETER...]
+#
+# Always included: user, hostname, port, identityfile
+function lk_ssh_host_parameter_sh() {
+    [[ ${1-} =~ ^(^([^@]+)@)?([^@:]+)(:([0-9]+))?$ ]] || return
+    local user=${BASH_REMATCH[2]} host=${BASH_REMATCH[3]} \
+        port=${BASH_REMATCH[5]} PREFIX=${2-} AWK
+    shift 2 &&
+        lk_awk_load -i AWK sh-get-ssh-host-parameters <<"EOF" || return
+function quote(str) {
+  gsub(/'/, "'\\''", str)
+  return "'" str "'"
+}
+BEGIN {
+  prefix = prefix ? prefix : "SSH_HOST_"
+  p["USER"] = 1
+  p["HOSTNAME"] = 1
+  p["PORT"] = 1
+  p["IDENTITYFILE"] = 1
+  for (i = 1; i < ARGC; i++) {
+    p[toupper(ARGV[i])] = 1
+    delete ARGV[i]
+  }
+}
+{ _p = toupper($1) }
+p[_p] {
+  $1 = ""
+  sub(/^[ \t]+/, "")
+  print prefix _p "=" quote($0)
+  delete p[_p]
+}
+END {
+  for (_p in p) {
+    if (p[_p]) {
+      print prefix _p "="
+    }
+  }
+}
+EOF
+    ssh -G ${port:+-p "$port"} "${user:+$user@}$host" |
+        awk -v prefix="$PREFIX" -f "$AWK" "$@"
 }
 
 # lk_dns_get_records [-TYPE[,TYPE...]] [+FIELD[,FIELD...]] NAME...
@@ -1493,7 +1557,7 @@ function lk_ssh_list_hosts() {
                     sed -E 's/^("?)([^~/])/\1~\/.ssh\/\2/')
         ) || true
         unset IFS
-        lk_expand_paths FILES &&
+        lk_mapfile FILES < <(lk_arr FILES | lk_expand_path) &&
             lk_remove_missing FILES &&
             lk_resolve_files FILES || return
     done

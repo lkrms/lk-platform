@@ -268,50 +268,6 @@ function lk_awk_dir() {
     echo "$DIR"
 }
 
-function _lk_get_colour() {
-    local SEQ
-    while [ $# -ge 2 ]; do
-        SEQ=$(tput $2) || SEQ=
-        printf '%s%s=%q\n' "$PREFIX" "$1" "$SEQ"
-        [ "$1" != DIM ] ||
-            printf '%s%s=%q\n' "$PREFIX" UNDIM \
-                "$([ "$SEQ" != $'\E[2m' ] || echo $'\E[22m')"
-        shift 2
-    done
-}
-
-# lk_get_colours [PREFIX]
-function lk_get_colours() {
-    local PREFIX
-    PREFIX="declare ${1-LK_}"
-    _lk_get_colour \
-        BLACK "setaf 0" \
-        RED "setaf 1" \
-        GREEN "setaf 2" \
-        YELLOW "setaf 3" \
-        BLUE "setaf 4" \
-        MAGENTA "setaf 5" \
-        CYAN "setaf 6" \
-        WHITE "setaf 7" \
-        GREY "setaf 8" \
-        BLACK_BG "setab 0" \
-        RED_BG "setab 1" \
-        GREEN_BG "setab 2" \
-        YELLOW_BG "setab 3" \
-        BLUE_BG "setab 4" \
-        MAGENTA_BG "setab 5" \
-        CYAN_BG "setab 6" \
-        WHITE_BG "setab 7" \
-        GREY_BG "setab 8" \
-        BOLD "bold" \
-        DIM "dim" \
-        UL_ON "smul" \
-        UL_OFF "rmul" \
-        WRAP_OFF "rmam" \
-        WRAP_ON "smam" \
-        RESET "sgr0"
-}
-
 # _lk_array_fill_temp ARRAY...
 #
 # Create new array _LK_TEMP_ARRAY and copy the elements of each ARRAY to it.
@@ -1391,24 +1347,6 @@ Usage: $FUNCNAME [-f] TARGET LINK"
         LK_SYMLINK_NO_CHANGE=0
 }
 
-function lk_user_exists() {
-    id "$1" &>/dev/null || return
-}
-
-function lk_user_home() {
-    lk_expand_path "~${1-}"
-}
-
-# lk_user_groups [USER]
-function lk_user_groups() {
-    id -Gn ${1+"$1"} | tr -s '[:blank:]' '\n'
-}
-
-# lk_user_in_group GROUP [USER]
-function lk_user_in_group() {
-    lk_user_groups ${2+"$2"} | grep -Fx "$1" >/dev/null
-}
-
 # lk_dir_parents [-u UNTIL] DIR...
 function lk_dir_parents() {
     local UNTIL=/
@@ -1467,68 +1405,6 @@ function lk_resolve_files() {
     lk_mapfile -z "$1" <(
         [ ${#_LK_TEMP_ARRAY[@]} -eq 0 ] ||
             gnu_realpath -zm "${_LK_TEMP_ARRAY[@]}" | sort -zu
-    )
-}
-
-# lk_expand_path [-z] [PATH]
-#
-# Perform quote removal, tilde expansion and glob expansion on PATH, then print
-# each result. If -z is set, output NUL instead of newline after each result.
-# The globstar shell option must be enabled with `shopt -s globstar` for **
-# globs to be expanded.
-function lk_expand_path() {
-    local LK_Z=${LK_Z-} EXIT_STATUS _PATH SHOPT DELIM q g ARR
-    [ "${1-}" != -z ] || { LK_Z=1 && shift; }
-    ! _lk_maybe_xargs 0 "$@" || return "$EXIT_STATUS"
-    [ -n "${1-}" ] || lk_warn "no path" || return
-    _PATH=$1
-    SHOPT=$(shopt -p nullglob) || true
-    shopt -s nullglob
-    DELIM=${LK_Z:+'\0'}
-    # If the path is double- or single-quoted, remove enclosing quotes and
-    # unescape
-    if [[ $_PATH =~ ^\"(.*)\"$ ]]; then
-        _PATH=${BASH_REMATCH[1]//'\"'/'"'}
-    elif [[ $_PATH =~ ^\'(.*)\'$ ]]; then
-        _PATH=${BASH_REMATCH[1]//"\\'"/"'"}
-    fi
-    # Perform tilde expansion
-    if [[ $_PATH =~ ^(~[-a-z0-9\$_]*)(/.*)?$ ]]; then
-        # `printf '%s%q'` outputs "~username''", which doesn't expand, if used
-        # with no path
-        eval "_PATH=$([ -n "${BASH_REMATCH[2]}" ] &&
-            printf '%s%q' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" ||
-            printf '%s' "${BASH_REMATCH[1]}")"
-    fi
-    # Expand globs
-    if [[ $_PATH =~ [*?] ]]; then
-        # Escape characters that have special meanings within double quotes
-        _PATH=$(lk_double_quote -f "$_PATH")
-        _PATH=${_PATH:1:${#_PATH}-2}
-        # Add quotes around glob sequences so that when the whole path is
-        # quoted, they will be unquoted
-        q='"'
-        for g in '\*+' '\?+'; do
-            while [[ $_PATH =~ (.*([^$q${g:1:1}]|^))($g)(.*) ]]; do
-                _PATH=${BASH_REMATCH[1]}$q${BASH_REMATCH[3]}$q${BASH_REMATCH[4]}
-            done
-        done
-        eval "ARR=($q$_PATH$q)"
-        [ ${#ARR[@]} -eq 0 ] ||
-            printf "%s${DELIM:-\\n}" "${ARR[@]}"
-    else
-        printf "%s${DELIM:-\\n}" "$_PATH"
-    fi
-    eval "$SHOPT"
-}
-
-# lk_expand_paths ARRAY
-function lk_expand_paths() {
-    local _LK_TEMP_ARRAY
-    _lk_array_fill_temp "$1" || return
-    lk_mapfile -z "$1" <(
-        [ ${#_LK_TEMP_ARRAY[@]} -eq 0 ] ||
-            lk_expand_path -z "${_LK_TEMP_ARRAY[@]}"
     )
 }
 
@@ -1982,6 +1858,7 @@ if [[ -n ${LK_TTY_NO_COLOUR-} ]] || ! lk_get_tty >/dev/null; then
         LK_CYAN= \
         LK_WHITE= \
         LK_GREY= \
+        LK_DEFAULT= \
         LK_BLACK_BG= \
         LK_RED_BG= \
         LK_GREEN_BG= \
@@ -1991,7 +1868,9 @@ if [[ -n ${LK_TTY_NO_COLOUR-} ]] || ! lk_get_tty >/dev/null; then
         LK_CYAN_BG= \
         LK_WHITE_BG= \
         LK_GREY_BG= \
+        LK_DEFAULT_BG= \
         LK_BOLD= \
+        LK_UNBOLD= \
         LK_DIM= \
         LK_UNDIM= \
         LK_RESET=
@@ -2007,6 +1886,7 @@ else
         LK_CYAN=$'\E[36m' \
         LK_WHITE=$'\E[37m' \
         LK_GREY=$'\E[90m' \
+        LK_DEFAULT=$'\E[39m' \
         LK_BLACK_BG=$'\E[40m' \
         LK_RED_BG=$'\E[41m' \
         LK_GREEN_BG=$'\E[42m' \
@@ -2016,18 +1896,16 @@ else
         LK_CYAN_BG=$'\E[46m' \
         LK_WHITE_BG=$'\E[47m' \
         LK_GREY_BG=$'\E[100m' \
+        LK_DEFAULT_BG=$'\E[49m' \
         LK_BOLD=$'\E[1m' \
+        LK_UNBOLD=$'\E[22m' \
         LK_DIM=$'\E[2m' \
         LK_UNDIM=$'\E[22m' \
         LK_RESET=$'\E[m'
 
     case "${TERM-}" in
     '' | dumb | unknown)
-        [ -z "${TERM+1}" ] || unset TERM
-        ;;
-    linux | vt220 | xterm-*color) ;;
-    *)
-        eval "$(lk_get_colours)"
+        [[ -z ${TERM+1} ]] || unset TERM
         ;;
     esac
 fi
