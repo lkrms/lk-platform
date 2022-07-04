@@ -1257,7 +1257,7 @@ function lk_trap_add() {
         _LK_TRAPS+=("$BASH_SUBSHELL" "$1" "$2")
     }
     trap -- "declare _LK_TRAP_STATUS=0;$(
-        printf '(%s)||_LK_TRAP_STATUS=$?;' "${TRAPS[@]}"
+        printf '{ %s;}||_LK_TRAP_STATUS=$?;' "${TRAPS[@]}"
     )(exit \$_LK_TRAP_STATUS)" "$1"
 }
 
