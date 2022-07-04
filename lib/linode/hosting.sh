@@ -135,6 +135,7 @@ BOLD=$'\E[1m'
 RESET=$'\E[m'
 echo "$BOLD$CYAN==> $RESET${BOLD}Checking prerequisites$RESET" >&2
 REPO_URL=https://raw.githubusercontent.com/lkrms/lk-platform
+_LK_SOURCED=
 for FILE_PATH in \
     /lib/bash/include/{core,debian,git}.sh /share/sudoers.d/default; do
     FILE=$_DIR/${FILE_PATH##*/}
@@ -150,8 +151,10 @@ for FILE_PATH in \
         echo "${MESSAGE/{\}/Already downloaded:}" >&2
     fi
     # TODO: verify before sourcing
-    [[ ! $FILE_PATH =~ /include/[a-z0-9_]+\.sh$ ]] ||
+    [[ ! $FILE_PATH =~ /include/([a-z0-9_]+)\.sh$ ]] || {
+        _LK_SOURCED+=,${BASH_REMATCH[1]}
         . "$FILE"
+    }
 done
 
 IMAGE_BASE_PACKAGES=$(lk_mktemp_file)
