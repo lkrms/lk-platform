@@ -2,12 +2,8 @@
 
 # lk_trap_add SIGNAL COMMAND [ARG...]
 function lk_trap_add() {
-    [ $# -ge 2 ] ||
-        lk_usage "Usage: $FUNCNAME SIGNAL COMMAND [ARG...]" || return
-    local IFS
-    unset IFS
-    [ $# -eq 2 ] ||
-        set -- "$1" "$2$(printf ' %q' "${@:3}")"
+    (($# > 1)) || lk_err "invalid arguments" || return
+    set -- "$1" "$2${3+ $(shift 2 && lk_quote_args "$@")}"
     _LK_TRAPS=(${_LK_TRAPS+"${_LK_TRAPS[@]}"})
     local i TRAPS=()
     for ((i = 0; i < ${#_LK_TRAPS[@]}; i += 3)); do
@@ -17,14 +13,13 @@ function lk_trap_add() {
         [[ ${_LK_TRAPS[i + 2]} != "${2-}" ]] ||
             set -- "$1"
     done
-    [ $# -eq 1 ] || {
+    (($# == 1)) || {
         TRAPS[${#TRAPS[@]}]=$2
         _LK_TRAPS+=("$BASH_SUBSHELL" "$1" "$2")
     }
-    trap -- "$(
-        printf '{ %s; }' "$TRAPS"
-        [ "${#TRAPS[@]}" -lt 2 ] || printf ' && { %s; }' "${TRAPS[@]:1}"
-    )" "$1"
+    trap -- "declare _LK_TRAP_STATUS=0;$(
+        printf '(%s)||_LK_TRAP_STATUS=$?;' "${TRAPS[@]}"
+    )(exit \$_LK_TRAP_STATUS)" "$1"
 }
 
 function _lk_cleanup_on_exit() {
