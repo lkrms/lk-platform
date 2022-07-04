@@ -127,6 +127,7 @@ BOLD=$'\E[1m'
 RESET=$'\E[m'
 echo "$BOLD$CYAN==> $RESET${BOLD}Checking prerequisites$RESET" >&2
 REPO_URL=https://raw.githubusercontent.com/lkrms/lk-platform
+_LK_SOURCED=
 for FILE_PATH in \
     /lib/bash/include/core.sh \
     /lib/bash/include/provision.sh \
@@ -148,8 +149,10 @@ for FILE_PATH in \
     else
         echo "${MESSAGE/{\}/Already downloaded:}" >&2
     fi
-    [[ ! $FILE_PATH =~ /include/[a-z0-9_]+\.sh$ ]] ||
+    [[ ! $FILE_PATH =~ /include/([a-z0-9_]+)\.sh$ ]] || {
+        _LK_SOURCED+=,${BASH_REMATCH[1]}
         . "$FILE"
+    }
 done
 
 while getopts ":u:o:c:p:s:xk:y" OPT; do

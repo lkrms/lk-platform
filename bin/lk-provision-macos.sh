@@ -99,6 +99,7 @@ function exit_trap() {
         RESET=$'\E[m'
         echo "$BOLD$CYAN==> $RESET${BOLD}Checking prerequisites$RESET" >&2
         REPO_URL=https://raw.githubusercontent.com/lkrms/lk-platform
+        _LK_SOURCED=
         for FILE_PATH in \
             lib/bash/include/{core,brew,macos,provision,whiptail}.sh \
             share/sudoers.d/default{,-macos} ""; do
@@ -119,8 +120,10 @@ function exit_trap() {
             else
                 echo "${MESSAGE/{\}/Already downloaded:}" >&2
             fi
-            [[ ! $FILE_PATH =~ /include/[a-z0-9_]+\.sh$ ]] ||
+            [[ ! $FILE_PATH =~ /include/([a-z0-9_]+)\.sh$ ]] || {
+                _LK_SOURCED+=,${BASH_REMATCH[1]}
                 . "$FILE"
+            }
         done
         SUDOERS=$_DIR/share__sudoers.d__default
     fi
