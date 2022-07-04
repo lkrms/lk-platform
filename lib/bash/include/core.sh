@@ -1346,6 +1346,15 @@ function lk_tty_length() {
     lk_strip_non_printing "$1" | awk 'NR == 1 { print length() }'
 }
 
+function _lk_tty_hostname_apply() {
+    _LK_TTY_HOSTNAME=${HOSTNAME:-$(lk_hostname)} ||
+        _LK_TTY_HOSTNAME="<unknown>"
+    _LK_TTY_HOSTNAME="${LK_DIM}[ $(lk_ellipsis 10 "$(
+        printf '%10s' "$_LK_TTY_HOSTNAME"
+    )") ] $LK_UNDIM"
+    _LK_TTY_HOSTNAME_INDENT=${_LK_TTY_HOSTNAME_INDENT:-$'\n               '}
+}
+
 function _lk_tty_margin_apply() {
     local _COLUMNS
     # Avoid recursion when `stty columns` triggers SIGWINCH
@@ -1526,7 +1535,14 @@ function lk_tty_print() {
     _lk_tty_format -b MESSAGE "" _LK_TTY_MESSAGE_COLOUR
     [ -z "${MESSAGE2:+1}" ] ||
         _lk_tty_format MESSAGE2 "$COLOUR" _LK_TTY_COLOUR2
-    echo "$MARGIN$PREFIX$MESSAGE$MESSAGE2" >&"${_LK_FD-2}"
+    MESSAGE=$MARGIN$PREFIX$MESSAGE$MESSAGE2
+    if [[ -z ${LK_TTY_HOSTNAME-} ]]; then
+        echo "$MESSAGE"
+    else
+        [[ -n $_LK_TTY_HOSTNAME ]] ||
+            _lk_tty_hostname_apply
+        echo "$_LK_TTY_HOSTNAME${MESSAGE//$'\n'/$_LK_TTY_HOSTNAME_INDENT}"
+    fi >&"${_LK_FD-2}"
     eval "$_lk_x_return"
 }
 
@@ -1764,7 +1780,7 @@ function lk_tty_run_detail() {
 # Only the first character of DELIM is used. If IFS is empty or unset, the
 # default value is used. Characters in DELIM and IFS must not appear in any KEY
 # or VALUE.
-function lk_tty_pairs() {
+function lk_tty_pairs() { (
     { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     local IFS=${IFS:-$'\t'} LF COLOUR ARGS= _IFS TEMP LEN KEY VALUE
     unset LF COLOUR
@@ -1806,7 +1822,7 @@ END { g = (m + 2) % 4; print (g ? m + 4 - g : m) + 1 }' "$TEMP") ||
             "$(printf "%-${LEN}s" "$KEY:")" "$VALUE" ${COLOUR+"$COLOUR"}
     done <"$TEMP"
     eval "$_lk_x_return"
-}
+); }
 
 # - lk_tty_pairs_detail [-d DELIM] [COLOUR [--] [KEY VALUE...]]
 # - lk_tty_pairs_detail [-d DELIM] -- [KEY VALUE...]
