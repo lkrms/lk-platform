@@ -1241,12 +1241,8 @@ function lk_mktemp_dir_with() {
 
 # lk_trap_add SIGNAL COMMAND [ARG...]
 function lk_trap_add() {
-    [ $# -ge 2 ] ||
-        lk_usage "Usage: $FUNCNAME SIGNAL COMMAND [ARG...]" || return
-    local IFS
-    unset IFS
-    [ $# -eq 2 ] ||
-        set -- "$1" "$2$(printf ' %q' "${@:3}")"
+    (($# > 1)) || lk_err "invalid arguments" || return
+    set -- "$1" "$2${3+ $(shift 2 && lk_quote_args "$@")}"
     _LK_TRAPS=(${_LK_TRAPS+"${_LK_TRAPS[@]}"})
     local i TRAPS=()
     for ((i = 0; i < ${#_LK_TRAPS[@]}; i += 3)); do
@@ -1256,14 +1252,13 @@ function lk_trap_add() {
         [[ ${_LK_TRAPS[i + 2]} != "${2-}" ]] ||
             set -- "$1"
     done
-    [ $# -eq 1 ] || {
+    (($# == 1)) || {
         TRAPS[${#TRAPS[@]}]=$2
         _LK_TRAPS+=("$BASH_SUBSHELL" "$1" "$2")
     }
-    trap -- "$(
-        printf '{ %s; }' "$TRAPS"
-        [ "${#TRAPS[@]}" -lt 2 ] || printf ' && { %s; }' "${TRAPS[@]:1}"
-    )" "$1"
+    trap -- "declare _LK_TRAP_STATUS=0;$(
+        printf '{ %s;}||_LK_TRAP_STATUS=$?;' "${TRAPS[@]}"
+    )(exit \$_LK_TRAP_STATUS)" "$1"
 }
 
 function _lk_cleanup_on_exit() {
@@ -1349,6 +1344,15 @@ function lk_tty_columns() {
 
 function lk_tty_length() {
     lk_strip_non_printing "$1" | awk 'NR == 1 { print length() }'
+}
+
+function _lk_tty_hostname_apply() {
+    _LK_TTY_HOSTNAME=${HOSTNAME:-$(lk_hostname)} ||
+        _LK_TTY_HOSTNAME="<unknown>"
+    _LK_TTY_HOSTNAME="${LK_DIM}[ $(lk_ellipsis 10 "$(
+        printf '%10s' "$_LK_TTY_HOSTNAME"
+    )") ] $LK_UNDIM"
+    _LK_TTY_HOSTNAME_INDENT=${_LK_TTY_HOSTNAME_INDENT:-$'\n               '}
 }
 
 function _lk_tty_margin_apply() {
@@ -1531,7 +1535,14 @@ function lk_tty_print() {
     _lk_tty_format -b MESSAGE "" _LK_TTY_MESSAGE_COLOUR
     [ -z "${MESSAGE2:+1}" ] ||
         _lk_tty_format MESSAGE2 "$COLOUR" _LK_TTY_COLOUR2
-    echo "$MARGIN$PREFIX$MESSAGE$MESSAGE2" >&"${_LK_FD-2}"
+    MESSAGE=$MARGIN$PREFIX$MESSAGE$MESSAGE2
+    if [[ -z ${LK_TTY_HOSTNAME-} ]]; then
+        echo "$MESSAGE"
+    else
+        [[ -n $_LK_TTY_HOSTNAME ]] ||
+            _lk_tty_hostname_apply
+        echo "$_LK_TTY_HOSTNAME${MESSAGE//$'\n'/$_LK_TTY_HOSTNAME_INDENT}"
+    fi >&"${_LK_FD-2}"
     eval "$_lk_x_return"
 }
 
@@ -1769,7 +1780,7 @@ function lk_tty_run_detail() {
 # Only the first character of DELIM is used. If IFS is empty or unset, the
 # default value is used. Characters in DELIM and IFS must not appear in any KEY
 # or VALUE.
-function lk_tty_pairs() {
+function lk_tty_pairs() { (
     { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     local IFS=${IFS:-$'\t'} LF COLOUR ARGS= _IFS TEMP LEN KEY VALUE
     unset LF COLOUR
@@ -1811,7 +1822,7 @@ END { g = (m + 2) % 4; print (g ? m + 4 - g : m) + 1 }' "$TEMP") ||
             "$(printf "%-${LEN}s" "$KEY:")" "$VALUE" ${COLOUR+"$COLOUR"}
     done <"$TEMP"
     eval "$_lk_x_return"
-}
+); }
 
 # - lk_tty_pairs_detail [-d DELIM] [COLOUR [--] [KEY VALUE...]]
 # - lk_tty_pairs_detail [-d DELIM] -- [KEY VALUE...]
