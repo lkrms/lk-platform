@@ -73,6 +73,7 @@ unset -f brew
 $BREW_SH
 export HOMEBREW_NO_ANALYTICS=1
 export HOMEBREW_NO_AUTO_UPDATE=1
+export HOMEBREW_NO_ENV_HINTS=1
 export HOMEBREW_CASK_OPTS=--no-quarantine
 EOF
     in_path "$HOMEBREW_PREFIX/share/man" "${MANPATH-}" ||
