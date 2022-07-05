@@ -539,10 +539,6 @@ $LK_NODE_HOSTNAME" &&
             linux-modules-cleanup "Kernel modules cleanup"
         )
 
-    SERVICE_ENABLE+=(
-        qemu-guest-agent "QEMU Guest Agent"
-    )
-
     service_apply
 
     if ! lk_is_bootstrap && lk_pac_installed grub; then
