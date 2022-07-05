@@ -17,6 +17,7 @@ PAC_KEEP=(
     pacman-cleanup-hook
     powershell-bin
     transmission-cli
+    mkvtoolnix-cli
 
     # PDF
     ghostscript  # PDF/PostScript processing
@@ -38,6 +39,11 @@ PAC_KEEP=(
     #
     linux-headers
     r8152-dkms
+
+    # Services
+    postfix
+    samba
+    wide-dhcpv6
 
     #
     powerpanel
