@@ -28,10 +28,18 @@ REPO=$1
 shift
 
 function download_sources() {
+    lk_mktemp_with -r PKGS
+    curl -fsSL "https://aur.archlinux.org/rpc/?v=5&type=info$(
+        printf '&arg[]=%s' "$@"
+    )" | jq -r '.results[]|[.Name,.PackageBase]|@tsv' >"$PKGS" || return
     printf '%s\n' "$@" |
         lk_tty_list - "Downloading from AUR:" package packages
-    local pkg
-    for pkg in "$@"; do
+    local _pkg pkg
+    for _pkg in "$@"; do
+        pkg=$(awk -v pkg="$_pkg" '$1==pkg{print $2}' "$PKGS" | grep .) ||
+            pkg=$_pkg
+        [[ ! -f .$pkg ]] || continue
+        touch ".$pkg" || return
         (file=$pkg.tar.gz &&
             url=https://aur.archlinux.org/cgit/aur.git/snapshot/$file &&
             lk_cache curl -fsL "$url" >"$file" &&
@@ -60,8 +68,8 @@ function quote(str) {
 function _print() {
   if (_name) {
     printf "%s:{\"pkgname\":[", (_count > 1 ? "," : "") quote(name[1])
-    for (i = 1; i < _name; i++) {
-      printf "%s", (i > 1 ? "," : "") quote(name[i])
+    for (j = i = 1 + pkgbase_is_not_pkgname; i < _name; i++) {
+      printf "%s", (i > j ? "," : "") quote(name[i])
       delete name[i]
     }
     printf "],\"depends\":["
@@ -69,10 +77,16 @@ function _print() {
       printf "%s", (i > 1 ? "," : "") quote(depends[i])
       delete depends[i]
     }
+    printf "],\"provides\":["
+    for (i = 1; i < _provides; i++) {
+      printf "%s", (i > 1 ? "," : "") quote(provides[i])
+      delete provides[i]
+    }
     printf "]}"
   }
   _name = 1
   _depends = 1
+  _provides = 1
   _count++
 }
 
@@ -82,13 +96,20 @@ BEGIN {
 $1 == "pkgbase" {
   _print()
   name[_name++] = $3
+  pkgbase_is_not_pkgname = 1
   next
+}
+$1 == "pkgname" && $3 == name[1] {
+  pkgbase_is_not_pkgname = 0
 }
 $1 == "pkgname" && $3 != name[1] {
   name[_name++] = $3
 }
 $1 == "depends" {
   depends[_depends++] = $3
+}
+$1 == "provides" {
+  provides[_provides++] = $3
 }
 END {
   _print()
@@ -106,9 +127,11 @@ lk_mktemp_dir_with PKGBUILDS download_sources "$@"
 
 cd "$PKGBUILDS"
 while PKG=($(parse_SRCINFO '.[].pkgname | @tsv')) &&
+    PROVIDES=($(parse_SRCINFO '.[].provides | @tsv')) &&
     DEPS=($(parse_SRCINFO '.[].depends | @tsv' |
-        grep -Fxvf "$OFFICIAL" \
-            -f <(printf '%s\n' "$@" ${PKG+"${PKG[@]}"} | sort -u))); do
+        grep -Fxvf "$OFFICIAL" -f <(printf '%s\n' \
+            "$@" ${PKG+"${PKG[@]}"} ${PROVIDES+"${PROVIDES[@]}"} |
+            sort -u))); do
     download_sources "${DEPS[@]}"
     set -- $(lk_arr PKG DEPS | sort -u)
 done
