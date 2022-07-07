@@ -38,7 +38,6 @@ HOMEBREW_FORMULAE+=(
     nload # Shows bandwidth by interface
 
     # System
-    #acme.sh
     dosfstools
     mtools
     nmap
@@ -191,6 +190,8 @@ HOMEBREW_FORMULAE+=(
     awscli
     azure-cli
     azure/functions/azure-functions-core-tools@4
+    gh
+    linode-cli
     wp-cli
 )
 
@@ -256,6 +257,7 @@ HOMEBREW_KEEP_FORMULAE+=(
     lkrms/virt-manager/libvirt
 
     #
+    autozimu/formulas/unison-fsmonitor
     ddcctl
 )
 

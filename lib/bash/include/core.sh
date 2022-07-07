@@ -1311,7 +1311,9 @@ function _lk_tty_format() {
             _COLOUR+=$LK_BOLD
     fi
     [ -z "${_STRING:+${_COLOUR:+$LK_RESET}}" ] || {
-        _STRING=$_B$_COLOUR$_E${_STRING//"$LK_RESET"/$_B$LK_RESET$_COLOUR$_E}$_B$LK_RESET$_E
+        local REGEX=$'^(\n)?(.*)$'
+        [[ $_STRING =~ $REGEX ]]
+        _STRING=${BASH_REMATCH[1]}$_B$_COLOUR$_E${BASH_REMATCH[2]//"$LK_RESET"/$_B$LK_RESET$_COLOUR$_E}$_B$LK_RESET$_E
         eval "$1=\$_STRING"
     }
 }
