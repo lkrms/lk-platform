@@ -279,8 +279,6 @@ PAC_PACKAGES+=(
     autoconf
     autoconf-archive
     autopep8
-    babel-cli
-    babel-core
     bash-language-server
     cloc
     cmake
@@ -299,7 +297,6 @@ PAC_PACKAGES+=(
     tidy
     ttf-font-awesome
     ttf-ionicons
-    uglify-js
 
     # Email
     msmtp     # SMTP client
@@ -371,12 +368,12 @@ PAC_PACKAGES+=(
 
     # Platforms
     aws-cli
+    github-cli
     python-boto # Optional linode-cli dependency
     s3cmd
 )
 
 AUR_PACKAGES+=(
-    babel-preset-env
     dotnet-runtime-3.1-bin # storageexplorer dependency
     nodejs-less
     nvm
