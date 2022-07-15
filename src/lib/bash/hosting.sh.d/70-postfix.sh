@@ -3,7 +3,8 @@
 function _lk_hosting_postfix_provision() {
     local SITES TEMP \
         RELAY=${LK_SMTP_RELAY:+"relay:$LK_SMTP_RELAY"} \
-        TRANSPORT=/etc/postfix/sender_transport \
+        TRANSPORT=/etc/postfix/transport \
+        SENDER_TRANSPORT=/etc/postfix/sender_transport \
         PASSWD=/etc/postfix/sasl_passwd \
         ACCESS=/etc/postfix/sender_access
 
@@ -52,13 +53,13 @@ sort_by(.domain)[] |
     } | awk -F '\t' \
         'seen[$1]++{print"Duplicate key: "$0>"/dev/stderr";next}{print}' \
         >"$TEMP" &&
-        lk_postmap "$TEMP" "$TRANSPORT" &&
+        lk_postmap "$TEMP" "$SENDER_TRANSPORT" &&
         lk_postconf_set relayhost "" &&
         lk_postconf_unset sender_dependent_relayhost_maps &&
         lk_postconf_set \
             default_transport "${LK_SMTP_UNKNOWN_SENDER_TRANSPORT:-defer:}" &&
         lk_postconf_set \
-            sender_dependent_default_transport_maps "hash:$TRANSPORT" || return
+            sender_dependent_default_transport_maps "hash:$SENDER_TRANSPORT" || return
 
     # 2. Install relay credentials and configure SMTP client parameters
     {
@@ -99,7 +100,7 @@ sort_by(.domain)[] | select(.smtp_relay.credentials != null) |
     #    no effect on sendmail, which bypasses smtpd_* restrictions.)
     awk -v OFS='\t' \
         '{sub("^@","");print$1,"permit_sender_relay"}' \
-        <"$TRANSPORT" >"$TEMP" || return
+        <"$SENDER_TRANSPORT" >"$TEMP" || return
     lk_postmap "$TEMP" "$ACCESS" &&
         lk_postconf_set smtpd_restriction_classes \
             "permit_sender_relay" &&
@@ -107,6 +108,8 @@ sort_by(.domain)[] | select(.smtp_relay.credentials != null) |
             "permit_mynetworks, permit_sasl_authenticated" 2>/dev/null &&
         lk_postconf_set smtpd_relay_restrictions \
             "check_sender_access hash:$ACCESS, defer_unauth_destination" || return
+
+    lk_postfix_apply_transport_maps "$TRANSPORT"
 }
 
 function _lk_hosting_postfix_test_config() {

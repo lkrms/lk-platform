@@ -1,10 +1,29 @@
 #!/bin/bash
 
 # lk_postconf_get PARAM
+#
+# Print the value of a Postfix parameter or return false if it is not explicitly
+# configured.
 function lk_postconf_get() {
     # `postconf -nh` prints a newline if the parameter has an empty value, and
-    # nothing at all if the parameter is not set in main.cf
-    (($(postconf -nh "$1" | wc -c))) && postconf -nh "$1"
+    # nothing at all if the parameter is not set in main.cf, so:
+    # 1. suppress error output from postconf
+    # 2. clone stdout to stderr
+    # 3. fail if there is no output (expression will resolve to `((0))`)
+    # 4. redirect cloned output to stdout
+    (($(postconf -nh "$1" 2>/dev/null | tee /dev/stderr | wc -c))) 2>&1
+}
+
+# lk_postconf_get_effective PARAM
+#
+# Print the value of a Postfix parameter or return false if it is unknown.
+function lk_postconf_get_effective() {
+    # `postconf -h` never exits non-zero, but if an error occurs it explains on
+    # stderr, so:
+    # 1. flip stdout and stderr
+    # 2. fail on output to stderr (expression will resolve to `! ((0))`)
+    # 3. redirect stderr back to stdout
+    ! (($(postconf -h "$1" 3>&1 1>&2 2>&3 | wc -c))) 2>&1
 }
 
 # lk_postconf_set PARAM VALUE
@@ -40,4 +59,40 @@ function lk_postmap() {
     else
         lk_elevate rm -f "$FILE"{,.db}
     fi
+}
+
+# lk_postfix_apply_transport_maps [DB_PATH]
+#
+# Install or update the Postfix transport_maps database at DB_PATH or
+# /etc/postfix/transport from LK_SMTP_TRANSPORT_MAPS.
+function lk_postfix_apply_transport_maps() {
+    local IFS=';' FILE=${1:-/etc/postfix/transport} TEMP i=0 HAS_DEFAULT=0
+    local IFS=, MAPS=(${LK_SMTP_TRANSPORT_MAPS-}) MAP _FROM FROM TO
+    lk_mktemp_with TEMP
+    for MAP in ${MAPS+"${MAPS[@]}"}; do
+        [[ $MAP == *=* ]] || continue
+        TO=${MAP##*=}
+        [[ -n $TO ]] || continue
+        _FROM=(${MAP%=*})
+        for FROM in ${_FROM+"${_FROM[@]}"}; do
+            [[ -n $FROM ]] || continue
+            [[ $FROM != "*" ]] || HAS_DEFAULT=1
+            printf '%s\tsmtp:%s\n' "$FROM" "$TO"
+            ((++i))
+        done
+    done >"$TEMP"
+    # Add a default entry unless the transport map is empty or a default has
+    # already been given
+    ((!i || HAS_DEFAULT)) || {
+        TO=$(lk_postconf_get_effective default_transport) || TO=
+        TO=${TO:-smtp:}
+        [[ $TO == *:* ]] || TO+=:
+        printf '%s\t%s\n' "*" "$TO" >>"$TEMP"
+    }
+    lk_postmap "$TEMP" "$FILE" &&
+        if ((i)); then
+            lk_postconf_set transport_maps "hash:$FILE"
+        else
+            lk_postconf_unset transport_maps
+        fi
 }

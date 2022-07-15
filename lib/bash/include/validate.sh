@@ -16,7 +16,7 @@ function _lk_validate_fail() {
 }
 
 function _lk_validate_list() {
-    local FN=$1 VAR=$2 VAL=${!2-} IFS=, NULL VALID SELECTED i
+    local FN=$1 VAR=$2 VAL=${!2-} IFS=${_LK_VALIDATE_DELIM:-,} NULL VALID SELECTED i
     shift
     SELECTED=($VAL)
     unset IFS
