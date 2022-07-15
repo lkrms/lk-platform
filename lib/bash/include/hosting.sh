@@ -707,6 +707,8 @@ function _lk_hosting_postfix_provision() {
         PASSWD=/etc/postfix/sasl_passwd \
         ACCESS=/etc/postfix/sender_access
 
+    lk_postfix_apply_transport_maps "$TRANSPORT"
+
     lk_mktemp_with SITES lk_hosting_list_sites -e -j &&
         lk_mktemp_with TEMP || return
 
@@ -807,8 +809,6 @@ sort_by(.domain)[] | select(.smtp_relay.credentials != null) |
             "permit_mynetworks, permit_sasl_authenticated" 2>/dev/null &&
         lk_postconf_set smtpd_relay_restrictions \
             "check_sender_access hash:$ACCESS, defer_unauth_destination" || return
-
-    lk_postfix_apply_transport_maps "$TRANSPORT"
 }
 
 function _lk_hosting_postfix_test_config() {

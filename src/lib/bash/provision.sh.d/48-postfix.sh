@@ -66,29 +66,21 @@ function lk_postmap() {
 # Install or update the Postfix transport_maps database at DB_PATH or
 # /etc/postfix/transport from LK_SMTP_TRANSPORT_MAPS.
 function lk_postfix_apply_transport_maps() {
-    local IFS=';' FILE=${1:-/etc/postfix/transport} TEMP i=0 HAS_DEFAULT=0
+    local IFS=';' FILE=${1:-/etc/postfix/transport} TEMP i=0
     local IFS=, MAPS=(${LK_SMTP_TRANSPORT_MAPS-}) MAP _FROM FROM TO
     lk_mktemp_with TEMP
     for MAP in ${MAPS+"${MAPS[@]}"}; do
         [[ $MAP == *=* ]] || continue
         TO=${MAP##*=}
         [[ -n $TO ]] || continue
+        [[ $TO == smtp:* ]] || TO=smtp:$TO
         _FROM=(${MAP%=*})
         for FROM in ${_FROM+"${_FROM[@]}"}; do
             [[ -n $FROM ]] || continue
-            [[ $FROM != "*" ]] || HAS_DEFAULT=1
-            printf '%s\tsmtp:%s\n' "$FROM" "$TO"
+            printf '%s\t%s\n' "$FROM" "$TO"
             ((++i))
         done
     done >"$TEMP"
-    # Add a default entry unless the transport map is empty or a default has
-    # already been given
-    ((!i || HAS_DEFAULT)) || {
-        TO=$(lk_postconf_get_effective default_transport) || TO=
-        TO=${TO:-smtp:}
-        [[ $TO == *:* ]] || TO+=:
-        printf '%s\t%s\n' "*" "$TO" >>"$TEMP"
-    }
     lk_postmap "$TEMP" "$FILE" &&
         if ((i)); then
             lk_postconf_set transport_maps "hash:$FILE"
