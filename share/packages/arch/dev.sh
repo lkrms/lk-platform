@@ -158,8 +158,10 @@ PAC_PACKAGES+=(
     nomacs
     qalculate-gtk
     remmina
+    screenkey
     scribus
     simplescreenrecorder
+    slop
     speedcrunch
     system-config-printer
     thunderbird
@@ -240,6 +242,8 @@ AUR_PACKAGES+=(
     clockify-desktop
     emote
     espanso
+    highlight-pointer
+    key-mon
     libreoffice-extension-languagetool
     masterpdfeditor-free
     pencil

@@ -65,6 +65,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_LINODE_IGNORE_REGEX`
 - `LK_LINODE_SSH_KEYS`
 - `LK_LINODE_SSH_KEYS_FILE`
+- `LK_LINODE_USER`
 - `LK_MAIL_FROM`
 - `LK_MEDIAINFO_FORMAT`
 - `LK_MEDIAINFO_LABEL`
@@ -98,6 +99,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_PHP_VERSIONS`
 - `LK_PLATFORM_BRANCH`
 - `LK_PROMPT`
+- `LK_PROMPT_TAG`
 - `LK_REJECT_OUTPUT`
 - `LK_SAMBA_WORKGROUP`
 - `LK_SFTP_ONLY_GROUP`
@@ -115,6 +117,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_SMTP_CREDENTIALS`
 - `LK_SMTP_RELAY`
 - `LK_SMTP_SENDERS`
+- `LK_SMTP_TRANSPORT_MAPS`
 - `LK_SMTP_UNKNOWN_SENDER_TRANSPORT`
 - `LK_SNAPSHOT_DAILY_MAX_AGE`
 - `LK_SNAPSHOT_FAILED_MAX_AGE`
@@ -134,6 +137,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_SUDO`
 - `LK_SUDO_ON_FAIL`
 - `LK_TRUSTED_IP_ADDRESSES`
+- `LK_TTY_HOSTNAME`
 - `LK_TTY_NO_COLOUR`
 - `LK_UBUNTU_CLOUDIMG_HOST`
 - `LK_UBUNTU_CLOUDIMG_SHA_URL`

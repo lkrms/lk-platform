@@ -94,3 +94,8 @@ cat <<EOF
 ${UNSET:+unset$UNSET
 }export SUDO_PROMPT="[sudo] password for %p: "
 EOF
+
+[ -n "${LANG-}" ] ||
+    { [ "$(uname -s)" != Darwin ] ||
+        ! LANG=$(defaults read -g AppleLocale | grep .).UTF-8 ||
+        echo "export LANG=$(quote "$LANG")"; } 2>/dev/null

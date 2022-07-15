@@ -117,8 +117,8 @@ MAS_APPS+=(
     409201541 # Pages
 
     #
+    417375580  # BetterSnapTool
     1502839586 # Hand Mirror
-    441258766  # Magnet
 
     #
     420212497  # Byword

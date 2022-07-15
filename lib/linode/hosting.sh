@@ -33,6 +33,7 @@ lk_die() { s=$? && echo "$0: ${1-error $s}" >&2 && (exit $s) && false || exit; }
 # <UDF name="LK_SMTP_RELAY" label="SMTP relay (system-wide)" example="[mail.clientname.com.au]:587" default="" />
 # <UDF name="LK_SMTP_CREDENTIALS" label="SMTP relay credentials" example="username:Passw0rd!" default="" />
 # <UDF name="LK_SMTP_SENDERS" label="Only relay email from these senders (comma-delimited)" example="@linode.linacreative.com,linode@linacreative.com" default="" />
+# <UDF name="LK_SMTP_TRANSPORT_MAPS" label="Map comma-delimited recipient domains and addresses to next hop (semicolon-delimited)" example="domain1.com,domain2.com=[domain.com]:587;user@domain3.com=domain4.net" default="" />
 # <UDF name="LK_EMAIL_DESTINATION" label="Only deliver email to this location (system-wide, STAGING ONLY)" example="/dev/null" default="" />
 # <UDF name="LK_UPGRADE_EMAIL" label="Email address for unattended upgrade notifications" example="unattended-upgrades@linode.linacreative.com" default="" />
 # <UDF name="LK_AUTO_REBOOT" label="Reboot automatically after unattended upgrades" oneof="Y,N" />
@@ -88,6 +89,7 @@ LK_MEMCACHED_MEMORY_LIMIT=${LK_MEMCACHED_MEMORY_LIMIT:-256}
 LK_SMTP_RELAY=${LK_SMTP_RELAY-}
 LK_SMTP_CREDENTIALS=${LK_SMTP_CREDENTIALS-}
 LK_SMTP_SENDERS=${LK_SMTP_SENDERS-}
+LK_SMTP_TRANSPORT_MAPS=${LK_SMTP_TRANSPORT_MAPS-}
 LK_EMAIL_DESTINATION=${LK_EMAIL_DESTINATION-}
 LK_UPGRADE_EMAIL=${LK_UPGRADE_EMAIL-}
 LK_AUTO_REBOOT=${LK_AUTO_REBOOT-}

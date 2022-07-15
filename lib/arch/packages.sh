@@ -208,12 +208,16 @@ if lk_node_service_enabled desktop; then
         arc-solid-gtk-theme
         #breeze-gtk
         #breeze-icons
+        capitaine-cursors
         #elementary-icon-theme
         #elementary-wallpapers
-        gtk-engine-murrine # GTK 2 support
         #gtk-theme-elementary
         papirus-icon-theme
         #sound-theme-elementary
+
+        # GTK 2 support
+        gtk-engine-murrine
+        gtk-engines
 
         #
         galculator
@@ -222,6 +226,7 @@ if lk_node_service_enabled desktop; then
         vlc
 
         #
+        gst-libav
         gst-plugins-good
         libdvdcss
 
@@ -232,17 +237,21 @@ if lk_node_service_enabled desktop; then
         evince
 
         #
-        inter-font
-        noto-fonts
-        noto-fonts-cjk
+        #adobe-source-code-pro-fonts
+        #adobe-source-sans-fonts
+        #adobe-source-serif-fonts
+        #inter-font
+        #noto-fonts
+        #noto-fonts-cjk
         terminus-font
         ttf-dejavu
+        ttf-fantasque-sans-mono
         ttf-inconsolata
         ttf-jetbrains-mono
-        ttf-lato
+        #ttf-lato
         ttf-opensans
-        ttf-roboto
-        ttf-roboto-mono
+        #ttf-roboto
+        #ttf-roboto-mono
         ttf-ubuntu-font-family
     )
 
@@ -257,6 +266,22 @@ if lk_node_service_enabled desktop; then
     AUR_PACKAGES+=(
         networkmanager-dispatcher-ntpd
         xrandr-invert-colors
+
+        # Huge, but installs a version of Source Sans Pro that renders correctly
+        # in vscode
+        ttf-google-fonts-git
+
+        # Selected works of https://github.com/vinceliuice
+        qogir-gtk-theme
+        qogir-icon-theme
+        tela-icon-theme
+        vimix-cursors
+        whitesur-gtk-theme
+        whitesur-icon-theme
+        whitesur-cursor-theme-git
+        mojave-gtk-theme
+        mcmojave-circle-icon-theme
+        mcmojave-cursors
 
         #
         #numix-gtk-theme-git
