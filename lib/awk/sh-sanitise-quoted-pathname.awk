@@ -26,25 +26,24 @@ BEGIN {
   unquote = unquote_single || unquote_double
   ORS = RS
 }
-function quote(str) {
-  gsub(/'/, "'\\''", str)
-  return "'" str "'"
-}
+
 # Remove enclosing quotes and unescape
 unquote && (/^'([^']+|\\')*'$/ || /^"([^"]+|\\")*"$/) {
-  if (unquote_single && gsub(/^'|'$/, "")) {
-    gsub(/\\'/, "'")
-  } else if (unquote_double && gsub(/^"|"$/, "")) {
-    gsub(/\\"/, "\"")
+  if (unquote_single && (gsub(/^'|'$/, "", $0))) {
+    gsub(/\\'/, "'", $0)
+  } else if (unquote_double && (gsub(/^"|"$/, "", $0))) {
+    gsub(/\\"/, "\"", $0)
   }
 }
+
 # Print tilde-prefixes unquoted
 /^(~[-a-z0-9\$_]*)(\/.*)?$/ {
   home = $0
   sub(/\/.*/, "/", home)
   printf "%s", home
-  sub(/^[^\/]+\/?/, "")
+  sub(/^[^\/]+\/?/, "", $0)
 }
+
 {
   # Print wildcards (as defined by glob(7)) unquoted
   while (pos = match($0, /\*+|\?+|\[(][^]]*|[^]]+)]/)) {
@@ -58,4 +57,11 @@ unquote && (/^'([^']+|\\')*'$/ || /^"([^"]+|\\")*"$/) {
     printf "%s", quote($0)
   }
   print ""
+}
+
+
+function quote(str)
+{
+  gsub(/'/, "'\\''", str)
+  return ("'" str "'")
 }

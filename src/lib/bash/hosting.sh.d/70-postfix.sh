@@ -9,6 +9,8 @@ function _lk_hosting_postfix_provision() {
         ACCESS=/etc/postfix/sender_access
 
     lk_postfix_apply_transport_maps "$TRANSPORT"
+    lk_postfix_apply_tls_certificate /var/www/html ||
+        [[ -z ${LK_CERTBOT_INSTALLED-} ]]
 
     lk_mktemp_with SITES lk_hosting_list_sites -e -j &&
         lk_mktemp_with TEMP || return
@@ -23,6 +25,8 @@ function _lk_hosting_postfix_provision() {
     {
         # If LK_SMTP_RELAY only applies to mail sent by LK_SMTP_SENDERS, it
         # belongs here too
+        #
+        # TODO: move this to provision.sh and maintain separate maps
         if [[ -n ${LK_SMTP_RELAY:+${LK_SMTP_SENDERS:+1}} ]]; then
             local IFS=,
             for SENDER in $LK_SMTP_SENDERS; do
@@ -66,6 +70,8 @@ sort_by(.domain)[] |
     # 2. Install relay credentials and configure SMTP client parameters
     {
         # Add system-wide SMTP relay credentials if configured
+        #
+        # TODO: move this to provision.sh and maintain separate maps
         if [[ -n ${LK_SMTP_RELAY:+${LK_SMTP_CREDENTIALS:+1}} ]]; then
             local IFS=,
             for SENDER in ${LK_SMTP_SENDERS:-"$LK_SMTP_RELAY"}; do
@@ -100,6 +106,8 @@ sort_by(.domain)[] | select(.smtp_relay.credentials != null) |
 
     # 3. Reject mail from unknown senders in the context of `RCPT TO`. (This has
     #    no effect on sendmail, which bypasses smtpd_* restrictions.)
+    #
+    # TODO: move this to provision.sh
     awk -v OFS='\t' \
         '{sub("^@","");print$1,"permit_sender_relay"}' \
         <"$SENDER_TRANSPORT" >"$TEMP" || return

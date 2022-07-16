@@ -204,7 +204,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
       lk_tty_print "Checking TLS certificates"
       local IFS=$'\n'
       NO_CERTBOT=($(comm -13 \
-        <(lk_certbot_list 2>/dev/null |
+        <(lk_certbot_list |
           awk -F$'\t' -v "now=$(lk_date "%Y-%m-%d %H:%M:%S%z")" \
             '$3 > now {print $2}' | sort -u) \
         <(lk_hosting_list_sites -e |
