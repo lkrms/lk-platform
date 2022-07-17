@@ -869,8 +869,9 @@ function lk_postfix_provision() {
 # Install or update the Postfix transport_maps database at DB_PATH or
 # /etc/postfix/transport from LK_SMTP_TRANSPORT_MAPS.
 function lk_postfix_apply_transport_maps() {
-    local IFS=';' FILE=${1:-/etc/postfix/transport} TEMP i=0
-    local IFS=, MAPS=(${LK_SMTP_TRANSPORT_MAPS-}) MAP _FROM FROM TO
+    local IFS=, FILE=${1:-/etc/postfix/transport} TEMP i=0 \
+        MAPS MAP _FROM FROM TO
+    lk_mapfile MAPS < <(tr ';' '\n' <<<"${LK_SMTP_TRANSPORT_MAPS-}")
     lk_mktemp_with TEMP
     for MAP in ${MAPS+"${MAPS[@]}"}; do
         [[ $MAP == *=* ]] || continue

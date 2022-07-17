@@ -707,9 +707,10 @@ function _lk_hosting_postfix_provision() {
         PASSWD=/etc/postfix/sasl_passwd \
         ACCESS=/etc/postfix/sender_access
 
-    lk_postfix_apply_transport_maps "$TRANSPORT"
+    lk_postfix_apply_transport_maps "$TRANSPORT" || return
+
     lk_postfix_apply_tls_certificate /var/www/html ||
-        [[ -z ${LK_CERTBOT_INSTALLED-} ]]
+        [[ -z ${LK_CERTBOT_INSTALLED-} ]] || return
 
     lk_mktemp_with SITES lk_hosting_list_sites -e -j &&
         lk_mktemp_with TEMP || return
