@@ -5,10 +5,6 @@
 # - Shell variable names are derived from a prefix (default: `SSH_HOST_`) and an
 #   uppercase parameter name, e.g. `SSH_HOST_IDENTITYFILE`
 # - Set awk variable `prefix` to override `SSH_HOST_`
-function quote(str) {
-  gsub(/'/, "'\\''", str)
-  return "'" str "'"
-}
 BEGIN {
   prefix = prefix ? prefix : "SSH_HOST_"
   p["USER"] = 1
@@ -20,17 +16,29 @@ BEGIN {
     delete ARGV[i]
   }
 }
-{ _p = toupper($1) }
+
+{
+  _p = toupper($1)
+}
+
 p[_p] {
   $1 = ""
-  sub(/^[ \t]+/, "")
+  sub(/^[ \t]+/, "", $0)
   print prefix _p "=" quote($0)
   delete p[_p]
 }
+
 END {
   for (_p in p) {
     if (p[_p]) {
       print prefix _p "="
     }
   }
+}
+
+
+function quote(str)
+{
+  gsub(/'/, "'\\''", str)
+  return ("'" str "'")
 }

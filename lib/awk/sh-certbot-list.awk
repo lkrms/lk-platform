@@ -1,39 +1,17 @@
-# Parse `certbot certificates` output to tab-separated fields as follows:
+# Parse `certbot certificates` output to tab-separated fields:
 # 1. Certificate name
 # 2. Domains (format: <name>[,www.<name>][,<other_domain>...])
 # 3. Expiry date (format: %Y-%m-%d %H:%M:%S%z)
 # 4. Certificate path
 # 5. Private key path
-
 BEGIN {
   OFS = "\t"
-}
-
-function val(_) {
-  _ = $0
-  sub("^[^:]+:[[:blank:]]+", "", _)
-  return _
-}
-
-function maybe_print() {
-  if (name) {
-    print name, domains, expiry, cert, key
-  }
 }
 
 tolower($0) ~ /\<certificate name:/ {
   maybe_print()
   name = val()
-  domains = expiry = cert = key = ""
-}
-
-function add_domain(d) {
-  for (i in a) {
-    if (!d || tolower(a[i]) == tolower(d)) {
-      domains = domains (domains ? "," : "") a[i]
-      delete a[i]
-    }
-  }
+  domains = expiry = cert = key = "-"
 }
 
 tolower($0) ~ /\<domains:/ {
@@ -64,4 +42,29 @@ tolower($0) ~ /\<expiry date:/ {
 
 END {
   maybe_print()
+}
+
+
+function add_domain(d)
+{
+  for (i in a) {
+    if (! d || tolower(a[i]) == tolower(d)) {
+      domains = domains (domains ? "," : "") a[i]
+      delete a[i]
+    }
+  }
+}
+
+function maybe_print()
+{
+  if (name) {
+    print name, domains, expiry, cert, key
+  }
+}
+
+function val(_)
+{
+  _ = $0
+  gsub("(^[^:]+:[[:blank:]]+|[[:blank:]]+$)", "", _)
+  return (_ ? _ : "-")
 }

@@ -832,9 +832,8 @@ EOF
     if lk_dpkg_installed postfix; then
         lk_tty_print "Checking Postfix"
         get_before_file /etc/postfix/main.cf
+        lk_postfix_provision
         lk_postconf_set inet_interfaces loopback-only
-        lk_postconf_set header_size_limit 409600
-        lk_postconf_set smtp_tls_security_level may
         FILE=/etc/aliases
         ALIASES=(
             postmaster root

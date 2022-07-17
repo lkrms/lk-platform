@@ -123,8 +123,9 @@ END     {if (NR == 1 && first) {print first; f = 2}; exit 2 - f}' && ((++i)) ||
   sub(/lk_awk_load/, "& -i")
   sub(/lk_awk_load -i[ \t]+[^ \t]+[ \t]+[^ \t]+/, "& <<\"EOF\"")
   print
-  while (getline < script > 0) { if (!match($0, /^[ \t]*(#|$)/)) { print } }
-  close(script)
+  command = "gawk -f " script " --pretty-print=- | sed -E \"s/\\t/  /g\""
+  while (command | getline > 0) { if (!match($0, /^[ \t]*(#|$)/)) { print } }
+  close(command)
   print "EOF"
   next
 }

@@ -16,14 +16,15 @@ function lk_postconf_get() {
 
 # lk_postconf_get_effective PARAM
 #
-# Print the value of a Postfix parameter or return false if it is unknown.
+# Expand and print the value of a Postfix parameter or return false if it is
+# unknown.
 function lk_postconf_get_effective() {
     # `postconf -h` never exits non-zero, but if an error occurs it explains on
     # stderr, so:
     # 1. flip stdout and stderr
     # 2. fail on output to stderr (expression will resolve to `! ((0))`)
     # 3. redirect stderr back to stdout
-    ! (($(postconf -h "$1" 3>&1 1>&2 2>&3 | wc -c))) 2>&1
+    ! (($(postconf -xh "$1" 3>&1 1>&2 2>&3 | wc -c))) 2>&1
 }
 
 # lk_postconf_set PARAM VALUE
@@ -61,6 +62,12 @@ function lk_postmap() {
     fi
 }
 
+function lk_postfix_provision() {
+    lk_postconf_set header_size_limit 409600
+    lk_postconf_set smtpd_tls_security_level may
+    lk_postconf_set smtp_tls_security_level may
+}
+
 # lk_postfix_apply_transport_maps [DB_PATH]
 #
 # Install or update the Postfix transport_maps database at DB_PATH or
@@ -73,7 +80,7 @@ function lk_postfix_apply_transport_maps() {
         [[ $MAP == *=* ]] || continue
         TO=${MAP##*=}
         [[ -n $TO ]] || continue
-        [[ $TO == smtp:* ]] || TO=smtp:$TO
+        [[ $TO =~ ^(relay|smtp):* ]] || TO=relay:$TO
         _FROM=(${MAP%=*})
         for FROM in ${_FROM+"${_FROM[@]}"}; do
             [[ -n $FROM ]] || continue
@@ -87,4 +94,32 @@ function lk_postfix_apply_transport_maps() {
         else
             lk_postconf_unset transport_maps
         fi
+}
+
+# lk_postfix_apply_tls_certificate WEBROOT [DOMAIN...]
+function lk_postfix_apply_tls_certificate() {
+    [[ -d ${1-} ]] || lk_warn "invalid arguments" || return
+    local IFS=$' \t\n' WEBROOT=$1 POSTFIX
+    POSTFIX=$(type -P postfix) || lk_warn "command not found: postfix" || return
+    shift
+    set -- $({
+        lk_postconf_get_effective myhostname
+        lk_args "$@"
+    } | lk_uniq)
+    lk_is_fqdn "$@" || lk_warn "invalid $(lk_plural $# domain): $*" || return
+    lk_tty_print "Checking Postfix TLS certificate:" "$*"
+    lk_certbot_maybe_install -w "$WEBROOT" "$@" &&
+        [[ -n ${LK_CERTBOT_INSTALLED:+1} ]] &&
+        lk_certbot_register_deploy_hook "$POSTFIX" reload -- "$@" || return
+
+    # Fields (see `lk_certbot_list`):
+    # 4. Certificate path
+    # 5. Private key path
+    IFS=$'\t'
+    local CERT=($LK_CERTBOT_INSTALLED)
+    lk_postconf_set smtpd_tls_cert_file "${CERT[3]}"
+    lk_postconf_set smtpd_tls_key_file "${CERT[4]}"
+    lk_postconf_set smtp_tls_cert_file '$smtpd_tls_cert_file'
+    lk_postconf_set smtp_tls_key_file '$smtpd_tls_key_file'
+    lk_postconf_set smtp_tls_loglevel 1
 }

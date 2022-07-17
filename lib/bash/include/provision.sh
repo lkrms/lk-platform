@@ -504,10 +504,6 @@ function lk_ssh_host_parameter_sh() {
         port=${BASH_REMATCH[5]} PREFIX=${2-} AWK
     shift 2 &&
         lk_awk_load -i AWK sh-get-ssh-host-parameters <<"EOF" || return
-function quote(str) {
-  gsub(/'/, "'\\''", str)
-  return "'" str "'"
-}
 BEGIN {
   prefix = prefix ? prefix : "SSH_HOST_"
   p["USER"] = 1
@@ -519,10 +515,12 @@ BEGIN {
     delete ARGV[i]
   }
 }
-{ _p = toupper($1) }
+{
+  _p = toupper($1)
+}
 p[_p] {
   $1 = ""
-  sub(/^[ \t]+/, "")
+  sub(/^[ \t]+/, "", $0)
   print prefix _p "=" quote($0)
   delete p[_p]
 }
@@ -532,6 +530,11 @@ END {
       print prefix _p "="
     }
   }
+}
+function quote(str)
+{
+  gsub(/'/, "'\\''", str)
+  return ("'" str "'")
 }
 EOF
     ssh -G ${port:+-p "$port"} "${user:+$user@}$host" |
@@ -809,14 +812,15 @@ function lk_postconf_get() {
 
 # lk_postconf_get_effective PARAM
 #
-# Print the value of a Postfix parameter or return false if it is unknown.
+# Expand and print the value of a Postfix parameter or return false if it is
+# unknown.
 function lk_postconf_get_effective() {
     # `postconf -h` never exits non-zero, but if an error occurs it explains on
     # stderr, so:
     # 1. flip stdout and stderr
     # 2. fail on output to stderr (expression will resolve to `! ((0))`)
     # 3. redirect stderr back to stdout
-    ! (($(postconf -h "$1" 3>&1 1>&2 2>&3 | wc -c))) 2>&1
+    ! (($(postconf -xh "$1" 3>&1 1>&2 2>&3 | wc -c))) 2>&1
 }
 
 # lk_postconf_set PARAM VALUE
@@ -854,6 +858,12 @@ function lk_postmap() {
     fi
 }
 
+function lk_postfix_provision() {
+    lk_postconf_set header_size_limit 409600
+    lk_postconf_set smtpd_tls_security_level may
+    lk_postconf_set smtp_tls_security_level may
+}
+
 # lk_postfix_apply_transport_maps [DB_PATH]
 #
 # Install or update the Postfix transport_maps database at DB_PATH or
@@ -866,7 +876,7 @@ function lk_postfix_apply_transport_maps() {
         [[ $MAP == *=* ]] || continue
         TO=${MAP##*=}
         [[ -n $TO ]] || continue
-        [[ $TO == smtp:* ]] || TO=smtp:$TO
+        [[ $TO =~ ^(relay|smtp):* ]] || TO=relay:$TO
         _FROM=(${MAP%=*})
         for FROM in ${_FROM+"${_FROM[@]}"}; do
             [[ -n $FROM ]] || continue
@@ -880,6 +890,34 @@ function lk_postfix_apply_transport_maps() {
         else
             lk_postconf_unset transport_maps
         fi
+}
+
+# lk_postfix_apply_tls_certificate WEBROOT [DOMAIN...]
+function lk_postfix_apply_tls_certificate() {
+    [[ -d ${1-} ]] || lk_warn "invalid arguments" || return
+    local IFS=$' \t\n' WEBROOT=$1 POSTFIX
+    POSTFIX=$(type -P postfix) || lk_warn "command not found: postfix" || return
+    shift
+    set -- $({
+        lk_postconf_get_effective myhostname
+        lk_args "$@"
+    } | lk_uniq)
+    lk_is_fqdn "$@" || lk_warn "invalid $(lk_plural $# domain): $*" || return
+    lk_tty_print "Checking Postfix TLS certificate:" "$*"
+    lk_certbot_maybe_install -w "$WEBROOT" "$@" &&
+        [[ -n ${LK_CERTBOT_INSTALLED:+1} ]] &&
+        lk_certbot_register_deploy_hook "$POSTFIX" reload -- "$@" || return
+
+    # Fields (see `lk_certbot_list`):
+    # 4. Certificate path
+    # 5. Private key path
+    IFS=$'\t'
+    local CERT=($LK_CERTBOT_INSTALLED)
+    lk_postconf_set smtpd_tls_cert_file "${CERT[3]}"
+    lk_postconf_set smtpd_tls_key_file "${CERT[4]}"
+    lk_postconf_set smtp_tls_cert_file '$smtpd_tls_cert_file'
+    lk_postconf_set smtp_tls_key_file '$smtpd_tls_key_file'
+    lk_postconf_set smtp_tls_loglevel 1
 }
 
 function _lk_openssl_verify() { (
@@ -1016,52 +1054,96 @@ function lk_ssl_install_ca_certificate() {
 
 # lk_certbot_list [DOMAIN...]
 #
-# Parse `certbot certificates` output to tab-separated fields as follows:
+# Parse `certbot certificates` output to tab-separated fields:
 # 1. Certificate name
 # 2. Domains (format: <name>[,www.<name>][,<other_domain>...])
 # 3. Expiry date (format: %Y-%m-%d %H:%M:%S%z)
 # 4. Certificate path
 # 5. Private key path
 function lk_certbot_list() {
-    local ARGS IFS=,
-    [ $# -eq 0 ] ||
-        ARGS=(--domains "$*")
-    lk_elevate certbot certificates ${ARGS[@]+"${ARGS[@]}"} |
-        awk -f "$LK_BASE/lib/awk/certbot-parse-certificates.awk"
+    local ARGS AWK IFS=,
+    ((!$#)) || ARGS=(--domains "$*")
+    lk_awk_load -i AWK sh-certbot-list <<"EOF" || return
+BEGIN {
+  OFS = "\t"
+}
+tolower($0) ~ /\<certificate name:/ {
+  maybe_print()
+  name = val()
+  domains = expiry = cert = key = "-"
+}
+tolower($0) ~ /\<domains:/ {
+  split(val(), a, "[[:blank:]]+")
+  domains = ""
+  no_www = tolower(name)
+  sub(/^www\./, "", no_www)
+  add_domain(no_www)
+  add_domain("www." no_www)
+  add_domain()
+}
+tolower($0) ~ /\<expiry date:/ {
+  expiry = val()
+  gsub("[[:blank:]]+\\(.*", "", expiry)
+}
+/\/fullchain\.pem$/ {
+  cert = val()
+}
+/\/privkey\.pem$/ {
+  key = val()
+}
+END {
+  maybe_print()
+}
+function add_domain(d)
+{
+  for (i in a) {
+    if (! d || tolower(a[i]) == tolower(d)) {
+      domains = domains (domains ? "," : "") a[i]
+      delete a[i]
+    }
+  }
+}
+function maybe_print()
+{
+  if (name) {
+    print name, domains, expiry, cert, key
+  }
+}
+function val(_)
+{
+  _ = $0
+  gsub("(^[^:]+:[[:blank:]]+|[[:blank:]]+$)", "", _)
+  return (_ ? _ : "-")
+}
+EOF
+    lk_elevate certbot certificates ${ARGS+"${ARGS[@]}"} 2>/dev/null |
+        awk -f "$AWK"
 }
 
-# lk_certbot_install [-w WEBROOT_PATH] DOMAIN... [-- CERTBOT_ARG...]
+# lk_certbot_install [-w WEBROOT_PATH] DOMAIN...
 function lk_certbot_install() {
-    local WEBROOT WEBROOT_PATH ERRORS=0 \
-        EMAIL=${LK_LETSENCRYPT_EMAIL-${LK_ADMIN_EMAIL-}} DOMAIN DOMAINS=()
+    local WEBROOT WEBROOT_PATH DOMAIN ERRORS=0 \
+        EMAIL=${LK_CERTBOT_EMAIL-${LK_ADMIN_EMAIL-}}
     unset WEBROOT
-    [ "${1-}" != -w ] || { WEBROOT= && WEBROOT_PATH=$2 && shift 2; }
-    while [ $# -gt 0 ]; do
-        [ "$1" != -- ] || {
-            shift
-            break
-        }
-        DOMAINS+=("$1")
-        shift
-    done
-    [ ${#DOMAINS[@]} -gt 0 ] ||
-        lk_usage "$FUNCNAME [-w WEBROOT_PATH] DOMAIN... [-- CERTBOT_ARG...]" ||
+    [[ ${1-} != -w ]] || { WEBROOT= && WEBROOT_PATH=$2 && shift 2; }
+    (($#)) ||
+        lk_usage "$FUNCNAME [-w WEBROOT_PATH] DOMAIN..." ||
         return
-    lk_is_fqdn "${DOMAINS[@]}" || lk_warn "invalid arguments" || return
-    [ -z "${WEBROOT+1}" ] || lk_elevate test -d "$WEBROOT_PATH" ||
+    lk_is_fqdn "$@" || lk_warn "invalid arguments" || return
+    [[ -z ${WEBROOT+1} ]] || lk_elevate test -d "$WEBROOT_PATH" ||
         lk_warn "directory not found: $WEBROOT_PATH" || return
-    [ -n "$EMAIL" ] || lk_warn "email address not set" || return
+    [[ -n $EMAIL ]] || lk_warn "email address not set" || return
     lk_is_email "$EMAIL" || lk_warn "invalid email address: $EMAIL" || return
-    [ -n "${_LK_LETSENCRYPT_IGNORE_DNS-}" ] || {
+    [[ -n ${_LK_CERTBOT_IGNORE_DNS-} ]] || {
         local IFS=' '
         lk_tty_print "Checking DNS"
-        lk_tty_detail "Resolving $(lk_plural DOMAINS domain):" "${DOMAINS[*]}"
-        for DOMAIN in "${DOMAINS[@]}"; do
+        lk_tty_detail "Resolving $(lk_plural $# domain):" "$*"
+        for DOMAIN in "$@"; do
             lk_node_is_host "$DOMAIN" ||
                 lk_tty_error -r "System address not matched:" "$DOMAIN" ||
                 ((++ERRORS))
         done
-        ((!ERRORS)) || lk_confirm "Ignore DNS errors?" N || return
+        ((!ERRORS)) || lk_tty_yn "Ignore DNS errors?" N || return
     }
     local IFS=,
     lk_tty_run lk_elevate certbot \
@@ -1076,15 +1158,17 @@ function lk_certbot_install() {
         ${WEBROOT---no-redirect} \
         ${WEBROOT---"${_LK_CERTBOT_PLUGIN:-apache}"} \
         ${WEBROOT+--webroot} \
-        ${WEBROOT+--webroot-path "$WEBROOT_PATH"} \
-        --domains "${DOMAINS[*]}" \
-        ${LK_CERTBOT_OPTIONS[@]:+"${LK_CERTBOT_OPTIONS[@]}"} \
-        "$@"
+        ${WEBROOT+--webroot-path} \
+        ${WEBROOT+"$WEBROOT_PATH"} \
+        --domains "$*" \
+        ${LK_CERTBOT_OPTIONS+"${LK_CERTBOT_OPTIONS[@]}"}
 }
 
-# lk_certbot_install_asap DOMAIN...
+# lk_certbot_install_asap [-w WEBROOT_PATH] DOMAIN...
 function lk_certbot_install_asap() {
-    lk_is_fqdn "$@" || lk_warn "invalid arguments" || return
+    local ARGS=()
+    { [[ ${1-} != -w ]] || { ARGS+=("$1" "$2") && shift 2; }; } &&
+        lk_is_fqdn "$@" || lk_warn "invalid arguments" || return
     local IFS=' ' RESOLVED FAILED CHANGED DOMAIN DOTS=0 LAST_RESOLVED=() i=0
     lk_tty_print "Preparing Let's Encrypt request"
     lk_tty_detail "Checking $(lk_plural $# domain):" "$*"
@@ -1099,24 +1183,69 @@ function lk_certbot_install_asap() {
             }
             FAILED+=("$DOMAIN")
         done
-        [ "${RESOLVED[*]-}" = "${LAST_RESOLVED[*]-}" ] || {
+        [[ ${RESOLVED[*]-} == "${LAST_RESOLVED[*]-}" ]] || {
             ((!DOTS)) || echo >&2
             ((DOTS = 0, CHANGED = 1))
             ((!i)) || lk_tty_log "Change detected at" "$(lk_date_log)"
             LAST_RESOLVED=(${RESOLVED+"${RESOLVED[@]}"})
         }
-        [ -n "${FAILED+1}" ] || break
+        [[ -n ${FAILED+1} ]] || break
         ((i && !CHANGED)) ||
             lk_tty_error "System address not matched:" "${FAILED[*]}"
         ((i)) || lk_tty_detail "Checking DNS every 60 seconds"
-        [ ! -t 2 ] || {
+        [[ ! -t 2 ]] || {
             echo -n . >&2
             ((++DOTS))
         }
         sleep 60
         ((++i))
     done
-    _LK_LETSENCRYPT_IGNORE_DNS=1 lk_certbot_install "$@"
+    _LK_CERTBOT_IGNORE_DNS=1 lk_certbot_install ${ARGS+"${ARGS[@]}"} "$@"
+}
+
+# lk_certbot_maybe_install [-w WEBROOT_PATH] DOMAIN...
+#
+# Provision a Let's Encrypt certificate for the given domains unless:
+# - they are covered by an existing certificate, or
+# - they don't resolve to the system.
+function lk_certbot_maybe_install() {
+    local ARGS=() DOMAIN
+    { [[ ${1-} != -w ]] || { ARGS+=("$1" "$2") && shift 2; }; } &&
+        lk_is_fqdn "$@" || lk_warn "invalid arguments" || return
+    ! LK_CERTBOT_INSTALLED=$(lk_certbot_list "$@" | grep .) || return 0
+    lk_test lk_node_is_host "$@" || return 0
+    _LK_CERTBOT_IGNORE_DNS=1 lk_certbot_install ${ARGS+"${ARGS[@]}"} "$@" &&
+        LK_CERTBOT_INSTALLED=$(lk_certbot_list "$@" | grep .)
+}
+
+# lk_certbot_register_deploy_hook COMMAND [ARG...] -- DOMAIN...
+#
+# Register a command to run whenever Certbot renews or installs a certificate
+# for the given domains.
+function lk_certbot_register_deploy_hook() {
+    local LK_SUDO=1 ARGS=("$@") COMMAND=() FILE
+    while (($#)); do
+        [[ $1 != -- ]] || { shift && break; }
+        COMMAND[${#COMMAND[@]}]=$1
+        shift
+    done
+    [[ -n ${COMMAND+1} ]] && (($#)) || lk_warn "invalid arguments" || return
+    FILE=/etc/letsencrypt/renewal-hooks/deploy/$(lk_md5 "${ARGS[@]}").sh &&
+        lk_install -d -m 00755 "${FILE%/*}" &&
+        lk_install -m 00755 "$FILE" &&
+        lk_file_replace "$FILE" <<EOF
+#!/bin/bash
+
+set -euo pipefail
+
+if comm -23 \\
+    <(printf '%s\\n' $(IFS=' ' && echo "$*") | sort) \\
+    <(printf '%s\\n' \$RENEWED_DOMAINS | sort) | grep .; then
+    exit
+fi
+
+$(lk_quote_arr COMMAND)
+EOF
 }
 
 # lk_composer_install [INSTALL_PATH]
