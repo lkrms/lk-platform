@@ -50,8 +50,9 @@ function lk_postmap() {
     lk_install -m "${3:-00644}" "$FILE" &&
         lk_elevate cp "$1" "$FILE" &&
         lk_elevate postmap "$FILE" || return
-    if ! lk_elevate diff -qN "$2" "$FILE" >/dev/null ||
-        ! diff -qN \
+    if [[ ! -e $2 ]] ||
+        ! lk_elevate diff -q "$2" "$FILE" >/dev/null ||
+        ! diff -q \
             <(lk_elevate postmap -s "$2" | sort) \
             <(lk_elevate postmap -s "$FILE" | sort) >/dev/null; then
         lk_elevate mv -f "$FILE.db" "$2.db" &&
@@ -74,8 +75,9 @@ function lk_postfix_provision() {
 # /etc/postfix/transport from LK_SMTP_TRANSPORT_MAPS.
 function lk_postfix_apply_transport_maps() {
     local IFS=, FILE=${1:-/etc/postfix/transport} TEMP i=0 \
-        MAPS MAP _FROM FROM TO
-    lk_mapfile MAPS < <(tr ';' '\n' <<<"${LK_SMTP_TRANSPORT_MAPS-}")
+        MAPS=() MAP _FROM FROM TO
+    [[ -z ${LK_SMTP_TRANSPORT_MAPS:+1} ]] ||
+        lk_mapfile MAPS < <(tr ';' '\n' <<<"$LK_SMTP_TRANSPORT_MAPS")
     lk_mktemp_with TEMP
     for MAP in ${MAPS+"${MAPS[@]}"}; do
         [[ $MAP == *=* ]] || continue

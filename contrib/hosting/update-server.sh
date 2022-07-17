@@ -91,7 +91,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
     export LC_ALL=C
 
     local INSTALL KEYS_FILE HEAD_FILE LAST_HEAD HEAD SH \
-      NO_CERTBOT WP OWNER STATUS=0
+      CERT_LIST NO_CERT WP OWNER STATUS=0
 
     cd /opt/lk-platform 2>/dev/null ||
       cd /opt/*-platform ||
@@ -203,15 +203,17 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
     ((!TLS)) || {
       lk_tty_print "Checking TLS certificates"
       local IFS=$'\n'
-      NO_CERTBOT=($(comm -13 \
-        <(lk_certbot_list |
-          awk -F$'\t' -v "now=$(lk_date "%Y-%m-%d %H:%M:%S%z")" \
-            '$3 > now {print $2}' | sort -u) \
-        <(lk_hosting_list_sites -e |
-          awk -F$'\t' '$11 == "N" {print $10}' | sort -u))) || return
+      lk_mktemp_with CERT_LIST lk_certbot_list &&
+        NO_CERT=($(comm -13 \
+          <(awk -F$'\t' -v "now=$(lk_date "%Y-%m-%d %H:%M:%S%z")" \
+            '$3 > now {print $2}' "$CERT_LIST" | sort -u) \
+          <(lk_hosting_list_sites -e |
+            awk -F$'\t' '$11 == "N" {print $10}' | sort -u))) ||
+        lk_tty_error -r "Error retrieving local certificates and/or domains" ||
+        return
       IFS=,
-      [ -z "${NO_CERTBOT+1}" ] ||
-        for DOMAINS in "${NO_CERTBOT[@]}"; do
+      [ -z "${NO_CERT+1}" ] ||
+        for DOMAINS in "${NO_CERT[@]}"; do
           [[ $DOMAINS =~ \.$TLD_REGEX(,|$) ]] || continue
           lk_tty_detail "Requesting TLS certificate:" "${DOMAINS//,/ }"
           lk_certbot_install $DOMAINS || lk_tty_error -r \
