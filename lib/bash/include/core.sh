@@ -2569,19 +2569,27 @@ function lk_keep_trying() {
 
 # lk_require_output [-q] COMMAND [ARG...]
 #
-# Return true if COMMAND writes output other than newlines and exits without
-# error. If -q is set, suppress output.
+# Return true if COMMAND succeeds with output other than newlines. If -q is set,
+# suppress output.
+#
+# Return values:
+# 1. if command fails with output
+# 2. if command succeeds with no output
+# 3. if command fails with no output
 function lk_require_output() { (
-    unset QUIET
-    [ "${1-}" != -q ] || { QUIET=1 && shift; }
-    FILE=$(lk_mktemp) && lk_delete_on_exit "$FILE" &&
-        if [ -z "${QUIET-}" ]; then
-            "$@" | tee "$FILE"
-        else
-            "$@" >"$FILE"
-        fi &&
-        grep -Eq '^.+$' "$FILE"
-); }
+    QUIET=0
+    [[ ${1-} != -q ]] || { QUIET=1 && shift; }
+    if ((!QUIET)); then
+        "$@" | grep --color=never .
+    else
+        "$@" | grep . >/dev/null
+    fi ||
+        case "${PIPESTATUS[0]},${PIPESTATUS[1]}" in
+        *,0) return 1 ;;
+        0,*) return 2 ;;
+        *) return 3 ;;
+        esac
+) }
 
 # lk_env_clean COMMAND [ARG...]
 #
@@ -3582,10 +3590,12 @@ function lk_diff() { (
             false
         else
             printf '%s' "$LK_RESET"
-            ! lk_require_output lk_maybe_sudo icdiff -U2 --no-headers \
+            STATUS=1
+            lk_require_output lk_maybe_sudo icdiff -U2 --no-headers \
                 ${_LK_TTY_INDENT:+--cols=$(($(
                     lk_tty_columns
-                ) - 2 * (_LK_TTY_INDENT + 2)))} "$@"
+                ) - 2 * (_LK_TTY_INDENT + 2)))} "$@" || ((!($? & 2))) || STATUS=0
+            ((!STATUS))
         fi
     elif lk_command_exists git; then
         lk_maybe_sudo \
