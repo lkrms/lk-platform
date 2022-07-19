@@ -83,7 +83,7 @@ PAC_PACKAGES+=(
     zsh
 
     # Utilities
-    acme.sh
+    certbot
     cloud-utils
     expac
     fatresize

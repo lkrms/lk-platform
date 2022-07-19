@@ -38,6 +38,7 @@ HOMEBREW_FORMULAE+=(
     nload # Shows bandwidth by interface
 
     # System
+    certbot
     dosfstools
     mtools
     nmap

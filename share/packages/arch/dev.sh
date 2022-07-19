@@ -116,11 +116,11 @@ PAC_PACKAGES+=(
     samba
 
     # System
-    acme.sh
     arch-install-scripts
     at
     base-devel
     binwalk
+    certbot
     cloud-utils
     cronie
     expac
