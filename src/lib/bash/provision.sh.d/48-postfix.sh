@@ -71,8 +71,8 @@ function lk_postfix_provision() {
 
 # lk_postfix_apply_transport_maps [DB_PATH]
 #
-# Install or update the Postfix transport_maps database at DB_PATH or
-# /etc/postfix/transport from LK_SMTP_TRANSPORT_MAPS.
+# Install or update the Postfix transport_maps database at DB_PATH
+# (/etc/postfix/transport by default) from LK_SMTP_TRANSPORT_MAPS.
 function lk_postfix_apply_transport_maps() {
     local IFS=, FILE=${1:-/etc/postfix/transport} TEMP i=0 \
         MAPS=() MAP _FROM FROM TO

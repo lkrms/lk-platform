@@ -703,6 +703,7 @@ function _lk_hosting_postfix_provision() {
     local SITES TEMP \
         RELAY=${LK_SMTP_RELAY:+"relay:$LK_SMTP_RELAY"} \
         TRANSPORT=/etc/postfix/transport \
+        SENDER_CANONICAL=/etc/postfix/sender_canonical \
         SENDER_TRANSPORT=/etc/postfix/sender_transport \
         PASSWD=/etc/postfix/sasl_passwd \
         ACCESS=/etc/postfix/sender_access
@@ -714,6 +715,15 @@ function _lk_hosting_postfix_provision() {
 
     lk_mktemp_with SITES lk_hosting_list_sites -e -j &&
         lk_mktemp_with TEMP || return
+
+    # 0. Use `sender_canonical_maps` to rewrite addresses like
+    #    "<site>@<hostname>" to "<site>@<domain>"
+    jq -r '.[] | [.owner.user, "\(.owner.user)@\(.domain)"] | @tsv' <"$SITES" |
+        awk -F '\t' \
+            'seen[$1]++{print"Duplicate key: "$0>"/dev/stderr";next}{print}' \
+            >"$TEMP" &&
+        lk_postmap "$TEMP" "$SENDER_CANONICAL" &&
+        lk_postconf_set sender_canonical_maps "hash:$SENDER_CANONICAL" || return
 
     # 1. Use `sender_dependent_default_transport_maps` to deliver mail to
     #    destinations configured in LK_SMTP_* and SITE_SMTP_*. For reference:

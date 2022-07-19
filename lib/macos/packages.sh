@@ -23,6 +23,7 @@ HOMEBREW_FORMULAE=(
 
     #
     bash-completion
+    flock
     icdiff
     jc
     jq
