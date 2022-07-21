@@ -7,17 +7,18 @@ PAC_REJECT=()
 
 PAC_KEEP=(
     # Utilities
+    ccache
     expect
     geekbench
     glances
     handbrake-cli
+    mkvtoolnix-cli
     mlocate
     offlineimap
     ookla-speedtest-bin
     pacman-cleanup-hook
     powershell-bin
     transmission-cli
-    mkvtoolnix-cli
 
     # PDF
     ghostscript  # PDF/PostScript processing
@@ -44,6 +45,7 @@ PAC_KEEP=(
     postfix
     samba
     wide-dhcpv6
+    radvd
 
     #
     powerpanel
