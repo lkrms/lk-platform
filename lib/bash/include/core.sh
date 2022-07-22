@@ -24,6 +24,13 @@ function lk_err() {
     lk_pass echo "${FUNCNAME[1 + ${_LK_STACK_DEPTH:-0}]-${0##*/}}: $1" >&2
 }
 
+# lk_bad_args [VALUE_NAME [VALUE]]
+function lk_bad_args() {
+    lk_pass printf '%s: invalid %s%s\n' \
+        "${FUNCNAME[1 + ${_LK_STACK_DEPTH:-0}]-${0##*/}}" \
+        "${1-arguments}" "${2+: $2}" >&2
+}
+
 # lk_script_name [STACK_DEPTH]
 function lk_script_name() {
     local DEPTH=$((${1:-0} + ${_LK_STACK_DEPTH:-0})) NAME
@@ -1116,11 +1123,19 @@ function lk_arr_remove() {
 done") && eval "$_SH"
 }
 
+# lk_arr_from ARRAY COMMAND [ARG...]
+#
+# Populate ARRAY with each line of output from COMMAND.
+function lk_arr_from() {
+    (($# > 1)) || lk_bad_args || return
+    lk_mapfile "$1" < <(shift && "$@")
+}
+
 # lk_arr_intersect ARRAY ARRAY2...
 #
 # Print ARRAY values that are present in at least one of the subsequent arrays.
 function lk_arr_intersect() {
-    (($# > 1)) || lk_warn "invalid arguments" || return
+    (($# > 1)) || lk_bad_args || return
     comm -12 <(lk_arr "$1" | sort -u) <(shift && lk_arr "$@" | sort -u)
 }
 
@@ -1128,7 +1143,7 @@ function lk_arr_intersect() {
 #
 # Print ARRAY values that are not present in any of the subsequent arrays.
 function lk_arr_diff() {
-    (($# > 1)) || lk_warn "invalid arguments" || return
+    (($# > 1)) || lk_bad_args || return
     comm -23 <(lk_arr "$1" | sort -u) <(shift && lk_arr "$@" | sort -u)
 }
 
