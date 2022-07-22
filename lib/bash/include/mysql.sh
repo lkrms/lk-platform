@@ -283,7 +283,7 @@ Usage: $FUNCNAME SSH_HOST DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
                 --no-tablespaces \
                 "$1" | sed -E ':repeat
 s/^(\/\*![0-9]+[[:blank:]]+.*)'"$2"'\.(`([^`]+|``)*`)/\1\2/
-t repeat' | gzip && [[ ${PIPESTATUS[*]} == 000 ]]
+t repeat' | gzip && [[ "${PIPESTATUS[*]}" == 000 ]]
         }
         declare -f do-mysqldump
         lk_quote_args do-mysqldump \

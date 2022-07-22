@@ -57,7 +57,7 @@ function lk_ssh_run_on_host() {
     lk_mktemp_with SH || return
     {
         [[ -z ${LIB+1} ]] || (
-            declare IFS=, LAST=0
+            LAST=0
             while :; do
                 lk_mapfile LIB < <(
                     FILES=("${LIB[@]/#/$LIB_DIR/}")
@@ -72,8 +72,10 @@ function lk_ssh_run_on_host() {
                 LAST=${#LIB[@]}
             done
             FILES=("${LIB[@]/#/$LIB_DIR/}")
+            IFS=,
             sed -E "s/^(_LK_SOURCED=).*/\1core${LIB+,${LIB[*]}}/" \
                 "$LIB_DIR/core.sh" || return
+            unset IFS
             [[ -z ${FILES+1} ]] ||
                 cat "${FILES[@]/%/.sh}" || return
         )

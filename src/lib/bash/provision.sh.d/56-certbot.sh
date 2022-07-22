@@ -79,7 +79,7 @@ function lk_certbot_install_asap() {
             }
             FAILED+=("$DOMAIN")
         done
-        [[ ${RESOLVED[*]-} == "${LAST_RESOLVED[*]-}" ]] || {
+        [[ "${RESOLVED[*]-}" == "${LAST_RESOLVED[*]-}" ]] || {
             ((!DOTS)) || echo >&2
             ((DOTS = 0, CHANGED = 1))
             ((!i)) || lk_tty_log "Change detected at" "$(lk_date_log)"

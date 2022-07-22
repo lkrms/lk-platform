@@ -15,8 +15,8 @@ printf '\n====> %s invoked\nArguments:\n%s\nEnvironment:\n%s\n' "$HOOK" \
 exec > >(tee >(lk_log >>"$LOG_FILE")) 2>&1
 
 cd "${PWD%/.git}"
-lk_mktemp_with INVALID gnu_xargs -0r shfmt -l -i 2 -s \
-    < <(shfmt -l -i 4 -s . | tr '\n' '\0')
+lk_mktemp_with INVALID gnu_xargs -0r shfmt -l -i 2 \
+    < <(shfmt -l -i 4 . | tr '\n' '\0')
 
 [ ! -s "$INVALID" ] || {
     lk_tty_error -r "Invalid formatting:" $'\n'"$(lk_pass cat "$INVALID")" ||
