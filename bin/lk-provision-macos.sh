@@ -868,6 +868,9 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
         done
     )
 
+    lk_tty_print "Cleaning up"
+    brew_loop lk_tty_run_detail brew cleanup
+
     if [ "$STATUS" -eq 0 ]; then
         lk_tty_success "Provisioning complete"
     else
