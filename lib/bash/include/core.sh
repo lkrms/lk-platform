@@ -1572,7 +1572,7 @@ function lk_tty_print() {
     if [[ -z ${LK_TTY_HOSTNAME-} ]]; then
         echo "$MESSAGE"
     else
-        [[ -n $_LK_TTY_HOSTNAME ]] ||
+        [[ -n ${_LK_TTY_HOSTNAME+1} ]] ||
             _lk_tty_hostname_apply
         echo "$_LK_TTY_HOSTNAME${MESSAGE//$'\n'/$_LK_TTY_HOSTNAME_INDENT}"
     fi >&"${_LK_FD-2}"
