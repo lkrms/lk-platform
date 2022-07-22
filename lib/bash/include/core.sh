@@ -1382,10 +1382,10 @@ function lk_tty_length() {
 function _lk_tty_hostname_apply() {
     _LK_TTY_HOSTNAME=${HOSTNAME:-$(lk_hostname)} ||
         _LK_TTY_HOSTNAME="<unknown>"
-    _LK_TTY_HOSTNAME="${LK_DIM}[ $(lk_ellipsis 10 "$(
-        printf '%10s' "$_LK_TTY_HOSTNAME"
+    _LK_TTY_HOSTNAME="${LK_DIM}[ $(lk_ellipsis 14 "$(
+        printf '%14s' "$_LK_TTY_HOSTNAME"
     )") ] $LK_UNDIM"
-    _LK_TTY_HOSTNAME_INDENT=${_LK_TTY_HOSTNAME_INDENT:-$'\n               '}
+    _LK_TTY_HOSTNAME_INDENT=${_LK_TTY_HOSTNAME_INDENT:-$'\n                   '}
 }
 
 function _lk_tty_margin_apply() {
