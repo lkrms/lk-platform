@@ -44,7 +44,7 @@ Options:
     [ $# -eq 1 ] ||
         # Accept more parameters if _LK_PARAM allows them
         { [ $# -gt 1 ] &&
-            [[ ${_LK_PARAM+${_LK_PARAM[*]: -1}} =~ \.\.\.[]\)\>]*$ ]]; } ||
+            [[ "${_LK_PARAM+${_LK_PARAM[*]: -1}}" =~ \.\.\.[]\)\>]*$ ]]; } ||
         lk_usage || return
     set -- "${*: -1}"
     [[ $1 == *.* ]] || {

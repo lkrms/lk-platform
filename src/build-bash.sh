@@ -25,7 +25,7 @@ minify=1
 shfmt_args=(-mn)
 [ "${shfmt_minify-1}" = 1 ] || {
     minify=0
-    shfmt_args=(-s -i "${shfmt_indent:-4}")
+    shfmt_args=(-i "${shfmt_indent:-4}")
 }
 [ "${shfmt_simplify-1}" = 1 ] || {
     format=0
@@ -114,7 +114,7 @@ NR == 2 {print first}
 f       {next}
 /^./    {f = 2}
 END     {if (NR == 1 && first) {print first; f = 2}; exit 2 - f}' && ((++i)) ||
-                [[ ${PIPESTATUS[*]} =~ ^0+2$ ]]
+                [[ "${PIPESTATUS[*]}" =~ ^0+2$ ]]
         done
     } >"$out2"
     # Add inline awk scripts

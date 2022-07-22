@@ -3,7 +3,7 @@
 function _lk_tty_prompt() {
     unset IFS
     PREFIX=" :: "
-    PROMPT=${_PROMPT[*]}
+    PROMPT="${_PROMPT[*]}"
     _lk_tty_format_readline -b PREFIX "${_LK_TTY_COLOUR-$_LK_COLOUR}" _LK_TTY_PREFIX_COLOUR
     _lk_tty_format_readline -b PROMPT "" _LK_TTY_MESSAGE_COLOUR
     echo "$PREFIX$PROMPT "

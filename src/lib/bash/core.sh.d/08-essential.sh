@@ -16,6 +16,13 @@ function lk_err() {
     lk_pass echo "${FUNCNAME[1 + ${_LK_STACK_DEPTH:-0}]-${0##*/}}: $1" >&2
 }
 
+# lk_bad_args [VALUE_NAME [VALUE]]
+function lk_bad_args() {
+    lk_pass printf '%s: invalid %s%s\n' \
+        "${FUNCNAME[1 + ${_LK_STACK_DEPTH:-0}]-${0##*/}}" \
+        "${1-arguments}" "${2+: $2}" >&2
+}
+
 # lk_script_name [STACK_DEPTH]
 function lk_script_name() {
     local DEPTH=$((${1:-0} + ${_LK_STACK_DEPTH:-0})) NAME

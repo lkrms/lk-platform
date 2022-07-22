@@ -53,11 +53,19 @@ function lk_arr_remove() {
 done") && eval "$_SH"
 }
 
+# lk_arr_from ARRAY COMMAND [ARG...]
+#
+# Populate ARRAY with each line of output from COMMAND.
+function lk_arr_from() {
+    (($# > 1)) || lk_bad_args || return
+    lk_mapfile "$1" < <(shift && "$@")
+}
+
 # lk_arr_intersect ARRAY ARRAY2...
 #
 # Print ARRAY values that are present in at least one of the subsequent arrays.
 function lk_arr_intersect() {
-    (($# > 1)) || lk_warn "invalid arguments" || return
+    (($# > 1)) || lk_bad_args || return
     comm -12 <(lk_arr "$1" | sort -u) <(shift && lk_arr "$@" | sort -u)
 }
 
@@ -65,7 +73,7 @@ function lk_arr_intersect() {
 #
 # Print ARRAY values that are not present in any of the subsequent arrays.
 function lk_arr_diff() {
-    (($# > 1)) || lk_warn "invalid arguments" || return
+    (($# > 1)) || lk_bad_args || return
     comm -23 <(lk_arr "$1" | sort -u) <(shift && lk_arr "$@" | sort -u)
 }
 

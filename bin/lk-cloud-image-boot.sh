@@ -1030,7 +1030,7 @@ dns-nameservers $VM_IPV4_GATEWAY" '{
         VIRT_OPTIONS+=(--network none)
         IFS=
         QEMU_COMMANDLINE+=(
-            -netdev user,id=lknet0${HOSTFWD[*]+"${HOSTFWD[*]/#/,hostfwd=}"}
+            -netdev "user,id=lknet0${HOSTFWD[*]+${HOSTFWD[*]/#/,hostfwd=}}"
             -device virtio-net-pci,netdev=lknet0,mac="$VM_MAC_ADDRESS"
         )
         unset IFS
@@ -1054,7 +1054,7 @@ dns-nameservers $VM_IPV4_GATEWAY" '{
             '.capabilities.guest[].arch|select(.["@name"] == $arch)' |
             lk_jq -r 'include "core"; .domain | to_array[]["@type"]' |
             grep -Fxv qemu ||
-        { [[ ${PIPESTATUS[*]} =~ ^0+1$ ]] && echo qemu; })
+        { [[ "${PIPESTATUS[*]}" =~ ^0+1$ ]] && echo qemu; })
 
     FILE=$(lk_mktemp_file)
     lk_delete_on_exit "$FILE"
