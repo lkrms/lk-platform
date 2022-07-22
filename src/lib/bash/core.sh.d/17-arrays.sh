@@ -53,4 +53,20 @@ function lk_arr_remove() {
 done") && eval "$_SH"
 }
 
+# lk_arr_intersect ARRAY ARRAY2...
+#
+# Print ARRAY values that are present in at least one of the subsequent arrays.
+function lk_arr_intersect() {
+    (($# > 1)) || lk_warn "invalid arguments" || return
+    comm -12 <(lk_arr "$1" | sort -u) <(shift && lk_arr "$@" | sort -u)
+}
+
+# lk_arr_diff ARRAY ARRAY2...
+#
+# Print ARRAY values that are not present in any of the subsequent arrays.
+function lk_arr_diff() {
+    (($# > 1)) || lk_warn "invalid arguments" || return
+    comm -23 <(lk_arr "$1" | sort -u) <(shift && lk_arr "$@" | sort -u)
+}
+
 #### Reviewed: 2021-11-16
