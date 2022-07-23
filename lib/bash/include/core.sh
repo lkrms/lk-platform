@@ -1,5 +1,7 @@
 #!/bin/bash
 
+shopt -s extglob
+
 export -n BASH_XTRACEFD SHELLOPTS
 
 USER=${USER:-$(id -un)} &&
@@ -4024,7 +4026,8 @@ Usage: $FUNCNAME [-m MODE] [-o OWNER] [-g GROUP] [-v] FILE...
     shift $((OPTIND - 1))
     [ $# -gt 0 ] || lk_usage || return
     [ -z "${OWNER-}" ] &&
-        { [ -z "${GROUP-}" ] || lk_user_in_group "$GROUP"; } ||
+        { [ -z "${GROUP-}" ] ||
+            id -Gn | tr -s '[:blank:]' '\n' | grep -Fx "$GROUP" >/dev/null; } ||
         LK_SUDO=1
     if lk_is_true DIR; then
         lk_maybe_sudo install ${ARGS[@]+"${ARGS[@]}"} "$@"

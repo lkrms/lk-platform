@@ -1,5 +1,7 @@
 #!/bin/bash
 
+shopt -s extglob
+
 export -n BASH_XTRACEFD SHELLOPTS
 
 USER=${USER:-$(id -un)} &&
