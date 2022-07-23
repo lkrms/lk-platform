@@ -16,6 +16,11 @@ function lk_certbot_list() {
         awk -f "$AWK"
 }
 
+# lk_certbot_list_all_domains [DOMAIN...]
+function lk_certbot_list_all_domains() {
+    lk_certbot_list "$@" | cut -f2 | tr ',' '\n'
+}
+
 # lk_certbot_install [-w WEBROOT_PATH] DOMAIN...
 function lk_certbot_install() {
     local WEBROOT WEBROOT_PATH DOMAIN ERRORS=0 \

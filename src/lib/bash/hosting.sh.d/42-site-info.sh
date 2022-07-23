@@ -163,4 +163,9 @@ function _lk_hosting_list_sites() { (
     fi
 ); }
 
+# lk_hosting_list_all_domains [-e]
+function lk_hosting_list_all_domains() {
+    lk_hosting_list_sites "$@" | cut -f10 | tr ',' '\n'
+}
+
 #### Reviewed: 2022-01-12
