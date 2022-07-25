@@ -38,7 +38,8 @@ function lk_hosting_certbot_maybe_install() {
             lk_hosting_site_configure -n \
                 -s SITE_SSL_CERT_FILE=${CERT[3]} \
                 -s SITE_SSL_KEY_FILE=${CERT[4]} \
-                -s SITE_SSL_CHAIN_FILE= || return
+                -s SITE_SSL_CHAIN_FILE= \
+                "$DOMAIN" || return
         }
     done < <(cut -f1,3,10 "$REQUESTS")
 }
