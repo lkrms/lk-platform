@@ -696,6 +696,9 @@ function lk_system_get_public_ips() { (
 # and if any matching records are found, print whitespace-delimited values for
 # each requested FIELD (default: `NAME,TTL,CLASS,TYPE,RDATA`).
 #
+# CNAMEs are followed recursively, but intermediate records are not printed
+# unless CNAME is one of the requested record types.
+#
 # Field names (not case-sensitive):
 # - `NAME`
 # - `TTL`
@@ -706,7 +709,7 @@ function lk_system_get_public_ips() { (
 #
 # Returns false only if an error occurs.
 function lk_dns_get_records() {
-    local IFS=$' \t\n' FIELDS TYPES TYPE NAME QUERY=()
+    local IFS=$' \t\n' FIELDS TYPES TYPE NAME QUERY=() NAMES_REGEX AWK
     while [[ ${1-} == [+-]* ]]; do
         [[ ${1-} != -* ]] || {
             TYPES=($(IFS=, && lk_upper ${1:1} | sort -u)) || return
@@ -733,20 +736,70 @@ END { if (status) { exit status } print expr }') || return
                 QUERY[${#QUERY[@]}]=$TYPE
         done
     done
+    NAMES_REGEX="^$(lk_ere_implode_args -e -- "$@")\\.?\$"
+    lk_awk_load -i AWK sh-dns-get-records <<"EOF" || return
+BEGIN {
+  s = "[ \\t]"
+  ns = "[^ \\t]"
+  name_ttl_regex = "^" s "*" ns "+" s "+" ns "+"
+}
+/^(;|[ \t]*$)/ {
+  next
+}
+{
+  line = $0
+  ttl = $2
+  $2 = "-"
+  if (seen[$0]++) {
+    next
+  }
+  print line
+}
+$4 != "CNAME" && cname_count[$1] {
+  canonical[canonical_count++] = line
+}
+$4 == "CNAME" {
+  i = cname_count[$5]++
+  cname_alias[$5][i] = $1
+  match(line, name_ttl_regex)
+  cname_record[$5][i] = substr(line, RSTART, RLENGTH)
+}
+END {
+  for (i = 0; i < canonical_count; i++) {
+    $0 = canonical[i]
+    follow_cname($1)
+  }
+}
+function follow_cname(cname, _i, _alias)
+{
+  for (_i = 0; _i < cname_count[cname]; _i++) {
+    _alias = cname_alias[cname][_i]
+    if (cname_count[_alias]) {
+      follow_cname(_alias)
+      continue
+    }
+    sub(name_ttl_regex, cname_record[cname][_i], $0)
+    print
+  }
+}
+EOF
     dig +noall +answer \
         ${_LK_DIG_ARGS+"${_LK_DIG_ARGS[@]}"} \
         ${_LK_DNS_SERVER:+@"$_LK_DNS_SERVER"} \
         "${QUERY[@]}" |
+        awk -f "$AWK" |
         awk -v S="$S" \
             -v NS="$NS" \
-            -v types=${TYPES+"^$(lk_ere_implode_arr -e TYPES)\$"} "
-function printexpr() { print ${FIELDS-} }"'
+            -v types=${TYPES+"^$(lk_ere_implode_arr -e TYPES)\$"} \
+            -v names="${NAMES_REGEX//\\/\\\\}" '
 function rdata(r, i) {
   r = $0
   for (i = 0; i < 4; i++) { sub("^" S "*" NS "+" S "+", "", r) }
   return r
 }
-!types || $4 ~ types { printexpr() }'
+((! types && $4 != "CNAME") || (types && $4 ~ types)) && ($1 ~ names || "CNAME" ~ types) {
+  print '"${FIELDS-}"'
+}'
 }
 
 # lk_dns_get_records_first_parent [-TYPE[,TYPE...]] [+FIELD[,FIELD...]] NAME
