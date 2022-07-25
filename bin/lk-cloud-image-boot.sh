@@ -8,10 +8,10 @@ lk_require validate
 # `local -n` was added in Bash 4.3
 lk_bash_at_least 4 3 || lk_die "Bash 4.3 or higher required"
 
-IMAGE=ubuntu-20.04
+IMAGE=ubuntu-22.04
 VM_PACKAGES=
 VM_FILESYSTEM_MAPS=
-VM_MEMORY=4096
+VM_MEMORY=2048
 VM_CPUS=2
 VM_DISK_SIZE=80G
 VM_IPV4_CIDR=
@@ -84,7 +84,6 @@ SUPPORTED IMAGES
     ubuntu-18.04        ubuntu-18.04-minimal
     ubuntu-16.04        ubuntu-16.04-minimal
     ubuntu-14.04
-    ubuntu-12.04
 
 PRESETS
 
@@ -323,7 +322,6 @@ while :; do
             METADATA[${#METADATA[@]}]=${!i}
         done
         METADATA_URLS[${#METADATA_URLS[@]}]=$URL
-        unset IFS
         ;;
     -H | --poweroff)
         POWEROFF=yes
@@ -356,11 +354,11 @@ while :; do
     -h | --allow-host)
         IFS=,
         for HOST in $1; do
-            unset IFS
             [[ $HOST =~ $HOST_OPT_PREFIX_REGEX ]] ||
                 lk_warn "invalid host: $HOST" || lk_usage
             ALLOW_HOSTS_XML[${#ALLOW_HOSTS_XML[@]}]="<host>$HOST</host>"
         done
+        unset IFS
         ;;
     -U | --allow-url)
         while IFS=, read -r -d '' URL FILTER; do
@@ -437,97 +435,88 @@ fi
 VM_HOSTNAME=${1-}
 [ -n "$VM_HOSTNAME" ] || lk_usage
 
+function prefer_direct_kernel_boot() {
+    [[ -n ${LK_CLOUDIMG_DIRECT_KERNEL_BOOT-} ]]
+}
+
+# boot_ubuntu RELEASE CODENAME [IMAGE_SUFFIX]
+function boot_ubuntu() {
+    IMAGE_NAME=ubuntu-$1
+    IMAGE_URL=http://$UBUNTU_HOST/$2/current/$2-server-cloudimg-${IMAGE_ARCH}${3-}.img
+    SHA_URLS=(
+        "$UBUNTU_SHA_URL/$2/current/SHA256SUMS.gpg"
+        "$UBUNTU_SHA_URL/$2/current/SHA256SUMS"
+    )
+    # On Apple Silicon, the default console (ttyAMA0) won't receive output if
+    # the cloud image boots with "console=tty1 console=ttyS0" or similar, and
+    # Ubuntu 22.04's arm64 images apply these options by default. Direct kernel
+    # boot allows us to override the default cmdline.
+    [[ $IMAGE_ARCH != arm64 ]] && ! prefer_direct_kernel_boot || {
+        KERNEL_URL=http://$UBUNTU_HOST/$2/current/unpacked/$2-server-cloudimg-${IMAGE_ARCH}-vmlinuz-generic
+        INITRD_URL=http://$UBUNTU_HOST/$2/current/unpacked/$2-server-cloudimg-${IMAGE_ARCH}-initrd-generic
+        KERNEL_SHA_URLS=(
+            "$UBUNTU_SHA_URL/$2/current/unpacked/SHA256SUMS.gpg"
+            "$UBUNTU_SHA_URL/$2/current/unpacked/SHA256SUMS"
+        )
+        INITRD_SHA_URLS=("${KERNEL_SHA_URLS[@]}")
+        # TODO: use `guestfish --ro -a img.qcow2 run : get-uuid /dev/sda1` to
+        # retrieve the root partition's UUID
+        KERNEL_ARGS=(root=LABEL=cloudimg-rootfs ro)
+        [[ $IMAGE_ARCH == arm64 ]] || KERNEL_ARGS+=(console=tty1 console=ttyS0)
+    }
+    OS_VARIANT=ubuntu$1
+}
+
+# boot_ubuntu_minimal RELEASE CODENAME [IMAGE_SUFFIX]
+function boot_ubuntu_minimal() {
+    IMAGE_NAME=ubuntu-$1-minimal
+    IMAGE_URL=http://$UBUNTU_HOST/minimal/releases/$2/release/ubuntu-$1-minimal-cloudimg-${IMAGE_ARCH}${3-}.img
+    SHA_URLS=(
+        "$UBUNTU_SHA_URL/minimal/releases/$2/release/SHA256SUMS.gpg"
+        "$UBUNTU_SHA_URL/minimal/releases/$2/release/SHA256SUMS"
+    )
+    OS_VARIANT=ubuntu$1
+}
+
+KERNEL_URL=
+INITRD_URL=
+KERNEL_ARGS=()
 SHA_KEYRING=/usr/share/keyrings/ubuntu-cloudimage-keyring.gpg
 [ -r "$SHA_KEYRING" ] ||
     SHA_KEYRING=$LK_BASE/share/keys/ubuntu-cloudimage-keyring.gpg
-[[ $IMAGE_ARCH == amd64 ]] || [[ $IMAGE != *minimal ]] ||
-    lk_die "minimal images are not available for $IMAGE_ARCH"
+[[ $IMAGE_ARCH == amd64 ]] || {
+    [[ $IMAGE != *minimal ]] ||
+        lk_die "minimal images are not available for $IMAGE_ARCH"
+    [[ $IMAGE != *14.04* ]] ||
+        lk_die "Ubuntu 14.04 is not supported on $IMAGE_ARCH"
+}
 case "$IMAGE" in
 *22.04*minimal)
-    IMAGE_NAME=ubuntu-22.04-minimal
-    IMAGE_URL=http://$UBUNTU_HOST/minimal/releases/jammy/release/ubuntu-22.04-minimal-cloudimg-$IMAGE_ARCH.img
-    SHA_URLS=(
-        "$UBUNTU_SHA_URL"/minimal/releases/jammy/release/SHA256SUMS.gpg
-    )
-    OS_VARIANT=ubuntu22.04
+    boot_ubuntu_minimal 22.04 jammy
     ;;
 *22.04*)
-    IMAGE_NAME=ubuntu-22.04
-    IMAGE_URL=http://$UBUNTU_HOST/jammy/current/jammy-server-cloudimg-$IMAGE_ARCH.img
-    SHA_URLS=(
-        "$UBUNTU_SHA_URL"/jammy/current/SHA256SUMS.gpg
-        "$UBUNTU_SHA_URL"/jammy/current/SHA256SUMS
-    )
-    OS_VARIANT=ubuntu22.04
+    boot_ubuntu 22.04 jammy
     ;;
 *20.04*minimal)
-    IMAGE_NAME=ubuntu-20.04-minimal
-    IMAGE_URL=http://$UBUNTU_HOST/minimal/releases/focal/release/ubuntu-20.04-minimal-cloudimg-$IMAGE_ARCH.img
-    SHA_URLS=(
-        "$UBUNTU_SHA_URL"/minimal/releases/focal/release/SHA256SUMS.gpg
-    )
-    OS_VARIANT=ubuntu20.04
+    boot_ubuntu_minimal 20.04 focal
     ;;
 *20.04*)
-    IMAGE_NAME=ubuntu-20.04
-    IMAGE_URL=http://$UBUNTU_HOST/focal/current/focal-server-cloudimg-$IMAGE_ARCH.img
-    SHA_URLS=(
-        "$UBUNTU_SHA_URL"/focal/current/SHA256SUMS.gpg
-        "$UBUNTU_SHA_URL"/focal/current/SHA256SUMS
-    )
-    OS_VARIANT=ubuntu20.04
+    boot_ubuntu 20.04 focal
     ;;
 *18.04*minimal)
-    IMAGE_NAME=ubuntu-18.04-minimal
-    IMAGE_URL=http://$UBUNTU_HOST/minimal/releases/bionic/release/ubuntu-18.04-minimal-cloudimg-$IMAGE_ARCH.img
-    SHA_URLS=(
-        "$UBUNTU_SHA_URL"/minimal/releases/bionic/release/SHA256SUMS.gpg
-    )
-    OS_VARIANT=ubuntu18.04
+    boot_ubuntu_minimal 18.04 bionic
     ;;
 *18.04*)
-    IMAGE_NAME=ubuntu-18.04
-    IMAGE_URL=http://$UBUNTU_HOST/bionic/current/bionic-server-cloudimg-$IMAGE_ARCH.img
-    SHA_URLS=(
-        "$UBUNTU_SHA_URL"/bionic/current/SHA256SUMS.gpg
-        "$UBUNTU_SHA_URL"/bionic/current/SHA256SUMS
-    )
-    OS_VARIANT=ubuntu18.04
+    boot_ubuntu 18.04 bionic
     ;;
 *16.04*minimal)
-    IMAGE_NAME=ubuntu-16.04-minimal
-    IMAGE_URL=http://$UBUNTU_HOST/minimal/releases/xenial/release/ubuntu-16.04-minimal-cloudimg-$IMAGE_ARCH-disk1.img
-    SHA_URLS=(
-        "$UBUNTU_SHA_URL"/minimal/releases/xenial/release/SHA256SUMS.gpg
-    )
-    OS_VARIANT=ubuntu16.04
+    boot_ubuntu_minimal 16.04 xenial -disk1
     ;;
 *16.04*)
-    IMAGE_NAME=ubuntu-16.04
-    IMAGE_URL=http://$UBUNTU_HOST/xenial/current/xenial-server-cloudimg-$IMAGE_ARCH-disk1.img
-    SHA_URLS=(
-        "$UBUNTU_SHA_URL"/xenial/current/SHA256SUMS.gpg
-        "$UBUNTU_SHA_URL"/xenial/current/SHA256SUMS
-    )
-    OS_VARIANT=ubuntu16.04
+    boot_ubuntu 16.04 xenial -disk1
     ;;
 *14.04*)
-    IMAGE_NAME=ubuntu-14.04
-    IMAGE_URL=http://$UBUNTU_HOST/trusty/current/trusty-server-cloudimg-$IMAGE_ARCH-disk1.img
-    SHA_URLS=(
-        "$UBUNTU_SHA_URL"/trusty/current/SHA256SUMS.gpg
-        "$UBUNTU_SHA_URL"/trusty/current/SHA256SUMS
-    )
-    OS_VARIANT=ubuntu14.04
-    ;;
-*12.04*)
-    IMAGE_NAME=ubuntu-12.04
-    IMAGE_URL=http://$UBUNTU_HOST/precise/current/precise-server-cloudimg-$IMAGE_ARCH-disk1.img
-    SHA_URLS=(
-        "$UBUNTU_SHA_URL"/precise/current/SHA256SUMS.gpg
-        "$UBUNTU_SHA_URL"/precise/current/SHA256SUMS
-    )
-    OS_VARIANT=ubuntu12.04
+    boot_ubuntu 14.04 trusty -disk1
     ;;
 *)
     lk_warn "invalid cloud image: $IMAGE"
@@ -535,25 +524,29 @@ case "$IMAGE" in
     ;;
 esac
 
-[[ $VM_NETWORK != user=* ]] || [ -n "${HOSTFWD+1}" ] ||
-    lk_tty_warning -r \
-        "--forward is required for access to services on usermode guests" ||
-    lk_confirm "Proceed without forwarding any ports?" Y || lk_die ""
+lk_no_input || [[ $VM_NETWORK != user=* ]] || [[ -n ${HOSTFWD+1} ]] || {
+    lk_tty_warning "Unreachable guest detected:" "$VM_HOSTNAME"
+    lk_tty_print \
+        "Port forwarding is required to access guests with usermode networking"
+    lk_tty_detail "Example:" "--forward tcp:2222:22"
+    lk_tty_yn "Proceed anyway?" Y || lk_die ""
+    lk_tty_print
+}
 
-if [ -n "$STACKSCRIPT" ]; then
-    lk_tty_log "Processing StackScript"
-    lk_mapfile SS_TAGS <(grep -Eo \
+if [[ -n $STACKSCRIPT ]]; then
+    lk_mapfile SS_TAGS < <(grep -Eo \
         "<(lk:)?[uU][dD][fF]($S+[a-zA-Z]+=\"[^\"]*\")*$S*/>" \
         "$STACKSCRIPT")
+    [[ -z ${SS_TAGS+1} ]] || lk_tty_log "Processing StackScript"
     SS_FIELDS=()
     TAG=0
-    for SS_TAG in ${SS_TAGS[@]+"${SS_TAGS[@]}"}; do
+    for SS_TAG in ${SS_TAGS+"${SS_TAGS[@]}"}; do
         ((++TAG))
-        lk_mapfile SS_ATTRIBS <(grep -Eo '[a-z]+="[^"]*"' <<<"$SS_TAG")
+        lk_mapfile SS_ATTRIBS < <(grep -Eo '[a-z]+="[^"]*"' <<<"$SS_TAG")
         unset NAME LABEL DEFAULT SELECT_OPTIONS SELECT_TEXT VALIDATE_COMMAND
         _LK_REQUIRED=1
         REQUIRED_TEXT=required
-        for SS_ATTRIB in ${SS_ATTRIBS[@]+"${SS_ATTRIBS[@]}"}; do
+        for SS_ATTRIB in ${SS_ATTRIBS+"${SS_ATTRIBS[@]}"}; do
             [[ $SS_ATTRIB =~ ^([a-z]+)=\"([^\"]*)\"$ ]]
             case "${BASH_REMATCH[1]}" in
             name)
@@ -564,30 +557,28 @@ if [ -n "$STACKSCRIPT" ]; then
                 ;;
             default)
                 DEFAULT=${BASH_REMATCH[2]}
-                unset _LK_REQUIRED
+                _LK_REQUIRED=0
                 REQUIRED_TEXT=optional
                 ;;
             oneof | manyof)
-                # shellcheck disable=SC2206
+                unset IFS
                 SELECT_OPTIONS=(${BASH_REMATCH[2]//,/ })
-                if [ "${BASH_REMATCH[1]}" = oneof ]; then
+                if [[ ${BASH_REMATCH[1]} == oneof ]]; then
                     SELECT_TEXT="Value must be one of the following"
                     VALIDATE_COMMAND=(
                         lk_validate_one_of VALUE "${SELECT_OPTIONS[@]}")
                 else
-                    SELECT_TEXT="Value can be any number of the following (comma-delimited)"
+                    SELECT_TEXT="Value must be one or more of the following (comma-delimited)"
                     VALIDATE_COMMAND=(
                         lk_validate_many_of VALUE "${SELECT_OPTIONS[@]}")
                 fi
                 ;;
             esac
         done
-        ! lk_is_true _LK_REQUIRED ||
-            [ -n "${VALIDATE_COMMAND+1}" ] ||
+        ((!_LK_REQUIRED)) ||
+            [[ -n ${VALIDATE_COMMAND+1} ]] ||
             VALIDATE_COMMAND=(lk_validate_not_null VALUE)
-        lk_tty_print \
-            "Checking field $TAG of ${#SS_TAGS[@]}:" \
-            "$NAME"
+        lk_tty_print "Checking field $TAG of ${#SS_TAGS[@]}:" "$NAME"
         [ -z "${SELECT_TEXT-}" ] ||
             lk_tty_list_detail SELECT_OPTIONS "$SELECT_TEXT:"
         [ -z "${DEFAULT-}" ] ||
@@ -595,29 +586,27 @@ if [ -n "$STACKSCRIPT" ]; then
         VALUE=$(lk_var_env "$NAME") || unset VALUE
         i=0
         while ((++i)); do
-            NO_ERROR_DISPLAYED=1
             IS_VALID=1
-            [ -z "${VALIDATE_COMMAND+1}" ] ||
+            [[ -z ${VALIDATE_COMMAND+1} ]] ||
                 FIELD_ERROR=$(_LK_VALIDATE_FIELD_NAME=$NAME \
                     "${VALIDATE_COMMAND[@]}") ||
                 IS_VALID=0
             INITIAL_VALUE=${VALUE-${DEFAULT-}}
-            lk_is_true IS_VALID ||
-                ! { lk_no_input || [ "$i" -gt 1 ]; } || {
-                lk_tty_warning "$FIELD_ERROR"
-                unset NO_ERROR_DISPLAYED
-            }
-            if lk_is_true IS_VALID && { lk_no_input || [ "$i" -gt 1 ]; }; then
+            ((IS_VALID)) ||
+                ! { lk_no_input || ((i > 1)); } ||
+                lk_tty_error "$FIELD_ERROR"
+            if ((IS_VALID)) && { lk_no_input || ((i > 1)); }; then
                 lk_tty_detail "Using value:" "$INITIAL_VALUE" "$LK_GREEN"
                 break
             else
                 LK_FORCE_INPUT=1 lk_tty_read \
-                    "$LABEL${NO_ERROR_DISPLAYED+ ($REQUIRED_TEXT)}:" VALUE \
+                    "-$REQUIRED_TEXT" \
+                    "$LK_BOLD$LABEL$LK_UNBOLD:" VALUE \
                     "" ${INITIAL_VALUE:+-i "$INITIAL_VALUE"}
             fi
         done
-        [ "${VALUE:=}" != "${DEFAULT-}" ] ||
-            lk_is_true LK_STACKSCRIPT_EXPORT_DEFAULT ||
+        [[ ${VALUE:=} != "${DEFAULT-}" ]] ||
+            lk_true LK_STACKSCRIPT_EXPORT_DEFAULT ||
             continue
         SS_FIELDS+=("$NAME=$VALUE")
     done
@@ -626,6 +615,7 @@ if [ -n "$STACKSCRIPT" ]; then
         # This works because cloud-init does no unescaping
         STACKSCRIPT_ENV=$(lk_echo_array SS_FIELDS | sort)
     }
+    [[ -z ${SS_TAGS+1} ]] || lk_tty_print
 fi
 
 KEYS_FILE=~/.ssh/authorized_keys
@@ -634,7 +624,7 @@ SSH_AUTHORIZED_KEYS=$(grep -Ev "^(#|$S*\$)" "$KEYS_FILE" |
     jq -Rn '[ inputs | split("\n")[] ]') ||
     lk_die "no keys in $KEYS_FILE"
 
-while VM_STATE=$(lk_maybe_sudo virsh domstate "$VM_HOSTNAME" 2>/dev/null); do
+while VM_STATE=$(lk_sudo virsh domstate "$VM_HOSTNAME" 2>/dev/null); do
     [ "$VM_STATE" != "shut off" ] || unset VM_STATE
     lk_tty_error "Domain already exists:" "$VM_HOSTNAME"
     PROMPT=(
@@ -642,12 +632,12 @@ while VM_STATE=$(lk_maybe_sudo virsh domstate "$VM_HOSTNAME" 2>/dev/null); do
         ${VM_STATE+"force off,"}
         "delete and permanently remove all storage volumes?"
     )
-    lk_is_true FORCE_DELETE ||
-        LK_FORCE_INPUT=1 lk_confirm "${PROMPT[*]}" N ||
+    lk_true FORCE_DELETE ||
+        LK_FORCE_INPUT=1 lk_tty_yn "${PROMPT[*]}" N ||
         lk_die ""
     [ -z "${VM_STATE+1}" ] ||
-        lk_maybe_sudo virsh destroy "$VM_HOSTNAME" || true
-    lk_maybe_sudo virsh undefine --managed-save --nvram \
+        lk_sudo virsh destroy "$VM_HOSTNAME" || true
+    lk_sudo virsh undefine --managed-save --nvram \
         --remove-all-storage "$VM_HOSTNAME" || true
 done
 
@@ -678,73 +668,122 @@ printf '%s\t%s\n' \
     lk_tty_detail "StackScript environment:" \
         $'\n'"$([ ${#SS_FIELDS[@]} -eq 0 ] && echo "<empty>" ||
             lk_echo_array SS_FIELDS | sort)"
+lk_tty_yn "OK to proceed?" Y || lk_die ""
 lk_tty_print
-lk_confirm "OK to proceed?" Y || lk_die ""
 
 {
     lk_elevate -f install -d -m 01777 \
-        "$LK_BASE/var/cache/lk-platform"{,/cloud-images,/NoCloud} 2>/dev/null &&
+        "$LK_BASE/var/cache/lk-platform"/{cloud-images,cloud-image-kernels,NoCloud} 2>/dev/null &&
         cd "$LK_BASE/var/cache/lk-platform/cloud-images" ||
         lk_die "error creating cache directories"
 
-    FILENAME=${IMAGE_URL##*/}
-    IMG_NAME=${FILENAME%.*}
-    if [ ! -f "$FILENAME" ] || lk_is_true REFRESH_CLOUDIMG; then
-        lk_tty_print "Downloading" "$FILENAME"
-        wget --no-cache --timestamping "$IMAGE_URL" || {
-            rm -f "$FILENAME"
-            lk_die "error downloading $IMAGE_URL"
-        }
-        if [ ${#SHA_URLS[@]} -eq 1 ]; then
-            SHA_SUMS=$(lk_curl "${SHA_URLS[0]}" |
-                gpg --no-default-keyring --keyring "$SHA_KEYRING" --decrypt)
-        else
-            SHA_SUMS=$(lk_curl "${SHA_URLS[1]}") &&
-                gpg --no-default-keyring --keyring "$SHA_KEYRING" --verify \
-                    <(lk_curl "${SHA_URLS[0]}") <(echo "$SHA_SUMS")
-        fi || lk_die "error verifying ${SHA_URLS[0]}"
-        echo "$SHA_SUMS" >"SHASUMS-$IMAGE_NAME" ||
-            lk_die "error writing to SHASUMS-$IMAGE_NAME"
-    fi
-
-    CLOUDIMG_ROOT=$POOL_ROOT/cloud-images
-    lk_install -d -m 00755 "$POOL_ROOT" "$CLOUDIMG_ROOT"
-    TIMESTAMP=$(lk_file_modified "$FILENAME")
-    CLOUDIMG_PATH=$CLOUDIMG_ROOT/$IMG_NAME-$TIMESTAMP.qcow2
-    if lk_maybe_sudo test -f "$CLOUDIMG_PATH"; then
-        lk_tty_print "Backing file already available:" "$CLOUDIMG_PATH"
-    else
-        awk -F '[*U^[:blank:]]+' -v "f=$FILENAME" \
-            '$2 == f { print }' "SHASUMS-$IMAGE_NAME" |
-            lk_require_output tail -n1 |
-            shasum -a "${SHA_ALGORITHM:-256}" -c &&
-            lk_tty_success "Verified" "$FILENAME" ||
-            lk_die "verification failed: $PWD/$FILENAME"
-        CLOUDIMG_FORMAT=$(qemu-img info --output=json "$FILENAME" |
-            jq -r .format)
-        if [ "$CLOUDIMG_FORMAT" != qcow2 ]; then
-            lk_tty_print \
-                "Converting $CLOUDIMG_FORMAT image to $CLOUDIMG_PATH"
-            lk_maybe_sudo \
-                qemu-img convert -pO qcow2 "$FILENAME" "$CLOUDIMG_PATH"
-        else
-            lk_tty_print \
-                "Copying $CLOUDIMG_FORMAT image to $CLOUDIMG_PATH"
-            lk_maybe_sudo cp -v "$FILENAME" "$CLOUDIMG_PATH"
+    # download_image URL SHA_URL...
+    function download_image() {
+        local URL=$1 FILE SUMS SUMS_GPG
+        shift
+        FILE=${URL##*/}
+        IMAGE_FILE=$FILE
+        if [ ! -f "$FILE" ] || lk_true REFRESH_CLOUDIMG; then
+            lk_tty_detail "Downloading" "$FILE"
+            wget --no-cache --timestamping \
+                --no-verbose --show-progress "$URL" || {
+                rm -f "$FILE"
+                lk_die "error downloading $URL"
+            }
         fi
-        lk_maybe_sudo touch -r "$FILENAME" "$CLOUDIMG_PATH" &&
-            lk_maybe_sudo chmod -v 444 "$CLOUDIMG_PATH" &&
-            lk_tty_print "Backing file installed successfully:" \
-                "$CLOUDIMG_PATH"
+        if [ ! -f "SHASUMS-${FILE%.*}" ] || lk_true REFRESH_CLOUDIMG; then
+            lk_mktemp_with SUMS
+            if (($# == 1)); then
+                lk_curl "$1" |
+                    gpg --no-default-keyring \
+                        --keyring "$SHA_KEYRING" \
+                        --decrypt \
+                        >"$SUMS" 2>/dev/null
+            else
+                lk_curl "$2" >"$SUMS" &&
+                    lk_mktemp_with SUMS_GPG lk_curl "$1" &&
+                    gpg --no-default-keyring \
+                        --keyring "$SHA_KEYRING" \
+                        --verify "$SUMS_GPG" "$SUMS" 2>/dev/null
+            fi || lk_die "error verifying $1"
+            cp "$SUMS" "SHASUMS-${FILE%.*}" ||
+                lk_die "error creating $PWD/SHASUMS-${FILE%.*}"
+        fi
+    }
+
+    # maybe_verify_image IMAGE_FILE TARGET_PATH
+    function maybe_verify_image() {
+        lk_install -d -m 00755 "${2%/*}"
+        if lk_sudo test -f "$2"; then
+            lk_tty_detail "Already installed:" "$2"
+            false
+        else
+            awk -F '[*[:blank:]]+' -v "img=$1" '$2 == img' "SHASUMS-${1%.*}" |
+                shasum -a "${SHA_ALGORITHM:-256}" -c >/dev/null &&
+                lk_tty_success "Verified" "$1" ||
+                lk_die "verification failed: $PWD/$1"
+        fi
+        lk_pass lk_tty_print
+    }
+
+    lk_tty_print \
+        "Acquiring image file${KERNEL_URL:+s} for" "$IMAGE_NAME"
+    download_image "$IMAGE_URL" "${SHA_URLS[@]}"
+    CLOUDIMG_NAME=${IMAGE_FILE%.*}-$(lk_file_modified "$IMAGE_FILE")
+    CLOUDIMG_PATH=$POOL_ROOT/cloud-images/${CLOUDIMG_NAME}.qcow2
+
+    if maybe_verify_image "$IMAGE_FILE" "$CLOUDIMG_PATH"; then
+        CLOUDIMG_FORMAT=$(qemu-img info --output=json "$IMAGE_FILE" |
+            jq -r .format)
+        lk_tty_print "Installing verified image to" "${CLOUDIMG_PATH%/*}"
+        if [ "$CLOUDIMG_FORMAT" != qcow2 ]; then
+            lk_sudo qemu-img convert -pO qcow2 "$IMAGE_FILE" "$CLOUDIMG_PATH"
+        else
+            lk_sudo cp "$IMAGE_FILE" "$CLOUDIMG_PATH"
+        fi
+        lk_sudo touch -r "$IMAGE_FILE" "$CLOUDIMG_PATH"
+        lk_sudo chmod 444 "$CLOUDIMG_PATH"
+        lk_tty_success "Backing file installed successfully"
+        lk_tty_print
     fi
 
-    IMAGE_BASENAME=$VM_HOSTNAME-$IMG_NAME-$TIMESTAMP
+    if [[ -n ${KERNEL_URL:+1} ]]; then
+        cd "$LK_BASE/var/cache/lk-platform/cloud-image-kernels"
+
+        download_image "$KERNEL_URL" "${KERNEL_SHA_URLS[@]}"
+        KERNEL_FILE=$IMAGE_FILE
+        KERNEL_PATH=$POOL_ROOT/cloud-image-kernels/${KERNEL_FILE%.*}-$(lk_file_modified "$KERNEL_FILE")
+        KERNEL_VERIFIED=1
+        maybe_verify_image "$KERNEL_FILE" "$KERNEL_PATH" || KERNEL_VERIFIED=0
+
+        INITRD_VERIFIED=1
+        unset INITRD_PATH
+        if [[ -n ${INITRD_URL:+1} ]]; then
+            download_image "$INITRD_URL" "${INITRD_SHA_URLS[@]}"
+            INITRD_FILE=$IMAGE_FILE
+            INITRD_PATH=$POOL_ROOT/cloud-image-kernels/${INITRD_FILE%.*}-$(lk_file_modified "$KERNEL_FILE")
+            maybe_verify_image "$INITRD_FILE" "$INITRD_PATH" || INITRD_VERIFIED=0
+        fi
+
+        if ((KERNEL_VERIFIED && INITRD_VERIFIED)); then
+            lk_sudo cp "$KERNEL_FILE" "$KERNEL_PATH"
+            lk_sudo touch -r "$KERNEL_FILE" "$KERNEL_PATH"
+            if [[ -n ${INITRD_URL:+1} ]]; then
+                lk_sudo cp "$INITRD_FILE" "$INITRD_PATH"
+                lk_sudo touch -r "$INITRD_FILE" "$INITRD_PATH"
+            fi
+            lk_sudo chmod 444 "$KERNEL_PATH" ${INITRD_PATH+"$INITRD_PATH"}
+        fi
+    fi
+
+    IMAGE_BASENAME=$VM_HOSTNAME-$CLOUDIMG_NAME
     DISK_PATH=$POOL_ROOT/$IMAGE_BASENAME.qcow2
     NOCLOUD_PATH=$POOL_ROOT/$IMAGE_BASENAME-cloud-init.qcow2
     if [ -e "$DISK_PATH" ]; then
         lk_tty_error "Disk image already exists:" "$DISK_PATH"
-        lk_is_true FORCE_DELETE || LK_FORCE_INPUT=1 lk_confirm \
-            "Destroy the existing image and start over?" N ||
+        lk_true FORCE_DELETE ||
+            LK_FORCE_INPUT=1 \
+                lk_tty_yn "Destroy the existing image and start over?" N ||
             lk_die ""
     fi
 
@@ -777,10 +816,16 @@ lk_confirm "OK to proceed?" Y || lk_die ""
     VIRT_OPTIONS=()
     QEMU_COMMANDLINE=()
 
-    [ -z "${QEMU_MACHINE:+1}" ] ||
+    [[ -z ${KERNEL_URL:+1} ]] || {
+        unset IFS
+        VIRT_OPTIONS+=(
+            --boot
+            "uefi,kernel=$KERNEL_PATH${INITRD_PATH+,initrd=$INITRD_PATH}${KERNEL_ARGS+,kernel_args=${KERNEL_ARGS[*]}}"
+        )
+    }
+    [[ -z ${QEMU_MACHINE:+1} ]] ||
         VIRT_OPTIONS+=(--machine "$QEMU_MACHINE")
     ! lk_is_macos || VIRT_OPTIONS+=(
-        --rng none
         --xml ./devices/emulator="$LK_BASE/share/qemu/qemu-system-hvf"
     )
 
@@ -817,7 +862,6 @@ lk_confirm "OK to proceed?" Y || lk_die ""
         for FILESYSTEM in "${FILESYSTEMS[@]}"; do
             IFS=,
             FILESYSTEM_DIRS=($FILESYSTEM)
-            unset IFS
             [ ${#FILESYSTEM_DIRS[@]} -ge 2 ] ||
                 lk_die "invalid filesystem map: $FILESYSTEM"
             [ -d "${FILESYSTEM_DIRS[0]}" ] ||
@@ -830,6 +874,7 @@ lk_confirm "OK to proceed?" Y || lk_die ""
             FSTAB+=("$MOUNT_NAME $MOUNT_DIR 9p defaults,nofail,trans=virtio,version=9p2000.L,posixacl,msize=262144,_netdev 0 0")
             MOUNT_DIRS+=("$MOUNT_DIR")
         done
+        unset IFS
         add_runcmd "$(
             function _run() {
                 install -d -m 00755 "$@" &&
@@ -850,7 +895,6 @@ lk_confirm "OK to proceed?" Y || lk_die ""
             --argjson keys "$SSH_AUTHORIZED_KEYS" '{
   "ssh_pwauth": false,
   "users": [{
-    "uid": $uid,
     "name": $name,
     "gecos": $gecos,
     "shell": "/bin/bash",
@@ -860,16 +904,10 @@ lk_confirm "OK to proceed?" Y || lk_die ""
   "package_upgrade": true,
   "package_reboot_if_required": true
 }'
-        [ "$IMAGE_NAME" != ubuntu-12.04 ] ||
-            add_json USER_DATA --argjson keys "$SSH_AUTHORIZED_KEYS" '{
-  "apt_upgrade": true,
-  "ssh_authorized_keys": $keys
-}'
     else
         add_json USER_DATA --argjson keys "$SSH_AUTHORIZED_KEYS" '{
   "ssh_pwauth": true,
   "disable_root": false,
-  "users": [],
   "ssh_authorized_keys": $keys
 }'
         _STACKSCRIPT=$(gzip <"$STACKSCRIPT" | lk_base64 | tr -d '\n')
@@ -897,8 +935,7 @@ lk_confirm "OK to proceed?" Y || lk_die ""
   }
 }'
 
-    PACKAGES=()
-    [ "$IMAGE_NAME" = ubuntu-12.04 ] || PACKAGES+=(qemu-guest-agent)
+    PACKAGES=(qemu-guest-agent)
     [ -z "$VM_PACKAGES" ] || {
         IFS=,
         PACKAGES+=($VM_PACKAGES)
@@ -915,25 +952,8 @@ lk_confirm "OK to proceed?" Y || lk_die ""
         [ "$IMAGE_NAME" != ubuntu-16.04-minimal ] ||
         add_write_files /etc/resolv.conf "nameserver $VM_IPV4_GATEWAY"
 
-    # ubuntu-12.04 doesn't start a serial getty (or implement write_files)
-    [ "$IMAGE_NAME" != ubuntu-12.04 ] ||
-        add_runcmd "$(
-            function _run() {
-                install -m 00644 /dev/null "/etc/init/$1.conf"
-                cat <<EOF >"/etc/init/$1.conf"
-start on stopped rc RUNLEVEL=[2345]
-stop on runlevel [!2345]
-respawn
-exec /sbin/getty --keep-baud 115200,38400,9600 $1 vt220
-EOF
-                /sbin/initctl start "$1"
-            }
-            declare -f _run
-            lk_quote_args _run ttyS0
-        )"
-
     # cloud-init on ubuntu-14.04 doesn't recognise the "apt" schema
-    [[ ! $IMAGE_NAME =~ ^ubuntu-(14.04|12.04)$ ]] ||
+    [[ $IMAGE_NAME != ubuntu-14.04 ]] ||
         add_json USER_DATA --arg uri "$UBUNTU_MIRROR" '{
   "apt_mirror": $uri
 }'
@@ -948,7 +968,7 @@ EOF
   "write_files": $writeFiles
 }'
 
-    ! lk_is_true POWEROFF || add_json USER_DATA '{
+    ! lk_true POWEROFF || add_json USER_DATA '{
   "power_state": {
     "mode": "poweroff"
   }
@@ -964,7 +984,7 @@ EOF
 
     # cloud-init on ubuntu-14.04 ignores the network-config file
     [ -z "$VM_IPV4_CIDR" ] ||
-        [[ ! $IMAGE_NAME =~ ^ubuntu-(14.04|12.04)$ ]] ||
+        [[ $IMAGE_NAME != ubuntu-14.04 ]] ||
         add_json META_DATA --arg interfaces "auto eth0
 iface eth0 inet static
 address $VM_IPV4_ADDRESS
@@ -977,14 +997,17 @@ dns-nameservers $VM_IPV4_GATEWAY" '{
     NOCLOUD_META_DIR=$LK_BASE/var/cache/lk-platform/NoCloud/$(lk_hostname)-$VM_HOSTNAME-$(lk_date_ymdhms)
     install -d -m 00755 "$NOCLOUD_META_DIR"
 
-    yq -y <<<"$NETWORK_CONFIG" \
-        >"$NOCLOUD_META_DIR/network-config"
+    # Quote MAC address to work around issue where numeric addresses are parsed
+    # incorrectly by cloud-init
+    yq -y <<<"$NETWORK_CONFIG" |
+        awk '$1=="mac_address:"&&$2~/^[0-9a-fA-F:]+$/{sub($2,"\"&\"")}{print}' \
+            >"$NOCLOUD_META_DIR/network-config"
     { echo "#cloud-config" && yq -y <<<"$USER_DATA"; } \
         >"$NOCLOUD_META_DIR/user-data"
     yq -y <<<"$META_DATA" \
         >"$NOCLOUD_META_DIR/meta-data"
 
-    if lk_confirm "Customise cloud-init data source?" N -t 10; then
+    if lk_tty_yn "Customise cloud-init data source?" N -t 10; then
         ! OPEN=$(lk_first_command xdg-open open) ||
             "$OPEN" "$NOCLOUD_META_DIR" || true
         lk_tty_pause "Press return to continue after making changes in $NOCLOUD_META_DIR . . . "
@@ -996,24 +1019,25 @@ dns-nameservers $VM_IPV4_GATEWAY" '{
     # https://cloudinit.readthedocs.io/en/latest/topics/datasources/nocloud.html
     if lk_command_exists mcopy; then
         # 128 x 1024 = 128KiB
-        dd if=/dev/null of="$FILE" bs=1024 seek=128
-        mkfs.vfat -n cidata "$FILE"
+        dd if=/dev/null of="$FILE" bs=1024 seek=128 status=none
+        # "cidata" must be lowercase for Ubuntu 14.04
+        mkfs.vfat -n cidata "$FILE" &>/dev/null
         mcopy -i "$FILE" \
             "$NOCLOUD_META_DIR"/{network-config,user-data,meta-data} ::
     else
         mkisofs -output "$FILE" -volid cidata -joliet -rock \
             "$NOCLOUD_META_DIR"/{network-config,user-data,meta-data}
     fi
-    lk_maybe_sudo install -m 00644 /dev/null "$NOCLOUD_PATH"
-    lk_maybe_sudo qemu-img convert -O qcow2 "$FILE" "$NOCLOUD_PATH"
+    lk_sudo install -m 00644 /dev/null "$NOCLOUD_PATH"
+    lk_sudo qemu-img convert -O qcow2 "$FILE" "$NOCLOUD_PATH"
 
     lk_tty_print "Creating virtual machine"
-    lk_tty_run_detail lk_maybe_sudo qemu-img create \
+    lk_tty_run_detail lk_sudo qemu-img create -q \
         -f "qcow2" \
         -b "$CLOUDIMG_PATH" \
         -F "qcow2" \
         "$DISK_PATH"
-    lk_tty_run_detail lk_maybe_sudo qemu-img resize \
+    lk_tty_run_detail lk_sudo qemu-img resize -q \
         -f "qcow2" \
         "$DISK_PATH" \
         "$VM_DISK_SIZE" || lk_die ""
@@ -1049,16 +1073,14 @@ dns-nameservers $VM_IPV4_GATEWAY" '{
     fi
 
     VIRT_TYPE=$(IFS= &&
-        lk_maybe_sudo virsh --connect "$LIBVIRT_URI" capabilities |
+        lk_sudo virsh --connect "$LIBVIRT_URI" capabilities |
         xq --arg arch "$QEMU_ARCH" \
             '.capabilities.guest[].arch|select(.["@name"] == $arch)' |
             lk_jq -r 'include "core"; .domain | to_array[]["@type"]' |
             grep -Fxv qemu ||
         { [[ "${PIPESTATUS[*]}" =~ ^0+1$ ]] && echo qemu; })
 
-    FILE=$(lk_mktemp_file)
-    lk_delete_on_exit "$FILE"
-    lk_tty_run_detail lk_maybe_sudo virt-install \
+    lk_mktemp_with FILE lk_tty_run_detail lk_sudo virt-install \
         --connect "$LIBVIRT_URI" \
         --name "$VM_HOSTNAME" \
         --memory "$VM_MEMORY" \
@@ -1068,19 +1090,20 @@ dns-nameservers $VM_IPV4_GATEWAY" '{
         --disk "$DISK_PATH",bus=virtio \
         --disk "$NOCLOUD_PATH",bus=virtio \
         --graphics none \
-        ${VIRT_OPTIONS[@]+"${VIRT_OPTIONS[@]}"} \
+        --rng /dev/urandom \
+        ${VIRT_OPTIONS+"${VIRT_OPTIONS[@]}"} \
         --virt-type "$VIRT_TYPE" \
-        --print-xml >"$FILE"
-    lk_tty_run_detail lk_maybe_sudo virsh --connect "$LIBVIRT_URI" \
-        define "$FILE"
+        --print-xml
+    lk_tty_run_detail lk_sudo virsh --connect "$LIBVIRT_URI" \
+        define "$FILE" >/dev/null
     for i in $(
         [ ${#METADATA[@]} -eq 0 ] ||
             seq 0 3 $((${#METADATA[@]} - 1))
     ); do
-        lk_tty_run_detail lk_maybe_sudo virsh --connect "$LIBVIRT_URI" \
-            metadata "$VM_HOSTNAME" "${METADATA[@]:i:3}"
+        lk_tty_run_detail lk_sudo virsh --connect "$LIBVIRT_URI" \
+            metadata "$VM_HOSTNAME" "${METADATA[@]:i:3}" >/dev/null
     done
-    lk_tty_run_detail lk_maybe_sudo virsh --connect "$LIBVIRT_URI" \
+    lk_tty_run_detail lk_sudo virsh --connect "$LIBVIRT_URI" \
         start "$VM_HOSTNAME" --console
 
     exit

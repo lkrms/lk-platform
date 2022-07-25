@@ -41,6 +41,7 @@ HOMEBREW_FORMULAE=(
 HOMEBREW_FORMULAE+=(
     byobu
     glances
+    gnu-time
     gnupg
     htop
     lftp

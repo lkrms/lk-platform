@@ -975,6 +975,18 @@ function lk_fold_quote_args() {
     printf '\n'
 }
 
+# lk_fold_quote_options [ARG...]
+#
+# Same as lk_fold_quote_args, but only start a new line before arguments that
+# start with "-".
+function lk_fold_quote_options() {
+    [ $# -eq 0 ] || { printf '%q' "$1" && shift; }
+    while (($#)); do
+        [[ $1 == -* ]] && printf ' \\\n    %q' "$1" || printf ' %q' "$1"
+        shift
+    done
+}
+
 # lk_implode_args GLUE [ARG...]
 function lk_implode_args() {
     local IFS=$' \t\n' GLUE=${1//\\/\\\\}
@@ -1790,7 +1802,7 @@ function lk_tty_run() {
         esac
         break
     done
-    ${_LK_TTY_COMMAND:-lk_tty_print} "Running:" "$(lk_quote_args "$@")"
+    ${_LK_TTY_COMMAND:-lk_tty_print} "Running:" "$(lk_fold_quote_options "$@")"
     eval "$_lk_x_restore"
     "${CMD[@]}"
 }
@@ -2138,9 +2150,8 @@ function lk_var_to_int() {
 }
 
 function _lk_tty_prompt() {
-    unset IFS
     PREFIX=" :: "
-    PROMPT="${_PROMPT[*]}"
+    PROMPT=${_PROMPT[*]}
     _lk_tty_format_readline -b PREFIX "${_LK_TTY_COLOUR-$_LK_COLOUR}" _LK_TTY_PREFIX_COLOUR
     _lk_tty_format_readline -b PROMPT "" _LK_TTY_MESSAGE_COLOUR
     echo "$PREFIX$PROMPT "
@@ -2152,26 +2163,27 @@ function lk_tty_pause() {
     lk_tty_print
 }
 
-# lk_tty_read PROMPT NAME [DEFAULT [READ_ARG...]]
+# lk_tty_read [-NOTE] PROMPT NAME [DEFAULT [READ_ARG...]]
 function lk_tty_read() {
-    [ $# -ge 2 ] || lk_usage "\
-Usage: $FUNCNAME PROMPT NAME [DEFAULT [READ_ARG...]]" || return
-    local IFS
-    unset IFS
-    if lk_no_input && [ -n "${3:+1}" ]; then
+    local IFS=$' \t\n' _NOTE
+    [[ ${1-} != -* ]] || { _NOTE=${1#-} && shift; }
+    (($# > 1)) && unset -v "$2" || lk_bad_args || return
+    if lk_no_input && [[ -n ${3:+1} ]]; then
         eval "$2=\$3"
     else
         local _PROMPT=("$1")
-        [ -z "${3:+1}" ] || _PROMPT+=("[$3]")
+        [[ -z ${_NOTE:+1} ]] || _PROMPT+=("$LK_DIM($_NOTE)$LK_UNDIM")
+        [[ -z ${3:+1} ]] || _PROMPT+=("[$3]")
         IFS= read -rep "$(_lk_tty_prompt)" "${@:4}" "$2" 2>&"${_LK_FD-2}" || return
         [ -n "${!2}" ] || eval "$2=\${3-}"
     fi
 }
 
-# lk_tty_read_silent PROMPT NAME [READ_ARG...]
+# lk_tty_read_silent [-NOTE] PROMPT NAME [READ_ARG...]
 function lk_tty_read_silent() {
-    local IFS
-    unset IFS
+    local IFS=$' \t\n' _NOTE
+    [[ ${1-} != -* ]] || { _NOTE=${1#-} && shift; }
+    (($# > 1)) || lk_bad_args || return
     lk_tty_read "${@:1:2}" "" -s "${@:3}"
     lk_tty_print
 }
@@ -2179,7 +2191,7 @@ function lk_tty_read_silent() {
 # lk_tty_read_password LABEL NAME
 function lk_tty_read_password() {
     local _PASSWORD
-    [ $# -eq 2 ] || lk_usage "Usage: $FUNCNAME LABEL NAME" || return
+    [ $# -eq 2 ] || lk_bad_args || return
     while :; do
         lk_tty_read_silent \
             "Password for $LK_BOLD$1$LK_RESET:" "$2" || return
@@ -2195,8 +2207,7 @@ function lk_tty_read_password() {
 
 # lk_tty_yn PROMPT [DEFAULT [READ_ARG...]]
 function lk_tty_yn() {
-    [ $# -ge 1 ] || lk_usage "\
-Usage: $FUNCNAME PROMPT [DEFAULT [READ_ARG...]]" || return
+    [ $# -ge 1 ] || lk_bad_args || return
     local YES="[yY]([eE][sS])?" NO="[nN][oO]?"
     if lk_no_input && [[ ${2-} =~ ^($YES|$NO)$ ]]; then
         [[ $2 =~ ^$YES$ ]]
