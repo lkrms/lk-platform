@@ -505,7 +505,7 @@ Example:
         ${REBUILD:+"$LINODE_ID"}
     )
     lk_tty_print "Running:" \
-        $'\n'"$(lk_fold_quote_args linode-cli "${ARGS[@]##ssh-??? * }")"
+        $'\n'"$(lk_fold_quote_options linode-cli "${ARGS[@]##ssh-??? * }")"
     lk_confirm "Proceed?" Y || return
     lk_tty_print "${VERBS[0]} Linode"
     FILE=/tmp/$FUNCNAME-$1-$(lk_date %s).json

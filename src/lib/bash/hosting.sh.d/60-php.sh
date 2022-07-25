@@ -24,8 +24,11 @@ function lk_hosting_php_get_versions() {
 }
 
 function _lk_hosting_php_check_pools() { (
-    shopt -s nullglob
+    shopt -s nullglob extglob
     lk_mktemp_with _SITE_LIST lk_hosting_list_sites || return
+    DREK=(/etc/php/*/fpm/pool.d/!(*.conf|*.orig|*.dpkg-dist))
+    [[ -z ${DREK+1} ]] ||
+        lk_elevate rm -fv "${DREK[@]}"
     for PHPVER in $(lk_hosting_php_get_versions); do
         POOLS=(/etc/php/"$PHPVER"/fpm/pool.d/*.conf)
         [[ -n ${POOLS+1} ]] || continue
@@ -40,7 +43,7 @@ function _lk_hosting_php_check_pools() { (
         lk_tty_detail "Disabling inactive PHP-FPM $PHPVER pools:" \
             $'\n'"$(lk_arr DISABLE)"
         for POOL in "${DISABLE[@]}"; do
-            lk_elevate mv -f "/etc/php/$PHPVER/fpm/pool.d/$POOL.conf"{,.bak} ||
+            lk_elevate rm -v "/etc/php/$PHPVER/fpm/pool.d/$POOL.conf" ||
                 return
         done
         lk_mark_dirty "php$PHPVER-fpm.service"

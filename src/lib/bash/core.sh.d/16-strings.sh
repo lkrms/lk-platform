@@ -47,6 +47,18 @@ function lk_fold_quote_args() {
     printf '\n'
 }
 
+# lk_fold_quote_options [ARG...]
+#
+# Same as lk_fold_quote_args, but only start a new line before arguments that
+# start with "-".
+function lk_fold_quote_options() {
+    [ $# -eq 0 ] || { printf '%q' "$1" && shift; }
+    while (($#)); do
+        [[ $1 == -* ]] && printf ' \\\n    %q' "$1" || printf ' %q' "$1"
+        shift
+    done
+}
+
 # lk_implode_args GLUE [ARG...]
 function lk_implode_args() {
     local IFS=$' \t\n' GLUE=${1//\\/\\\\}

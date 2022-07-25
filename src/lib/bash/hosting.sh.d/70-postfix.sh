@@ -20,9 +20,7 @@ function _lk_hosting_postfix_provision() {
     # 0. Use `sender_canonical_maps` to rewrite addresses like
     #    "<site>@<hostname>" to "<site>@<domain>"
     jq -r '.[] | [.owner.user, "\(.owner.user)@\(.domain)"] | @tsv' <"$SITES" |
-        awk -F '\t' \
-            'seen[$1]++{print"Duplicate key: "$0>"/dev/stderr";next}{print}' \
-            >"$TEMP" &&
+        awk -F '\t' 'seen[$1]++{next}{print}' >"$TEMP" &&
         lk_postmap "$TEMP" "$SENDER_CANONICAL" &&
         lk_postconf_set sender_canonical_maps "hash:$SENDER_CANONICAL" || return
 

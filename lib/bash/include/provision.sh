@@ -633,11 +633,71 @@ function lk_ssh_run_on_host() {
     return "$STATUS"
 }
 
+function lk_system_list_networks() {
+    local AWK
+    lk_awk_load -i AWK sh-system-list-networks <<"EOF" || return
+BEGIN {
+  mask_bits["f"] = 4
+  mask_bits["e"] = 3
+  mask_bits["c"] = 2
+  mask_bits["8"] = 1
+  mask_bits["0"] = 0
+}
+$1 ~ /^inet6?$/ && $2 !~ /^169\.254\./ {
+  if ($2 ~ /\/[0-9]+$/) {
+    print $2
+  } else if ($3 == "netmask" && $4 ~ /^0x[0-9a-f]{8}$/) {
+    prefix_bits = 0
+    for (i = 3; i <= length($4); i++) {
+      prefix_bits += mask_bits[substr($4, i, 1)]
+    }
+    printf "%s/%s\n", $2, prefix_bits
+  } else if ($3 == "prefixlen") {
+    sub(/%.*/, "", $2)
+    printf "%s/%s\n", $2, $4
+  }
+}
+EOF
+    if lk_command_exists ip; then
+        ip addr
+    else
+        ifconfig
+    fi | awk -f "$AWK" | lk_uniq
+}
+
+function lk_system_list_network_ips() {
+    lk_system_list_networks | sed -E 's/\/.*//' | lk_uniq
+}
+
+function lk_system_list_public_network_ips() {
+    lk_system_list_network_ips | sed -E '
+/^(10|172\.(1[6-9]|2[0-9]|3[01])|192\.168|127)\./d
+/^(f[cd]|fe80::|::1$)/d'
+}
+
+function lk_system_get_public_ips() { (
+    PIDS=()
+    for SERVER in 1.1.1.1 2606:4700:4700::1111; do
+        { ! ADDR=$(dig +noall +answer +short "@$SERVER" \
+            whoami.cloudflare TXT CH | tr -d '"') || echo "$ADDR"; } &
+        PIDS[${#PIDS[@]}]=$!
+    done
+    STATUS=0
+    for PID in "${PIDS[@]}"; do
+        wait "$PID" || STATUS=$?
+    done
+    ((!STATUS)) &&
+        lk_system_list_public_network_ips
+) | lk_uniq; }
+
 # lk_dns_get_records [-TYPE[,TYPE...]] [+FIELD[,FIELD...]] NAME...
 #
 # For each NAME, look up DNS resource records of the given TYPE (default: `A`)
 # and if any matching records are found, print whitespace-delimited values for
 # each requested FIELD (default: `NAME,TTL,CLASS,TYPE,RDATA`).
+#
+# CNAMEs are followed recursively, but intermediate records are not printed
+# unless CNAME is one of the requested record types.
 #
 # Field names (not case-sensitive):
 # - `NAME`
@@ -649,7 +709,7 @@ function lk_ssh_run_on_host() {
 #
 # Returns false only if an error occurs.
 function lk_dns_get_records() {
-    local IFS=$' \t\n' FIELDS TYPES TYPE NAME QUERY=()
+    local IFS=$' \t\n' FIELDS TYPES TYPE NAME QUERY=() NAMES_REGEX AWK
     while [[ ${1-} == [+-]* ]]; do
         [[ ${1-} != -* ]] || {
             TYPES=($(IFS=, && lk_upper ${1:1} | sort -u)) || return
@@ -676,20 +736,70 @@ END { if (status) { exit status } print expr }') || return
                 QUERY[${#QUERY[@]}]=$TYPE
         done
     done
+    NAMES_REGEX="^$(lk_ere_implode_args -e -- "$@")\\.?\$"
+    lk_awk_load -i AWK sh-dns-get-records <<"EOF" || return
+BEGIN {
+  s = "[ \\t]"
+  ns = "[^ \\t]"
+  name_ttl_regex = "^" s "*" ns "+" s "+" ns "+"
+}
+/^(;|[ \t]*$)/ {
+  next
+}
+{
+  line = $0
+  ttl = $2
+  $2 = "-"
+  if (seen[$0]++) {
+    next
+  }
+  print line
+}
+$4 != "CNAME" && cname_count[$1] {
+  canonical[canonical_count++] = line
+}
+$4 == "CNAME" {
+  i = cname_count[$5]++
+  cname_alias[$5][i] = $1
+  match(line, name_ttl_regex)
+  cname_record[$5][i] = substr(line, RSTART, RLENGTH)
+}
+END {
+  for (i = 0; i < canonical_count; i++) {
+    $0 = canonical[i]
+    follow_cname($1)
+  }
+}
+function follow_cname(cname, _i, _alias)
+{
+  for (_i = 0; _i < cname_count[cname]; _i++) {
+    _alias = cname_alias[cname][_i]
+    if (cname_count[_alias]) {
+      follow_cname(_alias)
+      continue
+    }
+    sub(name_ttl_regex, cname_record[cname][_i], $0)
+    print
+  }
+}
+EOF
     dig +noall +answer \
         ${_LK_DIG_ARGS+"${_LK_DIG_ARGS[@]}"} \
         ${_LK_DNS_SERVER:+@"$_LK_DNS_SERVER"} \
         "${QUERY[@]}" |
+        awk -f "$AWK" |
         awk -v S="$S" \
             -v NS="$NS" \
-            -v types=${TYPES+"^$(lk_ere_implode_arr -e TYPES)\$"} "
-function printexpr() { print ${FIELDS-} }"'
+            -v types=${TYPES+"^$(lk_ere_implode_arr -e TYPES)\$"} \
+            -v names="${NAMES_REGEX//\\/\\\\}" '
 function rdata(r, i) {
   r = $0
   for (i = 0; i < 4; i++) { sub("^" S "*" NS "+" S "+", "", r) }
   return r
 }
-!types || $4 ~ types { printexpr() }'
+((! types && $4 != "CNAME") || (types && $4 ~ types)) && ($1 ~ names || "CNAME" ~ types) {
+  print '"${FIELDS-}"'
+}'
 }
 
 # lk_dns_get_records_first_parent [-TYPE[,TYPE...]] [+FIELD[,FIELD...]] NAME
@@ -1123,6 +1233,11 @@ function val(_)
 EOF
     lk_elevate certbot certificates ${ARGS+"${ARGS[@]}"} 2>/dev/null |
         awk -f "$AWK"
+}
+
+# lk_certbot_list_all_domains [DOMAIN...]
+function lk_certbot_list_all_domains() {
+    lk_certbot_list "$@" | cut -f2 | tr ',' '\n'
 }
 
 # lk_certbot_install [-w WEBROOT_PATH] DOMAIN...
@@ -2165,59 +2280,6 @@ function lk_hosts_file_add() {
     lk_file_replace -f "$TEMP" "$FILE"
 }
 
-function _lk_node_ip() {
-    local i PRIVATE=("${@:2}") IP
-    IP=$(if lk_command_exists ip; then
-        ip address show
-    else
-        # See parse-ifconfig.awk for macOS output examples
-        ifconfig |
-            sed -E 's/ (prefixlen |netmask (0xf*[8ce]?0*( |$)))/\/\2/'
-    fi | awk \
-        -f "$LK_BASE/lib/awk/parse-ifconfig.awk" \
-        -v "ADDRESS_FAMILY=$1" |
-        sed -E 's/%[^/]+\//\//') || return
-    {
-        grep -Ev "^$(lk_regex_implode "${PRIVATE[@]}")" <<<"$IP" || true
-        lk_is_true _LK_IP_PUBLIC_ONLY ||
-            for i in "${PRIVATE[@]}"; do
-                grep -E "^$i" <<<"$IP" || true
-            done
-    } | if lk_is_true _LK_IP_KEEP_PREFIX; then
-        cat
-    else
-        sed -E 's/\/[0-9]+$//'
-    fi
-}
-
-function lk_node_ipv4() {
-    _lk_node_ip inet \
-        '10\.' '172\.(1[6-9]|2[0-9]|3[01])\.' '192\.168\.' '127\.' |
-        sed -E '/^169\.254\./d'
-}
-
-function lk_node_ipv6() {
-    _lk_node_ip inet6 "f[cd]" "fe80::" "::1/128"
-}
-
-function lk_node_public_ipv4() {
-    local IP
-    {
-        ! IP=$(dig +noall +answer +short @1.1.1.1 \
-            whoami.cloudflare TXT CH | sed -E 's/^"(.*)"$/\1/') || echo "$IP"
-        _LK_IP_PUBLIC_ONLY=1 lk_node_ipv4
-    } | sort -u
-}
-
-function lk_node_public_ipv6() {
-    local IP
-    {
-        ! IP=$(dig +noall +answer +short @2606:4700:4700::1111 \
-            whoami.cloudflare TXT CH | sed -E 's/^"(.*)"$/\1/') || echo "$IP"
-        _LK_IP_PUBLIC_ONLY=1 lk_node_ipv6
-    } | sort -u
-}
-
 # lk_node_is_host DOMAIN
 #
 # Return true if at least one public IP address matches an authoritative A or
@@ -2227,7 +2289,7 @@ function lk_node_is_host() {
     unset IFS
     lk_require_output -q lk_dns_resolve_hosts -d "$1" ||
         lk_warn "domain not found: $1" || return
-    NODE_IP=($(lk_node_public_ipv4 && lk_node_public_ipv6)) &&
+    NODE_IP=($(lk_system_get_public_ips)) &&
         [ ${#NODE_IP} -gt 0 ] ||
         lk_warn "public IP address not found" || return
     HOST_IP=($(lk_dns_resolve_name_from_ns "$1")) ||
