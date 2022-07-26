@@ -4,12 +4,15 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
 
 function __usage() {
   cat <<EOF
-Configure a hosting server to send email from the given domain via Amazon SES.
+Configure a hosting server to send email from a verified domain via Amazon SES.
 
 Usage:
   ${0##*/} <SSH_HOST> <SMTP_USER> <DOMAIN> <SES_DOMAIN> <SOURCE_IP>...
 
-If <SES_DOMAIN> is -, its value is taken from DOMAIN.
+When SSH_HOST is -, exit after printing SMTP credentials. No hosting server is
+required in this case.
+
+Assume SES_DOMAIN has the same value as DOMAIN when SES_DOMAIN is -.
 
 Environment:
   AWS_PROFILE   Must contain the name of an AWS CLI profile with a default
@@ -126,26 +129,30 @@ lk_log_start
     ACCESS_KEY_ID .AccessKey.AccessKeyId \
     SECRET_ACCESS_KEY .AccessKey.SecretAccessKey \
     <"$NEW_KEY") && eval "$SH"
-  lk_tty_success "Access key created:" "$ACCESS_KEY_ID"
-  lk_tty_detail \
-    "Converting access key to SMTP credentials for region:" "$AWS_REGION"
+  lk_tty_detail "Converting access key to SMTP credentials"
   SMTP_PASSWORD=$("$LK_BASE/lib/vendor/aws/smtp_credentials_generate.py" \
     "$SECRET_ACCESS_KEY" "$AWS_REGION")
   SMTP_CREDENTIALS=${ACCESS_KEY_ID}:${SMTP_PASSWORD}
 
-  if [[ ${SSH_HOST:--} == - ]]; then
-    lk_tty_print "Credentials for Postfix:" "$SMTP_CREDENTIALS"
-    exit
-  fi
+  lk_tty_success "AWS access key created"
+  lk_tty_pairs_detail -- \
+    "Access Key ID" "$ACCESS_KEY_ID" \
+    "Secret Access Key" "$SECRET_ACCESS_KEY" \
+    "SMTP region" "$AWS_REGION" \
+    "SMTP credentials" "$SMTP_CREDENTIALS"
+
+  [[ ${SSH_HOST:--} != - ]] ||
+    exit 0
 
   # Deploy the latest version of lk_hosting_site_configure etc.
+  lk_tty_print "Updating hosting server:" "$SSH_HOST"
   lk_tty_run_detail "$LK_BASE/contrib/hosting/update-server.sh" \
     --no-tls \
     --no-wordpress \
     --no-test \
     "$SSH_HOST"
 
-  function set-site-smtp-settings() {
+  function set_site_smtp_settings() {
     export LC_ALL=C
     . /opt/lk-platform/lib/bash/rc.sh &&
       lk_require hosting || return
@@ -176,9 +183,9 @@ lk_log_start
 
   lk_mktemp_with SCRIPT
   {
-    declare -f set-site-smtp-settings
+    declare -f set_site_smtp_settings
     declare -p AWS_REGION DOMAIN SES_DOMAIN SMTP_CREDENTIALS
-    lk_quote_args set-site-smtp-settings
+    lk_quote_args set_site_smtp_settings
   } >"$SCRIPT"
   COMMAND=$(lk_quote_args \
     bash -c 't=$(mktemp) && cat >"$t" && sudo -HE bash "$t"')
@@ -188,10 +195,8 @@ lk_log_start
 
   if KEY_ID=$(aws iam list-access-keys \
     --user-name "$SMTP_USER" |
-    jq -re \
-      --arg keyId "$ACCESS_KEY_ID" '
-.AccessKeyMetadata[] |
-  select(.AccessKeyId != $keyId) | .AccessKeyId') &&
+    jq -re --arg keyId "$ACCESS_KEY_ID" \
+      '.AccessKeyMetadata[] | select(.AccessKeyId != $keyId) | .AccessKeyId') &&
     lk_tty_yn "OK to delete previous key '$KEY_ID'?" Y; then
     lk_tty_run_detail aws iam delete-access-key \
       --user-name "$SMTP_USER" \
