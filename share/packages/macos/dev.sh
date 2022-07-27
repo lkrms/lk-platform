@@ -14,9 +14,7 @@ LOGIN_ITEMS=()
 HOMEBREW_TAPS+=(
     homebrew/cask-drivers
     homebrew/cask-fonts
-    homebrew/cask-versions
     homebrew/services
-    azure/functions
 )
 
 # Terminal-based
@@ -83,7 +81,7 @@ HOMEBREW_CASKS+=(
     nextcloud
     pencil
     rescuetime
-    scribus-dev
+    scribus
     skype
     spotify
     stretchly
@@ -171,6 +169,7 @@ HOMEBREW_FORMULAE+=(
 
     #
     python
+    python@3.9
 
     #
     perltidy
@@ -190,7 +189,6 @@ HOMEBREW_FORMULAE+=(
     # Platforms
     awscli
     azure-cli
-    azure/functions/azure-functions-core-tools@4
     gh
     linode-cli
     wp-cli
@@ -203,7 +201,6 @@ HOMEBREW_LINK_KEGS+=(
 )
 
 HOMEBREW_FORCE_INTEL+=(
-    azure/functions/azure-functions-core-tools@4
     composer
     php
     php@7.4
@@ -251,6 +248,7 @@ HOMEBREW_KEEP_FORMULAE+=(
     rust
 
     #
+    azure/functions/azure-functions-core-tools@4
     microsoft/mssql-release/msodbcsql17
     microsoft/mssql-release/mssql-tools
 

@@ -150,6 +150,7 @@ PAC_PACKAGES+=(
     gimp
     gnome-font-viewer
     gucharmap
+    hexchat
     inkscape
     keepassxc
     libreoffice-fresh
@@ -379,11 +380,13 @@ PAC_PACKAGES+=(
 
 AUR_PACKAGES+=(
     dotnet-runtime-3.1-bin # storageexplorer dependency
+    mongodb50-bin          # Required for legacy 'mongo' command
     nodejs-less
     nvm
     php-ibm_db2
     php-memprof
     php-sqlsrv
+    php7-xdebug # Required for PHP 7.4 debugging
     phpdoc-phar
     python-demjson3
     python39 # azure-functions-core-tools-bin dependency

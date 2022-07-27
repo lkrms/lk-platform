@@ -63,6 +63,7 @@ PAC_PACKAGES=(
     vim
 
     # System
+    acpi
     dmidecode
     htop
     hwinfo
@@ -236,22 +237,20 @@ if lk_node_service_enabled desktop; then
         #
         evince
 
-        #
-        #adobe-source-code-pro-fonts
-        #adobe-source-sans-fonts
-        #adobe-source-serif-fonts
-        #inter-font
-        #noto-fonts
-        #noto-fonts-cjk
+        # adobe-source-* packages have been replaced with aur/ttf-adobe-source-*
+        # because adobe-source-sans-fonts OTFs have rendering issues below ~12px
+        inter-font
+        noto-fonts
+        noto-fonts-cjk
         terminus-font
         ttf-dejavu
         ttf-fantasque-sans-mono
         ttf-inconsolata
         ttf-jetbrains-mono
-        #ttf-lato
+        ttf-lato
         ttf-opensans
-        #ttf-roboto
-        #ttf-roboto-mono
+        ttf-roboto
+        ttf-roboto-mono
         ttf-ubuntu-font-family
     )
 
@@ -267,9 +266,9 @@ if lk_node_service_enabled desktop; then
         networkmanager-dispatcher-ntpd
         xrandr-invert-colors
 
-        # Huge, but installs a version of Source Sans Pro that renders correctly
-        # in vscode
-        ttf-google-fonts-git
+        ttf-adobe-source-code-pro-fonts
+        ttf-adobe-source-sans-fonts
+        ttf-adobe-source-serif-fonts
 
         # Selected works of https://github.com/vinceliuice
         qogir-gtk-theme
