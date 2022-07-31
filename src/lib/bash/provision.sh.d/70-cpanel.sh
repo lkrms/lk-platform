@@ -240,14 +240,15 @@ Usage: $FUNCNAME USER MODULE FUNC [PARAMETER=VALUE...]" || return
     unset IFS
     case "$_LK_WHM_METHOD" in
     ssh)
-        # Output schema TBC
+        # {"data":{"uapi":{"data":{}}}}
         ssh "$_LK_WHM_SERVER" \
             whmapi1 --output=json \
             uapi_cpanel \
             cpanel.user="$1" \
             cpanel.module="$2" \
             cpanel.function="$3" \
-            "${@:4}"
+            "${@:4}" |
+            jq -cM '.data.uapi'
         ;;
     curl)
         # {"result":{"data":{}}}
