@@ -835,6 +835,9 @@ EOF
         get_before_file /etc/postfix/main.cf
         lk_postfix_provision
         lk_postconf_set inet_interfaces loopback-only
+        # Buy time to mitigate delivery issues by deferring rejected messages
+        # for up to 5 days while re-attempting delivery every 300-4000 seconds
+        lk_postconf_set soft_bounce yes
         FILE=/etc/aliases
         ALIASES=(
             postmaster root
