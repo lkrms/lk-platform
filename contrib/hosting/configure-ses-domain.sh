@@ -14,8 +14,9 @@ Options:
   -s, --skip-host   Only configure SES and DNS.
   -k, --insecure    Proceed even if <DOMAIN>'s TLS certificate is invalid.
 
-Each DOMAIN must resolve to a hosting server, and https://<DOMAIN>/php-sysinfo
-must be reachable.
+If DOMAIN resolves to a hosting server, https://<DOMAIN>/php-sysinfo is
+reachable, and DOMAIN is an Amazon SES verified identity, call
+configure-ses-site.sh automatically.
 
 Environment:
   AWS_PROFILE   Must contain the name of an AWS CLI profile with a default
@@ -26,7 +27,7 @@ EOF
 }
 
 lk_bash_at_least 4 || lk_die "Bash 4 or higher required"
-lk_assert_command_exists aws linode-cli
+lk_assert_command_exists aws
 
 SKIP_HOST=0
 CURL_OPTIONS=(-fsSL)
@@ -55,21 +56,47 @@ lk_is_fqdn "$@" || lk_usage
 export AWS_PROFILE=${AWS_PROFILE-${LK_AWS_PROFILE-}}
 [ -n "${AWS_PROFILE:+1}" ] || lk_usage -e "AWS_PROFILE not set"
 
+LINODE_USER=${LINODE_USER-${LK_LINODE_USER-}}
+unset LINODE
+[[ -z ${LINODE_USER:+1} ]] || {
+  lk_assert_command_exists linode-cli
+  LINODE=
+}
+
 AWS_REGION=$(aws configure get region) ||
   lk_usage -e "AWS region not set for profile '$AWS_PROFILE'"
+
+function is_linode() {
+  [ -n "${LINODE+1}" ]
+}
+
+function get_domain_tsv() {
+  local TOKEN
+  for TOKEN in "${TOKENS[@]}"; do
+    printf '0\t%s\t0\t%s\t%s\t0\t0\t%s\n' \
+      "$TOKEN._domainkey" CNAME 0 "$TOKEN.dkim.amazonses.com"
+  done
+  printf '0\t%s\t0\t%s\t%s\t0\t0\t%s\n' \
+    amazonses MX 10 "feedback-smtp.$AWS_REGION.amazonses.com" \
+    amazonses TXT 0 "v=spf1 include:amazonses.com ~all"
+}
+
+function get_domain_diff() {
+  "$LK_BASE/lib/awk/tdiff" \
+    1,3,5,6,7 2,4 \
+    "$1" <(get_domain_tsv)
+}
+
+function filter_domain_tsv() {
+  awk '
+$4 == "CNAME" && $2 ~/\._domainkey$/ && $8 ~ /\.dkim\.amazonses\.com$/ { print }
+$4 == "MX"    && $2 == "amazonses"   && $8 ~ /\.amazonses\.com$/       { print }
+$4 == "TXT"   && $2 == "amazonses"   && $8 ~ /^v=spf1( |$)/            { print }'
+}
 
 lk_log_start
 
 {
-  function is_linode() {
-    [ -n "${LINODE+1}" ]
-  }
-
-  LINODE_USER=${LINODE_USER-${LK_LINODE_USER-}}
-  unset LINODE
-  [[ -z ${LINODE_USER:+1} ]] ||
-    LINODE=
-
   unset IDENTITY
   DKIM_KEY_LENGTH=RSA_1024_BIT
 
@@ -106,18 +133,14 @@ lk_log_start
         --dkim-signing-attributes NextSigningKeyLength="$DKIM_KEY_LENGTH"
     fi
 
-    if jq -e '.VerifiedForSendingStatus' <"$IDENTITY" >/dev/null; then
-
+    ! jq -e '.VerifiedForSendingStatus' <"$IDENTITY" >/dev/null || {
       lk_tty_success "Email identity has been verified by Amazon SES"
       VERIFIED=1
+    }
 
-    else
-
-      TOKENS=($(jq -r '.DkimAttributes.Tokens[]' <"$IDENTITY"))
-      [ ${#TOKENS[@]} -eq 3 ] ||
-        lk_die "unexpected value in .DkimAttributes.Tokens[]"
-
-    fi
+    TOKENS=($(jq -r '.DkimAttributes.Tokens[]' <"$IDENTITY"))
+    [ ${#TOKENS[@]} -eq 3 ] ||
+      lk_die "unexpected value in .DkimAttributes.Tokens[]"
 
     FROM_DOMAIN=amazonses.$SES_DOMAIN
     SH=$(jq .MailFromAttributes <"$IDENTITY" | lk_json_sh \
@@ -141,10 +164,20 @@ lk_log_start
 
     fi
 
-    # `lk_linode_domain -s` sets DOMAIN and DOMAIN_ID
-    if ((!VERIFIED || !FROM_VERIFIED)) && is_linode &&
-      lk_linode_domain -s "$SES_DOMAIN" "${LINODE_ARGS[@]}"; then
+    if ((!VERIFIED || !FROM_VERIFIED)) && is_linode; then
+      lk_mktemp_with DOMAIN_DIFF get_domain_diff <(
+        lk_linode_domain_tsv "$SES_DOMAIN" "${LINODE_ARGS[@]}" |
+          filter_domain_tsv
+      )
 
+      if [[ -s $DOMAIN_DIFF ]]; then
+        lk_tty_detail "Updating Linode domain '$_DOMAIN':" \
+          $'\n'"$(<"$DOMAIN_DIFF")"
+      else
+        lk_tty_detail "No updates to Linode domain '$_DOMAIN' required"
+      fi
+
+      : <<"EOF"
       lk_mktemp_with RECORDS \
         lk_linode_domain_records "$DOMAIN_ID" "${LINODE_ARGS[@]}"
 
@@ -245,6 +278,7 @@ lk_log_start
           ;;
         esac >/dev/null
       fi
+EOF
 
     elif ((!VERIFIED || !FROM_VERIFIED)); then
 
@@ -268,14 +302,13 @@ lk_log_start
     ((!SKIP_HOST)) || continue
 
     lk_mktemp_with -r SYSINFO lk_tty_run_detail \
-      curl "${CURL_OPTIONS[@]}" "https://$_DOMAIN/php-sysinfo" ||
-      lk_die "unable to retrieve system information from host: $_DOMAIN"
-
-    SH=$(lk_json_sh \
-      HOST_NAME .hostname \
-      HOST_FQDN .fqdn \
-      HOST_IP '[.ip_addr[]|select(test(regex.ipPrivateFilter)|not)]' \
-      <"$SYSINFO") && eval "$SH"
+      curl "${CURL_OPTIONS[@]}" "https://$_DOMAIN/php-sysinfo" &&
+      SH=$(lk_json_sh \
+        HOST_NAME .hostname \
+        HOST_FQDN .fqdn \
+        HOST_IP '[.ip_addr[]|select(test(regex.ipPrivateFilter)|not)]' \
+        <"$SYSINFO" 2>/dev/null) && eval "$SH" ||
+      lk_die "unable to retrieve system information"
     lk_is_fqdn "$HOST_FQDN" ||
       lk_die "host reported invalid FQDN: $HOST_FQDN"
 

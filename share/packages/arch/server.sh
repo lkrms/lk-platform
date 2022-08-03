@@ -46,6 +46,7 @@ PAC_KEEP=(
     samba
     wide-dhcpv6
     radvd
+    znc
 
     #
     powerpanel
