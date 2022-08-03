@@ -1046,6 +1046,7 @@ done\""
         LIBVIRT_USERS=$([ -z "$LIBVIRT_USERS" ] || id -u $LIBVIRT_USERS)
         LK_CONF_OPTION_FILE=/etc/conf.d/libvirt-guests
         lk_conf_set_option URIS default
+        lk_conf_set_option PARALLEL_SHUTDOWN 4
         if lk_is_desktop; then
             lk_conf_set_option ON_BOOT ignore
             lk_conf_set_option SHUTDOWN_TIMEOUT 120
