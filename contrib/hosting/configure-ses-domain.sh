@@ -182,8 +182,13 @@ lk_log_start
       if is_linode &&
         lk_linode_domain_tsv "$SES_DOMAIN" | filter_domain_tsv \
           >"$DOMAIN_TSV"; then
+
         lk_tty_log "Domain is managed via Linode"
+        domain_record_create() { lk_linode_domain_record_create "$@"; }
+        domain_record_update() { lk_linode_domain_record_update "$@"; }
+        domain_record_delete() { lk_linode_domain_record_delete "$@"; }
         APPLY_DNS=1
+
       elif DOMAIN_IPV4=$(lk_dns_resolve_name_from_ns "$_DOMAIN" |
         lk_filter_ipv4 | head -n1 | grep .); then
         # Check for access to the domain via WHM first, then via cPanel
@@ -191,14 +196,24 @@ lk_log_start
           lk_whm_server_set -q "$DOMAIN_IPV4" &&
           lk_whm_domain_tsv "$SES_DOMAIN" | filter_domain_tsv \
             >"$DOMAIN_TSV"; then
+
           lk_tty_log "Domain is managed via WHM"
+          domain_record_create() { lk_whm_domain_record_create "$@"; }
+          domain_record_update() { lk_whm_domain_record_update "$@"; }
+          domain_record_delete() { lk_whm_domain_record_delete "$@"; }
           APPLY_DNS=1
+
         elif lk_tcp_is_reachable "$DOMAIN_IPV4" 2083 &&
           lk_cpanel_server_set -q "$DOMAIN_IPV4" &&
           lk_cpanel_domain_tsv "$SES_DOMAIN" | filter_domain_tsv \
             >"$DOMAIN_TSV"; then
+
           lk_tty_log "Domain is managed via cPanel"
+          domain_record_create() { lk_cpanel_domain_record_create "$@"; }
+          domain_record_update() { lk_cpanel_domain_record_update "$@"; }
+          domain_record_delete() { lk_cpanel_domain_record_delete "$@"; }
           APPLY_DNS=1
+
         fi
       fi
     fi

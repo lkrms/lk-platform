@@ -7,12 +7,18 @@ function __usage() {
 Configure a hosting server to send email from a verified domain via Amazon SES.
 
 Usage:
-  ${0##*/} <SSH_HOST> <SMTP_USER> <DOMAIN> <SES_DOMAIN> <SOURCE_IP>...
+  ${0##*/} [options] <SSH_HOST> <USER> <DOMAIN> <SES_DOMAIN> <SOURCE_IP>...
 
-When SSH_HOST is -, exit after printing SMTP credentials. No hosting server is
+Options:
+  -a, --api   Allow API-based sending (in addition to SMTP).
+
+When SSH_HOST is -, exit after printing credentials. No hosting server is
 required in this case.
 
-Assume SES_DOMAIN has the same value as DOMAIN when SES_DOMAIN is -.
+When SES_DOMAIN is -, set SES_DOMAIN to DOMAIN.
+
+Example:
+  ${0##*/} - domain.com@server.fqdn domain.com - 12.34.56.67
 
 Environment:
   AWS_PROFILE   Must contain the name of an AWS CLI profile with a default
@@ -23,8 +29,23 @@ EOF
 lk_bash_at_least 4 || lk_die "Bash 4 or higher required"
 lk_assert_command_exists aws
 
-lk_getopt
+ALLOW_API=0
+
+lk_getopt "a" "api"
 eval "set -- $LK_GETOPT"
+
+while :; do
+  OPT=$1
+  shift
+  case "$OPT" in
+  -a | --api)
+    ALLOW_API=1
+    ;;
+  --)
+    break
+    ;;
+  esac
+done
 
 [ $# -ge 5 ] || lk_usage
 lk_is_fqdn "$3" || lk_usage -e "invalid domain: $3"
@@ -41,7 +62,7 @@ AWS_REGION=$(aws configure get region) ||
   lk_usage -e "AWS region not set for profile '$AWS_PROFILE'"
 
 SSH_HOST=$1
-SMTP_USER=$2
+IAM_USER=$2
 DOMAIN=${3,,}
 SES_DOMAIN=${4,,}
 SOURCE_IP=("${@:5}")
@@ -52,8 +73,9 @@ lk_log_start
 
 {
   lk_tty_list SOURCE_IP \
-    "Configuring IAM user '$SMTP_USER' for SMTP access to Amazon SES from:" \
-    "IP address" "IP addresses"
+    "Configuring IAM user '$IAM_USER' for SMTP$(
+      ((!ALLOW_API)) || echo " and API"
+    ) access to Amazon SES from:" "IP address" "IP addresses"
 
   lk_tty_detail "Getting AWS Account ID"
   AWS_ACCOUNT_ID=$(aws sts get-caller-identity | jq -r '.Account')
@@ -65,44 +87,77 @@ lk_log_start
 
   { lk_mktemp_with IAM_USER \
     aws iam get-user \
-    --user-name "$SMTP_USER" 2>/dev/null &&
-    lk_tty_detail "IAM user already exists:" "$SMTP_USER"; } ||
+    --user-name "$IAM_USER" 2>/dev/null &&
+    lk_tty_detail "IAM user already exists:" "$IAM_USER"; } ||
     lk_mktemp_with -r IAM_USER lk_tty_run_detail \
       aws iam create-user \
-      --user-name "$SMTP_USER"
+      --user-name "$IAM_USER"
 
-  POLICY=$(jq \
-    --arg resource "$ARN_PREFIX/$SES_DOMAIN" '
-.Statement[0].Resource = $resource |
-  .Statement[0]
-    .Condition["ForAnyValue:IpAddress"]["aws:SourceIp"] = $ARGS.positional' \
-    --args "${SOURCE_IP[@]}" \
-    <<<'{
+  if ((ALLOW_API)); then
+    JQ='{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ses:SendRawEmail"
+      ],
+      "Resource": $resource,
+      "Condition": {
+        "ForAnyValue:IpAddress": {
+          "aws:SourceIp": $ARGS.positional
+        }
+      }
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ses:ListEmailIdentities",
+        "ses:GetIdentityVerificationAttributes",
+        "ses:GetIdentityDkimAttributes"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "ForAnyValue:IpAddress": {
+          "aws:SourceIp": $ARGS.positional
+        }
+      }
+    }
+  ]
+}'
+  else
+    JQ='{
   "Version": "2012-10-17",
   "Statement": [
     {
       "Effect": "Allow",
       "Action": "ses:SendRawEmail",
-      "Resource": null,
+      "Resource": $resource,
       "Condition": {
         "ForAnyValue:IpAddress": {
-          "aws:SourceIp": null
+          "aws:SourceIp": $ARGS.positional
         }
       }
     }
   ]
-}')
+}'
+  fi
+
+  POLICY=$(jq -n \
+    --arg resource "$ARN_PREFIX/$SES_DOMAIN" \
+    "$JQ" \
+    --args "${SOURCE_IP[@]}")
 
   lk_tty_detail "Applying 'AmazonSesSendingAccess' policy to IAM user"
   aws iam put-user-policy \
-    --user-name "$SMTP_USER" \
+    --user-name "$IAM_USER" \
     --policy-name "AmazonSesSendingAccess" \
     --policy-document "$POLICY"
 
-  lk_tty_print "Creating AWS access key for" "$SMTP_USER"
+  lk_tty_print "Creating AWS access key for" "$IAM_USER"
   lk_mktemp_with KEYS \
     aws iam list-access-keys \
-    --user-name "$SMTP_USER"
+    --user-name "$IAM_USER"
 
   KEY_COUNT=$(jq -r '.AccessKeyMetadata | length' <"$KEYS")
   if ((KEY_COUNT > 1)); then
@@ -118,13 +173,13 @@ lk_log_start
       lk_tty_yn "OK to delete newest key '$KEY_ID'?" Y || lk_die ""
     fi
     lk_tty_run_detail aws iam delete-access-key \
-      --user-name "$SMTP_USER" \
+      --user-name "$IAM_USER" \
       --access-key-id "$KEY_ID"
   fi
 
   lk_mktemp_with NEW_KEY lk_tty_run_detail \
     aws iam create-access-key \
-    --user-name "$SMTP_USER"
+    --user-name "$IAM_USER"
   SH=$(lk_json_sh \
     ACCESS_KEY_ID .AccessKey.AccessKeyId \
     SECRET_ACCESS_KEY .AccessKey.SecretAccessKey \
@@ -194,12 +249,12 @@ lk_log_start
     LK_VERBOSE=${LK_VERBOSE-1} "$COMMAND" <"$SCRIPT" || lk_die ""
 
   if KEY_ID=$(aws iam list-access-keys \
-    --user-name "$SMTP_USER" |
+    --user-name "$IAM_USER" |
     jq -re --arg keyId "$ACCESS_KEY_ID" \
       '.AccessKeyMetadata[] | select(.AccessKeyId != $keyId) | .AccessKeyId') &&
     lk_tty_yn "OK to delete previous key '$KEY_ID'?" Y; then
     lk_tty_run_detail aws iam delete-access-key \
-      --user-name "$SMTP_USER" \
+      --user-name "$IAM_USER" \
       --access-key-id "$KEY_ID"
   fi
 
