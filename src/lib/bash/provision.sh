@@ -794,22 +794,6 @@ function lk_squid_set_option() {
         "0,/^$S*#"{,"$S","$S*"}"$REGEX\$/{s/^($S*)#$REGEX\$/\\1$REPLACE_WITH\\4/}"
 }
 
-# lk_check_user_config [-n] VAR DIR FILE [FILE_MODE [DIR_MODE]]
-#
-# Create or update permissions on a user-specific config file and assign its
-# path to VAR in the caller's scope. If -n is set, don't create the file (useful
-# for setting VAR only). DIR may be the empty string.
-function lk_check_user_config() {
-    local _INSTALL=1
-    [ "${1-}" != -n ] || { _INSTALL= && shift; }
-    local _FILE_MODE=${4-} _DIR_MODE=${5-}
-    eval "$1=\${XDG_CONFIG_HOME:-~/.config}/lk-platform/${2:+\$2/}\$3"
-    [ -z "$_INSTALL" ] ||
-        { [ -z "$_FILE_MODE$_DIR_MODE" ] && [ -r "${!1}" ]; } ||
-        { lk_install -d ${_DIR_MODE:+-m "$_DIR_MODE"} "${!1%/*}" &&
-            lk_install ${_FILE_MODE:+-m "$_FILE_MODE"} "${!1}"; }
-}
-
 # _lk_crontab REMOVE_REGEX ADD_COMMAND
 function _lk_crontab() {
     local REGEX="${1:+.*$1.*}" ADD_COMMAND=${2-} TYPE=${2:+a}${1:+r} \
