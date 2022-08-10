@@ -254,6 +254,11 @@ if lk_node_service_enabled desktop; then
         ttf-ubuntu-font-family
     )
 
+    if ! lk_is_virtual && lk_is_portable; then
+        # The deprecated synaptics touchpad driver is (still) better than xinput
+        PAC_PACKAGES+=(xf86-input-synaptics)
+    fi
+
     if lk_arr PAC_PACKAGES AUR_PACKAGES | grep -E \
         '(^ttf-joypixels$|^ttf-.*\<(tw)?emoji\>|\<fonts-emoji\>)' \
         >/dev/null; then
