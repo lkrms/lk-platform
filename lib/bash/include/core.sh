@@ -1338,35 +1338,35 @@ function lk_delete_on_exit_withdraw() {
 
 # _lk_tty_format [-b] VAR [COLOUR COLOUR_VAR]
 #
-# If COLOUR_VAR is not unset, use its value to set the default appearance of
-# text in VAR. Otherwise, use COLOUR as the default, adding bold if -b is set
-# unless $LK_BOLD already appears in COLOUR or the text.
+# Set the default appearance of text in VAR as efficiently as possible:
+#
+# 1. If COLOUR_VAR is set and not empty, apply it to VAR and return.
+# 2. If COLOUR_VAR is set to the empty string, return without changing VAR.
+# 3. If -b is set and $LK_BOLD doesn't already appear in COLOUR or the text, add
+#    bold to COLOUR.
+# 4. Apply COLOUR to VAR.
+#
+# Formatting applied to VAR is reapplied after each appearance of $LK_RESET.
 function _lk_tty_format() {
-    local _BOLD= _STRING _COLOUR_SET _COLOUR _B=${_LK_TTY_B-} _E=${_LK_TTY_E-}
-    [ "${1-}" != -b ] || { _BOLD=1 && shift; }
-    [ $# -gt 0 ] &&
-        _STRING=${!1-} &&
-        _COLOUR_SET=${3:+${!3+1}} || return
-    if [ -n "$_COLOUR_SET" ]; then
-        _COLOUR=${!3}
+    local _BOLD _B=${_LK_TTY_B-} _E=${_LK_TTY_E-}
+    [[ $1 != -b ]] || { _BOLD=1 && shift; }
+    # Return early if VAR is empty
+    [[ -n ${!1:+1} ]] || return 0
+    if [[ -n ${3:+${!3+1}} ]]; then
+        # If COLOUR_VAR is set, replace COLOUR with its value
+        set -- "$1" "${!3}"
     else
-        _COLOUR=${2-}
-        [ -z "${_BOLD:+$LK_BOLD}" ] ||
-            [[ $_COLOUR$_STRING == *$LK_BOLD* ]] ||
-            _COLOUR+=$LK_BOLD
+        # If -b is set, $LK_BOLD isn't empty, and nothing is already bold, add
+        # bold to COLOUR
+        [[ -z ${_BOLD:+${LK_BOLD:+1}} ]] ||
+            [[ ${2-}${!1} == *$LK_BOLD* ]] ||
+            set -- "$1" "${2-}$LK_BOLD"
     fi
-    [ -z "${_STRING:+${_COLOUR:+$LK_RESET}}" ] || {
-        local REGEX=$'^(\n)?(.*)$'
-        [[ $_STRING =~ $REGEX ]]
-        _STRING=${BASH_REMATCH[1]}$_B$_COLOUR$_E${BASH_REMATCH[2]//"$LK_RESET"/$_B$LK_RESET$_COLOUR$_E}$_B$LK_RESET$_E
-        eval "$1=\$_STRING"
-    }
-}
-
-# _lk_tty_format_readline [-b] VAR [COLOUR COLOUR_VAR]
-function _lk_tty_format_readline() {
-    _LK_TTY_B=$'\x01' _LK_TTY_E=$'\x02' \
-        _lk_tty_format "$@"
+    # Return early if COLOUR or $LK_RESET are empty
+    [[ -n ${2:+${LK_RESET:+1}} ]] || return 0
+    local REGEX=$'^(\n)?(.*)$'
+    [[ ${!1} =~ $REGEX ]] &&
+        eval "$1="'${BASH_REMATCH[1]}$_B$2$_E${BASH_REMATCH[2]//"$LK_RESET"/$_B$LK_RESET$2$_E}$_B$LK_RESET$_E'
 }
 
 # lk_tty_path [PATH...]
@@ -2149,6 +2149,11 @@ function lk_var_to_int() {
     eval "$1=\$2"
 }
 
+# _lk_tty_format_readline [-b] VAR [COLOUR COLOUR_VAR]
+function _lk_tty_format_readline() {
+    _LK_TTY_B=$'\x01' _LK_TTY_E=$'\x02' _lk_tty_format "$@"
+}
+
 function _lk_tty_prompt() {
     PREFIX=" :: "
     PROMPT=${_PROMPT[*]}
@@ -2157,9 +2162,10 @@ function _lk_tty_prompt() {
     echo "$PREFIX$PROMPT "
 }
 
+# lk_tty_pause [MESSAGE [READ_ARG...]]
 function lk_tty_pause() {
-    local REPLY
-    read -rsp "${1:-Press return to continue . . . }"
+    local IFS=$' \t\n' REPLY
+    read -rsp "${1:-Press return to continue . . . }" "${@:2}" REPLY 2>&"${_LK_FD-2}"
     lk_tty_print
 }
 
@@ -2168,69 +2174,71 @@ function lk_tty_read() {
     local IFS=$' \t\n' _NOTE
     [[ ${1-} != -* ]] || { _NOTE=${1#-} && shift; }
     (($# > 1)) && unset -v "$2" || lk_bad_args || return
-    if lk_no_input && [[ -n ${3:+1} ]]; then
+    ! lk_no_input || [[ -z ${3:+1} ]] || {
         eval "$2=\$3"
-    else
-        local _PROMPT=("$1")
-        [[ -z ${_NOTE:+1} ]] || _PROMPT+=("$LK_DIM($_NOTE)$LK_UNDIM")
-        [[ -z ${3:+1} ]] || _PROMPT+=("[$3]")
-        IFS= read -rep "$(_lk_tty_prompt)" "${@:4}" "$2" 2>&"${_LK_FD-2}" || return
-        [ -n "${!2}" ] || eval "$2=\${3-}"
-    fi
+        return
+    }
+    local _PROMPT=("$1")
+    [[ -z ${_NOTE:+1} ]] || _PROMPT+=("$LK_DIM($_NOTE)$LK_UNDIM")
+    [[ -z ${3:+1} ]] || _PROMPT+=("[$3]")
+    IFS= read -rep "$(_lk_tty_prompt)" "${@:4}" "$2" 2>&"${_LK_FD-2}" || return
+    [[ -n ${!2:+1} ]] || eval "$2=\${3-}"
 }
 
 # lk_tty_read_silent [-NOTE] PROMPT NAME [READ_ARG...]
 function lk_tty_read_silent() {
     local IFS=$' \t\n' _NOTE
     [[ ${1-} != -* ]] || { _NOTE=${1#-} && shift; }
-    (($# > 1)) || lk_bad_args || return
-    lk_tty_read "${@:1:2}" "" -s "${@:3}"
+    (($# > 1)) && unset -v "$2" || lk_bad_args || return
+    lk_tty_read ${_NOTE:+"-$_NOTE"} "${@:1:2}" "" -s "${@:3}"
     lk_tty_print
 }
 
 # lk_tty_read_password LABEL NAME
 function lk_tty_read_password() {
+    (($# == 2)) || lk_bad_args || return
     local _PASSWORD
-    [ $# -eq 2 ] || lk_bad_args || return
     while :; do
         lk_tty_read_silent \
             "Password for $LK_BOLD$1$LK_RESET:" "$2" || return
-        [ -n "${!2}" ] ||
+        [[ -n ${!2:+1} ]] ||
             lk_warn "password cannot be empty" || continue
         lk_tty_read_silent \
             "Password for $LK_BOLD$1$LK_RESET (again):" _PASSWORD || return
-        [ "$_PASSWORD" = "${!2}" ] ||
+        [[ -z ${!2#"$_PASSWORD"} ]] ||
             lk_warn "passwords do not match" || continue
         break
     done
 }
 
-# lk_tty_yn PROMPT [DEFAULT [READ_ARG...]]
+# lk_tty_yn [-NOTE] PROMPT [DEFAULT [READ_ARG...]]
 function lk_tty_yn() {
-    [ $# -ge 1 ] || lk_bad_args || return
+    local IFS=$' \t\n' _NOTE
+    [[ ${1-} != -* ]] || { _NOTE=${1#-} && shift; }
+    (($#)) || lk_bad_args || return
     local YES="[yY]([eE][sS])?" NO="[nN][oO]?"
-    if lk_no_input && [[ ${2-} =~ ^($YES|$NO)$ ]]; then
+    ! lk_no_input || [[ ! ${2-} =~ ^($YES|$NO)$ ]] || {
         [[ $2 =~ ^$YES$ ]]
+        return
+    }
+    local _PROMPT=("$1") DEFAULT PROMPT REPLY
+    [[ -z ${_NOTE:+1} ]] || _PROMPT+=("$LK_DIM($_NOTE)$LK_UNDIM")
+    if [[ ${2-} =~ ^$YES$ ]]; then
+        _PROMPT+=("[Y/n]")
+        DEFAULT=Y
+    elif [[ ${2-} =~ ^$NO$ ]]; then
+        _PROMPT+=("[y/N]")
+        DEFAULT=N
     else
-        local IFS _PROMPT=("$1") DEFAULT= PROMPT REPLY
-        unset IFS
-        if [[ ${2-} =~ ^$YES$ ]]; then
-            _PROMPT+=("[Y/n]")
-            DEFAULT=Y
-        elif [[ ${2-} =~ ^$NO$ ]]; then
-            _PROMPT+=("[y/N]")
-            DEFAULT=N
-        else
-            _PROMPT+=("[y/n]")
-        fi
-        PROMPT=$(_lk_tty_prompt)
-        while :; do
-            IFS= read -rep "$PROMPT" "${@:3}" REPLY 2>&"${_LK_FD-2}" || return
-            [ -n "$REPLY" ] || REPLY=$DEFAULT
-            [[ ! $REPLY =~ ^$YES$ ]] || return 0
-            [[ ! $REPLY =~ ^$NO$ ]] || return 1
-        done
+        _PROMPT+=("[y/n]")
     fi
+    PROMPT=$(_lk_tty_prompt)
+    while :; do
+        IFS= read -rep "$PROMPT" "${@:3}" REPLY 2>&"${_LK_FD-2}" || return
+        [[ -n ${REPLY:+1} ]] || REPLY=${DEFAULT-}
+        [[ ! $REPLY =~ ^$YES$ ]] || return 0
+        [[ ! $REPLY =~ ^$NO$ ]] || return 1
+    done
 }
 
 # lk_trace [MESSAGE]
