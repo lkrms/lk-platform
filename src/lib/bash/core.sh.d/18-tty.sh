@@ -466,7 +466,8 @@ function lk_tty_run() {
         esac
         break
     done
-    ${_LK_TTY_COMMAND:-lk_tty_print} "Running:" "$(lk_fold_quote_options "$@")"
+    ${_LK_TTY_COMMAND:-lk_tty_print} \
+        "Running:" "$(lk_fold_quote_options -120 "$@")"
     eval "$_lk_x_restore"
     "${CMD[@]}"
 }

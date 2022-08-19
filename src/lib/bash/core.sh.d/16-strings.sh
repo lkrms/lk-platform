@@ -29,34 +29,57 @@ function lk_double_quote() {
         ${FORCE-$'/^[a-zA-Z0-9+./@_-]*$/b\n'}'s/["$\`]/\\&/g; s/.*/"&"/' "$@"
 }
 
+# lk_args_wider_than WIDTH [ARG...]
+function lk_args_wider_than() {
+    local IFS=$' \t\n' ARGS
+    ARGS=${*:2}
+    ((${#ARGS} > $1))
+}
+
+# _lk_fold_check_sh [-WIDTH] [ARG...]
+function _lk_fold_check_sh() {
+    [[ ${1-} =~ ^-[0-9]+$ ]] || return 0
+    local WIDTH=${1#-}
+    shift
+    echo shift
+    ! lk_args_wider_than "$WIDTH" "$@" || return 0
+    echo 'lk_quote_args "$@"'
+    echo return
+}
+
 # lk_quote_args [ARG...]
 #
 # Use `printf %q` to print the arguments on a space-delimited line.
 function lk_quote_args() {
-    [ $# -eq 0 ] || { printf '%q' "$1" && shift; }
-    [ $# -eq 0 ] || printf ' %q' "$@"
+    ((!$#)) || { printf '%q' "$1" && shift; }
+    ((!$#)) || printf ' %q' "$@"
     printf '\n'
 }
 
-# lk_fold_quote_args [ARG...]
+# lk_fold_quote_args [-WIDTH] [ARG...]
 #
-# Same as lk_quote_args, but print each argument on a new line.
+# Same as lk_quote_args, but print each argument on a new line. If WIDTH is set,
+# don't fold unless arguments would occupy more than WIDTH columns on a
+# space-delimited line.
 function lk_fold_quote_args() {
-    [ $# -eq 0 ] || { printf '%q' "$1" && shift; }
-    [ $# -eq 0 ] || printf ' \\\n    %q' "$@"
+    eval "$(_lk_fold_check_sh "$@")"
+    ((!$#)) || { printf '%q' "$1" && shift; }
+    ((!$#)) || printf ' \\\n    %q' "$@"
     printf '\n'
 }
 
-# lk_fold_quote_options [ARG...]
+# lk_fold_quote_options [-WIDTH] [ARG...]
 #
 # Same as lk_fold_quote_args, but only start a new line before arguments that
 # start with "-".
 function lk_fold_quote_options() {
-    [ $# -eq 0 ] || { printf '%q' "$1" && shift; }
+    eval "$(_lk_fold_check_sh "$@")"
+    ((!$#)) || { printf '%q' "$1" && shift; }
     while (($#)); do
         [[ $1 == -* ]] && printf ' \\\n    %q' "$1" || printf ' %q' "$1"
         shift
     done
+    printf '\n'
 }
 
 # lk_implode_args GLUE [ARG...]
@@ -101,7 +124,7 @@ function lk_ere_implode_args() {
     local ARGS
     [ "${1-}" != -e ] || { ARGS=(-e) && shift; }
     [ "${1-}" != -- ] || shift
-    [ $# -eq 0 ] ||
+    ((!$#)) ||
         printf '%s\n' "$@" | lk_ere_implode_input ${ARGS+"${ARGS[@]}"}
 }
 
