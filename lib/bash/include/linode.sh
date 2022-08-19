@@ -191,6 +191,51 @@ function lk_linode_domain_tsv() {
         _lk_linode_domain_tsv
 }
 
+# lk_linode_domain_record_create DOMAIN NAME TTL TYPE PRIO WEIGHT PORT TARGET
+function lk_linode_domain_record_create() {
+    local IFS=$' \t\n' DOMAIN_ID DOMAIN
+    lk_linode_domain -s "$1" "${@:9}" &&
+        lk_tty_run_detail linode-cli --json domains records-create \
+            --name "$2" \
+            --ttl_sec "${3:-0}" \
+            --type "$4" \
+            --priority "${5:-0}" \
+            --weight "${6:-0}" \
+            --port "${7:-0}" \
+            --target "$8" \
+            "$DOMAIN_ID" \
+            "${@:9}" |
+        _lk_linode_domain_tsv
+}
+
+# lk_linode_domain_record_update DOMAIN ID NAME TTL TYPE PRIO WEIGHT PORT TARGET
+function lk_linode_domain_record_update() {
+    local IFS=$' \t\n' DOMAIN_ID DOMAIN
+    lk_linode_domain -s "$1" "${@:10}" &&
+        lk_tty_run_detail linode-cli --json domains records-update \
+            --name "$3" \
+            --ttl_sec "${4:-0}" \
+            --type "$5" \
+            --priority "${6:-0}" \
+            --weight "${7:-0}" \
+            --port "${8:-0}" \
+            --target "$9" \
+            "$DOMAIN_ID" \
+            "$2" \
+            "${@:10}" |
+        _lk_linode_domain_tsv
+}
+
+# lk_linode_domain_record_delete DOMAIN ID
+function lk_linode_domain_record_delete() {
+    local IFS=$' \t\n' DOMAIN_ID DOMAIN
+    lk_linode_domain -s "$1" "${@:3}" &&
+        lk_tty_run_detail linode-cli domains records-delete \
+            "$DOMAIN_ID" \
+            "$2" \
+            "${@:3}"
+}
+
 # lk_linode_dump_domains [LINODE_ARG...]
 #
 # Print tab-separated values for DNS records in every Linode domain:
@@ -505,7 +550,7 @@ Example:
         ${REBUILD:+"$LINODE_ID"}
     )
     lk_tty_print "Running:" \
-        $'\n'"$(lk_fold_quote_options linode-cli "${ARGS[@]##ssh-??? * }")"
+        $'\n'"$(lk_fold_quote_options -120 linode-cli "${ARGS[@]##ssh-??? * }")"
     lk_confirm "Proceed?" Y || return
     lk_tty_print "${VERBS[0]} Linode"
     FILE=/tmp/$FUNCNAME-$1-$(lk_date %s).json

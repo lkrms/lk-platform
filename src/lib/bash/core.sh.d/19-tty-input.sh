@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# _lk_tty_format_readline [-b] VAR [COLOUR COLOUR_VAR]
+function _lk_tty_format_readline() {
+    _LK_TTY_B=$'\x01' _LK_TTY_E=$'\x02' _lk_tty_format "$@"
+}
+
 function _lk_tty_prompt() {
     PREFIX=" :: "
     PROMPT=${_PROMPT[*]}
@@ -8,9 +13,10 @@ function _lk_tty_prompt() {
     echo "$PREFIX$PROMPT "
 }
 
+# lk_tty_pause [MESSAGE [READ_ARG...]]
 function lk_tty_pause() {
-    local REPLY
-    read -rsp "${1:-Press return to continue . . . }"
+    local IFS=$' \t\n' REPLY
+    read -rsp "${1:-Press return to continue . . . }" "${@:2}" REPLY 2>&"${_LK_FD-2}"
     lk_tty_print
 }
 
@@ -19,67 +25,71 @@ function lk_tty_read() {
     local IFS=$' \t\n' _NOTE
     [[ ${1-} != -* ]] || { _NOTE=${1#-} && shift; }
     (($# > 1)) && unset -v "$2" || lk_bad_args || return
-    if lk_no_input && [[ -n ${3:+1} ]]; then
+    ! lk_no_input || [[ -z ${3:+1} ]] || {
         eval "$2=\$3"
-    else
-        local _PROMPT=("$1")
-        [[ -z ${_NOTE:+1} ]] || _PROMPT+=("$LK_DIM($_NOTE)$LK_UNDIM")
-        [[ -z ${3:+1} ]] || _PROMPT+=("[$3]")
-        IFS= read -rep "$(_lk_tty_prompt)" "${@:4}" "$2" 2>&"${_LK_FD-2}" || return
-        [ -n "${!2}" ] || eval "$2=\${3-}"
-    fi
+        return
+    }
+    local _PROMPT=("$1")
+    [[ -z ${_NOTE:+1} ]] || _PROMPT+=("$LK_DIM($_NOTE)$LK_UNDIM")
+    [[ -z ${3:+1} ]] || _PROMPT+=("[$3]")
+    IFS= read -rep "$(_lk_tty_prompt)" "${@:4}" "$2" 2>&"${_LK_FD-2}" || return
+    [[ -n ${!2:+1} ]] || eval "$2=\${3-}"
 }
 
 # lk_tty_read_silent [-NOTE] PROMPT NAME [READ_ARG...]
 function lk_tty_read_silent() {
     local IFS=$' \t\n' _NOTE
     [[ ${1-} != -* ]] || { _NOTE=${1#-} && shift; }
-    (($# > 1)) || lk_bad_args || return
-    lk_tty_read "${@:1:2}" "" -s "${@:3}"
+    (($# > 1)) && unset -v "$2" || lk_bad_args || return
+    lk_tty_read ${_NOTE:+"-$_NOTE"} "${@:1:2}" "" -s "${@:3}"
     lk_tty_print
 }
 
 # lk_tty_read_password LABEL NAME
 function lk_tty_read_password() {
+    (($# == 2)) || lk_bad_args || return
     local _PASSWORD
-    [ $# -eq 2 ] || lk_bad_args || return
     while :; do
         lk_tty_read_silent \
             "Password for $LK_BOLD$1$LK_RESET:" "$2" || return
-        [ -n "${!2}" ] ||
+        [[ -n ${!2:+1} ]] ||
             lk_warn "password cannot be empty" || continue
         lk_tty_read_silent \
             "Password for $LK_BOLD$1$LK_RESET (again):" _PASSWORD || return
-        [ "$_PASSWORD" = "${!2}" ] ||
+        [[ -z ${!2#"$_PASSWORD"} ]] ||
             lk_warn "passwords do not match" || continue
         break
     done
 }
 
-# lk_tty_yn PROMPT [DEFAULT [READ_ARG...]]
+# lk_tty_yn [-NOTE] PROMPT [DEFAULT [READ_ARG...]]
 function lk_tty_yn() {
-    [ $# -ge 1 ] || lk_bad_args || return
+    local IFS=$' \t\n' _NOTE
+    [[ ${1-} != -* ]] || { _NOTE=${1#-} && shift; }
+    (($#)) || lk_bad_args || return
     local YES="[yY]([eE][sS])?" NO="[nN][oO]?"
-    if lk_no_input && [[ ${2-} =~ ^($YES|$NO)$ ]]; then
+    ! lk_no_input || [[ ! ${2-} =~ ^($YES|$NO)$ ]] || {
         [[ $2 =~ ^$YES$ ]]
+        return
+    }
+    local _PROMPT=("$1") DEFAULT PROMPT REPLY
+    [[ -z ${_NOTE:+1} ]] || _PROMPT+=("$LK_DIM($_NOTE)$LK_UNDIM")
+    if [[ ${2-} =~ ^$YES$ ]]; then
+        _PROMPT+=("[Y/n]")
+        DEFAULT=Y
+    elif [[ ${2-} =~ ^$NO$ ]]; then
+        _PROMPT+=("[y/N]")
+        DEFAULT=N
     else
-        local IFS _PROMPT=("$1") DEFAULT= PROMPT REPLY
-        unset IFS
-        if [[ ${2-} =~ ^$YES$ ]]; then
-            _PROMPT+=("[Y/n]")
-            DEFAULT=Y
-        elif [[ ${2-} =~ ^$NO$ ]]; then
-            _PROMPT+=("[y/N]")
-            DEFAULT=N
-        else
-            _PROMPT+=("[y/n]")
-        fi
-        PROMPT=$(_lk_tty_prompt)
-        while :; do
-            IFS= read -rep "$PROMPT" "${@:3}" REPLY 2>&"${_LK_FD-2}" || return
-            [ -n "$REPLY" ] || REPLY=$DEFAULT
-            [[ ! $REPLY =~ ^$YES$ ]] || return 0
-            [[ ! $REPLY =~ ^$NO$ ]] || return 1
-        done
+        _PROMPT+=("[y/n]")
     fi
+    PROMPT=$(_lk_tty_prompt)
+    while :; do
+        IFS= read -rep "$PROMPT" "${@:3}" REPLY 2>&"${_LK_FD-2}" || return
+        [[ -n ${REPLY:+1} ]] || REPLY=${DEFAULT-}
+        [[ ! $REPLY =~ ^$YES$ ]] || return 0
+        [[ ! $REPLY =~ ^$NO$ ]] || return 1
+    done
 }
+
+#### Reviewed: 2022-08-18

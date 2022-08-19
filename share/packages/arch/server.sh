@@ -98,8 +98,6 @@ PAC_PACKAGES+=(
 
     # Networking
     iperf3
-    networkmanager-l2tp
-    networkmanager-openconnect
     ppp
 
     # Services

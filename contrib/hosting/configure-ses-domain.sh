@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 lk_bin_depth=2 . lk-bash-load.sh || exit
-lk_require linode
+lk_require provision linode
 
 function __usage() {
   cat <<EOF
@@ -82,6 +82,18 @@ function get_domain_tsv() {
 }
 
 function get_domain_diff() {
+  # - Records are matched by `name` and `record_type`
+  # - `record_id`, `ttl`, `priority`, `weight` and `port` are left as-is
+  # - `target` is updated if necessary
+  #
+  # 1. record_id
+  # 2. name
+  # 3. ttl
+  # 4. record_type
+  # 5. priority
+  # 6. weight
+  # 7. port
+  # 8. target
   "$LK_BASE/lib/awk/tdiff" \
     1,3,5,6,7 2,4 \
     "$1" <(get_domain_tsv)
@@ -108,6 +120,7 @@ lk_log_start
     SES_DOMAIN=$1
     VERIFIED=0
     FROM_VERIFIED=0
+    APPLY_DNS=0
     shift
 
     lk_tty_print "Provisioning '$_DOMAIN' with Amazon SES"
@@ -164,139 +177,67 @@ lk_log_start
 
     fi
 
-    if ((!VERIFIED || !FROM_VERIFIED)) && is_linode; then
-      lk_mktemp_with DOMAIN_DIFF get_domain_diff <(
-        lk_linode_domain_tsv "$SES_DOMAIN" "${LINODE_ARGS[@]}" |
-          filter_domain_tsv
-      )
+    if ((!VERIFIED || !FROM_VERIFIED)); then
+      lk_mktemp_with DOMAIN_TSV
+      if is_linode &&
+        lk_linode_domain_tsv "$SES_DOMAIN" | filter_domain_tsv \
+          >"$DOMAIN_TSV"; then
 
-      if [[ -s $DOMAIN_DIFF ]]; then
-        lk_tty_detail "Updating Linode domain '$_DOMAIN':" \
-          $'\n'"$(<"$DOMAIN_DIFF")"
-      else
-        lk_tty_detail "No updates to Linode domain '$_DOMAIN' required"
-      fi
+        lk_tty_log "Domain is managed via Linode"
+        domain_record_create() { lk_linode_domain_record_create "$@"; }
+        domain_record_update() { lk_linode_domain_record_update "$@"; }
+        domain_record_delete() { lk_linode_domain_record_delete "$@"; }
+        APPLY_DNS=1
 
-      : <<"EOF"
-      lk_mktemp_with RECORDS \
-        lk_linode_domain_records "$DOMAIN_ID" "${LINODE_ARGS[@]}"
+      elif DOMAIN_IPV4=$(lk_dns_resolve_name_from_ns "$_DOMAIN" |
+        lk_filter_ipv4 | head -n1 | grep .); then
+        # Check for access to the domain via WHM first, then via cPanel
+        if lk_tcp_is_reachable "$DOMAIN_IPV4" 2087 &&
+          lk_whm_server_set -q "$DOMAIN_IPV4" &&
+          lk_whm_domain_tsv "$SES_DOMAIN" | filter_domain_tsv \
+            >"$DOMAIN_TSV"; then
 
-      if ((!VERIFIED)); then
-        for TOKEN in "${TOKENS[@]}"; do
+          lk_tty_log "Domain is managed via WHM"
+          domain_record_create() { lk_whm_domain_record_create "$@"; }
+          domain_record_update() { lk_whm_domain_record_update "$@"; }
+          domain_record_delete() { lk_whm_domain_record_delete "$@"; }
+          APPLY_DNS=1
 
-          NAME=$TOKEN._domainkey
-          TARGET=$TOKEN.dkim.amazonses.com
-          RECORD=$(jq -r --arg name "$NAME" '
-[ .[] | select(.type == "CNAME" and .name == $name) ] |
-    first // empty | [ .id, .target ] | join(",")' <"$RECORDS") || return
+        elif lk_tcp_is_reachable "$DOMAIN_IPV4" 2083 &&
+          lk_cpanel_server_set -q "$DOMAIN_IPV4" &&
+          lk_cpanel_domain_tsv "$SES_DOMAIN" | filter_domain_tsv \
+            >"$DOMAIN_TSV"; then
 
-          case "$RECORD" in
-          *,"$TARGET")
-            lk_tty_detail "CNAME already added:" "$NAME.$DOMAIN"
-            continue
-            ;;
+          lk_tty_log "Domain is managed via cPanel"
+          domain_record_create() { lk_cpanel_domain_record_create "$@"; }
+          domain_record_update() { lk_cpanel_domain_record_update "$@"; }
+          domain_record_delete() { lk_cpanel_domain_record_delete "$@"; }
+          APPLY_DNS=1
 
-          *,*)
-            lk_tty_run_detail linode-cli "${LINODE_ARGS[@]}" \
-              domains records-update \
-              --target "$TARGET" \
-              "$DOMAIN_ID" "${RECORD%%,*}"
-            ;;
-
-          "")
-            lk_tty_run_detail linode-cli "${LINODE_ARGS[@]}" \
-              domains records-create \
-              --type CNAME \
-              --name "$NAME" \
-              --target "$TARGET" \
-              "$DOMAIN_ID"
-            ;;
-          esac >/dev/null
-
-        done
-      fi
-
-      if ((!FROM_VERIFIED)); then
-        NAME=amazonses
-        TARGET=feedback-smtp.$AWS_REGION.amazonses.com
-        PRIORITY=10
-        RECORD=$(jq -r --arg name "$NAME" '
-[ .[] | select(.type == "MX" and .name == $name) ] |
-    first // empty | [ .id, .target, .priority ] | join(",")' <"$RECORDS") ||
-          return
-        case "$RECORD" in
-        *,"$TARGET","$PRIORITY")
-          lk_tty_detail "MX already added:" "$NAME.$DOMAIN"
-          ;;
-
-        *,*,*)
-          lk_tty_run_detail linode-cli "${LINODE_ARGS[@]}" \
-            domains records-update \
-            --target "$TARGET" \
-            --priority "$PRIORITY" \
-            "$DOMAIN_ID" "${RECORD%%,*}"
-          ;;
-
-        "")
-          lk_tty_run_detail linode-cli "${LINODE_ARGS[@]}" \
-            domains records-create \
-            --type MX \
-            --name "$NAME" \
-            --target "$TARGET" \
-            --priority "$PRIORITY" \
-            "$DOMAIN_ID"
-          ;;
-        esac >/dev/null
-
-        TARGET="v=spf1 include:amazonses.com ~all"
-        RECORD=$(jq -r --arg name "$NAME" '
-[ .[] | select(.type == "TXT" and .name == $name) ] |
-    first // empty | [ .id, .target ] | join(",")' <"$RECORDS") || return
-        case "$RECORD" in
-        *,"$TARGET")
-          lk_tty_detail "SPF already added:" "$NAME.$DOMAIN"
-          ;;
-
-        *,"v=spf1 "*)
-          lk_tty_run_detail linode-cli "${LINODE_ARGS[@]}" \
-            domains records-update \
-            --target "$TARGET" \
-            "$DOMAIN_ID" "${RECORD%%,*}"
-          ;;
-
-        *,*)
-          lk_die "invalid TXT record at $NAME.$DOMAIN: ${RECORD//,/ }"
-          ;;
-
-        "")
-          lk_tty_run_detail linode-cli "${LINODE_ARGS[@]}" \
-            domains records-create \
-            --type TXT \
-            --name "$NAME" \
-            --target "$TARGET" \
-            "$DOMAIN_ID"
-          ;;
-        esac >/dev/null
-      fi
-EOF
-
-    elif ((!VERIFIED || !FROM_VERIFIED)); then
-
-      lk_tty_print "The following DNS records must be visible to SES:" "$(
-        if ((!VERIFIED)); then
-          for TOKEN in "${TOKENS[@]}"; do
-            NAME=$TOKEN._domainkey.$SES_DOMAIN.
-            TARGET=$TOKEN.dkim.amazonses.com.
-            printf '%s IN CNAME %s\n' "$NAME" "$TARGET"
-          done
         fi
+      fi
+    fi
+
+    if ((APPLY_DNS)); then
+      lk_mktemp_with DOMAIN_DIFF get_domain_diff "$DOMAIN_TSV"
+      if [[ -s $DOMAIN_DIFF ]]; then
+        lk_tty_detail "Updating '$_DOMAIN':" $'\n'"$(<"$DOMAIN_DIFF")"
+      else
+        lk_tty_detail "No updates to '$_DOMAIN' required"
+      fi
+    elif ((!VERIFIED || !FROM_VERIFIED)); then
+      lk_tty_print "The following DNS records must be visible to SES:" "$(
+        for TOKEN in "${TOKENS[@]}"; do
+          NAME=$TOKEN._domainkey.$SES_DOMAIN.
+          TARGET=$TOKEN.dkim.amazonses.com.
+          printf '%s IN CNAME %s\n' "$NAME" "$TARGET"
+        done
         NAME=$FROM_DOMAIN.
         printf '%s IN MX %s %s\n' \
           "$NAME" 10 "feedback-smtp.$AWS_REGION.amazonses.com."
         printf '%s IN TXT "%s"\n' \
           "$NAME" "v=spf1 include:amazonses.com ~all"
       )"
-
     fi
 
     ((!SKIP_HOST)) || continue

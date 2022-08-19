@@ -495,6 +495,39 @@ function lk_node_is_router() {
         lk_node_service_enabled router
 }
 
+# lk_user_config_set VAR DIR FILE
+#
+# Assign the path of a user-specific config file to VAR in the caller's scope.
+# DIR may be the empty string.
+function lk_user_config_set() {
+    (($# == 3)) && unset -v "$1" || lk_bad_args || return
+    eval "$1=\${XDG_CONFIG_HOME:-~/.config}/lk-platform/${2:+\$2/}\$3"
+}
+
+# lk_user_config_find ARRAY DIR PATTERN
+#
+# Assign the paths of any user-specific config files matching PATTERN to ARRAY
+# in the caller's scope. DIR may be the empty string.
+function lk_user_config_find() {
+    (($# == 3)) && unset -v "$1" || lk_bad_args || return
+    lk_mapfile "$1" < <(lk_expand_path \
+        "${XDG_CONFIG_HOME:-~/.config}/lk-platform/${2:+$2/}$3" |
+        lk_filter "test -e")
+}
+
+# lk_user_config_install VAR DIR FILE [FILE_MODE [DIR_MODE]]
+#
+# Create or update permissions on a user-specific config file and assign its
+# path to VAR in the caller's scope. DIR may be the empty string.
+function lk_user_config_install() {
+    (($# > 2)) || lk_bad_args || return
+    local IFS=$' \t\n'
+    lk_user_config_set "${@:1:3}" || return
+    { [[ -z ${4:+1}${5:+1} ]] && [[ -r ${!1} ]]; } ||
+        { lk_install -d ${5:+-m "$5"} "${!1%/*}" &&
+            lk_install ${4:+-m "$4"} "${!1}"; }
+}
+
 # lk_ssh_host_parameter_sh [USER@]<HOST>[:PORT] <VAR_PREFIX> [PARAMETER...]
 #
 # Always included: user, hostname, port, identityfile
@@ -1427,23 +1460,31 @@ function _lk_cpanel_token_generate_name() {
         echo "$NAME"
 }
 
-# lk_cpanel_server_set SERVER [USER]
+# lk_cpanel_server_set [-q] SERVER [USER]
 function lk_cpanel_server_set() {
-    [ $# -ge 1 ] || lk_usage "Usage: $FUNCNAME SERVER [USER]" || return
+    local QUIET=0 FILES FILE
+    [[ ${1-} != -q ]] || { QUIET=1 && shift; }
+    (($#)) || lk_usage "Usage: $FUNCNAME [-q] SERVER [USER]" || return
     unset "${!_LK_CPANEL_@}"
     _LK_CPANEL_SERVER=$1
     if lk_ssh_host_exists "$1"; then
         _LK_CPANEL_METHOD=ssh
-        [ $# -eq 1 ] || _LK_CPANEL_SERVER=$2@$1
+        (($# == 1)) || _LK_CPANEL_SERVER=$2@$1
     else
         _LK_CPANEL_METHOD=curl
-        [ $# -ge 2 ] || lk_warn "username required for curl access" || return
+        (($# > 1)) ||
+            { lk_user_config_find FILES token "cpanel-curl-*@$1" &&
+                ((${#FILES[@]} == 1)) &&
+                [[ -s $FILES ]] &&
+                FILE=${FILES##*/} || {
+                ((QUIET)) || lk_warn "username required for curl access"
+                return 1
+            }; }
     fi
-    local FILE
-    lk_check_user_config FILE \
-        token "cpanel-${_LK_CPANEL_METHOD}-${2+$2@}$1" 00600 00700 &&
+    lk_user_config_install FILE \
+        token "${FILE:-cpanel-${_LK_CPANEL_METHOD}-${2+$2@}$1}" 00600 00700 &&
         . "$FILE" || return
-    [ -s "$FILE" ] ||
+    [[ -s $FILE ]] ||
         case "$_LK_CPANEL_METHOD" in
         curl)
             local NAME URL
@@ -1456,7 +1497,7 @@ function lk_cpanel_server_set() {
             ;;
         esac
     lk_file_replace "$FILE" < <(lk_var_sh "${!_LK_CPANEL_@}") &&
-        lk_symlink "${FILE##*/}" "${FILE%/*}/cpanel-current"
+        { ((QUIET)) || lk_symlink "${FILE##*/}" "${FILE%/*}/cpanel-current"; }
 }
 
 # _lk_cpanel_server_do_check METHOD_VAR SERVER_VAR TOKEN_VAR PREFIX
@@ -1473,8 +1514,8 @@ function _lk_cpanel_server_do_check() {
                 return 0
             ;;
         esac
-        ! ((i++)) &&
-            lk_check_user_config -n FILE token "$4-current" &&
+        ((!i++)) &&
+            lk_user_config_set FILE token "$4-current" &&
             [ -f "$FILE" ] &&
             . "$FILE" || break
     done
@@ -1539,23 +1580,31 @@ function _lk_whm_get_url() {
     _lk_cpanel_get_url "$SERVER" "$FUNC" "" "api.version=1" "$@"
 }
 
-# lk_whm_server_set SERVER [USER]
+# lk_whm_server_set [-q] SERVER [USER]
 function lk_whm_server_set() {
-    [ $# -ge 1 ] || lk_usage "Usage: $FUNCNAME SERVER [USER]" || return
+    local QUIET=0 FILES FILE
+    [[ ${1-} != -q ]] || { QUIET=1 && shift; }
+    (($#)) || lk_usage "Usage: $FUNCNAME [-q] SERVER [USER]" || return
     unset "${!_LK_WHM_@}"
     _LK_WHM_SERVER=$1
     if lk_ssh_host_exists "$1"; then
         _LK_WHM_METHOD=ssh
-        [ $# -eq 1 ] || _LK_WHM_SERVER=$2@$1
+        (($# == 1)) || _LK_WHM_SERVER=$2@$1
     else
         _LK_WHM_METHOD=curl
-        [ $# -ge 2 ] || lk_warn "username required for curl access" || return
+        (($# > 1)) ||
+            { lk_user_config_find FILES token "whm-curl-*@$1" &&
+                ((${#FILES[@]} == 1)) &&
+                [[ -s $FILES ]] &&
+                FILE=${FILES##*/} || {
+                ((QUIET)) || lk_warn "username required for curl access"
+                return 1
+            }; }
     fi
-    local FILE
-    lk_check_user_config FILE \
-        token "whm-${_LK_WHM_METHOD}-${2+$2@}$1" 00600 00700 &&
+    lk_user_config_install FILE \
+        token "${FILE:-whm-${_LK_WHM_METHOD}-${2+$2@}$1}" 00600 00700 &&
         . "$FILE" || return
-    [ -s "$FILE" ] ||
+    [[ -s $FILE ]] ||
         case "$_LK_WHM_METHOD" in
         curl)
             local NAME URL
@@ -1568,7 +1617,7 @@ function lk_whm_server_set() {
             ;;
         esac
     lk_file_replace "$FILE" < <(lk_var_sh "${!_LK_WHM_@}") &&
-        lk_symlink "${FILE##*/}" "${FILE%/*}/whm-current"
+        { ((QUIET)) || lk_symlink "${FILE##*/}" "${FILE%/*}/whm-current"; }
 }
 
 function _lk_whm_server_check() {
@@ -2531,22 +2580,6 @@ function lk_squid_set_option() {
         "^$S*$OPTION$S+$VALUE($S*\$|$S+#$S+)" \
         "0,/^$S*$REGEX\$/{s/^($S*)$REGEX\$/\\1$REPLACE_WITH\\4/}" \
         "0,/^$S*#"{,"$S","$S*"}"$REGEX\$/{s/^($S*)#$REGEX\$/\\1$REPLACE_WITH\\4/}"
-}
-
-# lk_check_user_config [-n] VAR DIR FILE [FILE_MODE [DIR_MODE]]
-#
-# Create or update permissions on a user-specific config file and assign its
-# path to VAR in the caller's scope. If -n is set, don't create the file (useful
-# for setting VAR only). DIR may be the empty string.
-function lk_check_user_config() {
-    local _INSTALL=1
-    [ "${1-}" != -n ] || { _INSTALL= && shift; }
-    local _FILE_MODE=${4-} _DIR_MODE=${5-}
-    eval "$1=\${XDG_CONFIG_HOME:-~/.config}/lk-platform/${2:+\$2/}\$3"
-    [ -z "$_INSTALL" ] ||
-        { [ -z "$_FILE_MODE$_DIR_MODE" ] && [ -r "${!1}" ]; } ||
-        { lk_install -d ${_DIR_MODE:+-m "$_DIR_MODE"} "${!1%/*}" &&
-            lk_install ${_FILE_MODE:+-m "$_FILE_MODE"} "${!1}"; }
 }
 
 # _lk_crontab REMOVE_REGEX ADD_COMMAND

@@ -2,35 +2,35 @@
 
 # _lk_tty_format [-b] VAR [COLOUR COLOUR_VAR]
 #
-# If COLOUR_VAR is not unset, use its value to set the default appearance of
-# text in VAR. Otherwise, use COLOUR as the default, adding bold if -b is set
-# unless $LK_BOLD already appears in COLOUR or the text.
+# Set the default appearance of text in VAR as efficiently as possible:
+#
+# 1. If COLOUR_VAR is set and not empty, apply it to VAR and return.
+# 2. If COLOUR_VAR is set to the empty string, return without changing VAR.
+# 3. If -b is set and $LK_BOLD doesn't already appear in COLOUR or the text, add
+#    bold to COLOUR.
+# 4. Apply COLOUR to VAR.
+#
+# Formatting applied to VAR is reapplied after each appearance of $LK_RESET.
 function _lk_tty_format() {
-    local _BOLD= _STRING _COLOUR_SET _COLOUR _B=${_LK_TTY_B-} _E=${_LK_TTY_E-}
-    [ "${1-}" != -b ] || { _BOLD=1 && shift; }
-    [ $# -gt 0 ] &&
-        _STRING=${!1-} &&
-        _COLOUR_SET=${3:+${!3+1}} || return
-    if [ -n "$_COLOUR_SET" ]; then
-        _COLOUR=${!3}
+    local _BOLD _B=${_LK_TTY_B-} _E=${_LK_TTY_E-}
+    [[ $1 != -b ]] || { _BOLD=1 && shift; }
+    # Return early if VAR is empty
+    [[ -n ${!1:+1} ]] || return 0
+    if [[ -n ${3:+${!3+1}} ]]; then
+        # If COLOUR_VAR is set, replace COLOUR with its value
+        set -- "$1" "${!3}"
     else
-        _COLOUR=${2-}
-        [ -z "${_BOLD:+$LK_BOLD}" ] ||
-            [[ $_COLOUR$_STRING == *$LK_BOLD* ]] ||
-            _COLOUR+=$LK_BOLD
+        # If -b is set, $LK_BOLD isn't empty, and nothing is already bold, add
+        # bold to COLOUR
+        [[ -z ${_BOLD:+${LK_BOLD:+1}} ]] ||
+            [[ ${2-}${!1} == *$LK_BOLD* ]] ||
+            set -- "$1" "${2-}$LK_BOLD"
     fi
-    [ -z "${_STRING:+${_COLOUR:+$LK_RESET}}" ] || {
-        local REGEX=$'^(\n)?(.*)$'
-        [[ $_STRING =~ $REGEX ]]
-        _STRING=${BASH_REMATCH[1]}$_B$_COLOUR$_E${BASH_REMATCH[2]//"$LK_RESET"/$_B$LK_RESET$_COLOUR$_E}$_B$LK_RESET$_E
-        eval "$1=\$_STRING"
-    }
-}
-
-# _lk_tty_format_readline [-b] VAR [COLOUR COLOUR_VAR]
-function _lk_tty_format_readline() {
-    _LK_TTY_B=$'\x01' _LK_TTY_E=$'\x02' \
-        _lk_tty_format "$@"
+    # Return early if COLOUR or $LK_RESET are empty
+    [[ -n ${2:+${LK_RESET:+1}} ]] || return 0
+    local REGEX=$'^(\n)?(.*)$'
+    [[ ${!1} =~ $REGEX ]] &&
+        eval "$1="'${BASH_REMATCH[1]}$_B$2$_E${BASH_REMATCH[2]//"$LK_RESET"/$_B$LK_RESET$2$_E}$_B$LK_RESET$_E'
 }
 
 # lk_tty_path [PATH...]
@@ -466,7 +466,8 @@ function lk_tty_run() {
         esac
         break
     done
-    ${_LK_TTY_COMMAND:-lk_tty_print} "Running:" "$(lk_fold_quote_options "$@")"
+    ${_LK_TTY_COMMAND:-lk_tty_print} \
+        "Running:" "$(lk_fold_quote_options -120 "$@")"
     eval "$_lk_x_restore"
     "${CMD[@]}"
 }
