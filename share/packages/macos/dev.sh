@@ -12,7 +12,6 @@ HOMEBREW_FORCE_INTEL=()
 LOGIN_ITEMS=()
 
 HOMEBREW_TAPS+=(
-    homebrew/cask-drivers
     homebrew/cask-fonts
     homebrew/services
 )
@@ -28,6 +27,7 @@ HOMEBREW_FORMULAE+=(
 
     # Networking
     iperf3
+    nmap
     openconnect
     vpn-slice
 
@@ -37,9 +37,8 @@ HOMEBREW_FORMULAE+=(
 
     # System
     certbot
-    dosfstools
-    mtools
-    nmap
+    dosfstools # mkfs.vfat
+    mtools     # mcopy
 )
 
 # Desktop
@@ -61,7 +60,6 @@ HOMEBREW_CASKS+=(
     adobe-acrobat-reader
     alt-tab
     chromium
-    clockify
     copyq
     espanso
     firefox
@@ -73,21 +71,13 @@ HOMEBREW_CASKS+=(
     iterm2
     keepassxc
     keepingyouawake
-    keyboard-cleaner
     libreoffice
-    messenger
-    microsoft-teams
     mysides
-    nextcloud
     pencil
-    rescuetime
     scribus
-    skype
-    spotify
     stretchly
     the-unarchiver
     transmission
-    typora
 
     # PDF
     basictex
@@ -102,44 +92,28 @@ HOMEBREW_CASKS+=(
 
     # System
     displaycal
-    geekbench
     hex-fiend
 
     # Non-free
-    acorn
-    microsoft-office
+    geekbench
+    typora
 )
 
 MAS_APPS+=(
-    409183694 # Keynote
-    409203825 # Numbers
-    409201541 # Pages
-
-    #
-    417375580  # BetterSnapTool
-    1502839586 # Hand Mirror
-
-    #
-    420212497  # Byword
-    404705039  # Graphic
+    409201541  # Pages
+    409203825  # Numbers
+    409183694  # Keynote
     1295203466 # Microsoft Remote Desktop
-    1055273043 # PDF Expert
-
-    #
-    585829637 # Todoist
 )
 
 # Development
 HOMEBREW_TAPS+=(
     adoptopenjdk/openjdk
-    #lkrms/virt-manager
-    #mongodb/brew
+    mongodb/brew
 )
 
 HOMEBREW_FORMULAE+=(
     autopep8
-    cmake
-    emscripten
     graphviz # Optional phpdoc dependency
     plantuml # Optional phpdoc dependency
 
@@ -147,7 +121,6 @@ HOMEBREW_FORMULAE+=(
     libvirt
     qemu
     virt-manager
-    #lkrms/virt-manager/virt-viewer
 
     # Email
     msmtp  # SMTP client
@@ -166,6 +139,7 @@ HOMEBREW_FORMULAE+=(
     #
     composer
     php
+    php@7.4
 
     #
     python
@@ -176,7 +150,7 @@ HOMEBREW_FORMULAE+=(
 
     #
     mariadb
-    #mongodb/brew/mongodb-community
+    mongodb/brew/mongodb-database-tools
 
     #
     shellcheck
@@ -208,16 +182,11 @@ HOMEBREW_FORCE_INTEL+=(
 )
 
 HOMEBREW_CASKS+=(
-    android-studio
-    dash
     dbeaver-community
+    docker
     font-jetbrains-mono
     http-toolkit
     robo-3t
-    sequel-pro
-    sourcetree
-    sublime-merge
-    sublime-text
     visual-studio-code
 
     #
@@ -230,22 +199,17 @@ MAS_APPS+=(
     497799835  # Xcode
 )
 
-# Hardware-related
-HOMEBREW_CASKS+=(
-    sonos
-)
-
 HOMEBREW_KEEP_FORMULAE+=(
-    #
-    php
-    php@7.4
-
     #
     autoconf
     automake
+    cmake
 
     #
     rust
+
+    #
+    emscripten
 
     #
     azure/functions/azure-functions-core-tools@4
@@ -253,39 +217,27 @@ HOMEBREW_KEEP_FORMULAE+=(
     microsoft/mssql-release/mssql-tools
 
     #
-    lkrms/virt-manager/libvirt
-
-    #
     autozimu/formulas/unison-fsmonitor
-    ddcctl
 )
 
 HOMEBREW_KEEP_CASKS+=(
+    android-studio
     bbedit
     google-chrome
     key-codes
-    lingon-x
+    sequel-pro
+    shortcutdetective
+    sourcetree
+    teamviewer
+
+    #
     microsoft-azure-storage-explorer
     sfdx
-    shortcutdetective
-    studio-3t
-    teamviewer
 
     #
     makemkv
     mkvtoolnix
 
     #
-    virtualbox
-    virtualbox-extension-pack
-
-    #
     logitech-g-hub
-    logitech-gaming-software
-    monitorcontrol
-)
-
-LOGIN_ITEMS+=(
-    "/Applications/Nextcloud.app"
-    "/Applications/Todoist.app"
 )
