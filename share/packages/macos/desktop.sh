@@ -12,7 +12,6 @@ HOMEBREW_FORCE_INTEL=()
 LOGIN_ITEMS=()
 
 HOMEBREW_TAPS+=(
-    homebrew/cask-drivers
     homebrew/cask-fonts
 )
 
@@ -48,23 +47,17 @@ HOMEBREW_CASKS+=(
     adobe-acrobat-reader
     alt-tab
     bbedit
-    chromium
+    copyq
     espanso
     firefox
     flameshot
     flycut
+    google-chrome
     imageoptim
     iterm2
     keepassxc
     keepingyouawake
-    keyboard-cleaner
-    messenger
-    mysides
-    nextcloud
-    skype
-    spotify
     the-unarchiver
-    typora
 
     # PDF
     basictex
@@ -73,49 +66,26 @@ HOMEBREW_CASKS+=(
     vlc
 
     # Non-free
-    microsoft-office
+    typora
 )
 
 MAS_APPS+=(
-    409183694 # Keynote
-    409203825 # Numbers
-    409201541 # Pages
-
-    #
-    1502839586 # Hand Mirror
-    441258766  # Magnet
-
-    #
+    409201541  # Pages
+    409203825  # Numbers
+    409183694  # Keynote
     1295203466 # Microsoft Remote Desktop
-    1303222628 # Paprika
-    1055273043 # PDF Expert
-
-    #
-    585829637 # Todoist
-)
-
-# Hardware-related
-HOMEBREW_CASKS+=(
-    sonos
 )
 
 HOMEBREW_KEEP_FORMULAE+=(
-    ocaml
 )
 
 HOMEBREW_KEEP_CASKS+=(
     geekbench
-    google-chrome
     hammerspoon
     libreoffice
     lingon-x
     logitech-g-hub
-    logitech-gaming-software
+    pdf-expert
     teamviewer
     transmission
-)
-
-LOGIN_ITEMS+=(
-    "/Applications/Flycut.app"
-    "/Applications/Nextcloud.app"
 )

@@ -12,7 +12,6 @@ HOMEBREW_FORCE_INTEL=()
 LOGIN_ITEMS=()
 
 HOMEBREW_TAPS+=(
-    homebrew/cask-drivers
     homebrew/cask-fonts
 )
 
@@ -22,21 +21,18 @@ HOMEBREW_FORMULAE+=(
 
 HOMEBREW_CASKS+=(
     adobe-acrobat-reader
+    copyq
     firefox
+    flameshot
     flycut
     google-chrome
     iterm2
     keepassxc
     keepingyouawake
-    keyboard-cleaner
-    skype
-    teamviewer
     the-unarchiver
-
-    # Non-free
-    microsoft-office
 )
 
 HOMEBREW_KEEP_CASKS+=(
     pdf-expert
+    teamviewer
 )
