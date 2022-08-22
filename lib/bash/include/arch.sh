@@ -348,6 +348,7 @@ function lk_aur_sync() {
             --noconfirm \
             ${CHROOT+--chroot} \
             ${CHROOT+--makepkg-conf=/etc/makepkg.conf} \
+            ${CHROOT+${LK_ARCH_AUR_CHROOT_DIR:+--directory="$LK_ARCH_AUR_CHROOT_DIR"}} \
             ${GPGKEY+--sign} \
             ${CCACHE_DIR+--bind-rw="$CCACHE_DIR:/build/.ccache"} \
             "$PKG" &&
@@ -387,6 +388,7 @@ function lk_aur_rebuild() {
         --noconfirm \
         ${CHROOT+--chroot} \
         ${CHROOT+--makepkg-conf=/etc/makepkg.conf} \
+        ${CHROOT+${LK_ARCH_AUR_CHROOT_DIR:+--directory="$LK_ARCH_AUR_CHROOT_DIR"}} \
         ${GPGKEY+--sign} \
         ${CCACHE_DIR+--bind-rw="$CCACHE_DIR:/build/.ccache"} \
         --arg-file "$ARG_FILE"

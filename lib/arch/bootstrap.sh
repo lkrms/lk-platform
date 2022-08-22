@@ -69,6 +69,7 @@ LK_NTP_SERVER=${LK_NTP_SERVER-time.apple.com}                          #
 LK_ARCH_MIRROR=${LK_ARCH_MIRROR-}                                      #
 LK_ARCH_REPOS=${LK_ARCH_REPOS-}                                        # REPO|SERVER|KEY_URL|KEY_ID|SIG_LEVEL,...
 LK_ARCH_AUR_REPO_NAME=${LK_ARCH_AUR_REPO_NAME-}                        # If set, a local aurutils repo will be provisioned
+LK_ARCH_AUR_CHROOT_DIR=${LK_ARCH_AUR_CHROOT_DIR-}                      # Default: /var/lib/aurbuild
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-main}
 LK_PACKAGES_FILE=${LK_PACKAGES_FILE-}
 export LK_BASE=${LK_BASE:-/opt/lk-platform}
