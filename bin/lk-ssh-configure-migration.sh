@@ -157,10 +157,9 @@ function lk_tty_log() {
     lk_tty_print "${_LK_TTY_COLOUR-$LK_CYAN}$1" "${2-}"
 }
 
-function lk_ellipsis() {
-    [ "$1" -gt 3 ] &&
-        [[ $2 =~ ^(.{$(($1 - 3))}).{4,} ]] &&
-        echo "${BASH_REMATCH[1]}..." ||
+function lk_ellipsise() {
+    ((${#2} > $1)) &&
+        echo "${2:0:$1-3}..." ||
         echo "$2"
 }
 
@@ -180,7 +179,7 @@ function add_authorized_key() {
 }
 
 H=${HOSTNAME:-$(hostname -s)} || H="<unknown>"
-H=$(lk_ellipsis 10 "$(printf '%10s' "$H")")
+H=$(lk_ellipsise 10 "$(printf '%10s' "$H")")
 H_SPACES="               "
 
 case "$STAGE" in

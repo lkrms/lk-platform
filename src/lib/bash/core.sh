@@ -232,14 +232,6 @@ function lk_pad_zero() {
     printf "%0$1d" "${BASH_REMATCH[1]}"
 }
 
-# lk_ellipsis LENGTH STRING
-function lk_ellipsis() {
-    [ "$1" -gt 3 ] &&
-        [[ $2 =~ ^(.{$(($1 - 3))}).{4,} ]] &&
-        echo "${BASH_REMATCH[1]}..." ||
-        echo "$2"
-}
-
 # lk_repeat STRING MULTIPLIER
 function lk_repeat() {
     [ "$2" -le 0 ] || {
@@ -452,7 +444,7 @@ function _lk_lock_check_args() {
         ;;
     2 | 3)
         set -- "$1" "$2" "${3-}"
-        lk_test_many lk_is_identifier "${@:1:2}"
+        lk_test lk_is_identifier "${@:1:2}"
         ;;
     *)
         false
@@ -963,27 +955,6 @@ function lk_paste() {
         pbpaste) &&
         $COMMAND ||
         lk_tty_error "Unable to paste clipboard to output"
-}
-
-# lk_file_add_suffix FILENAME SUFFIX
-#
-# Add SUFFIX to FILENAME without changing its extension.
-function lk_file_add_suffix() {
-    local EXT
-    [[ $1 =~ [^/]((\.tar)?\.[-a-zA-Z0-9_]+/*|/*)$ ]] &&
-        EXT=${BASH_REMATCH[1]} ||
-        EXT=
-    echo "${1%"$EXT"}$2$EXT"
-}
-
-# lk_file_maybe_add_extension FILENAME EXT
-#
-# Add EXT to FILENAME if it's missing.
-function lk_file_maybe_add_extension() {
-    (
-        shopt -s nocasematch
-        [[ $1 == *.${2#.} ]] && echo "$1" || echo "$1.${2#.}"
-    )
 }
 
 function lk_mime_type() {

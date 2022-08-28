@@ -17,6 +17,15 @@ function lk_uniq() {
     _lk_stream_args 2 awk '!seen[$0]++ { print }' "$@"
 }
 
+# lk_ellipsise LENGTH [STRING...]
+function lk_ellipsise() {
+    local LENGTH=$1
+    shift
+    _lk_stream_args 4 awk -v "l=$LENGTH" '
+length($0) > l  { print substr($0, 1, l - 3) "..."; next }
+                { print }' "$@"
+}
+
 # lk_double_quote [-f] [STRING...]
 #
 # If -f is set, add double quotes even if STRING only contains letters, numbers

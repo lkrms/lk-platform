@@ -50,22 +50,22 @@ function lk_whiptail_checklist() {
         STATUS ITEM ITEMS=() i=0
     (($# >= _ARGS + 2)) || lk_warn "invalid arguments" || return
     shift 2
-    [ -z "${_STATUS+1}" ] || {
+    [[ -z ${_STATUS+1} ]] || {
         # If an odd number of arguments remain, the last one is STATUS
-        ! (($# % 2)) || STATUS="${*: -1:1}"
+        ! (($# % 2)) || STATUS=${*: -1}
         STATUS=${STATUS:-on}
     }
-    while [ $# -ge "$_ARGS" ]; do
+    while [[ $# -ge $_ARGS ]]; do
         ((++i))
         STATUS=${_STATUS+$STATUS}${_STATUS-$3}
         ! lk_no_input || {
-            [ "$STATUS" = off ] || echo "$1"
+            [[ $STATUS == off ]] || echo "$1"
             shift "$_ARGS"
             continue
         }
-        ITEM=$(lk_ellipsis "$MAX_WIDTH" "$2")
+        ITEM=$(lk_ellipsise "$MAX_WIDTH" "$2")
         ITEMS+=("$1" "$ITEM" "$STATUS")
-        [ ${#ITEM} -le "$WIDTH" ] || WIDTH=${#ITEM}
+        [[ ${#ITEM} -le $WIDTH ]] || WIDTH=${#ITEM}
         shift "$_ARGS"
     done
     ! lk_no_input || return 0

@@ -5,7 +5,7 @@
 lk_assert_command_exists mutool
 
 [ $# -ge 2 ] &&
-    lk_test_many lk_is_pdf "$@" || lk_usage "\
+    lk_test lk_is_pdf "$@" || lk_usage "\
 Usage: ${0##*/} PDF1 PDF2..."
 
 lk_log_start

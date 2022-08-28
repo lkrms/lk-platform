@@ -3,6 +3,7 @@
 lk_confirm() { lk_tty_yn "$@"; }
 lk_echo_args() { lk_args "$@"; }
 lk_echo_array() { lk_arr "$@"; }
+lk_ellipsis() { lk_ellipsise "$@"; }
 lk_escape_ere_replace() { lk_sed_escape_replace "$@"; }
 lk_escape_ere() { lk_sed_escape "$@"; }
 lk_first_existing() { lk_first_file "$@"; }

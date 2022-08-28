@@ -60,7 +60,7 @@ function lk_tty_length() {
 function _lk_tty_hostname_apply() {
     _LK_TTY_HOSTNAME=${HOSTNAME:-$(lk_hostname)} ||
         _LK_TTY_HOSTNAME="<unknown>"
-    _LK_TTY_HOSTNAME="${LK_DIM}[ $(lk_ellipsis 14 "$(
+    _LK_TTY_HOSTNAME="${LK_DIM}[ $(lk_ellipsise 14 "$(
         printf '%14s' "$_LK_TTY_HOSTNAME"
     )") ] $LK_UNDIM"
     _LK_TTY_HOSTNAME_INDENT=${_LK_TTY_HOSTNAME_INDENT:-$'\n                   '}
