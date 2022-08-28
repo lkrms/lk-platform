@@ -5,7 +5,7 @@ lk_require provision
 
 lk_assert_command_exists gs
 
-lk_test_many lk_is_pdf "$@" || lk_usage "\
+lk_test lk_is_pdf "$@" || lk_usage "\
 Usage: ${0##*/} PDF..."
 
 lk_log_start

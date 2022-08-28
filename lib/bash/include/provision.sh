@@ -1125,7 +1125,7 @@ Usage: $FUNCNAME [-s] CERT_FILE [KEY_FILE [CA_FILE]]" || return
 # lk_ssl_create_self_signed_cert DOMAIN...
 function lk_ssl_create_self_signed_cert() {
     [ $# -gt 0 ] || lk_usage "Usage: $FUNCNAME DOMAIN..." || return
-    lk_test_many lk_is_fqdn "$@" || lk_warn "invalid arguments" || return
+    lk_test lk_is_fqdn "$@" || lk_warn "invalid arguments" || return
     lk_tty_print "Creating a self-signed TLS certificate for:" \
         $'\n'"$(printf '%s\n' "$@")"
     local CA_FILE=${LK_SSL_CA:+$1-${LK_SSL_CA##*/}}

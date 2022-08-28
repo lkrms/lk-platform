@@ -11,9 +11,9 @@ while [[ ${1-} =~ ^(-[^-]|--.) ]]; do
     shift
 done
 
-[ "${1-}" != -- ] || shift
+[[ ${1-} != -- ]] || shift
 
-lk_test_many lk_is_pdf "$@" || lk_usage "\
+lk_test lk_is_pdf "$@" || lk_usage "\
 Usage: ${0##*/} [GS_OPTION...] PDF..."
 
 lk_log_start

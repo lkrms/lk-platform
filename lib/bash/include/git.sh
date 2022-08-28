@@ -649,7 +649,7 @@ on the standard output. If -y is set, proceed without prompting."
     [ $# -gt 0 ] || lk_usage || return
     REPO_COMMAND=("$@")
     if [ ${#REPOS[@]} -gt 0 ]; then
-        lk_test_many lk_git_is_top_level "${REPOS[@]}" ||
+        lk_test lk_git_is_top_level "${REPOS[@]}" ||
             lk_warn "each element of LK_GIT_REPOS must be the top-level \
 directory of a working tree" || return
         lk_resolve_files REPOS

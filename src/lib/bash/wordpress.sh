@@ -344,7 +344,7 @@ function lk_wp_replace_url() {
     local OLD_URL=${1-} NEW_URL=${2-} REPLACE STDERR IFS _SEARCH _REPLACE
     [ $# -eq 2 ] ||
         lk_usage "Usage: $FUNCNAME [-s SITE_ROOT] OLD_URL NEW_URL" || return
-    lk_test_many lk_is_uri "$@" || lk_warn "invalid URL" || return
+    lk_test lk_is_uri "$@" || lk_warn "invalid URL" || return
     lk_tty_print "Performing WordPress search/replace"
     REPLACE=(
         "$OLD_URL"

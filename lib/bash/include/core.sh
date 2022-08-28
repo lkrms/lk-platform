@@ -945,6 +945,15 @@ function lk_uniq() {
     _lk_stream_args 2 awk '!seen[$0]++ { print }' "$@"
 }
 
+# lk_ellipsise LENGTH [STRING...]
+function lk_ellipsise() {
+    local LENGTH=$1
+    shift
+    _lk_stream_args 4 awk -v "l=$LENGTH" '
+length($0) > l  { print substr($0, 1, l - 3) "..."; next }
+                { print }' "$@"
+}
+
 # lk_double_quote [-f] [STRING...]
 #
 # If -f is set, add double quotes even if STRING only contains letters, numbers
@@ -1419,7 +1428,7 @@ function lk_tty_length() {
 function _lk_tty_hostname_apply() {
     _LK_TTY_HOSTNAME=${HOSTNAME:-$(lk_hostname)} ||
         _LK_TTY_HOSTNAME="<unknown>"
-    _LK_TTY_HOSTNAME="${LK_DIM}[ $(lk_ellipsis 14 "$(
+    _LK_TTY_HOSTNAME="${LK_DIM}[ $(lk_ellipsise 14 "$(
         printf '%14s' "$_LK_TTY_HOSTNAME"
     )") ] $LK_UNDIM"
     _LK_TTY_HOSTNAME_INDENT=${_LK_TTY_HOSTNAME_INDENT:-$'\n                   '}
@@ -2778,6 +2787,7 @@ function lk_curl_get_form_args() {
 lk_confirm() { lk_tty_yn "$@"; }
 lk_echo_args() { lk_args "$@"; }
 lk_echo_array() { lk_arr "$@"; }
+lk_ellipsis() { lk_ellipsise "$@"; }
 lk_escape_ere_replace() { lk_sed_escape_replace "$@"; }
 lk_escape_ere() { lk_sed_escape "$@"; }
 lk_first_existing() { lk_first_file "$@"; }
@@ -3021,14 +3031,6 @@ function lk_pad_zero() {
     printf "%0$1d" "${BASH_REMATCH[1]}"
 }
 
-# lk_ellipsis LENGTH STRING
-function lk_ellipsis() {
-    [ "$1" -gt 3 ] &&
-        [[ $2 =~ ^(.{$(($1 - 3))}).{4,} ]] &&
-        echo "${BASH_REMATCH[1]}..." ||
-        echo "$2"
-}
-
 # lk_repeat STRING MULTIPLIER
 function lk_repeat() {
     [ "$2" -le 0 ] || {
@@ -3241,7 +3243,7 @@ function _lk_lock_check_args() {
         ;;
     2 | 3)
         set -- "$1" "$2" "${3-}"
-        lk_test_many lk_is_identifier "${@:1:2}"
+        lk_test lk_is_identifier "${@:1:2}"
         ;;
     *)
         false
@@ -3752,27 +3754,6 @@ function lk_paste() {
         pbpaste) &&
         $COMMAND ||
         lk_tty_error "Unable to paste clipboard to output"
-}
-
-# lk_file_add_suffix FILENAME SUFFIX
-#
-# Add SUFFIX to FILENAME without changing its extension.
-function lk_file_add_suffix() {
-    local EXT
-    [[ $1 =~ [^/]((\.tar)?\.[-a-zA-Z0-9_]+/*|/*)$ ]] &&
-        EXT=${BASH_REMATCH[1]} ||
-        EXT=
-    echo "${1%"$EXT"}$2$EXT"
-}
-
-# lk_file_maybe_add_extension FILENAME EXT
-#
-# Add EXT to FILENAME if it's missing.
-function lk_file_maybe_add_extension() {
-    (
-        shopt -s nocasematch
-        [[ $1 == *.${2#.} ]] && echo "$1" || echo "$1.${2#.}"
-    )
 }
 
 function lk_mime_type() {
