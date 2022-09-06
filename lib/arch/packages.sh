@@ -499,7 +499,7 @@ if [ -s "$PAC_REPLACE" ]; then
         awk -v "suffix=$SUFFIX" \
         '{print "s/^" $1 "(-git)?(" suffix ")?$/" $2 "/"}' "$PAC_REPLACE"
     PAC_REJECT+=($(lk_arr PAC_PACKAGES AUR_PACKAGES |
-        grep -Fxf <(awk '{print $1}' "$PAC_REPLACE")))
+        grep -Fxf <(awk '{print $1}' "$PAC_REPLACE") || true))
     PAC_PACKAGES=($(lk_arr PAC_PACKAGES | sed -Ef "$SED" | sort -u))
     AUR_PACKAGES=($(lk_arr AUR_PACKAGES | sed -Ef "$SED" | sort -u))
 fi

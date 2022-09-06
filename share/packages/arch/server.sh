@@ -120,10 +120,6 @@ PAC_PACKAGES+=(
 )
 
 AUR_PACKAGES+=(
-    # Networking
-    vpn-slice
-
-    #
     python-demjson3
     ruby-erubis
 )
