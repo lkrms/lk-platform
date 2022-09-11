@@ -69,6 +69,7 @@ PAC_PACKAGES=(
     hwinfo
     iotop
     lsof
+    msr-tools
     ncdu
     pcp
     ps_mem
