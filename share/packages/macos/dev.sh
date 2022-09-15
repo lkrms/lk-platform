@@ -2,8 +2,6 @@
 
 HOMEBREW_TAPS=()
 HOMEBREW_FORMULAE=()
-HOMEBREW_UNLINK_FORMULAE=()
-HOMEBREW_LINK_KEGS=()
 HOMEBREW_CASKS=()
 MAS_APPS=()
 HOMEBREW_KEEP_FORMULAE=()
@@ -108,7 +106,6 @@ MAS_APPS+=(
 
 # Development
 HOMEBREW_TAPS+=(
-    adoptopenjdk/openjdk
     mongodb/brew
 )
 
@@ -168,12 +165,6 @@ HOMEBREW_FORMULAE+=(
     wp-cli
 )
 
-HOMEBREW_UNLINK_FORMULAE+=(
-)
-
-HOMEBREW_LINK_KEGS+=(
-)
-
 HOMEBREW_FORCE_INTEL+=(
     composer
     php
@@ -190,8 +181,8 @@ HOMEBREW_CASKS+=(
     visual-studio-code
 
     #
-    adoptopenjdk/openjdk/adoptopenjdk11
     meld
+    temurin
 )
 
 MAS_APPS+=(

@@ -101,10 +101,10 @@ function lk_brew_formulae_list_native() {
     [ "${1-}" != -n ] || { NATIVE=false && shift; }
     if ! lk_is_system_apple_silicon; then
         [ "$NATIVE" = false ] ||
-            lk_brew_info --json=v2 --formula "${@---all}" |
+            lk_brew_info --json=v2 --formula "${@---eval-all}" |
             jq -r '.formulae[].full_name'
     else
-        lk_brew_info --json=v2 --formula "${@---all}" |
+        lk_brew_info --json=v2 --formula "${@---eval-all}" |
             jq -r --argjson native "$NATIVE" '
 def is_native:
     (.versions.bottle | not) or
