@@ -80,6 +80,22 @@ function lk_will_sudo() {
     [ "$EUID" -ne 0 ] && [ -n "${LK_SUDO-}" ]
 }
 
+# lk_sudo_on_fail COMMAND [ARG...]
+#
+# If `lk_sudo COMMAND` would invoke `sudo COMMAND`:
+# 1. Run `COMMAND` without sudo, redirecting any error output to /dev/null
+# 2. If COMMAND fails, run `sudo COMMAND`
+#
+# If `lk_sudo COMMAND` would invoke `COMMAND` without sudo:
+# 1. Run `COMMAND` without sudo
+function lk_sudo_on_fail() {
+    if lk_will_sudo; then
+        "$@" 2>/dev/null || sudo -H "$@"
+    else
+        "$@"
+    fi
+}
+
 # lk_can_sudo COMMAND
 #
 # Return true if the current user has permission to run COMMAND via sudo,

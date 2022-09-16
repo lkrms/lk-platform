@@ -2,11 +2,11 @@
 
 # To provision macOS using the script below:
 #
-#     [LK_NO_INPUT=1] bash -c "$(curl -fsSL http://lkr.ms/macos)"
+#     [LK_NO_INPUT=Y] bash -c "$(curl -fsSL http://lkr.ms/macos)"
 #
 # Or, to test the 'develop' branch:
 #
-#     [LK_NO_INPUT=1] LK_PLATFORM_BRANCH=develop _LK_FD=3 \
+#     [LK_NO_INPUT=Y] LK_PLATFORM_BRANCH=develop _LK_FD=3 \
 #         bash -xc "$(curl -fsSL http://lkr.ms/macos-dev)" 3>&2 2>~/lk-install.err
 
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
@@ -334,7 +334,9 @@ EOF
         wget
 
         #
-        bash-completion
+        bash
+        bash-completion@2
+        flock
         icdiff
         jq
         newt
@@ -781,40 +783,6 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
             brew uninstall --cask $(<"$PURGE_CASKS") &&
                 lk_brew_flush_cache
         }
-    }
-
-    function check_unlinked() {
-        local UNLINK
-        lk_mktemp_with UNLINK
-        lk_brew_info --json=v2 --installed | jq -r '
-.formulae[] | select((.full_name | IN($ARGS.positional[])) and
-  .linked_keg != null).full_name' \
-            --args "${HOMEBREW_UNLINK_FORMULAE[@]}" >"$UNLINK" || return
-        [ ! -s "$UNLINK" ] || {
-            lk_tty_run_detail brew unlink $(<"$UNLINK") &&
-                lk_brew_flush_cache
-        }
-    }
-    [ -z "${HOMEBREW_UNLINK_FORMULAE+1}" ] || {
-        lk_tty_print "Unlinking packages"
-        brew_loop check_unlinked
-    }
-
-    function check_linked() {
-        local LINK
-        lk_mktemp_with LINK
-        lk_brew_info --json=v2 --installed | jq -r '
-.formulae[] | select((.full_name | IN($ARGS.positional[])) and
-  .linked_keg == null).full_name' \
-            --args "${HOMEBREW_LINK_KEGS[@]}" >"$LINK" || return
-        [ ! -s "$LINK" ] || {
-            lk_tty_run_detail brew link $(<"$LINK") &&
-                lk_brew_flush_cache
-        }
-    }
-    [ -z "${HOMEBREW_LINK_KEGS+1}" ] || {
-        lk_tty_print "Unlinking packages"
-        brew_loop check_linked
     }
 
     lk_remove_missing LOGIN_ITEMS

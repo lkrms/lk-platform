@@ -1,0 +1,10 @@
+[Unit]
+Description=Stop vendor throttling (disable BD PROCHOT)
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart={{LK_BASE}}/contrib/misc/bd-prochot-off.sh
+
+[Install]
+WantedBy=multi-user.target

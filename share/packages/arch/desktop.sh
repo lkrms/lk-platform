@@ -68,6 +68,7 @@ PAC_PACKAGES+=(
 )
 
 AUR_PACKAGES+=(
+    gp-saml-gui-git
     pacman-cleanup-hook
     vpn-slice
 )

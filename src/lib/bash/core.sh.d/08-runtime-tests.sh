@@ -6,48 +6,50 @@
 # (e.g. `bash <(list)`), the standard input (`bash -i` or `list | bash`), or the
 # command line (`bash -c "string"`), return false.
 function lk_script_running() {
-    [ "${BASH_SOURCE+${BASH_SOURCE[*]: -1}}" = "$0" ] && [ -f "$0" ]
+    [[ ${BASH_SOURCE+${BASH_SOURCE[*]: -1}} == "$0" ]] && [[ -f $0 ]]
 }
 
 # lk_verbose [LEVEL]
 #
-# Return true if LK_VERBOSE [default: 0] is at least LEVEL [default: 1].
+# Return true if LK_VERBOSE (default: 0) is at least LEVEL (default: 1).
 function lk_verbose() {
-    [ "${LK_VERBOSE:-0}" -ge "${1-1}" ]
+    ((${LK_VERBOSE:-0} >= ${1-1}))
 }
 
 # lk_no_input
 #
-# Check LK_NO_INPUT and LK_FORCE_INPUT, and return true if user input should not
-# be requested.
+# Return true if the user should not be prompted for input.
+#
+# Returns false if:
+# - LK_FORCE_INPUT is set, or
+# - /dev/stdin is a terminal and LK_NO_INPUT is not set
 function lk_no_input() {
-    if [ "${LK_FORCE_INPUT-}" = 1 ]; then
-        { [ -t 0 ] || lk_err "/dev/stdin is not a terminal"; } && false
-    else
-        [ ! -t 0 ] || [ "${LK_NO_INPUT-}" = 1 ]
-    fi
+    [[ ${LK_FORCE_INPUT-} != Y ]] || {
+        { [[ -t 0 ]] ||
+            lk_err "/dev/stdin is not a terminal"; } && false || return
+    }
+    [[ ! -t 0 ]] || [[ ${LK_NO_INPUT-} == Y ]]
 }
 
 # lk_debug
 #
 # Return true if LK_DEBUG is set.
 function lk_debug() {
-    [ "${LK_DEBUG-}" = Y ]
+    [[ ${LK_DEBUG-} == Y ]]
 }
 
 # lk_root
 #
 # Return true if running as the root user.
 function lk_root() {
-    [ "$EUID" -eq 0 ]
+    [[ $EUID -eq 0 ]]
 }
 
 # lk_dry_run
 #
 # Return true if LK_DRY_RUN is set.
 function lk_dry_run() {
-    [ "${LK_DRY_RUN:-0}" -eq 1 ]
-
+    [[ ${LK_DRY_RUN-} == Y ]]
 }
 
 # lk_true VAR
@@ -55,8 +57,8 @@ function lk_dry_run() {
 # Return true if VAR or ${!VAR} is 'Y', 'yes', '1', 'true', or 'on' (not
 # case-sensitive).
 function lk_true() {
-    local REGEX='^([yY]([eE][sS])?|1|[tT][rR][uU][eE]|[oO][nN])$'
-    [[ $1 =~ $REGEX ]] || [[ ${1:+${!1-}} =~ $REGEX ]]
+    [[ $1 =~ ^([yY]([eE][sS])?|1|[tT][rR][uU][eE]|[oO][nN])$ ]] ||
+        [[ ${1:+${!1-}} =~ ^([yY]([eE][sS])?|1|[tT][rR][uU][eE]|[oO][nN])$ ]]
 }
 
 # lk_false VAR
@@ -64,8 +66,8 @@ function lk_true() {
 # Return true if VAR or ${!VAR} is 'N', 'no', '0', 'false', or 'off' (not
 # case-sensitive).
 function lk_false() {
-    local REGEX='^([nN][oO]?|0|[fF][aA][lL][sS][eE]|[oO][fF][fF])$'
-    [[ $1 =~ $REGEX ]] || [[ ${1:+${!1-}} =~ $REGEX ]]
+    [[ $1 =~ ^([nN][oO]?|0|[fF][aA][lL][sS][eE]|[oO][fF][fF])$ ]] ||
+        [[ ${1:+${!1-}} =~ ^([nN][oO]?|0|[fF][aA][lL][sS][eE]|[oO][fF][fF])$ ]]
 }
 
 # lk_test TEST [VALUE...]
@@ -76,12 +78,12 @@ function lk_test() {
     local IFS=$' \t\n' COMMAND
     COMMAND=($1)
     shift
-    [ -n "${COMMAND+1}" ] && [ $# -gt 0 ] || return
-    while [ $# -gt 0 ]; do
+    [[ -n ${COMMAND+1} ]] && (($#)) || return
+    while (($#)); do
         "${COMMAND[@]}" "$1" || break
         shift
     done
-    [ $# -eq 0 ]
+    ((!$#))
 }
 
 # lk_test_any TEST [VALUE...]
@@ -91,12 +93,12 @@ function lk_test_any() {
     local IFS=$' \t\n' COMMAND
     COMMAND=($1)
     shift
-    [ -n "${COMMAND+1}" ] && [ $# -gt 0 ] || return
-    while [ $# -gt 0 ]; do
+    [[ -n ${COMMAND+1} ]] && (($#)) || return
+    while (($#)); do
         ! "${COMMAND[@]}" "$1" || break
         shift
     done
-    [ $# -gt 0 ]
+    (($#))
 }
 
 function lk_paths_exist() { lk_test "lk_sudo test -e" "$@"; }
@@ -106,5 +108,3 @@ function lk_files_exist() { lk_test "lk_sudo test -f" "$@"; }
 function lk_dirs_exist() { lk_test "lk_sudo test -d" "$@"; }
 
 function lk_files_not_empty() { lk_test "lk_sudo test -s" "$@"; }
-
-#### Reviewed: 2021-12-29

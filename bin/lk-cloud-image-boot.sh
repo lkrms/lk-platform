@@ -335,12 +335,12 @@ while :; do
         continue
         ;;
     -y | --yes)
-        LK_NO_INPUT=1
+        LK_NO_INPUT=Y
         continue
         ;;
     -F | --force)
         FORCE_DELETE=1
-        LK_NO_INPUT=1
+        LK_NO_INPUT=Y
         continue
         ;;
     -g | --allow-gateway)
@@ -599,7 +599,7 @@ if [[ -n $STACKSCRIPT ]]; then
                 lk_tty_detail "Using value:" "$INITIAL_VALUE" "$LK_GREEN"
                 break
             else
-                LK_FORCE_INPUT=1 lk_tty_read \
+                LK_FORCE_INPUT=Y lk_tty_read \
                     "-$REQUIRED_TEXT" \
                     "$LK_BOLD$LABEL$LK_UNBOLD:" VALUE \
                     "" ${INITIAL_VALUE:+-i "$INITIAL_VALUE"}
@@ -633,7 +633,7 @@ while VM_STATE=$(lk_sudo virsh domstate "$VM_HOSTNAME" 2>/dev/null); do
         "delete and permanently remove all storage volumes?"
     )
     lk_true FORCE_DELETE ||
-        LK_FORCE_INPUT=1 lk_tty_yn "${PROMPT[*]}" N ||
+        LK_FORCE_INPUT=Y lk_tty_yn "${PROMPT[*]}" N ||
         lk_die ""
     [ -z "${VM_STATE+1}" ] ||
         lk_sudo virsh destroy "$VM_HOSTNAME" || true
@@ -782,7 +782,7 @@ lk_tty_print
     if [ -e "$DISK_PATH" ]; then
         lk_tty_error "Disk image already exists:" "$DISK_PATH"
         lk_true FORCE_DELETE ||
-            LK_FORCE_INPUT=1 \
+            LK_FORCE_INPUT=Y \
                 lk_tty_yn "Destroy the existing image and start over?" N ||
             lk_die ""
     fi

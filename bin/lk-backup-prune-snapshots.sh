@@ -96,7 +96,7 @@ while :; do
     shift
     case "$OPT" in
     -n | --dry-run)
-        LK_DRY_RUN=1
+        LK_DRY_RUN=Y
         ;;
     --)
         break

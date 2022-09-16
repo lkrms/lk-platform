@@ -131,6 +131,7 @@ PAC_PACKAGES+=(
 )
 
 AUR_PACKAGES+=(
+    gp-saml-gui-git
     pacman-cleanup-hook
     powershell-bin
     vpn-slice
@@ -205,7 +206,6 @@ PAC_PACKAGES+=(
 
     # Multimedia - audio
     audacity
-    python-eyed3
     sox
 
     # Multimedia - video
@@ -263,6 +263,7 @@ AUR_PACKAGES+=(
 
     # Multimedia - audio
     abcde
+    python-eyed3
 
     # Multimedia - video
     makemkv

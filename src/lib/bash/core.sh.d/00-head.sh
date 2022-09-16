@@ -9,5 +9,3 @@ USER=${USER:-$(id -un)} &&
     { [[ ${NS-} == "[^[:blank:]]" ]] || readonly NS="[^[:blank:]]"; } || return
 
 _LK_ARGV=("$@")
-
-#### Reviewed: 2022-05-23

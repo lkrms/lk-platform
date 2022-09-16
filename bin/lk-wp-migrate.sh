@@ -187,7 +187,7 @@ fi
 }
 
 # Migrate files
-LK_NO_INPUT=1 \
+LK_NO_INPUT=Y \
     lk_wp_sync_files_from_remote "$SSH_HOST" "$REMOTE_PATH" "$LOCAL_PATH" \
     ${EXCLUDE[@]+"${EXCLUDE[@]/#/--exclude=}"} "$@"
 
@@ -198,7 +198,7 @@ lk_wp_db_dump_remote "$SSH_HOST" "$REMOTE_PATH" >"$DB_FILE"
 # TODO: put this in an exit trap
 maybe_disable_remote_maintenance
 cd "$LOCAL_PATH"
-LK_NO_INPUT=1 \
+LK_NO_INPUT=Y \
     lk_wp_db_restore_local "$DB_FILE" "$DEFAULT_DB_NAME" "$DEFAULT_DB_USER"
 if [ "$INNODB" -eq 1 ]; then
     SH=$(lk_wp_db_get_vars)

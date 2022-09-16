@@ -2,9 +2,7 @@
 
 # lk_bash_at_least MAJOR [MINOR]
 function lk_bash_at_least() {
-    [ "${BASH_VERSINFO[0]}" -eq "$1" ] &&
-        [ "${BASH_VERSINFO[1]}" -ge "${2:-0}" ] ||
-        [ "${BASH_VERSINFO[0]}" -gt "$1" ]
+    ((BASH_VERSINFO[0] * 100 + BASH_VERSINFO[1] >= $1 * 100 + ${2-0}))
 }
 
 function lk_is_arm() {
@@ -17,8 +15,7 @@ function lk_is_macos() {
 
 # lk_is_apple_silicon
 #
-# Return true if running natively on Apple Silicon, otherwise return false.
-# Returns false when running as a translated Intel binary on Apple Silicon.
+# Return true if running natively on Apple Silicon.
 function lk_is_apple_silicon() {
     lk_is_macos && lk_is_arm
 }
@@ -29,7 +26,7 @@ function lk_is_apple_silicon() {
 # Intel binary.
 function lk_is_system_apple_silicon() {
     lk_is_macos && { lk_is_arm ||
-        [ "$(sysctl -n sysctl.proc_translated 2>/dev/null)" = 1 ]; }
+        [[ $(sysctl -n sysctl.proc_translated 2>/dev/null) == 1 ]]; }
 }
 
 function lk_is_linux() {
@@ -37,18 +34,12 @@ function lk_is_linux() {
 }
 
 function lk_is_arch() {
-    lk_is_linux && [ -f /etc/arch-release ]
+    lk_is_linux && [[ -f /etc/arch-release ]]
 }
 
 function lk_is_ubuntu() {
-    lk_is_linux && [ -r /etc/os-release ] &&
-        (. /etc/os-release && [ "$NAME" = Ubuntu ])
-}
-
-function lk_ubuntu_at_least() {
-    lk_is_linux && [ -r /etc/os-release ] &&
-        (. /etc/os-release && [ "$NAME" = Ubuntu ] &&
-            lk_version_at_least "$VERSION_ID" "$1")
+    lk_is_linux && [[ -r /etc/os-release ]] &&
+        (. /etc/os-release && [[ $NAME == Ubuntu ]])
 }
 
 function lk_is_wsl() {
@@ -56,7 +47,8 @@ function lk_is_wsl() {
 }
 
 function lk_is_virtual() {
-    lk_is_linux && grep -Eq '^flags[[:blank:]]*:.*\<hypervisor\>' /proc/cpuinfo
+    lk_is_linux &&
+        grep -Eq "^flags$S*:.*\\<hypervisor\\>" /proc/cpuinfo
 }
 
 function lk_is_qemu() {
@@ -66,8 +58,8 @@ function lk_is_qemu() {
 
 # lk_command_exists COMMAND...
 function lk_command_exists() {
-    [ $# -gt 0 ] || return
-    while [ $# -gt 0 ]; do
+    (($#)) || return
+    while (($#)); do
         type -P "$1" >/dev/null || return
         shift
     done
@@ -77,5 +69,3 @@ function lk_command_exists() {
 function lk_version_at_least() {
     printf '%s\n' "$@" | sort -V | head -n1 | grep -Fx "$2" >/dev/null
 }
-
-#### Reviewed: 2021-11-22

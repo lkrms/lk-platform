@@ -184,7 +184,7 @@ while getopts ":u:o:c:p:s:xk:y" OPT; do
         LK_PACKAGES_FILE=$OPTARG
         ;;
     y)
-        LK_NO_INPUT=1
+        LK_NO_INPUT=Y
         ;;
     \? | :)
         lk_usage

@@ -99,20 +99,19 @@ function _lk_tty_margin_add() {
 # Run COMMAND and add MARGIN spaces before each line of output, trapping
 # SIGWINCH and using stty to adjust the reported terminal size.
 function lk_tty_add_margin() { (
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     [ $# -gt 1 ] && ((_MARGIN = $1)) ||
-        lk_err "invalid arguments" || eval "$_lk_x_return"
+        lk_err "invalid arguments" || return
     shift
     ((_MARGIN > 0)) && _TTY=$(lk_get_tty) || {
         _lk_tty_margin_add "$@"
-        eval "$_lk_x_return"
+        return
     }
     _RESIZED=
     _CLEAR_SH="trap - SIGWINCH; _lk_tty_margin_clear $_MARGIN"
     _SIGNAL=$(kill -L SIGWINCH) &&
         trap "_lk_tty_margin_apply $_MARGIN resize" SIGWINCH &&
         _lk_tty_margin_apply "$_MARGIN" start &&
-        trap "$_CLEAR_SH" EXIT || eval "$_lk_x_return"
+        trap "$_CLEAR_SH" EXIT || return
     # Run the command in the background because only the foreground process
     # receives SIGWINCH, but remain interactive by redirecting terminal input to
     # the background process
@@ -129,13 +128,11 @@ function lk_tty_add_margin() { (
         # Continue if interrupted by SIGWINCH
         [ "$STATUS" -eq $((128 + _SIGNAL)) ] || break
     done
-    (exit "$STATUS")
-    eval "$_lk_x_return"
+    exit "$STATUS"
 ); }
 
 # lk_tty_group [[-n] MESSAGE [MESSAGE2 [COLOUR]]]
 function lk_tty_group() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     local NEST=
     [ "${1-}" != -n ] || { NEST=1 && shift; }
     _LK_TTY_GROUP=$((${_LK_TTY_GROUP:--1} + 1))
@@ -145,15 +142,12 @@ function lk_tty_group() {
         lk_tty_print "$@"
         _LK_TTY_NEST[_LK_TTY_GROUP]=$NEST
     }
-    eval "$_lk_x_return"
 }
 
 # lk_tty_group_end [COUNT]
 function lk_tty_group_end() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _LK_TTY_GROUP=$((${_LK_TTY_GROUP:-0} - ${1:-1}))
     ((_LK_TTY_GROUP > -1)) || unset _LK_TTY_GROUP _LK_TTY_NEST
-    eval "$_lk_x_return"
 }
 
 # lk_tty_print [MESSAGE [MESSAGE2 [COLOUR]]]
@@ -178,11 +172,10 @@ function lk_tty_group_end() {
 # - _LK_TTY_MESSAGE_COLOUR: override MESSAGE colour
 # - _LK_TTY_COLOUR2: override MESSAGE2 colour (supersedes _LK_TTY_COLOUR)
 function lk_tty_print() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     # Print a blank line and return if nothing was passed
     [ $# -gt 0 ] || {
         echo >&"${_LK_FD-2}"
-        eval "$_lk_x_return"
+        return
     }
     # If nested grouping is active and lk_tty_print isn't already in its own
     # call stack, bump lk_tty_print -> lk_tty_detail and lk_tty_detail ->
@@ -198,7 +191,7 @@ function lk_tty_print() {
         esac
         [ -z "${FUNC-}" ] || {
             "$FUNC" "$@"
-            eval "$_lk_x_return"
+            return
         }
     }
     local MESSAGE=${1-} MESSAGE2=${2-} \
@@ -254,18 +247,15 @@ function lk_tty_print() {
             _lk_tty_hostname_apply
         echo "$_LK_TTY_HOSTNAME${MESSAGE//$'\n'/$_LK_TTY_HOSTNAME_INDENT}"
     fi >&"${_LK_FD-2}"
-    eval "$_lk_x_return"
 }
 
 # lk_tty_detail MESSAGE [MESSAGE2 [COLOUR]]
 function lk_tty_detail() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     local _LK_TTY_COLOUR_ORIG=${_LK_COLOUR-}
     _LK_TTY_PREFIX1=${_LK_TTY_PREFIX2- -> } \
         _LK_COLOUR=${_LK_ALT_COLOUR-} \
         _LK_TTY_MESSAGE_COLOUR=${_LK_TTY_MESSAGE_COLOUR-} \
         lk_tty_print "$@"
-    eval "$_lk_x_return"
 }
 
 function _lk_tty_detail2() {
@@ -279,7 +269,6 @@ function _lk_tty_detail2() {
 # - lk_tty_list @ [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]] [-- [ARG...]]
 # - lk_tty_list [ARRAY [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
 function lk_tty_list() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     [ "${1-}" != @ ] || {
         local IFS=' ' _ITEMS=()
         for ((i = 2; i <= $#; i++)); do
@@ -304,10 +293,10 @@ function lk_tty_list() {
     }
     if [ "$_ARRAY" = - ]; then
         [ ! -t 0 ] && lk_mapfile _ITEMS ||
-            lk_err "no input" || eval "$_lk_x_return"
+            lk_err "no input" || return
     elif [ "$_ARRAY" != @ ]; then
         _ARRAY="${_ARRAY}[@]"
-        _ITEMS=(${!_ARRAY+"${!_ARRAY}"}) || eval "$_lk_x_return"
+        _ITEMS=(${!_ARRAY+"${!_ARRAY}"}) || return
     fi
     if [[ $_MESSAGE != *$'\n'* ]]; then
         _INDENT=$((${#_PREFIX} - 2))
@@ -320,7 +309,7 @@ function lk_tty_list() {
         _LIST=$(printf '\n%s' "${_ITEMS[@]}")
         ! lk_command_exists column expand ||
             _LIST=$'\n'$(COLUMNS=$((_COLUMNS > 0 ? _COLUMNS : 0)) \
-                column <<<"$_LIST" | expand) || eval "$_lk_x_return"
+                column <<<"$_LIST" | expand) || return
     }
     echo "$(
         _LK_FD=1
@@ -330,16 +319,13 @@ function lk_tty_list() {
             _LK_TTY_PREFIX=$(printf "%$((_INDENT > 0 ? _INDENT : 0))s") \
                 lk_tty_detail "($(lk_plural -v _ITEMS "$_SINGLE" "$_PLURAL"))"
     )" >&"${_LK_FD-2}"
-    eval "$_lk_x_return"
 }
 
 # - lk_tty_list_detail - [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]
 # - lk_tty_list_detail @ [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]] [-- [ARG...]]
 # - lk_tty_list_detail [ARRAY [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
 function lk_tty_list_detail() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _LK_STACK_DEPTH=1 _LK_TTY_COMMAND=lk_tty_detail lk_tty_list "$@"
-    eval "$_lk_x_return"
 }
 
 # lk_tty_dump OUTPUT MESSAGE1 MESSAGE2 COLOUR OUTPUT_COLOUR COMMAND [ARG...]
@@ -352,7 +338,6 @@ function lk_tty_list_detail() {
 # _LK_TTY_COLOUR and _LK_TTY_OUTPUT_COLOUR to specify an empty colour for COLOUR
 # and OUTPUT_COLOUR respectively.
 function lk_tty_dump() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     local _MESSAGE1=${2-} _MESSAGE2=${3-} _INDENT _CMD \
         _COLOUR=${_LK_TTY_OUTPUT_COLOUR-${_LK_TTY_MESSAGE_COLOUR-${5-}}}
     unset LK_TTY_DUMP_STATUS
@@ -382,43 +367,36 @@ function lk_tty_dump() {
         *)
             ${_CMD+"${_CMD[@]}"} cat <<<"${1%$'\n'}"
             ;;
-        esac || eval "$_lk_x_return"
+        esac || return
         printf '%s' "$LK_RESET"
     } >&"${_LK_FD-2}"
     _LK_TTY_PREFIX1=${_LK_TTY_SUFFIX1-<<< } \
         _LK_TTY_PREFIX2=${_LK_TTY_SUFFIX2- << } \
         _LK_TTY_PREFIX3=${_LK_TTY_SUFFIX3-  < } \
         ${_LK_TTY_COMMAND:-lk_tty_print} "" "$_MESSAGE2" ${4:+"$4"}
-    eval "$_lk_x_return"
 }
 
 # lk_tty_dump_detail [OPTIONS]
 #
 # See lk_tty_dump for details.
 function lk_tty_dump_detail() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _LK_STACK_DEPTH=1 _LK_TTY_COMMAND=lk_tty_detail lk_tty_dump "$@"
-    eval "$_lk_x_return"
 }
 
 # lk_tty_file FILE [COLOUR [FILE_COLOUR]]
 function lk_tty_file() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     [ -n "${1-}" ] && lk_sudo -f test -r "${1-}" ||
-        lk_err "file not found: ${1-}" || eval "$_lk_x_return"
+        lk_err "file not found: ${1-}" || return
     local IFS MESSAGE2
     unset IFS
     ! lk_verbose || { MESSAGE2=$(lk_sudo -f ls -ld "$1") &&
-        MESSAGE2=${MESSAGE2/"$1"/$LK_BOLD$1$LK_RESET}; } || eval "$_lk_x_return"
+        MESSAGE2=${MESSAGE2/"$1"/$LK_BOLD$1$LK_RESET}; } || return
     lk_sudo -f cat "$1" | lk_tty_dump - "$1" "${MESSAGE2-}" "${@:2}"
-    eval "$_lk_x_return"
 }
 
 # lk_tty_file_detail FILE [COLOUR [FILE_COLOUR]]
 function lk_tty_file_detail() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _LK_STACK_DEPTH=1 _LK_TTY_COMMAND=lk_tty_detail lk_tty_file "$@"
-    eval "$_lk_x_return"
 }
 
 # - lk_tty_run [-SHIFT]                         COMMAND [ARG...]
@@ -430,14 +408,13 @@ function lk_tty_file_detail() {
 # ARG is the 1-based argument to remove or REPLACE (starting with COMMAND or the
 # first argument not removed by SHIFT).
 function lk_tty_run() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     local IFS SHIFT= TRANSFORM= CMD i REGEX='([0-9]+)=([^:]*)'
     unset IFS
     [[ ${1-} != -* ]] ||
         { [[ $1 =~ ^-(([0-9]+)(:($REGEX(:$REGEX)*))?|($REGEX(:$REGEX)*))$ ]] &&
             SHIFT=${BASH_REMATCH[2]} &&
             TRANSFORM=${BASH_REMATCH[4]:-${BASH_REMATCH[1]}} &&
-            shift; } || lk_err "invalid arguments" || eval "$_lk_x_return"
+            shift; } || lk_err "invalid arguments" || return
     CMD=("$@")
     [ -z "$SHIFT" ] || shift "$SHIFT"
     while [[ $TRANSFORM =~ ^$REGEX:?(.*) ]]; do
@@ -468,7 +445,6 @@ function lk_tty_run() {
     done
     ${_LK_TTY_COMMAND:-lk_tty_print} \
         "Running:" "$(lk_fold_quote_options -120 "$@")"
-    eval "$_lk_x_restore"
     "${CMD[@]}"
 }
 
@@ -476,9 +452,7 @@ function lk_tty_run() {
 #
 # See lk_tty_run for details.
 function lk_tty_run_detail() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _LK_STACK_DEPTH=1 _LK_TTY_COMMAND=lk_tty_detail lk_tty_run "$@"
-    eval "$_lk_x_return"
 }
 
 # - lk_tty_pairs [-d DELIM] [COLOUR [--] [KEY VALUE...]]
@@ -493,7 +467,6 @@ function lk_tty_run_detail() {
 # default value is used. Characters in DELIM and IFS must not appear in any KEY
 # or VALUE.
 function lk_tty_pairs() { (
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     local IFS=${IFS:-$'\t'} LF COLOUR ARGS= _IFS TEMP LEN KEY VALUE
     unset LF COLOUR
     [ "${1-}" != -d ] || { LF=${2::1} && shift 2; }
@@ -514,7 +487,7 @@ function lk_tty_pairs() { (
     else if ($i == "]") { first = "]" }
     else { middle = middle $i } }
   printf("%s%s%s.\n", first, middle, last) }') && IFS=${_IFS%.} ||
-        lk_err "invalid arguments" || eval "$_lk_x_return"
+        lk_err "invalid arguments" || return
     if [ $# -gt 0 ]; then
         local SEP=${IFS::1}
         lk_mktemp_with TEMP printf "%s${SEP//%/%%}%s\n" "$@"
@@ -522,18 +495,16 @@ function lk_tty_pairs() { (
         lk_mktemp_with TEMP cat
     else
         true
-        eval "$_lk_x_return"
-    fi || eval "$_lk_x_return"
+        return
+    fi || return
     # Align the length of the longest KEY to the nearest tab
     LEN=$(awk -F"[$IFS]+" -v "RS=${LF:-\\0}" -v m=2 '
     { if ((l = length($1)) > m) m = l }
-END { g = (m + 2) % 4; print (g ? m + 4 - g : m) + 1 }' "$TEMP") ||
-        eval "$_lk_x_return"
+END { g = (m + 2) % 4; print (g ? m + 4 - g : m) + 1 }' "$TEMP") || return
     while read -r -d "$LF" KEY VALUE; do
         _LK_TTY_ONE_LINE=1 ${_LK_TTY_COMMAND:-lk_tty_print} \
             "$(printf "%-${LEN}s" "$KEY:")" "$VALUE" ${COLOUR+"$COLOUR"}
     done <"$TEMP"
-    eval "$_lk_x_return"
 ); }
 
 # - lk_tty_pairs_detail [-d DELIM] [COLOUR [--] [KEY VALUE...]]
@@ -541,9 +512,7 @@ END { g = (m + 2) % 4; print (g ? m + 4 - g : m) + 1 }' "$TEMP") ||
 #
 # See lk_tty_pairs for details.
 function lk_tty_pairs_detail() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _LK_STACK_DEPTH=1 _LK_TTY_COMMAND=lk_tty_detail lk_tty_pairs "$@"
-    eval "$_lk_x_return"
 }
 
 # lk_tty_diff [-L LABEL1 [-L LABEL2]] [FILE1] FILE2 [MESSAGE]
@@ -552,41 +521,36 @@ function lk_tty_pairs_detail() {
 # from input. If FILE2 is the only argument, use FILE2.orig as FILE1 if it
 # exists and has a size greater than zero, otherwise call lk_tty_file FILE2.
 function lk_tty_diff() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     local LABEL1 LABEL2
     [ "${1-}" != -L ] || { LABEL1=$2 && shift 2; }
     [ "${1-}" != -L ] || { LABEL2=$2 && shift 2; }
-    [ $# -gt 0 ] || lk_err "invalid arguments" || eval "$_lk_x_return"
+    [ $# -gt 0 ] || lk_err "invalid arguments" || return
     [ $# -gt 1 ] ||
         if lk_sudo -f test -s "$1.orig"; then
             set -- "$1.orig" "$@"
         else
             lk_tty_file "$1"
-            eval "$_lk_x_return"
+            return
         fi
     local FILE1=${1:--} FILE2=${2:--} MESSAGE=${3-}
     [ "$FILE1:$FILE2" != -:- ] ||
-        lk_err "FILE1 and FILE2 cannot both be read from input" ||
-        eval "$_lk_x_return"
+        lk_err "FILE1 and FILE2 cannot both be read from input" || return
     [[ :${#FILE1}${FILE1:0:1}:${#FILE2}${FILE2:0:1}: != *:1-:* ]] ||
         [ ! -t 0 ] ||
-        lk_err "input is a terminal" || eval "$_lk_x_return"
+        lk_err "input is a terminal" || return
     [ "$FILE1" != - ] || { FILE1=/dev/stdin && LABEL1="${LABEL1:-<input>}"; }
     [ "$FILE2" != - ] || { FILE2=/dev/stdin && LABEL2="${LABEL2:-<input>}"; }
     lk_tty_dump - \
         "${MESSAGE:-${LABEL1:-$FILE1}$LK_BOLD -> ${LABEL2:-$FILE2}$LK_RESET}" \
         "" "" "" lk_diff "$FILE1" "$FILE2"
-    eval "$_lk_x_return"
 }
 
 function lk_tty_diff_detail() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _LK_STACK_DEPTH=1 _LK_TTY_COMMAND=lk_tty_detail lk_tty_diff "$@"
-    eval "$_lk_x_return"
 }
 
 function _lk_tty_log() {
-    local STATUS=${_lk_x_status:-$?} BOLD= IFS=' ' \
+    local STATUS=$? BOLD= IFS=' ' \
         _LK_TTY_PREFIX=${_LK_TTY_PREFIX-$1} \
         _LK_TTY_MESSAGE_COLOUR=$2 _LK_TTY_COLOUR2=${_LK_TTY_COLOUR2-}
     shift 2
@@ -601,30 +565,22 @@ function _lk_tty_log() {
 
 # lk_tty_success [-r] [-n] MESSAGE [MESSAGE2...]
 function lk_tty_success() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _lk_tty_log " // " "$_LK_SUCCESS_COLOUR" "$@"
-    eval "$_lk_x_return"
 }
 
 # lk_tty_log [-r] [-n] MESSAGE [MESSAGE2...]
 function lk_tty_log() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _lk_tty_log " :: " "${_LK_TTY_COLOUR-$_LK_COLOUR}" "$@"
-    eval "$_lk_x_return"
 }
 
 # lk_tty_warning [-r] [-n] MESSAGE [MESSAGE2...]
 function lk_tty_warning() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _lk_tty_log "  ! " "$_LK_WARNING_COLOUR" "$@"
-    eval "$_lk_x_return"
 }
 
 # lk_tty_error [-r] [-n] MESSAGE [MESSAGE2...]
 function lk_tty_error() {
-    { eval "$(lk_x_off)"; } 2>/dev/null 4>&2
     _lk_tty_log " !! " "$_LK_ERROR_COLOUR" "$@"
-    eval "$_lk_x_return"
 }
 
 #### Reviewed: 2021-11-02

@@ -20,7 +20,7 @@ EOF
 MAILDIR=~/Maildir
 COURIER_PREFIX=INBOX
 
-LK_DRY_RUN=1
+LK_DRY_RUN=Y
 
 lk_getopt
 eval "set -- $LK_GETOPT"
