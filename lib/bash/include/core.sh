@@ -2203,20 +2203,20 @@ function lk_tty_read_password() {
 
 # lk_tty_yn [-NOTE] PROMPT [DEFAULT [READ_ARG...]]
 function lk_tty_yn() {
-    local IFS=$' \t\n' _NOTE
-    [[ ${1-} != -* ]] || { _NOTE=${1#-} && shift; }
+    local IFS=$' \t\n' NOTE
+    [[ ${1-} != -* ]] || { NOTE=${1#-} && shift; }
     (($#)) || lk_bad_args || return
-    local YES="[yY]([eE][sS])?" NO="[nN][oO]?"
-    ! lk_no_input || [[ ! ${2-} =~ ^($YES|$NO)$ ]] || {
-        [[ $2 =~ ^$YES$ ]]
+    local _Y="[yY]([eE][sS])?" _N="[nN][oO]?"
+    ! lk_no_input || [[ ! ${2-} =~ ^($_Y|$_N)$ ]] || {
+        [[ $2 =~ ^$_Y$ ]]
         return
     }
     local _PROMPT=("$1") DEFAULT PROMPT REPLY
-    [[ -z ${_NOTE:+1} ]] || _PROMPT+=("$LK_DIM($_NOTE)$LK_UNDIM")
-    if [[ ${2-} =~ ^$YES$ ]]; then
+    [[ -z ${NOTE:+1} ]] || _PROMPT+=("$LK_DIM($NOTE)$LK_UNDIM")
+    if [[ ${2-} =~ ^$_Y$ ]]; then
         _PROMPT+=("[Y/n]")
         DEFAULT=Y
-    elif [[ ${2-} =~ ^$NO$ ]]; then
+    elif [[ ${2-} =~ ^$_N$ ]]; then
         _PROMPT+=("[y/N]")
         DEFAULT=N
     else
@@ -2226,9 +2226,61 @@ function lk_tty_yn() {
     while :; do
         IFS= read -rep "$PROMPT" "${@:3}" REPLY 2>&"${_LK_FD-2}" || return
         [[ -n ${REPLY:+1} ]] || REPLY=${DEFAULT-}
-        [[ ! $REPLY =~ ^$YES$ ]] || return 0
-        [[ ! $REPLY =~ ^$NO$ ]] || return 1
+        [[ ! $REPLY =~ ^$_Y$ ]] || return 0
+        [[ ! $REPLY =~ ^$_N$ ]] || return 1
     done
+}
+
+# lk_tty_ynav [-NOTE] ANSWER_NAME PROMPT [DEFAULT [READ_ARG...]]
+function lk_tty_ynav() {
+    local IFS=$' \t\n' NOTE
+    [[ ${1-} != -* ]] || { NOTE=${1#-} && shift; }
+    (($# > 1)) || lk_bad_args || return
+    local _Y="[yY]([eE][sS])?" _N="[nN][oO]?" \
+        _A="[aA]([lL][wW][aA][yY][sS])?" _V="([vV]|[nN][eE][vV][eE][rR])" \
+        FILE=${XDG_CONFIG_HOME:-~/.config}/lk-platform/answers ANSWER DEFAULT
+    ANSWER=$([[ ! -e $FILE ]] ||
+        awk -F= -v "answer=$(lk_lower $1)" -v "regex=^($_Y|$_N|$_A|$_V)\$" \
+            'tolower($1)==answer&&$2~regex{print$2;exit}' "$FILE") || ANSWER=
+    DEFAULT=${ANSWER:-${3-}}
+    [[ -z $ANSWER ]] &&
+        { ! lk_no_input || [[ ! $DEFAULT =~ ^($_Y|$_N|$_A|$_V)$ ]]; } || {
+        [[ $DEFAULT =~ ^($_Y|$_A)$ ]]
+        return
+    }
+    local _PROMPT=("$2") PROMPT REPLY
+    [[ -z ${NOTE:+1} ]] || _PROMPT+=("$LK_DIM($NOTE)$LK_UNDIM")
+    if [[ $DEFAULT =~ ^$_Y$ ]]; then
+        _PROMPT+=("[Y/n/a/v]")
+        DEFAULT=Y
+    elif [[ $DEFAULT =~ ^$_N$ ]]; then
+        _PROMPT+=("[y/N/a/v]")
+        DEFAULT=N
+    elif [[ $DEFAULT =~ ^$_A$ ]]; then
+        _PROMPT+=("[y/n/A/v]")
+        DEFAULT=A
+    elif [[ $DEFAULT =~ ^$_V$ ]]; then
+        _PROMPT+=("[y/n/a/V]")
+        DEFAULT=V
+    else
+        _PROMPT+=("[y/n/a/v]")
+    fi
+    PROMPT=$(_lk_tty_prompt)
+    while :; do
+        IFS= read -rep "$PROMPT" "${@:4}" REPLY 2>&"${_LK_FD-2}" || return
+        [[ -n ${REPLY:+1} ]] || REPLY=${DEFAULT-}
+        [[ ! $REPLY =~ ^$_Y$ ]] || return 0
+        [[ ! $REPLY =~ ^$_N$ ]] || return 1
+        [[ ! $REPLY =~ ^$_A$ ]] || { REPLY=Y && break; }
+        [[ ! $REPLY =~ ^$_V$ ]] || { REPLY=N && break; }
+    done
+    { [[ -d ${FILE%/*} ]] || install -d "${FILE%/*}"; } &&
+        { [[ -e $FILE ]] || touch "$FILE"; } &&
+        (lk_mktemp_with ANSWERS \
+            awk -F= -v "answer=$(lk_lower $1)" -v "reply=$REPLY" -v OFS== \
+            'tolower($1)==answer{next}{print}END{print answer,reply;exit}' "$FILE" &&
+            cp "$ANSWERS" "$FILE") || true
+    [[ $REPLY == Y ]]
 }
 
 # lk_trace [MESSAGE]
