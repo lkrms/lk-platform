@@ -412,6 +412,7 @@ AUR_PACKAGES+=(
 
     #
     nodejs-generator-code
+    ovsx
     vsce
 
     # Platforms
