@@ -3,6 +3,8 @@
 lk_bin_depth=1 . lk-bash-load.sh || exit
 lk_require linux
 
+lk_assert_is_linux
+
 shopt -s nullglob
 
 LK_USAGE="\

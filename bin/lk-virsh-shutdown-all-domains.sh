@@ -16,6 +16,8 @@ export LK_BASE
 . "$LK_BASE/lib/bash/common.sh"
 lk_require linux
 
+lk_assert_is_linux
+
 unset _USER
 lk_root || {
     _USER=
