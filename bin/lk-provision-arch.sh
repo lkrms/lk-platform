@@ -40,7 +40,7 @@ if lk_is_bootstrap; then
     lk_tty_print
 else
     function systemctl_enable() {
-        local NO_START_REGEX='\<NetworkManager-dispatcher\>'
+        local NO_START_REGEX='^(NetworkManager-dispatcher|lightdm)$'
         lk_systemctl_exists "$1" || return 0
         if [[ $1 =~ $NO_START_REGEX ]]; then
             lk_systemctl_enable ${2:+-n "$2"} "$1"

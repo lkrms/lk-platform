@@ -278,21 +278,23 @@ if lk_node_service_enabled desktop; then
 
         # Selected works of https://github.com/vinceliuice
         qogir-gtk-theme
-        qogir-icon-theme
+        #qogir-icon-theme
         tela-icon-theme
-        vimix-cursors
-        whitesur-gtk-theme
-        whitesur-icon-theme
-        whitesur-cursor-theme-git
-        mojave-gtk-theme
-        mcmojave-circle-icon-theme
-        mcmojave-cursors
+        #vimix-cursors
+
+        #whitesur-gtk-theme
+        #whitesur-icon-theme
+        #whitesur-cursor-theme-git
+        #mojave-gtk-theme
+        #mcmojave-circle-icon-theme # Requires numix-gtk-theme-git
+        #mcmojave-cursors
 
         #numix-gtk-theme-git
         #sound-theme-smooth
-        wiki-loves-earth-wallpapers
-        wiki-loves-monuments-wallpapers
         #zuki-themes
+
+        #wiki-loves-earth-wallpapers
+        #wiki-loves-monuments-wallpapers
     )
 fi
 
