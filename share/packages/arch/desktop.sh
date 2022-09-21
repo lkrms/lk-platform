@@ -16,12 +16,12 @@ PAC_NO_REPLACE=(
 
 lk_is_virtual || {
     PAC_PACKAGES+=(
+        glmark2
         guvcview # Webcam utility
         linssid  # Wi-Fi scanner
     )
     AUR_PACKAGES+=(
         geekbench
-        glmark2
     )
     ! lk_system_has_intel_graphics || PAC_PACKAGES+=(
         clinfo

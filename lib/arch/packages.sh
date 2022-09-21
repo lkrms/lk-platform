@@ -170,6 +170,10 @@ AUR_PACKAGES+=(
     squid
 )
 
+! lk_node_service_enabled docker || PAC_PACKAGES+=(
+    docker
+)
+
 ! lk_node_service_enabled libvirt || PAC_PACKAGES+=(
     libvirt
     qemu-desktop
