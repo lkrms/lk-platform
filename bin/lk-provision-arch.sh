@@ -461,6 +461,8 @@ $LK_NODE_HOSTNAME" &&
         FILES=("$LK_BASE/share/tlp.d"/*-{stable,quiet}-*.conf)
         ! lk_is_portable ||
             FILES+=("$LK_BASE/share/tlp.d"/*-battery-thresholds.conf)
+        lk_node_service_enabled minimal ||
+            FILES+=("$LK_BASE/share/tlp.d"/*-maximum-performance.conf)
         lk_file_replace "$FILE" \
             < <(lk_arr FILES | sort | tr '\n' '\0' | xargs -0 cat)
         systemctl_mask systemd-rfkill.service

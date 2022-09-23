@@ -40,7 +40,6 @@ PAC_KEEP=(
     #
     mongodb-bin
     mongodb-tools-bin
-    studio-3t
 
     #
     memtest86-efi
@@ -356,7 +355,6 @@ PAC_PACKAGES+=(
     python-requests
     python-virtualenv
     python-xmlschema
-    python2
 
     #
     perl-tidy
