@@ -98,6 +98,7 @@ Options:
   -y                do not prompt for input
 
 Useful kernel parameters:
+  intel_idle.max_cstate=2   silence coil whine from C-states above C2
   usbcore.autosuspend=5     wait 5 seconds to suspend (default: 2, never: -1)
   libata.force=3.00:noncq   disable NCQ on ATA device 3.00
   mce=dont_log_ce           do not log corrected machine check errors
