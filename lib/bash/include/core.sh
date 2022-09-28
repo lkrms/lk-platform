@@ -206,7 +206,7 @@ function lk_is_virtual() {
 
 function lk_is_qemu() {
     lk_is_virtual &&
-        grep -iq QEMU /sys/devices/virtual/dmi/id/*_vendor 2>/dev/null
+        grep -Fxiq QEMU /sys/devices/virtual/dmi/id/*_vendor 2>/dev/null
 }
 
 # lk_command_exists COMMAND...

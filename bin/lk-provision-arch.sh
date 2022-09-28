@@ -40,7 +40,7 @@ if lk_is_bootstrap; then
     lk_tty_print
 else
     function systemctl_enable() {
-        local NO_START_REGEX='\<NetworkManager-dispatcher\>'
+        local NO_START_REGEX='^(NetworkManager-dispatcher|lightdm)$'
         lk_systemctl_exists "$1" || return 0
         if [[ $1 =~ $NO_START_REGEX ]]; then
             lk_systemctl_enable ${2:+-n "$2"} "$1"
@@ -461,6 +461,8 @@ $LK_NODE_HOSTNAME" &&
         FILES=("$LK_BASE/share/tlp.d"/*-{stable,quiet}-*.conf)
         ! lk_is_portable ||
             FILES+=("$LK_BASE/share/tlp.d"/*-battery-thresholds.conf)
+        lk_node_service_enabled minimal ||
+            FILES+=("$LK_BASE/share/tlp.d"/*-maximum-performance.conf)
         lk_file_replace "$FILE" \
             < <(lk_arr FILES | sort | tr '\n' '\0' | xargs -0 cat)
         systemctl_mask systemd-rfkill.service
@@ -1067,6 +1069,24 @@ done\""
     fi
 
     if lk_pac_installed docker; then
+        FILE=/etc/docker/daemon.json
+        lk_node_is_router &&
+            JQ='. + {"iptables":false,"ip6tables":false}' ||
+            JQ='del(.iptables,.ip6tables)'
+        lk_mktemp_with _FILE jq "$JQ" < <(
+            if [[ -e $FILE ]]; then
+                cat "$FILE"
+            else
+                echo "{}"
+            fi
+        )
+        if [[ ! -e $FILE ]] ||
+            ! diff -q <(jq <"$FILE") "$_FILE" >/dev/null; then
+            lk_install -d -m 00755 "${FILE%/*}"
+            lk_install -m 00644 "$FILE"
+            lk_file_replace -f "$_FILE" "$FILE"
+            SERVICE_RESTART+=(docker)
+        fi
         lk_user_in_group docker ||
             sudo usermod --append --groups docker "$USER"
         ! memory_at_least 7 || SERVICE_ENABLE+=(

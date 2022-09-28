@@ -193,11 +193,11 @@ function lk_wp_flush() {
     lk_wp_flush_opcache || true
     lk_tty_print "Flushing WordPress rewrite rules and caches"
     lk_tty_detail "Flushing object cache"
-    lk_report_error -q wp cache flush || return
+    lk_report_error -q wp cache flush --no-skip-plugins || return
     lk_tty_detail "Deleting transients"
-    lk_report_error -q wp transient delete --all || return
+    lk_report_error -q wp transient delete --all --no-skip-plugins || return
     lk_tty_detail "Flushing rewrite rules"
-    lk_report_error -q wp rewrite flush --hard || return
+    lk_report_error -q wp rewrite flush --hard --no-skip-plugins || return
     if wp cli has-command "w3-total-cache flush" 2>/dev/null; then
         lk_tty_detail "Flushing W3 Total Cache"
         lk_report_error -q wp w3-total-cache flush all || true

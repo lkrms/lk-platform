@@ -40,7 +40,6 @@ PAC_KEEP=(
     #
     mongodb-bin
     mongodb-tools-bin
-    studio-3t
 
     #
     memtest86-efi
@@ -55,6 +54,7 @@ PAC_NO_REPLACE=(
 
 lk_is_virtual || {
     PAC_PACKAGES+=(
+        glmark2
         guvcview # Webcam utility
         linssid  # Wi-Fi scanner
 
@@ -64,7 +64,6 @@ lk_is_virtual || {
     )
     AUR_PACKAGES+=(
         geekbench
-        glmark2
     )
     ! lk_system_has_intel_graphics || PAC_PACKAGES+=(
         clinfo
@@ -356,7 +355,6 @@ PAC_PACKAGES+=(
     python-requests
     python-virtualenv
     python-xmlschema
-    python2
 
     #
     perl-tidy
@@ -390,6 +388,7 @@ AUR_PACKAGES+=(
     php7-xdebug # Required for PHP 7.4 debugging
     phpdoc-phar
     python-demjson3
+    python-pywebview
     python39 # azure-functions-core-tools-bin dependency
     rollup
     ruby-rubocop
@@ -412,6 +411,7 @@ AUR_PACKAGES+=(
 
     #
     nodejs-generator-code
+    ovsx
     vsce
 
     # Platforms

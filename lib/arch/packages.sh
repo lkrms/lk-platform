@@ -7,49 +7,62 @@
 IFS=,
 PAC_REPOS=(
     ${LK_ARCH_REPOS-}
-    ${PAC_REPOS[@]+"${PAC_REPOS[@]}"}
+    ${PAC_REPOS+"${PAC_REPOS[@]}"}
 )
 unset IFS
 
-PAC_PACKAGES=(
-    #### Bare necessities
-    #
-    base
-    linux
-    mkinitcpio
+PAC_PACKAGES=(${PAC_PACKAGES+"${PAC_PACKAGES[@]}"})
+PAC_REJECT=(${PAC_REJECT+"${PAC_REJECT[@]}"})
+PAC_KEEP=(${PAC_KEEP+"${PAC_KEEP[@]}"})
+PAC_NO_REPLACE=(${PAC_NO_REPLACE+"${PAC_NO_REPLACE[@]}"})
+AUR_PACKAGES=(${AUR_PACKAGES+"${AUR_PACKAGES[@]}"})
+
+# - `:BM` = bare metal, i.e. only installed on physical hardware
+PAC_PACKAGES+=(
+    # Essentials
+    base                 # Includes coreutils, findutils, glibc, procps-ng, psmisc, util-linux, ...
+    linux                #
+    linux-firmware:BM    #
+    mkinitcpio           # Specify preferred initramfs package explicitly
+    kernel-modules-hook- # Keep the running kernel's modules installed after the kernel package is upgraded
     grub
     efibootmgr
-    kernel-modules-hook
 
-    #### Bootstrap requirements
-    #
-    sudo
+    # Services
     networkmanager
-    git
-    openssh
-    perl
-
-    ### Essential services
-    #
-    atop
-    logrotate
     ntp
+    logrotate
 
-    ### Utilities
-    #
+    # Utilities
     bc
+    curl
     diffutils
     file
+    git
+    inetutils # Provides hostname, telnet
     jc
+    jq
+    lftp
+    lynx
     mediainfo
+    ncdu-
+    openbsd-netcat
+    openssh #
+    p7zip   # Provides 7z
+    perl
     pv
     rsync
+    sudo
     time
-    trash-cli
+    trash-cli #
+    unzip     # Provides zip
+    wget      #
+    wimlib    # Provides wimextract
+    yq
 
     # Shell
     bash-completion
-    byobu
+    byobu-
     libnewt # Provides whiptail
     zsh
 
@@ -63,115 +76,113 @@ PAC_PACKAGES=(
     vim
 
     # System
-    acpi
-    dmidecode
-    htop
-    hwinfo
+    acpi-        # Show battery status
+    cpupower-:BM # Show and set processor frequency- and power-related values
+    dmidecode    #
+    ethtool:BM
+    fwupd:BM
+    hddtemp:BM
+    hdparm:BM
+    hwinfo-       # openSUSE's hardware information tool
+    lm_sensors:BM #
+    msr-tools     # Access processor MSRs ("Model Specific Registers") like BD PROCHOT
+    nvme-cli:BM
+    powertop:BM
+    smartmontools:BM #
+    sysfsutils       # e.g. to list options set for a loaded kernel module: `systool -v -m iwlwifi`
+    tlp:BM
+    tlp-rdw:BM
+    udisks2:BM # Allow fwupd to perform UEFI firmware upgrades
+    usbutils
+    wireless-regdb:BM
+
+    # Monitoring
+    atop-
+    htop-
     iotop
     lsof
-    msr-tools
-    ncdu
-    pcp
-    ps_mem
-    s-tui
-    sysfsutils
-    sysstat
+    ps_mem-
+    s-tui    # Monitor CPU frequency and temperature while toggling between stressed and regular operation
+    sysstat- # Provides iostat, pidstat, sar
 
-    # Network
-    bind # Provides dig
-    conntrack-tools
-    curl
-    inetutils # Provides hostname, telnet
-    ipset     # Used in conjunction with iptables by fail2ban
-    iptables-nft
-    lftp
-    lynx
-    ndisc6 # Provides rdisc6
-    nfs-utils
-    nmap
-    openbsd-netcat
+    # Networking
+    bind             # Provides dig
+    conntrack-tools- #
+    ipset-           # Used in conjunction with iptables by fail2ban
+    iptables-nft     #
+    ndisc6-          # Provides rdisc6
+    nmap-
     tcpdump
     traceroute
-    wget
     whois
-    wol
+    wol-
 
     # Network monitoring
-    iftop   # Reports on traffic by service and host
-    nethogs # Reports on traffic by process ('nettop')
-    nload   # Reports on traffic by interface
+    iftop-  # Monitor traffic by service and host
+    nethogs # Monitor traffic by process (similar to nettop on macOS)
+    nload-  # Monitor traffic by interface
 
-    # 7z/zip/wimextract
-    p7zip
-    unzip
-    wimlib
-
-    # json/yml/xml
-    jq
-    yq
+    # Partitions
+    gptfdisk:BM # Provides sgdisk
+    lvm2-:BM
+    mdadm-:BM
+    parted:BM
 
     # Filesystems
-    btrfs-progs
+    btrfs-progs-
     dosfstools
     e2fsprogs
     exfatprogs
-    f2fs-tools
-    jfsutils
-    nilfs-utils
+    f2fs-tools-
+    jfsutils-
+    nilfs-utils-
     ntfs-3g
-    reiserfsprogs
-    udftools
-    xfsprogs
+    reiserfsprogs-
+    udftools-
+    xfsprogs-
 
-    #
-    ${PAC_PACKAGES[@]+"${PAC_PACKAGES[@]}"}
+    # Network filesystems
+    nfs-utils-
 )
 
-PAC_REJECT=(
-    #
-    ${PAC_REJECT[@]+"${PAC_REJECT[@]}"}
+! lk_system_has_intel_cpu || PAC_PACKAGES+=(
+    intel-ucode:BM
 )
 
-PAC_KEEP=(
-    #
-    ${PAC_KEEP[@]+"${PAC_KEEP[@]}"}
+! lk_system_has_amd_cpu || PAC_PACKAGES+=(
+    amd-ucode:BM
 )
 
-PAC_NO_REPLACE=(
-    #
-    ${PAC_NO_REPLACE[@]+"${PAC_NO_REPLACE[@]}"}
-)
-
-AUR_PACKAGES=(
-    # System
-    rdfind
-
+AUR_PACKAGES+=(
     # Utilities
-    icdiff
+    icdiff-
+    rdfind-
 
-    #
-    ${AUR_PACKAGES[@]+"${AUR_PACKAGES[@]}"}
+    # System
+    powercap-:BM
 )
 
-if lk_node_service_enabled lighttpd; then
-    PAC_PACKAGES+=(lighttpd)
-fi
+! lk_node_service_enabled lighttpd || PAC_PACKAGES+=(
+    lighttpd
+)
 
-if lk_node_service_enabled squid; then
-    PAC_PACKAGES+=(squid)
-fi
+! lk_node_service_enabled squid || PAC_PACKAGES+=(
+    squid
+)
 
-if lk_node_service_enabled libvirt; then
-    PAC_PACKAGES+=(
-        libvirt
-        qemu-desktop
-        dnsmasq
-        edk2-ovmf # UEFI firmware
-        libguestfs
-        cpio
-        virt-install
-    )
-fi
+! lk_node_service_enabled docker || PAC_PACKAGES+=(
+    docker
+)
+
+! lk_node_service_enabled libvirt || PAC_PACKAGES+=(
+    libvirt
+    qemu-desktop
+    dnsmasq
+    edk2-ovmf # UEFI firmware
+    libguestfs
+    cpio
+    virt-install
+)
 
 if lk_node_service_enabled desktop; then
     PAC_PACKAGES+=(
@@ -183,12 +194,10 @@ if lk_node_service_enabled desktop; then
         xorg-server
         xorg-server-xvfb
 
-        #
         lightdm
         lightdm-gtk-greeter
         lightdm-gtk-greeter-settings
 
-        #
         autorandr
         cups
         gnome-keyring
@@ -203,7 +212,6 @@ if lk_node_service_enabled desktop; then
         xdg-user-dirs # Manage ~/Desktop, ~/Templates, etc.
         zenity
 
-        #
         adapta-gtk-theme
         arc-gtk-theme
         #arc-icon-theme
@@ -221,21 +229,17 @@ if lk_node_service_enabled desktop; then
         gtk-engine-murrine
         gtk-engines
 
-        #
         galculator
         geany
         pinta
         vlc
 
-        #
         gst-libav
         gst-plugins-good
         libdvdcss
 
-        #
         epiphany
 
-        #
         evince
 
         # adobe-source-* packages have been replaced with aur/ttf-adobe-source-*
@@ -261,7 +265,7 @@ if lk_node_service_enabled desktop; then
     fi
 
     if lk_arr PAC_PACKAGES AUR_PACKAGES | grep -E \
-        '(^ttf-joypixels$|^ttf-.*\<(tw)?emoji\>|\<fonts-emoji\>)' \
+        '(^ttf-joypixels-?($|:)|^ttf-.*\<(tw)?emoji\>|\<fonts-emoji\>)' \
         >/dev/null; then
         PAC_REJECT+=(noto-fonts-emoji)
     else
@@ -278,22 +282,23 @@ if lk_node_service_enabled desktop; then
 
         # Selected works of https://github.com/vinceliuice
         qogir-gtk-theme
-        qogir-icon-theme
+        #qogir-icon-theme
         tela-icon-theme
-        vimix-cursors
-        whitesur-gtk-theme
-        whitesur-icon-theme
-        whitesur-cursor-theme-git
-        mojave-gtk-theme
-        mcmojave-circle-icon-theme
-        mcmojave-cursors
+        #vimix-cursors
 
-        #
+        #whitesur-gtk-theme
+        #whitesur-icon-theme
+        #whitesur-cursor-theme-git
+        #mojave-gtk-theme
+        #mcmojave-circle-icon-theme # Requires numix-gtk-theme-git
+        #mcmojave-cursors
+
         #numix-gtk-theme-git
         #sound-theme-smooth
-        wiki-loves-earth-wallpapers
-        wiki-loves-monuments-wallpapers
         #zuki-themes
+
+        #wiki-loves-earth-wallpapers
+        #wiki-loves-monuments-wallpapers
     )
 fi
 
@@ -302,7 +307,6 @@ if lk_node_service_enabled xfce4; then
         xfce4
         xfce4-goodies
 
-        #
         catfish
         engrampa
         libcanberra
@@ -319,7 +323,6 @@ if lk_node_service_enabled xfce4; then
         mugshot
         xfce4-panel-profiles
 
-        #
         #elementary-xfce-icons
         #xfce-theme-greybird
     )
@@ -337,39 +340,6 @@ if lk_is_virtual; then
         fi
     fi
 else
-    PAC_PACKAGES+=(
-        linux-firmware
-
-        #
-        cpupower
-        hddtemp
-        lm_sensors
-        powertop
-        tlp
-        tlp-rdw
-
-        #
-        gptfdisk # Provides sgdisk
-        lvm2
-        mdadm
-        parted
-
-        #
-        ethtool
-        hdparm
-        nvme-cli
-        smartmontools
-        wireless-regdb
-
-        #
-        fwupd
-        udisks2
-    )
-
-    AUR_PACKAGES+=(
-        powercap
-    )
-
     if lk_node_service_enabled desktop; then
         PAC_PACKAGES+=(
             os-prober
@@ -386,25 +356,40 @@ else
         )
     fi
 
-    if grep -Eq '\<GenuineIntel\>' /proc/cpuinfo; then
-        PAC_PACKAGES+=(intel-ucode)
-    elif grep -Eq '\<AuthenticAMD\>' /proc/cpuinfo; then
-        PAC_PACKAGES+=(amd-ucode linux-headers)
-        AUR_PACKAGES+=(zenpower-dkms)
-        ! grep -Eq '\<Ryzen\>' /proc/cpuinfo ||
-            AUR_PACKAGES+=(ryzenadj-git)
-    fi
-    ! grep -iq "^ThinkPad" /sys/class/dmi/id/product_family ||
-        PAC_PACKAGES+=(tpacpi-bat)
-    ! lk_system_has_intel_graphics ||
-        PAC_PACKAGES+=(intel-media-driver libva-intel-driver)
-    ! lk_system_has_nvidia_graphics ||
-        PAC_PACKAGES+=(nvidia nvidia-utils)
-    ! lk_system_has_amd_graphics ||
-        PAC_PACKAGES+=(xf86-video-amdgpu libva-mesa-driver mesa-vdpau)
+    ! lk_system_is_thinkpad || PAC_PACKAGES+=(
+        tpacpi-bat
+    )
+
+    ! lk_system_has_intel_graphics || PAC_PACKAGES+=(
+        intel-media-driver
+        libva-intel-driver
+    )
+    ! lk_system_has_nvidia_graphics || PAC_PACKAGES+=(
+        nvidia
+        nvidia-utils
+    )
+    ! lk_system_has_amd_graphics || PAC_PACKAGES+=(
+        xf86-video-amdgpu
+        libva-mesa-driver
+        mesa-vdpau
+    )
 fi
 
 ####
+
+for ARR in PAC_PACKAGES AUR_PACKAGES; do
+    lk_mapfile "$ARR" < <(lk_arr "$ARR" |
+        if lk_is_virtual; then
+            gnu_sed -E '/:BM\>/d'
+        else
+            gnu_sed -E 's/:BM\>//'
+        fi |
+        if lk_node_service_enabled minimal; then
+            sed -E '/-$/d'
+        else
+            sed -E 's/-$//'
+        fi)
+done
 
 SUFFIX=-${LK_PATH_PREFIX%-}
 
