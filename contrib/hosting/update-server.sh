@@ -6,8 +6,10 @@
 # Options:
 #   --force-provision           Run provisioning script without revision change.
 #   --upgrade                   Upgrade apt packages on each host.
+#   --no-reboot                 Skip scheduling reboot if required.
+#   --reboot-time <TIME>        Override LK_AUTO_REBOOT_TIME.
 #   --no-tls                    Skip TLS certificate checks.
-#   --no-wordpress              Skip WordPress checks.
+#   --wordpress                 Run WordPress checks.
 #   --no-test                   Skip site reachability test.
 #   --set <SETTING> <VALUE>     }
 #   --add <SETTING> <VALUE>     } Pass lk-platform settings changes to the
@@ -232,6 +234,13 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
           )" || STATUS=$?
       done
 
+    ((!REBOOT)) ||
+      [[ ! -e /var/run/reboot-required ]] || {
+      lk_tty_print "Reboot required"
+      lk_tty_run_detail \
+        shutdown -r "${REBOOT_TIME:-${LK_AUTO_REBOOT_TIME:-+2}}" || STATUS=$?
+    }
+
     return "$STATUS"
   }
 
@@ -258,21 +267,26 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
   ARGS=()
   FORCE_PROVISION=0
   UPGRADE=0
+  REBOOT=1
+  REBOOT_TIME=
   TLS=1
-  WORDPRESS=1
+  WORDPRESS=0
   TEST=1
-  while [[ ${1-} =~ ^(-[saru]|--(set|add|remove|unset|(no-)?(force-provision|upgrade|tls|wordpress|test)))$ ]]; do
+  while [[ ${1-} =~ ^(-[saru]|--(set|add|remove|unset|(no-)?(force-provision|upgrade|reboot|tls|wordpress|test)|reboot-time))$ ]]; do
     [[ $1 != --no-force-provision ]] || FORCE_PROVISION=0
     [[ $1 != --force-provision ]] || FORCE_PROVISION=1
     [[ $1 != --no-upgrade ]] || UPGRADE=0
     [[ $1 != --upgrade ]] || UPGRADE=1
+    [[ $1 != --no-reboot ]] || REBOOT=0
+    [[ $1 != --reboot ]] || REBOOT=1
+    [[ $1 != --reboot-time ]] || { [[ -n ${2+1} ]] && REBOOT_TIME=$2 && shift 2 && continue; } || lk_die "invalid arguments"
     [[ $1 != --no-tls ]] || TLS=0
     [[ $1 != --tls ]] || TLS=1
     [[ $1 != --no-wordpress ]] || WORDPRESS=0
     [[ $1 != --wordpress ]] || WORDPRESS=1
     [[ $1 != --no-test ]] || TEST=0
     [[ $1 != --test ]] || TEST=1
-    [[ ! $1 =~ ^--(no-)?(force-provision|upgrade|tls|wordpress|test)$ ]] || { shift && continue; }
+    [[ ! $1 =~ ^--(no-)?(force-provision|upgrade|reboot|tls|wordpress|test)$ ]] || { shift && continue; }
     SHIFT=2
     [[ ${2-} == *=* ]] || [[ $1 =~ ^--?u ]] ||
       ((SHIFT++))
@@ -292,7 +306,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
   SCRIPT=$TMP/do-update-server.sh
   {
     declare -f keep-alive update-server do-update-server
-    declare -p FORCE_PROVISION TLS WORDPRESS TLD_REGEX
+    declare -p FORCE_PROVISION REBOOT REBOOT_TIME TLS WORDPRESS TLD_REGEX
     lk_quote_args do-update-server \
       "${UPDATE_SERVER_BRANCH:-main}" \
       "${UPDATE_SERVER_REPO:-https://github.com/lkrms/lk-platform.git}" \
