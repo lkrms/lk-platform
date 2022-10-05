@@ -1,4 +1,4 @@
-#!/bin/awk -f
+#!/usr/bin/awk -f
 
 # Print a list of changes to make lines in <file1> identical to <file2>.
 #
@@ -15,7 +15,7 @@
 #
 #     = <line from file2, with excluded fields from file1>
 #     - <line from file1>
-#     + <line from file2, with excluded fields empty>
+#     + <line from file2>
 #
 # <exclude-list> and <match-list> must be either
 # - the empty string (""), or
@@ -48,7 +48,7 @@ BEGIN {
   split_list(match_arg, match_list)
 }
 
-FNR == NR {
+FILENAME == ARGV[3] {
   file1_line[FNR] = $0
   if (match_arg) {
     add_to_index(match_list, match_index, match_index_c)
@@ -86,10 +86,10 @@ FNR == NR {
       next
     }
   }
-  # 3. "+ <line from file2, with excluded fields empty>"
-  if (exclude_arg) {
-    set_fields_to(exclude_list, "")
-  }
+  # 3. "+ <line from file2>"
+  #if (exclude_arg) {
+  #  set_fields_to(exclude_list, "")
+  #}
   print "+", $0
   next
 }
@@ -106,7 +106,7 @@ END {
 function add_to_index(fields, index_arr, index_arr_c, _key)
 {
   _key = implode_fields(fields)
-  index_arr[_key][index_arr_c[_key]++] = FNR
+  index_arr[_key, index_arr_c[_key]++] = FNR
 }
 
 function get_from_index(fields, index_arr, index_arr_c, arr, _key, _i, _NR)
@@ -116,7 +116,7 @@ function get_from_index(fields, index_arr, index_arr_c, arr, _key, _i, _NR)
   }
   _key = implode_fields(fields)
   while (_key in index_arr_c && (_i = --index_arr_c[_key]) > -1) {
-    _NR = index_arr[_key][_i]
+    _NR = index_arr[_key, _i]
     if (_NR in file1_line) {
       arr["line"] = file1_line[_NR]
       delete file1_line[_NR]

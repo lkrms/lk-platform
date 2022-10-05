@@ -11,12 +11,16 @@ Usage:
   ${0##*/} [options] <DOMAIN>...
 
 Options:
+  -f, --force       Delete unrecognised SES records from DNS.
   -s, --skip-host   Only configure SES and DNS.
   -k, --insecure    Proceed even if <DOMAIN>'s TLS certificate is invalid.
 
-If DOMAIN resolves to a hosting server, https://<DOMAIN>/php-sysinfo is
-reachable, and DOMAIN is an Amazon SES verified identity, call
-configure-ses-site.sh automatically.
+If a domain is serviced by Linode, WHM or cPanel, records for Amazon SES will be
+provisioned automatically.
+
+If DOMAIN has already been verified by Amazon SES and valid lk-platform hosting
+metadata can be retrieved from https://<DOMAIN>/php-sysinfo, SMTP credentials
+and settings will be deployed to the server by configure-ses-site.sh.
 
 Environment:
   AWS_PROFILE   Must contain the name of an AWS CLI profile with a default
@@ -29,16 +33,20 @@ EOF
 lk_bash_at_least 4 || lk_die "Bash 4 or higher required"
 lk_assert_command_exists aws
 
+FORCE=0
 SKIP_HOST=0
 CURL_OPTIONS=(-fsSL)
 
-lk_getopt "sk" "skip-host,insecure"
+lk_getopt "fsk" "force,skip-host,insecure"
 eval "set -- $LK_GETOPT"
 
 while :; do
   OPT=$1
   shift
   case "$OPT" in
+  -f | --force)
+    FORCE=1
+    ;;
   -s | --skip-host)
     SKIP_HOST=1
     ;;
@@ -106,11 +114,22 @@ $4 == "MX"    && $2 == "amazonses"   && $8 ~ /\.amazonses\.com$/       { print }
 $4 == "TXT"   && $2 == "amazonses"   && $8 ~ /^v=spf1( |$)/            { print }'
 }
 
+function confirm_profile() {
+  ((!PROFILE_CONFIRMED)) || return 0
+  local PROFILE
+  PROFILE=$(tr -Cd -- '-a-zA-Z0-9_' <<<"$AWS_PROFILE") &&
+    lk_tty_ynav "${0##*/}/$FUNCNAME/$PROFILE" \
+      "Before changes are made, is '$AWS_PROFILE' the correct AWS profile?" Y ||
+    lk_die ""
+  PROFILE_CONFIRMED=1
+}
+
 lk_log_start
 
 {
   unset IDENTITY
   DKIM_KEY_LENGTH=RSA_1024_BIT
+  PROFILE_CONFIRMED=0
 
   ! is_linode ||
     lk_linode_flush_cache
@@ -120,17 +139,17 @@ lk_log_start
     SES_DOMAIN=$1
     VERIFIED=0
     FROM_VERIFIED=0
-    APPLY_DNS=0
+    DNS_SERVICE=
     shift
 
-    lk_tty_print "Provisioning '$_DOMAIN' with Amazon SES"
+    lk_tty_log "Provisioning '$_DOMAIN' with Amazon SES"
 
     while :; do
-      lk_tty_detail "Checking" "$SES_DOMAIN"
+      lk_tty_detail "Checking SES for identity:" "$SES_DOMAIN"
       lk_mktemp_with -r IDENTITY \
         aws sesv2 get-email-identity \
         --email-identity "$SES_DOMAIN" 2>/dev/null &&
-        lk_tty_log "Email identity found:" "$SES_DOMAIN" || {
+        lk_tty_log "Amazon SES identity found:" "$SES_DOMAIN" || {
         SES_DOMAIN=${SES_DOMAIN#*.}
         ! lk_is_fqdn "$SES_DOMAIN" || lk_is_tld "$SES_DOMAIN" || continue
         SES_DOMAIN=
@@ -138,16 +157,18 @@ lk_log_start
       break
     done
 
-    if [ -z "$SES_DOMAIN" ]; then
+    if [[ -z $SES_DOMAIN ]]; then
+      confirm_profile
       SES_DOMAIN=$_DOMAIN
-      lk_mktemp_with -r IDENTITY lk_tty_run_detail \
+      lk_tty_print "Creating Amazon SES identity:" "$SES_DOMAIN"
+      lk_mktemp_with -r IDENTITY \
         aws sesv2 create-email-identity \
         --email-identity "$SES_DOMAIN" \
         --dkim-signing-attributes NextSigningKeyLength="$DKIM_KEY_LENGTH"
     fi
 
     ! jq -e '.VerifiedForSendingStatus' <"$IDENTITY" >/dev/null || {
-      lk_tty_success "Email identity has been verified by Amazon SES"
+      lk_tty_success "Identity has been verified by Amazon SES"
       VERIFIED=1
     }
 
@@ -163,70 +184,76 @@ lk_log_start
 
     if [[ $MAIL_FROM_DOMAIN != "$FROM_DOMAIN" ]] ||
       [[ $MAIL_FROM_ON_FAILURE != USE_DEFAULT_VALUE ]]; then
-
-      lk_tty_run_detail \
-        aws sesv2 put-email-identity-mail-from-attributes \
+      lk_tty_print "Setting custom MAIL FROM domain for SES identity:" "$SES_DOMAIN"
+      aws sesv2 put-email-identity-mail-from-attributes \
         --email-identity "$SES_DOMAIN" \
         --mail-from-domain "$FROM_DOMAIN" \
         --behavior-on-mx-failure USE_DEFAULT_VALUE
-
     elif [[ $MAIL_FROM_STATUS == SUCCESS ]]; then
-
       lk_tty_success "Custom MAIL FROM domain has been confirmed by Amazon SES"
       FROM_VERIFIED=1
-
     fi
 
     if ((!VERIFIED || !FROM_VERIFIED)); then
+      lk_tty_detail "Checking for DNS service:" "$SES_DOMAIN"
       lk_mktemp_with DOMAIN_TSV
       if is_linode &&
-        lk_linode_domain_tsv "$SES_DOMAIN" | filter_domain_tsv \
-          >"$DOMAIN_TSV"; then
-
-        lk_tty_log "Domain is managed via Linode"
+        lk_linode_domain_tsv "$SES_DOMAIN" | filter_domain_tsv >"$DOMAIN_TSV"; then
         domain_record_create() { lk_linode_domain_record_create "$@"; }
         domain_record_update() { lk_linode_domain_record_update "$@"; }
         domain_record_delete() { lk_linode_domain_record_delete "$@"; }
-        APPLY_DNS=1
-
+        DNS_SERVICE=Linode
       elif DOMAIN_IPV4=$(lk_dns_resolve_name_from_ns "$_DOMAIN" |
         lk_filter_ipv4 | head -n1 | grep .); then
         # Check for access to the domain via WHM first, then via cPanel
         if lk_tcp_is_reachable "$DOMAIN_IPV4" 2087 &&
           lk_whm_server_set -q "$DOMAIN_IPV4" &&
-          lk_whm_domain_tsv "$SES_DOMAIN" | filter_domain_tsv \
-            >"$DOMAIN_TSV"; then
-
-          lk_tty_log "Domain is managed via WHM"
+          lk_whm_domain_tsv "$SES_DOMAIN" | filter_domain_tsv >"$DOMAIN_TSV"; then
           domain_record_create() { lk_whm_domain_record_create "$@"; }
           domain_record_update() { lk_whm_domain_record_update "$@"; }
           domain_record_delete() { lk_whm_domain_record_delete "$@"; }
-          APPLY_DNS=1
-
+          DNS_SERVICE=WHM
         elif lk_tcp_is_reachable "$DOMAIN_IPV4" 2083 &&
           lk_cpanel_server_set -q "$DOMAIN_IPV4" &&
-          lk_cpanel_domain_tsv "$SES_DOMAIN" | filter_domain_tsv \
-            >"$DOMAIN_TSV"; then
-
-          lk_tty_log "Domain is managed via cPanel"
+          lk_cpanel_domain_tsv "$SES_DOMAIN" | filter_domain_tsv >"$DOMAIN_TSV"; then
           domain_record_create() { lk_cpanel_domain_record_create "$@"; }
           domain_record_update() { lk_cpanel_domain_record_update "$@"; }
           domain_record_delete() { lk_cpanel_domain_record_delete "$@"; }
-          APPLY_DNS=1
-
+          DNS_SERVICE=cPanel
         fi
       fi
     fi
 
-    if ((APPLY_DNS)); then
+    if [[ -n $DNS_SERVICE ]]; then
       lk_mktemp_with DOMAIN_DIFF get_domain_diff "$DOMAIN_TSV"
       if [[ -s $DOMAIN_DIFF ]]; then
-        lk_tty_detail "Updating '$_DOMAIN':" $'\n'"$(<"$DOMAIN_DIFF")"
+        lk_tty_print "Updating DNS records via $DNS_SERVICE:" "$SES_DOMAIN"
+        while IFS=$'\t' read -r ACTION RECORD_ID NAME TTL RECORD_TYPE PRIORITY WEIGHT PORT TARGET; do
+          RECORD=$'\n'"$NAME $TTL $RECORD_TYPE $PRIORITY $WEIGHT $PORT $TARGET"
+          case "$ACTION" in
+          +)
+            lk_tty_detail "Adding:" "$RECORD"
+            domain_record_create "$SES_DOMAIN" "$NAME" "$TTL" "$RECORD_TYPE" "$PRIORITY" "$WEIGHT" "$PORT" "$TARGET"
+            ;;
+          =)
+            lk_tty_detail "Updating:" "$RECORD"
+            domain_record_update "$SES_DOMAIN" "$RECORD_ID" "$NAME" "$TTL" "$RECORD_TYPE" "$PRIORITY" "$WEIGHT" "$PORT" "$TARGET"
+            ;;
+          -)
+            if ((FORCE)); then
+              lk_tty_detail "Deleting:" "$RECORD"
+              domain_record_delete "$SES_DOMAIN" "$RECORD_ID"
+            else
+              lk_tty_log "Run again with --force to delete:" "$RECORD"
+            fi
+            ;;
+          esac
+        done <"$DOMAIN_DIFF"
       else
-        lk_tty_detail "No updates to '$_DOMAIN' required"
+        lk_tty_success "No updates to '$_DOMAIN' required"
       fi
     elif ((!VERIFIED || !FROM_VERIFIED)); then
-      lk_tty_print "The following DNS records must be visible to SES:" "$(
+      lk_tty_log "The following DNS records must be visible to SES:" "$(
         for TOKEN in "${TOKENS[@]}"; do
           NAME=$TOKEN._domainkey.$SES_DOMAIN.
           TARGET=$TOKEN.dkim.amazonses.com.
@@ -242,7 +269,8 @@ lk_log_start
 
     ((!SKIP_HOST)) || continue
 
-    lk_mktemp_with -r SYSINFO lk_tty_run_detail \
+    lk_tty_detail "Checking for lk-platform hosting:" "$_DOMAIN"
+    lk_mktemp_with -r SYSINFO \
       curl "${CURL_OPTIONS[@]}" "https://$_DOMAIN/php-sysinfo" &&
       SH=$(lk_json_sh \
         HOST_NAME .hostname \
@@ -265,7 +293,7 @@ lk_log_start
       "${HOST_IP[@]}")
 
     if ((VERIFIED)); then
-      lk_tty_run_detail "${COMMAND[@]}"
+      "${COMMAND[@]}"
     else
       lk_tty_print \
         "Run one of the following after Amazon SES verifies $SES_DOMAIN:"

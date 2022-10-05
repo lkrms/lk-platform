@@ -12,10 +12,9 @@ Usage:
 Options:
   -a, --api   Allow API-based sending (in addition to SMTP).
 
-When SSH_HOST is -, exit after printing credentials. No hosting server is
-required in this case.
+If SSH_HOST is -, the script will exit after printing credentials.
 
-When SES_DOMAIN is -, set SES_DOMAIN to DOMAIN.
+If SES_DOMAIN is -, DOMAIN will be used as the Amazon SES identity.
 
 Example:
   ${0##*/} - domain.com@server.fqdn domain.com - 12.34.56.67
@@ -72,10 +71,10 @@ SOURCE_IP=("${@:5}")
 lk_log_start
 
 {
-  lk_tty_list SOURCE_IP \
-    "Configuring IAM user '$IAM_USER' for SMTP$(
-      ((!ALLOW_API)) || echo " and API"
-    ) access to Amazon SES from:" "IP address" "IP addresses"
+  lk_tty_log "Configuring IAM user '$IAM_USER' for SMTP$(
+    ((!ALLOW_API)) || echo " and API"
+  ) access to Amazon SES"
+  lk_tty_list_detail SOURCE_IP "Source addresses:"
 
   lk_tty_detail "Getting AWS Account ID"
   AWS_ACCOUNT_ID=$(aws sts get-caller-identity | jq -r '.Account')
@@ -85,13 +84,15 @@ lk_log_start
   aws sesv2 get-email-identity \
     --email-identity "$SES_DOMAIN" >/dev/null
 
-  { lk_mktemp_with IAM_USER \
+  lk_tty_detail "Checking for IAM user:" "$IAM_USER"
+  { lk_mktemp_with TEMP \
     aws iam get-user \
     --user-name "$IAM_USER" 2>/dev/null &&
-    lk_tty_detail "IAM user already exists:" "$IAM_USER"; } ||
-    lk_mktemp_with -r IAM_USER lk_tty_run_detail \
-      aws iam create-user \
-      --user-name "$IAM_USER"
+    lk_tty_log "IAM user already exists:" "$IAM_USER"; } ||
+    { lk_tty_print "Creating IAM user:" "$IAM_USER" &&
+      lk_mktemp_with -r TEMP \
+        aws iam create-user \
+        --user-name "$IAM_USER"; }
 
   if ((ALLOW_API)); then
     JQ='{
@@ -148,13 +149,13 @@ lk_log_start
     "$JQ" \
     --args "${SOURCE_IP[@]}")
 
-  lk_tty_detail "Applying 'AmazonSesSendingAccess' policy to IAM user"
+  lk_tty_print "Applying 'AmazonSesSendingAccess' policy to IAM user"
   aws iam put-user-policy \
     --user-name "$IAM_USER" \
     --policy-name "AmazonSesSendingAccess" \
     --policy-document "$POLICY"
 
-  lk_tty_print "Creating AWS access key for" "$IAM_USER"
+  lk_tty_detail "Checking AWS access keys for" "$IAM_USER"
   lk_mktemp_with KEYS \
     aws iam list-access-keys \
     --user-name "$IAM_USER"
@@ -172,12 +173,14 @@ lk_log_start
         <"$KEYS")
       lk_tty_yn "OK to delete newest key '$KEY_ID'?" Y || lk_die ""
     fi
-    lk_tty_run_detail aws iam delete-access-key \
+    lk_tty_detail "Deleting AWS access key:" "$KEY_ID"
+    aws iam delete-access-key \
       --user-name "$IAM_USER" \
       --access-key-id "$KEY_ID"
   fi
 
-  lk_mktemp_with NEW_KEY lk_tty_run_detail \
+  lk_tty_print "Generating AWS access key for" "$IAM_USER"
+  lk_mktemp_with NEW_KEY \
     aws iam create-access-key \
     --user-name "$IAM_USER"
   SH=$(lk_json_sh \
@@ -201,11 +204,7 @@ lk_log_start
 
   # Deploy the latest version of lk_hosting_site_configure etc.
   lk_tty_print "Updating hosting server:" "$SSH_HOST"
-  lk_tty_run_detail "$LK_BASE/contrib/hosting/update-server.sh" \
-    --no-tls \
-    --no-wordpress \
-    --no-test \
-    "$SSH_HOST"
+  "$LK_BASE/contrib/hosting/update-server.sh" "$SSH_HOST"
 
   function set_site_smtp_settings() {
     export LC_ALL=C
@@ -248,12 +247,14 @@ lk_log_start
   ssh -o ControlPath=none -o LogLevel=QUIET "$SSH_HOST" \
     LK_VERBOSE=${LK_VERBOSE-1} "$COMMAND" <"$SCRIPT" || lk_die ""
 
+  lk_tty_detail "Checking AWS access keys for" "$IAM_USER"
   if KEY_ID=$(aws iam list-access-keys \
     --user-name "$IAM_USER" |
     jq -re --arg keyId "$ACCESS_KEY_ID" \
       '.AccessKeyMetadata[] | select(.AccessKeyId != $keyId) | .AccessKeyId') &&
     lk_tty_yn "OK to delete previous key '$KEY_ID'?" Y; then
-    lk_tty_run_detail aws iam delete-access-key \
+    lk_tty_detail "Deleting AWS access key:" "$KEY_ID"
+    aws iam delete-access-key \
       --user-name "$IAM_USER" \
       --access-key-id "$KEY_ID"
   fi
