@@ -42,6 +42,7 @@ HOMEBREW_FORMULAE+=(
 # Basics
 HOMEBREW_FORMULAE+=(
     byobu
+    fzf
     glances
     gnu-time
     gnupg

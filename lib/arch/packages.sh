@@ -63,6 +63,7 @@ PAC_PACKAGES+=(
     # Shell
     bash-completion
     byobu-
+    fzf
     libnewt # Provides whiptail
     zsh
 
