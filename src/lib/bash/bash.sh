@@ -53,7 +53,7 @@ function print_pending() {
 END {
     print_pending()
 }'
-    lk_bash_find_scripts -d "$DIR" -print0 |
+    lk_find_shell_scripts -d "$DIR" -print0 |
         lk_xargs -z lk_bash_function_names -H |
         sort -u |
         sort -t: -k2 |
@@ -171,18 +171,6 @@ function lk_bash_command_cut() {
         lk_squeeze_whitespace
 }
 
-# lk_bash_find_scripts [-d DIR] [FIND_ACTION...]
-function lk_bash_find_scripts() {
-    local DIR
-    [ "${1-}" != -d ] || { DIR=$(cd "$2" && pwd -P) && shift 2 || return; }
-    gnu_find "${DIR:-.}" \
-        ! \( \( \( -type d -name .git \) -o ! -readable \) -prune \) \
-        -type f \
-        \( -name '*.sh' -o -exec \
-        sh -c 'head -c12 "$1" | grep -Eq "^#!/bin/(ba)?sh\\>"' sh '{}' \; \) \
-        \( "${@--print}" \)
-}
-
 # lk_bash_audit [-g] SCRIPT [SOURCE...]
 #
 # Print a summary of commands used in SCRIPT that are not functions declared in
@@ -259,7 +247,7 @@ function lk_bash_audit_tree() {
     unset GLOBALS
     [ "${1-}" != -g ] || { GLOBALS=1 && shift; }
     DIR=${1:+$(cd "$1" && pwd -P)} || return
-    SH=$(lk_bash_find_scripts ${DIR:+-d "$DIR"} -print0 | {
+    SH=$(lk_find_shell_scripts ${DIR:+-d "$DIR"} -print0 | {
         lk_mapfile -z FILES &&
             declare -p FILES
     }) && eval "$SH" || return

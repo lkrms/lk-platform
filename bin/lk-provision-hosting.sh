@@ -1,7 +1,8 @@
 #!/bin/bash
 
-[ "$EUID" -eq 0 ] || {
-    [ -z "${BASH_XTRACEFD-}" ] && unset ARGS ||
+# Elevate if not already running as root
+((!EUID)) || {
+    [[ -z ${BASH_XTRACEFD-} ]] && unset ARGS ||
         ARGS=(-C $((i = BASH_XTRACEFD, (${_LK_FD:=2} > i ? _LK_FD : i) + 1)))
     sudo ${ARGS+"${ARGS[@]}"} -H "$0" "$@"
     exit
@@ -1092,9 +1093,9 @@ END        { if (m) { print u[m] } else { exit 1 } }')} ||
         export WP_CLI_PACKAGES_DIR=$DIR
         if ! no_upgrade; then
             lk_tty_detail "Updating WP-CLI packages"
-            lk_wp package update --quiet
+            lk_keep_trying lk_wp package update --quiet
         fi
-        lk_wp_package_install \
+        lk_keep_trying lk_wp_package_install \
             aaemnnosttv/wp-cli-login-command
 
         DIR=/opt/opcache-gui
@@ -1153,8 +1154,8 @@ EOF
             lk_conf_set_option -m "${LK_MEMCACHED_MEMORY_LIMIT:-64}"
         check_after_file
         if ! lk_is_bootstrap && ! lk_systemctl_running memcached; then
-            lk_systemctl_reload_or_restart "$1"
-            lk_systemctl_enable "$1"
+            lk_systemctl_reload_or_restart memcached
+            lk_systemctl_enable memcached
         elif lk_is_false LK_FILE_REPLACE_NO_CHANGE; then
             lk_tty_run_detail systemctl restart memcached.service
         fi

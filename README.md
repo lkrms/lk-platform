@@ -165,7 +165,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 To generate the list above, run the following in `<LK_BASE>`:
 
 ```bash
-lk_bash_find_scripts -print0 |
+lk_find_shell_scripts -print0 |
     xargs -0 gnu_grep -Pho '((?<=\$\{)|(?<=lk_is_true )|(?<=lk_is_false ))LK_[a-zA-Z0-9_]+\b(?!(\[[^]]+\])?[#%}])' |
     sort -u |
     sed -Ee '/^LK_(.+_(UPDATED|DECLINED|NO_CHANGE)|BASE|USAGE|VERSION|Z|ADMIN_USERS|HOST_.+|MYSQL_(USERNAME|PASSWORD)|SHUTDOWN_ACTION)$/d' -e 's/.*/- `&`/'

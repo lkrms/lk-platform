@@ -2706,6 +2706,18 @@ function lk_file() {
 
 }
 
+# lk_find_shell_scripts [-d DIR] [FIND_ARG...]
+function lk_find_shell_scripts() {
+    local DIR
+    [[ ${1-} != -d ]] || { DIR=$(cd "$2" && pwd -P) && shift 2 || return; }
+    gnu_find "${DIR:-.}" \
+        ! \( \( \( -type d -name .git \) -o ! -readable \) -prune \) \
+        -type f \
+        \( -name '*.sh' -o -exec \
+        sh -c 'head -c20 "$1" | grep -Eq "^#!/(usr/)?bin/(env )?(ba)?sh\\>"' sh '{}' \; \) \
+        \( "${@--print}" \)
+}
+
 # lk_hash [ARG...]
 #
 # Compute the hash of the arguments or input using the most efficient algorithm

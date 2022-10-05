@@ -4,7 +4,7 @@
 #
 # To update REQUIRED_COMMANDS, run this in `$LK_BASE`:
 #
-#     lk_bash_find_scripts -print0 | xargs -0 awk \
+#     lk_find_shell_scripts -print0 | xargs -0 awk \
 #         -v s="^$S*" \
 #         -v r='function install_gnu_commands\\(\\) \\{$' '
 #             $0 ~ s r        { skip = 1; e = $0; sub(r, "", e); e = e "}" }
