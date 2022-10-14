@@ -9,7 +9,7 @@ function lk_date() {
         }
     elif ! lk_is_macos; then
         function lk_date() {
-            if [ $# -lt 2 ]; then
+            if (($# < 2)); then
                 date "+$1"
             else
                 date -d "@$2" "+$1"
@@ -17,7 +17,7 @@ function lk_date() {
         }
     else
         function lk_date() {
-            if [ $# -lt 2 ]; then
+            if (($# < 2)); then
                 date "+$1"
             else
                 date -jf '%s' "$2" "+$1"
@@ -42,4 +42,33 @@ function lk_date_http() { TZ=UTC lk_date "%a, %d %b %Y %H:%M:%S %Z" "$@"; }
 # lk_timestamp
 function lk_timestamp() { lk_date "%s"; }
 
-#### Reviewed: 2021-11-16
+# _lk_duration_unit VALUE UNIT
+function _lk_duration_unit() {
+    ((UNITS < 3)) || return 0
+    local UNIT=$2
+    if ((UNITS)); then
+        UNIT=${2:0:1}
+    else
+        (($1 == 1)) || UNIT+=s
+        UNIT=" $UNIT"
+    fi
+    ((!$1)) && [[ $UNIT != " s"* ]] || {
+        ((UNITS != 1)) || DUR+=", "
+        DUR+=$1$UNIT
+        ((++UNITS))
+    }
+}
+
+# lk_duration SECONDS
+#
+# Format SECONDS as a user-friendly duration.
+function lk_duration() {
+    local UNITS=0 DUR=
+    _lk_duration_unit $(($1 / 86400)) day
+    _lk_duration_unit $((($1 % 86400) / 3600)) hour
+    _lk_duration_unit $((($1 % 3600) / 60)) minute
+    _lk_duration_unit $(($1 % 60)) second
+    echo "$DUR"
+}
+
+#### Reviewed: 2022-10-14
