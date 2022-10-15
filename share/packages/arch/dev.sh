@@ -113,6 +113,7 @@ PAC_PACKAGES+=(
     networkmanager-l2tp
     networkmanager-openconnect
     samba
+    testssl.sh
 
     # System
     arch-install-scripts
@@ -130,6 +131,7 @@ PAC_PACKAGES+=(
 )
 
 AUR_PACKAGES+=(
+    dug-git
     gp-saml-gui-git
     pacman-cleanup-hook
     powershell-bin
@@ -215,7 +217,6 @@ PAC_PACKAGES+=(
     mkvtoolnix-gui
     mpv
     openshot
-    youtube-dl
     yt-dlp
 
     # System
@@ -287,6 +288,7 @@ PAC_PACKAGES+=(
     bash-language-server
     cloc
     cmake
+    d-feet
     dbeaver
     emscripten
     eslint
