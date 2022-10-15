@@ -461,7 +461,7 @@ $LK_NODE_HOSTNAME" &&
         FILES=("$LK_BASE/share/tlp.d"/*-{stable,quiet}-*.conf)
         ! lk_is_portable ||
             FILES+=("$LK_BASE/share/tlp.d"/*-battery-thresholds.conf)
-        lk_node_service_enabled minimal ||
+        lk_feature_enabled minimal ||
             FILES+=("$LK_BASE/share/tlp.d"/*-maximum-performance.conf)
         lk_file_replace "$FILE" \
             < <(lk_arr FILES | sort | tr '\n' '\0' | xargs -0 cat)
@@ -553,7 +553,7 @@ $LK_NODE_HOSTNAME" &&
 
     unset LK_FILE_REPLACE_NO_CHANGE
     FILE=/etc/mkinitcpio.conf
-    if [ -f "$FILE" ] && lk_node_service_enabled desktop &&
+    if [ -f "$FILE" ] && lk_feature_enabled desktop &&
         lk_system_has_amd_graphics; then
         lk_tty_print "Checking" "$FILE"
         if ! grep -Eq '^MODULES=(.*\<amdgpu\>.*)' "$FILE"; then
@@ -1103,14 +1103,17 @@ done\""
             eval "file_delete$SH"
     fi
 
-    if { [ -n "${LK_SAMBA_WORKGROUP-}" ] || lk_node_service_enabled samba; } &&
-        lk_pac_installed samba; then
+    if lk_pac_installed samba; then
         unset LK_FILE_REPLACE_NO_CHANGE
         FILE=/etc/samba/smb.conf
-        _FILE=$(LK_SAMBA_WORKGROUP=${LK_SAMBA_WORKGROUP:-WORKGROUP} \
-            lk_expand_template "$LK_BASE/share/samba/smb.template.conf")
         lk_install -m 00644 "$FILE"
-        lk_file_replace -i "^(#|;|$S*\$)" "$FILE" "$_FILE"
+        lk_file_replace -mi "^(#|;|$S*\$)" "$FILE" < <(
+            lk_mktemp_with TEMP &&
+                { LK_SAMBA_WORKGROUP=${LK_SAMBA_WORKGROUP:-WORKGROUP} \
+                    lk_expand_template "$LK_BASE/share/samba/smb.template.conf" &&
+                    { [[ ! -e $FILE ]] || cat "$FILE"; }; } >"$TEMP" &&
+                testparm --suppress-prompt "$TEMP" 2>/dev/null
+        )
         SERVICE_ENABLE+=(
             smb "Samba (SMB server)"
             nmb "Samba (NMB server)"

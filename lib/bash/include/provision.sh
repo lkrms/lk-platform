@@ -5,40 +5,64 @@ function lk_is_bootstrap() {
 }
 
 function lk_is_desktop() {
-    lk_node_service_enabled desktop
+    lk_feature_enabled desktop
 }
 
-# lk_node_service_enabled SERVICE
+# lk_feature_enabled FEATURE...
 #
-# Return true if SERVICE or an equivalent appears in LK_NODE_SERVICES.
-function lk_node_service_enabled() {
-    [ -n "${LK_NODE_SERVICES-}" ] || return
-    [[ ,$LK_NODE_SERVICES, == *,$1,* ]] ||
-        [[ ,$(lk_node_expand_services), == *,$1,* ]]
+# Return true if all features are enabled.
+#
+# To be enabled, FEATURE or one of its aliases must appear in the
+# comma-delimited LK_FEATURES setting.
+function lk_feature_enabled() {
+    (($#)) && [[ -n ${LK_FEATURES:+1} ]] || return
+    [[ -n ${_LK_FEATURES:+1} ]] &&
+        [[ ${_LK_FEATURES_LAST-} == "$LK_FEATURES" ]] ||
+        lk_feature_expand || return
+    while (($#)); do
+        [[ ,$_LK_FEATURES, == *,"$1",* ]] || return
+        shift
+    done
 }
 
-function _lk_node_expand_service() {
-    local SERVICE REVERSE=1
-    [ "${1-}" != -n ] || { REVERSE= && shift; }
-    if [[ ,$SERVICES, == *,$1,* ]]; then
-        SERVICES=$SERVICES$(printf ',%s' "${@:2}")
-    elif lk_is_true REVERSE; then
-        for SERVICE in "${@:2}"; do
-            [[ ,$SERVICES, == *,$SERVICE,* ]] || return 0
+# - _lk_feature_expand FEATURE ALIAS
+# - _lk_feature_expand GROUP FEATURE FEATURE...
+# - _lk_feature_expand -n FEATURE IMPLIED_FEATURE
+#
+# The first two forms work in both directions:
+# - FEATURE enables ALIAS, and ALIAS enables FEATURE
+# - GROUP enables each FEATURE, and they collectively enable GROUP
+#
+# The third form only works in one direction:
+# - FEATURE enables IMPLIED_FEATURE, but enabling IMPLIED_FEATURE does not
+#   enable FEATURE.
+function _lk_feature_expand() {
+    local REVERSIBLE=1 FEATURE
+    [[ $1 != -n ]] || { REVERSIBLE=0 && shift; }
+    FEATURE=$1
+    shift
+    if [[ ,$FEATURES, == *,"$FEATURE",* ]]; then
+        FEATURES+=$(printf ',%s' "$@")
+    elif ((REVERSIBLE)); then
+        while (($#)); do
+            [[ ,$FEATURES, == *,"$1",* ]] || return 0
+            shift
         done
-        SERVICES=$SERVICES,$1
+        FEATURES+=",$FEATURE"
     fi
 }
 
-# lk_node_expand_services [SERVICE,...]
+# lk_feature_expand
 #
-# Add alternative names to the service list (all enabled services by default).
-function lk_node_expand_services() {
-    local IFS=, SERVICES=${1-${LK_NODE_SERVICES-}}
-    _lk_node_expand_service apache+php apache2 php-fpm
-    _lk_node_expand_service mysql mariadb
-    _lk_node_expand_service -n xfce4 desktop
-    lk_echo_args $SERVICES | sort -u | lk_implode_input ","
+# Copy LK_FEATURES to _LK_FEATURES, with aliases and groups expanded.
+function lk_feature_expand() {
+    local FEATURES=$LK_FEATURES
+    _lk_feature_expand apache+php apache2 php-fpm &&
+        _lk_feature_expand mysql mariadb &&
+        _lk_feature_expand -n xfce4 desktop &&
+        _LK_FEATURES=$(IFS=, &&
+            lk_args $FEATURES | lk_uniq | lk_implode_input ,) &&
+        _LK_FEATURES_LAST=$LK_FEATURES
 }
 
 # lk_user_exists USER
@@ -292,7 +316,7 @@ function _lk_settings_list_known() {
         LK_BRIDGE_INTERFACE \
         LK_WIFI_REGDOM \
         LK_NODE_TIMEZONE \
-        LK_NODE_SERVICES LK_NODE_PACKAGES \
+        LK_FEATURES LK_PACKAGES \
         LK_NODE_LOCALES LK_NODE_LANGUAGE \
         LK_SAMBA_WORKGROUP \
         LK_GRUB_CMDLINE \
@@ -331,7 +355,9 @@ function _lk_settings_list_legacy() {
     printf '%s\n' \
         LK_PATH_PREFIX_ALPHA \
         LK_SCRIPT_DEBUG \
-        LK_EMAIL_BLACKHOLE
+        LK_EMAIL_BLACKHOLE \
+        LK_NODE_SERVICES \
+        LK_NODE_PACKAGES
 }
 
 function _lk_settings_writable_files() {
@@ -395,6 +421,8 @@ function lk_settings_getopt() {
         UNSET=() REGEX='^(LK_[a-zA-Z0-9_]*[a-zA-Z0-9])(=(.*))?$'
     _lk_settings_migrate LK_DEBUG {LK_,}SCRIPT_DEBUG
     _lk_settings_migrate LK_EMAIL_DESTINATION {LK_,}EMAIL_BLACKHOLE
+    _lk_settings_migrate LK_FEATURES {LK_,}NODE_SERVICES
+    _lk_settings_migrate LK_PACKAGES {LK_,}NODE_PACKAGES
     for s in $(_lk_settings_list_known | grep -Fxv LK_BASE); do
         o=()
         [[ $s == LK_NODE_* ]] || {
@@ -492,7 +520,7 @@ function lk_settings_persist() {
 
 function lk_node_is_router() {
     [ "${LK_IPV4_ADDRESS:+1}${LK_IPV4_GATEWAY:+2}" = 1 ] ||
-        lk_node_service_enabled router
+        lk_feature_enabled router
 }
 
 # lk_user_config_set VAR DIR FILE

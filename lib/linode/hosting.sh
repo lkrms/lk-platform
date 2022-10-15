@@ -6,8 +6,8 @@ lk_die() { s=$? && echo "$0: ${1-error $s}" >&2 && (exit $s) && false || exit; }
 
 # <UDF name="LK_NODE_FQDN" label="Host FQDN" example="web01-dev-syd.linode.linacreative.com" />
 # <UDF name="LK_NODE_TIMEZONE" label="System timezone" default="Australia/Sydney" />
-# <UDF name="LK_NODE_SERVICES" label="Services to install and configure" manyof="apache+php,mysql,memcached" default="" />
-# <UDF name="LK_NODE_PACKAGES" label="Additional packages to install (comma-delimited)" example="default-jre" default="" />
+# <UDF name="LK_FEATURES" label="Features to enable (comma-delimited)" manyof="apache+php,mysql,memcached" default="" />
+# <UDF name="LK_PACKAGES" label="Additional packages to install (comma-delimited)" example="default-jre" default="" />
 # <UDF name="LK_HOST_DOMAIN" label="Initial hosting domain" example="clientname.com.au" default="" />
 # <UDF name="LK_HOST_ACCOUNT" label="Initial hosting account name (default: based on domain)" example="clientname" default="" />
 # <UDF name="LK_HOST_SITE_ENABLE" label="Enable initial hosting site at launch" oneof="Y,N" default="N" />
@@ -62,8 +62,8 @@ SCRIPT_ENV=$(printenv | grep -Evi '^[^=]*password[^=]*=' || true)
 # Apply defaults from the tags above (use `lk_linode_get_udf_vars` to generate)
 LK_NODE_FQDN=${LK_NODE_FQDN-}
 LK_NODE_TIMEZONE=${LK_NODE_TIMEZONE:-Australia/Sydney}
-LK_NODE_SERVICES=${LK_NODE_SERVICES-}
-LK_NODE_PACKAGES=${LK_NODE_PACKAGES-}
+LK_FEATURES=${LK_FEATURES-}
+LK_PACKAGES=${LK_PACKAGES-}
 LK_HOST_DOMAIN=${LK_HOST_DOMAIN-}
 LK_HOST_ACCOUNT=${LK_HOST_ACCOUNT-}
 LK_HOST_SITE_ENABLE=${LK_HOST_SITE_ENABLE:-N}

@@ -5,41 +5,8 @@ function lk_is_bootstrap() {
 }
 
 function lk_is_desktop() {
-    lk_node_service_enabled desktop
+    lk_feature_enabled desktop
 }
-
-# lk_node_service_enabled SERVICE
-#
-# Return true if SERVICE or an equivalent appears in LK_NODE_SERVICES.
-function lk_node_service_enabled() {
-    [ -n "${LK_NODE_SERVICES-}" ] || return
-    [[ ,$LK_NODE_SERVICES, == *,$1,* ]] ||
-        [[ ,$(lk_node_expand_services), == *,$1,* ]]
-} #### Reviewed: 2021-03-27
-
-function _lk_node_expand_service() {
-    local SERVICE REVERSE=1
-    [ "${1-}" != -n ] || { REVERSE= && shift; }
-    if [[ ,$SERVICES, == *,$1,* ]]; then
-        SERVICES=$SERVICES$(printf ',%s' "${@:2}")
-    elif lk_is_true REVERSE; then
-        for SERVICE in "${@:2}"; do
-            [[ ,$SERVICES, == *,$SERVICE,* ]] || return 0
-        done
-        SERVICES=$SERVICES,$1
-    fi
-} #### Reviewed: 2021-03-27
-
-# lk_node_expand_services [SERVICE,...]
-#
-# Add alternative names to the service list (all enabled services by default).
-function lk_node_expand_services() {
-    local IFS=, SERVICES=${1-${LK_NODE_SERVICES-}}
-    _lk_node_expand_service apache+php apache2 php-fpm
-    _lk_node_expand_service mysql mariadb
-    _lk_node_expand_service -n xfce4 desktop
-    lk_echo_args $SERVICES | sort -u | lk_implode_input ","
-} #### Reviewed: 2021-03-27
 
 #### INCLUDE provision.sh.d
 

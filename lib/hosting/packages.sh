@@ -100,20 +100,20 @@ APT_REMOVE=(
     ${APT_REMOVE[@]+"${APT_REMOVE[@]}"}
 )
 
-function process_node_packages() {
-    if lk_node_service_enabled "$1"; then
+function process_feature_packages() {
+    if lk_feature_enabled "$1"; then
         APT_PACKAGES+=("${@:2}")
     else
         APT_REMOVE+=("${@:2}")
     fi
 }
 
-process_node_packages apache2 \
+process_feature_packages apache2 \
     apache2 \
     libapache2-mod-qos \
     python3-certbot-apache
 
-process_node_packages php-fpm \
+process_feature_packages php-fpm \
     php-apcu \
     php-apcu-bc \
     php-bcmath \
@@ -145,9 +145,9 @@ process_node_packages php-fpm \
     php-yaml \
     php-zip
 
-process_node_packages mariadb \
+process_feature_packages mariadb \
     mariadb-client \
     mariadb-server
 
-process_node_packages memcached \
+process_feature_packages memcached \
     memcached

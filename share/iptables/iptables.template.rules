@@ -40,7 +40,7 @@
 [ -z "${LK_SSH_TRUSTED_PORT:+1}" ] ||
     printf -- '-I lk_input -p tcp -m tcp --dport %s -j ACCEPT\n' \
         "$LK_SSH_TRUSTED_PORT"
-! lk_node_service_enabled libvirt || {
+! lk_feature_enabled libvirt || {
     printf ':%s - [0:0]\n' \
         LIBVIRT_FWI LIBVIRT_FWO LIBVIRT_FWX LIBVIRT_INP LIBVIRT_OUT
     printf -- '-I %s -j %s\n' \
@@ -75,7 +75,7 @@ esac
 :OUTPUT ACCEPT [0:0]
 :POSTROUTING ACCEPT [0:0]
 ({:
-! lk_node_service_enabled libvirt || {
+! lk_feature_enabled libvirt || {
     printf ':%s - [0:0]\n' LIBVIRT_PRT
     printf -- '-I %s -j %s\n' POSTROUTING LIBVIRT_PRT
 }
@@ -87,7 +87,7 @@ esac
 :OUTPUT ACCEPT [0:0]
 :POSTROUTING ACCEPT [0:0]
 ({:
-! lk_node_service_enabled libvirt || {
+! lk_feature_enabled libvirt || {
     printf ':%s - [0:0]\n' LIBVIRT_PRT
     printf -- '-I %s -j %s\n' POSTROUTING LIBVIRT_PRT
 }
