@@ -63,6 +63,7 @@ PAC_PACKAGES+=(
     # Shell
     bash-completion
     byobu-
+    fzf
     libnewt # Provides whiptail
     zsh
 
@@ -162,19 +163,19 @@ AUR_PACKAGES+=(
     powercap-:BM
 )
 
-! lk_node_service_enabled lighttpd || PAC_PACKAGES+=(
+! lk_feature_enabled lighttpd || PAC_PACKAGES+=(
     lighttpd
 )
 
-! lk_node_service_enabled squid || PAC_PACKAGES+=(
+! lk_feature_enabled squid || PAC_PACKAGES+=(
     squid
 )
 
-! lk_node_service_enabled docker || PAC_PACKAGES+=(
+! lk_feature_enabled docker || PAC_PACKAGES+=(
     docker
 )
 
-! lk_node_service_enabled libvirt || PAC_PACKAGES+=(
+! lk_feature_enabled libvirt || PAC_PACKAGES+=(
     libvirt
     qemu-desktop
     dnsmasq
@@ -184,7 +185,7 @@ AUR_PACKAGES+=(
     virt-install
 )
 
-if lk_node_service_enabled desktop; then
+if lk_feature_enabled desktop; then
     PAC_PACKAGES+=(
         xf86-video-vesa
         xorg-apps
@@ -302,7 +303,7 @@ if lk_node_service_enabled desktop; then
     )
 fi
 
-if lk_node_service_enabled xfce4; then
+if lk_feature_enabled xfce4; then
     PAC_PACKAGES+=(
         xfce4
         xfce4-goodies
@@ -333,14 +334,14 @@ if lk_is_virtual; then
         PAC_PACKAGES+=(
             qemu-guest-agent
         )
-        if lk_node_service_enabled desktop; then
+        if lk_feature_enabled desktop; then
             PAC_PACKAGES+=(
                 spice-vdagent
             )
         fi
     fi
 else
-    if lk_node_service_enabled desktop; then
+    if lk_feature_enabled desktop; then
         PAC_PACKAGES+=(
             os-prober
             mesa
@@ -348,7 +349,7 @@ else
         )
     fi
 
-    if lk_node_service_enabled xfce4; then
+    if lk_feature_enabled xfce4; then
         PAC_PACKAGES+=(
             bluez
             blueman
@@ -384,7 +385,7 @@ for ARR in PAC_PACKAGES AUR_PACKAGES; do
         else
             gnu_sed -E 's/:BM\>//'
         fi |
-        if lk_node_service_enabled minimal; then
+        if lk_feature_enabled minimal; then
             sed -E '/-$/d'
         else
             sed -E 's/-$//'

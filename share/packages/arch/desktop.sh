@@ -146,7 +146,6 @@ PAC_PACKAGES+=(
     handbrake
     handbrake-cli
     mpv
-    youtube-dl
     yt-dlp
 
     # System

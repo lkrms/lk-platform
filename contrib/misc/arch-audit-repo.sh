@@ -16,12 +16,13 @@ lk_require arch
             "$LK_BASE/share/packages/arch"/* \
             "$LK_BASE/lib/arch/packages.sh" |
             lk_bash_array_literals |
-            sed -E '/^[-a-zA-Z0-9+.@_]+$/!d' &&
+            sed -E '/^[-a-zA-Z0-9+.:@_]+$/!d; s/:.*//; s/-$//' &&
             curl -fsSL 'https://aur.archlinux.org/rpc/?v=5&type=search&by=maintainer&arg=lkrms' |
             jq -r '.results[].Name'; } | sort -u) \
         <(expac -S '%r %n %G' |
-            sed -En 's/^(core|extra|community|multilib) //p' |
-            tr ' ' '\n' | sort -u))
+            awk -v repo="${1:-${LK_ARCH_AUR_REPO_NAME:-aur}}" \
+                '$1 != repo { gsub(/(^[^ ]+[[:blank:]]+|[[:blank:]]+$)/, ""); print }' |
+            tr -s ' ' '\n' | sort -u))
 }
 
 REPO=$1
@@ -118,18 +119,18 @@ END {
 EOF
 
 lk_mktemp_with ERRORS
-lk_mktemp_with OFFICIAL
-# For each package in an official repo, print 'name' and 'provides'
+lk_mktemp_with OTHER
+# For each package in another repo, print 'name' and 'provides'
 expac -S '%r %n %S' |
-    sed -En 's/^(core|extra|community|multilib) //p' |
-    tr ' ' '\n' | sort -u >"$OFFICIAL"
+    awk -v repo="$REPO" '$1 != repo { gsub(/(^[^ ]+[[:blank:]]+|[[:blank:]]+$)/, ""); print }' |
+    tr -s ' ' '\n' | sort -u >"$OTHER"
 lk_mktemp_dir_with PKGBUILDS download_sources "$@"
 
 cd "$PKGBUILDS"
 while PKG=($(parse_SRCINFO '.[].pkgname | @tsv')) &&
     PROVIDES=($(parse_SRCINFO '.[].provides | @tsv')) &&
     DEPS=($(parse_SRCINFO '.[].depends | @tsv' |
-        grep -Fxvf "$OFFICIAL" -f <(printf '%s\n' \
+        grep -Fxvf "$OTHER" -f <(printf '%s\n' \
             "$@" ${PKG+"${PKG[@]}"} ${PROVIDES+"${PROVIDES[@]}"} |
             sort -u))); do
     download_sources "${DEPS[@]}"
@@ -143,7 +144,7 @@ printf '%s\n' "$@" | sort -u |
     lk_tty_list - "Expected from AUR in repo '$REPO':" package packages
 
 ! lk_mktemp_with ERRORS \
-    grep -Fxvf "$OFFICIAL" -f <(printf '%s\n' "$@") "$ERRORS" ||
+    grep -Fxvf "$OTHER" -f <(printf '%s\n' "$@") "$ERRORS" ||
     lk_tty_list_detail - \
         "Unable to download from AUR:" package packages <"$ERRORS"
 

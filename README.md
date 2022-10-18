@@ -18,6 +18,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_ADMIN_EMAIL`
 - `LK_APT_DEFAULT_MIRROR`
 - `LK_APT_DEFAULT_SECURITY_MIRROR`
+- `LK_ARCH_AUR_CHROOT_DIR`
 - `LK_ARCH_AUR_REPO_NAME`
 - `LK_ARCH_MIRROR`
 - `LK_ARCH_REPOS`
@@ -38,6 +39,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_CERTBOT_INSTALLED`
 - `LK_CERTBOT_OPTIONS`
 - `LK_CLIP_LINES`
+- `LK_CLOUDIMG_DIRECT_KERNEL_BOOT`
 - `LK_CLOUDIMG_SESSION_ROOT`
 - `LK_COMPLETION`
 - `LK_CURL_OPTIONS`
@@ -49,6 +51,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_DRY_RUN`
 - `LK_EMAIL_DESTINATION`
 - `LK_EXEC`
+- `LK_FEATURES`
 - `LK_FILE_BACKUP_MOVE`
 - `LK_FILE_BACKUP_TAKE`
 - `LK_FILE_KEEP_ORIGINAL`
@@ -82,8 +85,6 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_NODE_HOSTNAME`
 - `LK_NODE_LANGUAGE`
 - `LK_NODE_LOCALES`
-- `LK_NODE_PACKAGES`
-- `LK_NODE_SERVICES`
 - `LK_NODE_TIMEZONE`
 - `LK_NO_INPUT`
 - `LK_NO_STACK_TRACE`
@@ -92,6 +93,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_OPCACHE_MEMORY_CONSUMPTION`
 - `LK_OPENCONNECT_PROTOCOL`
 - `LK_OWASP_CRS_BRANCH`
+- `LK_PACKAGES`
 - `LK_PACKAGES_FILE`
 - `LK_PATH_PREFIX`
 - `LK_PHP_ADMIN_SETTINGS`
@@ -165,10 +167,10 @@ variable assignments compatible with Bash and POSIX `sh`.
 To generate the list above, run the following in `<LK_BASE>`:
 
 ```bash
-lk_bash_find_scripts -print0 |
-    xargs -0 gnu_grep -Pho '((?<=\$\{)|(?<=lk_is_true )|(?<=lk_is_false ))LK_[a-zA-Z0-9_]+\b(?!(\[[^]]+\])?[#%}])' |
+lk_find_shell_scripts -print0 |
+    xargs -0 gnu_grep -Pho '((?<=\$\{)|(?<=lk_is_true )|(?<=lk_is_false )|(?<=lk_true )|(?<=lk_false ))LK_[a-zA-Z0-9_]+\b(?!(\[[^]]+\])?[#%}])' |
     sort -u |
-    sed -Ee '/^LK_(.+_(UPDATED|DECLINED|NO_CHANGE)|BASE|USAGE|VERSION|Z|ADMIN_USERS|HOST_.+|MYSQL_(USERNAME|PASSWORD)|SHUTDOWN_ACTION)$/d' -e 's/.*/- `&`/'
+    sed -Ee '/^LK_(.+_(UPDATED|DECLINED|NO_CHANGE)|BASE|USAGE|VERSION|Z|ADMIN_USERS|HOST_.+|MYSQL_(USERNAME|PASSWORD)|SHUTDOWN_ACTION|BOLD|DIM|RESET)$/d' -e 's/.*/- `&`/'
 ```
 
 ### Site settings

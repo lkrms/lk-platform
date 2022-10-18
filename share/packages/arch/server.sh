@@ -108,7 +108,6 @@ PAC_PACKAGES+=(
     # Multimedia
     ffmpeg
     rtmpdump
-    youtube-dl
     yt-dlp
 
     #

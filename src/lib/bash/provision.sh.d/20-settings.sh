@@ -9,7 +9,7 @@ function _lk_settings_list_known() {
         LK_BRIDGE_INTERFACE \
         LK_WIFI_REGDOM \
         LK_NODE_TIMEZONE \
-        LK_NODE_SERVICES LK_NODE_PACKAGES \
+        LK_FEATURES LK_PACKAGES \
         LK_NODE_LOCALES LK_NODE_LANGUAGE \
         LK_SAMBA_WORKGROUP \
         LK_GRUB_CMDLINE \
@@ -48,7 +48,9 @@ function _lk_settings_list_legacy() {
     printf '%s\n' \
         LK_PATH_PREFIX_ALPHA \
         LK_SCRIPT_DEBUG \
-        LK_EMAIL_BLACKHOLE
+        LK_EMAIL_BLACKHOLE \
+        LK_NODE_SERVICES \
+        LK_NODE_PACKAGES
 }
 
 function _lk_settings_writable_files() {
@@ -112,6 +114,8 @@ function lk_settings_getopt() {
         UNSET=() REGEX='^(LK_[a-zA-Z0-9_]*[a-zA-Z0-9])(=(.*))?$'
     _lk_settings_migrate LK_DEBUG {LK_,}SCRIPT_DEBUG
     _lk_settings_migrate LK_EMAIL_DESTINATION {LK_,}EMAIL_BLACKHOLE
+    _lk_settings_migrate LK_FEATURES {LK_,}NODE_SERVICES
+    _lk_settings_migrate LK_PACKAGES {LK_,}NODE_PACKAGES
     for s in $(_lk_settings_list_known | grep -Fxv LK_BASE); do
         o=()
         [[ $s == LK_NODE_* ]] || {
@@ -209,7 +213,7 @@ function lk_settings_persist() {
 
 function lk_node_is_router() {
     [ "${LK_IPV4_ADDRESS:+1}${LK_IPV4_GATEWAY:+2}" = 1 ] ||
-        lk_node_service_enabled router
+        lk_feature_enabled router
 }
 
 #### Reviewed: 2021-08-28

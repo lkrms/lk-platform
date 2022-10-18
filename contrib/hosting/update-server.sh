@@ -1,18 +1,22 @@
 #!/bin/bash
 
+# Update lk-platform and run provisioning tasks on one or more hosting servers.
+#
 # Usage:
 #   update-server.sh [options] <SSH_HOST>...
 #
 # Options:
-#   --force-provision           Run provisioning script without revision change.
-#   --upgrade                   Upgrade apt packages on each host.
-#   --no-tls                    Skip TLS certificate checks.
-#   --no-wordpress              Skip WordPress checks.
-#   --no-test                   Skip site reachability test.
-#   --set <SETTING> <VALUE>     }
-#   --add <SETTING> <VALUE>     } Pass lk-platform settings changes to the
-#   --remove <SETTING> <VALUE>  } provisioning script.
-#   --unset <SETTING>           }
+#   --provision                 Run provisioning script.
+#   --upgrade                   Upgrade packages.
+#   --reboot                    Schedule a reboot if required.
+#   --reboot-time <TIME>        Override LK_AUTO_REBOOT_TIME.
+#   --tls                       Run TLS certificate checks.
+#   --wordpress                 Run WordPress checks.
+#   --test                      Run site reachability test.
+#   --set <SETTING> <VALUE>     Set an lk-platform setting.
+#   --add <SETTING> <VALUE>     Add a value to an lk-platform setting.
+#   --remove <SETTING> <VALUE>  Remove a value from an lk-platform setting.
+#   --unset <SETTING>           Clear an lk-platform setting.
 #
 # Environment:
 #   UPDATE_SERVER_BRANCH        Override 'main'.
@@ -20,8 +24,8 @@
 #   UPDATE_SERVER_HOSTING_KEYS  Update the SSH keys used to authorise provider
 #                               access to hosting accounts.
 #
-# Take the following actions on each <SSH_HOST>, creating an output log locally
-# and in ~root/ on the remote system:
+# This script takes the following actions on each <SSH_HOST>, creating an output
+# log locally and in ~root/ on the remote system:
 # 1. Ignore SIGHUP, SIGINT and SIGTERM to prevent, say, a dropped SSH connection
 #    killing a long-running `apt-get` process.
 # 2. Update or reset the lk-platform Git repository after stashing any
@@ -29,10 +33,14 @@
 # 3. Install icdiff for more readable log output.
 # 4. Replace /etc/skel.<PREFIX>/.ssh/authorized_keys_* with the value of
 #    UPDATE_SERVER_HOSTING_KEYS.
-# 5. Run lk-provision-hosting.sh with the specified arguments (--set, etc).
-# 6. Try to obtain Let's Encrypt TLS certificates for any public-facing sites
-#    that don't have one.
-# 7. Enable system cron on any WordPress sites that aren't using it.
+# 5. If --provision is set, run lk-provision-hosting.sh with any settings
+#    changes, otherwise apply settings changes directly.
+# 6. If --tls is set, try to obtain Let's Encrypt TLS certificates for any
+#    public-facing sites that don't have one.
+# 7. If --wordpress is set, enable system cron on any WordPress sites that
+#    aren't using it.
+# 8. If --reboot is set, check if a reboot is required and if so, schedule it
+#    for --reboot-time, LK_AUTO_REBOOT_TIME or 2 minutes' time
 
 lk_bin_depth=2 . lk-bash-load.sh || exit
 
@@ -188,13 +196,13 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
     LAST_HEAD=
     { [ ! -e "$HEAD_FILE" ] || LAST_HEAD=$(<"$HEAD_FILE"); } &&
       HEAD=$(lk_git_ref) || return
-    if ((FORCE_PROVISION)) || [[ $HEAD != "$LAST_HEAD" ]]; then
+    if ((PROVISION)); then
+      lk_tty_log "Provisioning with lk-platform revision $HEAD"
       ./bin/lk-provision-hosting.sh \
         --set LK_PLATFORM_BRANCH="$1" \
         "${@:4}" &&
         echo "$HEAD" >"$HEAD_FILE"
     else
-      lk_tty_log "System already provisioned by lk-platform revision $HEAD"
       lk_tty_print "Checking settings"
       SH=$(lk_settings_getopt "${@:4}") &&
         lk_settings_persist "$SH"
@@ -232,6 +240,13 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
           )" || STATUS=$?
       done
 
+    ((!REBOOT)) ||
+      [[ ! -e /var/run/reboot-required ]] || {
+      lk_tty_print "Reboot required"
+      lk_tty_run_detail \
+        shutdown -r "${REBOOT_TIME:-${LK_AUTO_REBOOT_TIME:-+2}}" || STATUS=$?
+    }
+
     return "$STATUS"
   }
 
@@ -256,23 +271,28 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
   }
 
   ARGS=()
-  FORCE_PROVISION=0
+  PROVISION=0
   UPGRADE=0
-  TLS=1
-  WORDPRESS=1
-  TEST=1
-  while [[ ${1-} =~ ^(-[saru]|--(set|add|remove|unset|(no-)?(force-provision|upgrade|tls|wordpress|test)))$ ]]; do
-    [[ $1 != --no-force-provision ]] || FORCE_PROVISION=0
-    [[ $1 != --force-provision ]] || FORCE_PROVISION=1
+  REBOOT=0
+  REBOOT_TIME=
+  TLS=0
+  WORDPRESS=0
+  TEST=0
+  while [[ ${1-} =~ ^(-[saru]|--(set|add|remove|unset|(no-)?(provision|upgrade|reboot|tls|wordpress|test)|reboot-time))$ ]]; do
+    [[ $1 != --no-provision ]] || PROVISION=0
+    [[ $1 != --provision ]] || PROVISION=1
     [[ $1 != --no-upgrade ]] || UPGRADE=0
     [[ $1 != --upgrade ]] || UPGRADE=1
+    [[ $1 != --no-reboot ]] || REBOOT=0
+    [[ $1 != --reboot ]] || REBOOT=1
+    [[ $1 != --reboot-time ]] || { [[ -n ${2+1} ]] && REBOOT_TIME=$2 && shift 2 && continue; } || lk_die "invalid arguments"
     [[ $1 != --no-tls ]] || TLS=0
     [[ $1 != --tls ]] || TLS=1
     [[ $1 != --no-wordpress ]] || WORDPRESS=0
     [[ $1 != --wordpress ]] || WORDPRESS=1
     [[ $1 != --no-test ]] || TEST=0
     [[ $1 != --test ]] || TEST=1
-    [[ ! $1 =~ ^--(no-)?(force-provision|upgrade|tls|wordpress|test)$ ]] || { shift && continue; }
+    [[ ! $1 =~ ^--(no-)?(provision|upgrade|reboot|tls|wordpress|test)$ ]] || { shift && continue; }
     SHIFT=2
     [[ ${2-} == *=* ]] || [[ $1 =~ ^--?u ]] ||
       ((SHIFT++))
@@ -292,7 +312,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
   SCRIPT=$TMP/do-update-server.sh
   {
     declare -f keep-alive update-server do-update-server
-    declare -p FORCE_PROVISION TLS WORDPRESS TLD_REGEX
+    declare -p PROVISION REBOOT REBOOT_TIME TLS WORDPRESS TLD_REGEX
     lk_quote_args do-update-server \
       "${UPDATE_SERVER_BRANCH:-main}" \
       "${UPDATE_SERVER_REPO:-https://github.com/lkrms/lk-platform.git}" \

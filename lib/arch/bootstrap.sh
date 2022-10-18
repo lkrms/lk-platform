@@ -60,7 +60,7 @@ LK_DNS_SEARCH=${LK_DNS_SEARCH-}                                        #
 LK_BRIDGE_INTERFACE=${LK_BRIDGE_INTERFACE-}                            #
 LK_WIFI_REGDOM=${LK_WIFI_REGDOM-}                                      # e.g. "AU"
 LK_NODE_TIMEZONE=${LK_NODE_TIMEZONE:-UTC}                              # See `timedatectl list-timezones`
-LK_NODE_SERVICES=${LK_NODE_SERVICES-}                                  #
+LK_FEATURES=${LK_FEATURES-}                                            #
 LK_NODE_LOCALES=${LK_NODE_LOCALES-en_AU.UTF-8 en_GB.UTF-8}             # "en_US.UTF-8" is added automatically
 LK_NODE_LANGUAGE=${LK_NODE_LANGUAGE-en_AU:en_GB:en}                    #
 LK_SAMBA_WORKGROUP=${LK_SAMBA_WORKGROUP-}                              #
@@ -176,10 +176,10 @@ while getopts ":u:o:c:p:s:xk:y" OPT; do
     s)
         [[ $OPTARG =~ ^[-a-z0-9+._]+(,[-a-z0-9+._]+)*$ ]] ||
             lk_warn "invalid service: $OPTARG" || lk_usage
-        LK_NODE_SERVICES=${LK_NODE_SERVICES:+$LK_NODE_SERVICES,}$OPTARG
+        LK_FEATURES=${LK_FEATURES:+$LK_FEATURES,}$OPTARG
         ;;
     x)
-        LK_NODE_SERVICES=${LK_NODE_SERVICES:+$LK_NODE_SERVICES,}xfce4
+        LK_FEATURES=${LK_FEATURES:+$LK_FEATURES,}xfce4
         ;;
     k)
         LK_PACKAGES_FILE=$OPTARG
@@ -213,8 +213,8 @@ LK_NODE_FQDN=${*: -1:1}
 LK_NODE_HOSTNAME=${LK_NODE_FQDN%%.*}
 [ "$LK_NODE_FQDN" != "$LK_NODE_HOSTNAME" ] ||
     LK_NODE_FQDN=
-LK_NODE_SERVICES=$(IFS=, &&
-    lk_echo_args $LK_NODE_SERVICES | sort -u | lk_implode_input ",")
+LK_FEATURES=$(IFS=, &&
+    lk_args $LK_FEATURES | lk_uniq | lk_implode_input ,)
 
 PASSWORD_GENERATED=0
 if [ -z "$BOOTSTRAP_KEY" ]; then
@@ -482,7 +482,7 @@ lk_var_sh \
     LK_BRIDGE_INTERFACE \
     LK_WIFI_REGDOM \
     LK_NODE_TIMEZONE \
-    LK_NODE_SERVICES \
+    LK_FEATURES \
     LK_NODE_LOCALES \
     LK_NODE_LANGUAGE \
     LK_SAMBA_WORKGROUP \

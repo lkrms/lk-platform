@@ -30,7 +30,7 @@ function _lk_prompt_command() {
                 ((LEN += ${#STR}))
             fi
             # " after 12s "
-            STR=" after ${SECS}s "
+            STR=" after $( ((SECS < 120)) && echo "${SECS}s" || lk_duration "$SECS") "
             PS+=("$STR\[$LK_RESET$DIM\]")
             ((LEN = COLUMNS - LEN - ${#STR})) || true
             [[ $LEN -le 0 ]] || {

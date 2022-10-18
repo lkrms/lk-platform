@@ -36,7 +36,6 @@ HOMEBREW_FORMULAE+=(
     qpdf
 
     # Multimedia (video)
-    youtube-dl
     yt-dlp
 )
 

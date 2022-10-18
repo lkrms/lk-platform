@@ -1,7 +1,8 @@
 #!/bin/bash
 
-[ "$EUID" -eq 0 ] || {
-    [ -z "${BASH_XTRACEFD-}" ] && unset ARGS ||
+# Elevate if not already running as root
+((!EUID)) || {
+    [[ -z ${BASH_XTRACEFD-} ]] && unset ARGS ||
         ARGS=(-C $((i = BASH_XTRACEFD, (${_LK_FD:=2} > i ? _LK_FD : i) + 1)))
     sudo ${ARGS+"${ARGS[@]}"} -H "$0" "$@"
     exit
@@ -88,8 +89,8 @@ export -n \
     LK_NODE_HOSTNAME=${LK_NODE_HOSTNAME-} \
     LK_NODE_FQDN=${LK_NODE_FQDN-} \
     LK_NODE_TIMEZONE=${LK_NODE_TIMEZONE-} \
-    LK_NODE_SERVICES=${LK_NODE_SERVICES-} \
-    LK_NODE_PACKAGES=${LK_NODE_PACKAGES-} \
+    LK_FEATURES=${LK_FEATURES-} \
+    LK_PACKAGES=${LK_PACKAGES-} \
     LK_ADMIN_EMAIL=${LK_ADMIN_EMAIL-} \
     LK_TRUSTED_IP_ADDRESSES=${LK_TRUSTED_IP_ADDRESSES-} \
     LK_SSH_TRUSTED_ONLY=${LK_SSH_TRUSTED_ONLY:-N} \
@@ -149,11 +150,11 @@ FIELD_ERRORS=$'\n'$(
 
     # Optional fields
     _LK_REQUIRED=0
-    lk_validate_many_of LK_NODE_SERVICES \
+    lk_validate_many_of LK_FEATURES \
         apache+php \
         mysql \
         memcached
-    lk_validate_list LK_NODE_PACKAGES "^$DPKG_SOURCE_REGEX\$"
+    lk_validate_list LK_PACKAGES "^$DPKG_SOURCE_REGEX\$"
     ! lk_is_bootstrap || {
         lk_validate LK_HOST_DOMAIN "^$DOMAIN_NAME_REGEX\$"
         lk_validate LK_HOST_ACCOUNT "^$LINUX_USERNAME_REGEX\$"
@@ -231,8 +232,8 @@ if lk_is_bootstrap; then
         LK_NODE_HOSTNAME \
         LK_NODE_FQDN \
         LK_NODE_TIMEZONE \
-        LK_NODE_SERVICES \
-        LK_NODE_PACKAGES \
+        LK_FEATURES \
+        LK_PACKAGES \
         LK_ADMIN_EMAIL \
         LK_TRUSTED_IP_ADDRESSES \
         LK_SSH_TRUSTED_ONLY \
@@ -306,9 +307,9 @@ APT_REMOVE=(
 DEFAULT_PHPVER=$(lk_hosting_php_get_default_version)
 PHP_VERSIONS=($(IFS=, && printf '%s\n' \
     $LK_PHP_VERSIONS $LK_PHP_DEFAULT_VERSION "$DEFAULT_PHPVER" | sort -u))
-if [[ -n $LK_PHP_VERSIONS ]] && lk_node_service_enabled php-fpm; then
+if [[ -n $LK_PHP_VERSIONS ]] && lk_feature_enabled php-fpm; then
     APT_REPOS+=("ppa:ondrej/php")
-    #! lk_node_service_enabled apache2 ||
+    #! lk_feature_enabled apache2 ||
     #    APT_REPOS+=("ppa:ondrej/apache2")
 fi
 
@@ -434,7 +435,7 @@ $IPV6_ADDRESS $HOST_NAMES}" && awk \
 
     lk_tty_print "Checking alternatives"
     # Ensure any new PHP versions don't become the default during installation
-    if [[ -n $LK_PHP_VERSIONS ]] && lk_node_service_enabled php-fpm &&
+    if [[ -n $LK_PHP_VERSIONS ]] && lk_feature_enabled php-fpm &&
         ! lk_is_bootstrap && CURRENT_PHP=$(type -P php) &&
         ! update-alternatives --query php |
         awk 'tolower($1)$2 == "status:manual"' |
@@ -604,7 +605,7 @@ EOF
     fi
 
     IFS=,
-    APT_PACKAGES=($LK_NODE_PACKAGES)
+    APT_PACKAGES=($LK_PACKAGES)
     unset IFS
     . "$LK_BASE/lib/hosting/packages.sh"
 
@@ -856,7 +857,7 @@ EOF
             postalias "$FILE"
     fi
 
-    if lk_node_service_enabled apache2; then
+    if lk_feature_enabled apache2; then
         lk_tty_print "Checking Apache"
         unset LK_FILE_REPLACE_NO_CHANGE LK_SYMLINK_NO_CHANGE
         DEFAULT_SITES=(/etc/apache2/sites-enabled/{,000-}default*.conf)
@@ -901,7 +902,7 @@ EOF
             socache_shmcb
             ssl
         )
-        ! lk_node_service_enabled php-fpm || APACHE_MODS+=(
+        ! lk_feature_enabled php-fpm || APACHE_MODS+=(
             proxy
             proxy_fcgi
         )
@@ -1002,7 +1003,7 @@ EOF
         IPTABLES_TCP_LISTEN+=(80 443)
     fi
 
-    if lk_node_service_enabled php-fpm; then
+    if lk_feature_enabled php-fpm; then
         lk_tty_print "Checking PHP-FPM"
         if ! lk_is_bootstrap; then
             lk_tty_detail "Checking configuration files"
@@ -1092,9 +1093,9 @@ END        { if (m) { print u[m] } else { exit 1 } }')} ||
         export WP_CLI_PACKAGES_DIR=$DIR
         if ! no_upgrade; then
             lk_tty_detail "Updating WP-CLI packages"
-            lk_wp package update --quiet
+            lk_keep_trying lk_wp package update --quiet
         fi
-        lk_wp_package_install \
+        lk_keep_trying lk_wp_package_install \
             aaemnnosttv/wp-cli-login-command
 
         DIR=/opt/opcache-gui
@@ -1106,7 +1107,7 @@ END        { if (m) { print u[m] } else { exit 1 } }')} ||
                 "$DIR"
     fi
 
-    if lk_node_service_enabled mariadb; then
+    if lk_feature_enabled mariadb; then
         lk_tty_print "Checking MariaDB (MySQL)"
         unset LK_FILE_REPLACE_NO_CHANGE
         FILE=/etc/mysql/mariadb.conf.d/90-${LK_PATH_PREFIX}default.cnf
@@ -1145,7 +1146,7 @@ EOF
         fi
     fi
 
-    if lk_node_service_enabled memcached; then
+    if lk_feature_enabled memcached; then
         lk_tty_print "Checking Memcached"
         LK_CONF_OPTION_FILE=/etc/memcached.conf
         get_before_file "$LK_CONF_OPTION_FILE"
@@ -1153,8 +1154,8 @@ EOF
             lk_conf_set_option -m "${LK_MEMCACHED_MEMORY_LIMIT:-64}"
         check_after_file
         if ! lk_is_bootstrap && ! lk_systemctl_running memcached; then
-            lk_systemctl_reload_or_restart "$1"
-            lk_systemctl_enable "$1"
+            lk_systemctl_reload_or_restart memcached
+            lk_systemctl_enable memcached
         elif lk_is_false LK_FILE_REPLACE_NO_CHANGE; then
             lk_tty_run_detail systemctl restart memcached.service
         fi
@@ -1175,7 +1176,7 @@ EOF
         lk_mark_clean "legacy-sites.migration"
     fi
 
-    if lk_node_service_enabled apache2 || lk_node_service_enabled php-fpm; then
+    if lk_feature_enabled apache2 || lk_feature_enabled php-fpm; then
         lk_hosting_site_configure_all
         lk_hosting_apply_config
         [[ ! -d /srv/www/.opcache ]] ||
@@ -1220,7 +1221,7 @@ EOF
 
             'https://api.github.com/meta|.web[]\,.api[]\,.git[]'
         )
-        if lk_node_service_enabled php-fpm; then
+        if lk_feature_enabled php-fpm; then
             HOSTS+=(
                 api.wordpress.org
                 downloads.wordpress.org
