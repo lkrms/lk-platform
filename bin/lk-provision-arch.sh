@@ -600,8 +600,11 @@ $LK_NODE_HOSTNAME" &&
 
     if lk_command_exists aur ||
         [ -n "${LK_ARCH_AUR_REPO_NAME-}" ] ||
-        { [ ${#AUR_PACKAGES[@]} -gt 0 ] && lk_tty_yn \
-            "OK to install aurutils for AUR package management?" Y; }; then
+        { [ ${#AUR_PACKAGES[@]} -gt 0 ] &&
+            lk_tty_list AUR_PACKAGES \
+                "To install from AUR:" package packages &&
+            lk_tty_yn \
+                "OK to install aurutils for AUR package management?" Y; }; then
         lk_log_tty_on
         lk_tty_print "Checking AUR packages"
         PAC_INSTALL=($(lk_pac_not_installed_list \
@@ -676,13 +679,13 @@ $LK_NODE_HOSTNAME" &&
         lk_log_tty_stdout_off
     fi
 
-    if [ ${#PAC_KEEP[@]} -gt 0 ]; then
-        PAC_KEEP=($(lk_pac_installed_list "${PAC_KEEP[@]}"))
+    if [ ${#PAC_OFFER[@]} -gt 0 ]; then
+        PAC_OFFER=($(lk_pac_installed_list "${PAC_OFFER[@]}"))
     fi
-    _PAC_KEEP=($(lk_arr PAC_KEEP | sed -E '/^aurutils$/d'))
+    _PAC_KEEP=($(lk_arr PAC_OFFER | sed -E '/^aurutils$/d'))
 
     lk_tty_print "Checking install reasons"
-    PAC_EXPLICIT=($(lk_arr PAC_PACKAGES AUR_PACKAGES PAC_KEEP | sort -u))
+    PAC_EXPLICIT=($(lk_arr PAC_PACKAGES AUR_PACKAGES PAC_OFFER | sort -u))
     PAC_MARK_EXPLICIT=($(lk_pac_installed_not_explicit "${PAC_EXPLICIT[@]}"))
     PAC_UNMARK_EXPLICIT=($(comm -13 \
         <(lk_arr PAC_EXPLICIT) \
@@ -695,7 +698,7 @@ $LK_NODE_HOSTNAME" &&
             pacman -D --asdeps "${PAC_UNMARK_EXPLICIT[@]}"
 
     REMOVE_MESSAGE=()
-    if PAC_REMOVE=($(pacman -Qdttq | grep -Fxvf <(lk_arr PAC_REJECT))); then
+    if PAC_REMOVE=($(pacman -Qdttq | grep -Fxvf <(lk_arr PAC_EXCEPT))); then
         lk_whiptail_build_list PAC_REMOVE '' "${PAC_REMOVE[@]}"
         lk_mapfile PAC_REMOVE <(lk_whiptail_checklist "Orphaned packages" \
             "Selected packages will be removed:" "${PAC_REMOVE[@]}" off)
@@ -704,11 +707,11 @@ $LK_NODE_HOSTNAME" &&
             REMOVE_MESSAGE+=("orphaned")
         }
     fi
-    [ ${#PAC_REJECT[@]} -eq 0 ] ||
-        PAC_REJECT=($(lk_pac_installed_list "${PAC_REJECT[@]}"))
-    [ ${#PAC_REJECT[@]} -eq 0 ] || {
+    [ ${#PAC_EXCEPT[@]} -eq 0 ] ||
+        PAC_EXCEPT=($(lk_pac_installed_list "${PAC_EXCEPT[@]}"))
+    [ ${#PAC_EXCEPT[@]} -eq 0 ] || {
         REMOVE_MESSAGE+=("blacklisted")
-        PAC_REMOVE+=("${PAC_REJECT[@]}")
+        PAC_REMOVE+=("${PAC_EXCEPT[@]}")
     }
     [ ${#PAC_REMOVE[@]} -eq 0 ] || {
         lk_tty_print \

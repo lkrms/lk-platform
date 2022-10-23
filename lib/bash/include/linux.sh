@@ -252,14 +252,16 @@ true || {
     systemctl
 }
 
+function lk_system_has_bluetooth() {
+    awk -v module=bluetooth '$1==module{f=1;exit}END{exit 1-f}' /proc/modules
+}
+
 function lk_system_has_intel_cpu() {
-    ! lk_is_virtual &&
-        grep -Eq '\<GenuineIntel\>' /proc/cpuinfo 2>/dev/null
+    grep -Eq '\<GenuineIntel\>' /proc/cpuinfo 2>/dev/null
 }
 
 function lk_system_has_amd_cpu() {
-    ! lk_is_virtual &&
-        grep -Eq '\<AuthenticAMD\>' /proc/cpuinfo 2>/dev/null
+    grep -Eq '\<AuthenticAMD\>' /proc/cpuinfo 2>/dev/null
 }
 
 function lk_system_is_thinkpad() {

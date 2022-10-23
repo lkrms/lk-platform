@@ -12,12 +12,16 @@ PAC_REPOS=(
 unset IFS
 
 PAC_PACKAGES=(${PAC_PACKAGES+"${PAC_PACKAGES[@]}"})
-PAC_REJECT=(${PAC_REJECT+"${PAC_REJECT[@]}"})
-PAC_KEEP=(${PAC_KEEP+"${PAC_KEEP[@]}"})
+PAC_EXCEPT=(${PAC_EXCEPT+"${PAC_EXCEPT[@]}"})
+PAC_OFFER=(${PAC_OFFER+"${PAC_OFFER[@]}"})
 PAC_NO_REPLACE=(${PAC_NO_REPLACE+"${PAC_NO_REPLACE[@]}"})
 AUR_PACKAGES=(${AUR_PACKAGES+"${AUR_PACKAGES[@]}"})
 
-# - `:BM` = bare metal, i.e. only installed on physical hardware
+# Package suffixes:
+# - "-" = optional (exclude when 'minimal' feature is enabled)
+# - ":BM" = bare metal (only install on physical hardware)
+# - ":P" = portable (only install on laptops)
+# - ":Q" = QEMU (only install on QEMU guests)
 PAC_PACKAGES+=(
     # Essentials
     base                 # Includes coreutils, findutils, glibc, procps-ng, psmisc, util-linux, ...
@@ -25,8 +29,10 @@ PAC_PACKAGES+=(
     linux-firmware:BM    #
     mkinitcpio           # Specify preferred initramfs package explicitly
     kernel-modules-hook- # Keep the running kernel's modules installed after the kernel package is upgraded
-    grub
-    efibootmgr
+    grub                 #
+    efibootmgr           #
+    os-prober            #
+    terminus-font        # Bitmap font that can be used with GRUB
 
     # Services
     networkmanager
@@ -89,6 +95,7 @@ PAC_PACKAGES+=(
     msr-tools     # Access processor MSRs ("Model Specific Registers") like BD PROCHOT
     nvme-cli:BM
     powertop:BM
+    qemu-guest-agent:Q
     smartmontools:BM #
     sysfsutils       # e.g. to list options set for a loaded kernel module: `systool -v -m iwlwifi`
     tlp:BM
@@ -154,6 +161,10 @@ PAC_PACKAGES+=(
     amd-ucode:BM
 )
 
+! lk_system_is_thinkpad || PAC_PACKAGES+=(
+    tpacpi-bat
+)
+
 AUR_PACKAGES+=(
     # Utilities
     icdiff-
@@ -187,17 +198,28 @@ AUR_PACKAGES+=(
 
 if lk_feature_enabled desktop; then
     PAC_PACKAGES+=(
-        xf86-video-vesa
-        xorg-apps
-        xorg-fonts
-        xorg-fonts-75dpi
-        xorg-fonts-100dpi
         xorg-server
-        xorg-server-xvfb
+        xorg-apps # Provides setxkbmap, xrandr, xrdb, xdpyinfo, ...
+        xorg-fonts-100dpi
+
+        xf86-input-synaptics:P # The deprecated synaptics touchpad driver is (still) better than xinput
+
+        bluez:BM
+        bluez-utils-:BM
+        blueman:BM
+
+        libva-utils-    # Provides vainfo
+        mesa            # Includes iris, nouveau, virtio_gpu, ...
+        mesa-utils-     # Provides glxinfo
+        spice-vdagent:Q #
+        vdpauinfo-
 
         lightdm
         lightdm-gtk-greeter
         lightdm-gtk-greeter-settings
+
+        xsecurelock
+        xss-lock
 
         autorandr
         cups
@@ -205,7 +227,7 @@ if lk_feature_enabled desktop; then
         gvfs
         gvfs-afc # Apple devices
         gvfs-mtp # Others
-        gvfs-nfs
+        gvfs-nfs-
         gvfs-smb
         network-manager-applet
         seahorse
@@ -213,46 +235,45 @@ if lk_feature_enabled desktop; then
         xdg-user-dirs # Manage ~/Desktop, ~/Templates, etc.
         zenity
 
-        adapta-gtk-theme
-        arc-gtk-theme
-        #arc-icon-theme
-        arc-solid-gtk-theme
-        #breeze-gtk
-        #breeze-icons
-        capitaine-cursors
-        #elementary-icon-theme
-        #elementary-wallpapers
-        #gtk-theme-elementary
-        papirus-icon-theme
-        #sound-theme-elementary
+        arc-gtk-theme-
+        arc-solid-gtk-theme-
+        capitaine-cursors-
+        papirus-icon-theme-
 
-        # GTK 2 support
-        gtk-engine-murrine
-        gtk-engines
+        gtk-engine-murrine- # Support GTK 2
+        gtk-engines-
 
-        galculator
-        geany
+        epiphany   # WebKit-based web browser
+        evince     # Document viewer
+        galculator #
+        geany      # notepadqq is smaller but depends on Qt
+        gimp-
+        mpv
         pinta
-        vlc
+        qalculate-gtk-
+        speedcrunch-
+        vlc-
 
-        gst-libav
-        gst-plugins-good
-        libdvdcss
+        pipewire
+        pipewire-alsa  # Supports ALSA clients
+        pipewire-pulse # Supports PulseAudio clients and Bluetooth audio
+        wireplumber    # Starts PipeWire via a systemd user unit
 
-        epiphany
-
-        evince
+        gst-libav         # "libav-based plugin containing many decoders and encoders"
+        gst-plugins-bad-  # "Plugins that need more quality, testing or documentation"
+        gst-plugins-base  # "Essential exemplary set of elements"
+        gst-plugins-good  # "Good-quality plugins under LGPL license"
+        gst-plugins-ugly- # "Good-quality plugins that might pose distribution problems"
+        libdvdcss-
 
         # adobe-source-* packages have been replaced with aur/ttf-adobe-source-*
         # because adobe-source-sans-fonts OTFs have rendering issues below ~12px
-        inter-font
         noto-fonts
         noto-fonts-cjk
-        terminus-font
         ttf-dejavu
-        ttf-fantasque-sans-mono
-        ttf-inconsolata
-        ttf-jetbrains-mono
+        ttf-fantasque-sans-mono- # For programming
+        ttf-inconsolata          # For terminals and programming
+        ttf-jetbrains-mono-      # For programming
         ttf-lato
         ttf-opensans
         ttf-roboto
@@ -260,46 +281,53 @@ if lk_feature_enabled desktop; then
         ttf-ubuntu-font-family
     )
 
-    if ! lk_is_virtual && lk_is_portable; then
-        # The deprecated synaptics touchpad driver is (still) better than xinput
-        PAC_PACKAGES+=(xf86-input-synaptics)
-    fi
+    # Hardware video acceleration
+    #
+    # - VA-API and VDPAU are the main hardware-accelerated video
+    #   encoding/decoding libraries
+    # - Intel drivers only support VA-API, but `libvdpau-va-gl` can be installed
+    #   to translate VDPAU to VA-API for VDPAU-only software
+    # - AMD drivers support VA-API and VDPAU
+    # - NVIDIA drivers also support both, but proprietary firmware must be
+    #   installed
+    ! lk_system_has_intel_graphics || PAC_PACKAGES+=(
+        # xf86-video-intel hasn't been recommended since Gen4
+        intel-media-driver # For Broadwell (2014) and newer
+        libva-intel-driver # For GMA 4500 (2008) and newer, up to Coffee Lake (2017)
+        intel-gpu-tools-   # Provides intel_gpu_top
+    )
+    ! lk_system_has_amd_graphics || PAC_PACKAGES+=(
+        xf86-video-amdgpu
+        libva-mesa-driver #
+        mesa-vdpau        #
+        radeontop-        # Equivalent to intel_gpu_top
+    )
+    ! lk_system_has_nvidia_graphics || PAC_PACKAGES+=(
+        nvidia
+        nvidia-utils
+    )
 
-    if lk_arr PAC_PACKAGES AUR_PACKAGES | grep -E \
-        '(^ttf-joypixels-?($|:)|^ttf-.*\<(tw)?emoji\>|\<fonts-emoji\>)' \
-        >/dev/null; then
-        PAC_REJECT+=(noto-fonts-emoji)
-    else
+    # Install noto-fonts-emoji unless an emoji font is already being installed
+    lk_arr PAC_PACKAGES AUR_PACKAGES |
+        grep -E \
+            '(^ttf-joypixels-?($|:)|^ttf-.*\<(tw)?emoji\>|\<fonts-emoji\>)' >/dev/null ||
         PAC_PACKAGES+=(noto-fonts-emoji)
-    fi
 
     AUR_PACKAGES+=(
-        networkmanager-dispatcher-ntpd
-        xrandr-invert-colors
+        networkmanager-dispatcher-ntpd-
+        xrandr-invert-colors-
 
-        ttf-adobe-source-code-pro-fonts
-        ttf-adobe-source-sans-fonts
-        ttf-adobe-source-serif-fonts
+        ttf-adobe-source-code-pro-fonts-
+        ttf-adobe-source-sans-fonts-
+        ttf-adobe-source-serif-fonts-
 
         # Selected works of https://github.com/vinceliuice
-        qogir-gtk-theme
-        #qogir-icon-theme
-        tela-icon-theme
-        #vimix-cursors
+        qogir-gtk-theme-
+        qogir-icon-theme-
+        tela-icon-theme-
+        vimix-cursors-
 
-        #whitesur-gtk-theme
-        #whitesur-icon-theme
-        #whitesur-cursor-theme-git
-        #mojave-gtk-theme
-        #mcmojave-circle-icon-theme # Requires numix-gtk-theme-git
-        #mcmojave-cursors
-
-        #numix-gtk-theme-git
-        #sound-theme-smooth
-        #zuki-themes
-
-        #wiki-loves-earth-wallpapers
-        #wiki-loves-monuments-wallpapers
+        zuki-themes-
     )
 fi
 
@@ -310,86 +338,52 @@ if lk_feature_enabled xfce4; then
 
         catfish
         engrampa
-        libcanberra
         pavucontrol
         plank
-        pulseaudio-alsa # Alternative: pipewire-alsa
-        xsecurelock
-        xss-lock
     )
-    PAC_REJECT+=(
-        xfce4-screensaver
-    )
+
     AUR_PACKAGES+=(
-        mugshot
-        xfce4-panel-profiles
-
-        #elementary-xfce-icons
-        #xfce-theme-greybird
-    )
-fi
-
-if lk_is_virtual; then
-    if lk_is_qemu; then
-        PAC_PACKAGES+=(
-            qemu-guest-agent
-        )
-        if lk_feature_enabled desktop; then
-            PAC_PACKAGES+=(
-                spice-vdagent
-            )
-        fi
-    fi
-else
-    if lk_feature_enabled desktop; then
-        PAC_PACKAGES+=(
-            os-prober
-            mesa
-            libvdpau-va-gl
-        )
-    fi
-
-    if lk_feature_enabled xfce4; then
-        PAC_PACKAGES+=(
-            bluez
-            blueman
-            pulseaudio-bluetooth # Alternative: pipewire-pulse
-        )
-    fi
-
-    ! lk_system_is_thinkpad || PAC_PACKAGES+=(
-        tpacpi-bat
-    )
-
-    ! lk_system_has_intel_graphics || PAC_PACKAGES+=(
-        intel-media-driver
-        libva-intel-driver
-    )
-    ! lk_system_has_nvidia_graphics || PAC_PACKAGES+=(
-        nvidia
-        nvidia-utils
-    )
-    ! lk_system_has_amd_graphics || PAC_PACKAGES+=(
-        xf86-video-amdgpu
-        libva-mesa-driver
-        mesa-vdpau
+        mugshot-
+        xfce4-panel-profiles-
+        xfce-theme-greybird- # Xubuntu's default theme
     )
 fi
 
 ####
 
 for ARR in PAC_PACKAGES AUR_PACKAGES; do
-    lk_mapfile "$ARR" < <(lk_arr "$ARR" |
-        if lk_is_virtual; then
-            gnu_sed -E '/:BM\>/d'
-        else
-            gnu_sed -E 's/:BM\>//'
-        fi |
-        if lk_feature_enabled minimal; then
-            sed -E '/-$/d'
-        else
-            sed -E 's/-$//'
-        fi)
+    lk_mapfile "$ARR" < <(
+        lk_arr "$ARR" |
+            if lk_is_qemu; then
+                # Keep QEMU, remove bare metal and portable
+                gnu_sed -E 's/:Q\>//; /:(BM|P)\>/d'
+            elif lk_is_virtual; then
+                # Remove bare metal, portable and QEMU
+                gnu_sed -E '/:(BM|P|Q)\>/d'
+            elif lk_is_portable; then
+                # Keep bare metal and portable, remove QEMU
+                gnu_sed -E 's/:(BM|P)\>//; /:Q\>/d'
+            else
+                # Keep bare metal, remove portable and QEMU
+                gnu_sed -E 's/:BM\>//; /:(P|Q)\>/d'
+            fi
+    )
+    if lk_feature_enabled minimal; then
+        # Add optional to PAC_OFFER
+        lk_mapfile PAC_OFFER < <(
+            { lk_arr PAC_OFFER &&
+                lk_arr "$ARR" | sed -En 's/-$//p'; } | sort -u
+        )
+        # Remove optional
+        lk_mapfile "$ARR" < <(
+            lk_arr "$ARR" | sed -E '/-$/d' | sort -u
+        )
+    else
+        # Keep optional
+        lk_mapfile "$ARR" < <(
+            lk_arr "$ARR" | sed -E 's/-$//' | sort -u
+        )
+    fi
 done
 
 SUFFIX=-${LK_PATH_PREFIX%-}
@@ -434,12 +428,12 @@ if PAC_GROUPS=$(lk_arr PAC_PACKAGES | grep -Fxf "$_PAC_GROUPS"); then
     } | sort -u))
 fi
 
-if [ -n "${PAC_REJECT+1}" ]; then
+if [ -n "${PAC_EXCEPT+1}" ]; then
     REJECT=(
-        "${PAC_REJECT[@]}"
-        "${PAC_REJECT[@]/%/-git}"
-        "${PAC_REJECT[@]/%/-git$SUFFIX}"
-        "${PAC_REJECT[@]/%/$SUFFIX}"
+        "${PAC_EXCEPT[@]}"
+        "${PAC_EXCEPT[@]/%/-git}"
+        "${PAC_EXCEPT[@]/%/-git$SUFFIX}"
+        "${PAC_EXCEPT[@]/%/$SUFFIX}"
     )
     PAC_PACKAGES=($(lk_arr PAC_PACKAGES | grep -Fxvf <(lk_arr REJECT) || true))
     AUR_PACKAGES=($(lk_arr AUR_PACKAGES | grep -Fxvf <(lk_arr REJECT) || true))
@@ -485,7 +479,7 @@ if [ -s "$PAC_REPLACE" ]; then
     lk_mktemp_with SED \
         awk -v "suffix=$SUFFIX" \
         '{print "s/^" $1 "(-git)?(" suffix ")?$/" $2 "/"}' "$PAC_REPLACE"
-    PAC_REJECT+=($(lk_arr PAC_PACKAGES AUR_PACKAGES |
+    PAC_EXCEPT+=($(lk_arr PAC_PACKAGES AUR_PACKAGES |
         grep -Fxf <(awk '{print $1}' "$PAC_REPLACE") || true))
     PAC_PACKAGES=($(lk_arr PAC_PACKAGES | sed -Ef "$SED" | sort -u))
     AUR_PACKAGES=($(lk_arr AUR_PACKAGES | sed -Ef "$SED" | sort -u))
@@ -507,12 +501,12 @@ if [ ${#AUR_PACKAGES[@]} -gt 0 ] ||
         grep -E '^file://'; } &>/dev/null; then
     PAC_BASE_DEVEL=($(lk_pac_groups base-devel))
     PAC_PACKAGES+=("${PAC_BASE_DEVEL[@]}" devtools pacutils vifm)
-    PAC_KEEP+=(aurutils aurutils-git aurutils{,-git}"$SUFFIX")
+    PAC_OFFER+=(aurutils aurutils-git aurutils{,-git}"$SUFFIX")
 fi
 
-# Reduce PAC_KEEP to packages not present in PAC_PACKAGES
-if [ ${#PAC_KEEP[@]} -gt 0 ]; then
-    PAC_KEEP=($(lk_arr PAC_KEEP | grep -Fxvf <(lk_arr PAC_PACKAGES) || true))
+# Reduce PAC_OFFER to packages not present in PAC_PACKAGES
+if [ ${#PAC_OFFER[@]} -gt 0 ]; then
+    PAC_OFFER=($(lk_arr PAC_OFFER | grep -Fxvf <(lk_arr PAC_PACKAGES) || true))
 fi
 
 PAC_PACKAGES=($(lk_arr PAC_PACKAGES | sort -u))
