@@ -1,6 +1,6 @@
 /var/log/apache2/*.log /srv/www/*/log/*.log {
 	daily
-	rotate 14
+	rotate {{LOG_RETENTION_DAYS}}
 	compress
 	create
 	delaycompress
