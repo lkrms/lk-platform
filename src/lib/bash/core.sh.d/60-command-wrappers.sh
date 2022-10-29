@@ -109,6 +109,18 @@ function lk_env_clean() {
     fi
 }
 
+# lk_stack COMMAND [ARG...]
+#
+# Run COMMAND with _LK_STACK_DEPTH incremented.
+function lk_stack() {
+    local STATUS=$? _LK_STACK_DEPTH=$((2 + ${_LK_STACK_DEPTH:-0}))
+    if ((!STATUS)); then
+        "$@"
+    else
+        (exit "$STATUS") || "$@"
+    fi
+}
+
 #### Other command wrappers in core.sh:
 #### - lk_pass
 #### - lk_elevate

@@ -2881,6 +2881,18 @@ function lk_env_clean() {
     fi
 }
 
+# lk_stack COMMAND [ARG...]
+#
+# Run COMMAND with _LK_STACK_DEPTH incremented.
+function lk_stack() {
+    local STATUS=$? _LK_STACK_DEPTH=$((2 + ${_LK_STACK_DEPTH:-0}))
+    if ((!STATUS)); then
+        "$@"
+    else
+        (exit "$STATUS") || "$@"
+    fi
+}
+
 function lk_jq() {
     jq -L"$LK_BASE/lib"/{jq,json} "$@"
 }
