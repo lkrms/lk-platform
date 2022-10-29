@@ -63,11 +63,11 @@ recurse(. as $c | .subcommands[]? | .name |= "\($c.name) \(.)") |
 }
 
 function lk_wp_get_site_root() {
-    local SITE_ROOT
-    SITE_ROOT=${_LK_WP_PATH:-$(lk_wp eval "echo ABSPATH;" --skip-wordpress)} &&
-        [ "$SITE_ROOT" != / ] &&
-        echo "${SITE_ROOT%/}" ||
-        lk_err "WordPress installation not found"
+    [[ -z ${_LK_WP_PATH:+1} ]] || { echo "$_LK_WP_PATH" && return; }
+    local ABSPATH
+    ABSPATH=$(lk_wp eval "echo rtrim(ABSPATH, DIRECTORY_SEPARATOR);" --skip-wordpress) &&
+        [[ -e $ABSPATH/wp-includes/version.php ]] &&
+        echo "$ABSPATH" || lk_err "WordPress installation not found"
 }
 
 # _lk_wp_set_path [SITE_ROOT]

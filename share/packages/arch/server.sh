@@ -3,9 +3,9 @@
 PAC_REPOS=()
 PAC_PACKAGES=()
 AUR_PACKAGES=()
-PAC_REJECT=()
+PAC_EXCEPT=()
 
-PAC_KEEP=(
+PAC_OFFER=(
     # Utilities
     ccache
     expect

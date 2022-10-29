@@ -3,9 +3,9 @@
 PAC_REPOS=()
 PAC_PACKAGES=()
 AUR_PACKAGES=()
-PAC_REJECT=()
+PAC_EXCEPT=()
 
-PAC_KEEP=(
+PAC_OFFER=(
     teamviewer
     zoom
 )
@@ -93,13 +93,11 @@ PAC_PACKAGES+=(
     libreoffice-fresh-en-gb
     nextcloud-client
     nomacs
-    qalculate-gtk
     remmina
     screenkey
     scribus
     simplescreenrecorder
     slop
-    speedcrunch
     system-config-printer
     thunderbird
     thunderbird-i18n-en-gb
@@ -145,16 +143,13 @@ PAC_PACKAGES+=(
     ffmpeg
     handbrake
     handbrake-cli
-    mpv
     yt-dlp
 
     # System
     dconf-editor
     gparted
     guake
-    libsecret   # Provides secret-tool
-    libva-utils # Provides vainfo
-    vdpauinfo
+    libsecret # Provides secret-tool
 
     # Automation
     evtest

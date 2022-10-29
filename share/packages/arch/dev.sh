@@ -6,9 +6,9 @@ PAC_REPOS=(
 
 PAC_PACKAGES=()
 AUR_PACKAGES=()
-PAC_REJECT=()
+PAC_EXCEPT=()
 
-PAC_KEEP=(
+PAC_OFFER=(
     ant
     apachedirectorystudio
     expect
@@ -159,13 +159,11 @@ PAC_PACKAGES+=(
     libreoffice-fresh-en-gb
     nextcloud-client
     nomacs
-    qalculate-gtk
     remmina
     screenkey
     scribus
     simplescreenrecorder
     slop
-    speedcrunch
     system-config-printer
     thunderbird
     thunderbird-i18n-en-gb
@@ -215,7 +213,6 @@ PAC_PACKAGES+=(
     handbrake-cli
     mkvtoolnix-cli
     mkvtoolnix-gui
-    mpv
     openshot
     yt-dlp
 
@@ -224,10 +221,8 @@ PAC_PACKAGES+=(
     fontconfig
     gparted
     guake
-    libsecret   # Provides secret-tool
-    libva-utils # Provides vainfo
+    libsecret # Provides secret-tool
     syslinux
-    vdpauinfo
 
     # Automation
     evtest
