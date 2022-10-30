@@ -1,34 +1,52 @@
 #!/bin/bash
 
+# _lk_git GIT_COMMAND [ARG...]
+#
+# Run a git command as _LK_GIT_USER with SSH port forwarding disabled,
+# preserving GIT_* environment variables.
+#
+# If _LK_GIT_USER is not set, git runs elevated if LK_SUDO is set, or as the
+# current user otherwise.
 function _lk_git() {
-    local VAR ENV=() SSH_SOCK_OWNER SSH_OPTIONS=(
-        ClearAllForwardings=yes
-        ${_LK_GIT_SSH_OPTIONS+"${_LK_GIT_SSH_OPTIONS[@]}"}
-    )
+    local IFS=$' \t\n' VAR ENV=() SSH_SOCK_OWNER
+    # Collect GIT_* environment variables so they can be passed to `runuser env`
+    # or similar
     for VAR in "${!GIT_@}"; do
-        ! lk_var_exported "$VAR" || ENV[${#ENV[@]}]="$VAR=${!VAR}"
+        ! lk_var_exported "$VAR" || ENV[${#ENV[@]}]=$VAR=${!VAR}
     done
+    # If git will run as the owner of the SSH agent socket, add SSH_AUTH_SOCK to
+    # the environment too
     [[ ${SSH_AUTH_SOCK:+1}${_LK_GIT_USER:+1} != 11 ]] ||
         ! SSH_SOCK_OWNER=$(lk_file_owner "$SSH_AUTH_SOCK" 2>/dev/null) ||
         [[ $SSH_SOCK_OWNER != "$_LK_GIT_USER" ]] ||
         ENV[${#ENV[@]}]=SSH_AUTH_SOCK=$SSH_AUTH_SOCK
-    set -- env ${ENV+"${ENV[@]}"} \
-        GIT_SSH_COMMAND="ssh$(printf ' -o %s' "${SSH_OPTIONS[@]}")" \
+    lk_run_as "${_LK_GIT_USER-}" env ${ENV+"${ENV[@]}"} \
+        GIT_SSH_COMMAND="ssh -oClearAllForwardings=yes${_LK_SSH_OPTIONS+"${_LK_SSH_OPTIONS[*]/#/ -o}"}" \
         git "$@"
-    lk_run_as "${_LK_GIT_USER-}" "$@"
-} #### Reviewed: 2021-05-25
+}
 
+# _lk_git_cd [DIR]
+#
+# Attempt `cd DIR` if DIR is set.
 function _lk_git_cd() {
-    # shellcheck disable=SC2164
-    [ $# -eq 0 ] || cd "$1"
+    ((!$#)) || cd "$1"
 }
 
 function _lk_git_is_quiet() {
-    [ -n "${_LK_GIT_QUIET-}" ]
+    [[ -n ${_LK_GIT_QUIET:+1} ]]
 }
 
+# lk_git GIT_COMMAND [ARG...]
+#
+# Run a git command in a working tree directly (if the current user owns the
+# repo) or as the owner (if it's owned by another user).
+#
+# To avoid repository ownership issues (reported by Git since v2.35.2),
+# top-level directory detection doesn't use git.
+#
+# Useful when provisioning trusted repositories as a privileged user.
 function lk_git() {
-    [[ -z ${_LK_GIT_USER-} ]] || {
+    [[ -z ${_LK_GIT_USER:+1} ]] || {
         _lk_git "$@"
         return
     }
@@ -37,8 +55,8 @@ function lk_git() {
     while :; do
         [[ ! -e $ROOT/.git ]] || break
         ROOT=${ROOT%/*}
-        [[ $ROOT != / ]] && [[ -r $ROOT ]] ||
-            lk_warn "not a repo: $PWD" || return
+        [[ -n ${ROOT:+1} ]] && [[ -r $ROOT ]] ||
+            lk_warn "not in a working tree: $PWD" || return
     done
     if [[ -O $ROOT ]]; then
         git "$@"
@@ -47,6 +65,8 @@ function lk_git() {
             _lk_git "$@"
     fi
 }
+
+#### Reviewed: 2022-10-30
 
 # lk_git_maybe_add_safe_directory [--system] [DIR]
 function lk_git_maybe_add_safe_directory() { (
@@ -348,7 +368,7 @@ Options:
     else
         lk_git_config core.sharedRepository 0664
     fi
-} #### Reviewed: 2021-05-25
+}
 
 function _lk_git_branch_check_diverged() {
     _lk_git merge-base --is-ancestor "$1" "$2" || {
@@ -361,7 +381,7 @@ function _lk_git_branch_check_diverged() {
         lk_tty_error "$1 has diverged from $2"
         return "$STATUS"
     }
-} #### Reviewed: 2021-05-30
+}
 
 # lk_git_fast_forward_branch [-f] BRANCH UPSTREAM
 function lk_git_fast_forward_branch() {
@@ -396,7 +416,7 @@ function lk_git_fast_forward_branch() {
         _lk_git ${FORCE-fetch . "$2:$1"}${FORCE+branch -f "$1" "$2"} \
             ${QUIET+--quiet}
     fi
-} #### Reviewed: 2021-05-25
+}
 
 # lk_git_push_branch BRANCH DOWNSTREAM
 function lk_git_push_branch() {
@@ -614,7 +634,7 @@ function _lk_git_do_with_repo() {
 function lk_git_with_repos() {
     local OPTIND OPTARG OPT LK_USAGE PARALLEL STDOUT PROMPT=1 \
         REPO_COMMAND NOUN FD ERR_FILE REPO _REPO ERR_COUNT=0 ERR_REPOS \
-        _LK_GIT_SSH_OPTIONS=() REPOS=(${LK_GIT_REPOS[@]+"${LK_GIT_REPOS[@]}"})
+        _LK_SSH_OPTIONS=() REPOS=(${LK_GIT_REPOS[@]+"${LK_GIT_REPOS[@]}"})
     _LK_GIT_REPO_ERRORS=(${REPOS[@]+"${REPOS[@]}"})
     LK_USAGE="\
 Usage: $FUNCNAME [-p|-t] [-y] COMMAND [ARG...]
@@ -628,13 +648,13 @@ on the standard output. If -y is set, proceed without prompting."
         p)
             ! lk_bash_at_least 4 3 || {
                 PARALLEL=1
-                _LK_GIT_SSH_OPTIONS=(ControlPath=none)
+                _LK_SSH_OPTIONS=(ControlPath=none)
             }
             unset STDOUT
             ;;
         t)
             STDOUT=1
-            unset PARALLEL _LK_GIT_SSH_OPTIONS
+            unset PARALLEL _LK_SSH_OPTIONS
             ;;
         y)
             unset PROMPT
@@ -875,7 +895,7 @@ Usage: $FUNCNAME [-o] [--type=TYPE] NAME VALUE
         else
             "${COMMAND[@]}"
         fi
-} #### Reviewed: 2021-05-29
+}
 
 # lk_git_config_remote_push_all [REMOTE]
 #

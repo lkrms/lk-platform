@@ -10,32 +10,6 @@ function lk_is_desktop() {
 
 #### INCLUDE provision.sh.d
 
-# lk_symlink_bin TARGET [ALIAS]
-function lk_symlink_bin() {
-    local TARGET LINK EXIT_STATUS vv='' \
-        BIN_PATH=${LK_BIN_PATH:-/usr/local/bin} _PATH=:$PATH:
-    [ $# -ge 1 ] || lk_usage "\
-Usage: $FUNCNAME TARGET [ALIAS]"
-    ! lk_verbose 2 || vv=v
-    set -- "$1" "${2:-${1##*/}}"
-    TARGET=$1
-    LINK=${BIN_PATH%/}/$2
-    # Don't search in BIN_PATH if the target and symlink have the same basename
-    [ "${TARGET##*/}" != "${LINK##*/}" ] ||
-        _PATH=${_PATH//":$BIN_PATH:"/:}
-    # Don't search in ~ unless BIN_PATH is in ~
-    [ "${BIN_PATH#~}" != "$BIN_PATH" ] ||
-        _PATH=$(sed -E "s/:$(lk_escape_ere ~)[^:]*:/:/g" <<<"$_PATH")
-    _PATH=${_PATH:1:${#_PATH}-2}
-    { [[ $TARGET == /* ]] ||
-        TARGET=$(PATH=$_PATH type -P "$TARGET"); } &&
-        lk_symlink "$TARGET" "$LINK" &&
-        return 0 || EXIT_STATUS=$?
-    [ ! -L "$LINK" ] || [ -x "$LINK" ] ||
-        lk_maybe_sudo rm -f"$vv" -- "$LINK" || true
-    return "$EXIT_STATUS"
-}
-
 function lk_configure_locales() {
     local IFS LK_SUDO=1 LOCALES _LOCALES FILE _FILE
     unset IFS

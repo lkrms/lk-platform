@@ -109,9 +109,31 @@ function lk_env_clean() {
     fi
 }
 
+# lk_v [-r] LEVEL COMMAND [ARG...]
+#
+# If LK_VERBOSE is at least LEVEL, run COMMAND and return its exit status.
+# Otherwise:
+# - if -r is set, return the exit status of the previous command
+# - return true
+#
+# The exit status of the previous command is propagated to COMMAND.
+function lk_v() {
+    local STATUS=$? RETURN=0 _LK_STACK_DEPTH=$((1 + ${_LK_STACK_DEPTH:-0}))
+    [[ $1 != -r ]] || { RETURN=$STATUS && shift; }
+    lk_verbose "$1" || return "$RETURN"
+    shift
+    if ((!STATUS)); then
+        "$@"
+    else
+        (exit "$STATUS") || "$@"
+    fi
+}
+
 # lk_stack COMMAND [ARG...]
 #
 # Run COMMAND with _LK_STACK_DEPTH incremented.
+#
+# The exit status of the previous command is propagated to COMMAND.
 function lk_stack() {
     local STATUS=$? _LK_STACK_DEPTH=$((2 + ${_LK_STACK_DEPTH:-0}))
     if ((!STATUS)); then
