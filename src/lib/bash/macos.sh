@@ -50,6 +50,9 @@ function lk_macos_version_name() {
     local VERSION
     VERSION=${1-$(lk_macos_version)} || return
     case "$VERSION" in
+    13.*)
+        echo "ventura"
+        ;;
     12.*)
         echo "monterey"
         ;;
