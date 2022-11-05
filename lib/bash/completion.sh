@@ -104,7 +104,8 @@ function __lk_generic() {
     lk-ssh-configure-migration.sh \
     lk-wp-dev-reset.sh \
     lk-xfce4-apply-dpi.sh \
-    lk-xkb-load.sh
+    lk-xkb-load.sh \
+    update-server.sh
 
 function __lk_backup_create_snapshot() {
     local cur prev words cword split cpos pwords
