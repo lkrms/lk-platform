@@ -304,9 +304,14 @@ APT_REMOVE=(
         apticron
     )
 
+# PHP version packaged with this release of Ubuntu
 DEFAULT_PHPVER=$(lk_hosting_php_get_default_version)
+# PHP versions to provision
 PHP_VERSIONS=($(IFS=, && printf '%s\n' \
-    $LK_PHP_VERSIONS $LK_PHP_DEFAULT_VERSION "$DEFAULT_PHPVER" | sort -u))
+    $LK_PHP_VERSIONS $LK_PHP_DEFAULT_VERSION | sort -Vu))
+# If not configured, provision DEFAULT_PHPVER
+[[ -n ${PHP_VERSIONS+1} ]] || PHP_VERSIONS=("$DEFAULT_PHPVER")
+# If configured, source PHP packages from ppa:ondrej/php
 if [[ -n $LK_PHP_VERSIONS ]] && lk_feature_enabled php-fpm; then
     APT_REPOS+=("ppa:ondrej/php")
     #! lk_feature_enabled apache2 ||
@@ -609,25 +614,19 @@ EOF
     unset IFS
     . "$LK_BASE/lib/hosting/packages.sh"
 
-    # Replace packages with version-specific equivalents if possible
-    function expand_packages() {
-        local PHPVER ADD
-        # Replace "php-json" with "php<version>-json", for example, if the
-        # version-specific package is available
-        lk_mktemp_with -r REMOVE_FILE
-        for PHPVER in "${PHP_VERSIONS[@]}"; do
-            ADD=($(comm -12 \
-                <(lk_arr "$1" | sed -En "s/^php-/php${PHPVER}-/p" | sort -u) \
-                "$APT_AVAILABLE"))
-            eval "$1+=(\${ADD+\"\${ADD[@]}\"})"
-            lk_arr ADD | sed -E 's/^php[^-]+-/php-/' >>"$REMOVE_FILE"
-        done
-        eval "$1=(\$(lk_arr $1 | lk_safe_grep -Fxvf \"$REMOVE_FILE\" | sort -u))"
-    }
-
     lk_mktemp_with APT_AVAILABLE sort -u <(lk_apt_available_list)
-    expand_packages APT_REMOVE
-    expand_packages APT_PACKAGES
+
+    lk_mktemp_with APT_PHP_PACKAGES
+    lk_safe_grep -Ef <(REGEX=$(lk_args "${PHP_VERSIONS[@]}" "" |
+        lk_ere_implode_input -e) &&
+        lk_arr APT_PACKAGES |
+        awk -v re="${REGEX//\\/\\\\}" \
+            '/^php-/ {print "^php" re substr($0, 4) "$"}') "$APT_AVAILABLE" |
+        sort -V |
+        awk '
+/^php[^-]/           { print; sub("^php[^-]+-", "php-", $0); skip[$0] = 1 }
+/^php-/ && !skip[$0] { print }' >"$APT_PHP_PACKAGES"
+
     # As of Ubuntu 22.04, each of the following has a version-specific package
     # in ppa:ondrej/php but not in stock Ubuntu, so they need to be explicitly
     # removed when switching to ppa:ondrej/php, otherwise their (virtual)
@@ -642,7 +641,10 @@ EOF
     # - php-msgpack
     # - php-redis
     # - php-yaml
-    APT_REMOVE_NOW=($(lk_dpkg_installed_list $(sort -u "$REMOVE_FILE")))
+    APT_PACKAGES=($({ lk_arr APT_PACKAGES | sed -E '/^php[0-9.]*-/d' &&
+        cat "$APT_PHP_PACKAGES"; } | sort -u))
+    APT_REMOVE_NOW=($(lk_apt_marked_manual_list | sed -E '/^php[0-9.]*-/!d' |
+        lk_safe_grep -Fxvf "$APT_PHP_PACKAGES"))
     APT_PACKAGES=($(comm -13 \
         <(lk_arr APT_REMOVE | sort -u) \
         <(lk_arr APT_PACKAGES | sort -u)))

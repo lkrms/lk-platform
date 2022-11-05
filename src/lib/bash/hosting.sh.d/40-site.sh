@@ -159,8 +159,9 @@ function _lk_hosting_site_load_settings() {
     lk_var_to_int SITE_PHP_FPM_OPCACHE_SIZE "$_SITE_PHP_FPM_OPCACHE_SIZE"
     ((SITE_PHP_FPM_OPCACHE_SIZE >= 8)) || SITE_PHP_FPM_OPCACHE_SIZE=8
     SITE_PHP_VERSION=${SITE_PHP_VERSION:-$_SITE_PHP_VERSION}
-    [ -d "/etc/php/$SITE_PHP_VERSION/fpm/pool.d" ] ||
-        lk_warn "PHP version not available: $SITE_PHP_VERSION" || return
+    lk_hosting_php_get_versions | grep -Fx "$SITE_PHP_VERSION" >/dev/null ||
+        SITE_PHP_VERSION=$(lk_hosting_php_get_versions | head -n1 | grep .) ||
+        lk_warn "PHP not available" || return
     SITE_SMTP_RELAY=${SITE_SMTP_RELAY:-$_SITE_SMTP_RELAY}
     SITE_SMTP_CREDENTIALS=${SITE_SMTP_CREDENTIALS:-$_SITE_SMTP_CREDENTIALS}
     SITE_SMTP_SENDERS=${SITE_SMTP_SENDERS:-$_SITE_SMTP_SENDERS}
