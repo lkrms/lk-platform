@@ -33,7 +33,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_BACKUP_MAIL_FROM`
 - `LK_BACKUP_ROOT`
 - `LK_BACKUP_TIMESTAMP`
-- `LK_BIN_PATH`
+- `LK_BIN_DIR`
 - `LK_BRIDGE_INTERFACE`
 - `LK_CERTBOT_EMAIL`
 - `LK_CERTBOT_INSTALLED`

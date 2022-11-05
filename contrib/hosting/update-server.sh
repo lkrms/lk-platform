@@ -1,46 +1,47 @@
 #!/bin/bash
 
-# Update lk-platform and run provisioning tasks on one or more hosting servers.
-#
-# Usage:
-#   update-server.sh [options] <SSH_HOST>...
-#
-# Options:
-#   --provision                 Run provisioning script.
-#   --upgrade                   Upgrade packages.
-#   --reboot                    Schedule a reboot if required.
-#   --reboot-time <TIME>        Override LK_AUTO_REBOOT_TIME.
-#   --tls                       Run TLS certificate checks.
-#   --wordpress                 Run WordPress checks.
-#   --test                      Run site reachability test.
-#   --set <SETTING> <VALUE>     Set an lk-platform setting.
-#   --add <SETTING> <VALUE>     Add a value to an lk-platform setting.
-#   --remove <SETTING> <VALUE>  Remove a value from an lk-platform setting.
-#   --unset <SETTING>           Clear an lk-platform setting.
-#
-# Environment:
-#   UPDATE_SERVER_BRANCH        Override 'main'.
-#   UPDATE_SERVER_REPO          Override the default GitHub web URL.
-#   UPDATE_SERVER_HOSTING_KEYS  Update the SSH keys used to authorise provider
-#                               access to hosting accounts.
-#
-# This script takes the following actions on each <SSH_HOST>, creating an output
-# log locally and in ~root/ on the remote system:
-# 1. Ignore SIGHUP, SIGINT and SIGTERM to prevent, say, a dropped SSH connection
-#    killing a long-running `apt-get` process.
-# 2. Update or reset the lk-platform Git repository after stashing any
-#    uncommitted changes.
-# 3. Install icdiff for more readable log output.
-# 4. Replace /etc/skel.<PREFIX>/.ssh/authorized_keys_* with the value of
-#    UPDATE_SERVER_HOSTING_KEYS.
-# 5. If --provision is set, run lk-provision-hosting.sh with any settings
-#    changes, otherwise apply settings changes directly.
-# 6. If --tls is set, try to obtain Let's Encrypt TLS certificates for any
-#    public-facing sites that don't have one.
-# 7. If --wordpress is set, enable system cron on any WordPress sites that
-#    aren't using it.
-# 8. If --reboot is set, check if a reboot is required and if so, schedule it
-#    for --reboot-time, LK_AUTO_REBOOT_TIME or 2 minutes' time
+function __usage() {
+  cat <<EOF
+Update lk-platform on one or more hosting servers and perform optional
+provisioning tasks.
+
+Usage:
+  ${0##*/} [options] <SSH_HOST>...
+
+Options:
+  -s, --set <SETTING>=<VALUE>     Set an lk-platform setting
+  -a, --add <SETTING>=<VALUE>     Add a value to an lk-platform setting
+  -r, --remove <SETTING>=<VALUE>  Remove a value from an lk-platform setting
+  -u, --unset <SETTING>           Clear an lk-platform setting
+      --branch <BRANCH>     lk-platform branch to provision [default: $BRANCH]
+      --repo <URL>          Override '$REPO'
+  -k, --keys <KEYS>         Update provider SSH keys for hosting account access
+  -p, --provision           Run \`lk-provision-hosting.sh\`
+  -g, --upgrade             Upgrade packages (implies --provision)
+  -l, --tls                 Try to obtain any missing TLS certificates
+  -w, --wordpress           Trigger WP-Cron from hosting account crontabs
+  -b, --reboot              Schedule a reboot if required
+  -t, --reboot-time <TIME>  Specify reboot time (implies --reboot)
+                            [default: LK_AUTO_REBOOT_TIME if set, otherwise +2]
+  -h, --reachability        Test site reachability
+
+This script takes the following actions on each <SSH_HOST>, creating an
+output log locally and in ~root/ on the remote system:
+1. Ignore SIGHUP, SIGINT and SIGTERM to prevent disruption of long-running
+   provisioning processes
+2. Update lk-platform, discarding any code changes
+3. Install icdiff for more readable log output
+4. Replace /etc/skel.<PREFIX>/.ssh/authorized_keys_* with <KEYS>
+5. If --provision is set, run \`lk-provision-hosting.sh\` with any settings
+   changes, otherwise apply settings changes directly
+6. If --tls is set, try to obtain Let's Encrypt TLS certificates for any
+   public-facing sites that don't have one
+7. If --wordpress is set, enable system cron on any WordPress sites that
+   aren't using it
+8. If --reboot is set, check if a reboot is required and if so, schedule
+   it for --reboot-time
+EOF
+}
 
 lk_bin_depth=2 . lk-bash-load.sh || exit
 
@@ -66,7 +67,6 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
     trap "" SIGHUP SIGINT SIGTERM
   }
 
-  # update-server BRANCH [--set SETTING]...
   function update-server() {
     function update-wp() {
       local CRONTAB DISABLE_WP_CRON
@@ -122,10 +122,10 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
         [ "${PIPESTATUS[*]}" = 0100 ]; } &&
       # Add origin or update its URL
       if git remote | grep -Fx origin >/dev/null; then
-        git config remote.origin.url | grep -Fx "$2" >/dev/null ||
-          git remote set-url origin "$2"
+        git config remote.origin.url | grep -Fx "$REPO" >/dev/null ||
+          git remote set-url origin "$REPO"
       else
-        git remote add origin "$2"
+        git remote add origin "$REPO"
       fi &&
       # Retrieve latest commits from origin
       git fetch --tags --force origin &&
@@ -133,7 +133,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
       git remote prune origin &&
       # If target branch is 'main', reset origin/main to the most recent
       # annotated tag's commit
-      if [[ $1 == main ]] &&
+      if [[ $BRANCH == main ]] &&
         TAG=$(git describe origin/main 2>/dev/null) &&
         REF=$(git rev-parse --verify --short "$TAG^{commit}"); then
         git update-ref refs/remotes/origin/main "$REF" &&
@@ -152,26 +152,26 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
         git branch --move master main &&
           git branch --set-upstream-to origin/main main
       fi &&
-      BRANCH=$(git rev-parse --verify --abbrev-ref HEAD) &&
-      if [[ $BRANCH == "$1" ]]; then
+      _BRANCH=$(git rev-parse --verify --abbrev-ref HEAD) &&
+      if [[ $_BRANCH == "$BRANCH" ]]; then
         # If the target branch is already checked out, merge upstream changes
-        git merge --ff-only "origin/$1" ||
-          git reset --hard "origin/$1"
-      elif [[ ,$BRANCHES, == *,"$1",* ]]; then
+        git merge --ff-only "origin/$BRANCH" ||
+          git reset --hard "origin/$BRANCH"
+      elif [[ ,$BRANCHES, == *,"$BRANCH",* ]]; then
         # If the target branch exists but isn't checked out, merge upstream
         # changes, then switch
-        { git merge-base --is-ancestor "$1" "origin/$1" &&
-          git fetch . "origin/$1:$1" ||
-          git branch --force "$1" "origin/$1"; } &&
-          git checkout "$1"
+        { git merge-base --is-ancestor "$BRANCH" "origin/$BRANCH" &&
+          git fetch . "origin/$BRANCH:$BRANCH" ||
+          git branch --force "$BRANCH" "origin/$BRANCH"; } &&
+          git checkout "$BRANCH"
       else
         # Otherwise, create a new branch from origin/<branch>
-        git checkout -b "$1" "origin/$1"
+        git checkout -b "$BRANCH" "origin/$BRANCH"
       fi &&
       # Set remote-tracking branch to origin/<branch> if needed
       { git rev-parse --verify --abbrev-ref "@{upstream}" 2>/dev/null |
-        grep -Fx "origin/$1" >/dev/null ||
-        git branch --set-upstream-to "origin/$1"; } &&
+        grep -Fx "origin/$BRANCH" >/dev/null ||
+        git branch --set-upstream-to "origin/$BRANCH"; } &&
       if [[ ,$BRANCHES, == *,master,* ]] && [[ ,$BRANCHES, == *,main,* ]]; then
         # Delete 'master'
         git merge-base --is-ancestor master origin/main &&
@@ -187,10 +187,10 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
 
     shopt -s nullglob
 
-    [ -z "${3:+1}" ] ||
+    [ -z "${KEYS:+1}" ] ||
       ! KEYS_FILE=$(lk_first_existing \
         /etc/skel.*/.ssh/{authorized_keys_*,authorized_keys}) ||
-      lk_file_replace -m "$KEYS_FILE" "$3" || return
+      lk_file_replace -m "$KEYS_FILE" "$KEYS" || return
 
     HEAD_FILE=.git/update-server-head
     LAST_HEAD=
@@ -199,12 +199,12 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
     if ((PROVISION)); then
       lk_tty_log "Provisioning with lk-platform revision $HEAD"
       ./bin/lk-provision-hosting.sh \
-        --set LK_PLATFORM_BRANCH="$1" \
-        "${@:4}" &&
+        --set LK_PLATFORM_BRANCH="$BRANCH" \
+        "$@" &&
         echo "$HEAD" >"$HEAD_FILE"
     else
       lk_tty_print "Checking settings"
-      SH=$(lk_settings_getopt "${@:4}") &&
+      SH=$(lk_settings_getopt "$@") &&
         lk_settings_persist "$SH"
     fi || return
 
@@ -222,7 +222,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
       IFS=,
       [ -z "${NO_CERT+1}" ] ||
         for DOMAINS in "${NO_CERT[@]}"; do
-          [[ $DOMAINS =~ \.$TLD_REGEX(,|$) ]] || continue
+          [[ $DOMAINS =~ \.$TOP_LEVEL_DOMAIN_REGEX(,|$) ]] || continue
           lk_tty_detail "Requesting TLS certificate:" "${DOMAINS//,/ }"
           lk_certbot_install $DOMAINS || lk_tty_error -r \
             "TLS certificate not obtained" || STATUS=$?
@@ -271,58 +271,88 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
   }
 
   ARGS=()
+  BRANCH=main
+  REPO=https://github.com/lkrms/lk-platform.git
+  KEYS=
   PROVISION=0
   UPGRADE=0
-  REBOOT=0
-  REBOOT_TIME=
   TLS=0
   WORDPRESS=0
-  TEST=0
-  while [[ ${1-} =~ ^(-[saru]|--(set|add|remove|unset|(no-)?(provision|upgrade|reboot|tls|wordpress|test)|reboot-time))$ ]]; do
-    [[ $1 != --no-provision ]] || PROVISION=0
-    [[ $1 != --provision ]] || PROVISION=1
-    [[ $1 != --no-upgrade ]] || UPGRADE=0
-    [[ $1 != --upgrade ]] || UPGRADE=1
-    [[ $1 != --no-reboot ]] || REBOOT=0
-    [[ $1 != --reboot ]] || REBOOT=1
-    [[ $1 != --reboot-time ]] || { [[ -n ${2+1} ]] && REBOOT_TIME=$2 && shift 2 && continue; } || lk_die "invalid arguments"
-    [[ $1 != --no-tls ]] || TLS=0
-    [[ $1 != --tls ]] || TLS=1
-    [[ $1 != --no-wordpress ]] || WORDPRESS=0
-    [[ $1 != --wordpress ]] || WORDPRESS=1
-    [[ $1 != --no-test ]] || TEST=0
-    [[ $1 != --test ]] || TEST=1
-    [[ ! $1 =~ ^--(no-)?(provision|upgrade|reboot|tls|wordpress|test)$ ]] || { shift && continue; }
-    SHIFT=2
-    [[ ${2-} == *=* ]] || [[ $1 =~ ^--?u ]] ||
-      ((SHIFT++))
-    ARGS+=("${@:1:SHIFT}")
-    shift "$SHIFT"
+  REBOOT=0
+  REBOOT_TIME=
+  REACHABILITY=0
+
+  lk_getopt "s:a:r:u:k:pglwbt:h" \
+    "set:,add:,remove:,unset:,branch:,repo:,keys:,provision,upgrade,tls,wordpress,reboot,reboot-time:,reachability"
+  eval "set -- $LK_GETOPT"
+
+  while :; do
+    OPT=$1
+    shift
+    case "$OPT" in
+    -s | -a | -r | -u | --set | --add | --remove | --unset)
+      ARGS+=("$OPT" "$1")
+      shift
+      ;;
+    --branch)
+      BRANCH=$1
+      shift
+      ;;
+    --repo)
+      REPO=$1
+      shift
+      ;;
+    -k | --keys)
+      KEYS=$1
+      shift
+      ;;
+    -p | --provision)
+      PROVISION=1
+      ;;
+    -g | --upgrade)
+      PROVISION=1
+      UPGRADE=1
+      ;;
+    -l | --tls)
+      TLS=1
+      ;;
+    -w | --wordpress)
+      WORDPRESS=1
+      ;;
+    -b | --reboot)
+      REBOOT=1
+      ;;
+    -t | --reboot-time)
+      REBOOT=1
+      REBOOT_TIME=$1
+      shift
+      ;;
+    -h | --reachability)
+      REACHABILITY=1
+      ;;
+    --)
+      break
+      ;;
+    esac
   done
   ((UPGRADE)) ||
     ARGS+=(--no-upgrade)
 
-  TLD_REGEX=$(lk_cache curl -fsSL \
-    "https://data.iana.org/TLD/tlds-alpha-by-domain.txt" |
-    sed -E '/^(#|$)/d' | tr '[:upper:]' '[:lower:]' |
-    lk_ere_implode_input -e)
-  TMP=$(lk_mktemp -d)
-  ! lk_verbose 2 ||
-    lk_tty_print "Generating scripts in" "$TMP"
+  (($#)) || lk_usage
+
+  eval "$(lk_get_regex TOP_LEVEL_DOMAIN_REGEX)"
+  lk_mktemp_dir_with TMP
+  lk_v 2 lk_tty_print "Generating scripts in" "$TMP"
   SCRIPT=$TMP/do-update-server.sh
   {
     declare -f keep-alive update-server do-update-server
-    declare -p PROVISION REBOOT REBOOT_TIME TLS WORDPRESS TLD_REGEX
-    lk_quote_args do-update-server \
-      "${UPDATE_SERVER_BRANCH:-main}" \
-      "${UPDATE_SERVER_REPO:-https://github.com/lkrms/lk-platform.git}" \
-      "${UPDATE_SERVER_HOSTING_KEYS-}" \
-      ${ARGS[@]+"${ARGS[@]}"}
+    declare -p BRANCH REPO KEYS PROVISION TLS WORDPRESS REBOOT REBOOT_TIME TOP_LEVEL_DOMAIN_REGEX
+    lk_quote_args do-update-server ${ARGS+"${ARGS[@]}"}
   } >"$SCRIPT"
   COMMAND=$(lk_quote_args \
     bash -c 't=$(mktemp) && cat >"$t" && sudo -HE bash "$t"')
 
-  ((!TEST)) || {
+  ((!REACHABILITY)) || {
     SCRIPT2=$TMP/do-query-server.sh
     {
       declare -f do-query-server
@@ -354,7 +384,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
       STATUS=0
       ssh -o ControlPath=none -o LogLevel=QUIET "$1" \
         LK_VERBOSE=${LK_VERBOSE-1} "$COMMAND" <"$SCRIPT" || STATUS=$?
-      ((!TEST)) || {
+      ((!REACHABILITY)) || {
         SH=$(ssh -o ControlPath=none -o LogLevel=QUIET "$1" \
           "$COMMAND2" <"$SCRIPT2") &&
           eval "$SH" && {

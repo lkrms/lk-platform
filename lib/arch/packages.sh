@@ -233,7 +233,7 @@ if lk_feature_enabled desktop; then
         seahorse
         x11vnc
         xdg-user-dirs # Manage ~/Desktop, ~/Templates, etc.
-        zenity
+        yad
 
         arc-gtk-theme-
         arc-solid-gtk-theme-
@@ -340,6 +340,10 @@ if lk_feature_enabled xfce4; then
         engrampa
         pavucontrol
         plank
+    )
+
+    PAC_EXCEPT+=(
+        xfce4-screensaver
     )
 
     AUR_PACKAGES+=(

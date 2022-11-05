@@ -30,6 +30,8 @@ PAC_OFFER=(
     #
     numix-gtk-theme-git
     ttf-apple-emoji
+    wiki-loves-earth-wallpapers
+    wiki-loves-monuments-wallpapers
     xfce-theme-greybird
     zuki-themes
 

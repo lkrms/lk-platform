@@ -23,8 +23,8 @@ lk_require arch git linux provision whiptail
 if lk_is_bootstrap; then
     function systemctl_enable() {
         [[ $1 == *.* ]] || set -- "$1.service" "${@:2}"
-        [ ! -e "/usr/lib/systemd/system/$1" ] &&
-            [ ! -e "/etc/systemd/system/$1" ] || {
+        [[ ! -e /usr/lib/systemd/system/$1 ]] &&
+            [[ ! -e /etc/systemd/system/$1 ]] || {
             lk_tty_detail "Enabling service:" "${2:-$1}"
             sudo systemctl enable "$1"
         }
@@ -35,7 +35,7 @@ if lk_is_bootstrap; then
         sudo systemctl mask "$1"
     }
     function lk_systemctl_stop() {
-        true
+        :
     }
     lk_tty_print
 else
@@ -757,6 +757,7 @@ $LK_NODE_HOSTNAME" &&
     lk_symlink_bin codium code || true
     lk_symlink_bin vim vi || true
     lk_symlink_bin xfce4-terminal xterm || true
+    lk_symlink_bin yad zenity || true
 
     lk_tty_print
     lk_tty_log "Checking installed packages and services"
@@ -866,7 +867,7 @@ $LK_NODE_HOSTNAME" &&
                 fi
             done
         done
-        file_delete "${LK_BIN_PATH:-/usr/local/bin}/wp"
+        file_delete "${LK_BIN_DIR:-/usr/local/bin}/wp"
     fi
 
     if lk_pac_installed php-fpm apache; then
