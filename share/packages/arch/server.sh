@@ -88,7 +88,6 @@ PAC_PACKAGES+=(
     # Utilities
     certbot
     cloud-utils
-    expac
     fatresize
     partclone
     stow
