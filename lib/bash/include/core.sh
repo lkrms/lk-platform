@@ -1348,7 +1348,7 @@ function lk_mktemp_dir_with() {
 
 # lk_trap_add SIGNAL COMMAND [ARG...]
 function lk_trap_add() {
-    (($# > 1)) || lk_err "invalid arguments" || return
+    (($# > 1)) || lk_bad_args || return
     set -- "$1" "$2${3+ $(shift 2 && lk_quote_args "$@")}"
     _LK_TRAPS=(${_LK_TRAPS+"${_LK_TRAPS[@]}"})
     local i TRAPS=()
@@ -1363,9 +1363,11 @@ function lk_trap_add() {
         TRAPS[${#TRAPS[@]}]=$2
         _LK_TRAPS+=("$BASH_SUBSHELL" "$1" "$2")
     }
-    trap -- "declare _LK_TRAP_STATUS=0;$(
-        printf '{ %s;}||_LK_TRAP_STATUS=$?;' "${TRAPS[@]}"
-    )(exit \$_LK_TRAP_STATUS)" "$1"
+    trap -- "declare _LK_TRAP_IN=\$? _LK_TRAP_OUT=0;$(
+        for TRAP in "${TRAPS[@]}"; do
+            printf 'if ((!_LK_TRAP_IN));then { %s;};else (exit $_LK_TRAP_IN)||{ %s;};fi||_LK_TRAP_OUT=$?;' "$TRAP" "$TRAP"
+        done
+    )(exit \$_LK_TRAP_OUT)" "$1"
 }
 
 function _lk_cleanup_on_exit() {
