@@ -122,6 +122,7 @@ process_feature_packages php-fpm \
     php-fpm \
     php-gd \
     php-gettext \
+    php-gmp \
     php-igbinary \
     php-imagick \
     php-imap \

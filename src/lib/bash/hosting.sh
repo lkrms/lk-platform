@@ -255,6 +255,13 @@ function _lk_hosting_site_provision() {
             APACHE+=(Use "Require${MACRO^}$PARAMS") ||
             APACHE+=(Use "Trust${MACRO^}$PARAMS")
     }
+    [[ -z $SITE_HTTPD_MACROS ]] || {
+        IFS=,
+        for MACRO in $SITE_HTTPD_MACROS; do
+            APACHE+=(Use "$MACRO")
+        done
+        unset IFS
+    }
     # Configure PHP-FPM if this is the first enabled site using this pool
     [[ $SITE_PHP_VERSION == -1 ]] ||
         ! lk_hosting_list_sites -e | awk \

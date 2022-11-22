@@ -99,6 +99,7 @@ function _lk_hosting_site_list_known_settings() {
         SITE_PHP_VERSION \
         SITE_DOWNSTREAM_FROM \
         SITE_DOWNSTREAM_FORCE \
+        SITE_HTTPD_MACROS \
         SITE_SMTP_RELAY \
         SITE_SMTP_CREDENTIALS \
         SITE_SMTP_SENDERS
@@ -402,6 +403,9 @@ function _lk_hosting_site_json() {
   },
   "upstream_proxy":         ($siteDownstreamFrom        | maybe_null),
   "upstream_only":          ($siteDownstreamForce       | to_bool),
+  "httpd": {
+    "macros":               ($siteHttpdMacros           | split(","))
+  },
   "php_fpm": {
     "pool":                 ($sitePhpFpmPool),
     "user":                 ($sitePhpFpmUser),
@@ -440,12 +444,13 @@ EOF
         SITE_DOWNSTREAM_FROM \
         SITE_ENABLE \
         SITE_ENABLE_STAGING \
+        SITE_HTTPD_MACROS \
         SITE_ORDER \
         SITE_PHP_FPM_ADMIN_SETTINGS \
         SITE_PHP_FPM_ENV \
         SITE_PHP_FPM_MAX_CHILDREN \
-        SITE_PHP_FPM_MEMORY_LIMIT \
         SITE_PHP_FPM_MAX_REQUESTS \
+        SITE_PHP_FPM_MEMORY_LIMIT \
         SITE_PHP_FPM_OPCACHE_SIZE \
         SITE_PHP_FPM_POOL \
         SITE_PHP_FPM_SETTINGS \
@@ -1157,6 +1162,13 @@ function _lk_hosting_site_provision() {
         lk_is_true SITE_DOWNSTREAM_FORCE &&
             APACHE+=(Use "Require${MACRO^}$PARAMS") ||
             APACHE+=(Use "Trust${MACRO^}$PARAMS")
+    }
+    [[ -z $SITE_HTTPD_MACROS ]] || {
+        IFS=,
+        for MACRO in $SITE_HTTPD_MACROS; do
+            APACHE+=(Use "$MACRO")
+        done
+        unset IFS
     }
     # Configure PHP-FPM if this is the first enabled site using this pool
     [[ $SITE_PHP_VERSION == -1 ]] ||

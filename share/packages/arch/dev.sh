@@ -16,7 +16,6 @@ PAC_OFFER=(
     linux-headers
     offlineimap
     ookla-speedtest-bin
-    sfdx-cli
     stretchly-bin
     stripe-cli
     subversion
@@ -125,7 +124,6 @@ PAC_PACKAGES+=(
     certbot
     cloud-utils
     cronie
-    expac
     mlocate
     namcap
     stow
@@ -133,6 +131,7 @@ PAC_PACKAGES+=(
 )
 
 AUR_PACKAGES+=(
+    asciinema-agg
     dug-git
     gp-saml-gui-git
     pacman-cleanup-hook
@@ -360,6 +359,8 @@ PAC_PACKAGES+=(
 
     #
     ruby
+    rubocop
+    ruby-rubocop-performance
 
     #
     shellcheck
@@ -379,6 +380,8 @@ PAC_PACKAGES+=(
 AUR_PACKAGES+=(
     dotnet-runtime-3.1-bin # storageexplorer dependency
     mongodb50-bin          # Required for legacy 'mongo' command
+    msodbcsql
+    mssql-tools
     nodejs-less
     nvm
     php-ibm_db2
@@ -390,8 +393,6 @@ AUR_PACKAGES+=(
     python-pywebview
     python39 # azure-functions-core-tools-bin dependency
     rollup
-    ruby-rubocop
-    ruby-rubocop-performance
     ruby-rubocop-rails
     ruby-ruby-debug-ide
     standard

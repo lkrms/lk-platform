@@ -34,6 +34,11 @@ PAC_PACKAGES+=(
     os-prober            #
     terminus-font        # Bitmap font that can be used with GRUB
 
+    # Pacman
+    expac
+    pacman-contrib
+    pacutils
+
     # Services
     networkmanager
     ntp
@@ -504,7 +509,7 @@ if [ ${#AUR_PACKAGES[@]} -gt 0 ] ||
         awk -F"$S*=$S*" '$1=="Server"{print$2}' |
         grep -E '^file://'; } &>/dev/null; then
     PAC_BASE_DEVEL=($(lk_pac_groups base-devel))
-    PAC_PACKAGES+=("${PAC_BASE_DEVEL[@]}" devtools pacutils vifm)
+    PAC_PACKAGES+=("${PAC_BASE_DEVEL[@]}" devtools vifm)
     PAC_OFFER+=(aurutils aurutils-git aurutils{,-git}"$SUFFIX")
 fi
 

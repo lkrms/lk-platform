@@ -609,7 +609,7 @@ $LK_NODE_HOSTNAME" &&
         lk_tty_print "Checking AUR packages"
         PAC_INSTALL=($(lk_pac_not_installed_list \
             ${PAC_BASE_DEVEL+"${PAC_BASE_DEVEL[@]}"} \
-            devtools pacutils vifm))
+            devtools vifm))
         [ ${#PAC_INSTALL[@]} -eq 0 ] || {
             lk_tty_detail "Installing aurutils dependencies"
             lk_faketty pacman -S --noconfirm "${PAC_INSTALL[@]}"
@@ -862,7 +862,7 @@ $LK_NODE_HOSTNAME" &&
                         lk_php_set_option xdebug.profiler_output_name callgrind.out.%H.%R.%u
                         lk_php_set_option xdebug.collect_return On
                         lk_php_set_option xdebug.trace_output_name trace.%H.%R.%u
-                        lk_php_enable_option zend_extension xdebug.so
+                        #lk_php_enable_option zend_extension xdebug.so
                     )
                 fi
             done

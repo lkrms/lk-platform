@@ -29,6 +29,7 @@ function _lk_hosting_site_list_known_settings() {
         SITE_PHP_VERSION \
         SITE_DOWNSTREAM_FROM \
         SITE_DOWNSTREAM_FORCE \
+        SITE_HTTPD_MACROS \
         SITE_SMTP_RELAY \
         SITE_SMTP_CREDENTIALS \
         SITE_SMTP_SENDERS

@@ -26,6 +26,9 @@ function _lk_hosting_site_json() {
   },
   "upstream_proxy":         ($siteDownstreamFrom        | maybe_null),
   "upstream_only":          ($siteDownstreamForce       | to_bool),
+  "httpd": {
+    "macros":               ($siteHttpdMacros           | split(","))
+  },
   "php_fpm": {
     "pool":                 ($sitePhpFpmPool),
     "user":                 ($sitePhpFpmUser),
@@ -64,12 +67,13 @@ EOF
         SITE_DOWNSTREAM_FROM \
         SITE_ENABLE \
         SITE_ENABLE_STAGING \
+        SITE_HTTPD_MACROS \
         SITE_ORDER \
         SITE_PHP_FPM_ADMIN_SETTINGS \
         SITE_PHP_FPM_ENV \
         SITE_PHP_FPM_MAX_CHILDREN \
-        SITE_PHP_FPM_MEMORY_LIMIT \
         SITE_PHP_FPM_MAX_REQUESTS \
+        SITE_PHP_FPM_MEMORY_LIMIT \
         SITE_PHP_FPM_OPCACHE_SIZE \
         SITE_PHP_FPM_POOL \
         SITE_PHP_FPM_SETTINGS \

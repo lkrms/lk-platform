@@ -1,0 +1,1 @@
+ACTION=="change", SUBSYSTEM=="power_supply", KERNEL!="hidpp_battery*", RUN+="/usr/bin/systemctl restart bd-prochot-off.service"

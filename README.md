@@ -213,6 +213,7 @@ primary domain. Available settings:
   `X-Forwarded-For:172.105.171.229,103.31.4.0/22`)
 - **`SITE_DOWNSTREAM_FORCE`** (`Y` or `N`; default: `N`; if set, requests are
   rejected except from an upstream proxy)
+- **`SITE_HTTPD_MACROS`** (comma-separated Apache macro names)
 
 #### Internal variables
 
