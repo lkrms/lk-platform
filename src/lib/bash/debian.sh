@@ -21,7 +21,7 @@ function lk_dpkg_installed_list() {
     { dpkg-query --show \
         --showformat '${db:Status-Status}\t${binary:Package}\n' \
         "$@" 2>/dev/null || (($? == 1)); } |
-        awk '$1 == "installed" { print $2 }'
+        awk '$1 == "installed" { sub(/:.*/, "", $2); print $2 }'
 }
 
 # lk_dpkg_not_installed_list PACKAGE...
