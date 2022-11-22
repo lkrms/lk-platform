@@ -69,17 +69,21 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
 
   function update-server() {
     function update-wp() {
-      local CRONTAB DISABLE_WP_CRON
+      local SITE_ROOT PHP CRONTAB DISABLE_WP_CRON
       cd "$1" &&
         . /opt/lk-platform/lib/bash/rc.sh || return
       [[ ! -e ~/.lk-archived ]] || {
         lk_tty_print "Not checking archived WordPress at" "$1"
         return
       }
+      SITE_ROOT=$(lk_wp_get_site_root) &&
+        PHP=$(lk_wp_curl -fsS "/php-sysinfo" | jq -r '.php.version') &&
+        PHP=$(type -P "php$PHP") || return
       lk_tty_print "Checking WordPress at" "$1"
       if CRONTAB=$(crontab -l 2>/dev/null | grep -F "$(printf \
         ' -- wp_if_running --path=%q cron event run --due-now' "$1")" |
-        grep -F _LK_LOG_FILE | grep -F WP_CLI_PHP) &&
+        grep -F _LK_LOG_FILE |
+        grep -F "$(printf 'WP_CLI_PHP=%q' "$PHP")") &&
         DISABLE_WP_CRON=$(lk_wp \
           config get DISABLE_WP_CRON --type=constant) &&
         lk_is_true DISABLE_WP_CRON; then
