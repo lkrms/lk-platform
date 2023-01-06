@@ -337,6 +337,7 @@ lk_log_start
     }
 
     LK_FILE_NO_DIFF=1
+    lk_mktemp_with TEMP
     for h in "${_LK_HOMES[@]}"; do
         [ ! -e "$h/.${LK_PATH_PREFIX}ignore" ] || continue
         OWNER=$(lk_file_owner "$h")
@@ -348,7 +349,8 @@ lk_log_start
         FILE=$h/.bashrc
         [ -e "$FILE" ] ||
             install -m 00644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
-        lk_file_replace -l "$FILE" "$("${RC_AWK[@]}" "$FILE")"
+        "${RC_AWK[@]}" "$FILE" >"$TEMP" &&
+            lk_file_replace -l "$FILE" "$(<"$TEMP")"
 
         # Create ~/.profile if no profile file exists, then check that ~/.bashrc
         # is sourced at startup when Bash is running as a login shell (e.g. in a
