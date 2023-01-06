@@ -318,10 +318,9 @@ lk_log_start
     RC_PATTERN="$(lk_regex_implode \
         "${RC_PATTERNS[@]}")(\\/.*)?\\/(\\.bashrc|rc\\.sh)"
     RC_PATTERN=${RC_PATTERN//\\/\\\\}
-    RC_SH=$(printf '%s\n' \
-        "if [ -f $RC_PATH ]; then" \
-        "    . $RC_PATH" \
-        "fi")
+    # Some awk variants fail with "newline in string" when a newline character
+    # appears in a command-line variable, so leave newlines as '\n' literals
+    RC_SH="if [ -f $RC_PATH ]; then\\n    . $RC_PATH\\nfi"
     RC_AWK=(awk
         -f "$LK_BASE/lib/awk/update-bashrc.awk"
         -v "RC_PATTERN=$RC_PATTERN"
