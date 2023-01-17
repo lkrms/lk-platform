@@ -386,6 +386,7 @@ AUR_PACKAGES+=(
     nvm
     php-ibm_db2
     php-memprof
+    php-pcov
     php-sqlsrv
     php7-xdebug # Required for PHP 7.4 debugging
     phpdoc-phar
