@@ -64,6 +64,9 @@ def regex:
 def regex($re):
   $regex::regex[][$re];
 
+def trim_fqdn:
+  if type == "string" then sub("\\.$"; "") else . end;
+
 def cpanel_error:
   .metadata.reason? // .errors? // "cPanel request failed" | to_array |
     join("\n") + "\n" | halt_error;
