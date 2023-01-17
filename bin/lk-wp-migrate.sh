@@ -155,7 +155,7 @@ lk_tty_detail "Remote maintenance mode:" "${MAINTENANCE:-ignore}"
 lk_tty_detail "Plugins to deactivate:" "$([ ${#DEACTIVATE[@]} -eq 0 ] &&
     echo "<none>" ||
     lk_echo_array DEACTIVATE)"
-[ -z "$RENAME" ] ||
+[[ -z ${RENAME:+1} ]] ||
     lk_tty_detail "Rename site to:" "$RENAME"
 lk_tty_detail "Copy remote TLS certificate:" \
     "$( ((SSL)) && echo yes || echo no)"
@@ -221,10 +221,16 @@ if [ ${#DEACTIVATE[@]} -gt 0 ]; then
     }
 fi
 
-[ -z "$RENAME" ] ||
-    LK_WP_REPLACE=1 LK_WP_APPLY=0 LK_WP_FLUSH=0 LK_WP_MIGRATE=0 \
-        _LK_WP_QUIET=1 _LK_WP_REPLACE_COMMAND=wp \
-        lk_wp_rename_site "$RENAME"
+if [[ -n ${RENAME:+1} ]]; then
+    SITE_ADDR=$(lk_wp_get_site_address)
+    if [[ $SITE_ADDR != $RENAME ]]; then
+        LK_WP_REPLACE=1 LK_WP_APPLY=0 LK_WP_FLUSH=0 LK_WP_MIGRATE=0 \
+            _LK_WP_QUIET=1 _LK_WP_REPLACE_COMMAND=wp \
+            lk_wp_rename_site "$RENAME"
+    else
+        lk_tty_print "Rename not required:" "$SITE_ADDR"
+    fi
+fi
 lk_wp_apply || STATUS=$?
 
 if [ "$SSL" -eq 1 ]; then

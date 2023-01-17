@@ -325,24 +325,11 @@ PAC_PACKAGES+=(
     php
     php-gd
     php-imagick
-    php-imap
-    php-intl
     php-memcache
     php-memcached
     php-sqlite
     php-xsl # Optional phpdoc-phar dependency
     xdebug
-
-    #
-    php7
-    php7-gd
-    php7-imagick
-    php7-imap
-    php7-intl
-    php7-memcache
-    php7-memcached
-    php7-sqlite
-    php7-xsl # Optional phpdoc-phar dependency
 
     #
     python
@@ -386,8 +373,18 @@ AUR_PACKAGES+=(
     nvm
     php-ibm_db2
     php-memprof
+    php-pcov
     php-sqlsrv
-    php7-xdebug # Required for PHP 7.4 debugging
+    php74
+    php74-gd
+    php74-imagick
+    php74-imap
+    php74-intl
+    php74-memcache
+    php74-memcached
+    php74-sqlite
+    php74-xdebug
+    php74-xsl # Optional phpdoc-phar dependency
     phpdoc-phar
     python-demjson3
     python-pywebview

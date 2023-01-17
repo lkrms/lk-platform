@@ -318,10 +318,9 @@ lk_log_start
     RC_PATTERN="$(lk_regex_implode \
         "${RC_PATTERNS[@]}")(\\/.*)?\\/(\\.bashrc|rc\\.sh)"
     RC_PATTERN=${RC_PATTERN//\\/\\\\}
-    RC_SH=$(printf '%s\n' \
-        "if [ -f $RC_PATH ]; then" \
-        "    . $RC_PATH" \
-        "fi")
+    # Some awk variants fail with "newline in string" when a newline character
+    # appears in a command-line variable, so leave newlines as '\n' literals
+    RC_SH="if [ -f $RC_PATH ]; then\\n    . $RC_PATH\\nfi"
     RC_AWK=(awk
         -f "$LK_BASE/lib/awk/update-bashrc.awk"
         -v "RC_PATTERN=$RC_PATTERN"
@@ -337,6 +336,7 @@ lk_log_start
     }
 
     LK_FILE_NO_DIFF=1
+    lk_mktemp_with TEMP
     for h in "${_LK_HOMES[@]}"; do
         [ ! -e "$h/.${LK_PATH_PREFIX}ignore" ] || continue
         OWNER=$(lk_file_owner "$h")
@@ -348,7 +348,8 @@ lk_log_start
         FILE=$h/.bashrc
         [ -e "$FILE" ] ||
             install -m 00644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
-        lk_file_replace -l "$FILE" "$("${RC_AWK[@]}" "$FILE")"
+        "${RC_AWK[@]}" "$FILE" >"$TEMP" &&
+            lk_file_replace -l "$FILE" "$(<"$TEMP")"
 
         # Create ~/.profile if no profile file exists, then check that ~/.bashrc
         # is sourced at startup when Bash is running as a login shell (e.g. in a

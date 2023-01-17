@@ -643,7 +643,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
         awk -F'\t' '{
     print $1
     print $2 " (" $4 ($6 ? ", Action: " $6 : "") ", Version: " $3 ")"
-    print $5 == "Y" ? "on" : "off"
+    print ($5 == "Y") ? "on" : "off"
 }')
     if [ ${#INSTALL_UPDATES[@]} -gt 0 ]; then
         lk_mapfile INSTALL_UPDATES <(lk_whiptail_checklist -s \

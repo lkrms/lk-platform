@@ -802,8 +802,8 @@ $LK_NODE_HOSTNAME" &&
         )
     fi
 
-    if lk_pac_installed php || lk_pac_installed php7; then
-        for DIR in /etc/php7 /etc/php; do
+    if lk_pac_installed php || lk_pac_installed php74; then
+        for DIR in /etc/php74 /etc/php; do
             unset LK_FILE_REPLACE_NO_CHANGE
             FILE=$DIR/php.ini
             CLI_FILE=$DIR/php-cli.ini
@@ -820,7 +820,6 @@ $LK_NODE_HOSTNAME" &&
                     gd
                     gettext
                     iconv
-                    imap
                     intl
                     mysqli
                     pdo_sqlite
@@ -828,6 +827,7 @@ $LK_NODE_HOSTNAME" &&
                     sqlite3
                     zip
                 )
+                [[ $DIR != *74 ]] || PHP_EXT+=(imap)
                 for EXT in ${PHP_EXT+"${PHP_EXT[@]}"}; do
                     lk_php_enable_option extension "$EXT"
                 done

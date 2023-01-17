@@ -160,6 +160,8 @@ PAC_PACKAGES+=(
 
 ! lk_system_has_intel_cpu || PAC_PACKAGES+=(
     intel-ucode:BM
+
+    i7z:BM # Monitor CPU time spent in each available C-State
 )
 
 ! lk_system_has_amd_cpu || PAC_PACKAGES+=(

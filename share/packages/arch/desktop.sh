@@ -207,8 +207,6 @@ PAC_PACKAGES+=(
     php
     php-gd
     php-imagick
-    php-imap
-    php-intl
     php-sqlite
 
     #
