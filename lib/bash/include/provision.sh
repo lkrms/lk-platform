@@ -1774,14 +1774,16 @@ function lk_cpanel_domain_list() {
 function _lk_cpanel_domain_tsv() {
     lk_jq -r 'include "core";
 [ (.data.payload? // .data? // cpanel_error)[] |
-    select(.type == "record" and (.record_type | in_arr(["SOA", "NS", "CAA"]) | not)) |
+    select(.type == "record" and (.record_type | in_arr(["NS", "CAA"]) | not)) |
     .name = (.dname_b64 | @base64d) ] |
   sort_by(.record_type, .name)[] |
   [.data_b64[] | @base64d] as $data |
-  if   .record_type == "MX"  then . += {"priority": $data[0], "target": $data[1]}
-  elif .record_type == "SRV" then . += {"priority": $data[0], "weight": $data[1], "port": $data[2], "target": $data[3]}
+  if   .record_type == "MX"  then . += {"priority": $data[0], "target": ($data[1] | trim_fqdn)}
+  elif .record_type == "SRV" then . += {"priority": $data[0], "weight": $data[1], "port": $data[2], "target": ($data[3] | trim_fqdn)}
+  elif .record_type == "SOA" then . += {"target": [$data[] | trim_fqdn] | join(" ")}
   else $data[] as $data | .target = $data end |
-  [.line_index, .name, .ttl, .record_type, .priority, .weight, .port, .target] | @tsv'
+  if (.record_type | in_arr(["CNAME", "MX", "SRV"])) then (.target |= trim_fqdn) else . end |
+  [.line_index, (.name | trim_fqdn), .ttl, .record_type, (.priority // 0), (.weight // 0), (.port // 0), .target] | @tsv'
 }
 
 # lk_cpanel_domain_tsv DOMAIN
@@ -1814,6 +1816,64 @@ function lk_cpanel_domain_tsv() {
 function lk_whm_domain_tsv() {
     _lk_whm_server_check &&
         lk_whm_get parse_dns_zone zone="$1" | _lk_cpanel_domain_tsv
+}
+
+# lk_cpanel_domain_serial_get DOMAIN
+function lk_cpanel_domain_serial_get() {
+    lk_cpanel_domain_tsv "$@" |
+        awk '!f && $4 == "SOA" { print $10; f = 1 }' |
+        grep .
+}
+
+# lk_cpanel_domain_record_create DOMAIN NAME TTL TYPE PRIO WEIGHT PORT TARGET
+function lk_cpanel_domain_record_create() {
+    local RECORD SERIAL
+    RECORD=$(jq -nc \
+        --arg name "$2" \
+        --arg ttl "$3" \
+        --arg type "$4" \
+        --arg prio "$5" \
+        --arg weight "$6" \
+        --arg port "$7" \
+        --arg target "$8" '
+{ "dname":       $name,
+  "ttl":         ( $ttl | tonumber | if . == 0 then 14400 else . end ),
+  "record_type": $type,
+  "data":        ( if   $type == "MX"  then [ ($prio | tonumber), $target ]
+                   elif $type == "SRV" then [ ($prio | tonumber), ($weight | tonumber), ($port | tonumber), $target ]
+                   else                     [ $target ] end ) }') &&
+        SERIAL=$(lk_cpanel_domain_serial_get "$1") || return
+    lk_cpanel_get DNS mass_edit_zone zone="$1" serial="$SERIAL" add="$RECORD"
+}
+
+# lk_cpanel_domain_record_update DOMAIN ID NAME TTL TYPE PRIO WEIGHT PORT TARGET
+function lk_cpanel_domain_record_update() {
+    local RECORD SERIAL
+    RECORD=$(jq -nc \
+        --arg line_index "$2" \
+        --arg name "$3" \
+        --arg ttl "$4" \
+        --arg type "$5" \
+        --arg prio "$6" \
+        --arg weight "$7" \
+        --arg port "$8" \
+        --arg target "$9" '
+{ "line_index":  $line_index,
+  "dname":       $name,
+  "ttl":         ( $ttl | tonumber | if . == 0 then 14400 else . end ),
+  "record_type": $type,
+  "data":        ( if   $type == "MX"  then [ ($prio | tonumber), $target ]
+                   elif $type == "SRV" then [ ($prio | tonumber), ($weight | tonumber), ($port | tonumber), $target ]
+                   else                     [ $target ] end ) }') &&
+        SERIAL=$(lk_cpanel_domain_serial_get "$1") || return
+    lk_cpanel_get DNS mass_edit_zone zone="$1" serial="$SERIAL" edit="$RECORD"
+}
+
+# lk_cpanel_domain_record_delete DOMAIN ID
+function lk_cpanel_domain_record_delete() {
+    local SERIAL
+    SERIAL=$(lk_cpanel_domain_serial_get "$1") || return
+    lk_cpanel_get DNS mass_edit_zone zone="$1" serial="$SERIAL" remove="$2"
 }
 
 # lk_cpanel_ssl_get_for_domain DOMAIN [TARGET_DIR]

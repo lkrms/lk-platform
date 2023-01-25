@@ -203,8 +203,10 @@ lk_log_start
         domain_record_update() { lk_linode_domain_record_update "$@"; }
         domain_record_delete() { lk_linode_domain_record_delete "$@"; }
         DNS_SERVICE=Linode
-      elif DOMAIN_IPV4=$(lk_dns_resolve_name_from_ns "$_DOMAIN" |
-        lk_filter_ipv4 | head -n1 | grep .); then
+      elif DOMAIN_IPV4=$(lk_dns_resolve_name_from_ns "cpanel.$_DOMAIN" |
+        lk_filter_ipv4 | head -n1 | grep .) ||
+        DOMAIN_IPV4=$(lk_dns_resolve_name_from_ns "$_DOMAIN" |
+          lk_filter_ipv4 | head -n1 | grep .); then
         # Check for access to the domain via WHM first, then via cPanel
         if lk_tcp_is_reachable "$DOMAIN_IPV4" 2087 &&
           lk_whm_server_set -q "$DOMAIN_IPV4" &&
