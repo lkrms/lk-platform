@@ -376,15 +376,25 @@ AUR_PACKAGES+=(
     php-pcov
     php-sqlsrv
     php74
+    php74-bcmath
+    php74-cli
+    php74-curl
+    php74-exif
     php74-gd
+    php74-gettext
+    php74-iconv
     php74-imagick
     php74-imap
     php74-intl
     php74-memcache
     php74-memcached
+    php74-mysql
+    php74-phar
+    php74-soap
     php74-sqlite
     php74-xdebug
     php74-xsl # Optional phpdoc-phar dependency
+    php74-zip
     phpdoc-phar
     python-demjson3
     python-pywebview

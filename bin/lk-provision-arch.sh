@@ -13,7 +13,7 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
     lk_die "unable to locate LK_BASE"
 export LK_BASE
 
-shopt -s nullglob
+shopt -s nullglob extglob
 
 . "$LK_BASE/lib/bash/common.sh"
 lk_require arch git linux provision whiptail
@@ -820,7 +820,10 @@ $LK_NODE_HOSTNAME" &&
                     gd
                     gettext
                     iconv
+                    imagick
                     intl
+                    memcache.so
+                    memcached.so
                     mysqli
                     pdo_sqlite
                     soap
@@ -829,17 +832,12 @@ $LK_NODE_HOSTNAME" &&
                 )
                 [[ $DIR != *74 ]] || PHP_EXT+=(imap)
                 for EXT in ${PHP_EXT+"${PHP_EXT[@]}"}; do
-                    lk_php_enable_option extension "$EXT"
-                done
-                STANDALONE_PHP_EXT=(
-                    imagick
-                    memcache.so
-                    memcached.so
-                )
-                for EXT in ${STANDALONE_PHP_EXT+"${STANDALONE_PHP_EXT[@]}"}; do
-                    FILE=$DIR/conf.d/${EXT%.*}.ini
-                    [ -f "$FILE" ] || continue
-                    lk_php_enable_option extension "$EXT" "$FILE"
+                    FILES=("$DIR"/conf.d/?([0-9][0-9]-)"${EXT%.*}".ini)
+                    [[ -f ${FILES-} ]] || unset FILES
+                    ! grep -Eq "^$S*extension$S*=$S*$EXT(\\.so)?$S*(\$|;)" \
+                        "$LK_CONF_OPTION_FILE" \
+                        ${FILES+"$FILES"} || continue
+                    lk_php_enable_option extension "$EXT" ${FILES+"$FILES"}
                 done
                 FILE=$DIR/conf.d/imagick.ini
                 [ ! -f "$FILE" ] || lk_php_set_option \
