@@ -293,7 +293,6 @@ PAC_PACKAGES+=(
     gperftools
     graphviz # Optional phpdoc dependency
     imagemagick
-    imagemagick-doc
     plantuml # Optional phpdoc dependency
     python-pylint
     qcachegrind
