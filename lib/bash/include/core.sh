@@ -1879,7 +1879,7 @@ function lk_tty_pairs() { (
     (($# % 2 == 0)) && { [ -z "$LF" ] ||
         { [ -n "$LF" ] && [[ $IFS != *$LF* ]]; }; } &&
         _IFS=$(LF=${LF:-\\0} && printf "%s${LF//%/%%}" "$IFS" |
-            awk -v "RS=$LF" '
+            awk -v "RS=${LF//$'\n'/\\n}" '
 { FS = ORS = RS
   gsub(/./, "&" RS)
   for (i = 1; i < NF; i++) {
