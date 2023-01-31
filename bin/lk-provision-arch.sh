@@ -827,6 +827,7 @@ $LK_NODE_HOSTNAME" &&
                     mysqli
                     pdo_sqlite
                     soap
+                    sodium
                     sqlite3
                     zip
                 )
