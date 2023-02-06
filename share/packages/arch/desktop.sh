@@ -112,7 +112,7 @@ PAC_PACKAGES+=(
     # PDF
     ghostscript  # PDF/PostScript processing
     mupdf-tools  # PDF manipulation
-    pandoc       # Text conversion (e.g. Markdown to PDF)
+    pandoc-cli   # Text conversion (e.g. Markdown to PDF)
     poppler      # Provides pdfimages
     pstoedit     # PDF/PostScript conversion to vector formats
     qpdf         # PDF manipulation (e.g. add underlay)
