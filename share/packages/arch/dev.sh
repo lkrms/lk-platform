@@ -369,6 +369,7 @@ AUR_PACKAGES+=(
     mongodb50-bin          # Required for legacy 'mongo' command
     msodbcsql
     mssql-tools
+    multitime
     nodejs-less
     nvm
     php-humbug-box-bin

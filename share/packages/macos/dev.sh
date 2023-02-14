@@ -19,6 +19,7 @@ HOMEBREW_FORMULAE+=(
     csvkit
     exiftool
     imagemagick
+    multitime
     s3cmd
     unison
 
@@ -111,6 +112,7 @@ HOMEBREW_FORMULAE+=(
     autopep8
     graphviz # Optional phpdoc dependency
     plantuml # Optional phpdoc dependency
+    qcachegrind
 
     #
     libvirt
