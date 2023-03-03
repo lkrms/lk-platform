@@ -464,8 +464,11 @@ function lk_git_fetch() {
     for REMOTE in $REMOTES; do
         (($#)) || ! _lk_git_is_remote_skipped "$REMOTE" || continue
         _lk_git fetch --tags --force --quiet "$REMOTE" &&
-            _lk_git remote set-head "$REMOTE" --auto >/dev/null &&
-            _lk_git remote prune "$REMOTE" || {
+            # `git remote set-head --auto` will fail if the remote HEAD points
+            # to a reference that isn't available locally
+            { { _lk_git remote set-head "$REMOTE" --auto >/dev/null ||
+                lk_warn "unable to set default branch for remote: $REMOTE"; } &&
+                _lk_git remote prune "$REMOTE" || true; } || {
             ((QUIET)) || lk_tty_error "Unable to fetch from remote:" "$REMOTE"
             ((++ERRORS))
         }
@@ -536,8 +539,11 @@ function lk_git_update_repo_to() {
     [ $# -ge 1 ] || lk_usage "Usage: $FUNCNAME [-f] REMOTE [BRANCH]" || return
     REMOTE=$1
     _lk_git fetch --tags --force --quiet "$REMOTE" &&
-        _lk_git remote set-head "$REMOTE" --auto >/dev/null &&
-        _lk_git remote prune "$REMOTE" ||
+        # `git remote set-head --auto` will fail if the remote HEAD points to a
+        # reference that isn't available locally
+        { { _lk_git remote set-head "$REMOTE" --auto >/dev/null ||
+            lk_warn "unable to set default branch for remote: $REMOTE"; } &&
+            _lk_git remote prune "$REMOTE" || true; } ||
         lk_warn "unable to fetch from remote: $REMOTE" ||
         return
     _BRANCH=$(lk_git_branch_current) || _BRANCH=
