@@ -280,7 +280,6 @@ lk_is_bootstrap ||
 PAC_PACKAGES+=(
     autoconf
     autoconf-archive
-    autopep8
     bash-language-server
     cloc
     cmake
@@ -294,6 +293,7 @@ PAC_PACKAGES+=(
     graphviz # Optional phpdoc dependency
     imagemagick
     plantuml # Optional phpdoc dependency
+    python-black
     python-pylint
     qcachegrind
     tidy
@@ -414,6 +414,7 @@ AUR_PACKAGES+=(
     symfony-console-autocomplete
     terser
     trickle-git
+    ts-standard
     zeal-git
 
     #
@@ -430,6 +431,7 @@ AUR_PACKAGES+=(
     vsce
 
     # Platforms
+    act # GitHub Action runner
     azure-cli
     azure-functions-core-tools-bin
     linode-cli
