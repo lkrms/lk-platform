@@ -312,8 +312,6 @@ EOF
         lk_tty_print "Found $BREW_NAME at:" "$("${BREW_PATH[i]}" --prefix)"
         lk_brew_tap "${HOMEBREW_TAPS[@]}" ||
             lk_die "unable to tap formula repositories"
-        lk_brew_enable_autoupdate ${BREW_ARCH[i]:+"${BREW_ARCH[i]}"} ||
-            lk_die 'unable to enable automatic `brew update`'
         [ "$LK_BREW_NEW_INSTALL" -eq 1 ] || {
             lk_tty_print "Updating formulae"
             brew update --quiet &&
