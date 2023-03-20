@@ -464,4 +464,5 @@ PAC_PACKAGES+=(
 
     #
     docker
+    docker-buildx
 )

@@ -191,6 +191,7 @@ AUR_PACKAGES+=(
 
 ! lk_feature_enabled docker || PAC_PACKAGES+=(
     docker
+    docker-buildx-
 )
 
 ! lk_feature_enabled libvirt || PAC_PACKAGES+=(
@@ -410,7 +411,7 @@ lk_pac_sync
 lk_mktemp_with _PAC_ALL pacman -Sl
 lk_mktemp_with _PAC_ALL_GROUPS pacman -Sgg
 lk_mktemp_with _PAC_PACKAGES sort -u <(awk '{ print $2 }' "$_PAC_ALL")
-lk_mktemp_with _PAC_GROUPS sort -u <(awk '{ print $1 }' "$_PAC_ALL_GROUPS")
+lk_mktemp_with _PAC_GROUPS sort -u <(awk '{ print $1 }' "$_PAC_ALL_GROUPS" | grep -Fxvf "$_PAC_PACKAGES")
 lk_mktemp_with _PAC_OFFICIAL sort -u \
     <(awk '$1 ~ /^(core|extra|community|multilib)$/ { print $2 }' "$_PAC_ALL")
 lk_mktemp_with _PAC_UNOFFICIAL sort -u \
