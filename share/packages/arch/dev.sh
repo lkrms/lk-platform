@@ -159,11 +159,9 @@ PAC_PACKAGES+=(
     libreoffice-fresh
     libreoffice-fresh-en-gb
     nextcloud-client
-    nomacs
     remmina
     screenkey
     scribus
-    simplescreenrecorder
     slop
     system-config-printer
     thunderbird
@@ -243,13 +241,15 @@ AUR_PACKAGES+=(
     key-mon
     libreoffice-extension-languagetool
     masterpdfeditor-free
+    nomacs
     pencil
     qpdfview
     rescuetime2
+    simplescreenrecorder
     skypeforlinux-stable-bin
     spotify
     stretchly
-    teams
+    teams-for-linux
     teamviewer
     todoist-appimage
     trimage
@@ -404,6 +404,7 @@ AUR_PACKAGES+=(
     php74-xsl # Optional phpdoc-phar dependency
     php74-zip
     phpdoc-phar
+    pretty-php
     python-demjson3
     python-pywebview
     python39 # azure-functions-core-tools-bin dependency

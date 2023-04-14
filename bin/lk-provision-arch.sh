@@ -1035,13 +1035,9 @@ done\""
     fi
 
     if lk_pac_installed bluez; then
-        unset LK_FILE_REPLACE_NO_CHANGE
-        lk_conf_set_option AutoEnable true /etc/bluetooth/main.conf
         SERVICE_ENABLE+=(
             bluetooth "Bluetooth"
         )
-        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
-            SERVICE_RESTART+=(bluetooth)
     fi
 
     if lk_pac_installed libvirt; then

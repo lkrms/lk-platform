@@ -92,11 +92,9 @@ PAC_PACKAGES+=(
     libreoffice-fresh
     libreoffice-fresh-en-gb
     nextcloud-client
-    nomacs
     remmina
     screenkey
     scribus
-    simplescreenrecorder
     slop
     system-config-printer
     thunderbird
@@ -169,12 +167,14 @@ AUR_PACKAGES+=(
     key-mon
     libreoffice-extension-languagetool
     masterpdfeditor-free
+    nomacs
     qpdfview
     rescuetime2
+    simplescreenrecorder
     skypeforlinux-stable-bin
     spotify
     stretchly
-    teams
+    teams-for-linux
     todoist-appimage
     trimage
     #ttf-apple-emoji
