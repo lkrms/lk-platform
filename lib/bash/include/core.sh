@@ -10,20 +10,31 @@ USER=${USER:-$(id -un)} &&
 
 _LK_ARGV=("$@")
 
+# lk_fail [STATUS]
+#
+# Fail with return value STATUS or 1.
+#
+# A subshell-free alternative to `(exit "$STATUS") && false`.
+function lk_fail() {
+    local s
+    ((s = ${1-})) && return "$s" || return 1
+}
+
 # lk_pass [-STATUS] COMMAND [ARG...]
 #
-# Run COMMAND without changing the previous command's exit status, or run
-# COMMAND and return STATUS.
+# Run COMMAND and return STATUS or the previous command's exit status.
 function lk_pass() {
-    local STATUS=$?
-    [[ $1 != -* ]] || { STATUS=${1:1} && shift; }
-    "$@" || true
-    return "$STATUS"
+    local s=$?
+    [[ $1 != -* ]] || { s=${1:1} && shift; }
+    "$@" || return "$s"
+    return "$s"
 }
 
 # lk_err MESSAGE
 function lk_err() {
-    lk_pass echo "${FUNCNAME[1 + ${_LK_STACK_DEPTH:-0}]-${0##*/}}: $1" >&2
+    lk_pass printf '%s: %s\n' \
+        "${FUNCNAME[1 + ${_LK_STACK_DEPTH:-0}]-${0##*/}}" \
+        "$1" >&2
 }
 
 # lk_bad_args [VALUE_NAME [VALUE]]
@@ -34,20 +45,24 @@ function lk_bad_args() {
 }
 
 # lk_script_name [STACK_DEPTH]
+#
+# Get the name of the top-level script or function that's currently running.
 function lk_script_name() {
-    local DEPTH=$((${1:-0} + ${_LK_STACK_DEPTH:-0})) NAME
+    local depth=$((${1-0} + ${_LK_STACK_DEPTH:-0})) name
     lk_script_running ||
-        NAME=${FUNCNAME[1 + DEPTH]+"${FUNCNAME[*]: -1}"}
-    [[ ! ${NAME-} =~ ^(source|main)$ ]] || NAME=
-    echo "${NAME:-${0##*/}}"
+        name=${FUNCNAME[1 + depth]+"${FUNCNAME[*]: -1}"}
+    [[ ! ${name-} =~ ^(source|main)$ ]] || name=
+    printf '%s\n' "${name:-${0##*/}}"
 }
 
 # lk_caller_name [STACK_DEPTH]
+#
+# Get the name of the caller's caller.
 function lk_caller_name() {
-    local DEPTH=$((${1:-0} + ${_LK_STACK_DEPTH:-0})) NAME
-    NAME=${FUNCNAME[2 + DEPTH]-}
-    [[ ! ${NAME-} =~ ^(source|main)$ ]] || NAME=
-    echo "${NAME:-${0##*/}}"
+    local depth=$((${1-0} + ${_LK_STACK_DEPTH:-0})) name
+    name=${FUNCNAME[2 + depth]-}
+    [[ ! $name =~ ^(source|main)$ ]] || name=
+    printf '%s\n' "${name:-${0##*/}}"
 }
 
 # lk_first_command ["COMMAND [ARG...]"...]
@@ -1274,9 +1289,9 @@ function _lk_caller() {
         SOURCE=${BASH_SOURCE[2]-}
         LINE=${BASH_LINENO[3]-}
     fi
-    [ -z "$SOURCE" ] || [ "$SOURCE" = main ] || [ "$SOURCE" = "$0" ] ||
+    [[ -z $SOURCE ]] || [[ $SOURCE == main ]] || [[ $SOURCE == "$0" ]] ||
         CALLER+=("$(lk_tty_path "$SOURCE")")
-    [ -z "$LINE" ] || [ "$LINE" -eq 1 ] ||
+    [[ -z $LINE ]] || [[ $LINE -eq 1 ]] ||
         CALLER[${#CALLER[@]} - 1]+=$LK_DIM:$LINE$LK_UNDIM
     lk_implode_arr "$LK_DIM->$LK_UNDIM" CALLER
 }
@@ -1296,8 +1311,8 @@ function lk_warn() {
 function lk_die() {
     local STATUS=$?
     ((STATUS)) || STATUS=1
-    [ "${1+1}${1:+2}" = 1 ] ||
-        lk_tty_error "$(_lk_caller): ${1:-command failed}"
+    [[ ${1+1}${1:+2} == 1 ]] ||
+        lk_tty_error "$(_lk_caller): ${1-command failed}"
     if [[ $- != *i* ]]; then
         exit "$STATUS"
     else

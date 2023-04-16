@@ -16,9 +16,9 @@ function _lk_caller() {
         SOURCE=${BASH_SOURCE[2]-}
         LINE=${BASH_LINENO[3]-}
     fi
-    [ -z "$SOURCE" ] || [ "$SOURCE" = main ] || [ "$SOURCE" = "$0" ] ||
+    [[ -z $SOURCE ]] || [[ $SOURCE == main ]] || [[ $SOURCE == "$0" ]] ||
         CALLER+=("$(lk_tty_path "$SOURCE")")
-    [ -z "$LINE" ] || [ "$LINE" -eq 1 ] ||
+    [[ -z $LINE ]] || [[ $LINE -eq 1 ]] ||
         CALLER[${#CALLER[@]} - 1]+=$LK_DIM:$LINE$LK_UNDIM
     lk_implode_arr "$LK_DIM->$LK_UNDIM" CALLER
 }
@@ -38,8 +38,8 @@ function lk_warn() {
 function lk_die() {
     local STATUS=$?
     ((STATUS)) || STATUS=1
-    [ "${1+1}${1:+2}" = 1 ] ||
-        lk_tty_error "$(_lk_caller): ${1:-command failed}"
+    [[ ${1+1}${1:+2} == 1 ]] ||
+        lk_tty_error "$(_lk_caller): ${1-command failed}"
     if [[ $- != *i* ]]; then
         exit "$STATUS"
     else
