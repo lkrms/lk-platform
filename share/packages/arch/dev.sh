@@ -16,9 +16,11 @@ PAC_OFFER=(
     linux-headers
     offlineimap
     ookla-speedtest-bin
+    ruby-ronn-ng
     stretchly-bin
     stripe-cli
     subversion
+    xfce4-dev-tools
     zoom
 
     #
@@ -241,7 +243,7 @@ AUR_PACKAGES+=(
     key-mon
     libreoffice-extension-languagetool
     masterpdfeditor-free
-    nomacs
+    nomacs-git
     pencil
     qpdfview
     rescuetime2

@@ -167,7 +167,7 @@ AUR_PACKAGES+=(
     key-mon
     libreoffice-extension-languagetool
     masterpdfeditor-free
-    nomacs
+    nomacs-git
     qpdfview
     rescuetime2
     simplescreenrecorder
