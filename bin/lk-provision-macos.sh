@@ -14,13 +14,12 @@ LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-main}
 export LK_BASE=${LK_BASE:-/opt/lk-platform}
 
 set -euo pipefail
-lk_die() { s=$? && echo "$0: ${1-error $s}" >&2 && (exit $s) && false || exit; }
+lk_fail() { (($1)) && return $1 || return 1; }
+lk_die() { s=$? && printf '%s: %s\n' "$0" "$1" >&2 && lk_fail $s || exit; }
 
 [[ $EUID -ne 0 ]] || lk_die "cannot run as root"
 [[ $OSTYPE == darwin* ]] || lk_die "not running on macOS"
 [[ $- != *s* ]] || lk_die "cannot run from standard input"
-
-umask 002
 
 function exit_trap() {
     local STATUS=$? EXT \
@@ -170,24 +169,6 @@ function exit_trap() {
     lk_tty_print "Configuring sudo"
     lk_sudo_apply_sudoers \
         "$SUDOERS" zz- "$SUDOERS-macos"
-
-    lk_tty_print "Configuring default umask"
-    { defaults read /var/db/com.apple.xpc.launchd/config/user.plist Umask |
-        grep -Fx 2; } &>/dev/null ||
-        lk_tty_run_detail sudo launchctl config user umask 002 >/dev/null
-    FILE=/etc/profile
-    [ ! -r "$FILE" ] || grep -Eq '\<umask\>' "$FILE" || {
-        lk_tty_detail "Setting umask in" "$FILE"
-        (LK_SUDO=1 && lk_file_keep_original "$FILE") &&
-            sudo tee -a "$FILE" <<"EOF" >/dev/null
-
-if [ "$(id -u)" -ne 0 ]; then
-    umask 002
-else
-    umask 022
-fi
-EOF
-    }
 
     function path_add() {
         local STATUS
