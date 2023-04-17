@@ -48,7 +48,8 @@ function exit_trap() {
         --header "Cache-Control: no-cache"
         --header "Pragma: no-cache"
         --location
-        --retry 2
+        --retry 9
+        --retry-max-time 120
         --show-error
         --silent
     )

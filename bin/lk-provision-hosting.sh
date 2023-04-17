@@ -278,7 +278,7 @@ unset BEFORE_FILE REBOOT
 P=${LK_PATH_PREFIX%-}_
 IPTABLES_TCP_LISTEN=()
 IPTABLES_UDP_LISTEN=()
-CURL_OPTIONS=(-fsSLH "Cache-Control: no-cache" -H "Pragma: no-cache" --retry 2)
+CURL_OPTIONS=(-fsSLH "Cache-Control: no-cache" -H "Pragma: no-cache" --retry 9 --retry-max-time 30)
 
 APT_REPOS=()
 APT_UNMARK=(
