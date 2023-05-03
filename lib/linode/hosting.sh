@@ -29,6 +29,8 @@ lk_die() { s=$? && echo "$0: ${1-error $s}" >&2 && (exit $s) && false || exit; }
 # <UDF name="LK_PHP_DEFAULT_VERSION" label="Default PHP version" oneof="5.6,7.0,7.1,7.2,7.3,7.4,8.0,8.1" default="" />
 # <UDF name="LK_PHP_SETTINGS" label="php.ini settings (user can overwrite, comma-delimited, flag assumed if value is On/True/Yes or Off/False/No)" example="upload_max_filesize=24M,display_errors=On" default="" />
 # <UDF name="LK_PHP_ADMIN_SETTINGS" label="Enforced php.ini settings (comma-delimited)" example="post_max_size=50M,log_errors=Off" default="" />
+# <UDF name="LK_SITE_PHP_FPM_MAX_CHILDREN" label="Default PHP-FPM pm.max_children" example="8" default="" />
+# <UDF name="LK_SITE_PHP_FPM_MEMORY_LIMIT" label="Default PHP-FPM memory_limit" example="256" default="" />
 # <UDF name="LK_MEMCACHED_MEMORY_LIMIT" label="Memcached size" oneof="64,128,256,512,768,1024" default="256" />
 # <UDF name="LK_SMTP_RELAY" label="SMTP relay (system-wide)" example="[mail.clientname.com.au]:587" default="" />
 # <UDF name="LK_SMTP_CREDENTIALS" label="SMTP relay credentials" example="username:Passw0rd!" default="" />
@@ -85,6 +87,8 @@ LK_PHP_VERSIONS=${LK_PHP_VERSIONS-}
 LK_PHP_DEFAULT_VERSION=${LK_PHP_DEFAULT_VERSION-}
 LK_PHP_SETTINGS=${LK_PHP_SETTINGS-}
 LK_PHP_ADMIN_SETTINGS=${LK_PHP_ADMIN_SETTINGS-}
+LK_SITE_PHP_FPM_MAX_CHILDREN=${LK_SITE_PHP_FPM_MAX_CHILDREN-}
+LK_SITE_PHP_FPM_MEMORY_LIMIT=${LK_SITE_PHP_FPM_MEMORY_LIMIT-}
 LK_MEMCACHED_MEMORY_LIMIT=${LK_MEMCACHED_MEMORY_LIMIT:-256}
 LK_SMTP_RELAY=${LK_SMTP_RELAY-}
 LK_SMTP_CREDENTIALS=${LK_SMTP_CREDENTIALS-}
