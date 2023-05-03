@@ -32,6 +32,8 @@ function lk_hosting_apply_config() {
     lk_tty_log "Checking hosting services"
     _lk_hosting_check &&
         PHP_VERSIONS=($(lk_hosting_php_get_versions)) || return
+    lk_tty_print "Hosts file"
+    lk_hosting_hosts_file_provision -q || return
     lk_tty_print "PHP-FPM pools"
     _lk_hosting_php_check_pools || return
     for PHPVER in ${PHP_VERSIONS+"${PHP_VERSIONS[@]}"}; do
