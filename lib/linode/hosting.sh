@@ -130,7 +130,7 @@ export "${!LK_@}" \
 _DIR=/tmp/${LK_PATH_PREFIX}install
 mkdir -p "$_DIR"
 
-CURL_OPTIONS=(-fsSLH "Cache-Control: no-cache" -H "Pragma: no-cache" --retry 2)
+CURL_OPTIONS=(-fsSLH "Cache-Control: no-cache" -H "Pragma: no-cache" --retry 9 --retry-max-time 120)
 YELLOW=$'\E[33m'
 CYAN=$'\E[36m'
 BOLD=$'\E[1m'

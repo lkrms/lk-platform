@@ -814,12 +814,12 @@ function lk_dns_get_records() {
         [[ ${1-} != +* ]] || {
             FIELDS=$(IFS=, && lk_upper ${1:1} |
                 awk -v caller="$FUNCNAME" '
-function toexpr(var) { expr = expr (expr ? ", " : "") var; next }
-/^NAME$/ { toexpr("$1") }
-/^TTL$/ { toexpr("$2") }
-/^CLASS$/ { toexpr("$3") }
-/^TYPE$/ { toexpr("$4") }
-/^(RDATA|VALUE)$/ { toexpr("rdata()") }
+function toexpr(var) { expr = expr (expr ? ", " : "") var }
+/^NAME$/ { toexpr("$1"); next }
+/^TTL$/ { toexpr("$2"); next }
+/^CLASS$/ { toexpr("$3"); next }
+/^TYPE$/ { toexpr("$4"); next }
+/^(RDATA|VALUE)$/ { toexpr("rdata()"); next }
 { print caller ": invalid field: " $0 > "/dev/stderr"; status = 1 }
 END { if (status) { exit status } print expr }') || return
         }
@@ -857,9 +857,9 @@ $4 != "CNAME" && cname_count[$1] {
 }
 $4 == "CNAME" {
   i = cname_count[$5]++
-  cname_alias[$5][i] = $1
+  cname_alias[$5, i] = $1
   match(line, name_ttl_regex)
-  cname_record[$5][i] = substr(line, RSTART, RLENGTH)
+  cname_record[$5, i] = substr(line, RSTART, RLENGTH)
 }
 END {
   for (i = 0; i < canonical_count; i++) {
@@ -870,12 +870,12 @@ END {
 function follow_cname(cname, _i, _alias)
 {
   for (_i = 0; _i < cname_count[cname]; _i++) {
-    _alias = cname_alias[cname][_i]
+    _alias = cname_alias[cname, _i]
     if (cname_count[_alias]) {
       follow_cname(_alias)
       continue
     }
-    sub(name_ttl_regex, cname_record[cname][_i], $0)
+    sub(name_ttl_regex, cname_record[cname, _i], $0)
     print
   }
 }
@@ -2170,7 +2170,7 @@ function lk_ssh_get_public_key() {
 # - LK_SSH_PREFIX is removed from the start of NAME and JUMP_HOST_NAME to ensure
 #   it's not added twice
 function lk_ssh_add_host() {
-    local NAME HOST SSH_USER KEY_FILE JUMP_HOST_NAME PORT='' \
+    local NAME HOST _HOST SSH_USER KEY_FILE JUMP_HOST_NAME PORT='' \
         h=${LK_SSH_HOME:-~} SSH_PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX} \
         LK_FILE_BACKUP_TAKE='' LK_VERBOSE=0 \
         KEY JUMP_ARGS JUMP_PORT CONF CONF_FILE TEST=
@@ -2218,7 +2218,11 @@ Usage: $FUNCNAME [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
     JUMP_HOST_NAME=${JUMP_HOST_NAME:+$SSH_PREFIX${JUMP_HOST_NAME#"$SSH_PREFIX"}}
     ! lk_is_true TEST || {
         if [ -z "$JUMP_HOST_NAME" ]; then
-            lk_ssh_is_reachable "$HOST" "${PORT:-22}"
+            lk_ssh_is_reachable "$HOST" "${PORT:-22}" ||
+                { _HOST=$(ssh -G "$HOST" | awk '$1 == "hostname" { print $2 }' | grep .) &&
+                    [[ $_HOST != "$HOST" ]] &&
+                    lk_ssh_is_reachable "$_HOST" "${PORT:-22}" &&
+                    HOST=$_HOST; }
         else
             JUMP_ARGS=(
                 -o ConnectTimeout=5

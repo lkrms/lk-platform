@@ -27,12 +27,12 @@ function lk_dns_get_records() {
         [[ ${1-} != +* ]] || {
             FIELDS=$(IFS=, && lk_upper ${1:1} |
                 awk -v caller="$FUNCNAME" '
-function toexpr(var) { expr = expr (expr ? ", " : "") var; next }
-/^NAME$/ { toexpr("$1") }
-/^TTL$/ { toexpr("$2") }
-/^CLASS$/ { toexpr("$3") }
-/^TYPE$/ { toexpr("$4") }
-/^(RDATA|VALUE)$/ { toexpr("rdata()") }
+function toexpr(var) { expr = expr (expr ? ", " : "") var }
+/^NAME$/ { toexpr("$1"); next }
+/^TTL$/ { toexpr("$2"); next }
+/^CLASS$/ { toexpr("$3"); next }
+/^TYPE$/ { toexpr("$4"); next }
+/^(RDATA|VALUE)$/ { toexpr("rdata()"); next }
 { print caller ": invalid field: " $0 > "/dev/stderr"; status = 1 }
 END { if (status) { exit status } print expr }') || return
         }

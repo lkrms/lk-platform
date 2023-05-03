@@ -114,7 +114,6 @@ PAC_PACKAGES+=(
     htop-
     iotop
     lsof
-    ps_mem-
     s-tui    # Monitor CPU frequency and temperature while toggling between stressed and regular operation
     sysstat- # Provides iostat, pidstat, sar
 
@@ -179,6 +178,9 @@ AUR_PACKAGES+=(
 
     # System
     powercap-:BM
+
+    # Monitoring
+    ps_mem-
 )
 
 ! lk_feature_enabled lighttpd || PAC_PACKAGES+=(
@@ -191,6 +193,7 @@ AUR_PACKAGES+=(
 
 ! lk_feature_enabled docker || PAC_PACKAGES+=(
     docker
+    docker-buildx-
 )
 
 ! lk_feature_enabled libvirt || PAC_PACKAGES+=(
@@ -262,9 +265,12 @@ if lk_feature_enabled desktop; then
         vlc-
 
         pipewire
-        pipewire-alsa  # Supports ALSA clients
-        pipewire-pulse # Supports PulseAudio clients and Bluetooth audio
-        wireplumber    # Starts PipeWire via a systemd user unit
+        pipewire-audio      # Supports Bluetooth audio
+        pipewire-alsa       # Supports ALSA clients
+        pipewire-jack       # Supports JACK clients
+        pipewire-pulse      # Supports PulseAudio clients
+        gst-plugin-pipewire # Supports GStreamer clients
+        wireplumber         # Starts PipeWire via a systemd user unit
 
         gst-libav         # "libav-based plugin containing many decoders and encoders"
         gst-plugins-bad-  # "Plugins that need more quality, testing or documentation"
@@ -410,7 +416,7 @@ lk_pac_sync
 lk_mktemp_with _PAC_ALL pacman -Sl
 lk_mktemp_with _PAC_ALL_GROUPS pacman -Sgg
 lk_mktemp_with _PAC_PACKAGES sort -u <(awk '{ print $2 }' "$_PAC_ALL")
-lk_mktemp_with _PAC_GROUPS sort -u <(awk '{ print $1 }' "$_PAC_ALL_GROUPS")
+lk_mktemp_with _PAC_GROUPS sort -u <(awk '{ print $1 }' "$_PAC_ALL_GROUPS" | grep -Fxvf "$_PAC_PACKAGES")
 lk_mktemp_with _PAC_OFFICIAL sort -u \
     <(awk '$1 ~ /^(core|extra|community|multilib)$/ { print $2 }' "$_PAC_ALL")
 lk_mktemp_with _PAC_UNOFFICIAL sort -u \

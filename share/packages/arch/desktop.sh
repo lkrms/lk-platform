@@ -92,11 +92,9 @@ PAC_PACKAGES+=(
     libreoffice-fresh
     libreoffice-fresh-en-gb
     nextcloud-client
-    nomacs
     remmina
     screenkey
     scribus
-    simplescreenrecorder
     slop
     system-config-printer
     thunderbird
@@ -112,7 +110,7 @@ PAC_PACKAGES+=(
     # PDF
     ghostscript  # PDF/PostScript processing
     mupdf-tools  # PDF manipulation
-    pandoc       # Text conversion (e.g. Markdown to PDF)
+    pandoc-cli   # Text conversion (e.g. Markdown to PDF)
     poppler      # Provides pdfimages
     pstoedit     # PDF/PostScript conversion to vector formats
     qpdf         # PDF manipulation (e.g. add underlay)
@@ -169,12 +167,14 @@ AUR_PACKAGES+=(
     key-mon
     libreoffice-extension-languagetool
     masterpdfeditor-free
+    nomacs-git
     qpdfview
     rescuetime2
+    simplescreenrecorder
     skypeforlinux-stable-bin
     spotify
     stretchly
-    teams
+    teams-for-linux
     todoist-appimage
     trimage
     #ttf-apple-emoji

@@ -124,6 +124,13 @@ function confirm_profile() {
   PROFILE_CONFIRMED=1
 }
 
+function maybe_get_ipv4() {
+  lk_dns_resolve_name_from_ns "$1" |
+    lk_filter_ipv4 |
+    head -n1 |
+    grep .
+}
+
 lk_log_start
 
 {
@@ -139,6 +146,7 @@ lk_log_start
     SES_DOMAIN=$1
     VERIFIED=0
     FROM_VERIFIED=0
+    DNS_TYPE=
     DNS_SERVICE=
     shift
 
@@ -199,34 +207,28 @@ lk_log_start
       lk_mktemp_with DOMAIN_TSV
       if is_linode &&
         lk_linode_domain_tsv "$SES_DOMAIN" | filter_domain_tsv >"$DOMAIN_TSV"; then
-        domain_record_create() { lk_linode_domain_record_create "$@"; }
-        domain_record_update() { lk_linode_domain_record_update "$@"; }
-        domain_record_delete() { lk_linode_domain_record_delete "$@"; }
+        DNS_TYPE=linode
         DNS_SERVICE=Linode
-      elif DOMAIN_IPV4=$(lk_dns_resolve_name_from_ns "cpanel.$_DOMAIN" |
-        lk_filter_ipv4 | head -n1 | grep .) ||
-        DOMAIN_IPV4=$(lk_dns_resolve_name_from_ns "$_DOMAIN" |
-          lk_filter_ipv4 | head -n1 | grep .); then
+      elif { CP_NAME=cpanel.$_DOMAIN && CP_IPV4=$(maybe_get_ipv4 "$CP_NAME"); } ||
+        { CP_NAME=$_DOMAIN && CP_IPV4=$(maybe_get_ipv4 "$CP_NAME"); }; then
         # Check for access to the domain via WHM first, then via cPanel
-        if lk_tcp_is_reachable "$DOMAIN_IPV4" 2087 &&
-          lk_whm_server_set -q "$DOMAIN_IPV4" &&
-          lk_whm_domain_tsv "$SES_DOMAIN" | filter_domain_tsv >"$DOMAIN_TSV"; then
-          domain_record_create() { lk_whm_domain_record_create "$@"; }
-          domain_record_update() { lk_whm_domain_record_update "$@"; }
-          domain_record_delete() { lk_whm_domain_record_delete "$@"; }
-          DNS_SERVICE=WHM
-        elif lk_tcp_is_reachable "$DOMAIN_IPV4" 2083 &&
-          lk_cpanel_server_set -q "$DOMAIN_IPV4" &&
-          lk_cpanel_domain_tsv "$SES_DOMAIN" | filter_domain_tsv >"$DOMAIN_TSV"; then
-          domain_record_create() { lk_cpanel_domain_record_create "$@"; }
-          domain_record_update() { lk_cpanel_domain_record_update "$@"; }
-          domain_record_delete() { lk_cpanel_domain_record_delete "$@"; }
-          DNS_SERVICE=cPanel
-        fi
+        for CP in {"whm,2087,WHM","cpanel,2083,cPanel"},{"$CP_NAME","$CP_IPV4"}; do
+          IFS=, read -r CP_TYPE CP_PORT CP_SERVICE CP_HOST <<<"$CP"
+          if lk_tcp_is_reachable "$CP_HOST" "$CP_PORT" &&
+            "lk_${CP_TYPE}_server_set" -q "$CP_HOST" &&
+            "lk_${CP_TYPE}_domain_tsv" "$SES_DOMAIN" | filter_domain_tsv >"$DOMAIN_TSV"; then
+            DNS_TYPE=$CP_TYPE
+            DNS_SERVICE=$CP_SERVICE
+            break
+          fi
+        done
       fi
     fi
 
-    if [[ -n $DNS_SERVICE ]]; then
+    if [[ -n $DNS_TYPE ]]; then
+      for DNS_OP in create update delete; do
+        eval "domain_record_${DNS_OP}() { lk_${DNS_TYPE}_domain_record_${DNS_OP} \"\$@\"; }"
+      done
       lk_mktemp_with DOMAIN_DIFF get_domain_diff "$DOMAIN_TSV"
       if [[ -s $DOMAIN_DIFF ]]; then
         lk_tty_print "Updating DNS records via $DNS_SERVICE:" "$SES_DOMAIN"
@@ -272,8 +274,9 @@ lk_log_start
     ((!SKIP_HOST)) || continue
 
     lk_tty_detail "Checking for lk-platform hosting:" "$_DOMAIN"
-    lk_mktemp_with -r SYSINFO \
-      curl "${CURL_OPTIONS[@]}" "https://$_DOMAIN/php-sysinfo" &&
+    { lk_mktemp_with -r SYSINFO \
+      curl "${CURL_OPTIONS[@]}" "https://$_DOMAIN/php-sysinfo" ||
+      { (($? == 22)) && lk_die "--skip-host not set and lk-platform not found on host"; }; } &&
       SH=$(lk_json_sh \
         HOST_NAME .hostname \
         HOST_FQDN .fqdn \

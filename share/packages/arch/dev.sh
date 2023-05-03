@@ -16,9 +16,11 @@ PAC_OFFER=(
     linux-headers
     offlineimap
     ookla-speedtest-bin
+    ruby-ronn-ng
     stretchly-bin
     stripe-cli
     subversion
+    xfce4-dev-tools
     zoom
 
     #
@@ -159,11 +161,9 @@ PAC_PACKAGES+=(
     libreoffice-fresh
     libreoffice-fresh-en-gb
     nextcloud-client
-    nomacs
     remmina
     screenkey
     scribus
-    simplescreenrecorder
     slop
     system-config-printer
     thunderbird
@@ -180,7 +180,7 @@ PAC_PACKAGES+=(
     # PDF
     ghostscript  # PDF/PostScript processing
     mupdf-tools  # PDF manipulation
-    pandoc       # Text conversion (e.g. Markdown to PDF)
+    pandoc-cli   # Text conversion (e.g. Markdown to PDF)
     poppler      # Provides pdfimages
     pstoedit     # PDF/PostScript conversion to vector formats
     qpdf         # PDF manipulation (e.g. add underlay)
@@ -243,13 +243,15 @@ AUR_PACKAGES+=(
     key-mon
     libreoffice-extension-languagetool
     masterpdfeditor-free
+    nomacs-git
     pencil
     qpdfview
     rescuetime2
+    simplescreenrecorder
     skypeforlinux-stable-bin
     spotify
     stretchly
-    teams
+    teams-for-linux
     teamviewer
     todoist-appimage
     trimage
@@ -280,7 +282,6 @@ lk_is_bootstrap ||
 PAC_PACKAGES+=(
     autoconf
     autoconf-archive
-    autopep8
     bash-language-server
     cloc
     cmake
@@ -293,8 +294,8 @@ PAC_PACKAGES+=(
     gperftools
     graphviz # Optional phpdoc dependency
     imagemagick
-    imagemagick-doc
     plantuml # Optional phpdoc dependency
+    python-black
     python-pylint
     qcachegrind
     tidy
@@ -327,6 +328,7 @@ PAC_PACKAGES+=(
     php-imagick
     php-memcache
     php-memcached
+    php-sodium
     php-sqlite
     php-xsl # Optional phpdoc-phar dependency
     xdebug
@@ -369,8 +371,10 @@ AUR_PACKAGES+=(
     mongodb50-bin          # Required for legacy 'mongo' command
     msodbcsql
     mssql-tools
+    multitime
     nodejs-less
     nvm
+    php-humbug-box-bin
     php-ibm_db2
     php-memprof
     php-pcov
@@ -380,22 +384,29 @@ AUR_PACKAGES+=(
     php74-cli
     php74-curl
     php74-exif
+    php74-fileinfo
     php74-gd
     php74-gettext
     php74-iconv
     php74-imagick
     php74-imap
     php74-intl
+    php74-json
+    php74-mbstring
     php74-memcache
     php74-memcached
     php74-mysql
     php74-phar
+    php74-simplexml
     php74-soap
+    php74-sodium
     php74-sqlite
+    php74-tokenizer
     php74-xdebug
     php74-xsl # Optional phpdoc-phar dependency
     php74-zip
     phpdoc-phar
+    pretty-php
     python-demjson3
     python-pywebview
     python39 # azure-functions-core-tools-bin dependency
@@ -406,6 +417,7 @@ AUR_PACKAGES+=(
     symfony-console-autocomplete
     terser
     trickle-git
+    ts-standard
     zeal-git
 
     #
@@ -422,6 +434,7 @@ AUR_PACKAGES+=(
     vsce
 
     # Platforms
+    act # GitHub Action runner
     azure-cli
     azure-functions-core-tools-bin
     linode-cli
@@ -454,4 +467,5 @@ PAC_PACKAGES+=(
 
     #
     docker
+    docker-buildx
 )

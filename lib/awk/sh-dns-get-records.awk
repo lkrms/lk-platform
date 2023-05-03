@@ -29,9 +29,9 @@ $4 != "CNAME" && cname_count[$1] {
 
 $4 == "CNAME" {
   i = cname_count[$5]++
-  cname_alias[$5][i] = $1
+  cname_alias[$5, i] = $1
   match(line, name_ttl_regex)
-  cname_record[$5][i] = substr(line, RSTART, RLENGTH)
+  cname_record[$5, i] = substr(line, RSTART, RLENGTH)
 }
 
 END {
@@ -47,13 +47,13 @@ END {
 function follow_cname(cname, _i, _alias)
 {
   for (_i = 0; _i < cname_count[cname]; _i++) {
-    _alias = cname_alias[cname][_i]
+    _alias = cname_alias[cname, _i]
     if (cname_count[_alias]) {
       follow_cname(_alias)
       continue
     }
     # Use sub() to preserve `dig`'s original delimiters
-    sub(name_ttl_regex, cname_record[cname][_i], $0)
+    sub(name_ttl_regex, cname_record[cname, _i], $0)
     print
   }
 }

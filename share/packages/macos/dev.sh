@@ -19,6 +19,7 @@ HOMEBREW_FORMULAE+=(
     csvkit
     exiftool
     imagemagick
+    multitime
     s3cmd
     unison
 
@@ -108,9 +109,11 @@ HOMEBREW_TAPS+=(
 )
 
 HOMEBREW_FORMULAE+=(
-    autopep8
+    black
     graphviz # Optional phpdoc dependency
     plantuml # Optional phpdoc dependency
+    qcachegrind
+    standard
 
     #
     libvirt
@@ -156,6 +159,7 @@ HOMEBREW_FORMULAE+=(
     luarocks
 
     # Platforms
+    act # GitHub Action runner
     awscli
     azure-cli
     gh

@@ -1,4 +1,4 @@
-partial default xkb_types "command_option" {
+partial default xkb_types "cmdopt" {
 
     // Level4 may not be necessary for real-world shortcuts
     // Level5 ensures Control-Option-Left doesn't become Control-Left
