@@ -30,7 +30,7 @@ function _lk_hosting_hosts_file_get_site_hosts() {
         lk_mktemp_with PUBLIC_IPS lk_system_list_public_network_ips || return
     awk '
 BEGIN { ip[1] = "127.0.0.1" }
-NF == 1 { ip[NR] = $0; next }
+FILENAME == ARGV[1] { ip[NR] = $0; next }
 { for (i in ip) { print ip[i], $0 } }' \
         "$PUBLIC_IPS" \
         <({ [[ ! -s $PUBLIC_IPS ]] || printf '%s\n' "$LK_NODE_FQDN"; } &&
