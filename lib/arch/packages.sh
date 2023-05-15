@@ -57,11 +57,13 @@ PAC_PACKAGES+=(
     lynx
     mediainfo
     ncdu-
+    nnn
     openbsd-netcat
     openssh #
     p7zip   # Provides 7z
     perl
     pv
+    ranger
     rsync
     sudo
     time

@@ -197,7 +197,7 @@ PAC_PACKAGES+=(
     meld
 
     #
-    jre11-openjdk
+    jre17-openjdk
 
     #
     nodejs-lts-gallium

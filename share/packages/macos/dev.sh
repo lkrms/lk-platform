@@ -110,8 +110,6 @@ HOMEBREW_TAPS+=(
 
 HOMEBREW_FORMULAE+=(
     black
-    graphviz # Optional phpdoc dependency
-    plantuml # Optional phpdoc dependency
     qcachegrind
     standard
 

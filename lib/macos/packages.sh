@@ -51,7 +51,9 @@ HOMEBREW_FORMULAE+=(
     lftp
     media-info
     ncdu
+    nnn
     p7zip
+    ranger
     watch
     zenity
 )
