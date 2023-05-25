@@ -43,11 +43,11 @@ set -x
 
 shopt -s nullglob
 
-DEFAULT_CMDLINE="quiet loglevel=3 audit=0$(! grep -q \
-    '^flags[[:blank:]]*:.*\bhypervisor\b' /proc/cpuinfo &>/dev/null ||
-    echo " console=tty0 console=ttyS0")"
+DEFAULT_CMDLINE="quiet loglevel=3 audit=0"
+! grep -Eq '^flags[[:blank:]]*:.*\<hypervisor\>' /proc/cpuinfo ||
+    DEFAULT_CMDLINE+=" console=tty0 console=ttyS0"
 BOOTSTRAP_PING_HOST=${BOOTSTRAP_PING_HOST:-one.one.one.one}            # https://blog.cloudflare.com/dns-resolver-1-1-1-1/
-BOOTSTRAP_TIME_URL=${BOOTSTRAP_TIME_URL:-https://$BOOTSTRAP_PING_HOST} #
+BOOTSTRAP_TIME_URL=${BOOTSTRAP_TIME_URL:-https://$BOOTSTRAP_PING_HOST} # System time is taken from the HTTP response header of this URL
 BOOTSTRAP_MOUNT_OPTIONS=${BOOTSTRAP_MOUNT_OPTIONS:-defaults}           # On VMs with TRIM support, "discard" is added automatically
 BOOTSTRAP_USERNAME=${BOOTSTRAP_USERNAME:-arch}                         #
 BOOTSTRAP_PASSWORD=${BOOTSTRAP_PASSWORD-}                              #
@@ -55,13 +55,13 @@ BOOTSTRAP_KEY=${BOOTSTRAP_KEY-}                                        #
 BOOTSTRAP_FULL_NAME=${BOOTSTRAP_FULL_NAME:-Arch Linux}                 #
 LK_IPV4_ADDRESS=${LK_IPV4_ADDRESS-}                                    #
 LK_IPV4_GATEWAY=${LK_IPV4_GATEWAY-}                                    #
-LK_DNS_SERVERS=${LK_DNS_SERVERS-}                                      # Space- or semicolon-delimited
-LK_DNS_SEARCH=${LK_DNS_SEARCH-}                                        #
-LK_BRIDGE_INTERFACE=${LK_BRIDGE_INTERFACE-}                            #
-LK_WIFI_REGDOM=${LK_WIFI_REGDOM-}                                      # e.g. "AU"
+LK_DNS_SERVERS=${LK_DNS_SERVERS-}                                      # Space- or semicolon-delimited (expanded by lk_nm_file_get_ipv4_ipv6)
+LK_DNS_SEARCH=${LK_DNS_SEARCH-}                                        # Space- or semicolon-delimited (expanded by lk_nm_file_get_ipv4_ipv6)
+LK_BRIDGE_INTERFACE=${LK_BRIDGE_INTERFACE-}                            # Ignored on laptops, otherwise configured on the first Ethernet port
+LK_WIFI_REGDOM=${LK_WIFI_REGDOM-}                                      # e.g. "AU" (see /etc/conf.d/wireless-regdom)
 LK_NODE_TIMEZONE=${LK_NODE_TIMEZONE:-UTC}                              # See `timedatectl list-timezones`
 LK_FEATURES=${LK_FEATURES-}                                            #
-LK_NODE_LOCALES=${LK_NODE_LOCALES-en_AU.UTF-8 en_GB.UTF-8}             # "en_US.UTF-8" is added automatically
+LK_NODE_LOCALES=${LK_NODE_LOCALES-en_AU.UTF-8 en_GB.UTF-8}             # "en_US.UTF-8" is always added
 LK_NODE_LANGUAGE=${LK_NODE_LANGUAGE-en_AU:en_GB:en}                    #
 LK_SAMBA_WORKGROUP=${LK_SAMBA_WORKGROUP-}                              #
 LK_GRUB_CMDLINE=${LK_GRUB_CMDLINE-$DEFAULT_CMDLINE}                    #
@@ -75,15 +75,17 @@ LK_PACKAGES_FILE=${LK_PACKAGES_FILE-}
 export LK_BASE=${LK_BASE:-/opt/lk-platform}
 export -n BOOTSTRAP_PASSWORD BOOTSTRAP_KEY
 
-[ -d /sys/firmware/efi/efivars ] || lk_die "not booted in UEFI mode"
-[ "$EUID" -eq 0 ] || lk_die "not running as root"
-[ "$OSTYPE" = linux-gnu ] || lk_die "not running on Linux"
-[ -f /etc/arch-release ] || lk_die "not running on Arch Linux"
+((!EUID)) || lk_die "not running as root"
+[[ $OSTYPE == linux-gnu ]] || lk_die "not running on Linux"
+[[ -f /etc/arch-release ]] || lk_die "not running on Arch Linux"
+[[ -d /sys/firmware/efi/efivars ]] || lk_die "not booted in UEFI mode"
 [[ $- != *s* ]] || lk_die "cannot run from standard input"
 
-LK_USAGE="\
-Usage: ${0##*/} [OPTIONS] ROOT_PART BOOT_PART HOSTNAME[.DOMAIN]
-   or: ${0##*/} [OPTIONS] INSTALL_DISK HOSTNAME[.DOMAIN]
+function __usage() {
+    cat <<EOF &&
+Usage:
+  ${0##*/} [OPTIONS] ROOT_PART BOOT_PART HOSTNAME[.DOMAIN]
+  ${0##*/} [OPTIONS] INSTALL_DISK HOSTNAME[.DOMAIN]
 
 Options:
   -u USERNAME       set the default user's login name (default: arch)
@@ -92,7 +94,7 @@ Options:
   -c CMDLINE        set the default kernel command-line
                     (default: \"$DEFAULT_CMDLINE\")
   -p PARAMETER      add PARAMETER to the default kernel command-line
-  -s SERVICE,...    enable each SERVICE
+  -f FEATURE,...    enable each FEATURE
   -x                install Xfce (alias for: -s xfce4)
   -k FILE           set LK_PACKAGES_FILE
   -y                do not prompt for input
@@ -104,8 +106,10 @@ Useful kernel parameters:
   mce=dont_log_ce           do not log corrected machine check errors
 
 Block devices:
-$(lsblk --output NAME,RM,SIZE,RO,TYPE,FSTYPE,MOUNTPOINT --paths |
-    sed 's/^/  /')"
+EOF
+        lsblk --output NAME,RM,SIZE,RO,TYPE,FSTYPE,MOUNTPOINT --paths |
+        sed 's/^/  /'
+}
 
 ROOT_PART=
 BOOT_PART=
@@ -158,7 +162,7 @@ for FILE_PATH in \
     }
 done
 
-while getopts ":u:o:c:p:s:xk:y" OPT; do
+while getopts ":u:o:c:p:f:xk:y" OPT; do
     case "$OPT" in
     u)
         BOOTSTRAP_USERNAME=$OPTARG
@@ -174,9 +178,9 @@ while getopts ":u:o:c:p:s:xk:y" OPT; do
     p)
         LK_GRUB_CMDLINE=${LK_GRUB_CMDLINE:+$LK_GRUB_CMDLINE }$OPTARG
         ;;
-    s)
+    f)
         [[ $OPTARG =~ ^[-a-z0-9+._]+(,[-a-z0-9+._]+)*$ ]] ||
-            lk_warn "invalid service: $OPTARG" || lk_usage
+            lk_warn "invalid feature: $OPTARG" || lk_usage
         LK_FEATURES=${LK_FEATURES:+$LK_FEATURES,}$OPTARG
         ;;
     x)

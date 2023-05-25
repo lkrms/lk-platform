@@ -9,6 +9,7 @@ AUR_PACKAGES=()
 PAC_EXCEPT=()
 
 PAC_OFFER=(
+    1password
     ant
     apachedirectorystudio
     expect
@@ -380,6 +381,7 @@ AUR_PACKAGES+=(
     php74-bcmath
     php74-cli
     php74-curl
+    php74-dom
     php74-exif
     php74-fileinfo
     php74-gd

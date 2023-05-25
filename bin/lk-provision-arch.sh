@@ -608,8 +608,7 @@ $LK_NODE_HOSTNAME" &&
         lk_log_tty_on
         lk_tty_print "Checking AUR packages"
         PAC_INSTALL=($(lk_pac_not_installed_list \
-            ${PAC_BASE_DEVEL+"${PAC_BASE_DEVEL[@]}"} \
-            devtools vifm))
+            base-devel devtools vifm))
         [ ${#PAC_INSTALL[@]} -eq 0 ] || {
             lk_tty_detail "Installing aurutils dependencies"
             lk_faketty pacman -S --noconfirm "${PAC_INSTALL[@]}"
@@ -649,7 +648,7 @@ $LK_NODE_HOSTNAME" &&
         fi
 
         FILE=/etc/aurutils/pacman-$REPO.conf
-        _FILE=$(cat /usr/share/devtools/pacman-extra.conf &&
+        _FILE=$(cat /usr/share/devtools/pacman.conf.d/extra.conf &&
             printf '\n[%s]\n' "$REPO" &&
             pacman-conf --repo="$REPO")
         lk_install -m 00644 "$FILE"

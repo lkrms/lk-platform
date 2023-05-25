@@ -420,12 +420,12 @@ lk_mktemp_with _PAC_ALL_GROUPS pacman -Sgg
 lk_mktemp_with _PAC_PACKAGES sort -u <(awk '{ print $2 }' "$_PAC_ALL")
 lk_mktemp_with _PAC_GROUPS sort -u <(awk '{ print $1 }' "$_PAC_ALL_GROUPS" | grep -Fxvf "$_PAC_PACKAGES")
 lk_mktemp_with _PAC_OFFICIAL sort -u \
-    <(awk '$1 ~ /^(core|extra|community|multilib)$/ { print $2 }' "$_PAC_ALL")
+    <(awk '$1 ~ /^(core|extra|multilib)$/ { print $2 }' "$_PAC_ALL")
 lk_mktemp_with _PAC_UNOFFICIAL sort -u \
-    <(awk '$1 !~ /^(core|extra|community|multilib)$/ { print $2 }' "$_PAC_ALL")
+    <(awk '$1 !~ /^(core|extra|multilib)$/ { print $2 }' "$_PAC_ALL")
 
-# If any AUR_PACKAGES now appear in core, extra, community or multilib, move
-# them to PAC_PACKAGES and notify the user
+# If any AUR_PACKAGES now appear in core, extra or multilib, move them to
+# PAC_PACKAGES and notify the user
 if AUR_MOVED=$(grep -Fxf <(lk_arr AUR_PACKAGES) "$_PAC_OFFICIAL"); then
     lk_tty_warning "Moved from AUR to official repos:" "$AUR_MOVED"
     PAC_PACKAGES+=($AUR_MOVED)
@@ -518,8 +518,7 @@ if [ ${#AUR_PACKAGES[@]} -gt 0 ] ||
     { pacman-conf --repo="${LK_ARCH_AUR_REPO_NAME:-aur}" |
         awk -F"$S*=$S*" '$1=="Server"{print$2}' |
         grep -E '^file://'; } &>/dev/null; then
-    PAC_BASE_DEVEL=($(lk_pac_groups base-devel))
-    PAC_PACKAGES+=("${PAC_BASE_DEVEL[@]}" devtools vifm)
+    PAC_PACKAGES+=(base-devel devtools vifm)
     PAC_OFFER+=(aurutils aurutils-git aurutils{,-git}"$SUFFIX")
 fi
 

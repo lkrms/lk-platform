@@ -139,7 +139,7 @@ EOF
 
 function lk_pac_official_repo_list() {
     pacman-conf --repo-list |
-        grep -E '^(core|extra|community|multilib)$'
+        grep -E '^(core|extra|multilib)$'
 }
 
 # lk_pac_installed PACKAGE...
