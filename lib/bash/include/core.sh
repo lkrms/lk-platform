@@ -4446,12 +4446,6 @@ function lk_filter() {
     ! eval "($TEST \"\$1\")" || printf "%s${DELIM:-\\n}" "$1"
 }
 
-function lk_json_from_xml_schema() {
-    [ $# -gt 0 ] && [ $# -le 2 ] && lk_files_exist "$@" || lk_usage "\
-Usage: $FUNCNAME XSD_FILE [XML_FILE]" || return
-    "$LK_BASE/lib/python/json_from_xml_schema.py" "$@"
-}
-
 # lk_random_hex BYTES
 function lk_random_hex() {
     [ $# -gt 0 ] && [[ $1 =~ ^[0-9]+$ ]] ||
