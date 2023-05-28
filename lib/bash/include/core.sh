@@ -1924,7 +1924,8 @@ function lk_tty_pairs() { (
         return
     fi || return
     # Align the length of the longest KEY to the nearest tab
-    LEN=$(awk -F"[$IFS]+" -v "RS=${LF:-\\0}" -v m=2 '
+    local _LF=${LF:-\\0}
+    LEN=$(awk -F"[${IFS//$'\n'/\\n}]+" -v "RS=${_LF//$'\n'/\\n}" -v m=2 '
     { if ((l = length($1)) > m) m = l }
 END { g = (m + 2) % 4; print (g ? m + 4 - g : m) + 1 }' "$TEMP") || return
     while read -r -d "$LF" KEY VALUE; do
