@@ -29,7 +29,7 @@ function lk_configure_locales() {
     unset LK_FILE_REPLACE_NO_CHANGE
     lk_file_keep_original "$FILE" &&
         lk_file_replace -i "^$S*(#|\$)" "$FILE" "$_FILE" || return
-    ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+    ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
         [ -n "${_LK_PROVISION_ROOT-}" ] ||
         lk_elevate locale-gen || return
 
@@ -271,7 +271,7 @@ Usage: $FUNCNAME [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
         PORT=${BASH_REMATCH[2]}
     }
     JUMP_HOST_NAME=${JUMP_HOST_NAME:+$SSH_PREFIX${JUMP_HOST_NAME#"$SSH_PREFIX"}}
-    ! lk_is_true TEST || {
+    ! lk_true TEST || {
         if [ -z "$JUMP_HOST_NAME" ]; then
             lk_ssh_is_reachable "$HOST" "${PORT:-22}" ||
                 { _HOST=$(ssh -G "$HOST" | awk '$1 == "hostname" { print $2 }' | grep .) &&

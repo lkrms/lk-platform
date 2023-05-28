@@ -220,8 +220,8 @@ function _lk_hosting_site_load_dynamic_settings() {
     #   burst performance--recommended for single-site production servers
     _SITE_PHP_FPM_PM=static
     [[ $PHP_FPM_POOLS -eq 1 ]] && lk_true SITE_ENABLE ||
-        { ! lk_is_true SITE_ENABLE_STAGING &&
-            ! lk_is_true LK_SITE_ENABLE_STAGING &&
+        { ! lk_true SITE_ENABLE_STAGING &&
+            ! lk_true LK_SITE_ENABLE_STAGING &&
             _SITE_PHP_FPM_PM=ondemand ||
             _SITE_PHP_FPM_PM=dynamic; }
 }

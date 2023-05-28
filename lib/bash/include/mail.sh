@@ -1,7 +1,7 @@
 #!/bin/bash
 
 function _lk_mail_ready() {
-    lk_is_true _LK_MAIL_READY ||
+    lk_true _LK_MAIL_READY ||
         lk_warn "lk_mail_new must be called before ${FUNCNAME[1]}" || return
 }
 

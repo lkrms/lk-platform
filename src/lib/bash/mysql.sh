@@ -95,7 +95,7 @@ function lk_mysql() {
     if [ -n "${LK_MY_CNF-}" ]; then
         [ -f "$LK_MY_CNF" ] || lk_warn "file not found: $LK_MY_CNF" || return
         "${_LK_MYSQL_COMMAND:-mysql}" --defaults-file="$LK_MY_CNF" "$@"
-    elif lk_root || lk_is_true LK_MYSQL_ELEVATE; then
+    elif lk_root || lk_true LK_MYSQL_ELEVATE; then
         lk_elevate "${_LK_MYSQL_COMMAND:-mysql}" \
             --no-defaults \
             --user="${LK_MYSQL_ELEVATE_USER:-root}" \

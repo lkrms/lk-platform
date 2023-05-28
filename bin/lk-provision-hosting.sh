@@ -389,7 +389,7 @@ fi
         "$FILE"
     maybe_restore_original /etc/systemd/journald.conf
     lk_is_bootstrap && ! lk_systemctl_running systemd-journald ||
-        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
         lk_tty_run_detail systemctl restart systemd-journald.service
 
     lk_tty_print "Checking root account"
@@ -413,7 +413,7 @@ fi
     lk_file_replace \
         -f "$LK_BASE/share/sysctl.d/default.conf" \
         "$FILE"
-    ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+    ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
         lk_tty_run_detail sysctl --system
 
     lk_tty_print "Checking kernel modules"
@@ -512,7 +512,7 @@ EOF
             esac
         done
     fi
-    ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+    ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
         _LK_APT_DIRTY=1
     FILE=/etc/apt/apt.conf.d/90${LK_PATH_PREFIX}default
     OLD_FILE=/etc/apt/apt.conf.d/90${LK_PATH_PREFIX}defaults
@@ -816,7 +816,7 @@ EOF
     check_after_file
     # TODO: restore original configuration if restart fails
     lk_is_bootstrap && ! lk_systemctl_running ssh ||
-        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
         lk_tty_run_detail systemctl restart ssh.service
 
     if lk_dpkg_installed postfix; then
@@ -841,7 +841,7 @@ EOF
         check_after_file
         unset LK_FILE_REPLACE_NO_CHANGE
         lk_file_replace "$FILE" < <(printf '%s:\t%s\n' "${ALIASES[@]}")
-        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
             postalias "$FILE"
     fi
 
@@ -985,8 +985,8 @@ EOF
             : >"$FILE"
             LK_FILE_REPLACE_NO_CHANGE=0
         fi
-        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE &&
-            ! lk_is_false LK_SYMLINK_NO_CHANGE ||
+        ! lk_false LK_FILE_REPLACE_NO_CHANGE &&
+            ! lk_false LK_SYMLINK_NO_CHANGE ||
             lk_mark_dirty "apache2.service"
         IPTABLES_TCP_LISTEN+=(80 443)
     fi
@@ -1034,7 +1034,7 @@ EOF
             lk_file_replace \
                 -f "$LK_BASE/share/systemd/php-fpm.service" \
                 "$FILE"
-            ! lk_is_false LK_FILE_REPLACE_NO_CHANGE || {
+            ! lk_false LK_FILE_REPLACE_NO_CHANGE || {
                 DAEMON_RELOAD=1
                 lk_mark_dirty "php$PHPVER-fpm.service"
             }
@@ -1066,7 +1066,7 @@ EOF
             lk_delete_on_exit "$_FILE"
             URL=https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
             curl "${CURL_OPTIONS[@]}" --output "$_FILE" "$URL" ||
-                lk_die "unable to download: $URL"
+                lk_die "download failed: $URL"
             cp "$_FILE" "$FILE"
         fi
 
@@ -1129,7 +1129,7 @@ WITH GRANT OPTION
 EOF
             fi
         else
-            ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+            ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
                 lk_tty_run_detail systemctl restart mysql.service
         fi
     fi
@@ -1144,7 +1144,7 @@ EOF
         if ! lk_is_bootstrap && ! lk_systemctl_running memcached; then
             lk_systemctl_reload_or_restart memcached
             lk_systemctl_enable memcached
-        elif lk_is_false LK_FILE_REPLACE_NO_CHANGE; then
+        elif lk_false LK_FILE_REPLACE_NO_CHANGE; then
             lk_tty_run_detail systemctl restart memcached.service
         fi
     fi
@@ -1183,7 +1183,7 @@ EOF
         )"
         maybe_restore_original /etc/fail2ban/jail.conf
         lk_is_bootstrap && ! lk_systemctl_running fail2ban ||
-            ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+            ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
             lk_tty_run_detail systemctl restart fail2ban.service
     fi
 
@@ -1236,7 +1236,7 @@ EOF
             lk_file_replace -f "$FILE" "/etc/iptables/rules.v${i:-4}" ||
             lk_die "error updating iptables"
     done
-    ! lk_is_false LK_FILE_REPLACE_NO_CHANGE || {
+    ! lk_false LK_FILE_REPLACE_NO_CHANGE || {
         lk_tty_run_detail iptables-restore </etc/iptables/rules.v4 &&
             lk_tty_run_detail ip6tables-restore </etc/iptables/rules.v6
     } || lk_die "error applying iptables rules"

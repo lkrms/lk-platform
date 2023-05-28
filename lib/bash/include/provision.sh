@@ -185,7 +185,7 @@ ChrootDirectory %h"
         -v "FIRST=$MATCH(${REGEX[1]}|\"${REGEX[1]}\")$S+(${SFTP_ONLY}|\"${SFTP_ONLY}\")$S*$" \
         -v "BREAK=$MATCH" \
         -f "$LK_BASE/lib/awk/block-replace.awk" "$FILE")
-    ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+    ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
         lk_tty_run_detail -1 lk_elevate systemctl restart ssh.service
     [[ $1 == _* ]] || lk_user_exists "$1" || set -- "_$1" "${@:2}"
     if lk_user_exists "$1"; then
@@ -600,38 +600,38 @@ function lk_ssh_host_parameter_sh() {
     local user=${BASH_REMATCH[2]} host=${BASH_REMATCH[3]} \
         port=${BASH_REMATCH[5]} PREFIX=${2-} AWK
     shift 2 &&
-        lk_awk_load -i AWK sh-get-ssh-host-parameters <<"EOF" || return
+        lk_awk_load AWK sh-get-ssh-host-parameters - <<"EOF" || return
 BEGIN {
-  prefix = prefix ? prefix : "SSH_HOST_"
-  p["USER"] = 1
-  p["HOSTNAME"] = 1
-  p["PORT"] = 1
-  p["IDENTITYFILE"] = 1
-  for (i = 1; i < ARGC; i++) {
-    p[toupper(ARGV[i])] = 1
-    delete ARGV[i]
-  }
+prefix = prefix ? prefix : "SSH_HOST_"
+p["USER"] = 1
+p["HOSTNAME"] = 1
+p["PORT"] = 1
+p["IDENTITYFILE"] = 1
+for (i = 1; i < ARGC; i++) {
+p[toupper(ARGV[i])] = 1
+delete ARGV[i]
+}
 }
 {
-  _p = toupper($1)
+_p = toupper($1)
 }
 p[_p] {
-  $1 = ""
-  sub(/^[ \t]+/, "", $0)
-  print prefix _p "=" quote($0)
-  delete p[_p]
+$1 = ""
+sub(/^[ \t]+/, "", $0)
+print prefix _p "=" quote($0)
+delete p[_p]
 }
 END {
-  for (_p in p) {
-    if (p[_p]) {
-      print prefix _p "="
-    }
-  }
+for (_p in p) {
+if (p[_p]) {
+print prefix _p "="
+}
+}
 }
 function quote(str)
 {
-  gsub(/'/, "'\\''", str)
-  return ("'" str "'")
+gsub(/'/, "'\\''", str)
+return ("'" str "'")
 }
 EOF
     ssh -G ${port:+-p "$port"} "${user:+$user@}$host" |
@@ -732,27 +732,27 @@ function lk_ssh_run_on_host() {
 
 function lk_system_list_networks() {
     local AWK
-    lk_awk_load -i AWK sh-system-list-networks <<"EOF" || return
+    lk_awk_load AWK sh-system-list-networks - <<"EOF" || return
 BEGIN {
-  mask_bits["f"] = 4
-  mask_bits["e"] = 3
-  mask_bits["c"] = 2
-  mask_bits["8"] = 1
-  mask_bits["0"] = 0
+mask_bits["f"] = 4
+mask_bits["e"] = 3
+mask_bits["c"] = 2
+mask_bits["8"] = 1
+mask_bits["0"] = 0
 }
 $1 ~ /^inet6?$/ && $2 !~ /^169\.254\./ {
-  if ($2 ~ /\/[0-9]+$/) {
-    print $2
-  } else if ($3 == "netmask" && $4 ~ /^0x[0-9a-f]{8}$/) {
-    prefix_bits = 0
-    for (i = 3; i <= length($4); i++) {
-      prefix_bits += mask_bits[substr($4, i, 1)]
-    }
-    printf "%s/%s\n", $2, prefix_bits
-  } else if ($3 == "prefixlen") {
-    sub(/%.*/, "", $2)
-    printf "%s/%s\n", $2, $4
-  }
+if ($2 ~ /\/[0-9]+$/) {
+print $2
+} else if ($3 == "netmask" && $4 ~ /^0x[0-9a-f]{8}$/) {
+prefix_bits = 0
+for (i = 3; i <= length($4); i++) {
+prefix_bits += mask_bits[substr($4, i, 1)]
+}
+printf "%s/%s\n", $2, prefix_bits
+} else if ($3 == "prefixlen") {
+sub(/%.*/, "", $2)
+printf "%s/%s\n", $2, $4
+}
 }
 EOF
     if lk_command_exists ip; then
@@ -834,50 +834,50 @@ END { if (status) { exit status } print expr }') || return
         done
     done
     NAMES_REGEX="^$(lk_ere_implode_args -e -- "$@")\\.?\$"
-    lk_awk_load -i AWK sh-dns-get-records <<"EOF" || return
+    lk_awk_load AWK sh-dns-get-records - <<"EOF" || return
 BEGIN {
-  s = "[ \\t]"
-  ns = "[^ \\t]"
-  name_ttl_regex = "^" s "*" ns "+" s "+" ns "+"
+s = "[ \\t]"
+ns = "[^ \\t]"
+name_ttl_regex = "^" s "*" ns "+" s "+" ns "+"
 }
 /^(;|[ \t]*$)/ {
-  next
+next
 }
 {
-  line = $0
-  ttl = $2
-  $2 = "-"
-  if (seen[$0]++) {
-    next
-  }
-  print line
+line = $0
+ttl = $2
+$2 = "-"
+if (seen[$0]++) {
+next
+}
+print line
 }
 $4 != "CNAME" && cname_count[$1] {
-  canonical[canonical_count++] = line
+canonical[canonical_count++] = line
 }
 $4 == "CNAME" {
-  i = cname_count[$5]++
-  cname_alias[$5, i] = $1
-  match(line, name_ttl_regex)
-  cname_record[$5, i] = substr(line, RSTART, RLENGTH)
+i = cname_count[$5]++
+cname_alias[$5, i] = $1
+match(line, name_ttl_regex)
+cname_record[$5, i] = substr(line, RSTART, RLENGTH)
 }
 END {
-  for (i = 0; i < canonical_count; i++) {
-    $0 = canonical[i]
-    follow_cname($1)
-  }
+for (i = 0; i < canonical_count; i++) {
+$0 = canonical[i]
+follow_cname($1)
+}
 }
 function follow_cname(cname, _i, _alias)
 {
-  for (_i = 0; _i < cname_count[cname]; _i++) {
-    _alias = cname_alias[cname, _i]
-    if (cname_count[_alias]) {
-      follow_cname(_alias)
-      continue
-    }
-    sub(name_ttl_regex, cname_record[cname, _i], $0)
-    print
-  }
+for (_i = 0; _i < cname_count[cname]; _i++) {
+_alias = cname_alias[cname, _i]
+if (cname_count[_alias]) {
+follow_cname(_alias)
+continue
+}
+sub(name_ttl_regex, cname_record[cname, _i], $0)
+print
+}
 }
 EOF
     dig +noall +answer \
@@ -1257,7 +1257,7 @@ function lk_ssl_install_ca_certificate() {
     lk_install -m 00644 "$FILE" &&
         LK_FILE_NO_DIFF=1 \
             lk_file_replace -mf "$1" "$FILE" || return
-    if lk_is_false LK_FILE_REPLACE_NO_CHANGE; then
+    if lk_false LK_FILE_REPLACE_NO_CHANGE; then
         lk_elevate "$COMMAND"
     else
         LK_FILE_REPLACE_NO_CHANGE=$_LK_FILE_REPLACE_NO_CHANGE
@@ -1275,57 +1275,57 @@ function lk_ssl_install_ca_certificate() {
 function lk_certbot_list() {
     local ARGS AWK IFS=,
     ((!$#)) || ARGS=(--domains "$*")
-    lk_awk_load -i AWK sh-certbot-list <<"EOF" || return
+    lk_awk_load AWK sh-certbot-list - <<"EOF" || return
 BEGIN {
-  OFS = "\t"
+OFS = "\t"
 }
 tolower($0) ~ /\<certificate name:/ {
-  maybe_print()
-  name = val()
-  domains = expiry = cert = key = "-"
+maybe_print()
+name = val()
+domains = expiry = cert = key = "-"
 }
 tolower($0) ~ /\<domains:/ {
-  split(val(), a, "[[:blank:]]+")
-  domains = ""
-  no_www = tolower(name)
-  sub(/^www\./, "", no_www)
-  add_domain(no_www)
-  add_domain("www." no_www)
-  add_domain()
+split(val(), a, "[[:blank:]]+")
+domains = ""
+no_www = tolower(name)
+sub(/^www\./, "", no_www)
+add_domain(no_www)
+add_domain("www." no_www)
+add_domain()
 }
 tolower($0) ~ /\<expiry date:/ {
-  expiry = val()
-  gsub("[[:blank:]]+\\(.*", "", expiry)
+expiry = val()
+gsub("[[:blank:]]+\\(.*", "", expiry)
 }
 /\/fullchain\.pem$/ {
-  cert = val()
+cert = val()
 }
 /\/privkey\.pem$/ {
-  key = val()
+key = val()
 }
 END {
-  maybe_print()
+maybe_print()
 }
 function add_domain(d)
 {
-  for (i in a) {
-    if (! d || tolower(a[i]) == tolower(d)) {
-      domains = domains (domains ? "," : "") a[i]
-      delete a[i]
-    }
-  }
+for (i in a) {
+if (! d || tolower(a[i]) == tolower(d)) {
+domains = domains (domains ? "," : "") a[i]
+delete a[i]
+}
+}
 }
 function maybe_print()
 {
-  if (name) {
-    print name, domains, expiry, cert, key
-  }
+if (name) {
+print name, domains, expiry, cert, key
+}
 }
 function val(_)
 {
-  _ = $0
-  gsub("(^[^:]+:[[:blank:]]+|[[:blank:]]+$)", "", _)
-  return (_ ? _ : "-")
+_ = $0
+gsub("(^[^:]+:[[:blank:]]+|[[:blank:]]+$)", "", _)
+return (_ ? _ : "-")
 }
 EOF
     lk_elevate certbot certificates ${ARGS+"${ARGS[@]}"} 2>/dev/null |
@@ -1974,7 +1974,7 @@ function lk_configure_locales() {
     unset LK_FILE_REPLACE_NO_CHANGE
     lk_file_keep_original "$FILE" &&
         lk_file_replace -i "^$S*(#|\$)" "$FILE" "$_FILE" || return
-    ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+    ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
         [ -n "${_LK_PROVISION_ROOT-}" ] ||
         lk_elevate locale-gen || return
 
@@ -2216,7 +2216,7 @@ Usage: $FUNCNAME [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
         PORT=${BASH_REMATCH[2]}
     }
     JUMP_HOST_NAME=${JUMP_HOST_NAME:+$SSH_PREFIX${JUMP_HOST_NAME#"$SSH_PREFIX"}}
-    ! lk_is_true TEST || {
+    ! lk_true TEST || {
         if [ -z "$JUMP_HOST_NAME" ]; then
             lk_ssh_is_reachable "$HOST" "${PORT:-22}" ||
                 { _HOST=$(ssh -G "$HOST" | awk '$1 == "hostname" { print $2 }' | grep .) &&

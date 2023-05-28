@@ -139,7 +139,7 @@ YELLOW=$'\E[33m'
 CYAN=$'\E[36m'
 BOLD=$'\E[1m'
 RESET=$'\E[m'
-echo "$BOLD$CYAN==> $RESET${BOLD}Checking prerequisites$RESET" >&2
+echo "$BOLD$CYAN==> $RESET${BOLD}Acquiring prerequisites$RESET" >&2
 REPO_URL=https://raw.githubusercontent.com/lkrms/lk-platform
 _LK_SOURCED=
 for FILE_PATH in \
@@ -151,7 +151,7 @@ for FILE_PATH in \
         echo "${MESSAGE/{\}/Downloading:}" >&2
         curl "${CURL_OPTIONS[@]}" --output "$FILE" "$URL" || {
             rm -f "$FILE"
-            lk_die "unable to download: $URL"
+            lk_die "download failed: $URL"
         }
     else
         echo "${MESSAGE/{\}/Already downloaded:}" >&2

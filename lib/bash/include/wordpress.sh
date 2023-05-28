@@ -227,7 +227,7 @@ function lk_wp_json_encode() {
 
 function _lk_wp_maybe_apply() {
     local _LK_WP_MAYBE=1 STATUS=0
-    if lk_is_false LK_WP_APPLY || { [ -z "${LK_WP_APPLY+1}" ] &&
+    if lk_false LK_WP_APPLY || { [ -z "${LK_WP_APPLY+1}" ] &&
         ! lk_confirm \
             "Run database updates and [re]apply WordPress settings?" Y; }; then
         _lk_wp_maybe_flush || STATUS=$?
@@ -238,13 +238,13 @@ function _lk_wp_maybe_apply() {
 }
 
 function _lk_wp_maybe_flush() {
-    lk_is_false LK_WP_FLUSH || { [ -z "${LK_WP_FLUSH+1}" ] &&
+    lk_false LK_WP_FLUSH || { [ -z "${LK_WP_FLUSH+1}" ] &&
         ! lk_confirm "Flush WordPress rewrite rules and caches?" Y; } ||
         lk_wp_flush
 }
 
 function _lk_wp_maybe_migrate() {
-    lk_is_false LK_WP_MIGRATE || { [ -z "${LK_WP_MIGRATE+1}" ] &&
+    lk_false LK_WP_MIGRATE || { [ -z "${LK_WP_MIGRATE+1}" ] &&
         ! lk_confirm \
             "Run WordPress data migrations and [re]build indexes?" Y; } ||
         lk_wp_migrate
@@ -299,7 +299,7 @@ function lk_wp_rename_site() {
     done
     lk_wp option update home "$NEW_URL" &&
         lk_wp option update siteurl "$NEW_SITE_URL" || return
-    lk_is_false LK_WP_REPLACE ||
+    lk_false LK_WP_REPLACE ||
         { [ -z "${LK_WP_REPLACE+1}" ] &&
             ! lk_confirm "Replace the previous URL in all tables?" Y; } ||
         lk_wp_replace_url "$OLD_URL" "$NEW_URL" ||
@@ -360,7 +360,7 @@ function lk_wp_replace_url() {
         "$(lk_wp_json_encode "${OLD_URL#http*:}")"
         "$(lk_wp_json_encode "${NEW_URL#http*:}")"
     )
-    ! lk_is_true LK_WP_REPLACE_WITHOUT_SCHEME ||
+    ! lk_true LK_WP_REPLACE_WITHOUT_SCHEME ||
         REPLACE+=(
             "${OLD_URL#http*://}"
             "${NEW_URL#http*://}"

@@ -21,16 +21,27 @@
 #
 # <LK_BASE>/lib/awk/<SCRIPT>.awk must exist at build time.
 function lk_awk_load() {
-    local _IN=0
-    [[ $1 != -i ]] || { _IN=1 && shift; }
+    _lk_script_load "$1" "${LK_BASE+$LK_BASE/lib/awk/$2.awk}" ${3+"$3"}
+}
+
+# lk_perl_load VAR SCRIPT
+#
+# Equivalent to lk_awk_load, but for Perl scripts.
+#
+# <LK_BASE>/lib/perl/<SCRIPT>.pl must exist at build time.
+function lk_perl_load() {
+    _lk_script_load "$1" "${LK_BASE+$LK_BASE/lib/perl/$2.pl}" ${3+"$3"}
+}
+
+# _lk_script_load VAR SCRIPT_PATH [-]
+function _lk_script_load() {
     unset -v "$1" || lk_err "invalid variable: $1" || return
-    local _FILE=${LK_BASE+$LK_BASE/lib/awk/$2.awk}
-    [[ ! -f $_FILE ]] || {
+    [[ ! -f $2 ]] || {
         # Avoid SIGPIPE
-        ((!_IN)) || cat >/dev/null
-        eval "$1=\$_FILE"
+        [[ -z ${3-} ]] || cat >/dev/null
+        eval "$1=\$2"
         return
     }
-    ((_IN)) || lk_err "file not found: $_FILE" || return
+    [[ -n ${3-} ]] || lk_err "file not found: $2" || return
     lk_mktemp_with "$1" cat
 }

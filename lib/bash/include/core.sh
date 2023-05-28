@@ -1259,17 +1259,28 @@ function lk_arr_diff() {
 #
 # <LK_BASE>/lib/awk/<SCRIPT>.awk must exist at build time.
 function lk_awk_load() {
-    local _IN=0
-    [[ $1 != -i ]] || { _IN=1 && shift; }
+    _lk_script_load "$1" "${LK_BASE+$LK_BASE/lib/awk/$2.awk}" ${3+"$3"}
+}
+
+# lk_perl_load VAR SCRIPT
+#
+# Equivalent to lk_awk_load, but for Perl scripts.
+#
+# <LK_BASE>/lib/perl/<SCRIPT>.pl must exist at build time.
+function lk_perl_load() {
+    _lk_script_load "$1" "${LK_BASE+$LK_BASE/lib/perl/$2.pl}" ${3+"$3"}
+}
+
+# _lk_script_load VAR SCRIPT_PATH [-]
+function _lk_script_load() {
     unset -v "$1" || lk_err "invalid variable: $1" || return
-    local _FILE=${LK_BASE+$LK_BASE/lib/awk/$2.awk}
-    [[ ! -f $_FILE ]] || {
+    [[ ! -f $2 ]] || {
         # Avoid SIGPIPE
-        ((!_IN)) || cat >/dev/null
-        eval "$1=\$_FILE"
+        [[ -z ${3-} ]] || cat >/dev/null
+        eval "$1=\$2"
         return
     }
-    ((_IN)) || lk_err "file not found: $_FILE" || return
+    [[ -n ${3-} ]] || lk_err "file not found: $2" || return
     lk_mktemp_with "$1" cat
 }
 
@@ -2391,18 +2402,18 @@ _LK_SOURCED=core
 # lk_squeeze_whitespace [FILE...]
 function lk_squeeze_whitespace() {
     local AWK
-    lk_awk_load -i AWK sh-squeeze-whitespace <<"EOF" || return
+    lk_awk_load AWK sh-squeeze-whitespace - <<"EOF" || return
 /^[ \t]*$/ {
-  if (last_blank) {
-    next
-  }
-  last_blank = 1
-  print ""
-  next
+if (last_blank) {
+next
+}
+last_blank = 1
+print ""
+next
 }
 {
-  last_blank = 0
-  print
+last_blank = 0
+print
 }
 EOF
     awk -f "$AWK" "$@"
@@ -2511,25 +2522,18 @@ function _lk_log_install_file() {
 # For each line of input, add a microsecond-resolution timestamp and remove
 # characters before any carriage returns that aren't part of the line ending.
 function lk_log() {
-    local PL=${LK_BASE:+$LK_BASE/lib/perl/log.pl}
-    trap "" SIGINT
-    if [[ -x $PL ]]; then
-        exec "$PL"
-    else
-        # Don't use exec because without Bash, $PL won't be deleted on exit
-        lk_mktemp_with PL cat <<"EOF" && chmod u+x "$PL" && "$PL"
-#!/usr/bin/perl -p
-BEGIN {
-  $| = 1;
-  use POSIX qw{strftime};
-  use Time::HiRes qw{gettimeofday};
-}
-( $s, $ms ) = Time::HiRes::gettimeofday();
-$ms = sprintf( "%06i", $ms );
-print strftime( "%Y-%m-%d %H:%M:%S.$ms %z ", localtime($s) );
+    local PL
+    lk_perl_load PL log - <<"EOF" || return
+BEGIN{
+$SIG{INT}="IGNORE";
+$|=1;
+use POSIX qw{strftime};
+use Time::HiRes qw{gettimeofday};}($s,$ms)=Time::HiRes::gettimeofday();
+$ms=sprintf("%06i",$ms);
+print strftime("%Y-%m-%d %H:%M:%S.$ms %z ",localtime($s));
 s/.*\r(.)/\1/;
 EOF
-    fi
+    exec perl -p "$PL"
 }
 
 function lk_file_owner() {
@@ -2620,43 +2624,43 @@ function lk_file_list_duplicates() {
 # on each PATH. Call after `shopt -s globstar` to expand `**` globs.
 function lk_expand_path() { (
     shopt -s nullglob
-    lk_awk_load -i AWK sh-sanitise-quoted-pathname <<"EOF" || return
+    lk_awk_load AWK sh-sanitise-quoted-pathname - <<"EOF" || return
 BEGIN {
-  unquote_single = no_unquote_single ? 0 : 1
-  unquote_double = no_unquote_double ? 0 : 1
-  unquote = unquote_single || unquote_double
-  ORS = RS
+unquote_single = no_unquote_single ? 0 : 1
+unquote_double = no_unquote_double ? 0 : 1
+unquote = unquote_single || unquote_double
+ORS = RS
 }
 unquote && (/^'([^']+|\\')*'$/ || /^"([^"]+|\\")*"$/) {
-  if (unquote_single && (gsub(/^'|'$/, "", $0))) {
-    gsub(/\\'/, "'", $0)
-  } else if (unquote_double && (gsub(/^"|"$/, "", $0))) {
-    gsub(/\\"/, "\"", $0)
-  }
+if (unquote_single && (gsub(/^'|'$/, "", $0))) {
+gsub(/\\'/, "'", $0)
+} else if (unquote_double && (gsub(/^"|"$/, "", $0))) {
+gsub(/\\"/, "\"", $0)
+}
 }
 /^(~[-a-z0-9\$_]*)(\/.*)?$/ {
-  home = $0
-  sub(/\/.*/, "/", home)
-  printf "%s", home
-  sub(/^[^\/]+\/?/, "", $0)
+home = $0
+sub(/\/.*/, "/", home)
+printf "%s", home
+sub(/^[^\/]+\/?/, "", $0)
 }
 {
-  while (pos = match($0, /\*+|\?+|\[(][^]]*|[^]]+)]/)) {
-    if (pos > 1) {
-      printf "%s", quote(substr($0, 1, pos - 1))
-    }
-    printf "%s", substr($0, pos, RLENGTH)
-    $0 = substr($0, pos + RLENGTH)
-  }
-  if ($0) {
-    printf "%s", quote($0)
-  }
-  print ""
+while (pos = match($0, /\*+|\?+|\[(][^]]*|[^]]+)]/)) {
+if (pos > 1) {
+printf "%s", quote(substr($0, 1, pos - 1))
+}
+printf "%s", substr($0, pos, RLENGTH)
+$0 = substr($0, pos + RLENGTH)
+}
+if ($0) {
+printf "%s", quote($0)
+}
+print ""
 }
 function quote(str)
 {
-  gsub(/'/, "'\\''", str)
-  return ("'" str "'")
+gsub(/'/, "'\\''", str)
+return ("'" str "'")
 }
 EOF
     SH="printf '%s\\n' $(_lk_stream_args 3 awk -f "$AWK" "$@" | tr '\n' ' ')" &&
@@ -3037,8 +3041,6 @@ lk_escape_ere() { lk_sed_escape "$@"; }
 lk_file_security() { lk_file_owner_mode "$@"; }
 lk_file_sort_by_date() { lk_file_sort_modified "$@"; }
 lk_first_existing() { lk_first_file "$@"; }
-lk_is_false() { lk_false "$@"; }
-lk_is_true() { lk_true "$@"; }
 lk_jq_get_array() { lk_json_mapfile "$@"; }
 lk_maybe_sudo() { lk_sudo "$@"; }
 lk_mktemp_dir() { _LK_STACK_DEPTH=$((1 + ${_LK_STACK_DEPTH:-0})) lk_mktemp -d; }
@@ -3206,7 +3208,7 @@ Usage: $FUNCNAME [-e] [-q] [FILE]"
     done
     shift $((OPTIND - 1))
     TEMPLATE=$(cat ${1+"$1"} && printf .) || return
-    ! lk_is_true EVAL || {
+    ! lk_true EVAL || {
         lk_mapfile KEYS <(
             # Add a newline to guarantee $'...\n'
             printf '%q' "$TEMPLATE"$'\n' |
@@ -3218,7 +3220,7 @@ Usage: $FUNCNAME [-e] [-q] [FILE]"
                 eval "KEYS[i]=\$'${KEYS[i]:3:$((${#KEYS[i]} - 6))}'"
                 REPLACE=$(eval "${KEYS[i]}" && printf .) ||
                     lk_warn "error evaluating: ${KEYS[i]}" || return
-                ! lk_is_true QUOTE ||
+                ! lk_true QUOTE ||
                     REPLACE=$(printf '%q.' "${REPLACE%.}")
                 REPLACE=${REPLACE%.}
                 TEMPLATE=${TEMPLATE//"({:${KEYS[i]}:})"/$REPLACE}
@@ -3233,7 +3235,7 @@ Usage: $FUNCNAME [-e] [-q] [FILE]"
         REPLACE=${!KEY}
         QUOTED=$(printf '%q.' "$REPLACE")
         QUOTED=${QUOTED%.}
-        ! lk_is_true QUOTE ||
+        ! lk_true QUOTE ||
             REPLACE=$QUOTED
         TEMPLATE=${TEMPLATE//"{{$KEY}}"/$REPLACE}
         TEMPLATE=${TEMPLATE//"{{\"$KEY\"}}"/$QUOTED}
@@ -3575,7 +3577,7 @@ function lk_log_create_file() {
 
 function lk_start_trace() {
     # Don't interfere with an existing trace
-    [[ $- != *x* ]] && lk_is_true LK_DEBUG || return 0
+    [[ $- != *x* ]] && lk_true LK_DEBUG || return 0
     local TRACE_PATH
     TRACE_PATH=${_LK_LOG_TRACE_PATH:-$(lk_log_create_file \
         -e "$(lk_date_ymdhms).trace" /tmp ~)} &&
@@ -3960,7 +3962,7 @@ function lk_maybe_trace() {
     }
     # Remove "env" from sudo command
     [[ $- != *x* ]] || ! lk_will_sudo || unset "COMMAND[4]"
-    ! lk_is_true OUTPUT ||
+    ! lk_true OUTPUT ||
         COMMAND=(lk_quote_args "${COMMAND[@]}")
     "${COMMAND[@]}"
 }
@@ -4133,7 +4135,7 @@ function lk_download() {
         --location
         --remote-time
     )
-    ! lk_is_true SERVER_NAMES || {
+    ! lk_true SERVER_NAMES || {
         lk_version_at_least "$CURL_VERSION" 7.26.0 ||
             lk_warn "curl too old to output filename_effective" || return
         DOWNLOAD_DIR=$(lk_mktemp_dir) &&
@@ -4150,7 +4152,7 @@ function lk_download() {
         lk_is_uri "$URI" || lk_warn "not a URI: $URI" || return
         unset DOWNLOAD_ONE
         DOWNLOAD_ARGS=()
-        lk_is_true SERVER_NAMES || {
+        lk_true SERVER_NAMES || {
             [ -n "$FILENAME" ] || {
                 SH=$(lk_uri_parts "$URI" _PATH) &&
                     eval "$SH"
@@ -4169,7 +4171,7 @@ function lk_download() {
             FILENAMES+=("$FILENAME")
         }
         DOWNLOAD_ARGS+=("$URI")
-        lk_is_true DOWNLOAD_ONE || {
+        lk_true DOWNLOAD_ONE || {
             COMMAND_ARGS+=("${DOWNLOAD_ARGS[@]}")
             continue
         }
@@ -4188,7 +4190,7 @@ function lk_download() {
     for COMMAND in ${COMMANDS[@]+"${COMMANDS[@]}"}; do
         eval "$COMMAND" || return
     done
-    lk_is_true SERVER_NAMES || {
+    lk_true SERVER_NAMES || {
         lk_echo_array FILENAMES
         return
     }
@@ -4300,7 +4302,7 @@ Usage: $FUNCNAME [-m MODE] [-o OWNER] [-g GROUP] [-v] FILE...
         { [ -z "${GROUP-}" ] ||
             id -Gn | tr -s '[:blank:]' '\n' | grep -Fx "$GROUP" >/dev/null; } ||
         LK_SUDO=1
-    if lk_is_true DIR; then
+    if lk_true DIR; then
         lk_maybe_sudo install ${ARGS[@]+"${ARGS[@]}"} "$@"
     else
         for DEST in "$@"; do
@@ -4353,7 +4355,7 @@ Usage: $FUNCNAME [-f] TARGET LINK"
             return 0
         lk_maybe_sudo rm -f"$vv" -- "$LINK" || return
     elif lk_maybe_sudo test -e "$LINK"; then
-        if ! lk_is_true NO_ORIG; then
+        if ! lk_true NO_ORIG; then
             lk_maybe_sudo \
                 mv -f"$v" -- "$LINK" "$LINK.orig" || return
         else
@@ -4574,7 +4576,7 @@ function lk_file_backup() {
         if lk_maybe_sudo test -e "$1"; then
             lk_maybe_sudo test -f "$1" || lk_warn "not a file: $1" || return
             lk_maybe_sudo test -s "$1" || return 0
-            ! lk_is_true MOVE || {
+            ! lk_true MOVE || {
                 FILE=$(lk_realpath "$1") || return
                 {
                     OWNER=$(lk_file_owner "$FILE") &&
@@ -4621,7 +4623,7 @@ function lk_file_prepare_temp() {
     ! lk_verbose 2 || vv=v
     TEMP=$(lk_maybe_sudo mktemp -- "${DIR%/}/.${1##*/}.XXXXXXXXXX") || return
     ! lk_maybe_sudo test -f "$1" ||
-        if lk_is_true NO_COPY; then
+        if lk_true NO_COPY; then
             local OPT
             lk_is_macos || OPT=--
             MODE=$(lk_file_mode "$1") &&
@@ -4696,7 +4698,7 @@ Options:
     LK_FILE_REPLACE_NO_CHANGE=${LK_FILE_REPLACE_NO_CHANGE:-1}
     LK_FILE_REPLACE_DECLINED=0
     if lk_maybe_sudo test -e "$1"; then
-        ! lk_is_true LINK || {
+        ! lk_true LINK || {
             TEMP=$(lk_realpath "$1") || return
             set -- "$TEMP"
         }
@@ -4710,16 +4712,16 @@ Options:
             ! lk_verbose 2 || lk_tty_detail "Not changed:" "$1"
             return 0
         }
-        ! lk_is_true ASK || lk_is_true NEW || {
+        ! lk_true ASK || lk_true NEW || {
             lk_tty_diff "$1" "" <<<"${CONTENT%$'\n'}" || return
             lk_confirm "Replace $1 as above?" Y || {
                 LK_FILE_REPLACE_DECLINED=1
                 return 1
             }
         }
-        ! lk_verbose || lk_is_true LK_FILE_NO_DIFF ||
+        ! lk_verbose || lk_true LK_FILE_NO_DIFF ||
             lk_file_get_text "$1" PREVIOUS || return
-        ! lk_is_true BACKUP ||
+        ! lk_true BACKUP ||
             lk_file_backup ${MOVE:+-m} "$1" || return
     fi
     TEMP=$(lk_file_prepare_temp "$1") &&
@@ -4729,7 +4731,7 @@ Options:
         lk_maybe_sudo mv -f"$vv" "$TEMP" "$1" &&
         LK_FILE_REPLACE_NO_CHANGE=0 || return
     ! lk_verbose || {
-        if lk_is_true LK_FILE_NO_DIFF || lk_is_true ASK; then
+        if lk_true LK_FILE_NO_DIFF || lk_true ASK; then
             lk_tty_detail "${VERB:-Updated}:" "$1"
         elif [ -n "${PREVIOUS+1}" ]; then
             echo -n "$PREVIOUS" | lk_tty_diff_detail "" "$1"

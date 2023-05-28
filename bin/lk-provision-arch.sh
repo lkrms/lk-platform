@@ -57,7 +57,7 @@ fi
 function service_apply() {
     local i _ERRORS=${#ERRORS[@]}
     lk_tty_print "Checking services"
-    lk_is_bootstrap || ! lk_is_true DAEMON_RELOAD ||
+    lk_is_bootstrap || ! lk_true DAEMON_RELOAD ||
         lk_tty_run_detail sudo systemctl daemon-reload ||
         ERRORS+=("Command failed: systemctl daemon-reload")
     [ ${#SERVICE_ENABLE[@]} -eq 0 ] ||
@@ -315,7 +315,7 @@ lk_start_trace
     _FILE=$(lk_arr UDEV_RULES)
     lk_install -m 00644 "$FILE"
     lk_file_replace "$FILE" "$_FILE"
-    if ! lk_is_bootstrap && lk_is_false LK_FILE_REPLACE_NO_CHANGE; then
+    if ! lk_is_bootstrap && lk_false LK_FILE_REPLACE_NO_CHANGE; then
         lk_systemctl_start NetworkManager
         if [ ${#IF_RENAME[@]} -gt 0 ]; then
             lk_maybe_trace bash -c "$(
@@ -372,7 +372,7 @@ lk_start_trace
             lk_file_replace -f "$_FILE" "$FILE"
         fi
     done
-    ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+    ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
         lk_tty_run_detail sudo udevadm control --reload
 
     if [ -n "${LK_NODE_HOSTNAME-}" ]; then
@@ -450,7 +450,7 @@ $LK_NODE_HOSTNAME" &&
         lk_install -m 00644 "$TARGET"
         lk_file_replace -f "$FILE" "$TARGET"
     done
-    ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+    ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
         sudo sysctl --system
 
     if lk_pac_installed tlp; then
@@ -473,7 +473,7 @@ $LK_NODE_HOSTNAME" &&
             NetworkManager-dispatcher "Network Manager dispatcher"
             tlp "TLP"
         )
-        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
             SERVICE_RESTART+=(tlp)
     fi
 
@@ -487,7 +487,7 @@ $LK_NODE_HOSTNAME" &&
     SERVICE_ENABLE+=(
         setterm-enable-blanking "setterm blanking"
     )
-    ! lk_is_false LK_FILE_REPLACE_NO_CHANGE || {
+    ! lk_false LK_FILE_REPLACE_NO_CHANGE || {
         DAEMON_RELOAD=1
         SERVICE_RESTART+=(setterm-enable-blanking)
     }
@@ -502,7 +502,7 @@ $LK_NODE_HOSTNAME" &&
         SERVICE_ENABLE+=(
             fstrim.timer "fstrim"
         )
-        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
             DAEMON_RELOAD=1
     fi
 
@@ -516,7 +516,7 @@ $LK_NODE_HOSTNAME" &&
             -f "$LK_BASE/lib/awk/ntp-set-server.awk" \
             "$FILE")
         lk_file_replace "$FILE" "$_FILE"
-        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
             SERVICE_RESTART+=(ntpd)
     fi
     SERVICE_ENABLE+=(
@@ -533,7 +533,7 @@ $LK_NODE_HOSTNAME" &&
     SERVICE_ENABLE+=(
         sshd "SSH server"
     )
-    ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+    ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
         SERVICE_RESTART+=(sshd)
 
     ! lk_pac_installed kernel-modules-hook ||
@@ -547,7 +547,7 @@ $LK_NODE_HOSTNAME" &&
         lk_tty_print "Checking boot loader"
         unset LK_FILE_REPLACE_NO_CHANGE
         lk_arch_configure_grub
-        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
             sudo update-grub --install
     fi
 
@@ -568,7 +568,7 @@ $LK_NODE_HOSTNAME" &&
             ) >"$TEMP_FILE"
             lk_file_keep_original "$FILE"
             lk_file_replace -f "$TEMP_FILE" "$FILE"
-            ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+            ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
                 sudo mkinitcpio -P
         fi
     fi
@@ -786,7 +786,7 @@ $LK_NODE_HOSTNAME" &&
         SERVICE_ENABLE+=(
             fail2ban "Fail2ban"
         )
-        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
             SERVICE_RESTART+=(fail2ban)
     fi
 
@@ -921,7 +921,7 @@ EOF
         SERVICE_ENABLE+=(
             php-fpm "PHP-FPM"
         )
-        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
             SERVICE_RESTART+=(php-fpm)
 
         unset LK_FILE_REPLACE_NO_CHANGE
@@ -956,7 +956,7 @@ EOF
         SERVICE_ENABLE+=(
             httpd "Apache"
         )
-        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
             SERVICE_RESTART+=(httpd)
 
         lk_git_provision_repo -fs \
@@ -978,7 +978,7 @@ EOF
 Wants=network-online.target
 After=network-online.target
 EOF
-        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
             DAEMON_RELOAD=1
         DIR=/etc/lighttpd/conf.d
         lk_install -d -m 00755 "$DIR"
@@ -1006,7 +1006,7 @@ done\""
         SERVICE_ENABLE+=(
             lighttpd "Lighttpd"
         )
-        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
             SERVICE_RESTART+=(lighttpd)
     fi
 
@@ -1020,7 +1020,7 @@ done\""
         SERVICE_ENABLE+=(
             squid "Squid proxy server"
         )
-        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE || {
+        ! lk_false LK_FILE_REPLACE_NO_CHANGE || {
             lk_systemctl_stop squid &&
                 sudo squid -zN &>/dev/null || lk_die \
                 "error creating Squid swap directories and cache_dir structures"
@@ -1116,7 +1116,7 @@ done\""
             smb "Samba (SMB server)"
             nmb "Samba (NMB server)"
         )
-        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
             SERVICE_RESTART+=(smb nmb)
         sudo pdbedit -L | cut -d: -f1 | grep -Fx "$USER" >/dev/null ||
             lk_tty_detail \

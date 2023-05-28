@@ -84,7 +84,7 @@ ChrootDirectory %h"
         -v "FIRST=$MATCH(${REGEX[1]}|\"${REGEX[1]}\")$S+(${SFTP_ONLY}|\"${SFTP_ONLY}\")$S*$" \
         -v "BREAK=$MATCH" \
         -f "$LK_BASE/lib/awk/block-replace.awk" "$FILE")
-    ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+    ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
         lk_tty_run_detail -1 lk_elevate systemctl restart ssh.service
     [[ $1 == _* ]] || lk_user_exists "$1" || set -- "_$1" "${@:2}"
     if lk_user_exists "$1"; then

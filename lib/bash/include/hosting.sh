@@ -290,8 +290,8 @@ function _lk_hosting_site_load_dynamic_settings() {
     #   burst performance--recommended for single-site production servers
     _SITE_PHP_FPM_PM=static
     [[ $PHP_FPM_POOLS -eq 1 ]] && lk_true SITE_ENABLE ||
-        { ! lk_is_true SITE_ENABLE_STAGING &&
-            ! lk_is_true LK_SITE_ENABLE_STAGING &&
+        { ! lk_true SITE_ENABLE_STAGING &&
+            ! lk_true LK_SITE_ENABLE_STAGING &&
             _SITE_PHP_FPM_PM=ondemand ||
             _SITE_PHP_FPM_PM=dynamic; }
 }
@@ -1180,7 +1180,7 @@ function _lk_hosting_site_provision() {
     }
     _lk_hosting_site_write_settings &&
         _lk_hosting_site_cache_settings || return
-    ! lk_is_true SITE_ENABLE_STAGING ||
+    ! lk_true SITE_ENABLE_STAGING ||
         APACHE+=(Use Staging)
     [[ -z $SITE_DOWNSTREAM_FROM ]] || {
         MACRO=${SITE_DOWNSTREAM_FROM,,}
@@ -1198,7 +1198,7 @@ function _lk_hosting_site_provision() {
             PARAMS=" \"${BASH_REMATCH[2]//,/ }\" ${BASH_REMATCH[1]}"
             ;;
         esac
-        lk_is_true SITE_DOWNSTREAM_FORCE &&
+        lk_true SITE_DOWNSTREAM_FORCE &&
             APACHE+=(Use "Require${MACRO^}$PARAMS") ||
             APACHE+=(Use "Trust${MACRO^}$PARAMS")
     }
@@ -1263,8 +1263,8 @@ function _lk_hosting_site_provision() {
             lk_file_replace -bpi "^$S*(;.*)?\$" -s \
                 "s/^$S*([^[:blank:]=]+)$S*=$S*($NS+($S+$NS+)*)$S*\$/\1 = \2/" \
                 "$FILE" "$_FILE" ||
-            lk_is_true LK_FILE_REPLACE_DECLINED || return
-        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+            lk_true LK_FILE_REPLACE_DECLINED || return
+        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
             lk_mark_dirty "php$SITE_PHP_VERSION-fpm.service"
     )
     if [ -d /etc/apache2/sites-available ]; then
@@ -1330,18 +1330,18 @@ function _lk_hosting_site_provision() {
         lk_install -m 00644 "$FILE" &&
             lk_file_replace -bpi "^$S*(#.*)?\$" -s "s/^$S+//" \
                 "$FILE" "$_FILE" ||
-            lk_is_true LK_FILE_REPLACE_DECLINED || return
-        lk_is_true LK_FILE_REPLACE_DECLINED ||
-            if lk_is_true SITE_ENABLE && ! a2query -q -s "$_SITE_NAME"; then
+            lk_true LK_FILE_REPLACE_DECLINED || return
+        lk_true LK_FILE_REPLACE_DECLINED ||
+            if lk_true SITE_ENABLE && ! a2query -q -s "$_SITE_NAME"; then
                 lk_tty_success "Enabling Apache site:" "$_SITE_NAME"
                 lk_elevate a2ensite "$_SITE_NAME"
                 LK_FILE_REPLACE_NO_CHANGE=0
-            elif ! lk_is_true SITE_ENABLE && a2query -q -s "$_SITE_NAME"; then
+            elif ! lk_true SITE_ENABLE && a2query -q -s "$_SITE_NAME"; then
                 lk_tty_warning "Disabling Apache site:" "$_SITE_NAME"
                 lk_elevate a2dissite "$_SITE_NAME"
                 LK_FILE_REPLACE_NO_CHANGE=0
             fi
-        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
             lk_mark_dirty "apache2.service"
     fi
 }
@@ -1377,7 +1377,7 @@ function lk_hosting_configure_backup() {
         "${LK_BASE%/*}/${LK_PATH_PREFIX}platform/lib/hosting/backup-all.sh" |
         sort -u | lk_ere_implode_input -e)
     lk_tty_print "Configuring automatic backups"
-    if lk_is_false LK_AUTO_BACKUP; then
+    if lk_false LK_AUTO_BACKUP; then
         lk_tty_error \
             "Automatic backups are disabled (LK_AUTO_BACKUP=$LK_AUTO_BACKUP)"
         lk_crontab_remove "$REGEX"
@@ -1386,7 +1386,7 @@ function lk_hosting_configure_backup() {
         # at 1 a.m.) unless LK_AUTO_REBOOT is enabled, in which case default to
         # "((REBOOT_MINUTE)) ((REBOOT_HOUR - 1)) * * *" (daily, 1 hour before
         # any automatic reboots)
-        [ -n "$BACKUP_SCHEDULE" ] || ! lk_is_true AUTO_REBOOT ||
+        [ -n "$BACKUP_SCHEDULE" ] || ! lk_true AUTO_REBOOT ||
             [[ ! $AUTO_REBOOT_TIME =~ ^0*([0-9]+):0*([0-9]+)$ ]] ||
             BACKUP_SCHEDULE="${BASH_REMATCH[2]} $(((BASH_REMATCH[1] + 23) % 24)) * * *"
         BACKUP_SCHEDULE=${BACKUP_SCHEDULE:-"0 1 * * *"}

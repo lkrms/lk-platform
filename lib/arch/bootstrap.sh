@@ -132,26 +132,26 @@ YELLOW=$'\E[33m'
 CYAN=$'\E[36m'
 BOLD=$'\E[1m'
 RESET=$'\E[m'
-echo "$BOLD$CYAN==> $RESET${BOLD}Checking prerequisites$RESET" >&2
+echo "$BOLD$CYAN==> $RESET${BOLD}Acquiring prerequisites$RESET" >&2
 REPO_URL=https://raw.githubusercontent.com/lkrms/lk-platform
 _LK_SOURCED=
 for FILE_PATH in \
-    /lib/bash/include/core.sh \
-    /lib/bash/include/provision.sh \
-    /lib/bash/include/linux.sh \
-    /lib/bash/include/arch.sh \
-    /lib/arch/packages.sh \
-    /lib/awk/section-get.awk \
-    /lib/awk/section-replace.awk \
-    /share/sudoers.d/default; do
+    lib/bash/include/core.sh \
+    lib/bash/include/provision.sh \
+    lib/bash/include/linux.sh \
+    lib/bash/include/arch.sh \
+    lib/arch/packages.sh \
+    lib/awk/section-get.awk \
+    lib/awk/section-replace.awk \
+    share/sudoers.d/default; do
     FILE=$_DIR/${FILE_PATH##*/}
-    URL=$REPO_URL/$LK_PLATFORM_BRANCH$FILE_PATH
+    URL=$REPO_URL/$LK_PLATFORM_BRANCH/$FILE_PATH
     MESSAGE="$BOLD$YELLOW -> $RESET{}$YELLOW $URL$RESET"
-    if [ ! -e "$FILE" ]; then
+    if [[ ! -e $FILE ]]; then
         echo "${MESSAGE/{\}/Downloading:}" >&2
         curl "${CURL_OPTIONS[@]}" --output "$FILE" "$URL" || {
             rm -f "$FILE"
-            lk_die "unable to download: $URL"
+            lk_die "download failed: $URL"
         }
     else
         echo "${MESSAGE/{\}/Already downloaded:}" >&2
@@ -216,29 +216,27 @@ case $# in
 esac
 LK_NODE_FQDN=${*: -1:1}
 LK_NODE_HOSTNAME=${LK_NODE_FQDN%%.*}
-[ "$LK_NODE_FQDN" != "$LK_NODE_HOSTNAME" ] ||
+[[ $LK_NODE_FQDN != "$LK_NODE_HOSTNAME" ]] ||
     LK_NODE_FQDN=
-LK_FEATURES=$(IFS=, &&
-    lk_args $LK_FEATURES | lk_uniq | lk_implode_input ,)
+LK_FEATURES=$(IFS=, && lk_uniq $LK_FEATURES | lk_implode_input ,)
 
 PASSWORD_GENERATED=0
-if [ -z "$BOOTSTRAP_KEY" ]; then
-    if [ -z "$BOOTSTRAP_PASSWORD" ] && lk_no_input; then
-        lk_tty_print \
-            "Generating a random password for user" "$BOOTSTRAP_USERNAME"
+if [[ -z ${BOOTSTRAP_KEY:+1} ]]; then
+    if [[ -z ${BOOTSTRAP_PASSWORD:+1} ]] && lk_no_input; then
+        lk_tty_print "Generating a random password for:" "$BOOTSTRAP_USERNAME"
         BOOTSTRAP_PASSWORD=$(lk_random_password 7)
         PASSWORD_GENERATED=1
         lk_tty_detail "Password:" "$BOOTSTRAP_PASSWORD"
         lk_tty_log "The password above will be repeated when ${0##*/} exits"
     fi
-    while [ -z "$BOOTSTRAP_PASSWORD" ]; do
+    while [[ -z ${BOOTSTRAP_PASSWORD:+1} ]]; do
         lk_tty_read_silent \
             "Password for $BOOTSTRAP_USERNAME:" BOOTSTRAP_PASSWORD
-        [ -n "$BOOTSTRAP_PASSWORD" ] ||
+        [[ -n ${BOOTSTRAP_PASSWORD:+1} ]] ||
             lk_warn "Password cannot be empty" || continue
         lk_tty_read_silent \
             "Password for $BOOTSTRAP_USERNAME (again):" CONFIRM_PASSWORD
-        [ "$BOOTSTRAP_PASSWORD" = "$CONFIRM_PASSWORD" ] || {
+        [[ $BOOTSTRAP_PASSWORD == "$CONFIRM_PASSWORD" ]] || {
             BOOTSTRAP_PASSWORD=
             lk_warn "Passwords do not match"
             continue
@@ -251,8 +249,8 @@ lk_tty_print
 
 function exit_trap() {
     local STATUS=$?
-    [ "$BASH_SUBSHELL" -eq 0 ] || return "$STATUS"
-    [ ! -d /mnt/boot ] || {
+    ((!BASH_SUBSHELL)) || return "$STATUS"
+    [[ ! -d /mnt/boot ]] || {
         set +x
         unset BASH_XTRACEFD
         exec 4>-
@@ -266,14 +264,13 @@ function exit_trap() {
     }
     ((!PASSWORD_GENERATED)) ||
         lk_tty_log \
-            "The random password generated for user '$BOOTSTRAP_USERNAME' is" \
-            "$BOOTSTRAP_PASSWORD"
+            "Password generated for $BOOTSTRAP_USERNAME:" "$BOOTSTRAP_PASSWORD"
     return "$STATUS"
 }
 
 function in_target() {
-    [ -d /mnt/boot ] || lk_die "no target mounted"
-    if [ "${1-}" != -u ]; then
+    [[ -d /mnt/boot ]] || lk_die "no target mounted"
+    if [[ ${1-} != -u ]]; then
         arch-chroot /mnt "$@"
     else
         (unset _LK_{{TTY,LOG}_{OUT,ERR},LOG}_FD _LK_LOG2_FD &&

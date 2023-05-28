@@ -86,7 +86,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
         grep -F "$(printf 'WP_CLI_PHP=%q' "$PHP")") &&
         DISABLE_WP_CRON=$(lk_wp \
           config get DISABLE_WP_CRON --type=constant) &&
-        lk_is_true DISABLE_WP_CRON; then
+        lk_true DISABLE_WP_CRON; then
         ! lk_verbose 2 || {
           lk_tty_detail "WP-Cron appears to be configured correctly"
           lk_tty_detail "crontab command:" $'\n'"$CRONTAB"

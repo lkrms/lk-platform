@@ -27,23 +27,7 @@ function _lk_log_install_file() {
 # For each line of input, add a microsecond-resolution timestamp and remove
 # characters before any carriage returns that aren't part of the line ending.
 function lk_log() {
-    local PL=${LK_BASE:+$LK_BASE/lib/perl/log.pl}
-    trap "" SIGINT
-    if [[ -x $PL ]]; then
-        exec "$PL"
-    else
-        # Don't use exec because without Bash, $PL won't be deleted on exit
-        lk_mktemp_with PL cat <<"EOF" && chmod u+x "$PL" && "$PL"
-#!/usr/bin/perl -p
-BEGIN {
-  $| = 1;
-  use POSIX qw{strftime};
-  use Time::HiRes qw{gettimeofday};
-}
-( $s, $ms ) = Time::HiRes::gettimeofday();
-$ms = sprintf( "%06i", $ms );
-print strftime( "%Y-%m-%d %H:%M:%S.$ms %z ", localtime($s) );
-s/.*\r(.)/\1/;
-EOF
-    fi
+    local PL
+    lk_perl_load PL log || return
+    exec perl -p "$PL"
 }
