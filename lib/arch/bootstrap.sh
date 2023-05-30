@@ -25,21 +25,10 @@ LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-} &&
         exec "$BASH" "$_FILE" "$@" || exit; }
 
 set -euo pipefail
-lk_die() { s=$? && echo "$0: ${1-error $s}" >&2 && (exit $s) && false || exit; }
-lk_log() { trap "" SIGINT && exec perl -pe 'BEGIN {
-  $| = 1;
-  use POSIX qw{strftime};
-  use Time::HiRes qw{gettimeofday};
-}
-( $s, $ms ) = Time::HiRes::gettimeofday();
-$ms = sprintf( "%06i", $ms );
-print strftime( "%Y-%m-%d %H:%M:%S.$ms %z ", localtime($s) );
-s/.*\r(.)/\1/;'; }
+lk_fail() { (($1)) && return $1 || return 1; }
+lk_die() { s=$? && printf '%s: %s\n' "$0" "$1" >&2 && lk_fail $s || exit; }
 
 LOG_FILE=$_DIR/install.$(date +%s)
-exec 4> >(lk_log >"$LOG_FILE.trace")
-BASH_XTRACEFD=4
-set -x
 
 shopt -s nullglob
 
@@ -162,6 +151,10 @@ for FILE_PATH in \
     }
 done
 
+exec 4> >(lk_log >"$LOG_FILE.trace")
+BASH_XTRACEFD=4
+set -x
+
 while getopts ":u:o:c:p:f:xk:y" OPT; do
     case "$OPT" in
     u)
@@ -256,7 +249,7 @@ function exit_trap() {
         exec 4>-
         lk_log_close || true
         local LOG FILE
-        for LOG in "$LOG_FILE".{log,out,trace}; do
+        for LOG in "$LOG_FILE".{log,trace}; do
             FILE=/var/log/${LK_PATH_PREFIX}${LOG##*/}
             in_target install -m 00640 -g adm /dev/null "$FILE" &&
                 cp -v --preserve=timestamps "$LOG" "/mnt/${FILE#/}" || break
@@ -273,7 +266,7 @@ function in_target() {
     if [[ ${1-} != -u ]]; then
         arch-chroot /mnt "$@"
     else
-        (unset _LK_{{TTY,LOG}_{OUT,ERR},LOG}_FD _LK_LOG2_FD &&
+        (unset _LK_{TTY_{OUT,ERR},LOG}_FD &&
             arch-chroot /mnt runuser "${@:1:2}" -- "${@:3}")
     fi
 }
@@ -283,7 +276,6 @@ function system_time() {
 }
 
 lk_log_start "$LOG_FILE"
-lk_log_tty_off
 lk_trap_add EXIT exit_trap
 
 # Clean up after failed attempts
@@ -496,13 +488,11 @@ lk_var_sh \
     LK_PLATFORM_BRANCH \
     LK_PACKAGES_FILE >"/mnt$FILE"
 
-lk_log_tty_on
 PROVISIONED=0
 in_target -u "$BOOTSTRAP_USERNAME" \
     env BASH_XTRACEFD=$BASH_XTRACEFD SHELLOPTS=xtrace _LK_NO_LOG=1 \
     "$LK_BASE/bin/lk-provision-arch.sh" --yes && PROVISIONED=1 ||
     lk_tty_error "Provisioning failed"
-lk_log_tty_off
 
 lk_tty_print "Installing boot loader"
 i=0

@@ -22,20 +22,15 @@ lk_die() { s=$? && printf '%s: %s\n' "$0" "$1" >&2 && lk_fail $s || exit; }
 [[ $- != *s* ]] || lk_die "cannot run from standard input"
 
 function exit_trap() {
-    local STATUS=$? EXT \
-        _LOG_FILE LOG_FILE _LK_LOG_BASENAME=lk-provision-macos.sh \
-        _LOG=$_LK_LOG_FILE_LOG _OUT=$_LK_LOG_FILE_OUT
-    lk_log_close || return "$STATUS"
-    for EXT in log out; do
-        _LOG_FILE=_$(lk_upper "$EXT") &&
-            _LOG_FILE=${!_LOG_FILE} &&
-            LOG_FILE=$(lk_log_create_file -e "$EXT") &&
-            [ "$LOG_FILE" != "$_LOG_FILE" ] || continue
-        lk_tty_log "Moving:" "$_LOG_FILE -> $LOG_FILE"
-        cat "$_LOG_FILE" >>"$LOG_FILE" &&
-            rm "$_LOG_FILE" ||
-            lk_tty_warning "Error moving" "$_LOG_FILE"
-    done
+    local STATUS=$? LK_LOG_BASENAME=lk-provision-macos.sh LOG_FILE
+    lk_log_close &&
+        LOG_FILE=$(lk_log_create_file) &&
+        [[ $LOG_FILE != "$_LK_LOG_FILE" ]] ||
+        return "$STATUS"
+    lk_tty_log "Moving:" "$_LK_LOG_FILE -> $LOG_FILE"
+    cat -- "$_LK_LOG_FILE" >>"$LOG_FILE" &&
+        rm -f -- "$_LK_LOG_FILE" ||
+        lk_tty_warning "Error moving" "$_LK_LOG_FILE"
     return "$STATUS"
 }
 

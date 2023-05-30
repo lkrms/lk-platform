@@ -42,11 +42,11 @@ done
 [ $# -gt 0 ] || lk_usage
 type -t "$1" >/dev/null || lk_warn "command not found: $1" || lk_usage
 
-[ -n "${_LK_LOG_BASENAME-}" ] ||
-    _LK_LOG_BASENAME=${1##*/}-$(lk_md5 "$@")
-export -n _LK_LOG_BASENAME
+[ -n "${LK_LOG_BASENAME-}" ] ||
+    LK_LOG_BASENAME=${1##*/}-$(lk_md5 "$@")
+export -n LK_LOG_BASENAME
 
-_LK_LOG_CMDLINE=("$@")
+LK_LOG_CMDLINE=("$@")
 lk_log_start
 
 "$@"

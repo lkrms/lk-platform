@@ -163,10 +163,6 @@ function lk_stack() {
 #### - lk_log_bypass
 #### - lk_log_bypass_stderr
 #### - lk_log_bypass_stdout
-#### - lk_log_bypass_tty
-#### - lk_log_bypass_tty_stderr
-#### - lk_log_bypass_tty_stdout
-#### - lk_log_no_bypass
 #### - lk_maybe_drop
 #### - lk_maybe_sudo
 #### - lk_maybe_trace

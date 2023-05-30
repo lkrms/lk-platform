@@ -170,7 +170,6 @@ if [ -n "$LK_PACKAGES_FILE" ]; then
 fi
 
 lk_log_start
-lk_log_tty_stdout_off
 lk_start_trace
 
 {
@@ -605,7 +604,6 @@ $LK_NODE_HOSTNAME" &&
                 "To install from AUR:" package packages &&
             lk_tty_yn \
                 "OK to install aurutils for AUR package management?" Y; }; then
-        lk_log_tty_on
         lk_tty_print "Checking AUR packages"
         PAC_INSTALL=($(lk_pac_not_installed_list \
             base-devel devtools vifm))
@@ -675,7 +673,6 @@ $LK_NODE_HOSTNAME" &&
                 <(lk_pac_repo_available_list "$REPO" | sort -u)))
             AUR_PACKAGES=()
         fi
-        lk_log_tty_stdout_off
     fi
 
     if [ ${#PAC_OFFER[@]} -gt 0 ]; then

@@ -82,7 +82,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
       lk_tty_print "Checking WordPress at" "$1"
       if CRONTAB=$(crontab -l 2>/dev/null | grep -F "$(printf \
         ' -- wp_if_running --path=%q cron event run --due-now' "$1")" |
-        grep -F _LK_LOG_FILE |
+        grep -E '\<LK_LOG_FILE' |
         grep -F "$(printf 'WP_CLI_PHP=%q' "$PHP")") &&
         DISABLE_WP_CRON=$(lk_wp \
           config get DISABLE_WP_CRON --type=constant) &&
@@ -379,7 +379,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
     lk_tty_print "Updating server $i of $((i + $# - 1)):" "$1"
 
     (
-      _LK_LOG_CMDLINE=("$0-$1")
+      LK_LOG_CMDLINE=("$0-$1")
       lk_log_start
 
       [ "${LK_NO_INPUT-}" != Y ] ||

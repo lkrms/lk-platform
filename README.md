@@ -170,7 +170,7 @@ To generate the list above, run the following in `<LK_BASE>`:
 lk_find_shell_scripts -print0 |
     xargs -0 gnu_grep -Pho '((?<=\$\{)|(?<=lk_true )|(?<=lk_false ))LK_[a-zA-Z0-9_]+\b(?!(\[[^]]+\])?[#%}])' |
     sort -u |
-    sed -Ee '/^LK_(.+_(UPDATED|DECLINED|NO_CHANGE)|BASE|USAGE|VERSION|Z|ADMIN_USERS|HOST_.+|MYSQL_(USERNAME|PASSWORD)|SHUTDOWN_ACTION|BOLD|DIM|RESET)$/d' -e 's/.*/- `&`/'
+    sed -Ee '/^LK_(.+_(UPDATED|DECLINED|NO_CHANGE|LAST)|BASE|USAGE|VERSION|Z|ADMIN_USERS|HOST_.+|LOG_.+|MYSQL_(USERNAME|PASSWORD)|SHUTDOWN_ACTION|BOLD|DIM|RESET)$/d' -e 's/.*/- `&`/'
 ```
 
 ### Site settings

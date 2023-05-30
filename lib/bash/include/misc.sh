@@ -27,7 +27,7 @@ function lk_openconnect() {
         --user "$VPN_USER"
         "$VPN_HOST"
     )
-    LOG_FILE=$(_LK_LOG_BASENAME=openconnect lk_log_create_file) || return
+    LOG_FILE=$(LK_LOG_BASENAME=openconnect lk_log_create_file) || return
     echo "$VPN_PASSWD" | lk_elevate "${COMMAND[@]}" >>"$LOG_FILE" 2>&1
 }
 

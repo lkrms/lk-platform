@@ -182,19 +182,18 @@ lk_keep_trying lk_apt_install "${INSTALL[@]}"
 
 LOG_FILE=/var/log/lk-platform-install
 install -m 00640 -g adm /dev/null "$LOG_FILE.log"
-install -m 00640 -g adm /dev/null "$LOG_FILE.out"
 lk_log_start "$LOG_FILE"
 
-if [ "$LK_DEBUG" = Y ]; then
+if lk_debug; then
     install -m 00640 -g adm /dev/null "$LOG_FILE.trace"
-    _LK_LOG_TRACE_PATH=$LOG_FILE.trace \
+    LK_LOG_TRACE_FILE=$LOG_FILE.trace \
         lk_start_trace
 fi
 
 lk_tty_log "Bootstrapping Ubuntu for hosting"
 lk_tty_print "Checking system state"
 lk_tty_detail "Environment:" "$SCRIPT_ENV"
-[ "$LK_DEBUG" != Y ] ||
+! lk_debug ||
     lk_tty_detail "Variables:" "$SCRIPT_VARS"
 lk_tty_list_detail - \
     "Pre-installed packages marked as 'manually installed':" \

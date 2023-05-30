@@ -739,7 +739,7 @@ function lk_wp_migrate() {
             [ -w "$LOG_FILE" ] || lk_mktemp_with LOG_FILE
             lk_tty_detail "Migrating scheduled actions in the background"
             lk_tty_log "Background task output will be logged to:" "$LOG_FILE"
-            _LK_LOG_FILE=$LOG_FILE \
+            LK_LOG_FILE=$LOG_FILE \
                 nohup "$LK_BASE/lib/platform/log.sh" -i wordpress -- \
                 wp --path="$_LK_WP_PATH" action-scheduler migrate &>/dev/null &
             disown
@@ -760,7 +760,7 @@ function lk_wp_enable_system_cron() {
     [ -w "$LOG_FILE" ] || LOG_FILE=~/cron.log
     lk_mapfile ARGS <(printf '%q\n' \
         "$LK_BASE/lib/platform/log.sh" "--path=$SITE_ROOT")
-    COMMAND=$(printf "WP_CLI_PHP=%q _LK_LOG_FILE=%q %s -i wordpress -- \
+    COMMAND=$(printf "WP_CLI_PHP=%q LK_LOG_FILE=%q %s -i wordpress -- \
 wp_if_running %s cron event run --due-now" "$PHP" "$LOG_FILE" "${ARGS[@]::2}")
     lk_tty_print "Using crontab to schedule WP-Cron in" "$SITE_ROOT"
     lk_wp config get DISABLE_WP_CRON --type=constant 2>/dev/null |
@@ -772,7 +772,7 @@ wp_if_running %s cron event run --due-now" "$PHP" "$LOG_FILE" "${ARGS[@]::2}")
     # Try to keep everything before and after COMMAND, e.g. environment
     # variables and redirections
     lk_mapfile ARGS_RE <(lk_arr ARGS | lk_ere_escape)
-    REGEX=$(lk_regex_expand_whitespace " (WP_CLI_PHP=$NS+ )?(_LK_LOG_FILE=$NS+ )?\
+    REGEX=$(lk_regex_expand_whitespace " (WP_CLI_PHP=$NS+ )?(LK_LOG_FILE=$NS+ )?\
 ${ARGS_RE[0]} .+ ${ARGS_RE[1]} cron event run --due-now( |\$)")
     [ $# -eq 0 ] && CRONTAB=$(lk_crontab_get "^$S*[^#[:blank:]].*$REGEX" |
         head -n1 | awk -v "c=$COMMAND" -v "r=${REGEX//\\/\\\\}" \

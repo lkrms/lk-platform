@@ -2,7 +2,7 @@
 
 # lk_trace [MESSAGE]
 function lk_trace() {
-    [ "${LK_DEBUG-}" = Y ] || return 0
+    lk_debug || return 0
     local NOW
     NOW=$(gnu_date +%s.%N) || return 0
     _LK_TRACE_FIRST=${_LK_TRACE_FIRST:-$NOW}

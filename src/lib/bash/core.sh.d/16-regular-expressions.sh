@@ -80,8 +80,9 @@ add_regex PHP_SETTING_REGEX "$PHP_SETTING_NAME_REGEX=.*"
 
 add_regex READLINE_NON_PRINTING_REGEX $'\x01[^\x02]*\x02'
 add_regex CONTROL_SEQUENCE_REGEX $'\x1b\\\x5b[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]'
-add_regex ESCAPE_SEQUENCE_REGEX $'\x1b[\x20-\x2f]*[\x30-\x7e]'
-add_regex NON_PRINTING_REGEX $'(\x01[^\x02]*\x02|\x1b(\\\x5b[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]|[\x20-\x2f]*[\x30-\x5a\\\x5c-\x7e]))'
+add_regex OPERATING_SYSTEM_COMMAND_REGEX $'\x1b\\\x5d([^\x07\x1b]|\x1b[^\\\\])*(\x07|\x1b\\\\)'
+add_regex ESCAPE_SEQUENCE_REGEX $'\x1b([PX^_]([^\x1b]|\x1b[^\\\\])*\x1b\\\\|[\x20-\x2f]*[\x30-\x7e])'
+add_regex NON_PRINTING_REGEX $'(\x01[^\x02]*\x02|\x1b(\\\x5b[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]|\\\x5d([^\x07\x1b]|\x1b[^\\\\])*(\x07|\x1b\\\\)|[PX^_]([^\x1b]|\x1b[^\\\\])*\x1b\\\\|[\x20-\x2f]*[\x30-OQ-WY-\x5a\\\x5c\x60-\x7e]))'
 
 # *_FILTER_REGEX expressions are:
 # 1. anchored
