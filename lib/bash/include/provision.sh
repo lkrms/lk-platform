@@ -380,6 +380,8 @@ function _lk_settings_list_known() {
         LK_SITE_PHP_FPM_MAX_CHILDREN LK_SITE_PHP_FPM_MEMORY_LIMIT \
         LK_ARCH_MIRROR \
         LK_ARCH_REPOS \
+        LK_ARCH_AUR_REPO_NAME \
+        LK_ARCH_AUR_CHROOT_DIR \
         LK_DEBUG \
         LK_PLATFORM_BRANCH \
         LK_PACKAGES_FILE

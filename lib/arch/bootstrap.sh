@@ -211,7 +211,7 @@ LK_NODE_FQDN=${*: -1:1}
 LK_NODE_HOSTNAME=${LK_NODE_FQDN%%.*}
 [[ $LK_NODE_FQDN != "$LK_NODE_HOSTNAME" ]] ||
     LK_NODE_FQDN=
-LK_FEATURES=$(IFS=, && lk_uniq $LK_FEATURES | lk_implode_input ,)
+LK_FEATURES=$(IFS=, && lk_args $LK_FEATURES | lk_uniq | lk_implode_input ,)
 
 PASSWORD_GENERATED=0
 if [[ -z ${BOOTSTRAP_KEY:+1} ]]; then
@@ -485,6 +485,7 @@ lk_var_sh \
     LK_ARCH_MIRROR \
     LK_ARCH_REPOS \
     LK_ARCH_AUR_REPO_NAME \
+    LK_ARCH_AUR_CHROOT_DIR \
     LK_PLATFORM_BRANCH \
     LK_PACKAGES_FILE >"/mnt$FILE"
 
