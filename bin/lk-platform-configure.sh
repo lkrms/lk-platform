@@ -259,7 +259,7 @@ lk_log_start
             if [ $(($(lk_timestamp) - FETCH_TIME)) -gt 300 ]; then
                 lk_tty_detail "Checking for changes"
                 ! update_repo ||
-                    ! lk_is_true LK_GIT_REPO_UPDATED ||
+                    ! lk_true LK_GIT_REPO_UPDATED ||
                     restart_script "$@"
             fi
         fi

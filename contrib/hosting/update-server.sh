@@ -63,7 +63,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
       exec 6>&1 7>&2 8>"$OUT_FILE" &&
       exec >&8 2>&1 </dev/null || return
     tail -fn+1 "$OUT_FILE" >&6 2>&7 &
-    trap "kill $!" EXIT
+    trap "kill $! 2>/dev/null || echo ' !! Connection with client lost during update' >&2" EXIT
     trap "" SIGHUP SIGINT SIGTERM
   }
 
@@ -82,11 +82,11 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
       lk_tty_print "Checking WordPress at" "$1"
       if CRONTAB=$(crontab -l 2>/dev/null | grep -F "$(printf \
         ' -- wp_if_running --path=%q cron event run --due-now' "$1")" |
-        grep -F _LK_LOG_FILE |
+        grep -E '\<LK_LOG_FILE' |
         grep -F "$(printf 'WP_CLI_PHP=%q' "$PHP")") &&
         DISABLE_WP_CRON=$(lk_wp \
           config get DISABLE_WP_CRON --type=constant) &&
-        lk_is_true DISABLE_WP_CRON; then
+        lk_true DISABLE_WP_CRON; then
         ! lk_verbose 2 || {
           lk_tty_detail "WP-Cron appears to be configured correctly"
           lk_tty_detail "crontab command:" $'\n'"$CRONTAB"
@@ -254,13 +254,19 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
     return "$STATUS"
   }
 
+  function do-exit() {
+    local STATUS=${1:-$?}
+    rm -f "$0" >&2 || true
+    exit "$STATUS"
+  }
+
   function do-update-server() {
     local STATUS=0
-    keep-alive || return
+    keep-alive || do-exit
     update-server "$@" &
     wait $! || STATUS=$?
     echo "update-server exit status: $STATUS" >&2
-    return "$STATUS"
+    do-exit "$STATUS"
   }
 
   function do-query-server() {
@@ -272,6 +278,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
       HOSTED_DOMAIN=($(lk_hosting_list_sites -e |
         awk '{print $10}' | tr ',' '\n')) &&
       declare -p PUBLIC_IP HOSTED_DOMAIN
+    do-exit
   }
 
   ARGS=()
@@ -349,7 +356,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
   lk_v 2 lk_tty_print "Generating scripts in" "$TMP"
   SCRIPT=$TMP/do-update-server.sh
   {
-    declare -f keep-alive update-server do-update-server
+    declare -f keep-alive update-server do-exit do-update-server
     declare -p BRANCH REPO KEYS PROVISION TLS WORDPRESS REBOOT REBOOT_TIME TOP_LEVEL_DOMAIN_REGEX
     lk_quote_args do-update-server ${ARGS+"${ARGS[@]}"}
   } >"$SCRIPT"
@@ -359,7 +366,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
   ((!REACHABILITY)) || {
     SCRIPT2=$TMP/do-query-server.sh
     {
-      declare -f do-query-server
+      declare -f do-exit do-query-server
       lk_quote_args do-query-server
     } >"$SCRIPT2"
     COMMAND2=$(lk_quote_args \
@@ -379,7 +386,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
     lk_tty_print "Updating server $i of $((i + $# - 1)):" "$1"
 
     (
-      _LK_LOG_CMDLINE=("$0-$1")
+      LK_LOG_CMDLINE=("$0-$1")
       lk_log_start
 
       [ "${LK_NO_INPUT-}" != Y ] ||

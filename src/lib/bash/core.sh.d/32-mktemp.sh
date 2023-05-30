@@ -21,6 +21,7 @@ function lk_mktemp_with() {
     [ -n "${_REUSE-}" ] && [ -e "${!_VAR-}" ] ||
         { eval "$_VAR=\$(_LK_STACK_DEPTH=\$_DEPTH lk_mktemp)" &&
             lk_delete_on_exit "${!_VAR}"; } || return
+    LK_MKTEMP_WITH_LAST=${!_VAR}
     [ $# -eq 0 ] || "$@" >"${!_VAR}"
 }
 

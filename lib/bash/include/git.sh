@@ -84,7 +84,7 @@ function lk_git_is_work_tree() {
     local RESULT
     RESULT=$(_lk_git_cd "$@" &&
         _lk_git rev-parse --is-inside-work-tree 2>/dev/null) &&
-        lk_is_true RESULT
+        lk_true RESULT
 }
 
 # lk_git_is_submodule [DIR]
@@ -690,7 +690,7 @@ directory of a working tree" || return
     }
     [ ${#REPOS[@]} -gt 1 ] || unset PARALLEL
     NOUN="${#REPOS[@]} $(lk_plural ${#REPOS[@]} repo repos)"
-    if lk_is_true PARALLEL; then
+    if lk_true PARALLEL; then
         _lk_git_is_quiet ||
             lk_tty_log "Processing $NOUN in parallel"
         FD=$(lk_fd_next) &&
@@ -765,7 +765,7 @@ function lk_git_audit_repos() {
     [ ${#LK_GIT_REPOS[@]} -gt 0 ] || lk_git_get_repos LK_GIT_REPOS
     [ ${#LK_GIT_REPOS[@]} -gt 0 ] || lk_warn "no repos found" || return
     NOUN="${#LK_GIT_REPOS[@]} $(lk_plural ${#LK_GIT_REPOS[@]} repo repos)"
-    if ! lk_is_true SKIP_FETCH; then
+    if ! lk_true SKIP_FETCH; then
         lk_tty_list LK_GIT_REPOS "Fetching all remotes:" repo repos
         lk_tty_print
         lk_git_with_repos -py lk_git_fetch ||
@@ -777,7 +777,7 @@ function lk_git_audit_repos() {
     lk_git_with_repos -ty lk_git_audit_repo -s ||
         AUDIT_ERRORS=(${_LK_GIT_REPO_ERRORS[@]+"${_LK_GIT_REPO_ERRORS[@]}"})
     lk_tty_print "Audit complete"
-    lk_is_true SKIP_FETCH || {
+    lk_true SKIP_FETCH || {
         [ ${#FETCH_ERRORS[@]} -eq 0 ] &&
             lk_tty_success "Fetch succeeded in $NOUN" ||
             lk_tty_error "Fetch failed in ${#FETCH_ERRORS[@]} of $NOUN:" \

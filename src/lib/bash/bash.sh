@@ -87,10 +87,6 @@ function lk_bash_command_literals() {
         lk_log_bypass
         lk_log_bypass_stderr
         lk_log_bypass_stdout
-        lk_log_bypass_tty
-        lk_log_bypass_tty_stderr
-        lk_log_bypass_tty_stdout
-        lk_log_no_bypass
         lk_maybe
         lk_maybe_drop
         lk_maybe_sudo

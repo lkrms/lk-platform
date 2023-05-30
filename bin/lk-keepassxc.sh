@@ -76,7 +76,7 @@ PASSWORDS=()
 
 for DATABASE_FILE in "$@"; do
     DATABASE_FILE=$(realpath "$DATABASE_FILE")
-    if lk_is_true RESET_PASSWORD; then
+    if lk_true RESET_PASSWORD; then
         lk_secret_remove "$DATABASE_FILE"
     fi
     PASSWORD="$(lk_secret "$DATABASE_FILE" "KeePassXC password for ${DATABASE_FILE##*/}")" ||
@@ -89,7 +89,7 @@ done
 [ ${#PASSWORDS[@]} -gt 0 ] ||
     lk_die "no database to open"
 
-if lk_is_true REGISTER; then
+if lk_true REGISTER; then
     if lk_is_macos; then
         function plist() {
             defaults write "$_FILE" "$@"
@@ -119,7 +119,7 @@ if lk_is_true REGISTER; then
     exit
 fi
 
-! lk_is_true CHECK_HAS_PASSWORD ||
+! lk_true CHECK_HAS_PASSWORD ||
     exit 0
 
 FIFO=$(lk_mktemp_dir)/fifo
@@ -131,7 +131,7 @@ PW_FIFO_FD=$(lk_fd_next)
 eval "exec $PW_FIFO_FD"'<>"$PW_FIFO"'
 
 MAIN_PID=$$
-if ! lk_is_true DAEMON; then
+if ! lk_true DAEMON; then
     nohup \
         "$KEEPASSXC" --pw-stdin "${DATABASES[@]}" \
         <&"$PW_FIFO_FD" >&"$FIFO_FD" 2>/dev/null &
@@ -161,7 +161,7 @@ fi
     kill "$CHECK_PID" 2>/dev/null || true
 ) &
 
-if lk_is_true DAEMON; then
+if lk_true DAEMON; then
     # Prevent the subshell spawned above becoming a zombie when KeePassXC fails
     # to reap it
     trap "" SIGCHLD

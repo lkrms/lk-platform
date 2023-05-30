@@ -21,7 +21,7 @@ lk_assert_is_linux
 unset _USER
 lk_root || {
     _USER=
-    export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$UID}
+    export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$EUID}
 }
 lk_systemctl_running ${_USER+-u} libvirtd.service ||
     lk_warn "libvirtd not running; skipping" ||

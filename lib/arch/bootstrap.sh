@@ -25,29 +25,18 @@ LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-} &&
         exec "$BASH" "$_FILE" "$@" || exit; }
 
 set -euo pipefail
-lk_die() { s=$? && echo "$0: ${1-error $s}" >&2 && (exit $s) && false || exit; }
-lk_log() { trap "" SIGINT && exec perl -pe 'BEGIN {
-  $| = 1;
-  use POSIX qw{strftime};
-  use Time::HiRes qw{gettimeofday};
-}
-( $s, $ms ) = Time::HiRes::gettimeofday();
-$ms = sprintf( "%06i", $ms );
-print strftime( "%Y-%m-%d %H:%M:%S.$ms %z ", localtime($s) );
-s/.*\r(.)/\1/;'; }
+lk_fail() { (($1)) && return $1 || return 1; }
+lk_die() { s=$? && printf '%s: %s\n' "$0" "$1" >&2 && lk_fail $s || exit; }
 
 LOG_FILE=$_DIR/install.$(date +%s)
-exec 4> >(lk_log >"$LOG_FILE.trace")
-BASH_XTRACEFD=4
-set -x
 
 shopt -s nullglob
 
-DEFAULT_CMDLINE="quiet loglevel=3 audit=0$(! grep -q \
-    '^flags[[:blank:]]*:.*\bhypervisor\b' /proc/cpuinfo &>/dev/null ||
-    echo " console=tty0 console=ttyS0")"
+DEFAULT_CMDLINE="quiet loglevel=3 audit=0"
+! grep -Eq '^flags[[:blank:]]*:.*\<hypervisor\>' /proc/cpuinfo ||
+    DEFAULT_CMDLINE+=" console=tty0 console=ttyS0"
 BOOTSTRAP_PING_HOST=${BOOTSTRAP_PING_HOST:-one.one.one.one}            # https://blog.cloudflare.com/dns-resolver-1-1-1-1/
-BOOTSTRAP_TIME_URL=${BOOTSTRAP_TIME_URL:-https://$BOOTSTRAP_PING_HOST} #
+BOOTSTRAP_TIME_URL=${BOOTSTRAP_TIME_URL:-https://$BOOTSTRAP_PING_HOST} # System time is taken from the HTTP response header of this URL
 BOOTSTRAP_MOUNT_OPTIONS=${BOOTSTRAP_MOUNT_OPTIONS:-defaults}           # On VMs with TRIM support, "discard" is added automatically
 BOOTSTRAP_USERNAME=${BOOTSTRAP_USERNAME:-arch}                         #
 BOOTSTRAP_PASSWORD=${BOOTSTRAP_PASSWORD-}                              #
@@ -55,13 +44,13 @@ BOOTSTRAP_KEY=${BOOTSTRAP_KEY-}                                        #
 BOOTSTRAP_FULL_NAME=${BOOTSTRAP_FULL_NAME:-Arch Linux}                 #
 LK_IPV4_ADDRESS=${LK_IPV4_ADDRESS-}                                    #
 LK_IPV4_GATEWAY=${LK_IPV4_GATEWAY-}                                    #
-LK_DNS_SERVERS=${LK_DNS_SERVERS-}                                      # Space- or semicolon-delimited
-LK_DNS_SEARCH=${LK_DNS_SEARCH-}                                        #
-LK_BRIDGE_INTERFACE=${LK_BRIDGE_INTERFACE-}                            #
-LK_WIFI_REGDOM=${LK_WIFI_REGDOM-}                                      # e.g. "AU"
+LK_DNS_SERVERS=${LK_DNS_SERVERS-}                                      # Space- or semicolon-delimited (expanded by lk_nm_file_get_ipv4_ipv6)
+LK_DNS_SEARCH=${LK_DNS_SEARCH-}                                        # Space- or semicolon-delimited (expanded by lk_nm_file_get_ipv4_ipv6)
+LK_BRIDGE_INTERFACE=${LK_BRIDGE_INTERFACE-}                            # Ignored on laptops, otherwise configured on the first Ethernet port
+LK_WIFI_REGDOM=${LK_WIFI_REGDOM-}                                      # e.g. "AU" (see /etc/conf.d/wireless-regdom)
 LK_NODE_TIMEZONE=${LK_NODE_TIMEZONE:-UTC}                              # See `timedatectl list-timezones`
 LK_FEATURES=${LK_FEATURES-}                                            #
-LK_NODE_LOCALES=${LK_NODE_LOCALES-en_AU.UTF-8 en_GB.UTF-8}             # "en_US.UTF-8" is added automatically
+LK_NODE_LOCALES=${LK_NODE_LOCALES-en_AU.UTF-8 en_GB.UTF-8}             # "en_US.UTF-8" is always added
 LK_NODE_LANGUAGE=${LK_NODE_LANGUAGE-en_AU:en_GB:en}                    #
 LK_SAMBA_WORKGROUP=${LK_SAMBA_WORKGROUP-}                              #
 LK_GRUB_CMDLINE=${LK_GRUB_CMDLINE-$DEFAULT_CMDLINE}                    #
@@ -75,15 +64,17 @@ LK_PACKAGES_FILE=${LK_PACKAGES_FILE-}
 export LK_BASE=${LK_BASE:-/opt/lk-platform}
 export -n BOOTSTRAP_PASSWORD BOOTSTRAP_KEY
 
-[ -d /sys/firmware/efi/efivars ] || lk_die "not booted in UEFI mode"
-[ "$EUID" -eq 0 ] || lk_die "not running as root"
-[ "$OSTYPE" = linux-gnu ] || lk_die "not running on Linux"
-[ -f /etc/arch-release ] || lk_die "not running on Arch Linux"
+((!EUID)) || lk_die "not running as root"
+[[ $OSTYPE == linux-gnu ]] || lk_die "not running on Linux"
+[[ -f /etc/arch-release ]] || lk_die "not running on Arch Linux"
+[[ -d /sys/firmware/efi/efivars ]] || lk_die "not booted in UEFI mode"
 [[ $- != *s* ]] || lk_die "cannot run from standard input"
 
-LK_USAGE="\
-Usage: ${0##*/} [OPTIONS] ROOT_PART BOOT_PART HOSTNAME[.DOMAIN]
-   or: ${0##*/} [OPTIONS] INSTALL_DISK HOSTNAME[.DOMAIN]
+function __usage() {
+    cat <<EOF &&
+Usage:
+  ${0##*/} [OPTIONS] ROOT_PART BOOT_PART HOSTNAME[.DOMAIN]
+  ${0##*/} [OPTIONS] INSTALL_DISK HOSTNAME[.DOMAIN]
 
 Options:
   -u USERNAME       set the default user's login name (default: arch)
@@ -92,7 +83,7 @@ Options:
   -c CMDLINE        set the default kernel command-line
                     (default: \"$DEFAULT_CMDLINE\")
   -p PARAMETER      add PARAMETER to the default kernel command-line
-  -s SERVICE,...    enable each SERVICE
+  -f FEATURE,...    enable each FEATURE
   -x                install Xfce (alias for: -s xfce4)
   -k FILE           set LK_PACKAGES_FILE
   -y                do not prompt for input
@@ -104,8 +95,10 @@ Useful kernel parameters:
   mce=dont_log_ce           do not log corrected machine check errors
 
 Block devices:
-$(lsblk --output NAME,RM,SIZE,RO,TYPE,FSTYPE,MOUNTPOINT --paths |
-    sed 's/^/  /')"
+EOF
+        lsblk --output NAME,RM,SIZE,RO,TYPE,FSTYPE,MOUNTPOINT --paths |
+        sed 's/^/  /'
+}
 
 ROOT_PART=
 BOOT_PART=
@@ -128,26 +121,26 @@ YELLOW=$'\E[33m'
 CYAN=$'\E[36m'
 BOLD=$'\E[1m'
 RESET=$'\E[m'
-echo "$BOLD$CYAN==> $RESET${BOLD}Checking prerequisites$RESET" >&2
+echo "$BOLD$CYAN==> $RESET${BOLD}Acquiring prerequisites$RESET" >&2
 REPO_URL=https://raw.githubusercontent.com/lkrms/lk-platform
 _LK_SOURCED=
 for FILE_PATH in \
-    /lib/bash/include/core.sh \
-    /lib/bash/include/provision.sh \
-    /lib/bash/include/linux.sh \
-    /lib/bash/include/arch.sh \
-    /lib/arch/packages.sh \
-    /lib/awk/section-get.awk \
-    /lib/awk/section-replace.awk \
-    /share/sudoers.d/default; do
+    lib/bash/include/core.sh \
+    lib/bash/include/provision.sh \
+    lib/bash/include/linux.sh \
+    lib/bash/include/arch.sh \
+    lib/arch/packages.sh \
+    lib/awk/section-get.awk \
+    lib/awk/section-replace.awk \
+    share/sudoers.d/default; do
     FILE=$_DIR/${FILE_PATH##*/}
-    URL=$REPO_URL/$LK_PLATFORM_BRANCH$FILE_PATH
+    URL=$REPO_URL/$LK_PLATFORM_BRANCH/$FILE_PATH
     MESSAGE="$BOLD$YELLOW -> $RESET{}$YELLOW $URL$RESET"
-    if [ ! -e "$FILE" ]; then
+    if [[ ! -e $FILE ]]; then
         echo "${MESSAGE/{\}/Downloading:}" >&2
         curl "${CURL_OPTIONS[@]}" --output "$FILE" "$URL" || {
             rm -f "$FILE"
-            lk_die "unable to download: $URL"
+            lk_die "download failed: $URL"
         }
     else
         echo "${MESSAGE/{\}/Already downloaded:}" >&2
@@ -158,7 +151,11 @@ for FILE_PATH in \
     }
 done
 
-while getopts ":u:o:c:p:s:xk:y" OPT; do
+exec 4> >(lk_log >"$LOG_FILE.trace")
+BASH_XTRACEFD=4
+set -x
+
+while getopts ":u:o:c:p:f:xk:y" OPT; do
     case "$OPT" in
     u)
         BOOTSTRAP_USERNAME=$OPTARG
@@ -174,9 +171,9 @@ while getopts ":u:o:c:p:s:xk:y" OPT; do
     p)
         LK_GRUB_CMDLINE=${LK_GRUB_CMDLINE:+$LK_GRUB_CMDLINE }$OPTARG
         ;;
-    s)
+    f)
         [[ $OPTARG =~ ^[-a-z0-9+._]+(,[-a-z0-9+._]+)*$ ]] ||
-            lk_warn "invalid service: $OPTARG" || lk_usage
+            lk_warn "invalid feature: $OPTARG" || lk_usage
         LK_FEATURES=${LK_FEATURES:+$LK_FEATURES,}$OPTARG
         ;;
     x)
@@ -212,29 +209,27 @@ case $# in
 esac
 LK_NODE_FQDN=${*: -1:1}
 LK_NODE_HOSTNAME=${LK_NODE_FQDN%%.*}
-[ "$LK_NODE_FQDN" != "$LK_NODE_HOSTNAME" ] ||
+[[ $LK_NODE_FQDN != "$LK_NODE_HOSTNAME" ]] ||
     LK_NODE_FQDN=
-LK_FEATURES=$(IFS=, &&
-    lk_args $LK_FEATURES | lk_uniq | lk_implode_input ,)
+LK_FEATURES=$(IFS=, && lk_args $LK_FEATURES | lk_uniq | lk_implode_input ,)
 
 PASSWORD_GENERATED=0
-if [ -z "$BOOTSTRAP_KEY" ]; then
-    if [ -z "$BOOTSTRAP_PASSWORD" ] && lk_no_input; then
-        lk_tty_print \
-            "Generating a random password for user" "$BOOTSTRAP_USERNAME"
+if [[ -z ${BOOTSTRAP_KEY:+1} ]]; then
+    if [[ -z ${BOOTSTRAP_PASSWORD:+1} ]] && lk_no_input; then
+        lk_tty_print "Generating a random password for:" "$BOOTSTRAP_USERNAME"
         BOOTSTRAP_PASSWORD=$(lk_random_password 7)
         PASSWORD_GENERATED=1
         lk_tty_detail "Password:" "$BOOTSTRAP_PASSWORD"
         lk_tty_log "The password above will be repeated when ${0##*/} exits"
     fi
-    while [ -z "$BOOTSTRAP_PASSWORD" ]; do
+    while [[ -z ${BOOTSTRAP_PASSWORD:+1} ]]; do
         lk_tty_read_silent \
             "Password for $BOOTSTRAP_USERNAME:" BOOTSTRAP_PASSWORD
-        [ -n "$BOOTSTRAP_PASSWORD" ] ||
+        [[ -n ${BOOTSTRAP_PASSWORD:+1} ]] ||
             lk_warn "Password cannot be empty" || continue
         lk_tty_read_silent \
             "Password for $BOOTSTRAP_USERNAME (again):" CONFIRM_PASSWORD
-        [ "$BOOTSTRAP_PASSWORD" = "$CONFIRM_PASSWORD" ] || {
+        [[ $BOOTSTRAP_PASSWORD == "$CONFIRM_PASSWORD" ]] || {
             BOOTSTRAP_PASSWORD=
             lk_warn "Passwords do not match"
             continue
@@ -247,14 +242,14 @@ lk_tty_print
 
 function exit_trap() {
     local STATUS=$?
-    [ "$BASH_SUBSHELL" -eq 0 ] || return "$STATUS"
-    [ ! -d /mnt/boot ] || {
+    ((!BASH_SUBSHELL)) || return "$STATUS"
+    [[ ! -d /mnt/boot ]] || {
         set +x
         unset BASH_XTRACEFD
         exec 4>-
         lk_log_close || true
         local LOG FILE
-        for LOG in "$LOG_FILE".{log,out,trace}; do
+        for LOG in "$LOG_FILE".{log,trace}; do
             FILE=/var/log/${LK_PATH_PREFIX}${LOG##*/}
             in_target install -m 00640 -g adm /dev/null "$FILE" &&
                 cp -v --preserve=timestamps "$LOG" "/mnt/${FILE#/}" || break
@@ -262,17 +257,16 @@ function exit_trap() {
     }
     ((!PASSWORD_GENERATED)) ||
         lk_tty_log \
-            "The random password generated for user '$BOOTSTRAP_USERNAME' is" \
-            "$BOOTSTRAP_PASSWORD"
+            "Password generated for $BOOTSTRAP_USERNAME:" "$BOOTSTRAP_PASSWORD"
     return "$STATUS"
 }
 
 function in_target() {
-    [ -d /mnt/boot ] || lk_die "no target mounted"
-    if [ "${1-}" != -u ]; then
+    [[ -d /mnt/boot ]] || lk_die "no target mounted"
+    if [[ ${1-} != -u ]]; then
         arch-chroot /mnt "$@"
     else
-        (unset _LK_{{TTY,LOG}_{OUT,ERR},LOG}_FD _LK_LOG2_FD &&
+        (unset _LK_{TTY_{OUT,ERR},LOG}_FD &&
             arch-chroot /mnt runuser "${@:1:2}" -- "${@:3}")
     fi
 }
@@ -282,7 +276,6 @@ function system_time() {
 }
 
 lk_log_start "$LOG_FILE"
-lk_log_tty_off
 lk_trap_add EXIT exit_trap
 
 # Clean up after failed attempts
@@ -492,16 +485,15 @@ lk_var_sh \
     LK_ARCH_MIRROR \
     LK_ARCH_REPOS \
     LK_ARCH_AUR_REPO_NAME \
+    LK_ARCH_AUR_CHROOT_DIR \
     LK_PLATFORM_BRANCH \
     LK_PACKAGES_FILE >"/mnt$FILE"
 
-lk_log_tty_on
 PROVISIONED=0
 in_target -u "$BOOTSTRAP_USERNAME" \
     env BASH_XTRACEFD=$BASH_XTRACEFD SHELLOPTS=xtrace _LK_NO_LOG=1 \
     "$LK_BASE/bin/lk-provision-arch.sh" --yes && PROVISIONED=1 ||
     lk_tty_error "Provisioning failed"
-lk_log_tty_off
 
 lk_tty_print "Installing boot loader"
 i=0

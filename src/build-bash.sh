@@ -5,7 +5,8 @@ head=$(mktemp)
 tail=$(mktemp)
 out=$(mktemp)
 out2=$(mktemp)
-trap 'rm -f "$head" "$tail" "$out" "$out2"' EXIT
+out3=$(mktemp)
+trap 'rm -f "$head" "$tail" "$out" "$out2" "$out3"' EXIT
 die() { echo "${BASH_SOURCE-$0}: $1" >&2 && false || exit; }
 
 _dir=${BASH_SOURCE%"${BASH_SOURCE##*/}"}
@@ -114,19 +115,25 @@ NR == 2 {print first}
 f       {next}
 /^./    {f = 2}
 END     {if (NR == 1 && first) {print first; f = 2}; exit 2 - f}' && ((++i)) ||
-                [[ "${PIPESTATUS[*]}" =~ ^0+2$ ]]
+                [[ ${PIPESTATUS[*]} =~ ^0+2$ ]]
         done
     } >"$out2"
-    # Add inline awk scripts
-    awk '$1 == "lk_awk_load" && $2 != "-i" {
-  script = "lib/awk/" $3 ".awk"
-  sub(/lk_awk_load/, "& -i")
-  sub(/lk_awk_load -i[ \t]+[^ \t]+[ \t]+[^ \t]+/, "& <<\"EOF\"")
+    # Add inline scripts
+    r="'\\\\\\\\''"
+    awk -v out3="'${out3//"'"/$r}'" '
+$1 == "lk_awk_load" && $4 != "-" {
+  command = "gawk -f lib/awk/" $3 ".awk --profile=" out3 " </dev/null >/dev/null && sed -E \"s/^ *[0-9]+ */\t/; s/ # [0-9]+$//; /^[ \t]*(#.*)?$/d; s/^\t+//\" " out3
+}
+$1 == "lk_perl_load" && $4 != "-" {
+  command = "perltidy -st -dp -dbc -dsc --mangle lib/perl/" $3 ".pl | awk \"NR==1 && /^#!/ {next} {print}\""
+}
+command {
+  sub(/lk_[^ \t]+_load[ \t]+[^ \t]+[ \t]+[^ \t]+/, "& - <<\"EOF\"", $0)
   print
-  command = "gawk -f " script " --pretty-print=- | sed -E \"s/\\t/  /g\""
-  while (command | getline > 0) { if (!match($0, /^[ \t]*(#|$)/)) { print } }
+  while ((command | getline) > 0) { print }
   close(command)
   print "EOF"
+  command = ""
   next
 }
 { print }' "$out2" >"$out"

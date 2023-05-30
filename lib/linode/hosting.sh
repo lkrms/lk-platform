@@ -25,8 +25,8 @@ lk_die() { s=$? && echo "$0: ${1-error $s}" >&2 && (exit $s) && false || exit; }
 # <UDF name="LK_MYSQL_PASSWORD" label="MySQL admin password (ignored if username not set)" default="" />
 # <UDF name="LK_INNODB_BUFFER_SIZE" label="InnoDB buffer size (~80% of RAM for MySQL-only servers)" oneof="128M,256M,512M,768M,1024M,1536M,2048M,2560M,3072M,4096M,5120M,6144M,7168M,8192M" default="256M" />
 # <UDF name="LK_OPCACHE_MEMORY_CONSUMPTION" label="PHP OPcache size" oneof="128,256,512,768,1024" default="256" />
-# <UDF name="LK_PHP_VERSIONS" label="PHP versions to install (apache+php required, official packages removed if set)" manyof="5.6,7.0,7.1,7.2,7.3,7.4,8.0,8.1" default="" />
-# <UDF name="LK_PHP_DEFAULT_VERSION" label="Default PHP version" oneof="5.6,7.0,7.1,7.2,7.3,7.4,8.0,8.1" default="" />
+# <UDF name="LK_PHP_VERSIONS" label="PHP versions to install (apache+php required, official packages removed if set)" manyof="5.6,7.0,7.1,7.2,7.3,7.4,8.0,8.1,8.2" default="" />
+# <UDF name="LK_PHP_DEFAULT_VERSION" label="Default PHP version" oneof="5.6,7.0,7.1,7.2,7.3,7.4,8.0,8.1,8.2" default="" />
 # <UDF name="LK_PHP_SETTINGS" label="php.ini settings (user can overwrite, comma-delimited, flag assumed if value is On/True/Yes or Off/False/No)" example="upload_max_filesize=24M,display_errors=On" default="" />
 # <UDF name="LK_PHP_ADMIN_SETTINGS" label="Enforced php.ini settings (comma-delimited)" example="post_max_size=50M,log_errors=Off" default="" />
 # <UDF name="LK_SITE_PHP_FPM_MAX_CHILDREN" label="Default PHP-FPM pm.max_children" example="8" default="" />
@@ -139,7 +139,7 @@ YELLOW=$'\E[33m'
 CYAN=$'\E[36m'
 BOLD=$'\E[1m'
 RESET=$'\E[m'
-echo "$BOLD$CYAN==> $RESET${BOLD}Checking prerequisites$RESET" >&2
+echo "$BOLD$CYAN==> $RESET${BOLD}Acquiring prerequisites$RESET" >&2
 REPO_URL=https://raw.githubusercontent.com/lkrms/lk-platform
 _LK_SOURCED=
 for FILE_PATH in \
@@ -151,7 +151,7 @@ for FILE_PATH in \
         echo "${MESSAGE/{\}/Downloading:}" >&2
         curl "${CURL_OPTIONS[@]}" --output "$FILE" "$URL" || {
             rm -f "$FILE"
-            lk_die "unable to download: $URL"
+            lk_die "download failed: $URL"
         }
     else
         echo "${MESSAGE/{\}/Already downloaded:}" >&2
@@ -182,19 +182,18 @@ lk_keep_trying lk_apt_install "${INSTALL[@]}"
 
 LOG_FILE=/var/log/lk-platform-install
 install -m 00640 -g adm /dev/null "$LOG_FILE.log"
-install -m 00640 -g adm /dev/null "$LOG_FILE.out"
 lk_log_start "$LOG_FILE"
 
-if [ "$LK_DEBUG" = Y ]; then
+if lk_debug; then
     install -m 00640 -g adm /dev/null "$LOG_FILE.trace"
-    _LK_LOG_TRACE_PATH=$LOG_FILE.trace \
+    LK_LOG_TRACE_FILE=$LOG_FILE.trace \
         lk_start_trace
 fi
 
 lk_tty_log "Bootstrapping Ubuntu for hosting"
 lk_tty_print "Checking system state"
 lk_tty_detail "Environment:" "$SCRIPT_ENV"
-[ "$LK_DEBUG" != Y ] ||
+! lk_debug ||
     lk_tty_detail "Variables:" "$SCRIPT_VARS"
 lk_tty_list_detail - \
     "Pre-installed packages marked as 'manually installed':" \

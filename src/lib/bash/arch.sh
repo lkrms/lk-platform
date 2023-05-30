@@ -139,7 +139,7 @@ EOF
 
 function lk_pac_official_repo_list() {
     pacman-conf --repo-list |
-        grep -E '^(core|extra|community|multilib)$'
+        grep -E '^(core|extra|multilib)$'
 }
 
 # lk_pac_installed PACKAGE...
@@ -187,7 +187,7 @@ function lk_pac_not_installed_list() {
 
 function lk_pac_sync() {
     ! lk_root && ! lk_can_sudo pacman ||
-        { lk_is_false _LK_PACMAN_SYNC && [ "${1-}" != -f ]; } ||
+        { lk_false _LK_PACMAN_SYNC && [ "${1-}" != -f ]; } ||
         { lk_tty_print "Refreshing package databases" &&
             lk_elevate pacman -Sy >/dev/null &&
             _LK_PACMAN_SYNC=0; }

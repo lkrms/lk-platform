@@ -9,6 +9,7 @@ AUR_PACKAGES=()
 PAC_EXCEPT=()
 
 PAC_OFFER=(
+    1password
     ant
     apachedirectorystudio
     expect
@@ -292,9 +293,7 @@ PAC_PACKAGES+=(
     geckodriver
     gobject-introspection
     gperftools
-    graphviz # Optional phpdoc dependency
     imagemagick
-    plantuml # Optional phpdoc dependency
     python-black
     python-pylint
     qcachegrind
@@ -313,8 +312,8 @@ PAC_PACKAGES+=(
     tig
 
     #
-    jdk11-openjdk
-    jre11-openjdk
+    jdk17-openjdk
+    jre17-openjdk
 
     #
     nodejs-lts-gallium
@@ -330,7 +329,6 @@ PAC_PACKAGES+=(
     php-memcached
     php-sodium
     php-sqlite
-    php-xsl # Optional phpdoc-phar dependency
     xdebug
 
     #
@@ -383,6 +381,7 @@ AUR_PACKAGES+=(
     php74-bcmath
     php74-cli
     php74-curl
+    php74-dom
     php74-exif
     php74-fileinfo
     php74-gd
@@ -403,9 +402,9 @@ AUR_PACKAGES+=(
     php74-sqlite
     php74-tokenizer
     php74-xdebug
-    php74-xsl # Optional phpdoc-phar dependency
+    php74-xmlreader
+    php74-xmlwriter
     php74-zip
-    phpdoc-phar
     pretty-php
     python-demjson3
     python-pywebview

@@ -157,6 +157,18 @@ lk_log_start
             lk_tty_detail \
                 "Partially pruned:" "$SNAPSHOTS_PRUNING_COUNT"
 
+        find_snapshots SNAPSHOTS_PENDING \
+            -execdir test ! -e '{}/.finished' \; \
+            ! -execdir test -e '{}/.pruning' \;
+        [ "$SNAPSHOTS_PENDING_COUNT" -eq 0 ] || {
+            LATEST_PENDING=$(snapshot_date "${SNAPSHOTS_PENDING[0]}")
+            OLDEST_PENDING=$(snapshot_date \
+                "${SNAPSHOTS_PENDING[$((SNAPSHOTS_PENDING_COUNT - 1))]}")
+            lk_tty_detail "Pending/failed:" \
+                "$SNAPSHOTS_PENDING_COUNT ($([ "$LATEST_PENDING" = "$OLDEST_PENDING" ] ||
+                    echo "$OLDEST_PENDING to ")$LATEST_PENDING)"
+        }
+
         if [ -n "$FAILED_MAX_AGE" ]; then
             PRUNE_FAILED_BEFORE_DATE=$(date \
                 -d "$LATEST_CLEAN $FAILED_MAX_AGE days ago" +"%F")

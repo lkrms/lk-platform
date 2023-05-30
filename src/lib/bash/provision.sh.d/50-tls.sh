@@ -125,7 +125,7 @@ function lk_ssl_install_ca_certificate() {
     lk_install -m 00644 "$FILE" &&
         LK_FILE_NO_DIFF=1 \
             lk_file_replace -mf "$1" "$FILE" || return
-    if lk_is_false LK_FILE_REPLACE_NO_CHANGE; then
+    if lk_false LK_FILE_REPLACE_NO_CHANGE; then
         lk_elevate "$COMMAND"
     else
         LK_FILE_REPLACE_NO_CHANGE=$_LK_FILE_REPLACE_NO_CHANGE

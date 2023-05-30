@@ -227,7 +227,7 @@ function lk_wp_json_encode() {
 
 function _lk_wp_maybe_apply() {
     local _LK_WP_MAYBE=1 STATUS=0
-    if lk_is_false LK_WP_APPLY || { [ -z "${LK_WP_APPLY+1}" ] &&
+    if lk_false LK_WP_APPLY || { [ -z "${LK_WP_APPLY+1}" ] &&
         ! lk_confirm \
             "Run database updates and [re]apply WordPress settings?" Y; }; then
         _lk_wp_maybe_flush || STATUS=$?
@@ -238,13 +238,13 @@ function _lk_wp_maybe_apply() {
 }
 
 function _lk_wp_maybe_flush() {
-    lk_is_false LK_WP_FLUSH || { [ -z "${LK_WP_FLUSH+1}" ] &&
+    lk_false LK_WP_FLUSH || { [ -z "${LK_WP_FLUSH+1}" ] &&
         ! lk_confirm "Flush WordPress rewrite rules and caches?" Y; } ||
         lk_wp_flush
 }
 
 function _lk_wp_maybe_migrate() {
-    lk_is_false LK_WP_MIGRATE || { [ -z "${LK_WP_MIGRATE+1}" ] &&
+    lk_false LK_WP_MIGRATE || { [ -z "${LK_WP_MIGRATE+1}" ] &&
         ! lk_confirm \
             "Run WordPress data migrations and [re]build indexes?" Y; } ||
         lk_wp_migrate
@@ -299,7 +299,7 @@ function lk_wp_rename_site() {
     done
     lk_wp option update home "$NEW_URL" &&
         lk_wp option update siteurl "$NEW_SITE_URL" || return
-    lk_is_false LK_WP_REPLACE ||
+    lk_false LK_WP_REPLACE ||
         { [ -z "${LK_WP_REPLACE+1}" ] &&
             ! lk_confirm "Replace the previous URL in all tables?" Y; } ||
         lk_wp_replace_url "$OLD_URL" "$NEW_URL" ||
@@ -360,7 +360,7 @@ function lk_wp_replace_url() {
         "$(lk_wp_json_encode "${OLD_URL#http*:}")"
         "$(lk_wp_json_encode "${NEW_URL#http*:}")"
     )
-    ! lk_is_true LK_WP_REPLACE_WITHOUT_SCHEME ||
+    ! lk_true LK_WP_REPLACE_WITHOUT_SCHEME ||
         REPLACE+=(
             "${OLD_URL#http*://}"
             "${NEW_URL#http*://}"
@@ -739,7 +739,7 @@ function lk_wp_migrate() {
             [ -w "$LOG_FILE" ] || lk_mktemp_with LOG_FILE
             lk_tty_detail "Migrating scheduled actions in the background"
             lk_tty_log "Background task output will be logged to:" "$LOG_FILE"
-            _LK_LOG_FILE=$LOG_FILE \
+            LK_LOG_FILE=$LOG_FILE \
                 nohup "$LK_BASE/lib/platform/log.sh" -i wordpress -- \
                 wp --path="$_LK_WP_PATH" action-scheduler migrate &>/dev/null &
             disown
@@ -760,7 +760,7 @@ function lk_wp_enable_system_cron() {
     [ -w "$LOG_FILE" ] || LOG_FILE=~/cron.log
     lk_mapfile ARGS <(printf '%q\n' \
         "$LK_BASE/lib/platform/log.sh" "--path=$SITE_ROOT")
-    COMMAND=$(printf "WP_CLI_PHP=%q _LK_LOG_FILE=%q %s -i wordpress -- \
+    COMMAND=$(printf "WP_CLI_PHP=%q LK_LOG_FILE=%q %s -i wordpress -- \
 wp_if_running %s cron event run --due-now" "$PHP" "$LOG_FILE" "${ARGS[@]::2}")
     lk_tty_print "Using crontab to schedule WP-Cron in" "$SITE_ROOT"
     lk_wp config get DISABLE_WP_CRON --type=constant 2>/dev/null |
@@ -772,7 +772,7 @@ wp_if_running %s cron event run --due-now" "$PHP" "$LOG_FILE" "${ARGS[@]::2}")
     # Try to keep everything before and after COMMAND, e.g. environment
     # variables and redirections
     lk_mapfile ARGS_RE <(lk_arr ARGS | lk_ere_escape)
-    REGEX=$(lk_regex_expand_whitespace " (WP_CLI_PHP=$NS+ )?(_LK_LOG_FILE=$NS+ )?\
+    REGEX=$(lk_regex_expand_whitespace " (WP_CLI_PHP=$NS+ )?(LK_LOG_FILE=$NS+ )?\
 ${ARGS_RE[0]} .+ ${ARGS_RE[1]} cron event run --due-now( |\$)")
     [ $# -eq 0 ] && CRONTAB=$(lk_crontab_get "^$S*[^#[:blank:]].*$REGEX" |
         head -n1 | awk -v "c=$COMMAND" -v "r=${REGEX//\\/\\\\}" \

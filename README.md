@@ -168,9 +168,9 @@ To generate the list above, run the following in `<LK_BASE>`:
 
 ```bash
 lk_find_shell_scripts -print0 |
-    xargs -0 gnu_grep -Pho '((?<=\$\{)|(?<=lk_is_true )|(?<=lk_is_false )|(?<=lk_true )|(?<=lk_false ))LK_[a-zA-Z0-9_]+\b(?!(\[[^]]+\])?[#%}])' |
+    xargs -0 gnu_grep -Pho '((?<=\$\{)|(?<=lk_true )|(?<=lk_false ))LK_[a-zA-Z0-9_]+\b(?!(\[[^]]+\])?[#%}])' |
     sort -u |
-    sed -Ee '/^LK_(.+_(UPDATED|DECLINED|NO_CHANGE)|BASE|USAGE|VERSION|Z|ADMIN_USERS|HOST_.+|MYSQL_(USERNAME|PASSWORD)|SHUTDOWN_ACTION|BOLD|DIM|RESET)$/d' -e 's/.*/- `&`/'
+    sed -Ee '/^LK_(.+_(UPDATED|DECLINED|NO_CHANGE|LAST)|BASE|USAGE|VERSION|Z|ADMIN_USERS|HOST_.+|LOG_.+|MYSQL_(USERNAME|PASSWORD)|SHUTDOWN_ACTION|BOLD|DIM|RESET)$/d' -e 's/.*/- `&`/'
 ```
 
 ### Site settings
@@ -206,8 +206,8 @@ primary domain. Available settings:
 - **`SITE_PHP_FPM_SETTINGS`**
 - **`SITE_PHP_FPM_ENV`**
 - **`SITE_PHP_VERSION`** (`5.6`, `7.0`, `7.1`, `7.2`, `7.3`, `7.4`, `8.0`,
-  `8.1`, or `-1` to disable; default: `LK_PHP_DEFAULT_VERSION` if set, otherwise
-  *system-dependent*)
+  `8.1`, `8.2`, or `-1` to disable; default: `LK_PHP_DEFAULT_VERSION` if set,
+  otherwise *system-dependent*)
 - **`SITE_DOWNSTREAM_FROM`** (`cloudflare` or
   `<HTTP_HEADER>:<PROXY_CIDR>[,<PROXY_CIDR>...]`, e.g.
   `X-Forwarded-For:172.105.171.229,103.31.4.0/22`)
