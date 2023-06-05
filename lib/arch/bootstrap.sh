@@ -1,18 +1,17 @@
 #!/bin/bash
 
 # To install Arch Linux using the script below:
-# 1. boot from an Arch Linux live CD
-# 2. wpa_supplicant -B -i wlan0 -c <(wpa_passphrase SSID passphrase)
-# 3. bash -c "$(curl -fsSL http://lkr.ms/bs)" bootstrap.sh [OPTIONS...]
+# 1. Boot from an Arch Linux live CD
+# 2. Run `wpa_supplicant -B -i wlan0 -c <(wpa_passphrase <SSID> <passphrase>)`
+# 3. Run `bash -c "$(curl -fsSL http://lkr.ms/bs)" bootstrap.sh [ARG...]`
 #
-# e.g. to automatically partition `/dev/vda` and provision Xfce4 using hostname
-# 'archlinux', default user 'susan', the `develop` branch of lk-platform, local
-# mirror 'arch.mirror' and packages defined in `packages/arch/desktop.sh`:
+# e.g. to automatically partition `/dev/vda` and provision host 'archlinux' for
+# user 'susan' with Xfce4 and packages defined in `packages/arch/desktop.sh`
+# from local mirror 'arch.mirror':
 #
-#     LK_PLATFORM_BRANCH=develop \
-#         LK_ARCH_MIRROR='http://arch.mirror/$repo/os/$arch' \
-#         bash -c "$(curl -fsSL http://lkr.ms/bs-dev)" \
-#         bootstrap.sh -xu susan -k desktop /dev/vda archlinux
+#     LK_ARCH_MIRROR='http://arch.mirror/$repo/os/$arch' \
+#         bash -c "$(curl -fsSL http://lkr.ms/bs)" \
+#         bootstrap.sh -u susan -x -k desktop /dev/vda archlinux
 
 LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-} &&
     _DIR=/tmp/${LK_PATH_PREFIX}install &&
@@ -20,7 +19,7 @@ LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-} &&
 
 [[ $- != *c* ]] ||
     { _FILE="$_DIR/bootstrap.sh" &&
-        echo "$BASH_EXECUTION_STRING" >"$_FILE" &&
+        printf '%s\n' "$BASH_EXECUTION_STRING" >"$_FILE" &&
         { [[ $- != *x* ]] || export SHELLOPTS=xtrace; } &&
         exec "$BASH" "$_FILE" "$@" || exit; }
 
@@ -56,7 +55,7 @@ LK_SAMBA_WORKGROUP=${LK_SAMBA_WORKGROUP-}                              #
 LK_GRUB_CMDLINE=${LK_GRUB_CMDLINE-$DEFAULT_CMDLINE}                    #
 LK_NTP_SERVER=${LK_NTP_SERVER-time.apple.com}                          #
 LK_ARCH_MIRROR=${LK_ARCH_MIRROR-}                                      #
-LK_ARCH_REPOS=${LK_ARCH_REPOS-}                                        # REPO|SERVER|KEY_URL|KEY_ID|SIG_LEVEL,...
+LK_ARCH_REPOS=${LK_ARCH_REPOS-}                                        # NAME|SERVER|KEY_ID|KEY_URL,...
 LK_ARCH_AUR_REPO_NAME=${LK_ARCH_AUR_REPO_NAME-}                        # If set, a local aurutils repo will be provisioned
 LK_ARCH_AUR_CHROOT_DIR=${LK_ARCH_AUR_CHROOT_DIR-}                      # Default: /var/lib/aurbuild
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-main}
@@ -117,11 +116,7 @@ CURL_OPTIONS=(
     --silent
 )
 
-YELLOW=$'\E[33m'
-CYAN=$'\E[36m'
-BOLD=$'\E[1m'
-RESET=$'\E[m'
-echo "$BOLD$CYAN==> $RESET${BOLD}Acquiring prerequisites$RESET" >&2
+echo "==> Acquiring prerequisites" >&2
 REPO_URL=https://raw.githubusercontent.com/lkrms/lk-platform
 _LK_SOURCED=
 for FILE_PATH in \
@@ -135,7 +130,7 @@ for FILE_PATH in \
     share/sudoers.d/default; do
     FILE=$_DIR/${FILE_PATH##*/}
     URL=$REPO_URL/$LK_PLATFORM_BRANCH/$FILE_PATH
-    MESSAGE="$BOLD$YELLOW -> $RESET{}$YELLOW $URL$RESET"
+    MESSAGE=" -> {} $URL"
     if [[ ! -e $FILE ]]; then
         echo "${MESSAGE/{\}/Downloading:}" >&2
         curl "${CURL_OPTIONS[@]}" --output "$FILE" "$URL" || {
@@ -279,9 +274,9 @@ lk_log_start "$LOG_FILE"
 lk_trap_add EXIT exit_trap
 
 # Clean up after failed attempts
-if [ -d /mnt/boot ]; then
+if [[ -d /mnt/boot ]]; then
     OTHER_OS_MOUNTS=(/mnt/mnt/*)
-    if [ ${#OTHER_OS_MOUNTS[@]} -gt 0 ]; then
+    if [[ -n ${OTHER_OS_MOUNTS+1} ]]; then
         umount "${OTHER_OS_MOUNTS[@]}"
         rmdir "${OTHER_OS_MOUNTS[@]}"
     fi
@@ -294,9 +289,9 @@ FILES=(/etc/pacman.conf{.orig,})
 ! lk_files_exist "${FILES[@]}" ||
     mv -fv "${FILES[@]}"
 lk_arch_configure_pacman
-if [ -n "$LK_ARCH_MIRROR" ]; then
+if [[ -n ${LK_ARCH_MIRROR:+1} ]]; then
     lk_systemctl_disable_now reflector || true
-    echo "Server=$LK_ARCH_MIRROR" >/etc/pacman.d/mirrorlist
+    printf 'Server=%s\n' "$LK_ARCH_MIRROR" >/etc/pacman.d/mirrorlist
 fi
 
 lk_tty_print "Checking network connection"
@@ -304,9 +299,8 @@ ping -c 1 "$BOOTSTRAP_PING_HOST" || lk_die "no network"
 
 lk_tty_print "Syncing system time"
 lk_tty_detail "Before syncing:" "$(system_time)"
-NOW=$(curl -fsSI "$BOOTSTRAP_TIME_URL" | awk '
-    { $1 = tolower($1); if(sub(/^date:[[:blank:]]*/, "")) { d = $0 } }
-END { if (d) { print d } else { exit 1 } }') &&
+NOW=$(curl -fsSI "$BOOTSTRAP_TIME_URL" |
+    sed -En 's/^[Dd][Aa][Tt][Ee]:[ \t]*//p' | tail -n1 | grep .) &&
     NOW=$(system_time --set "$NOW") ||
     lk_die "unable to sync system time with $BOOTSTRAP_TIME_URL"
 lk_tty_detail "After syncing with $BOOTSTRAP_TIME_URL:" "$NOW"
@@ -331,7 +325,7 @@ fi
 lk_tty_print
 lk_tty_log "Checking disk partitions"
 REPARTITIONED=0
-if [ -n "$INSTALL_DISK" ]; then
+if [[ -n ${INSTALL_DISK:+1} ]]; then
     lk_tty_yn "Repartition $INSTALL_DISK? ALL DATA WILL BE LOST." Y
     lk_tty_print "Partitioning:" "$INSTALL_DISK"
     lk_tty_run_detail parted --script "$INSTALL_DISK" \
@@ -343,7 +337,7 @@ if [ -n "$INSTALL_DISK" ]; then
     sleep 1
     PARTITIONS=($(_lk_lsblk TYPE,NAME --paths "$INSTALL_DISK" |
         awk '$1=="part"{print $2}'))
-    [ ${#PARTITIONS[@]} -eq 2 ] &&
+    [[ ${#PARTITIONS[@]} -eq 2 ]] &&
         ROOT_PART=${PARTITIONS[1]} &&
         BOOT_PART=${PARTITIONS[0]} || lk_die "invalid partition table"
     lk_tty_run_detail wipefs -a "$ROOT_PART"
@@ -358,27 +352,29 @@ SH="BOOT_TYPE=($(_lk_lsblk -q FSTYPE,FSVER,PARTTYPE "$BOOT_PART"))" &&
     lk_die "not a partition: $BOOT_PART"
 
 FORMAT_BOOT=1
-if [ "${BOOT_TYPE[0]}" = vfat ] &&
-    [ "${BOOT_TYPE[2]}" = c12a7328-f81f-11d2-ba4b-00a0c93ec93b ]; then
+if [[ ${BOOT_TYPE[0]} == vfat ]] &&
+    [[ ${BOOT_TYPE[2]} == c12a7328-f81f-11d2-ba4b-00a0c93ec93b ]]; then
     lk_tty_print \
         "ESP at $BOOT_PART already formatted as ${BOOT_TYPE[1]}; leaving as-is"
     FORMAT_BOOT=0
 else
-    [ -z "${BOOT_TYPE[0]}" ] ||
+    [[ -z ${BOOT_TYPE[0]:+1} ]] ||
         lk_warn "Unexpected ${BOOT_TYPE[0]} filesystem at $BOOT_PART" || true
     ((REPARTITIONED)) ||
         lk_tty_yn "OK to format ESP at $BOOT_PART as fat32?" Y ||
         lk_die ""
 fi
 
-[ -z "$ROOT_FSTYPE" ] ||
+[[ -z ${ROOT_FSTYPE:+1} ]] ||
     lk_warn "Unexpected $ROOT_FSTYPE filesystem at $ROOT_PART" || true
 ((REPARTITIONED)) ||
     lk_tty_yn "OK to format $ROOT_PART as ext4?" Y ||
     lk_die ""
 
-lk_tty_print "Formatting:" \
-    "$( ((!FORMAT_BOOT)) || echo "$BOOT_PART ")$ROOT_PART"
+lk_tty_print "Formatting:" "$({
+    ((!FORMAT_BOOT)) || printf '%s\n' "$BOOT_PART"
+    printf '%s\n' "$ROOT_PART"
+} | lk_implode_input " ")"
 ((!FORMAT_BOOT)) ||
     lk_tty_run_detail mkfs.fat -vn ESP -F 32 "$BOOT_PART"
 lk_tty_run_detail mkfs.ext4 -vL root "$ROOT_PART"
@@ -439,16 +435,16 @@ lk_tty_run_detail -1 in_target useradd \
     --shell /bin/bash \
     --key UMASK=026 \
     "$BOOTSTRAP_USERNAME"
-[ -z "$BOOTSTRAP_PASSWORD" ] ||
+[[ -z ${BOOTSTRAP_PASSWORD:+1} ]] ||
     printf '%s\n' "$BOOTSTRAP_PASSWORD" "$BOOTSTRAP_PASSWORD" |
     in_target passwd "$BOOTSTRAP_USERNAME"
 FILE=/mnt/etc/sudoers.d/nopasswd-$BOOTSTRAP_USERNAME
 install -m 00440 /dev/null "$FILE"
-echo "$BOOTSTRAP_USERNAME ALL=(ALL) NOPASSWD:ALL" >"$FILE"
-[ -z "$BOOTSTRAP_KEY" ] ||
-    echo "$BOOTSTRAP_KEY" | in_target -u "$BOOTSTRAP_USERNAME" \
+printf '%s ALL=(ALL) NOPASSWD:ALL\n' "$BOOTSTRAP_USERNAME" >"$FILE"
+[[ -z ${BOOTSTRAP_KEY:+1} ]] ||
+    printf '%s\n' "$BOOTSTRAP_KEY" | in_target -u "$BOOTSTRAP_USERNAME" \
         bash -c "cat >~/.ssh/authorized_keys"
-[ -z "$BOOTSTRAP_FULL_NAME" ] ||
+[[ -z ${BOOTSTRAP_FULL_NAME:+1} ]] ||
     in_target chfn -f "$BOOTSTRAP_FULL_NAME" "$BOOTSTRAP_USERNAME"
 
 export _LK_BOOTSTRAP=1
@@ -512,7 +508,7 @@ while :; do
     ((++i))
     in_target update-grub --install && GRUB_INSTALLED=1 && break
     lk_tty_error "Boot loader installation failed"
-    ! lk_no_input || { [ "$i" -lt 2 ] &&
+    ! lk_no_input || { ((i < 2)) &&
         { lk_tty_detail "Trying again in 5 seconds" &&
             sleep 5 &&
             continue; } || break; }

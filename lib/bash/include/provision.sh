@@ -1267,6 +1267,28 @@ function lk_ssl_install_ca_certificate() {
     fi
 }
 
+# lk_gpg_check_key_validity [GPG_ARG...] KEY_ID
+#
+# Return true if KEY_ID is valid, 2 if it is installed but invalid, 3 if it is
+# invalid and not installed.
+function lk_gpg_check_key_validity() {
+    local IFS=$' \t\n' AWK
+    lk_awk_load AWK sh-gpg-check-key-validity - <<"EOF" || return
+BEGIN {
+FS = ":"
+key_id = toupper(key_id)
+}
+! s && $1 == "pub" && toupper(substr($5, length($5) - length(key_id) + 1)) == key_id {
+s = $2 ~ /^[fu]$/ ? 3 : 1
+}
+END {
+exit (3 - s)
+}
+EOF
+    lk_sudo gpg "${@:1:$#-1}" --batch --with-colons --list-keys "${*: -1}" |
+        awk -v key_id="${*: -1}" -f "$AWK"
+}
+
 # lk_certbot_list [DOMAIN...]
 #
 # Parse `certbot certificates` output to tab-separated fields:
@@ -2595,25 +2617,6 @@ function lk_conf_enable_row() {
         "^$ROW\$" \
         "^$S*$ROW$S*\$" \
         "^$S*#"{,"$S","$S*"}"$ROW$S*\$"
-}
-
-# lk_conf_remove_row [-s SECTION] ROW [FILE]
-function lk_conf_remove_row() {
-    local SECTION ROW FILE __FILE
-    unset SECTION
-    [ "${1-}" != -s ] || { SECTION=$2 && shift 2 || return; }
-    ROW=$(lk_regex_expand_whitespace "$(lk_escape_ere "$1")")
-    FILE=${2:-$LK_CONF_OPTION_FILE}
-    if [ -z "${SECTION-}" ]; then
-        lk_file_get_text "$FILE" __FILE
-    else
-        __FILE=$(awk \
-            -v "section=$SECTION" \
-            -f "$(lk_awk_dir)/section-get.awk" \
-            "$FILE")$'\n'
-    fi || return
-    __FILE=$(sed -E "/^$S*$ROW$S*\$/d" <<<"$__FILE") &&
-        _lk_option_do_replace
 }
 
 # lk_php_set_option OPTION VALUE [FILE]

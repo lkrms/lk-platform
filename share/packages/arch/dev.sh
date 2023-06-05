@@ -1,7 +1,10 @@
 #!/bin/bash
 
 PAC_REPOS=(
-    'sublime-text|http://sublimetext.mirror/arch/stable/$arch|http://sublimetext.mirror/sublimehq-pub.gpg|8A8F901A'
+    "sublime-text|\
+http://sublimetext.mirror/arch/stable/\$arch|\
+8A8F901A|\
+http://sublimetext.mirror/sublimehq-pub.gpg"
 )
 
 PAC_PACKAGES=()

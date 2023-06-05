@@ -122,7 +122,7 @@ END     {if (NR == 1 && first) {print first; f = 2}; exit 2 - f}' && ((++i)) ||
     r="'\\\\\\\\''"
     awk -v out3="'${out3//"'"/$r}'" '
 $1 == "lk_awk_load" && $4 != "-" {
-  command = "gawk -f lib/awk/" $3 ".awk --profile=" out3 " </dev/null >/dev/null && sed -E \"s/^ *[0-9]+ */\t/; s/ # [0-9]+$//; /^[ \t]*(#.*)?$/d; s/^\t+//\" " out3
+  command = "gawk -f lib/awk/" $3 ".awk --profile=" out3 " </dev/null >/dev/null; sed -E \"s/^ *[0-9]+ */\t/; s/ # [0-9]+$//; /^[ \t]*(#.*)?$/d; s/^\t+//\" " out3
 }
 $1 == "lk_perl_load" && $4 != "-" {
   command = "perltidy -st -dp -dbc -dsc --mangle lib/perl/" $3 ".pl | awk \"NR==1 && /^#!/ {next} {print}\""

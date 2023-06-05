@@ -408,7 +408,7 @@ done
 SUFFIX=-${LK_PATH_PREFIX%-}
 
 if [ ${#PAC_REPOS[@]} -gt 0 ]; then
-    PAC_REPOS=($(lk_arr PAC_REPOS | sort -u))
+    PAC_REPOS=($(lk_arr PAC_REPOS | lk_uniq))
     lk_arch_add_repo "${PAC_REPOS[@]}"
 fi
 

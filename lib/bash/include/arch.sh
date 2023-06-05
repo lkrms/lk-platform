@@ -2,37 +2,25 @@
 
 lk_require linux provision
 
-function lk_arch_chroot() {
-    [ "${1-}" != -u ] || {
-        [ $# -ge 3 ] || lk_warn "invalid arguments" || return
-        set -- runuser "${@:1:2}" -- "${@:3}"
-    }
-    if [ -n "${_LK_ARCH_ROOT-}" ]; then
-        lk_elevate arch-chroot "$_LK_ARCH_ROOT" "$@"
-    else
-        lk_elevate "$@"
-    fi
+function _lk_arch_path() {
+    printf '%s\n' "${_LK_ARCH_ROOT:+${_LK_ARCH_ROOT%/}}$1"
 }
 
-function lk_arch_path() {
-    [[ ${1-} == /* ]] || lk_warn "path not absolute: ${1-}" || return
-    echo "${_LK_ARCH_ROOT:+${_LK_ARCH_ROOT%/}}$1"
-}
-
-function lk_arch_reset_pacman_keyring() { (
-    shopt -s dotglob
+function lk_arch_reset_pacman_keyring() {
+    local LK_SUDO=1
     lk_elevate gpgconf --homedir /etc/pacman.d/gnupg --kill gpg-agent &&
-        lk_elevate rm -Rf /etc/pacman.d/gnupg/* &&
-        lk_elevate pacman-key --init &&
-        lk_elevate pacman-key --populate archlinux
-); }
+        lk_elevate rm -Rf /etc/pacman.d/gnupg &&
+        lk_faketty pacman-key --init &&
+        lk_faketty pacman-key --populate
+}
 
+# lk_arch_configure_pacman
+#
+# Configure options in /etc/pacman.conf.
 function lk_arch_configure_pacman() {
-    local LK_CONF_OPTION_FILE _LK_CONF_DELIM=" = " LK_SUDO=1
-    LK_CONF_OPTION_FILE=$(lk_arch_path /etc/pacman.conf)
+    local LK_SUDO=1 LK_CONF_OPTION_FILE=/etc/pacman.conf _LK_CONF_DELIM=" = "
     lk_tty_print "Checking pacman options in" "$LK_CONF_OPTION_FILE"
     lk_conf_enable_row -s options Color
-    lk_conf_remove_row -s options TotalDownload
     lk_conf_set_option -s options ParallelDownloads 5
 }
 
@@ -40,60 +28,71 @@ function lk_arch_configure_pacman() {
 #
 # Add each REPO to /etc/pacman.conf unless it has already been added. REPO is a
 # pipe-separated list of values in this order (trailing pipes are optional):
-# - REPO
-# - SERVER
-# - KEY_URL (optional)
-# - KEY_ID (optional)
-# - SIG_LEVEL (optional)
+# - NAME (required)
+# - SERVER (required)
+# - KEY_ID
+# - KEY_URL (ignored if KEY_ID is not given)
 #
 # Examples (line breaks added for legibility):
-# - lk_arch_add_repo "aur|file:///srv/repo/aur|||Optional TrustAll"
-# - lk_arch_add_repo "sublime-text|
-#   https://download.sublimetext.com/arch/stable/\$arch|
-#   https://download.sublimetext.com/sublimehq-pub.gpg|
-#   8A8F901A"
+#
+#     lk_arch_add_repo 'aur|file:///srv/repo/aur'
+#
+#     lk_arch_add_repo 'sublime-text|
+#         https://download.sublimetext.com/arch/stable/$arch|
+#         8A8F901A|
+#         https://download.sublimetext.com/sublimehq-pub.gpg'
+#
 function lk_arch_add_repo() {
-    local IFS='|' FILE SH i r REPO SERVER KEY_URL KEY_ID SIG_LEVEL _FILE \
-        LK_SUDO=1
-    [ $# -gt 0 ] || lk_warn "no repo" || return
-    FILE=$(lk_arch_path /etc/pacman.conf)
-    [ -f "$FILE" ] ||
-        lk_warn "$FILE: file not found" || return
-    SH=$(
-        function add_key() { KEY_FILE=$(mktemp) && {
-            STATUS=0
-            curl -fsSL --output "$KEY_FILE" "$1" &&
-                pacman-key --add "$KEY_FILE" || STATUS=$?
-            rm -f "$KEY_FILE" || true
-            return "$STATUS"
-        }; }
-        declare -f add_key
-        echo 'add_key "$1"'
-    )
+    local LK_SUDO=1 FILE=/etc/pacman.conf \
+        REPO SIG_LEVEL NAME SERVER KEY_ID KEY_URL _FILE
+    (($#)) || lk_bad_args || return
+    [[ -f $FILE ]] || lk_warn "file not found: $FILE" || return
     lk_tty_print "Checking repositories in" "$FILE"
-    for i in "$@"; do
-        r=($i)
-        REPO=${r[0]}
+    for REPO in "$@"; do
+        SIG_LEVEL=
+        IFS='|' read -r NAME SERVER KEY_ID KEY_URL <<<"$REPO"
+        [[ -n ${NAME:+${SERVER:+1}} ]] || lk_bad_args || return
         ! pacman-conf --config "$FILE" --repo-list |
-            grep -Fx "$REPO" >/dev/null || continue
-        SERVER=${r[1]}
-        KEY_URL=${r[2]-}
-        KEY_ID=${r[3]-}
-        SIG_LEVEL=${r[4]-}
-        lk_tty_detail "Adding '$REPO':" "$SERVER"
-        if [ -n "$KEY_URL" ]; then
-            lk_arch_chroot bash -c "$SH" bash "$KEY_URL"
-        elif [ -n "$KEY_ID" ]; then
-            lk_arch_chroot pacman-key --recv-keys "$KEY_ID"
-        fi || return
-        [ -z "$KEY_ID" ] ||
-            lk_arch_chroot pacman-key --lsign-key "$KEY_ID" || return
+            grep -Fx "$NAME" >/dev/null ||
+            continue
+        lk_tty_detail "Adding repository:" "$NAME ($SERVER)"
+        if [[ -n ${KEY_ID:+1} ]]; then
+            local VALIDITY=0
+            lk_gpg_check_key_validity \
+                --homedir /etc/pacman.d/gnupg "$KEY_ID" 2>/dev/null ||
+                VALIDITY=$?
+            # 3 = not installed
+            if ((VALIDITY == 3)); then
+                if [[ -n ${KEY_URL:+1} ]]; then
+                    curl -fsSL "$KEY_URL" |
+                        lk_elevate pacman-key --add /dev/stdin || return
+                else
+                    lk_elevate pacman-key --recv-keys "$KEY_ID" || return
+                fi
+                ((VALIDITY--))
+            fi
+            # 2 = not trusted
+            if ((VALIDITY == 2)); then
+                lk_faketty pacman-key --lsign-key "$KEY_ID" || return
+            elif ((VALIDITY)); then
+                return "$VALIDITY"
+            fi
+        else
+            SIG_LEVEL="Optional TrustAll"
+        fi
         lk_file_keep_original "$FILE" &&
-            lk_file_get_text "$FILE" _FILE &&
-            lk_file_replace "$FILE" "$_FILE
-[$REPO]${SIG_LEVEL:+
-SigLevel = $SIG_LEVEL}
-Server = $SERVER"
+            # Add this repo just before the first official repo
+            lk_mktemp_with _FILE awk \
+                -v "name=$NAME" \
+                -v "server=$SERVER" \
+                -v "sig_level=$SIG_LEVEL" '
+added || ! /^#?\[(core|extra|multilib)(-testing)?\]/ { print; next }
+{ printf "[%s]\n", name
+  if (sig_level) { printf "SigLevel = %s\n", sig_level }
+  printf "Server = %s\n\n", server
+  added = 1
+  print }' "$FILE" &&
+            lk_file_replace -f "$_FILE" "$FILE" || return
         unset _LK_PACMAN_SYNC
     done
 }
@@ -103,7 +102,7 @@ function lk_arch_configure_grub() {
     CMDLINE=${LK_GRUB_CMDLINE+"$(lk_escape_ere_replace \
         "$(lk_double_quote -f "$LK_GRUB_CMDLINE")")"}
     CMDLINE=${CMDLINE:-\\1}
-    FILE=$(lk_arch_path /etc/default/grub)
+    FILE=$(_lk_arch_path /etc/default/grub)
     _FILE=$(sed -E \
         -e 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=saved/' \
         -e 's/^#?GRUB_SAVEDEFAULT=.*/GRUB_SAVEDEFAULT=true/' \
@@ -111,7 +110,7 @@ function lk_arch_configure_grub() {
         "$FILE") &&
         lk_file_keep_original "$FILE" &&
         lk_file_replace "$FILE" "$_FILE" || lk_warn "unable to update $FILE" || return
-    FILE=$(lk_arch_path /usr/local/bin/update-grub)
+    FILE=$(_lk_arch_path /usr/local/bin/update-grub)
     _FILE=$(
         cat <<"EOF"
 #!/bin/bash

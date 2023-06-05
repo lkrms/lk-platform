@@ -339,12 +339,24 @@ function lk_test_any() {
     (($#))
 }
 
+# lk_paths_exist PATH [PATH...]
+#
+# Return true if every PATH exists.
 function lk_paths_exist() { lk_test "lk_sudo test -e" "$@"; }
 
+# lk_files_exist FILE [FILE...]
+#
+# Return true if every FILE exists.
 function lk_files_exist() { lk_test "lk_sudo test -f" "$@"; }
 
+# lk_dirs_exist DIR [DIR...]
+#
+# Return true if every DIR exists.
 function lk_dirs_exist() { lk_test "lk_sudo test -d" "$@"; }
 
+# lk_files_not_empty FILE [FILE...]
+#
+# Return true if every FILE exists and has a size greater than zero.
 function lk_files_not_empty() { lk_test "lk_sudo test -s" "$@"; }
 
 function _lk_sudo_check() {
@@ -4444,7 +4456,7 @@ function lk_file_get_backup_suffix() {
 # LK_BASE/var/backup if elevated, or ~/.lk-platform/backup if not elevated.
 function lk_file_backup() {
     local MOVE=${LK_FILE_BACKUP_MOVE-} FILE OWNER OWNER_HOME DEST GROUP \
-        MODIFIED SUFFIX TZ=UTC s vv=
+        MODIFIED TARGET TZ=UTC s vv=
     [ "${1-}" != -m ] || { MOVE=1 && shift; }
     ! lk_verbose 2 || vv=v
     export TZ
@@ -4483,8 +4495,9 @@ function lk_file_backup() {
                 DEST=$DEST/${FILE//"$s"/__}
             }
             MODIFIED=$(lk_file_modified "$1") &&
-                SUFFIX=$(lk_file_get_backup_suffix "$MODIFIED") &&
-                lk_maybe_sudo cp -naL"$vv" "$1" "${DEST:-$1}$SUFFIX"
+                TARGET=${DEST:-$1}$(lk_file_get_backup_suffix "$MODIFIED") &&
+                { lk_maybe_sudo test -e "$TARGET" ||
+                    lk_maybe_sudo cp -naL"$vv" "$1" "$TARGET"; } || return
         fi
         shift
     done
