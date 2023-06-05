@@ -1,0 +1,14 @@
+#!/bin/bash
+
+exec >>/tmp/githooks.out
+
+echo "=== $(date) ==="
+echo "Directory: $PWD"
+echo "  Command: $0"
+echo "Arguments: $#"
+((!$#)) || printf '  - %q\n' "$@"
+echo
+echo "Input:"
+cat
+echo "==="
+echo
