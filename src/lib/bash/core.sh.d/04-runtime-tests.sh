@@ -101,10 +101,22 @@ function lk_test_any() {
     (($#))
 }
 
+# lk_paths_exist PATH [PATH...]
+#
+# Return true if every PATH exists.
 function lk_paths_exist() { lk_test "lk_sudo test -e" "$@"; }
 
+# lk_files_exist FILE [FILE...]
+#
+# Return true if every FILE exists.
 function lk_files_exist() { lk_test "lk_sudo test -f" "$@"; }
 
+# lk_dirs_exist DIR [DIR...]
+#
+# Return true if every DIR exists.
 function lk_dirs_exist() { lk_test "lk_sudo test -d" "$@"; }
 
+# lk_files_not_empty FILE [FILE...]
+#
+# Return true if every FILE exists and has a size greater than zero.
 function lk_files_not_empty() { lk_test "lk_sudo test -s" "$@"; }

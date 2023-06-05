@@ -624,7 +624,7 @@ $LK_NODE_HOSTNAME" &&
         [ -e "$FILE" ] ||
             (LK_SUDO= && lk_faketty repo-add "$FILE")
 
-        lk_arch_add_repo "$REPO|file://$DIR|||Optional TrustAll"
+        lk_arch_add_repo "$REPO|file://$DIR"
         LK_CONF_OPTION_FILE=/etc/pacman.conf
         lk_conf_enable_row -s options "CacheDir = /var/cache/pacman/pkg/"
         lk_conf_enable_row -s options "CacheDir = $DIR/"
@@ -980,7 +980,6 @@ EOF
         DIR=/etc/lighttpd/conf.d
         lk_install -d -m 00755 "$DIR"
         LK_CONF_OPTION_FILE=/etc/lighttpd/lighttpd.conf
-        lk_conf_remove_row 'var.log_root = "/var/log/lighttpd"'
         lk_conf_enable_row \
             "include_shell \"for f in /etc/lighttpd/conf.d/*.conf;do \
 [ -f \\\"\$f\\\" ]||continue;\

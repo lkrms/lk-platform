@@ -1166,7 +1166,7 @@ function lk_file_get_backup_suffix() {
 # LK_BASE/var/backup if elevated, or ~/.lk-platform/backup if not elevated.
 function lk_file_backup() {
     local MOVE=${LK_FILE_BACKUP_MOVE-} FILE OWNER OWNER_HOME DEST GROUP \
-        MODIFIED SUFFIX TZ=UTC s vv=
+        MODIFIED TARGET TZ=UTC s vv=
     [ "${1-}" != -m ] || { MOVE=1 && shift; }
     ! lk_verbose 2 || vv=v
     export TZ
@@ -1205,8 +1205,9 @@ function lk_file_backup() {
                 DEST=$DEST/${FILE//"$s"/__}
             }
             MODIFIED=$(lk_file_modified "$1") &&
-                SUFFIX=$(lk_file_get_backup_suffix "$MODIFIED") &&
-                lk_maybe_sudo cp -naL"$vv" "$1" "${DEST:-$1}$SUFFIX"
+                TARGET=${DEST:-$1}$(lk_file_get_backup_suffix "$MODIFIED") &&
+                { lk_maybe_sudo test -e "$TARGET" ||
+                    lk_maybe_sudo cp -naL"$vv" "$1" "$TARGET"; } || return
         fi
         shift
     done
