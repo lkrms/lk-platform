@@ -10,10 +10,6 @@ PAC_OFFER=(
     zoom
 )
 
-PAC_NO_REPLACE=(
-    stretchly
-)
-
 lk_is_virtual || {
     PAC_PACKAGES+=(
         glmark2
@@ -141,7 +137,6 @@ PAC_PACKAGES+=(
     ffmpeg
     handbrake
     handbrake-cli
-    yt-dlp
 
     # System
     dconf-editor
@@ -180,6 +175,9 @@ AUR_PACKAGES+=(
     #ttf-apple-emoji
     ttf-twemoji
     typora
+
+    # Multimedia - video
+    yt-dlp-git
 
     # System
     hfsprogs

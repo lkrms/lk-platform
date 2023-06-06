@@ -6,12 +6,14 @@ function _lk_arch_path() {
     printf '%s\n' "${_LK_ARCH_ROOT:+${_LK_ARCH_ROOT%/}}$1"
 }
 
+# lk_arch_reset_pacman_keyring
+#
+# Remove /etc/pacman.d/gnupg and restore pacman's default package signing keys.
 function lk_arch_reset_pacman_keyring() {
-    local LK_SUDO=1
     lk_elevate gpgconf --homedir /etc/pacman.d/gnupg --kill gpg-agent &&
         lk_elevate rm -Rf /etc/pacman.d/gnupg &&
-        lk_faketty pacman-key --init &&
-        lk_faketty pacman-key --populate
+        lk_elevate lk_faketty pacman-key --init &&
+        lk_elevate lk_faketty pacman-key --populate
 }
 
 # lk_arch_configure_pacman
@@ -22,6 +24,7 @@ function lk_arch_configure_pacman() {
     lk_tty_print "Checking pacman options in" "$LK_CONF_OPTION_FILE"
     lk_conf_enable_row -s options Color
     lk_conf_set_option -s options ParallelDownloads 5
+    lk_conf_enable_row -s options ILoveCandy
 }
 
 # lk_arch_add_repo REPO...
@@ -52,10 +55,6 @@ function lk_arch_add_repo() {
         SIG_LEVEL=
         IFS='|' read -r NAME SERVER KEY_ID KEY_URL <<<"$REPO"
         [[ -n ${NAME:+${SERVER:+1}} ]] || lk_bad_args || return
-        ! pacman-conf --config "$FILE" --repo-list |
-            grep -Fx "$NAME" >/dev/null ||
-            continue
-        lk_tty_detail "Adding repository:" "$NAME ($SERVER)"
         if [[ -n ${KEY_ID:+1} ]]; then
             local VALIDITY=0
             lk_gpg_check_key_validity \
@@ -80,6 +79,10 @@ function lk_arch_add_repo() {
         else
             SIG_LEVEL="Optional TrustAll"
         fi
+        ! pacman-conf --config "$FILE" --repo-list |
+            grep -Fx "$NAME" >/dev/null ||
+            continue
+        lk_tty_detail "Adding repository:" "$NAME ($SERVER)"
         lk_file_keep_original "$FILE" &&
             # Add this repo just before the first official repo
             lk_mktemp_with _FILE awk \
@@ -101,40 +104,23 @@ function lk_arch_configure_grub() {
     local CMDLINE FILE _FILE LK_SUDO=1
     CMDLINE=${LK_GRUB_CMDLINE+"$(lk_escape_ere_replace \
         "$(lk_double_quote -f "$LK_GRUB_CMDLINE")")"}
-    CMDLINE=${CMDLINE:-\\1}
+    CMDLINE=${CMDLINE:-\\2}
     FILE=$(_lk_arch_path /etc/default/grub)
-    _FILE=$(sed -E \
-        -e 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=saved/' \
-        -e 's/^#?GRUB_SAVEDEFAULT=.*/GRUB_SAVEDEFAULT=true/' \
-        -e "s/^GRUB_CMDLINE_LINUX_DEFAULT=(.*)/GRUB_CMDLINE_LINUX_DEFAULT=$CMDLINE/" \
-        "$FILE") &&
+    lk_mktemp_with _FILE sed -E "
+s/^(GRUB_DEFAULT)=.*/\1=saved/
+s/^#?(GRUB_SAVEDEFAULT)=.*/\1=true/
+s/^(GRUB_CMDLINE_LINUX_DEFAULT)=(.*)/\1=$CMDLINE/" "$FILE" &&
         lk_file_keep_original "$FILE" &&
-        lk_file_replace "$FILE" "$_FILE" || lk_warn "unable to update $FILE" || return
+        lk_file_replace -f "$_FILE" "$FILE" ||
+        lk_warn "unable to update $FILE" || return
     FILE=$(_lk_arch_path /usr/local/bin/update-grub)
-    _FILE=$(
-        cat <<"EOF"
-#!/bin/bash
-
-set -euo pipefail
-lk_die() { s=$? && echo "$0: ${1-error $s}" >&2 && (exit $s) && false || exit; }
-
-[ "$EUID" -eq 0 ] || lk_die "not running as root"
-
-if [[ ${1-} =~ ^(-i|--install)$ ]]; then
-    grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
-    # On some systems, GRUB must be installed at the default/fallpack boot path
-    install -d /boot/EFI/BOOT
-    cp -afv /boot/EFI/{GRUB/grubx64.efi,BOOT/BOOTX64.EFI} >&2
-else
-    echo "${0##*/}: skipping grub-install (--install not set)" >&2
-fi
-grub-mkconfig -o /boot/grub/grub.cfg
-EOF
-    )
     lk_install -d -m 00755 "${FILE%/*}" &&
         lk_install -m 00755 "$FILE" &&
-        lk_file_replace "$FILE" "$_FILE" || lk_warn "unable to update $FILE" || return
+        lk_file_replace -f "$LK_BASE/share/grub/update-grub-arch" "$FILE" ||
+        lk_warn "unable to update $FILE" || return
 }
+
+####
 
 function lk_pac_official_repo_list() {
     pacman-conf --repo-list |
@@ -186,9 +172,9 @@ function lk_pac_not_installed_list() {
 
 function lk_pac_sync() {
     ! lk_root && ! lk_can_sudo pacman ||
-        { lk_false _LK_PACMAN_SYNC && [ "${1-}" != -f ]; } ||
+        { lk_false _LK_PACMAN_SYNC && [[ ${1-} != -f ]]; } ||
         { lk_tty_print "Refreshing package databases" &&
-            lk_elevate pacman -Sy >/dev/null &&
+            lk_elevate lk_faketty pacman -Sy &&
             _LK_PACMAN_SYNC=0; }
 }
 

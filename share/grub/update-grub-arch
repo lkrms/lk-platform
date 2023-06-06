@@ -1,0 +1,19 @@
+#!/bin/bash
+
+set -euo pipefail
+lk_fail() { (($1)) && return $1 || return 1; }
+lk_die() { s=$? && printf '%s: %s\n' "$0" "$1" >&2 && lk_fail $s || exit; }
+
+((!EUID)) || lk_die "not running as root"
+
+if [[ ${1-} =~ ^(-i|--install)$ ]]; then
+    grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
+    # On some systems, GRUB must be installed at the default/fallpack boot path
+    install -Dpv /boot/EFI/GRUB/grubx64.efi /boot/EFI/BOOT/BOOTX64.EFI
+elif (($#)); then
+    lk_die "invalid arguments"
+else
+    printf '%s: skipping grub-install (--install not set)\n' "$0"
+fi
+
+grub-mkconfig -o /boot/grub/grub.cfg

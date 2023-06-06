@@ -63,7 +63,7 @@ function lk_feature_enabled() {
 
 # - _lk_feature_expand FEATURE ALIAS
 # - _lk_feature_expand GROUP FEATURE FEATURE...
-# - _lk_feature_expand -n FEATURE IMPLIED_FEATURE
+# - _lk_feature_expand -n FEATURE IMPLIED_FEATURE...
 #
 # The first two forms work in both directions:
 # - FEATURE enables ALIAS, and ALIAS enables FEATURE
@@ -93,7 +93,8 @@ function _lk_feature_expand() {
 # Copy LK_FEATURES to _LK_FEATURES, with aliases and groups expanded.
 function lk_feature_expand() {
     local FEATURES=$LK_FEATURES
-    _lk_feature_expand apache+php apache2 php-fpm &&
+    _lk_feature_expand -n dev apache+php mysql docker libvirt &&
+        _lk_feature_expand apache+php apache2 php-fpm &&
         _lk_feature_expand mysql mariadb &&
         _lk_feature_expand -n xfce4 desktop &&
         _LK_FEATURES=$(IFS=, &&
