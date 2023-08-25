@@ -6,7 +6,8 @@
 # - 2: key is in the keyring but is not valid
 # - 3: key is not in the keyring and is not valid
 #
-# Reference: /usr/share/doc/gnupg/DETAILS
+# References:
+# - /usr/share/doc/gnupg/DETAILS
 #
 BEGIN {
   FS = ":"

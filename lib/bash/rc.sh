@@ -197,6 +197,11 @@ fi
             lk_first_file /usr/share/bash-completion/bash_completion \
                 "${HOMEBREW_PREFIX-}/opt/bash-completion@2/etc/profile.d/bash_completion.sh"
         ) || SOURCE+=("$FILE" "$LK_BASE/lib/bash/completion.sh")
+        ! lk_is_macos || ! FILE=$(
+            XCODE=/Applications/Xcode.app/Contents/Developer
+            TOOLS=/Library/Developer/CommandLineTools
+            lk_first_file {"$XCODE","$TOOLS"}/usr/share/git-core/git-completion.bash
+        ) || SOURCE+=("$FILE")
         ! FILE=$(
             lk_first_file /usr/share/fzf/completion.bash \
                 "${HOMEBREW_PREFIX-}/opt/fzf/shell/completion.bash"

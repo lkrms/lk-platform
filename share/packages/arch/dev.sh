@@ -55,10 +55,6 @@ PAC_OFFER=(
     rasdaemon
 )
 
-PAC_NO_REPLACE=(
-    stretchly
-)
-
 lk_is_virtual || {
     PAC_PACKAGES+=(
         glmark2
@@ -219,7 +215,6 @@ PAC_PACKAGES+=(
     mkvtoolnix-cli
     mkvtoolnix-gui
     openshot
-    yt-dlp
 
     # System
     dconf-editor
@@ -270,6 +265,7 @@ AUR_PACKAGES+=(
     # Multimedia - video
     makemkv
     video-trimmer
+    yt-dlp-git
 
     # System
     hfsprogs
@@ -340,6 +336,7 @@ PAC_PACKAGES+=(
     python-dateutil #
     python-mysqlclient
     python-pip
+    python-pipenv
     python-requests
     python-virtualenv
     python-xmlschema
@@ -365,6 +362,7 @@ PAC_PACKAGES+=(
     github-cli
     python-boto # Optional linode-cli dependency
     s3cmd
+    wp-cli
 )
 
 AUR_PACKAGES+=(
@@ -440,34 +438,7 @@ AUR_PACKAGES+=(
     azure-cli
     azure-functions-core-tools-bin
     linode-cli
-    wp-cli
 
     #
     storageexplorer
-)
-
-# Development services
-PAC_PACKAGES+=(
-    apache
-    mariadb
-    php-fpm
-
-    #
-    fcgi # Provides cgi-fcgi
-)
-
-# VMs and containers
-PAC_PACKAGES+=(
-    # KVM/QEMU
-    dnsmasq
-    edk2-ovmf # UEFI firmware
-    iptables-nft
-    libguestfs
-    libvirt
-    qemu-desktop
-    virt-manager
-
-    #
-    docker
-    docker-buildx
 )

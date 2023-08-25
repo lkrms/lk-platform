@@ -9,12 +9,11 @@ PAC_REPOS=(
     ${LK_ARCH_REPOS-}
     ${PAC_REPOS+"${PAC_REPOS[@]}"}
 )
-unset IFS
+IFS=$' \t\n'
 
 PAC_PACKAGES=(${PAC_PACKAGES+"${PAC_PACKAGES[@]}"})
 PAC_EXCEPT=(${PAC_EXCEPT+"${PAC_EXCEPT[@]}"})
 PAC_OFFER=(${PAC_OFFER+"${PAC_OFFER[@]}"})
-PAC_NO_REPLACE=(${PAC_NO_REPLACE+"${PAC_NO_REPLACE[@]}"})
 AUR_PACKAGES=(${AUR_PACKAGES+"${AUR_PACKAGES[@]}"})
 
 # Package suffixes:
@@ -24,20 +23,20 @@ AUR_PACKAGES=(${AUR_PACKAGES+"${AUR_PACKAGES[@]}"})
 # - ":Q" = QEMU (only install on QEMU guests)
 PAC_PACKAGES+=(
     # Essentials
-    base                 # Includes coreutils, findutils, glibc, procps-ng, psmisc, util-linux, ...
-    linux                #
-    linux-firmware:BM    #
+    base # Includes coreutils, findutils, glibc, procps-ng, psmisc, util-linux, ...
+    linux
+    linux-firmware:BM
     mkinitcpio           # Specify preferred initramfs package explicitly
     kernel-modules-hook- # Keep the running kernel's modules installed after the kernel package is upgraded
-    grub                 #
-    efibootmgr           #
-    os-prober            #
-    terminus-font        # Bitmap font that can be used with GRUB
+    grub
+    efibootmgr
+    os-prober
+    terminus-font # Bitmap font that can be used with GRUB
 
     # Pacman
-    expac
-    pacman-contrib
-    pacutils
+    expac-
+    pacman-contrib-
+    pacutils-
 
     # Services
     networkmanager
@@ -59,24 +58,24 @@ PAC_PACKAGES+=(
     ncdu-
     nnn
     openbsd-netcat
-    openssh #
-    p7zip   # Provides 7z
+    openssh
+    p7zip # Provides 7z
     perl
     pv
     ranger
     rsync
     sudo
     time
-    trash-cli #
-    unzip     # Provides zip
-    wget      #
-    wimlib    # Provides wimextract
+    trash-cli
+    unzip # Provides zip
+    wget
+    wimlib # Provides wimextract
     yq
 
     # Shell
     bash-completion
     byobu-
-    fzf
+    fzf-
     libnewt # Provides whiptail
     zsh
 
@@ -92,19 +91,19 @@ PAC_PACKAGES+=(
     # System
     acpi-        # Show battery status
     cpupower-:BM # Show and set processor frequency- and power-related values
-    dmidecode    #
+    dmidecode
     ethtool:BM
     fwupd:BM
     hddtemp:BM
     hdparm:BM
-    hwinfo-       # openSUSE's hardware information tool
-    lm_sensors:BM #
-    msr-tools     # Access processor MSRs ("Model Specific Registers") like BD PROCHOT
+    hwinfo- # openSUSE's hardware information tool
+    lm_sensors:BM
+    msr-tools # Access processor MSRs ("Model Specific Registers") like BD PROCHOT
     nvme-cli:BM
     powertop:BM
     qemu-guest-agent:Q
-    smartmontools:BM #
-    sysfsutils       # e.g. to list options set for a loaded kernel module: `systool -v -m iwlwifi`
+    smartmontools:BM
+    sysfsutils # e.g. to list options set for a loaded kernel module: `systool -v -m iwlwifi`
     tlp:BM
     tlp-rdw:BM
     udisks2:BM # Allow fwupd to perform UEFI firmware upgrades
@@ -120,11 +119,11 @@ PAC_PACKAGES+=(
     sysstat- # Provides iostat, pidstat, sar
 
     # Networking
-    bind             # Provides dig
-    conntrack-tools- #
-    ipset-           # Used in conjunction with iptables by fail2ban
-    iptables-nft     #
-    ndisc6-          # Provides rdisc6
+    bind # Provides dig
+    conntrack-tools-
+    ipset- # Used in conjunction with iptables by fail2ban
+    iptables-nft
+    ndisc6- # Provides rdisc6
     nmap-
     tcpdump
     traceroute
@@ -161,8 +160,7 @@ PAC_PACKAGES+=(
 
 ! lk_system_has_intel_cpu || PAC_PACKAGES+=(
     intel-ucode:BM
-
-    i7z:BM # Monitor CPU time spent in each available C-State
+    i7z-:BM # Monitor CPU time spent in each available C-State
 )
 
 ! lk_system_has_amd_cpu || PAC_PACKAGES+=(
@@ -170,10 +168,13 @@ PAC_PACKAGES+=(
 )
 
 ! lk_system_is_thinkpad || PAC_PACKAGES+=(
-    tpacpi-bat
+    tpacpi-bat:BM
 )
 
 AUR_PACKAGES+=(
+    # Essentials
+    upd72020x-fw-:BM # Firmware for module 'xhci_pci'
+
     # Utilities
     icdiff-
     rdfind-
@@ -193,6 +194,19 @@ AUR_PACKAGES+=(
     squid
 )
 
+! lk_feature_enabled apache2 || PAC_PACKAGES+=(
+    apache
+)
+
+! lk_feature_enabled php-fpm || PAC_PACKAGES+=(
+    php-fpm
+    fcgi # Provides cgi-fcgi
+)
+
+! lk_feature_enabled mariadb || PAC_PACKAGES+=(
+    mariadb
+)
+
 ! lk_feature_enabled docker || PAC_PACKAGES+=(
     docker
     docker-buildx-
@@ -207,6 +221,9 @@ AUR_PACKAGES+=(
     cpio
     virt-install
 )
+! lk_feature_enabled libvirt desktop || PAC_PACKAGES+=(
+    virt-manager
+)
 
 if lk_feature_enabled desktop; then
     PAC_PACKAGES+=(
@@ -220,10 +237,10 @@ if lk_feature_enabled desktop; then
         bluez-utils-:BM
         blueman:BM
 
-        libva-utils-    # Provides vainfo
-        mesa            # Includes iris, nouveau, virtio_gpu, ...
-        mesa-utils-     # Provides glxinfo
-        spice-vdagent:Q #
+        libva-utils- # Provides vainfo
+        mesa         # Includes iris, nouveau, virtio_gpu, ...
+        mesa-utils-  # Provides glxinfo
+        spice-vdagent:Q
         vdpauinfo-
 
         lightdm
@@ -255,10 +272,10 @@ if lk_feature_enabled desktop; then
         gtk-engine-murrine- # Support GTK 2
         gtk-engines-
 
-        epiphany   # WebKit-based web browser
-        evince     # Document viewer
-        galculator #
-        geany      # notepadqq is smaller but depends on Qt
+        epiphany # WebKit-based web browser
+        evince   # Document viewer
+        galculator
+        geany # notepadqq is smaller but depends on Qt
         gimp-
         mpv
         pinta
@@ -313,9 +330,9 @@ if lk_feature_enabled desktop; then
     )
     ! lk_system_has_amd_graphics || PAC_PACKAGES+=(
         xf86-video-amdgpu
-        libva-mesa-driver #
-        mesa-vdpau        #
-        radeontop-        # Equivalent to intel_gpu_top
+        libva-mesa-driver
+        mesa-vdpau
+        radeontop- # Equivalent to intel_gpu_top
     )
     ! lk_system_has_nvidia_graphics || PAC_PACKAGES+=(
         nvidia
@@ -405,11 +422,10 @@ for ARR in PAC_PACKAGES AUR_PACKAGES; do
     fi
 done
 
-SUFFIX=-${LK_PATH_PREFIX%-}
-
-if [ ${#PAC_REPOS[@]} -gt 0 ]; then
+if [[ -n ${PAC_REPOS+1} ]]; then
     PAC_REPOS=($(lk_arr PAC_REPOS | lk_uniq))
     lk_arch_add_repo "${PAC_REPOS[@]}"
+    # TODO: check order of repos here
 fi
 
 lk_pac_sync
@@ -419,10 +435,8 @@ lk_mktemp_with _PAC_ALL pacman -Sl
 lk_mktemp_with _PAC_ALL_GROUPS pacman -Sgg
 lk_mktemp_with _PAC_PACKAGES sort -u <(awk '{ print $2 }' "$_PAC_ALL")
 lk_mktemp_with _PAC_GROUPS sort -u <(awk '{ print $1 }' "$_PAC_ALL_GROUPS" | grep -Fxvf "$_PAC_PACKAGES")
-lk_mktemp_with _PAC_OFFICIAL sort -u \
-    <(awk '$1 ~ /^(core|extra|multilib)$/ { print $2 }' "$_PAC_ALL")
-lk_mktemp_with _PAC_UNOFFICIAL sort -u \
-    <(awk '$1 !~ /^(core|extra|multilib)$/ { print $2 }' "$_PAC_ALL")
+lk_mktemp_with _PAC_OFFICIAL sort -u <(awk '$1 ~ /^(core|extra|multilib)$/ { print $2 }' "$_PAC_ALL")
+lk_mktemp_with _PAC_UNOFFICIAL sort -u <(awk '$1 !~ /^(core|extra|multilib)$/ { print $2 }' "$_PAC_ALL")
 
 # If any AUR_PACKAGES now appear in core, extra or multilib, move them to
 # PAC_PACKAGES and notify the user
@@ -432,8 +446,7 @@ if AUR_MOVED=$(grep -Fxf <(lk_arr AUR_PACKAGES) "$_PAC_OFFICIAL"); then
 fi
 
 # Check for PAC_PACKAGES removed from official repos
-if PAC_MOVED=$(lk_arr PAC_PACKAGES |
-    grep -Fxvf "$_PAC_OFFICIAL" -f "$_PAC_GROUPS"); then
+if PAC_MOVED=$(lk_arr PAC_PACKAGES | grep -Fxvf "$_PAC_OFFICIAL" -f "$_PAC_GROUPS"); then
     lk_tty_warning "Removed from official repos:" "$PAC_MOVED"
     AUR_PACKAGES+=($PAC_MOVED)
 fi
@@ -447,61 +460,9 @@ if PAC_GROUPS=$(lk_arr PAC_PACKAGES | grep -Fxf "$_PAC_GROUPS"); then
     } | sort -u))
 fi
 
-if [ -n "${PAC_EXCEPT+1}" ]; then
-    REJECT=(
-        "${PAC_EXCEPT[@]}"
-        "${PAC_EXCEPT[@]/%/-git}"
-        "${PAC_EXCEPT[@]/%/-git$SUFFIX}"
-        "${PAC_EXCEPT[@]/%/$SUFFIX}"
-    )
-    PAC_PACKAGES=($(lk_arr PAC_PACKAGES | grep -Fxvf <(lk_arr REJECT) || true))
-    AUR_PACKAGES=($(lk_arr AUR_PACKAGES | grep -Fxvf <(lk_arr REJECT) || true))
-fi
-
-# Use unofficial packages named PACKAGE-git, PACKAGE-lk or PACKAGE-git-lk
-# instead of PACKAGE, unless PACKAGE appears in PAC_NO_REPLACE
-lk_mktemp_with PAC_REPLACE awk \
-    -v "suffix=$SUFFIX\$" \
-    -v "no_replace=$(lk_ere_implode_arr PAC_NO_REPLACE)" '
-function save(_p) {
-    if (_prio[pkg] < prio) {
-        if (_replace[pkg]) {
-            _replace[_replace[pkg]] = $0
-        }
-        _replace[pkg] = $0
-        _prio[pkg] = prio
-    } else {
-        _replace[$0] = _replace[pkg]
-    }
-}
-$0 ~ suffix || /-git$/ {
-    pkg = $0
-    prio = 0
-    # -lk beats -git, -git-lk beats -lk and -git
-    if (sub(suffix, "", pkg)) {
-        prio += 2
-        save()
-    }
-    if (sub(/-git$/, "", pkg)) {
-        prio += 1
-        save()
-    }
-}
-END {
-    for (pkg in _replace) {
-        if (!no_replace || pkg !~ no_replace) {
-            print pkg, _replace[pkg]
-        }
-    }
-}' "$_PAC_UNOFFICIAL"
-if [ -s "$PAC_REPLACE" ]; then
-    lk_mktemp_with SED \
-        awk -v "suffix=$SUFFIX" \
-        '{print "s/^" $1 "(-git)?(" suffix ")?$/" $2 "/"}' "$PAC_REPLACE"
-    PAC_EXCEPT+=($(lk_arr PAC_PACKAGES AUR_PACKAGES |
-        grep -Fxf <(awk '{print $1}' "$PAC_REPLACE") || true))
-    PAC_PACKAGES=($(lk_arr PAC_PACKAGES | sed -Ef "$SED" | sort -u))
-    AUR_PACKAGES=($(lk_arr AUR_PACKAGES | sed -Ef "$SED" | sort -u))
+if [[ -n ${PAC_EXCEPT+1} ]]; then
+    PAC_PACKAGES=($(lk_arr PAC_PACKAGES | grep -Fxvf <(lk_arr PAC_EXCEPT) || true))
+    AUR_PACKAGES=($(lk_arr AUR_PACKAGES | grep -Fxvf <(lk_arr PAC_EXCEPT) || true))
 fi
 
 # Move any AUR_PACKAGES that can be installed from a repo to PAC_PACKAGES, and
@@ -513,17 +474,17 @@ ALL_PACKAGES=(
 PAC_PACKAGES=($(lk_arr ALL_PACKAGES | grep -Fxf "$_PAC_PACKAGES" || true))
 AUR_PACKAGES=($(lk_arr ALL_PACKAGES | grep -Fxvf "$_PAC_PACKAGES" || true))
 
-if [ ${#AUR_PACKAGES[@]} -gt 0 ] ||
-    [ -n "${LK_ARCH_AUR_REPO_NAME-}" ] ||
+if [[ -n ${AUR_PACKAGES+1} ]] ||
+    [[ -n ${LK_ARCH_AUR_REPO_NAME-} ]] ||
     { pacman-conf --repo="${LK_ARCH_AUR_REPO_NAME:-aur}" |
-        awk -F"$S*=$S*" '$1=="Server"{print$2}' |
+        awk -F "[ \t]*=[ \t]*" '$1 == "Server" {print $2}' |
         grep -E '^file://'; } &>/dev/null; then
-    PAC_PACKAGES+=(base-devel devtools vifm)
-    PAC_OFFER+=(aurutils aurutils-git aurutils{,-git}"$SUFFIX")
+    PAC_PACKAGES+=(base-devel devtools)
+    PAC_OFFER+=(aurutils vifm)
 fi
 
 # Reduce PAC_OFFER to packages not present in PAC_PACKAGES
-if [ ${#PAC_OFFER[@]} -gt 0 ]; then
+if [[ -n ${PAC_OFFER+1} ]]; then
     PAC_OFFER=($(lk_arr PAC_OFFER | grep -Fxvf <(lk_arr PAC_PACKAGES) || true))
 fi
 

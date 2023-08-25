@@ -107,7 +107,6 @@ PAC_PACKAGES+=(
     # Multimedia
     ffmpeg
     rtmpdump
-    yt-dlp
 
     #
     nodejs-lts-gallium
@@ -120,4 +119,7 @@ PAC_PACKAGES+=(
 AUR_PACKAGES+=(
     python-demjson3
     ruby-erubis
+
+    # Multimedia
+    yt-dlp-git
 )
