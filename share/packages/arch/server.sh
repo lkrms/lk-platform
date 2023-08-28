@@ -21,13 +21,13 @@ PAC_OFFER=(
     transmission-cli
 
     # PDF
-    ghostscript  # PDF/PostScript processing
-    mupdf-tools  # PDF manipulation
-    pandoc-cli   # Text conversion (e.g. Markdown to PDF)
-    poppler      # Provides pdfimages
-    pstoedit     # PDF/PostScript conversion to vector formats
-    qpdf         # PDF manipulation (e.g. add underlay)
-    texlive-core # PDF support for pandoc
+    ghostscript   # PDF/PostScript processing
+    mupdf-tools   # PDF manipulation
+    pandoc-cli    # Text conversion (e.g. Markdown to PDF)
+    poppler       # Provides pdfimages
+    pstoedit      # PDF/PostScript conversion to vector formats
+    qpdf          # PDF manipulation (e.g. add underlay)
+    texlive-basic # PDF support for pandoc
 
     # Platforms
     aws-cli

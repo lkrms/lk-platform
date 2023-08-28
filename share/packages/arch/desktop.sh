@@ -104,13 +104,13 @@ PAC_PACKAGES+=(
     hyphen-en
 
     # PDF
-    ghostscript  # PDF/PostScript processing
-    mupdf-tools  # PDF manipulation
-    pandoc-cli   # Text conversion (e.g. Markdown to PDF)
-    poppler      # Provides pdfimages
-    pstoedit     # PDF/PostScript conversion to vector formats
-    qpdf         # PDF manipulation (e.g. add underlay)
-    texlive-core # PDF support for pandoc
+    ghostscript   # PDF/PostScript processing
+    mupdf-tools   # PDF manipulation
+    pandoc-cli    # Text conversion (e.g. Markdown to PDF)
+    poppler       # Provides pdfimages
+    pstoedit      # PDF/PostScript conversion to vector formats
+    qpdf          # PDF manipulation (e.g. add underlay)
+    texlive-basic # PDF support for pandoc
 
     # Photography
     geeqie
@@ -127,7 +127,6 @@ PAC_PACKAGES+=(
     unrtf
 
     # Multimedia - playback
-    clementine
     gst-plugins-bad
 
     # Multimedia - audio
@@ -155,6 +154,7 @@ PAC_PACKAGES+=(
 )
 
 AUR_PACKAGES+=(
+    clementine
     clockify-desktop
     emote
     espanso

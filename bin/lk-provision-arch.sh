@@ -798,8 +798,8 @@ $LK_NODE_HOSTNAME" &&
         )
     fi
 
-    if lk_pac_installed php || lk_pac_installed php74; then
-        for DIR in /etc/php74 /etc/php; do
+    if lk_pac_installed php; then
+        for DIR in /etc/php81 /etc/php80 /etc/php74 /etc/php; do
             unset LK_FILE_REPLACE_NO_CHANGE
             FILE=$DIR/php.ini
             CLI_FILE=$DIR/php-cli.ini
