@@ -178,13 +178,13 @@ PAC_PACKAGES+=(
     hyphen-en
 
     # PDF
-    ghostscript  # PDF/PostScript processing
-    mupdf-tools  # PDF manipulation
-    pandoc-cli   # Text conversion (e.g. Markdown to PDF)
-    poppler      # Provides pdfimages
-    pstoedit     # PDF/PostScript conversion to vector formats
-    qpdf         # PDF manipulation (e.g. add underlay)
-    texlive-core # PDF support for pandoc
+    ghostscript   # PDF/PostScript processing
+    mupdf-tools   # PDF manipulation
+    pandoc-cli    # Text conversion (e.g. Markdown to PDF)
+    poppler       # Provides pdfimages
+    pstoedit      # PDF/PostScript conversion to vector formats
+    qpdf          # PDF manipulation (e.g. add underlay)
+    texlive-basic # PDF support for pandoc
 
     # Photography
     geeqie
@@ -201,7 +201,6 @@ PAC_PACKAGES+=(
     unrtf
 
     # Multimedia - playback
-    clementine
     gst-plugins-bad
 
     # Multimedia - audio
@@ -235,6 +234,7 @@ PAC_PACKAGES+=(
 )
 
 AUR_PACKAGES+=(
+    clementine
     clockify-desktop
     emote
     espanso
@@ -406,6 +406,57 @@ AUR_PACKAGES+=(
     php74-xmlreader
     php74-xmlwriter
     php74-zip
+    php80
+    php80-bcmath
+    php80-cli
+    php80-curl
+    php80-dom
+    php80-exif
+    php80-fileinfo
+    php80-gd
+    php80-gettext
+    php80-iconv
+    php80-imagick
+    php80-imap
+    php80-intl
+    php80-mbstring
+    php80-memcached
+    php80-mysql
+    php80-phar
+    php80-simplexml
+    php80-soap
+    php80-sodium
+    php80-sqlite
+    php80-tokenizer
+    php80-xdebug
+    php80-xmlreader
+    php80-xmlwriter
+    php80-zip
+    php81
+    php81-bcmath
+    php81-cli
+    php81-curl
+    php81-dom
+    php81-exif
+    php81-fileinfo
+    php81-gd
+    php81-gettext
+    php81-iconv
+    php81-imagick
+    php81-imap
+    php81-intl
+    php81-mbstring
+    php81-mysql
+    php81-phar
+    php81-simplexml
+    php81-soap
+    php81-sodium
+    php81-sqlite
+    php81-tokenizer
+    php81-xdebug
+    php81-xmlreader
+    php81-xmlwriter
+    php81-zip
     pretty-php
     python-demjson3
     python-pywebview
