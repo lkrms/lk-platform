@@ -348,8 +348,9 @@ lk_log_start
         FILE=$h/.bashrc
         [ -e "$FILE" ] ||
             install -m 00644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
-        "${RC_AWK[@]}" "$FILE" >"$TEMP" &&
-            lk_file_replace -l "$FILE" "$(<"$TEMP")"
+        grep -Fq " $RC_PATH " "$FILE" ||
+            { "${RC_AWK[@]}" "$FILE" >"$TEMP" &&
+                lk_file_replace -l "$FILE" "$(<"$TEMP")"; }
 
         # Create ~/.profile if no profile file exists, then check that ~/.bashrc
         # is sourced at startup when Bash is running as a login shell (e.g. in a
