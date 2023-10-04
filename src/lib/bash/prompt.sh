@@ -61,7 +61,7 @@ function _lk_prompt_command() {
     # "$ " or "# "
     PS1="${PS[*]}"'\$ '
     _LK_PROMPT_DISPLAYED=1
-    [[ ${LC_BYOBU:+1}${BYOBU_RUN_DIR:+2} != 2 ]] || export LC_BYOBU=0
+    [[ ${LC_BYOBU:+1}${BYOBU_TERM:+2} != 2 ]] || export LC_BYOBU=0
 }
 
 function lk_prompt_enable() {
