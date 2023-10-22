@@ -889,6 +889,8 @@ EOF
             http2
             info
             macro
+            proxy
+            proxy_http
             remoteip
             rewrite
             socache_shmcb
