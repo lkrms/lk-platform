@@ -207,13 +207,15 @@ primary domain. Available settings:
 - **`SITE_PHP_FPM_ENV`**
 - **`SITE_PHP_VERSION`** (`5.6`, `7.0`, `7.1`, `7.2`, `7.3`, `7.4`, `8.0`,
   `8.1`, `8.2`, or `-1` to disable; default: `LK_PHP_DEFAULT_VERSION` if set,
-  otherwise *system-dependent*)
+  otherwise _system-dependent_)
 - **`SITE_DOWNSTREAM_FROM`** (`cloudflare` or
   `<HTTP_HEADER>:<PROXY_CIDR>[,<PROXY_CIDR>...]`, e.g.
   `X-Forwarded-For:172.105.171.229,103.31.4.0/22`)
 - **`SITE_DOWNSTREAM_FORCE`** (`Y` or `N`; default: `N`; if set, requests are
   rejected except from an upstream proxy)
 - **`SITE_HTTPD_MACROS`** (comma-separated Apache macro names)
+- **`SITE_HTTPD_REWRITE_RULES`** (space-separated triplets of `RewriteRule`
+  patterns, targets and flags, e.g. `^/time/(.*)$ http://localhost:7755/$1 [P]`)
 
 #### Internal variables
 

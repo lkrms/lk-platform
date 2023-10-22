@@ -27,7 +27,8 @@ function _lk_hosting_site_json() {
   "upstream_proxy":         ($siteDownstreamFrom        | maybe_null),
   "upstream_only":          ($siteDownstreamForce       | to_bool),
   "httpd": {
-    "macros":               ($siteHttpdMacros           | split(","))
+    "macros":               ($siteHttpdMacros           | split(",")),
+    "rewriteRules":         ($siteHttpdRewriteRules     | split(","))
   },
   "php_fpm": {
     "pool":                 ($sitePhpFpmPool),
@@ -68,6 +69,7 @@ EOF
         SITE_ENABLE \
         SITE_ENABLE_STAGING \
         SITE_HTTPD_MACROS \
+        SITE_HTTPD_REWRITE_RULES \
         SITE_ORDER \
         SITE_PHP_FPM_ADMIN_SETTINGS \
         SITE_PHP_FPM_ENV \
