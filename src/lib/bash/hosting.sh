@@ -263,10 +263,17 @@ function _lk_hosting_site_provision() {
         unset IFS
     }
     [[ -z $SITE_HTTPD_REWRITE_RULES ]] || {
-        IFS=$'\n'
-        APACHE+=($(IFS=' ' &&
-            printf 'RewriteRule\n%s %s %s\n' $SITE_HTTPD_REWRITE_RULES))
-        unset IFS
+        IFS=' ' read -ra ARGS <<<"$SITE_HTTPD_REWRITE_RULES"
+        [[ -z ${ARGS+1} ]] || ((${#ARGS[@]} % 3)) || {
+            IFS=$'\n' read -d '' -ra DIRECTIVES < <(
+                printf 'RewriteRule\n%s %s %s\n' "${ARGS[@]}"
+                printf '\0'
+            )
+            APACHE+=(
+                RewriteEngine On
+                "${DIRECTIVES[@]}"
+            )
+        }
     }
     # Configure PHP-FPM if this is the first enabled site using this pool
     [[ $SITE_PHP_VERSION == -1 ]] ||
