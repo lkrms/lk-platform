@@ -100,6 +100,7 @@ function _lk_hosting_site_list_known_settings() {
         SITE_DOWNSTREAM_FROM \
         SITE_DOWNSTREAM_FORCE \
         SITE_HTTPD_MACROS \
+        SITE_HTTPD_REWRITE_RULES \
         SITE_SMTP_RELAY \
         SITE_SMTP_CREDENTIALS \
         SITE_SMTP_SENDERS
@@ -404,7 +405,8 @@ function _lk_hosting_site_json() {
   "upstream_proxy":         ($siteDownstreamFrom        | maybe_null),
   "upstream_only":          ($siteDownstreamForce       | to_bool),
   "httpd": {
-    "macros":               ($siteHttpdMacros           | split(","))
+    "macros":               ($siteHttpdMacros           | split(",")),
+    "rewriteRules":         ($siteHttpdRewriteRules     | split(","))
   },
   "php_fpm": {
     "pool":                 ($sitePhpFpmPool),
@@ -445,6 +447,7 @@ EOF
         SITE_ENABLE \
         SITE_ENABLE_STAGING \
         SITE_HTTPD_MACROS \
+        SITE_HTTPD_REWRITE_RULES \
         SITE_ORDER \
         SITE_PHP_FPM_ADMIN_SETTINGS \
         SITE_PHP_FPM_ENV \
@@ -1207,6 +1210,12 @@ function _lk_hosting_site_provision() {
         for MACRO in $SITE_HTTPD_MACROS; do
             APACHE+=(Use "$MACRO")
         done
+        unset IFS
+    }
+    [[ -z $SITE_HTTPD_REWRITE_RULES ]] || {
+        IFS=$'\n'
+        APACHE+=($(IFS=' ' &&
+            printf 'RewriteRule\n%s %s %s\n' $SITE_HTTPD_REWRITE_RULES))
         unset IFS
     }
     # Configure PHP-FPM if this is the first enabled site using this pool

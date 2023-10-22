@@ -262,6 +262,12 @@ function _lk_hosting_site_provision() {
         done
         unset IFS
     }
+    [[ -z $SITE_HTTPD_REWRITE_RULES ]] || {
+        IFS=$'\n'
+        APACHE+=($(IFS=' ' &&
+            printf 'RewriteRule\n%s %s %s\n' $SITE_HTTPD_REWRITE_RULES))
+        unset IFS
+    }
     # Configure PHP-FPM if this is the first enabled site using this pool
     [[ $SITE_PHP_VERSION == -1 ]] ||
         ! lk_hosting_list_sites -e | awk \
