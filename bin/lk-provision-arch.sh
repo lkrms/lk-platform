@@ -818,8 +818,8 @@ $LK_NODE_HOSTNAME" &&
                     iconv
                     imagick
                     intl
-                    memcache.so
-                    memcached.so
+                    #memcache.so
+                    #memcached.so
                     mysqli
                     pdo_sqlite
                     soap
