@@ -196,7 +196,7 @@ PAC_PACKAGES+=(
     jre17-openjdk
 
     #
-    nodejs-lts-gallium
+    nodejs
     npm
 
     #
