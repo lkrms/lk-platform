@@ -298,7 +298,6 @@ PAC_PACKAGES+=(
     qcachegrind
     tidy
     ttf-font-awesome
-    ttf-ionicons
 
     # Email
     msmtp     # SMTP client
@@ -315,7 +314,7 @@ PAC_PACKAGES+=(
     jre17-openjdk
 
     #
-    nodejs-lts-gallium
+    nodejs
     npm
     yarn
 

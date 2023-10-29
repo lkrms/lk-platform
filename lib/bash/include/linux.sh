@@ -191,10 +191,6 @@ function lk_systemctl_mask() { _lk_systemctl "$@"; }
 # lk_systemctl_unmask UNIT
 function lk_systemctl_unmask() { _lk_systemctl "$@"; }
 
-true || {
-    systemctl
-}
-
 function lk_system_has_bluetooth() {
     awk -v module=bluetooth '$1==module{f=1;exit}END{exit 1-f}' /proc/modules
 }

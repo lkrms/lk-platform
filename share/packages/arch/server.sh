@@ -108,7 +108,7 @@ PAC_PACKAGES+=(
     rtmpdump
 
     #
-    nodejs-lts-gallium
+    nodejs
     npm
     python
     python-pip

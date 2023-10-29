@@ -138,8 +138,3 @@ Usage: $FUNCNAME SUBJECT TO [FROM [HEADERS...]]" || return
         lk_warn "MTA not found" || return
     lk_mail_get_mime "$@" | "$MTA" -oi -t
 }
-
-true || {
-    msmtp
-    sendmail
-}

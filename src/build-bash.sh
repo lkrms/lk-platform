@@ -19,6 +19,21 @@ write=1
 
 set -- $(printf '%s\n' src/lib/bash/*.{sh,sh.d} | sed -E 's/\.d$//' | sort -u)
 
+# Remove trailing structures like:
+#
+# ```
+# true || {
+#     command
+#     ...
+# }
+# ```
+function filter() {
+    awk '
+NR == 1 { f = $0; next }
+        { f = f ORS $0 }
+END     { sub("\ntrue \\|\\| \\{(\n[[:space:]]+[^[:space:]]+)+\n\\}", "", f); printf "%s", f }'
+}
+
 export LC_ALL=C
 
 format=1
@@ -69,7 +84,7 @@ while [ $# -gt 0 ]; do
                 "$file" >"$head"
             awk -v "from=^#### (END|INCLUDE) $name.d\$" \
                 '$0~from{f=1;next}!f{next}{print}END{if(!f)exit 1}' \
-                "$file" >"$tail" ||
+                "$file" | filter >"$tail" ||
                 die "not found in $PWD/$file: #### END $name.d"
             parts=("$head")
         fi
@@ -102,6 +117,7 @@ skip                    {next}
 NR > f && last $0 != "" {print last}
                         {last = $0}
 END                     {if (last) print last}' |
+                filter |
                 if ((format)) && type -P shfmt >/dev/null; then
                     shfmt "${shfmt_args[@]}" | shfmt "${shfmt_args[@]}"
                 else

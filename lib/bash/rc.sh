@@ -182,56 +182,56 @@ elif lk_is_macos; then
     export BASH_SILENCE_DEPRECATION_WARNING=1
 fi
 
-[[ $- != *i* ]] || {
+if [[ $- != *i* ]]; then
+    return
+fi
 
-    shopt -s checkwinsize histappend
-    HISTCONTROL=ignorespace
-    HISTIGNORE=
-    HISTSIZE=
-    HISTFILESIZE=
-    HISTTIMEFORMAT="%b %_d %Y %H:%M:%S %z "
+shopt -s checkwinsize histappend
+HISTCONTROL=ignorespace
+HISTIGNORE=
+HISTSIZE=
+HISTFILESIZE=
+HISTTIMEFORMAT="%b %_d %Y %H:%M:%S %z "
 
-    lk_false LK_COMPLETION || ! lk_bash_at_least 4 || { SH=$(
-        SOURCE=()
-        ! FILE=$(
-            lk_first_file /usr/share/bash-completion/bash_completion \
-                "${HOMEBREW_PREFIX-}/opt/bash-completion@2/etc/profile.d/bash_completion.sh"
-        ) || SOURCE+=("$FILE" "$LK_BASE/lib/bash/completion.sh")
-        ! lk_is_macos || ! FILE=$(
-            XCODE=/Applications/Xcode.app/Contents/Developer
-            TOOLS=/Library/Developer/CommandLineTools
-            lk_first_file {"$XCODE","$TOOLS"}/usr/share/git-core/git-completion.bash
-        ) || SOURCE+=("$FILE")
-        ! FILE=$(
-            lk_first_file /usr/share/fzf/completion.bash \
-                "${HOMEBREW_PREFIX-}/opt/fzf/shell/completion.bash"
-        ) || SOURCE+=("$FILE")
-        [[ -z ${SOURCE+1} ]] || printf '. %q\n' "${SOURCE[@]}"
-    ) && eval "$SH"; }
+lk_false LK_COMPLETION || ! lk_bash_at_least 4 || { SH=$(
+    SOURCE=()
+    ! FILE=$(
+        lk_first_file /usr/share/bash-completion/bash_completion \
+            "${HOMEBREW_PREFIX-}/opt/bash-completion@2/etc/profile.d/bash_completion.sh"
+    ) || SOURCE+=("$FILE" "$LK_BASE/lib/bash/completion.sh")
+    ! lk_is_macos || ! FILE=$(
+        XCODE=/Applications/Xcode.app/Contents/Developer
+        TOOLS=/Library/Developer/CommandLineTools
+        lk_first_file {"$XCODE","$TOOLS"}/usr/share/git-core/git-completion.bash
+    ) || SOURCE+=("$FILE")
+    ! FILE=$(
+        lk_first_file /usr/share/fzf/completion.bash \
+            "${HOMEBREW_PREFIX-}/opt/fzf/shell/completion.bash"
+    ) || SOURCE+=("$FILE")
+    [[ -z ${SOURCE+1} ]] || printf '. %q\n' "${SOURCE[@]}"
+) && eval "$SH"; }
 
-    lk_false LK_PROMPT || {
-        lk_require prompt
-        lk_prompt_enable
-    }
-
-    ! lk_command_exists dircolors || { SH=$(
-        COMMAND=(dircolors -b)
-        [ ! -r ~/.dircolors ] || COMMAND+=(~/.dircolors)
-        # OTHER_WRITABLE defaults to 34;42 (blue on green), which is almost
-        # always unreadable; replace it with white on green
-        OUTPUT=$("${COMMAND[@]}") &&
-            echo "${OUTPUT//=34;42:/=37;42:}"
-    ) && eval "$SH"; }
-
-    alias clip=lk_clip
-    alias unclip=lk_paste
-    if ! lk_is_macos; then
-        alias duh='du -h --max-depth 1 | sort -h'
-        alias open='xdg-open'
-    else
-        alias duh='du -h -d 1 | sort -h'
-    fi
-
-    unset SH
-
+lk_false LK_PROMPT || {
+    lk_require prompt
+    lk_prompt_enable
 }
+
+! lk_command_exists dircolors || { SH=$(
+    COMMAND=(dircolors -b)
+    [ ! -r ~/.dircolors ] || COMMAND+=(~/.dircolors)
+    # OTHER_WRITABLE defaults to 34;42 (blue on green), which is almost
+    # always unreadable; replace it with white on green
+    OUTPUT=$("${COMMAND[@]}") &&
+        echo "${OUTPUT//=34;42:/=37;42:}"
+) && eval "$SH"; }
+
+alias clip=lk_clip
+alias unclip=lk_paste
+if ! lk_is_macos; then
+    alias duh='du -h --max-depth 1 | sort -h'
+    alias open='xdg-open'
+else
+    alias duh='du -h -d 1 | sort -h'
+fi
+
+unset SH
