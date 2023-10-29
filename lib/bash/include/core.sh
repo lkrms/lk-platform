@@ -1405,7 +1405,7 @@ function lk_trap_add() {
         TRAPS[${#TRAPS[@]}]=$2
         _LK_TRAPS+=("$BASH_SUBSHELL" "$1" "$2")
     }
-    trap -- "declare _LK_TRAP_IN=\$? _LK_TRAP_OUT=0;$(
+    trap -- "declare _LK_TRAP_SIGNAL=$1 _LK_TRAP_IN=\$? _LK_TRAP_OUT=0;$(
         for TRAP in "${TRAPS[@]}"; do
             printf 'if ((!_LK_TRAP_IN));then { %s;};else (exit $_LK_TRAP_IN)||{ %s;};fi||_LK_TRAP_OUT=$?;' "$TRAP" "$TRAP"
         done
@@ -4708,8 +4708,10 @@ function _lk_err_trap() {
 
 set -o pipefail
 
-lk_trap_add EXIT '_lk_exit_trap "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'
-lk_trap_add ERR '_lk_err_trap "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'
+if [[ $- != *i* ]]; then
+    lk_trap_add EXIT '_lk_exit_trap "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'
+    lk_trap_add ERR '_lk_err_trap "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'
+fi
 
 if [[ -n ${LK_TTY_NO_COLOUR-} ]] || ! lk_get_tty >/dev/null; then
     declare \
@@ -4779,18 +4781,3 @@ _LK_ALT_COLOUR=$LK_YELLOW
 _LK_SUCCESS_COLOUR=$LK_GREEN
 _LK_WARNING_COLOUR=$LK_YELLOW
 _LK_ERROR_COLOUR=$LK_RED
-
-true || {
-    env
-    md5
-    md5sum
-    pbcopy
-    pbpaste
-    sha256sum
-    shasum
-    xclip
-    xxh32sum
-    xxh64sum
-    xxh128sum
-    xxhsum
-}

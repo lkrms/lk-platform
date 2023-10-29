@@ -17,7 +17,7 @@ function lk_trap_add() {
         TRAPS[${#TRAPS[@]}]=$2
         _LK_TRAPS+=("$BASH_SUBSHELL" "$1" "$2")
     }
-    trap -- "declare _LK_TRAP_IN=\$? _LK_TRAP_OUT=0;$(
+    trap -- "declare _LK_TRAP_SIGNAL=$1 _LK_TRAP_IN=\$? _LK_TRAP_OUT=0;$(
         for TRAP in "${TRAPS[@]}"; do
             printf 'if ((!_LK_TRAP_IN));then { %s;};else (exit $_LK_TRAP_IN)||{ %s;};fi||_LK_TRAP_OUT=$?;' "$TRAP" "$TRAP"
         done

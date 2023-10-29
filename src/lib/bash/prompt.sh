@@ -1,28 +1,33 @@
 #!/bin/bash
 
-#### Reviewed: 2021-05-11
-
-function _lk_prompt_debug_trap() {
-    [[ ${_LK_PROMPT_DISPLAYED:-0} -eq 0 ]] ||
-        [[ $BASH_COMMAND == "$PROMPT_COMMAND" ]] || {
-        [[ -n ${_LK_PROMPT_LAST+1} ]] ||
+function _lk_prompt_trap() {
+    if ((${_LK_PROMPT_DISPLAYED-0})) &&
+        [[ $BASH_COMMAND != "$PROMPT_COMMAND" ]]; then
+        if [[ -z ${_LK_PROMPT_LAST+1} ]]; then
             _LK_PROMPT_LAST_START=$(lk_date %s)
-        _LK_PROMPT_LAST=($BASH_COMMAND)
-    }
+            _LK_PROMPT_LAST=($BASH_COMMAND)
+            return
+        fi
+        _LK_PROMPT_LAST[${#_LK_PROMPT_LAST[@]}]=';'
+        _LK_PROMPT_LAST+=($BASH_COMMAND)
+    fi
 }
 
 function _lk_prompt_command() {
-    local STATUS=$? DIM=${LK_DIM:-$LK_GREY} SECS PS=() STR LEN=25 IFS
+    # "Thu May 06 15:02:32 ✔( )" is 24 characters wide
+    local STATUS=$? SECS PS=() STR LEN=24 IFS
+    # Append the last command to HISTFILE
     history -a
+    # Suppress expansion of prompt strings
     shopt -u promptvars
     if [[ -n ${_LK_PROMPT_LAST+1} ]]; then
-        ((SECS = $(lk_date %s) - _LK_PROMPT_LAST_START)) || true
-        if ((STATUS || SECS > 1)) ||
-            { [[ $(type -t "$_LK_PROMPT_LAST") != builtin ]] &&
-                [[ $_LK_PROMPT_LAST != ls ]]; }; then
+        SECS=$(($(lk_date %s) - _LK_PROMPT_LAST_START))
+        if ((STATUS)) ||
+            ((SECS > 1)) ||
+            [[ $(type -t "$_LK_PROMPT_LAST") != builtin ]]; then
             # "Thu May 06 15:02:32 "
-            PS+=("\n\[$DIM\]\d \t\[$LK_RESET\] ")
-            if [ "$STATUS" -eq 0 ]; then
+            PS+=("\n\[$LK_DIM\]\d \t\[$LK_UNDIM\] ")
+            if ((!STATUS)); then
                 # "✔"
                 PS+=("\[$LK_GREEN\]"$'\xe2\x9c\x94')
             else
@@ -32,17 +37,23 @@ function _lk_prompt_command() {
                 ((LEN += ${#STR}))
             fi
             # " after 12s "
-            STR=" after $( ((SECS < 120)) && echo "${SECS}s" || lk_duration "$SECS") "
-            PS+=("$STR\[$LK_RESET$DIM\]")
-            ((LEN = COLUMNS - LEN - ${#STR})) || true
-            [[ $LEN -le 0 ]] || {
+            if ((SECS < 120)); then
+                SECS+=s
+            else
+                SECS=$(lk_duration "$SECS")
+            fi
+            STR=" after $SECS "
+            PS+=("$STR\[$LK_DEFAULT$LK_DIM\]")
+            LEN=$((COLUMNS - LEN - ${#STR}))
+            if ((LEN > 0)); then
                 # "( sleep 12; false )"
                 unset IFS
-                PS+=("( $(lk_strip_non_printing <<<"${_LK_PROMPT_LAST[*]}" |
-                    head -c"$LEN" | sed 's/\\/\\&/g') )")
-            }
+                PS+=("($(printf ' %s' "${_LK_PROMPT_LAST[@]}" |
+                    lk_prompt_sanitise |
+                    head -c"$LEN") )")
+            fi
             # "\n"
-            PS+=("\[$LK_RESET\]\n")
+            PS+=("\[$LK_UNDIM\]\n")
         fi
         _LK_PROMPT_LAST=()
     fi
@@ -54,19 +65,25 @@ function _lk_prompt_command() {
         PS+=("\[$LK_BOLD$LK_RED\]\u@")
     fi
     # "host1 ~ "
-    PS+=("\h\[$LK_RESET$LK_BOLD$LK_BLUE\] \w \[$LK_RESET\]")
-    [[ -z ${LK_PROMPT_TAG-} ]] ||
-        PS+=("\[$LK_WHITE$LK_MAGENTA_BG\] \[$LK_BOLD\]${LK_PROMPT_TAG}\[$LK_UNBOLD\] \[$LK_RESET\] ")
+    PS+=("\h\[$LK_BLUE\] \w \[$LK_DEFAULT$LK_UNBOLD\]")
+    [[ -z ${LK_PROMPT_TAG:+1} ]] ||
+        PS+=("\[$LK_WHITE$LK_MAGENTA_BG\] \[$LK_BOLD\]${LK_PROMPT_TAG}\[$LK_UNBOLD\] \[$LK_DEFAULT_BG$LK_DEFAULT\] ")
     IFS=
     # "$ " or "# "
-    PS1="${PS[*]}"'\$ '
+    PS1="${PS[*]}\\\$ "
     _LK_PROMPT_DISPLAYED=1
     [[ ${LC_BYOBU:+1}${BYOBU_TERM:+2} != 2 ]] || export LC_BYOBU=0
 }
 
 function lk_prompt_enable() {
+    eval "$(lk_get_regex NON_PRINTING_REGEX)"
+    eval "function lk_prompt_sanitise() {
+    LC_ALL=C sed -E $(
+        printf '%q' "s/$NON_PRINTING_REGEX//g; "$'s/.*\r(.)/\\1/'
+    ) | tr -d '\\0-\\10\\16-\\37\\177'
+}"
     unset _LK_PROMPT_DISPLAYED
     _LK_PROMPT_LAST=()
     PROMPT_COMMAND=_lk_prompt_command
-    lk_trap_add DEBUG _lk_prompt_debug_trap
+    trap _lk_prompt_trap DEBUG
 }
