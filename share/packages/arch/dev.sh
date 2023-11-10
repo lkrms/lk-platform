@@ -18,6 +18,7 @@ PAC_OFFER=(
     expect
     geteltorito # ThinkPad UEFI firmware update conversion
     linux-headers
+    mockoon-bin
     offlineimap
     ookla-speedtest-bin
     ruby-ronn-ng
@@ -298,6 +299,7 @@ PAC_PACKAGES+=(
     qcachegrind
     tidy
     ttf-font-awesome
+    zeal
 
     # Email
     msmtp     # SMTP client
@@ -468,7 +470,6 @@ AUR_PACKAGES+=(
     terser
     trickle-git
     ts-standard
-    zeal-git
 
     #
     git-cola
