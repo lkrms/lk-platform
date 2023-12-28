@@ -63,6 +63,7 @@ PAC_PACKAGES+=(
     perl
     pv
     ranger
+    rdfind-
     rsync
     sudo
     time
@@ -177,7 +178,6 @@ AUR_PACKAGES+=(
 
     # Utilities
     icdiff-
-    rdfind-
 
     # System
     powercap-:BM

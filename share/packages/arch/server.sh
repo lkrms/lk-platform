@@ -105,6 +105,7 @@ PAC_PACKAGES+=(
     fail2ban
 
     # Multimedia
+    ffmpeg
     rtmpdump
 
     #
@@ -120,6 +121,5 @@ AUR_PACKAGES+=(
     ruby-erubis
 
     # Multimedia
-    ffmpeg-full
     yt-dlp-git
 )

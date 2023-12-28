@@ -132,6 +132,11 @@ PAC_PACKAGES+=(
     # Multimedia - audio
     audacity
 
+    # Multimedia - video
+    ffmpeg
+    handbrake
+    handbrake-cli
+
     # System
     dconf-editor
     gparted
@@ -172,9 +177,6 @@ AUR_PACKAGES+=(
     typora
 
     # Multimedia - video
-    ffmpeg-full
-    handbrake-full
-    handbrake-full-cli
     yt-dlp-git
 
     # System

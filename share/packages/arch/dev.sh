@@ -209,6 +209,9 @@ PAC_PACKAGES+=(
     sox
 
     # Multimedia - video
+    ffmpeg
+    handbrake
+    handbrake-cli
     mkvtoolnix-cli
     mkvtoolnix-gui
     openshot
@@ -236,6 +239,7 @@ AUR_PACKAGES+=(
     clockify-desktop
     emote
     espanso
+    gtk3-nocsd-git
     highlight-pointer
     key-mon
     libreoffice-extension-languagetool
@@ -261,9 +265,6 @@ AUR_PACKAGES+=(
     python-eyed3
 
     # Multimedia - video
-    ffmpeg-full
-    handbrake-full
-    handbrake-full-cli
     makemkv
     video-trimmer
     yt-dlp-git
