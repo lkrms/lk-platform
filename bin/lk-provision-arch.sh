@@ -818,8 +818,8 @@ $LK_NODE_HOSTNAME" &&
                     iconv
                     imagick
                     intl
-                    #memcache.so
-                    #memcached.so
+                    memcache.so
+                    memcached.so
                     mysqli
                     pdo_sqlite
                     soap
@@ -832,6 +832,10 @@ $LK_NODE_HOSTNAME" &&
                     FILES=("$DIR"/conf.d/?([0-9][0-9]-)"${EXT%.*}".ini)
                     [[ -f ${FILES-} ]] || unset FILES
                     ! grep -Eq "^$S*extension$S*=$S*$EXT(\\.so)?$S*(\$|;)" \
+                        "$LK_CONF_OPTION_FILE" \
+                        ${FILES+"$FILES"} || continue
+                    # Require a disabled entry
+                    grep -Eq "^$S*;$S*extension$S*=$S*$EXT(\\.so)?$S*(\$|;)" \
                         "$LK_CONF_OPTION_FILE" \
                         ${FILES+"$FILES"} || continue
                     lk_php_enable_option extension "$EXT" ${FILES+"$FILES"}
