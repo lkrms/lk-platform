@@ -28,9 +28,9 @@ partial alphanumeric_keys
 xkb_symbols "arrow_keys" {
     // Command-Up => Control-Home
     key   <UP> {
-        type[Group1]= "PC_SUPER_LEVEL2",
-        symbols[Group1]= [              Up,        NoSymbol ],
-        actions[Group1]= [ NoAction(), RedirectKey(key=<HOME>,mods= Control,clearMods= Mod4) ]
+        type[Group1]= "COMMAND_OPTION",
+        symbols[Group1]= [              Up,        NoSymbol,              Up,              Up,              Up ],
+        actions[Group1]= [ NoAction(), RedirectKey(key=<HOME>,mods= Control,clearMods= Mod4), NoAction(), NoAction(), NoAction() ]
     };
     // Command-Left => Home
     // Option-Left => Control-Left
@@ -48,8 +48,8 @@ xkb_symbols "arrow_keys" {
     };
     // Command-Down => Control-End
     key <DOWN> {
-        type[Group1]= "PC_SUPER_LEVEL2",
-        symbols[Group1]= [            Down,        NoSymbol ],
-        actions[Group1]= [ NoAction(), RedirectKey(key=<END>,mods= Control,clearMods= Mod4) ]
+        type[Group1]= "COMMAND_OPTION",
+        symbols[Group1]= [            Down,        NoSymbol,            Down,            Down,            Down ],
+        actions[Group1]= [ NoAction(), RedirectKey(key=<END>,mods= Control,clearMods= Mod4), NoAction(), NoAction(), NoAction() ]
     };
 };
