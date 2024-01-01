@@ -92,6 +92,7 @@ PAC_PACKAGES+=(
     screenkey
     scribus
     slop
+    speech-dispatcher
     system-config-printer
     thunderbird
     thunderbird-i18n-en-gb
