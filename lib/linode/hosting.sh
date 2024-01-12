@@ -6,7 +6,7 @@ lk_die() { s=$? && echo "$0: ${1-error $s}" >&2 && (exit $s) && false || exit; }
 
 # <UDF name="LK_NODE_FQDN" label="Host FQDN" example="web01-dev-syd.linode.linacreative.com" />
 # <UDF name="LK_NODE_TIMEZONE" label="System timezone" default="Australia/Sydney" />
-# <UDF name="LK_FEATURES" label="Features to enable (comma-delimited)" manyof="apache+php,mysql,memcached" default="" />
+# <UDF name="LK_FEATURES" label="Features to enable (comma-delimited)" manyof="nginx,apache+php,mysql,memcached" default="" />
 # <UDF name="LK_PACKAGES" label="Additional packages to install (comma-delimited)" example="default-jre" default="" />
 # <UDF name="LK_HOST_DOMAIN" label="Initial hosting domain" example="clientname.com.au" default="" />
 # <UDF name="LK_HOST_ACCOUNT" label="Initial hosting account name (default: based on domain)" example="clientname" default="" />

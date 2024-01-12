@@ -153,6 +153,7 @@ FIELD_ERRORS=$'\n'$(
     # Optional fields
     _LK_REQUIRED=0
     lk_validate_many_of LK_FEATURES \
+        nginx \
         apache+php \
         mysql \
         memcached
@@ -847,6 +848,10 @@ EOF
         lk_file_replace "$FILE" < <(printf '%s:\t%s\n' "${ALIASES[@]}")
         ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
             postalias "$FILE"
+    fi
+
+    if lk_feature_enabled nginx && ! lk_feature_enabled apache2; then
+        IPTABLES_TCP_LISTEN+=(80 443)
     fi
 
     if lk_feature_enabled apache2; then

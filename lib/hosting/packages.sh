@@ -108,6 +108,9 @@ function process_feature_packages() {
     fi
 }
 
+process_feature_packages nginx \
+    nginx
+
 process_feature_packages apache2 \
     apache2 \
     libapache2-mod-qos \
