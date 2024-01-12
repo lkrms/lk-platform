@@ -18,6 +18,7 @@ PAC_OFFER=(
     expect
     geteltorito # ThinkPad UEFI firmware update conversion
     linux-headers
+    mockoon-bin
     offlineimap
     ookla-speedtest-bin
     ruby-ronn-ng
@@ -165,6 +166,7 @@ PAC_PACKAGES+=(
     screenkey
     scribus
     slop
+    speech-dispatcher
     system-config-printer
     thunderbird
     thunderbird-i18n-en-gb
@@ -208,6 +210,9 @@ PAC_PACKAGES+=(
     sox
 
     # Multimedia - video
+    ffmpeg
+    handbrake
+    handbrake-cli
     mkvtoolnix-cli
     mkvtoolnix-gui
     openshot
@@ -235,6 +240,7 @@ AUR_PACKAGES+=(
     clockify-desktop
     emote
     espanso
+    gtk3-nocsd-git
     highlight-pointer
     key-mon
     libreoffice-extension-languagetool
@@ -260,9 +266,6 @@ AUR_PACKAGES+=(
     python-eyed3
 
     # Multimedia - video
-    ffmpeg-full
-    handbrake-full
-    handbrake-full-cli
     makemkv
     video-trimmer
     yt-dlp-git
@@ -298,6 +301,7 @@ PAC_PACKAGES+=(
     qcachegrind
     tidy
     ttf-font-awesome
+    zeal
 
     # Email
     msmtp     # SMTP client
@@ -468,7 +472,6 @@ AUR_PACKAGES+=(
     terser
     trickle-git
     ts-standard
-    zeal-git
 
     #
     git-cola

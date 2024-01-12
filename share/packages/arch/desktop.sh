@@ -92,6 +92,7 @@ PAC_PACKAGES+=(
     screenkey
     scribus
     slop
+    speech-dispatcher
     system-config-printer
     thunderbird
     thunderbird-i18n-en-gb
@@ -131,6 +132,11 @@ PAC_PACKAGES+=(
 
     # Multimedia - audio
     audacity
+
+    # Multimedia - video
+    ffmpeg
+    handbrake
+    handbrake-cli
 
     # System
     dconf-editor
@@ -172,9 +178,6 @@ AUR_PACKAGES+=(
     typora
 
     # Multimedia - video
-    ffmpeg-full
-    handbrake-full
-    handbrake-full-cli
     yt-dlp-git
 
     # System

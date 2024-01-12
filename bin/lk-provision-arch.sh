@@ -799,7 +799,7 @@ $LK_NODE_HOSTNAME" &&
     fi
 
     if lk_pac_installed php; then
-        for DIR in /etc/php81 /etc/php80 /etc/php74 /etc/php; do
+        for DIR in /etc/php83 /etc/php82 /etc/php81 /etc/php80 /etc/php74 /etc/php; do
             unset LK_FILE_REPLACE_NO_CHANGE
             FILE=$DIR/php.ini
             CLI_FILE=$DIR/php-cli.ini
@@ -832,6 +832,10 @@ $LK_NODE_HOSTNAME" &&
                     FILES=("$DIR"/conf.d/?([0-9][0-9]-)"${EXT%.*}".ini)
                     [[ -f ${FILES-} ]] || unset FILES
                     ! grep -Eq "^$S*extension$S*=$S*$EXT(\\.so)?$S*(\$|;)" \
+                        "$LK_CONF_OPTION_FILE" \
+                        ${FILES+"$FILES"} || continue
+                    # Require a disabled entry
+                    grep -Eq "^$S*;$S*extension$S*=$S*$EXT(\\.so)?$S*(\$|;)" \
                         "$LK_CONF_OPTION_FILE" \
                         ${FILES+"$FILES"} || continue
                     lk_php_enable_option extension "$EXT" ${FILES+"$FILES"}
