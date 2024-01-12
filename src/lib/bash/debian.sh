@@ -44,6 +44,15 @@ function lk_dpkg_installed_versions() {
         awk '$1 == "installed" { print $2 }'
 }
 
+# lk_dpkg_check_config_files [PACKAGE...]
+#
+# Print "<FILE>: (OK|FAILED)" for configuration files installed by each PACKAGE.
+function lk_dpkg_check_config_files() {
+    dpkg-query --show --showformat '${Conffiles}\n' "$@" |
+        awk 'NF { print $2, $1 }' |
+        md5sum -c
+}
+
 # _lk_apt_flock COMMAND [ARG...]
 #
 # Use `flock /var/lib/apt/daily_lock` to wait for scheduled apt operations to
