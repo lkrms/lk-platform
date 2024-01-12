@@ -248,6 +248,7 @@ AUR_PACKAGES+=(
     nomacs-git
     pencil
     qpdfview
+    render50
     rescuetime2
     simplescreenrecorder
     skypeforlinux-stable-bin
