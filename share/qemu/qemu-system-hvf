@@ -20,18 +20,36 @@ function addArg() {
     done
 }
 
+function quote() {
+    ((!$#)) || { printf '%q' "$1" && shift; }
+    ((!$#)) || printf ' \\\n    %q' "$@"
+    printf '\n'
+}
+
 function run() {
-    set -- ${arg[@]+"${arg[@]}"} "$@"
+    set -- ${arg+"${arg[@]}"} "$@"
+    quote "$cmd" "$@" >"$temp/out"
     {
-        printf '\n\n\nOutgoing:\n\n%q' "$cmd"
-        [ $# -eq 0 ] || printf ' \\\n    %q' "$@"
+        printf '\n\nOutgoing:\n\n'
+        quote "$cmd" "$@"
+        printf '\n\ndiff:\n\n'
+        ! diff -u "$temp/in" "$temp/out" || printf 'No changes\n'
     } >>/tmp/qemu-system-hvf.log
     exec "$cmd" "$@"
 }
 
+set -euo pipefail
+
+sh=$(/usr/libexec/path_helper -s)
+eval "$sh"
+
+temp=$(mktemp -d)
+quote "$0" "$@" >"$temp/in"
+
 {
-    printf '\n\n\n=== %s\n\nIncoming:\n\n%q' "$(/bin/date)" "$0"
-    [ $# -eq 0 ] || printf ' \\\n    %q' "$@"
+    printf '\n\n=== %s\n\nIncoming:\n\n' "$(/bin/date)"
+    quote "$0" "$@"
+
 } >>/tmp/qemu-system-hvf.log
 
 arm64=0
