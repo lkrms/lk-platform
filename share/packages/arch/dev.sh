@@ -377,6 +377,7 @@ AUR_PACKAGES+=(
     multitime
     nodejs-less
     nvm
+    phive
     php-humbug-box-bin
     php-ibm_db2
     php-memprof
@@ -505,7 +506,8 @@ AUR_PACKAGES+=(
     robo3t-bin
     sublime-merge
     sublime-text
-    vscodium-bin
+    visual-studio-code-bin
+    #vscodium-bin
 
     #
     nodejs-generator-code
