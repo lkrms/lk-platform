@@ -248,6 +248,7 @@ AUR_PACKAGES+=(
     nomacs-git
     pencil
     qpdfview
+    render50
     rescuetime2
     simplescreenrecorder
     skypeforlinux-stable-bin
@@ -376,6 +377,7 @@ AUR_PACKAGES+=(
     multitime
     nodejs-less
     nvm
+    phive
     php-humbug-box-bin
     php-ibm_db2
     php-memprof
@@ -460,6 +462,31 @@ AUR_PACKAGES+=(
     php81-xmlreader
     php81-xmlwriter
     php81-zip
+    php82
+    php82-bcmath
+    php82-cli
+    php82-curl
+    php82-dom
+    php82-exif
+    php82-fileinfo
+    php82-gd
+    php82-gettext
+    php82-iconv
+    php82-imagick
+    php82-imap
+    php82-intl
+    php82-mbstring
+    php82-mysql
+    php82-phar
+    php82-simplexml
+    php82-soap
+    php82-sodium
+    php82-sqlite
+    php82-tokenizer
+    php82-xdebug
+    php82-xmlreader
+    php82-xmlwriter
+    php82-zip
     pretty-php
     python-demjson3
     python-pywebview
@@ -479,7 +506,8 @@ AUR_PACKAGES+=(
     robo3t-bin
     sublime-merge
     sublime-text
-    vscodium-bin
+    visual-studio-code-bin
+    #vscodium-bin
 
     #
     nodejs-generator-code
