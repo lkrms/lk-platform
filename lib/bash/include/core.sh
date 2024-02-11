@@ -2921,7 +2921,7 @@ EOF
 #     -p          Prompt before replacing FILE (implies -d)
 #     -b          Create a backup of FILE before replacing it
 #     -r          Preserve the original FILE as FILE.orig
-#     -m MODE     Specify the file mode
+#     -m MODE     Specify the file mode (MODE must be numeric)
 #     -o USER     Specify the owner
 #     -g GROUP    Specify the group
 #     -v          Be verbose
@@ -2931,12 +2931,12 @@ EOF
 function lk_file() {
     local OPTIND OPTARG OPT \
         DIFF=0 PROMPT=0 BACKUP=0 ORIG=0 MODE OWNER GROUP VERBOSE=0 \
-        GREP_ARGS=() TEMP
+        SED_ARGS=() TEMP _MODE _OWNER _GROUP CHOWN=
     lk_counter_init LK_FILE_DECLINED
     while getopts ":i:dpbrm:o:g:v" OPT; do
         case "$OPT" in
         i)
-            GREP_ARGS+=(-e "$OPTARG")
+            SED_ARGS+=(-e "/${OPTARG//\//\\\/}/d")
             ;;
         d)
             DIFF=1
@@ -2952,18 +2952,22 @@ function lk_file() {
             ORIG=1
             ;;
         m)
-            MODE=$OPTARG
+            [[ $OPTARG =~ ^[0-7]{3,4}$ ]] ||
+                lk_err "invalid mode: $OPTARG" || return
+            MODE=$(printf '%04d' "$OPTARG")
             ;;
         o)
+            [[ $OPTARG =~ [^0-9] ]] ||
+                lk_err "invalid user: $OPTARG" || return
             OWNER=$(id -u "$OPTARG") || return
             ((OWNER == EUID)) || lk_will_elevate ||
                 lk_err "not allowed: -o $OPTARG" || return
             OWNER=$OPTARG
             ;;
         g)
+            [[ $OPTARG =~ [^0-9] ]] ||
+                lk_err "invalid group: $OPTARG" || return
             GROUP=$OPTARG
-            [[ $GROUP =~ [^0-9] ]] ||
-                lk_err "invalid group: $GROUP" || return
             lk_will_elevate ||
                 id -Gn | tr -s '[:blank:]' '\n' | grep -Fx "$GROUP" >/dev/null ||
                 lk_err "not allowed: -g $GROUP"
@@ -2982,6 +2986,7 @@ function lk_file() {
     [[ ! -t 0 ]] || lk_err "no input" || return
     lk_mktemp_with TEMP cat &&
         lk_reopen_tty_in || return
+
     # If the file doesn't exist, use `install` to create it
     if [[ ! -e $1 ]] && ! { lk_will_sudo && sudo test -e "$1"; }; then
         ((!DIFF)) || lk_tty_diff_detail -L "" -L "$1" /dev/null "$TEMP"
@@ -2994,9 +2999,41 @@ function lk_file() {
             "$TEMP" "$1" || lk_err "error installing $1" || return
         return
     fi
-    # Otherwise, update permissions if needed
-    OWNER_MODE=$(lk_file_owner_mode)
 
+    # Otherwise, check if the file has been changed
+    if [[ -n ${SED_ARGS+1} ]]; then
+        diff -q \
+            <(lk_sudo_on_fail sed -E "${SED_ARGS[@]}" "$1") \
+            <(sed -E "${SED_ARGS[@]}" "$TEMP") \
+            >/dev/null
+    else
+        diff -q <(lk_sudo_on_fail cat "$1") "$TEMP" >/dev/null
+    fi || {
+        ((!DIFF)) || lk_tty_diff_detail -L "a/${1#/}" -L "b/${1#/}" "$1" "$TEMP"
+        ((!PROMPT)) || lk_tty_yn "Update $1 as above?" Y || {
+            ((++LK_FILE_DECLINED))
+            return 1
+        }
+        lk_sudo_on_fail cp "$TEMP" "$1" ||
+            lk_err "error replacing $1" || return
+    }
+
+    # Finally, update permissions and ownership if needed
+    if [[ -n ${MODE-} ]]; then
+        _MODE=$(lk_file_mode "$1") || return
+        [[ $MODE == "$_MODE" ]] ||
+            lk_sudo_on_fail chmod "0$MODE" "$1" || return
+    fi
+    if [[ -n ${OWNER-} ]]; then
+        _OWNER=$(lk_file_owner "$1") || return
+        [[ $OWNER == "$_OWNER" ]] || CHOWN=$OWNER
+    fi
+    if [[ -n ${GROUP-} ]]; then
+        _GROUP=$(lk_file_group "$1") || return
+        [[ $GROUP == "$_GROUP" ]] || CHOWN+=:$GROUP
+    fi
+    [[ -z $CHOWN ]] ||
+        lk_sudo_on_fail chown "$CHOWN" "$1" || return
 }
 
 # lk_find_shell_scripts [-d DIR] [FIND_ARG...]
