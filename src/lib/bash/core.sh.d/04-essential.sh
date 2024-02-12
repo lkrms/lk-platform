@@ -106,7 +106,8 @@ function lk_get_tty() {
 #
 # Reopen /dev/stdin from /dev/tty if possible.
 function lk_reopen_tty_in() {
-    [[ ! -c /dev/tty ]] || [[ ! -r /dev/tty ]] || exec </dev/tty
+    [[ -c /dev/tty ]] && [[ -r /dev/tty ]] || return 0
+    { exec </dev/tty; } 2>/dev/null || true
 }
 
 # lk_plural [-v] <VALUE|ARRAY> SINGLE [PLURAL]
