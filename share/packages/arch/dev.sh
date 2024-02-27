@@ -364,7 +364,6 @@ PAC_PACKAGES+=(
     # Platforms
     aws-cli
     github-cli
-    python-boto # Optional linode-cli dependency
     s3cmd
     wp-cli
 )
@@ -488,6 +487,7 @@ AUR_PACKAGES+=(
     php82-xmlwriter
     php82-zip
     pretty-php
+    python-boto # Optional linode-cli dependency
     python-demjson3
     python-pywebview
     python39 # azure-functions-core-tools-bin dependency

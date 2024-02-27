@@ -807,8 +807,10 @@ $LK_NODE_HOSTNAME" &&
             [ -f "$CLI_FILE" ] ||
                 sudo cp -a "$(lk_first_file "$FILE.orig" "$FILE")" "$CLI_FILE"
             for LK_CONF_OPTION_FILE in "$FILE" "$CLI_FILE"; do
-                [[ $LK_CONF_OPTION_FILE != "$CLI_FILE" ]] ||
+                [[ $LK_CONF_OPTION_FILE != "$CLI_FILE" ]] || {
                     lk_php_set_option memory_limit -1
+                    lk_php_set_option short_open_tag On
+                }
                 PHP_EXT=(
                     bcmath
                     curl
