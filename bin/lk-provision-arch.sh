@@ -807,8 +807,10 @@ $LK_NODE_HOSTNAME" &&
             [ -f "$CLI_FILE" ] ||
                 sudo cp -a "$(lk_first_file "$FILE.orig" "$FILE")" "$CLI_FILE"
             for LK_CONF_OPTION_FILE in "$FILE" "$CLI_FILE"; do
-                [[ $LK_CONF_OPTION_FILE != "$CLI_FILE" ]] ||
+                [[ $LK_CONF_OPTION_FILE != "$CLI_FILE" ]] || {
                     lk_php_set_option memory_limit -1
+                    lk_php_set_option short_open_tag On
+                }
                 PHP_EXT=(
                     bcmath
                     curl
@@ -862,6 +864,12 @@ $LK_NODE_HOSTNAME" &&
                         lk_php_set_option xdebug.collect_return On
                         lk_php_set_option xdebug.trace_output_name trace.%H.%R.%u
                         #lk_php_enable_option zend_extension xdebug.so
+                    )
+
+                    (
+                        LK_CONF_OPTION_FILE=$DIR/conf.d/pcov.ini
+                        [ -f "$LK_CONF_OPTION_FILE" ] || exit 0
+                        lk_php_disable_option extension pcov.so
                     )
                 fi
             done

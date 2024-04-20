@@ -2643,6 +2643,26 @@ function lk_php_enable_option() {
         "^$S*;"{,"$S","$S*"}"$OPTION$S*=$S*$VALUE$S*\$"
 }
 
+# lk_php_disable_option OPTION [VALUE [FILE]]
+function lk_php_disable_option() {
+    local OPTION VALUE SETTING FILE=${3:-$LK_CONF_OPTION_FILE}
+    OPTION=$(lk_escape_ere "$1")
+    VALUE=${2:+$(lk_escape_ere "$2")}
+    if [[ -n ${VALUE:+1} ]]; then
+        lk_option_set "$FILE" \
+            ";$1=$2" \
+            "^$S*;$S*$OPTION$S*=$S*$VALUE$S*\$" \
+            "^$S*$OPTION$S*=$S*$VALUE$S*\$"
+    else
+        SETTING=$(grep -Em 1 "^$S*$OPTION$S*=" "$FILE" | sed -E 's/^/;/' | head -n1) ||
+            return 0
+        lk_option_set "$FILE" \
+            "$SETTING" \
+            "^$S*;$S*$OPTION$S*=" \
+            "^$S*$OPTION$S*=.*"
+    fi
+}
+
 # lk_httpd_set_option OPTION VALUE [FILE]
 function lk_httpd_set_option() {
     local OPTION VALUE REPLACE_WITH FILE=${3:-$LK_CONF_OPTION_FILE}
