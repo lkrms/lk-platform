@@ -318,7 +318,6 @@ PAC_PACKAGES+=(
 
     #
     jdk17-openjdk
-    jre17-openjdk
 
     #
     nodejs
