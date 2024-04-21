@@ -541,9 +541,9 @@ function _lk_option_check() {
 
 function _lk_option_do_replace() {
     [ -z "${SECTION-}" ] || { __FILE=$(awk \
-        -v "SECTION=$SECTION" \
-        -v "ENTRIES=$__FILE" \
-        -f "$(lk_awk_dir)/section-replace.awk" \
+        -v "section=$SECTION" \
+        -v "entries=$__FILE" \
+        -f "$(lk_awk_dir)/sh-section-replace.awk" \
         "$FILE" && printf .) && __FILE=${__FILE%.}; } || return
     lk_file_keep_original "$FILE" &&
         lk_file_replace -l "$FILE" "$__FILE"
@@ -595,7 +595,7 @@ Usage: $FUNCNAME [-s SECTION] [-p] FILE SETTING CHECK_REGEX [REPLACE_REGEX...]"
     else
         _FILE=$(awk \
             -v "section=$SECTION" \
-            -f "$(lk_awk_dir)/section-get.awk" \
+            -f "$(lk_awk_dir)/sh-section-get.awk" \
             "$FILE")$'\n'
     fi || return
     [ "${PRESERVE+1}" = 1 ] ||

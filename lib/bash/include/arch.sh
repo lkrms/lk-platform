@@ -116,7 +116,7 @@ s/^(GRUB_CMDLINE_LINUX_DEFAULT)=(.*)/\1=$CMDLINE/" "$FILE" &&
     FILE=$(_lk_arch_path /usr/local/bin/update-grub)
     lk_install -d -m 00755 "${FILE%/*}" &&
         lk_install -m 00755 "$FILE" &&
-        lk_file_replace -f "$LK_BASE/share/grub/update-grub-arch" "$FILE" ||
+        lk_file_replace -f "$(_lk_arch_path "$LK_BASE/share/grub/update-grub-arch")" "$FILE" ||
         lk_warn "unable to update $FILE" || return
 }
 
