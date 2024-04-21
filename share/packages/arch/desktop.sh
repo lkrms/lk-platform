@@ -112,6 +112,8 @@ PAC_PACKAGES+=(
     pstoedit      # PDF/PostScript conversion to vector formats
     qpdf          # PDF manipulation (e.g. add underlay)
     texlive-basic # PDF support for pandoc
+    tesseract     # OCR
+    tesseract-data-eng
 
     # Photography
     geeqie
