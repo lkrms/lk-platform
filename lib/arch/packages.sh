@@ -168,10 +168,6 @@ PAC_PACKAGES+=(
     amd-ucode:BM
 )
 
-! lk_system_is_thinkpad || PAC_PACKAGES+=(
-    tpacpi-bat:BM
-)
-
 AUR_PACKAGES+=(
     # Essentials
     upd72020x-fw-:BM # Firmware for module 'xhci_pci'
