@@ -187,6 +187,8 @@ PAC_PACKAGES+=(
     pstoedit      # PDF/PostScript conversion to vector formats
     qpdf          # PDF manipulation (e.g. add underlay)
     texlive-basic # PDF support for pandoc
+    tesseract     # OCR
+    tesseract-data-eng
 
     # Photography
     geeqie
@@ -385,6 +387,7 @@ AUR_PACKAGES+=(
     php74
     php74-bcmath
     php74-cli
+    php74-ctype
     php74-curl
     php74-dom
     php74-exif
@@ -413,6 +416,7 @@ AUR_PACKAGES+=(
     php80
     php80-bcmath
     php80-cli
+    php80-ctype
     php80-curl
     php80-dom
     php80-exif
@@ -439,6 +443,7 @@ AUR_PACKAGES+=(
     php81
     php81-bcmath
     php81-cli
+    php81-ctype
     php81-curl
     php81-dom
     php81-exif
@@ -464,6 +469,7 @@ AUR_PACKAGES+=(
     php82
     php82-bcmath
     php82-cli
+    php82-ctype
     php82-curl
     php82-dom
     php82-exif
