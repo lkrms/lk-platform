@@ -125,8 +125,8 @@ for FILE_PATH in \
     lib/bash/include/linux.sh \
     lib/bash/include/arch.sh \
     lib/arch/packages.sh \
-    lib/awk/section-get.awk \
-    lib/awk/section-replace.awk \
+    lib/awk/sh-section-get.awk \
+    lib/awk/sh-section-replace.awk \
     share/sudoers.d/default; do
     FILE=$_DIR/${FILE_PATH##*/}
     URL=$REPO_URL/$LK_PLATFORM_BRANCH/$FILE_PATH
