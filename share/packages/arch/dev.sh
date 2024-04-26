@@ -291,7 +291,7 @@ PAC_PACKAGES+=(
     bash-language-server
     cloc
     cmake
-    d-feet
+    d-spy
     dbeaver
     emscripten
     eslint
@@ -363,7 +363,9 @@ PAC_PACKAGES+=(
     lua-posix
 
     # Platforms
+    act # GitHub Action runner
     aws-cli
+    azure-cli
     github-cli
     s3cmd
     wp-cli
@@ -520,8 +522,6 @@ AUR_PACKAGES+=(
     vsce
 
     # Platforms
-    act # GitHub Action runner
-    azure-cli
     azure-functions-core-tools-bin
     linode-cli
 
