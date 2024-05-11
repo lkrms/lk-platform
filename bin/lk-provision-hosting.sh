@@ -444,6 +444,14 @@ fi
     lk_tty_detail "Checking sources"
     unset LK_FILE_REPLACE_NO_CHANGE
     FILE=/etc/apt/sources.list
+    DEB822_FILE=/etc/apt/sources.list.d/ubuntu.sources
+    if [[ -f $DEB822_FILE ]]; then
+        lk_file_keep_original "$FILE"
+        lk_file_replace "$FILE" < <(
+            awk -f "$LK_BASE/lib/awk/sh-apt-convert-sources.awk" "$DEB822_FILE"
+        )
+        lk_tty_run_detail mv -fv "$DEB822_FILE"{,.disabled}
+    fi
     # Disable source packages, multiverse sources
     _FILE=$(sed -E \
         -e "s/^deb-src$S/#&/" \
