@@ -677,6 +677,9 @@ function lk_hosting_php_get_default_version() { (
     22.04)
         echo 8.1
         ;;
+    24.04)
+        echo 8.3
+        ;;
     *)
         false
         ;;
