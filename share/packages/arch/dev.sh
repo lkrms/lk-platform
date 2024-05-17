@@ -19,12 +19,14 @@ PAC_OFFER=(
     geteltorito # ThinkPad UEFI firmware update conversion
     linux-headers
     mockoon-bin
+    mssql-server
     offlineimap
     ookla-speedtest-bin
     ruby-ronn-ng
     stretchly-bin
     stripe-cli
     subversion
+    vscodium-bin
     xfce4-dev-tools
     zoom
 
@@ -83,7 +85,7 @@ lk_is_virtual || {
     ! lk_system_has_amd_graphics || PAC_PACKAGES+=(
         clinfo
         libclc
-        opencl-mesa
+        opencl-clover-mesa
         vulkan-radeon
         vulkan-tools
     )
@@ -218,6 +220,7 @@ PAC_PACKAGES+=(
     mkvtoolnix-cli
     mkvtoolnix-gui
     openshot
+    yt-dlp
 
     # System
     dconf-editor
@@ -241,7 +244,7 @@ AUR_PACKAGES+=(
     clementine
     clockify-desktop
     emote
-    espanso
+    espanso-x11
     gtk3-nocsd-git
     highlight-pointer
     key-mon
@@ -271,7 +274,6 @@ AUR_PACKAGES+=(
     # Multimedia - video
     makemkv
     video-trimmer
-    yt-dlp-git
 
     # System
     hfsprogs
@@ -372,8 +374,7 @@ PAC_PACKAGES+=(
 )
 
 AUR_PACKAGES+=(
-    dotnet-runtime-3.1-bin # storageexplorer dependency
-    mongodb50-bin          # Required for legacy 'mongo' command
+    mongodb50-bin # Required for legacy 'mongo' command
     msodbcsql
     mssql-tools
     multitime
@@ -405,6 +406,7 @@ AUR_PACKAGES+=(
     php74-memcached
     php74-mysql
     php74-phar
+    php74-posix
     php74-simplexml
     php74-soap
     php74-sodium
@@ -432,6 +434,7 @@ AUR_PACKAGES+=(
     php80-memcached
     php80-mysql
     php80-phar
+    php80-posix
     php80-simplexml
     php80-soap
     php80-sodium
@@ -458,6 +461,7 @@ AUR_PACKAGES+=(
     php81-mbstring
     php81-mysql
     php81-phar
+    php81-posix
     php81-simplexml
     php81-soap
     php81-sodium
@@ -484,6 +488,7 @@ AUR_PACKAGES+=(
     php82-mbstring
     php82-mysql
     php82-phar
+    php82-posix
     php82-simplexml
     php82-soap
     php82-sodium
@@ -514,7 +519,6 @@ AUR_PACKAGES+=(
     sublime-merge
     sublime-text
     visual-studio-code-bin
-    #vscodium-bin
 
     #
     nodejs-generator-code

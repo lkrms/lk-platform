@@ -148,16 +148,26 @@ printf '%s\n' "$@" | sort -u |
     lk_tty_list_detail - \
         "Unable to download from AUR:" package packages <"$ERRORS"
 
+lk_mktemp_with AVAILABLE lk_pac_repo_available_list "$REPO"
+lk_mktemp_with PROVIDED
+pacman -Sp --print-format "%n %P" $(
+    awk -v repo="$REPO" '{ print repo "/" $0 }' "$AVAILABLE"
+) | tr -s ' ' '\n' | sed -E 's/=.*//' | sort -u >"$PROVIDED"
+
 if lk_mktemp_with MISSING grep -Fxv \
-    -f <(lk_pac_repo_available_list "$REPO") < <(printf '%s\n' "$@"); then
+    -f "$PROVIDED" < <(printf '%s\n' "$@"); then
     lk_tty_list_detail - \
         "Missing (provided by others?):" package packages <"$MISSING"
 else
     lk_tty_detail "No missing packages found"
 fi
 
-if lk_mktemp_with ORPHANS grep -Fxv \
-    -f <(printf '%s\n' "$@") < <(lk_pac_repo_available_list "$REPO"); then
+if lk_mktemp_with ORPHANS grep -Fxv -f <(
+    pacman -Sp --print-format "%n" $(
+        grep -Fx -f "$PROVIDED" < <(printf '%s\n' "$@") |
+            awk -v repo="$REPO" '{ print repo "/" $0 }'
+    )
+) <"$AVAILABLE"; then
     lk_tty_list_detail - "Orphaned:" package packages <"$ORPHANS"
 else
     lk_tty_detail "No orphans found"

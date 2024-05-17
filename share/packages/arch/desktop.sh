@@ -33,7 +33,7 @@ lk_is_virtual || {
     ! lk_system_has_amd_graphics || PAC_PACKAGES+=(
         clinfo
         libclc
-        opencl-mesa
+        opencl-clover-mesa
         vulkan-radeon
         vulkan-tools
     )
@@ -139,6 +139,7 @@ PAC_PACKAGES+=(
     ffmpeg
     handbrake
     handbrake-cli
+    yt-dlp
 
     # System
     dconf-editor
@@ -160,7 +161,7 @@ AUR_PACKAGES+=(
     clementine
     clockify-desktop
     emote
-    espanso
+    espanso-x11
     highlight-pointer
     key-mon
     libreoffice-extension-languagetool
@@ -178,9 +179,6 @@ AUR_PACKAGES+=(
     #ttf-apple-emoji
     ttf-twemoji
     typora
-
-    # Multimedia - video
-    yt-dlp-git
 
     # System
     hfsprogs
