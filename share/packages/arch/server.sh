@@ -35,7 +35,6 @@ PAC_OFFER=(
     aws-cli
     azure-cli
     linode-cli
-    python-boto # Optional linode-cli dependency
     s3cmd
     wp-cli
 
