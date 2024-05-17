@@ -73,7 +73,7 @@ lk_is_virtual || {
     ! lk_system_has_amd_graphics || PAC_PACKAGES+=(
         clinfo
         libclc
-        opencl-mesa
+        opencl-clover-mesa
         vulkan-radeon
         vulkan-tools
     )
@@ -109,6 +109,7 @@ PAC_PACKAGES+=(
     # Multimedia
     ffmpeg
     rtmpdump
+    yt-dlp
 
     #
     nodejs
@@ -119,9 +120,9 @@ PAC_PACKAGES+=(
 )
 
 AUR_PACKAGES+=(
+    sqm-scripts
+
+    #
     python-demjson3
     ruby-erubis
-
-    # Multimedia
-    yt-dlp-git
 )

@@ -192,8 +192,8 @@ FIELD_ERRORS=$'\n'$(
     }
     lk_validate LK_INNODB_BUFFER_SIZE '^[0-9]+[kmgtpeKMGTPE]?$'
     lk_validate LK_OPCACHE_MEMORY_CONSUMPTION '^[0-9]+$'
-    lk_validate_many_of LK_PHP_VERSIONS 5.6 7.0 7.1 7.2 7.3 7.4 8.0 8.1 8.2
-    lk_validate_one_of LK_PHP_DEFAULT_VERSION 5.6 7.0 7.1 7.2 7.3 7.4 8.0 8.1 8.2
+    lk_validate_many_of LK_PHP_VERSIONS 5.6 7.0 7.1 7.2 7.3 7.4 8.0 8.1 8.2 8.3
+    lk_validate_one_of LK_PHP_DEFAULT_VERSION 5.6 7.0 7.1 7.2 7.3 7.4 8.0 8.1 8.2 8.3
     lk_validate_list LK_PHP_SETTINGS "^$PHP_SETTING_REGEX\$"
     lk_validate_list LK_PHP_ADMIN_SETTINGS "^$PHP_SETTING_REGEX\$"
     lk_validate LK_SITE_PHP_FPM_MAX_CHILDREN '^[0-9]+$'
@@ -331,6 +331,7 @@ case "$DISTRIB_RELEASE" in
     ;;
 20.04) ;;
 22.04) ;;
+24.04) ;;
 *)
     lk_die "Ubuntu release not supported: $DISTRIB_RELEASE"
     ;;
@@ -443,6 +444,14 @@ fi
     lk_tty_detail "Checking sources"
     unset LK_FILE_REPLACE_NO_CHANGE
     FILE=/etc/apt/sources.list
+    DEB822_FILE=/etc/apt/sources.list.d/ubuntu.sources
+    if [[ -f $DEB822_FILE ]]; then
+        lk_file_keep_original "$FILE"
+        lk_file_replace "$FILE" < <(
+            awk -f "$LK_BASE/lib/awk/sh-apt-convert-sources.awk" "$DEB822_FILE"
+        )
+        lk_tty_run_detail mv -fv "$DEB822_FILE"{,.disabled}
+    fi
     # Disable source packages, multiverse sources
     _FILE=$(sed -E \
         -e "s/^deb-src$S/#&/" \

@@ -1418,6 +1418,9 @@ function _lk_err_trap() {
 
 set -o pipefail
 
+! lk_bash_at_least 5 2 ||
+    shopt -u patsub_replacement
+
 if [[ $- != *i* ]]; then
     lk_trap_add EXIT '_lk_exit_trap "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'
     lk_trap_add ERR '_lk_err_trap "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'

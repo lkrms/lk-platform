@@ -79,6 +79,7 @@ If --isolate is set:
 
 SUPPORTED IMAGES
 
+    ubuntu-24.04        ubuntu-24.04-minimal
     ubuntu-22.04        ubuntu-22.04-minimal
     ubuntu-20.04        ubuntu-20.04-minimal
     ubuntu-18.04        ubuntu-18.04-minimal
@@ -491,6 +492,12 @@ SHA_KEYRING=/usr/share/keyrings/ubuntu-cloudimage-keyring.gpg
         lk_die "Ubuntu 14.04 is not supported on $IMAGE_ARCH"
 }
 case "$IMAGE" in
+*24.04*minimal)
+    boot_ubuntu_minimal 24.04 noble
+    ;;
+*24.04*)
+    boot_ubuntu 24.04 noble
+    ;;
 *22.04*minimal)
     boot_ubuntu_minimal 22.04 jammy
     ;;
@@ -1090,6 +1097,7 @@ dns-nameservers $VM_IPV4_GATEWAY" '{
         --disk "$DISK_PATH",bus=virtio \
         --disk "$NOCLOUD_PATH",bus=virtio \
         --graphics none \
+        --tpm none \
         --rng /dev/urandom \
         ${VIRT_OPTIONS+"${VIRT_OPTIONS[@]}"} \
         --virt-type "$VIRT_TYPE" \
