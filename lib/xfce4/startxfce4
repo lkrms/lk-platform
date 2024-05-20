@@ -102,4 +102,8 @@ xfconf-query -c xfce4-power-manager \
 xfconf-query -c xfce4-notifyd \
     -p /do-not-disturb -n -t bool -s false
 
+[ -z "${XDG_RUNTIME_DIR-}" ] ||
+    [ ! -e /usr/lib/systemd/user/gcr-ssh-agent.socket ] ||
+    export SSH_AUTH_SOCK=$XDG_RUNTIME_DIR/gcr/ssh
+
 exec /usr/bin/startxfce4 "$@"
