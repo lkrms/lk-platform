@@ -146,7 +146,6 @@ AUR_PACKAGES+=(
 
 # Desktop
 PAC_PACKAGES+=(
-    caprine
     chromium
     copyq
     filezilla
@@ -241,6 +240,7 @@ PAC_PACKAGES+=(
 )
 
 AUR_PACKAGES+=(
+    caprine
     clementine
     clockify-desktop
     emote
@@ -405,6 +405,7 @@ AUR_PACKAGES+=(
     php74-memcache
     php74-memcached
     php74-mysql
+    php74-pcntl
     php74-phar
     php74-posix
     php74-simplexml
@@ -433,6 +434,7 @@ AUR_PACKAGES+=(
     php80-mbstring
     php80-memcached
     php80-mysql
+    php80-pcntl
     php80-phar
     php80-posix
     php80-simplexml
@@ -460,6 +462,7 @@ AUR_PACKAGES+=(
     php81-intl
     php81-mbstring
     php81-mysql
+    php81-pcntl
     php81-phar
     php81-posix
     php81-simplexml
@@ -487,6 +490,7 @@ AUR_PACKAGES+=(
     php82-intl
     php82-mbstring
     php82-mysql
+    php82-pcntl
     php82-phar
     php82-posix
     php82-simplexml

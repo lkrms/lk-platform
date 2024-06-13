@@ -71,7 +71,6 @@ AUR_PACKAGES+=(
 
 # Desktop
 PAC_PACKAGES+=(
-    caprine
     chromium
     copyq
     filezilla
@@ -158,6 +157,7 @@ PAC_PACKAGES+=(
 )
 
 AUR_PACKAGES+=(
+    caprine
     clementine
     clockify-desktop
     emote
