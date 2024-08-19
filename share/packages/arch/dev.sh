@@ -129,8 +129,8 @@ PAC_PACKAGES+=(
     certbot
     cloud-utils
     cronie
-    mlocate
     namcap
+    plocate
     stow
     ubuntu-keyring
 )
