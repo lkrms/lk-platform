@@ -147,16 +147,17 @@ function lk_nm_device_connection_uuid() {
             lk_require_output awk -v "i=$1" '$0==i{f=1;next}f{print;f=0}'
 }
 
-# lk_nm_file_get_ipv4_ipv6 IPV4_ADDRESS IPV4_GATEWAY DNS_SERVERS DNS_SEARCH
+# lk_nm_file_get_ipv4_ipv6 IPV4_ADDRESS IPV4_GATEWAY DNS_SERVERS DNS_SEARCH IPV6_METHOD
 #
 # Output NetworkManager [ipv4] and [ipv6] keyfile sections for the given
 # configuration. All arguments are optional.
 function lk_nm_file_get_ipv4_ipv6() {
-    local ADDRESS=${1-} GATEWAY=${2-} DNS4 DNS6 DNS_SEARCH MANUAL IFS=$'; \t\n'
+    local ADDRESS=${1-} GATEWAY=${2-} DNS4 DNS6 DNS_SEARCH METHOD6 MANUAL IFS=$'; \t\n'
     unset MANUAL
     DNS4=($(printf '%s\n' ${3-} | lk_filter_ipv4))
     DNS6=($(printf '%s\n' ${3-} | lk_filter_ipv6))
     DNS_SEARCH=(${4-})
+    METHOD6=${5:-auto}
     [ -z "$ADDRESS" ] || MANUAL=
     cat <<EOF
 
@@ -173,7 +174,7 @@ dns=${DNS6[*]};${DNS_SEARCH[*]+
 dns-search=${DNS_SEARCH[*]};}
 ignore-auto-dns=true}
 ip6-privacy=0
-method=auto}
+method=$METHOD6}
 EOF
 }
 

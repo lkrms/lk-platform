@@ -35,6 +35,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_BACKUP_TIMESTAMP`
 - `LK_BIN_DIR`
 - `LK_BRIDGE_INTERFACE`
+- `LK_BRIDGE_IPV6_PD`
 - `LK_CERTBOT_EMAIL`
 - `LK_CERTBOT_INSTALLED`
 - `LK_CERTBOT_OPTIONS`
