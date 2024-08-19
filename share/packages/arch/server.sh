@@ -13,10 +13,10 @@ PAC_OFFER=(
     glances
     handbrake-cli
     mkvtoolnix-cli
-    mlocate
     offlineimap
     ookla-speedtest-bin
     pacman-cleanup-hook
+    plocate
     powershell-bin
     transmission-cli
 

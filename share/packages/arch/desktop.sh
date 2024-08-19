@@ -60,7 +60,7 @@ PAC_PACKAGES+=(
     samba
 
     # System
-    mlocate
+    plocate
 )
 
 AUR_PACKAGES+=(
