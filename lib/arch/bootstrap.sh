@@ -46,6 +46,7 @@ LK_IPV4_GATEWAY=${LK_IPV4_GATEWAY-}                                    #
 LK_DNS_SERVERS=${LK_DNS_SERVERS-}                                      # Space- or semicolon-delimited (expanded by lk_nm_file_get_ipv4_ipv6)
 LK_DNS_SEARCH=${LK_DNS_SEARCH-}                                        # Space- or semicolon-delimited (expanded by lk_nm_file_get_ipv4_ipv6)
 LK_BRIDGE_INTERFACE=${LK_BRIDGE_INTERFACE-}                            # Ignored on laptops, otherwise configured on the first Ethernet port
+LK_BRIDGE_IPV6_PD=${LK_BRIDGE_IPV6_PD-}                                # If set, the bridge will be used to delegate an IPv6 prefix
 LK_WIFI_REGDOM=${LK_WIFI_REGDOM-}                                      # e.g. "AU" (see /etc/conf.d/wireless-regdom)
 LK_NODE_TIMEZONE=${LK_NODE_TIMEZONE:-UTC}                              # See `timedatectl list-timezones`
 LK_FEATURES=${LK_FEATURES-}                                            #
@@ -470,6 +471,7 @@ lk_var_sh \
     LK_DNS_SERVERS \
     LK_DNS_SEARCH \
     LK_BRIDGE_INTERFACE \
+    LK_BRIDGE_IPV6_PD \
     LK_WIFI_REGDOM \
     LK_NODE_TIMEZONE \
     LK_FEATURES \

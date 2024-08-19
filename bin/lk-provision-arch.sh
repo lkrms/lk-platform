@@ -256,7 +256,8 @@ lk_start_trace
                 lk_install -m 00600 "$BRIDGE_FILE"
                 lk_file_replace -i "$NM_IGNORE" "$BRIDGE_FILE" \
                     < <(lk_nm_file_get_bridge \
-                        "$BRIDGE" "$IF_ADDRESS" "${IPV4_IPV6[@]}")
+                        "$BRIDGE" "$IF_ADDRESS" "${IPV4_IPV6[@]}" \
+                        "${LK_BRIDGE_IPV6_PD:+shared}")
                 lk_file_replace -i "$NM_IGNORE" "$FILE" \
                     < <(lk_nm_file_get_ethernet \
                         "$IF_NAME" "$IF_ADDRESS" "$BRIDGE")
