@@ -1103,11 +1103,11 @@ done\""
 
     if lk_pac_installed xfce4-session; then
         lk_symlink_bin "$LK_BASE/lib/xfce4/startxfce4"
-        SH=$(sudo bash -c 'shopt -s nullglob &&
-        a=({/etc/skel*,/home/*}/.config/xfce4/xinitrc) &&
-        { [ ${#a[@]} -eq 0 ] || printf " %q" "${a[@]}"; }')
-        [ -z "$SH" ] ||
-            eval "file_delete$SH"
+        SOCKET=gcr-ssh-agent.socket
+        if [[ -e /usr/lib/systemd/user/$SOCKET ]] &&
+            [[ ! -e /etc/systemd/user/sockets.target.wants/$SOCKET ]]; then
+            sudo systemctl enable --global "$SOCKET"
+        fi
     fi
 
     if lk_pac_installed samba; then
