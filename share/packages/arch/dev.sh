@@ -507,8 +507,6 @@ AUR_PACKAGES+=(
     python-pywebview
     python39 # azure-functions-core-tools-bin dependency
     rollup
-    ruby-rubocop-rails
-    ruby-ruby-debug-ide
     standard
     symfony-console-autocomplete
     terser
