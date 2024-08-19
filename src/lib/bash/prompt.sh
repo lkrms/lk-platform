@@ -72,6 +72,8 @@ function _lk_prompt_command() {
     # "$ " or "# "
     PS1="${PS[*]}\\\$ "
     _LK_PROMPT_DISPLAYED=1
+    # Remove Byobu's "history -a;history -r;" prefix
+    PROMPT_COMMAND=_lk_prompt_command
     [[ ${LC_BYOBU:+1}${BYOBU_TERM:+2} != 2 ]] || export LC_BYOBU=0
 }
 
