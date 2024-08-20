@@ -1242,7 +1242,7 @@ function _lk_hosting_site_provision() {
             lk_install -m 00640 -o "$SITE_PHP_FPM_USER" -g "$_SITE_GROUP" \
                 "$LOG_DIR/php$SITE_PHP_VERSION-fpm.error.log" \
                 "$LOG_DIR/php$SITE_PHP_VERSION-fpm.xdebug.log"
-        SITE_PHP_FPM_PM=${SITE_PHP_FPM_PM:-$_SITE_PHP_FPM_PM}
+        SITE_PHP_FPM_PM=${LK_PHP_FPM_PM:-${SITE_PHP_FPM_PM:-$_SITE_PHP_FPM_PM}}
         if ((${SITE_PHP_VERSION%.*} >= 8)); then
             SITE_PHP_FPM_ADMIN_SETTINGS=${SITE_PHP_FPM_ADMIN_SETTINGS:+$SITE_PHP_FPM_ADMIN_SETTINGS,}auto_prepend_file=$LK_BASE/lib/php/auto_prepend.php
         fi

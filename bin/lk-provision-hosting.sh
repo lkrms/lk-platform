@@ -106,6 +106,7 @@ export -n \
     LK_PHP_DEFAULT_VERSION=${LK_PHP_DEFAULT_VERSION-} \
     LK_PHP_SETTINGS=${LK_PHP_SETTINGS-} \
     LK_PHP_ADMIN_SETTINGS=${LK_PHP_ADMIN_SETTINGS-} \
+    LK_PHP_FPM_PM=${LK_PHP_FPM_PM-} \
     LK_SITE_PHP_FPM_MAX_CHILDREN=${LK_SITE_PHP_FPM_MAX_CHILDREN-} \
     LK_SITE_PHP_FPM_MEMORY_LIMIT=${LK_SITE_PHP_FPM_MEMORY_LIMIT-} \
     LK_MEMCACHED_MEMORY_LIMIT=${LK_MEMCACHED_MEMORY_LIMIT-} \
@@ -196,6 +197,7 @@ FIELD_ERRORS=$'\n'$(
     lk_validate_one_of LK_PHP_DEFAULT_VERSION 5.6 7.0 7.1 7.2 7.3 7.4 8.0 8.1 8.2 8.3
     lk_validate_list LK_PHP_SETTINGS "^$PHP_SETTING_REGEX\$"
     lk_validate_list LK_PHP_ADMIN_SETTINGS "^$PHP_SETTING_REGEX\$"
+    lk_validate_one_of LK_PHP_FPM_PM static ondemand dynamic
     lk_validate LK_SITE_PHP_FPM_MAX_CHILDREN '^[0-9]+$'
     lk_validate LK_SITE_PHP_FPM_MEMORY_LIMIT '^[0-9]+$'
     lk_validate LK_MEMCACHED_MEMORY_LIMIT '^[0-9]+$'
@@ -254,6 +256,7 @@ if lk_is_bootstrap; then
         LK_PHP_DEFAULT_VERSION \
         LK_PHP_SETTINGS \
         LK_PHP_ADMIN_SETTINGS \
+        LK_PHP_FPM_PM \
         LK_MEMCACHED_MEMORY_LIMIT \
         LK_SMTP_RELAY \
         LK_SMTP_CREDENTIALS \
@@ -1134,6 +1137,15 @@ END        { if (m) { print u[m] } else { exit 1 } }')} ||
                 "$LK_BASE/share/mariadb.conf.d/default-hosting.template.cnf"
         )
         lk_file_replace "$FILE" "$_FILE"
+        CONFIG_NO_CHANGE=$LK_FILE_REPLACE_NO_CHANGE
+        unset LK_FILE_REPLACE_NO_CHANGE
+        FILE=/etc/systemd/system/mariadb.service.d/90-${LK_PATH_PREFIX}override.conf
+        lk_install -d -m 00755 "${FILE%/*}"
+        lk_install -m 00644 "$FILE"
+        lk_file_replace \
+            -f "$LK_BASE/share/systemd/mariadb.service" \
+            "$FILE"
+        SERVICE_NO_CHANGE=$LK_FILE_REPLACE_NO_CHANGE
         if lk_is_bootstrap; then
             # MariaDB packages provide a `mysql.service` alias for
             # `mariadb.service`, so use `mysql.service` for maximum portability
@@ -1149,8 +1161,11 @@ WITH GRANT OPTION
 EOF
             fi
         else
-            ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+            if lk_false CONFIG_NO_CHANGE || lk_false SERVICE_NO_CHANGE; then
+                ! lk_false SERVICE_NO_CHANGE ||
+                    lk_tty_run_detail systemctl daemon-reload
                 lk_tty_run_detail systemctl restart mysql.service
+            fi
         fi
     fi
 
