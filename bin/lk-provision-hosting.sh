@@ -1137,6 +1137,12 @@ END        { if (m) { print u[m] } else { exit 1 } }')} ||
                 "$LK_BASE/share/mariadb.conf.d/default-hosting.template.cnf"
         )
         lk_file_replace "$FILE" "$_FILE"
+        FILE=/etc/systemd/system/mariadb.service.d/90-${LK_PATH_PREFIX}override.conf
+        lk_install -d -m 00755 "${FILE%/*}"
+        lk_install -m 00644 "$FILE"
+        lk_file_replace \
+            -f "$LK_BASE/share/systemd/mariadb.service" \
+            "$FILE"
         if lk_is_bootstrap; then
             # MariaDB packages provide a `mysql.service` alias for
             # `mariadb.service`, so use `mysql.service` for maximum portability
