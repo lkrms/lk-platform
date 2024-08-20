@@ -106,6 +106,7 @@ export -n \
     LK_PHP_DEFAULT_VERSION=${LK_PHP_DEFAULT_VERSION-} \
     LK_PHP_SETTINGS=${LK_PHP_SETTINGS-} \
     LK_PHP_ADMIN_SETTINGS=${LK_PHP_ADMIN_SETTINGS-} \
+    LK_PHP_FPM_PM=${LK_PHP_FPM_PM-} \
     LK_SITE_PHP_FPM_MAX_CHILDREN=${LK_SITE_PHP_FPM_MAX_CHILDREN-} \
     LK_SITE_PHP_FPM_MEMORY_LIMIT=${LK_SITE_PHP_FPM_MEMORY_LIMIT-} \
     LK_MEMCACHED_MEMORY_LIMIT=${LK_MEMCACHED_MEMORY_LIMIT-} \
@@ -196,6 +197,7 @@ FIELD_ERRORS=$'\n'$(
     lk_validate_one_of LK_PHP_DEFAULT_VERSION 5.6 7.0 7.1 7.2 7.3 7.4 8.0 8.1 8.2 8.3
     lk_validate_list LK_PHP_SETTINGS "^$PHP_SETTING_REGEX\$"
     lk_validate_list LK_PHP_ADMIN_SETTINGS "^$PHP_SETTING_REGEX\$"
+    lk_validate_one_of LK_PHP_FPM_PM static ondemand dynamic
     lk_validate LK_SITE_PHP_FPM_MAX_CHILDREN '^[0-9]+$'
     lk_validate LK_SITE_PHP_FPM_MEMORY_LIMIT '^[0-9]+$'
     lk_validate LK_MEMCACHED_MEMORY_LIMIT '^[0-9]+$'
@@ -254,6 +256,7 @@ if lk_is_bootstrap; then
         LK_PHP_DEFAULT_VERSION \
         LK_PHP_SETTINGS \
         LK_PHP_ADMIN_SETTINGS \
+        LK_PHP_FPM_PM \
         LK_MEMCACHED_MEMORY_LIMIT \
         LK_SMTP_RELAY \
         LK_SMTP_CREDENTIALS \

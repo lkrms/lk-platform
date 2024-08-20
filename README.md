@@ -99,6 +99,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_PATH_PREFIX`
 - `LK_PHP_ADMIN_SETTINGS`
 - `LK_PHP_DEFAULT_VERSION`
+- `LK_PHP_FPM_PM`
 - `LK_PHP_SETTINGS`
 - `LK_PHP_VERSIONS`
 - `LK_PLATFORM_BRANCH`
