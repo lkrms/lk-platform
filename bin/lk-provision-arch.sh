@@ -824,6 +824,7 @@ $LK_NODE_HOSTNAME" &&
                     memcache.so
                     memcached.so
                     mysqli
+                    pcov
                     pdo_sqlite
                     soap
                     sodium
@@ -865,12 +866,6 @@ $LK_NODE_HOSTNAME" &&
                         lk_php_set_option xdebug.collect_return On
                         lk_php_set_option xdebug.trace_output_name trace.%H.%R.%u
                         #lk_php_enable_option zend_extension xdebug.so
-                    )
-
-                    (
-                        LK_CONF_OPTION_FILE=$DIR/conf.d/pcov.ini
-                        [ -f "$LK_CONF_OPTION_FILE" ] || exit 0
-                        lk_php_disable_option extension pcov.so
                     )
                 fi
             done
