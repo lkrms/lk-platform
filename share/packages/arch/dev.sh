@@ -220,6 +220,7 @@ PAC_PACKAGES+=(
     mkvtoolnix-cli
     mkvtoolnix-gui
     openshot
+    video-trimmer
     yt-dlp
 
     # System
@@ -274,7 +275,6 @@ AUR_PACKAGES+=(
 
     # Multimedia - video
     makemkv
-    video-trimmer
 
     # System
     hfsprogs
@@ -345,6 +345,7 @@ PAC_PACKAGES+=(
     python-mysqlclient
     python-pip
     python-pipenv
+    python-pywebview
     python-requests
     python-virtualenv
     python-xmlschema
@@ -505,7 +506,6 @@ AUR_PACKAGES+=(
     php82-zip
     pretty-php
     python-demjson3
-    python-pywebview
     python39 # azure-functions-core-tools-bin dependency
     rollup
     standard
