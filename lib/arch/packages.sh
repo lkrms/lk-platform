@@ -264,6 +264,7 @@ if lk_feature_enabled desktop; then
         arc-solid-gtk-theme-
         capitaine-cursors-
         papirus-icon-theme-
+        vimix-cursors-
 
         gtk-engine-murrine- # Support GTK 2
         gtk-engines-
@@ -353,7 +354,6 @@ if lk_feature_enabled desktop; then
         qogir-gtk-theme-
         qogir-icon-theme-
         tela-icon-theme-
-        vimix-cursors-
 
         zuki-themes-
     )
@@ -363,6 +363,7 @@ if lk_feature_enabled xfce4; then
     PAC_PACKAGES+=(
         xfce4
         xfce4-goodies
+        xfce4-panel-profiles-
 
         catfish
         engrampa
@@ -376,7 +377,6 @@ if lk_feature_enabled xfce4; then
 
     AUR_PACKAGES+=(
         mugshot-
-        xfce4-panel-profiles-
         xfce-theme-greybird- # Xubuntu's default theme
     )
 fi

@@ -21,14 +21,15 @@ PAC_OFFER=(
     transmission-cli
 
     # PDF
-    ghostscript   # PDF/PostScript processing
-    mupdf-tools   # PDF manipulation
-    pandoc-cli    # Text conversion (e.g. Markdown to PDF)
-    poppler       # Provides pdfimages
-    pstoedit      # PDF/PostScript conversion to vector formats
-    qpdf          # PDF manipulation (e.g. add underlay)
-    texlive-basic # PDF support for pandoc
-    tesseract     # OCR
+    ghostscript        # PDF/PostScript processing
+    mupdf-tools        # PDF manipulation
+    pandoc-cli         # Text conversion (e.g. Markdown to PDF)
+    poppler            # Provides pdfimages
+    pstoedit           # PDF/PostScript conversion to vector formats
+    qpdf               # PDF manipulation (e.g. add underlay)
+    texlive-latexextra # PDF support for pandoc
+    texlive-fontsextra #
+    tesseract          # OCR
     tesseract-data-eng
 
     # Platforms

@@ -181,14 +181,15 @@ PAC_PACKAGES+=(
     hyphen-en
 
     # PDF
-    ghostscript   # PDF/PostScript processing
-    mupdf-tools   # PDF manipulation
-    pandoc-cli    # Text conversion (e.g. Markdown to PDF)
-    poppler       # Provides pdfimages
-    pstoedit      # PDF/PostScript conversion to vector formats
-    qpdf          # PDF manipulation (e.g. add underlay)
-    texlive-basic # PDF support for pandoc
-    tesseract     # OCR
+    ghostscript        # PDF/PostScript processing
+    mupdf-tools        # PDF manipulation
+    pandoc-cli         # Text conversion (e.g. Markdown to PDF)
+    poppler            # Provides pdfimages
+    pstoedit           # PDF/PostScript conversion to vector formats
+    qpdf               # PDF manipulation (e.g. add underlay)
+    texlive-latexextra # PDF support for pandoc
+    texlive-fontsextra #
+    tesseract          # OCR
     tesseract-data-eng
 
     # Photography
@@ -219,6 +220,7 @@ PAC_PACKAGES+=(
     mkvtoolnix-cli
     mkvtoolnix-gui
     openshot
+    video-trimmer
     yt-dlp
 
     # System
@@ -273,7 +275,6 @@ AUR_PACKAGES+=(
 
     # Multimedia - video
     makemkv
-    video-trimmer
 
     # System
     hfsprogs
@@ -344,6 +345,7 @@ PAC_PACKAGES+=(
     python-mysqlclient
     python-pip
     python-pipenv
+    python-pywebview
     python-requests
     python-virtualenv
     python-xmlschema
@@ -504,7 +506,6 @@ AUR_PACKAGES+=(
     php82-zip
     pretty-php
     python-demjson3
-    python-pywebview
     python39 # azure-functions-core-tools-bin dependency
     rollup
     standard
