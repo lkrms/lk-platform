@@ -819,6 +819,7 @@ $LK_NODE_HOSTNAME" &&
                     gd
                     gettext
                     iconv
+                    igbinary.so
                     imagick
                     intl
                     memcache.so
