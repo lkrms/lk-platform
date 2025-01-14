@@ -257,7 +257,10 @@ lk_start_trace
                 lk_file_replace -i "$NM_IGNORE" "$BRIDGE_FILE" \
                     < <(lk_nm_file_get_bridge \
                         "$BRIDGE" "$IF_ADDRESS" "${IPV4_IPV6[@]}" \
-                        "${LK_BRIDGE_IPV6_PD:+shared}")
+                        "${LK_BRIDGE_IPV6_PD:+$(lk_nm_is_running &&
+                            nmcli -g ipv6.method connection show "$BRIDGE" 2>/dev/null |
+                            grep -Fx ignore ||
+                            echo shared)}")
                 lk_file_replace -i "$NM_IGNORE" "$FILE" \
                     < <(lk_nm_file_get_ethernet \
                         "$IF_NAME" "$IF_ADDRESS" "$BRIDGE")
@@ -800,7 +803,7 @@ $LK_NODE_HOSTNAME" &&
     fi
 
     if lk_pac_installed php; then
-        for DIR in /etc/php83 /etc/php82 /etc/php81 /etc/php80 /etc/php74 /etc/php; do
+        for DIR in /etc/php84 /etc/php83 /etc/php82 /etc/php81 /etc/php80 /etc/php74 /etc/php; do
             unset LK_FILE_REPLACE_NO_CHANGE
             FILE=$DIR/php.ini
             CLI_FILE=$DIR/php-cli.ini
@@ -819,6 +822,7 @@ $LK_NODE_HOSTNAME" &&
                     gd
                     gettext
                     iconv
+                    igbinary.so
                     imagick
                     intl
                     memcache.so

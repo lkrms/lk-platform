@@ -107,7 +107,6 @@ PAC_PACKAGES+=(
     # Utilities
     cdrtools
     csvkit
-    ext4magic
     fatresize
     glances
     partclone
@@ -504,6 +503,34 @@ AUR_PACKAGES+=(
     php82-xmlreader
     php82-xmlwriter
     php82-zip
+    php84
+    php84-bcmath
+    php84-cli
+    php84-ctype
+    php84-curl
+    php84-dom
+    php84-exif
+    php84-fileinfo
+    php84-gd
+    php84-gettext
+    php84-iconv
+    #php84-imagick
+    php84-imap
+    php84-intl
+    php84-mbstring
+    php84-mysql
+    php84-pcntl
+    php84-phar
+    php84-posix
+    php84-simplexml
+    php84-soap
+    php84-sodium
+    php84-sqlite
+    php84-tokenizer
+    php84-xdebug
+    php84-xmlreader
+    php84-xmlwriter
+    php84-zip
     pretty-php
     python-demjson3
     python39 # azure-functions-core-tools-bin dependency
