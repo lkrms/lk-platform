@@ -44,6 +44,7 @@ PAC_PACKAGES+=(
     logrotate
 
     # Utilities
+    7zip
     bc
     curl
     diffutils
@@ -59,7 +60,6 @@ PAC_PACKAGES+=(
     nnn
     openbsd-netcat
     openssh
-    p7zip # Provides 7z
     perl
     pv
     ranger

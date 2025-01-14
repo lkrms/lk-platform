@@ -107,7 +107,6 @@ PAC_PACKAGES+=(
     # Utilities
     cdrtools
     csvkit
-    ext4magic
     fatresize
     glances
     partclone
