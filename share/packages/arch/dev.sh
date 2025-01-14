@@ -527,7 +527,7 @@ AUR_PACKAGES+=(
     php84-sodium
     php84-sqlite
     php84-tokenizer
-    #php84-xdebug
+    php84-xdebug
     php84-xmlreader
     php84-xmlwriter
     php84-zip
