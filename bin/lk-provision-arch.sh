@@ -986,6 +986,9 @@ EOF
 [Unit]
 Wants=network-online.target
 After=network-online.target
+
+[Service]
+RestartSec=10
 EOF
         ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
             DAEMON_RELOAD=1

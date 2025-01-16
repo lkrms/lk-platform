@@ -1,3 +1,4 @@
+: /.lk-backup-filter
 - /.byobu/.ssh-agent
 - /.cache
 - /.trash
@@ -6,7 +7,8 @@
 - /backup-archive
 - /log
 - /*/log
-- /staging
+- /public_html/.lk-settings-*
+- /*/public_html/.lk-settings-*
 - public_html/wp-content/backup
 - public_html/wp-content/cache
 - public_html/wp-content/litespeed

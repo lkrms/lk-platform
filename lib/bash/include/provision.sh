@@ -139,8 +139,9 @@ function lk_list_group_ids() {
     fi
 }
 
+# lk_group_exists NAME|GID
 function lk_group_exists() {
-    lk_list_group_ids | cut -f1 | grep -Fx "$1" >/dev/null
+    lk_list_group_ids | tr '\t' '\n' | grep -Fx "$1" >/dev/null
 }
 
 # lk_user_add_sftp_only USERNAME [SOURCE_DIR TARGET_DIR]...

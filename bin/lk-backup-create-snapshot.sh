@@ -14,7 +14,7 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
 export LK_BASE
 
 . "$LK_BASE/lib/bash/common.sh"
-lk_require backup mail mysql
+lk_require backup mail mysql provision
 ! lk_is_linux ||
     lk_require linux
 
@@ -86,9 +86,9 @@ $(lk_strip_non_printing -d '\v' <"$SNAPSHOT_LOG_FILE")" &&
 
 function find_custom() {
     local ARR="${1//-/_}[@]" FILE COUNT=0
-    for FILE in {"$LK_BASE/etc/backup","$BACKUP_ROOT/conf.d"}/{"$1","$SOURCE_NAME-$1","$SOURCE_NAME/$1"} \
-        ${!ARR+"${!ARR}"}; do
-        [ -e "$FILE" ] || continue
+    set -- {"$LK_BASE/etc/backup","$BACKUP_ROOT/conf.d"}/{"$1","$SOURCE_NAME-$1","$SOURCE_NAME/$1"} ${!ARR+"${!ARR}"}
+    for FILE in "$@"; do
+        [[ -e $FILE ]] || continue
         realpath "$FILE" || lk_die
         ((++COUNT))
     done
@@ -186,7 +186,8 @@ filter_rsync=()
 hook_pre_rsync=()
 hook_post_rsync=()
 
-LK_USAGE="\
+function __usage() {
+    cat <<EOF
 Usage: ${0##*/} [OPTIONS] SOURCE_NAME SOURCE BACKUP_ROOT [-- RSYNC_ARG...]
 
 Use hard links to duplicate the previous SOURCE_NAME snapshot at BACKUP_ROOT,
@@ -218,7 +219,9 @@ Sources:
 
 Hooks:
   pre_rsync
-  post_rsync"
+  post_rsync
+EOF
+}
 
 lk_getopt "g:f:h:" \
     "group:,filter:,hook:"
@@ -229,8 +232,7 @@ while :; do
     shift
     case "$OPT" in
     -g | --group)
-        # TODO: add macOS-friendly test
-        getent group "$1" &>/dev/null ||
+        lk_group_exists "$1" ||
             lk_die "group not found: $1"
         SNAPSHOT_GROUP=$1
         shift
