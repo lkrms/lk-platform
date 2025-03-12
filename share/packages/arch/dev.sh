@@ -211,6 +211,7 @@ PAC_PACKAGES+=(
     # Multimedia - audio
     audacity
     sox
+    strawberry
 
     # Multimedia - video
     ffmpeg
@@ -242,7 +243,6 @@ PAC_PACKAGES+=(
 
 AUR_PACKAGES+=(
     caprine
-    clementine
     clockify-desktop
     emote
     espanso-x11
