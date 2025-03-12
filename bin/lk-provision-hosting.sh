@@ -295,6 +295,7 @@ APT_UNMARK=(
     # Installed by previous versions of lk-platform
     software-properties-common
 )
+APT_PACKAGES=()
 APT_REMOVE=(
     # Recommended by ubuntu-minimal
     rsyslog
@@ -334,7 +335,14 @@ case "$DISTRIB_RELEASE" in
     ;;
 20.04) ;;
 22.04) ;;
-24.04) ;;
+24.04)
+    APT_PACKAGES+=(
+        ntpsec
+    )
+    APT_REMOVE+=(
+        ntp
+    )
+    ;;
 *)
     lk_die "Ubuntu release not supported: $DISTRIB_RELEASE"
     ;;
@@ -612,7 +620,7 @@ EOF
     fi
 
     IFS=,
-    APT_PACKAGES=($LK_PACKAGES)
+    APT_PACKAGES+=($LK_PACKAGES)
     unset IFS
     . "$LK_BASE/lib/hosting/packages.sh"
 

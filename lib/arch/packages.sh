@@ -151,7 +151,6 @@ PAC_PACKAGES+=(
     jfsutils-
     nilfs-utils-
     ntfs-3g
-    reiserfsprogs-
     udftools-
     xfsprogs-
 
@@ -367,6 +366,7 @@ if lk_feature_enabled xfce4; then
 
         catfish
         engrampa
+        mugshot
         pavucontrol
         plank
     )
@@ -376,7 +376,6 @@ if lk_feature_enabled xfce4; then
     )
 
     AUR_PACKAGES+=(
-        mugshot-
         xfce-theme-greybird- # Xubuntu's default theme
     )
 fi

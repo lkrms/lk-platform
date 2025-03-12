@@ -211,6 +211,7 @@ PAC_PACKAGES+=(
     # Multimedia - audio
     audacity
     sox
+    strawberry
 
     # Multimedia - video
     ffmpeg
@@ -242,7 +243,6 @@ PAC_PACKAGES+=(
 
 AUR_PACKAGES+=(
     caprine
-    clementine
     clockify-desktop
     emote
     espanso-x11
@@ -301,6 +301,7 @@ PAC_PACKAGES+=(
     gobject-introspection
     gperftools
     imagemagick
+    ollama
     python-black
     python-pylint
     qcachegrind
@@ -382,7 +383,6 @@ AUR_PACKAGES+=(
     nodejs-less
     nvm
     phive
-    php-humbug-box-bin
     php-ibm_db2
     php-memprof
     php-pcov
@@ -503,34 +503,34 @@ AUR_PACKAGES+=(
     php82-xmlreader
     php82-xmlwriter
     php82-zip
-    php84
-    php84-bcmath
-    php84-cli
-    php84-ctype
-    php84-curl
-    php84-dom
-    php84-exif
-    php84-fileinfo
-    php84-gd
-    php84-gettext
-    php84-iconv
-    #php84-imagick
-    php84-imap
-    php84-intl
-    php84-mbstring
-    php84-mysql
-    php84-pcntl
-    php84-phar
-    php84-posix
-    php84-simplexml
-    php84-soap
-    php84-sodium
-    php84-sqlite
-    php84-tokenizer
-    php84-xdebug
-    php84-xmlreader
-    php84-xmlwriter
-    php84-zip
+    php83
+    php83-bcmath
+    php83-cli
+    php83-ctype
+    php83-curl
+    php83-dom
+    php83-exif
+    php83-fileinfo
+    php83-gd
+    php83-gettext
+    php83-iconv
+    php83-imagick
+    php83-imap
+    php83-intl
+    php83-mbstring
+    php83-mysql
+    php83-pcntl
+    php83-phar
+    php83-posix
+    php83-simplexml
+    php83-soap
+    php83-sodium
+    php83-sqlite
+    php83-tokenizer
+    php83-xdebug
+    php83-xmlreader
+    php83-xmlwriter
+    php83-zip
     pretty-php
     python-demjson3
     python39 # azure-functions-core-tools-bin dependency
