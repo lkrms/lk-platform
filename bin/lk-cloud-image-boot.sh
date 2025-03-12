@@ -8,7 +8,7 @@ lk_require validate
 # `local -n` was added in Bash 4.3
 lk_bash_at_least 4 3 || lk_die "Bash 4.3 or higher required"
 
-IMAGE=ubuntu-22.04
+IMAGE=ubuntu-24.04
 VM_PACKAGES=
 VM_FILESYSTEM_MAPS=
 VM_MEMORY=2048
