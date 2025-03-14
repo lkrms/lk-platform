@@ -318,7 +318,6 @@ function exit_trap() {
         pv
         python-yq
         rsync
-        trash
     )
 
     ! MACOS_VERSION=$(lk_macos_version) ||

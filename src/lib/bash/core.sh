@@ -850,7 +850,7 @@ function lk_rm() {
             shift
         done
         [ -z "${DELETE+1}" ] ||
-            lk_maybe_sudo trash -F"$v" -- "${DELETE[@]}"
+            lk_maybe_sudo trash "$v" "${DELETE[@]}"
     else
         lk_file_backup -m "$@" &&
             lk_maybe_sudo rm -Rf"$v" -- "$@"
