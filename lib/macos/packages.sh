@@ -36,7 +36,6 @@ HOMEBREW_FORMULAE+=(
     pv
     python-yq
     rsync
-    trash
 )
 
 # Basics
