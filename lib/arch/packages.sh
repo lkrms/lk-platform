@@ -259,8 +259,6 @@ if lk_feature_enabled desktop; then
         xdg-user-dirs # Manage ~/Desktop, ~/Templates, etc.
         yad
 
-        arc-gtk-theme-
-        arc-solid-gtk-theme-
         capitaine-cursors-
         papirus-icon-theme-
         vimix-cursors-
@@ -274,7 +272,6 @@ if lk_feature_enabled desktop; then
         geany # notepadqq is smaller but depends on Qt
         gimp-
         mpv
-        pinta
         qalculate-gtk-
         speedcrunch-
         vlc-
@@ -343,6 +340,7 @@ if lk_feature_enabled desktop; then
 
     AUR_PACKAGES+=(
         networkmanager-dispatcher-ntpd-
+        pinta-
         xrandr-invert-colors-
 
         ttf-adobe-source-code-pro-fonts-

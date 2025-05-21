@@ -6,6 +6,7 @@ AUR_PACKAGES=()
 PAC_EXCEPT=()
 
 PAC_OFFER=(
+    geekbench
     teamviewer
     zoom
 )
@@ -17,7 +18,7 @@ lk_is_virtual || {
         linssid  # Wi-Fi scanner
     )
     AUR_PACKAGES+=(
-        geekbench
+        geekbench5
     )
     ! lk_system_has_intel_graphics || PAC_PACKAGES+=(
         clinfo

@@ -10,6 +10,7 @@ PAC_OFFER=(
     ccache
     expect
     geekbench
+    geekbench5
     glances
     handbrake-cli
     mkvtoolnix-cli

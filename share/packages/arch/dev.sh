@@ -16,6 +16,7 @@ PAC_OFFER=(
     ant
     apachedirectorystudio
     expect
+    geekbench
     geteltorito # ThinkPad UEFI firmware update conversion
     linux-headers
     mockoon-bin
@@ -69,7 +70,7 @@ lk_is_virtual || {
         i2c-tools
     )
     AUR_PACKAGES+=(
-        geekbench
+        geekbench5
     )
     ! lk_system_has_intel_graphics || PAC_PACKAGES+=(
         clinfo
@@ -325,6 +326,7 @@ PAC_PACKAGES+=(
     #
     nodejs
     npm
+    nvm
     yarn
 
     #
@@ -381,7 +383,6 @@ AUR_PACKAGES+=(
     mssql-tools
     multitime
     nodejs-less
-    nvm
     phive
     php-ibm_db2
     php-memprof
