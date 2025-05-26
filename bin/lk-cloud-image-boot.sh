@@ -1085,7 +1085,7 @@ dns-nameservers $VM_IPV4_GATEWAY" '{
             '.capabilities.guest[].arch|select(.["@name"] == $arch)' |
             lk_jq -r 'include "core"; .domain | to_array[]["@type"]' |
             grep -Fxv qemu ||
-        { [[ "${PIPESTATUS[*]}" =~ ^0+1$ ]] && echo qemu; })
+        { [[ ${PIPESTATUS[*]} =~ ^0+1$ ]] && echo qemu; })
 
     lk_mktemp_with FILE lk_tty_run_detail lk_sudo virt-install \
         --connect "$LIBVIRT_URI" \

@@ -1,0 +1,11 @@
+{
+    "bashIde.globPattern": "./src/lib/bash/**/*.sh",
+    "bashIde.includeAllWorkspaceSymbols": true,
+    "bashIde.shellcheckPath": "",
+    "files.exclude": {
+        "**/lib/bash/include": true
+    },
+    "xml.catalogs": [
+        "./share/xml/catalog.xml"
+    ]
+}

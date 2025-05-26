@@ -9,6 +9,8 @@ out3=$(mktemp)
 trap 'rm -f "$head" "$tail" "$out" "$out2" "$out3"' EXIT
 die() { echo "${BASH_SOURCE-$0}: $1" >&2 && false || exit; }
 
+((BASH_VERSINFO[0] >= 4)) || die "Bash 4 or higher required"
+
 _dir=${BASH_SOURCE%"${BASH_SOURCE##*/}"}
 _dir=${_dir:-$PWD}
 _dir=$(cd "$_dir" && pwd -P)
