@@ -1,6 +1,7 @@
 #!/bin/bash
 
 lk_confirm() { lk_tty_yn "$@"; }
+lk_delete_on_exit_withdraw() { lk_on_exit_undo_delete "$@"; }
 lk_echo_args() { lk_args "$@"; }
 lk_echo_array() { lk_arr "$@"; }
 lk_ellipsis() { lk_ellipsise "$@"; }
@@ -16,5 +17,3 @@ lk_mktemp_file() { _LK_STACK_DEPTH=$((1 + ${_LK_STACK_DEPTH:-0})) lk_mktemp; }
 lk_regex_implode() { lk_ere_implode_args -- "$@"; }
 lk_test_many() { lk_test "$@"; }
 lk_tty_detail_pairs() { lk_tty_pairs_detail "$@"; }
-
-#### Reviewed: 2021-10-30
