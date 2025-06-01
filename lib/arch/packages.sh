@@ -212,6 +212,7 @@ AUR_PACKAGES+=(
     qemu-desktop
     dnsmasq
     edk2-ovmf # UEFI firmware
+    swtpm     # TPM emulator
     libguestfs
     cpio
     virt-install
