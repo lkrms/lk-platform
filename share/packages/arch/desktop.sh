@@ -172,7 +172,6 @@ AUR_PACKAGES+=(
     qpdfview
     rescuetime2
     simplescreenrecorder
-    skypeforlinux-stable-bin
     spotify
     stretchly
     teams-for-linux

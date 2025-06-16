@@ -258,7 +258,6 @@ AUR_PACKAGES+=(
     render50
     rescuetime2
     simplescreenrecorder
-    skypeforlinux-stable-bin
     spotify
     stretchly
     teams-for-linux
