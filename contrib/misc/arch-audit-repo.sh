@@ -8,46 +8,52 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
 lk_require arch
 
 # Default to AUR packages provisioned by lk-platform and/or maintained by lkrms
-[ $# -gt 1 ] || {
+REPO=${1:-${LK_ARCH_AUR_REPO_NAME:-aur}}
+
+(($# > 1)) && shift || {
     lk_require bash
     lk_pac_sync
-    set -- "${1:-${LK_ARCH_AUR_REPO_NAME:-aur}}" $(comm -23 \
+    set -- $(comm -23 \
         <({ cat \
             "$LK_BASE/share/packages/arch"/* \
             "$LK_BASE/lib/arch/packages.sh" |
             lk_bash_array_literals |
-            sed -E '/^[-a-zA-Z0-9+.:@_]+$/!d; s/:.*//; s/-$//' &&
+            sed -E 's/:.*//; /^[-a-zA-Z0-9+.@_]+$/!d; s/-$//' &&
             curl -fsSL 'https://aur.archlinux.org/rpc/?v=5&type=search&by=maintainer&arg=lkrms' |
             jq -r '.results[].Name'; } | sort -u) \
         <(expac -S '%r %n %G' |
-            awk -v repo="${1:-${LK_ARCH_AUR_REPO_NAME:-aur}}" \
-                '$1 != repo { gsub(/(^[^ ]+[[:blank:]]+|[[:blank:]]+$)/, ""); print }' |
-            tr -s ' ' '\n' | sort -u))
+            awk -v repo="$REPO" '$1 != repo { for (i = 2; i <= NF; i++) { print $i; } }' |
+            sort -u))
 }
-
-REPO=$1
-shift
 
 function download_sources() {
     lk_mktemp_with -r PKGS
     curl -fsSL "https://aur.archlinux.org/rpc/?v=5&type=info$(
         printf '&arg[]=%s' "$@"
-    )" | jq -r '.results[]|[.Name,.PackageBase]|@tsv' >"$PKGS" || return
+    )" | jq -r '.results[] | [.Name, .PackageBase] | @tsv' >"$PKGS" || return
     printf '%s\n' "$@" |
         lk_tty_list - "Downloading from AUR:" package packages
-    local _pkg pkg
+    local _pkg pkg waiting=0
     for _pkg in "$@"; do
-        pkg=$(awk -v pkg="$_pkg" '$1==pkg{print $2}' "$PKGS" | grep .) ||
-            pkg=$_pkg
+        pkg=$(awk -v pkg="$_pkg" '$1 == pkg { print $2; }' "$PKGS" | grep .) || {
+            lk_tty_detail "Unknown package:" "$_pkg"
+            echo "$_pkg" >>"$ERRORS"
+            continue
+        }
         [[ ! -f .$pkg ]] || continue
         touch ".$pkg" || return
         (file=$pkg.tar.gz &&
             url=https://aur.archlinux.org/cgit/aur.git/snapshot/$file &&
-            lk_cache curl -fsL "$url" >"$file" &&
+            lk_cache -t 3600 curl -fsL --retry 10 "$url" >"$file" &&
             tar -zxf "$file" &&
             rm -f "$file" ||
             lk_pass rm -Rf "$file" "$pkg" ||
             echo "$pkg" >>"$ERRORS") &
+        ((++waiting))
+        ((waiting < 10)) || {
+            wait
+            waiting=0
+        }
     done
     wait
 }
@@ -122,8 +128,8 @@ lk_mktemp_with ERRORS
 lk_mktemp_with OTHER
 # For each package in another repo, print 'name' and 'provides'
 expac -S '%r %n %S' |
-    awk -v repo="$REPO" '$1 != repo { gsub(/(^[^ ]+[[:blank:]]+|[[:blank:]]+$)/, ""); print }' |
-    tr -s ' ' '\n' | sort -u >"$OTHER"
+    awk -v repo="$REPO" '$1 != repo { for (i = 2; i <= NF; i++) { print $i; } }' |
+    sort -u >"$OTHER"
 lk_mktemp_dir_with PKGBUILDS download_sources "$@"
 
 cd "$PKGBUILDS"

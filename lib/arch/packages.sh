@@ -324,8 +324,7 @@ if lk_feature_enabled desktop; then
     )
     ! lk_system_has_amd_graphics || PAC_PACKAGES+=(
         xf86-video-amdgpu
-        libva-mesa-driver
-        mesa-vdpau
+        mesa
         radeontop- # Equivalent to intel_gpu_top
     )
     ! lk_system_has_nvidia_graphics || PAC_PACKAGES+=(

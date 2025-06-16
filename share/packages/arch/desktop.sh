@@ -34,7 +34,7 @@ lk_is_virtual || {
     ! lk_system_has_amd_graphics || PAC_PACKAGES+=(
         clinfo
         libclc
-        opencl-clover-mesa
+        opencl-mesa
         vulkan-radeon
         vulkan-tools
     )
