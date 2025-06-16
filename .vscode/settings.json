@@ -1,7 +1,8 @@
 {
-    "bashIde.globPattern": "./src/lib/bash/**/*.sh",
+    "bashIde.enableSourceErrorDiagnostics": true,
+    "bashIde.globPattern": "./{!(lib),lib/!(bash),lib/bash/!(include)}{,/**/}*.sh",
     "bashIde.includeAllWorkspaceSymbols": true,
-    "bashIde.shellcheckPath": "",
+    "bashIde.shellcheckArguments": "--exclude=1090,1091,2015",
     "files.exclude": {
         "**/lib/bash/include": true
     },
