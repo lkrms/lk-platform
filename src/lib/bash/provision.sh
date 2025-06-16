@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function lk_is_bootstrap() {
     [ -n "${_LK_BOOTSTRAP-}" ]

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function _lk_hosting_httpd_test_config() {
     lk_tty_detail "Testing Apache configuration"

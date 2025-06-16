@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # - lk_trap_add [-f] SIGNAL COMMAND [ARG...]
 # - lk_trap_add -q [-f] SIGNAL QUOTED_COMMAND

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # lk_date FORMAT [TIMESTAMP]
 function lk_date() {

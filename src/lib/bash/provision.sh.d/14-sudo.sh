@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # lk_sudo_keep_alive [INTERVAL]
 #

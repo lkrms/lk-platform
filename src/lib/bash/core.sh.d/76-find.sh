@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # lk_find_shell_scripts [-d DIR] [FIND_ARG...]
 function lk_find_shell_scripts() {

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # lk_certbot_list [DOMAIN...]
 #
@@ -135,7 +135,7 @@ function lk_certbot_register_deploy_hook() {
         lk_install -d -m 00755 "${FILE%/*}" &&
         lk_install -m 00755 "$FILE" &&
         lk_file_replace "$FILE" <<EOF
-#!/bin/bash
+#!/usr/bin/env bash
 
 set -euo pipefail
 

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 lk_delete_on_exit() { lk_on_exit_delete "$@"; }
 lk_kill_on_exit() { lk_on_exit_kill "$@"; }

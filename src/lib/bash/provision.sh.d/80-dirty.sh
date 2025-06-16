@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function _lk_dirty_check() {
     local DIR=$LK_BASE/var/lib/lk-platform/dirty

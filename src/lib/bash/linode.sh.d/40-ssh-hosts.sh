@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # lk_linode_ssh_add [NAME [USER]]
 #

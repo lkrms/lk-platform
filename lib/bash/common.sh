@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 [[ -n ${_LK_CONFIG_LOADED-} ]] || { SH=$(
     set -u

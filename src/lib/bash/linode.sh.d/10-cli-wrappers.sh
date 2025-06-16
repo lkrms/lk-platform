@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 lk_linode_linodes() { linode-cli-json linodes list "$@"; }
 lk_linode_ips() { linode-cli-json networking ips-list "$@"; }

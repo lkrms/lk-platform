@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Run with -i to output the `install_gnu_commands` function
 #

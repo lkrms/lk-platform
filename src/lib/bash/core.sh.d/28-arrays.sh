@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # lk_arr [-COMMAND] [ARRAY...]
 function lk_arr() {

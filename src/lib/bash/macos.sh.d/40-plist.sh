@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function PlistBuddy() {
     lk_sudo /usr/libexec/PlistBuddy "$@"

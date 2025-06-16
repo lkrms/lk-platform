@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Adapt the following for scripts that depend on lk-platform's library of Bash
 # functions.

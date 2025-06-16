@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function lk_system_has_bluetooth() {
     awk -v module=bluetooth '$1==module{f=1;exit}END{exit 1-f}' /proc/modules

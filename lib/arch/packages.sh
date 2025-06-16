@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # References:
 # - https://wiki.archlinux.org/index.php/Installation_guide

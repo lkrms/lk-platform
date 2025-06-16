@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function lk_linode_hosting_get_stackscript() {
     local STACKSCRIPT

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # lk_dns_get_records [-TYPE[,TYPE...]] [+FIELD[,FIELD...]] NAME...
 #

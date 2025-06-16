@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function lk_bash_is_builtin() {
     [[ $(type -t "$1") == builtin ]]

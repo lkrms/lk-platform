@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # _lk_cpanel_get_url SERVER MODULE FUNC [PARAMETER=VALUE...]
 function _lk_cpanel_get_url() {

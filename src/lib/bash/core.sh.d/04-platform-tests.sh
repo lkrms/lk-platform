@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # lk_bash_at_least MAJOR [MINOR]
 function lk_bash_at_least() {

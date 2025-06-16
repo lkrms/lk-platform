@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # To install Arch Linux using the script below:
 # 1. Boot from an Arch Linux live CD

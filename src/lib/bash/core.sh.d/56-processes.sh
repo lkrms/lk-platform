@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function lk_ps_parent_command() {
     ps -o comm= -p "$PPID"

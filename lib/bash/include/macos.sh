@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 if lk_is_apple_silicon; then
     function _lk_macos_env() {

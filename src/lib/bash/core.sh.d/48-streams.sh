@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # lk_squeeze_whitespace [FILE...]
 function lk_squeeze_whitespace() {

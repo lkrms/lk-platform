@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function _lk_systemctl() {
     # Skip the argument check if we've called ourselves

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function lk_hosting_migrate_legacy_sites() { (
     shopt -s nullglob

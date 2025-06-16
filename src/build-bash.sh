@@ -90,7 +90,7 @@ while [ $# -gt 0 ]; do
                 die "not found in $PWD/$file: #### END $name.d"
             parts=("$head")
         fi
-        echo "#!/bin/bash"
+        echo "#!/usr/bin/env bash"
         ((minify)) || echo
         parts+=("$dir"/*)
         ((!embed)) || parts+=("$tail")

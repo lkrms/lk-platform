@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function _lk_openssl_verify() { (
     # Disable xtrace if its output would break the test below

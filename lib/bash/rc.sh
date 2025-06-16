@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 unset _LK_PROMPT_DISPLAYED
 

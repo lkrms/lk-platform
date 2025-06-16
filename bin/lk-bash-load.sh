@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Scenario 1: bootstrapping lk-platform scripts
 #

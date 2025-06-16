@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function lk_validate_clear() {
     _LK_VALIDATE_STATUS=0

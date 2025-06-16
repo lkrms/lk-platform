@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # _lk_stream_args COMMAND_ARGS COMMAND... [ARG...]
 function _lk_stream_args() {

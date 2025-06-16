@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 PAC_REPOS=()
 PAC_PACKAGES=()

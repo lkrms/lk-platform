@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 HOMEBREW_TAPS=(${HOMEBREW_TAPS+"${HOMEBREW_TAPS[@]}"})
 HOMEBREW_FORMULAE=(${HOMEBREW_FORMULAE+"${HOMEBREW_FORMULAE[@]}"})

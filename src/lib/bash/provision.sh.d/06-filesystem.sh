@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # lk_symlink_bin TARGET [ALIAS]
 #

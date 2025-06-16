@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function _lk_mail_ready() {
     lk_true _LK_MAIL_READY ||

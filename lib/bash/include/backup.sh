@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # lk_backup_snapshot_list ARRAY SNAPSHOT_ROOT [FIND_ARG...]
 function lk_backup_snapshot_list() {
