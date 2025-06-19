@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # lk_gpg_check_key_validity [GPG_ARG...] KEY_ID
 #

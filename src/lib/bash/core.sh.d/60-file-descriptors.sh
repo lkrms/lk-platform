@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # lk_fd_is_open FD
 function lk_fd_is_open() {

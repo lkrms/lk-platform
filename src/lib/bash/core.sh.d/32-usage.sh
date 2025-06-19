@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # _lk_usage_format <CALLER>
 function _lk_usage_format() {

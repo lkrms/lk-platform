@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function lk_linode_filter_linodes() {
     local REGEX=${LK_LINODE_IGNORE_REGEX-}

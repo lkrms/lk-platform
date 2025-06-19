@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function _lk_hosting_is_quiet() {
     [ -n "${_LK_HOSTING_QUIET-}" ]

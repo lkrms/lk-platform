@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function _lk_prompt_trap() {
     if ((${_LK_PROMPT_DISPLAYED-0})) &&

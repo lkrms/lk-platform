@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function lk_assert_root() {
     lk_root || lk_die "not running as root"

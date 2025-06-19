@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function lk_linode_provision_hosting() {
     local IFS=$'\n' REBUILD NODE_FQDN NODE_HOSTNAME HOST_DOMAIN HOST_ACCOUNT \

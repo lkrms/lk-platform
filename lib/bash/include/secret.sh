@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # _lk_secret_set VALUE LABEL [SERVICE]
 function _lk_secret_set() {

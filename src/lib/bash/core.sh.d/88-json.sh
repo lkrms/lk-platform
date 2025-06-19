@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function lk_jq() {
     jq -L"$LK_BASE/lib"/{jq,json} "$@"

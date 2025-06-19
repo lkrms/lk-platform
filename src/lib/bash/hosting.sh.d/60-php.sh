@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function lk_hosting_php_get_default_version() { (
     . /etc/lsb-release || return

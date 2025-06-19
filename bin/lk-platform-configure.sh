@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 set -euo pipefail
 
@@ -385,7 +385,7 @@ lk_log_start
                 lk_tty_detail "Adding df wrapper to" "$FILE"
                 if [ ! -e "$FILE" ]; then
                     install -m 00644 -o "$OWNER" -g "$GROUP" /dev/null "$FILE"
-                    CONTENT=$'#!/bin/bash\n\n'
+                    CONTENT=$'#!/usr/bin/env bash\n\n'
                 else
                     lk_file_get_text "$FILE" CONTENT
                 fi

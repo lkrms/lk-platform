@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 PAC_REPOS=()
 PAC_PACKAGES=()
@@ -6,6 +6,7 @@ AUR_PACKAGES=()
 PAC_EXCEPT=()
 
 PAC_OFFER=(
+    geekbench
     teamviewer
     zoom
 )
@@ -17,7 +18,7 @@ lk_is_virtual || {
         linssid  # Wi-Fi scanner
     )
     AUR_PACKAGES+=(
-        geekbench
+        geekbench5
     )
     ! lk_system_has_intel_graphics || PAC_PACKAGES+=(
         clinfo
@@ -33,7 +34,7 @@ lk_is_virtual || {
     ! lk_system_has_amd_graphics || PAC_PACKAGES+=(
         clinfo
         libclc
-        opencl-clover-mesa
+        opencl-mesa
         vulkan-radeon
         vulkan-tools
     )
@@ -171,7 +172,6 @@ AUR_PACKAGES+=(
     qpdfview
     rescuetime2
     simplescreenrecorder
-    skypeforlinux-stable-bin
     spotify
     stretchly
     teams-for-linux

@@ -8,7 +8,7 @@ lk_require validate
 # `local -n` was added in Bash 4.3
 lk_bash_at_least 4 3 || lk_die "Bash 4.3 or higher required"
 
-IMAGE=ubuntu-22.04
+IMAGE=ubuntu-24.04
 VM_PACKAGES=
 VM_FILESYSTEM_MAPS=
 VM_MEMORY=2048
@@ -1085,7 +1085,7 @@ dns-nameservers $VM_IPV4_GATEWAY" '{
             '.capabilities.guest[].arch|select(.["@name"] == $arch)' |
             lk_jq -r 'include "core"; .domain | to_array[]["@type"]' |
             grep -Fxv qemu ||
-        { [[ "${PIPESTATUS[*]}" =~ ^0+1$ ]] && echo qemu; })
+        { [[ ${PIPESTATUS[*]} =~ ^0+1$ ]] && echo qemu; })
 
     lk_mktemp_with FILE lk_tty_run_detail lk_sudo virt-install \
         --connect "$LIBVIRT_URI" \

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # _lk_tty_format_readline [-b] VAR [COLOUR COLOUR_VAR]
 function _lk_tty_format_readline() {

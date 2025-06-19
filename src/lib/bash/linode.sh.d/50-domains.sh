@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # lk_linode_domain [-s] <DOMAIN_ID|DOMAIN_NAME> [LINODE_ARG...]
 #
@@ -70,7 +70,6 @@ function lk_linode_domain_record_update() {
         linode-cli --json domains records-update \
             --name "$3" \
             --ttl_sec "${4:-0}" \
-            --type "$5" \
             --priority "${6:-0}" \
             --weight "${7:-0}" \
             --port "${8:-0}" \
@@ -182,7 +181,6 @@ include "core";
                 continue
             lk_tty_detail "Updating DNS record $RECORD:" "$NAME $TYPE $TARGET"
             JSON=$(linode-cli --json domains records-update \
-                --type "$TYPE" \
                 --name "$NAME" \
                 --target "$TARGET" \
                 --ttl_sec "$TTL" \

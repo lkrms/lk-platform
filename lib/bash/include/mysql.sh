@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function lk_mysql_is_quiet() {
     [ -n "${_LK_MYSQL_QUIET-}" ]

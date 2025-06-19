@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # lk_ssh_host_parameter_sh [USER@]<HOST>[:PORT] <VAR_PREFIX> [PARAMETER...]
 #

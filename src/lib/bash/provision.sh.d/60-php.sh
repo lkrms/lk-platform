@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # lk_composer_install [INSTALL_PATH]
 function lk_composer_install() {

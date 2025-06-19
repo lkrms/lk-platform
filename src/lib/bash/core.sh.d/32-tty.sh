@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # _lk_tty_format [-b] VAR [COLOUR COLOUR_VAR]
 #

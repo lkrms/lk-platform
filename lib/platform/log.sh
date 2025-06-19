@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 set -euo pipefail
 lk_die() { echo "${BASH_SOURCE-$0}: $1" >&2 && false || exit; }

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 for MYSQL_SERVICE in mariadb mysql mysqld; do
     ! lk_systemctl_running "$MYSQL_SERVICE" || break

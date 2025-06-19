@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function lk_brew_flush_cache() {
     lk_cache_mark_dirty
@@ -37,7 +37,7 @@ function lk_brew_install_homebrew() {
         lk_mktemp_with _LK_BREW_INSTALL lk_curl "$URL" ||
         lk_pass rm -f "${_LK_BREW_INSTALL-}" || return
     CI=1 lk_faketty ${COMMAND+"${COMMAND[@]}"} \
-        /bin/bash "$_LK_BREW_INSTALL" || return
+        "$BASH" "$_LK_BREW_INSTALL" || return
     [[ -x $BREW ]] ||
         lk_warn "$BREW: command not found" || return
     LK_BREW_NEW_INSTALL=1

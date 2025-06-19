@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # lk_maybe [-p] COMMAND [ARG...]
 #

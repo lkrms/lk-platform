@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # To provision macOS using the script below:
 #
@@ -155,10 +155,10 @@ function exit_trap() {
     }
 
     CURRENT_SHELL=$(lk_dscl_read UserShell)
-    [[ $CURRENT_SHELL == */bash ]] ||
-        ! lk_confirm "Use Bash as the default shell for user '$USER'?" N || {
+    [[ $CURRENT_SHELL == "$BASH" ]] ||
+        ! lk_confirm "Use $BASH as the default shell for user '$USER'?" N || {
         lk_tty_print "Setting default shell"
-        lk_tty_run_detail sudo chsh -s /bin/bash "$USER"
+        lk_tty_run_detail sudo chsh -s "$BASH" "$USER"
     }
 
     lk_tty_print "Configuring sudo"
@@ -318,7 +318,6 @@ function exit_trap() {
         pv
         python-yq
         rsync
-        trash
     )
 
     ! MACOS_VERSION=$(lk_macos_version) ||

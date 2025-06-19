@@ -1,0 +1,12 @@
+{
+    "bashIde.enableSourceErrorDiagnostics": true,
+    "bashIde.globPattern": "./{!(lib),lib/!(bash),lib/bash/!(include)}{,/**/}*.sh",
+    "bashIde.includeAllWorkspaceSymbols": true,
+    "bashIde.shellcheckArguments": "--exclude=1090,1091,2015",
+    "files.exclude": {
+        "**/lib/bash/include": true
+    },
+    "xml.catalogs": [
+        "./share/xml/catalog.xml"
+    ]
+}

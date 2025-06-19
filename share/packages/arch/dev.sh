@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 PAC_REPOS=(
     "sublime-text|\
@@ -16,6 +16,7 @@ PAC_OFFER=(
     ant
     apachedirectorystudio
     expect
+    geekbench
     geteltorito # ThinkPad UEFI firmware update conversion
     linux-headers
     mockoon-bin
@@ -69,7 +70,7 @@ lk_is_virtual || {
         i2c-tools
     )
     AUR_PACKAGES+=(
-        geekbench
+        geekbench5
     )
     ! lk_system_has_intel_graphics || PAC_PACKAGES+=(
         clinfo
@@ -85,7 +86,7 @@ lk_is_virtual || {
     ! lk_system_has_amd_graphics || PAC_PACKAGES+=(
         clinfo
         libclc
-        opencl-clover-mesa
+        opencl-mesa
         vulkan-radeon
         vulkan-tools
     )
@@ -107,7 +108,6 @@ PAC_PACKAGES+=(
     # Utilities
     cdrtools
     csvkit
-    fatresize
     glances
     partclone
     unison
@@ -257,7 +257,6 @@ AUR_PACKAGES+=(
     render50
     rescuetime2
     simplescreenrecorder
-    skypeforlinux-stable-bin
     spotify
     stretchly
     teams-for-linux
@@ -325,6 +324,7 @@ PAC_PACKAGES+=(
     #
     nodejs
     npm
+    nvm
     yarn
 
     #
@@ -381,7 +381,6 @@ AUR_PACKAGES+=(
     mssql-tools
     multitime
     nodejs-less
-    nvm
     phive
     php-ibm_db2
     php-memprof

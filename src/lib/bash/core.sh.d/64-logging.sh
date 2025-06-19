@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # lk_log_start [TEMP_LOG_FILE]
 function lk_log_start() {

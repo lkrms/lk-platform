@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 if [[ ! ${1-} =~ ^(--new|--old)$ ]]; then
 
@@ -233,7 +233,7 @@ new)
         SSH_ASKPASS=$(mktemp)
         lk_tty_detail "Creating temporary SSH_ASKPASS script:" "$SSH_ASKPASS"
         cat <<EOF >"$SSH_ASKPASS"
-#!/bin/bash
+#!/usr/bin/env bash
 echo $(printf '%q' "$OLD_PASSWORD")
 EOF
         chmod u+x "$SSH_ASKPASS"

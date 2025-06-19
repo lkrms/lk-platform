@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function quote() {
     if [[ $1 =~ [^[:print:]] ]]; then

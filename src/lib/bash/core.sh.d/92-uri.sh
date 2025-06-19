@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # lk_uri_encode PARAMETER=VALUE...
 function lk_uri_encode() {

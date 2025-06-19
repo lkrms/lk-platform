@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # _lk_hosting_site_list_known_settings [FORMAT]
 #

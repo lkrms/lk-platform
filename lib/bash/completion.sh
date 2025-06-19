@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 lk_bash_at_least 4 2 || return 0
 

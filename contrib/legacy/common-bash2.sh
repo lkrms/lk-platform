@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function lk_realpath() {
     local FILE=$1 i=0 COMPONENT LN RESOLVED=

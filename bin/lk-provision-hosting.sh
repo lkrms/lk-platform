@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Elevate if not already running as root
 ((!EUID)) || {

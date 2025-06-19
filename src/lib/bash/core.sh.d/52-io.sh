@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # lk_fifo_flush FIFO_PATH
 function lk_fifo_flush() {

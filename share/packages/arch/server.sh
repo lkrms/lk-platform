@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 PAC_REPOS=()
 PAC_PACKAGES=()
@@ -10,6 +10,7 @@ PAC_OFFER=(
     ccache
     expect
     geekbench
+    geekbench5
     glances
     handbrake-cli
     mkvtoolnix-cli
@@ -73,7 +74,7 @@ lk_is_virtual || {
     ! lk_system_has_amd_graphics || PAC_PACKAGES+=(
         clinfo
         libclc
-        opencl-clover-mesa
+        opencl-mesa
         vulkan-radeon
         vulkan-tools
     )
@@ -90,7 +91,6 @@ PAC_PACKAGES+=(
     # Utilities
     certbot
     cloud-utils
-    fatresize
     partclone
     stow
     syslinux

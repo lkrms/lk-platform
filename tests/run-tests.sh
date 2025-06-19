@@ -112,5 +112,6 @@ else
     lk_tty_print
 fi
 lk_tty_detail "$(printf '%s: %d, ' "${SUMMARY[@]}" | sed -E 's/, $/\n/')"
+lk_tty_detail "Bash version:" "$BASH_VERSION"
 
 ((!FAILED)) || lk_die ""

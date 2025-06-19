@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function lk_linode_hosting_get_stackscript() {
     local STACKSCRIPT
@@ -33,6 +33,7 @@ function lk_linode_hosting_update_stackscript() {
     fi
     OUTPUT=$(linode-cli --json stackscripts "${ARGS[@]}" \
         --label hosting.sh \
+        --images linode/ubuntu24.04 \
         --images linode/ubuntu22.04 \
         --images linode/ubuntu20.04 \
         --images linode/ubuntu18.04 \

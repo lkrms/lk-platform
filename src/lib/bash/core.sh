@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 #### INCLUDE core.sh.d
 
@@ -837,24 +837,23 @@ function lk_me() {
 # lk_rm [-v] [--] [FILE...]
 function lk_rm() {
     local v=
-    [ "${1-}" != -v ] || { v=v && shift; }
-    [ "${1-}" != -- ] || shift
-    [ $# -gt 0 ] || return 0
+    [[ ${1-} != -v ]] || { v=v && shift; }
+    [[ ${1-} != -- ]] || shift
+    (($#)) || return 0
     if lk_command_exists trash-put; then
         lk_maybe_sudo trash-put -f"$v" -- "$@"
     elif lk_command_exists trash; then
-        local DELETE=()
-        while [ $# -gt 0 ]; do
-            lk_maybe_sudo test -e "$1" &&
-                DELETE[${#DELETE[@]}]=$1 || true
-            shift
+        local FILE FILES=()
+        for FILE in "$@"; do
+            ! lk_maybe_sudo test -e "$FILE" || FILES[${#FILES[@]}]=$FILE
         done
-        [ -z "${DELETE+1}" ] ||
-            lk_maybe_sudo trash -F"$v" -- "${DELETE[@]}"
+        # `trash` on macOS doesn't accept `--` as a separator
+        [[ -z ${FILES+1} ]] ||
+            lk_maybe_sudo trash ${v:+-v} "${FILES[@]}"
     else
-        lk_file_backup -m "$@" &&
-            lk_maybe_sudo rm -Rf"$v" -- "$@"
-    fi
+        false
+    fi || lk_file_backup -m "$@" &&
+        lk_maybe_sudo rm -Rf"$v" -- "$@"
 }
 
 # - lk_install [-m MODE] [-o OWNER] [-g GROUP] [-v] FILE...
@@ -1422,8 +1421,8 @@ set -o pipefail
     shopt -u patsub_replacement
 
 if [[ $- != *i* ]]; then
-    lk_trap_add EXIT '_lk_exit_trap "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'
-    lk_trap_add ERR '_lk_err_trap "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'
+    lk_trap_add -q EXIT '_lk_exit_trap "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'
+    lk_trap_add -q ERR '_lk_err_trap "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'
 fi
 
 if [[ -n ${LK_TTY_NO_COLOUR-} ]] || ! lk_get_tty >/dev/null; then

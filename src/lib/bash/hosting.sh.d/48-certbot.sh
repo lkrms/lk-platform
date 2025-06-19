@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function lk_hosting_certbot_maybe_install() {
     local SITE_DOMAINS CERT_DOMAINS NO_CERT_DOMAINS REGEX REQUESTS

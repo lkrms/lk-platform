@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function _lk_settings_list_known() {
     printf '%s\n' \
