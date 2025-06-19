@@ -108,7 +108,6 @@ PAC_PACKAGES+=(
     # Utilities
     cdrtools
     csvkit
-    fatresize
     glances
     partclone
     unison

@@ -1,8 +1,47 @@
 #!/usr/bin/env bash
 
-# References:
-# - https://wiki.archlinux.org/index.php/Installation_guide
-# - https://gitlab.archlinux.org/archlinux/archiso/-/raw/master/configs/releng/packages.x86_64
+# shellcheck disable=SC2206,SC2207 # IFS is carefully managed here.
+
+# Inputs:
+#
+# - `PAC_REPOS=("<name>|<server>|<key_id>|<key_url>" ...)`: unofficial package
+#   repositories. Applied after repositories in `LK_ARCH_REPOS` and before
+#   official Arch Linux repositories.
+# - `PAC_PACKAGES=(<package> ...)`: packages to install from official
+#   repositories. Each packages must be available in core, extra or multilib,
+#   even if it is overridden by a custom build in an unofficial repository.
+# - `AUR_PACKAGES=(<package> ...)`: packages to install from unofficial
+#   repositories or build locally from the AUR (Arch User Repository).
+# - `PAC_EXCEPT=(<package> ...)`: packages to exclude, e.g. from groups they
+#   appear in. Packages in this list are only installed as dependencies of other
+#   packages.
+# - `PAC_OFFER=(<package> ...)`: packages not installed by default that are not
+#   removed if present.
+#
+# Entries in `PAC_PACKAGES` and `AUR_PACKAGES` may have one or more of the
+# following suffixes:
+#
+# - `-`  = do not install when `minimal` feature is enabled
+# - `:H` = only install on physical Hardware
+# - `:P` = only install on Portable devices
+# - `:Q` = only install on QEMU guests
+
+# add_package_if QUOTED_COMMAND PACKAGE...
+function add_package_if() {
+    if $1; then
+        shift
+        PAC_PACKAGES+=("$@")
+    fi
+}
+
+# add_package_if_feature_enabled "FEATURE..." PACKAGE...
+function add_package_if_feature_enabled() {
+    # shellcheck disable=SC2086 # Multiple features may be given.
+    if lk_feature_enabled $1; then
+        shift
+        PAC_PACKAGES+=("$@")
+    fi
+}
 
 IFS=,
 PAC_REPOS=(
@@ -12,214 +51,218 @@ PAC_REPOS=(
 IFS=$' \t\n'
 
 PAC_PACKAGES=(${PAC_PACKAGES+"${PAC_PACKAGES[@]}"})
+AUR_PACKAGES=(${AUR_PACKAGES+"${AUR_PACKAGES[@]}"})
 PAC_EXCEPT=(${PAC_EXCEPT+"${PAC_EXCEPT[@]}"})
 PAC_OFFER=(${PAC_OFFER+"${PAC_OFFER[@]}"})
-AUR_PACKAGES=(${AUR_PACKAGES+"${AUR_PACKAGES[@]}"})
 
-# Package suffixes:
-# - "-" = optional (exclude when 'minimal' feature is enabled)
-# - ":BM" = bare metal (only install on physical hardware)
-# - ":P" = portable (only install on laptops)
-# - ":Q" = QEMU (only install on QEMU guests)
+# References:
+#
+# - https://wiki.archlinux.org/title/Installation_guide
+# - https://gitlab.archlinux.org/archlinux/archiso/-/raw/ab176d19b0caeb1fcd9452161c7dc133f674cca2/configs/releng/packages.x86_64
+
 PAC_PACKAGES+=(
-    # Essentials
-    base # Includes coreutils, findutils, glibc, procps-ng, psmisc, util-linux, ...
+    ## Essentials
+    #
+    # - `base` dependencies (since 2022-01-26): `archlinux-keyring`, `bash`,
+    #   `bzip2`, `coreutils`, `file`, `filesystem`, `findutils`, `gawk`,
+    #   `gcc-libs`, `gettext`, `glibc`, `grep`, `gzip`, `iproute2`, `iputils`,
+    #   `licenses`, `pacman`, `pciutils`, `procps-ng`, `psmisc`, `sed`,
+    #   `shadow`, `systemd`, `systemd-sysvcompat`, `tar`, `util-linux`, `xz`
+    # - `terminus-font`: Bitmap font for use with GRUB
+    # - `kernel-modules-hook`: Restores the running kernel's modules between
+    #   upgrade and reboot
+
+    base
     linux
-    linux-firmware:BM
-    mkinitcpio           # Specify preferred initramfs package explicitly
-    kernel-modules-hook- # Keep the running kernel's modules installed after the kernel package is upgraded
+    linux-firmware:H
+    mkinitcpio
+
     grub
     efibootmgr
     os-prober
-    terminus-font # Bitmap font that can be used with GRUB
+    terminus-font-
 
-    # Pacman
-    expac-
-    pacman-contrib-
-    pacutils-
+    edk2-shell-
+    kernel-modules-hook-
 
-    # Services
-    networkmanager
-    ntp
-    logrotate
+    ## System
+    #
+    # - `bolt`: Thunderbolt device manager and CLI
+    # - `udisks2`: Required by `fwupd` for UEFI firmware upgrades
+    # - `acpi`: Checks battery status
+    # - `cpupower`: Manipulates processor frequency and power settings
+    # - `msr-tools`: Manipulates processor MSRs ("Model-Specific Registers"),
+    #   e.g. `BD PROCHOT`
 
-    # Utilities
-    7zip
-    bc
-    curl
-    diffutils
-    file
-    git
-    inetutils # Provides hostname, telnet
-    jc
-    jq
-    lftp
-    lynx
-    mediainfo
-    ncdu-
-    nnn
-    openbsd-netcat
-    openssh
-    perl
-    pv
-    ranger
-    rdfind-
-    rsync
-    sudo
-    time
-    trash-cli
-    unzip # Provides zip
-    wget
-    wimlib # Provides wimextract
-    yq
-
-    # Shell
-    bash-completion
-    byobu-
-    fzf-
-    libnewt # Provides whiptail
-    zsh
-
-    # Documentation
-    man-db
-    man-pages
-    texinfo
-
-    # Editors
-    nano
-    vim
-
-    # System
-    acpi-        # Show battery status
-    cpupower-:BM # Show and set processor frequency- and power-related values
+    bolt
     dmidecode
-    ethtool:BM
-    fwupd:BM
-    hddtemp:BM
-    hdparm:BM
-    hwinfo- # openSUSE's hardware information tool
-    lm_sensors:BM
-    msr-tools # Access processor MSRs ("Model Specific Registers") like BD PROCHOT
-    nvme-cli:BM
-    powertop:BM
-    qemu-guest-agent:Q
-    smartmontools:BM
-    sysfsutils # e.g. to list options set for a loaded kernel module: `systool -v -m iwlwifi`
-    tlp:BM
-    tlp-rdw:BM
-    udisks2:BM # Allow fwupd to perform UEFI firmware upgrades
+    ethtool
+    hwinfo
+    networkmanager
+    sysfsutils-
     usbutils
-    wireless-regdb:BM
 
-    # Monitoring
-    atop-
-    htop-
-    iotop
-    lsof
-    s-tui    # Monitor CPU frequency and temperature while toggling between stressed and regular operation
-    sysstat- # Provides iostat, pidstat, sar
-
-    # Networking
-    bind # Provides dig
     conntrack-tools-
-    ipset- # Used in conjunction with iptables by fail2ban
+    ipset-
     iptables-nft
-    ndisc6- # Provides rdisc6
-    nmap-
-    tcpdump
-    traceroute
-    whois
-    wol-
 
-    # Network monitoring
-    iftop-  # Monitor traffic by service and host
-    nethogs # Monitor traffic by process (similar to nettop on macOS)
-    nload-  # Monitor traffic by interface
+    fwupd:H
+    udisks2:H
 
-    # Partitions
-    gptfdisk:BM # Provides sgdisk
-    lvm2-:BM
-    mdadm-:BM
-    parted:BM
+    acpi:H
+    hddtemp:H
+    hdparm-:H
+    lm_sensors:H
+    nvme-cli-:H
+    powertop:H
+    smartmontools:H
+    tlp:H
+    tlp-rdw:H
+    wireless-regdb:H
 
-    # Filesystems
-    btrfs-progs-
+    cpupower-:H
+    msr-tools-:H
+
+    ## VM guest integration
+    #
+    # - `open-vm-tools`, `virtualbox-guest-utils-nox` and `hyperv` will be added
+    #   when VMware, VirtualBox and Hyper-V guest detection is implemented
+
+    qemu-guest-agent:Q
+
+    ## Filesystems
+    #
+    # - `gptfdisk`: Provides `sgdisk`
+
+    gptfdisk
+    parted
+
+    btrfs-progs
     dosfstools
     e2fsprogs
     exfatprogs
     f2fs-tools-
+    fatresize
     jfsutils-
+    mtools-
+    nbd-
+    nfs-utils-
     nilfs-utils-
     ntfs-3g
     udftools-
     xfsprogs-
 
-    # Network filesystems
-    nfs-utils-
-)
+    lvm2-:H
+    mdadm-:H
 
-! lk_system_has_intel_cpu || PAC_PACKAGES+=(
-    intel-ucode:BM
-    i7z-:BM # Monitor CPU time spent in each available C-State
-)
+    ## Utilities
+    #
+    # - `bind`: Provides `dig`
+    # - `fclones`: Performs file de-duplication
+    # - `iftop`: Reports network traffic by service and host
+    # - `inetutils`: Provides `hostname`, `telnet`
+    # - `libnewt`: Provides `whiptail`
+    # - `ndisc6`: Provides `rdisc6`
+    # - `nethogs`: Reports network traffic by process (similar to `nettop`)
+    # - `nload`: Reports network traffic by interface
+    # - `s-tui`: CPU stress test and monitoring tool
+    # - `sysstat`: Provides `iostat`, `pidstat`, `sar`
+    # - `unzip`: Provides `zip`
+    # - `wimlib`: Provides `wimextract`
+    # - `pacman-contrib`: Provides `paccache`
+    # - `pacutils`: Provides `paccheck`
 
-! lk_system_has_amd_cpu || PAC_PACKAGES+=(
-    amd-ucode:BM
+    atop-
+    bash-completion
+    bc
+    bind
+    byobu-
+    curl
+    diffutils
+    fclones
+    file
+    fzf
+    git
+    git-delta
+    grml-zsh-config
+    htop
+    iftop
+    inetutils
+    iotop
+    jc
+    jq
+    less
+    lf
+    lftp
+    libnewt
+    logrotate
+    lsof
+    lynx
+    mediainfo
+    nano
+    ncdu
+    ndisc6-
+    nethogs
+    nload
+    nmap-
+    ntp
+    openbsd-netcat
+    openssh
+    pv
+    ranger
+    rsync
+    s-tui
+    sudo
+    sysstat
+    tcpdump
+    time
+    tmux
+    traceroute
+    trash-cli
+    vim
+    wget
+    whois
+    wol
+    yq
+    zsh
+
+    7zip
+    unzip
+    wimlib
+
+    expac
+    pacman-contrib
+    pacutils
+
+    perl
+
+    man-db
+    man-pages
+    texinfo
 )
 
 AUR_PACKAGES+=(
-    # Essentials
-    upd72020x-fw-:BM # Firmware for module 'xhci_pci'
+    ## System
+    powercap-:H
 
-    # Utilities
-    icdiff-
-
-    # System
-    powercap-:BM
-
-    # Monitoring
+    ## Utilities
     ps_mem-
 )
 
-! lk_feature_enabled lighttpd || PAC_PACKAGES+=(
-    lighttpd
-)
-
-! lk_feature_enabled squid || PAC_PACKAGES+=(
-    squid
-)
-
-! lk_feature_enabled apache2 || PAC_PACKAGES+=(
-    apache
-)
-
-! lk_feature_enabled php-fpm || PAC_PACKAGES+=(
-    php-fpm
-    fcgi # Provides cgi-fcgi
-)
-
-! lk_feature_enabled mariadb || PAC_PACKAGES+=(
-    mariadb
-)
-
-! lk_feature_enabled docker || PAC_PACKAGES+=(
-    docker
-    docker-buildx-
-)
-
-! lk_feature_enabled libvirt || PAC_PACKAGES+=(
-    libvirt
-    qemu-desktop
-    dnsmasq
-    edk2-ovmf # UEFI firmware
-    swtpm     # TPM emulator
-    libguestfs
-    cpio
-    virt-install
-)
-! lk_feature_enabled libvirt desktop || PAC_PACKAGES+=(
-    virt-manager
-)
+# - `i7z`: Reports CPU time spent in each available C-State
+# - `edk2-ovmf`: UEFI firmware
+# - `swtpm`: TPM emulator
+add_package_if lk_system_has_intel_cpu intel-ucode:H i7z-:H
+add_package_if lk_system_has_amd_cpu amd-ucode:H
+add_package_if_feature_enabled lighttpd lighttpd
+add_package_if_feature_enabled squid squid
+add_package_if_feature_enabled apache2 apache
+add_package_if_feature_enabled php-fpm php-fpm fcgi
+add_package_if_feature_enabled mariadb mariadb
+add_package_if_feature_enabled docker docker docker-buildx-
+add_package_if_feature_enabled libvirt \
+    libvirt qemu-desktop dnsmasq edk2-ovmf swtpm libguestfs cpio virt-install
+add_package_if_feature_enabled "libvirt desktop" virt-manager
 
 if lk_feature_enabled desktop; then
     PAC_PACKAGES+=(
@@ -229,9 +272,9 @@ if lk_feature_enabled desktop; then
 
         xf86-input-synaptics:P # The deprecated synaptics touchpad driver is (still) better than xinput
 
-        bluez:BM
-        bluez-utils-:BM
-        blueman:BM
+        bluez:H
+        bluez-utils-:H
+        blueman:H
 
         libva-utils- # Provides vainfo
         mesa         # Includes iris, nouveau, virtio_gpu, ...
@@ -385,16 +428,16 @@ for ARR in PAC_PACKAGES AUR_PACKAGES; do
         lk_arr "$ARR" |
             if lk_is_qemu; then
                 # Keep QEMU, remove bare metal and portable
-                gnu_sed -E 's/:Q\>//; /:(BM|P)\>/d'
+                gnu_sed -E 's/:Q\>//; /:(H|P)\>/d'
             elif lk_is_virtual; then
                 # Remove bare metal, portable and QEMU
-                gnu_sed -E '/:(BM|P|Q)\>/d'
+                gnu_sed -E '/:(H|P|Q)\>/d'
             elif lk_is_portable; then
                 # Keep bare metal and portable, remove QEMU
-                gnu_sed -E 's/:(BM|P)\>//; /:Q\>/d'
+                gnu_sed -E 's/:(H|P)\>//; /:Q\>/d'
             else
                 # Keep bare metal, remove portable and QEMU
-                gnu_sed -E 's/:BM\>//; /:(P|Q)\>/d'
+                gnu_sed -E 's/:H\>//; /:(P|Q)\>/d'
             fi
     )
     if lk_feature_enabled minimal; then
@@ -423,63 +466,66 @@ fi
 
 lk_pac_sync
 
-# To minimise expensive pacman calls, create lists and filter with grep/awk/sed
-lk_mktemp_with _PAC_ALL pacman -Sl
-lk_mktemp_with _PAC_ALL_GROUPS pacman -Sgg
-lk_mktemp_with _PAC_PACKAGES sort -u <(awk '{ print $2 }' "$_PAC_ALL")
-lk_mktemp_with _PAC_GROUPS sort -u <(awk '{ print $1 }' "$_PAC_ALL_GROUPS" | grep -Fxvf "$_PAC_PACKAGES")
-lk_mktemp_with _PAC_OFFICIAL sort -u <(awk '$1 ~ /^(core|extra|multilib)$/ { print $2 }' "$_PAC_ALL")
-lk_mktemp_with _PAC_UNOFFICIAL sort -u <(awk '$1 !~ /^(core|extra|multilib)$/ { print $2 }' "$_PAC_ALL")
-
-# If any AUR_PACKAGES now appear in core, extra or multilib, move them to
-# PAC_PACKAGES and notify the user
-if AUR_MOVED=$(grep -Fxf <(lk_arr AUR_PACKAGES) "$_PAC_OFFICIAL"); then
-    lk_tty_warning "Moved from AUR to official repos:" "$AUR_MOVED"
-    PAC_PACKAGES+=($AUR_MOVED)
-fi
+# Get package and group lists to minimise calls to pacman
+declare _repo_pkg _group_pkg _pkg _group _official_pkg _official_group
+lk_mktemp_with _repo_pkg pacman -Sl                                                                    # <repo> <package> <version>
+lk_mktemp_with _group_pkg pacman -Sgg                                                                  # <group> <package>
+lk_mktemp_with _pkg sort -u <(awk '{ print $2 }' "$_repo_pkg")                                         # <package>
+lk_mktemp_with _group sort -u <(awk '{ print $1 }' "$_group_pkg" | grep -Fxvf "$_pkg")                 # <group>
+lk_mktemp_with _official_pkg sort -u <(awk '$1 ~ /^(core|extra|multilib)$/ { print $2 }' "$_repo_pkg") # <package>
+lk_mktemp_with _official_group sort -u <(
+    regex=$(lk_ere_implode_input -e < <(awk '{ print $2 }' "$_group_pkg" | grep -Fxf "$_official_pkg"))
+    awk -v "regex=^${regex//\\/\\\\}\$" '$2 ~ regex { print $1 }' "$_group_pkg"
+)
 
 # Check for PAC_PACKAGES removed from official repos
-if PAC_MOVED=$(lk_arr PAC_PACKAGES | grep -Fxvf "$_PAC_OFFICIAL" -f "$_PAC_GROUPS"); then
-    lk_tty_warning "Removed from official repos:" "$PAC_MOVED"
-    AUR_PACKAGES+=($PAC_MOVED)
+if removed=$(lk_arr PAC_PACKAGES | grep -Fxvf "$_official_pkg" -f "$_official_group"); then
+    lk_tty_warning "Ignoring (removed from official repos):" "$removed"
+    PAC_PACKAGES=($(lk_arr PAC_PACKAGES | grep -Fxf "$_official_pkg" -f "$_official_group"))
 fi
 
-# If PAC_PACKAGES contains group names, replace them with their packages
-if PAC_GROUPS=$(lk_arr PAC_PACKAGES | grep -Fxf "$_PAC_GROUPS"); then
+# Check for AUR_PACKAGES that are now in an official repo
+if moved=$(grep -Fxf <(lk_arr AUR_PACKAGES) "$_official_pkg"); then
+    lk_tty_warning "Moved from AUR to official repos:" "$moved"
+    PAC_PACKAGES+=($moved)
+fi
+
+# Replace groups in PAC_PACKAGES with the packages they contain
+if group=$(lk_arr PAC_PACKAGES | grep -Fxf "$_group"); then
     PAC_PACKAGES=($({
-        lk_arr PAC_PACKAGES | grep -Fxvf "$_PAC_GROUPS" || true
-        awk -v "re=$(lk_ere_implode_input <<<"$PAC_GROUPS")" \
-            '$1 ~ "^" re "$" { print $2 }' "$_PAC_ALL_GROUPS"
+        lk_arr PAC_PACKAGES | grep -Fxvf "$_group" || true
+        regex=$(lk_ere_implode_input -e <<<"$group")
+        awk -v "regex=^${regex//\\/\\\\}\$" '$1 ~ regex { print $2 }' "$_group_pkg"
     } | sort -u))
 fi
 
+# Remove packages in PAC_EXCEPT from PAC_PACKAGES and AUR_PACKAGES
 if [[ -n ${PAC_EXCEPT+1} ]]; then
     PAC_PACKAGES=($(lk_arr PAC_PACKAGES | grep -Fxvf <(lk_arr PAC_EXCEPT) || true))
     AUR_PACKAGES=($(lk_arr AUR_PACKAGES | grep -Fxvf <(lk_arr PAC_EXCEPT) || true))
 fi
 
-# Move any AUR_PACKAGES that can be installed from a repo to PAC_PACKAGES, and
-# vice-versa
-ALL_PACKAGES=(
-    ${PAC_PACKAGES+"${PAC_PACKAGES[@]}"}
-    ${AUR_PACKAGES+"${AUR_PACKAGES[@]}"}
-)
-PAC_PACKAGES=($(lk_arr ALL_PACKAGES | grep -Fxf "$_PAC_PACKAGES" || true))
-AUR_PACKAGES=($(lk_arr ALL_PACKAGES | grep -Fxvf "$_PAC_PACKAGES" || true))
+# Move AUR_PACKAGES that can be installed from a repo to PAC_PACKAGES
+PAC_PACKAGES=($(lk_arr PAC_PACKAGES AUR_PACKAGES | grep -Fxf "$_pkg" || true))
+AUR_PACKAGES=($(lk_arr AUR_PACKAGES | grep -Fxvf "$_pkg" || true))
 
 if [[ -n ${AUR_PACKAGES+1} ]] ||
     [[ -n ${LK_ARCH_AUR_REPO_NAME-} ]] ||
     { pacman-conf --repo="${LK_ARCH_AUR_REPO_NAME:-aur}" |
-        awk -F "[ \t]*=[ \t]*" '$1 == "Server" {print $2}' |
-        grep -E '^file://'; } &>/dev/null; then
+        awk -F '[ \t]*=[ \t]*' '$1 == "Server" && $2 ~ /^[fF][iI][lL][eE]:\/\//' |
+        grep .; } &>/dev/null; then
+    # Add makepkg essentials
     PAC_PACKAGES+=(base-devel devtools)
+    # Don't remove aurutils packages
     PAC_OFFER+=(aurutils vifm)
 fi
 
-# Reduce PAC_OFFER to packages not present in PAC_PACKAGES
+# Remove packages in PAC_PACKAGES or AUR_PACKAGES from PAC_OFFER
 if [[ -n ${PAC_OFFER+1} ]]; then
-    PAC_OFFER=($(lk_arr PAC_OFFER | grep -Fxvf <(lk_arr PAC_PACKAGES) || true))
+    PAC_OFFER=($(lk_arr PAC_OFFER | grep -Fxvf <(lk_arr PAC_PACKAGES AUR_PACKAGES) || true))
 fi
 
 PAC_PACKAGES=($(lk_arr PAC_PACKAGES | sort -u))
 AUR_PACKAGES=($(lk_arr AUR_PACKAGES | sort -u))
+
+#### Reviewed: 2025-06-19 (except desktop packages)

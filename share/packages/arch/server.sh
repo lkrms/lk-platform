@@ -91,7 +91,6 @@ PAC_PACKAGES+=(
     # Utilities
     certbot
     cloud-utils
-    fatresize
     partclone
     stow
     syslinux
