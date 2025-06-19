@@ -1,19 +1,49 @@
 #!/usr/bin/env bash
 
+# Usage: sudo update-grub [-i|--install]
+
 set -euo pipefail
-lk_fail() { (($1)) && return $1 || return 1; }
-lk_die() { s=$? && printf '%s: %s\n' "$0" "$1" >&2 && lk_fail $s || exit; }
 
-((!EUID)) || lk_die "not running as root"
+function die() {
+    local s=$?
+    printf '%s: %s\n' "${0##*/}" "${1-command failed}" >&2
+    exit $((s ? s : 1))
+}
 
-if [[ ${1-} =~ ^(-i|--install)$ ]]; then
-    grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
-    # On some systems, GRUB must be installed at the default/fallpack boot path
-    install -Dpv /boot/EFI/GRUB/grubx64.efi /boot/EFI/BOOT/BOOTX64.EFI
-elif (($#)); then
-    lk_die "invalid arguments"
+((!EUID)) || die "not running as root"
+
+install=0
+case "${1-}" in
+-i | --install)
+    install=1
+    shift
+    ;;
+esac
+
+((!$#)) || die "invalid arguments"
+
+if ((install)); then
+    uefi_bits=$(</sys/firmware/efi/fw_platform_size) 2>/dev/null ||
+        die "not running in UEFI mode"
+    if ((uefi_bits == 32)); then
+        target=i386-efi
+        grub_file=grubia32.efi
+        boot_file=BOOTIA32.EFI
+    else
+        target=x86_64-efi
+        grub_file=grubx64.efi
+        boot_file=BOOTX64.EFI
+    fi
+    grub_file=/boot/EFI/GRUB/$grub_file
+    grub-install --target="$target" --efi-directory=/boot --bootloader-id=GRUB &&
+        [[ -f $grub_file ]] &&
+        # Also make GRUB the UEFI "fallback" bootloader
+        install -Dpv "$grub_file" "/boot/EFI/BOOT/$boot_file" ||
+        die "error installing GRUB"
 else
-    printf '%s: skipping grub-install (--install not set)\n' "$0"
+    printf '%s: grub-install skipped (-i, --install not given)\n' "${0##*/}"
 fi
 
 grub-mkconfig -o /boot/grub/grub.cfg
+
+#### Reviewed: 2025-06-20

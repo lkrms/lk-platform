@@ -24,8 +24,12 @@ LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-} &&
         exec "$BASH" "$_FILE" "$@" || exit; }
 
 set -euo pipefail
-lk_fail() { (($1)) && return $1 || return 1; }
-lk_die() { s=$? && printf '%s: %s\n' "$0" "$1" >&2 && lk_fail $s || exit; }
+
+function die() {
+    local s=$?
+    printf '%s: %s\n' "${0##*/}" "${1-command failed}" >&2
+    exit $((s ? s : 1))
+}
 
 LOG_FILE=$_DIR/install.$(date +%s)
 
@@ -64,11 +68,11 @@ LK_PACKAGES_FILE=${LK_PACKAGES_FILE-}
 export LK_BASE=${LK_BASE:-/opt/lk-platform}
 export -n BOOTSTRAP_PASSWORD BOOTSTRAP_KEY
 
-((!EUID)) || lk_die "not running as root"
-[[ $OSTYPE == linux-gnu ]] || lk_die "not running on Linux"
-[[ -f /etc/arch-release ]] || lk_die "not running on Arch Linux"
-[[ -d /sys/firmware/efi/efivars ]] || lk_die "not booted in UEFI mode"
-[[ $- != *s* ]] || lk_die "cannot run from standard input"
+((!EUID)) || die "not running as root"
+[[ $OSTYPE == linux-gnu ]] || die "not running on Linux"
+[[ -f /etc/arch-release ]] || die "not running on Arch Linux"
+[[ -d /sys/firmware/efi/efivars ]] || die "not running in UEFI mode"
+[[ $- != *s* ]] || die "cannot run from standard input"
 
 function __usage() {
     cat <<EOF &&
@@ -136,7 +140,7 @@ for FILE_PATH in \
         echo "${MESSAGE/{\}/Downloading:}" >&2
         curl "${CURL_OPTIONS[@]}" --output "$FILE" "$URL" || {
             rm -f "$FILE"
-            lk_die "download failed: $URL"
+            die "download failed: $URL"
         }
     else
         echo "${MESSAGE/{\}/Already downloaded:}" >&2
