@@ -127,3 +127,13 @@ function lk_getopt() {
     OPTS+=("$@")
     LK_GETOPT=$(lk_quote_arr OPTS)
 } #### Reviewed: 2021-12-30
+
+# Suppress trace output from lk_tty_*
+eval "declare$(
+    IFS=$' \t\n'
+    # shellcheck disable=SC2046
+    printf ' %q' +t $(
+        compgen -A function lk_tty_
+        compgen -A function _lk_tty_
+    )
+)"
