@@ -14,12 +14,16 @@ LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-main}
 export LK_BASE=${LK_BASE:-/opt/lk-platform}
 
 set -euo pipefail
-lk_fail() { (($1)) && return $1 || return 1; }
-lk_die() { s=$? && printf '%s: %s\n' "$0" "$1" >&2 && lk_fail $s || exit; }
 
-[[ $EUID -ne 0 ]] || lk_die "cannot run as root"
-[[ $OSTYPE == darwin* ]] || lk_die "not running on macOS"
-[[ $- != *s* ]] || lk_die "cannot run from standard input"
+function die() {
+    local s=$?
+    printf '%s: %s\n' "${0##*/}" "${1-command failed}" >&2
+    exit $((s ? s : 1))
+}
+
+[[ $EUID -ne 0 ]] || die "cannot run as root"
+[[ $OSTYPE == darwin* ]] || die "not running on macOS"
+[[ $- != *s* ]] || die "cannot run from standard input"
 
 function exit_trap() {
     local STATUS=$? LK_LOG_BASENAME=lk-provision-macos.sh LOG_FILE
@@ -110,7 +114,7 @@ function exit_trap() {
                 echo "${MESSAGE/{\}/Downloading:}" >&2
                 curl "${CURL_OPTIONS[@]}" --output "$FILE" "$URL" || {
                     rm -f "$FILE"
-                    lk_die "download failed: $URL"
+                    die "download failed: $URL"
                 }
             else
                 echo "${MESSAGE/{\}/Already downloaded:}" >&2
