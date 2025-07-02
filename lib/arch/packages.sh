@@ -227,6 +227,8 @@ PAC_PACKAGES+=(
     zsh
 
     7zip
+    innoextract-
+    unshield-
     unzip
     wimlib
 
@@ -246,6 +248,7 @@ AUR_PACKAGES+=(
     powercap-:H
 
     ## Utilities
+    icdiff-
     ps_mem-
 )
 
