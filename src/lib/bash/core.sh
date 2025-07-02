@@ -1091,6 +1091,17 @@ function lk_base64() {
     fi
 }
 
+# lk_hex [-d]
+function lk_hex() {
+    local decode=0
+    [[ ${1-} != -d ]] || decode=1
+    if ((decode)); then
+        xxd -r -p
+    else
+        xxd -p -c 0
+    fi
+}
+
 if ! lk_is_macos; then
     function lk_full_name() {
         getent passwd "${1:-$EUID}" | cut -d: -f5 | cut -d, -f1
