@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-unset _LK_PROMPT_DISPLAYED
+unset _LK_PROMPT_SEEN
 
 SH=$(
     set -u

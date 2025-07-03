@@ -100,7 +100,7 @@ Example:
         $'\n'"$(lk_fold_quote_options -120 linode-cli "${ARGS[@]##ssh-??? * }")"
     lk_confirm "Proceed?" Y || return
     lk_tty_print "${VERBS[0]} Linode"
-    FILE=/tmp/$FUNCNAME-$1-$(lk_date %s).json
+    FILE=/tmp/$FUNCNAME-$1-$(lk_timestamp).json
     LINODES=$(linode-cli "${ARGS[@]}" | tee "$FILE") ||
         lk_pass rm -f "$FILE" || return
     lk_linode_flush_cache
