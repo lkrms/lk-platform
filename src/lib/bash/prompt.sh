@@ -1,91 +1,121 @@
 #!/usr/bin/env bash
 
-function _lk_prompt_trap() {
-    if ((${_LK_PROMPT_DISPLAYED-0})) &&
-        [[ $BASH_COMMAND != "$PROMPT_COMMAND" ]]; then
-        if [[ -z ${_LK_PROMPT_LAST+1} ]]; then
-            _LK_PROMPT_LAST_START=$(lk_date %s)
-            _LK_PROMPT_LAST=($BASH_COMMAND)
-            return
-        fi
-        _LK_PROMPT_LAST[${#_LK_PROMPT_LAST[@]}]=';'
-        _LK_PROMPT_LAST+=($BASH_COMMAND)
+# _lk_prompt_trap_debug
+#
+# Collect commands for the next prompt string.
+function _lk_prompt_trap_debug() {
+    # Don't collect anything before the first prompt
+    if ((!_LK_PROMPT_SEEN)) || [[ $BASH_COMMAND == "$PROMPT_COMMAND" ]]; then
+        return
     fi
+
+    # Normalise arguments without unsafe expansion
+    local command=($BASH_COMMAND) IFS=' '
+    if [[ -z ${_LK_PROMPT+1} ]]; then
+        _LK_PROMPT_START=$(lk_timestamp)
+        _LK_PROMPT_FIRST=$command
+    fi
+    _LK_PROMPT[${#_LK_PROMPT[@]}]=${command[*]}
 }
 
+# _lk_prompt_command
+#
+# Create a prompt string with current time, last command, elapsed time, exit
+# status and Git status.
 function _lk_prompt_command() {
-    # "Thu May 06 15:02:32 ✔( )" is 24 characters wide
-    local STATUS=$? SECS PS=() STR LEN=24 IFS
-    # Append the last command to HISTFILE
+    local status=$? part parts=()
     history -a
-    # Suppress expansion of prompt strings
+    # Prevent unsafe prompt string expansion
     shopt -u promptvars
-    if [[ -n ${_LK_PROMPT_LAST+1} ]]; then
-        SECS=$(($(lk_date %s) - _LK_PROMPT_LAST_START))
-        if ((STATUS)) ||
-            ((SECS > 1)) ||
-            [[ $(type -t "$_LK_PROMPT_LAST") != builtin ]]; then
+    if [[ -n ${_LK_PROMPT+1} ]]; then
+        local elapsed=$(($(lk_timestamp) - _LK_PROMPT_START))
+        # If the last command failed, ran for at least 2 seconds, or is not a
+        # builtin, add a summary line
+        if ((status || elapsed > 1 || ${#_LK_PROMPT[@]} > 1)) ||
+            [[ $(type -t "$_LK_PROMPT_FIRST") != builtin ]]; then
+            # Start with these 26 columns: "Thu May 06 15:02:32 ✔ (  )"
+            local width=26
             # "Thu May 06 15:02:32 "
-            PS+=("\n\[$LK_DIM\]\d \t\[$LK_UNDIM\] ")
-            if ((!STATUS)); then
+            parts[${#parts[@]}]="\n\[$LK_DIM\]\d \t\[$LK_UNDIM\] "
+            if ((!status)); then
                 # "✔"
-                PS+=("\[$LK_GREEN\]"$'\xe2\x9c\x94')
+                parts[${#parts[@]}]="\[$LK_GREEN\]✔"
             else
                 # "✘ returned 1"
-                STR=" returned $STATUS"
-                PS+=("\[$LK_RED\]"$'\xe2\x9c\x98'"$STR")
-                ((LEN += ${#STR}))
+                part=" returned $status"
+                parts[${#parts[@]}]="\[$LK_RED\]✘$part"
+                ((width += ${#part}))
             fi
-            # " after 12s "
-            if ((SECS < 120)); then
-                SECS+=s
+            # " after 12s"
+            if ((elapsed < 120)); then
+                elapsed+=s
             else
-                SECS=$(lk_duration "$SECS")
+                elapsed=$(lk_duration "$elapsed")
             fi
-            STR=" after $SECS "
-            PS+=("$STR\[$LK_DEFAULT$LK_DIM\]")
-            LEN=$((COLUMNS - LEN - ${#STR}))
-            if ((LEN > 0)); then
-                # "( sleep 12; false )"
-                unset IFS
-                PS+=("($(printf ' %s' "${_LK_PROMPT_LAST[@]}" |
-                    lk_prompt_sanitise |
-                    head -c"$LEN") )")
+            part=" after $elapsed"
+            parts[${#parts[@]}]="$part\[$LK_DEFAULT\]"
+            width=$((COLUMNS - width - ${#part}))
+            if ((width > 0)); then
+                # " ( sleep 12; false )"
+                local IFS=' '
+                parts[${#parts[@]}]=" \[$LK_DIM\]( $(
+                    set -- "${_LK_PROMPT[@]}"
+                    { printf '%s' "$1" && shift && { ((!$#)) || printf '; %s' "$@"; }; } |
+                        _lk_prompt_sanitise |
+                        head -c"$width"
+                ) )\[$LK_UNDIM\]"
             fi
             # "\n"
-            PS+=("\[$LK_UNDIM\]\n")
+            parts[${#parts[@]}]="\n"
         fi
-        _LK_PROMPT_LAST=()
+        _LK_PROMPT=()
     fi
     if ((EUID)); then
         # "ubuntu@"
-        PS+=("\[$LK_BOLD$LK_GREEN\]\u@")
+        parts[${#parts[@]}]="\[$LK_BOLD$LK_GREEN\]\u@"
     else
         # "root@"
-        PS+=("\[$LK_BOLD$LK_RED\]\u@")
+        parts[${#parts[@]}]="\[$LK_BOLD$LK_RED\]\u@"
     fi
-    # "host1 ~ "
-    PS+=("\h\[$LK_BLUE\] \w \[$LK_DEFAULT$LK_UNBOLD\]")
-    [[ -z ${LK_PROMPT_TAG:+1} ]] ||
-        PS+=("\[$LK_WHITE$LK_MAGENTA_BG\] \[$LK_BOLD\]${LK_PROMPT_TAG}\[$LK_UNBOLD\] \[$LK_DEFAULT_BG$LK_DEFAULT\] ")
-    IFS=
-    # "$ " or "# "
-    PS1="${PS[*]}\\\$ "
-    _LK_PROMPT_DISPLAYED=1
-    # Remove Byobu's "history -a;history -r;" prefix
+    # "host1 ~"
+    parts[${#parts[@]}]="\h \[$LK_BLUE\]\w\[$LK_DEFAULT$LK_UNBOLD\]"
+    if ((EUID)) && [[ $(type -t __git_ps1) == function ]]; then
+        part=$(GIT_PS1_SHOWCOLORHINTS=1 __git_ps1 '%s')
+        if [[ -n ${part:+1} ]]; then
+            # "(main)"
+            parts[${#parts[@]}]="\[$LK_YELLOW\](\[$LK_DEFAULT\]$part\[$LK_YELLOW\])\[$LK_DEFAULT\]"
+        fi
+    fi
+    if [[ -n ${LK_PROMPT_TAG:+1} ]]; then
+        # " .tag."
+        parts[${#parts[@]}]=" \[$LK_WHITE$LK_MAGENTA_BG\] \[$LK_BOLD\]${LK_PROMPT_TAG}\[$LK_UNBOLD\] \[$LK_DEFAULT_BG$LK_DEFAULT\]"
+    fi
+    local IFS=
+    # " $ " or " # "
+    PS1="${parts[*]} \\\$ "
+    _LK_PROMPT_SEEN=1
+    # Remove `history -a;history -r;` added by Byobu, for example
     PROMPT_COMMAND=_lk_prompt_command
+    # Speaking of Byobu, prevent nested sessions
     [[ ${LC_BYOBU:+1}${BYOBU_TERM:+2} != 2 ]] || export LC_BYOBU=0
 }
 
+# lk_prompt_enable
+#
+# Enable the lk-platform Bash prompt.
 function lk_prompt_enable() {
     eval "$(lk_get_regex NON_PRINTING_REGEX)"
-    eval "function lk_prompt_sanitise() {
+    eval "function _lk_prompt_sanitise() {
     LC_ALL=C sed -E $(
         printf '%q' "s/$NON_PRINTING_REGEX//g; "$'s/.*\r(.)/\\1/'
     ) | tr -d '\\0-\\10\\16-\\37\\177'
 }"
-    unset _LK_PROMPT_DISPLAYED
-    _LK_PROMPT_LAST=()
+    _LK_PROMPT_SEEN=0
+    _LK_PROMPT=()
     PROMPT_COMMAND=_lk_prompt_command
-    trap _lk_prompt_trap DEBUG
+    # On Bash 3.2, DEBUG handlers need to be removed before they can be replaced
+    trap - DEBUG
+    trap _lk_prompt_trap_debug DEBUG
 }
+
+#### Reviewed: 2025-07-03

@@ -365,9 +365,9 @@ lk_start_trace
     lk_tty_print "Checking udev rules"
     unset LK_FILE_REPLACE_NO_CHANGE
     for _FILE in \
-        "$LK_BASE/share/udev"/{keyboard-event,disable-webcam-sound}*.rules; do
+        "$LK_BASE/share/udev"/{keyboard-event,disable-webcam-sound,libvirt-guest-tap-unmanaged}*.rules; do
         FILE=${_FILE##*/}
-        FILE=/etc/udev/rules.d/82-${LK_PATH_PREFIX}${FILE/.template./.}
+        FILE=/etc/udev/rules.d/85-${LK_PATH_PREFIX}${FILE/.template./.}
         lk_install -m 00644 "$FILE"
         if [[ $_FILE == *.template.* ]]; then
             lk_file_replace "$FILE" < <(lk_expand_template "$_FILE")

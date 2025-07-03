@@ -1,0 +1,1 @@
+ACTION=="add|change|move", SUBSYSTEM=="net", ENV{ID_NET_DRIVER}=="tun", ENV{INTERFACE}=="vnet[0-9]*", ENV{NM_UNMANAGED}="1"

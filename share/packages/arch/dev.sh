@@ -70,6 +70,7 @@ lk_is_virtual || {
         i2c-tools
     )
     AUR_PACKAGES+=(
+        furmark
         geekbench5
     )
     ! lk_system_has_intel_graphics || PAC_PACKAGES+=(
