@@ -15,6 +15,7 @@ PAC_OFFER=(
     1password
     ant
     apachedirectorystudio
+    balena-etcher
     expect
     geekbench
     geteltorito # ThinkPad UEFI firmware update conversion

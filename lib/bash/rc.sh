@@ -214,6 +214,13 @@ lk_false LK_COMPLETION || ! lk_bash_at_least 4 || { SH=$(
 lk_false LK_PROMPT || {
     lk_require prompt
     lk_prompt_enable
+    [[ $(type -t __git_ps1) == function ]] || { SH=$(
+        ! FILE=$(
+            lk_first_file /usr/share/git/git-prompt.sh \
+                /usr/lib/git-core/git-sh-prompt \
+                {/Applications/Xcode.app/Contents/Developer,/Library/Developer/CommandLineTools}/usr/share/git-core/git-prompt.sh
+        ) || printf '. %q\n' "$FILE"
+    ) && eval "$SH"; }
 }
 
 ! lk_command_exists dircolors || { SH=$(

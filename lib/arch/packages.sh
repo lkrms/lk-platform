@@ -227,7 +227,9 @@ PAC_PACKAGES+=(
     zsh
 
     7zip
+    cabextract-
     innoextract-
+    msitools-
     unshield-
     unzip
     wimlib
@@ -265,7 +267,7 @@ add_package_if_feature_enabled mariadb mariadb
 add_package_if_feature_enabled docker docker docker-buildx-
 add_package_if_feature_enabled libvirt \
     libvirt qemu-desktop dnsmasq edk2-ovmf swtpm libguestfs cpio virt-install
-add_package_if_feature_enabled "libvirt desktop" virt-manager
+add_package_if_feature_enabled "libvirt desktop" virt-manager virt-viewer
 
 if lk_feature_enabled desktop; then
     PAC_PACKAGES+=(
