@@ -104,7 +104,6 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_PROMPT`
 - `LK_PROMPT_TAG`
 - `LK_REJECT_OUTPUT`
-- `LK_SAMBA_WORKGROUP`
 - `LK_SFTP_ONLY_GROUP`
 - `LK_SITE_DISABLE_HTTPS`
 - `LK_SITE_DISABLE_WWW`
@@ -117,6 +116,8 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_SITE_SMTP_CREDENTIALS`
 - `LK_SITE_SMTP_RELAY`
 - `LK_SITE_SMTP_SENDERS`
+- `LK_SMB_CONF`
+- `LK_SMB_WORKGROUP`
 - `LK_SMTP_CREDENTIALS`
 - `LK_SMTP_RELAY`
 - `LK_SMTP_SENDERS`

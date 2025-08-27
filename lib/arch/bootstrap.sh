@@ -56,7 +56,8 @@ LK_NODE_TIMEZONE=${LK_NODE_TIMEZONE:-UTC}                              # See `ti
 LK_FEATURES=${LK_FEATURES-}                                            #
 LK_NODE_LOCALES=${LK_NODE_LOCALES-en_AU.UTF-8 en_GB.UTF-8}             # "en_US.UTF-8" is always added
 LK_NODE_LANGUAGE=${LK_NODE_LANGUAGE-en_AU:en_GB:en}                    #
-LK_SAMBA_WORKGROUP=${LK_SAMBA_WORKGROUP-}                              #
+LK_SMB_CONF=${LK_SMB_CONF-}                                            #
+LK_SMB_WORKGROUP=${LK_SMB_WORKGROUP-}                                  #
 LK_GRUB_CMDLINE=${LK_GRUB_CMDLINE-$DEFAULT_CMDLINE}                    #
 LK_NTP_SERVER=${LK_NTP_SERVER-time.apple.com}                          #
 LK_ARCH_MIRROR=${LK_ARCH_MIRROR-}                                      #
@@ -481,7 +482,8 @@ lk_var_sh \
     LK_FEATURES \
     LK_NODE_LOCALES \
     LK_NODE_LANGUAGE \
-    LK_SAMBA_WORKGROUP \
+    LK_SMB_CONF \
+    LK_SMB_WORKGROUP \
     LK_GRUB_CMDLINE \
     LK_NTP_SERVER \
     LK_ARCH_MIRROR \
