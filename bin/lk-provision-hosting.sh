@@ -1139,7 +1139,7 @@ END        { if (m) { print u[m] } else { exit 1 } }')} ||
         _FILE=$(
             LK_MYSQL_MAX_CONNECTIONS=${LK_MYSQL_MAX_CONNECTIONS:-301}
             LK_INNODB_BUFFER_SIZE=${LK_INNODB_BUFFER_SIZE:-128M}
-            BUFFER_BYTES=$(lk_mysql_bytes "$LK_INNODB_BUFFER_SIZE") || exit
+            BUFFER_BYTES=$(lk_mysql_option_bytes "$LK_INNODB_BUFFER_SIZE") || exit
             ((LK_INNODB_BUFFERS = (BUFFER_BYTES / 1024 ** 2 - 1) / 1024 + 1))
             lk_expand_template \
                 "$LK_BASE/share/mariadb.conf.d/default-hosting.template.cnf"
@@ -1163,8 +1163,8 @@ END        { if (m) { print u[m] } else { exit 1 } }')} ||
                     "$LK_MYSQL_USERNAME"
                 mysql -uroot <<EOF
 GRANT ALL PRIVILEGES ON *.*
-TO '$(lk_mysql_escape "$LK_MYSQL_USERNAME")'@'localhost'
-IDENTIFIED BY '$(lk_mysql_escape "$LK_MYSQL_PASSWORD")'
+TO $(lk_mysql_escape "$LK_MYSQL_USERNAME")@'localhost'
+IDENTIFIED BY $(lk_mysql_escape "$LK_MYSQL_PASSWORD")
 WITH GRANT OPTION
 EOF
             fi

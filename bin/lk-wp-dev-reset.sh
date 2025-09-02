@@ -96,7 +96,7 @@ lk_tty_print "Checking WordPress installation at" "$SITE_ROOT"
 lk_tty_detail "Testing MySQL connection"
 SH=$(lk_wp_db_get_vars) && eval "$SH"
 TABLE_PREFIX=$(lk_wp_get_table_prefix)
-lk_mysql_write_cnf
+lk_mysql_options_client_write
 lk_mysql_connects "$DB_NAME"
 
 # Retrieve particulars
@@ -222,7 +222,7 @@ fi
     lk_tty_print "Updating email addresses"
     lk_mysql "$DB_NAME" <<SQL
 UPDATE ${TABLE_PREFIX}options
-SET option_value = '$(lk_mysql_escape "$ADMIN_EMAIL")'
+SET option_value = $(lk_mysql_escape "$ADMIN_EMAIL")
 WHERE option_name IN ('admin_email', 'woocommerce_email_from_address', 'woocommerce_stock_email_recipient');
 
 DELETE
@@ -233,7 +233,7 @@ UPDATE ${TABLE_PREFIX}users
 SET user_email = CONCAT (
         'user_'
         ,ID
-        ,'$(lk_mysql_escape "@$SITE_DOMAIN")'
+        ,$(lk_mysql_escape "@$SITE_DOMAIN")
         )
 WHERE ID <> 1;
 
@@ -245,7 +245,7 @@ UPDATE ${TABLE_PREFIX}postmeta
 SET meta_value = CONCAT (
         'post_'
         ,post_id
-        ,'$(lk_mysql_escape "@$SITE_DOMAIN")'
+        ,$(lk_mysql_escape "@$SITE_DOMAIN")
         )
 WHERE meta_key IN ('_billing_email');
 SQL
