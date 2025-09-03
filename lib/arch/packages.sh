@@ -179,6 +179,7 @@ PAC_PACKAGES+=(
     byobu-
     curl
     diffutils
+    dos2unix
     fclones
     file
     fzf
@@ -223,6 +224,7 @@ PAC_PACKAGES+=(
     wget
     whois
     wol
+    xdelta3
     yq
     zsh
 
@@ -230,6 +232,7 @@ PAC_PACKAGES+=(
     cabextract-
     innoextract-
     msitools-
+    rpm-tools-
     unshield-
     unzip
     wimlib
@@ -254,10 +257,9 @@ AUR_PACKAGES+=(
     ps_mem-
 )
 
-# - `i7z`: Reports CPU time spent in each available C-State
 # - `edk2-ovmf`: UEFI firmware
 # - `swtpm`: TPM emulator
-add_package_if lk_system_has_intel_cpu intel-ucode:H i7z-:H
+add_package_if lk_system_has_intel_cpu intel-ucode:H
 add_package_if lk_system_has_amd_cpu amd-ucode:H
 add_package_if_feature_enabled lighttpd lighttpd
 add_package_if_feature_enabled squid squid

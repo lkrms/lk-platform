@@ -1118,8 +1118,8 @@ done\""
         lk_install -m 00644 "$FILE"
         lk_file_replace -mi "^(#|;|$S*\$)" "$FILE" < <(
             lk_mktemp_with TEMP &&
-                { LK_SAMBA_WORKGROUP=${LK_SAMBA_WORKGROUP:-WORKGROUP} \
-                    lk_expand_template "$LK_BASE/share/samba/smb.template.conf" &&
+                { LK_SMB_WORKGROUP=${LK_SMB_WORKGROUP:-WORKGROUP} \
+                    lk_expand_template "$LK_BASE/share/samba/${LK_SMB_CONF:-standalone}.smb.t.conf" &&
                     { [[ ! -e $FILE ]] || cat "$FILE"; }; } >"$TEMP" &&
                 testparm --suppress-prompt "$TEMP" 2>/dev/null
         )

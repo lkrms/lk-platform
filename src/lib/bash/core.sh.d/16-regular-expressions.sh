@@ -16,6 +16,10 @@ function quote() {
 
 set -euo pipefail
 
+_FILE=$BASH_SOURCE
+_DIR=$(dirname "$_FILE")
+DATA_DIR=$(cd "$_DIR/../../../data" && pwd -P)
+
 ALL=()
 
 add_regex DOMAIN_PART_REGEX "[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
@@ -25,18 +29,24 @@ add_regex EMAIL_ADDRESS_REGEX "[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$
 add_regex DOMAIN_PART_LOWER_REGEX "[a-z0-9]([-a-z0-9]*[a-z0-9])?"
 add_regex DOMAIN_NAME_LOWER_REGEX "$DOMAIN_PART_LOWER_REGEX(\\.$DOMAIN_PART_LOWER_REGEX)+"
 
-s=/
-_TLD=/tmp/tlds-alpha-by-domain-${0//"$s"/__}-$EUID
-[ -s "$_TLD" ] ||
-    curl -fL "https://data.iana.org/TLD/tlds-alpha-by-domain.txt" |
-    sed -E '/^(#|$)/d' |
+_TLD=/tmp/tlds-alpha-by-domain-${0//"/"/__}-$EUID
+if [[ ! -s $_TLD ]]; then
+    FILE=$DATA_DIR/tlds-alpha-by-domain.txt
+    [[ -s $FILE ]] ||
+        curl -fLo "$FILE" "https://data.iana.org/TLD/tlds-alpha-by-domain.txt" ||
+        {
+            rm -f "$FILE"
+            exit 1
+        }
+    sed -E '/^(#|$)/d' "$FILE" |
         tr '[:upper:]' '[:lower:]' |
         awk '{gsub("\\.","\\.")}NR==1{printf("(%s",$0)}NR>1{printf("|%s",$0)}END{print")"}' \
             >"$_TLD" ||
-    {
-        rm -f "$_TLD"
-        exit 1
-    }
+        {
+            rm -f "$_TLD"
+            exit 1
+        }
+fi
 add_regex TOP_LEVEL_DOMAIN_REGEX "$(<"$_TLD")"
 
 _O="(25[0-5]|2[0-4][0-9]|(1[0-9]|[1-9])?[0-9])"

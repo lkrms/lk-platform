@@ -502,7 +502,7 @@ function lk_wp_db_set_local() {
     LOCAL_DB_HOST=${LK_MYSQL_HOST:-localhost}
     if [ "${LOCAL_DB_NAME:+1}\
 ${LOCAL_DB_USER:+1}${LOCAL_DB_PASSWORD:+1}" = 111 ]; then
-        lk_mysql_write_cnf \
+        lk_mysql_options_client_write \
             "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD" "$LOCAL_DB_HOST" || return
         # Keep current credentials if they work
         ! lk_mysql_connects 2>/dev/null || return 0
@@ -524,12 +524,12 @@ ${LOCAL_DB_USER:+1}${LOCAL_DB_PASSWORD:+1}" = 111 ]; then
     LOCAL_DB_USER=${3:-$DEFAULT_IDENTIFIER}
     # Try existing password with new LOCAL_DB_USER before generating a new one
     [ -z "$LOCAL_DB_PASSWORD" ] || {
-        lk_mysql_write_cnf \
+        lk_mysql_options_client_write \
             "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD" "$LOCAL_DB_HOST" || return
         ! lk_mysql_connects 2>/dev/null || return 0
     }
     LOCAL_DB_PASSWORD=$(lk_random_password 24) &&
-        lk_mysql_write_cnf \
+        lk_mysql_options_client_write \
             "$LOCAL_DB_USER" "$LOCAL_DB_PASSWORD" "$LOCAL_DB_HOST"
 }
 
@@ -588,8 +588,8 @@ Usage: $FUNCNAME [-s SITE_ROOT] SQL_PATH [DB_NAME [DB_USER]]" || return
     done
     lk_tty_detail "Resetting database:" "$LOCAL_DB_NAME@$LOCAL_DB_HOST"
     lk_mysql <<SQL || return
-DROP DATABASE IF EXISTS $(lk_mysql_quote_identifier "$LOCAL_DB_NAME");
-CREATE DATABASE $(lk_mysql_quote_identifier "$LOCAL_DB_NAME");
+DROP DATABASE IF EXISTS $(lk_mysql_escape_identifier "$LOCAL_DB_NAME");
+CREATE DATABASE $(lk_mysql_escape_identifier "$LOCAL_DB_NAME");
 SQL
     lk_tty_detail "Restoring backup file:" "$1"
     if [[ $1 =~ \.gz(ip)?$ ]]; then
@@ -610,7 +610,7 @@ function lk_wp_db_myisam_to_innodb() { (
     lk_tty_group -n \
         "Preparing to convert MyISAM tables in WordPress database to InnoDB"
     SH=$(lk_wp_db_get_vars) && eval "$SH" &&
-        lk_mysql_write_cnf || return
+        lk_mysql_options_client_write || return
     ! lk_mysql_innodb_only "$DB_NAME" ||
         lk_warn "no MyISAM tables in database '$DB_NAME'" || return 0
     _lk_wp_is_quiet || {

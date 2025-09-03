@@ -16,6 +16,7 @@ PAC_OFFER=(
     ant
     apachedirectorystudio
     balena-etcher
+    dumpet # i.e. "dump El Torito"
     expect
     geekbench
     geteltorito # ThinkPad UEFI firmware update conversion
@@ -174,6 +175,7 @@ PAC_PACKAGES+=(
     thunderbird-i18n-en-gb
     transmission-cli
     transmission-gtk
+    wireshark-qt
 
     # For LibreOffice
     hunspell
@@ -307,7 +309,7 @@ PAC_PACKAGES+=(
     python-pylint
     qcachegrind
     tidy
-    ttf-font-awesome
+    woff2-font-awesome
     zeal
 
     # Email
