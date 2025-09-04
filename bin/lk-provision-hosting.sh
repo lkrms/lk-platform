@@ -1112,10 +1112,11 @@ END        { if (m) { print u[m] } else { exit 1 } }')} ||
         export WP_CLI_PACKAGES_DIR=$DIR
         if ! no_upgrade; then
             lk_tty_detail "Updating WP-CLI packages"
-            lk_keep_trying lk_wp package update --quiet
+            lk_wp package update --quiet ||
+                lk_warn "WP-CLI package update failed" || true
         fi
-        lk_keep_trying lk_wp_package_install \
-            aaemnnosttv/wp-cli-login-command
+        lk_wp_package_install aaemnnosttv/wp-cli-login-command ||
+            lk_warn "WP-CLI package installation failed" || true
 
         DIR=/opt/opcache-gui
         no_upgrade && [ -e "$DIR" ] ||
