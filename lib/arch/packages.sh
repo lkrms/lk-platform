@@ -298,6 +298,7 @@ if lk_feature_enabled desktop; then
 
         autorandr
         cups
+        gnome-disk-utility # Provides gnome-disk-image-mounter
         gnome-keyring
         gvfs
         gvfs-afc # Apple devices
@@ -326,6 +327,7 @@ if lk_feature_enabled desktop; then
         qalculate-gtk-
         speedcrunch-
         vlc-
+        vlc-plugin-ffmpeg-
 
         pipewire
         pipewire-audio      # Supports Bluetooth audio

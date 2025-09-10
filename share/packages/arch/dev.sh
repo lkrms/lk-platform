@@ -20,6 +20,7 @@ PAC_OFFER=(
     expect
     geekbench
     geteltorito # ThinkPad UEFI firmware update conversion
+    imhex-bin
     linux-headers
     mockoon-bin
     mssql-server
@@ -247,6 +248,7 @@ PAC_PACKAGES+=(
 
 AUR_PACKAGES+=(
     caprine
+    chromium-widevine
     clockify-desktop
     emote
     espanso-x11
@@ -276,6 +278,7 @@ AUR_PACKAGES+=(
     python-eyed3
 
     # Multimedia - video
+    bento4
     makemkv
 
     # System
@@ -301,6 +304,7 @@ PAC_PACKAGES+=(
     emscripten
     eslint
     geckodriver
+    ghex
     gobject-introspection
     gperftools
     imagemagick
@@ -537,6 +541,7 @@ AUR_PACKAGES+=(
     pretty-php
     python-demjson3
     python39 # azure-functions-core-tools-bin dependency
+    rehex
     rollup
     standard
     symfony-console-autocomplete
