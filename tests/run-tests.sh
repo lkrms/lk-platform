@@ -23,7 +23,7 @@ function assert_output_equals() {
             assertion_failed_diff 'expected output does not match actual output' "$expected_output" "$output" ||
                 return
         else
-            assertion_failed 'expected output %q, got %q' "$expected_output" "$output" ||
+            assertion_failed -q 'expected output %s, got %s' "$expected_output" "$output" ||
                 return
         fi
 }
@@ -45,15 +45,27 @@ function assert_output_equals_file() {
             assertion_failed_diff 'expected output does not match actual output' "${expected_output%.}" "${output%.}" ||
                 return
         else
-            assertion_failed 'expected output %q, got %q' "${expected_output%.}" "${output%.}" ||
+            assertion_failed -q 'expected output %s, got %s' "${expected_output%.}" "${output%.}" ||
                 return
         fi
 }
 
-# assertion_failed message [arg...]
+# assertion_failed [-q] message [arg...]
 function assertion_failed() {
+    local quote=0
+    [[ $1 != -q ]] || {
+        quote=1
+        shift
+    }
     local message=$1
     shift
+    if (($# && quote)); then
+        local args=() arg
+        for arg in "$@"; do
+            args[${#args[@]}]="'${arg//"'"/"'\\''"}'"
+        done
+        set -- "${args[@]}"
+    fi
     printf "%s: ${message}\\n" "${BASH_SOURCE[2]#tests/unit/}:${BASH_LINENO[1]}" "$@" >&2
     return 1
 }
@@ -75,11 +87,16 @@ function assertion_failed_diff() { {
 LK_BASE=$(pwd -P)
 . "$LK_BASE/lib/bash/common.sh"
 
+if (($#)); then
+    set -- "${@#tests/unit/}"
+    set -- "${@/#/tests/unit/}"
+fi
+
 TESTS=0
 PASSED=0
 FAILED=0
 ERRORS=()
-while IFS= read -rd '' TEST; do
+while IFS= read -r TEST; do
     lk_tty_print "Running:" "${TEST#tests/unit/}"
     set +e
     (
@@ -95,17 +112,31 @@ while IFS= read -rd '' TEST; do
         ((++FAILED))
     fi
     ((++TESTS))
-done < <(find tests/unit -type f -name '*-test.sh' -print0)
-
-((!TESTS)) || lk_tty_print
+done < <(find tests/unit -type f -name '*-test.sh' |
+    if (($#)); then
+        grep -Fxf <(printf '%s\n' "$@") | sort
+    else
+        sort
+    fi)
 
 SUMMARY=(Tests "$TESTS")
 ((!PASSED)) || SUMMARY+=(Passed "$PASSED")
 ((!FAILED)) || SUMMARY+=(Failed "$FAILED")
 
+if (($#)); then
+    IFS=$'\n'
+    if MISSING=($(printf '%s\n' "$@" | sort -u | grep -Fxvf <(find tests/unit -type f -name '*-test.sh'))); then
+        printf '%s: file not found\n' "${MISSING[@]#tests/unit/}" >&2
+        SUMMARY+=(Missing "${#MISSING[@]}")
+        ((++FAILED))
+    fi
+fi
+
+((!TESTS && !$#)) || lk_tty_print
+
 if ((!FAILED)); then
     lk_tty_success 'OK'
-else
+elif [[ -n ${ERRORS+1} ]]; then
     lk_tty_error 'ERRORS:' $'\n'"$(
         printf -- '- %s\n' "${ERRORS[@]#tests/unit/}"
     )"

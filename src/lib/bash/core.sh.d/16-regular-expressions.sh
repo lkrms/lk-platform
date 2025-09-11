@@ -241,8 +241,7 @@ for REGEX in "${ALL[@]}"; do
 done
 printf '
         *)
-            lk_err "regex not found: $1"
-            STATUS=1
+            lk_err "regex not found: $1" || STATUS=1
             ;;
         esac
         shift
