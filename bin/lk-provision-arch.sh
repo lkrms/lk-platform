@@ -509,19 +509,25 @@ $LK_NODE_HOSTNAME" &&
             DAEMON_RELOAD=1
     fi
 
-    if [ -n "${LK_NTP_SERVER-}" ]; then
-        lk_tty_print "Checking NTP"
-        unset LK_FILE_REPLACE_NO_CHANGE
-        FILE=/etc/ntp.conf
-        lk_file_keep_original "$FILE"
-        _FILE=$(awk \
-            -v "NTP_SERVER=server $LK_NTP_SERVER iburst" \
-            -f "$LK_BASE/lib/awk/ntp-set-server.awk" \
-            "$FILE")
-        lk_file_replace "$FILE" "$_FILE"
-        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
-            SERVICE_RESTART+=(ntpd)
-    fi
+    lk_tty_print "Checking NTP"
+    unset LK_FILE_REPLACE_NO_CHANGE
+    FILE=/etc/ntp.conf
+    lk_file_keep_original "$FILE"
+    _FILE=$(
+        interfaces=$({
+            ! lk_feature_enabled desktop ||
+                ! lk_pac_installed libvirt ||
+                printf '%s\n' 192.168.{122,100}.0/24
+            lk_system_list_physical_links
+        } | lk_implode_input ,) &&
+            awk -v server="${LK_NTP_SERVER-}" \
+                -v interfaces="$interfaces" \
+                -f "$LK_BASE/lib/awk/ntp-set-server.awk" \
+                "$FILE"
+    )
+    lk_file_replace "$FILE" "$_FILE"
+    ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+        SERVICE_RESTART+=(ntpd)
     SERVICE_ENABLE+=(
         ntpd "NTP"
     )
