@@ -61,7 +61,7 @@ function lk_file() {
     local OPTIND OPTARG OPT \
         DIFF=0 PROMPT=0 BACKUP=0 ORIG=0 MODE OWNER GROUP VERBOSE=0 \
         SED_ARGS=() TEMP _MODE _OWNER _GROUP CHOWN=
-    lk_counter_init LK_FILE_DECLINED
+    LK_FILE_DECLINED=$((${LK_FILE_DECLINED-0})) || return
     while getopts ":i:dpbrm:o:g:v" OPT; do
         case "$OPT" in
         i)
@@ -105,8 +105,7 @@ function lk_file() {
             VERBOSE=1
             ;;
         \? | :)
-            lk_bad_args
-            return 1
+            lk_bad_args || return
             ;;
         esac
     done
@@ -114,7 +113,7 @@ function lk_file() {
     (($# == 1)) || lk_bad_args || return
     [[ ! -t 0 ]] || lk_err "no input" || return
     lk_mktemp_with TEMP cat &&
-        lk_reopen_tty_in || return
+        lk_readable_tty_open || return
 
     # If the file doesn't exist, use `install` to create it
     if [[ ! -e $1 ]] && ! { lk_will_sudo && sudo test -e "$1"; }; then

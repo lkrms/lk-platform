@@ -10,131 +10,138 @@ USER=${USER:-$(id -un)} &&
 
 _LK_ARGV=("$@")
 
-# lk_fail [STATUS]
+# lk_pass [-<status>] [--] <command> [<arg>...]
 #
-# Fail with return value STATUS or 1.
-#
-# A subshell-free alternative to `(exit "$STATUS") && false`.
-function lk_fail() {
-    local s
-    ((s = ${1-})) && return "$s" || return 1
-}
-
-# lk_pass [-STATUS] COMMAND [ARG...]
-#
-# Run COMMAND and return STATUS or the previous command's exit status.
+# Run a command and return the previous command's exit status, or <status> if
+# given.
 function lk_pass() {
-    local s=$?
-    [[ $1 != -* ]] || { s=${1:1} && shift; }
-    "$@" || return "$s"
-    return "$s"
+    local status=$?
+    if [[ $1 == -* ]] && [[ $1 != -- ]] && [[ $1 =~ ^-[0-9]+$ ]]; then
+        status=$((${1:1}))
+        shift
+    fi
+    [[ $1 != -- ]] || shift
+    "$@" || true
+    return $status
 }
 
-# lk_err MESSAGE
-function lk_err() {
-    lk_pass printf '%s: %s\n' \
-        "${FUNCNAME[1 + ${_LK_STACK_DEPTH:-0}]-${0##*/}}" \
-        "$1" >&2
-}
-
-# lk_bad_args [VALUE_NAME [VALUE]]
-function lk_bad_args() {
-    lk_pass printf '%s: invalid %s%s\n' \
-        "${FUNCNAME[1 + ${_LK_STACK_DEPTH:-0}]-${0##*/}}" \
-        "${1-arguments}" "${2+: $2}" >&2
-}
-
-# lk_script_name [STACK_DEPTH]
+# lk_err <message>
 #
-# Get the name of the top-level script or function that's currently running.
-function lk_script_name() {
-    local depth=$((${1-0} + ${_LK_STACK_DEPTH:-0})) name
-    lk_script_running ||
-        name=${FUNCNAME[1 + depth]+"${FUNCNAME[*]: -1}"}
-    [[ ! ${name-} =~ ^(source|main)$ ]] || name=
+# Write "<caller>: <message>" to STDERR and return the previous command's exit
+# status, or 1 if the previous command did not fail.
+function lk_err() {
+    local status=$?
+    ((status)) || status=1
+    printf '%s: %s\n' \
+        "${FUNCNAME[1 + ${_LK_STACK_DEPTH-0}]-${0##*/}}" \
+        "$1" >&2
+    return $status
+}
+
+# lk_bad_args
+#
+# Write "<caller>: invalid arguments" to STDERR and return the previous
+# command's exit status, or 1 if the previous command did not fail.
+function lk_bad_args() {
+    _LK_STACK_DEPTH=$((${_LK_STACK_DEPTH-0} + 1)) \
+        lk_err 'invalid arguments'
+}
+
+# lk_script [<stack_depth>]
+#
+# Print the name of the script or function that's currently running.
+function lk_script() {
+    local depth=$((${_LK_STACK_DEPTH-0} + ${1-0})) name
+    lk_script_running || {
+        name=${FUNCNAME[depth + 1]+${FUNCNAME[*]: -1}}
+        [[ ! $name =~ ^(source|main)$ ]] || name=
+    }
     printf '%s\n' "${name:-${0##*/}}"
 }
 
-# lk_caller_name [STACK_DEPTH]
+# lk_caller [<stack_depth>]
 #
-# Get the name of the caller's caller.
-function lk_caller_name() {
-    local depth=$((${1-0} + ${_LK_STACK_DEPTH:-0})) name
+# Print the name of the caller's caller.
+function lk_caller() {
+    local depth=$((${_LK_STACK_DEPTH-0} + ${1-0})) name
     name=${FUNCNAME[2 + depth]-}
     [[ ! $name =~ ^(source|main)$ ]] || name=
     printf '%s\n' "${name:-${0##*/}}"
 }
 
-# lk_first_command ["COMMAND [ARG...]"...]
+# lk_runnable ["<command> [<arg>...]"...]
 #
-# Print the first command line where COMMAND is in PATH or return false if no
-# COMMAND is found.
-function lk_first_command() {
-    local IFS=$' \t\n' CMD
+# Print the first IFS-delimited command line that corresponds to an executable
+# disk file, or fail if no <command> is found on the filesystem or in PATH.
+function lk_runnable() {
+    local cmd
     while (($#)); do
-        CMD=($1)
-        ! type -P "$CMD" >/dev/null || break
+        read -ra cmd <<<"$1"
+        ! type -P "${cmd[0]}" >/dev/null || break
         shift
     done
-    (($#)) && echo "$1"
+    (($#)) && printf '%s\n' "$1"
 }
 
-# lk_first_file [FILE...]
+# lk_readable [<file>...]
 #
-# Print the first FILE that exists or return false if no FILE is found.
-function lk_first_file() {
+# Print the first readable file, or fail if no <file> is readable by the current
+# user.
+function lk_readable() {
     while (($#)); do
-        [[ ! -e $1 ]] || break
+        [[ ! -r $1 ]] || break
         shift
     done
-    (($#)) && echo "$1"
+    (($#)) && printf '%s\n' "$1"
 }
 
-# lk_first_writable_char [PATH...]
+# lk_writable_tty
 #
-# Print the first PATH that is a writable character special file, or return
-# false if no such PATH is found.
-function lk_first_writable_char() {
+# Print the first writable device of `/dev/tty` and `/dev/console`, or fail if
+# neither is a character device that can be opened for writing.
+function lk_writable_tty() {
+    set -- /dev/tty /dev/console
     while (($#)); do
-        { [[ ! -c $1 ]] || ! : >"$1"; } 2>/dev/null || break
+        [[ ! -c $1 ]] || ! : >"$1" || break
         shift
-    done
-    (($#)) && echo "$1"
+    done 2>/dev/null
+    (($#)) && printf '%s\n' "$1"
 }
 
-# lk_get_tty
+# lk_readable_tty_open
 #
-# Print "/dev/tty" if Bash has a controlling terminal, otherwise print
-# "/dev/console" if it is open for writing, or return false.
-function lk_get_tty() {
-    lk_first_writable_char /dev/tty /dev/console
+# Reopen `/dev/tty` as STDIN, or fail if `/dev/tty` is not a readable character
+# device.
+function lk_readable_tty_open() {
+    [[ -c /dev/tty ]] && [[ -r /dev/tty ]] && exec </dev/tty
 }
 
-# lk_reopen_tty_in
+# lk_plural [-v] (<count>|<array>) <single> [<plural>]
 #
-# Reopen /dev/stdin from /dev/tty if possible.
-function lk_reopen_tty_in() {
-    [[ -c /dev/tty ]] && [[ -r /dev/tty ]] || return 0
-    { exec </dev/tty; } 2>/dev/null || true
-}
-
-# lk_plural [-v] <VALUE|ARRAY> SINGLE [PLURAL]
-#
-# Print SINGLE if VALUE or the length of ARRAY is 1, otherwise print PLURAL (or
-# "${SINGLE}s" if PLURAL is omitted). If -v is set, include VALUE in the output.
+# Print the singular form of a noun if <count> or the length of an array is 1,
+# otherwise print the noun's plural form (default: "<single>s"). If `-v` is
+# given, insert "<count> " before the noun.
 function lk_plural() {
-    local _VALUE _COUNT
-    [[ $1 != -v ]] || { _VALUE=1 && shift; }
-    [[ $1 =~ ^-?[0-9]+$ ]] && _COUNT=$1 ||
-        { declare -p "$1" &>/dev/null && eval "_COUNT=\${#$1[@]}"; } ||
+    local _count _noun
+    [[ $1 == -v ]] || set -- "" "$@"
+    if [[ $2 =~ ^[+-]?[0-9]+$ ]]; then
+        _count=$2
+    elif declare -pa "$2" &>/dev/null; then
+        eval "_count=\${#$2[@]}"
+    else
         lk_bad_args || return
-    _VALUE="${_VALUE:+$_COUNT }"
-    ((_COUNT == 1)) && echo "$_VALUE$2" || echo "$_VALUE${3-$2s}"
+    fi
+    if ((_count == 1)); then
+        _noun=$3
+    else
+        _noun=${4-${3}s}
+    fi
+    printf '%s%s\n' "${1:+$_count }" "$_noun"
 }
 
-# lk_assign VAR
+# lk_assign <var>
 #
-# Read standard input until EOF or NUL and assign it to VAR.
+# Read the contents of STDIN until EOF or NUL and assign them to a variable.
 #
 # Example:
 #
@@ -145,28 +152,12 @@ function lk_assign() {
     IFS= read -rd '' "$1" || true
 }
 
-# lk_safe_grep GREP_ARG...
+# lk_grep <grep_arg>...
 #
-# Run grep without returning an error if no lines were selected.
-function lk_safe_grep() {
+# Run `grep` and return zero whether lines are selected or not, failing only if
+# there is an error.
+function lk_grep() {
     grep "$@" || [[ $? -eq 1 ]] || return 2
-}
-
-# lk_counter_init [VAR...]
-#
-# Set each VAR in the caller's scope to whichever integer is greater:
-# - The current value of VAR
-# - 0 (zero)
-function lk_counter_init() {
-    while (($#)); do
-        if [[ -n ${!1-} ]]; then
-            eval "$1=\$(($1 < 0 ? 0 : $1))"
-        else
-            unset -v "$1" || lk_bad_args || return
-            eval "$1=0"
-        fi
-        shift
-    done
 }
 
 # lk_bash_at_least MAJOR [MINOR]
@@ -404,7 +395,6 @@ function lk_elevate() {
         ${LK_EXEC:+exec} sudo -H "$_COMMAND" "$@"
     else
         lk_err "invalid command: $1"
-        false
     fi
 }
 
@@ -909,8 +899,7 @@ function lk_get_regex() {
             printf '%s=%q\n' BACKUP_TIMESTAMP_FINDUTILS_REGEX '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]'
             ;;
         *)
-            lk_err "regex not found: $1"
-            STATUS=1
+            lk_err "regex not found: $1" || STATUS=1
             ;;
         esac
         shift
@@ -1843,7 +1832,6 @@ function lk_tty_dump() {
         0- | *-1- | *-0)
             if [ -t 0 ]; then
                 lk_err "input is a terminal"
-                false
             else
                 ${_CMD+"${_CMD[@]}"} cat
             fi
@@ -2974,7 +2962,7 @@ function lk_file() {
     local OPTIND OPTARG OPT \
         DIFF=0 PROMPT=0 BACKUP=0 ORIG=0 MODE OWNER GROUP VERBOSE=0 \
         SED_ARGS=() TEMP _MODE _OWNER _GROUP CHOWN=
-    lk_counter_init LK_FILE_DECLINED
+    LK_FILE_DECLINED=$((${LK_FILE_DECLINED-0})) || return
     while getopts ":i:dpbrm:o:g:v" OPT; do
         case "$OPT" in
         i)
@@ -3018,8 +3006,7 @@ function lk_file() {
             VERBOSE=1
             ;;
         \? | :)
-            lk_bad_args
-            return 1
+            lk_bad_args || return
             ;;
         esac
     done
@@ -3027,7 +3014,7 @@ function lk_file() {
     (($# == 1)) || lk_bad_args || return
     [[ ! -t 0 ]] || lk_err "no input" || return
     lk_mktemp_with TEMP cat &&
-        lk_reopen_tty_in || return
+        lk_readable_tty_open || return
 
     # If the file doesn't exist, use `install` to create it
     if [[ ! -e $1 ]] && ! { lk_will_sudo && sudo test -e "$1"; }; then
@@ -3358,6 +3345,7 @@ lk_delete_on_exit() { lk_on_exit_delete "$@"; }
 lk_kill_on_exit() { lk_on_exit_kill "$@"; }
 lk_undo_delete_on_exit() { lk_on_exit_undo_delete "$@"; }
 
+lk_caller_name() { lk_caller $((${1-0} + 1)); }
 lk_confirm() { lk_tty_yn "$@"; }
 lk_delete_on_exit_withdraw() { lk_on_exit_undo_delete "$@"; }
 lk_echo_args() { lk_args "$@"; }
@@ -3367,12 +3355,17 @@ lk_escape_ere_replace() { lk_sed_escape_replace "$@"; }
 lk_escape_ere() { lk_sed_escape "$@"; }
 lk_file_security() { lk_file_owner_mode "$@"; }
 lk_file_sort_by_date() { lk_file_sort_modified "$@"; }
-lk_first_existing() { lk_first_file "$@"; }
+lk_first_command() { lk_runnable "$@"; }
+lk_first_existing() { lk_readable "$@"; }
+lk_first_file() { lk_readable "$@"; }
+lk_get_tty() { lk_writable_tty "$@"; }
 lk_jq_get_array() { lk_json_mapfile "$@"; }
 lk_maybe_sudo() { lk_sudo "$@"; }
-lk_mktemp_dir() { _LK_STACK_DEPTH=$((1 + ${_LK_STACK_DEPTH:-0})) lk_mktemp -d; }
-lk_mktemp_file() { _LK_STACK_DEPTH=$((1 + ${_LK_STACK_DEPTH:-0})) lk_mktemp; }
+lk_mktemp_dir() { _LK_STACK_DEPTH=$((${_LK_STACK_DEPTH-0} + 1)) lk_mktemp -d; }
+lk_mktemp_file() { _LK_STACK_DEPTH=$((${_LK_STACK_DEPTH-0} + 1)) lk_mktemp; }
 lk_regex_implode() { lk_ere_implode_args -- "$@"; }
+lk_safe_grep() { lk_grep "$@"; }
+lk_script_name() { lk_script $((${1-0} + 1)); }
 lk_test_many() { lk_test "$@"; }
 lk_tty_detail_pairs() { lk_tty_pairs_detail "$@"; }
 
