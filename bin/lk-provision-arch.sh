@@ -1059,8 +1059,14 @@ done\""
     if lk_pac_installed libvirt; then
         lk_user_in_group libvirt && lk_user_in_group kvm ||
             sudo usermod --append --groups libvirt,kvm "$USER"
-        LIBVIRT_USERS=$(lk_get_users_in_group libvirt)
-        LIBVIRT_USERS=$([ -z "$LIBVIRT_USERS" ] || id -u $LIBVIRT_USERS)
+
+        unset LK_FILE_REPLACE_NO_CHANGE
+        LK_CONF_OPTION_FILE=/etc/libvirt/network.conf
+        _LK_CONF_DELIM=" = " \
+            lk_conf_set_option firewall_backend '"iptables"'
+        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+            SERVICE_RESTART+=(libvirtd)
+
         LK_CONF_OPTION_FILE=/etc/conf.d/libvirt-guests
         lk_conf_set_option URIS default
         lk_conf_set_option PARALLEL_SHUTDOWN 4
@@ -1077,6 +1083,7 @@ done\""
         fi
         lk_conf_set_option ON_SHUTDOWN shutdown
         lk_conf_set_option SYNC_TIME 1
+
         ! memory_at_least 7 || SERVICE_ENABLE+=(
             libvirtd "libvirt"
             libvirt-guests "libvirt-guests"
