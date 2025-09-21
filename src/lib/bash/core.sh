@@ -399,7 +399,7 @@ function lk_cache() {
                 [ "$AGE" -lt "$TTL" ]; }; }; then
         cat "$FILE"
     else
-        "$@" >"$FILE" && cat -- "$FILE" || lk_pass rm -f -- "$FILE"
+        "$@" | tee -- "$FILE" || lk_pass rm -f -- "$FILE"
     fi
 } #### Reviewed: 2021-03-25
 
