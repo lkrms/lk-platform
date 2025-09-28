@@ -3748,6 +3748,19 @@ function _lk_cache_dir() {
     )} && eval "$VAR=\$DIR" && echo "$DIR"
 }
 
+function _lk_cache_init() {
+    local TTL=300 AGE
+    [[ $1 != -t ]] || { TTL=$2 && shift 2; }
+    FILE=$(_lk_cache_dir)/${BASH_SOURCE[2]//"/"/__} &&
+        { [[ ! -f "${FILE}_dirty" ]] || rm -f -- "$FILE"*; } &&
+        FILE+=_${FUNCNAME[2]}_$(lk_hash "$@") || return
+    CMD=("$@")
+    HIT=1
+    [[ -f $FILE ]] && {
+        ((!TTL)) || { AGE=$(lk_file_age "$FILE") && ((AGE < TTL)); }
+    } || HIT=0
+}
+
 # lk_cache [-t TTL] COMMAND [ARG...]
 #
 # Print output from a previous run if possible, otherwise execute the command
@@ -3755,19 +3768,20 @@ function _lk_cache_dir() {
 # cached output for up to TTL seconds (default: 300). If TTL is 0, use cached
 # output indefinitely.
 function lk_cache() {
-    local TTL=300 FILE AGE s=/
-    [ "${1-}" != -t ] || { TTL=$2 && shift 2; }
-    FILE=$(_lk_cache_dir)/${BASH_SOURCE[1]//"$s"/__} &&
-        { [ ! -f "${FILE}_dirty" ] || rm -f -- "$FILE"*; } || return
-    FILE+=_${FUNCNAME[1]}_$(lk_hash "$@") || return
-    if [ -f "$FILE" ] &&
-        { [ "$TTL" -eq 0 ] ||
-            { AGE=$(lk_file_age "$FILE") &&
-                [ "$AGE" -lt "$TTL" ]; }; }; then
+    local CMD FILE HIT
+    _lk_cache_init "$@" || return
+    if ((HIT)); then
         cat "$FILE"
     else
-        "$@" | tee -- "$FILE" || lk_pass rm -f -- "$FILE"
+        "${CMD[@]}" | tee -- "$FILE" || lk_pass rm -f -- "$FILE"
     fi
+}
+
+# lk_cache_has [-t TTL] COMMAND [ARG...]
+function lk_cache_has() {
+    local CMD FILE HIT
+    _lk_cache_init "$@" &&
+        ((HIT == 1))
 }
 
 function lk_cache_mark_dirty() {
