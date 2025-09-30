@@ -11,5 +11,5 @@ function _lk_hosting_check() {
 }
 
 function lk_hosting_flush_cache() {
-    lk_cache_mark_dirty
+    lk_cache_flush
 }

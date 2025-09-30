@@ -367,62 +367,6 @@ function lk_has_arg() {
     lk_in_array "$1" _LK_ARGV
 }
 
-function _lk_cache_dir() {
-    local VAR=_LK_OUTPUT_CACHE DIR SUBDIR=
-    [ -z "${_LK_CACHE_NAMESPACE:+1}" ] || {
-        VAR+=_$_LK_CACHE_NAMESPACE
-        SUBDIR=/$_LK_CACHE_NAMESPACE
-    }
-    # "${!VAR:=...}" doesn't work in Bash 3.2
-    DIR=${!VAR:-$(
-        TMPDIR=${TMPDIR:-/tmp}
-        DIR=${TMPDIR%/}/_lk_output_cache_$EUID$SUBDIR
-        install -d -m 00700 "$DIR" && echo "$DIR"
-    )} && eval "$VAR=\$DIR" && echo "$DIR"
-}
-
-function _lk_cache_init() {
-    local TTL=300 AGE
-    [[ $1 != -t ]] || { TTL=$2 && shift 2; }
-    FILE=$(_lk_cache_dir)/${BASH_SOURCE[2]//"/"/__} &&
-        { [[ ! -f "${FILE}_dirty" ]] || rm -f -- "$FILE"*; } &&
-        FILE+=_${FUNCNAME[2]}_$(lk_hash "$@") || return
-    CMD=("$@")
-    HIT=1
-    [[ -f $FILE ]] && {
-        ((!TTL)) || { AGE=$(lk_file_age "$FILE") && ((AGE < TTL)); }
-    } || HIT=0
-}
-
-# lk_cache [-t TTL] COMMAND [ARG...]
-#
-# Print output from a previous run if possible, otherwise execute the command
-# line and cache its output in a transient per-process cache. If -t is set, use
-# cached output for up to TTL seconds (default: 300). If TTL is 0, use cached
-# output indefinitely.
-function lk_cache() {
-    local CMD FILE HIT
-    _lk_cache_init "$@" || return
-    if ((HIT)); then
-        cat "$FILE"
-    else
-        "${CMD[@]}" | tee -- "$FILE" || lk_pass rm -f -- "$FILE"
-    fi
-} #### Reviewed: 2021-03-25
-
-# lk_cache_has [-t TTL] COMMAND [ARG...]
-function lk_cache_has() {
-    local CMD FILE HIT
-    _lk_cache_init "$@" &&
-        ((HIT == 1))
-}
-
-function lk_cache_mark_dirty() {
-    local FILE s=/
-    FILE=$(_lk_cache_dir)/${BASH_SOURCE[1]//"$s"/__}_dirty || return
-    touch "$FILE"
-} #### Reviewed: 2021-03-25
-
 # lk_get_outputs_of COMMAND [ARG...]
 #
 # Execute COMMAND, output Bash-compatible code that sets _STDOUT and _STDERR to

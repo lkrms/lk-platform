@@ -2484,6 +2484,92 @@ function lk_tee() {
     exec tee "$@"
 }
 
+# _lk_cache_dir [<stack_depth>]
+function _lk_cache_dir() {
+    local TMPDIR=${TMPDIR:-/tmp} depth=$((${_LK_STACK_DEPTH-0} + ${1-0}))
+    local dir=${TMPDIR%/}/lk_cache_${EUID}
+    local dirs=("$dir")
+    [[ -z ${LK_CACHE_NAMESPACE-} ]] || {
+        dir=$dir/$LK_CACHE_NAMESPACE
+        dirs[${#dirs[@]}]=$dir
+    }
+    local file=${BASH_SOURCE[depth + 2]-${0##*/}}
+    dir=$dir/${file//"/"/__}
+    dirs[${#dirs[@]}]=$dir
+    [[ -d $dir ]] || install -d -m 0700 "${dirs[@]}" || return
+    printf '%s\n' "$dir"
+}
+
+# _lk_cache_init [-f] [-t <ttl>] [--] <command> [<arg>...]
+function _lk_cache_init() {
+    local depth=$((${_LK_STACK_DEPTH-0})) force=0 ttl=300 age
+    while [[ ${1-} == -* ]]; do
+        case "$1" in
+        -f) force=1 ;;
+        -t) ttl=${2-} && shift ;;
+        --) shift && break ;;
+        *) lk_bad_args || return ;;
+        esac
+        shift || lk_bad_args || return
+    done
+    cmd=("$@")
+    file=$(_lk_cache_dir 1)/${FUNCNAME[depth + 2]-${0##*/}}_$(lk_hash "$@") || return
+    hit=1
+    if ((force)) || [[ ! -f $file ]] || {
+        ((ttl)) && age=$(lk_file_age "$file") && ((age > ttl))
+    }; then
+        hit=0
+    fi
+}
+
+# lk_cache [-f] [-t <ttl>] [--] <command> [<arg>...]
+#
+# If the most recent run of a command was successful, print its output again and
+# return. Otherwise, run the command and cache its output for subsequent runs if
+# its exit status is zero.
+#
+# Options:
+#
+#     -t <ttl>  Number of seconds output from the command is considered fresh,
+#               or 0 to use cached output indefinitely (default: 300)
+#     -f        Run the command even if cached output is available
+#
+# Cached output is stored under `TMPDIR` in directories that can only be
+# accessed by the current user. Pathnames are derived from:
+# - `LK_CACHE_NAMESPACE` (if set)
+# - caller filename (to prevent downstream naming collisions)
+# - caller name
+function lk_cache() {
+    local cmd file hit
+    _lk_cache_init "$@" &&
+        if ((hit)); then
+            cat "$file"
+        else
+            "${cmd[@]}" | tee -- "$file" || lk_pass rm -f -- "$file"
+        fi
+}
+
+# lk_cache_has [-t <ttl>] [--] <command> [<arg>...]
+#
+# Check if cached output is available for a command.
+#
+# The state of the output cache may change between calls to `lk_cache_has` and
+# `lk_cache`. Code that assumes otherwise may be vulnerable to race conditions.
+function lk_cache_has() {
+    local cmd file hit
+    _lk_cache_init "$@" &&
+        ((hit == 1))
+}
+
+# lk_cache_flush
+#
+# Discard output cached by calls to `lk_cache` from the caller's source file.
+function lk_cache_flush() {
+    local dir
+    dir=$(_lk_cache_dir) &&
+        rm -Rf -- "$dir"
+}
+
 # lk_fifo_flush FIFO_PATH
 function lk_fifo_flush() {
     [ -p "${1-}" ] || lk_err "not a FIFO: ${1-}" || return
@@ -3345,6 +3431,7 @@ lk_delete_on_exit() { lk_on_exit_delete "$@"; }
 lk_kill_on_exit() { lk_on_exit_kill "$@"; }
 lk_undo_delete_on_exit() { lk_on_exit_undo_delete "$@"; }
 
+lk_cache_mark_dirty() { _LK_STACK_DEPTH=$((${_LK_STACK_DEPTH-0} + 1)) lk_cache_flush; }
 lk_caller_name() { lk_caller $((${1-0} + 1)); }
 lk_confirm() { lk_tty_yn "$@"; }
 lk_delete_on_exit_withdraw() { lk_on_exit_undo_delete "$@"; }
@@ -3732,62 +3819,6 @@ function _lk_maybe_xargs() {
 
 function lk_has_arg() {
     lk_in_array "$1" _LK_ARGV
-}
-
-function _lk_cache_dir() {
-    local VAR=_LK_OUTPUT_CACHE DIR SUBDIR=
-    [ -z "${_LK_CACHE_NAMESPACE:+1}" ] || {
-        VAR+=_$_LK_CACHE_NAMESPACE
-        SUBDIR=/$_LK_CACHE_NAMESPACE
-    }
-    # "${!VAR:=...}" doesn't work in Bash 3.2
-    DIR=${!VAR:-$(
-        TMPDIR=${TMPDIR:-/tmp}
-        DIR=${TMPDIR%/}/_lk_output_cache_$EUID$SUBDIR
-        install -d -m 00700 "$DIR" && echo "$DIR"
-    )} && eval "$VAR=\$DIR" && echo "$DIR"
-}
-
-function _lk_cache_init() {
-    local TTL=300 AGE
-    [[ $1 != -t ]] || { TTL=$2 && shift 2; }
-    FILE=$(_lk_cache_dir)/${BASH_SOURCE[2]//"/"/__} &&
-        { [[ ! -f "${FILE}_dirty" ]] || rm -f -- "$FILE"*; } &&
-        FILE+=_${FUNCNAME[2]}_$(lk_hash "$@") || return
-    CMD=("$@")
-    HIT=1
-    [[ -f $FILE ]] && {
-        ((!TTL)) || { AGE=$(lk_file_age "$FILE") && ((AGE < TTL)); }
-    } || HIT=0
-}
-
-# lk_cache [-t TTL] COMMAND [ARG...]
-#
-# Print output from a previous run if possible, otherwise execute the command
-# line and cache its output in a transient per-process cache. If -t is set, use
-# cached output for up to TTL seconds (default: 300). If TTL is 0, use cached
-# output indefinitely.
-function lk_cache() {
-    local CMD FILE HIT
-    _lk_cache_init "$@" || return
-    if ((HIT)); then
-        cat "$FILE"
-    else
-        "${CMD[@]}" | tee -- "$FILE" || lk_pass rm -f -- "$FILE"
-    fi
-}
-
-# lk_cache_has [-t TTL] COMMAND [ARG...]
-function lk_cache_has() {
-    local CMD FILE HIT
-    _lk_cache_init "$@" &&
-        ((HIT == 1))
-}
-
-function lk_cache_mark_dirty() {
-    local FILE s=/
-    FILE=$(_lk_cache_dir)/${BASH_SOURCE[1]//"$s"/__}_dirty || return
-    touch "$FILE"
 }
 
 # lk_get_outputs_of COMMAND [ARG...]

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+lk_cache_mark_dirty() { _LK_STACK_DEPTH=$((${_LK_STACK_DEPTH-0} + 1)) lk_cache_flush; }
 lk_caller_name() { lk_caller $((${1-0} + 1)); }
 lk_confirm() { lk_tty_yn "$@"; }
 lk_delete_on_exit_withdraw() { lk_on_exit_undo_delete "$@"; }
