@@ -2545,7 +2545,9 @@ function lk_cache() {
         if ((hit)); then
             cat "$file"
         else
-            "${cmd[@]}" | tee -- "$file" || lk_pass rm -f -- "$file"
+            local tmp=${file%/*}/.${file##*/}.tmp
+            "${cmd[@]}" | tee -- "$tmp" && mv -f "$tmp" "$file" ||
+                lk_pass rm -f -- "$file" "$tmp"
         fi
 }
 
