@@ -308,6 +308,7 @@ PAC_PACKAGES+=(
     gobject-introspection
     gperftools
     imagemagick
+    mitmproxy
     ollama
     python-black
     python-pylint
@@ -389,6 +390,7 @@ AUR_PACKAGES+=(
     mssql-tools
     multitime
     nodejs-less
+    osslsigncode
     phive
     php-ibm_db2
     php-memprof

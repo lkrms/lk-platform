@@ -178,6 +178,7 @@ PAC_PACKAGES+=(
     bind
     byobu-
     curl
+    ddrescue-
     diffutils
     dos2unix
     fclones
