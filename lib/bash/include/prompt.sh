@@ -95,7 +95,9 @@ function _lk_prompt_command() {
     PS1="${parts[*]} \\\$ "
     _LK_PROMPT_SEEN=1
     # Remove `history -a;history -r;` added by Byobu, for example
-    PROMPT_COMMAND=_lk_prompt_command
+    lk_bash_at_least 5 1 &&
+        PROMPT_COMMAND=(_lk_prompt_command) ||
+        PROMPT_COMMAND=_lk_prompt_command
     # Speaking of Byobu, prevent nested sessions
     [[ ${LC_BYOBU:+1}${BYOBU_TERM:+2} != 2 ]] || export LC_BYOBU=0
 }
@@ -112,7 +114,9 @@ function lk_prompt_enable() {
 }"
     _LK_PROMPT_SEEN=0
     _LK_PROMPT=()
-    PROMPT_COMMAND=_lk_prompt_command
+    lk_bash_at_least 5 1 &&
+        PROMPT_COMMAND=(_lk_prompt_command) ||
+        PROMPT_COMMAND=_lk_prompt_command
     # On Bash 3.2, DEBUG handlers need to be removed before they can be replaced
     trap - DEBUG
     trap _lk_prompt_trap_debug DEBUG
