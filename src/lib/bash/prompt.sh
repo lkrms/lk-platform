@@ -33,17 +33,17 @@ function _lk_prompt_command() {
         # builtin, add a summary line
         if ((status || elapsed > 1 || ${#_LK_PROMPT[@]} > 1)) ||
             [[ $(type -t "$_LK_PROMPT_FIRST") != builtin ]]; then
-            # Start with these 26 columns: "Thu May 06 15:02:32 ✔ (  )"
+            # Start with these 26 columns: "Thu May 06 15:02:32 ✓ (  )"
             local width=26
             # "Thu May 06 15:02:32 "
             parts[${#parts[@]}]="\n\[$LK_DIM\]\d \t\[$LK_UNDIM\] "
             if ((!status)); then
-                # "✔"
-                parts[${#parts[@]}]="\[$LK_GREEN\]✔"
+                # "✓"
+                parts[${#parts[@]}]="\[$LK_GREEN\]✓"
             else
-                # "✘ returned 1"
+                # "✗ returned 1"
                 part=" returned $status"
-                parts[${#parts[@]}]="\[$LK_RED\]✘$part"
+                parts[${#parts[@]}]="\[$LK_RED\]✗$part"
                 ((width += ${#part}))
             fi
             # " after 12s"
