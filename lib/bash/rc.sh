@@ -174,7 +174,7 @@ function find_all() {
 lk_require bash git linode misc provision wordpress
 
 if lk_is_linux; then
-    lk_require iptables linux
+    lk_require ebtables iptables linux
     ! lk_is_arch || lk_require arch
     ! lk_is_ubuntu || lk_require debian
 elif lk_is_macos; then
