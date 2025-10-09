@@ -10,10 +10,11 @@ function _lk_prompt_trap_debug() {
     fi
 
     # Normalise arguments without unsafe expansion
+    # shellcheck disable=SC2206
     local command=($BASH_COMMAND) IFS=' '
     if [[ -z ${_LK_PROMPT+1} ]]; then
         _LK_PROMPT_START=$(lk_timestamp)
-        _LK_PROMPT_FIRST=$command
+        _LK_PROMPT_FIRST=${command[0]}
     fi
     _LK_PROMPT[${#_LK_PROMPT[@]}]=${command[*]}
 }
@@ -56,14 +57,16 @@ function _lk_prompt_command() {
             parts[${#parts[@]}]="$part\[$LK_DEFAULT\]"
             width=$((COLUMNS - width - ${#part}))
             if ((width > 0)); then
-                # " ( sleep 12; false )"
-                local IFS=' '
-                parts[${#parts[@]}]=" \[$LK_DIM\]( $(
+                local commands
+                commands=$(
                     set -- "${_LK_PROMPT[@]}"
                     { printf '%s' "$1" && shift && { ((!$#)) || printf '; %s' "$@"; }; } |
                         _lk_prompt_sanitise |
                         head -c"$width"
-                ) )\[$LK_UNDIM\]"
+                )
+                # " ( sleep 12; false )"
+                local IFS=' '
+                parts[${#parts[@]}]=" \[$LK_DIM\]( ${commands//\\/\\\\} )\[$LK_UNDIM\]"
             fi
             # "\n"
             parts[${#parts[@]}]="\n"
@@ -95,6 +98,7 @@ function _lk_prompt_command() {
     PS1="${parts[*]} \\\$ "
     _LK_PROMPT_SEEN=1
     # Remove `history -a;history -r;` added by Byobu, for example
+    # shellcheck disable=SC2178
     lk_bash_at_least 5 1 &&
         PROMPT_COMMAND=(_lk_prompt_command) ||
         PROMPT_COMMAND=_lk_prompt_command
@@ -114,6 +118,7 @@ function lk_prompt_enable() {
 }"
     _LK_PROMPT_SEEN=0
     _LK_PROMPT=()
+    # shellcheck disable=SC2178
     lk_bash_at_least 5 1 &&
         PROMPT_COMMAND=(_lk_prompt_command) ||
         PROMPT_COMMAND=_lk_prompt_command
