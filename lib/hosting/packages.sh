@@ -151,7 +151,9 @@ process_feature_packages php-fpm \
 
 process_feature_packages mariadb \
     mariadb-client \
-    mariadb-server
+    mariadb-server \
+    libdbd-mysql-perl \
+    libterm-readkey-perl
 
 process_feature_packages memcached \
     memcached
