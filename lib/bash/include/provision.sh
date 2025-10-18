@@ -176,7 +176,7 @@ Example:
     lk_tty_print "Checking SSH server"
     FILE=/etc/ssh/sshd_config
     REGEX=("[mM][aA][tT][cC][hH]" "[gG][rR][oO][uU][pP]")
-    MATCH="^($S*#)?$S*($REGEX|\"$REGEX\")($S+|$S*=$S*)"
+    MATCH="^($LK_h*#)?$LK_h*($REGEX|\"$REGEX\")($LK_h+|$LK_h*=$LK_h*)"
     CONFIG="\
 Match Group $SFTP_ONLY
 ForceCommand internal-sftp
@@ -184,7 +184,7 @@ ChrootDirectory %h"
     lk_file_keep_original "$FILE"
     lk_file_replace "$FILE" < <(awk \
         -v "BLOCK=$CONFIG" \
-        -v "FIRST=$MATCH(${REGEX[1]}|\"${REGEX[1]}\")$S+(${SFTP_ONLY}|\"${SFTP_ONLY}\")$S*$" \
+        -v "FIRST=$MATCH(${REGEX[1]}|\"${REGEX[1]}\")$LK_h+(${SFTP_ONLY}|\"${SFTP_ONLY}\")$LK_h*$" \
         -v "BREAK=$MATCH" \
         -f "$LK_BASE/lib/awk/block-replace.awk" "$FILE")
     ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
@@ -893,8 +893,8 @@ EOF
         ${_LK_DNS_SERVER:+@"$_LK_DNS_SERVER"} \
         "${QUERY[@]}" |
         awk -f "$AWK" |
-        awk -v S="$S" \
-            -v NS="$NS" \
+        awk -v S="$LK_h" \
+            -v NS="$LK_H" \
             -v types=${TYPES+"^$(lk_ere_implode_arr -e TYPES)\$"} \
             -v names="${NAMES_REGEX//\\/\\\\}" '
 function rdata(r, i) {
@@ -1171,11 +1171,11 @@ Usage: $FUNCNAME [-s] CERT_FILE [KEY_FILE [CA_FILE]]" || return
     local CERT=$1 KEY=${2-} CA=${3-} CERT_MODULUS KEY_MODULUS
     # If no CA file has been provided but CERT contains multiple certificates,
     # copy the first to a temp CERT file and the others to a temp CA file
-    [ -n "$CA" ] || [ "$(grep -Ec "^-+BEGIN$S" "$CERT")" -le 1 ] ||
+    [ -n "$CA" ] || [ "$(grep -Ec "^-+BEGIN$LK_h" "$CERT")" -le 1 ] ||
         { lk_mktemp_with CA \
-            lk_sudo awk "/^-+BEGIN$S/ {c++} c > 1 {print}" "$CERT" &&
+            lk_sudo awk "/^-+BEGIN$LK_h/ {c++} c > 1 {print}" "$CERT" &&
             lk_mktemp_with CERT \
-                lk_sudo awk "/^-+BEGIN$S/ {c++} c <= 1 {print}" "$CERT" ||
+                lk_sudo awk "/^-+BEGIN$LK_h/ {c++} c <= 1 {print}" "$CERT" ||
             return; }
     if [ -n "$CA" ]; then
         _lk_openssl_verify "$CA" &&
@@ -2031,19 +2031,19 @@ function lk_configure_locales() {
     # 1. Comment all locales out
     # 2. Uncomment configured locales
     _FILE=$(sed -E \
-        -e "s/^$S*#?/#/" \
+        -e "s/^$LK_h*#?/#/" \
         -e "s/^#($_LOCALES.*)/\\1/" \
         "$FILE") || return
     unset LK_FILE_REPLACE_NO_CHANGE
     lk_file_keep_original "$FILE" &&
-        lk_file_replace -i "^$S*(#|\$)" "$FILE" "$_FILE" || return
+        lk_file_replace -i "^$LK_h*(#|\$)" "$FILE" "$_FILE" || return
     ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
         [ -n "${_LK_PROVISION_ROOT-}" ] ||
         lk_elevate locale-gen || return
 
     FILE=${_LK_PROVISION_ROOT-}/etc/locale.conf
     lk_install -m 00644 "$FILE"
-    lk_file_replace -i "^(#|$S*\$)" "$FILE" "\
+    lk_file_replace -i "^(#|$LK_h*\$)" "$FILE" "\
 LANG=${LOCALES[0]}${LK_NODE_LANGUAGE:+
 LANGUAGE=$LK_NODE_LANGUAGE}"
 }
@@ -2133,9 +2133,9 @@ function lk_ssh_set_option() {
     VALUE=$(lk_escape_ere "$2")
     lk_option_set "$FILE" \
         "$1 $2" \
-        "^$S*$OPTION($S+|$S*=$S*)$VALUE$S*\$" \
-        "^$S*$OPTION($S+|$S*=).*" \
-        "^$S*#"{,"$S","$S*"}"$OPTION($S+|$S*=).*"
+        "^$LK_h*$OPTION($LK_h+|$LK_h*=$LK_h*)$VALUE$LK_h*\$" \
+        "^$LK_h*$OPTION($LK_h+|$LK_h*=).*" \
+        "^$LK_h*#"{,"$LK_h","$LK_h*"}"$OPTION($LK_h+|$LK_h*=).*"
 }
 
 function lk_ssh_list_hosts() {
@@ -2147,11 +2147,11 @@ function lk_ssh_list_hosts() {
             "${FILES[@]}"
             $(INCLUDE="[iI][nN][cC][lL][uU][dD][eE]" &&
                 grep -Eh \
-                    "^$S*$INCLUDE($S+(\"[^\"]*\"|[^\"]+))+$S*\$" \
+                    "^$LK_h*$INCLUDE($LK_h+(\"[^\"]*\"|[^\"]+))+$LK_h*\$" \
                     "${FILES[@]}" 2>/dev/null |
                 sed -E \
-                    -e "s/^$S*$INCLUDE$S+(.+)$S*\$/\\1/" \
-                    -e "s/$S+/\n/g" |
+                    -e "s/^$LK_h*$INCLUDE$LK_h+(.+)$LK_h*\$/\\1/" \
+                    -e "s/$LK_h+/\n/g" |
                     sed -E 's/^("?)([^~/])/\1~\/.ssh\/\2/')
         ) || true
         unset IFS
@@ -2162,11 +2162,11 @@ function lk_ssh_list_hosts() {
     [ ${#FILES[@]} -eq 0 ] || {
         HOST="[hH][oO][sS][tT]"
         grep -Eh \
-            "^$S*$HOST($S+(\"[^\"]*\"|[^\"]+))+$S*\$" \
+            "^$LK_h*$HOST($LK_h+(\"[^\"]*\"|[^\"]+))+$LK_h*\$" \
             "${FILES[@]}" 2>/dev/null |
             sed -E \
-                -e "s/^$S*$HOST$S+(.+)$S*\$/\\1/" \
-                -e "s/$S+/\n/g" |
+                -e "s/^$LK_h*$HOST$LK_h+(.+)$LK_h*\$/\\1/" \
+                -e "s/$LK_h+/\n/g" |
             sed -E \
                 -e 's/"(.+)"/\1/g' \
                 -e "/[*?]/d" |
@@ -2256,7 +2256,7 @@ Usage: $FUNCNAME [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
         # ~/.ssh/authorized_keys for exactly one public key with the comment
         # field set to KEY_FILE
         { [[ $KEY_FILE =~ ^[-a-zA-Z0-9_]+$ ]] && { KEY=$(grep -E \
-            "$S$KEY_FILE\$" "$h/.ssh/authorized_keys" 2>/dev/null) &&
+            "$LK_h$KEY_FILE\$" "$h/.ssh/authorized_keys" 2>/dev/null) &&
             [ "$(wc -l <<<"$KEY")" -eq 1 ] &&
             KEY_FILE=- || KEY_FILE=; }; } ||
         lk_warn "$KEY_FILE: file not found" || return
@@ -2352,7 +2352,7 @@ function lk_ssh_configure() {
     # ~/.ssh/config, or replaces an equivalent entry
     PATTERN="(~/\\.ssh/)?${SSH_PREFIX}config\\.d/\\*"
     PATTERN="(\"$PATTERN\"|$PATTERN)"
-    PATTERN="^$S*[iI][nN][cC][lL][uU][dD][eE]$S+$PATTERN$S*\$"
+    PATTERN="^$LK_h*[iI][nN][cC][lL][uU][dD][eE]$LK_h+$PATTERN$LK_h*\$"
     PATTERN=${PATTERN//\\/\\\\}
     CONF="Include ~/.ssh/${SSH_PREFIX}config.d/*"
     AWK=(awk
@@ -2637,9 +2637,9 @@ function lk_conf_set_option() {
     lk_option_set ${SECTION+-s "$SECTION"} \
         "$FILE" \
         "$1${_LK_CONF_DELIM-=}$2" \
-        "^$S*$OPTION$S*$DELIM$S*$VALUE$S*\$" \
-        "^$S*$OPTION$S*$DELIM.*" \
-        "^$S*#"{,"$S","$S*"}"$OPTION$S*$DELIM.*"
+        "^$LK_h*$OPTION$LK_h*$DELIM$LK_h*$VALUE$LK_h*\$" \
+        "^$LK_h*$OPTION$LK_h*$DELIM.*" \
+        "^$LK_h*#"{,"$LK_h","$LK_h*"}"$OPTION$LK_h*$DELIM.*"
 }
 
 # lk_conf_enable_row [-s SECTION] ROW [FILE]
@@ -2653,8 +2653,8 @@ function lk_conf_enable_row() {
         "$FILE" \
         "$1" \
         "^$ROW\$" \
-        "^$S*$ROW$S*\$" \
-        "^$S*#"{,"$S","$S*"}"$ROW$S*\$"
+        "^$LK_h*$ROW$LK_h*\$" \
+        "^$LK_h*#"{,"$LK_h","$LK_h*"}"$ROW$LK_h*\$"
 }
 
 # lk_php_set_option OPTION VALUE [FILE]
@@ -2664,9 +2664,9 @@ function lk_php_set_option() {
     VALUE=$(lk_escape_ere "$2")
     lk_option_set "$FILE" \
         "$1=$2" \
-        "^$S*$OPTION$S*=$S*$VALUE$S*\$" \
-        "^$S*$OPTION$S*=.*" \
-        "^$S*;"{,"$S","$S*"}"$OPTION$S*=.*"
+        "^$LK_h*$OPTION$LK_h*=$LK_h*$VALUE$LK_h*\$" \
+        "^$LK_h*$OPTION$LK_h*=.*" \
+        "^$LK_h*;"{,"$LK_h","$LK_h*"}"$OPTION$LK_h*=.*"
 }
 
 # lk_php_enable_option OPTION VALUE [FILE]
@@ -2676,8 +2676,8 @@ function lk_php_enable_option() {
     VALUE=$(lk_escape_ere "$2")
     lk_option_set "$FILE" \
         "$1=$2" \
-        "^$S*$OPTION$S*=$S*$VALUE$S*\$" \
-        "^$S*;"{,"$S","$S*"}"$OPTION$S*=$S*$VALUE$S*\$"
+        "^$LK_h*$OPTION$LK_h*=$LK_h*$VALUE$LK_h*\$" \
+        "^$LK_h*;"{,"$LK_h","$LK_h*"}"$OPTION$LK_h*=$LK_h*$VALUE$LK_h*\$"
 }
 
 # lk_php_disable_option OPTION [VALUE [FILE]]
@@ -2688,15 +2688,15 @@ function lk_php_disable_option() {
     if [[ -n ${VALUE:+1} ]]; then
         lk_option_set "$FILE" \
             ";$1=$2" \
-            "^$S*;$S*$OPTION$S*=$S*$VALUE$S*\$" \
-            "^$S*$OPTION$S*=$S*$VALUE$S*\$"
+            "^$LK_h*;$LK_h*$OPTION$LK_h*=$LK_h*$VALUE$LK_h*\$" \
+            "^$LK_h*$OPTION$LK_h*=$LK_h*$VALUE$LK_h*\$"
     else
-        SETTING=$(grep -Em 1 "^$S*$OPTION$S*=" "$FILE" | sed -E 's/^/;/' | head -n1) ||
+        SETTING=$(grep -Em 1 "^$LK_h*$OPTION$LK_h*=" "$FILE" | sed -E 's/^/;/' | head -n1) ||
             return 0
         lk_option_set "$FILE" \
             "$SETTING" \
-            "^$S*;$S*$OPTION$S*=" \
-            "^$S*$OPTION$S*=.*"
+            "^$LK_h*;$LK_h*$OPTION$LK_h*=" \
+            "^$LK_h*$OPTION$LK_h*=.*"
     fi
 }
 
@@ -2708,9 +2708,9 @@ function lk_httpd_set_option() {
     REPLACE_WITH=$(lk_escape_ere_replace "$1 $2")
     lk_option_set -p "$FILE" \
         "$1 $2" \
-        "^$S*$OPTION$S+$VALUE$S*\$" \
-        "0,/^$S*$OPTION$S+.*/{s/^($S*)$OPTION$S+.*/\\1$REPLACE_WITH/}" \
-        "0,/^$S*#"{,"$S","$S*"}"$OPTION$S+.*/{s/^($S*)#$S*$OPTION$S+.*/\\1$REPLACE_WITH/}"
+        "^$LK_h*$OPTION$LK_h+$VALUE$LK_h*\$" \
+        "0,/^$LK_h*$OPTION$LK_h+.*/{s/^($LK_h*)$OPTION$LK_h+.*/\\1$REPLACE_WITH/}" \
+        "0,/^$LK_h*#"{,"$LK_h","$LK_h*"}"$OPTION$LK_h+.*/{s/^($LK_h*)#$LK_h*$OPTION$LK_h+.*/\\1$REPLACE_WITH/}"
 }
 
 # lk_httpd_enable_option OPTION VALUE [FILE]
@@ -2721,8 +2721,8 @@ function lk_httpd_enable_option() {
     REPLACE_WITH=$(lk_escape_ere_replace "$1 $2")
     lk_option_set -p "$FILE" \
         "$1 $2" \
-        "^$S*$OPTION$S+$VALUE$S*\$" \
-        "0,/^$S*#"{,"$S","$S*"}"$OPTION$S+$VALUE$S*\$/{s/^($S*)#$S*$OPTION$S+$VALUE$S*\$/\\1$REPLACE_WITH/}"
+        "^$LK_h*$OPTION$LK_h+$VALUE$LK_h*\$" \
+        "0,/^$LK_h*#"{,"$LK_h","$LK_h*"}"$OPTION$LK_h+$VALUE$LK_h*\$/{s/^($LK_h*)#$LK_h*$OPTION$LK_h+$VALUE$LK_h*\$/\\1$REPLACE_WITH/}"
 }
 
 # lk_httpd_remove_option OPTION VALUE [FILE]
@@ -2730,7 +2730,7 @@ function lk_httpd_remove_option() {
     local OPTION VALUE FILE=${3:-$LK_CONF_OPTION_FILE} _FILE
     OPTION=$(lk_regex_case_insensitive "$(lk_escape_ere "$1")")
     VALUE=$(lk_regex_expand_whitespace "$(lk_escape_ere "$2")")
-    _FILE=$(sed -E "/^$S*$OPTION$S+$VALUE$S*\$/d" "$FILE") &&
+    _FILE=$(sed -E "/^$LK_h*$OPTION$LK_h+$VALUE$LK_h*\$/d" "$FILE") &&
         lk_file_replace -l "$FILE" "$_FILE"
 }
 
@@ -2740,12 +2740,12 @@ function lk_squid_set_option() {
     OPTION=$(lk_escape_ere "$1")
     VALUE=$(lk_regex_expand_whitespace "$(lk_escape_ere "$2")")
     REPLACE_WITH=$(lk_escape_ere_replace "$1 $2")
-    REGEX="$OPTION($S+([^#[:space:]]|#$NS)$NS*)*($S+#$S+.*)?"
+    REGEX="$OPTION($LK_h+([^#[:space:]]|#$LK_H)$LK_H*)*($LK_h+#$LK_h+.*)?"
     lk_option_set -p "$FILE" \
         "$1 $2" \
-        "^$S*$OPTION$S+$VALUE($S*\$|$S+#$S+)" \
-        "0,/^$S*$REGEX\$/{s/^($S*)$REGEX\$/\\1$REPLACE_WITH\\4/}" \
-        "0,/^$S*#"{,"$S","$S*"}"$REGEX\$/{s/^($S*)#$REGEX\$/\\1$REPLACE_WITH\\4/}"
+        "^$LK_h*$OPTION$LK_h+$VALUE($LK_h*\$|$LK_h+#$LK_h+)" \
+        "0,/^$LK_h*$REGEX\$/{s/^($LK_h*)$REGEX\$/\\1$REPLACE_WITH\\4/}" \
+        "0,/^$LK_h*#"{,"$LK_h","$LK_h*"}"$REGEX\$/{s/^($LK_h*)#$REGEX\$/\\1$REPLACE_WITH\\4/}"
 }
 
 # _lk_crontab REMOVE_REGEX ADD_COMMAND
@@ -2761,8 +2761,8 @@ function _lk_crontab() {
         lk_warn "command does not match regex" || return
     case "$TYPE" in
     a | ar)
-        REGEX=${REGEX:-"^$S*$(lk_regex_expand_whitespace \
-            "$(lk_ere_escape "$ADD_COMMAND")")$S*\$"}
+        REGEX=${REGEX:-"^$LK_h*$(lk_regex_expand_whitespace \
+            "$(lk_ere_escape "$ADD_COMMAND")")$LK_h*\$"}
         # If the command is already present, replace the first occurrence and
         # delete any duplicates
         if grep -E "$REGEX" >/dev/null <<<"$CRONTAB"; then
@@ -2817,8 +2817,8 @@ function lk_crontab_apply() {
 # lk_crontab_remove_command COMMAND
 function lk_crontab_remove_command() {
     [ -n "${1-}" ] || lk_warn "no command" || return
-    _lk_crontab "^$S*[^#[:blank:]].*$S$(lk_regex_expand_whitespace \
-        "$(lk_ere_escape "$1")")($S|\$)" ""
+    _lk_crontab "^$LK_h*[^#[:blank:]].*$LK_h$(lk_regex_expand_whitespace \
+        "$(lk_ere_escape "$1")")($LK_h|\$)" ""
 }
 
 # lk_crontab_get REGEX

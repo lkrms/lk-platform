@@ -38,7 +38,7 @@ if [ -n "${ACCEPT_OUTPUT_CHAIN-}" ]; then
             "$(lk_implode_arr $'\n' OUTPUT_ALLOW)"
     if lk_is_ubuntu; then
         APT_SOURCE_HOSTS=($(
-            grep -Eo "^[^#]+${S}https?://[^/[:blank:]]+" "/etc/apt/sources.list" |
+            grep -Eo "^[^#]+${LK_h}https?://[^/[:blank:]]+" "/etc/apt/sources.list" |
                 sed -E 's/^.*:\/\///' | sort -u
         )) || lk_die "no active package sources in /etc/apt/sources.list"
         OUTPUT_ALLOW+=("${APT_SOURCE_HOSTS[@]}")

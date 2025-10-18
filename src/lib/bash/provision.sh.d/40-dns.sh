@@ -53,8 +53,8 @@ END { if (status) { exit status } print expr }') || return
         ${_LK_DNS_SERVER:+@"$_LK_DNS_SERVER"} \
         "${QUERY[@]}" |
         awk -f "$AWK" |
-        awk -v S="$S" \
-            -v NS="$NS" \
+        awk -v S="$LK_h" \
+            -v NS="$LK_H" \
             -v types=${TYPES+"^$(lk_ere_implode_arr -e TYPES)\$"} \
             -v names="${NAMES_REGEX//\\/\\\\}" '
 function rdata(r, i) {

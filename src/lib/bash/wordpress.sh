@@ -388,8 +388,8 @@ function lk_wp_db_config() {
             php --strip |
             # 2. Extract the relevant "define(...);" calls, one per line
             gnu_grep -Po "\
-(?<=<\?php|;|^)$S*define$S*\($S*(['\"])DB_(NAME|USER|PASSWORD|HOST)\1$S*,\
-$S*('([^']+|\\\\')*'|\"([^\"\$]+|\\\\(\"|\\\$))*\")$S*\)$S*(;|\$)" |
+(?<=<\?php|;|^)$LK_h*define$LK_h*\($LK_h*(['\"])DB_(NAME|USER|PASSWORD|HOST)\1$LK_h*,\
+$LK_h*('([^']+|\\\\')*'|\"([^\"\$]+|\\\\(\"|\\\$))*\")$LK_h*\)$LK_h*(;|\$)" |
             # 3. Add any missing semicolons
             sed -E 's/[^;]$/&;/' || exit
         # 4. Add code to output each value as a shell expression
@@ -772,9 +772,9 @@ wp_if_running %s cron event run --due-now" "$PHP" "$LOG_FILE" "${ARGS[@]::2}")
     # Try to keep everything before and after COMMAND, e.g. environment
     # variables and redirections
     lk_mapfile ARGS_RE <(lk_arr ARGS | lk_ere_escape)
-    REGEX=$(lk_regex_expand_whitespace " (WP_CLI_PHP=$NS+ )?(LK_LOG_FILE=$NS+ )?\
+    REGEX=$(lk_regex_expand_whitespace " (WP_CLI_PHP=$LK_H+ )?(LK_LOG_FILE=$LK_H+ )?\
 ${ARGS_RE[0]} .+ ${ARGS_RE[1]} cron event run --due-now( |\$)")
-    [ $# -eq 0 ] && CRONTAB=$(lk_crontab_get "^$S*[^#[:blank:]].*$REGEX" |
+    [ $# -eq 0 ] && CRONTAB=$(lk_crontab_get "^$LK_h*[^#[:blank:]].*$REGEX" |
         head -n1 | awk -v "c=$COMMAND" -v "r=${REGEX//\\/\\\\}" \
         '{if(split($0,a,r)!=2)exit 1;printf("%s %s",a[1],c);if(a[2])printf(" %s",a[2])}') ||
         # But if that's not possible, add or replace the whole job

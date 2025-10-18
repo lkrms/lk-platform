@@ -223,7 +223,7 @@ function lk_trim() {
     if [ $# -gt 0 ]; then
         printf '%s\n' "$@" | lk_trim
     else
-        sed -E "s/^$S*(.*$NS)?$S*\$/\1/"
+        sed -E "s/^$LK_h*(.*$LK_H)?$LK_h*\$/\1/"
     fi
 }
 

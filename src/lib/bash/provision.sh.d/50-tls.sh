@@ -31,11 +31,11 @@ Usage: $FUNCNAME [-s] CERT_FILE [KEY_FILE [CA_FILE]]" || return
     local CERT=$1 KEY=${2-} CA=${3-} CERT_MODULUS KEY_MODULUS
     # If no CA file has been provided but CERT contains multiple certificates,
     # copy the first to a temp CERT file and the others to a temp CA file
-    [ -n "$CA" ] || [ "$(grep -Ec "^-+BEGIN$S" "$CERT")" -le 1 ] ||
+    [ -n "$CA" ] || [ "$(grep -Ec "^-+BEGIN$LK_h" "$CERT")" -le 1 ] ||
         { lk_mktemp_with CA \
-            lk_sudo awk "/^-+BEGIN$S/ {c++} c > 1 {print}" "$CERT" &&
+            lk_sudo awk "/^-+BEGIN$LK_h/ {c++} c > 1 {print}" "$CERT" &&
             lk_mktemp_with CERT \
-                lk_sudo awk "/^-+BEGIN$S/ {c++} c <= 1 {print}" "$CERT" ||
+                lk_sudo awk "/^-+BEGIN$LK_h/ {c++} c <= 1 {print}" "$CERT" ||
             return; }
     if [ -n "$CA" ]; then
         _lk_openssl_verify "$CA" &&

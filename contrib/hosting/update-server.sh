@@ -418,7 +418,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
                   HTTP=$(awk \
                     'NR == 1 || tolower($1) == "location:" {print}' \
                     "$TMP/curl-$DOMAIN.http") &&
-                  [[ $HTTP =~ ^HTTP/$NS+$S+([0-9]+) ]] &&
+                  [[ $HTTP =~ ^HTTP/$LK_H+$LK_h+([0-9]+) ]] &&
                   ((rc = BASH_REMATCH[1], rc < 400 || rc == 403)) &&
                   lk_tty_success "OK:" "$DOMAIN$INVALID_TLS" &&
                   break || {

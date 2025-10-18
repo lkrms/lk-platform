@@ -61,7 +61,7 @@ function download_sources() {
 function parse_SRCINFO() {
     awk -f /dev/stdin "$PKGBUILDS"/*/.SRCINFO <<<"$AWK" |
         jq -r "$1" |
-        grep -Eo "($S|^)[[:alnum:]+@_][[:alnum:]+.@_-]*" |
+        grep -Eo "($LK_h|^)[[:alnum:]+@_][[:alnum:]+.@_-]*" |
         tr -d '[:blank:]' |
         sort -u
 }

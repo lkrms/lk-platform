@@ -223,15 +223,15 @@ done >"$LK_BASE"/etc/packages.conf
 eval "$(lk_get_regex LINUX_USERNAME_REGEX)"
 if ADMIN_USERS=($(grep -Eo "$LINUX_USERNAME_REGEX" <<<"$LK_ADMIN_USERS")); then
     REGEX=$(lk_regex_implode "${ADMIN_USERS[@]}")
-    ADMIN_USER_KEYS=$(sed -E "/$S$REGEX\$/!d" "$KEYS_FILE")
-    HOST_KEYS=$(sed -E "/$S$REGEX\$/d" "$KEYS_FILE")
+    ADMIN_USER_KEYS=$(sed -E "/$LK_h$REGEX\$/!d" "$KEYS_FILE")
+    HOST_KEYS=$(sed -E "/$LK_h$REGEX\$/d" "$KEYS_FILE")
 else
     ADMIN_USER_KEYS=
     HOST_KEYS=$(cat "$KEYS_FILE")
 fi
 
 if [[ $LK_SSH_JUMP_KEY =~ ^[-a-zA-Z0-9_]+$ ]] &&
-    JUMP_KEY=$(grep -E "$S$LK_SSH_JUMP_KEY\$" "$KEYS_FILE") &&
+    JUMP_KEY=$(grep -E "$LK_h$LK_SSH_JUMP_KEY\$" "$KEYS_FILE") &&
     [ "$(wc -l <<<"$JUMP_KEY")" -eq 1 ]; then
     FILE=/etc/skel/.ssh/${LK_PATH_PREFIX}keys/jump
     lk_tty_print "Installing default key for SSH jump proxy:" "$FILE"

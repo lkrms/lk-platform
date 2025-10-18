@@ -210,7 +210,7 @@ function lk_is_wsl() {
 
 function lk_is_virtual() {
     lk_is_linux &&
-        grep -Eq "^flags$S*:.*\\<hypervisor\\>" /proc/cpuinfo
+        grep -Eq "^flags$LK_h*:.*\\<hypervisor\\>" /proc/cpuinfo
 }
 
 function lk_is_qemu() {
@@ -2065,7 +2065,7 @@ function _lk_usage_format() {
         "$(lk_sed_escape_replace "$LK_RESET")"
     sed -E "
 # Print the command name in bold
-s/^($S*([uU]sage:|[oO]r:)?$S+(sudo )?)($1)($S|\$)/\1$2\4$3\5/
+s/^($LK_h*([uU]sage:|[oO]r:)?$LK_h+(sudo )?)($1)($LK_h|\$)/\1$2\4$3\5/
 # Print all-caps headings in bold
 s/^[A-Z0-9][A-Z0-9 ]*\$/$2&$3/
 # Remove leading backslashes
@@ -2191,7 +2191,7 @@ function lk_var_env() { (
 ); }
 
 function lk_var_has_attr() {
-    local REGEX="^declare -$NS*$2"
+    local REGEX="^declare -$LK_H*$2"
     [[ $(declare -p "$1" 2>/dev/null) =~ $REGEX ]]
 }
 
@@ -3827,7 +3827,7 @@ function lk_trim() {
     if [ $# -gt 0 ]; then
         printf '%s\n' "$@" | lk_trim
     else
-        sed -E "s/^$S*(.*$NS)?$S*\$/\1/"
+        sed -E "s/^$LK_h*(.*$LK_H)?$LK_h*\$/\1/"
     fi
 }
 

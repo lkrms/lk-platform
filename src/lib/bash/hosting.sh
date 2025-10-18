@@ -329,8 +329,8 @@ function _lk_hosting_site_provision() {
         _FILE=$(DOMAIN=$_SITE_DOMAIN lk_expand_template -e \
             "$LK_BASE/share/php-fpm.d/default-hosting.template.conf")
         lk_install -m 00644 "$FILE" &&
-            lk_file_replace -bpi "^$S*(;.*)?\$" -s \
-                "s/^$S*([^[:blank:]=]+)$S*=$S*($NS+($S+$NS+)*)$S*\$/\1 = \2/" \
+            lk_file_replace -bpi "^$LK_h*(;.*)?\$" -s \
+                "s/^$LK_h*([^[:blank:]=]+)$LK_h*=$LK_h*($LK_H+($LK_h+$LK_H+)*)$LK_h*\$/\1 = \2/" \
                 "$FILE" "$_FILE" ||
             lk_true LK_FILE_REPLACE_DECLINED || return
         ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
@@ -397,7 +397,7 @@ function _lk_hosting_site_provision() {
                 lk_elevate mv -nv "$OLD_FILE" "$FILE"
             fi || return
         lk_install -m 00644 "$FILE" &&
-            lk_file_replace -bpi "^$S*(#.*)?\$" -s "s/^$S+//" \
+            lk_file_replace -bpi "^$LK_h*(#.*)?\$" -s "s/^$LK_h+//" \
                 "$FILE" "$_FILE" ||
             lk_true LK_FILE_REPLACE_DECLINED || return
         lk_true LK_FILE_REPLACE_DECLINED ||

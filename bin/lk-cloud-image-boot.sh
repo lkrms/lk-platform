@@ -543,7 +543,7 @@ lk_no_input || [[ $VM_NETWORK != user=* ]] || [[ -n ${HOSTFWD+1} ]] || {
 
 if [[ -n $STACKSCRIPT ]]; then
     lk_mapfile SS_TAGS < <(grep -Eo \
-        "<(lk:)?[uU][dD][fF]($S+[a-zA-Z]+=\"[^\"]*\")*$S*/>" \
+        "<(lk:)?[uU][dD][fF]($LK_h+[a-zA-Z]+=\"[^\"]*\")*$LK_h*/>" \
         "$STACKSCRIPT")
     [[ -z ${SS_TAGS+1} ]] || lk_tty_log "Processing StackScript"
     SS_FIELDS=()
@@ -628,7 +628,7 @@ fi
 
 KEYS_FILE=~/.ssh/authorized_keys
 [[ -f $KEYS_FILE ]] || lk_die "file not found: $KEYS_FILE"
-SSH_AUTHORIZED_KEYS=$(grep -Ev "^(#|$S*\$)" "$KEYS_FILE" |
+SSH_AUTHORIZED_KEYS=$(grep -Ev "^(#|$LK_h*\$)" "$KEYS_FILE" |
     jq -Rn '[ inputs | split("\n")[] ]') ||
     lk_die "no keys in $KEYS_FILE"
 

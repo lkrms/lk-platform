@@ -86,7 +86,7 @@ function lk_vscode_state_get_item() {
     DB=$(lk_vscode_state_get_db) &&
         sqlite3 -line "$DB" \
             "select value from ItemTable where key='$KEY'" |
-        awk -F"$S*=$S*" '$1=="value"{print$2}'
+        awk -F"$LK_h*=$LK_h*" '$1=="value"{print$2}'
 }
 
 function lk_vscode_state_set_item() {
@@ -175,6 +175,6 @@ function lk_nextcloud_get_excluded() {
 function lk_squid_get_directive_order() {
     local CONF=${1:-/etc/squid/squid.conf} \
         ORIG_CONF=${2:-/etc/squid/squid.conf.documented}
-    sed -En "s/^#  TAG: ($NS+).*/\1/p" "$ORIG_CONF" |
-        grep -Fxf <(awk '$0 !~ "^(#|'"$S"'*$)" {print $1}' "$CONF" | sort -u)
+    sed -En "s/^#  TAG: ($LK_H+).*/\1/p" "$ORIG_CONF" |
+        grep -Fxf <(awk '$0 !~ "^(#|'"$LK_h"'*$)" {print $1}' "$CONF" | sort -u)
 }

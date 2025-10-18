@@ -143,7 +143,7 @@ function lk_macos_bundle_list() {
 # Output tab-separated fields LABEL, TITLE, VERSION, SIZE, RECOMMENDED, and
 # ACTION for each available update reported by `softwareupdate --list`.
 function lk_macos_update_list_available() {
-    softwareupdate --list | awk -v "S=$S" -v OFS=$'\t' '
+    softwareupdate --list | awk -v "S=$LK_h" -v OFS=$'\t' '
 $1 ~ /^[*-]$/ {
   recommended = ($1 == "*" ? "Y" : "N")
   if (sub("^" S "*[*-]" S "+Label:" S "+", "")) {

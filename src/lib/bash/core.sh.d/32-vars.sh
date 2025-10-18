@@ -62,7 +62,7 @@ function lk_var_env() { (
 ); }
 
 function lk_var_has_attr() {
-    local REGEX="^declare -$NS*$2"
+    local REGEX="^declare -$LK_H*$2"
     [[ $(declare -p "$1" 2>/dev/null) =~ $REGEX ]]
 }
 
