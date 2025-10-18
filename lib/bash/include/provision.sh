@@ -1985,6 +1985,39 @@ function lk_mark_clean() {
     done
 }
 
+function lk_maybe_trace() {
+    local OUTPUT COMMAND
+    [ "${1-}" != -o ] || { OUTPUT=1 && shift; }
+    [ $# -gt 0 ] || lk_warn "no command" || return
+    COMMAND=("$@")
+    [[ $- != *x* ]] ||
+        COMMAND=(env
+            ${BASH_XTRACEFD:+BASH_XTRACEFD=$BASH_XTRACEFD}
+            SHELLOPTS=xtrace
+            "$@")
+    ! lk_will_sudo || {
+        # See: https://bugzilla.sudo.ws/show_bug.cgi?id=950
+        local SUDO_MIN=3 VER
+        ! VER=$(sudo -V | awk 'NR == 1 { print $NF }') ||
+            printf '%s\n' "$VER" 1.8.9 1.8.32 1.9.0 1.9.4p1 | sort -V |
+            awk -v "v=$VER" '$0 == v { l = NR } END { exit 1 - l % 2 }' ||
+            SUDO_MIN=4
+        COMMAND=(
+            sudo -H
+            -C "$(($(set +u && printf '%s\n' $((SUDO_MIN - 1)) \
+                $((_LK_FD ? _LK_FD : 2)) $((BASH_XTRACEFD)) $((_LK_TRACE_FD)) \
+                $((_LK_TTY_OUT_FD)) $((_LK_TTY_ERR_FD)) \
+                $((_LK_LOG_FD)) | sort -n | tail -n1) + 1))"
+            "${COMMAND[@]}"
+        )
+    }
+    # Remove "env" from sudo command
+    [[ $- != *x* ]] || ! lk_will_sudo || unset "COMMAND[4]"
+    ! lk_true OUTPUT ||
+        COMMAND=(lk_quote_args "${COMMAND[@]}")
+    "${COMMAND[@]}"
+}
+
 function lk_configure_locales() {
     local IFS LK_SUDO=1 LOCALES _LOCALES FILE _FILE
     unset IFS

@@ -145,7 +145,7 @@ echo "$BOLD$CYAN==> $RESET${BOLD}Acquiring prerequisites$RESET" >&2
 REPO_URL=https://raw.githubusercontent.com/lkrms/lk-platform
 _LK_SOURCED=
 for FILE_PATH in \
-    /lib/bash/include/{core,debian,git}.sh /share/sudoers.d/default; do
+    /lib/bash/include/{core,debian,git,provision}.sh /share/sudoers.d/default; do
     FILE=$_DIR/${FILE_PATH##*/}
     URL=$REPO_URL/$LK_PLATFORM_BRANCH$FILE_PATH
     MESSAGE="$BOLD$YELLOW -> $RESET{}$YELLOW $URL$RESET"

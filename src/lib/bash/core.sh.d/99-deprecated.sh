@@ -24,3 +24,6 @@ lk_safe_grep() { lk_grep "$@"; }
 lk_script_name() { lk_script $((${1-0} + 1)); }
 lk_test_many() { lk_test "$@"; }
 lk_tty_detail_pairs() { lk_tty_pairs_detail "$@"; }
+
+[[ ${S-} ]] || S=$LK_h
+[[ ${NS-} ]] || NS=$LK_H
