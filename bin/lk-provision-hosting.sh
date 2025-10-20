@@ -628,12 +628,14 @@ EOF
     lk_mktemp_with APT_AVAILABLE sort -u <(lk_apt_available_list)
 
     lk_mktemp_with APT_PHP_PACKAGES
-    lk_safe_grep -Ef <(REGEX=$(lk_args "${PHP_VERSIONS[@]}" "" |
-        lk_ere_implode_input -e) &&
-        lk_arr APT_PACKAGES |
-        awk -v re="${REGEX//\\/\\\\}" \
-            '/^php-/ {print "^php" re substr($0, 4) "$"}') "$APT_AVAILABLE" |
-        sort -V |
+    lk_safe_grep -Ehf <(
+        REGEX=$(lk_args "${PHP_VERSIONS[@]}" "" |
+            lk_ere_implode_input -e) &&
+            lk_arr APT_PACKAGES |
+            awk -v re="${REGEX//\\/\\\\}" \
+                '/^php-/ {print "^php" re substr($0, 4) "$"}'
+    ) "$APT_AVAILABLE" <(lk_dpkg_installed_list) |
+        sort -uV |
         awk '
 /^php[^-]/           { print; sub("^php[^-]+-", "php-", $0); skip[$0] = 1 }
 /^php-/ && !skip[$0] { print }' >"$APT_PHP_PACKAGES"
