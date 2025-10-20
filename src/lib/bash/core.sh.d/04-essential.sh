@@ -103,7 +103,8 @@ function lk_writable_tty() {
 # Reopen `/dev/tty` as STDIN, or fail if `/dev/tty` is not a readable character
 # device.
 function lk_readable_tty_open() {
-    [[ -c /dev/tty ]] && [[ -r /dev/tty ]] && exec </dev/tty
+    [[ -c /dev/tty ]] && [[ -r /dev/tty ]] &&
+        { exec </dev/tty; } 2>/dev/null
 }
 
 # lk_plural [-v] (<count>|<array>) <single> [<plural>]

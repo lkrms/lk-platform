@@ -112,8 +112,8 @@ function lk_file() {
     shift $((OPTIND - 1))
     (($# == 1)) || lk_bad_args || return
     [[ ! -t 0 ]] || lk_err "no input" || return
-    lk_mktemp_with TEMP cat &&
-        lk_readable_tty_open || return
+    lk_mktemp_with TEMP cat || lk_err "error writing input to file" || return
+    lk_readable_tty_open || PROMPT=0
 
     # If the file doesn't exist, use `install` to create it
     if [[ ! -e $1 ]] && ! { lk_will_sudo && sudo test -e "$1"; }; then
