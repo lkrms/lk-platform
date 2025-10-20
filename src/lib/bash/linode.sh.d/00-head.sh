@@ -28,5 +28,5 @@ function linode-cli-json {
 }
 
 function lk_linode_flush_cache() {
-    lk_cache_mark_dirty
+    lk_cache_flush
 }

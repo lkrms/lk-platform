@@ -2,7 +2,7 @@
 
 ## DDoS protection
 
-According to [this article][antiddos], dropping invalid packets in the `mangle`
+According to [this article][anti-DDoS], dropping invalid packets in the `mangle`
 table is essential to mitigating DDoS attacks at line rate:
 
 ```bash
@@ -13,28 +13,30 @@ iptables -t mangle -A PREROUTING -p tcp -m conntrack --ctstate NEW -m tcpmss ! -
 
 ## TCP flags
 
-Of the 6 TCP flags surfaced by `iptables`, [`netfilter`][netfilter] code in
+Of the 6 TCP flags surfaced by `iptables`, [`netfilter` code][netfilter] in
 recent Linux kernels ignores `PSH` and considers the other 5 `INVALID` in any
 combination other than:
 
-| `SYN` | `ACK` | `FIN` | `RST` | `URG` | `PSH`   |
-| ----- | ----- | ----- | ----- | ----- | ------- |
-| X     |       |       |       |       | ignored |
-| X     |       |       |       | X     | ignored |
-| X     | X     |       |       |       | ignored |
-|       |       |       | X     |       | ignored |
-|       | X     |       | X     |       | ignored |
-|       | X     | X     |       |       | ignored |
-|       | X     | X     |       | X     | ignored |
-|       | X     |       |       | X     | ignored |
-|       | X     |       |       |       | ignored |
+| `SYN` | `ACK` | `FIN` | `RST` | `URG` | `PSH` |
+| ----- | ----- | ----- | ----- | ----- | ----- |
+| ✗     |       |       |       |       | -     |
+| ✗     |       |       |       | ✗     | -     |
+| ✗     | ✗     |       |       |       | -     |
+|       |       |       | ✗     |       | -     |
+|       | ✗     |       | ✗     |       | -     |
+|       | ✗     | ✗     |       |       | -     |
+|       | ✗     | ✗     |       | ✗     | -     |
+|       | ✗     |       |       | ✗     | -     |
+|       | ✗     |       |       |       | -     |
 
 So, as long as `INVALID` packets are dropped, the "block packets with bogus TCP
-flags" rules one might find in `iptables` tutorials are no longer required.
+flags" rules one might find in `iptables` tutorials are no longer necessary.
 
-> Examples of unnecessary rules:
+> [!TIP]
 >
-> ```bash
+> Rules like this:
+>
+> ```shell
 > iptables -t mangle -A PREROUTING -p tcp -m tcp --tcp-flags ALL ALL -j DROP
 > iptables -t mangle -A PREROUTING -p tcp -m tcp --tcp-flags ALL NONE -j DROP
 > iptables -t mangle -A PREROUTING -p tcp -m tcp --tcp-flags ALL FIN,PSH,URG -j DROP
@@ -45,8 +47,13 @@ flags" rules one might find in `iptables` tutorials are no longer required.
 > iptables -t mangle -A PREROUTING -p tcp -m tcp --tcp-flags FIN,RST FIN,RST -j DROP
 > iptables -t mangle -A PREROUTING -p tcp -m tcp --tcp-flags ALL FIN,SYN,PSH,URG -j DROP
 > ```
+>
+> can be replaced with one rule like this:
+>
+> ```shell
+> iptables -t filter -m conntrack --ctstate INVALID -j DROP
+> ```
 
-- [antiddos]: https://itgala.xyz/iptables-antiddos-protection/
-- [netfilter]:
-      https://github.com/torvalds/linux/blob/4b97bac0756a81cda5afd45417a99b5bccdcff67/net/netfilter/nf_conntrack_proto_tcp.c#L709
-
+[anti-DDoS]: https://itgala.xyz/iptables-antiddos-protection/
+[netfilter]:
+  https://github.com/torvalds/linux/blob/4b97bac0756a81cda5afd45417a99b5bccdcff67/net/netfilter/nf_conntrack_proto_tcp.c#L709

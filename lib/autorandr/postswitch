@@ -16,7 +16,7 @@ if [[ -f $AUTORANDR_PROFILE_FOLDER/dpi ]] &&
     lk_require linux
     CURRENT_DPI=$(lk_x_dpi) || CURRENT_DPI=-1
 
-    xrandr --dpi "$DPI"
+    xrandr --dpi "$DPI" || true
 
     case "${XDG_CURRENT_DESKTOP-}" in
     XFCE)

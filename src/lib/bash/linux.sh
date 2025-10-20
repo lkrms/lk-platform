@@ -180,7 +180,7 @@ EOF
 
 # lk_nm_file_get_ethernet DEV MAC [BRIDGE_DEV [IP_ARG...]]
 function lk_nm_file_get_ethernet() {
-    local NAME=$1 MAC=$2 MASTER=${3-} UUID
+    local NAME=$1 MAC=$2 BRIDGE=${3-} UUID
     # Maintain UUID if possible
     UUID=$(lk_nm_connection_uuid "$NAME" 2>/dev/null) ||
         UUID=${UUID:-$(uuidgen)} || return
@@ -189,12 +189,15 @@ function lk_nm_file_get_ethernet() {
 id=$NAME
 uuid=$UUID
 type=ethernet
-interface-name=$NAME${MASTER:+
-master=$MASTER
-slave-type=bridge}
+interface-name=$NAME${BRIDGE:+
+controller=$BRIDGE
+port-type=bridge}
 
 [ethernet]
-mac-address=$(lk_upper "$MAC")
+mac-address=$(lk_upper "$MAC")${BRIDGE:+
+
+[bridge-port]
+}
 EOF
     [ $# -lt 4 ] ||
         lk_nm_file_get_ipv4_ipv6 "${@:4}"

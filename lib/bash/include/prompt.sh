@@ -10,10 +10,11 @@ function _lk_prompt_trap_debug() {
     fi
 
     # Normalise arguments without unsafe expansion
+    # shellcheck disable=SC2206
     local command=($BASH_COMMAND) IFS=' '
     if [[ -z ${_LK_PROMPT+1} ]]; then
         _LK_PROMPT_START=$(lk_timestamp)
-        _LK_PROMPT_FIRST=$command
+        _LK_PROMPT_FIRST=${command[0]}
     fi
     _LK_PROMPT[${#_LK_PROMPT[@]}]=${command[*]}
 }
@@ -33,17 +34,17 @@ function _lk_prompt_command() {
         # builtin, add a summary line
         if ((status || elapsed > 1 || ${#_LK_PROMPT[@]} > 1)) ||
             [[ $(type -t "$_LK_PROMPT_FIRST") != builtin ]]; then
-            # Start with these 26 columns: "Thu May 06 15:02:32 ✔ (  )"
+            # Start with these 26 columns: "Thu May 06 15:02:32 ✓ (  )"
             local width=26
             # "Thu May 06 15:02:32 "
             parts[${#parts[@]}]="\n\[$LK_DIM\]\d \t\[$LK_UNDIM\] "
             if ((!status)); then
-                # "✔"
-                parts[${#parts[@]}]="\[$LK_GREEN\]✔"
+                # "✓"
+                parts[${#parts[@]}]="\[$LK_GREEN\]✓"
             else
-                # "✘ returned 1"
+                # "✗ returned 1"
                 part=" returned $status"
-                parts[${#parts[@]}]="\[$LK_RED\]✘$part"
+                parts[${#parts[@]}]="\[$LK_RED\]✗$part"
                 ((width += ${#part}))
             fi
             # " after 12s"
@@ -56,14 +57,16 @@ function _lk_prompt_command() {
             parts[${#parts[@]}]="$part\[$LK_DEFAULT\]"
             width=$((COLUMNS - width - ${#part}))
             if ((width > 0)); then
-                # " ( sleep 12; false )"
-                local IFS=' '
-                parts[${#parts[@]}]=" \[$LK_DIM\]( $(
+                local commands
+                commands=$(
                     set -- "${_LK_PROMPT[@]}"
                     { printf '%s' "$1" && shift && { ((!$#)) || printf '; %s' "$@"; }; } |
                         _lk_prompt_sanitise |
                         head -c"$width"
-                ) )\[$LK_UNDIM\]"
+                )
+                # " ( sleep 12; false )"
+                local IFS=' '
+                parts[${#parts[@]}]=" \[$LK_DIM\]( ${commands//\\/\\\\} )\[$LK_UNDIM\]"
             fi
             # "\n"
             parts[${#parts[@]}]="\n"
@@ -95,7 +98,10 @@ function _lk_prompt_command() {
     PS1="${parts[*]} \\\$ "
     _LK_PROMPT_SEEN=1
     # Remove `history -a;history -r;` added by Byobu, for example
-    PROMPT_COMMAND=_lk_prompt_command
+    # shellcheck disable=SC2178
+    lk_bash_at_least 5 1 &&
+        PROMPT_COMMAND=(_lk_prompt_command) ||
+        PROMPT_COMMAND=_lk_prompt_command
     # Speaking of Byobu, prevent nested sessions
     [[ ${LC_BYOBU:+1}${BYOBU_TERM:+2} != 2 ]] || export LC_BYOBU=0
 }
@@ -112,7 +118,10 @@ function lk_prompt_enable() {
 }"
     _LK_PROMPT_SEEN=0
     _LK_PROMPT=()
-    PROMPT_COMMAND=_lk_prompt_command
+    # shellcheck disable=SC2178
+    lk_bash_at_least 5 1 &&
+        PROMPT_COMMAND=(_lk_prompt_command) ||
+        PROMPT_COMMAND=_lk_prompt_command
     # On Bash 3.2, DEBUG handlers need to be removed before they can be replaced
     trap - DEBUG
     trap _lk_prompt_trap_debug DEBUG

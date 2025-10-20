@@ -44,7 +44,6 @@ function lk_elevate() {
         ${LK_EXEC:+exec} sudo -H "$_COMMAND" "$@"
     else
         lk_err "invalid command: $1"
-        false
     fi
 }
 

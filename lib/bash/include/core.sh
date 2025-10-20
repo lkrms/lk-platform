@@ -10,131 +10,139 @@ USER=${USER:-$(id -un)} &&
 
 _LK_ARGV=("$@")
 
-# lk_fail [STATUS]
+# lk_pass [-<status>] [--] <command> [<arg>...]
 #
-# Fail with return value STATUS or 1.
-#
-# A subshell-free alternative to `(exit "$STATUS") && false`.
-function lk_fail() {
-    local s
-    ((s = ${1-})) && return "$s" || return 1
-}
-
-# lk_pass [-STATUS] COMMAND [ARG...]
-#
-# Run COMMAND and return STATUS or the previous command's exit status.
+# Run a command and return the previous command's exit status, or <status> if
+# given.
 function lk_pass() {
-    local s=$?
-    [[ $1 != -* ]] || { s=${1:1} && shift; }
-    "$@" || return "$s"
-    return "$s"
+    local status=$?
+    if [[ $1 == -* ]] && [[ $1 != -- ]] && [[ $1 =~ ^-[0-9]+$ ]]; then
+        status=$((${1:1}))
+        shift
+    fi
+    [[ $1 != -- ]] || shift
+    "$@" || true
+    return $status
 }
 
-# lk_err MESSAGE
-function lk_err() {
-    lk_pass printf '%s: %s\n' \
-        "${FUNCNAME[1 + ${_LK_STACK_DEPTH:-0}]-${0##*/}}" \
-        "$1" >&2
-}
-
-# lk_bad_args [VALUE_NAME [VALUE]]
-function lk_bad_args() {
-    lk_pass printf '%s: invalid %s%s\n' \
-        "${FUNCNAME[1 + ${_LK_STACK_DEPTH:-0}]-${0##*/}}" \
-        "${1-arguments}" "${2+: $2}" >&2
-}
-
-# lk_script_name [STACK_DEPTH]
+# lk_err <message>
 #
-# Get the name of the top-level script or function that's currently running.
-function lk_script_name() {
-    local depth=$((${1-0} + ${_LK_STACK_DEPTH:-0})) name
-    lk_script_running ||
-        name=${FUNCNAME[1 + depth]+"${FUNCNAME[*]: -1}"}
-    [[ ! ${name-} =~ ^(source|main)$ ]] || name=
+# Write "<caller>: <message>" to STDERR and return the previous command's exit
+# status, or 1 if the previous command did not fail.
+function lk_err() {
+    local status=$?
+    ((status)) || status=1
+    printf '%s: %s\n' \
+        "${FUNCNAME[1 + ${_LK_STACK_DEPTH-0}]-${0##*/}}" \
+        "$1" >&2
+    return $status
+}
+
+# lk_bad_args
+#
+# Write "<caller>: invalid arguments" to STDERR and return the previous
+# command's exit status, or 1 if the previous command did not fail.
+function lk_bad_args() {
+    _LK_STACK_DEPTH=$((${_LK_STACK_DEPTH-0} + 1)) \
+        lk_err 'invalid arguments'
+}
+
+# lk_script [<stack_depth>]
+#
+# Print the name of the script or function that's currently running.
+function lk_script() {
+    local depth=$((${_LK_STACK_DEPTH-0} + ${1-0})) name
+    lk_script_running || {
+        name=${FUNCNAME[depth + 1]+${FUNCNAME[*]: -1}}
+        [[ ! $name =~ ^(source|main)$ ]] || name=
+    }
     printf '%s\n' "${name:-${0##*/}}"
 }
 
-# lk_caller_name [STACK_DEPTH]
+# lk_caller [<stack_depth>]
 #
-# Get the name of the caller's caller.
-function lk_caller_name() {
-    local depth=$((${1-0} + ${_LK_STACK_DEPTH:-0})) name
+# Print the name of the caller's caller.
+function lk_caller() {
+    local depth=$((${_LK_STACK_DEPTH-0} + ${1-0})) name
     name=${FUNCNAME[2 + depth]-}
     [[ ! $name =~ ^(source|main)$ ]] || name=
     printf '%s\n' "${name:-${0##*/}}"
 }
 
-# lk_first_command ["COMMAND [ARG...]"...]
+# lk_runnable ["<command> [<arg>...]"...]
 #
-# Print the first command line where COMMAND is in PATH or return false if no
-# COMMAND is found.
-function lk_first_command() {
-    local IFS=$' \t\n' CMD
+# Print the first IFS-delimited command line that corresponds to an executable
+# disk file, or fail if no <command> is found on the filesystem or in PATH.
+function lk_runnable() {
+    local cmd
     while (($#)); do
-        CMD=($1)
-        ! type -P "$CMD" >/dev/null || break
+        read -ra cmd <<<"$1"
+        ! type -P "${cmd[0]}" >/dev/null || break
         shift
     done
-    (($#)) && echo "$1"
+    (($#)) && printf '%s\n' "$1"
 }
 
-# lk_first_file [FILE...]
+# lk_readable [<file>...]
 #
-# Print the first FILE that exists or return false if no FILE is found.
-function lk_first_file() {
+# Print the first readable file, or fail if no <file> is readable by the current
+# user.
+function lk_readable() {
     while (($#)); do
-        [[ ! -e $1 ]] || break
+        [[ ! -r $1 ]] || break
         shift
     done
-    (($#)) && echo "$1"
+    (($#)) && printf '%s\n' "$1"
 }
 
-# lk_first_writable_char [PATH...]
+# lk_writable_tty
 #
-# Print the first PATH that is a writable character special file, or return
-# false if no such PATH is found.
-function lk_first_writable_char() {
+# Print the first writable device of `/dev/tty` and `/dev/console`, or fail if
+# neither is a character device that can be opened for writing.
+function lk_writable_tty() {
+    set -- /dev/tty /dev/console
     while (($#)); do
-        { [[ ! -c $1 ]] || ! : >"$1"; } 2>/dev/null || break
+        [[ ! -c $1 ]] || ! : >"$1" || break
         shift
-    done
-    (($#)) && echo "$1"
+    done 2>/dev/null
+    (($#)) && printf '%s\n' "$1"
 }
 
-# lk_get_tty
+# lk_readable_tty_open
 #
-# Print "/dev/tty" if Bash has a controlling terminal, otherwise print
-# "/dev/console" if it is open for writing, or return false.
-function lk_get_tty() {
-    lk_first_writable_char /dev/tty /dev/console
+# Reopen `/dev/tty` as STDIN, or fail if `/dev/tty` is not a readable character
+# device.
+function lk_readable_tty_open() {
+    [[ -c /dev/tty ]] && [[ -r /dev/tty ]] &&
+        { exec </dev/tty; } 2>/dev/null
 }
 
-# lk_reopen_tty_in
+# lk_plural [-v] (<count>|<array>) <single> [<plural>]
 #
-# Reopen /dev/stdin from /dev/tty if possible.
-function lk_reopen_tty_in() {
-    [[ -c /dev/tty ]] && [[ -r /dev/tty ]] || return 0
-    { exec </dev/tty; } 2>/dev/null || true
-}
-
-# lk_plural [-v] <VALUE|ARRAY> SINGLE [PLURAL]
-#
-# Print SINGLE if VALUE or the length of ARRAY is 1, otherwise print PLURAL (or
-# "${SINGLE}s" if PLURAL is omitted). If -v is set, include VALUE in the output.
+# Print the singular form of a noun if <count> or the length of an array is 1,
+# otherwise print the noun's plural form (default: "<single>s"). If `-v` is
+# given, insert "<count> " before the noun.
 function lk_plural() {
-    local _VALUE _COUNT
-    [[ $1 != -v ]] || { _VALUE=1 && shift; }
-    [[ $1 =~ ^-?[0-9]+$ ]] && _COUNT=$1 ||
-        { declare -p "$1" &>/dev/null && eval "_COUNT=\${#$1[@]}"; } ||
+    local _count _noun
+    [[ $1 == -v ]] || set -- "" "$@"
+    if [[ $2 =~ ^[+-]?[0-9]+$ ]]; then
+        _count=$2
+    elif declare -pa "$2" &>/dev/null; then
+        eval "_count=\${#$2[@]}"
+    else
         lk_bad_args || return
-    _VALUE="${_VALUE:+$_COUNT }"
-    ((_COUNT == 1)) && echo "$_VALUE$2" || echo "$_VALUE${3-$2s}"
+    fi
+    if ((_count == 1)); then
+        _noun=$3
+    else
+        _noun=${4-${3}s}
+    fi
+    printf '%s%s\n' "${1:+$_count }" "$_noun"
 }
 
-# lk_assign VAR
+# lk_assign <var>
 #
-# Read standard input until EOF or NUL and assign it to VAR.
+# Read the contents of STDIN until EOF or NUL and assign them to a variable.
 #
 # Example:
 #
@@ -145,28 +153,12 @@ function lk_assign() {
     IFS= read -rd '' "$1" || true
 }
 
-# lk_safe_grep GREP_ARG...
+# lk_grep <grep_arg>...
 #
-# Run grep without returning an error if no lines were selected.
-function lk_safe_grep() {
+# Run `grep` and return zero whether lines are selected or not, failing only if
+# there is an error.
+function lk_grep() {
     grep "$@" || [[ $? -eq 1 ]] || return 2
-}
-
-# lk_counter_init [VAR...]
-#
-# Set each VAR in the caller's scope to whichever integer is greater:
-# - The current value of VAR
-# - 0 (zero)
-function lk_counter_init() {
-    while (($#)); do
-        if [[ -n ${!1-} ]]; then
-            eval "$1=\$(($1 < 0 ? 0 : $1))"
-        else
-            unset -v "$1" || lk_bad_args || return
-            eval "$1=0"
-        fi
-        shift
-    done
 }
 
 # lk_bash_at_least MAJOR [MINOR]
@@ -404,7 +396,6 @@ function lk_elevate() {
         ${LK_EXEC:+exec} sudo -H "$_COMMAND" "$@"
     else
         lk_err "invalid command: $1"
-        false
     fi
 }
 
@@ -909,8 +900,7 @@ function lk_get_regex() {
             printf '%s=%q\n' BACKUP_TIMESTAMP_FINDUTILS_REGEX '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]'
             ;;
         *)
-            lk_err "regex not found: $1"
-            STATUS=1
+            lk_err "regex not found: $1" || STATUS=1
             ;;
         esac
         shift
@@ -1843,7 +1833,6 @@ function lk_tty_dump() {
         0- | *-1- | *-0)
             if [ -t 0 ]; then
                 lk_err "input is a terminal"
-                false
             else
                 ${_CMD+"${_CMD[@]}"} cat
             fi
@@ -2496,6 +2485,94 @@ function lk_tee() {
     exec tee "$@"
 }
 
+# _lk_cache_dir [<stack_depth>]
+function _lk_cache_dir() {
+    local TMPDIR=${TMPDIR:-/tmp} depth=$((${_LK_STACK_DEPTH-0} + ${1-0}))
+    local dir=${TMPDIR%/}/lk_cache_${EUID}
+    local dirs=("$dir")
+    [[ -z ${LK_CACHE_NAMESPACE-} ]] || {
+        dir=$dir/$LK_CACHE_NAMESPACE
+        dirs[${#dirs[@]}]=$dir
+    }
+    local file=${BASH_SOURCE[depth + 2]-${0##*/}}
+    dir=$dir/${file//"/"/__}
+    dirs[${#dirs[@]}]=$dir
+    [[ -d $dir ]] || install -d -m 0700 "${dirs[@]}" || return
+    printf '%s\n' "$dir"
+}
+
+# _lk_cache_init [-f] [-t <ttl>] [--] <command> [<arg>...]
+function _lk_cache_init() {
+    local depth=$((${_LK_STACK_DEPTH-0})) force=0 ttl=300 age
+    while [[ ${1-} == -* ]]; do
+        case "$1" in
+        -f) force=1 ;;
+        -t) ttl=${2-} && shift ;;
+        --) shift && break ;;
+        *) lk_bad_args || return ;;
+        esac
+        shift || lk_bad_args || return
+    done
+    cmd=("$@")
+    file=$(_lk_cache_dir 1)/${FUNCNAME[depth + 2]-${0##*/}}_$(lk_hash "$@") || return
+    hit=1
+    if ((force)) || [[ ! -f $file ]] || {
+        ((ttl)) && age=$(lk_file_age "$file") && ((age > ttl))
+    }; then
+        hit=0
+    fi
+}
+
+# lk_cache [-f] [-t <ttl>] [--] <command> [<arg>...]
+#
+# If the most recent run of a command was successful, print its output again and
+# return. Otherwise, run the command and cache its output for subsequent runs if
+# its exit status is zero.
+#
+# Options:
+#
+#     -t <ttl>  Number of seconds output from the command is considered fresh,
+#               or 0 to use cached output indefinitely (default: 300)
+#     -f        Run the command even if cached output is available
+#
+# Cached output is stored under `TMPDIR` in directories that can only be
+# accessed by the current user. Pathnames are derived from:
+# - `LK_CACHE_NAMESPACE` (if set)
+# - caller filename (to prevent downstream naming collisions)
+# - caller name
+function lk_cache() {
+    local cmd file hit
+    _lk_cache_init "$@" &&
+        if ((hit)); then
+            cat "$file"
+        else
+            local tmp=${file%/*}/.${file##*/}.tmp
+            "${cmd[@]}" | tee -- "$tmp" && mv -f "$tmp" "$file" ||
+                lk_pass rm -f -- "$file" "$tmp"
+        fi
+}
+
+# lk_cache_has [-t <ttl>] [--] <command> [<arg>...]
+#
+# Check if cached output is available for a command.
+#
+# The state of the output cache may change between calls to `lk_cache_has` and
+# `lk_cache`. Code that assumes otherwise may be vulnerable to race conditions.
+function lk_cache_has() {
+    local cmd file hit
+    _lk_cache_init "$@" &&
+        ((hit == 1))
+}
+
+# lk_cache_flush
+#
+# Discard output cached by calls to `lk_cache` from the caller's source file.
+function lk_cache_flush() {
+    local dir
+    dir=$(_lk_cache_dir) &&
+        rm -Rf -- "$dir"
+}
+
 # lk_fifo_flush FIFO_PATH
 function lk_fifo_flush() {
     [ -p "${1-}" ] || lk_err "not a FIFO: ${1-}" || return
@@ -2974,7 +3051,7 @@ function lk_file() {
     local OPTIND OPTARG OPT \
         DIFF=0 PROMPT=0 BACKUP=0 ORIG=0 MODE OWNER GROUP VERBOSE=0 \
         SED_ARGS=() TEMP _MODE _OWNER _GROUP CHOWN=
-    lk_counter_init LK_FILE_DECLINED
+    LK_FILE_DECLINED=$((${LK_FILE_DECLINED-0})) || return
     while getopts ":i:dpbrm:o:g:v" OPT; do
         case "$OPT" in
         i)
@@ -3018,16 +3095,15 @@ function lk_file() {
             VERBOSE=1
             ;;
         \? | :)
-            lk_bad_args
-            return 1
+            lk_bad_args || return
             ;;
         esac
     done
     shift $((OPTIND - 1))
     (($# == 1)) || lk_bad_args || return
     [[ ! -t 0 ]] || lk_err "no input" || return
-    lk_mktemp_with TEMP cat &&
-        lk_reopen_tty_in || return
+    lk_mktemp_with TEMP cat || lk_err "error writing input to file" || return
+    lk_readable_tty_open || PROMPT=0
 
     # If the file doesn't exist, use `install` to create it
     if [[ ! -e $1 ]] && ! { lk_will_sudo && sudo test -e "$1"; }; then
@@ -3358,6 +3434,8 @@ lk_delete_on_exit() { lk_on_exit_delete "$@"; }
 lk_kill_on_exit() { lk_on_exit_kill "$@"; }
 lk_undo_delete_on_exit() { lk_on_exit_undo_delete "$@"; }
 
+lk_cache_mark_dirty() { _LK_STACK_DEPTH=$((${_LK_STACK_DEPTH-0} + 1)) lk_cache_flush; }
+lk_caller_name() { lk_caller $((${1-0} + 1)); }
 lk_confirm() { lk_tty_yn "$@"; }
 lk_delete_on_exit_withdraw() { lk_on_exit_undo_delete "$@"; }
 lk_echo_args() { lk_args "$@"; }
@@ -3367,12 +3445,17 @@ lk_escape_ere_replace() { lk_sed_escape_replace "$@"; }
 lk_escape_ere() { lk_sed_escape "$@"; }
 lk_file_security() { lk_file_owner_mode "$@"; }
 lk_file_sort_by_date() { lk_file_sort_modified "$@"; }
-lk_first_existing() { lk_first_file "$@"; }
+lk_first_command() { lk_runnable "$@"; }
+lk_first_existing() { lk_readable "$@"; }
+lk_first_file() { lk_readable "$@"; }
+lk_get_tty() { lk_writable_tty "$@"; }
 lk_jq_get_array() { lk_json_mapfile "$@"; }
 lk_maybe_sudo() { lk_sudo "$@"; }
-lk_mktemp_dir() { _LK_STACK_DEPTH=$((1 + ${_LK_STACK_DEPTH:-0})) lk_mktemp -d; }
-lk_mktemp_file() { _LK_STACK_DEPTH=$((1 + ${_LK_STACK_DEPTH:-0})) lk_mktemp; }
+lk_mktemp_dir() { _LK_STACK_DEPTH=$((${_LK_STACK_DEPTH-0} + 1)) lk_mktemp -d; }
+lk_mktemp_file() { _LK_STACK_DEPTH=$((${_LK_STACK_DEPTH-0} + 1)) lk_mktemp; }
 lk_regex_implode() { lk_ere_implode_args -- "$@"; }
+lk_safe_grep() { lk_grep "$@"; }
+lk_script_name() { lk_script $((${1-0} + 1)); }
 lk_test_many() { lk_test "$@"; }
 lk_tty_detail_pairs() { lk_tty_pairs_detail "$@"; }
 
@@ -3739,48 +3822,6 @@ function _lk_maybe_xargs() {
 
 function lk_has_arg() {
     lk_in_array "$1" _LK_ARGV
-}
-
-function _lk_cache_dir() {
-    local VAR=_LK_OUTPUT_CACHE DIR SUBDIR=
-    [ -z "${_LK_CACHE_NAMESPACE:+1}" ] || {
-        VAR+=_$_LK_CACHE_NAMESPACE
-        SUBDIR=/$_LK_CACHE_NAMESPACE
-    }
-    # "${!VAR:=...}" doesn't work in Bash 3.2
-    DIR=${!VAR:-$(
-        TMPDIR=${TMPDIR:-/tmp}
-        DIR=${TMPDIR%/}/_lk_output_cache_$EUID$SUBDIR
-        install -d -m 00700 "$DIR" && echo "$DIR"
-    )} && eval "$VAR=\$DIR" && echo "$DIR"
-}
-
-# lk_cache [-t TTL] COMMAND [ARG...]
-#
-# Print output from a previous run if possible, otherwise execute the command
-# line and cache its output in a transient per-process cache. If -t is set, use
-# cached output for up to TTL seconds (default: 300). If TTL is 0, use cached
-# output indefinitely.
-function lk_cache() {
-    local TTL=300 FILE AGE s=/
-    [ "${1-}" != -t ] || { TTL=$2 && shift 2; }
-    FILE=$(_lk_cache_dir)/${BASH_SOURCE[1]//"$s"/__} &&
-        { [ ! -f "${FILE}_dirty" ] || rm -f -- "$FILE"*; } || return
-    FILE+=_${FUNCNAME[1]}_$(lk_hash "$@") || return
-    if [ -f "$FILE" ] &&
-        { [ "$TTL" -eq 0 ] ||
-            { AGE=$(lk_file_age "$FILE") &&
-                [ "$AGE" -lt "$TTL" ]; }; }; then
-        cat "$FILE"
-    else
-        "$@" >"$FILE" && cat -- "$FILE" || lk_pass rm -f -- "$FILE"
-    fi
-}
-
-function lk_cache_mark_dirty() {
-    local FILE s=/
-    FILE=$(_lk_cache_dir)/${BASH_SOURCE[1]//"$s"/__}_dirty || return
-    touch "$FILE"
 }
 
 # lk_get_outputs_of COMMAND [ARG...]

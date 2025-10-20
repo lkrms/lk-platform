@@ -255,13 +255,13 @@ function exit_trap() {
     . "$LK_BASE/lib/macos/packages.sh"
 
     function brew_loop() {
-        local i SH BREW BREW_NAME _LK_CACHE_NAMESPACE
+        local i SH BREW BREW_NAME LK_CACHE_NAMESPACE
         for i in "${!BREW_PATH[@]}"; do
             if ((!i)); then
                 SH=$(_lk_macos_env '^/usr/local(/|$)')
             else
                 SH=$(_lk_macos_env '^/opt/homebrew(/|$)')
-                _LK_CACHE_NAMESPACE=x86_64
+                LK_CACHE_NAMESPACE=x86_64
             fi && BREW=(
                 env "PATH=$(eval "$SH" && echo "$PATH")"
                 ${BREW_ARCH[i]:+arch "-${BREW_ARCH[i]}"}

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 function lk_brew_flush_cache() {
-    lk_cache_mark_dirty
+    lk_cache_flush
 }
 
 function lk_brew_info() {

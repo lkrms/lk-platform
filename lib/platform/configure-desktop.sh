@@ -20,7 +20,6 @@ if lk_is_linux; then
                 cat <<"EOF"
 <network>
   <name>isolated</name>
-  <domain name='isolated'/>
   <ip address='192.168.100.1' netmask='255.255.255.0'>
     <dhcp>
       <range start='192.168.100.128' end='192.168.100.254'/>

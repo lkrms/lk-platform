@@ -359,7 +359,6 @@ function lk_tty_dump() {
         0- | *-1- | *-0)
             if [ -t 0 ]; then
                 lk_err "input is a terminal"
-                false
             else
                 ${_CMD+"${_CMD[@]}"} cat
             fi

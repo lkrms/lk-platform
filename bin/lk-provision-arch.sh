@@ -509,19 +509,25 @@ $LK_NODE_HOSTNAME" &&
             DAEMON_RELOAD=1
     fi
 
-    if [ -n "${LK_NTP_SERVER-}" ]; then
-        lk_tty_print "Checking NTP"
-        unset LK_FILE_REPLACE_NO_CHANGE
-        FILE=/etc/ntp.conf
-        lk_file_keep_original "$FILE"
-        _FILE=$(awk \
-            -v "NTP_SERVER=server $LK_NTP_SERVER iburst" \
-            -f "$LK_BASE/lib/awk/ntp-set-server.awk" \
-            "$FILE")
-        lk_file_replace "$FILE" "$_FILE"
-        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
-            SERVICE_RESTART+=(ntpd)
-    fi
+    lk_tty_print "Checking NTP"
+    unset LK_FILE_REPLACE_NO_CHANGE
+    FILE=/etc/ntp.conf
+    lk_file_keep_original "$FILE"
+    _FILE=$(
+        interfaces=$({
+            ! lk_feature_enabled desktop ||
+                ! lk_pac_installed libvirt ||
+                printf '%s\n' 192.168.{122,100}.0/24
+            lk_system_list_physical_links
+        } | lk_implode_input ,) &&
+            awk -v server="${LK_NTP_SERVER-}" \
+                -v interfaces="$interfaces" \
+                -f "$LK_BASE/lib/awk/ntp-set-server.awk" \
+                "$FILE"
+    )
+    lk_file_replace "$FILE" "$_FILE"
+    ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+        SERVICE_RESTART+=(ntpd)
     SERVICE_ENABLE+=(
         ntpd "NTP"
     )
@@ -1053,8 +1059,14 @@ done\""
     if lk_pac_installed libvirt; then
         lk_user_in_group libvirt && lk_user_in_group kvm ||
             sudo usermod --append --groups libvirt,kvm "$USER"
-        LIBVIRT_USERS=$(lk_get_users_in_group libvirt)
-        LIBVIRT_USERS=$([ -z "$LIBVIRT_USERS" ] || id -u $LIBVIRT_USERS)
+
+        unset LK_FILE_REPLACE_NO_CHANGE
+        LK_CONF_OPTION_FILE=/etc/libvirt/network.conf
+        _LK_CONF_DELIM=" = " \
+            lk_conf_set_option firewall_backend '"iptables"'
+        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+            SERVICE_RESTART+=(libvirtd)
+
         LK_CONF_OPTION_FILE=/etc/conf.d/libvirt-guests
         lk_conf_set_option URIS default
         lk_conf_set_option PARALLEL_SHUTDOWN 4
@@ -1071,6 +1083,7 @@ done\""
         fi
         lk_conf_set_option ON_SHUTDOWN shutdown
         lk_conf_set_option SYNC_TIME 1
+
         ! memory_at_least 7 || SERVICE_ENABLE+=(
             libvirtd "libvirt"
             libvirt-guests "libvirt-guests"

@@ -15,8 +15,8 @@ VM_MEMORY=2048
 VM_CPUS=2
 VM_DISK_SIZE=80G
 VM_IPV4_CIDR=
-VM_MAC_ADDRESS=$(printf '52:54:00:%02x:%02x:%02x' \
-    $((RANDOM % 256)) $((RANDOM % 256)) $((RANDOM % 256)))
+VM_MAC_ADDRESS="52:54:00$(printf ':%02x' $((RANDOM % 256)) $((RANDOM % 256)) $((RANDOM % 256)))"
+DIRECT_KERNEL_BOOT=
 REFRESH_CLOUDIMG=
 FORWARD_XML=()
 HOSTFWD=()
@@ -40,6 +40,7 @@ Boot a new libvirt VM from the current release of a cloud-init image.
 OPTIONS
 
     -i, --image=IMAGE               boot from IMAGE (default: $IMAGE)
+    -k, --direct-kernel-boot        boot guest directly from a kernel and initrd
     -r, --refresh-image             download latest IMAGE if cached version
                                     is out-of-date
     -p, --packages=PACKAGE,...      install each PACKAGE in guest
@@ -134,8 +135,8 @@ EXAMPLE
 \\    ${0##*/} -y -i ubuntu-18.04-minimal -r -c 2 -m 2048 -s 10G \\
       -n bridge=virbr0 -I 192.168.122.184/24 -Ogl --no-reject demo-server"
 
-lk_getopt "i:rp:f:P:m:c:s:n:I:R:OM:S:x:HuyFglh:U:" \
-    "image:,refresh-image,packages:,fs-maps:,preset:,memory:,\
+lk_getopt "i:krp:f:P:m:c:s:n:I:R:OM:S:x:HuyFglh:U:" \
+    "image:,direct-kernel-boot,refresh-image,packages:,fs-maps:,preset:,memory:,\
 cpus:,disk-size:,network:,ip-address:,forward:,isolate,mac:,stackscript:,\
 metadata:,poweroff,session,force,allow-gateway,allow-gateway-lan,allow-host:,\
 allow-url:,no-log,no-reject"
@@ -164,7 +165,7 @@ QEMU_MACHINE=
         QEMU_MACHINE=virt
     }
 }
-[ "$IMAGE_ARCH" = amd64 ] ||
+[[ $IMAGE_ARCH == amd64 ]] ||
     UBUNTU_MIRROR=${LK_UBUNTU_PORTS_MIRROR:-http://ports.ubuntu.com}
 
 VM_NETWORK_DEFAULT=default
@@ -181,12 +182,16 @@ while :; do
     -i | --image)
         IMAGE=$1
         ;;
+    -k | --direct-kernel-boot)
+        DIRECT_KERNEL_BOOT=yes
+        continue
+        ;;
     -r | --refresh-image)
         REFRESH_CLOUDIMG=yes
         continue
         ;;
     -p | --packages)
-        [ -n "$STACKSCRIPT" ] ||
+        [[ -n $STACKSCRIPT ]] ||
             VM_PACKAGES=$1
         ;;
     -f | --fs-maps)
@@ -282,9 +287,9 @@ while :; do
                 FROM_HOST=${BASH_REMATCH[3]}
                 TO_GUEST=${BASH_REMATCH[5]}
                 FORWARD=${BASH_REMATCH[7]}
-                [ -z "$PROTOCOL" ] ||
+                [[ -z $PROTOCOL ]] ||
                     _XML[${#_XML[@]}]="<protocol>$PROTOCOL</protocol>"
-                [ -z "$TO_GUEST" ] &&
+                [[ -z $TO_GUEST ]] &&
                     _XML[${#_XML[@]}]="<port>$FROM_HOST</port>" ||
                     _XML+=("<from-host>$FROM_HOST</from-host>"
                         "<to-guest>$TO_GUEST</to-guest>")
@@ -306,16 +311,16 @@ while :; do
         VM_MAC_ADDRESS=$1
         ;;
     -S | --stackscript)
-        [ -f "$1" ] ||
+        [[ -f $1 ]] ||
             lk_warn "invalid StackScript: $1" || lk_usage
         STACKSCRIPT=$1
         VM_PACKAGES=
         ;;
     -x | --metadata)
         IFS=, read -r -d '' URL KEY XML < <(printf '%s\0' "$1") &&
-            [ -n "${XML:+1}" ] ||
+            [[ -n ${XML:+1} ]] ||
             lk_warn "invalid metadata: $1" || lk_usage
-        [ "$URL" != "$XMLNS" ] ||
+        [[ $URL != "$XMLNS" ]] ||
             lk_warn "metadata URL not allowed: $URL" || lk_usage
         ! lk_in_array "$URL" METADATA_URLS ||
             lk_warn "metadata URL not unique: $URL"
@@ -391,24 +396,24 @@ VM_NETWORK=${VM_NETWORK:-$VM_NETWORK_DEFAULT}
 ! lk_is_macos || VM_NETWORK=user=
 
 if [[ $VM_NETWORK == user=* ]]; then
-    [ -z "$VM_IPV4_CIDR$ISOLATE" ] || lk_warn \
+    [[ -z $VM_IPV4_CIDR$ISOLATE ]] || lk_warn \
         "usermode networking cannot be used with --ip-address or --isolate" ||
         lk_usage
 else
     XML=
-    [ -z "$ISOLATE" ] || {
+    [[ -z $ISOLATE ]] || {
         XML=$(
-            [ -z "$ALLOW_HOST_XML" ] || echo "$ALLOW_HOST_XML"
-            [ -z "$ALLOW_HOST_NET_XML" ] || echo "$ALLOW_HOST_NET_XML"
+            [[ -z $ALLOW_HOST_XML ]] || echo "$ALLOW_HOST_XML"
+            [[ -z $ALLOW_HOST_NET_XML ]] || echo "$ALLOW_HOST_NET_XML"
             lk_echo_array ALLOW_HOSTS_XML
             lk_echo_array ALLOW_URL_XML
         )
-        [ -z "${XML:+1}" ] || XML="<allow>
+        [[ -z ${XML:+1} ]] || XML="<allow>
   ${XML//$'\n'/$'\n'  }
 </allow>"
         XML=${ISOLATE_ACTION_XML:+$ISOLATE_ACTION_XML
 }$XML
-        [ -z "${XML:+1}" ] &&
+        [[ -z ${XML:+1} ]] &&
             XML="<isolate />" ||
             XML="<isolate>
   ${XML//$'\n'/$'\n'  }
@@ -418,8 +423,8 @@ else
         lk_echo_array FORWARD_XML
         echo "$XML"
     )
-    [ -z "${XML:+1}" ] || {
-        [ -n "$VM_IPV4_CIDR" ] ||
+    [[ -z ${XML:+1} ]] || {
+        [[ -n $VM_IPV4_CIDR ]] ||
             lk_warn "--ip-address required with --forward and --isolate" ||
             lk_usage
         XML="<lk>
@@ -434,11 +439,7 @@ else
 fi
 
 VM_HOSTNAME=${1-}
-[ -n "$VM_HOSTNAME" ] || lk_usage
-
-function prefer_direct_kernel_boot() {
-    [[ -n ${LK_CLOUDIMG_DIRECT_KERNEL_BOOT-} ]]
-}
+[[ -n $VM_HOSTNAME ]] || lk_usage
 
 # boot_ubuntu RELEASE CODENAME [IMAGE_SUFFIX]
 function boot_ubuntu() {
@@ -450,9 +451,9 @@ function boot_ubuntu() {
     )
     # On Apple Silicon, the default console (ttyAMA0) won't receive output if
     # the cloud image boots with "console=tty1 console=ttyS0" or similar, and
-    # Ubuntu 22.04's arm64 images apply these options by default. Direct kernel
-    # boot allows us to override the default cmdline.
-    [[ $IMAGE_ARCH != arm64 ]] && ! prefer_direct_kernel_boot || {
+    # early Ubuntu 22.04 images for arm64 applied these options by default.
+    # Direct kernel boot allows us to override the default cmdline.
+    ! lk_true DIRECT_KERNEL_BOOT || {
         KERNEL_URL=http://$UBUNTU_HOST/$2/current/unpacked/$2-server-cloudimg-${IMAGE_ARCH}-vmlinuz-generic
         INITRD_URL=http://$UBUNTU_HOST/$2/current/unpacked/$2-server-cloudimg-${IMAGE_ARCH}-initrd-generic
         KERNEL_SHA_URLS=(
@@ -483,7 +484,7 @@ KERNEL_URL=
 INITRD_URL=
 KERNEL_ARGS=()
 SHA_KEYRING=/usr/share/keyrings/ubuntu-cloudimage-keyring.gpg
-[ -r "$SHA_KEYRING" ] ||
+[[ -r $SHA_KEYRING ]] ||
     SHA_KEYRING=$LK_BASE/share/keys/ubuntu-cloudimage-keyring.gpg
 [[ $IMAGE_ARCH == amd64 ]] || {
     [[ $IMAGE != *minimal ]] ||
@@ -586,9 +587,9 @@ if [[ -n $STACKSCRIPT ]]; then
             [[ -n ${VALIDATE_COMMAND+1} ]] ||
             VALIDATE_COMMAND=(lk_validate_not_null VALUE)
         lk_tty_print "Checking field $TAG of ${#SS_TAGS[@]}:" "$NAME"
-        [ -z "${SELECT_TEXT-}" ] ||
+        [[ -z ${SELECT_TEXT-} ]] ||
             lk_tty_list_detail SELECT_OPTIONS "$SELECT_TEXT:"
-        [ -z "${DEFAULT-}" ] ||
+        [[ -z ${DEFAULT-} ]] ||
             lk_tty_detail "Default value:" "$DEFAULT"
         VALUE=$(lk_var_env "$NAME") || unset VALUE
         i=0
@@ -618,7 +619,7 @@ if [[ -n $STACKSCRIPT ]]; then
         SS_FIELDS+=("$NAME=$VALUE")
     done
     STACKSCRIPT_ENV=
-    [ ${#SS_FIELDS[@]} -eq 0 ] || {
+    [[ ${#SS_FIELDS[@]} -eq 0 ]] || {
         # This works because cloud-init does no unescaping
         STACKSCRIPT_ENV=$(lk_echo_array SS_FIELDS | sort)
     }
@@ -626,13 +627,13 @@ if [[ -n $STACKSCRIPT ]]; then
 fi
 
 KEYS_FILE=~/.ssh/authorized_keys
-[ -f "$KEYS_FILE" ] || lk_die "file not found: $KEYS_FILE"
+[[ -f $KEYS_FILE ]] || lk_die "file not found: $KEYS_FILE"
 SSH_AUTHORIZED_KEYS=$(grep -Ev "^(#|$S*\$)" "$KEYS_FILE" |
     jq -Rn '[ inputs | split("\n")[] ]') ||
     lk_die "no keys in $KEYS_FILE"
 
 while VM_STATE=$(lk_sudo virsh domstate "$VM_HOSTNAME" 2>/dev/null); do
-    [ "$VM_STATE" != "shut off" ] || unset VM_STATE
+    [[ $VM_STATE != "shut off" ]] || unset VM_STATE
     lk_tty_error "Domain already exists:" "$VM_HOSTNAME"
     PROMPT=(
         "OK to"
@@ -642,7 +643,7 @@ while VM_STATE=$(lk_sudo virsh domstate "$VM_HOSTNAME" 2>/dev/null); do
     lk_true FORCE_DELETE ||
         LK_FORCE_INPUT=Y lk_tty_yn "${PROMPT[*]}" N ||
         lk_die ""
-    [ -z "${VM_STATE+1}" ] ||
+    [[ -z ${VM_STATE+1} ]] ||
         lk_sudo virsh destroy "$VM_HOSTNAME" || true
     lk_sudo virsh undefine --managed-save --nvram \
         --remove-all-storage "$VM_HOSTNAME" || true
@@ -656,6 +657,7 @@ _VM_NETWORK=$VM_NETWORK
 printf '%s\t%s\n' \
     "Name" "$LK_BOLD$VM_HOSTNAME$LK_RESET" \
     "Image" "$IMAGE_NAME" \
+    "Direct kernel boot" "${DIRECT_KERNEL_BOOT:-no}" \
     "Refresh if cached" "${REFRESH_CLOUDIMG:-no}" \
     "Packages" "${_VM_PACKAGES:-<none>}" \
     "Filesystem maps" "${VM_FILESYSTEM_MAPS:-<none>}" \
@@ -671,9 +673,9 @@ printf '%s\t%s\n' \
     "Shut down" "${POWEROFF:-no}" \
     "Libvirt service" "$LIBVIRT_URI" \
     "Disk image path" "$POOL_ROOT" | IFS=$'\t' lk_tty_detail_pairs
-[ -z "$STACKSCRIPT" ] ||
+[[ -z $STACKSCRIPT ]] ||
     lk_tty_detail "StackScript environment:" \
-        $'\n'"$([ ${#SS_FIELDS[@]} -eq 0 ] && echo "<empty>" ||
+        $'\n'"$([[ ${#SS_FIELDS[@]} -eq 0 ]] && echo "<empty>" ||
             lk_echo_array SS_FIELDS | sort)"
 lk_tty_yn "OK to proceed?" Y || lk_die ""
 lk_tty_print
@@ -690,7 +692,7 @@ lk_tty_print
         shift
         FILE=${URL##*/}
         IMAGE_FILE=$FILE
-        if [ ! -f "$FILE" ] || lk_true REFRESH_CLOUDIMG; then
+        if [[ ! -f $FILE ]] || lk_true REFRESH_CLOUDIMG; then
             lk_tty_detail "Downloading" "$FILE"
             wget --no-cache --timestamping \
                 --no-verbose --show-progress "$URL" || {
@@ -698,7 +700,7 @@ lk_tty_print
                 lk_die "error downloading $URL"
             }
         fi
-        if [ ! -f "SHASUMS-${FILE%.*}" ] || lk_true REFRESH_CLOUDIMG; then
+        if [[ ! -f SHASUMS-${FILE%.*} ]] || lk_true REFRESH_CLOUDIMG; then
             lk_mktemp_with SUMS
             if (($# == 1)); then
                 lk_curl "$1" |
@@ -743,7 +745,7 @@ lk_tty_print
         CLOUDIMG_FORMAT=$(qemu-img info --output=json "$IMAGE_FILE" |
             jq -r .format)
         lk_tty_print "Installing verified image to" "${CLOUDIMG_PATH%/*}"
-        if [ "$CLOUDIMG_FORMAT" != qcow2 ]; then
+        if [[ $CLOUDIMG_FORMAT != qcow2 ]]; then
             lk_sudo qemu-img convert -pO qcow2 "$IMAGE_FILE" "$CLOUDIMG_PATH"
         else
             lk_sudo cp "$IMAGE_FILE" "$CLOUDIMG_PATH"
@@ -786,7 +788,7 @@ lk_tty_print
     IMAGE_BASENAME=$VM_HOSTNAME-$CLOUDIMG_NAME
     DISK_PATH=$POOL_ROOT/$IMAGE_BASENAME.qcow2
     NOCLOUD_PATH=$POOL_ROOT/$IMAGE_BASENAME-cloud-init.qcow2
-    if [ -e "$DISK_PATH" ]; then
+    if [[ -e $DISK_PATH ]]; then
         lk_tty_error "Disk image already exists:" "$DISK_PATH"
         lk_true FORCE_DELETE ||
             LK_FORCE_INPUT=Y \
@@ -797,7 +799,7 @@ lk_tty_print
     # add_json [-j JQ_OPERATOR] VAR [JQ_ARG...] JQ_OBJECT
     function add_json() {
         local JQ='.+='
-        [ "${1-}" != -j ] || { JQ=$2 && shift 2; }
+        [[ ${1-} != -j ]] || { JQ=$2 && shift 2; }
         local -n JSON=$1
         JSON=$(jq "${@:2:$#-2}" "$JQ${*: -1}" <<<"$JSON")
     }
@@ -832,6 +834,8 @@ lk_tty_print
     }
     [[ -z ${QEMU_MACHINE:+1} ]] ||
         VIRT_OPTIONS+=(--machine "$QEMU_MACHINE")
+    [[ $IMAGE_ARCH != arm64 ]] ||
+        VIRT_OPTIONS+=(--cpu cortex-a57)
     ! lk_is_macos || VIRT_OPTIONS+=(
         --xml ./devices/emulator="$LK_BASE/share/qemu/qemu-system-hvf"
     )
@@ -848,7 +852,7 @@ lk_tty_print
   }]
 }'
 
-    if [ -n "$VM_IPV4_CIDR" ]; then
+    if [[ -n $VM_IPV4_CIDR ]]; then
         add_json -j '.config[].subnets=' NETWORK_CONFIG \
             --arg cidr "$VM_IPV4_CIDR" \
             --arg gw "$VM_IPV4_GATEWAY" '[{
@@ -863,15 +867,15 @@ lk_tty_print
 
     FSTAB=()
     MOUNT_DIRS=()
-    [ -z "$VM_FILESYSTEM_MAPS" ] || {
+    [[ -z $VM_FILESYSTEM_MAPS ]] || {
         IFS="|"
         FILESYSTEMS=($VM_FILESYSTEM_MAPS)
         for FILESYSTEM in "${FILESYSTEMS[@]}"; do
             IFS=,
             FILESYSTEM_DIRS=($FILESYSTEM)
-            [ ${#FILESYSTEM_DIRS[@]} -ge 2 ] ||
+            [[ ${#FILESYSTEM_DIRS[@]} -ge 2 ]] ||
                 lk_die "invalid filesystem map: $FILESYSTEM"
-            [ -d "${FILESYSTEM_DIRS[0]}" ] ||
+            [[ -d ${FILESYSTEM_DIRS[0]} ]] ||
                 lk_die "directory not found: ${FILESYSTEM_DIRS[0]}"
             SOURCE_DIR=${FILESYSTEM_DIRS[0]}
             MOUNT_DIR=${FILESYSTEM_DIRS[1]}
@@ -894,7 +898,7 @@ lk_tty_print
         )"
     }
 
-    if [ -z "$STACKSCRIPT" ]; then
+    if [[ -z $STACKSCRIPT ]]; then
         add_json USER_DATA \
             --arg uid "$(id -u)" \
             --arg name "$(id -un)" \
@@ -943,20 +947,20 @@ lk_tty_print
 }'
 
     PACKAGES=(qemu-guest-agent)
-    [ -z "$VM_PACKAGES" ] || {
+    [[ -z $VM_PACKAGES ]] || {
         IFS=,
         PACKAGES+=($VM_PACKAGES)
         unset IFS
     }
-    [ ${#PACKAGES[@]} -eq 0 ] ||
+    [[ ${#PACKAGES[@]} -eq 0 ]] ||
         add_json USER_DATA "$(lk_echo_array PACKAGES | sort -u | jq -Rn '{
   "packages": [inputs]
 }')"
 
     # ubuntu-16.04-minimal leaves /etc/resolv.conf unconfigured if a static IP
     # is assigned (no resolvconf package?)
-    [ -z "$VM_IPV4_CIDR" ] ||
-        [ "$IMAGE_NAME" != ubuntu-16.04-minimal ] ||
+    [[ -z $VM_IPV4_CIDR ]] ||
+        [[ $IMAGE_NAME != ubuntu-16.04-minimal ]] ||
         add_write_files /etc/resolv.conf "nameserver $VM_IPV4_GATEWAY"
 
     # cloud-init on ubuntu-14.04 doesn't recognise the "apt" schema
@@ -965,12 +969,12 @@ lk_tty_print
   "apt_mirror": $uri
 }'
 
-    [ "$RUNCMD" = "[]" ] ||
+    [[ $RUNCMD == "[]" ]] ||
         add_json USER_DATA --argjson runcmd "$RUNCMD" '{
   "runcmd": $runcmd
 }'
 
-    [ "$WRITE_FILES" = "[]" ] ||
+    [[ $WRITE_FILES == "[]" ]] ||
         add_json USER_DATA --argjson writeFiles "$WRITE_FILES" '{
   "write_files": $writeFiles
 }'
@@ -990,7 +994,7 @@ lk_tty_print
 }'
 
     # cloud-init on ubuntu-14.04 ignores the network-config file
-    [ -z "$VM_IPV4_CIDR" ] ||
+    [[ -z $VM_IPV4_CIDR ]] ||
         [[ $IMAGE_NAME != ubuntu-14.04 ]] ||
         add_json META_DATA --arg interfaces "auto eth0
 iface eth0 inet static
@@ -1050,7 +1054,7 @@ dns-nameservers $VM_IPV4_GATEWAY" '{
         "$VM_DISK_SIZE" || lk_die ""
 
     VM_NETWORK_TYPE=${VM_NETWORK%%=*}
-    if [ "$VM_NETWORK_TYPE" = "$VM_NETWORK" ]; then
+    if [[ $VM_NETWORK_TYPE == "$VM_NETWORK" ]]; then
         VM_NETWORK_TYPE=network
     else
         VM_NETWORK=${VM_NETWORK#*=}
@@ -1074,7 +1078,7 @@ dns-nameservers $VM_IPV4_GATEWAY" '{
         ;;
     esac
 
-    if [ ${#QEMU_COMMANDLINE[@]} -gt 0 ]; then
+    if [[ ${#QEMU_COMMANDLINE[@]} -gt 0 ]]; then
         unset IFS
         VIRT_OPTIONS+=(--qemu-commandline="${QEMU_COMMANDLINE[*]}")
     fi
@@ -1105,7 +1109,7 @@ dns-nameservers $VM_IPV4_GATEWAY" '{
     lk_tty_run_detail lk_sudo virsh --connect "$LIBVIRT_URI" \
         define "$FILE" >/dev/null
     for i in $(
-        [ ${#METADATA[@]} -eq 0 ] ||
+        [[ ${#METADATA[@]} -eq 0 ]] ||
             seq 0 3 $((${#METADATA[@]} - 1))
     ); do
         lk_tty_run_detail lk_sudo virsh --connect "$LIBVIRT_URI" \
