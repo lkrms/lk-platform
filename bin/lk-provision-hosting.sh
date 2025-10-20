@@ -547,6 +547,7 @@ EOF
         no-install-recommends
         unattended-upgrade
         keep-changed-conffiles
+        allow-release-label-change
     )
     _FILE=$(
         cd "$LK_BASE/share/apt/apt.conf.d"
