@@ -625,7 +625,7 @@ EOF
     unset IFS
     . "$LK_BASE/lib/hosting/packages.sh"
 
-    lk_mktemp_with APT_AVAILABLE sort -u <(lk_apt_available_list)
+    lk_mktemp_with APT_AVAILABLE lk_apt_available_list
 
     lk_mktemp_with APT_PHP_PACKAGES
     lk_safe_grep -Ehf <(
@@ -639,6 +639,20 @@ EOF
         awk '
 /^php[^-]/           { print; sub("^php[^-]+-", "php-", $0); skip[$0] = 1 }
 /^php-/ && !skip[$0] { print }' >"$APT_PHP_PACKAGES"
+
+    if lk_feature_enabled php-fpm; then
+        if [[ -n $LK_PHP_VERSIONS ]]; then
+            for PHPVER in "${PHP_VERSIONS[@]}"; do
+                grep -Fxq "php${PHPVER}-cli" "$APT_PHP_PACKAGES" &&
+                    grep -Fxq "php${PHPVER}-fpm" "$APT_PHP_PACKAGES" ||
+                    lk_die "cannot install PHP $PHPVER"
+            done
+        else
+            grep -Fxq php-cli "$APT_PHP_PACKAGES" &&
+                grep -Fxq php-fpm "$APT_PHP_PACKAGES" ||
+                lk_die "cannot install PHP"
+        fi
+    fi
 
     # As of Ubuntu 22.04, each of the following has a version-specific package
     # in ppa:ondrej/php but not in stock Ubuntu, so they need to be explicitly
@@ -670,6 +684,12 @@ EOF
         APT_UNMARK=($(lk_apt_marked_manual_list "${APT_UNMARK[@]}"))
         [[ ${#APT_UNMARK[@]} -eq 0 ]] ||
             lk_apt_mark auto "${APT_UNMARK[@]}"
+    fi
+
+    if [[ ${APT_REMOVE_NOW+1} ]]; then
+        lk_tty_list APT_REMOVE_NOW "Removing:" package packages
+        lk_tty_detail "Cancel within 60 seconds to prevent package removal"
+        sleep 60
     fi
 
     if [[ ${#APT_PACKAGES[@]} -eq 0 ]]; then
