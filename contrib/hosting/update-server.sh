@@ -185,7 +185,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
     . ./lib/bash/rc.sh || return
 
     # Install icdiff if it's not already installed
-    INSTALL=$(lk_dpkg_not_installed_list icdiff) || return
+    INSTALL=$(lk_dpkg_list_not_installed icdiff) || return
     [ -z "$INSTALL" ] ||
       lk_apt_install $INSTALL || return
 

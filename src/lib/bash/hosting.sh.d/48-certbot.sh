@@ -7,7 +7,7 @@ function lk_hosting_certbot_maybe_install() {
     lk_tty_print "Checking TLS certificates for" \
         "$(lk_plural -v SITE_DOMAINS domain)"
     lk_arr_from CERT_DOMAINS lk_certbot_list_all_domains &&
-        lk_arr_from NO_CERT_DOMAINS lk_arr_diff SITE_DOMAINS CERT_DOMAINS ||
+        lk_arr_from NO_CERT_DOMAINS lk_arr_complement SITE_DOMAINS CERT_DOMAINS ||
         return
     [[ -n ${NO_CERT_DOMAINS+1} ]] || {
         lk_tty_success "No certificates to acquire"

@@ -1,56 +1,69 @@
 #!/usr/bin/env bash
 
-# lk_dpkg_installed PACKAGE...
+# shellcheck disable=SC2207
+
+# lk_dpkg_is_installed <package>...
 #
-# Return true if every PACKAGE is installed.
-function lk_dpkg_installed() {
-    local ARGS COUNT
-    ARGS=$(lk_args "$@" | sort -u) && set -- $ARGS || return
-    (($#)) || lk_warn "no package" || return
-    COUNT=$(dpkg-query --show \
-        --showformat '${db:Status-Status}\n' \
-        "$@" 2>/dev/null |
-        grep -Fx --count "installed") &&
-        ((COUNT == $#))
+# Check if the given packages are installed.
+function lk_dpkg_is_installed() {
+    (($#)) || lk_err "no package" || return
+    local IFS=$' \t\n' pkgs installed
+    pkgs=($(printf '%s\n' "$@" | sort -u)) && installed=$(
+        # Discard "no packages found matching <package>"
+        dpkg-query -W -f '${db:Status-Status}\n' "${pkgs[@]}" 2>/dev/null |
+            grep -Fxc installed
+    ) && ((installed == ${#pkgs[@]}))
 }
 
-# lk_dpkg_installed_list [PACKAGE...]
+# lk_dpkg_list_installed [<package>...]
 #
-# Output each currently installed PACKAGE, or list all installed packages.
-function lk_dpkg_installed_list() {
-    { dpkg-query --show \
-        --showformat '${db:Status-Status}\t${binary:Package}\n' \
-        "$@" 2>/dev/null || (($? == 1)); } |
-        awk '$1 == "installed" { sub(/:.*/, "", $2); print $2 }'
+# Print each of the given packages that is installed, or if no packages are
+# given, print every installed package.
+#
+# Architecture qualifiers are removed before output is passed to `sort -u`.
+function lk_dpkg_list_installed() {
+    local IFS=$' \t\n'
+    dpkg-query -W -f '${db:Status-Status}\t${binary:Package}\n' "$@" 2>/dev/null |
+        awk '$1 == "installed" { sub(/:.*/, "", $2); print $2 }' |
+        sort -u ||
+        [[ ${PIPESTATUS[*]} == "1 0 0" ]]
 }
 
-# lk_dpkg_not_installed_list PACKAGE...
+# lk_dpkg_list_installed_versions [<package>...]
 #
-# Output each PACKAGE that isn't currently installed.
-function lk_dpkg_not_installed_list() {
-    (($#)) || lk_warn "no package" || return
-    comm -13 \
-        <(lk_dpkg_installed_list "$@" | sort -u) \
-        <(lk_args "$@" | sort -u)
+# Print "<package>=<version>" for each of the given packages that is installed,
+# or if no packages are given, for every installed package.
+#
+# Architecture qualifiers are removed before output is passed to `sort -u`.
+function lk_dpkg_list_installed_versions() {
+    local IFS=$' \t\n'
+    dpkg-query -W -f '${db:Status-Status}\t${binary:Package}=${Version}\n' "$@" 2>/dev/null |
+        awk '$1 == "installed" { sub(/:[^=]*/, "", $2); print $2 }' |
+        sort -u ||
+        [[ ${PIPESTATUS[*]} == "1 0 0" ]]
 }
 
-# lk_dpkg_installed_versions [PACKAGE...]
+# lk_dpkg_list_config_files [<package>...]
 #
-# Output ${Package}=${Version} for each currently installed PACKAGE, or for all
-# installed packages.
-function lk_dpkg_installed_versions() {
-    dpkg-query --show --showformat \
-        '${db:Status-Status}\t${binary:Package}=${Version}\n' "$@" |
-        awk '$1 == "installed" { print $2 }'
+# Print "<checksum>  <file>" for configuration files installed by each of the
+# given packages, or if no packages are given, for every package.
+#
+# Output is passed to `sort -u`, then sorted by file.
+function lk_dpkg_list_config_files() {
+    dpkg-query -W -f '${Conffiles}\n' "$@" |
+        awk 'NF { checksum = $NF; gsub(/^[ \t]*|[ \t][^ \t]+$/, ""); print checksum "  " $0 }' |
+        sort -u |
+        sort -k2
 }
 
-# lk_dpkg_check_config_files [PACKAGE...]
+# lk_dpkg_list_not_installed <package>...
 #
-# Print "<FILE>: (OK|FAILED)" for configuration files installed by each PACKAGE.
-function lk_dpkg_check_config_files() {
-    dpkg-query --show --showformat '${Conffiles}\n' "$@" |
-        awk 'NF { print $2, $1 }' |
-        md5sum -c
+# Print each of the given packages that is not installed.
+function lk_dpkg_list_not_installed() {
+    (($#)) || lk_err "no package" || return
+    lk_file_complement -s \
+        <(printf '%s\n' "$@" | sort -u) \
+        <(lk_dpkg_list_installed "$@")
 }
 
 # _lk_apt_flock COMMAND [ARG...]
@@ -70,7 +83,8 @@ function _lk_apt_flock() {
 # packages.
 function lk_apt_available_list() {
     lk_apt_update >&2 &&
-        apt-cache pkgnames "$@"
+        apt-cache pkgnames "$@" |
+        sort -u
 }
 
 # lk_apt_marked_manual_list [PACKAGE...]
@@ -91,7 +105,7 @@ function lk_apt_marked_auto_list() {
 
 # lk_apt_mark (auto|manual) PACKAGE...
 function lk_apt_mark() {
-    (($# > 1)) || lk_warn "no package" || return
+    (($# > 1)) || lk_err "no package" || return
     _lk_apt_flock apt-mark "$@"
 }
 
@@ -99,7 +113,7 @@ function lk_apt_mark() {
 #
 # Output each PACKAGE that isn't currently marked as "manually installed".
 function lk_apt_not_marked_manual_list() {
-    (($#)) || lk_warn "no package" || return
+    (($#)) || lk_err "no package" || return
     comm -13 \
         <(lk_apt_marked_manual_list "$@" | sort -u) \
         <(lk_args "$@" | sort -u)
@@ -120,7 +134,7 @@ function lk_apt_update() {
 #
 # Output each PACKAGE that doesn't appear in APT's package index.
 function lk_apt_unavailable_list() {
-    (($#)) || lk_warn "no package" || return
+    (($#)) || lk_err "no package" || return
     comm -13 \
         <(lk_apt_available_list | sort -u) \
         <(lk_args "$@" | sort -u)
@@ -131,7 +145,7 @@ function lk_apt_unavailable_list() {
 # Return true if each PACKAGE is marked as "manually installed".
 function lk_apt_installed() {
     local NOT_INSTALLED
-    (($#)) || lk_warn "no package" || return
+    (($#)) || lk_err "no package" || return
     NOT_INSTALLED=$(lk_apt_not_marked_manual_list "$@" | wc -l) &&
         [ "$NOT_INSTALLED" -eq 0 ]
 }
@@ -141,12 +155,12 @@ function lk_apt_installed() {
 # Install each PACKAGE.
 function lk_apt_install() {
     local INSTALL REMOVE MARK
-    (($#)) || lk_warn "no package" || return
+    (($#)) || lk_err "no package" || return
     INSTALL=($(lk_args "$@" | sed -E '/-$/d'))
     REMOVE=($(lk_args "$@" | sed -En '/-$/p'))
     [[ -z ${INSTALL+1} ]] || {
         MARK=($(lk_apt_marked_auto_list "${INSTALL[@]}")) &&
-            INSTALL=($(lk_dpkg_not_installed_list "${INSTALL[@]}")) || return
+            INSTALL=($(lk_dpkg_list_not_installed "${INSTALL[@]}")) || return
     }
     [[ -z ${MARK+1}${INSTALL+1}${REMOVE+1} ]] || {
         lk_arr MARK INSTALL REMOVE | lk_tty_list - \
@@ -165,8 +179,8 @@ function lk_apt_install() {
 # Remove each installed PACKAGE and any unused dependencies.
 function lk_apt_remove() {
     local REMOVE
-    (($#)) || lk_warn "no package" || return
-    REMOVE=($(lk_dpkg_installed_list "$@")) || return
+    (($#)) || lk_err "no package" || return
+    REMOVE=($(lk_dpkg_list_installed "$@")) || return
     [ ${#REMOVE[@]} -eq 0 ] || {
         lk_tty_list REMOVE "${_LK_APT_REMOVE_MESSAGE:-Removing}:" \
             "APT package" "APT packages"
@@ -191,8 +205,7 @@ function lk_apt_autoremove() {
 
 function lk_apt_purge_removed() {
     local PURGE
-    PURGE=($(dpkg-query --show --showformat \
-        '${db:Status-Status}\t${binary:Package}\n' |
+    PURGE=($(dpkg-query -W -f '${db:Status-Status}\t${binary:Package}\n' |
         awk '$1 == "config-files" { print $2 }')) || return
     [ ${#PURGE[@]} -eq 0 ] || {
         lk_tty_list PURGE "Purging previously removed packages:" \

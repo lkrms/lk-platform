@@ -143,6 +143,48 @@ function lk_stack() {
     fi
 }
 
+# lk_output_diff [-i] <command1> [<arg1>...] -- <command2> [<arg2>...] [-- <arg>...]
+#
+# Run two commands, optionally passing the given arguments to both, and compare
+# their output.
+#
+# If -i is given, occurrences of "{}" are replaced with <arg> in both commands,
+# and there must be no additional arguments. Otherwise, <arg> and any subsequent
+# arguments are added to the end of both commands.
+function lk_output_diff() {
+    local _arg _cmd1=() _cmd2=() _replace=0 _temp1 _temp2
+    [[ ${1-} != -i ]] || {
+        _replace=1
+        shift
+    }
+    while (($#)); do
+        _arg=$1
+        shift
+        [[ $_arg != -- ]] || break
+        _cmd1[${#_cmd1[@]}]=$_arg
+    done
+    while (($#)); do
+        _arg=$1
+        shift
+        [[ $_arg != -- ]] || break
+        _cmd2[${#_cmd2[@]}]=$_arg
+    done
+    if ((_replace)); then
+        (($# == 1)) && [[ ${_cmd1+1}${_cmd2+1} == 11 ]] || lk_bad_args || return
+        _cmd1=("${_cmd1[@]//"{}"/$1}")
+        _cmd2=("${_cmd2[@]//"{}"/$1}")
+    elif (($#)); then
+        _cmd1+=("$@")
+        _cmd2+=("$@")
+    else
+        [[ ${_cmd1+1}${_cmd2+1} == 11 ]] || lk_bad_args || return
+    fi
+    lk_mktemp_with _temp1 "${_cmd1[@]}" &&
+        lk_mktemp_with _temp2 "${_cmd2[@]}" || return
+    local IFS=$' \t\n'
+    lk_tty_diff -L "\`${_cmd1[*]}\`" -L "\`${_cmd2[*]}\`" "$_temp1" "$_temp2"
+}
+
 #### Other command wrappers in core.sh:
 #### - lk_pass
 #### - lk_elevate

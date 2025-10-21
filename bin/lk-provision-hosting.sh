@@ -588,7 +588,7 @@ EOF
         lk_keep_trying lk_apt_update
 
     if ! no_upgrade &&
-        [ -x /usr/local/bin/pip3 ] && ! lk_dpkg_installed python3-pip; then
+        [ -x /usr/local/bin/pip3 ] && ! lk_dpkg_is_installed python3-pip; then
         PIP3=/usr/local/bin/pip3
         lk_tty_print "Removing standalone pip3"
         function pip3_args() {
@@ -634,7 +634,7 @@ EOF
             lk_arr APT_PACKAGES |
             awk -v re="${REGEX//\\/\\\\}" \
                 '/^php-/ {print "^php" re substr($0, 4) "$"}'
-    ) "$APT_AVAILABLE" <(lk_dpkg_installed_list) |
+    ) "$APT_AVAILABLE" <(lk_dpkg_list_installed) |
         sort -uV |
         awk '
 /^php[^-]/           { print; sub("^php[^-]+-", "php-", $0); skip[$0] = 1 }
@@ -691,7 +691,7 @@ EOF
             lk_systemctl_disable_now "$SERVICE"
     done
 
-    if lk_dpkg_installed logrotate; then
+    if lk_dpkg_is_installed logrotate; then
         lk_tty_print "Checking logrotate"
         _LK_CONF_DELIM=" " \
             lk_conf_set_option su "root adm" /etc/logrotate.conf
@@ -716,7 +716,7 @@ EOF
             lk_tty_run_detail mv -n "$FILE"{.disabled,}
     fi
 
-    if lk_dpkg_installed apt-listchanges apticron; then
+    if lk_dpkg_is_installed apt-listchanges apticron; then
         lk_tty_print "Checking apticron"
         FILE=/etc/apt/listchanges.conf
         ORIG=$FILE
@@ -847,7 +847,7 @@ EOF
         ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
         lk_tty_run_detail systemctl restart ssh.service
 
-    if lk_dpkg_installed postfix; then
+    if lk_dpkg_is_installed postfix; then
         lk_tty_print "Checking Postfix"
         get_before_file /etc/postfix/main.cf
         lk_postfix_provision
@@ -928,7 +928,7 @@ EOF
             proxy
             proxy_fcgi
         )
-        ! lk_dpkg_installed libapache2-mod-qos ||
+        ! lk_dpkg_is_installed libapache2-mod-qos ||
             APACHE_MODS+=(
                 qos
                 unique_id
@@ -1218,7 +1218,7 @@ EOF
             lk_mark_dirty opcache.file_cache.path
     fi
 
-    if lk_dpkg_installed fail2ban; then
+    if lk_dpkg_is_installed fail2ban; then
         lk_tty_print "Checking Fail2ban"
         unset LK_FILE_REPLACE_NO_CHANGE
         FILE=/etc/fail2ban/jail.d/${LK_PATH_PREFIX}default.local
@@ -1307,7 +1307,7 @@ EOF
     [ ! -e /etc/glances ] ||
         lk_tty_run_detail rm -Rf /etc/glances
     [ ! -e /etc/apt/listchanges.conf.orig ] ||
-        lk_dpkg_installed apt-listchanges ||
+        lk_dpkg_is_installed apt-listchanges ||
         lk_tty_run_detail rm -f /etc/apt/listchanges.conf.orig
 
     lk_tty_success "Provisioning complete"

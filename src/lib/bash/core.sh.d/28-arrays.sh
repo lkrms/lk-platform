@@ -69,10 +69,10 @@ function lk_arr_intersect() {
     comm -12 <(lk_arr "$1" | sort -u) <(shift && lk_arr "$@" | sort -u)
 }
 
-# lk_arr_diff ARRAY ARRAY2...
+# lk_arr_complement ARRAY ARRAY2...
 #
 # Print ARRAY values that are not present in any of the subsequent arrays.
-function lk_arr_diff() {
+function lk_arr_complement() {
     (($# > 1)) || lk_bad_args || return
     comm -23 <(lk_arr "$1" | sort -u) <(shift && lk_arr "$@" | sort -u)
 }
