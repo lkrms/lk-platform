@@ -291,6 +291,7 @@ IPTABLES_UDP_LISTEN=()
 CURL_OPTIONS=(-fsSLH "Cache-Control: no-cache" -H "Pragma: no-cache" --retry 9 --retry-max-time 30)
 
 APT_REPOS=()
+APT_REMOVE_REPOS=()
 APT_UNMARK=(
     # Installed by previous versions of lk-platform
     software-properties-common
@@ -322,20 +323,19 @@ PHP_VERSIONS=($(IFS=, && printf '%s\n' \
     $LK_PHP_VERSIONS $LK_PHP_DEFAULT_VERSION | sort -Vu))
 # If not configured, provision DEFAULT_PHPVER
 [[ -n ${PHP_VERSIONS+1} ]] || PHP_VERSIONS=("$DEFAULT_PHPVER")
-# If configured, source PHP packages from ppa:ondrej/php
+# Otherwise, source PHP packages from ppa:ondrej/php
 if [[ -n $LK_PHP_VERSIONS ]] && lk_feature_enabled php-fpm; then
     APT_REPOS+=("ppa:ondrej/php")
-    #! lk_feature_enabled apache2 ||
-    #    APT_REPOS+=("ppa:ondrej/apache2")
+else
+    APT_REMOVE_REPOS+=("ppa:ondrej/php")
 fi
 
 case "$DISTRIB_RELEASE" in
-18.04)
-    APT_REPOS+=("ppa:certbot/certbot")
-    ;;
-20.04) ;;
-22.04) ;;
+18.04) APT_REPOS+=("ppa:certbot/certbot") ;;
+20.04) APT_REMOVE_REPOS+=("ppa:certbot/certbot") ;;
+22.04) APT_REMOVE_REPOS+=("ppa:certbot/certbot") ;;
 24.04)
+    APT_REMOVE_REPOS+=("ppa:certbot/certbot")
     APT_PACKAGES+=(
         ntpsec
     )
@@ -452,93 +452,7 @@ fi
     fi
 
     lk_tty_print "Checking APT"
-    lk_tty_detail "Checking sources"
     unset LK_FILE_REPLACE_NO_CHANGE
-    FILE=/etc/apt/sources.list
-    DEB822_FILE=/etc/apt/sources.list.d/ubuntu.sources
-    if [[ -f $DEB822_FILE ]]; then
-        lk_file_keep_original "$FILE"
-        lk_file_replace "$FILE" < <(
-            awk -f "$LK_BASE/lib/awk/sh-apt-convert-sources.awk" "$DEB822_FILE"
-        )
-        lk_tty_run_detail mv -fv "$DEB822_FILE"{,.disabled}
-    fi
-    # Disable source packages, multiverse sources
-    _FILE=$(sed -E \
-        -e "s/^deb-src$S/#&/" \
-        -e "s/^deb$S.*$S$DISTRIB_CODENAME(-(updates|security|backports))?($S+$NS+)*$S+multiverse($S|\$)/#&/" \
-        "$FILE")
-    # Enable universe (required for certbot), backports
-    IFS=,
-    COMPONENTS=($(printf '%s,' "$DISTRIB_CODENAME"{,-{updates,security,backports}}","{main,restricted,universe}))
-    unset IFS
-    _FILE+=$(printf '\n' &&
-        lk_apt_sources_get_missing -l - "${COMPONENTS[@]}" <<<"$_FILE")
-    lk_file_keep_original "$FILE"
-    lk_file_replace "$FILE" "$_FILE"
-    if [ ${#APT_REPOS[@]} -gt 0 ]; then
-        for REPO in "${APT_REPOS[@]}"; do
-            case "$REPO" in
-            ppa:*)
-                PPA=${REPO#ppa:}
-                PPA_OWNER=${PPA%/*}
-                PPA_NAME=${PPA#*/}
-                GPG_FILE=$LK_BASE/share/keys/ppa-${PPA_OWNER}-${PPA_NAME}.gpg
-                if [[ -f $GPG_FILE ]]; then
-                    GPG_FILE=$(lk_realpath "$GPG_FILE")
-                    FILE=/etc/apt/trusted.gpg.d/${GPG_FILE##*/}
-                    [[ -e $FILE ]] && diff -q "$GPG_FILE" "$FILE" >/dev/null ||
-                        lk_tty_run_detail install -m 00644 "$GPG_FILE" "$FILE"
-                else
-                    lk_tty_warning \
-                        "Signing key for '$REPO' not found:" "$GPG_FILE"
-                    GPG_KEY=$(lk_keep_trying lk_curl \
-                        "https://api.launchpad.net/1.0/~${PPA_OWNER}/+archive/ubuntu/${PPA_NAME}" |
-                        jq -r '.signing_key_fingerprint')
-                    apt-key adv --list-keys "$GPG_KEY" &>/dev/null || {
-                        lk_tty_detail "Downloading key:" "$GPG_KEY"
-                        lk_keep_trying apt-key adv \
-                            --keyserver keyserver.ubuntu.com \
-                            --recv-keys "$GPG_KEY"
-                    }
-                fi
-                REPO_PATH=/$PPA/ubuntu
-                REPO_HOST=http://ppa.launchpadcontent.net
-                ARGS=()
-                [[ -z ${LK_LAUNCHPAD_PPA_MIRROR-} ]] || {
-                    # Match the standard PPA URL too
-                    ARGS=(-e "${REPO_HOST#*://}$REPO_PATH" -e)
-                    REPO_HOST=$LK_LAUNCHPAD_PPA_MIRROR
-                }
-                FILE=/etc/apt/sources.list.d/ppa-${PPA_OWNER}-${PPA_NAME}.list
-                if ! apt-get indextargets --format '$(SITE)' |
-                    sed -En "$(printf '%s\n' \
-                        's/^https?:\/\///' 's/\/+$//' \
-                        't print' 'b' ':print' 'p')" |
-                    grep -Fx ${ARGS+"${ARGS[@]}"} \
-                        "${REPO_HOST#*://}$REPO_PATH" >/dev/null; then
-                    lk_tty_detail "Adding repository:" "$REPO"
-                elif [[ ! -f $FILE ]]; then
-                    # The repo has been configured, but not by this script
-                    lk_tty_warning "Repository configured incorrectly:" "$REPO"
-                    FILE=
-                fi
-                if [[ -n $FILE ]]; then
-                    lk_install -m 00644 "$FILE"
-                    lk_file_replace "$FILE" <<EOF
-deb $REPO_HOST$REPO_PATH $DISTRIB_CODENAME main
-# deb-src $REPO_HOST$REPO_PATH $DISTRIB_CODENAME main
-EOF
-                fi
-                ;;
-            *)
-                lk_die "unknown repo type: $REPO"
-                ;;
-            esac
-        done
-    fi
-    ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
-        _LK_APT_DIRTY=1
     FILE=/etc/apt/apt.conf.d/90${LK_PATH_PREFIX}default
     OLD_FILE=/etc/apt/apt.conf.d/90${LK_PATH_PREFIX}defaults
     maybe_move_old "$OLD_FILE" "$FILE"
@@ -571,6 +485,99 @@ EOF
         printf 'Unattended-Upgrade::%s "%s";\n' "${OPTIONS[@]}"
     )
     lk_file_replace "$FILE" "$_FILE"
+    lk_tty_detail "Checking sources"
+    FILE=/etc/apt/sources.list
+    DEB822_FILE=/etc/apt/sources.list.d/ubuntu.sources
+    if [[ -f $DEB822_FILE ]]; then
+        lk_file_keep_original "$FILE"
+        lk_file_replace "$FILE" < <(
+            awk -f "$LK_BASE/lib/awk/sh-apt-convert-sources.awk" "$DEB822_FILE"
+        )
+        lk_tty_run_detail mv -fv "$DEB822_FILE"{,.disabled}
+    fi
+    # Disable source packages, multiverse sources
+    _FILE=$(sed -E \
+        -e "s/^deb-src$S/#&/" \
+        -e "s/^deb$S.*$S$DISTRIB_CODENAME(-(updates|security|backports))?($S+$NS+)*$S+multiverse($S|\$)/#&/" \
+        "$FILE")
+    # Enable universe (required for certbot), backports
+    IFS=,
+    COMPONENTS=($(printf '%s,' "$DISTRIB_CODENAME"{,-{updates,security,backports}}","{main,restricted,universe}))
+    unset IFS
+    _FILE+=$(printf '\n' &&
+        lk_apt_sources_get_missing -l - "${COMPONENTS[@]}" <<<"$_FILE")
+    lk_file_keep_original "$FILE"
+    lk_file_replace "$FILE" "$_FILE"
+    if [ ${#APT_REMOVE_REPOS[@]} -gt 0 ]; then
+        for REPO in "${APT_REMOVE_REPOS[@]}"; do
+            case "$REPO" in
+            ppa:*)
+                PPA=${REPO#ppa:}
+                PPA_OWNER=${PPA%/*}
+                PPA_NAME=${PPA#*/}
+                FILE=/etc/apt/sources.list.d/ppa-${PPA_OWNER}-${PPA_NAME}.list
+                if [[ -f $FILE ]]; then
+                    lk_tty_detail "Removing repository:" "$REPO"
+                    lk_file_backup "$FILE" &&
+                        rm -f "$FILE"
+                    FILE=/etc/apt/trusted.gpg.d/ppa-${PPA_OWNER}-${PPA_NAME}.gpg
+                    [[ ! -f $FILE ]] || {
+                        lk_file_backup "$FILE" &&
+                            rm -f "$FILE"
+                    }
+                fi
+                ;;
+            *)
+                lk_die "unknown repo type: $REPO"
+                ;;
+            esac
+        done
+    fi
+    if [ ${#APT_REPOS[@]} -gt 0 ]; then
+        for REPO in "${APT_REPOS[@]}"; do
+            case "$REPO" in
+            ppa:*)
+                PPA=${REPO#ppa:}
+                PPA_OWNER=${PPA%/*}
+                PPA_NAME=${PPA#*/}
+                GPG_FILE=$LK_BASE/share/keys/ppa-${PPA_OWNER}-${PPA_NAME}.gpg
+                if [[ -f $GPG_FILE ]]; then
+                    FILE=/etc/apt/trusted.gpg.d/ppa-${PPA_OWNER}-${PPA_NAME}.gpg
+                    [[ -e $FILE ]] && diff -q "$GPG_FILE" "$FILE" >/dev/null ||
+                        lk_tty_run_detail install -m 00644 "$GPG_FILE" "$FILE"
+                else
+                    lk_tty_warning \
+                        "Signing key for '$REPO' not found:" "$GPG_FILE"
+                    GPG_KEY=$(lk_keep_trying lk_curl \
+                        "https://api.launchpad.net/1.0/~${PPA_OWNER}/+archive/ubuntu/${PPA_NAME}" |
+                        jq -r '.signing_key_fingerprint')
+                    apt-key adv --list-keys "$GPG_KEY" &>/dev/null || {
+                        lk_tty_detail "Downloading key:" "$GPG_KEY"
+                        lk_keep_trying apt-key adv \
+                            --keyserver keyserver.ubuntu.com \
+                            --recv-keys "$GPG_KEY"
+                    }
+                fi
+                REPO_PATH=/$PPA/ubuntu
+                REPO_HOST=${LK_LAUNCHPAD_PPA_MIRROR:-http://ppa.launchpadcontent.net}
+                FILE=/etc/apt/sources.list.d/ppa-${PPA_OWNER}-${PPA_NAME}.list
+                if [[ ! -f $FILE ]]; then
+                    lk_tty_detail "Adding repository:" "$REPO"
+                    lk_install -m 00644 "$FILE"
+                    lk_file_replace "$FILE" <<EOF
+deb $REPO_HOST$REPO_PATH $DISTRIB_CODENAME main
+# deb-src $REPO_HOST$REPO_PATH $DISTRIB_CODENAME main
+EOF
+                fi
+                ;;
+            *)
+                lk_die "unknown repo type: $REPO"
+                ;;
+            esac
+        done
+    fi
+    ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+        _LK_APT_DIRTY=1
 
     # See `man invoke-rc.d` for more information
     lk_tty_detail \
@@ -627,6 +634,7 @@ EOF
 
     lk_mktemp_with APT_AVAILABLE lk_apt_list_available
 
+    # Prefer version-specific PHP packages
     lk_mktemp_with APT_PHP_PACKAGES
     lk_safe_grep -Ehf <(
         REGEX=$(lk_args "${PHP_VERSIONS[@]}" "" |
@@ -634,24 +642,18 @@ EOF
             lk_arr APT_PACKAGES |
             awk -v re="${REGEX//\\/\\\\}" \
                 '/^php-/ {print "^php" re substr($0, 4) "$"}'
-    ) "$APT_AVAILABLE" <(lk_dpkg_list_installed) |
+    ) "$APT_AVAILABLE" <([[ -z $LK_PHP_VERSIONS ]] || lk_dpkg_list_installed) |
         sort -uV |
         awk '
 /^php[^-]/           { print; sub("^php[^-]+-", "php-", $0); skip[$0] = 1 }
 /^php-/ && !skip[$0] { print }' >"$APT_PHP_PACKAGES"
 
     if lk_feature_enabled php-fpm; then
-        if [[ -n $LK_PHP_VERSIONS ]]; then
-            for PHPVER in "${PHP_VERSIONS[@]}"; do
-                grep -Fxq "php${PHPVER}-cli" "$APT_PHP_PACKAGES" &&
-                    grep -Fxq "php${PHPVER}-fpm" "$APT_PHP_PACKAGES" ||
-                    lk_die "cannot install PHP $PHPVER"
-            done
-        else
-            grep -Fxq php-cli "$APT_PHP_PACKAGES" &&
-                grep -Fxq php-fpm "$APT_PHP_PACKAGES" ||
-                lk_die "cannot install PHP"
-        fi
+        for PHPVER in "${PHP_VERSIONS[@]}"; do
+            grep -Fxq "php${PHPVER}-cli" "$APT_PHP_PACKAGES" &&
+                grep -Fxq "php${PHPVER}-fpm" "$APT_PHP_PACKAGES" ||
+                lk_die "cannot install PHP $PHPVER"
+        done
     fi
 
     # As of Ubuntu 22.04, each of the following has a version-specific package
