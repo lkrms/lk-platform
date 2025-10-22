@@ -625,7 +625,7 @@ EOF
     unset IFS
     . "$LK_BASE/lib/hosting/packages.sh"
 
-    lk_mktemp_with APT_AVAILABLE lk_apt_available_list
+    lk_mktemp_with APT_AVAILABLE lk_apt_list_available
 
     lk_mktemp_with APT_PHP_PACKAGES
     lk_safe_grep -Ehf <(

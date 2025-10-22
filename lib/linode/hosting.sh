@@ -178,7 +178,7 @@ INSTALL=(
     jq
     perl
     tzdata
-    $(lk_apt_available_list icdiff)
+    $(lk_apt_list_available icdiff)
 )
 lk_keep_trying lk_apt_install "${INSTALL[@]}"
 

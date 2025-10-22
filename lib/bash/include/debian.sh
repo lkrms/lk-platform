@@ -59,6 +59,8 @@ function lk_dpkg_list_config_files() {
 # lk_dpkg_list_not_installed <package>...
 #
 # Print each of the given packages that is not installed.
+#
+# Output is passed to `sort -u`.
 function lk_dpkg_list_not_installed() {
     (($#)) || lk_err "no package" || return
     lk_file_complement -s \
@@ -77,14 +79,50 @@ function _lk_apt_flock() {
         lk_elevate lk_faketty flock "${DIR%/}/daily_lock" "$@"
 }
 
-# lk_apt_available_list [PACKAGE...]
+# lk_apt_list_available [-u] [<package>...]
 #
-# Output each PACKAGE available for installation, or list all available
-# packages.
-function lk_apt_available_list() {
-    lk_apt_update >&2 &&
-        apt-cache pkgnames "$@" |
-        sort -u
+# Print each of the given packages that is downloadable, or if no packages are
+# given, print every downloadable package. If -u is given, don't update package
+# indexes.
+#
+# Package lists (usually in `/var/lib/apt/lists`) are used to exclude local
+# packages from the output.
+#
+# Output is passed to `sort -u`.
+#
+# shellcheck disable=SC2120
+function lk_apt_list_available() {
+    local dir sh update=1
+    [[ ${1-} != -u ]] || {
+        update=0
+        shift
+    }
+    sh=$(apt-config shell dir Dir::State::Lists/d) && eval "$sh" || return
+    ((!update)) || lk_apt_update >&2 || return
+    awk -F': ' '$1 == "Package" { print $2 }' "${dir%/}"/*_Packages |
+        if (($#)); then
+            lk_grep -Fxf <(printf '%s\n' "$@") | sort -u
+        else
+            sort -u
+        fi
+}
+
+# lk_apt_list_not_available [-u] <package>...
+#
+# Print each of the given packages that is not downloadable. If -u is given,
+# don't update package indexes.
+#
+# Output is passed to `sort -u`.
+function lk_apt_list_not_available() {
+    local update=
+    [[ ${1-} != -u ]] || {
+        update=0
+        shift
+    }
+    (($#)) || lk_err "no package" || return
+    lk_file_complement -s \
+        <(printf '%s\n' "$@" | sort -u) \
+        <(lk_apt_list_available ${update:+-u} "$@")
 }
 
 # lk_apt_marked_manual_list [PACKAGE...]
@@ -128,16 +166,6 @@ function lk_apt_update() {
         _lk_apt_flock apt-get -q update &&
             _LK_APT_DIRTY=0
     }
-}
-
-# lk_apt_unavailable_list PACKAGE...
-#
-# Output each PACKAGE that doesn't appear in APT's package index.
-function lk_apt_unavailable_list() {
-    (($#)) || lk_err "no package" || return
-    comm -13 \
-        <(lk_apt_available_list | sort -u) \
-        <(lk_args "$@" | sort -u)
 }
 
 # lk_apt_installed PACKAGE...
