@@ -645,8 +645,14 @@ while VM_STATE=$(lk_sudo virsh domstate "$VM_HOSTNAME" 2>/dev/null); do
         lk_die ""
     [[ -z ${VM_STATE+1} ]] ||
         lk_sudo virsh destroy "$VM_HOSTNAME" || true
-    lk_sudo virsh undefine --managed-save --nvram \
-        --remove-all-storage "$VM_HOSTNAME" || true
+    lk_sudo virsh undefine \
+        --managed-save \
+        --snapshots-metadata \
+        --checkpoints-metadata \
+        --nvram \
+        --remove-all-storage \
+        --tpm \
+        "$VM_HOSTNAME" || true
 done
 
 lk_tty_print "Provisioning:"
