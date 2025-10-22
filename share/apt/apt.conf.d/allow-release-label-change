@@ -1,0 +1,2 @@
+// Don't break updates when a PPA label is changed, for example
+Acquire::AllowReleaseInfoChange::Label "true";

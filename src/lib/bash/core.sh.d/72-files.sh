@@ -163,3 +163,45 @@ function lk_file() {
     [[ -z $CHOWN ]] ||
         lk_sudo_on_fail chown "$CHOWN" "$1" || return
 }
+
+# lk_file_complement [-s] <file> <file2>...
+#
+# Print lines in <file> that are not present in any of the subsequent files.
+# Individual files are not sorted if -s is given. This option should only be
+# used when files have already been sorted by `sort -u` in the current locale.
+function lk_file_complement() {
+    local sort=1
+    [[ ${1-} != -s ]] || {
+        sort=0
+        shift
+    }
+    (($# > 1)) || lk_bad_args || return
+    if ((sort)); then
+        comm -23 <(sort -u "$1") <(shift && sort -u "$@")
+    elif (($# > 2)); then
+        comm -23 "$1" <(shift && sort -u "$@")
+    else
+        comm -23 "$1" "$2"
+    fi
+}
+
+# lk_file_intersect [-s] <file> <file2>...
+#
+# Print lines in <file> that are present in at least one subsequent file.
+# Individual files are not sorted if -s is given. This option should only be
+# used when files have already been sorted by `sort -u` in the current locale.
+function lk_file_intersect() {
+    local sort=1
+    [[ ${1-} != -s ]] || {
+        sort=0
+        shift
+    }
+    (($# > 1)) || lk_bad_args || return
+    if ((sort)); then
+        comm -12 <(sort -u "$1") <(shift && sort -u "$@")
+    elif (($# > 2)); then
+        comm -12 "$1" <(shift && sort -u "$@")
+    else
+        comm -12 "$1" "$2"
+    fi
+}

@@ -169,7 +169,7 @@ IMAGE_BASE_PACKAGES=$(lk_mktemp_file)
 IMAGE_INITIAL_PACKAGE_STATE=$(lk_mktemp_file)
 lk_delete_on_exit "$IMAGE_BASE_PACKAGES" "$IMAGE_INITIAL_PACKAGE_STATE"
 lk_apt_marked_manual_list | sort >"$IMAGE_BASE_PACKAGES"
-lk_dpkg_installed_versions | sort >"$IMAGE_INITIAL_PACKAGE_STATE"
+lk_dpkg_list_installed_versions | sort >"$IMAGE_INITIAL_PACKAGE_STATE"
 
 INSTALL=(
     bsdmainutils
@@ -178,7 +178,7 @@ INSTALL=(
     jq
     perl
     tzdata
-    $(lk_apt_available_list icdiff)
+    $(lk_apt_list_available icdiff)
 )
 lk_keep_trying lk_apt_install "${INSTALL[@]}"
 

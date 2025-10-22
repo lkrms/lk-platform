@@ -1,20 +1,23 @@
 # Trusted keys
 
-## Downloading and exporting PGP keys
-
-> Using an [ephemeral GnuPG home directory][ephemeral] is recommended:
+> [!TIP]
+>
+> You can use an [ephemeral GnuPG home directory][ephemeral] with the `gpg`
+> commands below:
 >
 > ```bash
 > GNUPGHOME=$(mktemp -d)
 > export GNUPGHOME
 > ```
 
+## Downloading PPA keys
+
 For example, to get the signing key for the `ondrej/php` PPA, pass the
 fingerprint that appears under "Technical details about this PPA" on its
 [Launchpad page][ppa] to the `gpg` command as follows:
 
 ```bash
-fingerprint=14AA40EC0831756756D7F66C4F4EA0AAE5267A6C
+fingerprint=B8DC7E53946656EFBCE4C1DD71DAEAAB4AD4CAB6
 
 # Add the signing key to your keyring
 gpg --keyserver keyserver.ubuntu.com --recv-keys "$fingerprint"
@@ -32,4 +35,4 @@ The key file can then be installed to `/etc/apt/trusted.gpg.d`.
 
 [ppa]: https://launchpad.net/~ondrej/+archive/ubuntu/php
 [ephemeral]:
-    https://www.gnupg.org/documentation/manuals/gnupg/Ephemeral-home-directories.html
+  https://www.gnupg.org/documentation/manuals/gnupg/Ephemeral-home-directories.html

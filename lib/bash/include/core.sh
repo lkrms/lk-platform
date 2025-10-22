@@ -1236,10 +1236,10 @@ function lk_arr_intersect() {
     comm -12 <(lk_arr "$1" | sort -u) <(shift && lk_arr "$@" | sort -u)
 }
 
-# lk_arr_diff ARRAY ARRAY2...
+# lk_arr_complement ARRAY ARRAY2...
 #
 # Print ARRAY values that are not present in any of the subsequent arrays.
-function lk_arr_diff() {
+function lk_arr_complement() {
     (($# > 1)) || lk_bad_args || return
     comm -23 <(lk_arr "$1" | sort -u) <(shift && lk_arr "$@" | sort -u)
 }
@@ -3154,6 +3154,48 @@ function lk_file() {
         lk_sudo_on_fail chown "$CHOWN" "$1" || return
 }
 
+# lk_file_complement [-s] <file> <file2>...
+#
+# Print lines in <file> that are not present in any of the subsequent files.
+# Individual files are not sorted if -s is given. This option should only be
+# used when files have already been sorted by `sort -u` in the current locale.
+function lk_file_complement() {
+    local sort=1
+    [[ ${1-} != -s ]] || {
+        sort=0
+        shift
+    }
+    (($# > 1)) || lk_bad_args || return
+    if ((sort)); then
+        comm -23 <(sort -u "$1") <(shift && sort -u "$@")
+    elif (($# > 2)); then
+        comm -23 "$1" <(shift && sort -u "$@")
+    else
+        comm -23 "$1" "$2"
+    fi
+}
+
+# lk_file_intersect [-s] <file> <file2>...
+#
+# Print lines in <file> that are present in at least one subsequent file.
+# Individual files are not sorted if -s is given. This option should only be
+# used when files have already been sorted by `sort -u` in the current locale.
+function lk_file_intersect() {
+    local sort=1
+    [[ ${1-} != -s ]] || {
+        sort=0
+        shift
+    }
+    (($# > 1)) || lk_bad_args || return
+    if ((sort)); then
+        comm -12 <(sort -u "$1") <(shift && sort -u "$@")
+    elif (($# > 2)); then
+        comm -12 "$1" <(shift && sort -u "$@")
+    else
+        comm -12 "$1" "$2"
+    fi
+}
+
 # lk_find_shell_scripts [-d DIR] [FIND_ARG...]
 function lk_find_shell_scripts() {
     local DIR
@@ -3334,6 +3376,48 @@ function lk_stack() {
     fi
 }
 
+# lk_output_diff [-i] <command1> [<arg1>...] -- <command2> [<arg2>...] [-- <arg>...]
+#
+# Run two commands, optionally passing the given arguments to both, and compare
+# their output.
+#
+# If -i is given, occurrences of "{}" are replaced with <arg> in both commands,
+# and there must be no additional arguments. Otherwise, <arg> and any subsequent
+# arguments are added to the end of both commands.
+function lk_output_diff() {
+    local _arg _cmd1=() _cmd2=() _replace=0 _temp1 _temp2
+    [[ ${1-} != -i ]] || {
+        _replace=1
+        shift
+    }
+    while (($#)); do
+        _arg=$1
+        shift
+        [[ $_arg != -- ]] || break
+        _cmd1[${#_cmd1[@]}]=$_arg
+    done
+    while (($#)); do
+        _arg=$1
+        shift
+        [[ $_arg != -- ]] || break
+        _cmd2[${#_cmd2[@]}]=$_arg
+    done
+    if ((_replace)); then
+        (($# == 1)) && [[ ${_cmd1+1}${_cmd2+1} == 11 ]] || lk_bad_args || return
+        _cmd1=("${_cmd1[@]//"{}"/$1}")
+        _cmd2=("${_cmd2[@]//"{}"/$1}")
+    elif (($#)); then
+        _cmd1+=("$@")
+        _cmd2+=("$@")
+    else
+        [[ ${_cmd1+1}${_cmd2+1} == 11 ]] || lk_bad_args || return
+    fi
+    lk_mktemp_with _temp1 "${_cmd1[@]}" &&
+        lk_mktemp_with _temp2 "${_cmd2[@]}" || return
+    local IFS=$' \t\n'
+    lk_tty_diff -L "\`${_cmd1[*]}\`" -L "\`${_cmd2[*]}\`" "$_temp1" "$_temp2"
+}
+
 function lk_jq() {
     jq -L"$LK_BASE/lib"/{jq,json} "$@"
 }
@@ -3430,7 +3514,11 @@ function lk_curl_get_form_args() {
     done
 }
 
+lk_complement_arr() { lk_arr_complement "$@"; }
+lk_complement_file() { lk_file_complement "$@"; }
 lk_delete_on_exit() { lk_on_exit_delete "$@"; }
+lk_intersect_arr() { lk_arr_intersect "$@"; }
+lk_intersect_file() { lk_file_intersect "$@"; }
 lk_kill_on_exit() { lk_on_exit_kill "$@"; }
 lk_undo_delete_on_exit() { lk_on_exit_undo_delete "$@"; }
 
