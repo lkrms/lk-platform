@@ -310,7 +310,7 @@ function lk_apt_reinstall_damaged() {
         _MISSING=$(lk_mktemp_file) &&
         lk_delete_on_exit "$_DPKG" "$_REAL" "$_MISSING" || return
     find /var/lib/dpkg/info -name "*.md5sums" -print0 |
-        xargs -0 sed -E "s/^$NS+$S+(.*)/\/\1/" | sort -u >"$_DPKG" &&
+        xargs -0 sed -E "s/^$LK_H+$LK_h+(.*)/\/\1/" | sort -u >"$_DPKG" &&
         FILE_COUNT=$(wc -l <"$_DPKG") &&
         DIRS=$(sed -E 's/(.*)\/[^/]+$/\1/' "$_DPKG" | sort -u |
             awk -f "$LK_BASE/lib/awk/paths-get-unique-roots.awk" | sort -u) ||
@@ -343,7 +343,7 @@ function lk_apt_reinstall_damaged() {
 # lk_apt_sources_get_clean [-l LIST]
 function lk_apt_sources_get_clean() {
     local LIST=/etc/apt/sources.list CODENAME SH \
-        SUITES=("$NS+") COMPONENTS=("$NS+")
+        SUITES=("$LK_H+") COMPONENTS=("$LK_H+")
     [ "${1-}" != -l ] || LIST=$2
     [ "$LIST" != - ] || unset LIST
     if lk_is_ubuntu; then
@@ -352,10 +352,10 @@ function lk_apt_sources_get_clean() {
         COMPONENTS=(main restricted universe multiverse)
     fi
     SH=$(lk_get_regex URI_REGEX_REQ_SCHEME_HOST) && eval "$SH"
-    grep -E "^deb$S+$URI_REGEX_REQ_SCHEME_HOST$S+\
+    grep -E "^deb$LK_h+$URI_REGEX_REQ_SCHEME_HOST$LK_h+\
 ($(lk_implode_arr '|' SUITES))\
-($S+($(lk_implode_arr '|' COMPONENTS)))+$S*(#.*|\$)" ${LIST:+"$LIST"} |
-        sed -E "s/$S*(#.*)?\$//" |
+($LK_h+($(lk_implode_arr '|' COMPONENTS)))+$LK_h*(#.*|\$)" ${LIST:+"$LIST"} |
+        sed -E "s/$LK_h*(#.*)?\$//" |
         awk '{for(i=4;i<=NF;i++)print$1,$2,$3,$i}'
 }
 

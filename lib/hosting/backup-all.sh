@@ -14,6 +14,8 @@ _FILE=$(realpath "$_FILE") && _DIR=${_FILE%/*} &&
 export LK_BASE
 
 . "$LK_BASE/lib/bash/common.sh"
+# Provides `lk_maybe_trace`
+lk_include provision
 
 lk_elevate
 

@@ -48,7 +48,7 @@ function lk_is_wsl() {
 
 function lk_is_virtual() {
     lk_is_linux &&
-        grep -Eq "^flags$S*:.*\\<hypervisor\\>" /proc/cpuinfo
+        grep -Eq "^flags$LK_h*:.*\\<hypervisor\\>" /proc/cpuinfo
 }
 
 function lk_is_qemu() {

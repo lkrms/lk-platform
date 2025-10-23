@@ -35,7 +35,7 @@ function lk_block_device_is_ssd() {
     local COUNT
     lk_paths_exist "$@" || lk_warn "not found: $*" || return
     COUNT=$(_lk_lsblk DISC-GRAN,DISC-MAX --nodeps "$@" |
-        grep -Evc "^$S*0B$S+0B$S*\$") &&
+        grep -Evc "^$LK_h*0B$LK_h+0B$LK_h*\$") &&
         [ "$COUNT" -eq $# ]
 }
 
@@ -313,7 +313,7 @@ function lk_fs_ext4_check() {
     for SOURCE in "${SOURCES[@]}"; do
         lk_tty_print "Checking:" "$SOURCE"
         lk_elevate tune2fs -l "$SOURCE" |
-            sed -En "s/^($(lk_regex_implode "$@")):$S*/\1\t/p" |
+            sed -En "s/^($(lk_regex_implode "$@")):$LK_h*/\1\t/p" |
             IFS=$'\t' lk_tty_detail_pairs || return
         lk_tty_print
     done

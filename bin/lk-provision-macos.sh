@@ -562,7 +562,7 @@ Please open the Mac App Store and sign in"
 
             OUTDATED=$(mas outdated)
             if UPGRADE_APPS=($(grep -Eo '^[0-9]+' <<<"$OUTDATED")); then
-                sed -E "s/^[0-9]+$S+(.*$NS)$S+\(/\1 (/" <<<"$OUTDATED" |
+                sed -E "s/^[0-9]+$LK_h+(.*$LK_H)$LK_h+\(/\1 (/" <<<"$OUTDATED" |
                     lk_tty_list_detail - "$(
                         lk_plural ${#UPGRADE_APPS[@]} Update Updates
                     ) available:" app apps

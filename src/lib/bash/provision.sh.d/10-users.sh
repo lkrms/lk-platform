@@ -74,7 +74,7 @@ Example:
     lk_tty_print "Checking SSH server"
     FILE=/etc/ssh/sshd_config
     REGEX=("[mM][aA][tT][cC][hH]" "[gG][rR][oO][uU][pP]")
-    MATCH="^($S*#)?$S*($REGEX|\"$REGEX\")($S+|$S*=$S*)"
+    MATCH="^($LK_h*#)?$LK_h*($REGEX|\"$REGEX\")($LK_h+|$LK_h*=$LK_h*)"
     CONFIG="\
 Match Group $SFTP_ONLY
 ForceCommand internal-sftp
@@ -82,7 +82,7 @@ ChrootDirectory %h"
     lk_file_keep_original "$FILE"
     lk_file_replace "$FILE" < <(awk \
         -v "BLOCK=$CONFIG" \
-        -v "FIRST=$MATCH(${REGEX[1]}|\"${REGEX[1]}\")$S+(${SFTP_ONLY}|\"${SFTP_ONLY}\")$S*$" \
+        -v "FIRST=$MATCH(${REGEX[1]}|\"${REGEX[1]}\")$LK_h+(${SFTP_ONLY}|\"${SFTP_ONLY}\")$LK_h*$" \
         -v "BREAK=$MATCH" \
         -f "$LK_BASE/lib/awk/block-replace.awk" "$FILE")
     ! lk_false LK_FILE_REPLACE_NO_CHANGE ||

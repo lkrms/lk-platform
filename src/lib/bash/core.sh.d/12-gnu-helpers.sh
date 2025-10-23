@@ -5,12 +5,12 @@
 # To update REQUIRED_COMMANDS, run this in `$LK_BASE`:
 #
 #     lk_find_shell_scripts -print0 | xargs -0 awk \
-#         -v s="^$S*" \
+#         -v s="^$LK_h*" \
 #         -v r='function install_gnu_commands\\(\\) \\{$' '
 #             $0 ~ s r        { skip = 1; e = $0; sub(r, "", e); e = e "}" }
 #             skip && $0 == e { skip = 0; next }
 #             !skip           { print }' |
-#         grep -Pho "\\bgnu_([a-zA-Z0-9_](?!$S*\\(\\)))+\\b" |
+#         grep -Pho "\\bgnu_([a-zA-Z0-9_](?!$LK_h*\\(\\)))+\\b" |
 #         sort -u |
 #         sed 's/^gnu_//'
 

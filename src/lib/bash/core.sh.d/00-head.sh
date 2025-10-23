@@ -2,10 +2,13 @@
 
 shopt -s extglob
 
-export -n BASH_XTRACEFD SHELLOPTS
+[[ ${USER-} ]] || USER=$(id -un) || return
 
-USER=${USER:-$(id -un)} &&
-    { [[ ${S-} == "[[:blank:]]" ]] || readonly S="[[:blank:]]"; } &&
-    { [[ ${NS-} == "[^[:blank:]]" ]] || readonly NS="[^[:blank:]]"; } || return
+# Provide horizontal whitespace patterns known to work everywhere
+LK_h=$'[ \t]'
+LK_H=$'[^ \t]'
 
+# Collect arguments passed to the current script or function
 _LK_ARGV=("$@")
+
+#### Reviewed: 2025-10-18

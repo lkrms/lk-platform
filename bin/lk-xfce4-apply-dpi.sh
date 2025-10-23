@@ -117,7 +117,7 @@ done
 
 if PANEL_PLUGINS=$(
     xfconf-query -c xfce4-panel -p /plugins -lv 2>/dev/null |
-        grep -E "^/plugins/[^/]+$S+"
+        grep -E "^/plugins/[^/]+$LK_h+"
 ); then
     ((PANEL_ICON_SIZE = _24 - _GAP - 4))
     while read -r PLUGIN_ID PLUGIN_NAME; do
@@ -141,7 +141,7 @@ WHISKER_SETTINGS=(
         <<<"v = 3 * $_M / 1 - 2; if (v < 0) v = 0; if (v > 6) v = 6; v")"
 )
 
-REGEX="^($S*$|menu-(width|height)=)"
+REGEX="^($LK_h*$|menu-(width|height)=)"
 for FILE in ~/.config/xfce4/panel/whiskermenu*.rc; do
     NEW_SETTINGS=$(
         lk_echo_array WHISKER_SETTINGS

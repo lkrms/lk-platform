@@ -497,8 +497,8 @@ fi
     fi
     # Disable source packages, multiverse sources
     _FILE=$(sed -E \
-        -e "s/^deb-src$S/#&/" \
-        -e "s/^deb$S.*$S$DISTRIB_CODENAME(-(updates|security|backports))?($S+$NS+)*$S+multiverse($S|\$)/#&/" \
+        -e "s/^deb-src$LK_h/#&/" \
+        -e "s/^deb$LK_h.*$LK_h$DISTRIB_CODENAME(-(updates|security|backports))?($LK_h+$LK_H+)*$LK_h+multiverse($LK_h|\$)/#&/" \
         "$FILE")
     # Enable universe (required for certbot), backports
     IFS=,
@@ -585,7 +585,7 @@ EOF
     FILE=/usr/sbin/policy-rc.d
     lk_install -m 00755 "$FILE"
     LK_VERBOSE= \
-        lk_file_replace -i "^(# |$S*\$)" "$FILE" "$(lk_expand_template -e \
+        lk_file_replace -i "^(# |$LK_h*\$)" "$FILE" "$(lk_expand_template -e \
             "$LK_BASE/share/apt/policy-rc.d.template.sh")"
 
     debconf-set-selections < <(lk_expand_template \
@@ -841,7 +841,7 @@ EOF
         ADMIN_USERS=($LK_ADMIN_USERS)
         unset IFS
         for ADMIN_USER in "${ADMIN_USERS[@]}"; do
-            ADMIN_USER_KEY=$(sed -En "/$S$ADMIN_USER\$/p" \
+            ADMIN_USER_KEY=$(sed -En "/$LK_h$ADMIN_USER\$/p" \
                 <<<"${_LK_ADMIN_USER_KEYS-}")
             lk_hosting_user_add_admin \
                 "$ADMIN_USER" ${ADMIN_USER_KEY:+"$ADMIN_USER_KEY"}
@@ -864,9 +864,9 @@ EOF
         # Avoid "Directive 'Port' is not allowed within a Match block" by adding
         # "Port TRUSTED_PORT" immediately after "Port 22"
         FILE=$LK_CONF_OPTION_FILE
-        grep -Eq "^$S*Port$S+$LK_SSH_TRUSTED_PORT$S*\$" "$FILE" ||
+        grep -Eq "^$LK_h*Port$LK_h+$LK_SSH_TRUSTED_PORT$LK_h*\$" "$FILE" ||
             lk_file_replace "$FILE" < <(sed -E \
-                "s/^$S*Port$S+22$S*\$/&\\"$'\n'"Port $LK_SSH_TRUSTED_PORT/" "$FILE")
+                "s/^$LK_h*Port$LK_h+22$LK_h*\$/&\\"$'\n'"Port $LK_SSH_TRUSTED_PORT/" "$FILE")
     }
     check_after_file
     # TODO: restore original configuration if restart fails
@@ -1072,7 +1072,7 @@ EOF
             # The listen directive of a custom pool will always contain "$pool"
             lk_mapfile DEFAULT_POOLS \
                 <(lk_safe_grep -Pl \
-                    "^$S*listen$S*=(?!.*\\\$pool\\b.*\$)" "${POOLS[@]}")
+                    "^$LK_h*listen$LK_h*=(?!.*\\\$pool\\b.*\$)" "${POOLS[@]}")
             [ ${#DEFAULT_POOLS[@]} -eq 0 ] || {
                 lk_tty_detail "Disabling default pools:" \
                     $'\n'"$(lk_arr DEFAULT_POOLS)"
@@ -1265,7 +1265,7 @@ EOF
     unset LK_FILE_REPLACE_NO_CHANGE
     if [ "$LK_REJECT_OUTPUT" != N ]; then
         HOSTS=($(
-            grep -Eo "^[^#]+${S}https?://[^/[:blank:]]+" /etc/apt/sources.list |
+            grep -Eo "^[^#]+${LK_h}https?://[^/[:blank:]]+" /etc/apt/sources.list |
                 sed -E 's/.*:\/\///' |
                 sort -u
         )) || lk_die "no active repositories in /etc/apt/sources.list"

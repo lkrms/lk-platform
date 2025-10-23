@@ -20,7 +20,7 @@ END { if (NR && ! blank) { print "" } }' "$FILE" &&
             _lk_hosting_hosts_file_get_site_hosts "$PUBLIC_IPS"
     } >"$TEMP" &&
         lk_file_keep_original "$FILE" &&
-        lk_file_replace -i "^(#|$S*\$)" "$FILE" <"$TEMP"
+        lk_file_replace -i "^(#|$LK_h*\$)" "$FILE" <"$TEMP"
 }
 
 # _lk_hosting_hosts_file_get_site_hosts [PUBLIC_IPS_FILE]

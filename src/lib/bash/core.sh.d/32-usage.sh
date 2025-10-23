@@ -7,7 +7,7 @@ function _lk_usage_format() {
         "$(lk_sed_escape_replace "$LK_RESET")"
     sed -E "
 # Print the command name in bold
-s/^($S*([uU]sage:|[oO]r:)?$S+(sudo )?)($1)($S|\$)/\1$2\4$3\5/
+s/^($LK_h*([uU]sage:|[oO]r:)?$LK_h+(sudo )?)($1)($LK_h|\$)/\1$2\4$3\5/
 # Print all-caps headings in bold
 s/^[A-Z0-9][A-Z0-9 ]*\$/$2&$3/
 # Remove leading backslashes

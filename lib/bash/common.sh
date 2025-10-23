@@ -137,3 +137,6 @@ eval "declare$(
         compgen -A function _lk_tty_
     )
 )"
+
+# Don't propagate Bash options exported by `lk_maybe_trace` to other scripts
+export -n BASH_XTRACEFD SHELLOPTS
