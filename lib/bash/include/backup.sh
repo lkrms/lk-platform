@@ -83,7 +83,7 @@ function lk_backup_snapshot_to_archive() { (
     lk_tty_success "Files compressed successfully"
     [ ${#DB[@]} -eq 0 ] || {
         lk_tty_list DB_NEW "Copying database $(lk_plural ${#DB[@]} backup) to:"
-        cp -an "${DB[@]}" "$ARCHIVE_ROOT/" || return
+        lk_file_cp_new -v "${DB[@]}" "$ARCHIVE_ROOT/" || return
     }
     SIZE=$(gnu_du -hsc "$XZ" ${DB_NEW+"${DB_NEW[@]}"} | awk 'END{print $1}') &&
         lk_tty_success "Archive created successfully" &&

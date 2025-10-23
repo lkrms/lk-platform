@@ -205,3 +205,23 @@ function lk_file_intersect() {
         comm -12 "$1" "$2"
     fi
 }
+
+# lk_file_cp_new [<rsync_arg>...] <src>... <dest>
+#
+# Copy files with an `rsync` command similar to the deprecated `cp -an`.
+#
+# To preserve hard links, ACLs and extended attributes as per `cp -a`, `rsync`
+# options -H, -A and -X, respectively, may be given.
+function lk_file_cp_new() {
+    (($# > 1)) || lk_bad_args || return
+    # cp option => rsync equivalent:
+    # - --no-dereference => -l
+    # - --recursive => -r
+    # - --preserve=mode => -p
+    # - --preserve=ownership => -go
+    # - --preserve=timestamps => -t
+    # - --preserve=links => -H
+    # - --preserve=context,xattr => -AX
+    # - --no-clobber => --ignore-existing
+    rsync -rlptgo --ignore-existing --info=flist0,stats0 "$@"
+}

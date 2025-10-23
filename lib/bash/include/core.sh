@@ -3196,6 +3196,26 @@ function lk_file_intersect() {
     fi
 }
 
+# lk_file_cp_new [<rsync_arg>...] <src>... <dest>
+#
+# Copy files with an `rsync` command similar to the deprecated `cp -an`.
+#
+# To preserve hard links, ACLs and extended attributes as per `cp -a`, `rsync`
+# options -H, -A and -X, respectively, may be given.
+function lk_file_cp_new() {
+    (($# > 1)) || lk_bad_args || return
+    # cp option => rsync equivalent:
+    # - --no-dereference => -l
+    # - --recursive => -r
+    # - --preserve=mode => -p
+    # - --preserve=ownership => -go
+    # - --preserve=timestamps => -t
+    # - --preserve=links => -H
+    # - --preserve=context,xattr => -AX
+    # - --no-clobber => --ignore-existing
+    rsync -rlptgo --ignore-existing --info=flist0,stats0 "$@"
+}
+
 # lk_find_shell_scripts [-d DIR] [FIND_ARG...]
 function lk_find_shell_scripts() {
     local DIR
@@ -4662,7 +4682,7 @@ function lk_file_keep_original() {
     while [ $# -gt 0 ]; do
         ! lk_maybe_sudo test -s "$1" ||
             lk_maybe_sudo test -e "$1.orig" ||
-            lk_maybe_sudo cp -naL"$v" "$1" "$1.orig" || return
+            lk_maybe_sudo cp -aL"$v" "$1" "$1.orig" || return
         shift
     done
 }
@@ -4720,7 +4740,7 @@ function lk_file_backup() {
             MODIFIED=$(lk_file_modified "$1") &&
                 TARGET=${DEST:-$1}$(lk_file_get_backup_suffix "$MODIFIED") &&
                 { lk_maybe_sudo test -e "$TARGET" ||
-                    lk_maybe_sudo cp -naL"$vv" "$1" "$TARGET"; } || return
+                    lk_maybe_sudo cp -aL"$vv" "$1" "$TARGET"; } || return
         fi
         shift
     done

@@ -784,7 +784,7 @@ EOF
 
     DIR=/etc/skel.${LK_PATH_PREFIX%-}
     lk_tty_print "Checking skeleton directory for hosting accounts:" "$DIR"
-    cp -naTv /etc/skel "$DIR"
+    lk_file_cp_new -v /etc/skel/ "$DIR/"
     DIR=$DIR/.ssh
     FILE=$DIR/authorized_keys_${LK_PATH_PREFIX%-}
     if lk_is_bootstrap; then
