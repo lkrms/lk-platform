@@ -772,7 +772,7 @@ EOF
     lk_tty_print "Checking update-motd scripts"
     DIR=/etc/update-motd.d
     for FILE in \
-        "$DIR"/*-{fsck-at-reboot,help-text,livepatch,motd-news,release-upgrade}; do
+        "$DIR"/*-{contract-ua-esm-status,esm-announce,fsck-at-reboot,help-text,livepatch,motd-news,release-upgrade}; do
         [ ! -x "$FILE" ] ||
             chmod -v a-x "$FILE"
     done
@@ -781,6 +781,11 @@ EOF
         [ -x "$FILE" ] ||
             chmod -v a+x "$FILE"
     done
+    FILE=/var/lib/update-notifier/hide-esm-in-motd
+    if [[ ! -f $FILE ]] && [[ -d ${FILE%/*} ]]; then
+        lk_file -m 644 "$FILE" </dev/null
+        /usr/lib/update-notifier/update-motd-updates-available --force &>/dev/null || true
+    fi
 
     DIR=/etc/skel.${LK_PATH_PREFIX%-}
     lk_tty_print "Checking skeleton directory for hosting accounts:" "$DIR"
