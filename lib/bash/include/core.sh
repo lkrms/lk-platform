@@ -3035,24 +3035,31 @@ EOF
 #
 # Options:
 #
-#     -i REGEX    Ignore REGEX when comparing
-#     -d          Print a diff between FILE and its replacement
-#     -p          Prompt before replacing FILE (implies -d)
-#     -b          Create a backup of FILE before replacing it
-#     -r          Preserve the original FILE as FILE.orig
-#     -m MODE     Specify the file mode (MODE must be numeric)
-#     -o USER     Specify the owner
-#     -g GROUP    Specify the group
-#     -v          Be verbose
+#     -i REGEX  Ignore REGEX when comparing
+#     -d        Print a diff between FILE and its replacement
+#     -p        Prompt before replacing FILE (implies -d)
+#     -b        Create a backup of FILE before replacing it
+#     -s        Create the backup of FILE in a secure store (implies -b)
+#     -r        Preserve the original FILE as FILE.orig
+#     -m MODE   Specify the file mode (MODE must be numeric)
+#     -o USER   Specify the owner
+#     -g GROUP  Specify the group
+#     -v        Be verbose (may be given multiple times, overrides previous -q)
+#     -q        Do not be verbose (overrides previous -v)
 #
-# If -p is set and the user opts out of replacing FILE, return false and
-# increment LK_FILE_DECLINED.
+# If -p is given and the user opts out of replacing FILE, the operation fails
+# and LK_FILE_DECLINED is incremented.
+#
+# If -s is given, FILE is copied to a user- or system-wide backup directory
+# before it is replaced.
+#
+# If -v or -q are given, the value of LK_VERBOSE is ignored.
 function lk_file() {
     local OPTIND OPTARG OPT \
-        DIFF=0 PROMPT=0 BACKUP=0 ORIG=0 MODE OWNER GROUP VERBOSE=0 \
-        SED_ARGS=() TEMP _MODE _OWNER _GROUP CHOWN=
+        DIFF=0 PROMPT=0 BACKUP=0 STORE= ORIG=0 MODE OWNER GROUP VERBOSE= \
+        SED_ARGS=() TEMP _MODE _OWNER _GROUP _CHOWN= CHOWN=
     LK_FILE_DECLINED=$((${LK_FILE_DECLINED-0})) || return
-    while getopts ":i:dpbrm:o:g:v" OPT; do
+    while getopts ":i:dpbsrm:o:g:vq" OPT; do
         case "$OPT" in
         i)
             SED_ARGS+=(-e "/${OPTARG//\//\\\/}/d")
@@ -3065,6 +3072,10 @@ function lk_file() {
             DIFF=1
             ;;
         b)
+            BACKUP=1
+            ;;
+        s)
+            STORE=1
             BACKUP=1
             ;;
         r)
@@ -3092,7 +3103,10 @@ function lk_file() {
                 lk_err "not allowed: -g $GROUP"
             ;;
         v)
-            VERBOSE=1
+            ((++VERBOSE))
+            ;;
+        q)
+            VERBOSE=0
             ;;
         \? | :)
             lk_bad_args || return
@@ -3104,17 +3118,19 @@ function lk_file() {
     [[ ! -t 0 ]] || lk_err "no input" || return
     lk_mktemp_with TEMP cat || lk_err "error writing input to file" || return
     lk_readable_tty_open || PROMPT=0
+    VERBOSE=${VERBOSE:-${LK_VERBOSE:-0}}
 
     # If the file doesn't exist, use `install` to create it
     if [[ ! -e $1 ]] && ! { lk_will_sudo && sudo test -e "$1"; }; then
         ((!DIFF)) || lk_tty_diff_detail -L "" -L "$1" /dev/null "$TEMP"
-        ((!PROMPT)) || lk_tty_yn "Install $1 as above?" Y || {
+        ((!PROMPT)) || lk_tty_yn "Create $1 as above?" Y || {
             ((++LK_FILE_DECLINED))
             return 1
         }
+        ((!VERBOSE)) || lk_tty_detail "Creating:" "$1"
         lk_sudo_on_fail install -m "${MODE:-0644}" \
             ${OWNER:+-o="$OWNER"} ${GROUP:+-g="$GROUP"} \
-            "$TEMP" "$1" || lk_err "error installing $1" || return
+            "$TEMP" "$1" || lk_err "error creating $1" || return
         return
     fi
 
@@ -3132,6 +3148,13 @@ function lk_file() {
             ((++LK_FILE_DECLINED))
             return 1
         }
+        ((!VERBOSE)) || lk_tty_detail "Updating:" "$1"
+        ((!ORIG)) || [[ -e "$1.orig" ]] || { lk_will_sudo && sudo test -e "$1.orig"; } || {
+            lk_sudo_on_fail cp -aL "$1" "$1.orig" || return
+            # FILE.orig will suffice as a backup
+            BACKUP=0
+        }
+        ((!BACKUP)) || lk_file_backup ${STORE:+-m} "$1" || return
         lk_sudo_on_fail cp "$TEMP" "$1" ||
             lk_err "error replacing $1" || return
     }
@@ -3139,19 +3162,31 @@ function lk_file() {
     # Finally, update permissions and ownership if needed
     if [[ -n ${MODE-} ]]; then
         _MODE=$(lk_file_mode "$1") || return
-        [[ $MODE == "$_MODE" ]] ||
+        [[ $MODE == "$_MODE" ]] || {
+            ((VERBOSE < 2)) ||
+                lk_tty_detail "Updating file mode ($_MODE -> $MODE):" "$1"
             lk_sudo_on_fail chmod "0$MODE" "$1" || return
+        }
     fi
     if [[ -n ${OWNER-} ]]; then
         _OWNER=$(lk_file_owner "$1") || return
-        [[ $OWNER == "$_OWNER" ]] || CHOWN=$OWNER
+        [[ $OWNER == "$_OWNER" ]] || {
+            _CHOWN=$_OWNER
+            CHOWN=$OWNER
+        }
     fi
     if [[ -n ${GROUP-} ]]; then
         _GROUP=$(lk_file_group "$1") || return
-        [[ $GROUP == "$_GROUP" ]] || CHOWN+=:$GROUP
+        [[ $GROUP == "$_GROUP" ]] || {
+            _CHOWN+=:$_GROUP
+            CHOWN+=:$GROUP
+        }
     fi
-    [[ -z $CHOWN ]] ||
+    [[ -z $CHOWN ]] || {
+        ((VERBOSE < 2)) ||
+            lk_tty_detail "Updating ownership ($_CHOWN -> $CHOWN):" "$1"
         lk_sudo_on_fail chown "$CHOWN" "$1" || return
+    }
 }
 
 # lk_file_complement [-s] <file> <file2>...
