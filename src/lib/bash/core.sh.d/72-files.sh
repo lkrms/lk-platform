@@ -73,57 +73,58 @@ function lk_expand_path() { (
 # Entries in global arrays LK_FILE_CHANGED and LK_FILE_UNCHANGED are arranged
 # from most to least recent. New entries are always added at index 0.
 function lk_file() {
-    local OPTIND OPTARG OPT \
-        DIFF=0 PROMPT=0 BACKUP=0 STORE= ORIG=0 MODE OWNER GROUP VERBOSE= \
-        SED_ARGS=() CHANGED=0 TEMP _MODE _OWNER _GROUP _CHOWN= CHOWN=
-    while getopts ":i:dpbsrm:o:g:vq" OPT; do
-        case "$OPT" in
+    # shellcheck disable=SC1007
+    local OPTIND OPTARG opt \
+        diff=0 prompt=0 backup=0 store= orig=0 mode owner group verbose= \
+        sed_args=() changed=0 temp _mode _owner _group _chown= chown=
+    while getopts ":i:dpbsrm:o:g:vq" opt; do
+        case "$opt" in
         i)
-            SED_ARGS+=(-e "/${OPTARG//\//\\\/}/d")
+            sed_args+=(-e "/${OPTARG//\//\\\/}/d")
             ;;
         d)
-            DIFF=1
+            diff=1
             ;;
         p)
-            PROMPT=1
-            DIFF=1
+            prompt=1
+            diff=1
             ;;
         b)
-            BACKUP=1
+            backup=1
             ;;
         s)
-            STORE=1
-            BACKUP=1
+            store=1
+            backup=1
             ;;
         r)
-            ORIG=1
+            orig=1
             ;;
         m)
             [[ $OPTARG =~ ^[0-7]{3,4}$ ]] ||
                 lk_err "invalid mode: $OPTARG" || return 2
-            MODE=$(printf '%4s' "$OPTARG" | tr ' ' 0)
+            mode=$(printf '%4s' "$OPTARG" | tr ' ' 0)
             ;;
         o)
             [[ $OPTARG =~ [^0-9] ]] ||
                 lk_err "invalid user: $OPTARG" || return 2
-            OWNER=$(id -u "$OPTARG") || return 2
-            ((OWNER == EUID)) || lk_will_elevate ||
+            owner=$(id -u "$OPTARG") || return 2
+            ((owner == EUID)) || lk_will_elevate ||
                 lk_err "not allowed: -o $OPTARG" || return 2
-            OWNER=$OPTARG
+            owner=$OPTARG
             ;;
         g)
             [[ $OPTARG =~ [^0-9] ]] ||
                 lk_err "invalid group: $OPTARG" || return 2
-            GROUP=$OPTARG
+            group=$OPTARG
             lk_will_elevate ||
-                id -Gn | tr -s '[:blank:]' '\n' | grep -Fx "$GROUP" >/dev/null ||
-                lk_err "not allowed: -g $GROUP" || return 2
+                id -Gn | tr -s '[:blank:]' '\n' | grep -Fx "$group" >/dev/null ||
+                lk_err "not allowed: -g $group" || return 2
             ;;
         v)
-            ((++VERBOSE))
+            ((++verbose))
             ;;
         q)
-            VERBOSE=0
+            verbose=0
             ;;
         \? | :)
             lk_bad_args || return 2
@@ -133,83 +134,83 @@ function lk_file() {
     shift $((OPTIND - 1))
     (($# == 1)) || lk_bad_args || return 2
     [[ ! -t 0 ]] || lk_err "no input" || return 2
-    lk_mktemp_with TEMP cat || lk_err "error writing input to file" || return 2
-    lk_readable_tty_open || PROMPT=0
-    VERBOSE=${VERBOSE:-${LK_VERBOSE:-0}}
+    lk_mktemp_with temp cat || lk_err "error writing input to file" || return 2
+    lk_readable_tty_open || prompt=0
+    verbose=${verbose:-${LK_VERBOSE:-0}}
 
     # If the file doesn't exist, use `install` to create it
     if [[ ! -e $1 ]] && ! { lk_will_sudo && sudo test -e "$1"; }; then
-        ((!DIFF)) || lk_tty_diff_detail -L "" -L "$1" /dev/null "$TEMP"
-        ((!PROMPT)) || lk_tty_yn "Create $1 as above?" Y || {
+        ((!diff)) || lk_tty_diff_detail -L "" -L "$1" /dev/null "$temp"
+        ((!prompt)) || lk_tty_yn "Create $1 as above?" Y || {
             LK_FILE_UNCHANGED=("$1" ${LK_FILE_UNCHANGED+"${LK_FILE_UNCHANGED[@]}"})
             return 1
         }
-        ((!VERBOSE)) || lk_tty_detail "Creating:" "$1"
-        lk_sudo_on_fail install -m "${MODE:-0644}" \
-            ${OWNER:+-o="$OWNER"} ${GROUP:+-g="$GROUP"} \
-            "$TEMP" "$1" || lk_err "error creating $1" || return 2
+        ((!verbose)) || lk_tty_detail "Creating:" "$1"
+        lk_sudo_on_fail install -m "${mode:-0644}" \
+            ${owner:+-o="$owner"} ${group:+-g="$group"} \
+            "$temp" "$1" || lk_err "error creating $1" || return 2
         LK_FILE_CHANGED=("$1" ${LK_FILE_CHANGED+"${LK_FILE_CHANGED[@]}"})
         return
     fi
 
     # Otherwise, check if the file has been changed
-    if [[ -n ${SED_ARGS+1} ]]; then
+    if [[ -n ${sed_args+1} ]]; then
         diff -q \
-            <(lk_sudo_on_fail sed -E "${SED_ARGS[@]}" "$1") \
-            <(sed -E "${SED_ARGS[@]}" "$TEMP") \
+            <(lk_sudo_on_fail sed -E "${sed_args[@]}" "$1") \
+            <(sed -E "${sed_args[@]}" "$temp") \
             >/dev/null
     else
-        diff -q <(lk_sudo_on_fail cat "$1") "$TEMP" >/dev/null
+        diff -q <(lk_sudo_on_fail cat "$1") "$temp" >/dev/null
     fi || {
-        ((!DIFF)) || lk_tty_diff_detail -L "a/${1#/}" -L "b/${1#/}" "$1" "$TEMP"
-        ((!PROMPT)) || lk_tty_yn "Update $1 as above?" Y || {
+        ((!diff)) || lk_tty_diff_detail -L "a/${1#/}" -L "b/${1#/}" "$1" "$temp"
+        ((!prompt)) || lk_tty_yn "Update $1 as above?" Y || {
             LK_FILE_UNCHANGED=("$1" ${LK_FILE_UNCHANGED+"${LK_FILE_UNCHANGED[@]}"})
             return 1
         }
-        ((!VERBOSE)) || lk_tty_detail "Updating:" "$1"
-        ((!ORIG)) || [[ -e "$1.orig" ]] || { lk_will_sudo && sudo test -e "$1.orig"; } || {
+        ((!verbose)) || lk_tty_detail "Updating:" "$1"
+        ((!orig)) || [[ -e "$1.orig" ]] || { lk_will_sudo && sudo test -e "$1.orig"; } || {
             lk_sudo_on_fail cp -aL "$1" "$1.orig" || return 2
             # FILE.orig will suffice as a backup
-            BACKUP=0
+            backup=0
         }
-        ((!BACKUP)) || lk_file_backup ${STORE:+-m} "$1" || return 2
-        lk_sudo_on_fail cp "$TEMP" "$1" ||
+        ((!backup)) || lk_file_backup ${store:+-m} "$1" || return 2
+        lk_sudo_on_fail cp "$temp" "$1" ||
             lk_err "error replacing $1" || return 2
-        CHANGED=1
+        changed=1
     }
 
     # Finally, update permissions and ownership if needed
-    if [[ -n ${MODE-} ]]; then
-        _MODE=$(lk_file_mode "$1") || return 2
-        [[ $MODE == "$_MODE" ]] || {
-            ((VERBOSE < 2)) ||
-                lk_tty_detail "Updating file mode ($_MODE -> $MODE):" "$1"
-            lk_sudo_on_fail chmod "0$MODE" "$1" || return 2
-            CHANGED=1
+    if [[ -n ${mode-} ]]; then
+        _mode=$(lk_file_mode "$1") || return 2
+        [[ $mode == "$_mode" ]] || {
+            ((verbose < 2)) ||
+                lk_tty_detail "Updating file mode ($_mode -> $mode):" "$1"
+            lk_sudo_on_fail chmod "0$mode" "$1" || return 2
+            changed=1
         }
     fi
-    if [[ -n ${OWNER-} ]]; then
-        _OWNER=$(lk_file_owner "$1") || return 2
-        [[ $OWNER == "$_OWNER" ]] || {
-            _CHOWN=$_OWNER
-            CHOWN=$OWNER
+    if [[ -n ${owner-} ]]; then
+        _owner=$(lk_file_owner "$1") || return 2
+        [[ $owner == "$_owner" ]] || {
+            _chown=$_owner
+            chown=$owner
         }
     fi
-    if [[ -n ${GROUP-} ]]; then
-        _GROUP=$(lk_file_group "$1") || return 2
-        [[ $GROUP == "$_GROUP" ]] || {
-            _CHOWN+=:$_GROUP
-            CHOWN+=:$GROUP
+    if [[ -n ${group-} ]]; then
+        _group=$(lk_file_group "$1") || return 2
+        [[ $group == "$_group" ]] || {
+            _chown+=:$_group
+            chown+=:$group
         }
     fi
-    [[ -z $CHOWN ]] || {
-        ((VERBOSE < 2)) ||
-            lk_tty_detail "Updating ownership ($_CHOWN -> $CHOWN):" "$1"
-        lk_sudo_on_fail chown "$CHOWN" "$1" || return 2
-        CHANGED=1
+    [[ -z $chown ]] || {
+        ((verbose < 2)) ||
+            lk_tty_detail "Updating ownership ($_chown -> $chown):" "$1"
+        lk_sudo_on_fail chown "$chown" "$1" || return 2
+        changed=1
     }
 
-    ((!CHANGED)) ||
+    ((!changed)) ||
         LK_FILE_CHANGED=("$1" ${LK_FILE_CHANGED+"${LK_FILE_CHANGED[@]}"})
 }
 
