@@ -39,36 +39,43 @@ function lk_expand_path() { (
         eval "$SH"
 ); }
 
-# lk_file [-i REGEX] [-dpbr] [-m MODE] [-o USER] [-g GROUP] [-v] FILE
+# lk_file [-i <regex>] [-dpbsrvq] [-m <mode>] [-o <user>] [-g <group>] <file>
 #
-# Create or update FILE if its content or permissions differ from the input.
+# Create or update a file if it differs from the given input or permissions.
 #
 # Options:
 #
-#     -i REGEX  Ignore REGEX when comparing
-#     -d        Print a diff between FILE and its replacement
-#     -p        Prompt before replacing FILE (implies -d)
-#     -b        Create a backup of FILE before replacing it
-#     -s        Create the backup of FILE in a secure store (implies -b)
-#     -r        Preserve the original FILE as FILE.orig
-#     -m MODE   Specify the file mode (MODE must be numeric)
-#     -o USER   Specify the owner
-#     -g GROUP  Specify the group
-#     -v        Be verbose (may be given multiple times, overrides previous -q)
-#     -q        Do not be verbose (overrides previous -v)
+#     -i <regex>  Exclude lines that match a regular expression from comparison
+#     -d          Print a diff before replacing the file
+#     -p          Prompt to confirm changes (implies -d)
+#     -b          Create a backup of the file before replacing it
+#     -s          Create the backup in a secure store (implies -b)
+#     -r          Preserve the original file as `<file>.orig`
+#     -m <mode>   Specify a numeric mode for the file
+#     -o <user>   Specify an owner for the file
+#     -g <group>  Specify a group for the file
+#     -v          Be verbose (repeat for more detail; overrides previous -q)
+#     -q          Only report errors (overrides previous -v)
 #
-# If -p is given and the user opts out of replacing FILE, the operation fails
-# and LK_FILE_DECLINED is incremented.
+# If the file is created or updated, it is added to LK_FILE_CHANGED and the
+# return value is 0.
 #
-# If -s is given, FILE is copied to a user- or system-wide backup directory
-# before it is replaced.
+# If -p is given and the user opts out of replacing the file, it is added to
+# LK_FILE_UNCHANGED and the return value is 1.
+#
+# If an error occurs, the return value is 2.
+#
+# If -s is given, the file is copied to a user- or system-wide backup directory
+# before it is replaced. See `lk_file_backup` for details.
 #
 # If -v or -q are given, the value of LK_VERBOSE is ignored.
+#
+# Entries in global arrays LK_FILE_CHANGED and LK_FILE_UNCHANGED are arranged
+# from most to least recent. New entries are always added at index 0.
 function lk_file() {
     local OPTIND OPTARG OPT \
         DIFF=0 PROMPT=0 BACKUP=0 STORE= ORIG=0 MODE OWNER GROUP VERBOSE= \
-        SED_ARGS=() TEMP _MODE _OWNER _GROUP _CHOWN= CHOWN=
-    LK_FILE_DECLINED=$((${LK_FILE_DECLINED-0})) || return
+        SED_ARGS=() CHANGED=0 TEMP _MODE _OWNER _GROUP _CHOWN= CHOWN=
     while getopts ":i:dpbsrm:o:g:vq" OPT; do
         case "$OPT" in
         i)
@@ -93,24 +100,24 @@ function lk_file() {
             ;;
         m)
             [[ $OPTARG =~ ^[0-7]{3,4}$ ]] ||
-                lk_err "invalid mode: $OPTARG" || return
+                lk_err "invalid mode: $OPTARG" || return 2
             MODE=$(printf '%4s' "$OPTARG" | tr ' ' 0)
             ;;
         o)
             [[ $OPTARG =~ [^0-9] ]] ||
-                lk_err "invalid user: $OPTARG" || return
-            OWNER=$(id -u "$OPTARG") || return
+                lk_err "invalid user: $OPTARG" || return 2
+            OWNER=$(id -u "$OPTARG") || return 2
             ((OWNER == EUID)) || lk_will_elevate ||
-                lk_err "not allowed: -o $OPTARG" || return
+                lk_err "not allowed: -o $OPTARG" || return 2
             OWNER=$OPTARG
             ;;
         g)
             [[ $OPTARG =~ [^0-9] ]] ||
-                lk_err "invalid group: $OPTARG" || return
+                lk_err "invalid group: $OPTARG" || return 2
             GROUP=$OPTARG
             lk_will_elevate ||
                 id -Gn | tr -s '[:blank:]' '\n' | grep -Fx "$GROUP" >/dev/null ||
-                lk_err "not allowed: -g $GROUP"
+                lk_err "not allowed: -g $GROUP" || return 2
             ;;
         v)
             ((++VERBOSE))
@@ -119,14 +126,14 @@ function lk_file() {
             VERBOSE=0
             ;;
         \? | :)
-            lk_bad_args || return
+            lk_bad_args || return 2
             ;;
         esac
     done
     shift $((OPTIND - 1))
-    (($# == 1)) || lk_bad_args || return
-    [[ ! -t 0 ]] || lk_err "no input" || return
-    lk_mktemp_with TEMP cat || lk_err "error writing input to file" || return
+    (($# == 1)) || lk_bad_args || return 2
+    [[ ! -t 0 ]] || lk_err "no input" || return 2
+    lk_mktemp_with TEMP cat || lk_err "error writing input to file" || return 2
     lk_readable_tty_open || PROMPT=0
     VERBOSE=${VERBOSE:-${LK_VERBOSE:-0}}
 
@@ -134,13 +141,14 @@ function lk_file() {
     if [[ ! -e $1 ]] && ! { lk_will_sudo && sudo test -e "$1"; }; then
         ((!DIFF)) || lk_tty_diff_detail -L "" -L "$1" /dev/null "$TEMP"
         ((!PROMPT)) || lk_tty_yn "Create $1 as above?" Y || {
-            ((++LK_FILE_DECLINED))
+            LK_FILE_UNCHANGED=("$1" ${LK_FILE_UNCHANGED+"${LK_FILE_UNCHANGED[@]}"})
             return 1
         }
         ((!VERBOSE)) || lk_tty_detail "Creating:" "$1"
         lk_sudo_on_fail install -m "${MODE:-0644}" \
             ${OWNER:+-o="$OWNER"} ${GROUP:+-g="$GROUP"} \
-            "$TEMP" "$1" || lk_err "error creating $1" || return
+            "$TEMP" "$1" || lk_err "error creating $1" || return 2
+        LK_FILE_CHANGED=("$1" ${LK_FILE_CHANGED+"${LK_FILE_CHANGED[@]}"})
         return
     fi
 
@@ -155,38 +163,40 @@ function lk_file() {
     fi || {
         ((!DIFF)) || lk_tty_diff_detail -L "a/${1#/}" -L "b/${1#/}" "$1" "$TEMP"
         ((!PROMPT)) || lk_tty_yn "Update $1 as above?" Y || {
-            ((++LK_FILE_DECLINED))
+            LK_FILE_UNCHANGED=("$1" ${LK_FILE_UNCHANGED+"${LK_FILE_UNCHANGED[@]}"})
             return 1
         }
         ((!VERBOSE)) || lk_tty_detail "Updating:" "$1"
         ((!ORIG)) || [[ -e "$1.orig" ]] || { lk_will_sudo && sudo test -e "$1.orig"; } || {
-            lk_sudo_on_fail cp -aL "$1" "$1.orig" || return
+            lk_sudo_on_fail cp -aL "$1" "$1.orig" || return 2
             # FILE.orig will suffice as a backup
             BACKUP=0
         }
-        ((!BACKUP)) || lk_file_backup ${STORE:+-m} "$1" || return
+        ((!BACKUP)) || lk_file_backup ${STORE:+-m} "$1" || return 2
         lk_sudo_on_fail cp "$TEMP" "$1" ||
-            lk_err "error replacing $1" || return
+            lk_err "error replacing $1" || return 2
+        CHANGED=1
     }
 
     # Finally, update permissions and ownership if needed
     if [[ -n ${MODE-} ]]; then
-        _MODE=$(lk_file_mode "$1") || return
+        _MODE=$(lk_file_mode "$1") || return 2
         [[ $MODE == "$_MODE" ]] || {
             ((VERBOSE < 2)) ||
                 lk_tty_detail "Updating file mode ($_MODE -> $MODE):" "$1"
-            lk_sudo_on_fail chmod "0$MODE" "$1" || return
+            lk_sudo_on_fail chmod "0$MODE" "$1" || return 2
+            CHANGED=1
         }
     fi
     if [[ -n ${OWNER-} ]]; then
-        _OWNER=$(lk_file_owner "$1") || return
+        _OWNER=$(lk_file_owner "$1") || return 2
         [[ $OWNER == "$_OWNER" ]] || {
             _CHOWN=$_OWNER
             CHOWN=$OWNER
         }
     fi
     if [[ -n ${GROUP-} ]]; then
-        _GROUP=$(lk_file_group "$1") || return
+        _GROUP=$(lk_file_group "$1") || return 2
         [[ $GROUP == "$_GROUP" ]] || {
             _CHOWN+=:$_GROUP
             CHOWN+=:$GROUP
@@ -195,8 +205,12 @@ function lk_file() {
     [[ -z $CHOWN ]] || {
         ((VERBOSE < 2)) ||
             lk_tty_detail "Updating ownership ($_CHOWN -> $CHOWN):" "$1"
-        lk_sudo_on_fail chown "$CHOWN" "$1" || return
+        lk_sudo_on_fail chown "$CHOWN" "$1" || return 2
+        CHANGED=1
     }
+
+    ((!CHANGED)) ||
+        LK_FILE_CHANGED=("$1" ${LK_FILE_CHANGED+"${LK_FILE_CHANGED[@]}"})
 }
 
 # lk_file_complement [-s] <file> <file2>...
@@ -243,7 +257,8 @@ function lk_file_intersect() {
 
 # lk_file_cp_new [<rsync_arg>...] <src>... <dest>
 #
-# Copy files with an `rsync` command similar to the deprecated `cp -an`.
+# Copy one or more files with a portable `rsync` command similar to the
+# deprecated `cp -an`.
 #
 # To preserve hard links, ACLs and extended attributes as per `cp -a`, `rsync`
 # options -H, -A and -X, respectively, may be given.
