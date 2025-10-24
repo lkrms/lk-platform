@@ -3067,7 +3067,7 @@ function lk_file() {
     # shellcheck disable=SC1007
     local OPTIND OPTARG opt \
         diff=0 prompt=0 backup=0 store= orig=0 mode owner group verbose= \
-        sed_args=() changed=0 temp _mode _owner _group _chown= chown=
+        sed_args=() changed=0 dir temp _mode _owner _group _chown= chown=
     while getopts ":i:dpbsrm:o:g:vq" opt; do
         case "$opt" in
         i)
@@ -3128,9 +3128,11 @@ function lk_file() {
     lk_mktemp_with temp cat || lk_err "error writing input to file" || return 2
     lk_readable_tty_open || prompt=0
     verbose=${verbose:-${LK_VERBOSE:-0}}
+    dir=${1%/*}
+    [[ $dir != "$1" ]] || dir=.
 
     # If the file doesn't exist, use `install` to create it
-    if [[ ! -e $1 ]] && ! { lk_will_sudo && sudo test -e "$1"; }; then
+    if [[ ! -e $1 ]] && { [[ -r $dir ]] || ! { lk_will_sudo && sudo test -e "$1"; }; }; then
         ((!diff)) || lk_tty_diff_detail -L "" -L "$1" /dev/null "$temp"
         ((!prompt)) || lk_tty_yn "Create $1 as above?" Y || {
             LK_FILE_UNCHANGED=("$1" ${LK_FILE_UNCHANGED+"${LK_FILE_UNCHANGED[@]}"})
@@ -3144,14 +3146,16 @@ function lk_file() {
         return
     fi
 
-    # Otherwise, check if the file has been changed
+    # Otherwise, check if the file has changed
     if [[ -n ${sed_args+1} ]]; then
-        diff -q \
-            <(lk_sudo_on_fail sed -E "${sed_args[@]}" "$1") \
-            <(sed -E "${sed_args[@]}" "$temp") \
-            >/dev/null
+        local _temp2 temp2
+        lk_mktemp_with _temp2 lk_sudo_on_fail sed -E "${sed_args[@]}" "$1" &&
+            lk_mktemp_with temp2 sed -E "${sed_args[@]}" "$temp" || return 2
+        diff -q "$_temp2" "$temp2" >/dev/null
     else
-        diff -q <(lk_sudo_on_fail cat "$1") "$temp" >/dev/null
+        local _temp
+        lk_mktemp_with _temp lk_sudo_on_fail cat "$1" || return 2
+        diff -q "$_temp" "$temp" >/dev/null
     fi || {
         ((!diff)) || lk_tty_diff_detail -L "a/${1#/}" -L "b/${1#/}" "$1" "$temp"
         ((!prompt)) || lk_tty_yn "Update $1 as above?" Y || {
@@ -3159,7 +3163,7 @@ function lk_file() {
             return 1
         }
         ((!verbose)) || lk_tty_detail "Updating:" "$1"
-        ((!orig)) || [[ -e "$1.orig" ]] || { lk_will_sudo && sudo test -e "$1.orig"; } || {
+        ((!orig)) || [[ -e "$1.orig" ]] || { [[ ! -r $dir ]] && lk_will_sudo && sudo test -e "$1.orig"; } || {
             lk_sudo_on_fail cp -aL "$1" "$1.orig" || return 2
             # FILE.orig will suffice as a backup
             backup=0
@@ -3249,11 +3253,11 @@ function lk_file_intersect() {
 
 # lk_file_cp_new [<rsync_arg>...] <src>... <dest>
 #
-# Copy one or more files with a portable `rsync` command similar to the
-# deprecated `cp -an`.
+# Use a portable `rsync` command similar to `cp -an`, which is deprecated, to
+# copy one or more files.
 #
-# To preserve hard links, ACLs and extended attributes as per `cp -a`, `rsync`
-# options -H, -A and -X, respectively, may be given.
+# To preserve hard links, ACLs and extended attributes as per `cp -a`, use
+# `rsync` options -H, -A and -X respectively.
 function lk_file_cp_new() {
     (($# > 1)) || lk_bad_args || return
     # cp option => rsync equivalent:
