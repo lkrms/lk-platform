@@ -15,7 +15,7 @@ export LK_BASE
 
 . "$LK_BASE/lib/bash/common.sh"
 # Provides `lk_maybe_trace`
-lk_include provision
+lk_require provision
 
 lk_elevate
 
