@@ -3,9 +3,9 @@
 lk_require mysql
 
 # lk_mysql_option_bytes
-assert_output_equals -1 '' lk_mysql_option_bytes 2>/dev/null
-assert_output_equals -1 '' lk_mysql_option_bytes 'G' 2>/dev/null
-assert_output_equals -1 '' lk_mysql_option_bytes '0B' 2>/dev/null
+assert_output_with_stderr_equals -1 '' 'lk_mysql_option_bytes: invalid size: ' lk_mysql_option_bytes
+assert_output_with_stderr_equals -1 '' 'lk_mysql_option_bytes: invalid size: G' lk_mysql_option_bytes 'G'
+assert_output_with_stderr_equals -1 '' 'lk_mysql_option_bytes: invalid size: 0B' lk_mysql_option_bytes '0B'
 assert_output_equals 576 lk_mysql_option_bytes 576
 assert_output_equals 0 lk_mysql_option_bytes 0K
 assert_output_equals 1073741824 lk_mysql_option_bytes 1g

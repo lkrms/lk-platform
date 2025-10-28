@@ -185,32 +185,4 @@ function lk_output_diff() {
     lk_tty_diff -L "\`${_cmd1[*]}\`" -L "\`${_cmd2[*]}\`" "$_temp1" "$_temp2"
 }
 
-#### Other command wrappers in core.sh:
-#### - lk_pass
-#### - lk_elevate
-#### - lk_sudo
-#### - lk_unbuffer
-#### - lk_mktemp_with
-#### - lk_mktemp_dir_with
-#### - lk_trap_add
-#### - lk_tty_add_margin
-#### - lk_tty_dump
-#### - lk_tty_run
-#### - lk_tty_run_detail
-####
-#### And elsewhere:
-#### - lk_cache
-#### - lk_get_outputs_of
-#### - lk_git_with_repos
-#### - lk_log_bypass
-#### - lk_log_bypass_stderr
-#### - lk_log_bypass_stdout
-#### - lk_maybe_drop
-#### - lk_maybe_sudo
-#### - lk_maybe_trace
-#### - lk_nohup
-#### - lk_run_as
-#### - lk_xargs
-#### - _lk_apt_flock
-
 #### Reviewed: 2021-08-28

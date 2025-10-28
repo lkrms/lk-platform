@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 
-# lk_pass [-<status>] [--] <command> [<arg>...]
+# lk_pass [-<status>] [--] [<command> [<arg>...]]
 #
 # Run a command and return the previous command's exit status, or <status> if
 # given.
 function lk_pass() {
     local status=$?
-    if [[ $1 == -* ]] && [[ $1 != -- ]] && [[ $1 =~ ^-[0-9]+$ ]]; then
+    if [[ ${1-} == -+([0-9]) ]]; then
         status=$((${1:1}))
         shift
     fi
-    [[ $1 != -- ]] || shift
+    [[ ${1-} != -- ]] || shift
     "$@" || true
     return $status
 }
@@ -22,9 +22,7 @@ function lk_pass() {
 function lk_err() {
     local status=$?
     ((status)) || status=1
-    printf '%s: %s\n' \
-        "${FUNCNAME[1 + ${_LK_STACK_DEPTH-0}]-${0##*/}}" \
-        "$1" >&2
+    printf '%s: %s\n' "$(_LK_STACK_DEPTH=0 lk_caller)" "$1" >&2
     return $status
 }
 
@@ -33,8 +31,10 @@ function lk_err() {
 # Write "<caller>: invalid arguments" to STDERR and return the previous
 # command's exit status, or 1 if the previous command did not fail.
 function lk_bad_args() {
-    _LK_STACK_DEPTH=$((${_LK_STACK_DEPTH-0} + 1)) \
-        lk_err 'invalid arguments'
+    local status=$?
+    ((status)) || status=1
+    printf '%s: invalid arguments\n' "$(_LK_STACK_DEPTH=0 lk_caller)" >&2
+    return $status
 }
 
 # lk_script [<stack_depth>]
@@ -44,7 +44,7 @@ function lk_script() {
     local depth=$((${_LK_STACK_DEPTH-0} + ${1-0})) name
     lk_script_running || {
         name=${FUNCNAME[depth + 1]+${FUNCNAME[*]: -1}}
-        [[ ! $name =~ ^(source|main)$ ]] || name=
+        [[ $name != @(source|main) ]] || name=
     }
     printf '%s\n' "${name:-${0##*/}}"
 }
@@ -55,7 +55,7 @@ function lk_script() {
 function lk_caller() {
     local depth=$((${_LK_STACK_DEPTH-0} + ${1-0})) name
     name=${FUNCNAME[2 + depth]-}
-    [[ ! $name =~ ^(source|main)$ ]] || name=
+    [[ $name != @(source|main) ]] || name=
     printf '%s\n' "${name:-${0##*/}}"
 }
 
@@ -110,12 +110,13 @@ function lk_readable_tty_open() {
 # lk_plural [-v] (<count>|<array>) <single> [<plural>]
 #
 # Print the singular form of a noun if <count> or the length of an array is 1,
-# otherwise print the noun's plural form (default: "<single>s"). If `-v` is
-# given, insert "<count> " before the noun.
+# otherwise print the noun's plural form (default: "<single>s"). If -v is given,
+# insert "<count> " before the noun.
 function lk_plural() {
     local _count _noun
-    [[ $1 == -v ]] || set -- "" "$@"
-    if [[ $2 =~ ^[+-]?[0-9]+$ ]]; then
+    [[ ${1-} == -v ]] || set -- "" "$@"
+    (($# > 2)) || lk_bad_args || return
+    if [[ $2 == ?(+|-)+([0-9]) ]]; then
         _count=$2
     elif declare -pa "$2" &>/dev/null; then
         eval "_count=\${#$2[@]}"
@@ -140,6 +141,7 @@ function lk_plural() {
 #     SELECT id, name FROM table;
 #     SQL
 function lk_assign() {
+    unset -v "${1-}" || lk_bad_args || return
     IFS= read -rd '' "$1" || true
 }
 
@@ -148,7 +150,11 @@ function lk_assign() {
 # Run `grep` and return zero whether lines are selected or not, failing only if
 # there is an error.
 function lk_grep() {
-    grep "$@" || [[ $? -eq 1 ]] || return 2
+    local status
+    grep "$@" || {
+        status=$?
+        ((status == 1)) || return $status
+    }
 }
 
-#### Reviewed: 2025-09-11
+#### Reviewed: 2025-10-28
