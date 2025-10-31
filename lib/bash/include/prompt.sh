@@ -106,15 +106,15 @@ function _lk_prompt_create() {
 
 # _lk_prompt_filter
 #
-# Reduce input to a line of printable characters by removing escape
-# sequences and non-printing characters, representing newlines as "\n"
-# and "\r", and removing ASCII control characters.
+# Reduce input to a line of printable characters by removing escape sequences
+# and non-printing characters, replacing tabs and vertical whitespace characters
+# with a space, and removing ASCII control characters.
 function _lk_prompt_filter() {
     LC_ALL=C sed -E \
         -e $'s/(\001[^\002]*\002|\E(\\[[0-?]*[ -/]*[@-~]|\\]([^\a\E]|\E[^\\\\])*(\a|\E\\\\)|[PX^_]([^\E]|\E[^\\\\])*\E\\\\|[ -/]*[0-OQ-WY-Z\\\\`-~]))//g' \
-        -e $'s/\r/\\\\r/g' \
+        -e $'s/[\t\v\f\r]/ /g' \
         -e '$b' \
-        -e 's/$/\\n/' | tr -d '\n\0-\10\16-\37\177'
+        -e 's/$/ /' | tr -d '\n\0-\10\16-\37\177'
 }
 
 # lk_prompt_enable
