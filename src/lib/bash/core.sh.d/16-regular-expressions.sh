@@ -9,8 +9,7 @@ function quote() {
     if [[ $1 =~ [^[:print:]] ]]; then
         printf '%q\n' "$1"
     else
-        local r="'\\''"
-        echo "'${1//"'"/$r}'"
+        printf "'%s'\n" "${1//"'"/"'\\''"}"
     fi
 }
 

@@ -12,20 +12,39 @@ function die() {
 function assert_output_equals() {
     local expected_status=0
     [[ $1 != -* ]] || { expected_status=${1:1} && shift; }
-    local expected_output=$1 output status=0
+    local expected_output=$1
     shift
-    output=$("$@") || status=$?
+    _do_assert_output_equals "$expected_output" "" "$@"
+}
+
+# assert_output_with_stderr_equals [-expected_status] expected_output expected_stderr COMMAND [ARG...]
+function assert_output_with_stderr_equals() {
+    local expected_status=0
+    [[ $1 != -* ]] || { expected_status=${1:1} && shift; }
+    _do_assert_output_equals "$@"
+}
+
+# _do_assert_output_equals expected_output expected_stderr COMMAND [ARG...]
+function _do_assert_output_equals() {
+    local expected_output=$1 expected_stderr=$2 \
+        output stderr=$TEMP/stderr status=0 actual expected
+    shift 2
+    output=$(_LK_STACK_DEPTH=$((${_LK_STACK_DEPTH-0} + 1)) "$@" 2>"$stderr") || status=$?
     ((status == expected_status)) ||
         assertion_failed 'expected status %d, got %d' "$expected_status" "$status" ||
         return
-    [[ $output == "$expected_output" ]] ||
-        if [[ "$expected_output$output" == *$'\n'* ]]; then
-            assertion_failed_diff 'expected output does not match actual output' "$expected_output" "$output" ||
-                return
-        else
-            assertion_failed -q 'expected output %s, got %s' "$expected_output" "$output" ||
-                return
-        fi
+    stderr=$(<"$stderr")
+    for actual in output stderr; do
+        expected=expected_$actual
+        [[ ${!actual} == "${!expected}" ]] ||
+            if [[ "${!expected}${!actual}" == *$'\n'* ]]; then
+                assertion_failed_diff "expected $actual does not match actual $actual" "${!expected}" "${!actual}" ||
+                    return
+            else
+                assertion_failed -q "expected $actual %s, got %s" "${!expected}" "${!actual}" ||
+                    return
+            fi
+    done
 }
 
 # assert_output_equals_file [-expected_status] expected_output_file COMMAND [ARG...]
@@ -86,6 +105,9 @@ function assertion_failed_diff() { {
 
 LK_BASE=$(pwd -P)
 . "$LK_BASE/lib/bash/common.sh"
+
+TEMP=$(mktemp -d)
+trap 'rm -Rf "$TEMP"' EXIT
 
 if (($#)); then
     set -- "${@#tests/unit/}"

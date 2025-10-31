@@ -59,7 +59,7 @@ function lk_mysql_option_escape() {
 function lk_mysql_option_bytes() { (
     shopt -s nocasematch
     # See https://mariadb.com/docs/server/server-management/variables-and-modes/server-system-variables
-    [[ ${1-} =~ ^0*([0-9]+)[KMGTPE]?$ ]] || lk_warn "invalid size: ${1-}" || exit
+    [[ ${1-} =~ ^0*([0-9]+)[KMGTPE]?$ ]] || lk_err "invalid size: ${1-}" || exit
     case "$1" in
     *K) p=1 ;;
     *M) p=2 ;;

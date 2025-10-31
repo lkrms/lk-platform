@@ -37,15 +37,22 @@ function -not_a_number() { -return 71 "$@"; }
 function -6ish() { -return 6 "$@"; }
 function -0or1() { -return 0 "$@"; }
 
-assert_output_equals -0 'Returning 2' lk_pass return_status 2
+# fail_with_err <message>
+function fail_with_err() {
+    lk_err "$1"
+}
 
+# lk_pass
+assert_output_equals -0 'Returning 2' lk_pass return_status 2
 assert_output_equals -8 'Returning 0' pass_to_lk_pass return_status -q 8
 assert_output_equals -0 'Returning 128' pass_to_lk_pass return_status -q 0
-
 assert_output_equals -4 'Returning 0' pass_with_status_to_lk_pass 4 return_status -q 8
 assert_output_equals -6 'Returning 128' pass_with_status_to_lk_pass 6 return_status -q 0
 assert_output_equals -0 'Returning 0' pass_with_status_to_lk_pass 0 return_status -q 2
-
 assert_output_equals -8 'Returning 71 from -not_a_number(return_status,0)' pass_with_status_to_lk_pass not_a_number return_status -q 8
 assert_output_equals -0 'Returning 6 from -6ish(return_status,128)' pass_with_status_to_lk_pass 6ish return_status -q 0
 assert_output_equals -2 'Returning 0 from -0or1(return_status,0)' pass_with_status_to_lk_pass 0or1 return_status -q 2
+
+# lk_err
+assert_output_with_stderr_equals -1 '' 'fail_with_err: ohno' fail_with_err "ohno"
+assert_output_with_stderr_equals -2 'Returning 2' 'fail_with_err: noreallyohno' eval 'return_status 2 || fail_with_err "noreallyohno"'
