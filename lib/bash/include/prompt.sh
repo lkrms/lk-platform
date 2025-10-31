@@ -18,8 +18,8 @@ function _lk_prompt_handle_debug() {
 # - the current time (e.g. "Thu May 06 15:02:32")
 # - the exit status and elapsed time of the last command (e.g. " ✗ returned 1
 #   after 12s")
-# - the last command, collapsed to a line of printable characters and truncated
-#   if necessary (e.g. " ( sleep 12; false )")
+# - the last command, reduced to a line of printable characters and truncated if
+#   necessary (e.g. " ( sleep 12; false )")
 # - the username of the current user
 # - the name of the current host
 # - the current working directory, abbreviated by replacing `$HOME` with tilde
@@ -104,14 +104,23 @@ function _lk_prompt_create() {
     [[ ${LC_BYOBU:+1}${BYOBU_TERM:+2} != 2 ]] || export LC_BYOBU=0
 }
 
+# _lk_prompt_filter
+#
+# Reduce input to a line of printable characters by removing escape
+# sequences and non-printing characters, representing newlines as "\n"
+# and "\r", and removing ASCII control characters.
+function _lk_prompt_filter() {
+    LC_ALL=C sed -E \
+        -e $'s/(\001[^\002]*\002|\E(\\[[0-?]*[ -/]*[@-~]|\\]([^\a\E]|\E[^\\\\])*(\a|\E\\\\)|[PX^_]([^\E]|\E[^\\\\])*\E\\\\|[ -/]*[0-OQ-WY-Z\\\\`-~]))//g' \
+        -e $'s/\r/\\\\r/g' \
+        -e '$b' \
+        -e 's/$/\\n/' | tr -d '\n\0-\10\16-\37\177'
+}
+
 # lk_prompt_enable
 #
 # Enable the lk-platform Bash prompt.
 function lk_prompt_enable() {
-    local script
-    eval "$(lk_get_regex NON_PRINTING_REGEX)"
-    script=$(printf '%q' "s/$NON_PRINTING_REGEX//g")"\$'; s/\\r/\\\\\\\\r/g; \$b; s/\$/\\\\\\\\n/'"
-    eval "function _lk_prompt_filter() { LC_ALL=C sed -E $script | tr -d '\\0-\\10\\12\\16-\\37\\177'; }"
     _LK_PROMPT_SEEN=0
     _LK_PROMPT=()
     # shellcheck disable=SC2178
