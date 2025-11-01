@@ -496,43 +496,6 @@ function lk_diff() { (
     fi && echo "${BLUE}Files are identical${_LK_DIFF_SED_SCRIPT:+ or have hidden differences}$RESET"
 ); }
 
-# lk_clip
-#
-# Copy input to the user's clipboard if possible, otherwise print it out.
-function lk_clip() {
-    local OUTPUT COMMAND LINES MESSAGE DISPLAY_LINES=${LK_CLIP_LINES:-5}
-    [ ! -t 0 ] || lk_warn "no input" || return
-    OUTPUT=$(cat && printf .) && OUTPUT=${OUTPUT%.}
-    if COMMAND=$(lk_first_command \
-        "xclip -selection clipboard" \
-        pbcopy) &&
-        echo -n "$OUTPUT" | $COMMAND &>/dev/null; then
-        LINES=$(wc -l <<<"$OUTPUT" | tr -d ' ')
-        [ "$LINES" -le "$DISPLAY_LINES" ] || {
-            OUTPUT=$(head -n$((DISPLAY_LINES - 1)) <<<"$OUTPUT" &&
-                echo "$LK_BOLD$LK_MAGENTA...$LK_RESET")
-            MESSAGE="$LINES lines copied"
-        }
-        lk_tty_print "${MESSAGE:-Copied} to clipboard:" \
-            $'\n'"$LK_GREEN$OUTPUT$LK_RESET" "$LK_MAGENTA"
-    else
-        lk_tty_error "Unable to copy input to clipboard"
-        echo -n "$OUTPUT"
-    fi
-}
-
-# lk_paste
-#
-# Paste the user's clipboard to output, if possible.
-function lk_paste() {
-    local COMMAND
-    COMMAND=$(lk_first_command \
-        "xclip -selection clipboard -out" \
-        pbpaste) &&
-        $COMMAND ||
-        lk_tty_error "Unable to paste clipboard to output"
-}
-
 function lk_mime_type() {
     [ -e "$1" ] || lk_warn "file not found: $1" || return
     file --brief --mime-type "$1"
