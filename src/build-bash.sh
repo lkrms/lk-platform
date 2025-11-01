@@ -96,10 +96,12 @@ while [ $# -gt 0 ]; do
         ((!embed)) || parts+=("$tail")
         i=0
         for part in "${parts[@]}"; do
-            [ -f "$part" ] || continue
+            [[ -f $part ]] || continue
             echo "  - $part" >&2
             ((!i || minify)) || echo
-            if [ -x "$part" ]; then
+            if [[ -x $part ]] &&
+                git ls-files --format='%(objectmode)' "$part" 2>/dev/null |
+                grep -Fx 100755 >/dev/null; then
                 "$part"
             else
                 cat "$part"

@@ -2395,6 +2395,36 @@ function lk_tty_ynav() {
     [[ $REPLY == Y ]]
 }
 
+# lk_clip_set
+#
+# Copy input to the desktop environment's clipboard.
+function lk_clip_set() {
+    [[ ! -t 0 ]] || lk_err "no input" || return
+    local command
+    command=$(
+        lk_runnable \
+            "xclip -selection clipboard" \
+            pbcopy \
+            clip
+    ) || lk_err "no clipboard" || return
+    command $command || lk_err "error copying input to clipboard" || return
+    lk_tty_detail "Input copied to clipboard"
+}
+
+# lk_clip_get
+#
+# Paste the desktop environment's clipboard to output.
+function lk_clip_get() {
+    local command
+    command=$(
+        lk_runnable \
+            "xclip -selection clipboard -out" \
+            pbpaste \
+            "powershell.exe -noprofile -command Get-Clipboard"
+    ) || lk_err "no clipboard" || return
+    command $command || lk_err "error pasting clipboard to output" || return
+}
+
 # lk_trace [MESSAGE]
 function lk_trace() {
     lk_debug || return 0
@@ -4125,43 +4155,6 @@ function lk_diff() { (
         lk_maybe_sudo gnu_diff ${DIFF_VER+--color=always} -U3 "$@"
     fi && echo "${BLUE}Files are identical${_LK_DIFF_SED_SCRIPT:+ or have hidden differences}$RESET"
 ); }
-
-# lk_clip
-#
-# Copy input to the user's clipboard if possible, otherwise print it out.
-function lk_clip() {
-    local OUTPUT COMMAND LINES MESSAGE DISPLAY_LINES=${LK_CLIP_LINES:-5}
-    [ ! -t 0 ] || lk_warn "no input" || return
-    OUTPUT=$(cat && printf .) && OUTPUT=${OUTPUT%.}
-    if COMMAND=$(lk_first_command \
-        "xclip -selection clipboard" \
-        pbcopy) &&
-        echo -n "$OUTPUT" | $COMMAND &>/dev/null; then
-        LINES=$(wc -l <<<"$OUTPUT" | tr -d ' ')
-        [ "$LINES" -le "$DISPLAY_LINES" ] || {
-            OUTPUT=$(head -n$((DISPLAY_LINES - 1)) <<<"$OUTPUT" &&
-                echo "$LK_BOLD$LK_MAGENTA...$LK_RESET")
-            MESSAGE="$LINES lines copied"
-        }
-        lk_tty_print "${MESSAGE:-Copied} to clipboard:" \
-            $'\n'"$LK_GREEN$OUTPUT$LK_RESET" "$LK_MAGENTA"
-    else
-        lk_tty_error "Unable to copy input to clipboard"
-        echo -n "$OUTPUT"
-    fi
-}
-
-# lk_paste
-#
-# Paste the user's clipboard to output, if possible.
-function lk_paste() {
-    local COMMAND
-    COMMAND=$(lk_first_command \
-        "xclip -selection clipboard -out" \
-        pbpaste) &&
-        $COMMAND ||
-        lk_tty_error "Unable to paste clipboard to output"
-}
 
 function lk_mime_type() {
     [ -e "$1" ] || lk_warn "file not found: $1" || return
