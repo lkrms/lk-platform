@@ -20,6 +20,7 @@ PAC_OFFER=(
     expect
     geekbench
     geteltorito # ThinkPad UEFI firmware update conversion
+    gtk3-demos
     imhex-bin
     linux-headers
     mockoon-bin
@@ -160,7 +161,6 @@ PAC_PACKAGES+=(
     gimp
     gnome-font-viewer
     gucharmap
-    hexchat
     inkscape
     keepassxc
     libreoffice-fresh
@@ -257,7 +257,7 @@ AUR_PACKAGES+=(
     key-mon
     libreoffice-extension-languagetool
     masterpdfeditor-free
-    nomacs-git
+    nomacs
     pencil
     qpdfview
     render50
