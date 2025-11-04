@@ -46,7 +46,6 @@ PAC_OFFER=(
     wiki-loves-earth-wallpapers
     wiki-loves-monuments-wallpapers
     xfce-theme-greybird
-    zuki-themes
 
     #
     displaycal

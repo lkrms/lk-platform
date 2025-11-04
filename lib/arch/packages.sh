@@ -401,8 +401,6 @@ if lk_feature_enabled desktop; then
         qogir-gtk-theme-
         qogir-icon-theme-
         tela-icon-theme-
-
-        zuki-themes-
     )
 fi
 
