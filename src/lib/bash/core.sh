@@ -1325,12 +1325,6 @@ if [[ $- != *i* ]]; then
     lk_trap_add -q ERR '_lk_err_trap "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'
 fi
 
-_LK_COLOUR=$LK_CYAN
-_LK_ALT_COLOUR=$LK_YELLOW
-_LK_SUCCESS_COLOUR=$LK_GREEN
-_LK_WARNING_COLOUR=$LK_YELLOW
-_LK_ERROR_COLOUR=$LK_RED
-
 true || {
     env
     md5

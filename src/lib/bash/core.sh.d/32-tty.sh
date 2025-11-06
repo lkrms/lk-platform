@@ -164,8 +164,8 @@ function lk_tty_group_end() {
 #   lines will be aligned with the first (values: 0 or 1; default: 0)
 # - _LK_TTY_INDENT: MESSAGE2 indent (default: based on prefix length and message
 #   line counts)
-# - _LK_COLOUR: default colour of prefix and MESSAGE2 (default: LK_CYAN)
-# - _LK_ALT_COLOUR: default colour of prefix and MESSAGE2 for nested messages
+# - _LK_COLOUR_NOTICE: default colour of prefix and MESSAGE2 (default: LK_CYAN)
+# - _LK_COLOUR_INFO: default colour of prefix and MESSAGE2 for nested messages
 #   and output from lk_tty_detail, lk_tty_list_detail, etc. (default: LK_YELLOW)
 # - _LK_TTY_COLOUR: override prefix and MESSAGE2 colour
 # - _LK_TTY_PREFIX_COLOUR: override prefix colour (supersedes _LK_TTY_COLOUR)
@@ -195,7 +195,7 @@ function lk_tty_print() {
         }
     }
     local MESSAGE=${1-} MESSAGE2=${2-} \
-        COLOUR=${3-${_LK_TTY_COLOUR-$_LK_COLOUR}} \
+        COLOUR=${3-${_LK_TTY_COLOUR-$_LK_COLOUR_NOTICE}} \
         PREFIX=${_LK_TTY_PREFIX-${_LK_TTY_PREFIX1-==> }} \
         IFS MARGIN SPACES NEWLINE=0 NEWLINE2=0 SEP=$'\n' INDENT=0
     unset IFS
@@ -251,16 +251,16 @@ function lk_tty_print() {
 
 # lk_tty_detail MESSAGE [MESSAGE2 [COLOUR]]
 function lk_tty_detail() {
-    local _LK_TTY_COLOUR_ORIG=${_LK_COLOUR-}
+    local _LK_TTY_COLOUR_ORIG=${_LK_COLOUR_NOTICE-}
     _LK_TTY_PREFIX1=${_LK_TTY_PREFIX2- -> } \
-        _LK_COLOUR=${_LK_ALT_COLOUR-} \
+        _LK_COLOUR_NOTICE=${_LK_COLOUR_INFO-} \
         _LK_TTY_MESSAGE_COLOUR=${_LK_TTY_MESSAGE_COLOUR-} \
         lk_tty_print "$@"
 }
 
 function _lk_tty_detail2() {
     _LK_TTY_PREFIX1=${_LK_TTY_PREFIX3-  - } \
-        _LK_COLOUR=${_LK_TTY_COLOUR_ORIG-$_LK_COLOUR} \
+        _LK_COLOUR_NOTICE=${_LK_TTY_COLOUR_ORIG-$_LK_COLOUR_NOTICE} \
         _LK_TTY_MESSAGE_COLOUR=${_LK_TTY_MESSAGE_COLOUR-} \
         lk_tty_print "$@"
 }
@@ -565,22 +565,22 @@ function _lk_tty_log() {
 
 # lk_tty_success [-r] [-n] MESSAGE [MESSAGE2...]
 function lk_tty_success() {
-    _lk_tty_log " // " "$_LK_SUCCESS_COLOUR" "$@"
+    _lk_tty_log " // " "$_LK_COLOUR_SUCCESS" "$@"
 }
 
 # lk_tty_log [-r] [-n] MESSAGE [MESSAGE2...]
 function lk_tty_log() {
-    _lk_tty_log " :: " "${_LK_TTY_COLOUR-$_LK_COLOUR}" "$@"
+    _lk_tty_log " :: " "${_LK_TTY_COLOUR-$_LK_COLOUR_NOTICE}" "$@"
 }
 
 # lk_tty_warning [-r] [-n] MESSAGE [MESSAGE2...]
 function lk_tty_warning() {
-    _lk_tty_log "  ! " "$_LK_WARNING_COLOUR" "$@"
+    _lk_tty_log "  ! " "$_LK_COLOUR_WARNING" "$@"
 }
 
 # lk_tty_error [-r] [-n] MESSAGE [MESSAGE2...]
 function lk_tty_error() {
-    _lk_tty_log " !! " "$_LK_ERROR_COLOUR" "$@"
+    _lk_tty_log " !! " "$_LK_COLOUR_ERROR" "$@"
 }
 
 #### Reviewed: 2021-11-02

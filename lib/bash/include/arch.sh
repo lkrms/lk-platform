@@ -339,9 +339,9 @@ function lk_aur_sync() {
             FAILED+=("$PKG")
     done
     [ ${#SYNCED[@]} -eq 0 ] ||
-        lk_tty_list SYNCED "Synced from AUR:" package{,s} "$_LK_SUCCESS_COLOUR"
+        lk_tty_list SYNCED "Synced from AUR:" package{,s} "$_LK_COLOUR_SUCCESS"
     [ ${#FAILED[@]} -eq 0 ] ||
-        lk_tty_list FAILED "Failed to sync:" package{,s} "$_LK_ERROR_COLOUR"
+        lk_tty_list FAILED "Failed to sync:" package{,s} "$_LK_COLOUR_ERROR"
     [ ${#FAILED[@]} -eq 0 ]
 }
 

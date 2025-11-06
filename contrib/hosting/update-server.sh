@@ -455,10 +455,10 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
         { FILE=$UPDATED &&
           [ "${LK_NO_INPUT-}" != Y ] ||
           lk_tty_print "Update completed:" "$1" \
-            "$LK_BOLD$_LK_SUCCESS_COLOUR" || :; } ||
+            "$LK_BOLD$_LK_COLOUR_SUCCESS" || :; } ||
         { FILE=$FAILED &&
           lk_tty_print "Update failed:" "$1" \
-            "$LK_BOLD$_LK_ERROR_COLOUR"; }
+            "$LK_BOLD$_LK_COLOUR_ERROR"; }
       echo "$1" >>"$FILE"
     ) &
 

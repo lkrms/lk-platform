@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# shellcheck disable=SC2034
+
 shopt -s extglob
 
 [[ ${USER-} ]] || USER=$(id -un) || return
@@ -42,6 +44,12 @@ function lk_colour_off() {
     LK_CLEAR_LINE=
     LK_AUTO_WRAP_OFF=
     LK_AUTO_WRAP_ON=
+
+    _LK_COLOUR_ERROR=
+    _LK_COLOUR_WARNING=
+    _LK_COLOUR_NOTICE=
+    _LK_COLOUR_INFO=
+    _LK_COLOUR_SUCCESS=
 }
 
 # lk_colour_on
@@ -75,11 +83,17 @@ function lk_colour_on() {
     LK_CLEAR_LINE=$'\E[K'
     LK_AUTO_WRAP_OFF=$'\E[?7l'
     LK_AUTO_WRAP_ON=$'\E[?7h'
+
+    _LK_COLOUR_ERROR=$LK_RED
+    _LK_COLOUR_WARNING=$LK_YELLOW
+    _LK_COLOUR_NOTICE=$LK_CYAN
+    _LK_COLOUR_INFO=$LK_YELLOW
+    _LK_COLOUR_SUCCESS=$LK_GREEN
 }
 
-# https://no-color.org/: "Command-line software which adds ANSI color to its
-# output by default should check for a NO_COLOR environment variable that, when
-# present and not an empty string (regardless of its value), prevents the
+# From https://no-color.org/: "Command-line software which adds ANSI color to
+# its output by default should check for a NO_COLOR environment variable that,
+# when present and not an empty string (regardless of its value), prevents the
 # addition of ANSI color."
 if [[ ${LK_NO_COLOUR-} ]] || [[ ${NO_COLOR-} ]]; then
     lk_colour_off
