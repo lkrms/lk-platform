@@ -436,7 +436,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
                     ;;
                   esac
                   lk_tty_error "Failed:" \
-                    "$LK_BOLD$DOMAIN$INVALID_TLS$LK_RESET $LK_DIM${HTTP:-($TEST_STATUS)}$LK_UNDIM"
+                    "$LK_BOLD$DOMAIN$INVALID_TLS$LK_RESET $LK_DIM${HTTP:-($TEST_STATUS)}$LK_UNBOLD_UNDIM"
                   echo "$1:$DOMAIN" >>"$UNREACHABLE"
                 }
                 break

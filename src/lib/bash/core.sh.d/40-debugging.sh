@@ -12,7 +12,7 @@ function lk_trace() {
         "${_LK_TRACE_LAST:-$NOW}" \
         "${1+${1::30}}" \
         "${BASH_SOURCE[1]+${BASH_SOURCE[1]#$LK_BASE/}:${BASH_LINENO[0]}}" |
-        awk -F'\t' -v "d=$LK_DIM" -v "u=$LK_UNDIM" \
+        awk -F'\t' -v "d=$LK_DIM" -v "u=$LK_UNBOLD_UNDIM" \
             '{printf "%s%09.4f  +%.4f\t%-30s\t%s\n",d,$1-$2,$1-$3,$4,$5 u}' >&2
     _LK_TRACE_LAST=$NOW
 }
@@ -40,7 +40,7 @@ function lk_stack_trace() {
         ((ROWS == 1)) || printf "%${WIDTH}d. " "$ROW"
         printf "%s %s (%s:%s)\n" \
             "$( ((ROW > 1)) && echo at || echo in)" \
-            "$LK_BOLD$FUNC$LK_RESET" "$FILE$LK_DIM" "$LINE$LK_UNDIM"
+            "$LK_BOLD$FUNC$LK_RESET" "$FILE$LK_DIM" "$LINE$LK_UNBOLD_UNDIM"
     done
 }
 

@@ -73,7 +73,7 @@ function lk_whiptail_checklist() {
     ((WIDTH += 16, WIDTH += WIDTH % 2))
     TEXT=$(fold -s -w $((WIDTH - 4)) <<<"$TEXT")
     lk_whiptail \
-        --backtitle "$(lk_script_name)" \
+        --backtitle "$(lk_script)" \
         --title "$TITLE" \
         --notags \
         --separate-output \

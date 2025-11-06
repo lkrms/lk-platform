@@ -11,6 +11,82 @@ LK_H=$'[^ \t]'
 # Collect arguments passed to the current script or function
 _LK_ARGV=("$@")
 
+# lk_colour_off
+#
+# Assign empty strings to colour and formatting variables.
+function lk_colour_off() {
+    LK_BLACK=
+    LK_RED=
+    LK_GREEN=
+    LK_YELLOW=
+    LK_BLUE=
+    LK_MAGENTA=
+    LK_CYAN=
+    LK_WHITE=
+    LK_DEFAULT=
+    LK_BLACK_BG=
+    LK_RED_BG=
+    LK_GREEN_BG=
+    LK_YELLOW_BG=
+    LK_BLUE_BG=
+    LK_MAGENTA_BG=
+    LK_CYAN_BG=
+    LK_WHITE_BG=
+    LK_DEFAULT_BG=
+    LK_BOLD=
+    LK_DIM=
+    LK_BOLD_UNDIM=
+    LK_DIM_UNBOLD=
+    LK_UNBOLD_UNDIM=
+    LK_RESET=
+    LK_CLEAR_LINE=
+    LK_AUTO_WRAP_OFF=
+    LK_AUTO_WRAP_ON=
+}
+
+# lk_colour_on
+#
+# Assign ANSI escape sequences to colour and formatting variables.
+function lk_colour_on() {
+    LK_BLACK=$'\E[30m'
+    LK_RED=$'\E[31m'
+    LK_GREEN=$'\E[32m'
+    LK_YELLOW=$'\E[33m'
+    LK_BLUE=$'\E[34m'
+    LK_MAGENTA=$'\E[35m'
+    LK_CYAN=$'\E[36m'
+    LK_WHITE=$'\E[37m'
+    LK_DEFAULT=$'\E[39m'
+    LK_BLACK_BG=$'\E[40m'
+    LK_RED_BG=$'\E[41m'
+    LK_GREEN_BG=$'\E[42m'
+    LK_YELLOW_BG=$'\E[43m'
+    LK_BLUE_BG=$'\E[44m'
+    LK_MAGENTA_BG=$'\E[45m'
+    LK_CYAN_BG=$'\E[46m'
+    LK_WHITE_BG=$'\E[47m'
+    LK_DEFAULT_BG=$'\E[49m'
+    LK_BOLD=$'\E[1m'
+    LK_DIM=$'\E[2m'
+    LK_BOLD_UNDIM=$'\E[22;1m'
+    LK_DIM_UNBOLD=$'\E[22;2m'
+    LK_UNBOLD_UNDIM=$'\E[22m'
+    LK_RESET=$'\E[m'
+    LK_CLEAR_LINE=$'\E[K'
+    LK_AUTO_WRAP_OFF=$'\E[?7l'
+    LK_AUTO_WRAP_ON=$'\E[?7h'
+}
+
+# https://no-color.org/: "Command-line software which adds ANSI color to its
+# output by default should check for a NO_COLOR environment variable that, when
+# present and not an empty string (regardless of its value), prevents the
+# addition of ANSI color."
+if [[ ${LK_NO_COLOUR-} ]] || [[ ${NO_COLOR-} ]]; then
+    lk_colour_off
+else
+    lk_colour_on
+fi
+
 # lk_pass [-<status>] [--] [<command> [<arg>...]]
 #
 # Run a command and return the previous command's exit status, or <status> if
@@ -1299,7 +1375,7 @@ function _lk_script_load() {
 
 function _lk_caller() {
     local CALLER
-    CALLER=("$(lk_script_name 2)")
+    CALLER=("$(lk_script 2)")
     CALLER[0]=$LK_BOLD$CALLER$LK_RESET
     lk_verbose || {
         echo "$CALLER"
@@ -1316,8 +1392,8 @@ function _lk_caller() {
     [[ -z $SOURCE ]] || [[ $SOURCE == main ]] || [[ $SOURCE == "$0" ]] ||
         CALLER+=("$(lk_tty_path "$SOURCE")")
     [[ -z $LINE ]] || [[ $LINE -eq 1 ]] ||
-        CALLER[${#CALLER[@]} - 1]+=$LK_DIM:$LINE$LK_UNDIM
-    lk_implode_arr "$LK_DIM->$LK_UNDIM" CALLER
+        CALLER[${#CALLER[@]} - 1]+=$LK_DIM:$LINE$LK_UNBOLD_UNDIM
+    lk_implode_arr "$LK_DIM->$LK_UNBOLD_UNDIM" CALLER
 }
 
 # lk_warn [MESSAGE]
@@ -1333,14 +1409,14 @@ function lk_warn() {
 # Print "<CALLER>: MESSAGE" as an error and return or exit non-zero with the
 # most recent exit status or 1. If MESSAGE is the empty string, suppress output.
 function lk_die() {
-    local STATUS=$?
-    ((STATUS)) || STATUS=1
-    [[ ${1+1}${1:+2} == 1 ]] ||
-        lk_tty_error "$(_lk_caller): ${1-command failed}"
+    local status=$?
+    ((status)) || status=1
+    (($#)) || set -- "command failed"
+    [[ -z $1 ]] || lk_tty_error "$(_lk_caller): $1"
     if [[ $- != *i* ]]; then
-        exit "$STATUS"
+        exit $status
     else
-        return "$STATUS"
+        return $status
     fi
 }
 
@@ -1543,7 +1619,7 @@ function _lk_tty_hostname_apply() {
         _LK_TTY_HOSTNAME="<unknown>"
     _LK_TTY_HOSTNAME="${LK_DIM}[ $(lk_ellipsise 14 "$(
         printf '%14s' "$_LK_TTY_HOSTNAME"
-    )") ] $LK_UNDIM"
+    )") ] $LK_UNBOLD_UNDIM"
     _LK_TTY_HOSTNAME_INDENT=${_LK_TTY_HOSTNAME_INDENT:-$'\n                   '}
 }
 
@@ -2281,7 +2357,7 @@ function lk_tty_read() {
         return
     }
     local _PROMPT=("$1")
-    [[ -z ${_NOTE:+1} ]] || _PROMPT+=("$LK_DIM($_NOTE)$LK_UNDIM")
+    [[ -z ${_NOTE:+1} ]] || _PROMPT+=("$LK_DIM($_NOTE)$LK_UNBOLD_UNDIM")
     [[ -z ${3:+1} ]] || _PROMPT+=("[$3]")
     IFS= read -rep "$(_lk_tty_prompt)" "${@:4}" "$2" 2>&"${_LK_FD-2}" || return
     [[ -n ${!2:+1} ]] || eval "$2=\${3-}"
@@ -2324,7 +2400,7 @@ function lk_tty_yn() {
         return
     }
     local _PROMPT=("$1") DEFAULT PROMPT REPLY
-    [[ -z ${NOTE:+1} ]] || _PROMPT+=("$LK_DIM($NOTE)$LK_UNDIM")
+    [[ -z ${NOTE:+1} ]] || _PROMPT+=("$LK_DIM($NOTE)$LK_UNBOLD_UNDIM")
     if [[ ${2-} =~ ^$_Y$ ]]; then
         _PROMPT+=("[Y/n]")
         DEFAULT=Y
@@ -2361,7 +2437,7 @@ function lk_tty_ynav() {
         return
     }
     local _PROMPT=("$2") PROMPT REPLY
-    [[ -z ${NOTE:+1} ]] || _PROMPT+=("$LK_DIM($NOTE)$LK_UNDIM")
+    [[ -z ${NOTE:+1} ]] || _PROMPT+=("$LK_DIM($NOTE)$LK_UNBOLD_UNDIM")
     if [[ $DEFAULT =~ ^$_Y$ ]]; then
         _PROMPT+=("[Y/n/a/v]")
         DEFAULT=Y
@@ -2437,7 +2513,7 @@ function lk_trace() {
         "${_LK_TRACE_LAST:-$NOW}" \
         "${1+${1::30}}" \
         "${BASH_SOURCE[1]+${BASH_SOURCE[1]#$LK_BASE/}:${BASH_LINENO[0]}}" |
-        awk -F'\t' -v "d=$LK_DIM" -v "u=$LK_UNDIM" \
+        awk -F'\t' -v "d=$LK_DIM" -v "u=$LK_UNBOLD_UNDIM" \
             '{printf "%s%09.4f  +%.4f\t%-30s\t%s\n",d,$1-$2,$1-$3,$4,$5 u}' >&2
     _LK_TRACE_LAST=$NOW
 }
@@ -2465,7 +2541,7 @@ function lk_stack_trace() {
         ((ROWS == 1)) || printf "%${WIDTH}d. " "$ROW"
         printf "%s %s (%s:%s)\n" \
             "$( ((ROW > 1)) && echo at || echo in)" \
-            "$LK_BOLD$FUNC$LK_RESET" "$FILE$LK_DIM" "$LINE$LK_UNDIM"
+            "$LK_BOLD$FUNC$LK_RESET" "$FILE$LK_DIM" "$LINE$LK_UNBOLD_UNDIM"
     done
 }
 
@@ -4125,16 +4201,14 @@ function lk_diff() { (
         fi
     done
     # Use the same escape sequences as icdiff, which ignores TERM
-    BLUE=$'\E[34m'
-    GREEN=$'\E[1;32m'
-    RESET=$'\E[m'
+    lk_colour_on
     if lk_command_exists icdiff; then
         # Don't use icdiff if FILE1 is empty
         if lk_maybe_sudo test ! -s "$1" -a -s "$2"; then
-            echo "$BLUE$2$RESET"
-            printf '%s' "$GREEN"
-            # Add $RESET to the last line
-            lk_maybe_sudo cat "$2" | awk -v "r=$RESET" \
+            printf '%s%s%s\n' "$LK_BLUE" "$2" "$LK_RESET"
+            printf '%s' "$LK_BOLD$LK_GREEN"
+            # Add $LK_RESET to the last line
+            lk_maybe_sudo cat "$2" | awk -v "r=$LK_RESET" \
                 's { print l } { s = 1; l = $0 } END { print l r }'
             false
         else
@@ -4153,7 +4227,10 @@ function lk_diff() { (
         DIFF_VER=$(lk_diff_version 2>/dev/null) &&
             lk_version_at_least "$DIFF_VER" 3.4 || unset DIFF_VER
         lk_maybe_sudo gnu_diff ${DIFF_VER+--color=always} -U3 "$@"
-    fi && echo "${BLUE}Files are identical${_LK_DIFF_SED_SCRIPT:+ or have hidden differences}$RESET"
+    fi && printf '%sFiles are identical%s%s' \
+        "$LK_BLUE" \
+        "${_LK_DIFF_SED_SCRIPT:+ or have hidden differences}" \
+        "$LK_RESET"
 ); }
 
 function lk_mime_type() {
@@ -4982,69 +5059,6 @@ set -o pipefail
 if [[ $- != *i* ]]; then
     lk_trap_add -q EXIT '_lk_exit_trap "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'
     lk_trap_add -q ERR '_lk_err_trap "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'
-fi
-
-if [[ -n ${LK_TTY_NO_COLOUR-} ]] || ! lk_get_tty >/dev/null; then
-    declare \
-        LK_BLACK= \
-        LK_RED= \
-        LK_GREEN= \
-        LK_YELLOW= \
-        LK_BLUE= \
-        LK_MAGENTA= \
-        LK_CYAN= \
-        LK_WHITE= \
-        LK_GREY= \
-        LK_DEFAULT= \
-        LK_BLACK_BG= \
-        LK_RED_BG= \
-        LK_GREEN_BG= \
-        LK_YELLOW_BG= \
-        LK_BLUE_BG= \
-        LK_MAGENTA_BG= \
-        LK_CYAN_BG= \
-        LK_WHITE_BG= \
-        LK_GREY_BG= \
-        LK_DEFAULT_BG= \
-        LK_BOLD= \
-        LK_UNBOLD= \
-        LK_DIM= \
-        LK_UNDIM= \
-        LK_RESET=
-else
-    # See: `man 4 console_codes`
-    declare \
-        LK_BLACK=$'\E[30m' \
-        LK_RED=$'\E[31m' \
-        LK_GREEN=$'\E[32m' \
-        LK_YELLOW=$'\E[33m' \
-        LK_BLUE=$'\E[34m' \
-        LK_MAGENTA=$'\E[35m' \
-        LK_CYAN=$'\E[36m' \
-        LK_WHITE=$'\E[37m' \
-        LK_GREY=$'\E[90m' \
-        LK_DEFAULT=$'\E[39m' \
-        LK_BLACK_BG=$'\E[40m' \
-        LK_RED_BG=$'\E[41m' \
-        LK_GREEN_BG=$'\E[42m' \
-        LK_YELLOW_BG=$'\E[43m' \
-        LK_BLUE_BG=$'\E[44m' \
-        LK_MAGENTA_BG=$'\E[45m' \
-        LK_CYAN_BG=$'\E[46m' \
-        LK_WHITE_BG=$'\E[47m' \
-        LK_GREY_BG=$'\E[100m' \
-        LK_DEFAULT_BG=$'\E[49m' \
-        LK_BOLD=$'\E[1m' \
-        LK_UNBOLD=$'\E[22m' \
-        LK_DIM=$'\E[2m' \
-        LK_UNDIM=$'\E[22m' \
-        LK_RESET=$'\E[m'
-
-    case "${TERM-}" in
-    '' | dumb | unknown)
-        [[ -z ${TERM+1} ]] || unset TERM
-        ;;
-    esac
 fi
 
 _LK_COLOUR=$LK_CYAN

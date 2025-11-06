@@ -30,7 +30,7 @@ function lk_tty_read() {
         return
     }
     local _PROMPT=("$1")
-    [[ -z ${_NOTE:+1} ]] || _PROMPT+=("$LK_DIM($_NOTE)$LK_UNDIM")
+    [[ -z ${_NOTE:+1} ]] || _PROMPT+=("$LK_DIM($_NOTE)$LK_UNBOLD_UNDIM")
     [[ -z ${3:+1} ]] || _PROMPT+=("[$3]")
     IFS= read -rep "$(_lk_tty_prompt)" "${@:4}" "$2" 2>&"${_LK_FD-2}" || return
     [[ -n ${!2:+1} ]] || eval "$2=\${3-}"
@@ -73,7 +73,7 @@ function lk_tty_yn() {
         return
     }
     local _PROMPT=("$1") DEFAULT PROMPT REPLY
-    [[ -z ${NOTE:+1} ]] || _PROMPT+=("$LK_DIM($NOTE)$LK_UNDIM")
+    [[ -z ${NOTE:+1} ]] || _PROMPT+=("$LK_DIM($NOTE)$LK_UNBOLD_UNDIM")
     if [[ ${2-} =~ ^$_Y$ ]]; then
         _PROMPT+=("[Y/n]")
         DEFAULT=Y
@@ -110,7 +110,7 @@ function lk_tty_ynav() {
         return
     }
     local _PROMPT=("$2") PROMPT REPLY
-    [[ -z ${NOTE:+1} ]] || _PROMPT+=("$LK_DIM($NOTE)$LK_UNDIM")
+    [[ -z ${NOTE:+1} ]] || _PROMPT+=("$LK_DIM($NOTE)$LK_UNBOLD_UNDIM")
     if [[ $DEFAULT =~ ^$_Y$ ]]; then
         _PROMPT+=("[Y/n/a/v]")
         DEFAULT=Y

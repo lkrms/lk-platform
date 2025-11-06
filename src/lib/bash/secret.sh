@@ -40,7 +40,7 @@ function _lk_secret_forget() {
 function lk_secret() {
     [ $# -ge 2 ] || lk_warn "invalid arguments" || return
     set -- "$1" "$2" "${3:-$(lk_caller_name)}"
-    local KEYCHAIN=keychain PASSWORD SECRET=$LK_DIM$3/$LK_UNDIM$1
+    local KEYCHAIN=keychain PASSWORD SECRET=$LK_DIM$3/$LK_UNBOLD_UNDIM$1
     lk_is_macos || KEYCHAIN=keyring
     if ! PASSWORD=$(_lk_secret_get "$1" "$3" 2>/dev/null); then
         ! lk_no_input ||
@@ -58,7 +58,7 @@ function lk_secret() {
 function lk_secret_remove() {
     [ $# -ge 1 ] || lk_warn "invalid arguments" || return
     set -- "$1" "${2:-$(lk_caller_name)}"
-    local SECRET=$LK_DIM$2/$LK_UNDIM$1
+    local SECRET=$LK_DIM$2/$LK_UNBOLD_UNDIM$1
     _lk_secret_get "$@" &>/dev/null ||
         lk_warn "password not found: $SECRET" || return 0
     _lk_secret_forget "$@" >/dev/null &&

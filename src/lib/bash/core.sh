@@ -465,16 +465,14 @@ function lk_diff() { (
         fi
     done
     # Use the same escape sequences as icdiff, which ignores TERM
-    BLUE=$'\E[34m'
-    GREEN=$'\E[1;32m'
-    RESET=$'\E[m'
+    lk_colour_on
     if lk_command_exists icdiff; then
         # Don't use icdiff if FILE1 is empty
         if lk_maybe_sudo test ! -s "$1" -a -s "$2"; then
-            echo "$BLUE$2$RESET"
-            printf '%s' "$GREEN"
-            # Add $RESET to the last line
-            lk_maybe_sudo cat "$2" | awk -v "r=$RESET" \
+            printf '%s%s%s\n' "$LK_BLUE" "$2" "$LK_RESET"
+            printf '%s' "$LK_BOLD$LK_GREEN"
+            # Add $LK_RESET to the last line
+            lk_maybe_sudo cat "$2" | awk -v "r=$LK_RESET" \
                 's { print l } { s = 1; l = $0 } END { print l r }'
             false
         else
@@ -493,7 +491,10 @@ function lk_diff() { (
         DIFF_VER=$(lk_diff_version 2>/dev/null) &&
             lk_version_at_least "$DIFF_VER" 3.4 || unset DIFF_VER
         lk_maybe_sudo gnu_diff ${DIFF_VER+--color=always} -U3 "$@"
-    fi && echo "${BLUE}Files are identical${_LK_DIFF_SED_SCRIPT:+ or have hidden differences}$RESET"
+    fi && printf '%sFiles are identical%s%s' \
+        "$LK_BLUE" \
+        "${_LK_DIFF_SED_SCRIPT:+ or have hidden differences}" \
+        "$LK_RESET"
 ); }
 
 function lk_mime_type() {
@@ -1322,69 +1323,6 @@ set -o pipefail
 if [[ $- != *i* ]]; then
     lk_trap_add -q EXIT '_lk_exit_trap "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'
     lk_trap_add -q ERR '_lk_err_trap "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'
-fi
-
-if [[ -n ${LK_TTY_NO_COLOUR-} ]] || ! lk_get_tty >/dev/null; then
-    declare \
-        LK_BLACK= \
-        LK_RED= \
-        LK_GREEN= \
-        LK_YELLOW= \
-        LK_BLUE= \
-        LK_MAGENTA= \
-        LK_CYAN= \
-        LK_WHITE= \
-        LK_GREY= \
-        LK_DEFAULT= \
-        LK_BLACK_BG= \
-        LK_RED_BG= \
-        LK_GREEN_BG= \
-        LK_YELLOW_BG= \
-        LK_BLUE_BG= \
-        LK_MAGENTA_BG= \
-        LK_CYAN_BG= \
-        LK_WHITE_BG= \
-        LK_GREY_BG= \
-        LK_DEFAULT_BG= \
-        LK_BOLD= \
-        LK_UNBOLD= \
-        LK_DIM= \
-        LK_UNDIM= \
-        LK_RESET=
-else
-    # See: `man 4 console_codes`
-    declare \
-        LK_BLACK=$'\E[30m' \
-        LK_RED=$'\E[31m' \
-        LK_GREEN=$'\E[32m' \
-        LK_YELLOW=$'\E[33m' \
-        LK_BLUE=$'\E[34m' \
-        LK_MAGENTA=$'\E[35m' \
-        LK_CYAN=$'\E[36m' \
-        LK_WHITE=$'\E[37m' \
-        LK_GREY=$'\E[90m' \
-        LK_DEFAULT=$'\E[39m' \
-        LK_BLACK_BG=$'\E[40m' \
-        LK_RED_BG=$'\E[41m' \
-        LK_GREEN_BG=$'\E[42m' \
-        LK_YELLOW_BG=$'\E[43m' \
-        LK_BLUE_BG=$'\E[44m' \
-        LK_MAGENTA_BG=$'\E[45m' \
-        LK_CYAN_BG=$'\E[46m' \
-        LK_WHITE_BG=$'\E[47m' \
-        LK_GREY_BG=$'\E[100m' \
-        LK_DEFAULT_BG=$'\E[49m' \
-        LK_BOLD=$'\E[1m' \
-        LK_UNBOLD=$'\E[22m' \
-        LK_DIM=$'\E[2m' \
-        LK_UNDIM=$'\E[22m' \
-        LK_RESET=$'\E[m'
-
-    case "${TERM-}" in
-    '' | dumb | unknown)
-        [[ -z ${TERM+1} ]] || unset TERM
-        ;;
-    esac
 fi
 
 _LK_COLOUR=$LK_CYAN

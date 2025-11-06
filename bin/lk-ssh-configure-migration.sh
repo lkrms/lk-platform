@@ -125,7 +125,7 @@ else
     LK_BOLD={{LK_BOLD}}
     LK_CYAN={{LK_CYAN}}
     LK_YELLOW={{LK_YELLOW}}
-    LK_GREY={{LK_GREY}}
+    LK_DIM={{LK_DIM}}
     LK_RESET={{LK_RESET}}
 fi
 
@@ -138,7 +138,7 @@ function lk_tty_print() {
                 echo $'\n'"${2#$'\n'}"
         )
     echo "\
-${LK_GREY}[ $H ] \
+${LK_DIM}[ $H ] \
 $LK_RESET$LK_BOLD${_LK_TTY_COLOUR-$LK_CYAN}${_LK_TTY_PREFIX-==> }\
 $LK_RESET${_LK_TTY_MESSAGE_COLOUR-$LK_BOLD}\
 $(sed "1b
