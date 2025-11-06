@@ -24,7 +24,8 @@ function lk_trap_add() {
         _LK_TRAPS=(${_LK_TRAPS+"${_LK_TRAPS[@]}"})
     fi
     # Collect other traps from this subshell for this signal
-    for ((i = first ? 3 : 0; i < ${#_LK_TRAPS[@]}; i += 3)); do
+    i=$((first ? 3 : 0))
+    for (( ; i < ${#_LK_TRAPS[@]}; i += 3)); do
         ((_LK_TRAPS[i] == BASH_SUBSHELL)) &&
             [[ ${_LK_TRAPS[i + 1]} == "$1" ]] || continue
         trap=${_LK_TRAPS[i + 2]}

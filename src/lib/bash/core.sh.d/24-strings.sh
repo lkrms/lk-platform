@@ -4,7 +4,8 @@
 function _lk_stream_args() {
     local IFS=$' \t\n'
     if (($# > $1 + 1)); then
-        printf '%s\n' "${@:$1+2}" | "${@:2:$1}"
+        local first_arg=$(($1 + 2))
+        printf '%s\n' "${@:first_arg}" | "${@:2:$1}"
     else
         local EXEC=1
         [ "$(type -t "$2")" = file ] || EXEC=

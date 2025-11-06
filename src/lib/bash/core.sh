@@ -479,9 +479,9 @@ function lk_diff() { (
             printf '%s' "$LK_RESET"
             STATUS=1
             lk_require_output lk_maybe_sudo icdiff -U2 --no-headers \
-                ${_LK_TTY_INDENT:+--cols=$(($(
+                ${_LK_TTY_INDENT:+--cols="$(($(
                     lk_tty_columns
-                ) - 2 * (_LK_TTY_INDENT + 2)))} "$@" || ((!($? & 2))) || STATUS=0
+                ) - 2 * (_LK_TTY_INDENT + 2)))"} "$@" || ((!($? & 2))) || STATUS=0
             ((!STATUS))
         fi
     elif lk_command_exists git; then

@@ -1080,7 +1080,8 @@ function lk_duration() {
 function _lk_stream_args() {
     local IFS=$' \t\n'
     if (($# > $1 + 1)); then
-        printf '%s\n' "${@:$1+2}" | "${@:2:$1}"
+        local first_arg=$(($1 + 2))
+        printf '%s\n' "${@:first_arg}" | "${@:2:$1}"
     else
         local EXEC=1
         [ "$(type -t "$2")" = file ] || EXEC=
@@ -1500,7 +1501,8 @@ function lk_trap_add() {
         _LK_TRAPS=(${_LK_TRAPS+"${_LK_TRAPS[@]}"})
     fi
     # Collect other traps from this subshell for this signal
-    for ((i = first ? 3 : 0; i < ${#_LK_TRAPS[@]}; i += 3)); do
+    i=$((first ? 3 : 0))
+    for (( ; i < ${#_LK_TRAPS[@]}; i += 3)); do
         ((_LK_TRAPS[i] == BASH_SUBSHELL)) &&
             [[ ${_LK_TRAPS[i + 1]} == "$1" ]] || continue
         trap=${_LK_TRAPS[i + 2]}
@@ -1840,10 +1842,10 @@ function _lk_tty_detail2() {
 # - lk_tty_list @ [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]] [-- [ARG...]]
 # - lk_tty_list [ARRAY [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
 function lk_tty_list() {
-    [ "${1-}" != @ ] || {
+    [[ ${1-} != @ ]] || {
         local IFS=' ' _ITEMS=()
         for ((i = 2; i <= $#; i++)); do
-            [ "${!i}" = -- ] || continue
+            [[ ${!i} == -- ]] || continue
             _ITEMS=("${@:i+1}")
             set -- "${@:1:i-1}"
             break
@@ -1852,20 +1854,20 @@ function lk_tty_list() {
     local _ARRAY=${1:--} _MESSAGE=${2-List:} _SINGLE _PLURAL _COLOUR \
         _PREFIX=${_LK_TTY_PREFIX-${_LK_TTY_PREFIX1-==> }} \
         _ITEMS _INDENT _COLUMNS _LIST=
-    [ $# -ge 2 ] || {
+    [[ $# -ge 2 ]] || {
         _SINGLE=item
         _PLURAL=items
     }
     _COLOUR=3
-    [ $# -le 3 ] || {
+    [[ $# -le 3 ]] || {
         _SINGLE=${3-}
         _PLURAL=${4-}
         _COLOUR=5
     }
-    if [ "$_ARRAY" = - ]; then
-        [ ! -t 0 ] && lk_mapfile _ITEMS ||
+    if [[ $_ARRAY == - ]]; then
+        [[ ! -t 0 ]] && lk_mapfile _ITEMS ||
             lk_err "no input" || return
-    elif [ "$_ARRAY" != @ ]; then
+    elif [[ $_ARRAY != @ ]]; then
         _ARRAY="${_ARRAY}[@]"
         _ITEMS=(${!_ARRAY+"${!_ARRAY}"}) || return
     fi
@@ -1876,7 +1878,7 @@ function lk_tty_list() {
     fi
     _INDENT=${_LK_TTY_INDENT:-$_INDENT}
     _COLUMNS=$(($(lk_tty_columns) - _INDENT - ${_LK_TTY_GROUP:-0} * 4))
-    [ -z "${_ITEMS+1}" ] || {
+    [[ -z ${_ITEMS+1} ]] || {
         _LIST=$(printf '\n%s' "${_ITEMS[@]}")
         ! lk_command_exists column expand ||
             _LIST=$'\n'$(COLUMNS=$((_COLUMNS > 0 ? _COLUMNS : 0)) \
@@ -1886,7 +1888,7 @@ function lk_tty_list() {
         _LK_FD=1
         ${_LK_TTY_COMMAND:-lk_tty_print} \
             "$_MESSAGE" "$_LIST" ${!_COLOUR+"${!_COLOUR}"}
-        [ -z "${_SINGLE:+${_PLURAL:+1}}" ] ||
+        [[ -z ${_SINGLE:+${_PLURAL:+1}} ]] ||
             _LK_TTY_PREFIX=$(printf "%$((_INDENT > 0 ? _INDENT : 0))s") \
                 lk_tty_detail "($(lk_plural -v _ITEMS "$_SINGLE" "$_PLURAL"))"
     )" >&"${_LK_FD-2}"
@@ -2039,15 +2041,15 @@ function lk_tty_run_detail() {
 function lk_tty_pairs() { (
     local IFS=${IFS:-$'\t'} LF COLOUR ARGS= _IFS TEMP LEN KEY VALUE
     unset LF COLOUR
-    [ "${1-}" != -d ] || { LF=${2::1} && shift 2; }
-    [ "${1-}" = -- ] || [ $# -eq 0 ] || { COLOUR=$1 && shift; }
-    [ "${1-}" != -- ] || { ARGS=1 && shift; }
-    [ -n "${LF+1}" ] || { LF=$'\n' && IFS=$'\t'; }
+    [[ ${1-} != -d ]] || { LF=${2::1} && shift 2; }
+    [[ ${1-} == -- ]] || [[ $# -eq 0 ]] || { COLOUR=$1 && shift; }
+    [[ ${1-} != -- ]] || { ARGS=1 && shift; }
+    [[ -n ${LF+1} ]] || { LF=$'\n' && IFS=$'\t'; }
     # Check for an even number of arguments remaining and that LF does not
     # appear in IFS, then remove duplicates in IFS and rearrange it for the
     # regex bracket expression below
-    (($# % 2 == 0)) && { [ -z "$LF" ] ||
-        { [ -n "$LF" ] && [[ $IFS != *$LF* ]]; }; } &&
+    (($# % 2 == 0)) && { [[ -z $LF ]] ||
+        { [[ -n $LF ]] && [[ $IFS != *$LF* ]]; }; } &&
         _IFS=$(LF=${LF:-\\0} && printf "%s${LF//%/%%}" "$IFS" |
             awk -v "RS=${LF//$'\n'/\\n}" '
 { FS = ORS = RS
@@ -2058,10 +2060,10 @@ function lk_tty_pairs() { (
     else { middle = middle $i } }
   printf("%s%s%s.\n", first, middle, last) }') && IFS=${_IFS%.} ||
         lk_err "invalid arguments" || return
-    if [ $# -gt 0 ]; then
+    if [[ $# -gt 0 ]]; then
         local SEP=${IFS::1}
         lk_mktemp_with TEMP printf "%s${SEP//%/%%}%s\n" "$@"
-    elif [ -z "$ARGS" ]; then
+    elif [[ -z $ARGS ]]; then
         lk_mktemp_with TEMP cat
     else
         true
@@ -2833,7 +2835,7 @@ function lk_log_start() {
         _LK_FD_LOGGED=1
     }
     lk_log_tty_on
-    cat >"/dev/fd/$_LK_LOG_FD" <<<"$HEADER"
+    cat <<<"$HEADER" >"/dev/fd/$_LK_LOG_FD"
     ! lk_verbose 2 || _LK_FD=$_LK_TTY_OUT_FD lk_tty_log "Output log:" "$FILE"
     _LK_LOG_FILE=$FILE
 }
@@ -3517,7 +3519,7 @@ function lk_keep_trying() {
 # 1. if command fails with output
 # 2. if command succeeds with no output
 # 3. if command fails with no output
-function lk_require_output() { (
+function lk_require_output() (
     QUIET=0
     [[ ${1-} != -q ]] || { QUIET=1 && shift; }
     if ((!QUIET)); then
@@ -3530,7 +3532,7 @@ function lk_require_output() { (
         0,*) return 2 ;;
         *) return 3 ;;
         esac
-) }
+)
 
 # lk_env_clean COMMAND [ARG...]
 #
@@ -3645,8 +3647,8 @@ function lk_jq() {
 #     }
 function lk_jq_var() {
     local _ARGS=() _VAR _ARG _CMD=()
-    while [ $# -gt 0 ]; do
-        [ "$1" = -- ] || { _ARGS[${#_ARGS[@]}]=$1 && shift && continue; }
+    while [[ $# -gt 0 ]]; do
+        [[ $1 == -- ]] || { _ARGS[${#_ARGS[@]}]=$1 && shift && continue; }
         shift && break
     done
     while IFS=$'\t' read -r _VAR _ARG; do
@@ -4231,9 +4233,9 @@ function lk_diff() { (
             printf '%s' "$LK_RESET"
             STATUS=1
             lk_require_output lk_maybe_sudo icdiff -U2 --no-headers \
-                ${_LK_TTY_INDENT:+--cols=$(($(
+                ${_LK_TTY_INDENT:+--cols="$(($(
                     lk_tty_columns
-                ) - 2 * (_LK_TTY_INDENT + 2)))} "$@" || ((!($? & 2))) || STATUS=0
+                ) - 2 * (_LK_TTY_INDENT + 2)))"} "$@" || ((!($? & 2))) || STATUS=0
             ((!STATUS))
         fi
     elif lk_command_exists git; then

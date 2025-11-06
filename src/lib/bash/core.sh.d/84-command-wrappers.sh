@@ -82,7 +82,7 @@ function lk_keep_trying() {
 # 1. if command fails with output
 # 2. if command succeeds with no output
 # 3. if command fails with no output
-function lk_require_output() { (
+function lk_require_output() (
     QUIET=0
     [[ ${1-} != -q ]] || { QUIET=1 && shift; }
     if ((!QUIET)); then
@@ -95,7 +95,7 @@ function lk_require_output() { (
         0,*) return 2 ;;
         *) return 3 ;;
         esac
-) }
+)
 
 # lk_env_clean COMMAND [ARG...]
 #

@@ -19,7 +19,8 @@ function _lk_linode_cli_json {
             linode-cli --json --page "$PAGE" "$@" &&
             COUNT=$(jq -r 'length' "$JSON") &&
             jq '.[]' "$JSON" || return
-        ((PAGE++, COUNT == 100)) || break
+        ((PAGE++))
+        ((COUNT == 100)) || break
     done | jq --slurp
 }
 

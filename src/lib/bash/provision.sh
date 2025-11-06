@@ -285,7 +285,7 @@ Usage: $FUNCNAME [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
             [ "$(wc -l <<<"$KEY")" -eq 1 ] &&
             KEY_FILE=- || KEY_FILE=; }; } ||
         lk_warn "$KEY_FILE: file not found" || return
-    [ ! "$KEY_FILE" = - ] || {
+    [[ $KEY_FILE != - ]] || {
         KEY=${KEY:-$(cat)}
         KEY_FILE=$h/.ssh/${SSH_PREFIX}keys/$NAME
         lk_install -m 00600 "$KEY_FILE" &&
@@ -370,7 +370,7 @@ function lk_ssh_configure() {
     [ $# -eq 0 ] || [ $# -ge 2 ] || lk_warn "invalid arguments" || return
     [ ${#HOMES[@]} -gt 0 ] || HOMES=(~)
     [ ${#HOMES[@]} -le 1 ] ||
-        [ ! "$JUMP_KEY_FILE" = - ] ||
+        [[ $JUMP_KEY_FILE != - ]] ||
         KEY=$(cat)
 
     # Prepare awk command that adds "Include ~/.ssh/lk-config.d/*" to
@@ -388,7 +388,7 @@ function lk_ssh_configure() {
     for h in "${HOMES[@]}"; do
         [ ! -e "$h/.${LK_PATH_PREFIX}ignore" ] &&
             [ ! -e "$h/.ssh/.${LK_PATH_PREFIX}ignore" ] || continue
-        if [[ $h == ~ ]]; then
+        if [[ $h == "$HOME" ]]; then
             OWNER=$USER
         elif [[ $h =~ ^/etc/skel(\.${LK_PATH_PREFIX%-})?$ ]]; then
             OWNER=root
@@ -434,7 +434,7 @@ EOF
                 "jump" \
                 "$JUMP_HOST" \
                 "$JUMP_USER" \
-                "$JUMP_KEY_FILE" ${KEY+<<<"$KEY"}
+                "$JUMP_KEY_FILE" <<<"${KEY-}"
         (
             shopt -s nullglob
             chmod 00600 \
@@ -790,7 +790,7 @@ function _lk_crontab() {
             "$(lk_ere_escape "$ADD_COMMAND")")$LK_h*\$"}
         # If the command is already present, replace the first occurrence and
         # delete any duplicates
-        if grep -E "$REGEX" >/dev/null <<<"$CRONTAB"; then
+        if grep -E "$REGEX" <<<"$CRONTAB" >/dev/null; then
             REGEX=${REGEX//\//\\\/}
             NEW_CRONTAB=$(gnu_sed -E "0,/$REGEX/{s/$REGEX/$(
                 lk_sed_escape_replace "$ADD_COMMAND"
