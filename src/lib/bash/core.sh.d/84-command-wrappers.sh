@@ -143,20 +143,48 @@ function lk_stack() {
     fi
 }
 
-# lk_output_diff [-i] <command1> [<arg1>...] -- <command2> [<arg2>...] [-- <arg>...]
+function _lk_output_diff_usage() {
+    cat <<EOF
+Usage: $1 -1 <command>... -- <arg1>... [-- <arg2>...]
+   or: $1 -2 <command1>... -- <command2>... [-- <arg>...]
+   or: $1 -2 -i <command1>... -- <command2>... -- <arg>
+
+Run two commands and compare their output. If -1 is given, run the same command
+with each of the given argument lists, or if -2 is given, run each of the given
+commands, optionally adding the same arguments to both.
+
+If -i is given after -2, occurrences of "{}" are replaced with <arg> in both
+commands, and there must be no additional arguments.
+EOF
+} #### Reviewed: 2025-11-08
+
+# - lk_output_diff -1 <command>... -- <arg1>... [-- <arg2>...]
+# - lk_output_diff -2 <command1>... -- <command2>... [-- <arg>...]
+# - lk_output_diff -2 -i <command1>... -- <command2>... -- <arg>
 #
-# Run two commands, optionally passing the given arguments to both, and compare
-# their output.
+# Run two commands and compare their output. If -1 is given, run the same
+# command with each of the given argument lists, or if -2 is given, run each of
+# the given commands, optionally adding the same arguments to both.
 #
-# If -i is given, occurrences of "{}" are replaced with <arg> in both commands,
-# and there must be no additional arguments. Otherwise, <arg> and any subsequent
-# arguments are added to the end of both commands.
+# If -i is given after -2, occurrences of "{}" are replaced with <arg> in both
+# commands, and there must be no additional arguments.
 function lk_output_diff() {
-    local _arg _cmd1=() _cmd2=() _replace=0 _temp1 _temp2
-    [[ ${1-} != -i ]] || {
-        _replace=1
+    local _arg _cmd1=() _cmd2=() _count _replace=0 _temp1 _temp2
+    if [[ ${1-} == -1 ]]; then
+        _count=1
         shift
-    }
+    elif [[ ${1-} == -2 ]]; then
+        _count=2
+        shift
+        if [[ ${1-} == -i ]]; then
+            _replace=1
+            shift
+        fi
+    elif [[ ${1+1} ]]; then
+        lk_usage -e "argument #1 must be '-1' or '-2', '$1' given" || return
+    else
+        lk_usage || return
+    fi
     while (($#)); do
         _arg=$1
         shift
@@ -170,19 +198,23 @@ function lk_output_diff() {
         _cmd2[${#_cmd2[@]}]=$_arg
     done
     if ((_replace)); then
-        (($# == 1)) && [[ ${_cmd1+1}${_cmd2+1} == 11 ]] || lk_bad_args || return
-        _cmd1=("${_cmd1[@]//"{}"/$1}")
-        _cmd2=("${_cmd2[@]//"{}"/$1}")
-    elif (($#)); then
+        (($# == 1)) || lk_usage -e "1 argument required, $# given" || return
+        _cmd1=(${_cmd1+"${_cmd1[@]//"{}"/$1}"})
+        _cmd2=(${_cmd2+"${_cmd2[@]//"{}"/$1}"})
+    elif ((_count == 2)); then
         _cmd1+=("$@")
         _cmd2+=("$@")
     else
-        [[ ${_cmd1+1}${_cmd2+1} == 11 ]] || lk_bad_args || return
+        local _cmd=(${_cmd1+"${_cmd1[@]}"})
+        _cmd1=(${_cmd+"${_cmd[@]}"} ${_cmd2+"${_cmd2[@]}"})
+        _cmd2=(${_cmd+"${_cmd[@]}"} "$@")
     fi
+    [[ ${_cmd1+1}${_cmd2+1} == 11 ]] ||
+        lk_usage -e "commands cannot be empty" || return
     lk_mktemp_with _temp1 "${_cmd1[@]}" &&
         lk_mktemp_with _temp2 "${_cmd2[@]}" || return
     local IFS=$' \t\n'
     lk_tty_diff -L "\`${_cmd1[*]}\`" -L "\`${_cmd2[*]}\`" "$_temp1" "$_temp2"
-}
+} #### Reviewed: 2025-11-08
 
 #### Reviewed: 2021-08-28
