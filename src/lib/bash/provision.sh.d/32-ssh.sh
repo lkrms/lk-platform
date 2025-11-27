@@ -22,13 +22,14 @@ function lk_ssh_host_parameter_sh() {
 #
 #     -f FUNCTION   Declare FUNCTION on the remote system before running COMMAND
 #     -l LIBRARY    Add LIBRARY and any dependencies to the generated script
+#     -t            Allocate a pseudo-terminal even if there is no local TTY
 #
 # - `-f` and `-l` may be given multiple times
 # - If `-l` is set, the `core` library is added automatically
 # - Use `-l core` to add the `core` library only
 # - Values applied to `-l` correspond to arguments passed to `lk_require`
 function lk_ssh_run_on_host() {
-    local FUNC=() LIB=() LIB_DIR=$LK_BASE/lib/bash/include
+    local FUNC=() LIB=() TTY= LIB_DIR=$LK_BASE/lib/bash/include
     while (($# > 1)) && [[ $1 == -* ]]; do
         case "$1" in
         -f)
@@ -38,6 +39,11 @@ function lk_ssh_run_on_host() {
             local FILE=$LIB_DIR/$2.sh
             [[ -r $FILE ]] || lk_warn "file not found: $FILE" || return
             LIB[${#LIB[@]}]=$2
+            ;;
+        -t)
+            TTY=1
+            shift
+            continue
             ;;
         *)
             false || lk_warn "invalid argument: $1" || return
@@ -54,7 +60,7 @@ function lk_ssh_run_on_host() {
     [[ $(type -t "$1") != function ]] || FUNC[${#FUNC[@]}]=$1
     # Add the requested functions and libraries, and any dependencies, to a
     # temporary file
-    lk_mktemp_with SH || return
+    lk_mktemp_with SH echo "shopt -s extglob" || return
     {
         [[ -z ${LIB+1} ]] || (
             LAST=0
@@ -84,7 +90,7 @@ function lk_ssh_run_on_host() {
                 declare -f "${FUNC[@]}" || return
         }
         lk_quote_args "$@"
-    } >"$SH" || return
+    } >>"$SH" || return
     local REMOTE_SH STATUS=0 ARGS=(
         -o ControlMaster=auto
         -o ControlPath="/tmp/.${FUNCNAME}_%C-%u"
@@ -97,7 +103,7 @@ function lk_ssh_run_on_host() {
     }
     REMOTE_SH=$(ssh "${ARGS[@]}" "$HOST" mktemp) || return
     scp -pq "${ARGS[@]}" "$SH" "$HOST:$REMOTE_SH" &&
-        ssh -tt "${ARGS[@]}" "$HOST" \
+        ssh ${TTY:+-tt} "${ARGS[@]}" "$HOST" \
             "${SUDO+sudo }LK_TTY_HOSTNAME=1 bash $(
                 lk_quote_args "$REMOTE_SH"
             )" || STATUS=$?
