@@ -124,6 +124,10 @@ PAC_PACKAGES+=(
     samba
     testssl.sh
 
+    # MaxMind GeoIP2 data and tooling
+    geoipupdate
+    mmdblookup
+
     # System
     arch-install-scripts
     at
@@ -142,6 +146,7 @@ AUR_PACKAGES+=(
     asciinema-agg
     dug-git
     gp-saml-gui-git
+    mmdbinspect
     pacman-cleanup-hook
     powershell-bin
     vpn-slice
@@ -223,7 +228,7 @@ PAC_PACKAGES+=(
     handbrake-cli
     mkvtoolnix-cli
     mkvtoolnix-gui
-    openshot
+    #openshot
     video-trimmer
     yt-dlp
 
