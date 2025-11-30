@@ -7,7 +7,7 @@ PAC_EXCEPT=()
 
 PAC_OFFER=(
     geekbench
-    teamviewer
+    #teamviewer
     zoom
 )
 

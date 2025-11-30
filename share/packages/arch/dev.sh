@@ -270,7 +270,7 @@ AUR_PACKAGES+=(
     spotify
     stretchly
     teams-for-linux
-    teamviewer
+    #teamviewer
     todoist-appimage
     trimage
     #ttf-apple-emoji
