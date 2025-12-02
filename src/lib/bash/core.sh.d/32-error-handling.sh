@@ -2,7 +2,7 @@
 
 function _lk_caller() {
     local CALLER
-    CALLER=("$(lk_script_name 2)")
+    CALLER=("$(lk_script 2)")
     CALLER[0]=$LK_BOLD$CALLER$LK_RESET
     lk_verbose || {
         echo "$CALLER"
@@ -19,8 +19,8 @@ function _lk_caller() {
     [[ -z $SOURCE ]] || [[ $SOURCE == main ]] || [[ $SOURCE == "$0" ]] ||
         CALLER+=("$(lk_tty_path "$SOURCE")")
     [[ -z $LINE ]] || [[ $LINE -eq 1 ]] ||
-        CALLER[${#CALLER[@]} - 1]+=$LK_DIM:$LINE$LK_UNDIM
-    lk_implode_arr "$LK_DIM->$LK_UNDIM" CALLER
+        CALLER[${#CALLER[@]} - 1]+=$LK_DIM:$LINE$LK_UNBOLD_UNDIM
+    lk_implode_arr "$LK_DIM->$LK_UNBOLD_UNDIM" CALLER
 }
 
 # lk_warn [MESSAGE]
@@ -36,14 +36,14 @@ function lk_warn() {
 # Print "<CALLER>: MESSAGE" as an error and return or exit non-zero with the
 # most recent exit status or 1. If MESSAGE is the empty string, suppress output.
 function lk_die() {
-    local STATUS=$?
-    ((STATUS)) || STATUS=1
-    [[ ${1+1}${1:+2} == 1 ]] ||
-        lk_tty_error "$(_lk_caller): ${1-command failed}"
+    local status=$?
+    ((status)) || status=1
+    (($#)) || set -- "command failed"
+    [[ -z $1 ]] || lk_tty_error "$(_lk_caller): $1"
     if [[ $- != *i* ]]; then
-        exit "$STATUS"
+        exit $status
     else
-        return "$STATUS"
+        return $status
     fi
 }
 

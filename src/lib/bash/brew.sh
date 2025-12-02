@@ -29,7 +29,7 @@ function lk_brew_install_homebrew() {
         TARGET_DIR=${TARGET_DIR:-/home/linuxbrew/.linuxbrew}
         COMMAND=()
     fi
-    NAME="Homebrew${NAME:+ ($NAME)}"
+    NAME=Homebrew${NAME:+" ($NAME)"}
     BREW=$TARGET_DIR/bin/brew
     [[ ! -x $BREW ]] || return 0
     lk_tty_print "Installing $NAME"

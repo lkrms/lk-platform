@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# shellcheck disable=SC2034
+
 shopt -s extglob
 
 [[ ${USER-} ]] || USER=$(id -un) || return
@@ -10,6 +12,94 @@ LK_H=$'[^ \t]'
 
 # Collect arguments passed to the current script or function
 _LK_ARGV=("$@")
+
+# lk_colour_off
+#
+# Assign empty strings to colour and formatting variables.
+function lk_colour_off() {
+    LK_BLACK=
+    LK_RED=
+    LK_GREEN=
+    LK_YELLOW=
+    LK_BLUE=
+    LK_MAGENTA=
+    LK_CYAN=
+    LK_WHITE=
+    LK_DEFAULT=
+    LK_BLACK_BG=
+    LK_RED_BG=
+    LK_GREEN_BG=
+    LK_YELLOW_BG=
+    LK_BLUE_BG=
+    LK_MAGENTA_BG=
+    LK_CYAN_BG=
+    LK_WHITE_BG=
+    LK_DEFAULT_BG=
+    LK_BOLD=
+    LK_DIM=
+    LK_BOLD_UNDIM=
+    LK_DIM_UNBOLD=
+    LK_UNBOLD_UNDIM=
+    LK_RESET=
+    LK_CLEAR_LINE=
+    LK_AUTO_WRAP_OFF=
+    LK_AUTO_WRAP_ON=
+
+    _LK_COLOUR_ERROR=
+    _LK_COLOUR_WARNING=
+    _LK_COLOUR_NOTICE=
+    _LK_COLOUR_INFO=
+    _LK_COLOUR_SUCCESS=
+}
+
+# lk_colour_on
+#
+# Assign ANSI escape sequences to colour and formatting variables.
+function lk_colour_on() {
+    LK_BLACK=$'\E[30m'
+    LK_RED=$'\E[31m'
+    LK_GREEN=$'\E[32m'
+    LK_YELLOW=$'\E[33m'
+    LK_BLUE=$'\E[34m'
+    LK_MAGENTA=$'\E[35m'
+    LK_CYAN=$'\E[36m'
+    LK_WHITE=$'\E[37m'
+    LK_DEFAULT=$'\E[39m'
+    LK_BLACK_BG=$'\E[40m'
+    LK_RED_BG=$'\E[41m'
+    LK_GREEN_BG=$'\E[42m'
+    LK_YELLOW_BG=$'\E[43m'
+    LK_BLUE_BG=$'\E[44m'
+    LK_MAGENTA_BG=$'\E[45m'
+    LK_CYAN_BG=$'\E[46m'
+    LK_WHITE_BG=$'\E[47m'
+    LK_DEFAULT_BG=$'\E[49m'
+    LK_BOLD=$'\E[1m'
+    LK_DIM=$'\E[2m'
+    LK_BOLD_UNDIM=$'\E[22;1m'
+    LK_DIM_UNBOLD=$'\E[22;2m'
+    LK_UNBOLD_UNDIM=$'\E[22m'
+    LK_RESET=$'\E[m'
+    LK_CLEAR_LINE=$'\E[K'
+    LK_AUTO_WRAP_OFF=$'\E[?7l'
+    LK_AUTO_WRAP_ON=$'\E[?7h'
+
+    _LK_COLOUR_ERROR=$LK_RED
+    _LK_COLOUR_WARNING=$LK_YELLOW
+    _LK_COLOUR_NOTICE=$LK_CYAN
+    _LK_COLOUR_INFO=$LK_YELLOW
+    _LK_COLOUR_SUCCESS=$LK_GREEN
+}
+
+# From https://no-color.org/: "Command-line software which adds ANSI color to
+# its output by default should check for a NO_COLOR environment variable that,
+# when present and not an empty string (regardless of its value), prevents the
+# addition of ANSI color."
+if [[ ${LK_NO_COLOUR-} ]] || [[ ${NO_COLOR-} ]]; then
+    lk_colour_off
+else
+    lk_colour_on
+fi
 
 # lk_pass [-<status>] [--] [<command> [<arg>...]]
 #
@@ -990,7 +1080,8 @@ function lk_duration() {
 function _lk_stream_args() {
     local IFS=$' \t\n'
     if (($# > $1 + 1)); then
-        printf '%s\n' "${@:$1+2}" | "${@:2:$1}"
+        local first_arg=$(($1 + 2))
+        printf '%s\n' "${@:first_arg}" | "${@:2:$1}"
     else
         local EXEC=1
         [ "$(type -t "$2")" = file ] || EXEC=
@@ -1299,7 +1390,7 @@ function _lk_script_load() {
 
 function _lk_caller() {
     local CALLER
-    CALLER=("$(lk_script_name 2)")
+    CALLER=("$(lk_script 2)")
     CALLER[0]=$LK_BOLD$CALLER$LK_RESET
     lk_verbose || {
         echo "$CALLER"
@@ -1316,8 +1407,8 @@ function _lk_caller() {
     [[ -z $SOURCE ]] || [[ $SOURCE == main ]] || [[ $SOURCE == "$0" ]] ||
         CALLER+=("$(lk_tty_path "$SOURCE")")
     [[ -z $LINE ]] || [[ $LINE -eq 1 ]] ||
-        CALLER[${#CALLER[@]} - 1]+=$LK_DIM:$LINE$LK_UNDIM
-    lk_implode_arr "$LK_DIM->$LK_UNDIM" CALLER
+        CALLER[${#CALLER[@]} - 1]+=$LK_DIM:$LINE$LK_UNBOLD_UNDIM
+    lk_implode_arr "$LK_DIM->$LK_UNBOLD_UNDIM" CALLER
 }
 
 # lk_warn [MESSAGE]
@@ -1333,14 +1424,14 @@ function lk_warn() {
 # Print "<CALLER>: MESSAGE" as an error and return or exit non-zero with the
 # most recent exit status or 1. If MESSAGE is the empty string, suppress output.
 function lk_die() {
-    local STATUS=$?
-    ((STATUS)) || STATUS=1
-    [[ ${1+1}${1:+2} == 1 ]] ||
-        lk_tty_error "$(_lk_caller): ${1-command failed}"
+    local status=$?
+    ((status)) || status=1
+    (($#)) || set -- "command failed"
+    [[ -z $1 ]] || lk_tty_error "$(_lk_caller): $1"
     if [[ $- != *i* ]]; then
-        exit "$STATUS"
+        exit $status
     else
-        return "$STATUS"
+        return $status
     fi
 }
 
@@ -1410,7 +1501,8 @@ function lk_trap_add() {
         _LK_TRAPS=(${_LK_TRAPS+"${_LK_TRAPS[@]}"})
     fi
     # Collect other traps from this subshell for this signal
-    for ((i = first ? 3 : 0; i < ${#_LK_TRAPS[@]}; i += 3)); do
+    i=$((first ? 3 : 0))
+    for (( ; i < ${#_LK_TRAPS[@]}; i += 3)); do
         ((_LK_TRAPS[i] == BASH_SUBSHELL)) &&
             [[ ${_LK_TRAPS[i + 1]} == "$1" ]] || continue
         trap=${_LK_TRAPS[i + 2]}
@@ -1543,7 +1635,7 @@ function _lk_tty_hostname_apply() {
         _LK_TTY_HOSTNAME="<unknown>"
     _LK_TTY_HOSTNAME="${LK_DIM}[ $(lk_ellipsise 14 "$(
         printf '%14s' "$_LK_TTY_HOSTNAME"
-    )") ] $LK_UNDIM"
+    )") ] $LK_UNBOLD_UNDIM"
     _LK_TTY_HOSTNAME_INDENT=${_LK_TTY_HOSTNAME_INDENT:-$'\n                   '}
 }
 
@@ -1645,8 +1737,8 @@ function lk_tty_group_end() {
 #   lines will be aligned with the first (values: 0 or 1; default: 0)
 # - _LK_TTY_INDENT: MESSAGE2 indent (default: based on prefix length and message
 #   line counts)
-# - _LK_COLOUR: default colour of prefix and MESSAGE2 (default: LK_CYAN)
-# - _LK_ALT_COLOUR: default colour of prefix and MESSAGE2 for nested messages
+# - _LK_COLOUR_NOTICE: default colour of prefix and MESSAGE2 (default: LK_CYAN)
+# - _LK_COLOUR_INFO: default colour of prefix and MESSAGE2 for nested messages
 #   and output from lk_tty_detail, lk_tty_list_detail, etc. (default: LK_YELLOW)
 # - _LK_TTY_COLOUR: override prefix and MESSAGE2 colour
 # - _LK_TTY_PREFIX_COLOUR: override prefix colour (supersedes _LK_TTY_COLOUR)
@@ -1676,7 +1768,7 @@ function lk_tty_print() {
         }
     }
     local MESSAGE=${1-} MESSAGE2=${2-} \
-        COLOUR=${3-${_LK_TTY_COLOUR-$_LK_COLOUR}} \
+        COLOUR=${3-${_LK_TTY_COLOUR-$_LK_COLOUR_NOTICE}} \
         PREFIX=${_LK_TTY_PREFIX-${_LK_TTY_PREFIX1-==> }} \
         IFS MARGIN SPACES NEWLINE=0 NEWLINE2=0 SEP=$'\n' INDENT=0
     unset IFS
@@ -1732,16 +1824,16 @@ function lk_tty_print() {
 
 # lk_tty_detail MESSAGE [MESSAGE2 [COLOUR]]
 function lk_tty_detail() {
-    local _LK_TTY_COLOUR_ORIG=${_LK_COLOUR-}
+    local _LK_TTY_COLOUR_ORIG=${_LK_COLOUR_NOTICE-}
     _LK_TTY_PREFIX1=${_LK_TTY_PREFIX2- -> } \
-        _LK_COLOUR=${_LK_ALT_COLOUR-} \
+        _LK_COLOUR_NOTICE=${_LK_COLOUR_INFO-} \
         _LK_TTY_MESSAGE_COLOUR=${_LK_TTY_MESSAGE_COLOUR-} \
         lk_tty_print "$@"
 }
 
 function _lk_tty_detail2() {
     _LK_TTY_PREFIX1=${_LK_TTY_PREFIX3-  - } \
-        _LK_COLOUR=${_LK_TTY_COLOUR_ORIG-$_LK_COLOUR} \
+        _LK_COLOUR_NOTICE=${_LK_TTY_COLOUR_ORIG-$_LK_COLOUR_NOTICE} \
         _LK_TTY_MESSAGE_COLOUR=${_LK_TTY_MESSAGE_COLOUR-} \
         lk_tty_print "$@"
 }
@@ -1750,10 +1842,10 @@ function _lk_tty_detail2() {
 # - lk_tty_list @ [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]] [-- [ARG...]]
 # - lk_tty_list [ARRAY [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
 function lk_tty_list() {
-    [ "${1-}" != @ ] || {
+    [[ ${1-} != @ ]] || {
         local IFS=' ' _ITEMS=()
         for ((i = 2; i <= $#; i++)); do
-            [ "${!i}" = -- ] || continue
+            [[ ${!i} == -- ]] || continue
             _ITEMS=("${@:i+1}")
             set -- "${@:1:i-1}"
             break
@@ -1762,20 +1854,20 @@ function lk_tty_list() {
     local _ARRAY=${1:--} _MESSAGE=${2-List:} _SINGLE _PLURAL _COLOUR \
         _PREFIX=${_LK_TTY_PREFIX-${_LK_TTY_PREFIX1-==> }} \
         _ITEMS _INDENT _COLUMNS _LIST=
-    [ $# -ge 2 ] || {
+    [[ $# -ge 2 ]] || {
         _SINGLE=item
         _PLURAL=items
     }
     _COLOUR=3
-    [ $# -le 3 ] || {
+    [[ $# -le 3 ]] || {
         _SINGLE=${3-}
         _PLURAL=${4-}
         _COLOUR=5
     }
-    if [ "$_ARRAY" = - ]; then
-        [ ! -t 0 ] && lk_mapfile _ITEMS ||
+    if [[ $_ARRAY == - ]]; then
+        [[ ! -t 0 ]] && lk_mapfile _ITEMS ||
             lk_err "no input" || return
-    elif [ "$_ARRAY" != @ ]; then
+    elif [[ $_ARRAY != @ ]]; then
         _ARRAY="${_ARRAY}[@]"
         _ITEMS=(${!_ARRAY+"${!_ARRAY}"}) || return
     fi
@@ -1786,7 +1878,7 @@ function lk_tty_list() {
     fi
     _INDENT=${_LK_TTY_INDENT:-$_INDENT}
     _COLUMNS=$(($(lk_tty_columns) - _INDENT - ${_LK_TTY_GROUP:-0} * 4))
-    [ -z "${_ITEMS+1}" ] || {
+    [[ -z ${_ITEMS+1} ]] || {
         _LIST=$(printf '\n%s' "${_ITEMS[@]}")
         ! lk_command_exists column expand ||
             _LIST=$'\n'$(COLUMNS=$((_COLUMNS > 0 ? _COLUMNS : 0)) \
@@ -1796,7 +1888,7 @@ function lk_tty_list() {
         _LK_FD=1
         ${_LK_TTY_COMMAND:-lk_tty_print} \
             "$_MESSAGE" "$_LIST" ${!_COLOUR+"${!_COLOUR}"}
-        [ -z "${_SINGLE:+${_PLURAL:+1}}" ] ||
+        [[ -z ${_SINGLE:+${_PLURAL:+1}} ]] ||
             _LK_TTY_PREFIX=$(printf "%$((_INDENT > 0 ? _INDENT : 0))s") \
                 lk_tty_detail "($(lk_plural -v _ITEMS "$_SINGLE" "$_PLURAL"))"
     )" >&"${_LK_FD-2}"
@@ -1949,15 +2041,15 @@ function lk_tty_run_detail() {
 function lk_tty_pairs() { (
     local IFS=${IFS:-$'\t'} LF COLOUR ARGS= _IFS TEMP LEN KEY VALUE
     unset LF COLOUR
-    [ "${1-}" != -d ] || { LF=${2::1} && shift 2; }
-    [ "${1-}" = -- ] || [ $# -eq 0 ] || { COLOUR=$1 && shift; }
-    [ "${1-}" != -- ] || { ARGS=1 && shift; }
-    [ -n "${LF+1}" ] || { LF=$'\n' && IFS=$'\t'; }
+    [[ ${1-} != -d ]] || { LF=${2::1} && shift 2; }
+    [[ ${1-} == -- ]] || [[ $# -eq 0 ]] || { COLOUR=$1 && shift; }
+    [[ ${1-} != -- ]] || { ARGS=1 && shift; }
+    [[ -n ${LF+1} ]] || { LF=$'\n' && IFS=$'\t'; }
     # Check for an even number of arguments remaining and that LF does not
     # appear in IFS, then remove duplicates in IFS and rearrange it for the
     # regex bracket expression below
-    (($# % 2 == 0)) && { [ -z "$LF" ] ||
-        { [ -n "$LF" ] && [[ $IFS != *$LF* ]]; }; } &&
+    (($# % 2 == 0)) && { [[ -z $LF ]] ||
+        { [[ -n $LF ]] && [[ $IFS != *$LF* ]]; }; } &&
         _IFS=$(LF=${LF:-\\0} && printf "%s${LF//%/%%}" "$IFS" |
             awk -v "RS=${LF//$'\n'/\\n}" '
 { FS = ORS = RS
@@ -1968,10 +2060,10 @@ function lk_tty_pairs() { (
     else { middle = middle $i } }
   printf("%s%s%s.\n", first, middle, last) }') && IFS=${_IFS%.} ||
         lk_err "invalid arguments" || return
-    if [ $# -gt 0 ]; then
+    if [[ $# -gt 0 ]]; then
         local SEP=${IFS::1}
         lk_mktemp_with TEMP printf "%s${SEP//%/%%}%s\n" "$@"
-    elif [ -z "$ARGS" ]; then
+    elif [[ -z $ARGS ]]; then
         lk_mktemp_with TEMP cat
     else
         true
@@ -2046,22 +2138,22 @@ function _lk_tty_log() {
 
 # lk_tty_success [-r] [-n] MESSAGE [MESSAGE2...]
 function lk_tty_success() {
-    _lk_tty_log " // " "$_LK_SUCCESS_COLOUR" "$@"
+    _lk_tty_log " // " "$_LK_COLOUR_SUCCESS" "$@"
 }
 
 # lk_tty_log [-r] [-n] MESSAGE [MESSAGE2...]
 function lk_tty_log() {
-    _lk_tty_log " :: " "${_LK_TTY_COLOUR-$_LK_COLOUR}" "$@"
+    _lk_tty_log " :: " "${_LK_TTY_COLOUR-$_LK_COLOUR_NOTICE}" "$@"
 }
 
 # lk_tty_warning [-r] [-n] MESSAGE [MESSAGE2...]
 function lk_tty_warning() {
-    _lk_tty_log "  ! " "$_LK_WARNING_COLOUR" "$@"
+    _lk_tty_log "  ! " "$_LK_COLOUR_WARNING" "$@"
 }
 
 # lk_tty_error [-r] [-n] MESSAGE [MESSAGE2...]
 function lk_tty_error() {
-    _lk_tty_log " !! " "$_LK_ERROR_COLOUR" "$@"
+    _lk_tty_log " !! " "$_LK_COLOUR_ERROR" "$@"
 }
 
 # _lk_usage_format <CALLER>
@@ -2259,7 +2351,7 @@ function _lk_tty_format_readline() {
 function _lk_tty_prompt() {
     PREFIX=" :: "
     PROMPT=${_PROMPT[*]}
-    _lk_tty_format_readline -b PREFIX "${_LK_TTY_COLOUR-$_LK_COLOUR}" _LK_TTY_PREFIX_COLOUR
+    _lk_tty_format_readline -b PREFIX "${_LK_TTY_COLOUR-$_LK_COLOUR_NOTICE}" _LK_TTY_PREFIX_COLOUR
     _lk_tty_format_readline -b PROMPT "" _LK_TTY_MESSAGE_COLOUR
     echo "$PREFIX$PROMPT "
 }
@@ -2281,7 +2373,7 @@ function lk_tty_read() {
         return
     }
     local _PROMPT=("$1")
-    [[ -z ${_NOTE:+1} ]] || _PROMPT+=("$LK_DIM($_NOTE)$LK_UNDIM")
+    [[ -z ${_NOTE:+1} ]] || _PROMPT+=("$LK_DIM($_NOTE)$LK_UNBOLD_UNDIM")
     [[ -z ${3:+1} ]] || _PROMPT+=("[$3]")
     IFS= read -rep "$(_lk_tty_prompt)" "${@:4}" "$2" 2>&"${_LK_FD-2}" || return
     [[ -n ${!2:+1} ]] || eval "$2=\${3-}"
@@ -2324,7 +2416,7 @@ function lk_tty_yn() {
         return
     }
     local _PROMPT=("$1") DEFAULT PROMPT REPLY
-    [[ -z ${NOTE:+1} ]] || _PROMPT+=("$LK_DIM($NOTE)$LK_UNDIM")
+    [[ -z ${NOTE:+1} ]] || _PROMPT+=("$LK_DIM($NOTE)$LK_UNBOLD_UNDIM")
     if [[ ${2-} =~ ^$_Y$ ]]; then
         _PROMPT+=("[Y/n]")
         DEFAULT=Y
@@ -2361,7 +2453,7 @@ function lk_tty_ynav() {
         return
     }
     local _PROMPT=("$2") PROMPT REPLY
-    [[ -z ${NOTE:+1} ]] || _PROMPT+=("$LK_DIM($NOTE)$LK_UNDIM")
+    [[ -z ${NOTE:+1} ]] || _PROMPT+=("$LK_DIM($NOTE)$LK_UNBOLD_UNDIM")
     if [[ $DEFAULT =~ ^$_Y$ ]]; then
         _PROMPT+=("[Y/n/a/v]")
         DEFAULT=Y
@@ -2395,6 +2487,36 @@ function lk_tty_ynav() {
     [[ $REPLY == Y ]]
 }
 
+# lk_clip_set
+#
+# Copy input to the desktop environment's clipboard.
+function lk_clip_set() {
+    [[ ! -t 0 ]] || lk_err "no input" || return
+    local command
+    command=$(
+        lk_runnable \
+            "xclip -selection clipboard" \
+            pbcopy \
+            clip
+    ) || lk_err "no clipboard" || return
+    command $command || lk_err "error copying input to clipboard" || return
+    lk_tty_detail "Input copied to clipboard"
+}
+
+# lk_clip_get
+#
+# Paste the desktop environment's clipboard to output.
+function lk_clip_get() {
+    local command
+    command=$(
+        lk_runnable \
+            "xclip -selection clipboard -out" \
+            pbpaste \
+            "powershell.exe -noprofile -command Get-Clipboard"
+    ) || lk_err "no clipboard" || return
+    command $command || lk_err "error pasting clipboard to output" || return
+}
+
 # lk_trace [MESSAGE]
 function lk_trace() {
     lk_debug || return 0
@@ -2407,7 +2529,7 @@ function lk_trace() {
         "${_LK_TRACE_LAST:-$NOW}" \
         "${1+${1::30}}" \
         "${BASH_SOURCE[1]+${BASH_SOURCE[1]#$LK_BASE/}:${BASH_LINENO[0]}}" |
-        awk -F'\t' -v "d=$LK_DIM" -v "u=$LK_UNDIM" \
+        awk -F'\t' -v "d=$LK_DIM" -v "u=$LK_UNBOLD_UNDIM" \
             '{printf "%s%09.4f  +%.4f\t%-30s\t%s\n",d,$1-$2,$1-$3,$4,$5 u}' >&2
     _LK_TRACE_LAST=$NOW
 }
@@ -2435,7 +2557,7 @@ function lk_stack_trace() {
         ((ROWS == 1)) || printf "%${WIDTH}d. " "$ROW"
         printf "%s %s (%s:%s)\n" \
             "$( ((ROW > 1)) && echo at || echo in)" \
-            "$LK_BOLD$FUNC$LK_RESET" "$FILE$LK_DIM" "$LINE$LK_UNDIM"
+            "$LK_BOLD$FUNC$LK_RESET" "$FILE$LK_DIM" "$LINE$LK_UNBOLD_UNDIM"
     done
 }
 
@@ -2713,7 +2835,7 @@ function lk_log_start() {
         _LK_FD_LOGGED=1
     }
     lk_log_tty_on
-    cat >"/dev/fd/$_LK_LOG_FD" <<<"$HEADER"
+    cat <<<"$HEADER" >"/dev/fd/$_LK_LOG_FD"
     ! lk_verbose 2 || _LK_FD=$_LK_TTY_OUT_FD lk_tty_log "Output log:" "$FILE"
     _LK_LOG_FILE=$FILE
 }
@@ -3397,7 +3519,7 @@ function lk_keep_trying() {
 # 1. if command fails with output
 # 2. if command succeeds with no output
 # 3. if command fails with no output
-function lk_require_output() { (
+function lk_require_output() (
     QUIET=0
     [[ ${1-} != -q ]] || { QUIET=1 && shift; }
     if ((!QUIET)); then
@@ -3410,7 +3532,7 @@ function lk_require_output() { (
         0,*) return 2 ;;
         *) return 3 ;;
         esac
-) }
+)
 
 # lk_env_clean COMMAND [ARG...]
 #
@@ -3458,20 +3580,48 @@ function lk_stack() {
     fi
 }
 
-# lk_output_diff [-i] <command1> [<arg1>...] -- <command2> [<arg2>...] [-- <arg>...]
+function _lk_output_diff_usage() {
+    cat <<EOF
+Usage: $1 -1 <command>... -- <arg1>... [-- <arg2>...]
+   or: $1 -2 <command1>... -- <command2>... [-- <arg>...]
+   or: $1 -2 -i <command1>... -- <command2>... -- <arg>
+
+Run two commands and compare their output. If -1 is given, run the same command
+with each of the given argument lists, or if -2 is given, run each of the given
+commands, optionally adding the same arguments to both.
+
+If -i is given after -2, occurrences of "{}" are replaced with <arg> in both
+commands, and there must be no additional arguments.
+EOF
+}
+
+# - lk_output_diff -1 <command>... -- <arg1>... [-- <arg2>...]
+# - lk_output_diff -2 <command1>... -- <command2>... [-- <arg>...]
+# - lk_output_diff -2 -i <command1>... -- <command2>... -- <arg>
 #
-# Run two commands, optionally passing the given arguments to both, and compare
-# their output.
+# Run two commands and compare their output. If -1 is given, run the same
+# command with each of the given argument lists, or if -2 is given, run each of
+# the given commands, optionally adding the same arguments to both.
 #
-# If -i is given, occurrences of "{}" are replaced with <arg> in both commands,
-# and there must be no additional arguments. Otherwise, <arg> and any subsequent
-# arguments are added to the end of both commands.
+# If -i is given after -2, occurrences of "{}" are replaced with <arg> in both
+# commands, and there must be no additional arguments.
 function lk_output_diff() {
-    local _arg _cmd1=() _cmd2=() _replace=0 _temp1 _temp2
-    [[ ${1-} != -i ]] || {
-        _replace=1
+    local _arg _cmd1=() _cmd2=() _count _replace=0 _temp1 _temp2
+    if [[ ${1-} == -1 ]]; then
+        _count=1
         shift
-    }
+    elif [[ ${1-} == -2 ]]; then
+        _count=2
+        shift
+        if [[ ${1-} == -i ]]; then
+            _replace=1
+            shift
+        fi
+    elif [[ ${1+1} ]]; then
+        lk_usage -e "argument #1 must be '-1' or '-2', '$1' given" || return
+    else
+        lk_usage || return
+    fi
     while (($#)); do
         _arg=$1
         shift
@@ -3485,15 +3635,19 @@ function lk_output_diff() {
         _cmd2[${#_cmd2[@]}]=$_arg
     done
     if ((_replace)); then
-        (($# == 1)) && [[ ${_cmd1+1}${_cmd2+1} == 11 ]] || lk_bad_args || return
-        _cmd1=("${_cmd1[@]//"{}"/$1}")
-        _cmd2=("${_cmd2[@]//"{}"/$1}")
-    elif (($#)); then
+        (($# == 1)) || lk_usage -e "1 argument required, $# given" || return
+        _cmd1=(${_cmd1+"${_cmd1[@]//"{}"/$1}"})
+        _cmd2=(${_cmd2+"${_cmd2[@]//"{}"/$1}"})
+    elif ((_count == 2)); then
         _cmd1+=("$@")
         _cmd2+=("$@")
     else
-        [[ ${_cmd1+1}${_cmd2+1} == 11 ]] || lk_bad_args || return
+        local _cmd=(${_cmd1+"${_cmd1[@]}"})
+        _cmd1=(${_cmd+"${_cmd[@]}"} ${_cmd2+"${_cmd2[@]}"})
+        _cmd2=(${_cmd+"${_cmd[@]}"} "$@")
     fi
+    [[ ${_cmd1+1}${_cmd2+1} == 11 ]] ||
+        lk_usage -e "commands cannot be empty" || return
     lk_mktemp_with _temp1 "${_cmd1[@]}" &&
         lk_mktemp_with _temp2 "${_cmd2[@]}" || return
     local IFS=$' \t\n'
@@ -3525,8 +3679,8 @@ function lk_jq() {
 #     }
 function lk_jq_var() {
     local _ARGS=() _VAR _ARG _CMD=()
-    while [ $# -gt 0 ]; do
-        [ "$1" = -- ] || { _ARGS[${#_ARGS[@]}]=$1 && shift && continue; }
+    while [[ $# -gt 0 ]]; do
+        [[ $1 == -- ]] || { _ARGS[${#_ARGS[@]}]=$1 && shift && continue; }
         shift && break
     done
     while IFS=$'\t' read -r _VAR _ARG; do
@@ -3596,6 +3750,8 @@ function lk_curl_get_form_args() {
     done
 }
 
+lk_color_off() { lk_colour_off; }
+lk_color_on() { lk_colour_on; }
 lk_complement_arr() { lk_arr_complement "$@"; }
 lk_complement_file() { lk_file_complement "$@"; }
 lk_delete_on_exit() { lk_on_exit_delete "$@"; }
@@ -4095,25 +4251,23 @@ function lk_diff() { (
         fi
     done
     # Use the same escape sequences as icdiff, which ignores TERM
-    BLUE=$'\E[34m'
-    GREEN=$'\E[1;32m'
-    RESET=$'\E[m'
+    lk_colour_on
     if lk_command_exists icdiff; then
         # Don't use icdiff if FILE1 is empty
         if lk_maybe_sudo test ! -s "$1" -a -s "$2"; then
-            echo "$BLUE$2$RESET"
-            printf '%s' "$GREEN"
-            # Add $RESET to the last line
-            lk_maybe_sudo cat "$2" | awk -v "r=$RESET" \
+            printf '%s%s%s\n' "$LK_BLUE" "$2" "$LK_RESET"
+            printf '%s' "$LK_BOLD$LK_GREEN"
+            # Add $LK_RESET to the last line
+            lk_maybe_sudo cat "$2" | awk -v "r=$LK_RESET" \
                 's { print l } { s = 1; l = $0 } END { print l r }'
             false
         else
             printf '%s' "$LK_RESET"
             STATUS=1
             lk_require_output lk_maybe_sudo icdiff -U2 --no-headers \
-                ${_LK_TTY_INDENT:+--cols=$(($(
+                ${_LK_TTY_INDENT:+--cols="$(($(
                     lk_tty_columns
-                ) - 2 * (_LK_TTY_INDENT + 2)))} "$@" || ((!($? & 2))) || STATUS=0
+                ) - 2 * (_LK_TTY_INDENT + 2)))"} "$@" || ((!($? & 2))) || STATUS=0
             ((!STATUS))
         fi
     elif lk_command_exists git; then
@@ -4123,45 +4277,11 @@ function lk_diff() { (
         DIFF_VER=$(lk_diff_version 2>/dev/null) &&
             lk_version_at_least "$DIFF_VER" 3.4 || unset DIFF_VER
         lk_maybe_sudo gnu_diff ${DIFF_VER+--color=always} -U3 "$@"
-    fi && echo "${BLUE}Files are identical${_LK_DIFF_SED_SCRIPT:+ or have hidden differences}$RESET"
+    fi && printf '%sFiles are identical%s%s' \
+        "$LK_BLUE" \
+        "${_LK_DIFF_SED_SCRIPT:+ or have hidden differences}" \
+        "$LK_RESET"
 ); }
-
-# lk_clip
-#
-# Copy input to the user's clipboard if possible, otherwise print it out.
-function lk_clip() {
-    local OUTPUT COMMAND LINES MESSAGE DISPLAY_LINES=${LK_CLIP_LINES:-5}
-    [ ! -t 0 ] || lk_warn "no input" || return
-    OUTPUT=$(cat && printf .) && OUTPUT=${OUTPUT%.}
-    if COMMAND=$(lk_first_command \
-        "xclip -selection clipboard" \
-        pbcopy) &&
-        echo -n "$OUTPUT" | $COMMAND &>/dev/null; then
-        LINES=$(wc -l <<<"$OUTPUT" | tr -d ' ')
-        [ "$LINES" -le "$DISPLAY_LINES" ] || {
-            OUTPUT=$(head -n$((DISPLAY_LINES - 1)) <<<"$OUTPUT" &&
-                echo "$LK_BOLD$LK_MAGENTA...$LK_RESET")
-            MESSAGE="$LINES lines copied"
-        }
-        lk_tty_print "${MESSAGE:-Copied} to clipboard:" \
-            $'\n'"$LK_GREEN$OUTPUT$LK_RESET" "$LK_MAGENTA"
-    else
-        lk_tty_error "Unable to copy input to clipboard"
-        echo -n "$OUTPUT"
-    fi
-}
-
-# lk_paste
-#
-# Paste the user's clipboard to output, if possible.
-function lk_paste() {
-    local COMMAND
-    COMMAND=$(lk_first_command \
-        "xclip -selection clipboard -out" \
-        pbpaste) &&
-        $COMMAND ||
-        lk_tty_error "Unable to paste clipboard to output"
-}
 
 function lk_mime_type() {
     [ -e "$1" ] || lk_warn "file not found: $1" || return
@@ -4990,72 +5110,3 @@ if [[ $- != *i* ]]; then
     lk_trap_add -q EXIT '_lk_exit_trap "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'
     lk_trap_add -q ERR '_lk_err_trap "$LINENO ${FUNCNAME-} ${BASH_SOURCE-}"'
 fi
-
-if [[ -n ${LK_TTY_NO_COLOUR-} ]] || ! lk_get_tty >/dev/null; then
-    declare \
-        LK_BLACK= \
-        LK_RED= \
-        LK_GREEN= \
-        LK_YELLOW= \
-        LK_BLUE= \
-        LK_MAGENTA= \
-        LK_CYAN= \
-        LK_WHITE= \
-        LK_GREY= \
-        LK_DEFAULT= \
-        LK_BLACK_BG= \
-        LK_RED_BG= \
-        LK_GREEN_BG= \
-        LK_YELLOW_BG= \
-        LK_BLUE_BG= \
-        LK_MAGENTA_BG= \
-        LK_CYAN_BG= \
-        LK_WHITE_BG= \
-        LK_GREY_BG= \
-        LK_DEFAULT_BG= \
-        LK_BOLD= \
-        LK_UNBOLD= \
-        LK_DIM= \
-        LK_UNDIM= \
-        LK_RESET=
-else
-    # See: `man 4 console_codes`
-    declare \
-        LK_BLACK=$'\E[30m' \
-        LK_RED=$'\E[31m' \
-        LK_GREEN=$'\E[32m' \
-        LK_YELLOW=$'\E[33m' \
-        LK_BLUE=$'\E[34m' \
-        LK_MAGENTA=$'\E[35m' \
-        LK_CYAN=$'\E[36m' \
-        LK_WHITE=$'\E[37m' \
-        LK_GREY=$'\E[90m' \
-        LK_DEFAULT=$'\E[39m' \
-        LK_BLACK_BG=$'\E[40m' \
-        LK_RED_BG=$'\E[41m' \
-        LK_GREEN_BG=$'\E[42m' \
-        LK_YELLOW_BG=$'\E[43m' \
-        LK_BLUE_BG=$'\E[44m' \
-        LK_MAGENTA_BG=$'\E[45m' \
-        LK_CYAN_BG=$'\E[46m' \
-        LK_WHITE_BG=$'\E[47m' \
-        LK_GREY_BG=$'\E[100m' \
-        LK_DEFAULT_BG=$'\E[49m' \
-        LK_BOLD=$'\E[1m' \
-        LK_UNBOLD=$'\E[22m' \
-        LK_DIM=$'\E[2m' \
-        LK_UNDIM=$'\E[22m' \
-        LK_RESET=$'\E[m'
-
-    case "${TERM-}" in
-    '' | dumb | unknown)
-        [[ -z ${TERM+1} ]] || unset TERM
-        ;;
-    esac
-fi
-
-_LK_COLOUR=$LK_CYAN
-_LK_ALT_COLOUR=$LK_YELLOW
-_LK_SUCCESS_COLOUR=$LK_GREEN
-_LK_WARNING_COLOUR=$LK_YELLOW
-_LK_ERROR_COLOUR=$LK_RED

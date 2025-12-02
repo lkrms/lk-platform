@@ -1,6 +1,6 @@
 {
     "bashIde.enableSourceErrorDiagnostics": true,
-    "bashIde.globPattern": "./{!(lib),lib/!(bash),lib/bash/!(include)}{,/**/}*.sh",
+    "bashIde.globPattern": "./{src/lib/bash/!(core.sh.d),src/lib/bash/core.sh.d/!(16-regular-expressions.sh),lib/bash/!(include)}{,/**/}*.sh",
     "bashIde.includeAllWorkspaceSymbols": true,
     "bashIde.shellcheckArguments": "--exclude=1090,1091,2015,2016",
     "files.exclude": {

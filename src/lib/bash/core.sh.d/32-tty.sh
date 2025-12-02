@@ -62,7 +62,7 @@ function _lk_tty_hostname_apply() {
         _LK_TTY_HOSTNAME="<unknown>"
     _LK_TTY_HOSTNAME="${LK_DIM}[ $(lk_ellipsise 14 "$(
         printf '%14s' "$_LK_TTY_HOSTNAME"
-    )") ] $LK_UNDIM"
+    )") ] $LK_UNBOLD_UNDIM"
     _LK_TTY_HOSTNAME_INDENT=${_LK_TTY_HOSTNAME_INDENT:-$'\n                   '}
 }
 
@@ -164,8 +164,8 @@ function lk_tty_group_end() {
 #   lines will be aligned with the first (values: 0 or 1; default: 0)
 # - _LK_TTY_INDENT: MESSAGE2 indent (default: based on prefix length and message
 #   line counts)
-# - _LK_COLOUR: default colour of prefix and MESSAGE2 (default: LK_CYAN)
-# - _LK_ALT_COLOUR: default colour of prefix and MESSAGE2 for nested messages
+# - _LK_COLOUR_NOTICE: default colour of prefix and MESSAGE2 (default: LK_CYAN)
+# - _LK_COLOUR_INFO: default colour of prefix and MESSAGE2 for nested messages
 #   and output from lk_tty_detail, lk_tty_list_detail, etc. (default: LK_YELLOW)
 # - _LK_TTY_COLOUR: override prefix and MESSAGE2 colour
 # - _LK_TTY_PREFIX_COLOUR: override prefix colour (supersedes _LK_TTY_COLOUR)
@@ -195,7 +195,7 @@ function lk_tty_print() {
         }
     }
     local MESSAGE=${1-} MESSAGE2=${2-} \
-        COLOUR=${3-${_LK_TTY_COLOUR-$_LK_COLOUR}} \
+        COLOUR=${3-${_LK_TTY_COLOUR-$_LK_COLOUR_NOTICE}} \
         PREFIX=${_LK_TTY_PREFIX-${_LK_TTY_PREFIX1-==> }} \
         IFS MARGIN SPACES NEWLINE=0 NEWLINE2=0 SEP=$'\n' INDENT=0
     unset IFS
@@ -251,16 +251,16 @@ function lk_tty_print() {
 
 # lk_tty_detail MESSAGE [MESSAGE2 [COLOUR]]
 function lk_tty_detail() {
-    local _LK_TTY_COLOUR_ORIG=${_LK_COLOUR-}
+    local _LK_TTY_COLOUR_ORIG=${_LK_COLOUR_NOTICE-}
     _LK_TTY_PREFIX1=${_LK_TTY_PREFIX2- -> } \
-        _LK_COLOUR=${_LK_ALT_COLOUR-} \
+        _LK_COLOUR_NOTICE=${_LK_COLOUR_INFO-} \
         _LK_TTY_MESSAGE_COLOUR=${_LK_TTY_MESSAGE_COLOUR-} \
         lk_tty_print "$@"
 }
 
 function _lk_tty_detail2() {
     _LK_TTY_PREFIX1=${_LK_TTY_PREFIX3-  - } \
-        _LK_COLOUR=${_LK_TTY_COLOUR_ORIG-$_LK_COLOUR} \
+        _LK_COLOUR_NOTICE=${_LK_TTY_COLOUR_ORIG-$_LK_COLOUR_NOTICE} \
         _LK_TTY_MESSAGE_COLOUR=${_LK_TTY_MESSAGE_COLOUR-} \
         lk_tty_print "$@"
 }
@@ -269,10 +269,10 @@ function _lk_tty_detail2() {
 # - lk_tty_list @ [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]] [-- [ARG...]]
 # - lk_tty_list [ARRAY [MESSAGE [SINGLE_NOUN PLURAL_NOUN] [COLOUR]]]
 function lk_tty_list() {
-    [ "${1-}" != @ ] || {
+    [[ ${1-} != @ ]] || {
         local IFS=' ' _ITEMS=()
         for ((i = 2; i <= $#; i++)); do
-            [ "${!i}" = -- ] || continue
+            [[ ${!i} == -- ]] || continue
             _ITEMS=("${@:i+1}")
             set -- "${@:1:i-1}"
             break
@@ -281,20 +281,20 @@ function lk_tty_list() {
     local _ARRAY=${1:--} _MESSAGE=${2-List:} _SINGLE _PLURAL _COLOUR \
         _PREFIX=${_LK_TTY_PREFIX-${_LK_TTY_PREFIX1-==> }} \
         _ITEMS _INDENT _COLUMNS _LIST=
-    [ $# -ge 2 ] || {
+    [[ $# -ge 2 ]] || {
         _SINGLE=item
         _PLURAL=items
     }
     _COLOUR=3
-    [ $# -le 3 ] || {
+    [[ $# -le 3 ]] || {
         _SINGLE=${3-}
         _PLURAL=${4-}
         _COLOUR=5
     }
-    if [ "$_ARRAY" = - ]; then
-        [ ! -t 0 ] && lk_mapfile _ITEMS ||
+    if [[ $_ARRAY == - ]]; then
+        [[ ! -t 0 ]] && lk_mapfile _ITEMS ||
             lk_err "no input" || return
-    elif [ "$_ARRAY" != @ ]; then
+    elif [[ $_ARRAY != @ ]]; then
         _ARRAY="${_ARRAY}[@]"
         _ITEMS=(${!_ARRAY+"${!_ARRAY}"}) || return
     fi
@@ -305,7 +305,7 @@ function lk_tty_list() {
     fi
     _INDENT=${_LK_TTY_INDENT:-$_INDENT}
     _COLUMNS=$(($(lk_tty_columns) - _INDENT - ${_LK_TTY_GROUP:-0} * 4))
-    [ -z "${_ITEMS+1}" ] || {
+    [[ -z ${_ITEMS+1} ]] || {
         _LIST=$(printf '\n%s' "${_ITEMS[@]}")
         ! lk_command_exists column expand ||
             _LIST=$'\n'$(COLUMNS=$((_COLUMNS > 0 ? _COLUMNS : 0)) \
@@ -315,7 +315,7 @@ function lk_tty_list() {
         _LK_FD=1
         ${_LK_TTY_COMMAND:-lk_tty_print} \
             "$_MESSAGE" "$_LIST" ${!_COLOUR+"${!_COLOUR}"}
-        [ -z "${_SINGLE:+${_PLURAL:+1}}" ] ||
+        [[ -z ${_SINGLE:+${_PLURAL:+1}} ]] ||
             _LK_TTY_PREFIX=$(printf "%$((_INDENT > 0 ? _INDENT : 0))s") \
                 lk_tty_detail "($(lk_plural -v _ITEMS "$_SINGLE" "$_PLURAL"))"
     )" >&"${_LK_FD-2}"
@@ -468,15 +468,15 @@ function lk_tty_run_detail() {
 function lk_tty_pairs() { (
     local IFS=${IFS:-$'\t'} LF COLOUR ARGS= _IFS TEMP LEN KEY VALUE
     unset LF COLOUR
-    [ "${1-}" != -d ] || { LF=${2::1} && shift 2; }
-    [ "${1-}" = -- ] || [ $# -eq 0 ] || { COLOUR=$1 && shift; }
-    [ "${1-}" != -- ] || { ARGS=1 && shift; }
-    [ -n "${LF+1}" ] || { LF=$'\n' && IFS=$'\t'; }
+    [[ ${1-} != -d ]] || { LF=${2::1} && shift 2; }
+    [[ ${1-} == -- ]] || [[ $# -eq 0 ]] || { COLOUR=$1 && shift; }
+    [[ ${1-} != -- ]] || { ARGS=1 && shift; }
+    [[ -n ${LF+1} ]] || { LF=$'\n' && IFS=$'\t'; }
     # Check for an even number of arguments remaining and that LF does not
     # appear in IFS, then remove duplicates in IFS and rearrange it for the
     # regex bracket expression below
-    (($# % 2 == 0)) && { [ -z "$LF" ] ||
-        { [ -n "$LF" ] && [[ $IFS != *$LF* ]]; }; } &&
+    (($# % 2 == 0)) && { [[ -z $LF ]] ||
+        { [[ -n $LF ]] && [[ $IFS != *$LF* ]]; }; } &&
         _IFS=$(LF=${LF:-\\0} && printf "%s${LF//%/%%}" "$IFS" |
             awk -v "RS=${LF//$'\n'/\\n}" '
 { FS = ORS = RS
@@ -487,10 +487,10 @@ function lk_tty_pairs() { (
     else { middle = middle $i } }
   printf("%s%s%s.\n", first, middle, last) }') && IFS=${_IFS%.} ||
         lk_err "invalid arguments" || return
-    if [ $# -gt 0 ]; then
+    if [[ $# -gt 0 ]]; then
         local SEP=${IFS::1}
         lk_mktemp_with TEMP printf "%s${SEP//%/%%}%s\n" "$@"
-    elif [ -z "$ARGS" ]; then
+    elif [[ -z $ARGS ]]; then
         lk_mktemp_with TEMP cat
     else
         true
@@ -565,22 +565,22 @@ function _lk_tty_log() {
 
 # lk_tty_success [-r] [-n] MESSAGE [MESSAGE2...]
 function lk_tty_success() {
-    _lk_tty_log " // " "$_LK_SUCCESS_COLOUR" "$@"
+    _lk_tty_log " // " "$_LK_COLOUR_SUCCESS" "$@"
 }
 
 # lk_tty_log [-r] [-n] MESSAGE [MESSAGE2...]
 function lk_tty_log() {
-    _lk_tty_log " :: " "${_LK_TTY_COLOUR-$_LK_COLOUR}" "$@"
+    _lk_tty_log " :: " "${_LK_TTY_COLOUR-$_LK_COLOUR_NOTICE}" "$@"
 }
 
 # lk_tty_warning [-r] [-n] MESSAGE [MESSAGE2...]
 function lk_tty_warning() {
-    _lk_tty_log "  ! " "$_LK_WARNING_COLOUR" "$@"
+    _lk_tty_log "  ! " "$_LK_COLOUR_WARNING" "$@"
 }
 
 # lk_tty_error [-r] [-n] MESSAGE [MESSAGE2...]
 function lk_tty_error() {
-    _lk_tty_log " !! " "$_LK_ERROR_COLOUR" "$@"
+    _lk_tty_log " !! " "$_LK_COLOUR_ERROR" "$@"
 }
 
 #### Reviewed: 2021-11-02

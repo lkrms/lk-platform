@@ -232,8 +232,8 @@ lk_false LK_PROMPT || {
         echo "${OUTPUT//=34;42:/=37;42:}"
 ) && eval "$SH"; }
 
-alias clip=lk_clip
-alias unclip=lk_paste
+alias clip=lk_clip_set
+alias unclip=lk_clip_get
 if ! lk_is_macos; then
     alias duh='du -h --max-depth 1 | sort -h'
     alias open='xdg-open'

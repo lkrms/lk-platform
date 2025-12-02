@@ -75,7 +75,7 @@ function rdata(r, i) {
 #
 # Returns false if no matching records are found.
 function lk_dns_get_records_first_parent() {
-    local IFS=$' \t\n' NAME=${*:$#} DOMAIN
+    local IFS=$' \t\n' NAME=${*: -1} DOMAIN
     lk_is_fqdn "$NAME" || lk_warn "invalid domain: $NAME" || return
     DOMAIN=$NAME
     set -- "${@:1:$#-1}"

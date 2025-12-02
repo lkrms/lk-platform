@@ -316,9 +316,6 @@ if lk_feature_enabled desktop; then
         papirus-icon-theme-
         vimix-cursors-
 
-        gtk-engine-murrine- # Support GTK 2
-        gtk-engines-
-
         epiphany # WebKit-based web browser
         evince   # Document viewer
         galculator
@@ -404,8 +401,6 @@ if lk_feature_enabled desktop; then
         qogir-gtk-theme-
         qogir-icon-theme-
         tela-icon-theme-
-
-        zuki-themes-
     )
 fi
 

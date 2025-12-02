@@ -7,7 +7,7 @@ PAC_EXCEPT=()
 
 PAC_OFFER=(
     geekbench
-    teamviewer
+    #teamviewer
     zoom
 )
 
@@ -168,7 +168,7 @@ AUR_PACKAGES+=(
     key-mon
     libreoffice-extension-languagetool
     masterpdfeditor-free
-    nomacs-git
+    nomacs
     qpdfview
     rescuetime2
     simplescreenrecorder

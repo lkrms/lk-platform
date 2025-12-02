@@ -32,7 +32,7 @@ function lk_openconnect() {
 }
 
 function lk_mediainfo_check() {
-    local FILE VALUE COUNT \
+    local FILE VALUE COUNT SEMI=';' \
         LK_MEDIAINFO_LABEL=${LK_MEDIAINFO_LABEL-} \
         LK_MEDIAINFO_NO_VALUE=${LK_MEDIAINFO_NO_VALUE-<no content type>}
     LK_MEDIAINFO_FILES=()
@@ -41,7 +41,7 @@ function lk_mediainfo_check() {
     while IFS= read -rd '' FILE; do
         ((++COUNT))
         VALUE=$(mediainfo \
-            --Output="${LK_MEDIAINFO_FORMAT:-General;%ContentType%}" \
+            --Output="${LK_MEDIAINFO_FORMAT:-General$SEMI%ContentType%}" \
             "$FILE") || return
         LK_MEDIAINFO_FILES+=("$FILE")
         LK_MEDIAINFO_VALUES+=("$VALUE")

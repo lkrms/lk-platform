@@ -876,27 +876,28 @@ END { exit f ? 1 : 0 }' || [ ${PIPESTATUS[1]} -eq 0 ] ||
 # - lk_git_config [-o] [--type=TYPE] NAME VALUE
 # - lk_git_config [-o] [--type=TYPE] --unset[-all] NAME
 function lk_git_config() {
-    local OUTPUT COMMAND=() REGEX
-    [ "${1-}" != -o ] || { OUTPUT=1 && shift; }
-    [ $# -ge 2 ] ||
+    local OUTPUT ARGS=() COMMAND=() REGEX
+    [[ ${1-} != -o ]] || { OUTPUT=1 && shift; }
+    [[ ${1-} != --type=* ]] || { ARGS+=("$1") && shift; }
+    (($# == 2)) ||
         lk_usage "\
 Usage: $FUNCNAME [-o] [--type=TYPE] NAME VALUE
    or: $FUNCNAME [-o] [--type=TYPE] --unset[-all] NAME" || return
-    case "${*:$#-1:1}" in
+    case "$1" in
     --unset | --unset-all)
-        ! _lk_git config --local "${@:1:$#-2}" --get "${*:$#}" >/dev/null ||
+        ! _lk_git config --local ${ARGS+"${ARGS[@]}"} --get "$2" >/dev/null ||
             COMMAND=(_lk_git config --local "$@")
         ;;
 
     *)
-        REGEX=$(lk_escape_ere "${*:$#}") || return
+        REGEX=$(lk_escape_ere "$2") || return
         _lk_git config --local \
-            "${@:1:$#-2}" --get "${*:$#-1:1}" "$REGEX" >/dev/null ||
+            ${ARGS+"${ARGS[@]}"} --get "$1" "$REGEX" >/dev/null ||
             COMMAND=(_lk_git config --local "$@")
         ;;
     esac
-    [ -z "${COMMAND+1}" ] ||
-        if [ -n "${OUTPUT-}" ]; then
+    [[ -z ${COMMAND+1} ]] ||
+        if [[ -n ${OUTPUT-} ]]; then
             lk_quote_args "${COMMAND[@]}"
         else
             "${COMMAND[@]}"

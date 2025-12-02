@@ -20,6 +20,7 @@ PAC_OFFER=(
     expect
     geekbench
     geteltorito # ThinkPad UEFI firmware update conversion
+    gtk3-demos
     imhex-bin
     linux-headers
     mockoon-bin
@@ -45,7 +46,6 @@ PAC_OFFER=(
     wiki-loves-earth-wallpapers
     wiki-loves-monuments-wallpapers
     xfce-theme-greybird
-    zuki-themes
 
     #
     displaycal
@@ -124,6 +124,10 @@ PAC_PACKAGES+=(
     samba
     testssl.sh
 
+    # MaxMind GeoIP2 data and tooling
+    geoipupdate
+    mmdblookup
+
     # System
     arch-install-scripts
     at
@@ -142,6 +146,7 @@ AUR_PACKAGES+=(
     asciinema-agg
     dug-git
     gp-saml-gui-git
+    mmdbinspect
     pacman-cleanup-hook
     powershell-bin
     vpn-slice
@@ -160,7 +165,6 @@ PAC_PACKAGES+=(
     gimp
     gnome-font-viewer
     gucharmap
-    hexchat
     inkscape
     keepassxc
     libreoffice-fresh
@@ -224,7 +228,7 @@ PAC_PACKAGES+=(
     handbrake-cli
     mkvtoolnix-cli
     mkvtoolnix-gui
-    openshot
+    #openshot
     video-trimmer
     yt-dlp
 
@@ -257,7 +261,7 @@ AUR_PACKAGES+=(
     key-mon
     libreoffice-extension-languagetool
     masterpdfeditor-free
-    nomacs-git
+    nomacs
     pencil
     qpdfview
     render50
@@ -266,7 +270,7 @@ AUR_PACKAGES+=(
     spotify
     stretchly
     teams-for-linux
-    teamviewer
+    #teamviewer
     todoist-appimage
     trimage
     #ttf-apple-emoji

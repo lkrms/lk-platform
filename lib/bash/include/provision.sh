@@ -655,13 +655,14 @@ EOF
 #
 #     -f FUNCTION   Declare FUNCTION on the remote system before running COMMAND
 #     -l LIBRARY    Add LIBRARY and any dependencies to the generated script
+#     -t            Allocate a pseudo-terminal even if there is no local TTY
 #
 # - `-f` and `-l` may be given multiple times
 # - If `-l` is set, the `core` library is added automatically
 # - Use `-l core` to add the `core` library only
 # - Values applied to `-l` correspond to arguments passed to `lk_require`
 function lk_ssh_run_on_host() {
-    local FUNC=() LIB=() LIB_DIR=$LK_BASE/lib/bash/include
+    local FUNC=() LIB=() TTY= LIB_DIR=$LK_BASE/lib/bash/include
     while (($# > 1)) && [[ $1 == -* ]]; do
         case "$1" in
         -f)
@@ -671,6 +672,11 @@ function lk_ssh_run_on_host() {
             local FILE=$LIB_DIR/$2.sh
             [[ -r $FILE ]] || lk_warn "file not found: $FILE" || return
             LIB[${#LIB[@]}]=$2
+            ;;
+        -t)
+            TTY=1
+            shift
+            continue
             ;;
         *)
             false || lk_warn "invalid argument: $1" || return
@@ -687,7 +693,7 @@ function lk_ssh_run_on_host() {
     [[ $(type -t "$1") != function ]] || FUNC[${#FUNC[@]}]=$1
     # Add the requested functions and libraries, and any dependencies, to a
     # temporary file
-    lk_mktemp_with SH || return
+    lk_mktemp_with SH echo "shopt -s extglob" || return
     {
         [[ -z ${LIB+1} ]] || (
             LAST=0
@@ -717,7 +723,7 @@ function lk_ssh_run_on_host() {
                 declare -f "${FUNC[@]}" || return
         }
         lk_quote_args "$@"
-    } >"$SH" || return
+    } >>"$SH" || return
     local REMOTE_SH STATUS=0 ARGS=(
         -o ControlMaster=auto
         -o ControlPath="/tmp/.${FUNCNAME}_%C-%u"
@@ -730,7 +736,7 @@ function lk_ssh_run_on_host() {
     }
     REMOTE_SH=$(ssh "${ARGS[@]}" "$HOST" mktemp) || return
     scp -pq "${ARGS[@]}" "$SH" "$HOST:$REMOTE_SH" &&
-        ssh -tt "${ARGS[@]}" "$HOST" \
+        ssh ${TTY:+-tt} "${ARGS[@]}" "$HOST" \
             "${SUDO+sudo }LK_TTY_HOSTNAME=1 bash $(
                 lk_quote_args "$REMOTE_SH"
             )" || STATUS=$?
@@ -915,7 +921,7 @@ function rdata(r, i) {
 #
 # Returns false if no matching records are found.
 function lk_dns_get_records_first_parent() {
-    local IFS=$' \t\n' NAME=${*:$#} DOMAIN
+    local IFS=$' \t\n' NAME=${*: -1} DOMAIN
     lk_is_fqdn "$NAME" || lk_warn "invalid domain: $NAME" || return
     DOMAIN=$NAME
     set -- "${@:1:$#-1}"
@@ -2260,7 +2266,7 @@ Usage: $FUNCNAME [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
             [ "$(wc -l <<<"$KEY")" -eq 1 ] &&
             KEY_FILE=- || KEY_FILE=; }; } ||
         lk_warn "$KEY_FILE: file not found" || return
-    [ ! "$KEY_FILE" = - ] || {
+    [[ $KEY_FILE != - ]] || {
         KEY=${KEY:-$(cat)}
         KEY_FILE=$h/.ssh/${SSH_PREFIX}keys/$NAME
         lk_install -m 00600 "$KEY_FILE" &&
@@ -2345,7 +2351,7 @@ function lk_ssh_configure() {
     [ $# -eq 0 ] || [ $# -ge 2 ] || lk_warn "invalid arguments" || return
     [ ${#HOMES[@]} -gt 0 ] || HOMES=(~)
     [ ${#HOMES[@]} -le 1 ] ||
-        [ ! "$JUMP_KEY_FILE" = - ] ||
+        [[ $JUMP_KEY_FILE != - ]] ||
         KEY=$(cat)
 
     # Prepare awk command that adds "Include ~/.ssh/lk-config.d/*" to
@@ -2363,7 +2369,7 @@ function lk_ssh_configure() {
     for h in "${HOMES[@]}"; do
         [ ! -e "$h/.${LK_PATH_PREFIX}ignore" ] &&
             [ ! -e "$h/.ssh/.${LK_PATH_PREFIX}ignore" ] || continue
-        if [[ $h == ~ ]]; then
+        if [[ $h == "$HOME" ]]; then
             OWNER=$USER
         elif [[ $h =~ ^/etc/skel(\.${LK_PATH_PREFIX%-})?$ ]]; then
             OWNER=root
@@ -2409,7 +2415,7 @@ EOF
                 "jump" \
                 "$JUMP_HOST" \
                 "$JUMP_USER" \
-                "$JUMP_KEY_FILE" ${KEY+<<<"$KEY"}
+                "$JUMP_KEY_FILE" <<<"${KEY-}"
         (
             shopt -s nullglob
             chmod 00600 \
@@ -2765,7 +2771,7 @@ function _lk_crontab() {
             "$(lk_ere_escape "$ADD_COMMAND")")$LK_h*\$"}
         # If the command is already present, replace the first occurrence and
         # delete any duplicates
-        if grep -E "$REGEX" >/dev/null <<<"$CRONTAB"; then
+        if grep -E "$REGEX" <<<"$CRONTAB" >/dev/null; then
             REGEX=${REGEX//\//\\\/}
             NEW_CRONTAB=$(gnu_sed -E "0,/$REGEX/{s/$REGEX/$(
                 lk_sed_escape_replace "$ADD_COMMAND"

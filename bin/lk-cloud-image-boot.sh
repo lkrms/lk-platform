@@ -609,7 +609,7 @@ if [[ -n $STACKSCRIPT ]]; then
             else
                 LK_FORCE_INPUT=Y lk_tty_read \
                     "-$REQUIRED_TEXT" \
-                    "$LK_BOLD$LABEL$LK_UNBOLD:" VALUE \
+                    "$LK_BOLD$LABEL$LK_UNBOLD_UNDIM:" VALUE \
                     "" ${INITIAL_VALUE:+-i "$INITIAL_VALUE"}
             fi
         done

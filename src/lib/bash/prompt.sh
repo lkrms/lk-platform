@@ -35,7 +35,7 @@ function _lk_prompt_create() {
         elapsed=$((now - $1))
         shift
         # "Thu May 06 15:02:32 "
-        parts[${#parts[@]}]="\n\[$LK_DIM\]\d \t\[$LK_UNDIM\] "
+        parts[${#parts[@]}]="\n\[$LK_DIM\]\d \t\[$LK_UNBOLD_UNDIM\] "
         if ((!status)); then
             # "✓"
             parts[${#parts[@]}]="\[$LK_GREEN\]✓"
@@ -64,7 +64,7 @@ function _lk_prompt_create() {
             } | _lk_prompt_filter | head -c"$width")
             # " ( sleep 12; false )"
             local IFS=' '
-            parts[${#parts[@]}]=" \[$LK_DIM\]( ${commands//\\/\\\\} )\[$LK_UNDIM\]"
+            parts[${#parts[@]}]=" \[$LK_DIM\]( ${commands//\\/\\\\} )\[$LK_UNBOLD_UNDIM\]"
         fi
         parts[${#parts[@]}]="\n"
         _LK_PROMPT=()
@@ -77,7 +77,7 @@ function _lk_prompt_create() {
         parts[${#parts[@]}]="\[$LK_BOLD$LK_RED\]\u@"
     fi
     # "host1 ~"
-    parts[${#parts[@]}]="\h \[$LK_BLUE\]\w\[$LK_DEFAULT$LK_UNBOLD\]"
+    parts[${#parts[@]}]="\h \[$LK_BLUE\]\w\[$LK_DEFAULT$LK_UNBOLD_UNDIM\]"
     if ((EUID)) && [[ $(type -t __git_ps1) == function ]]; then
         part=$(GIT_PS1_SHOWCOLORHINTS=1 __git_ps1 '%s')
         if [[ ${part:+1} ]]; then
@@ -87,7 +87,7 @@ function _lk_prompt_create() {
     fi
     if [[ ${LK_PROMPT_TAG:+1} ]]; then
         # " <sp>tag<sp>"
-        parts[${#parts[@]}]=" \[$LK_WHITE$LK_MAGENTA_BG\] \[$LK_BOLD\]${LK_PROMPT_TAG}\[$LK_UNBOLD\] \[$LK_DEFAULT_BG$LK_DEFAULT\]"
+        parts[${#parts[@]}]=" \[$LK_WHITE$LK_MAGENTA_BG\] \[$LK_BOLD\]${LK_PROMPT_TAG}\[$LK_UNBOLD_UNDIM\] \[$LK_DEFAULT_BG$LK_DEFAULT\]"
     fi
     history -a
     shopt -u promptvars

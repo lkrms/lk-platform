@@ -361,7 +361,7 @@ function lk_nm_device_connection_uuid() {
 # Output NetworkManager [ipv4] and [ipv6] keyfile sections for the given
 # configuration. All arguments are optional.
 function lk_nm_file_get_ipv4_ipv6() {
-    local ADDRESS=${1-} GATEWAY=${2-} DNS4 DNS6 DNS_SEARCH METHOD6 MANUAL IFS=$'; \t\n'
+    local ADDRESS=${1-} GATEWAY=${2-} DNS4 DNS6 DNS_SEARCH METHOD6 MANUAL SEMI=';' IFS=$'; \t\n'
     unset MANUAL
     DNS4=($(printf '%s\n' ${3-} | lk_filter_ipv4))
     DNS6=($(printf '%s\n' ${3-} | lk_filter_ipv6))
@@ -372,15 +372,15 @@ function lk_nm_file_get_ipv4_ipv6() {
 
 [ipv4]${ADDRESS:+
 address1=$ADDRESS${GATEWAY:+,$GATEWAY}}${DNS4[*]+
-dns=${DNS4[*]};${DNS_SEARCH[*]+
-dns-search=${DNS_SEARCH[*]};}
+dns=${DNS4[*]}$SEMI${DNS_SEARCH[*]+
+dns-search=${DNS_SEARCH[*]}$SEMI}
 ignore-auto-dns=true}
 method=${MANUAL-auto}${MANUAL+manual
 
 [ipv6]
 addr-gen-mode=stable-privacy${DNS6[*]+
-dns=${DNS6[*]};${DNS_SEARCH[*]+
-dns-search=${DNS_SEARCH[*]};}
+dns=${DNS6[*]}$SEMI${DNS_SEARCH[*]+
+dns-search=${DNS_SEARCH[*]}$SEMI}
 ignore-auto-dns=true}
 ip6-privacy=0
 method=$METHOD6}

@@ -35,7 +35,8 @@ function download_sources() {
         lk_tty_list - "Downloading from AUR:" package packages
     local _pkg pkg waiting=0
     for _pkg in "$@"; do
-        pkg=$(awk -v pkg="$_pkg" '$1 == pkg { print $2; }' "$PKGS" | grep .) || {
+        pkg=$(awk -v pkg="$_pkg" '$1 == pkg { print $2; }' "$PKGS" | grep .) ||
+            pkg=$(download_all_sources_json | jq -r --arg pkg "^$_pkg\b" '[.[] | select((.Provides | type == "array") and any(.Provides[]; test($pkg)))] | if length == 1 then .[0].PackageBase else empty end' | grep .) || {
             lk_tty_detail "Unknown package:" "$_pkg"
             echo "$_pkg" >>"$ERRORS"
             continue
@@ -64,6 +65,10 @@ function parse_SRCINFO() {
         grep -Eo "($LK_h|^)[[:alnum:]+@_][[:alnum:]+.@_-]*" |
         tr -d '[:blank:]' |
         sort -u
+}
+
+function download_all_sources_json() {
+    lk_cache curl -fsSL "https://aur.archlinux.org/packages-meta-ext-v1.json.gz" | gunzip
 }
 
 lk_assign AWK <<"EOF"

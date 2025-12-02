@@ -694,7 +694,8 @@ function lk_hosting_php_get_versions() {
 function _lk_hosting_php_check_pools() { (
     shopt -s nullglob extglob
     lk_mktemp_with _SITE_LIST lk_hosting_list_sites || return
-    DREK=(/etc/php/*/fpm/pool.d/!(*.conf|*.orig|*.dpkg-dist))
+    # Work around Bash IDE not parsing extglob syntax properly
+    eval 'DREK=(/etc/php/*/fpm/pool.d/!(*.conf|*.orig|*.dpkg-dist))'
     [[ -z ${DREK+1} ]] ||
         lk_elevate rm -fv "${DREK[@]}"
     for PHPVER in $(lk_hosting_php_get_versions); do

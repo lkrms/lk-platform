@@ -57,7 +57,7 @@ function lk_log_start() {
         _LK_FD_LOGGED=1
     }
     lk_log_tty_on
-    cat >"/dev/fd/$_LK_LOG_FD" <<<"$HEADER"
+    cat <<<"$HEADER" >"/dev/fd/$_LK_LOG_FD"
     ! lk_verbose 2 || _LK_FD=$_LK_TTY_OUT_FD lk_tty_log "Output log:" "$FILE"
     _LK_LOG_FILE=$FILE
 }

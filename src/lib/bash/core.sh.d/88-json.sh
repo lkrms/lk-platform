@@ -25,8 +25,8 @@ function lk_jq() {
 #     }
 function lk_jq_var() {
     local _ARGS=() _VAR _ARG _CMD=()
-    while [ $# -gt 0 ]; do
-        [ "$1" = -- ] || { _ARGS[${#_ARGS[@]}]=$1 && shift && continue; }
+    while [[ $# -gt 0 ]]; do
+        [[ $1 == -- ]] || { _ARGS[${#_ARGS[@]}]=$1 && shift && continue; }
         shift && break
     done
     while IFS=$'\t' read -r _VAR _ARG; do
