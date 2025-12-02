@@ -22,7 +22,7 @@ function lk_pass() {
 function lk_err() {
     local status=$?
     ((status)) || status=1
-    printf '%s: %s\n' "$(_LK_STACK_DEPTH=0 lk_caller)" "$1" >&2
+    printf '%s: %s\n' "$(_LK_STACK_DEPTH=0 lk_caller)" "${1-}" >&2
     return $status
 }
 

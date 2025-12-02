@@ -307,7 +307,7 @@ function lk_tty_list() {
     _COLUMNS=$(($(lk_tty_columns) - _INDENT - ${_LK_TTY_GROUP:-0} * 4))
     [[ -z ${_ITEMS+1} ]] || {
         _LIST=$(printf '\n%s' "${_ITEMS[@]}")
-        ! lk_command_exists column expand ||
+        ! lk_has column expand ||
             _LIST=$'\n'$(COLUMNS=$((_COLUMNS > 0 ? _COLUMNS : 0)) \
                 column <<<"$_LIST" | expand) || return
     }

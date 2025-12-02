@@ -135,7 +135,7 @@ function lk_run_as() {
     shift
     if [[ $EUID -eq $_USER ]]; then
         "$@"
-    elif lk_is_linux; then
+    elif lk_system_is_linux; then
         _USER=$(id -un "$_USER")
         lk_elevate runuser -u "$_USER" -- "$@"
     else

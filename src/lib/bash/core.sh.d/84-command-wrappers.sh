@@ -43,7 +43,7 @@ function lk_report_error() {
 # redirected.
 function lk_faketty() {
     [ "$1" != exec ] || { local LK_EXEC=1 && shift; }
-    if ! lk_is_macos; then
+    if ! lk_system_is_macos; then
         SHELL=$BASH lk_sudo script -qfec "$(lk_quote_args "$@")" /dev/null
     else
         lk_sudo script -qt 0 /dev/null "$@"

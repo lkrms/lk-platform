@@ -102,7 +102,7 @@ function render() {
     build)
         if [ "$PLATFORM" = macos ]; then
             printf '%s &&\n    %s=%s ||\n    %s=%s\n' \
-                lk_is_apple_silicon \
+                lk_system_is_apple_silicon \
                 _LK_HOMEBREW_PREFIX /opt/homebrew \
                 _LK_HOMEBREW_PREFIX /usr/local
         fi
@@ -151,7 +151,7 @@ EOF
 esac
 
 {
-    printf 'if ! lk_is_macos; then\n'
+    printf 'if ! lk_system_is_macos; then\n'
     PLATFORM=
     render
     printf 'else\n'

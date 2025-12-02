@@ -9,8 +9,8 @@ function lk_mapfile() {
     [ "${1-}" != -z ] || { _ARGS=(-d '') && shift; }
     [ -n "${2+1}" ] || set -- "$1" /dev/stdin
     [ -r "$2" ] || lk_err "not readable: $2" || return
-    if lk_bash_at_least 4 4 ||
-        { [ -z "${_ARGS+1}" ] && lk_bash_at_least 4 0; }; then
+    if lk_bash_is 4 4 ||
+        { [ -z "${_ARGS+1}" ] && lk_bash_is 4 0; }; then
         mapfile -t ${_ARGS+"${_ARGS[@]}"} "$1" <"$2"
     else
         eval "$1=()" || return
@@ -27,7 +27,7 @@ function lk_mapfile() {
 # Unless Bash version is 4 or higher, set BASHPID to the process ID of the
 # running (sub)shell.
 function lk_set_bashpid() {
-    lk_bash_at_least 4 ||
+    lk_bash_is 4 ||
         BASHPID=$(exec sh -c 'echo "$PPID"')
 }
 
@@ -36,7 +36,7 @@ function lk_set_bashpid() {
 # Run `sed` with the correct arguments to edit files in-place on the detected
 # platform.
 function lk_sed_i() {
-    if ! lk_is_macos; then
+    if ! lk_system_is_macos; then
         local IFS
         unset IFS
         lk_sudo sed -i"${1-}" "${@:2}"
@@ -87,7 +87,7 @@ function _lk_realpath() {
 # Print the resolved absolute path of each FILE.
 function lk_realpath() {
     local STATUS=0
-    if lk_command_exists realpath; then
+    if lk_has realpath; then
         lk_sudo realpath "$@"
     else
         while [ $# -gt 0 ]; do
@@ -108,7 +108,7 @@ function lk_unbuffer() {
     shift
     case "$CMD" in
     sed)
-        if lk_is_macos; then
+        if lk_system_is_macos; then
             set -- "$CMD" -l "$@"
         else
             set -- "$CMD" -u "$@"
@@ -121,7 +121,7 @@ function lk_unbuffer() {
         set -- "$CMD" --line-buffered "$@"
         ;;
     *)
-        if [ "$CMD" = tr ] && lk_is_macos; then
+        if [ "$CMD" = tr ] && lk_system_is_macos; then
             set -- "$CMD" -u "$@"
         else
             # TODO: reinstate unbuffer after resolving LF -> CRLF issue

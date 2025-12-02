@@ -209,7 +209,7 @@ function lk_start_trace() {
     CMD=${LK_LOG_CMDLINE:-$0}
     TRACE_FILE=${LK_LOG_TRACE_FILE:-/tmp/${LK_LOG_BASENAME:-${CMD##*/}}-$EUID.$(lk_date_ymdhms).trace} &&
         exec 4> >(lk_log >"$TRACE_FILE") || return
-    if lk_bash_at_least 4 1; then
+    if lk_bash_is 4 1; then
         BASH_XTRACEFD=4
     else
         # If BASH_XTRACEFD isn't supported, trace all output to stderr and send

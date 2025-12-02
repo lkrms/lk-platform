@@ -123,7 +123,7 @@ function lk_pass() {
 function lk_err() {
     local status=$?
     ((status)) || status=1
-    printf '%s: %s\n' "$(_LK_STACK_DEPTH=0 lk_caller)" "$1" >&2
+    printf '%s: %s\n' "$(_LK_STACK_DEPTH=0 lk_caller)" "${1-}" >&2
     return $status
 }
 
@@ -258,64 +258,34 @@ function lk_grep() {
     }
 }
 
-# lk_bash_at_least MAJOR [MINOR]
-function lk_bash_at_least() {
-    ((BASH_VERSINFO[0] * 100 + BASH_VERSINFO[1] >= $1 * 100 + ${2-0}))
-}
-
-function lk_is_arm() {
-    [[ $MACHTYPE =~ ^(arm|aarch)64- ]]
-}
-
-function lk_is_macos() {
-    [[ $OSTYPE == darwin* ]]
-}
-
-# lk_is_apple_silicon
+# lk_bash_is <major_version> [<minor_version>]
 #
-# Return true if running natively on Apple Silicon.
-function lk_is_apple_silicon() {
-    lk_is_macos && lk_is_arm
+# Check if running on a version of Bash greater than or equal to the given
+# version.
+function lk_bash_is() {
+    case $# in
+    0) lk_bad_args ;;
+    1) ((BASH_VERSINFO[0] >= $1)) ;;
+    *) ((BASH_VERSINFO[0] > $1 || (BASH_VERSINFO[0] == $1 && BASH_VERSINFO[1] >= $2))) ;;
+    esac
 }
 
-# lk_is_system_apple_silicon
+# lk_version_is <installed_version> <minimum_version>
 #
-# Return true if running on Apple Silicon, whether natively or as a translated
-# Intel binary.
-function lk_is_system_apple_silicon() {
-    lk_is_macos && { lk_is_arm ||
-        [[ $(sysctl -n sysctl.proc_translated 2>/dev/null) == 1 ]]; }
+# Check if the installed version of an application is greater than or equal to
+# the given minimum version.
+function lk_version_is() {
+    (($# == 2)) || lk_bad_args || return
+    local latest
+    latest=$(printf '%s\n' "$@" | sort -V | awk 'END { print }') &&
+        [[ $latest == "$1" ]]
 }
 
-function lk_is_linux() {
-    [[ $OSTYPE == linux-gnu ]]
-}
-
-function lk_is_arch() {
-    lk_is_linux && [[ -f /etc/arch-release ]]
-}
-
-function lk_is_ubuntu() {
-    lk_is_linux && [[ -r /etc/os-release ]] &&
-        (. /etc/os-release && [[ $NAME == Ubuntu ]])
-}
-
-function lk_is_wsl() {
-    lk_is_linux && grep -iq Microsoft /proc/version &>/dev/null
-}
-
-function lk_is_virtual() {
-    lk_is_linux &&
-        grep -Eq "^flags$LK_h*:.*\\<hypervisor\\>" /proc/cpuinfo
-}
-
-function lk_is_qemu() {
-    lk_is_virtual &&
-        grep -Fxiq QEMU /sys/devices/virtual/dmi/id/*_vendor 2>/dev/null
-}
-
-# lk_command_exists COMMAND...
-function lk_command_exists() {
+# lk_has [<command>...]
+#
+# Check if the given commands are executable disk files on the filesystem or in
+# PATH.
+function lk_has() {
     (($#)) || return
     while (($#)); do
         type -P "$1" >/dev/null || return
@@ -323,9 +293,76 @@ function lk_command_exists() {
     done
 }
 
-# lk_version_at_least INSTALLED MINIMUM
-function lk_version_at_least() {
-    printf '%s\n' "$@" | sort -V | head -n1 | grep -Fx "$2" >/dev/null
+# lk_system_is_linux
+#
+# Check if running on Linux.
+function lk_system_is_linux() {
+    [[ $OSTYPE == linux-gnu ]]
+}
+
+# lk_system_is_arch
+#
+# Check if running on Arch Linux.
+function lk_system_is_arch() {
+    lk_system_is_linux && [[ -f /etc/arch-release ]]
+}
+
+# lk_system_is_ubuntu
+#
+# Check if running on Ubuntu.
+function lk_system_is_ubuntu() {
+    lk_system_is_linux && [[ -f /etc/os-release ]] &&
+        (. /etc/os-release && [[ $NAME == Ubuntu ]]) &>/dev/null
+}
+
+# lk_system_is_wsl
+#
+# Check if running on the Windows Subsystem for Linux.
+function lk_system_is_wsl() {
+    lk_system_is_linux &&
+        { [[ -f /proc/sys/fs/binfmt_misc/WSLInterop ]] || [[ -d /run/WSL ]]; }
+}
+
+# lk_system_is_vm
+#
+# Check if running on a virtual machine.
+function lk_system_is_vm() {
+    lk_system_is_linux && awk -F '[ \t]*:[ \t]*' \
+        '$1 == "flags" && $2 ~ /(^| )hypervisor( |$)/ { h = 1; exit } END { exit (1 - h) }' \
+        /proc/cpuinfo
+}
+
+# lk_system_is_qemu
+#
+# Check if running on a QEMU virtual machine.
+function lk_system_is_qemu() {
+    lk_system_is_vm &&
+        grep -Fxiq QEMU /sys/devices/virtual/dmi/id/*_vendor 2>/dev/null
+}
+
+# lk_system_is_macos
+#
+# Check if running on macOS.
+function lk_system_is_macos() {
+    [[ $OSTYPE == darwin* ]]
+}
+
+# lk_system_is_arm
+#
+# Check if running on an ARM processor.
+function lk_system_is_arm() {
+    [[ $MACHTYPE == @(arm|aarch)* ]]
+}
+
+# lk_system_is_apple_silicon [-t]
+#
+# Check if running on Apple Silicon:
+# - natively, or
+# - as a translated binary (if -t is given)
+function lk_system_is_apple_silicon() {
+    lk_system_is_macos && { lk_system_is_arm || {
+        [[ ${1-} == -t ]] && [[ $(sysctl -n sysctl.proc_translated 2>/dev/null) == 1 ]]
+    }; }
 }
 
 # lk_script_running
@@ -584,7 +621,7 @@ function lk_run_as() {
     shift
     if [[ $EUID -eq $_USER ]]; then
         "$@"
-    elif lk_is_linux; then
+    elif lk_system_is_linux; then
         _USER=$(id -un "$_USER")
         lk_elevate runuser -u "$_USER" -- "$@"
     else
@@ -595,7 +632,7 @@ function lk_run_as() {
 # Define wrapper functions (e.g. `gnu_find`) to invoke the GNU version of
 # certain commands (e.g. `gfind`) when standard utilities are not compatible
 # with their GNU counterparts, e.g. on BSD/macOS
-if ! lk_is_macos; then
+if ! lk_system_is_macos; then
     function gnu_awk() { lk_sudo gawk "$@"; }
     function gnu_chgrp() { lk_sudo chgrp "$@"; }
     function gnu_chmod() { lk_sudo chmod "$@"; }
@@ -621,7 +658,7 @@ if ! lk_is_macos; then
     function gnu_uniq() { lk_sudo uniq "$@"; }
     function gnu_xargs() { lk_sudo xargs "$@"; }
 else
-    lk_is_apple_silicon &&
+    lk_system_is_apple_silicon &&
         _LK_HOMEBREW_PREFIX=/opt/homebrew ||
         _LK_HOMEBREW_PREFIX=/usr/local
     function gnu_awk() { lk_sudo gawk "$@"; }
@@ -659,8 +696,8 @@ function lk_mapfile() {
     [ "${1-}" != -z ] || { _ARGS=(-d '') && shift; }
     [ -n "${2+1}" ] || set -- "$1" /dev/stdin
     [ -r "$2" ] || lk_err "not readable: $2" || return
-    if lk_bash_at_least 4 4 ||
-        { [ -z "${_ARGS+1}" ] && lk_bash_at_least 4 0; }; then
+    if lk_bash_is 4 4 ||
+        { [ -z "${_ARGS+1}" ] && lk_bash_is 4 0; }; then
         mapfile -t ${_ARGS+"${_ARGS[@]}"} "$1" <"$2"
     else
         eval "$1=()" || return
@@ -677,7 +714,7 @@ function lk_mapfile() {
 # Unless Bash version is 4 or higher, set BASHPID to the process ID of the
 # running (sub)shell.
 function lk_set_bashpid() {
-    lk_bash_at_least 4 ||
+    lk_bash_is 4 ||
         BASHPID=$(exec sh -c 'echo "$PPID"')
 }
 
@@ -686,7 +723,7 @@ function lk_set_bashpid() {
 # Run `sed` with the correct arguments to edit files in-place on the detected
 # platform.
 function lk_sed_i() {
-    if ! lk_is_macos; then
+    if ! lk_system_is_macos; then
         local IFS
         unset IFS
         lk_sudo sed -i"${1-}" "${@:2}"
@@ -737,7 +774,7 @@ function _lk_realpath() {
 # Print the resolved absolute path of each FILE.
 function lk_realpath() {
     local STATUS=0
-    if lk_command_exists realpath; then
+    if lk_has realpath; then
         lk_sudo realpath "$@"
     else
         while [ $# -gt 0 ]; do
@@ -758,7 +795,7 @@ function lk_unbuffer() {
     shift
     case "$CMD" in
     sed)
-        if lk_is_macos; then
+        if lk_system_is_macos; then
             set -- "$CMD" -l "$@"
         else
             set -- "$CMD" -u "$@"
@@ -771,7 +808,7 @@ function lk_unbuffer() {
         set -- "$CMD" --line-buffered "$@"
         ;;
     *)
-        if [ "$CMD" = tr ] && lk_is_macos; then
+        if [ "$CMD" = tr ] && lk_system_is_macos; then
             set -- "$CMD" -u "$@"
         else
             # TODO: reinstate unbuffer after resolving LF -> CRLF issue
@@ -1008,11 +1045,11 @@ function lk_get_regex() {
 # lk_date FORMAT [TIMESTAMP]
 function lk_date() {
     # Take advantage of printf support for strftime in Bash 4.2+
-    if lk_bash_at_least 4 2; then
+    if lk_bash_is 4 2; then
         function lk_date() {
             printf "%($1)T\n" "${2:--1}"
         }
-    elif ! lk_is_macos; then
+    elif ! lk_system_is_macos; then
         function lk_date() {
             if (($# < 2)); then
                 date "+$1"
@@ -1880,7 +1917,7 @@ function lk_tty_list() {
     _COLUMNS=$(($(lk_tty_columns) - _INDENT - ${_LK_TTY_GROUP:-0} * 4))
     [[ -z ${_ITEMS+1} ]] || {
         _LIST=$(printf '\n%s' "${_ITEMS[@]}")
-        ! lk_command_exists column expand ||
+        ! lk_has column expand ||
             _LIST=$'\n'$(COLUMNS=$((_COLUMNS > 0 ? _COLUMNS : 0)) \
                 column <<<"$_LIST" | expand) || return
     }
@@ -2987,7 +3024,7 @@ function lk_start_trace() {
     CMD=${LK_LOG_CMDLINE:-$0}
     TRACE_FILE=${LK_LOG_TRACE_FILE:-/tmp/${LK_LOG_BASENAME:-${CMD##*/}}-$EUID.$(lk_date_ymdhms).trace} &&
         exec 4> >(lk_log >"$TRACE_FILE") || return
-    if lk_bash_at_least 4 1; then
+    if lk_bash_is 4 1; then
         BASH_XTRACEFD=4
     else
         # If BASH_XTRACEFD isn't supported, trace all output to stderr and send
@@ -3028,7 +3065,7 @@ EOF
 }
 
 function lk_file_owner() {
-    if ! lk_is_macos; then
+    if ! lk_system_is_macos; then
         function lk_file_owner() { lk_sudo_on_fail stat -c '%U' -- "$@"; }
     else
         function lk_file_owner() { lk_sudo_on_fail stat -f '%Su' -- "$@"; }
@@ -3037,7 +3074,7 @@ function lk_file_owner() {
 }
 
 function lk_file_group() {
-    if ! lk_is_macos; then
+    if ! lk_system_is_macos; then
         function lk_file_group() { lk_sudo_on_fail stat -c '%G' -- "$@"; }
     else
         function lk_file_group() { lk_sudo_on_fail stat -f '%Sg' -- "$@"; }
@@ -3046,7 +3083,7 @@ function lk_file_group() {
 }
 
 function lk_file_mode() {
-    if ! lk_is_macos; then
+    if ! lk_system_is_macos; then
         function lk_file_mode() { lk_sudo_on_fail stat -c '%04a' -- "$@"; }
     else
         function lk_file_mode() { lk_sudo_on_fail stat -f '%OMp%03OLp' -- "$@"; }
@@ -3055,7 +3092,7 @@ function lk_file_mode() {
 }
 
 function lk_file_owner_mode() {
-    if ! lk_is_macos; then
+    if ! lk_system_is_macos; then
         function lk_file_owner_mode() { lk_sudo_on_fail stat -c '%U:%G %04a' -- "$@"; }
     else
         function lk_file_owner_mode() { lk_sudo_on_fail stat -f '%Su:%Sg %OMp%03OLp' -- "$@"; }
@@ -3064,7 +3101,7 @@ function lk_file_owner_mode() {
 }
 
 function lk_file_modified() {
-    if ! lk_is_macos; then
+    if ! lk_system_is_macos; then
         function lk_file_modified() { lk_sudo_on_fail stat -c '%Y' -- "$@"; }
     else
         function lk_file_modified() { lk_sudo_on_fail stat -t '%s' -f '%Sm' -- "$@"; }
@@ -3073,7 +3110,7 @@ function lk_file_modified() {
 }
 
 function lk_file_sort_modified() {
-    if ! lk_is_macos; then
+    if ! lk_system_is_macos; then
         function lk_file_sort_modified() { lk_sudo_on_fail stat -c '%Y :%n' -- "$@" | sort -n | cut -d: -f2-; }
     else
         function lk_file_sort_modified() { lk_sudo_on_fail stat -t '%s' -f '%Sm :%N' -- "$@" | sort -n | cut -d: -f2-; }
@@ -3480,7 +3517,7 @@ function lk_report_error() {
 # redirected.
 function lk_faketty() {
     [ "$1" != exec ] || { local LK_EXEC=1 && shift; }
-    if ! lk_is_macos; then
+    if ! lk_system_is_macos; then
         SHELL=$BASH lk_sudo script -qfec "$(lk_quote_args "$@")" /dev/null
     else
         lk_sudo script -qt 0 /dev/null "$@"
@@ -3760,8 +3797,10 @@ lk_intersect_file() { lk_file_intersect "$@"; }
 lk_kill_on_exit() { lk_on_exit_kill "$@"; }
 lk_undo_delete_on_exit() { lk_on_exit_undo_delete "$@"; }
 
+lk_bash_at_least() { lk_bash_is "$@"; }
 lk_cache_mark_dirty() { _LK_STACK_DEPTH=$((${_LK_STACK_DEPTH-0} + 1)) lk_cache_flush; }
 lk_caller_name() { lk_caller $((${1-0} + 1)); }
+lk_command_exists() { lk_has "$@"; }
 lk_confirm() { lk_tty_yn "$@"; }
 lk_delete_on_exit_withdraw() { lk_on_exit_undo_delete "$@"; }
 lk_echo_args() { lk_args "$@"; }
@@ -3775,6 +3814,15 @@ lk_first_command() { lk_runnable "$@"; }
 lk_first_existing() { lk_readable "$@"; }
 lk_first_file() { lk_readable "$@"; }
 lk_get_tty() { lk_writable_tty "$@"; }
+lk_is_apple_silicon() { lk_system_is_apple_silicon; }
+lk_is_arch() { lk_system_is_arch; }
+lk_is_linux() { lk_system_is_linux; }
+lk_is_macos() { lk_system_is_macos; }
+lk_is_qemu() { lk_system_is_qemu; }
+lk_is_system_apple_silicon() { lk_system_is_apple_silicon -t; }
+lk_is_ubuntu() { lk_system_is_ubuntu; }
+lk_is_virtual() { lk_system_is_vm; }
+lk_is_wsl() { lk_system_is_wsl; }
 lk_jq_get_array() { lk_json_mapfile "$@"; }
 lk_maybe_sudo() { lk_sudo "$@"; }
 lk_mktemp_dir() { _LK_STACK_DEPTH=$((${_LK_STACK_DEPTH-0} + 1)) lk_mktemp -d; }
@@ -3784,6 +3832,7 @@ lk_safe_grep() { lk_grep "$@"; }
 lk_script_name() { lk_script $((${1-0} + 1)); }
 lk_test_many() { lk_test "$@"; }
 lk_tty_detail_pairs() { lk_tty_pairs_detail "$@"; }
+lk_version_at_least() { lk_version_is "$@"; }
 
 [[ ${S-} ]] || S=$LK_h
 [[ ${NS-} ]] || NS=$LK_H
@@ -4177,7 +4226,7 @@ function lk_get_outputs_of() {
 }
 
 function _lk_lock_check_args() {
-    lk_is_linux || lk_command_exists flock || {
+    lk_system_is_linux || lk_has flock || {
         [ "${FUNCNAME[1]-}" = lk_lock_drop ] ||
             lk_tty_warning "File locking is not supported on this platform"
         return 2
@@ -4252,7 +4301,7 @@ function lk_diff() { (
     done
     # Use the same escape sequences as icdiff, which ignores TERM
     lk_colour_on
-    if lk_command_exists icdiff; then
+    if lk_has icdiff; then
         # Don't use icdiff if FILE1 is empty
         if lk_maybe_sudo test ! -s "$1" -a -s "$2"; then
             printf '%s%s%s\n' "$LK_BLUE" "$2" "$LK_RESET"
@@ -4270,12 +4319,12 @@ function lk_diff() { (
                 ) - 2 * (_LK_TTY_INDENT + 2)))"} "$@" || ((!($? & 2))) || STATUS=0
             ((!STATUS))
         fi
-    elif lk_command_exists git; then
+    elif lk_has git; then
         lk_maybe_sudo \
             git diff --no-index --no-prefix --no-ext-diff --color -U3 "$@"
     else
         DIFF_VER=$(lk_diff_version 2>/dev/null) &&
-            lk_version_at_least "$DIFF_VER" 3.4 || unset DIFF_VER
+            lk_version_is "$DIFF_VER" 3.4 || unset DIFF_VER
         lk_maybe_sudo gnu_diff ${DIFF_VER+--color=always} -U3 "$@"
     fi && printf '%sFiles are identical%s%s' \
         "$LK_BLUE" \
@@ -4415,7 +4464,7 @@ function lk_download() {
         --remote-time
     )
     ! lk_true SERVER_NAMES || {
-        lk_version_at_least "$CURL_VERSION" 7.26.0 ||
+        lk_version_is "$CURL_VERSION" 7.26.0 ||
             lk_warn "curl too old to output filename_effective" || return
         DOWNLOAD_DIR=$(lk_mktemp_dir) &&
             lk_delete_on_exit "$DOWNLOAD_DIR" &&
@@ -4460,9 +4509,9 @@ function lk_download() {
         cat)
     [ ${#COMMAND_ARGS[@]} -eq 0 ] || {
         CURL_COMMAND=("${CURL_COMMAND[@]//--remote-name/--remote-name-all}")
-        ! lk_version_at_least "$CURL_VERSION" 7.66.0 ||
+        ! lk_version_is "$CURL_VERSION" 7.66.0 ||
             CURL_COMMAND+=(--parallel)
-        ! lk_version_at_least "$CURL_VERSION" 7.68.0 ||
+        ! lk_version_is "$CURL_VERSION" 7.68.0 ||
             CURL_COMMAND+=(--parallel-immediate)
         COMMANDS+=("$(lk_quote_arr CURL_COMMAND COMMAND_ARGS)")
     }
@@ -4498,7 +4547,7 @@ function lk_curl() {
 function lk_maybe_drop() {
     if ! lk_root; then
         "$@"
-    elif lk_is_linux; then
+    elif lk_system_is_linux; then
         runuser -u nobody -- "$@"
     else
         sudo -u nobody -- "$@"
@@ -4515,9 +4564,9 @@ function lk_rm() {
     [[ ${1-} != -v ]] || { v=v && shift; }
     [[ ${1-} != -- ]] || shift
     (($#)) || return 0
-    if lk_command_exists trash-put; then
+    if lk_has trash-put; then
         lk_maybe_sudo trash-put -f"$v" -- "$@"
-    elif lk_command_exists trash; then
+    elif lk_has trash; then
         local FILE FILES=()
         for FILE in "$@"; do
             ! lk_maybe_sudo test -e "$FILE" || FILES[${#FILES[@]}]=$FILE
@@ -4752,11 +4801,11 @@ function lk_random_password() {
 function lk_base64() {
     local DECODE
     [ "${1-}" != -d ] || DECODE=1
-    if lk_command_exists openssl &&
+    if lk_has openssl &&
         openssl base64 &>/dev/null </dev/null; then
         # OpenSSL's implementation is ubiquitous and well-behaved
         openssl base64 ${DECODE:+-d}
-    elif lk_command_exists base64 &&
+    elif lk_has base64 &&
         base64 --version 2>/dev/null </dev/null | grep -i gnu >/dev/null; then
         # base64 on BSD and some legacy systems (e.g. RAIDiator 4.x) doesn't
         # wrap lines by default
@@ -4777,7 +4826,7 @@ function lk_hex() {
     fi
 }
 
-if ! lk_is_macos; then
+if ! lk_system_is_macos; then
     function lk_full_name() {
         getent passwd "${1:-$EUID}" | cut -d: -f5 | cut -d, -f1
     }
@@ -4803,7 +4852,7 @@ function lk_file_age() {
         echo $(($(lk_timestamp) - MODIFIED))
 }
 
-if ! lk_is_macos; then
+if ! lk_system_is_macos; then
     function lk_timestamp_readable() {
         gnu_date -Rd "@$1"
     }
@@ -4909,7 +4958,7 @@ function lk_file_prepare_temp() {
     ! lk_maybe_sudo test -f "$1" ||
         if lk_true NO_COPY; then
             local OPT
-            lk_is_macos || OPT=--
+            lk_system_is_macos || OPT=--
             MODE=$(lk_file_mode "$1") &&
                 lk_maybe_sudo chmod "$(lk_pad_zero 5 "$MODE")" \
                     ${OPT:+"$OPT"} "$TEMP"
@@ -5103,7 +5152,7 @@ function _lk_err_trap() {
 
 set -o pipefail
 
-! lk_bash_at_least 5 2 ||
+! lk_bash_is 5 2 ||
     shopt -u patsub_replacement
 
 if [[ $- != *i* ]]; then

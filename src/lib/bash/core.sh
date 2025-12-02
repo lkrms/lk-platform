@@ -391,7 +391,7 @@ function lk_get_outputs_of() {
 }
 
 function _lk_lock_check_args() {
-    lk_is_linux || lk_command_exists flock || {
+    lk_system_is_linux || lk_has flock || {
         [ "${FUNCNAME[1]-}" = lk_lock_drop ] ||
             lk_tty_warning "File locking is not supported on this platform"
         return 2
@@ -466,7 +466,7 @@ function lk_diff() { (
     done
     # Use the same escape sequences as icdiff, which ignores TERM
     lk_colour_on
-    if lk_command_exists icdiff; then
+    if lk_has icdiff; then
         # Don't use icdiff if FILE1 is empty
         if lk_maybe_sudo test ! -s "$1" -a -s "$2"; then
             printf '%s%s%s\n' "$LK_BLUE" "$2" "$LK_RESET"
@@ -484,12 +484,12 @@ function lk_diff() { (
                 ) - 2 * (_LK_TTY_INDENT + 2)))"} "$@" || ((!($? & 2))) || STATUS=0
             ((!STATUS))
         fi
-    elif lk_command_exists git; then
+    elif lk_has git; then
         lk_maybe_sudo \
             git diff --no-index --no-prefix --no-ext-diff --color -U3 "$@"
     else
         DIFF_VER=$(lk_diff_version 2>/dev/null) &&
-            lk_version_at_least "$DIFF_VER" 3.4 || unset DIFF_VER
+            lk_version_is "$DIFF_VER" 3.4 || unset DIFF_VER
         lk_maybe_sudo gnu_diff ${DIFF_VER+--color=always} -U3 "$@"
     fi && printf '%sFiles are identical%s%s' \
         "$LK_BLUE" \
@@ -629,7 +629,7 @@ function lk_download() {
         --remote-time
     )
     ! lk_true SERVER_NAMES || {
-        lk_version_at_least "$CURL_VERSION" 7.26.0 ||
+        lk_version_is "$CURL_VERSION" 7.26.0 ||
             lk_warn "curl too old to output filename_effective" || return
         DOWNLOAD_DIR=$(lk_mktemp_dir) &&
             lk_delete_on_exit "$DOWNLOAD_DIR" &&
@@ -674,9 +674,9 @@ function lk_download() {
         cat)
     [ ${#COMMAND_ARGS[@]} -eq 0 ] || {
         CURL_COMMAND=("${CURL_COMMAND[@]//--remote-name/--remote-name-all}")
-        ! lk_version_at_least "$CURL_VERSION" 7.66.0 ||
+        ! lk_version_is "$CURL_VERSION" 7.66.0 ||
             CURL_COMMAND+=(--parallel)
-        ! lk_version_at_least "$CURL_VERSION" 7.68.0 ||
+        ! lk_version_is "$CURL_VERSION" 7.68.0 ||
             CURL_COMMAND+=(--parallel-immediate)
         COMMANDS+=("$(lk_quote_arr CURL_COMMAND COMMAND_ARGS)")
     }
@@ -712,7 +712,7 @@ function lk_curl() {
 function lk_maybe_drop() {
     if ! lk_root; then
         "$@"
-    elif lk_is_linux; then
+    elif lk_system_is_linux; then
         runuser -u nobody -- "$@"
     else
         sudo -u nobody -- "$@"
@@ -729,9 +729,9 @@ function lk_rm() {
     [[ ${1-} != -v ]] || { v=v && shift; }
     [[ ${1-} != -- ]] || shift
     (($#)) || return 0
-    if lk_command_exists trash-put; then
+    if lk_has trash-put; then
         lk_maybe_sudo trash-put -f"$v" -- "$@"
-    elif lk_command_exists trash; then
+    elif lk_has trash; then
         local FILE FILES=()
         for FILE in "$@"; do
             ! lk_maybe_sudo test -e "$FILE" || FILES[${#FILES[@]}]=$FILE
@@ -966,11 +966,11 @@ function lk_random_password() {
 function lk_base64() {
     local DECODE
     [ "${1-}" != -d ] || DECODE=1
-    if lk_command_exists openssl &&
+    if lk_has openssl &&
         openssl base64 &>/dev/null </dev/null; then
         # OpenSSL's implementation is ubiquitous and well-behaved
         openssl base64 ${DECODE:+-d}
-    elif lk_command_exists base64 &&
+    elif lk_has base64 &&
         base64 --version 2>/dev/null </dev/null | grep -i gnu >/dev/null; then
         # base64 on BSD and some legacy systems (e.g. RAIDiator 4.x) doesn't
         # wrap lines by default
@@ -991,7 +991,7 @@ function lk_hex() {
     fi
 }
 
-if ! lk_is_macos; then
+if ! lk_system_is_macos; then
     function lk_full_name() {
         getent passwd "${1:-$EUID}" | cut -d: -f5 | cut -d, -f1
     }
@@ -1017,7 +1017,7 @@ function lk_file_age() {
         echo $(($(lk_timestamp) - MODIFIED))
 }
 
-if ! lk_is_macos; then
+if ! lk_system_is_macos; then
     function lk_timestamp_readable() {
         gnu_date -Rd "@$1"
     }
@@ -1123,7 +1123,7 @@ function lk_file_prepare_temp() {
     ! lk_maybe_sudo test -f "$1" ||
         if lk_true NO_COPY; then
             local OPT
-            lk_is_macos || OPT=--
+            lk_system_is_macos || OPT=--
             MODE=$(lk_file_mode "$1") &&
                 lk_maybe_sudo chmod "$(lk_pad_zero 5 "$MODE")" \
                     ${OPT:+"$OPT"} "$TEMP"
@@ -1317,7 +1317,7 @@ function _lk_err_trap() {
 
 set -o pipefail
 
-! lk_bash_at_least 5 2 ||
+! lk_bash_is 5 2 ||
     shopt -u patsub_replacement
 
 if [[ $- != *i* ]]; then
