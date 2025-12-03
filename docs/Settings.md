@@ -38,7 +38,6 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_CERTBOT_EMAIL`
 - `LK_CERTBOT_INSTALLED`
 - `LK_CERTBOT_OPTIONS`
-- `LK_CLIP_LINES`
 - `LK_CLOUDIMG_SESSION_ROOT`
 - `LK_COMPLETION`
 - `LK_CURL_OPTIONS`
@@ -48,6 +47,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_DNS_SEARCH`
 - `LK_DNS_SERVERS`
 - `LK_DRY_RUN`
+- `LK_DRYRUN`
 - `LK_EMAIL_DESTINATION`
 - `LK_EXEC`
 - `LK_FEATURES`
@@ -78,6 +78,7 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_MYSQL_HOST`
 - `LK_MYSQL_MAX_CONNECTIONS`
 - `LK_MYSQL_SUDO`
+- `LK_NO_COLOUR`
 - `LK_NODE_FQDN`
 - `LK_NODE_HOSTNAME`
 - `LK_NODE_LANGUAGE`
@@ -140,7 +141,6 @@ variable assignments compatible with Bash and POSIX `sh`.
 - `LK_SUDO_ON_FAIL`
 - `LK_TRUSTED_IP_ADDRESSES`
 - `LK_TTY_HOSTNAME`
-- `LK_TTY_NO_COLOUR`
 - `LK_UBUNTU_CLOUDIMG_HOST`
 - `LK_UBUNTU_CLOUDIMG_SHA_URL`
 - `LK_UBUNTU_MIRROR`
@@ -167,9 +167,9 @@ To generate the list above, run the following in `<LK_BASE>`:
 
 ```bash
 lk_find_shell_scripts -print0 |
-    xargs -0 gnu_grep -Pho '((?<=\$\{)|(?<=lk_true )|(?<=lk_false ))LK_[a-zA-Z0-9_]+\b(?!(\[[^]]+\])?[#%}])' |
+    xargs -0 gnu_grep -Pho '((?<=\$\{)|(?<=lk_is_true )|(?<=lk_is_false ))LK_[a-zA-Z0-9_]+\b(?!(\[[^]]+\])?[#%}])' |
     sort -u |
-    sed -Ee '/^LK_(.+_(UPDATED|DECLINED|NO_CHANGE|LAST)|BASE|USAGE|VERSION|Z|ADMIN_USERS|HOST_.+|LOG_.+|MYSQL_(USERNAME|PASSWORD)|SHUTDOWN_ACTION|BOLD|DIM|RESET)$/d' -e 's/.*/- `&`/'
+    sed -Ee '/^LK_(.+_(UPDATED|DECLINED|NO_CHANGE|LAST)|BASE|USAGE|VERSION|Z|ADMIN_USERS|HOST_.+|LOG_.+|MYSQL_(USERNAME|PASSWORD)|SHUTDOWN_ACTION|BOLD|DIM|RESET|FILE_(CHANGED|UNCHANGED))$/d' -e 's/.*/- `&`/'
 ```
 
 ## Site settings

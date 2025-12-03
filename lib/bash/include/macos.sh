@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-if lk_is_apple_silicon; then
+if lk_system_is_apple_silicon; then
     function _lk_macos_env() {
         local _LK_VAR _LK_VARS=(PATH MANPATH INFOPATH) _LK_VAL
         for _LK_VAR in "${_LK_VARS[@]}"; do
@@ -90,7 +90,7 @@ function lk_macos_setenv() {
         lk_warn "not a valid identifier: ${1-}" || return
     local LK_SUDO=1 _LABEL=setenv.$1 _FILE _TEMP
     _FILE=/Library/LaunchAgents/$_LABEL.plist
-    _TEMP=$(lk_mktemp_dir)/$_LABEL.plist &&
+    _TEMP=$(lk_mktemp -d)/$_LABEL.plist &&
         lk_delete_on_exit "${_TEMP%/*}" || return
     defaults write "$_TEMP" Label -string "$_LABEL" &&
         defaults write "$_TEMP" ProgramArguments -array \
@@ -99,9 +99,9 @@ function lk_macos_setenv() {
     if ! diff \
         <(plutil -convert xml1 -o - "$_FILE" 2>/dev/null) \
         <(plutil -convert xml1 -o - "$_TEMP") >/dev/null; then
-        lk_root || launchctl unload "$_FILE" &>/dev/null || true
+        lk_user_is_root || launchctl unload "$_FILE" &>/dev/null || true
         lk_elevate install -m 00644 "$_TEMP" "$_FILE" || return
-        lk_root || launchctl load -w "$_FILE" || return
+        lk_user_is_root || launchctl load -w "$_FILE" || return
     fi
     grep -Eq "\<$1\>" /etc/profile &>/dev/null || {
         lk_file_keep_original /etc/profile && lk_elevate tee -a \
@@ -252,7 +252,7 @@ function lk_macos_install_dmg() {
     local IFS MOUNT_ROOT MOUNT_POINTS EXIT_STATUS=0
     [ -f "$1" ] || lk_warn "file not found: $1" || return
     lk_tty_detail "Attaching:" "${1##*/}"
-    MOUNT_ROOT=$(lk_mktemp_dir) &&
+    MOUNT_ROOT=$(lk_mktemp -d) &&
         IFS=$'\n' &&
         MOUNT_POINTS=($(hdiutil attach -mountroot "$MOUNT_ROOT" "$1" |
             cut -sf3 | sed '/^[[:blank:]]*$/d')) &&
@@ -296,7 +296,7 @@ function lk_macos_maybe_install_pkg_url() {
     pkgutil --pkgs | grep -Fx "$PKGID" >/dev/null || (
         lk_tty_print "Installing package:" "$PKG_NAME"
         lk_tty_detail "Downloading:" "$PKG_URL"
-        DIR=$(lk_mktemp_dir) &&
+        DIR=$(lk_mktemp -d) &&
             cd "$DIR" &&
             FILE=$(lk_download "$PKG_URL") &&
             lk_macos_install "$FILE" &&
@@ -362,7 +362,7 @@ function lk_macos_defaults_dump() {
     done
     [ -z "${_LK_MACOS_DEFAULTS_DUMP_SUDO-}" ] ||
         return 0
-    lk_root || ! lk_can_sudo defaults || {
+    lk_user_is_root || ! lk_can_sudo defaults || {
         local _LK_MACOS_DEFAULTS_DUMP_SUDO=1
         _LK_DEFAULTS_DIR=$DIR/system \
             lk_macos_defaults_dump || return
@@ -371,7 +371,7 @@ function lk_macos_defaults_dump() {
     lk_tty_log \
         'Output of "defaults [-currentHost] export $DOMAIN" dumped to:' \
         "$(for d in "$DIR" ${_LK_MACOS_DEFAULTS_DUMP_SUDO:+"$DIR/system"}; do
-            lk_echo_args \
+            lk_args \
                 "$d" "$d/currentHost"
         done)"
 }

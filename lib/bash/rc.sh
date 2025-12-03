@@ -39,7 +39,7 @@ unset SH
 
 function lk_cat_log() {
     local FILES FILE
-    lk_files_exist "$@" || lk_usage "\
+    lk_test_all_f "$@" || lk_usage "\
 Usage: $FUNCNAME LOG_FILE[.gz] [LOG_FILE...]" || return
     lk_mapfile FILES <(lk_file_sort_modified "$@")
     for FILE in "${FILES[@]}"; do
@@ -65,7 +65,7 @@ function lk_bak_find() {
 function lk_bak_diff() {
     local BACKUP FILE FILE2 \
         REGEX='.*(-[0-9]+\.bak|\.lk-bak-[0-9]{8}T[0-9]{6}Z)'
-    lk_root || ! lk_can_sudo bash || {
+    lk_user_is_root || ! lk_can_sudo bash || {
         lk_elevate bash -c "$(
             function bak_diff() {
                 . "$1"
@@ -173,11 +173,11 @@ function find_all() {
 [ ! -d /srv/backup ] || lk_require backup
 lk_require bash git linode misc provision wordpress
 
-if lk_is_linux; then
+if lk_system_is_linux; then
     lk_require ebtables iptables linux
-    ! lk_is_arch || lk_require arch
-    ! lk_is_ubuntu || lk_require debian
-elif lk_is_macos; then
+    ! lk_system_is_arch || lk_require arch
+    ! lk_system_is_ubuntu || lk_require debian
+elif lk_system_is_macos; then
     lk_require macos
     export BASH_SILENCE_DEPRECATION_WARNING=1
 fi
@@ -193,37 +193,37 @@ HISTSIZE=
 HISTFILESIZE=
 HISTTIMEFORMAT="%b %_d %Y %H:%M:%S %z "
 
-lk_false LK_COMPLETION || ! lk_bash_at_least 4 || { SH=$(
+lk_is_false LK_COMPLETION || ! lk_bash_is 4 || { SH=$(
     SOURCE=()
     ! FILE=$(
-        lk_first_file /usr/share/bash-completion/bash_completion \
+        lk_readable /usr/share/bash-completion/bash_completion \
             "${HOMEBREW_PREFIX-}/opt/bash-completion@2/etc/profile.d/bash_completion.sh"
     ) || SOURCE+=("$FILE" "$LK_BASE/lib/bash/completion.sh")
-    ! lk_is_macos || ! FILE=$(
+    ! lk_system_is_macos || ! FILE=$(
         XCODE=/Applications/Xcode.app/Contents/Developer
         TOOLS=/Library/Developer/CommandLineTools
-        lk_first_file {"$XCODE","$TOOLS"}/usr/share/git-core/git-completion.bash
+        lk_readable {"$XCODE","$TOOLS"}/usr/share/git-core/git-completion.bash
     ) || SOURCE+=("$FILE")
     ! FILE=$(
-        lk_first_file /usr/share/fzf/completion.bash \
+        lk_readable /usr/share/fzf/completion.bash \
             "${HOMEBREW_PREFIX-}/opt/fzf/shell/completion.bash"
     ) || SOURCE+=("$FILE")
     [[ -z ${SOURCE+1} ]] || printf '. %q\n' "${SOURCE[@]}"
 ) && eval "$SH"; }
 
-lk_false LK_PROMPT || {
+lk_is_false LK_PROMPT || {
     lk_require prompt
     lk_prompt_enable
     [[ $(type -t __git_ps1) == function ]] || { SH=$(
         ! FILE=$(
-            lk_first_file /usr/share/git/git-prompt.sh \
+            lk_readable /usr/share/git/git-prompt.sh \
                 /usr/lib/git-core/git-sh-prompt \
                 {/Applications/Xcode.app/Contents/Developer,/Library/Developer/CommandLineTools}/usr/share/git-core/git-prompt.sh
         ) || printf '. %q\n' "$FILE"
     ) && eval "$SH"; }
 }
 
-! lk_command_exists dircolors || { SH=$(
+! lk_has dircolors || { SH=$(
     COMMAND=(dircolors -b)
     [ ! -r ~/.dircolors ] || COMMAND+=(~/.dircolors)
     # OTHER_WRITABLE defaults to 34;42 (blue on green), which is almost
@@ -234,7 +234,7 @@ lk_false LK_PROMPT || {
 
 alias clip=lk_clip_set
 alias unclip=lk_clip_get
-if ! lk_is_macos; then
+if ! lk_system_is_macos; then
     alias duh='du -h --max-depth 1 | sort -h'
     alias open='xdg-open'
 else

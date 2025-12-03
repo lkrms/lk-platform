@@ -59,7 +59,7 @@ PAC_OFFER=(
     brother-hll3230cdw
 )
 
-lk_is_virtual || {
+lk_system_is_vm || {
     ! lk_system_has_intel_graphics || PAC_PACKAGES+=(
         clinfo
         intel-compute-runtime

@@ -102,7 +102,7 @@ added || ! /^#?\[(core|extra|multilib)(-testing)?\]/ { print; next }
 
 function lk_arch_configure_grub() {
     local CMDLINE FILE _FILE LK_SUDO=1
-    CMDLINE=${LK_GRUB_CMDLINE+"$(lk_escape_ere_replace \
+    CMDLINE=${LK_GRUB_CMDLINE+"$(lk_sed_escape_replace \
         "$(lk_double_quote -f "$LK_GRUB_CMDLINE")")"}
     CMDLINE=${CMDLINE:-\\2}
     FILE=$(_lk_arch_path /etc/default/grub)
@@ -150,7 +150,7 @@ function lk_pac_installed_list() {
     [ $# -eq 0 ] || {
         comm -12 \
             <(lk_pac_installed_list $E $D | sort -u) \
-            <(lk_echo_args "$@" | sort -u)
+            <(lk_args "$@" | sort -u)
         return
     }
     pacman -Qq $E $D
@@ -167,12 +167,12 @@ function lk_pac_not_installed_list() {
     [ $# -gt 0 ] || lk_warn "no package" || return
     comm -13 \
         <(lk_pac_installed_list $E $D "$@" | sort -u) \
-        <(lk_echo_args "$@" | sort -u)
+        <(lk_args "$@" | sort -u)
 }
 
 function lk_pac_sync() {
-    ! lk_root && ! lk_can_sudo pacman ||
-        { lk_false _LK_PACMAN_SYNC && [[ ${1-} != -f ]]; } ||
+    ! lk_user_is_root && ! lk_can_sudo pacman ||
+        { lk_is_false _LK_PACMAN_SYNC && [[ ${1-} != -f ]]; } ||
         { lk_tty_print "Refreshing package databases" &&
             lk_elevate lk_faketty pacman -Sy &&
             _LK_PACMAN_SYNC=0; }
@@ -199,7 +199,7 @@ function lk_pac_available_list() {
     lk_pac_sync || return
     if [ $# -gt 0 ]; then
         comm -12 \
-            <(lk_echo_args "$@" | sort -u) \
+            <(lk_args "$@" | sort -u) \
             <(lk_pac_available_list ${OFFICIAL:+-o} | sort -u)
     else
         local IFS=$'\n' REPOS
@@ -215,7 +215,7 @@ function lk_pac_unavailable_list() {
     [ $# -gt 0 ] || lk_warn "no package" || return
     lk_pac_sync || return
     comm -23 \
-        <(lk_echo_args "$@" | sort -u) \
+        <(lk_args "$@" | sort -u) \
         <(lk_pac_available_list ${OFFICIAL:+-o} | sort -u)
 }
 
@@ -239,7 +239,7 @@ function lk_pac_installed_not_explicit() {
 function lk_pac_list_changed_files() {
     [ $# -gt 0 ] || set -- /etc
     local REGEX
-    REGEX=$(lk_regex_implode "$@")
+    REGEX=$(lk_ere_implode_args -- "$@")
     {
         comm -13 \
             <(pacman -Ql |
@@ -285,7 +285,7 @@ function lk_makepkg() {
     LK_MAKEPKG_LIST=()
     if [ -n "${AUR_PACKAGE-}" ]; then
         AUR_URL=https://aur.archlinux.org/$AUR_PACKAGE.git
-        BUILD_DIR=$(lk_mktemp_dir) &&
+        BUILD_DIR=$(lk_mktemp -d) &&
             lk_delete_on_exit "$BUILD_DIR" &&
             git clone "$AUR_URL" "$BUILD_DIR" &&
             SH=$({ cd "$BUILD_DIR" && lk_makepkg "$@"; } >&2 &&
@@ -323,7 +323,7 @@ function lk_aur_sync() {
     [ $# -gt 0 ] || return 0
     unset CHROOT
     ! lk_aur_can_chroot || CHROOT=
-    lk_echo_args "$@" |
+    lk_args "$@" |
         lk_tty_list - "Syncing from AUR:" package packages
     lk_makepkg_setup
     for PKG in "$@"; do
@@ -354,7 +354,7 @@ function lk_aur_rebuild() {
     while (($#)); do
         PKG=${1%PKGBUILD}
         PKG=${PKG%/}
-        PKG=$(lk_first_file "$PWD/$PKG/PKGBUILD" "$SYNC_DIR/$PKG/PKGBUILD") ||
+        PKG=$(lk_readable "$PWD/$PKG/PKGBUILD" "$SYNC_DIR/$PKG/PKGBUILD") ||
             lk_warn "PKGBUILD not found: $1" || return
         PKGS[${#PKGS[@]}]=$PKG
         shift

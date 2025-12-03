@@ -57,7 +57,7 @@ function _lk_version() {
 function lk_usage() {
     local STATUS=$? CALLER
     ((STATUS)) || STATUS=1
-    CALLER=$(lk_caller_name) || CALLER=bash
+    CALLER=$(lk_caller) || CALLER=bash
     while [ "${1-}" = -e ]; do
         lk_tty_error "$LK_BOLD$CALLER$LK_RESET: $2"
         shift 2

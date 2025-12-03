@@ -65,12 +65,12 @@ function lk_plural() {
     [ "$1" -eq 1 ] && echo "$VALUE$2" || echo "$VALUE$3"
 }
 
-function lk_echo_args() {
+function lk_args() {
     [ $# -eq 0 ] || printf '%s\n' "$@"
 }
 
-function lk_echo_array() {
-    eval "lk_echo_args \${$1[@]+\"\${$1[@]}\"}"
+function lk_arr() {
+    eval "lk_args \${$1[@]+\"\${$1[@]}\"}"
 }
 
 function lk_tty_print() {

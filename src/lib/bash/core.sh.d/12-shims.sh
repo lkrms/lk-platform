@@ -125,7 +125,7 @@ function lk_unbuffer() {
             set -- "$CMD" -u "$@"
         else
             # TODO: reinstate unbuffer after resolving LF -> CRLF issue
-            case "$(lk_first_command stdbuf)" in
+            case "$(lk_runnable stdbuf)" in
             stdbuf)
                 set -- stdbuf -i0 -oL -eL "$CMD" "$@"
                 ;;

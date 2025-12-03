@@ -44,7 +44,7 @@ function maybe_move_old() {
 function maybe_restore_original() {
     ! lk_is_bootstrap || return 0
     set -- "$1"{.orig,}
-    ! lk_files_exist "$@" ||
+    ! lk_test_all_f "$@" ||
         diff -q "$@" >/dev/null || {
         lk_file_backup "$2" &&
             lk_tty_run_detail mv -fv "$@" &&
@@ -406,7 +406,7 @@ fi
         "$FILE"
     maybe_restore_original /etc/systemd/journald.conf
     lk_is_bootstrap && ! lk_systemctl_running systemd-journald ||
-        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
         lk_tty_run_detail systemctl restart systemd-journald.service
 
     lk_tty_print "Checking root account"
@@ -430,7 +430,7 @@ fi
     lk_file_replace \
         -f "$LK_BASE/share/sysctl.d/default.conf" \
         "$FILE"
-    ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+    ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
         lk_tty_run_detail sysctl --system
 
     lk_tty_print "Checking kernel modules"
@@ -576,7 +576,7 @@ EOF
             esac
         done
     fi
-    ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+    ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
         _LK_APT_DIRTY=1
 
     # See `man invoke-rc.d` for more information
@@ -636,7 +636,7 @@ EOF
 
     # Prefer version-specific PHP packages
     lk_mktemp_with APT_PHP_PACKAGES
-    lk_safe_grep -Ehf <(
+    lk_grep -Ehf <(
         REGEX=$(lk_args "${PHP_VERSIONS[@]}" "" |
             lk_ere_implode_input -e) &&
             lk_arr APT_PACKAGES |
@@ -673,12 +673,12 @@ EOF
     APT_PACKAGES=($({ lk_arr APT_PACKAGES | sed -E '/^php[0-9.]*-/d' &&
         cat "$APT_PHP_PACKAGES"; } | sort -u))
     APT_REMOVE_NOW=($(lk_apt_marked_manual_list | sed -E '/^php[0-9.]*-/!d' |
-        lk_safe_grep -Fxvf "$APT_PHP_PACKAGES"))
+        lk_grep -Fxvf "$APT_PHP_PACKAGES"))
     APT_PACKAGES=($(comm -13 \
         <(lk_arr APT_REMOVE | sort -u) \
         <(lk_arr APT_PACKAGES | sort -u)))
-    APT_MISSING=($(lk_arr APT_PACKAGES | lk_safe_grep -Fxvf "$APT_AVAILABLE"))
-    APT_PACKAGES=($(lk_arr APT_PACKAGES | lk_safe_grep -Fxf "$APT_AVAILABLE"))
+    APT_MISSING=($(lk_arr APT_PACKAGES | lk_grep -Fxvf "$APT_AVAILABLE"))
+    APT_PACKAGES=($(lk_arr APT_PACKAGES | lk_grep -Fxf "$APT_AVAILABLE"))
     [ ${#APT_MISSING[@]} -eq 0 ] ||
         lk_tty_warning "Unavailable for installation:" "${APT_MISSING[*]}"
 
@@ -743,7 +743,7 @@ EOF
         FILE=/etc/apt/listchanges.conf
         ORIG=$FILE
         [ ! -e "$FILE.orig" ] || ORIG=$FILE.orig
-        _FILE=$(lk_mktemp_file)
+        _FILE=$(lk_mktemp)
         lk_delete_on_exit "$_FILE"
         cp "$ORIG" "$_FILE"
         LK_CONF_OPTION_FILE=$_FILE
@@ -871,7 +871,7 @@ EOF
     check_after_file
     # TODO: restore original configuration if restart fails
     lk_is_bootstrap && ! lk_systemctl_running ssh ||
-        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
         lk_tty_run_detail systemctl restart ssh.service
 
     if lk_dpkg_is_installed postfix; then
@@ -896,7 +896,7 @@ EOF
         check_after_file
         unset LK_FILE_REPLACE_NO_CHANGE
         lk_file_replace "$FILE" < <(printf '%s:\t%s\n' "${ALIASES[@]}")
-        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
             postalias "$FILE"
     fi
 
@@ -1046,8 +1046,8 @@ EOF
             : >"$FILE"
             LK_FILE_REPLACE_NO_CHANGE=0
         fi
-        ! lk_false LK_FILE_REPLACE_NO_CHANGE &&
-            ! lk_false LK_SYMLINK_NO_CHANGE ||
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE &&
+            ! lk_is_false LK_SYMLINK_NO_CHANGE ||
             lk_mark_dirty "apache2.service"
         IPTABLES_TCP_LISTEN+=(80 443)
     fi
@@ -1071,7 +1071,7 @@ EOF
         [ ${#POOLS[@]} -eq 0 ] || {
             # The listen directive of a custom pool will always contain "$pool"
             lk_mapfile DEFAULT_POOLS \
-                <(lk_safe_grep -Pl \
+                <(lk_grep -Pl \
                     "^$LK_h*listen$LK_h*=(?!.*\\\$pool\\b.*\$)" "${POOLS[@]}")
             [ ${#DEFAULT_POOLS[@]} -eq 0 ] || {
                 lk_tty_detail "Disabling default pools:" \
@@ -1095,7 +1095,7 @@ EOF
             lk_file_replace \
                 -f "$LK_BASE/share/systemd/php-fpm.service" \
                 "$FILE"
-            ! lk_false LK_FILE_REPLACE_NO_CHANGE || {
+            ! lk_is_false LK_FILE_REPLACE_NO_CHANGE || {
                 DAEMON_RELOAD=1
                 lk_mark_dirty "php$PHPVER-fpm.service"
             }
@@ -1123,7 +1123,7 @@ EOF
             no_upgrade || lk_tty_run_detail "$FILE" cli update --yes
         else
             lk_tty_detail "Installing WP-CLI to" "$FILE"
-            _FILE=$(lk_mktemp_file)
+            _FILE=$(lk_mktemp)
             lk_delete_on_exit "$_FILE"
             URL=https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
             curl "${CURL_OPTIONS[@]}" --output "$_FILE" "$URL" ||
@@ -1200,8 +1200,8 @@ WITH GRANT OPTION
 EOF
             fi
         else
-            if lk_false CONFIG_NO_CHANGE || lk_false SERVICE_NO_CHANGE; then
-                ! lk_false SERVICE_NO_CHANGE ||
+            if lk_is_false CONFIG_NO_CHANGE || lk_is_false SERVICE_NO_CHANGE; then
+                ! lk_is_false SERVICE_NO_CHANGE ||
                     lk_tty_run_detail systemctl daemon-reload
                 lk_tty_run_detail systemctl restart mysql.service
             fi
@@ -1218,7 +1218,7 @@ EOF
         if ! lk_is_bootstrap && ! lk_systemctl_running memcached; then
             lk_systemctl_reload_or_restart memcached
             lk_systemctl_enable memcached
-        elif lk_false LK_FILE_REPLACE_NO_CHANGE; then
+        elif lk_is_false LK_FILE_REPLACE_NO_CHANGE; then
             lk_tty_run_detail systemctl restart memcached.service
         fi
     fi
@@ -1257,7 +1257,7 @@ EOF
         )"
         maybe_restore_original /etc/fail2ban/jail.conf
         lk_is_bootstrap && ! lk_systemctl_running fail2ban ||
-            ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+            ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
             lk_tty_run_detail systemctl restart fail2ban.service
     fi
 
@@ -1295,7 +1295,7 @@ EOF
         LK_ACCEPT_OUTPUT_HOSTS="${HOSTS[*]}${LK_ACCEPT_OUTPUT_HOSTS:+,$LK_ACCEPT_OUTPUT_HOSTS}"
         unset IFS
     fi
-    FILE=$(lk_mktemp_file)
+    FILE=$(lk_mktemp)
     lk_delete_on_exit "$FILE"
     for i in "" 6; do
         lk_expand_template -e \
@@ -1310,7 +1310,7 @@ EOF
             lk_file_replace -f "$FILE" "/etc/iptables/rules.v${i:-4}" ||
             lk_die "error updating iptables"
     done
-    ! lk_false LK_FILE_REPLACE_NO_CHANGE || {
+    ! lk_is_false LK_FILE_REPLACE_NO_CHANGE || {
         lk_tty_run_detail iptables-restore </etc/iptables/rules.v4 &&
             lk_tty_run_detail ip6tables-restore </etc/iptables/rules.v6
     } || lk_die "error applying iptables rules"

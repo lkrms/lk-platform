@@ -19,7 +19,7 @@ lk_require linux
 lk_assert_is_linux
 
 unset _USER
-lk_root || {
+lk_user_is_root || {
     _USER=
     export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$EUID}
 }

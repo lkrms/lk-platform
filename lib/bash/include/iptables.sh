@@ -49,7 +49,7 @@ function _lk_iptables_args() {
     done
     shift $((OPTIND - 1))
     [ $# -ge "$PARAMS" ] || lk_usage || return
-    ! lk_verbose || [ -n "${HAS_SUFFIX+1}" ] ||
+    ! lk_is_v || [ -n "${HAS_SUFFIX+1}" ] ||
         COMMAND+=(-v)
     printf 'local LK_USAGE=%q COMMAND=(%s)\n' \
         "$LK_USAGE" \

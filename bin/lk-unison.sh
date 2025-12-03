@@ -5,9 +5,9 @@
 shopt -s nullglob
 
 UNISON=~/.unison
-if lk_is_linux; then
+if lk_system_is_linux; then
     lk_require linux
-elif lk_is_macos; then
+elif lk_system_is_macos; then
     [ -d "$UNISON" ] ||
         UNISON=~/"Library/Application Support/Unison"
     lk_require macos
@@ -18,7 +18,7 @@ fi
 PROFILES=()
 while [ $# -gt 0 ] && [[ $1 != -* ]]; do
     FILE=$UNISON/${1%.prf}
-    FILE=$(lk_first_existing "$FILE.prf.template" "$FILE.prf") ||
+    FILE=$(lk_readable "$FILE.prf.template" "$FILE.prf") ||
         lk_die "profile not found: $1"
     PROFILES[${#PROFILES[@]}]=$FILE
     shift

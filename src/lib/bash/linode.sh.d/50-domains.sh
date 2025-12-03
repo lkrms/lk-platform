@@ -234,7 +234,7 @@ include "core";
     done < <(comm -23 \
         <(sort <<<"$_REVERSE") \
         <(sort <<<"$REVERSE"))
-    ! lk_verbose || {
+    ! lk_is_v || {
         RECORDS=$(lk_linode_domain_records "$DOMAIN_ID" "${@:3}" |
             jq -r '.[]|"\(.name)\t\(.type)\t\(.target)\t\(.ttl_sec)"') || return
         RECORDS=$(comm -13 \
@@ -251,11 +251,11 @@ function lk_linode_dns_check_all() {
     local USE_TAGS LINODES LABELS
     [ "${1-}" != -t ] || { USE_TAGS=1 && shift; }
     LINODES=$(lk_linode_linodes "${@:2}") || return
-    lk_jq_get_array LABELS '.[]|"\(.label) (\(.tags|join(", ")))"' <<<"$LINODES"
+    lk_json_mapfile LABELS '.[]|"\(.label) (\(.tags|join(", ")))"' <<<"$LINODES"
     [ ${#LABELS[@]} -gt 0 ] || lk_warn "no Linodes found" || return
-    lk_echo_array LABELS | sort |
+    lk_arr LABELS | sort |
         lk_tty_list - "Checking DNS and RDNS records for:" Linode Linodes
-    lk_confirm "Proceed?" Y || return
+    lk_tty_yn "Proceed?" Y || return
     LK_VERBOSE=1 \
         lk_linode_dns_check ${USE_TAGS:+-t} "$LINODES" "$1" "${@:2}" || return
     lk_tty_success "DNS check complete"

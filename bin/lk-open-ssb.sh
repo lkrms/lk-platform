@@ -44,7 +44,7 @@ SCOPE=${SCOPE//\//_}
 [[ ! $SCOPE =~ (.*([^_]|^))_+$ ]] ||
     SCOPE=${BASH_REMATCH[1]}
 
-if lk_is_linux; then
+if lk_system_is_linux; then
     REGEX="^$(lk_ere_escape "$SCOPE")\\."
     if WINDOW_ID=$(wmctrl -lpx |
         awk -v re="${REGEX//\\/\\\\}" '$4 ~ re { print $1; exit }' |
@@ -54,7 +54,7 @@ if lk_is_linux; then
     fi
 fi
 
-COMMAND=$(lk_first_command \
+COMMAND=$(lk_runnable \
     chromium google-chrome-stable google-chrome chrome) ||
     lk_die "Chromium not found"
 

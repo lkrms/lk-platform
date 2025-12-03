@@ -30,7 +30,7 @@ function lk_symlink_bin() {
     fi
     lk_symlink "$TARGET" "$LN" &&
         return || STATUS=$?
-    lk_verbose 2 || unset V
+    lk_is_v 2 || unset V
     [[ ! -L $LN ]] || [[ -f $LN ]] ||
         lk_sudo rm -f${V+v} -- "$LN" || true
     return "$STATUS"

@@ -86,13 +86,13 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
         grep -F "$(printf 'WP_CLI_PHP=%q' "$PHP")") &&
         DISABLE_WP_CRON=$(lk_wp \
           config get DISABLE_WP_CRON --type=constant) &&
-        lk_true DISABLE_WP_CRON; then
-        ! lk_verbose 2 || {
+        lk_is_true DISABLE_WP_CRON; then
+        ! lk_is_v 2 || {
           lk_tty_detail "WP-Cron appears to be configured correctly"
           lk_tty_detail "crontab command:" $'\n'"$CRONTAB"
         }
       else
-        ! lk_verbose 2 ||
+        ! lk_is_v 2 ||
           lk_tty_detail "WP-Cron: valid job not found in crontab"
         lk_wp_enable_system_cron
       fi
@@ -192,7 +192,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
     shopt -s nullglob
 
     [ -z "${KEYS:+1}" ] ||
-      ! KEYS_FILE=$(lk_first_existing \
+      ! KEYS_FILE=$(lk_readable \
         /etc/skel.*/.ssh/{authorized_keys_*,authorized_keys}) ||
       lk_file_replace -m "$KEYS_FILE" "$KEYS" || return
 
@@ -462,17 +462,17 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
       echo "$1" >>"$FILE"
     ) &
 
-    lk_no_input || {
+    lk_input_is_off || {
       wait "$!"
       trap - SIGHUP SIGINT SIGTERM
-      [ $# -gt 1 ] && lk_confirm "Continue?" Y || break
+      [ $# -gt 1 ] && lk_tty_yn "Continue?" Y || break
     }
 
     shift
 
   done
 
-  if lk_no_input; then
+  if lk_input_is_off; then
     lk_tty_print "Waiting for updates to complete"
     wait
   else

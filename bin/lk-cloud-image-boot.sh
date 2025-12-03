@@ -6,7 +6,7 @@ lk_bin_depth=1 . lk-bash-load.sh || exit
 lk_require validate
 
 # `local -n` was added in Bash 4.3
-lk_bash_at_least 4 3 || lk_die "Bash 4.3 or higher required"
+lk_bash_is 4 3 || lk_die "Bash 4.3 or higher required"
 
 IMAGE=ubuntu-24.04
 VM_PACKAGES=
@@ -152,14 +152,14 @@ POOL_ROOT=/var/lib/libvirt/images
 IMAGE_ARCH=amd64
 QEMU_ARCH=x86_64
 QEMU_MACHINE=
-! lk_is_macos || {
+! lk_system_is_macos || {
     # Use explicit sockets to ensure x86_64 virt-install connects to native
     # libvirtd on arm64
     SYSTEM_SOCKET=$HOMEBREW_PREFIX/var/run/libvirt/libvirt-sock
     SESSION_SOCKET=${XDG_RUNTIME_DIR:-~/.cache}/libvirt/libvirt-sock
     POOL_ROOT=$HOMEBREW_PREFIX/var/lib/libvirt/images
     QEMU_MACHINE=q35
-    ! lk_is_apple_silicon || {
+    ! lk_system_is_apple_silicon || {
         IMAGE_ARCH=arm64
         QEMU_ARCH=aarch64
         QEMU_MACHINE=virt
@@ -296,7 +296,7 @@ while :; do
                 HOSTFWD+=("${PROTOCOL:-$_PROTOCOL}::$FROM_HOST-:${TO_GUEST:-$FROM_HOST}")
                 _PROTOCOL=$PROTOCOL
             done
-            XML=$(lk_echo_array _XML)
+            XML=$(lk_arr _XML)
             XML="<forward>
   ${XML//$'\n'/$'\n'  }
 </forward>"
@@ -393,7 +393,7 @@ while :; do
 done
 
 VM_NETWORK=${VM_NETWORK:-$VM_NETWORK_DEFAULT}
-! lk_is_macos || VM_NETWORK=user=
+! lk_system_is_macos || VM_NETWORK=user=
 
 if [[ $VM_NETWORK == user=* ]]; then
     [[ -z $VM_IPV4_CIDR$ISOLATE ]] || lk_warn \
@@ -405,8 +405,8 @@ else
         XML=$(
             [[ -z $ALLOW_HOST_XML ]] || echo "$ALLOW_HOST_XML"
             [[ -z $ALLOW_HOST_NET_XML ]] || echo "$ALLOW_HOST_NET_XML"
-            lk_echo_array ALLOW_HOSTS_XML
-            lk_echo_array ALLOW_URL_XML
+            lk_arr ALLOW_HOSTS_XML
+            lk_arr ALLOW_URL_XML
         )
         [[ -z ${XML:+1} ]] || XML="<allow>
   ${XML//$'\n'/$'\n'  }
@@ -420,7 +420,7 @@ else
 </isolate>"
     }
     XML=$(
-        lk_echo_array FORWARD_XML
+        lk_arr FORWARD_XML
         echo "$XML"
     )
     [[ -z ${XML:+1} ]] || {
@@ -453,7 +453,7 @@ function boot_ubuntu() {
     # the cloud image boots with "console=tty1 console=ttyS0" or similar, and
     # early Ubuntu 22.04 images for arm64 applied these options by default.
     # Direct kernel boot allows us to override the default cmdline.
-    ! lk_true DIRECT_KERNEL_BOOT || {
+    ! lk_is_true DIRECT_KERNEL_BOOT || {
         KERNEL_URL=http://$UBUNTU_HOST/$2/current/unpacked/$2-server-cloudimg-${IMAGE_ARCH}-vmlinuz-generic
         INITRD_URL=http://$UBUNTU_HOST/$2/current/unpacked/$2-server-cloudimg-${IMAGE_ARCH}-initrd-generic
         KERNEL_SHA_URLS=(
@@ -532,7 +532,7 @@ case "$IMAGE" in
     ;;
 esac
 
-lk_no_input || [[ $VM_NETWORK != user=* ]] || [[ -n ${HOSTFWD+1} ]] || {
+lk_input_is_off || [[ $VM_NETWORK != user=* ]] || [[ -n ${HOSTFWD+1} ]] || {
     lk_tty_warning "Unreachable guest detected:" "$VM_HOSTNAME"
     lk_tty_print \
         "Port forwarding is required to access guests with usermode networking"
@@ -601,9 +601,9 @@ if [[ -n $STACKSCRIPT ]]; then
                 IS_VALID=0
             INITIAL_VALUE=${VALUE-${DEFAULT-}}
             ((IS_VALID)) ||
-                ! { lk_no_input || ((i > 1)); } ||
+                ! { lk_input_is_off || ((i > 1)); } ||
                 lk_tty_error "$FIELD_ERROR"
-            if ((IS_VALID)) && { lk_no_input || ((i > 1)); }; then
+            if ((IS_VALID)) && { lk_input_is_off || ((i > 1)); }; then
                 lk_tty_detail "Using value:" "$INITIAL_VALUE" "$LK_GREEN"
                 break
             else
@@ -614,14 +614,14 @@ if [[ -n $STACKSCRIPT ]]; then
             fi
         done
         [[ ${VALUE:=} != "${DEFAULT-}" ]] ||
-            lk_true LK_STACKSCRIPT_EXPORT_DEFAULT ||
+            lk_is_true LK_STACKSCRIPT_EXPORT_DEFAULT ||
             continue
         SS_FIELDS+=("$NAME=$VALUE")
     done
     STACKSCRIPT_ENV=
     [[ ${#SS_FIELDS[@]} -eq 0 ]] || {
         # This works because cloud-init does no unescaping
-        STACKSCRIPT_ENV=$(lk_echo_array SS_FIELDS | sort)
+        STACKSCRIPT_ENV=$(lk_arr SS_FIELDS | sort)
     }
     [[ -z ${SS_TAGS+1} ]] || lk_tty_print
 fi
@@ -640,7 +640,7 @@ while VM_STATE=$(lk_sudo virsh domstate "$VM_HOSTNAME" 2>/dev/null); do
         ${VM_STATE+"force off,"}
         "delete and permanently remove all storage volumes?"
     )
-    lk_true FORCE_DELETE ||
+    lk_is_true FORCE_DELETE ||
         LK_FORCE_INPUT=Y lk_tty_yn "${PROMPT[*]}" N ||
         lk_die ""
     [[ -z ${VM_STATE+1} ]] ||
@@ -678,11 +678,11 @@ printf '%s\t%s\n' \
         ${#METADATA_URLS[@]} "" s)" \
     "Shut down" "${POWEROFF:-no}" \
     "Libvirt service" "$LIBVIRT_URI" \
-    "Disk image path" "$POOL_ROOT" | IFS=$'\t' lk_tty_detail_pairs
+    "Disk image path" "$POOL_ROOT" | IFS=$'\t' lk_tty_pairs_detail
 [[ -z $STACKSCRIPT ]] ||
     lk_tty_detail "StackScript environment:" \
         $'\n'"$([[ ${#SS_FIELDS[@]} -eq 0 ]] && echo "<empty>" ||
-            lk_echo_array SS_FIELDS | sort)"
+            lk_arr SS_FIELDS | sort)"
 lk_tty_yn "OK to proceed?" Y || lk_die ""
 lk_tty_print
 
@@ -698,7 +698,7 @@ lk_tty_print
         shift
         FILE=${URL##*/}
         IMAGE_FILE=$FILE
-        if [[ ! -f $FILE ]] || lk_true REFRESH_CLOUDIMG; then
+        if [[ ! -f $FILE ]] || lk_is_true REFRESH_CLOUDIMG; then
             lk_tty_detail "Downloading" "$FILE"
             wget --no-cache --timestamping \
                 --no-verbose --show-progress "$URL" || {
@@ -706,7 +706,7 @@ lk_tty_print
                 lk_die "error downloading $URL"
             }
         fi
-        if [[ ! -f SHASUMS-${FILE%.*} ]] || lk_true REFRESH_CLOUDIMG; then
+        if [[ ! -f SHASUMS-${FILE%.*} ]] || lk_is_true REFRESH_CLOUDIMG; then
             lk_mktemp_with SUMS
             if (($# == 1)); then
                 lk_curl "$1" |
@@ -796,7 +796,7 @@ lk_tty_print
     NOCLOUD_PATH=$POOL_ROOT/$IMAGE_BASENAME-cloud-init.qcow2
     if [[ -e $DISK_PATH ]]; then
         lk_tty_error "Disk image already exists:" "$DISK_PATH"
-        lk_true FORCE_DELETE ||
+        lk_is_true FORCE_DELETE ||
             LK_FORCE_INPUT=Y \
                 lk_tty_yn "Destroy the existing image and start over?" N ||
             lk_die ""
@@ -842,7 +842,7 @@ lk_tty_print
         VIRT_OPTIONS+=(--machine "$QEMU_MACHINE")
     [[ $IMAGE_ARCH != arm64 ]] ||
         VIRT_OPTIONS+=(--cpu cortex-a57)
-    ! lk_is_macos || VIRT_OPTIONS+=(
+    ! lk_system_is_macos || VIRT_OPTIONS+=(
         --xml ./devices/emulator="$LK_BASE/share/qemu/qemu-system-hvf"
     )
 
@@ -936,7 +936,7 @@ lk_tty_print
                     export "${@:2}"
                 /root/StackScript </dev/null
             }
-            declare -f lk_command_exists lk_base64 _run
+            declare -f lk_has lk_base64 _run
             lk_quote_args _run "$_STACKSCRIPT" "${SS_FIELDS[@]}"
         )"
     fi
@@ -959,7 +959,7 @@ lk_tty_print
         unset IFS
     }
     [[ ${#PACKAGES[@]} -eq 0 ]] ||
-        add_json USER_DATA "$(lk_echo_array PACKAGES | sort -u | jq -Rn '{
+        add_json USER_DATA "$(lk_arr PACKAGES | sort -u | jq -Rn '{
   "packages": [inputs]
 }')"
 
@@ -985,7 +985,7 @@ lk_tty_print
   "write_files": $writeFiles
 }'
 
-    ! lk_true POWEROFF || add_json USER_DATA '{
+    ! lk_is_true POWEROFF || add_json USER_DATA '{
   "power_state": {
     "mode": "poweroff"
   }
@@ -1025,16 +1025,16 @@ dns-nameservers $VM_IPV4_GATEWAY" '{
         >"$NOCLOUD_META_DIR/meta-data"
 
     if lk_tty_yn "Customise cloud-init data source?" N -t 10; then
-        ! OPEN=$(lk_first_command xdg-open open) ||
+        ! OPEN=$(lk_runnable xdg-open open) ||
             "$OPEN" "$NOCLOUD_META_DIR" || true
         lk_tty_pause "Press return to continue after making changes in $NOCLOUD_META_DIR . . . "
     fi
 
-    FILE=$(lk_mktemp_file)
+    FILE=$(lk_mktemp)
     lk_delete_on_exit "$FILE"
     # If possible, create a vfat data source rather than a read-only ISO
     # https://cloudinit.readthedocs.io/en/latest/topics/datasources/nocloud.html
-    if lk_command_exists mcopy; then
+    if lk_has mcopy; then
         # 128 x 1024 = 128KiB
         dd if=/dev/null of="$FILE" bs=1024 seek=128 status=none
         # "cidata" must be lowercase for Ubuntu 14.04

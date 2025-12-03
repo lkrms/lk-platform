@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 function _lk_mail_ready() {
-    lk_true _LK_MAIL_READY ||
+    lk_is_true _LK_MAIL_READY ||
         lk_warn "lk_mail_new must be called before ${FUNCNAME[1]}" || return
 }
 
@@ -86,7 +86,7 @@ function lk_mail_get_mime() {
         ${_LK_MAIL_HTML:+"$_LK_MAIL_HTML"})
     TEXT_PART_TYPE=(${_LK_MAIL_TEXT:+"text/plain"}
         ${_LK_MAIL_HTML:+"text/html"})
-    lk_echo_array TEXT_PART |
+    lk_arr TEXT_PART |
         grep -v '^[[:alnum:][:space:][:punct:][:cntrl:]]*$' >/dev/null || {
         ENCODING=7bit
         CHARSET=us-ascii
@@ -106,7 +106,7 @@ function lk_mail_get_mime() {
                 "Content-Transfer-Encoding: $ENCODING")
         HEADERS+=("")
     }
-    lk_echo_array HEADERS
+    lk_arr HEADERS
     [ -z "$BOUNDARY" ] || [ -z "$ALT_BOUNDARY" ] ||
         ALT_BOUNDARY='' _lk_mail_get_part "" "$ALT_TYPE" "$ENCODING"
     for i in "${!TEXT_PART[@]}"; do
@@ -134,7 +134,7 @@ function lk_mail_send() {
     _lk_mail_ready || return
     [ $# -ge 2 ] || lk_usage "\
 Usage: $FUNCNAME SUBJECT TO [FROM [HEADERS...]]" || return
-    MTA=$(lk_first_command sendmail msmtp) ||
+    MTA=$(lk_runnable sendmail msmtp) ||
         lk_warn "MTA not found" || return
     lk_mail_get_mime "$@" | "$MTA" -oi -t
 }

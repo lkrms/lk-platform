@@ -18,7 +18,7 @@ lk_require secret
 
 lk_assert_not_root
 lk_assert_not_wsl
-KEEPASSXC=$(lk_first_command \
+KEEPASSXC=$(lk_runnable \
     keepassxc \
     /Applications/KeePassXC.app/Contents/MacOS/KeePassXC) ||
     lk_die "KeePassXC not found"
@@ -69,14 +69,14 @@ done
 # --detach, --autostart and --check-has-password are mutually exclusive
 [ $(((1 - DAEMON) + CHECK_HAS_PASSWORD + REGISTER)) -le 1 ] || lk_usage
 
-lk_files_exist "$@" || lk_usage
+lk_test_all_f "$@" || lk_usage
 
 DATABASES=()
 PASSWORDS=()
 
 for DATABASE_FILE in "$@"; do
     DATABASE_FILE=$(realpath "$DATABASE_FILE")
-    if lk_true RESET_PASSWORD; then
+    if lk_is_true RESET_PASSWORD; then
         lk_secret_remove "$DATABASE_FILE"
     fi
     PASSWORD="$(lk_secret "$DATABASE_FILE" "KeePassXC password for ${DATABASE_FILE##*/}")" ||
@@ -89,14 +89,14 @@ done
 [ ${#PASSWORDS[@]} -gt 0 ] ||
     lk_die "no database to open"
 
-if lk_true REGISTER; then
-    if lk_is_macos; then
+if lk_is_true REGISTER; then
+    if lk_system_is_macos; then
         function plist() {
             defaults write "$_FILE" "$@"
         }
         LABEL=com.linacreative.platform.keepassxc
         FILE=~/Library/LaunchAgents/$LABEL.plist
-        _FILE=$(lk_mktemp_dir)/$LABEL.plist && lk_delete_on_exit "${_FILE%/*}"
+        _FILE=$(lk_mktemp -d)/$LABEL.plist && lk_delete_on_exit "${_FILE%/*}"
         plist Disabled -bool false
         plist Label -string "$LABEL"
         plist ProcessType -string "Interactive"
@@ -119,10 +119,10 @@ if lk_true REGISTER; then
     exit
 fi
 
-! lk_true CHECK_HAS_PASSWORD ||
+! lk_is_true CHECK_HAS_PASSWORD ||
     exit 0
 
-FIFO=$(lk_mktemp_dir)/fifo
+FIFO=$(lk_mktemp -d)/fifo
 PW_FIFO=${FIFO%/*}/pw_fifo
 mkfifo "$FIFO" "$PW_FIFO"
 FIFO_FD=$(lk_fd_next)
@@ -131,7 +131,7 @@ PW_FIFO_FD=$(lk_fd_next)
 eval "exec $PW_FIFO_FD"'<>"$PW_FIFO"'
 
 MAIN_PID=$$
-if ! lk_true DAEMON; then
+if ! lk_is_true DAEMON; then
     nohup \
         "$KEEPASSXC" --pw-stdin "${DATABASES[@]}" \
         <&"$PW_FIFO_FD" >&"$FIFO_FD" 2>/dev/null &
@@ -161,7 +161,7 @@ fi
     kill "$CHECK_PID" 2>/dev/null || true
 ) &
 
-if lk_true DAEMON; then
+if lk_is_true DAEMON; then
     # Prevent the subshell spawned above becoming a zombie when KeePassXC fails
     # to reap it
     trap "" SIGCHLD

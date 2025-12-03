@@ -4,7 +4,7 @@
 
 lk_assert_command_exists mutool
 
-lk_test lk_is_pdf "$@" || lk_usage "\
+lk_test_all lk_is_pdf "$@" || lk_usage "\
 Usage: ${0##*/} PDF..."
 
 lk_log_start
@@ -50,5 +50,5 @@ done
 [ ${#ERRORS[@]} -eq 0 ] ||
     lk_tty_error -r \
         "Unable to process ${#ERRORS[@]} $(lk_plural \
-            ${#ERRORS[@]} file files):" $'\n'"$(lk_echo_array ERRORS)" ||
+            ${#ERRORS[@]} file files):" $'\n'"$(lk_arr ERRORS)" ||
     lk_die ""

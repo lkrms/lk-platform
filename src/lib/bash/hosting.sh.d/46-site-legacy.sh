@@ -58,7 +58,7 @@ function lk_hosting_migrate_legacy_sites() { (
             _lk_hosting_site_load_dynamic_settings &&
             _lk_hosting_site_write_settings &&
             lk_hosting_site_provision "$_SITE_DOMAIN" &&
-            lk_delete_on_exit_withdraw "$_SITE_FILE" || return
+            lk_on_exit_undo_delete "$_SITE_FILE" || return
     done
     lk_tty_success "Legacy sites migrated successfully"
 ); }

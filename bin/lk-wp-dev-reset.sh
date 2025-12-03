@@ -121,14 +121,14 @@ get_state
 # Check plugins
 TO_DEACTIVATE=($(
     comm -12 \
-        <(lk_echo_array ACTIVE_PLUGINS | sort -u) \
-        <(lk_echo_array DEFAULT_DEACTIVATE DEACTIVATE | sort -u)
+        <(lk_arr ACTIVE_PLUGINS | sort -u) \
+        <(lk_arr DEFAULT_DEACTIVATE DEACTIVATE | sort -u)
 ))
 
 if [ ${#TO_DEACTIVATE[@]} -gt 0 ]; then
     lk_tty_list_detail TO_DEACTIVATE \
         "$(lk_plural -v TO_DEACTIVATE plugin) to deactivate before continuing:"
-    lk_confirm "Proceed?" Y || lk_die ""
+    lk_tty_yn "Proceed?" Y || lk_die ""
     lk_wp plugin deactivate "${TO_DEACTIVATE[@]}"
     STALE=1
 fi
@@ -200,7 +200,7 @@ lk_require_output -q lk_dns_resolve_names "${HOSTS[@]}" && unset HOSTS ||
     lk_tty_detail "/etc/hosts will be updated with:" "${HOSTS[*]}"
 lk_tty_detail "Plugin code will be allowed to run where necessary"
 
-lk_confirm "Proceed?" Y || lk_pass lk_wp_maintenance_maybe_disable || lk_die ""
+lk_tty_yn "Proceed?" Y || lk_pass lk_wp_maintenance_maybe_disable || lk_die ""
 
 lk_tty_print
 lk_tty_log "Resetting WordPress for local development"

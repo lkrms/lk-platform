@@ -71,7 +71,7 @@ function lk_backup_snapshot_to_archive() { (
     lk_tty_detail "From snapshot:" "$SNAPSHOT"
     lk_tty_detail "To directory:" "$ARCHIVE_ROOT"
     lk_tty_detail "Uncompressed size:" "$SIZE"
-    lk_confirm "Proceed?" Y || return
+    lk_tty_yn "Proceed?" Y || return
     lk_tty_print "Compressing files to" "$XZ"
     [ ${#DB[@]} -eq 0 ] || lk_tty_detail \
         "Database $(lk_plural ${#DB[@]} backup) will be copied separately"

@@ -8,9 +8,9 @@ lk_assert_command_exists qpdfview
 
 [[ ${1-} != -- ]] || shift
 
-if lk_files_exist "$@"; then
+if lk_test_all_f "$@"; then
     TRIAGE=0
-elif lk_dirs_exist "$@"; then
+elif lk_test_all_d "$@"; then
     TRIAGE=1
 else
     lk_usage "\
@@ -28,7 +28,7 @@ function get_targets_sh() {
     declare -p TARGETS TARGET_BASENAMES
 }
 
-lk_command_exists wmctrl &&
+lk_has wmctrl &&
     WINDOW_ID=$(xdotool getactivewindow 2>/dev/null) ||
     WINDOW_ID=
 

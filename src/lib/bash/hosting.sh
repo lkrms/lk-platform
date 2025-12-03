@@ -25,7 +25,7 @@ Usage: $FUNCNAME LOGIN" || return
         local LK_SUDO=1 FILE=$_HOME/.ssh/authorized_keys
         lk_install -d -m 00700 -o "$1" -g "$_GROUP" "${FILE%/*}"
         lk_install -m 00600 -o "$1" -g "$_GROUP" "$FILE"
-        lk_file_replace "$FILE" "$(lk_echo_args "${@:2}")"
+        lk_file_replace "$FILE" "$(lk_args "${@:2}")"
     }
     lk_sudo_nopasswd_add "$1"
 }
@@ -198,13 +198,13 @@ function _lk_hosting_site_provision() {
                 ${SITE_SSL_CHAIN_FILE:+"$SITE_SSL_CHAIN_FILE"}
             )
         # Failing that, use SITE_ROOT/ssl/DOMAIN.cert, creating it if needed
-        lk_files_exist ${SSL_FILES+"${SSL_FILES[@]}"} || {
+        lk_test_all_f ${SSL_FILES+"${SSL_FILES[@]}"} || {
             SSL_FILES=("$SITE_ROOT/ssl/$_SITE_DOMAIN".{cert,key})
             lk_install -m 00644 -o "$_SITE_USER" -g "$_SITE_GROUP" \
                 "${SSL_FILES[0]}" &&
                 lk_install -m 00640 -o "$_SITE_USER" -g "$_SITE_GROUP" \
                     "${SSL_FILES[1]}" || return
-            lk_files_not_empty "${SSL_FILES[@]}" || {
+            lk_test_all_s "${SSL_FILES[@]}" || {
                 [ -n "${LK_SSL_CA-}" ] ||
                     printf '%s\n' "${DOMAINS[@]}" |
                     grep -Ev '\.(test|localhost)$' >/dev/null ||
@@ -233,7 +233,7 @@ function _lk_hosting_site_provision() {
     }
     _lk_hosting_site_write_settings &&
         _lk_hosting_site_cache_settings || return
-    ! lk_true SITE_ENABLE_STAGING ||
+    ! lk_is_true SITE_ENABLE_STAGING ||
         APACHE+=(Use Staging)
     [[ -z $SITE_DOWNSTREAM_FROM ]] || {
         MACRO=${SITE_DOWNSTREAM_FROM,,}
@@ -251,7 +251,7 @@ function _lk_hosting_site_provision() {
             PARAMS=" \"${BASH_REMATCH[2]//,/ }\" ${BASH_REMATCH[1]}"
             ;;
         esac
-        lk_true SITE_DOWNSTREAM_FORCE &&
+        lk_is_true SITE_DOWNSTREAM_FORCE &&
             APACHE+=(Use "Require${MACRO^}$PARAMS") ||
             APACHE+=(Use "Trust${MACRO^}$PARAMS")
     }
@@ -332,8 +332,8 @@ function _lk_hosting_site_provision() {
             lk_file_replace -bpi "^$LK_h*(;.*)?\$" -s \
                 "s/^$LK_h*([^[:blank:]=]+)$LK_h*=$LK_h*($LK_H+($LK_h+$LK_H+)*)$LK_h*\$/\1 = \2/" \
                 "$FILE" "$_FILE" ||
-            lk_true LK_FILE_REPLACE_DECLINED || return
-        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+            lk_is_true LK_FILE_REPLACE_DECLINED || return
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
             lk_mark_dirty "php$SITE_PHP_VERSION-fpm.service"
     )
     if [ -d /etc/apache2/sites-available ]; then
@@ -399,18 +399,18 @@ function _lk_hosting_site_provision() {
         lk_install -m 00644 "$FILE" &&
             lk_file_replace -bpi "^$LK_h*(#.*)?\$" -s "s/^$LK_h+//" \
                 "$FILE" "$_FILE" ||
-            lk_true LK_FILE_REPLACE_DECLINED || return
-        lk_true LK_FILE_REPLACE_DECLINED ||
-            if lk_true SITE_ENABLE && ! a2query -q -s "$_SITE_NAME"; then
+            lk_is_true LK_FILE_REPLACE_DECLINED || return
+        lk_is_true LK_FILE_REPLACE_DECLINED ||
+            if lk_is_true SITE_ENABLE && ! a2query -q -s "$_SITE_NAME"; then
                 lk_tty_success "Enabling Apache site:" "$_SITE_NAME"
                 lk_elevate a2ensite "$_SITE_NAME"
                 LK_FILE_REPLACE_NO_CHANGE=0
-            elif ! lk_true SITE_ENABLE && a2query -q -s "$_SITE_NAME"; then
+            elif ! lk_is_true SITE_ENABLE && a2query -q -s "$_SITE_NAME"; then
                 lk_tty_warning "Disabling Apache site:" "$_SITE_NAME"
                 lk_elevate a2dissite "$_SITE_NAME"
                 LK_FILE_REPLACE_NO_CHANGE=0
             fi
-        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
             lk_mark_dirty "apache2.service"
     fi
 }
@@ -446,7 +446,7 @@ function lk_hosting_configure_backup() {
         "${LK_BASE%/*}/${LK_PATH_PREFIX}platform/lib/hosting/backup-all.sh" |
         sort -u | lk_ere_implode_input -e)
     lk_tty_print "Configuring automatic backups"
-    if lk_false LK_AUTO_BACKUP; then
+    if lk_is_false LK_AUTO_BACKUP; then
         lk_tty_error \
             "Automatic backups are disabled (LK_AUTO_BACKUP=$LK_AUTO_BACKUP)"
         lk_crontab_remove "$REGEX"
@@ -455,7 +455,7 @@ function lk_hosting_configure_backup() {
         # at 1 a.m.) unless LK_AUTO_REBOOT is enabled, in which case default to
         # "((REBOOT_MINUTE)) ((REBOOT_HOUR - 1)) * * *" (daily, 1 hour before
         # any automatic reboots)
-        [ -n "$BACKUP_SCHEDULE" ] || ! lk_true AUTO_REBOOT ||
+        [ -n "$BACKUP_SCHEDULE" ] || ! lk_is_true AUTO_REBOOT ||
             [[ ! $AUTO_REBOOT_TIME =~ ^0*([0-9]+):0*([0-9]+)$ ]] ||
             BACKUP_SCHEDULE="${BASH_REMATCH[2]} $(((BASH_REMATCH[1] + 23) % 24)) * * *"
         BACKUP_SCHEDULE=${BACKUP_SCHEDULE:-"0 1 * * *"}

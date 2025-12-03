@@ -13,7 +13,7 @@ done
 
 [[ ${1-} != -- ]] || shift
 
-lk_test lk_is_pdf "$@" || lk_usage "\
+lk_test_all lk_is_pdf "$@" || lk_usage "\
 Usage: ${0##*/} [GS_OPTION...] PDF..."
 
 lk_log_start
@@ -87,7 +87,7 @@ GS_OPTIONS+=(
     -sDEVICE=pdfwrite
     "-dPDFSETTINGS=${PDFSETTINGS:-/screen}"
     ${NPROC:+-dNumRenderingThreads="$NPROC"}
-    ${MEM:+-dBufferSpace="$(lk_echo_args \
+    ${MEM:+-dBufferSpace="$(lk_args \
         $((MEM / 2)) \
         $((2 * 1024 ** 3)) | sort -n | head -n1)"}
     -c "33554432 setvmthreshold << ${DISTILLER_PARAMS[*]} >> setdistillerparams"
@@ -132,5 +132,5 @@ done
 [ ${#ERRORS[@]} -eq 0 ] ||
     lk_tty_error -r \
         "Unable to process ${#ERRORS[@]} $(lk_plural \
-            ${#ERRORS[@]} file files):" $'\n'"$(lk_echo_array ERRORS)" ||
+            ${#ERRORS[@]} file files):" $'\n'"$(lk_arr ERRORS)" ||
     lk_die ""

@@ -29,13 +29,13 @@ function snapshot_hour() {
 }
 
 function first_snapshot_on_date() {
-    lk_echo_array SNAPSHOTS_CLEAN |
+    lk_arr SNAPSHOTS_CLEAN |
         grep "^$1" |
         tail -n1
 }
 
 function first_snapshot_in_hour() {
-    lk_echo_array SNAPSHOTS_CLEAN |
+    lk_arr SNAPSHOTS_CLEAN |
         grep "^${1:0:10}-${1:11:2}" |
         tail -n1
 }
@@ -243,13 +243,13 @@ lk_log_start
         done
 
         lk_mapfile SNAPSHOTS_KEEP <(
-            lk_echo_array KEEP | sort -ru
+            lk_arr KEEP | sort -ru
         )
         SNAPSHOTS_KEEP_COUNT=${#SNAPSHOTS_KEEP[@]}
 
         lk_mapfile SNAPSHOTS_PRUNE <(comm -23 \
-            <(lk_echo_array SNAPSHOTS_CLEAN | sort) \
-            <(lk_echo_array SNAPSHOTS_KEEP | sort))
+            <(lk_arr SNAPSHOTS_CLEAN | sort) \
+            <(lk_arr SNAPSHOTS_KEEP | sort))
         SNAPSHOTS_PRUNE_COUNT=${#SNAPSHOTS_PRUNE[@]}
 
         lk_tty_detail \

@@ -6,7 +6,7 @@
 # necessary, then extend the sudo timeout in the background every INTERVAL
 # seconds (240 by default) until the (sub)shell exits or `sudo -nv` fails.
 function lk_sudo_keep_alive() {
-    ! lk_root || return 0
+    ! lk_user_is_root || return 0
     # Use `sudo bash -c 'exec true'` because `sudo -v` prompts NOPASSWD:ALL
     # users for a password, and succeeds regardless of the user's privileges
     sudo bash -c 'exec true' && lk_set_bashpid || return
@@ -41,7 +41,7 @@ EOF
 # allowing them to run sudo commands without being prompted for a password.
 # Silently return false if the current user can't run commands via sudo.
 function lk_sudo_nopasswd_offer() {
-    ! lk_root || lk_warn "cannot run as root" || return
+    ! lk_user_is_root || lk_warn "cannot run as root" || return
     local FILE=/etc/sudoers.d/nopasswd-$USER
     ! sudo -n test -e "$FILE" 2>/dev/null || return 0
     lk_can_sudo install || return

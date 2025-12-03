@@ -14,7 +14,7 @@ function lk_brew_install_homebrew() {
         URL=https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh \
         COMMAND=(caffeinate -d) REFRESH_ENV=1 NAME BREW
     LK_BREW_NEW_INSTALL=0
-    if lk_is_system_apple_silicon; then
+    if lk_system_is_apple_silicon -t; then
         TARGET_DIR=${TARGET_DIR:-/opt/homebrew}
         COMMAND=(caffeinate -d arch -arm64)
         NAME=native
@@ -23,7 +23,7 @@ function lk_brew_install_homebrew() {
             REFRESH_ENV=0
             NAME=Intel
         }
-    elif lk_is_macos; then
+    elif lk_system_is_macos; then
         TARGET_DIR=${TARGET_DIR:-/usr/local}
     else
         TARGET_DIR=${TARGET_DIR:-/home/linuxbrew/.linuxbrew}
@@ -70,7 +70,7 @@ function lk_brew_list_casks() {
 function lk_brew_formulae_list_native() {
     local NATIVE=true
     [[ ${1-} != -n ]] || { NATIVE=false && shift; }
-    if ! lk_is_system_apple_silicon; then
+    if ! lk_system_is_apple_silicon -t; then
         [[ $NATIVE == false ]] ||
             lk_brew_info --json=v2 --formula "${@---eval-all}" |
             jq -r '.formulae[].full_name'

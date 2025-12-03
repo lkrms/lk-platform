@@ -102,7 +102,7 @@ function lk_tty_add_margin() { (
     [ $# -gt 1 ] && ((_MARGIN = $1)) ||
         lk_err "invalid arguments" || return
     shift
-    ((_MARGIN > 0)) && _TTY=$(lk_get_tty) || {
+    ((_MARGIN > 0)) && _TTY=$(lk_writable_tty) || {
         _lk_tty_margin_add "$@"
         return
     }
@@ -430,7 +430,7 @@ function lk_tty_run() {
             lk_user_is_root || set -- sudo "$@"
             break
             ;;
-        lk_sudo | lk_maybe_sudo)
+        lk_sudo | lk_sudo)
             shift
             ! lk_will_sudo || set -- sudo "$@"
             break

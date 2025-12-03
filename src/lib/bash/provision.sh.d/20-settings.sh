@@ -214,7 +214,7 @@ function lk_settings_persist() {
     ) >"$_FILE" || return
     lk_file_replace -m -f "$_FILE" "$2" &&
         lk_file_backup -m ${DELETE+"${DELETE[@]}"} &&
-        lk_maybe_sudo rm -f -- ${DELETE+"${DELETE[@]}"}
+        lk_sudo rm -f -- ${DELETE+"${DELETE[@]}"}
 }
 
 function lk_node_is_router() {

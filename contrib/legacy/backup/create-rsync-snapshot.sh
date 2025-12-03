@@ -113,7 +113,7 @@ function lk_mail_get_mime() {
         ${_LK_MAIL_HTML:+"$_LK_MAIL_HTML"})
     TEXT_PART_TYPE=(${_LK_MAIL_TEXT:+"text/plain"}
         ${_LK_MAIL_HTML:+"text/html"})
-    lk_echo_array TEXT_PART |
+    lk_arr TEXT_PART |
         grep -v '^[[:alnum:][:space:][:punct:][:cntrl:]]*$' >/dev/null || {
         ENCODING=7bit
         CHARSET=us-ascii
@@ -137,7 +137,7 @@ function lk_mail_get_mime() {
                 "Content-Transfer-Encoding: $ENCODING"
                 "")
     }
-    lk_echo_array HEADERS
+    lk_arr HEADERS
     [ -z "$BOUNDARY" ] || [ -z "$ALT_BOUNDARY" ] ||
         ALT_BOUNDARY='' _lk_mail_get_part "" "$ALT_TYPE" "$ENCODING"
     [ ${#TEXT_PART[@]} -eq 0 ] ||
@@ -291,7 +291,7 @@ function run_custom_hook() {
             wait "$!" ||
                 lk_die "hook script failed (exit status $?)"
             [ ${#LINES[@]} -eq 0 ] || {
-                SH=$(lk_echo_array LINES)
+                SH=$(lk_arr LINES)
                 eval "$SH" ||
                     _LK_TTY_COLOUR2='' lk_tty_error "\
 Shell commands emitted by hook script failed (exit status $?):" $'\n'"$SH" ||
@@ -321,7 +321,7 @@ function is_stage_complete() {
 
 function get_stage() {
     local STAGE
-    for STAGE in $(tac < <(lk_echo_array SNAPSHOT_STAGES)) starting; do
+    for STAGE in $(tac < <(lk_arr SNAPSHOT_STAGES)) starting; do
         [ ! -e "$LK_SNAPSHOT/.$STAGE" ] || break
     done
     echo "${STAGE//-/ }"
@@ -512,13 +512,13 @@ trap exit_trap EXIT
     fi
 
     lk_tty_print "Creating snapshot at" "$LK_SNAPSHOT"
-    lk_tty_detail "Log files:" "$(lk_echo_args \
+    lk_tty_detail "Log files:" "$(lk_args \
         "$SNAPSHOT_LOG_FILE" "$RSYNC_OUT_FILE" "$RSYNC_ERR_FILE")"
     RSYNC_ARGS=(-vrlpt --delete --stats "$@")
     ! RSYNC_FILTERS=($(find_custom filter-rsync | tac &&
         (exit "${PIPESTATUS[0]}"))) || {
         lk_tty_detail "Rsync filter:" \
-            "$(lk_echo_args "${RSYNC_FILTERS[@]/#/. }")"
+            "$(lk_args "${RSYNC_FILTERS[@]/#/. }")"
         RSYNC_ARGS[${#RSYNC_ARGS[@]}]=--delete-excluded
         for RSYNC_FILTER in "${RSYNC_FILTERS[@]}"; do
             RSYNC_ARGS[${#RSYNC_ARGS[@]}]=--filter

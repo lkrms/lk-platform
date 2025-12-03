@@ -33,7 +33,7 @@
   macOS, code must run on **Bash 3.2 and above**.
   ```shell
   # In a function
-  lk_bash_at_least 4 || lk_err "Bash 4 or higher required" || return
+  lk_bash_is 4 || lk_err "Bash 4 or higher required" || return
   # In a script
-  lk_bash_at_least 4 3 || lk_die "Bash 4.3 or higher required"
+  lk_bash_is 4 3 || lk_die "Bash 4.3 or higher required"
   ```

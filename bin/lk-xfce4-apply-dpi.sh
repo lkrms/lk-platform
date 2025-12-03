@@ -144,7 +144,7 @@ WHISKER_SETTINGS=(
 REGEX="^($LK_h*$|menu-(width|height)=)"
 for FILE in ~/.config/xfce4/panel/whiskermenu*.rc; do
     NEW_SETTINGS=$(
-        lk_echo_array WHISKER_SETTINGS
+        lk_arr WHISKER_SETTINGS
         sed -E '/^(menu-(width|height)|(item|category)-icon-size)=/d' "$FILE"
     )
     if ! diff \

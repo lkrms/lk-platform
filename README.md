@@ -42,7 +42,7 @@ If a script requires a more recent version of Bash than 3.2, it MUST fail during
 input validation when running on an earlier version, e.g.
 
 ```bash
-lk_bash_at_least 4 3 || lk_die "Bash 4.3 or higher required"
+lk_bash_is 4 3 || lk_die "Bash 4.3 or higher required"
 ```
 
 #### Parameter expansion

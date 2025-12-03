@@ -216,7 +216,7 @@ LK_FEATURES=$(IFS=, && lk_args $LK_FEATURES | lk_uniq | lk_implode_input ,)
 
 PASSWORD_GENERATED=0
 if [[ -z ${BOOTSTRAP_KEY:+1} ]]; then
-    if [[ -z ${BOOTSTRAP_PASSWORD:+1} ]] && lk_no_input; then
+    if [[ -z ${BOOTSTRAP_PASSWORD:+1} ]] && lk_input_is_off; then
         lk_tty_print "Generating a random password for:" "$BOOTSTRAP_USERNAME"
         BOOTSTRAP_PASSWORD=$(lk_random_password 7)
         PASSWORD_GENERATED=1
@@ -292,7 +292,7 @@ fi
 
 lk_tty_log "Setting up live environment"
 FILES=(/etc/pacman.conf{.orig,})
-! lk_files_exist "${FILES[@]}" ||
+! lk_test_all_f "${FILES[@]}" ||
     mv -fv "${FILES[@]}"
 lk_arch_configure_pacman
 if [[ -n ${LK_ARCH_MIRROR:+1} ]]; then
@@ -385,7 +385,7 @@ lk_tty_print "Formatting:" "$({
     lk_tty_run_detail mkfs.fat -vn ESP -F 32 "$BOOT_PART"
 lk_tty_run_detail mkfs.ext4 -vL root "$ROOT_PART"
 
-if lk_is_virtual; then
+if lk_system_is_vm; then
     ! lk_block_device_is_ssd "$ROOT_PART" || ROOT_EXTRA=,discard
     ! lk_block_device_is_ssd "$BOOT_PART" || BOOT_EXTRA=,discard
 fi
@@ -516,7 +516,7 @@ while :; do
     ((++i))
     in_target update-grub --install && GRUB_INSTALLED=1 && break
     lk_tty_error "Boot loader installation failed"
-    ! lk_no_input || { ((i < 2)) &&
+    ! lk_input_is_off || { ((i < 2)) &&
         { lk_tty_detail "Trying again in 5 seconds" &&
             sleep 5 &&
             continue; } || break; }

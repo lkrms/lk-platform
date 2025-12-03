@@ -26,7 +26,7 @@ lk_getopt
 eval "set -- $LK_GETOPT"
 
 [ $# -gt 0 ] || set -- "$MAILDIR"
-lk_dirs_exist "$@" || lk_usage -e "invalid Maildir"
+lk_test_all_d "$@" || lk_usage -e "invalid Maildir"
 
 lk_log_start
 
@@ -60,7 +60,7 @@ for MAILDIR in "$@"; do
         if [ ! -d "$DIR" ]; then
             lk_maybe -p lk_run_as "$OWNER" \
                 install -d -m 00700 "$MAILDIR/.$FOLDER"/{,cur,new,tmp} &&
-                { lk_dry_run || [ -d "$DIR" ]; } ||
+                { lk_is_dryrun || [ -d "$DIR" ]; } ||
                 lk_die "unable to create $FOLDER in $MAILDIR"
 
             if [ -f "$SUBSCRIBED" ] &&

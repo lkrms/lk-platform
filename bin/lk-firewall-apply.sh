@@ -36,7 +36,7 @@ if [ -n "${ACCEPT_OUTPUT_CHAIN-}" ]; then
     [ ${#OUTPUT_ALLOW[@]} -eq 0 ] ||
         lk_tty_detail "Added to whitelist from firewall.conf:" \
             "$(lk_implode_arr $'\n' OUTPUT_ALLOW)"
-    if lk_is_ubuntu; then
+    if lk_system_is_ubuntu; then
         APT_SOURCE_HOSTS=($(
             grep -Eo "^[^#]+${LK_h}https?://[^/[:blank:]]+" "/etc/apt/sources.list" |
                 sed -E 's/^.*:\/\///' | sort -u

@@ -30,7 +30,7 @@ Environment:
 EOF
 }
 
-lk_bash_at_least 4 || lk_die "Bash 4 or higher required"
+lk_bash_is 4 || lk_die "Bash 4 or higher required"
 lk_assert_command_exists aws
 
 FORCE=0

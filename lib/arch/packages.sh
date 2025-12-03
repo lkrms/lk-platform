@@ -431,10 +431,10 @@ fi
 for ARR in PAC_PACKAGES AUR_PACKAGES; do
     lk_mapfile "$ARR" < <(
         lk_arr "$ARR" |
-            if lk_is_qemu; then
+            if lk_system_is_qemu; then
                 # Keep QEMU, remove bare metal and portable
                 gnu_sed -E 's/:Q\>//; /:(H|P)\>/d'
-            elif lk_is_virtual; then
+            elif lk_system_is_vm; then
                 # Remove bare metal, portable and QEMU
                 gnu_sed -E '/:(H|P|Q)\>/d'
             elif lk_is_portable; then

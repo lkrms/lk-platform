@@ -97,7 +97,7 @@ function _lk_prompt_create() {
     _LK_PROMPT_SEEN=1
     # Remove `history -a;history -r;` added by Byobu, for example
     # shellcheck disable=SC2178
-    lk_bash_at_least 5 1 &&
+    lk_bash_is 5 1 &&
         PROMPT_COMMAND=(_lk_prompt_create) ||
         PROMPT_COMMAND=_lk_prompt_create
     # Speaking of Byobu, prevent nested sessions
@@ -113,7 +113,7 @@ function lk_prompt_enable() {
     _LK_PROMPT_SEEN=0
     _LK_PROMPT=()
     # shellcheck disable=SC2178
-    lk_bash_at_least 5 1 &&
+    lk_bash_is 5 1 &&
         PROMPT_COMMAND=(_lk_prompt_create) ||
         PROMPT_COMMAND=_lk_prompt_create
     # On Bash 3.2, DEBUG handlers need to be removed before they can be replaced

@@ -23,7 +23,7 @@ function lk_hosting_php_get_default_version() { (
 
 function lk_hosting_php_get_versions() {
     basename -a /lib/systemd/system/php*-fpm.service |
-        lk_safe_grep -Eo '[0-9][0-9.]*' | sort -V
+        lk_grep -Eo '[0-9][0-9.]*' | sort -V
 }
 
 function _lk_hosting_php_check_pools() { (

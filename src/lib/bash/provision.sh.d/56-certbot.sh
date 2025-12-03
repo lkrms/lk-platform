@@ -114,7 +114,7 @@ function lk_certbot_maybe_install() {
     { [[ ${1-} != -w ]] || { ARGS+=("$1" "$2") && shift 2; }; } &&
         lk_is_fqdn "$@" || lk_warn "invalid arguments" || return
     ! LK_CERTBOT_INSTALLED=$(lk_certbot_list "$@" | grep .) || return 0
-    lk_test lk_node_is_host "$@" || return 0
+    lk_test_all lk_node_is_host "$@" || return 0
     _LK_CERTBOT_IGNORE_DNS=1 lk_certbot_install ${ARGS+"${ARGS[@]}"} "$@" &&
         LK_CERTBOT_INSTALLED=$(lk_certbot_list "$@" | grep .)
 }

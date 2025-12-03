@@ -3,7 +3,7 @@
 function _lk_openssl_verify() { (
     # Disable xtrace if its output would break the test below
     [[ $- != *x* ]] ||
-        { lk_bash_at_least 4 1 && [ "${BASH_XTRACEFD:-2}" -gt 2 ]; } ||
+        { lk_bash_is 4 1 && [ "${BASH_XTRACEFD:-2}" -gt 2 ]; } ||
         set +x
     # In case openssl is too old to exit non-zero when `verify` fails, return
     # false if there are multiple lines of output (NB: some versions send errors
@@ -26,7 +26,7 @@ function lk_ssl_is_cert_self_signed() {
 function lk_ssl_verify_cert() {
     local SS_OK
     [ "${1-}" != -s ] || { SS_OK=1 && shift; }
-    lk_files_exist "$@" || lk_usage "\
+    lk_test_all_f "$@" || lk_usage "\
 Usage: $FUNCNAME [-s] CERT_FILE [KEY_FILE [CA_FILE]]" || return
     local CERT=$1 KEY=${2-} CA=${3-} CERT_MODULUS KEY_MODULUS
     # If no CA file has been provided but CERT contains multiple certificates,
@@ -57,17 +57,17 @@ Usage: $FUNCNAME [-s] CERT_FILE [KEY_FILE [CA_FILE]]" || return
 # lk_ssl_create_self_signed_cert DOMAIN...
 function lk_ssl_create_self_signed_cert() {
     [ $# -gt 0 ] || lk_usage "Usage: $FUNCNAME DOMAIN..." || return
-    lk_test lk_is_fqdn "$@" || lk_warn "invalid arguments" || return
+    lk_test_all lk_is_fqdn "$@" || lk_warn "invalid arguments" || return
     lk_tty_print "Creating a self-signed TLS certificate for:" \
         $'\n'"$(printf '%s\n' "$@")"
     local CA_FILE=${LK_SSL_CA:+$1-${LK_SSL_CA##*/}}
-    lk_no_input || {
+    lk_input_is_off || {
         local FILES=("$1".{key,csr,cert} ${CA_FILE:+"$CA_FILE"})
         lk_remove_missing_or_empty FILES || return
         [ ${#FILES[@]} -eq 0 ] || {
             lk_tty_detail "Files to overwrite:" \
                 $'\n'"$(printf '%s\n' "${FILES[@]}")"
-            lk_confirm "Proceed?" Y || return
+            lk_tty_yn "Proceed?" Y || return
         }
     }
     local CONF
@@ -110,10 +110,10 @@ function lk_ssl_install_ca_certificate() {
     local DIR COMMAND CERT FILE \
         _LK_FILE_REPLACE_NO_CHANGE=${LK_FILE_REPLACE_NO_CHANGE-}
     unset LK_FILE_REPLACE_NO_CHANGE
-    DIR=$(lk_first_file \
+    DIR=$(lk_readable \
         /usr/local/share/ca-certificates/ \
         /etc/ca-certificates/trust-source/anchors/) &&
-        COMMAND=$(LK_SUDO= && lk_first_command \
+        COMMAND=$(LK_SUDO= && lk_runnable \
             update-ca-certificates \
             update-ca-trust) ||
         lk_warn "CA certificate store not found" || return
@@ -125,7 +125,7 @@ function lk_ssl_install_ca_certificate() {
     lk_install -m 00644 "$FILE" &&
         LK_FILE_NO_DIFF=1 \
             lk_file_replace -mf "$1" "$FILE" || return
-    if lk_false LK_FILE_REPLACE_NO_CHANGE; then
+    if lk_is_false LK_FILE_REPLACE_NO_CHANGE; then
         lk_elevate "$COMMAND"
     else
         LK_FILE_REPLACE_NO_CHANGE=$_LK_FILE_REPLACE_NO_CHANGE

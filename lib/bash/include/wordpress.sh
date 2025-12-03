@@ -44,7 +44,7 @@ function lk_wp_if_running() {
 }
 
 function _lk_wp_is_quiet() {
-    [ -n "${_LK_WP_QUIET-}" ] && ! lk_verbose
+    [ -n "${_LK_WP_QUIET-}" ] && ! lk_is_v
 }
 
 function _lk_wp_tty_run() {
@@ -227,8 +227,8 @@ function lk_wp_json_encode() {
 
 function _lk_wp_maybe_apply() {
     local _LK_WP_MAYBE=1 STATUS=0
-    if lk_false LK_WP_APPLY || { [ -z "${LK_WP_APPLY+1}" ] &&
-        ! lk_confirm \
+    if lk_is_false LK_WP_APPLY || { [ -z "${LK_WP_APPLY+1}" ] &&
+        ! lk_tty_yn \
             "Run database updates and [re]apply WordPress settings?" Y; }; then
         _lk_wp_maybe_flush || STATUS=$?
         _lk_wp_maybe_migrate
@@ -238,14 +238,14 @@ function _lk_wp_maybe_apply() {
 }
 
 function _lk_wp_maybe_flush() {
-    lk_false LK_WP_FLUSH || { [ -z "${LK_WP_FLUSH+1}" ] &&
-        ! lk_confirm "Flush WordPress rewrite rules and caches?" Y; } ||
+    lk_is_false LK_WP_FLUSH || { [ -z "${LK_WP_FLUSH+1}" ] &&
+        ! lk_tty_yn "Flush WordPress rewrite rules and caches?" Y; } ||
         lk_wp_flush
 }
 
 function _lk_wp_maybe_migrate() {
-    lk_false LK_WP_MIGRATE || { [ -z "${LK_WP_MIGRATE+1}" ] &&
-        ! lk_confirm \
+    lk_is_false LK_WP_MIGRATE || { [ -z "${LK_WP_MIGRATE+1}" ] &&
+        ! lk_tty_yn \
             "Run WordPress data migrations and [re]build indexes?" Y; } ||
         lk_wp_migrate
 }
@@ -289,7 +289,7 @@ function lk_wp_rename_site() {
         "Site address:" "$OLD_URL -> $LK_BOLD$NEW_URL$LK_RESET"
     lk_tty_detail \
         "WordPress address:" "$OLD_SITE_URL -> $LK_BOLD$NEW_SITE_URL$LK_RESET"
-    _lk_wp_is_quiet || lk_confirm "Proceed?" Y || return
+    _lk_wp_is_quiet || lk_tty_yn "Proceed?" Y || return
     for CONST in WP_HOME WP_SITEURL; do
         ! lk_wp config has "$CONST" || {
             lk_sed_i '' "/^OLD_${CONST}=/d" "$FILE" 2>/dev/null || true
@@ -299,9 +299,9 @@ function lk_wp_rename_site() {
     done
     lk_wp option update home "$NEW_URL" &&
         lk_wp option update siteurl "$NEW_SITE_URL" || return
-    lk_false LK_WP_REPLACE ||
+    lk_is_false LK_WP_REPLACE ||
         { [ -z "${LK_WP_REPLACE+1}" ] &&
-            ! lk_confirm "Replace the previous URL in all tables?" Y; } ||
+            ! lk_tty_yn "Replace the previous URL in all tables?" Y; } ||
         lk_wp_replace_url "$OLD_URL" "$NEW_URL" ||
         return
     _lk_wp_maybe_apply || return
@@ -344,7 +344,7 @@ function lk_wp_replace_url() {
     local OLD_URL=${1-} NEW_URL=${2-} REPLACE STDERR IFS _SEARCH _REPLACE
     [ $# -eq 2 ] ||
         lk_usage "Usage: $FUNCNAME [-s SITE_ROOT] OLD_URL NEW_URL" || return
-    lk_test lk_is_uri "$@" || lk_warn "invalid URL" || return
+    lk_test_all lk_is_uri "$@" || lk_warn "invalid URL" || return
     lk_tty_print "Performing WordPress search/replace"
     REPLACE=(
         "$OLD_URL"
@@ -360,7 +360,7 @@ function lk_wp_replace_url() {
         "$(lk_wp_json_encode "${OLD_URL#http*:}")"
         "$(lk_wp_json_encode "${NEW_URL#http*:}")"
     )
-    ! lk_true LK_WP_REPLACE_WITHOUT_SCHEME ||
+    ! lk_is_true LK_WP_REPLACE_WITHOUT_SCHEME ||
         REPLACE+=(
             "${OLD_URL#http*://}"
             "${NEW_URL#http*://}"
@@ -572,7 +572,7 @@ Usage: $FUNCNAME [-s SITE_ROOT] SQL_PATH [DB_NAME [DB_USER]]" || return
         lk_tty_detail "DROP and re-CREATE database:" \
             "$LOCAL_DB_NAME@$LOCAL_DB_HOST"
         lk_tty_detail "Restore" "$1"
-        lk_confirm "Proceed?" Y || return
+        lk_tty_yn "Proceed?" Y || return
     }
     [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] || {
         [[ $USER =~ ^[-a-zA-Z0-9_]+$ ]] &&
@@ -619,7 +619,7 @@ function lk_wp_db_myisam_to_innodb() { (
         else
             lk_tty_log "The database will be backed up before conversion"
         fi
-        lk_confirm "Proceed?" Y || return
+        lk_tty_yn "Proceed?" Y || return
     }
     unset _LK_WP_MAINTENANCE_ON
     lk_wp_maintenance_enable &&
@@ -666,9 +666,9 @@ Usage: $FUNCNAME SSH_HOST [REMOTE_PATH [LOCAL_PATH [RSYNC_ARG...]]]" || return
     ARGS+=("$1:$REMOTE_PATH/" "$LOCAL_PATH/")
     lk_tty_detail "Local files will be overwritten with command:" \
         "rsync ${ARGS[*]}"
-    _lk_wp_is_quiet || ! lk_confirm "Perform a trial run first?" N ||
+    _lk_wp_is_quiet || ! lk_tty_yn "Perform a trial run first?" N ||
         rsync --dry-run "${ARGS[@]}" | "${PAGER:-less}" >&2 || true
-    lk_confirm "LOCAL CHANGES WILL BE PERMANENTLY LOST. Proceed?" Y ||
+    lk_tty_yn "LOCAL CHANGES WILL BE PERMANENTLY LOST. Proceed?" Y ||
         return
     [ -d "$LOCAL_PATH" ] || mkdir -p "$LOCAL_PATH" || return
     rsync "${ARGS[@]}" || STATUS=$?
@@ -840,10 +840,10 @@ function lk_wp_set_permissions() {
         SITE_ROOT=$(lk_realpath "$SITE_ROOT") || return
     if lk_will_elevate; then
         OWNER=$(lk_file_owner "$SITE_ROOT/..") &&
-            LOG_FILE=$(lk_mktemp_file) || return
+            LOG_FILE=$(lk_mktemp) || return
         lk_tty_print "Setting file ownership in" "$SITE_ROOT"
         lk_tty_detail "Owner:" "$OWNER"
-        CHANGES=$(lk_maybe_sudo gnu_chown -Rhc "$OWNER" "$SITE_ROOT" |
+        CHANGES=$(lk_sudo gnu_chown -Rhc "$OWNER" "$SITE_ROOT" |
             tee -a "$LOG_FILE" | wc -l | tr -d ' ') || return
         lk_tty_detail "Changes:" "$CHANGES"
         ! ((CHANGES)) &&
