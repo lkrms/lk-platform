@@ -143,7 +143,7 @@ function lk_bad_args() {
 # Print the name of the script or function that's currently running.
 function lk_script() {
     local depth=$((${_LK_STACK_DEPTH-0} + ${1-0})) name
-    lk_script_running || {
+    lk_is_script || {
         name=${FUNCNAME[depth + 1]+${FUNCNAME[*]: -1}}
         [[ $name != @(source|main) ]] || name=
     }
@@ -365,126 +365,140 @@ function lk_system_is_apple_silicon() {
     }; }
 }
 
-# lk_script_running
+# lk_is_script
 #
-# Return true if a script file is running. If reading commands from a named pipe
-# (e.g. `bash <(list)`), the standard input (`bash -i` or `list | bash`), or the
-# command line (`bash -c "string"`), return false.
-function lk_script_running() {
+# Check if a script file is running.
+#
+# Fails if Bash is reading commands from:
+# - the standard input (e.g. `bash -i` or `write_list | bash`)
+# - a string (`bash -c "list"`), or
+# - a named pipe (`bash <(write_list)`)
+function lk_is_script() {
     [[ ${BASH_SOURCE+${BASH_SOURCE[*]: -1}} == "$0" ]] && [[ -f $0 ]]
 }
 
-# lk_verbose [LEVEL]
+# lk_is_v [<minimum_verbosity>]
 #
-# Return true if LK_VERBOSE (default: 0) is at least LEVEL (default: 1).
-function lk_verbose() {
+# Check if the level of output verbosity applied via LK_VERBOSE (0 if empty or
+# unset) is greater than or equal to the given value (1 if not given).
+function lk_is_v() {
     ((${LK_VERBOSE:-0} >= ${1-1}))
 }
 
-# lk_no_input
+# lk_input_is_off
 #
-# Return true if the user should not be prompted for input.
+# Check if user input prompts should be skipped.
 #
-# Returns false if:
-# - LK_FORCE_INPUT is set, or
-# - /dev/stdin is a terminal and LK_NO_INPUT is not set
-function lk_no_input() {
-    [[ ${LK_FORCE_INPUT-} != Y ]] || {
-        { [[ -t 0 ]] ||
-            lk_err "/dev/stdin is not a terminal"; } && false || return
-    }
-    [[ ! -t 0 ]] || [[ ${LK_NO_INPUT-} == Y ]]
+# Fails if:
+# - the standard input is connected to a terminal and LK_NO_INPUT is not Y, or
+# - LK_FORCE_INPUT=Y
+function lk_input_is_off() {
+    if [[ ${LK_FORCE_INPUT-} == Y ]]; then
+        [[ -t 0 ]] || lk_err "LK_FORCE_INPUT=Y but /dev/stdin is not a terminal" || return
+        return 1
+    fi
+    [[ ${LK_NO_INPUT-} == Y ]] || [[ ! -t 0 ]]
 }
 
-# lk_debug
+# lk_debug_is_on
 #
-# Return true if LK_DEBUG is set.
-function lk_debug() {
+# Check if debugging is enabled via LK_DEBUG=Y.
+function lk_debug_is_on() {
     [[ ${LK_DEBUG-} == Y ]]
 }
 
-# lk_root
+# lk_user_is_root
 #
-# Return true if running as the root user.
-function lk_root() {
-    [[ $EUID -eq 0 ]]
+# Check if running as root.
+function lk_user_is_root() {
+    ((!EUID))
 }
 
-# lk_dry_run
+# lk_is_dryrun
 #
-# Return true if LK_DRY_RUN is set.
-function lk_dry_run() {
-    [[ ${LK_DRY_RUN-} == Y ]]
+# Check if running in dry-run mode via LK_DRYRUN=Y (preferred) or LK_DRY_RUN=Y
+# (deprecated).
+function lk_is_dryrun() {
+    [[ ${LK_DRYRUN-} == Y ]] || [[ ${LK_DRY_RUN-} == Y ]]
 }
 
-# lk_true VAR
+# lk_is_true <value>
 #
-# Return true if VAR or ${!VAR} is 'Y', 'yes', '1', 'true', or 'on' (not
-# case-sensitive).
-function lk_true() {
-    [[ $1 =~ ^([yY]([eE][sS])?|1|[tT][rR][uU][eE]|[oO][nN])$ ]] ||
-        [[ ${1:+${!1-}} =~ ^([yY]([eE][sS])?|1|[tT][rR][uU][eE]|[oO][nN])$ ]]
+# Check if a value, or the variable it references, is 'Y', 'yes', '1', 'true',
+# or 'on'. Not case-sensitive.
+function lk_is_true() {
+    (($#)) || lk_bad_args || return
+    [[ $1 == @([yY]?([eE][sS])|1|[tT][rR][uU][eE]|[oO][nN]) ]] ||
+        [[ ${!1-} == @([yY]?([eE][sS])|1|[tT][rR][uU][eE]|[oO][nN]) ]] 2>/dev/null
 }
 
-# lk_false VAR
+# lk_is_false <value>
 #
-# Return true if VAR or ${!VAR} is 'N', 'no', '0', 'false', or 'off' (not
-# case-sensitive).
-function lk_false() {
-    [[ $1 =~ ^([nN][oO]?|0|[fF][aA][lL][sS][eE]|[oO][fF][fF])$ ]] ||
-        [[ ${1:+${!1-}} =~ ^([nN][oO]?|0|[fF][aA][lL][sS][eE]|[oO][fF][fF])$ ]]
+# Check if a value, or the variable it references, is 'N', 'no', '0', 'false',
+# or 'off'. Not case-sensitive.
+function lk_is_false() {
+    (($#)) || lk_bad_args || return
+    [[ $1 == @([nN]?([oO])|0|[fF][aA][lL][sS][eE]|[oO][fF][fF]) ]] ||
+        [[ ${!1-} == @([nN]?([oO])|0|[fF][aA][lL][sS][eE]|[oO][fF][fF]) ]] 2>/dev/null
 }
 
-# lk_test TEST [VALUE...]
+# lk_test_all "<command> [<arg>...]" <value>...
 #
-# Return true if every VALUE passes TEST, otherwise return false. If there are
-# no VALUE arguments, return false.
-function lk_test() {
-    local IFS=$' \t\n' COMMAND
-    COMMAND=($1)
+# Check if all of the given values pass an IFS-delimited test command.
+function lk_test_all() {
+    (($# > 1)) || return
+    local cmd
+    read -ra cmd <<<"$1"
     shift
-    [[ -n ${COMMAND+1} ]] && (($#)) || return
     while (($#)); do
-        "${COMMAND[@]}" "$1" || break
+        "${cmd[@]}" "$1" || break
         shift
     done
     ((!$#))
 }
 
-# lk_test_any TEST [VALUE...]
+# lk_test_any "<command> [<arg>...]" <value>...
 #
-# Return true if at least one VALUE passes TEST, otherwise return false.
+# Check if any of the given values pass an IFS-delimited test command.
 function lk_test_any() {
-    local IFS=$' \t\n' COMMAND
-    COMMAND=($1)
+    (($# > 1)) || return
+    local cmd
+    read -ra cmd <<<"$1"
     shift
-    [[ -n ${COMMAND+1} ]] && (($#)) || return
     while (($#)); do
-        ! "${COMMAND[@]}" "$1" || break
+        ! "${cmd[@]}" "$1" || break
         shift
     done
     (($#))
 }
 
-# lk_paths_exist PATH [PATH...]
+# lk_test_all_e <file>...
 #
-# Return true if every PATH exists.
-function lk_paths_exist() { lk_test "lk_sudo test -e" "$@"; }
+# Check if every given file exists.
+function lk_test_all_e() {
+    lk_test_all "lk_sudo_on_fail test -e" "$@"
+}
 
-# lk_files_exist FILE [FILE...]
+# lk_test_all_f <file>...
 #
-# Return true if every FILE exists.
-function lk_files_exist() { lk_test "lk_sudo test -f" "$@"; }
+# Check if every given file exists and is a regular file.
+function lk_test_all_f() {
+    lk_test_all "lk_sudo_on_fail test -f" "$@"
+}
 
-# lk_dirs_exist DIR [DIR...]
+# lk_test_all_d <file>...
 #
-# Return true if every DIR exists.
-function lk_dirs_exist() { lk_test "lk_sudo test -d" "$@"; }
+# Check if every given file exists and is a directory.
+function lk_test_all_d() {
+    lk_test_all "lk_sudo_on_fail test -d" "$@"
+}
 
-# lk_files_not_empty FILE [FILE...]
+# lk_test_all_s <file>...
 #
-# Return true if every FILE exists and has a size greater than zero.
-function lk_files_not_empty() { lk_test "lk_sudo test -s" "$@"; }
+# Check if every given file exists and has a size greater than zero.
+function lk_test_all_s() {
+    lk_test_all "lk_sudo_on_fail test -s" "$@"
+}
 
 function _lk_sudo_check() {
     local LK_SUDO_ON_FAIL=${LK_SUDO_ON_FAIL-} LK_EXEC=${LK_EXEC-} SHIFT=0 \
@@ -593,7 +607,7 @@ function lk_sudo_on_fail() {
 # without asking the user to authenticate.
 function lk_can_sudo() {
     [[ -n ${1-} ]] || lk_err "invalid arguments" || return
-    if lk_no_input; then
+    if lk_input_is_off; then
         sudo -nl "$1" &>/dev/null
     else
         # Return without allowing sudo to prompt for a password if the user has
@@ -1429,7 +1443,7 @@ function _lk_caller() {
     local CALLER
     CALLER=("$(lk_script 2)")
     CALLER[0]=$LK_BOLD$CALLER$LK_RESET
-    lk_verbose || {
+    lk_is_v || {
         echo "$CALLER"
         return
     }
@@ -1998,7 +2012,7 @@ function lk_tty_file() {
         lk_err "file not found: ${1-}" || return
     local IFS MESSAGE2
     unset IFS
-    ! lk_verbose || { MESSAGE2=$(lk_sudo -f ls -ld "$1") &&
+    ! lk_is_v || { MESSAGE2=$(lk_sudo -f ls -ld "$1") &&
         MESSAGE2=${MESSAGE2/"$1"/$LK_BOLD$1$LK_RESET}; } || return
     lk_sudo -f cat "$1" | lk_tty_dump - "$1" "${MESSAGE2-}" "${@:2}"
 }
@@ -2037,7 +2051,7 @@ function lk_tty_run() {
         case "${1-}" in
         lk_elevate)
             shift
-            lk_root || set -- sudo "$@"
+            lk_user_is_root || set -- sudo "$@"
             break
             ;;
         lk_sudo | lk_maybe_sudo)
@@ -2362,7 +2376,7 @@ function lk_var_not_null() {
 # assign TRUE (default: Y) to VAR, otherwise assign FALSE (default: N).
 function lk_var_to_bool() {
     [ $# -eq 3 ] || set -- "$1" Y N
-    if lk_true "$1"; then
+    if lk_is_true "$1"; then
         eval "$1=\$2"
     else
         eval "$1=\$3"
@@ -2405,7 +2419,7 @@ function lk_tty_read() {
     local IFS=$' \t\n' _NOTE
     [[ ${1-} != -* ]] || { _NOTE=${1#-} && shift; }
     (($# > 1)) && unset -v "$2" || lk_bad_args || return
-    ! lk_no_input || [[ -z ${3:+1} ]] || {
+    ! lk_input_is_off || [[ -z ${3:+1} ]] || {
         eval "$2=\$3"
         return
     }
@@ -2448,7 +2462,7 @@ function lk_tty_yn() {
     [[ ${1-} != -* ]] || { NOTE=${1#-} && shift; }
     (($#)) || lk_bad_args || return
     local _Y="[yY]([eE][sS])?" _N="[nN][oO]?"
-    ! lk_no_input || [[ ! ${2-} =~ ^($_Y|$_N)$ ]] || {
+    ! lk_input_is_off || [[ ! ${2-} =~ ^($_Y|$_N)$ ]] || {
         [[ $2 =~ ^$_Y$ ]]
         return
     }
@@ -2485,7 +2499,7 @@ function lk_tty_ynav() {
             'tolower($1)==answer&&$2~regex{print$2;exit}' "$FILE") || ANSWER=
     DEFAULT=${ANSWER:-${3-}}
     [[ -z $ANSWER ]] &&
-        { ! lk_no_input || [[ ! $DEFAULT =~ ^($_Y|$_N|$_A|$_V)$ ]]; } || {
+        { ! lk_input_is_off || [[ ! $DEFAULT =~ ^($_Y|$_N|$_A|$_V)$ ]]; } || {
         [[ $DEFAULT =~ ^($_Y|$_A)$ ]]
         return
     }
@@ -2556,7 +2570,7 @@ function lk_clip_get() {
 
 # lk_trace [MESSAGE]
 function lk_trace() {
-    lk_debug || return 0
+    lk_debug_is_on || return 0
     local NOW
     NOW=$(gnu_date +%s.%N) || return 0
     _LK_TRACE_FIRST=${_LK_TRACE_FIRST:-$NOW}
@@ -2818,7 +2832,7 @@ function lk_fd_next() {
 # lk_log_start [TEMP_LOG_FILE]
 function lk_log_start() {
     [[ -z ${_LK_NO_LOG-} ]] &&
-        ! lk_log_is_open && lk_script_running || return 0
+        ! lk_log_is_open && lk_is_script || return 0
     local ARG0 HEADER FILE
     ARG0=$(type -p "${LK_LOG_CMDLINE:-$0}") &&
         ARG0=${ARG0:-${LK_LOG_CMDLINE+"Bash $(type -t "$LK_LOG_CMDLINE") $LK_LOG_CMDLINE"}} ||
@@ -2873,7 +2887,7 @@ function lk_log_start() {
     }
     lk_log_tty_on
     cat <<<"$HEADER" >"/dev/fd/$_LK_LOG_FD"
-    ! lk_verbose 2 || _LK_FD=$_LK_TTY_OUT_FD lk_tty_log "Output log:" "$FILE"
+    ! lk_is_v 2 || _LK_FD=$_LK_TTY_OUT_FD lk_tty_log "Output log:" "$FILE"
     _LK_LOG_FILE=$FILE
 }
 
@@ -3019,7 +3033,7 @@ function lk_log_bypass_stderr() { lk_log_bypass -e "$@"; }
 
 function lk_start_trace() {
     [[ -z ${_LK_NO_LOG-} ]] &&
-        [[ $- != *x* ]] && lk_debug && lk_script_running || return 0
+        [[ $- != *x* ]] && lk_debug_is_on && lk_is_script || return 0
     local CMD TRACE_FILE
     CMD=${LK_LOG_CMDLINE:-$0}
     TRACE_FILE=${LK_LOG_TRACE_FILE:-/tmp/${LK_LOG_BASENAME:-${CMD##*/}}-$EUID.$(lk_date_ymdhms).trace} &&
@@ -3476,13 +3490,13 @@ function lk_md5() {
 
 # lk_maybe [-p] COMMAND [ARG...]
 #
-# Run COMMAND unless LK_DRY_RUN is set. If -p is set, print COMMAND if not
-# running it.
+# Run COMMAND unless LK_DRYRUN=Y (preferred) or LK_DRY_RUN=Y (deprecated). If -p
+# is set, print COMMAND if not running it.
 function lk_maybe() {
     local PRINT
     [ "${1-}" != -p ] || { PRINT=1 && shift; }
-    if lk_dry_run; then
-        [ -z "${PRINT-}" ] && ! lk_verbose ||
+    if lk_is_dryrun; then
+        [ -z "${PRINT-}" ] && ! lk_is_v ||
             lk_tty_log \
                 "${LK_YELLOW}[DRY RUN]${LK_RESET} Not running:" \
                 "$(lk_quote_args "$@")"
@@ -3594,7 +3608,7 @@ function lk_env_clean() {
 function lk_v() {
     local STATUS=$? RETURN=0 _LK_STACK_DEPTH=$((1 + ${_LK_STACK_DEPTH:-0}))
     [[ $1 != -r ]] || { RETURN=$STATUS && shift; }
-    lk_verbose "$1" || return "$RETURN"
+    lk_is_v "$1" || return "$RETURN"
     shift
     if ((!STATUS)); then
         "$@"
@@ -3756,7 +3770,7 @@ function lk_json_sh() {
 #
 # Print "true" if VAR or ${!VAR} is truthy, otherwise print "false".
 function lk_json_bool() {
-    lk_true "$1" && echo "true" || echo "false"
+    lk_is_true "$1" && echo "true" || echo "false"
 }
 
 # lk_uri_encode PARAMETER=VALUE...
@@ -3802,14 +3816,20 @@ lk_cache_mark_dirty() { _LK_STACK_DEPTH=$((${_LK_STACK_DEPTH-0} + 1)) lk_cache_f
 lk_caller_name() { lk_caller $((${1-0} + 1)); }
 lk_command_exists() { lk_has "$@"; }
 lk_confirm() { lk_tty_yn "$@"; }
+lk_debug() { lk_debug_is_on; }
 lk_delete_on_exit_withdraw() { lk_on_exit_undo_delete "$@"; }
+lk_dirs_exist() { lk_test_all_d "$@"; }
+lk_dry_run() { lk_is_dryrun; }
 lk_echo_args() { lk_args "$@"; }
 lk_echo_array() { lk_arr "$@"; }
 lk_ellipsis() { lk_ellipsise "$@"; }
 lk_escape_ere_replace() { lk_sed_escape_replace "$@"; }
 lk_escape_ere() { lk_sed_escape "$@"; }
+lk_false() { lk_is_false "$@"; }
 lk_file_security() { lk_file_owner_mode "$@"; }
 lk_file_sort_by_date() { lk_file_sort_modified "$@"; }
+lk_files_exist() { lk_test_all_f "$@"; }
+lk_files_not_empty() { lk_test_all_s "$@"; }
 lk_first_command() { lk_runnable "$@"; }
 lk_first_existing() { lk_readable "$@"; }
 lk_first_file() { lk_readable "$@"; }
@@ -3827,11 +3847,18 @@ lk_jq_get_array() { lk_json_mapfile "$@"; }
 lk_maybe_sudo() { lk_sudo "$@"; }
 lk_mktemp_dir() { _LK_STACK_DEPTH=$((${_LK_STACK_DEPTH-0} + 1)) lk_mktemp -d; }
 lk_mktemp_file() { _LK_STACK_DEPTH=$((${_LK_STACK_DEPTH-0} + 1)) lk_mktemp; }
+lk_no_input() { lk_input_is_off; }
+lk_paths_exist() { lk_test_all_e "$@"; }
 lk_regex_implode() { lk_ere_implode_args -- "$@"; }
+lk_root() { lk_user_is_root; }
 lk_safe_grep() { lk_grep "$@"; }
 lk_script_name() { lk_script $((${1-0} + 1)); }
+lk_script_running() { lk_is_script; }
 lk_test_many() { lk_test "$@"; }
+lk_test() { lk_test_all "$@"; }
+lk_true() { lk_is_true "$@"; }
 lk_tty_detail_pairs() { lk_tty_pairs_detail "$@"; }
+lk_verbose() { lk_is_v "$@"; }
 lk_version_at_least() { lk_version_is "$@"; }
 
 [[ ${S-} ]] || S=$LK_h

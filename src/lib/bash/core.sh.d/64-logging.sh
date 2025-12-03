@@ -3,7 +3,7 @@
 # lk_log_start [TEMP_LOG_FILE]
 function lk_log_start() {
     [[ -z ${_LK_NO_LOG-} ]] &&
-        ! lk_log_is_open && lk_script_running || return 0
+        ! lk_log_is_open && lk_is_script || return 0
     local ARG0 HEADER FILE
     ARG0=$(type -p "${LK_LOG_CMDLINE:-$0}") &&
         ARG0=${ARG0:-${LK_LOG_CMDLINE+"Bash $(type -t "$LK_LOG_CMDLINE") $LK_LOG_CMDLINE"}} ||
@@ -58,7 +58,7 @@ function lk_log_start() {
     }
     lk_log_tty_on
     cat <<<"$HEADER" >"/dev/fd/$_LK_LOG_FD"
-    ! lk_verbose 2 || _LK_FD=$_LK_TTY_OUT_FD lk_tty_log "Output log:" "$FILE"
+    ! lk_is_v 2 || _LK_FD=$_LK_TTY_OUT_FD lk_tty_log "Output log:" "$FILE"
     _LK_LOG_FILE=$FILE
 }
 
@@ -204,7 +204,7 @@ function lk_log_bypass_stderr() { lk_log_bypass -e "$@"; }
 
 function lk_start_trace() {
     [[ -z ${_LK_NO_LOG-} ]] &&
-        [[ $- != *x* ]] && lk_debug && lk_script_running || return 0
+        [[ $- != *x* ]] && lk_debug_is_on && lk_is_script || return 0
     local CMD TRACE_FILE
     CMD=${LK_LOG_CMDLINE:-$0}
     TRACE_FILE=${LK_LOG_TRACE_FILE:-/tmp/${LK_LOG_BASENAME:-${CMD##*/}}-$EUID.$(lk_date_ymdhms).trace} &&

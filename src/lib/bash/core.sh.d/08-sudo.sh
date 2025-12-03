@@ -107,7 +107,7 @@ function lk_sudo_on_fail() {
 # without asking the user to authenticate.
 function lk_can_sudo() {
     [[ -n ${1-} ]] || lk_err "invalid arguments" || return
-    if lk_no_input; then
+    if lk_input_is_off; then
         sudo -nl "$1" &>/dev/null
     else
         # Return without allowing sudo to prompt for a password if the user has

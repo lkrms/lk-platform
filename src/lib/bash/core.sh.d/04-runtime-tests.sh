@@ -1,122 +1,138 @@
 #!/usr/bin/env bash
 
-# lk_script_running
+# lk_is_script
 #
-# Return true if a script file is running. If reading commands from a named pipe
-# (e.g. `bash <(list)`), the standard input (`bash -i` or `list | bash`), or the
-# command line (`bash -c "string"`), return false.
-function lk_script_running() {
+# Check if a script file is running.
+#
+# Fails if Bash is reading commands from:
+# - the standard input (e.g. `bash -i` or `write_list | bash`)
+# - a string (`bash -c "list"`), or
+# - a named pipe (`bash <(write_list)`)
+function lk_is_script() {
     [[ ${BASH_SOURCE+${BASH_SOURCE[*]: -1}} == "$0" ]] && [[ -f $0 ]]
 }
 
-# lk_verbose [LEVEL]
+# lk_is_v [<minimum_verbosity>]
 #
-# Return true if LK_VERBOSE (default: 0) is at least LEVEL (default: 1).
-function lk_verbose() {
+# Check if the level of output verbosity applied via LK_VERBOSE (0 if empty or
+# unset) is greater than or equal to the given value (1 if not given).
+function lk_is_v() {
     ((${LK_VERBOSE:-0} >= ${1-1}))
 }
 
-# lk_no_input
+# lk_input_is_off
 #
-# Return true if the user should not be prompted for input.
+# Check if user input prompts should be skipped.
 #
-# Returns false if:
-# - LK_FORCE_INPUT is set, or
-# - /dev/stdin is a terminal and LK_NO_INPUT is not set
-function lk_no_input() {
-    [[ ${LK_FORCE_INPUT-} != Y ]] || {
-        { [[ -t 0 ]] ||
-            lk_err "/dev/stdin is not a terminal"; } && false || return
-    }
-    [[ ! -t 0 ]] || [[ ${LK_NO_INPUT-} == Y ]]
+# Fails if:
+# - the standard input is connected to a terminal and LK_NO_INPUT is not Y, or
+# - LK_FORCE_INPUT=Y
+function lk_input_is_off() {
+    if [[ ${LK_FORCE_INPUT-} == Y ]]; then
+        [[ -t 0 ]] || lk_err "LK_FORCE_INPUT=Y but /dev/stdin is not a terminal" || return
+        return 1
+    fi
+    [[ ${LK_NO_INPUT-} == Y ]] || [[ ! -t 0 ]]
 }
 
-# lk_debug
+# lk_debug_is_on
 #
-# Return true if LK_DEBUG is set.
-function lk_debug() {
+# Check if debugging is enabled via LK_DEBUG=Y.
+function lk_debug_is_on() {
     [[ ${LK_DEBUG-} == Y ]]
 }
 
-# lk_root
+# lk_user_is_root
 #
-# Return true if running as the root user.
-function lk_root() {
-    [[ $EUID -eq 0 ]]
+# Check if running as root.
+function lk_user_is_root() {
+    ((!EUID))
 }
 
-# lk_dry_run
+# lk_is_dryrun
 #
-# Return true if LK_DRY_RUN is set.
-function lk_dry_run() {
-    [[ ${LK_DRY_RUN-} == Y ]]
+# Check if running in dry-run mode via LK_DRYRUN=Y (preferred) or LK_DRY_RUN=Y
+# (deprecated).
+function lk_is_dryrun() {
+    [[ ${LK_DRYRUN-} == Y ]] || [[ ${LK_DRY_RUN-} == Y ]]
 }
 
-# lk_true VAR
+# lk_is_true <value>
 #
-# Return true if VAR or ${!VAR} is 'Y', 'yes', '1', 'true', or 'on' (not
-# case-sensitive).
-function lk_true() {
-    [[ $1 =~ ^([yY]([eE][sS])?|1|[tT][rR][uU][eE]|[oO][nN])$ ]] ||
-        [[ ${1:+${!1-}} =~ ^([yY]([eE][sS])?|1|[tT][rR][uU][eE]|[oO][nN])$ ]]
+# Check if a value, or the variable it references, is 'Y', 'yes', '1', 'true',
+# or 'on'. Not case-sensitive.
+function lk_is_true() {
+    (($#)) || lk_bad_args || return
+    [[ $1 == @([yY]?([eE][sS])|1|[tT][rR][uU][eE]|[oO][nN]) ]] ||
+        [[ ${!1-} == @([yY]?([eE][sS])|1|[tT][rR][uU][eE]|[oO][nN]) ]] 2>/dev/null
 }
 
-# lk_false VAR
+# lk_is_false <value>
 #
-# Return true if VAR or ${!VAR} is 'N', 'no', '0', 'false', or 'off' (not
-# case-sensitive).
-function lk_false() {
-    [[ $1 =~ ^([nN][oO]?|0|[fF][aA][lL][sS][eE]|[oO][fF][fF])$ ]] ||
-        [[ ${1:+${!1-}} =~ ^([nN][oO]?|0|[fF][aA][lL][sS][eE]|[oO][fF][fF])$ ]]
+# Check if a value, or the variable it references, is 'N', 'no', '0', 'false',
+# or 'off'. Not case-sensitive.
+function lk_is_false() {
+    (($#)) || lk_bad_args || return
+    [[ $1 == @([nN]?([oO])|0|[fF][aA][lL][sS][eE]|[oO][fF][fF]) ]] ||
+        [[ ${!1-} == @([nN]?([oO])|0|[fF][aA][lL][sS][eE]|[oO][fF][fF]) ]] 2>/dev/null
 }
 
-# lk_test TEST [VALUE...]
+# lk_test_all "<command> [<arg>...]" <value>...
 #
-# Return true if every VALUE passes TEST, otherwise return false. If there are
-# no VALUE arguments, return false.
-function lk_test() {
-    local IFS=$' \t\n' COMMAND
-    COMMAND=($1)
+# Check if all of the given values pass an IFS-delimited test command.
+function lk_test_all() {
+    (($# > 1)) || return
+    local cmd
+    read -ra cmd <<<"$1"
     shift
-    [[ -n ${COMMAND+1} ]] && (($#)) || return
     while (($#)); do
-        "${COMMAND[@]}" "$1" || break
+        "${cmd[@]}" "$1" || break
         shift
     done
     ((!$#))
 }
 
-# lk_test_any TEST [VALUE...]
+# lk_test_any "<command> [<arg>...]" <value>...
 #
-# Return true if at least one VALUE passes TEST, otherwise return false.
+# Check if any of the given values pass an IFS-delimited test command.
 function lk_test_any() {
-    local IFS=$' \t\n' COMMAND
-    COMMAND=($1)
+    (($# > 1)) || return
+    local cmd
+    read -ra cmd <<<"$1"
     shift
-    [[ -n ${COMMAND+1} ]] && (($#)) || return
     while (($#)); do
-        ! "${COMMAND[@]}" "$1" || break
+        ! "${cmd[@]}" "$1" || break
         shift
     done
     (($#))
 }
 
-# lk_paths_exist PATH [PATH...]
+# lk_test_all_e <file>...
 #
-# Return true if every PATH exists.
-function lk_paths_exist() { lk_test "lk_sudo test -e" "$@"; }
+# Check if every given file exists.
+function lk_test_all_e() {
+    lk_test_all "lk_sudo_on_fail test -e" "$@"
+}
 
-# lk_files_exist FILE [FILE...]
+# lk_test_all_f <file>...
 #
-# Return true if every FILE exists.
-function lk_files_exist() { lk_test "lk_sudo test -f" "$@"; }
+# Check if every given file exists and is a regular file.
+function lk_test_all_f() {
+    lk_test_all "lk_sudo_on_fail test -f" "$@"
+}
 
-# lk_dirs_exist DIR [DIR...]
+# lk_test_all_d <file>...
 #
-# Return true if every DIR exists.
-function lk_dirs_exist() { lk_test "lk_sudo test -d" "$@"; }
+# Check if every given file exists and is a directory.
+function lk_test_all_d() {
+    lk_test_all "lk_sudo_on_fail test -d" "$@"
+}
 
-# lk_files_not_empty FILE [FILE...]
+# lk_test_all_s <file>...
 #
-# Return true if every FILE exists and has a size greater than zero.
-function lk_files_not_empty() { lk_test "lk_sudo test -s" "$@"; }
+# Check if every given file exists and has a size greater than zero.
+function lk_test_all_s() {
+    lk_test_all "lk_sudo_on_fail test -s" "$@"
+}
+
+#### Reviewed: 2025-12-03

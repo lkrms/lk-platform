@@ -98,7 +98,7 @@ function lk_var_not_null() {
 # assign TRUE (default: Y) to VAR, otherwise assign FALSE (default: N).
 function lk_var_to_bool() {
     [ $# -eq 3 ] || set -- "$1" Y N
-    if lk_true "$1"; then
+    if lk_is_true "$1"; then
         eval "$1=\$2"
     else
         eval "$1=\$3"

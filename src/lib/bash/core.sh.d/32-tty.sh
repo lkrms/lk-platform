@@ -388,7 +388,7 @@ function lk_tty_file() {
         lk_err "file not found: ${1-}" || return
     local IFS MESSAGE2
     unset IFS
-    ! lk_verbose || { MESSAGE2=$(lk_sudo -f ls -ld "$1") &&
+    ! lk_is_v || { MESSAGE2=$(lk_sudo -f ls -ld "$1") &&
         MESSAGE2=${MESSAGE2/"$1"/$LK_BOLD$1$LK_RESET}; } || return
     lk_sudo -f cat "$1" | lk_tty_dump - "$1" "${MESSAGE2-}" "${@:2}"
 }
@@ -427,7 +427,7 @@ function lk_tty_run() {
         case "${1-}" in
         lk_elevate)
             shift
-            lk_root || set -- sudo "$@"
+            lk_user_is_root || set -- sudo "$@"
             break
             ;;
         lk_sudo | lk_maybe_sudo)

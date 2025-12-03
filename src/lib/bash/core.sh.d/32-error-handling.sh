@@ -4,7 +4,7 @@ function _lk_caller() {
     local CALLER
     CALLER=("$(lk_script 2)")
     CALLER[0]=$LK_BOLD$CALLER$LK_RESET
-    lk_verbose || {
+    lk_is_v || {
         echo "$CALLER"
         return
     }
