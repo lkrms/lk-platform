@@ -6,8 +6,9 @@
 # or 'on'. Not case-sensitive.
 function lk_is_true() {
     (($#)) || lk_bad_args || return
-    [[ $1 == @([yY]?([eE][sS])|1|[tT][rR][uU][eE]|[oO][nN]) ]] ||
-        [[ ${!1-} == @([yY]?([eE][sS])|1|[tT][rR][uU][eE]|[oO][nN]) ]] 2>/dev/null
+    # Work around Bash IDE not parsing extglob syntax properly
+    eval '[[ $1 == @([yY]?([eE][sS])|1|[tT][rR][uU][eE]|[oO][nN]) ]]' ||
+        eval '[[ ${!1-} == @([yY]?([eE][sS])|1|[tT][rR][uU][eE]|[oO][nN]) ]]' 2>/dev/null
 }
 
 # lk_is_false <value>
@@ -16,8 +17,9 @@ function lk_is_true() {
 # or 'off'. Not case-sensitive.
 function lk_is_false() {
     (($#)) || lk_bad_args || return
-    [[ $1 == @([nN]?([oO])|0|[fF][aA][lL][sS][eE]|[oO][fF][fF]) ]] ||
-        [[ ${!1-} == @([nN]?([oO])|0|[fF][aA][lL][sS][eE]|[oO][fF][fF]) ]] 2>/dev/null
+    # Work around Bash IDE not parsing extglob syntax properly
+    eval '[[ $1 == @([nN]?([oO])|0|[fF][aA][lL][sS][eE]|[oO][fF][fF]) ]]' ||
+        eval '[[ ${!1-} == @([nN]?([oO])|0|[fF][aA][lL][sS][eE]|[oO][fF][fF]) ]]' 2>/dev/null
 }
 
 # lk_test_all "<command> [<arg>...]" <value>...
