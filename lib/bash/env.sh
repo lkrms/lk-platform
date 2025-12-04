@@ -1,100 +1,79 @@
 #!/bin/sh
 
+# quote <value>
 quote() {
-    echo "'$(echo "$1" | sed -E "s/'/'\\\\''/g")'"
+    printf '%s\n' "$1" | sed "s/'/'\\\\''/g; 1s/^/'/; \$s/\$/'/"
 }
 
-in_path() {
-    case ":$2:" in
-    *:"$1":*)
-        return
-        ;;
-    *)
-        return 1
-        ;;
-    esac
-}
-
-_path_join() {
-    _path=
-    while [ $# -gt 0 ]; do
-        [ ! -d "$1" ] ||
-            _path=${_path:+$_path:}$1
-        shift
+# implode_dirs [<dir>...]
+implode_dirs() {
+    p=
+    for d in "$@"; do
+        [ ! -d "$d" ] || p=${p:+$p:}$d
     done
+    printf '%s\n' "$p"
 }
 
-_path_check() {
-    echo "$1" | awk -v RS=: '
-function add_dir(d) { a[i++] = d; b[d] = 1 }
-{ gsub(/(^[[:space:]]+|[[:space:]]+$)/, "") }
-$0 && !b[$0] { add_dir($0) }
-END { for (i = 0; i < length(a); i++) { s = (i ? s RS : "") a[i] } print s }' \
-        2>/dev/null || echo "$1"
+# normalise_path <path>
+normalise_path() {
+    printf '%s' "$1" | awk -v RS=: '
+$0 != "" && ! s[$0]++ {
+  d[i++] = $0
 }
 
-path_add() {
-    _path_join "$@"
-    _path_check "$PATH:$_path"
+END {
+  p = ""
+  for (j = 0; j < i; j++) {
+    p = (j ? p RS : "") d[j]
+  }
+  print p
+}'
 }
 
-path_add_to_front() {
-    _path_join "$@"
-    _path_check "$_path:$PATH"
+# add_after_path [<dir>...]
+add_after_path() {
+    normalise_path "$PATH:$(implode_dirs "$@")"
+}
+
+# add_before_path [<dir>...]
+add_before_path() {
+    normalise_path "$(implode_dirs "$@"):$PATH"
 }
 
 IFS=:
 PATH=${PATH-}
-OLD_PATH=$PATH
-PATH=$(path_add \
-    /usr/bin /bin /usr/sbin /sbin \
-    $LK_BASE/bin \
-    ${LK_ADD_TO_PATH-})
-PATH=$(path_add_to_front \
-    /usr/local/bin /usr/local/sbin \
-    /home/linuxbrew/.linuxbrew/bin /home/linuxbrew/.linuxbrew/sbin)
+_path=$PATH
+# shellcheck disable=SC2086
+PATH=$(add_after_path /usr/bin /bin /usr/sbin /sbin ${LK_BASE+"$LK_BASE/bin"} ${LK_ADD_TO_PATH-})
+PATH=$(add_before_path /usr/local/bin /usr/local/sbin /home/linuxbrew/.linuxbrew/bin /home/linuxbrew/.linuxbrew/sbin)
+# Don't add Homebrew for arm64 to PATH if running as a translated binary
 [ ! -d /opt/homebrew/bin ] ||
     [ /opt/homebrew/bin -ef /usr/local/bin ] ||
-    [ "$(uname -m 2>/dev/null)" = x86_64 ] || {
-    PATH=$(path_add_to_front /opt/homebrew/bin /opt/homebrew/sbin)
-    # DYLD_FALLBACK_LIBRARY_PATH defaults to "$HOME/lib:/usr/local/lib:/usr/lib"
-    # (see `man dlopen`)
-    [ ! -d /opt/homebrew/lib ] ||
-        echo 'export DYLD_FALLBACK_LIBRARY_PATH=${DYLD_FALLBACK_LIBRARY_PATH-${HOME:+$HOME/lib:}/opt/homebrew/lib:/usr/local/lib:/usr/lib}'
-}
+    [ "$(uname -m)" != arm64 ] ||
+    PATH=$(add_before_path /opt/homebrew/bin /opt/homebrew/sbin)
 
-unset -f brew
+if _brew=$(
+    unset -f brew
+    command -v brew
+) && _sh=$("$_brew" shellenv); then
+    eval "$_sh"
+    printf '%s\n' "$_sh"
+    printf 'export %s=%s\n' \
+        HOMEBREW_NO_ANALYTICS 1 \
+        HOMEBREW_NO_ENV_HINTS 1
+fi
 
-! BREW=$(command -v brew) ||
-    ! BREW_SH=$(PATH=/usr/bin:/bin:/usr/sbin:/sbin "$BREW" shellenv 2>/dev/null |
-        grep -E '\<HOMEBREW_(PREFIX|CELLAR|REPOSITORY|SHELLENV_PREFIX)=') || {
-    eval "$BREW_SH"
-    cat <<EOF
-$BREW_SH
-export HOMEBREW_NO_ANALYTICS=1
-export HOMEBREW_NO_ENV_HINTS=1
-export HOMEBREW_CASK_OPTS=--no-quarantine
-EOF
-    in_path "$HOMEBREW_PREFIX/share/man" "${MANPATH-}" ||
-        echo 'export MANPATH="$HOMEBREW_PREFIX/share/man${MANPATH+:$MANPATH}:"'
-    in_path "$HOMEBREW_PREFIX/share/info" "${INFOPATH-}" ||
-        echo 'export INFOPATH="$HOMEBREW_PREFIX/share/info:${INFOPATH-}"'
-}
+# shellcheck disable=SC2086
+PATH=$(add_before_path ${LK_ADD_TO_PATH_FIRST-} ${HOME:+"$HOME/.local/bin"})
+[ "$PATH" = "$_path" ] ||
+    printf 'export %s=%s\n' \
+        PATH "$(quote "$PATH")"
+printf 'export %s=%s\n' \
+    SUDO_PROMPT "$(quote "[sudo] password for %p: ")"
 
-PATH=$(path_add_to_front \
-    ${LK_ADD_TO_PATH_FIRST-} \
-    ${HOME:+$HOME/.local/bin} \
-    ${HOMEBREW_PREFIX:+$HOMEBREW_PREFIX/bin:$HOMEBREW_PREFIX/sbin})
-[ "$PATH" = "$OLD_PATH" ] ||
-    echo "export PATH=$(quote "$PATH")"
-UNSET="${LK_ADD_TO_PATH+ LK_ADD_TO_PATH}\
-${LK_ADD_TO_PATH_FIRST+ LK_ADD_TO_PATH_FIRST}"
-cat <<EOF
-${UNSET:+unset$UNSET
-}export SUDO_PROMPT="[sudo] password for %p: "
-EOF
-
-[ -n "${LANG-}" ] ||
-    { [ "$(uname -s)" != Darwin ] ||
-        ! LANG=$(defaults read -g AppleLocale | grep .).UTF-8 ||
-        echo "export LANG=$(quote "$LANG")"; } 2>/dev/null
+[ "${LANG-}" ] ||
+    [ "$(uname -s)" != Darwin ] ||
+    ! _locale=$(defaults read -g AppleLocale) 2>/dev/null ||
+    [ -z "$_locale" ] ||
+    printf 'export %s=%s\n' \
+        LANG "$(quote "$_locale.UTF-8")"
