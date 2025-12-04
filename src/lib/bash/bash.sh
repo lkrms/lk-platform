@@ -15,7 +15,7 @@ function lk_bash_function_names() {
     while [ $# -gt 0 ]; do
         if [ ${WITH_FILENAME:-0} -eq 1 ]; then
             lk_bash_function_names "$1" |
-                sed -E "s/^/$(lk_escape_ere_replace "$1"):/"
+                sed -E "s/^/$(lk_sed_escape_replace "$1"):/"
         else
             shfmt -tojson <"$1" | jq -r \
                 '..|select(type=="object" and .Type=="FuncDecl").Name.Value'
@@ -89,7 +89,7 @@ function lk_bash_command_literals() {
         lk_log_bypass_stdout
         lk_maybe
         lk_maybe_drop
-        lk_maybe_sudo
+        lk_sudo
         lk_maybe_trace
         lk_mktemp_dir_with
         lk_mktemp_with
@@ -109,7 +109,7 @@ function lk_bash_command_literals() {
     cat ${1+"$1"} |
         shfmt -tojson |
         jq -r \
-            --arg regex "^$(lk_regex_implode "$EXEC_COMMANDS")\$" \
+            --arg regex "^$(lk_ere_implode_args -- "$EXEC_COMMANDS")\$" \
             '..|select(type=="object")|((.Args[0].Parts[0]|select(.Type=="Lit").Value),(select(.Args[]?.Parts[]?|select(type=="object" and .Type=="Lit" and (.Value|test($regex)))|length>0)|[.Args[].Parts[]|(if .Type=="Lit" then (if .Value|test($regex) then "" else .Value end) else null end)]|first|select(.!=null)))'
 }
 
@@ -180,7 +180,7 @@ function lk_bash_audit() {
     local IFS=$'\n' FILE SCRIPT _COMMANDS FUNCTIONS COMMAND _PATH QUIET=1
     [ "${1-}" != -g ] &&
         local COMMANDS COMMAND_FILES MISSING_COMMANDS PACKAGES QUIET= || shift
-    lk_paths_exist "$@" || lk_usage "\
+    lk_test_all_e "$@" || lk_usage "\
 Usage: $FUNCNAME [-g] SCRIPT [SOURCE...]" || return
     FILE=${1##/dev/fd/*}
     SCRIPT=$(<"$1") &&
@@ -190,12 +190,12 @@ Usage: $FUNCNAME [-g] SCRIPT [SOURCE...]" || return
             lk_bash_function_names "$s"
         done | sort -u)) || return
     COMMANDS=($(comm -23 \
-        <(lk_echo_array _COMMANDS) \
-        <(lk_echo_array FUNCTIONS)))
+        <(lk_arr _COMMANDS) \
+        <(lk_arr FUNCTIONS)))
     # Add functions that are also commands on the local system
     COMMANDS+=($(type -P $(comm -12 \
-        <(lk_echo_array _COMMANDS) \
-        <(lk_echo_array FUNCTIONS) |
+        <(lk_arr _COMMANDS) \
+        <(lk_arr FUNCTIONS) |
         sed -E '/^_?lk_/d') | sed -E 's/.*\/([^/]+)$/\1/'))
     COMMAND_FILES=()
     MISSING_COMMANDS=()
@@ -206,7 +206,7 @@ Usage: $FUNCNAME [-g] SCRIPT [SOURCE...]" || return
         return
     }
     [ -n "$QUIET" ] ||
-        lk_echo_array COMMANDS | sort |
+        lk_arr COMMANDS | sort |
         lk_tty_list - "External commands used${FILE:+ in $1}:"
     for COMMAND in "${COMMANDS[@]}"; do
         [[ ! $COMMAND =~ ^(lk_|\./) ]] || continue
@@ -219,20 +219,20 @@ Usage: $FUNCNAME [-g] SCRIPT [SOURCE...]" || return
         [ ${#MISSING_COMMANDS[@]} -eq 0 ] ||
         lk_tty_list_detail MISSING_COMMANDS "Not installed:"
     [ ${#COMMAND_FILES[@]} -gt 0 ] || return 0
-    COMMAND_FILES=($(lk_echo_array COMMAND_FILES | sort -u))
+    COMMAND_FILES=($(lk_arr COMMAND_FILES | sort -u))
     PACKAGES=($(
-        if lk_is_arch; then
+        if lk_system_is_arch; then
             pacman -Qo "${COMMAND_FILES[@]}" |
                 awk -F " is owned by " -v OFS=": " \
                     '$2 {split($2, a, " "); print a[1], $1}'
-        elif lk_is_ubuntu; then
+        elif lk_system_is_ubuntu; then
             dpkg -S "${COMMAND_FILES[@]}"
         fi | sort -u || true
     ))
     [ ${#PACKAGES[@]} -gt 0 ] || return 0
     [ -n "$QUIET" ] ||
         lk_tty_list PACKAGES "Command owners:"
-    PACKAGES=($(lk_echo_array PACKAGES | cut -d: -f1 | sort -u))
+    PACKAGES=($(lk_arr PACKAGES | cut -d: -f1 | sort -u))
     [ -n "$QUIET" ] ||
         lk_tty_list PACKAGES "Packages:"
 } #### Reviewed: 2021-09-06
@@ -247,7 +247,7 @@ function lk_bash_audit_tree() {
         lk_mapfile -z FILES &&
             declare -p FILES
     }) && eval "$SH" || return
-    lk_echo_args "${FILES[@]#${DIR:-.}/}" |
+    lk_args "${FILES[@]#${DIR:-.}/}" |
         lk_tty_list - "Auditing:" script scripts
     lk_bash_audit ${GLOBALS+-g} <(cat "${FILES[@]}")
 }

@@ -84,7 +84,7 @@ function lk_git_is_work_tree() {
     local RESULT
     RESULT=$(_lk_git_cd "$@" &&
         _lk_git rev-parse --is-inside-work-tree 2>/dev/null) &&
-        lk_true RESULT
+        lk_is_true RESULT
 }
 
 # lk_git_is_submodule [DIR]
@@ -189,7 +189,7 @@ function lk_git_remote_from_url() {
     unset VALUE
     [ "${1-}" != -E ] || { shift && VALUE=${1-}; }
     [ $# -gt 0 ] || lk_usage "Usage: $FUNCNAME [-E] URL" || return
-    VALUE=${VALUE-$(lk_escape_ere "${1-}")} &&
+    VALUE=${VALUE-$(lk_sed_escape "${1-}")} &&
         _lk_git config --local --name-only --get-regexp "$REGEX" "$VALUE" |
         lk_require_output sed -E "s/$REGEX/\1/"
 }
@@ -233,7 +233,7 @@ function lk_git_branch_list_local() {
 function lk_git_branch_list_remote() {
     local REMOTE _REMOTE
     REMOTE=${1:-$(lk_git_remote_singleton)} || lk_warn "no remote" || return
-    _REMOTE=$(lk_escape_ere "$REMOTE")
+    _REMOTE=$(lk_sed_escape "$REMOTE")
     _lk_git for-each-ref --format="%(refname:short)" "refs/remotes/$REMOTE" |
         lk_require_output \
             sed -E -e "/^$_REMOTE\/HEAD\$/d" -e "s/^$_REMOTE\///"
@@ -426,7 +426,7 @@ function lk_git_push_branch() {
     AHEAD=$(_lk_git rev-list --count "$2..$1") &&
         _PATH=$(pwd | lk_tty_path) || return
     [ "$AHEAD" -gt 0 ] || return 0
-    ! lk_no_input ||
+    ! lk_input_is_off ||
         lk_warn "in $_PATH, cannot push to $2: user input disabled" || return 0
     _lk_git_branch_check_diverged "$2" "$1" || return
     LOG=$(_lk_git log --reverse \
@@ -439,8 +439,8 @@ function lk_git_push_branch() {
     [ ${#PUSH_URLS[@]} -eq 0 ] ||
         lk_tty_detail "Push $(lk_plural \
             ${#PUSH_URLS[@]} URL URLs):" \
-            $'\n'"$(lk_echo_array PUSH_URLS)"
-    lk_confirm "In $LK_BOLD$_PATH$LK_RESET, \
+            $'\n'"$(lk_arr PUSH_URLS)"
+    lk_tty_yn "In $LK_BOLD$_PATH$LK_RESET, \
 push $LK_BOLD$1$LK_RESET to $LK_BOLD$2$LK_RESET?" "${_LK_GIT_ANSWER-Y}" ||
         return 0
     lk_tty_detail \
@@ -579,7 +579,7 @@ function lk_git_get_repos() {
     local _LK_GIT_REPO _LK_GIT_ROOTS=(.) _lk_i=0
     lk_is_identifier "$1" || lk_warn "not a valid identifier: $1" || return
     [ $# -lt 2 ] || {
-        lk_paths_exist "${@:2}" || lk_warn "directory not found" || return
+        lk_test_all_e "${@:2}" || lk_warn "directory not found" || return
         _LK_GIT_ROOTS=("${@:2}")
         lk_resolve_files _LK_GIT_ROOTS
     }
@@ -650,7 +650,7 @@ on the standard output. If -y is set, proceed without prompting."
     while getopts ":pty" OPT; do
         case "$OPT" in
         p)
-            ! lk_bash_at_least 4 3 || {
+            ! lk_bash_is 4 3 || {
                 PARALLEL=1
                 _LK_SSH_OPTIONS=(ControlPath=none)
             }
@@ -673,7 +673,7 @@ on the standard output. If -y is set, proceed without prompting."
     [ $# -gt 0 ] || lk_usage || return
     REPO_COMMAND=("$@")
     if [ ${#REPOS[@]} -gt 0 ]; then
-        lk_test lk_git_is_top_level "${REPOS[@]}" ||
+        lk_test_all lk_git_is_top_level "${REPOS[@]}" ||
             lk_warn "each element of LK_GIT_REPOS must be the top-level \
 directory of a working tree" || return
         lk_resolve_files REPOS
@@ -681,21 +681,21 @@ directory of a working tree" || return
         lk_git_get_repos REPOS
         [ ${#REPOS[@]} -gt 0 ] || lk_warn "no repos found" || return
     fi
-    [ -z "${PROMPT-}" ] || lk_no_input || {
-        lk_echo_array REPOS | lk_tty_path |
+    [ -z "${PROMPT-}" ] || lk_input_is_off || {
+        lk_arr REPOS | lk_tty_path |
             lk_tty_list - "Repositories:" repo repos
         lk_tty_print "Command to run:" \
             $'\n'"$(lk_quote_args "${REPO_COMMAND[@]}")"
-        lk_confirm "Proceed?" Y || return
+        lk_tty_yn "Proceed?" Y || return
     }
     [ ${#REPOS[@]} -gt 1 ] || unset PARALLEL
     NOUN="${#REPOS[@]} $(lk_plural ${#REPOS[@]} repo repos)"
-    if lk_true PARALLEL; then
+    if lk_is_true PARALLEL; then
         _lk_git_is_quiet ||
             lk_tty_log "Processing $NOUN in parallel"
         FD=$(lk_fd_next) &&
             eval "exec $FD>&2 2>/dev/null" &&
-            ERR_FILE=$(lk_mktemp_file) &&
+            ERR_FILE=$(lk_mktemp) &&
             lk_delete_on_exit "$ERR_FILE" || return
         for REPO in "${REPOS[@]}"; do
             _REPO=$(lk_tty_path "$REPO")
@@ -729,7 +729,7 @@ directory of a working tree" || return
         [ "$ERR_COUNT" -eq 0 ] &&
             lk_tty_success "Command succeeded in $NOUN" ||
             lk_tty_error "Command failed in $ERR_COUNT of $NOUN:" \
-                "$(lk_echo_array ERR_REPOS)"
+                "$(lk_arr ERR_REPOS)"
     }
     _LK_GIT_REPO_ERRORS=(${ERR_REPOS[@]+"${ERR_REPOS[@]}"})
     [ "$ERR_COUNT" -eq 0 ]
@@ -765,7 +765,7 @@ function lk_git_audit_repos() {
     [ ${#LK_GIT_REPOS[@]} -gt 0 ] || lk_git_get_repos LK_GIT_REPOS
     [ ${#LK_GIT_REPOS[@]} -gt 0 ] || lk_warn "no repos found" || return
     NOUN="${#LK_GIT_REPOS[@]} $(lk_plural ${#LK_GIT_REPOS[@]} repo repos)"
-    if ! lk_true SKIP_FETCH; then
+    if ! lk_is_true SKIP_FETCH; then
         lk_tty_list LK_GIT_REPOS "Fetching all remotes:" repo repos
         lk_tty_print
         lk_git_with_repos -py lk_git_fetch ||
@@ -777,16 +777,16 @@ function lk_git_audit_repos() {
     lk_git_with_repos -ty lk_git_audit_repo -s ||
         AUDIT_ERRORS=(${_LK_GIT_REPO_ERRORS[@]+"${_LK_GIT_REPO_ERRORS[@]}"})
     lk_tty_print "Audit complete"
-    lk_true SKIP_FETCH || {
+    lk_is_true SKIP_FETCH || {
         [ ${#FETCH_ERRORS[@]} -eq 0 ] &&
             lk_tty_success "Fetch succeeded in $NOUN" ||
             lk_tty_error "Fetch failed in ${#FETCH_ERRORS[@]} of $NOUN:" \
-                "$(lk_echo_array FETCH_ERRORS)"
+                "$(lk_arr FETCH_ERRORS)"
     }
     [ ${#AUDIT_ERRORS[@]} -eq 0 ] &&
         lk_tty_success "Checks passed in $NOUN" ||
         lk_tty_error "Checks failed in ${#AUDIT_ERRORS[@]} of $NOUN:" \
-            "$(lk_echo_array AUDIT_ERRORS)"
+            "$(lk_arr AUDIT_ERRORS)"
     [[ $((${#FETCH_ERRORS[@]} + ${#AUDIT_ERRORS[@]})) -eq 0 ]]
 }
 
@@ -888,7 +888,7 @@ Usage: $FUNCNAME [-o] [--type=TYPE] NAME VALUE
         ;;
 
     *)
-        REGEX=$(lk_escape_ere "$2") || return
+        REGEX=$(lk_sed_escape "$2") || return
         _lk_git config --local \
             ${ARGS+"${ARGS[@]}"} --get "$1" "$REGEX" >/dev/null ||
             COMMAND=(_lk_git config --local "$@")
@@ -932,7 +932,7 @@ function lk_git_recheckout() {
         COMMIT=$(_lk_git rev-list -1 --oneline HEAD) || return
     lk_tty_detail "Repository:" "$REPO_ROOT"
     lk_tty_detail "HEAD refers to:" "$COMMIT"
-    lk_no_input || lk_confirm \
+    lk_input_is_off || lk_tty_yn \
         "Uncommitted changes will be permanently deleted. Proceed?" N || return
     lk_run_as "${_LK_GIT_USER-}" rm -fv "$REPO_ROOT/.git/index" &&
         _lk_git checkout --force --no-overlay HEAD -- "$REPO_ROOT" &&

@@ -102,7 +102,7 @@ function lk_tty_add_margin() { (
     [ $# -gt 1 ] && ((_MARGIN = $1)) ||
         lk_err "invalid arguments" || return
     shift
-    ((_MARGIN > 0)) && _TTY=$(lk_get_tty) || {
+    ((_MARGIN > 0)) && _TTY=$(lk_writable_tty) || {
         _lk_tty_margin_add "$@"
         return
     }
@@ -307,7 +307,7 @@ function lk_tty_list() {
     _COLUMNS=$(($(lk_tty_columns) - _INDENT - ${_LK_TTY_GROUP:-0} * 4))
     [[ -z ${_ITEMS+1} ]] || {
         _LIST=$(printf '\n%s' "${_ITEMS[@]}")
-        ! lk_command_exists column expand ||
+        ! lk_has column expand ||
             _LIST=$'\n'$(COLUMNS=$((_COLUMNS > 0 ? _COLUMNS : 0)) \
                 column <<<"$_LIST" | expand) || return
     }
@@ -388,7 +388,7 @@ function lk_tty_file() {
         lk_err "file not found: ${1-}" || return
     local IFS MESSAGE2
     unset IFS
-    ! lk_verbose || { MESSAGE2=$(lk_sudo -f ls -ld "$1") &&
+    ! lk_is_v || { MESSAGE2=$(lk_sudo -f ls -ld "$1") &&
         MESSAGE2=${MESSAGE2/"$1"/$LK_BOLD$1$LK_RESET}; } || return
     lk_sudo -f cat "$1" | lk_tty_dump - "$1" "${MESSAGE2-}" "${@:2}"
 }
@@ -427,10 +427,10 @@ function lk_tty_run() {
         case "${1-}" in
         lk_elevate)
             shift
-            lk_root || set -- sudo "$@"
+            lk_user_is_root || set -- sudo "$@"
             break
             ;;
-        lk_sudo | lk_maybe_sudo)
+        lk_sudo | lk_sudo)
             shift
             ! lk_will_sudo || set -- sudo "$@"
             break

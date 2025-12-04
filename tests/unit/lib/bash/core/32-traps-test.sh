@@ -65,7 +65,7 @@ else
 
     function output() {
 
-        if lk_bash_at_least 4; then
+        if lk_bash_is 4; then
 
             cat <<EOF
 Subshell #1: inherited traps only, set +e

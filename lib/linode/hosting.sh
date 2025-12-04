@@ -165,8 +165,8 @@ for FILE_PATH in \
     }
 done
 
-IMAGE_BASE_PACKAGES=$(lk_mktemp_file)
-IMAGE_INITIAL_PACKAGE_STATE=$(lk_mktemp_file)
+IMAGE_BASE_PACKAGES=$(lk_mktemp)
+IMAGE_INITIAL_PACKAGE_STATE=$(lk_mktemp)
 lk_delete_on_exit "$IMAGE_BASE_PACKAGES" "$IMAGE_INITIAL_PACKAGE_STATE"
 lk_apt_marked_manual_list | sort >"$IMAGE_BASE_PACKAGES"
 lk_dpkg_list_installed_versions | sort >"$IMAGE_INITIAL_PACKAGE_STATE"
@@ -186,7 +186,7 @@ LOG_FILE=/var/log/lk-platform-install
 install -m 00640 -g adm /dev/null "$LOG_FILE.log"
 lk_log_start "$LOG_FILE"
 
-if lk_debug; then
+if lk_debug_is_on; then
     install -m 00640 -g adm /dev/null "$LOG_FILE.trace"
     LK_LOG_TRACE_FILE=$LOG_FILE.trace \
         lk_start_trace
@@ -195,7 +195,7 @@ fi
 lk_tty_log "Bootstrapping Ubuntu for hosting"
 lk_tty_print "Checking system state"
 lk_tty_detail "Environment:" "$SCRIPT_ENV"
-! lk_debug ||
+! lk_debug_is_on ||
     lk_tty_detail "Variables:" "$SCRIPT_VARS"
 lk_tty_list_detail - \
     "Pre-installed packages marked as 'manually installed':" \
@@ -222,7 +222,7 @@ done >"$LK_BASE"/etc/packages.conf
 
 eval "$(lk_get_regex LINUX_USERNAME_REGEX)"
 if ADMIN_USERS=($(grep -Eo "$LINUX_USERNAME_REGEX" <<<"$LK_ADMIN_USERS")); then
-    REGEX=$(lk_regex_implode "${ADMIN_USERS[@]}")
+    REGEX=$(lk_ere_implode_args -- "${ADMIN_USERS[@]}")
     ADMIN_USER_KEYS=$(sed -E "/$LK_h$REGEX\$/!d" "$KEYS_FILE")
     HOST_KEYS=$(sed -E "/$LK_h$REGEX\$/d" "$KEYS_FILE")
 else

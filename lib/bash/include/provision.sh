@@ -38,7 +38,7 @@ function lk_symlink_bin() {
     fi
     lk_symlink "$TARGET" "$LN" &&
         return || STATUS=$?
-    lk_verbose 2 || unset V
+    lk_is_v 2 || unset V
     [[ ! -L $LN ]] || [[ -f $LN ]] ||
         lk_sudo rm -f${V+v} -- "$LN" || true
     return "$STATUS"
@@ -124,7 +124,7 @@ function lk_user_in_group() {
 }
 
 function lk_list_user_homes() {
-    if ! lk_is_macos; then
+    if ! lk_system_is_macos; then
         getent passwd | awk -F: -v OFS=$'\t' '{print $1, $6}'
     else
         dscl . list /Users NFSHomeDirectory | awk -v OFS=$'\t' '{print $1, $2}'
@@ -132,7 +132,7 @@ function lk_list_user_homes() {
 }
 
 function lk_list_group_ids() {
-    if ! lk_is_macos; then
+    if ! lk_system_is_macos; then
         getent group | awk -F: -v OFS=$'\t' '{print $1, $3}'
     else
         dscl . list /Groups PrimaryGroupID | awk -v OFS=$'\t' '{print $1, $2}'
@@ -187,11 +187,11 @@ ChrootDirectory %h"
         -v "FIRST=$MATCH(${REGEX[1]}|\"${REGEX[1]}\")$LK_h+(${SFTP_ONLY}|\"${SFTP_ONLY}\")$LK_h*$" \
         -v "BREAK=$MATCH" \
         -f "$LK_BASE/lib/awk/block-replace.awk" "$FILE")
-    ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+    ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
         lk_tty_run_detail -1 lk_elevate systemctl restart ssh.service
     [[ $1 == _* ]] || lk_user_exists "$1" || set -- "_$1" "${@:2}"
     if lk_user_exists "$1"; then
-        lk_confirm "Configure existing user '$1' for SFTP-only access?" Y &&
+        lk_tty_yn "Configure existing user '$1' for SFTP-only access?" Y &&
             lk_tty_run_detail -1 lk_elevate \
                 usermod --shell /bin/false --groups "$SFTP_ONLY" --append "$1"
     else
@@ -231,8 +231,8 @@ function lk_user_bind_dir() {
     }
     shift
     lk_tty_print "Checking bind mounts for user '$1'"
-    lk_command_exists findmnt || lk_warn "command not found: findmnt" || return
-    TEMP=$(lk_mktemp_file) && TEMP2=$(lk_mktemp_file) &&
+    lk_has findmnt || lk_warn "command not found: findmnt" || return
+    TEMP=$(lk_mktemp) && TEMP2=$(lk_mktemp) &&
         lk_delete_on_exit "$TEMP" "$TEMP2" || return
     lk_elevate -f cp /etc/fstab "$TEMP"
     while [ $# -ge 2 ]; do
@@ -250,7 +250,7 @@ function lk_user_bind_dir() {
             lk_elevate test ! "$FSROOT" -ef "$SOURCE" || break
             lk_tty_warning "Already mounted at $TARGET:" \
                 "$(lk_elevate findmnt -no SOURCE -M "$TARGET")"
-            lk_confirm "OK to unmount?" Y &&
+            lk_tty_yn "OK to unmount?" Y &&
                 lk_tty_run_detail -1 lk_elevate umount "$TARGET" || return
         done
         [ -n "$FSROOT" ] || {
@@ -268,7 +268,7 @@ END { maybe_print() }' "$TEMP" >"$TEMP2" && cp "$TEMP2" "$TEMP" || return
     done
     lk_elevate findmnt -F "$TEMP" --verify &>"$TEMP2" ||
         lk_pass cat "$TEMP2" >&2 ||
-        lk_pass lk_delete_on_exit_withdraw "$TEMP" ||
+        lk_pass lk_on_exit_undo_delete "$TEMP" ||
         lk_warn "invalid fstab: $TEMP" || return
     lk_file_replace -m -f "$TEMP" /etc/fstab
     for TARGET in ${TARGETS+"${TARGETS[@]}"}; do
@@ -282,7 +282,7 @@ END { maybe_print() }' "$TEMP" >"$TEMP2" && cp "$TEMP2" "$TEMP" || return
 # necessary, then extend the sudo timeout in the background every INTERVAL
 # seconds (240 by default) until the (sub)shell exits or `sudo -nv` fails.
 function lk_sudo_keep_alive() {
-    ! lk_root || return 0
+    ! lk_user_is_root || return 0
     # Use `sudo bash -c 'exec true'` because `sudo -v` prompts NOPASSWD:ALL
     # users for a password, and succeeds regardless of the user's privileges
     sudo bash -c 'exec true' && lk_set_bashpid || return
@@ -317,7 +317,7 @@ EOF
 # allowing them to run sudo commands without being prompted for a password.
 # Silently return false if the current user can't run commands via sudo.
 function lk_sudo_nopasswd_offer() {
-    ! lk_root || lk_warn "cannot run as root" || return
+    ! lk_user_is_root || lk_warn "cannot run as root" || return
     local FILE=/etc/sudoers.d/nopasswd-$USER
     ! sudo -n test -e "$FILE" 2>/dev/null || return 0
     lk_can_sudo install || return
@@ -559,7 +559,7 @@ function lk_settings_persist() {
     ) >"$_FILE" || return
     lk_file_replace -m -f "$_FILE" "$2" &&
         lk_file_backup -m ${DELETE+"${DELETE[@]}"} &&
-        lk_maybe_sudo rm -f -- ${DELETE+"${DELETE[@]}"}
+        lk_sudo rm -f -- ${DELETE+"${DELETE[@]}"}
 }
 
 function lk_node_is_router() {
@@ -729,7 +729,7 @@ function lk_ssh_run_on_host() {
         -o ControlPath="/tmp/.${FUNCNAME}_%C-%u"
         -o ControlPersist=60
     )
-    lk_debug || ARGS+=(-o LogLevel=QUIET)
+    lk_debug_is_on || ARGS+=(-o LogLevel=QUIET)
     [[ ! $HOST =~ :[0-9]+$ ]] || {
         ARGS+=(-o Port="${HOST##*:}")
         HOST=${HOST%:*}
@@ -769,7 +769,7 @@ printf "%s/%s\n", $2, $4
 }
 }
 EOF
-    if lk_command_exists ip; then
+    if lk_has ip; then
         ip addr
     else
         ifconfig
@@ -943,19 +943,19 @@ function lk_dns_resolve_name_from_ns() {
         awk 'NR == 1 { sub(/\.$/, "", $5); print $5 }') || return
     _LK_DIG_ARGS=(+norecurse)
     _LK_DNS_SERVER=$NAMESERVER
-    ! lk_verbose 2 || {
+    ! lk_is_v 2 || {
         lk_tty_detail "Using name server:" "$NAMESERVER"
         lk_tty_detail "Looking up A and AAAA records for:" "$1"
     }
     IP=($(lk_dns_get_records +VALUE -A,AAAA "$1")) || return
     if [[ ${#IP[@]} -eq 0 ]]; then
-        ! lk_verbose 2 || {
+        ! lk_is_v 2 || {
             lk_tty_detail "No A or AAAA records returned"
             lk_tty_detail "Looking up CNAME record for:" "$1"
         }
         CNAME=($(lk_dns_get_records +VALUE -CNAME "$1")) || return
         if [[ ${#CNAME[@]} -eq 1 ]]; then
-            ! lk_verbose 2 ||
+            ! lk_is_v 2 ||
                 lk_tty_detail "CNAME value from $NAMESERVER for $1:" "$CNAME"
             unset _LK_DIG_ARGS _LK_DNS_SERVER
             IP=($(lk_dns_get_records +VALUE -A,AAAA "${CNAME%.}")) || return
@@ -963,7 +963,7 @@ function lk_dns_resolve_name_from_ns() {
     fi
     [[ ${#IP[@]} -gt 0 ]] ||
         lk_warn "could not resolve $1${_LK_DNS_SERVER+: $NAMESERVER}" || return
-    ! lk_verbose 2 ||
+    ! lk_is_v 2 ||
         lk_tty_detail \
             "A and AAAA values${_LK_DNS_SERVER+ from $NAMESERVER} for $1:" \
             "$(lk_arr IP)"
@@ -978,7 +978,7 @@ function lk_dns_resolve_names() {
     local USE_DNS
     unset USE_DNS
     [ "${1-}" != -d ] || { USE_DNS= && shift; }
-    case "${USE_DNS-$(lk_first_command getent dscacheutil)}" in
+    case "${USE_DNS-$(lk_runnable getent dscacheutil)}" in
     getent)
         { getent ahosts "$@" || [ $# -eq 2 ]; } | awk '
 $3          { host = $3 }
@@ -1149,7 +1149,7 @@ function lk_postfix_apply_tls_certificate() {
 function _lk_openssl_verify() { (
     # Disable xtrace if its output would break the test below
     [[ $- != *x* ]] ||
-        { lk_bash_at_least 4 1 && [ "${BASH_XTRACEFD:-2}" -gt 2 ]; } ||
+        { lk_bash_is 4 1 && [ "${BASH_XTRACEFD:-2}" -gt 2 ]; } ||
         set +x
     # In case openssl is too old to exit non-zero when `verify` fails, return
     # false if there are multiple lines of output (NB: some versions send errors
@@ -1172,7 +1172,7 @@ function lk_ssl_is_cert_self_signed() {
 function lk_ssl_verify_cert() {
     local SS_OK
     [ "${1-}" != -s ] || { SS_OK=1 && shift; }
-    lk_files_exist "$@" || lk_usage "\
+    lk_test_all_f "$@" || lk_usage "\
 Usage: $FUNCNAME [-s] CERT_FILE [KEY_FILE [CA_FILE]]" || return
     local CERT=$1 KEY=${2-} CA=${3-} CERT_MODULUS KEY_MODULUS
     # If no CA file has been provided but CERT contains multiple certificates,
@@ -1203,17 +1203,17 @@ Usage: $FUNCNAME [-s] CERT_FILE [KEY_FILE [CA_FILE]]" || return
 # lk_ssl_create_self_signed_cert DOMAIN...
 function lk_ssl_create_self_signed_cert() {
     [ $# -gt 0 ] || lk_usage "Usage: $FUNCNAME DOMAIN..." || return
-    lk_test lk_is_fqdn "$@" || lk_warn "invalid arguments" || return
+    lk_test_all lk_is_fqdn "$@" || lk_warn "invalid arguments" || return
     lk_tty_print "Creating a self-signed TLS certificate for:" \
         $'\n'"$(printf '%s\n' "$@")"
     local CA_FILE=${LK_SSL_CA:+$1-${LK_SSL_CA##*/}}
-    lk_no_input || {
+    lk_input_is_off || {
         local FILES=("$1".{key,csr,cert} ${CA_FILE:+"$CA_FILE"})
         lk_remove_missing_or_empty FILES || return
         [ ${#FILES[@]} -eq 0 ] || {
             lk_tty_detail "Files to overwrite:" \
                 $'\n'"$(printf '%s\n' "${FILES[@]}")"
-            lk_confirm "Proceed?" Y || return
+            lk_tty_yn "Proceed?" Y || return
         }
     }
     local CONF
@@ -1256,10 +1256,10 @@ function lk_ssl_install_ca_certificate() {
     local DIR COMMAND CERT FILE \
         _LK_FILE_REPLACE_NO_CHANGE=${LK_FILE_REPLACE_NO_CHANGE-}
     unset LK_FILE_REPLACE_NO_CHANGE
-    DIR=$(lk_first_file \
+    DIR=$(lk_readable \
         /usr/local/share/ca-certificates/ \
         /etc/ca-certificates/trust-source/anchors/) &&
-        COMMAND=$(LK_SUDO= && lk_first_command \
+        COMMAND=$(LK_SUDO= && lk_runnable \
             update-ca-certificates \
             update-ca-trust) ||
         lk_warn "CA certificate store not found" || return
@@ -1271,7 +1271,7 @@ function lk_ssl_install_ca_certificate() {
     lk_install -m 00644 "$FILE" &&
         LK_FILE_NO_DIFF=1 \
             lk_file_replace -mf "$1" "$FILE" || return
-    if lk_false LK_FILE_REPLACE_NO_CHANGE; then
+    if lk_is_false LK_FILE_REPLACE_NO_CHANGE; then
         lk_elevate "$COMMAND"
     else
         LK_FILE_REPLACE_NO_CHANGE=$_LK_FILE_REPLACE_NO_CHANGE
@@ -1466,7 +1466,7 @@ function lk_certbot_maybe_install() {
     { [[ ${1-} != -w ]] || { ARGS+=("$1" "$2") && shift 2; }; } &&
         lk_is_fqdn "$@" || lk_warn "invalid arguments" || return
     ! LK_CERTBOT_INSTALLED=$(lk_certbot_list "$@" | grep .) || return 0
-    lk_test lk_node_is_host "$@" || return 0
+    lk_test_all lk_node_is_host "$@" || return 0
     _LK_CERTBOT_IGNORE_DNS=1 lk_certbot_install ${ARGS+"${ARGS[@]}"} "$@" &&
         LK_CERTBOT_INSTALLED=$(lk_certbot_list "$@" | grep .)
 }
@@ -2019,7 +2019,7 @@ function lk_maybe_trace() {
     }
     # Remove "env" from sudo command
     [[ $- != *x* ]] || ! lk_will_sudo || unset "COMMAND[4]"
-    ! lk_true OUTPUT ||
+    ! lk_is_true OUTPUT ||
         COMMAND=(lk_quote_args "${COMMAND[@]}")
     "${COMMAND[@]}"
 }
@@ -2027,10 +2027,10 @@ function lk_maybe_trace() {
 function lk_configure_locales() {
     local IFS LK_SUDO=1 LOCALES _LOCALES FILE _FILE
     unset IFS
-    lk_is_linux || lk_warn "platform not supported" || return
+    lk_system_is_linux || lk_warn "platform not supported" || return
     LOCALES=(${LK_NODE_LOCALES-} en_US.UTF-8)
     _LOCALES=$(lk_arr LOCALES |
-        lk_escape_ere |
+        lk_sed_escape |
         lk_implode_input "|")
     [ ${#LOCALES[@]} -lt 2 ] || _LOCALES="($_LOCALES)"
     FILE=${_LK_PROVISION_ROOT-}/etc/locale.gen
@@ -2043,7 +2043,7 @@ function lk_configure_locales() {
     unset LK_FILE_REPLACE_NO_CHANGE
     lk_file_keep_original "$FILE" &&
         lk_file_replace -i "^$LK_h*(#|\$)" "$FILE" "$_FILE" || return
-    ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+    ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
         [ -n "${_LK_PROVISION_ROOT-}" ] ||
         lk_elevate locale-gen || return
 
@@ -2061,7 +2061,7 @@ function lk_dir_set_modes() {
     LK_USAGE="\
 Usage: $FUNCNAME DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..."
     [ $# -ge 4 ] && ! ((($# - 1) % 3)) || lk_usage || return
-    lk_maybe_sudo test -d "$1" || lk_warn "not a directory: $1" || return
+    lk_sudo test -d "$1" || lk_warn "not a directory: $1" || return
     DIR=$(lk_realpath "$1") || return
     shift
     while [ $# -gt 0 ]; do
@@ -2077,18 +2077,18 @@ Usage: $FUNCNAME DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..."
         PRUNE+=("${1%/}")
         shift 3
     done
-    LOG_FILE=$(lk_mktemp_file) || return
-    ! lk_verbose || lk_tty_print \
+    LOG_FILE=$(lk_mktemp) || return
+    ! lk_is_v || lk_tty_print \
         "Updating file modes in $(lk_tty_path "$DIR")"
     for i in "${!MATCH[@]}"; do
         [ -n "${DIR_MODE[$i]:+1}${FILE_MODE[$i]:+1}" ] || continue
-        ! lk_verbose 2 || lk_tty_print "Checking:" "${MATCH[$i]}"
+        ! lk_is_v 2 || lk_tty_print "Checking:" "${MATCH[$i]}"
         CHANGES=0
         for TYPE in DIR_MODE FILE_MODE; do
             MODE=${TYPE}"[$i]"
             MODE=${!MODE}
             [ -n "$MODE" ] || continue
-            ! lk_verbose 2 || lk_tty_detail "$([ "$TYPE" = DIR_MODE ] &&
+            ! lk_is_v 2 || lk_tty_detail "$([ "$TYPE" = DIR_MODE ] &&
                 echo Directory ||
                 echo File) mode:" "$MODE"
             ARGS=(-regextype posix-egrep)
@@ -2098,7 +2098,7 @@ Usage: $FUNCNAME DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..."
             [ ${#_PRUNE[@]} -eq 0 ] ||
                 ARGS+=(! \(
                     -type d
-                    -regex "$(lk_regex_implode "${_PRUNE[@]}")"
+                    -regex "$(lk_ere_implode_args -- "${_PRUNE[@]}")"
                     -prune \))
             ARGS+=(-type "$(lk_lower "${TYPE:0:1}")")
             [ "$TYPE" = DIR_MODE ] || {
@@ -2107,7 +2107,7 @@ Usage: $FUNCNAME DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..."
                 )
                 [ ${#_EXCLUDE[@]} -eq 0 ] ||
                     ARGS+=(
-                        ! -regex "$(lk_regex_implode "${_EXCLUDE[@]}")"
+                        ! -regex "$(lk_ere_implode_args -- "${_EXCLUDE[@]}")"
                     )
             }
             ARGS+=(! -perm "${MODE//+/-}" -regex "${MATCH[$i]}" -print0)
@@ -2117,15 +2117,15 @@ Usage: $FUNCNAME DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..."
                 tee -a "$LOG_FILE" | wc -l) || return
             ((CHANGES += _CHANGES)) || true
         done
-        ! lk_verbose 2 || lk_tty_detail "Changes:" "$LK_BOLD$CHANGES"
+        ! lk_is_v 2 || lk_tty_detail "Changes:" "$LK_BOLD$CHANGES"
         ((TOTAL += CHANGES)) || true
     done
-    ! lk_verbose && ! ((TOTAL)) ||
-        $(lk_verbose &&
+    ! lk_is_v && ! ((TOTAL)) ||
+        $(lk_is_v &&
             echo "lk_tty_print" ||
             echo "lk_tty_detail") \
             "$TOTAL file $(lk_plural \
-                "$TOTAL" mode modes) updated$(lk_verbose ||
+                "$TOTAL" mode modes) updated$(lk_is_v ||
                     echo " in $(lk_tty_path "$DIR")")"
     ! ((TOTAL)) &&
         lk_delete_on_exit "$LOG_FILE" ||
@@ -2135,8 +2135,8 @@ Usage: $FUNCNAME DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]..."
 # lk_ssh_set_option OPTION VALUE [FILE]
 function lk_ssh_set_option() {
     local OPTION VALUE FILE=${3:-$LK_CONF_OPTION_FILE}
-    OPTION=$(lk_regex_case_insensitive "$(lk_escape_ere "$1")")
-    VALUE=$(lk_escape_ere "$2")
+    OPTION=$(lk_regex_case_insensitive "$(lk_sed_escape "$1")")
+    VALUE=$(lk_sed_escape "$2")
     lk_option_set "$FILE" \
         "$1 $2" \
         "^$LK_h*$OPTION($LK_h+|$LK_h*=$LK_h*)$VALUE$LK_h*\$" \
@@ -2218,7 +2218,7 @@ function lk_ssh_get_public_key() {
         echo "$KEY"
     else
         # ssh-keygen doesn't allow fingerprinting from a file descriptor
-        KEY_FILE=$(lk_mktemp_file) &&
+        KEY_FILE=$(lk_mktemp) &&
             lk_delete_on_exit "$KEY_FILE" &&
             cat <<<"$KEY" >"$KEY_FILE" || return
         ssh-keygen -y -f "$KEY_FILE" || EXIT_STATUS=$?
@@ -2285,7 +2285,7 @@ Usage: $FUNCNAME [-t] NAME HOST[:PORT] USER [KEY_FILE [JUMP_HOST_NAME]]" ||
         PORT=${BASH_REMATCH[2]}
     }
     JUMP_HOST_NAME=${JUMP_HOST_NAME:+$SSH_PREFIX${JUMP_HOST_NAME#"$SSH_PREFIX"}}
-    ! lk_true TEST || {
+    ! lk_is_true TEST || {
         if [ -z "$JUMP_HOST_NAME" ]; then
             lk_ssh_is_reachable "$HOST" "${PORT:-22}" ||
                 { _HOST=$(ssh -G "$HOST" | awk '$1 == "hostname" { print $2 }' | grep .) &&
@@ -2420,7 +2420,7 @@ EOF
             shopt -s nullglob
             chmod 00600 \
                 "$h/.ssh/"{config,"$SSH_PREFIX"{config.d,keys}/*}
-            ! lk_root ||
+            ! lk_user_is_root ||
                 chown "$OWNER:$GROUP" \
                     "$h/.ssh/"{config,"$SSH_PREFIX"{config.d,keys}/*}
         )
@@ -2481,7 +2481,7 @@ function lk_hosts_file_add() {
         [[ $1 != -r ]] || { REPLACE=1 && shift; }
         [[ $1 != -b ]] || { BLOCK=$2 && shift 2; }
     done
-    BLOCK=${BLOCK:-$(lk_caller_name)} &&
+    BLOCK=${BLOCK:-$(lk_caller)} &&
         BLOCK_RE=$(lk_ere_escape "$BLOCK") || return
     if (($#)); then
         _lk_hosts_file_add < <(echo "$@")
@@ -2495,7 +2495,7 @@ function lk_hosts_file_add() {
     else
         lk_tty_print "You do not have permission to edit" "$FILE"
         lk_tty_detail "Updated hosts file written to:" "$TEMP"
-        lk_delete_on_exit_withdraw "$TEMP"
+        lk_on_exit_undo_delete "$TEMP"
         return
     fi
     lk_file_replace -f "$TEMP" "$FILE"
@@ -2520,7 +2520,7 @@ function lk_node_is_host() {
         <(lk_arr NODE_IP | sort -u)
 }
 
-if lk_is_macos; then
+if lk_system_is_macos; then
     function lk_tcp_listening_ports() {
         netstat -nap tcp |
             awk '$NF == "LISTEN" { sub(".*\\.", "", $4); print $4 }' |
@@ -2549,7 +2549,7 @@ function lk_tcp_is_reachable() {
 function _lk_option_check() {
     { { [ $# -gt 0 ] &&
         echo -n "$1" ||
-        lk_maybe_sudo cat "$FILE"; } |
+        lk_sudo cat "$FILE"; } |
         grep -E "$CHECK_REGEX"; } &>/dev/null
 }
 
@@ -2600,10 +2600,10 @@ Usage: $FUNCNAME [-s SECTION] [-p] FILE SETTING CHECK_REGEX [REPLACE_REGEX...]"
     SETTING=$2
     CHECK_REGEX=$3
     ! _lk_option_check || return 0
-    lk_maybe_sudo test -e "$FILE" ||
+    lk_sudo test -e "$FILE" ||
         { lk_install -d -m 00755 "${FILE%/*}" &&
             lk_install -m 00644 "$FILE"; } || return
-    lk_maybe_sudo test -f "$FILE" || lk_warn "file not found: $FILE" || return
+    lk_sudo test -f "$FILE" || lk_warn "file not found: $FILE" || return
     if [ -z "${SECTION-}" ]; then
         lk_file_get_text "$FILE" _FILE
     else
@@ -2613,7 +2613,7 @@ Usage: $FUNCNAME [-s SECTION] [-p] FILE SETTING CHECK_REGEX [REPLACE_REGEX...]"
             "$FILE")$'\n'
     fi || return
     [ "${PRESERVE+1}" = 1 ] ||
-        REPLACE_WITH=$(lk_escape_ere_replace "$SETTING")
+        REPLACE_WITH=$(lk_sed_escape_replace "$SETTING")
     shift 3
     for REGEX in "$@"; do
         __FILE=$(gnu_sed -E \
@@ -2635,9 +2635,9 @@ function lk_conf_set_option() {
     local SECTION OPTION VALUE DELIM FILE
     unset SECTION
     [ "${1-}" != -s ] || { SECTION=$2 && shift 2 || return; }
-    OPTION=$(lk_escape_ere "$1")
-    VALUE=$(lk_escape_ere "$2")
-    DELIM=$(lk_escape_ere "$(lk_trim <<<"${_LK_CONF_DELIM-=}")")
+    OPTION=$(lk_sed_escape "$1")
+    VALUE=$(lk_sed_escape "$2")
+    DELIM=$(lk_sed_escape "$(lk_trim <<<"${_LK_CONF_DELIM-=}")")
     DELIM=${DELIM:-$_LK_CONF_DELIM}
     FILE=${3:-$LK_CONF_OPTION_FILE}
     lk_option_set ${SECTION+-s "$SECTION"} \
@@ -2653,7 +2653,7 @@ function lk_conf_enable_row() {
     local SECTION ROW FILE
     unset SECTION
     [ "${1-}" != -s ] || { SECTION=$2 && shift 2 || return; }
-    ROW=$(lk_regex_expand_whitespace "$(lk_escape_ere "$1")")
+    ROW=$(lk_regex_expand_whitespace "$(lk_sed_escape "$1")")
     FILE=${2:-$LK_CONF_OPTION_FILE}
     lk_option_set ${SECTION+-s "$SECTION"} \
         "$FILE" \
@@ -2666,8 +2666,8 @@ function lk_conf_enable_row() {
 # lk_php_set_option OPTION VALUE [FILE]
 function lk_php_set_option() {
     local OPTION VALUE FILE=${3:-$LK_CONF_OPTION_FILE}
-    OPTION=$(lk_escape_ere "$1")
-    VALUE=$(lk_escape_ere "$2")
+    OPTION=$(lk_sed_escape "$1")
+    VALUE=$(lk_sed_escape "$2")
     lk_option_set "$FILE" \
         "$1=$2" \
         "^$LK_h*$OPTION$LK_h*=$LK_h*$VALUE$LK_h*\$" \
@@ -2678,8 +2678,8 @@ function lk_php_set_option() {
 # lk_php_enable_option OPTION VALUE [FILE]
 function lk_php_enable_option() {
     local OPTION VALUE FILE=${3:-$LK_CONF_OPTION_FILE}
-    OPTION=$(lk_escape_ere "$1")
-    VALUE=$(lk_escape_ere "$2")
+    OPTION=$(lk_sed_escape "$1")
+    VALUE=$(lk_sed_escape "$2")
     lk_option_set "$FILE" \
         "$1=$2" \
         "^$LK_h*$OPTION$LK_h*=$LK_h*$VALUE$LK_h*\$" \
@@ -2689,8 +2689,8 @@ function lk_php_enable_option() {
 # lk_php_disable_option OPTION [VALUE [FILE]]
 function lk_php_disable_option() {
     local OPTION VALUE SETTING FILE=${3:-$LK_CONF_OPTION_FILE}
-    OPTION=$(lk_escape_ere "$1")
-    VALUE=${2:+$(lk_escape_ere "$2")}
+    OPTION=$(lk_sed_escape "$1")
+    VALUE=${2:+$(lk_sed_escape "$2")}
     if [[ -n ${VALUE:+1} ]]; then
         lk_option_set "$FILE" \
             ";$1=$2" \
@@ -2709,9 +2709,9 @@ function lk_php_disable_option() {
 # lk_httpd_set_option OPTION VALUE [FILE]
 function lk_httpd_set_option() {
     local OPTION VALUE REPLACE_WITH FILE=${3:-$LK_CONF_OPTION_FILE}
-    OPTION=$(lk_regex_case_insensitive "$(lk_escape_ere "$1")")
-    VALUE=$(lk_regex_expand_whitespace "$(lk_escape_ere "$2")")
-    REPLACE_WITH=$(lk_escape_ere_replace "$1 $2")
+    OPTION=$(lk_regex_case_insensitive "$(lk_sed_escape "$1")")
+    VALUE=$(lk_regex_expand_whitespace "$(lk_sed_escape "$2")")
+    REPLACE_WITH=$(lk_sed_escape_replace "$1 $2")
     lk_option_set -p "$FILE" \
         "$1 $2" \
         "^$LK_h*$OPTION$LK_h+$VALUE$LK_h*\$" \
@@ -2722,9 +2722,9 @@ function lk_httpd_set_option() {
 # lk_httpd_enable_option OPTION VALUE [FILE]
 function lk_httpd_enable_option() {
     local OPTION VALUE REPLACE_WITH FILE=${3:-$LK_CONF_OPTION_FILE}
-    OPTION=$(lk_regex_case_insensitive "$(lk_escape_ere "$1")")
-    VALUE=$(lk_regex_expand_whitespace "$(lk_escape_ere "$2")")
-    REPLACE_WITH=$(lk_escape_ere_replace "$1 $2")
+    OPTION=$(lk_regex_case_insensitive "$(lk_sed_escape "$1")")
+    VALUE=$(lk_regex_expand_whitespace "$(lk_sed_escape "$2")")
+    REPLACE_WITH=$(lk_sed_escape_replace "$1 $2")
     lk_option_set -p "$FILE" \
         "$1 $2" \
         "^$LK_h*$OPTION$LK_h+$VALUE$LK_h*\$" \
@@ -2734,8 +2734,8 @@ function lk_httpd_enable_option() {
 # lk_httpd_remove_option OPTION VALUE [FILE]
 function lk_httpd_remove_option() {
     local OPTION VALUE FILE=${3:-$LK_CONF_OPTION_FILE} _FILE
-    OPTION=$(lk_regex_case_insensitive "$(lk_escape_ere "$1")")
-    VALUE=$(lk_regex_expand_whitespace "$(lk_escape_ere "$2")")
+    OPTION=$(lk_regex_case_insensitive "$(lk_sed_escape "$1")")
+    VALUE=$(lk_regex_expand_whitespace "$(lk_sed_escape "$2")")
     _FILE=$(sed -E "/^$LK_h*$OPTION$LK_h+$VALUE$LK_h*\$/d" "$FILE") &&
         lk_file_replace -l "$FILE" "$_FILE"
 }
@@ -2743,9 +2743,9 @@ function lk_httpd_remove_option() {
 # lk_squid_set_option OPTION VALUE [FILE]
 function lk_squid_set_option() {
     local OPTION VALUE REPLACE_WITH REGEX FILE=${3:-$LK_CONF_OPTION_FILE}
-    OPTION=$(lk_escape_ere "$1")
-    VALUE=$(lk_regex_expand_whitespace "$(lk_escape_ere "$2")")
-    REPLACE_WITH=$(lk_escape_ere_replace "$1 $2")
+    OPTION=$(lk_sed_escape "$1")
+    VALUE=$(lk_regex_expand_whitespace "$(lk_sed_escape "$2")")
+    REPLACE_WITH=$(lk_sed_escape_replace "$1 $2")
     REGEX="$OPTION($LK_h+([^#[:space:]]|#$LK_H)$LK_H*)*($LK_h+#$LK_h+.*)?"
     lk_option_set -p "$FILE" \
         "$1 $2" \
@@ -2758,8 +2758,8 @@ function lk_squid_set_option() {
 function _lk_crontab() {
     local REGEX="${1:+.*$1.*}" ADD_COMMAND=${2-} TYPE=${2:+a}${1:+r} \
         CRONTAB NEW= NEW_CRONTAB
-    lk_command_exists crontab || lk_warn "command not found: crontab" || return
-    CRONTAB=$(lk_maybe_sudo crontab -l 2>/dev/null) &&
+    lk_has crontab || lk_warn "command not found: crontab" || return
+    CRONTAB=$(lk_sudo crontab -l 2>/dev/null) &&
         unset NEW ||
         CRONTAB=
     [ "$TYPE" != ar ] ||
@@ -2791,7 +2791,7 @@ function _lk_crontab() {
     if [ -z "$NEW_CRONTAB" ]; then
         [ -n "${NEW+1}" ] || {
             lk_tty_print "Removing empty crontab for user '$(lk_me)'"
-            lk_maybe_sudo crontab -r
+            lk_sudo crontab -r
         }
     else
         [ "$NEW_CRONTAB" = "$CRONTAB" ] || {
@@ -2800,7 +2800,7 @@ function _lk_crontab() {
                 <([ -z "$CRONTAB" ] || cat <<<"$CRONTAB") \
                 <(cat <<<"$NEW_CRONTAB") \
                 "${NEW+Creating}${NEW-Updating} crontab for user '$(lk_me)'"
-            lk_maybe_sudo crontab - <<<"$NEW_CRONTAB"
+            lk_sudo crontab - <<<"$NEW_CRONTAB"
         }
     fi
 }
@@ -2829,7 +2829,7 @@ function lk_crontab_remove_command() {
 
 # lk_crontab_get REGEX
 function lk_crontab_get() {
-    lk_maybe_sudo crontab -l 2>/dev/null | grep -E "${1-}"
+    lk_sudo crontab -l 2>/dev/null | grep -E "${1-}"
 }
 
 # lk_system_memory [POWER]
@@ -2841,12 +2841,12 @@ function lk_crontab_get() {
 # - 3 = GiB (default)
 function lk_system_memory() {
     local POWER=${1:-3}
-    if lk_is_linux; then
+    if lk_system_is_linux; then
         lk_require_output \
             awk -v "p=$((POWER - 1))" \
             '/^MemTotal\W/{print int($2/1024^p)}' \
             /proc/meminfo
-    elif lk_is_macos; then
+    elif lk_system_is_macos; then
         sysctl -n hw.memsize |
             lk_require_output \
                 awk -v "p=$POWER" '{print int($1/1024^p)}'
@@ -2860,12 +2860,12 @@ function lk_system_memory() {
 # Output available memory in units of 1024 ^ POWER bytes (see lk_system_memory).
 function lk_system_memory_free() {
     local POWER=${1:-3}
-    if lk_is_linux; then
+    if lk_system_is_linux; then
         lk_require_output \
             awk -v "p=$((POWER - 1))" \
             '/^MemAvailable\W/{print int($2/1024^p)}' \
             /proc/meminfo
-    elif lk_is_macos; then
+    elif lk_system_is_macos; then
         vm_stat |
             lk_require_output \
                 awk -v "p=$POWER" \

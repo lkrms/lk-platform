@@ -2,7 +2,7 @@
 
 . lk-bash-load.sh || exit
 
-OPEN=$(lk_first_command xdg-open open) ||
+OPEN=$(lk_runnable xdg-open open) ||
     lk_die "command not found: open"
 
 DIR=${LK_NOTE_DIR:-~/Documents/Notes}

@@ -7,7 +7,7 @@
 # with a space between each argument.
 function lk_hash() {
     _LK_HASH_COMMAND=${_LK_HASH_COMMAND:-${LK_HASH_COMMAND:-$(
-        lk_first_command xxhsum shasum md5sum md5
+        lk_runnable xxhsum shasum md5sum md5
     )}} || lk_err "checksum command not found" || return
     if [ $# -gt 0 ]; then
         local IFS
@@ -20,7 +20,7 @@ function lk_hash() {
 
 function lk_md5() {
     local _LK_HASH_COMMAND
-    _LK_HASH_COMMAND=$(lk_first_command md5sum md5) ||
+    _LK_HASH_COMMAND=$(lk_runnable md5sum md5) ||
         lk_err "md5 command not found" || return
     lk_hash "$@"
 } #### Reviewed: 2021-07-15

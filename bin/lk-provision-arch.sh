@@ -57,7 +57,7 @@ fi
 function service_apply() {
     local i _ERRORS=${#ERRORS[@]}
     lk_tty_print "Checking services"
-    lk_is_bootstrap || ! lk_true DAEMON_RELOAD ||
+    lk_is_bootstrap || ! lk_is_true DAEMON_RELOAD ||
         lk_tty_run_detail sudo systemctl daemon-reload ||
         ERRORS+=("Command failed: systemctl daemon-reload")
     [ ${#SERVICE_ENABLE[@]} -eq 0 ] ||
@@ -232,7 +232,7 @@ lk_start_trace
         IF_PREFIX=en
         IF_ARRAY=ETHERNET
         # Reverse the order to minimise *.nmconnection renaming collisions
-        for i in $(lk_echo_args "${!ETHERNET_NOW[@]}" | tac); do
+        for i in $(lk_args "${!ETHERNET_NOW[@]}" | tac); do
             process_interface
             FILE=$NM_DIR/$IF_NAME$NM_EXT
             [ "$IF" = "$IF_NAME" ] || {
@@ -318,7 +318,7 @@ lk_start_trace
     _FILE=$(lk_arr UDEV_RULES)
     lk_install -m 00644 "$FILE"
     lk_file_replace "$FILE" "$_FILE"
-    if ! lk_is_bootstrap && lk_false LK_FILE_REPLACE_NO_CHANGE; then
+    if ! lk_is_bootstrap && lk_is_false LK_FILE_REPLACE_NO_CHANGE; then
         lk_systemctl_start NetworkManager
         if [ ${#IF_RENAME[@]} -gt 0 ]; then
             lk_maybe_trace bash -c "$(
@@ -375,7 +375,7 @@ lk_start_trace
             lk_file_replace -f "$_FILE" "$FILE"
         fi
     done
-    ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+    ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
         lk_tty_run_detail sudo udevadm control --reload
 
     if [ -n "${LK_NODE_HOSTNAME-}" ]; then
@@ -447,13 +447,13 @@ $LK_NODE_HOSTNAME" &&
     unset LK_FILE_REPLACE_NO_CHANGE
     for FILE in default.conf \
         $(! lk_node_is_router || echo router.conf) \
-        $(lk_is_virtual || echo sysrq.conf); do
+        $(lk_system_is_vm || echo sysrq.conf); do
         TARGET=/etc/sysctl.d/90-${FILE/default/${LK_PATH_PREFIX}default}
         FILE=$LK_BASE/share/sysctl.d/$FILE
         lk_install -m 00644 "$TARGET"
         lk_file_replace -f "$FILE" "$TARGET"
     done
-    ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+    ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
         sudo sysctl --system
 
     if lk_pac_installed tlp; then
@@ -476,7 +476,7 @@ $LK_NODE_HOSTNAME" &&
             NetworkManager-dispatcher "Network Manager dispatcher"
             tlp "TLP"
         )
-        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
             SERVICE_RESTART+=(tlp)
     fi
 
@@ -490,7 +490,7 @@ $LK_NODE_HOSTNAME" &&
     SERVICE_ENABLE+=(
         setterm-enable-blanking "setterm blanking"
     )
-    ! lk_false LK_FILE_REPLACE_NO_CHANGE || {
+    ! lk_is_false LK_FILE_REPLACE_NO_CHANGE || {
         DAEMON_RELOAD=1
         SERVICE_RESTART+=(setterm-enable-blanking)
     }
@@ -505,7 +505,7 @@ $LK_NODE_HOSTNAME" &&
         SERVICE_ENABLE+=(
             fstrim.timer "fstrim"
         )
-        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
             DAEMON_RELOAD=1
     fi
 
@@ -526,7 +526,7 @@ $LK_NODE_HOSTNAME" &&
                 "$FILE"
     )
     lk_file_replace "$FILE" "$_FILE"
-    ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+    ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
         SERVICE_RESTART+=(ntpd)
     SERVICE_ENABLE+=(
         ntpd "NTP"
@@ -542,7 +542,7 @@ $LK_NODE_HOSTNAME" &&
     SERVICE_ENABLE+=(
         sshd "SSH server"
     )
-    ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+    ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
         SERVICE_RESTART+=(sshd)
 
     ! lk_pac_installed kernel-modules-hook ||
@@ -556,7 +556,7 @@ $LK_NODE_HOSTNAME" &&
         lk_tty_print "Checking boot loader"
         unset LK_FILE_REPLACE_NO_CHANGE
         lk_arch_configure_grub
-        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
             sudo update-grub --install
     fi
 
@@ -566,18 +566,18 @@ $LK_NODE_HOSTNAME" &&
         lk_system_has_amd_graphics; then
         lk_tty_print "Checking" "$FILE"
         if ! grep -Eq '^MODULES=(.*\<amdgpu\>.*)' "$FILE"; then
-            TEMP_FILE=$(lk_mktemp_file)
+            TEMP_FILE=$(lk_mktemp)
             lk_delete_on_exit "$TEMP_FILE"
             (
                 unset MODULES
                 . "$FILE"
                 MODULES+=(amdgpu)
-                sed -E 's/^(MODULES=\().*(\))/\1'"$(lk_escape_ere_replace \
+                sed -E 's/^(MODULES=\().*(\))/\1'"$(lk_sed_escape_replace \
                     "$(lk_quote_arr MODULES)")"'\2/' "$FILE"
             ) >"$TEMP_FILE"
             lk_file_keep_original "$FILE"
             lk_file_replace -f "$TEMP_FILE" "$FILE"
-            ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+            ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
                 sudo mkinitcpio -P
         fi
     fi
@@ -607,7 +607,7 @@ $LK_NODE_HOSTNAME" &&
     unset LK_FILE_KEEP_ORIGINAL
     LK_SUDO=1
 
-    if lk_command_exists aur ||
+    if lk_has aur ||
         [ -n "${LK_ARCH_AUR_REPO_NAME-}" ] ||
         { [ ${#AUR_PACKAGES[@]} -gt 0 ] &&
             lk_tty_list AUR_PACKAGES \
@@ -641,12 +641,12 @@ $LK_NODE_HOSTNAME" &&
         _LK_CONF_DELIM=" = " \
             lk_conf_set_option -s options CleanMethod KeepCurrent
 
-        if ! lk_command_exists aur ||
+        if ! lk_has aur ||
             ! lk_pac_repo_available_list "$REPO" |
             grep -Fx aurutils >/dev/null; then
             lk_tty_detail "Building aurutils"
             PKGDEST=$DIR lk_makepkg -a aurutils --force
-            lk_files_exist "${LK_MAKEPKG_LIST[@]}" ||
+            lk_test_all_f "${LK_MAKEPKG_LIST[@]}" ||
                 lk_die "not found: ${LK_MAKEPKG_LIST[*]}"
             (LK_SUDO= &&
                 lk_faketty repo-add --remove "$FILE" "${LK_MAKEPKG_LIST[@]}")
@@ -734,7 +734,7 @@ $LK_NODE_HOSTNAME" &&
         PAC_INSTALL=(
             $(pacman -Sp --print-format "%n %r/%n-%v" "${PAC_INSTALL[@]}" |
                 # Remove dependencies from `pacman -Sp` output
-                sort | grep -E "^$(lk_regex_implode "${PAC_INSTALL[@]}") ")
+                sort | grep -E "^$(lk_ere_implode_args -- "${PAC_INSTALL[@]}") ")
         )
         lk_mapfile PAC_INSTALL <(lk_whiptail_checklist "Installing packages" \
             "Selected packages will be installed:" "${PAC_INSTALL[@]}")
@@ -793,7 +793,7 @@ $LK_NODE_HOSTNAME" &&
         SERVICE_ENABLE+=(
             fail2ban "Fail2ban"
         )
-        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
             SERVICE_RESTART+=(fail2ban)
     fi
 
@@ -815,7 +815,7 @@ $LK_NODE_HOSTNAME" &&
             CLI_FILE=$DIR/php-cli.ini
             [ -f "$FILE" ] || continue
             [ -f "$CLI_FILE" ] ||
-                sudo cp -a "$(lk_first_file "$FILE.orig" "$FILE")" "$CLI_FILE"
+                sudo cp -a "$(lk_readable "$FILE.orig" "$FILE")" "$CLI_FILE"
             for LK_CONF_OPTION_FILE in "$FILE" "$CLI_FILE"; do
                 [[ $LK_CONF_OPTION_FILE != "$CLI_FILE" ]] || {
                     lk_php_set_option memory_limit -1
@@ -936,7 +936,7 @@ EOF
         SERVICE_ENABLE+=(
             php-fpm "PHP-FPM"
         )
-        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
             SERVICE_RESTART+=(php-fpm)
 
         unset LK_FILE_REPLACE_NO_CHANGE
@@ -971,7 +971,7 @@ EOF
         SERVICE_ENABLE+=(
             httpd "Apache"
         )
-        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
             SERVICE_RESTART+=(httpd)
 
         lk_git_provision_repo -fs \
@@ -996,7 +996,7 @@ After=network-online.target
 [Service]
 RestartSec=10
 EOF
-        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
             DAEMON_RELOAD=1
         DIR=/etc/lighttpd/conf.d
         lk_install -d -m 00755 "$DIR"
@@ -1023,7 +1023,7 @@ done\""
         SERVICE_ENABLE+=(
             lighttpd "Lighttpd"
         )
-        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
             SERVICE_RESTART+=(lighttpd)
     fi
 
@@ -1037,7 +1037,7 @@ done\""
         SERVICE_ENABLE+=(
             squid "Squid proxy server"
         )
-        ! lk_false LK_FILE_REPLACE_NO_CHANGE || {
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE || {
             lk_systemctl_stop squid &&
                 sudo squid -zN &>/dev/null || lk_die \
                 "error creating Squid swap directories and cache_dir structures"
@@ -1064,7 +1064,7 @@ done\""
         LK_CONF_OPTION_FILE=/etc/libvirt/network.conf
         _LK_CONF_DELIM=" = " \
             lk_conf_set_option firewall_backend '"iptables"'
-        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
             SERVICE_RESTART+=(libvirtd)
 
         LK_CONF_OPTION_FILE=/etc/conf.d/libvirt-guests
@@ -1140,7 +1140,7 @@ done\""
             smb "Samba (SMB server)"
             nmb "Samba (NMB server)"
         )
-        ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+        ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
             SERVICE_RESTART+=(smb nmb)
         sudo pdbedit -L | cut -d: -f1 | grep -Fx "$USER" >/dev/null ||
             lk_tty_detail \

@@ -97,19 +97,19 @@ function lk_dns_resolve_name_from_ns() {
         awk 'NR == 1 { sub(/\.$/, "", $5); print $5 }') || return
     _LK_DIG_ARGS=(+norecurse)
     _LK_DNS_SERVER=$NAMESERVER
-    ! lk_verbose 2 || {
+    ! lk_is_v 2 || {
         lk_tty_detail "Using name server:" "$NAMESERVER"
         lk_tty_detail "Looking up A and AAAA records for:" "$1"
     }
     IP=($(lk_dns_get_records +VALUE -A,AAAA "$1")) || return
     if [[ ${#IP[@]} -eq 0 ]]; then
-        ! lk_verbose 2 || {
+        ! lk_is_v 2 || {
             lk_tty_detail "No A or AAAA records returned"
             lk_tty_detail "Looking up CNAME record for:" "$1"
         }
         CNAME=($(lk_dns_get_records +VALUE -CNAME "$1")) || return
         if [[ ${#CNAME[@]} -eq 1 ]]; then
-            ! lk_verbose 2 ||
+            ! lk_is_v 2 ||
                 lk_tty_detail "CNAME value from $NAMESERVER for $1:" "$CNAME"
             unset _LK_DIG_ARGS _LK_DNS_SERVER
             IP=($(lk_dns_get_records +VALUE -A,AAAA "${CNAME%.}")) || return
@@ -117,7 +117,7 @@ function lk_dns_resolve_name_from_ns() {
     fi
     [[ ${#IP[@]} -gt 0 ]] ||
         lk_warn "could not resolve $1${_LK_DNS_SERVER+: $NAMESERVER}" || return
-    ! lk_verbose 2 ||
+    ! lk_is_v 2 ||
         lk_tty_detail \
             "A and AAAA values${_LK_DNS_SERVER+ from $NAMESERVER} for $1:" \
             "$(lk_arr IP)"
@@ -132,7 +132,7 @@ function lk_dns_resolve_names() {
     local USE_DNS
     unset USE_DNS
     [ "${1-}" != -d ] || { USE_DNS= && shift; }
-    case "${USE_DNS-$(lk_first_command getent dscacheutil)}" in
+    case "${USE_DNS-$(lk_runnable getent dscacheutil)}" in
     getent)
         { getent ahosts "$@" || [ $# -eq 2 ]; } | awk '
 $3          { host = $3 }

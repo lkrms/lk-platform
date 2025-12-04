@@ -15,7 +15,7 @@ export LK_BASE
 
 . "$LK_BASE/lib/bash/common.sh"
 lk_require backup mail mysql provision
-! lk_is_linux ||
+! lk_system_is_linux ||
     lk_require linux
 
 function exit_trap() {
@@ -31,7 +31,7 @@ function exit_trap() {
         lk_mail_new
         MESSAGE=
         { [ ! -s "$RSYNC_OUT_FILE" ] && [ ! -s "$RSYNC_ERR_FILE" ]; } ||
-            ! TAR=$(lk_mktemp_file) ||
+            ! TAR=$(lk_mktemp) ||
             ! lk_delete_on_exit "$TAR" ||
             ! tar -C "${RSYNC_OUT_FILE%/*}" -czf "$TAR" \
                 "${RSYNC_OUT_FILE##*/}" \
@@ -120,7 +120,7 @@ function run_custom_hook() {
             wait "$!" ||
                 lk_die "hook script failed (exit status $?)"
             [ ${#LINES[@]} -eq 0 ] || {
-                SH=$(lk_echo_array LINES)
+                SH=$(lk_arr LINES)
                 eval "$SH" ||
                     _LK_TTY_COLOUR2='' lk_tty_error -r "\
 Shell commands emitted by hook script failed (exit status $?):" $'\n'"$SH" ||
@@ -150,7 +150,7 @@ function is_stage_complete() {
 
 function get_stage() {
     local STAGE
-    for STAGE in $(tac < <(lk_echo_array SNAPSHOT_STAGES)) starting; do
+    for STAGE in $(tac < <(lk_arr SNAPSHOT_STAGES)) starting; do
         [ ! -e "$LK_SNAPSHOT/.$STAGE" ] || break
     done
     echo "${STAGE//-/ }"
@@ -288,7 +288,7 @@ SOURCE_NAME=${SOURCE_NAME//\//_}
 BACKUP_ROOT=$(realpath "$BACKUP_ROOT")
 JOB_NAME=${BACKUP_ROOT//\//_}-$SOURCE_NAME
 lk_lock LOCK_FILE LOCK_FD "${0##*/}-$JOB_NAME"
-FIFO_FILE=$(lk_mktemp_dir)/fifo
+FIFO_FILE=$(lk_mktemp -d)/fifo
 mkfifo "$FIFO_FILE"
 exec 8<>"$FIFO_FILE"
 
@@ -390,12 +390,12 @@ lk_trap_add EXIT exit_trap
     fi
 
     lk_tty_print "Creating snapshot at" "$LK_SNAPSHOT"
-    lk_tty_detail "Log files:" "$(lk_echo_args \
+    lk_tty_detail "Log files:" "$(lk_args \
         "$SNAPSHOT_LOG_FILE" "$RSYNC_OUT_FILE" "$RSYNC_ERR_FILE")"
     RSYNC_ARGS=(-vrlpt --delete --stats "$@")
     ! RSYNC_FILTERS=($(find_custom filter-rsync | tac)) || {
         lk_tty_detail "Rsync filter:" \
-            "$(lk_echo_args "${RSYNC_FILTERS[@]/#/. }")"
+            "$(lk_args "${RSYNC_FILTERS[@]/#/. }")"
         RSYNC_ARGS+=(--delete-excluded)
         for RSYNC_FILTER in "${RSYNC_FILTERS[@]}"; do
             RSYNC_ARGS+=(--filter ". $RSYNC_FILTER")

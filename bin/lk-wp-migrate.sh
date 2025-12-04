@@ -154,7 +154,7 @@ lk_tty_detail "[local] Destination:" "$LOCAL_PATH"
 lk_tty_detail "Remote maintenance mode:" "${MAINTENANCE:-ignore}"
 lk_tty_detail "Plugins to deactivate:" "$([ ${#DEACTIVATE[@]} -eq 0 ] &&
     echo "<none>" ||
-    lk_echo_array DEACTIVATE)"
+    lk_arr DEACTIVATE)"
 [[ -z ${RENAME:+1} ]] ||
     lk_tty_detail "Rename site to:" "$RENAME"
 lk_tty_detail "Copy remote TLS certificate:" \
@@ -168,9 +168,9 @@ lk_tty_detail "Local WP-Cron:" \
 
 lk_tty_detail "Exclude files:" "$([ ${#EXCLUDE[@]} -eq 0 ] &&
     echo "<none>" ||
-    lk_echo_array EXCLUDE)"
+    lk_arr EXCLUDE)"
 
-lk_confirm "Proceed?" Y
+lk_tty_yn "Proceed?" Y
 
 lk_tty_print "Enabling WordPress maintenance mode"
 lk_tty_detail "[local] Creating" "$LOCAL_PATH/.maintenance"
@@ -212,11 +212,11 @@ fi
 if [ ${#DEACTIVATE[@]} -gt 0 ]; then
     ACTIVE_PLUGINS=($(lk_wp plugin list --status=active --field=name))
     DEACTIVATE=($(comm -12 \
-        <(lk_echo_array ACTIVE_PLUGINS | sort -u) \
-        <(lk_echo_array DEACTIVATE | sort -u)))
+        <(lk_arr ACTIVE_PLUGINS | sort -u) \
+        <(lk_arr DEACTIVATE | sort -u)))
     [ ${#DEACTIVATE[@]} -eq 0 ] || {
         lk_tty_print \
-            "Deactivating plugins:" $'\n'"$(lk_echo_array DEACTIVATE)"
+            "Deactivating plugins:" $'\n'"$(lk_arr DEACTIVATE)"
         lk_wp plugin deactivate "${DEACTIVATE[@]}"
     }
 fi

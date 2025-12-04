@@ -46,12 +46,12 @@ function lk_mediainfo_check() {
         LK_MEDIAINFO_FILES+=("$FILE")
         LK_MEDIAINFO_VALUES+=("$VALUE")
         if [ -n "${VALUE// /}" ]; then
-            lk_script_running && ! lk_verbose ||
+            lk_is_script && ! lk_is_v ||
                 lk_tty_log "${FILE#./}:" \
                     "$LK_MEDIAINFO_LABEL$VALUE"
         else
             LK_MEDIAINFO_EMPTY_FILES+=("$FILE")
-            lk_script_running && ! lk_verbose ||
+            lk_is_script && ! lk_is_v ||
                 lk_tty_warning "${FILE#./}:" \
                     "$LK_MEDIAINFO_LABEL$LK_MEDIAINFO_NO_VALUE"
         fi
@@ -60,7 +60,7 @@ function lk_mediainfo_check() {
             printf '%s\0' "$@" ||
             find -L . -type f ! -name '.*' -print0
     )
-    lk_script_running && ! lk_verbose 2 || {
+    lk_is_script && ! lk_is_v 2 || {
         lk_tty_print \
             "$COUNT $(lk_plural "$COUNT" file files) checked"
         lk_tty_detail \
@@ -76,7 +76,7 @@ function lk_vscode_state_get_db() {
     local DB=/User/globalStorage/state.vscdb PATHS
     PATHS=(~/{.config,"Library/Application Support"}/{VSCodium,Code})
     PATHS=("${PATHS[@]/%/$DB}")
-    lk_first_existing "${PATHS[@]}"
+    lk_readable "${PATHS[@]}"
 }
 
 function lk_vscode_state_get_item() {

@@ -22,7 +22,7 @@ function lk_user_in_group() {
 }
 
 function lk_list_user_homes() {
-    if ! lk_is_macos; then
+    if ! lk_system_is_macos; then
         getent passwd | awk -F: -v OFS=$'\t' '{print $1, $6}'
     else
         dscl . list /Users NFSHomeDirectory | awk -v OFS=$'\t' '{print $1, $2}'
@@ -30,7 +30,7 @@ function lk_list_user_homes() {
 }
 
 function lk_list_group_ids() {
-    if ! lk_is_macos; then
+    if ! lk_system_is_macos; then
         getent group | awk -F: -v OFS=$'\t' '{print $1, $3}'
     else
         dscl . list /Groups PrimaryGroupID | awk -v OFS=$'\t' '{print $1, $2}'
@@ -85,11 +85,11 @@ ChrootDirectory %h"
         -v "FIRST=$MATCH(${REGEX[1]}|\"${REGEX[1]}\")$LK_h+(${SFTP_ONLY}|\"${SFTP_ONLY}\")$LK_h*$" \
         -v "BREAK=$MATCH" \
         -f "$LK_BASE/lib/awk/block-replace.awk" "$FILE")
-    ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+    ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
         lk_tty_run_detail -1 lk_elevate systemctl restart ssh.service
     [[ $1 == _* ]] || lk_user_exists "$1" || set -- "_$1" "${@:2}"
     if lk_user_exists "$1"; then
-        lk_confirm "Configure existing user '$1' for SFTP-only access?" Y &&
+        lk_tty_yn "Configure existing user '$1' for SFTP-only access?" Y &&
             lk_tty_run_detail -1 lk_elevate \
                 usermod --shell /bin/false --groups "$SFTP_ONLY" --append "$1"
     else
@@ -129,8 +129,8 @@ function lk_user_bind_dir() {
     }
     shift
     lk_tty_print "Checking bind mounts for user '$1'"
-    lk_command_exists findmnt || lk_warn "command not found: findmnt" || return
-    TEMP=$(lk_mktemp_file) && TEMP2=$(lk_mktemp_file) &&
+    lk_has findmnt || lk_warn "command not found: findmnt" || return
+    TEMP=$(lk_mktemp) && TEMP2=$(lk_mktemp) &&
         lk_delete_on_exit "$TEMP" "$TEMP2" || return
     lk_elevate -f cp /etc/fstab "$TEMP"
     while [ $# -ge 2 ]; do
@@ -148,7 +148,7 @@ function lk_user_bind_dir() {
             lk_elevate test ! "$FSROOT" -ef "$SOURCE" || break
             lk_tty_warning "Already mounted at $TARGET:" \
                 "$(lk_elevate findmnt -no SOURCE -M "$TARGET")"
-            lk_confirm "OK to unmount?" Y &&
+            lk_tty_yn "OK to unmount?" Y &&
                 lk_tty_run_detail -1 lk_elevate umount "$TARGET" || return
         done
         [ -n "$FSROOT" ] || {
@@ -166,7 +166,7 @@ END { maybe_print() }' "$TEMP" >"$TEMP2" && cp "$TEMP2" "$TEMP" || return
     done
     lk_elevate findmnt -F "$TEMP" --verify &>"$TEMP2" ||
         lk_pass cat "$TEMP2" >&2 ||
-        lk_pass lk_delete_on_exit_withdraw "$TEMP" ||
+        lk_pass lk_on_exit_undo_delete "$TEMP" ||
         lk_warn "invalid fstab: $TEMP" || return
     lk_file_replace -m -f "$TEMP" /etc/fstab
     for TARGET in ${TARGETS+"${TARGETS[@]}"}; do

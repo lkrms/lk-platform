@@ -3,7 +3,7 @@
 function lk_system_list_networks() {
     local AWK
     lk_awk_load AWK sh-system-list-networks || return
-    if lk_command_exists ip; then
+    if lk_has ip; then
         ip addr
     else
         ifconfig

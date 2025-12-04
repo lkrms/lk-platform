@@ -194,7 +194,7 @@ function lk_mysql_restore_filter() {
     11.4.*) sandbox_version=11.4.2 ;;
     *) sandbox_version=12.0 ;;
     esac
-    lk_version_at_least "$version" "$sandbox_version" ||
+    lk_version_is "$version" "$sandbox_version" ||
         expr+=('1 { /^\/\*![0-9]+[[:blank:]]*\\-.*\*\/[[:blank:]]*$/ d }')
     sed -E "${expr[@]/#/-e}"
 }
@@ -217,7 +217,7 @@ function lk_mysql_restore_local() {
     lk_tty_detail "Local database will be reset with:" "$_SQL"
     lk_tty_warning \
         "All data in local database '$DB_NAME' will be permanently destroyed"
-    lk_confirm "Proceed?" Y || return
+    lk_tty_yn "Proceed?" Y || return
     lk_tty_print "Restoring database to local system"
     lk_tty_detail "Resetting database" "$DB_NAME"
     echo "$_SQL" | lk_mysql || return

@@ -84,8 +84,8 @@ while :; do
     esac
 done
 
-! lk_true ALL || [ $# -eq 0 ] || lk_usage
-lk_true ALL || {
+! lk_is_true ALL || [ $# -eq 0 ] || lk_usage
+lk_is_true ALL || {
     [ $# -gt 0 ] || lk_usage
     ! grep -E '[[:blank:]]$' <(printf '%s\n' "$@") >/dev/null ||
         lk_usage -e "invalid arguments"
@@ -104,9 +104,9 @@ lk_mysql_mapfile DB_ALL -h"$DB_HOST" <<<"SHOW DATABASES" || lk_die ""
 lk_tty_detail "${#DB_ALL[@]} $(lk_plural \
     ${#DB_ALL[@]} database databases) found"
 
-if lk_true ALL; then
+if lk_is_true ALL; then
     DB_INCLUDE=(${DB_ALL[@]+"${DB_ALL[@]}"})
-elif lk_true EXCLUDE; then
+elif lk_is_true EXCLUDE; then
     DB_INCLUDE=(${DB_ALL[@]+"${DB_ALL[@]}"})
     DB_EXCLUDE+=("$@")
 else
@@ -123,7 +123,7 @@ else
             STATUS=1
             lk_tty_warning "${#DB_MISSING[@]} requested $(
                 lk_plural ${#DB_MISSING[@]} database databases
-            ) not available on this host:" "$(lk_echo_array DB_MISSING)"
+            ) not available on this host:" "$(lk_arr DB_MISSING)"
         }
     fi
 fi
@@ -145,7 +145,7 @@ fi
 
 lk_tty_list_detail DB_INCLUDE "Ready to dump:" database databases
 
-lk_confirm "Proceed?" Y || lk_die ""
+lk_tty_yn "Proceed?" Y || lk_die ""
 
 LOCK_NAME=${0##*/}-${DEST//\//_}
 lk_lock LOCK_FILE LOCK_FD "$LOCK_NAME"
@@ -156,7 +156,7 @@ DEST_MODE=00600
 for DB_NAME in "${DB_INCLUDE[@]}"; do
     lk_tty_print "Dumping database:" "$DB_NAME"
     FILE=$DEST/$DB_NAME
-    lk_true NO_TIMESTAMP ||
+    lk_is_true NO_TIMESTAMP ||
         FILE=$FILE-${TIMESTAMP:-$(lk_date "%Y-%m-%d-%H%M%S")}
     FILE=$FILE.sql.gz
     lk_tty_detail "Backup file:" "$FILE"

@@ -2,13 +2,13 @@
 
 # lk_maybe [-p] COMMAND [ARG...]
 #
-# Run COMMAND unless LK_DRY_RUN is set. If -p is set, print COMMAND if not
-# running it.
+# Run COMMAND unless LK_DRYRUN=Y (preferred) or LK_DRY_RUN=Y (deprecated). If -p
+# is set, print COMMAND if not running it.
 function lk_maybe() {
     local PRINT
     [ "${1-}" != -p ] || { PRINT=1 && shift; }
-    if lk_dry_run; then
-        [ -z "${PRINT-}" ] && ! lk_verbose ||
+    if lk_is_dryrun; then
+        [ -z "${PRINT-}" ] && ! lk_is_v ||
             lk_tty_log \
                 "${LK_YELLOW}[DRY RUN]${LK_RESET} Not running:" \
                 "$(lk_quote_args "$@")"
@@ -43,7 +43,7 @@ function lk_report_error() {
 # redirected.
 function lk_faketty() {
     [ "$1" != exec ] || { local LK_EXEC=1 && shift; }
-    if ! lk_is_macos; then
+    if ! lk_system_is_macos; then
         SHELL=$BASH lk_sudo script -qfec "$(lk_quote_args "$@")" /dev/null
     else
         lk_sudo script -qt 0 /dev/null "$@"
@@ -120,7 +120,7 @@ function lk_env_clean() {
 function lk_v() {
     local STATUS=$? RETURN=0 _LK_STACK_DEPTH=$((1 + ${_LK_STACK_DEPTH:-0}))
     [[ $1 != -r ]] || { RETURN=$STATUS && shift; }
-    lk_verbose "$1" || return "$RETURN"
+    lk_is_v "$1" || return "$RETURN"
     shift
     if ((!STATUS)); then
         "$@"

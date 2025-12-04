@@ -8,6 +8,8 @@ analysis.
 ### `core`
 
 - `lk_pass`
+- `lk_test_all`
+- `lk_test_any`
 - `lk_elevate`
 - `lk_sudo`
 - `lk_run_as`
@@ -44,3 +46,5 @@ analysis.
 
 - `lk_plural` (read-only)
 - `lk_assign`
+- `lk_is_true` (read-only)
+- `lk_is_false` (read-only)

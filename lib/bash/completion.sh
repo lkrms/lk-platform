@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-lk_bash_at_least 4 2 || return 0
+lk_bash_is 4 2 || return 0
 
 complete -F _command \
     lk_faketty \

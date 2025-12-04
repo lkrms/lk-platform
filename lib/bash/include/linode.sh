@@ -70,7 +70,7 @@ function lk_linode_linode_sh() {
 function lk_linode_ssh_add() {
     local LINODES LINODE SH LABEL USERNAME PUBLIC_SUFFIX \
         LK_SSH_PRIORITY=${LK_SSH_PRIORITY-45}
-    lk_jq_get_array LINODES &&
+    lk_json_mapfile LINODES &&
         [ ${#LINODES[@]} -gt 0 ] || lk_warn "no Linodes in input" || return
     for LINODE in "${LINODES[@]}"; do
         SH=$(lk_linode_linode_sh <<<"$LINODE") &&
@@ -102,11 +102,11 @@ function lk_linode_ssh_add() {
 function lk_linode_ssh_add_all() {
     local JSON LABELS
     JSON=$(lk_linode_linodes "$@" | lk_linode_filter_linodes) || return
-    lk_jq_get_array LABELS ".[].label" <<<"$JSON" &&
+    lk_json_mapfile LABELS ".[].label" <<<"$JSON" &&
         [ ${#LABELS[@]} -gt 0 ] || lk_warn "no Linodes found" || return
-    lk_echo_array LABELS | sort |
+    lk_arr LABELS | sort |
         lk_tty_list - "Adding to SSH configuration:" Linode Linodes
-    lk_confirm "Proceed?" Y || return
+    lk_tty_yn "Proceed?" Y || return
     lk_linode_ssh_add <<<"$JSON"
     lk_tty_success "SSH configuration complete"
 }
@@ -118,11 +118,11 @@ function lk_linode_hosting_ssh_add_all() {
         "$(declare -f lk_get_users_in_group lk_get_standard_users &&
             lk_quote_args lk_get_standard_users /srv/www)") || return
     JSON=$(lk_linode_linodes "$@" | lk_linode_filter_linodes) &&
-        lk_jq_get_array LINODES <<<"$JSON" &&
+        lk_json_mapfile LINODES <<<"$JSON" &&
         [ ${#LINODES[@]} -gt 0 ] || lk_warn "no Linodes found" || return
     jq -r '.[].label' <<<"$JSON" | sort | lk_tty_list - \
         "Adding hosting accounts to SSH configuration:" Linode Linodes
-    lk_confirm "Proceed?" Y || return
+    lk_tty_yn "Proceed?" Y || return
     for LINODE in "${LINODES[@]}"; do
         SH=$(lk_linode_linode_sh <<<"$LINODE") &&
             eval "$SH" || return
@@ -378,7 +378,7 @@ include "core";
     done < <(comm -23 \
         <(sort <<<"$_REVERSE") \
         <(sort <<<"$REVERSE"))
-    ! lk_verbose || {
+    ! lk_is_v || {
         RECORDS=$(lk_linode_domain_records "$DOMAIN_ID" "${@:3}" |
             jq -r '.[]|"\(.name)\t\(.type)\t\(.target)\t\(.ttl_sec)"') || return
         RECORDS=$(comm -13 \
@@ -395,11 +395,11 @@ function lk_linode_dns_check_all() {
     local USE_TAGS LINODES LABELS
     [ "${1-}" != -t ] || { USE_TAGS=1 && shift; }
     LINODES=$(lk_linode_linodes "${@:2}") || return
-    lk_jq_get_array LABELS '.[]|"\(.label) (\(.tags|join(", ")))"' <<<"$LINODES"
+    lk_json_mapfile LABELS '.[]|"\(.label) (\(.tags|join(", ")))"' <<<"$LINODES"
     [ ${#LABELS[@]} -gt 0 ] || lk_warn "no Linodes found" || return
-    lk_echo_array LABELS | sort |
+    lk_arr LABELS | sort |
         lk_tty_list - "Checking DNS and RDNS records for:" Linode Linodes
-    lk_confirm "Proceed?" Y || return
+    lk_tty_yn "Proceed?" Y || return
     LK_VERBOSE=1 \
         lk_linode_dns_check ${USE_TAGS:+-t} "$LINODES" "$1" "${@:2}" || return
     lk_tty_success "DNS check complete"
@@ -512,9 +512,9 @@ Example:
         lk_tty_detail "CPU count:" "$LINODE_VPCUS"
         lk_tty_detail "Memory:" "$LINODE_MEMORY"
         lk_tty_detail "Storage:" "$((LINODE_DISK / 1024))G"
-        lk_tty_detail "IP addresses:" $'\n'"$(lk_echo_args \
+        lk_tty_detail "IP addresses:" $'\n'"$(lk_args \
             $LINODE_IPV4_PUBLIC $LINODE_IPV6 $LINODE_IPV4_PRIVATE)"
-        lk_confirm "Destroy the existing Linode and start over?" N || return
+        lk_tty_yn "Destroy the existing Linode and start over?" N || return
         ARGS+=(--image "$LINODE_IMAGE")
     }
     STACKSCRIPT_DATA=$(jq -n \
@@ -551,7 +551,7 @@ Example:
     )
     lk_tty_print "Running:" \
         $'\n'"$(lk_fold_quote_options -120 linode-cli "${ARGS[@]##ssh-??? * }")"
-    lk_confirm "Proceed?" Y || return
+    lk_tty_yn "Proceed?" Y || return
     lk_tty_print "${VERBS[0]} Linode"
     FILE=/tmp/$FUNCNAME-$1-$(lk_timestamp).json
     LINODES=$(linode-cli "${ARGS[@]}" | tee "$FILE") ||
@@ -569,7 +569,7 @@ Example:
     lk_tty_detail "Memory:" "$LINODE_MEMORY"
     lk_tty_detail "Storage:" "$((LINODE_DISK / 1024))G"
     lk_tty_detail "Image:" "$LINODE_IMAGE"
-    lk_tty_detail "IP addresses:" $'\n'"$(lk_echo_args \
+    lk_tty_detail "IP addresses:" $'\n'"$(lk_args \
         $LINODE_IPV4_PUBLIC $LINODE_IPV6 $LINODE_IPV4_PRIVATE)"
     lk_linode_ssh_add <<<"$LINODES"
     [ -z "$HOST_ACCOUNT" ] || {

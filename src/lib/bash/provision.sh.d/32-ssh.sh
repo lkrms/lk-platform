@@ -96,7 +96,7 @@ function lk_ssh_run_on_host() {
         -o ControlPath="/tmp/.${FUNCNAME}_%C-%u"
         -o ControlPersist=60
     )
-    lk_debug || ARGS+=(-o LogLevel=QUIET)
+    lk_debug_is_on || ARGS+=(-o LogLevel=QUIET)
     [[ ! $HOST =~ :[0-9]+$ ]] || {
         ARGS+=(-o Port="${HOST##*:}")
         HOST=${HOST%:*}

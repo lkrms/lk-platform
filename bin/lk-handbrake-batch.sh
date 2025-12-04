@@ -56,10 +56,10 @@ while :; do
     esac
 done
 
-if lk_files_exist "$@"; then
+if lk_test_all_f "$@"; then
     # <SOURCE_FILE>...
     SOURCE_FILES=("$@")
-elif [ $# -gt 1 ] && [ -d "${*: -1}" ] && lk_files_exist "${@:1:$#-1}"; then
+elif [ $# -gt 1 ] && [ -d "${*: -1}" ] && lk_test_all_f "${@:1:$#-1}"; then
     # <SOURCE_FILE>... <TARGET_DIR>
     SOURCE_FILES=("${@:1:$#-1}")
     TARGET_ROOT=${*: -1}
@@ -109,7 +109,7 @@ done
 
 lk_tty_list_detail ENCODE_LIST "Queued:" encode encodes
 lk_tty_detail "HandBrake preset:" "$PRESET"
-lk_confirm "Proceed?" Y || lk_die
+lk_tty_yn "Proceed?" Y || lk_die
 
 SUCCESS_FILES=()
 ERROR_FILES=()

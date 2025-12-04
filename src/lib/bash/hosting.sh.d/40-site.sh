@@ -42,7 +42,7 @@ function _lk_hosting_site_list_known_settings() {
 # _SITE_FILE.
 function _lk_hosting_site_assign_file() {
     local DEFAULT_FILE=$LK_BASE/etc/lk-platform/sites/$1.conf
-    _SITE_FILE=$(lk_first_file \
+    _SITE_FILE=$(lk_readable \
         "$DEFAULT_FILE" \
         "$LK_BASE/etc/sites/$1.conf") || _SITE_FILE=$DEFAULT_FILE
 }
@@ -137,7 +137,7 @@ function _lk_hosting_site_load_settings() {
     lk_var_to_bool SITE_DISABLE_WWW
     SITE_DISABLE_HTTPS=${SITE_DISABLE_HTTPS:-${LK_SITE_DISABLE_HTTPS:-N}}
     lk_var_to_bool SITE_DISABLE_HTTPS
-    if lk_true LK_SITE_ENABLE_STAGING; then
+    if lk_is_true LK_SITE_ENABLE_STAGING; then
         SITE_ENABLE_STAGING=Y
     else
         SITE_ENABLE_STAGING=${SITE_ENABLE_STAGING:-N}
@@ -220,9 +220,9 @@ function _lk_hosting_site_load_dynamic_settings() {
     # - `static` spawns every child at startup, sacrificing idle capacity for
     #   burst performance--recommended for single-site production servers
     _SITE_PHP_FPM_PM=static
-    [[ $PHP_FPM_POOLS -eq 1 ]] && lk_true SITE_ENABLE ||
-        { ! lk_true SITE_ENABLE_STAGING &&
-            ! lk_true LK_SITE_ENABLE_STAGING &&
+    [[ $PHP_FPM_POOLS -eq 1 ]] && lk_is_true SITE_ENABLE ||
+        { ! lk_is_true SITE_ENABLE_STAGING &&
+            ! lk_is_true LK_SITE_ENABLE_STAGING &&
             _SITE_PHP_FPM_PM=ondemand ||
             _SITE_PHP_FPM_PM=dynamic; }
 }
@@ -252,7 +252,7 @@ function _lk_hosting_site_write_settings() {
         lk_install -m 00660 -g adm "$FILE" &&
         lk_file_replace -lp "$FILE" \
             "$(lk_var_sh "${!SITE_@}" | sed -E "s/^$REGEX=/#&/")" || return
-    ! lk_false LK_FILE_NO_CHANGE && ! lk_false LK_FILE_REPLACE_NO_CHANGE ||
+    ! lk_is_false LK_FILE_NO_CHANGE && ! lk_is_false LK_FILE_REPLACE_NO_CHANGE ||
         lk_hosting_flush_cache || return
     lk_install -m 00440 -o "$_SITE_USER" -g "$_SITE_GROUP" "$USER_FILE" &&
         LK_VERBOSE= LK_FILE_BACKUP_TAKE= \
@@ -278,7 +278,7 @@ function _lk_hosting_site_cache_settings() {
             < <(_LK_STACK_DEPTH=-1 \
                 lk_var_sh_q "${!SITE_@}" "${!_SITE_@}") || return
     # Ensure the cache file is newer than the site file
-    lk_false LK_FILE_REPLACE_NO_CHANGE || touch "$FILE"
+    lk_is_false LK_FILE_REPLACE_NO_CHANGE || touch "$FILE"
 }
 
 # _lk_hosting_site_assign_cached_settings [-s] DOMAIN

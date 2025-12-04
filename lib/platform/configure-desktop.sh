@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-if lk_is_linux; then
+if lk_system_is_linux; then
 
     lk_require linux
 
@@ -31,7 +31,7 @@ EOF
         fi
     fi
 
-    if lk_command_exists autorandr; then
+    if lk_has autorandr; then
         lk_tty_print "Checking autorandr"
         DIR=/etc/xdg/autorandr
         lk_install -d -m 00755 "$DIR"

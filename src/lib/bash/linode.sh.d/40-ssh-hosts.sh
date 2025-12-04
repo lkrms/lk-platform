@@ -6,7 +6,7 @@
 function lk_linode_ssh_add() {
     local LINODES LINODE SH LABEL USERNAME PUBLIC_SUFFIX \
         LK_SSH_PRIORITY=${LK_SSH_PRIORITY-45}
-    lk_jq_get_array LINODES &&
+    lk_json_mapfile LINODES &&
         [ ${#LINODES[@]} -gt 0 ] || lk_warn "no Linodes in input" || return
     for LINODE in "${LINODES[@]}"; do
         SH=$(lk_linode_linode_sh <<<"$LINODE") &&
@@ -38,11 +38,11 @@ function lk_linode_ssh_add() {
 function lk_linode_ssh_add_all() {
     local JSON LABELS
     JSON=$(lk_linode_linodes "$@" | lk_linode_filter_linodes) || return
-    lk_jq_get_array LABELS ".[].label" <<<"$JSON" &&
+    lk_json_mapfile LABELS ".[].label" <<<"$JSON" &&
         [ ${#LABELS[@]} -gt 0 ] || lk_warn "no Linodes found" || return
-    lk_echo_array LABELS | sort |
+    lk_arr LABELS | sort |
         lk_tty_list - "Adding to SSH configuration:" Linode Linodes
-    lk_confirm "Proceed?" Y || return
+    lk_tty_yn "Proceed?" Y || return
     lk_linode_ssh_add <<<"$JSON"
     lk_tty_success "SSH configuration complete"
 }
@@ -54,11 +54,11 @@ function lk_linode_hosting_ssh_add_all() {
         "$(declare -f lk_get_users_in_group lk_get_standard_users &&
             lk_quote_args lk_get_standard_users /srv/www)") || return
     JSON=$(lk_linode_linodes "$@" | lk_linode_filter_linodes) &&
-        lk_jq_get_array LINODES <<<"$JSON" &&
+        lk_json_mapfile LINODES <<<"$JSON" &&
         [ ${#LINODES[@]} -gt 0 ] || lk_warn "no Linodes found" || return
     jq -r '.[].label' <<<"$JSON" | sort | lk_tty_list - \
         "Adding hosting accounts to SSH configuration:" Linode Linodes
-    lk_confirm "Proceed?" Y || return
+    lk_tty_yn "Proceed?" Y || return
     for LINODE in "${LINODES[@]}"; do
         SH=$(lk_linode_linode_sh <<<"$LINODE") &&
             eval "$SH" || return

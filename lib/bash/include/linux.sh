@@ -204,12 +204,12 @@ function lk_system_has_amd_cpu() {
 }
 
 function lk_system_is_thinkpad() {
-    ! lk_is_virtual &&
+    ! lk_system_is_vm &&
         grep -iq ThinkPad /sys/devices/virtual/dmi/id/product_family 2>/dev/null
 }
 
 function lk_system_is_star_labs() {
-    ! lk_is_virtual &&
+    ! lk_system_is_vm &&
         grep -Fxiq 'Star Labs' /sys/devices/virtual/dmi/id/*_vendor 2>/dev/null
 }
 
@@ -234,7 +234,7 @@ function _lk_lsblk() {
 # lk_block_device_is TYPE DEVICE_PATH...
 function lk_block_device_is() {
     local COUNT
-    lk_paths_exist "${@:2}" || lk_warn "not found: ${*:2}" || return
+    lk_test_all_e "${@:2}" || lk_warn "not found: ${*:2}" || return
     COUNT=$(_lk_lsblk TYPE --nodeps "${@:2}" | grep -Fxc "$1") &&
         [ "$COUNT" -eq $(($# - 1)) ]
 }
@@ -242,7 +242,7 @@ function lk_block_device_is() {
 # lk_block_device_is_ssd DEVICE_PATH...
 function lk_block_device_is_ssd() {
     local COUNT
-    lk_paths_exist "$@" || lk_warn "not found: $*" || return
+    lk_test_all_e "$@" || lk_warn "not found: $*" || return
     COUNT=$(_lk_lsblk DISC-GRAN,DISC-MAX --nodeps "$@" |
         grep -Evc "^$LK_h*0B$LK_h+0B$LK_h*\$") &&
         [ "$COUNT" -eq $# ]
@@ -467,7 +467,7 @@ function lk_get_standard_users() {
     USERS=($(getent passwd | awk -F: -v "h=${1-}" \
         '$3 >= 1000 && $3 < 65534 && index($6, h) == 1 { print $1 }'))
     # lk_linode_hosting_ssh_add_all relies on this being a standalone function,
-    # so don't use lk_echo_array
+    # so don't use lk_arr
     comm -13 \
         <(printf '%s\n' "${ADM_USERS[@]}" | sort) \
         <(printf '%s\n' "${USERS[@]}" | sort)
@@ -481,12 +481,12 @@ function lk_icon_install() {
     )
     [ -f "$1" ] || lk_warn "file not found: $1" || return
     for SIZE in "${SIZES[@]}"; do
-        lk_maybe_sudo install -d "$TARGET_DIR/$SIZE/apps" &&
-            lk_maybe_sudo convert "$1" -resize "$SIZE" \
+        lk_sudo install -d "$TARGET_DIR/$SIZE/apps" &&
+            lk_sudo convert "$1" -resize "$SIZE" \
                 "$TARGET_DIR/$SIZE/apps/${1##*/}" || return
     done
-    ! lk_command_exists gtk-update-icon-cache ||
-        lk_maybe_sudo gtk-update-icon-cache --force --quiet \
+    ! lk_has gtk-update-icon-cache ||
+        lk_sudo gtk-update-icon-cache --force --quiet \
             --ignore-theme-index "$TARGET_DIR" || true
 }
 
@@ -522,8 +522,8 @@ function lk_fs_ext4_check() {
     for SOURCE in "${SOURCES[@]}"; do
         lk_tty_print "Checking:" "$SOURCE"
         lk_elevate tune2fs -l "$SOURCE" |
-            sed -En "s/^($(lk_regex_implode "$@")):$LK_h*/\1\t/p" |
-            IFS=$'\t' lk_tty_detail_pairs || return
+            sed -En "s/^($(lk_ere_implode_args -- "$@")):$LK_h*/\1\t/p" |
+            IFS=$'\t' lk_tty_pairs_detail || return
         lk_tty_print
     done
 }
@@ -546,7 +546,7 @@ function _lk_lid_files() {
         shopt -s nullglob || exit
         LID_FILES=(/proc/acpi/button/lid/*/state)
         [ ${#LID_FILES[@]} -gt 0 ] || exit
-        lk_echo_array LID_FILES
+        lk_arr LID_FILES
     )
 }
 
@@ -624,7 +624,7 @@ function lk_file_acl_list_with_extended() {
 # Search each STARTING_POINT and remove extended ACLs from all files and
 # directories. If no STARTING_POINT is specified, search the current directory.
 function lk_file_acl_remove_extended() {
-    lk_confirm "OK to remove extended ACL entries recursively?" Y || return
+    lk_tty_yn "OK to remove extended ACL entries recursively?" Y || return
     lk_file_acl_list_with_extended "$@" |
         # Interpret special character escapes added by `getfacl`
         gnu_xargs -d '\n' printf '%b\0' |

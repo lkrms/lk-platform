@@ -65,5 +65,5 @@ function lk_json_sh() {
 #
 # Print "true" if VAR or ${!VAR} is truthy, otherwise print "false".
 function lk_json_bool() {
-    lk_true "$1" && echo "true" || echo "false"
+    lk_is_true "$1" && echo "true" || echo "false"
 }

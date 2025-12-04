@@ -42,6 +42,6 @@ printf '%s\t%s\n' \
     "dpkg script" "${DPKG_MAINTSCRIPT_NAME:-<unknown>}" \
     "Provisioning" "$PROVISIONING" \
     "Upgrading" "$UPGRADING" \
-    "Exit status" "$STATUS" | IFS=$'\t' lk_tty_detail_pairs
+    "Exit status" "$STATUS" | IFS=$'\t' lk_tty_pairs_detail
 
 (exit "$STATUS") || lk_die ""

@@ -23,7 +23,7 @@ END{ for (i = 0; i < length(a); i++) p(a[i]) }' <<<"${3-$PATH}"
 # user.
 function lk_check_pid() {
     [ $# -eq 1 ] || return
-    lk_maybe_sudo kill -0 "$1" 2>/dev/null
+    lk_sudo kill -0 "$1" 2>/dev/null
 }
 
 # lk_curl_config [--]ARG[=PARAM]...
@@ -161,7 +161,7 @@ Usage: $FUNCNAME [-e] [-q] [FILE]"
     done
     shift $((OPTIND - 1))
     TEMPLATE=$(cat ${1+"$1"} && printf .) || return
-    ! lk_true EVAL || {
+    ! lk_is_true EVAL || {
         lk_mapfile KEYS <(
             # Add a newline to guarantee $'...\n'
             printf '%q' "$TEMPLATE"$'\n' |
@@ -173,7 +173,7 @@ Usage: $FUNCNAME [-e] [-q] [FILE]"
                 eval "KEYS[i]=\$'${KEYS[i]:3:$((${#KEYS[i]} - 6))}'"
                 REPLACE=$(eval "${KEYS[i]}" && printf .) ||
                     lk_warn "error evaluating: ${KEYS[i]}" || return
-                ! lk_true QUOTE ||
+                ! lk_is_true QUOTE ||
                     REPLACE=$(printf '%q.' "${REPLACE%.}")
                 REPLACE=${REPLACE%.}
                 TEMPLATE=${TEMPLATE//"({:${KEYS[i]}:})"/$REPLACE}
@@ -188,7 +188,7 @@ Usage: $FUNCNAME [-e] [-q] [FILE]"
         REPLACE=${!KEY}
         QUOTED=$(printf '%q.' "$REPLACE")
         QUOTED=${QUOTED%.}
-        ! lk_true QUOTE ||
+        ! lk_is_true QUOTE ||
             REPLACE=$QUOTED
         TEMPLATE=${TEMPLATE//"{{$KEY}}"/$REPLACE}
         TEMPLATE=${TEMPLATE//"{{\"$KEY\"}}"/$QUOTED}
@@ -375,8 +375,8 @@ function lk_get_outputs_of() {
     local SH EXIT_STATUS
     SH=$(
         _LK_CAN_FAIL=1
-        _LK_STDOUT=$(lk_mktemp_file) &&
-            _LK_STDERR=$(lk_mktemp_file) &&
+        _LK_STDOUT=$(lk_mktemp) &&
+            _LK_STDERR=$(lk_mktemp) &&
             lk_delete_on_exit "$_LK_STDOUT" "$_LK_STDERR" || exit
         unset _LK_FD
         "$@" >"$_LK_STDOUT" 2>"$_LK_STDERR" || EXIT_STATUS=$?
@@ -391,7 +391,7 @@ function lk_get_outputs_of() {
 }
 
 function _lk_lock_check_args() {
-    lk_is_linux || lk_command_exists flock || {
+    lk_system_is_linux || lk_has flock || {
         [ "${FUNCNAME[1]-}" = lk_lock_drop ] ||
             lk_tty_warning "File locking is not supported on this platform"
         return 2
@@ -402,7 +402,7 @@ function _lk_lock_check_args() {
         ;;
     2 | 3)
         set -- "$1" "$2" "${3-}"
-        lk_test lk_is_identifier "${@:1:2}"
+        lk_test_all lk_is_identifier "${@:1:2}"
         ;;
     *)
         false
@@ -420,7 +420,7 @@ function lk_lock() {
         { [ $? -eq 2 ] && return 0; } || return
     eval "$_LK_SH" || return
     unset "${@:1:2}"
-    eval "$1=\${_LK_FILE:-/tmp/\${3:-.\${LK_PATH_PREFIX:-lk-}\$(lk_caller_name)}.lock}" &&
+    eval "$1=\${_LK_FILE:-/tmp/\${3:-.\${LK_PATH_PREFIX:-lk-}\$(lk_caller)}.lock}" &&
         eval "$2=\$(lk_fd_next)" &&
         eval "exec ${!2}>\"\$$1\"" || return
     flock ${_LK_NONBLOCK+-n} "${!2}" ||
@@ -457,8 +457,8 @@ function lk_diff() { (
     [ $# -eq 2 ] || lk_usage "Usage: $FUNCNAME FILE1 FILE2" || exit
     for i in 1 2; do
         if [ -p "${!i}" ] || [ -n "${_LK_DIFF_SED_SCRIPT:+1}" ]; then
-            FILE=$(lk_mktemp_file) && lk_delete_on_exit "$FILE" &&
-                lk_maybe_sudo sed -E \
+            FILE=$(lk_mktemp) && lk_delete_on_exit "$FILE" &&
+                lk_sudo sed -E \
                     "${_LK_DIFF_SED_SCRIPT-}" \
                     "${!i}" >"$FILE" || exit
             set -- "${@:1:i-1}" "$FILE" "${@:i+1}"
@@ -466,31 +466,31 @@ function lk_diff() { (
     done
     # Use the same escape sequences as icdiff, which ignores TERM
     lk_colour_on
-    if lk_command_exists icdiff; then
+    if lk_has icdiff; then
         # Don't use icdiff if FILE1 is empty
-        if lk_maybe_sudo test ! -s "$1" -a -s "$2"; then
+        if lk_sudo test ! -s "$1" -a -s "$2"; then
             printf '%s%s%s\n' "$LK_BLUE" "$2" "$LK_RESET"
             printf '%s' "$LK_BOLD$LK_GREEN"
             # Add $LK_RESET to the last line
-            lk_maybe_sudo cat "$2" | awk -v "r=$LK_RESET" \
+            lk_sudo cat "$2" | awk -v "r=$LK_RESET" \
                 's { print l } { s = 1; l = $0 } END { print l r }'
             false
         else
             printf '%s' "$LK_RESET"
             STATUS=1
-            lk_require_output lk_maybe_sudo icdiff -U2 --no-headers \
+            lk_require_output lk_sudo icdiff -U2 --no-headers \
                 ${_LK_TTY_INDENT:+--cols="$(($(
                     lk_tty_columns
                 ) - 2 * (_LK_TTY_INDENT + 2)))"} "$@" || ((!($? & 2))) || STATUS=0
             ((!STATUS))
         fi
-    elif lk_command_exists git; then
-        lk_maybe_sudo \
+    elif lk_has git; then
+        lk_sudo \
             git diff --no-index --no-prefix --no-ext-diff --color -U3 "$@"
     else
         DIFF_VER=$(lk_diff_version 2>/dev/null) &&
-            lk_version_at_least "$DIFF_VER" 3.4 || unset DIFF_VER
-        lk_maybe_sudo gnu_diff ${DIFF_VER+--color=always} -U3 "$@"
+            lk_version_is "$DIFF_VER" 3.4 || unset DIFF_VER
+        lk_sudo gnu_diff ${DIFF_VER+--color=always} -U3 "$@"
     fi && printf '%sFiles are identical%s%s' \
         "$LK_BLUE" \
         "${_LK_DIFF_SED_SCRIPT:+ or have hidden differences}" \
@@ -585,7 +585,7 @@ function lk_get_uris() {
 function lk_wget_uris() {
     local TEMP_FILE
     # --convert-links is disabled if wget uses standard output
-    TEMP_FILE=$(lk_mktemp_file) &&
+    TEMP_FILE=$(lk_mktemp) &&
         lk_delete_on_exit "$TEMP_FILE" &&
         wget --quiet --convert-links --output-document "$TEMP_FILE" "$1" ||
         return
@@ -628,10 +628,10 @@ function lk_download() {
         --location
         --remote-time
     )
-    ! lk_true SERVER_NAMES || {
-        lk_version_at_least "$CURL_VERSION" 7.26.0 ||
+    ! lk_is_true SERVER_NAMES || {
+        lk_version_is "$CURL_VERSION" 7.26.0 ||
             lk_warn "curl too old to output filename_effective" || return
-        DOWNLOAD_DIR=$(lk_mktemp_dir) &&
+        DOWNLOAD_DIR=$(lk_mktemp -d) &&
             lk_delete_on_exit "$DOWNLOAD_DIR" &&
             pushd "$DOWNLOAD_DIR" >/dev/null || return
         CURL_COMMAND+=(
@@ -645,7 +645,7 @@ function lk_download() {
         lk_is_uri "$URI" || lk_warn "not a URI: $URI" || return
         unset DOWNLOAD_ONE
         DOWNLOAD_ARGS=()
-        lk_true SERVER_NAMES || {
+        lk_is_true SERVER_NAMES || {
             [ -n "$FILENAME" ] || {
                 SH=$(lk_uri_parts "$URI" _PATH) &&
                     eval "$SH"
@@ -664,27 +664,27 @@ function lk_download() {
             FILENAMES+=("$FILENAME")
         }
         DOWNLOAD_ARGS+=("$URI")
-        lk_true DOWNLOAD_ONE || {
+        lk_is_true DOWNLOAD_ONE || {
             COMMAND_ARGS+=("${DOWNLOAD_ARGS[@]}")
             continue
         }
         COMMANDS+=("$(lk_quote_arr CURL_COMMAND DOWNLOAD_ARGS)")
     done < <([ $# -gt 0 ] &&
-        lk_echo_args "$@" ||
+        lk_args "$@" ||
         cat)
     [ ${#COMMAND_ARGS[@]} -eq 0 ] || {
         CURL_COMMAND=("${CURL_COMMAND[@]//--remote-name/--remote-name-all}")
-        ! lk_version_at_least "$CURL_VERSION" 7.66.0 ||
+        ! lk_version_is "$CURL_VERSION" 7.66.0 ||
             CURL_COMMAND+=(--parallel)
-        ! lk_version_at_least "$CURL_VERSION" 7.68.0 ||
+        ! lk_version_is "$CURL_VERSION" 7.68.0 ||
             CURL_COMMAND+=(--parallel-immediate)
         COMMANDS+=("$(lk_quote_arr CURL_COMMAND COMMAND_ARGS)")
     }
     for COMMAND in ${COMMANDS[@]+"${COMMANDS[@]}"}; do
         eval "$COMMAND" || return
     done
-    lk_true SERVER_NAMES || {
-        lk_echo_array FILENAMES
+    lk_is_true SERVER_NAMES || {
+        lk_arr FILENAMES
         return
     }
     popd >/dev/null && (
@@ -710,9 +710,9 @@ function lk_curl() {
 }
 
 function lk_maybe_drop() {
-    if ! lk_root; then
+    if ! lk_user_is_root; then
         "$@"
-    elif lk_is_linux; then
+    elif lk_system_is_linux; then
         runuser -u nobody -- "$@"
     else
         sudo -u nobody -- "$@"
@@ -720,7 +720,7 @@ function lk_maybe_drop() {
 }
 
 function lk_me() {
-    lk_maybe_sudo id -un
+    lk_sudo id -un
 }
 
 # lk_rm [-v] [--] [FILE...]
@@ -729,20 +729,20 @@ function lk_rm() {
     [[ ${1-} != -v ]] || { v=v && shift; }
     [[ ${1-} != -- ]] || shift
     (($#)) || return 0
-    if lk_command_exists trash-put; then
-        lk_maybe_sudo trash-put -f"$v" -- "$@"
-    elif lk_command_exists trash; then
+    if lk_has trash-put; then
+        lk_sudo trash-put -f"$v" -- "$@"
+    elif lk_has trash; then
         local FILE FILES=()
         for FILE in "$@"; do
-            ! lk_maybe_sudo test -e "$FILE" || FILES[${#FILES[@]}]=$FILE
+            ! lk_sudo test -e "$FILE" || FILES[${#FILES[@]}]=$FILE
         done
         # `trash` on macOS doesn't accept `--` as a separator
         [[ -z ${FILES+1} ]] ||
-            lk_maybe_sudo trash ${v:+-v} "${FILES[@]}"
+            lk_sudo trash ${v:+-v} "${FILES[@]}"
     else
         false
     fi || lk_file_backup -m "$@" &&
-        lk_maybe_sudo rm -Rf"$v" -- "$@"
+        lk_sudo rm -Rf"$v" -- "$@"
 }
 
 # - lk_install [-m MODE] [-o OWNER] [-g GROUP] [-v] FILE...
@@ -794,19 +794,19 @@ Usage: $FUNCNAME [-m MODE] [-o OWNER] [-g GROUP] [-v] FILE...
         { [ -z "${GROUP-}" ] ||
             id -Gn | tr -s '[:blank:]' '\n' | grep -Fx "$GROUP" >/dev/null; } ||
         LK_SUDO=1
-    if lk_true DIR; then
-        lk_maybe_sudo install ${ARGS[@]+"${ARGS[@]}"} "$@"
+    if lk_is_true DIR; then
+        lk_sudo install ${ARGS[@]+"${ARGS[@]}"} "$@"
     else
         for DEST in "$@"; do
-            if lk_maybe_sudo test ! -e "$DEST" 2>/dev/null; then
-                lk_maybe_sudo install ${ARGS[@]+"${ARGS[@]}"} /dev/null "$DEST"
+            if lk_sudo test ! -e "$DEST" 2>/dev/null; then
+                lk_sudo install ${ARGS[@]+"${ARGS[@]}"} /dev/null "$DEST"
             else
-                STAT=$(lk_file_security "$DEST" 2>/dev/null) || return
+                STAT=$(lk_file_owner_mode "$DEST" 2>/dev/null) || return
                 [ -z "${MODE-}" ] ||
                     { [[ $MODE =~ ^0*([0-7]+)$ ]] &&
                         REGEX=" 0*${BASH_REMATCH[1]}\$" &&
                         [[ $STAT =~ $REGEX ]]; } ||
-                    lk_maybe_sudo chmod \
+                    lk_sudo chmod \
                         ${VERBOSE:+-v} "$MODE" "$DEST" ||
                     return
                 [ -z "${OWNER-}${GROUP-}" ] ||
@@ -834,30 +834,30 @@ Usage: $FUNCNAME [-f] TARGET LINK"
     LINK=${2%/}
     LINK_DIR=${LINK%/*}
     [ "$LINK_DIR" != "$LINK" ] || LINK_DIR=.
-    lk_maybe_sudo test -e "$TARGET" ||
+    lk_sudo test -e "$TARGET" ||
         { [ "${TARGET:0:1}" != / ] &&
-            lk_maybe_sudo test -e "$LINK_DIR/$TARGET"; } ||
+            lk_sudo test -e "$LINK_DIR/$TARGET"; } ||
         lk_warn "target not found: $TARGET" || return
-    ! lk_verbose || v=v
-    ! lk_verbose 2 || vv=v
+    ! lk_is_v || v=v
+    ! lk_is_v 2 || vv=v
     LK_SYMLINK_NO_CHANGE=${LK_SYMLINK_NO_CHANGE:-1}
-    if lk_maybe_sudo test -L "$LINK"; then
-        CURRENT_TARGET=$(lk_maybe_sudo readlink -- "$LINK") || return
+    if lk_sudo test -L "$LINK"; then
+        CURRENT_TARGET=$(lk_sudo readlink -- "$LINK") || return
         [ "$CURRENT_TARGET" != "$TARGET" ] ||
             return 0
-        lk_maybe_sudo rm -f"$vv" -- "$LINK" || return
-    elif lk_maybe_sudo test -e "$LINK"; then
-        if ! lk_true NO_ORIG; then
-            lk_maybe_sudo \
+        lk_sudo rm -f"$vv" -- "$LINK" || return
+    elif lk_sudo test -e "$LINK"; then
+        if ! lk_is_true NO_ORIG; then
+            lk_sudo \
                 mv -f"$v" -- "$LINK" "$LINK.orig" || return
         else
             lk_rm ${v:+"-$v"} -- "$LINK" || return
         fi
-    elif lk_maybe_sudo test ! -d "$LINK_DIR"; then
-        lk_maybe_sudo \
+    elif lk_sudo test ! -d "$LINK_DIR"; then
+        lk_sudo \
             install -d"$v" -- "$LINK_DIR" || return
     fi
-    lk_maybe_sudo ln -s"$v" -- "$TARGET" "$LINK" &&
+    lk_sudo ln -s"$v" -- "$TARGET" "$LINK" &&
         LK_SYMLINK_NO_CHANGE=0
 }
 
@@ -900,14 +900,14 @@ function lk_remove_false() {
 #
 # Remove paths to missing files from ARRAY.
 function lk_remove_missing() {
-    lk_remove_false 'lk_maybe_sudo test -e "{}" -o -L "{}"' "$1"
+    lk_remove_false 'lk_sudo test -e "{}" -o -L "{}"' "$1"
 }
 
 # lk_remove_missing_or_empty ARRAY
 #
 # Remove paths to missing or empty files from ARRAY.
 function lk_remove_missing_or_empty() {
-    lk_remove_false 'lk_maybe_sudo test -s "{}" -o -L "{}"' "$1"
+    lk_remove_false 'lk_sudo test -s "{}" -o -L "{}"' "$1"
 }
 
 # lk_resolve_files ARRAY
@@ -923,7 +923,7 @@ function lk_resolve_files() {
 }
 
 function lk_basename() {
-    { [ $# -gt 0 ] && lk_echo_args "$@" || cat; } |
+    { [ $# -gt 0 ] && lk_args "$@" || cat; } |
         sed -E 's/.*\/([^/]+)\/*$/\1/'
 }
 
@@ -966,11 +966,11 @@ function lk_random_password() {
 function lk_base64() {
     local DECODE
     [ "${1-}" != -d ] || DECODE=1
-    if lk_command_exists openssl &&
+    if lk_has openssl &&
         openssl base64 &>/dev/null </dev/null; then
         # OpenSSL's implementation is ubiquitous and well-behaved
         openssl base64 ${DECODE:+-d}
-    elif lk_command_exists base64 &&
+    elif lk_has base64 &&
         base64 --version 2>/dev/null </dev/null | grep -i gnu >/dev/null; then
         # base64 on BSD and some legacy systems (e.g. RAIDiator 4.x) doesn't
         # wrap lines by default
@@ -991,7 +991,7 @@ function lk_hex() {
     fi
 }
 
-if ! lk_is_macos; then
+if ! lk_system_is_macos; then
     function lk_full_name() {
         getent passwd "${1:-$EUID}" | cut -d: -f5 | cut -d, -f1
     }
@@ -1017,7 +1017,7 @@ function lk_file_age() {
         echo $(($(lk_timestamp) - MODIFIED))
 }
 
-if ! lk_is_macos; then
+if ! lk_system_is_macos; then
     function lk_timestamp_readable() {
         gnu_date -Rd "@$1"
     }
@@ -1032,9 +1032,9 @@ fi
 # Read the entire FILE into variable VAR, adding a newline at the end unless
 # FILE has zero bytes or its last byte is a newline.
 function lk_file_get_text() {
-    lk_maybe_sudo test -e "$1" || lk_warn "file not found: $1" || return
+    lk_sudo test -e "$1" || lk_warn "file not found: $1" || return
     lk_is_identifier "$2" || lk_warn "not a valid identifier: $2" || return
-    eval "$2=\$(lk_maybe_sudo cat \"\$1\" && printf .)" &&
+    eval "$2=\$(lk_sudo cat \"\$1\" && printf .)" &&
         eval "$2=\${$2%.}" &&
         { [ -z "${!2:+1}" ] ||
             eval "$2=\${$2%\$'\\n'}\$'\\n'"; }
@@ -1044,11 +1044,11 @@ function lk_file_get_text() {
 function lk_file_keep_original() {
     [ "${LK_FILE_KEEP_ORIGINAL:-1}" -eq 1 ] || return 0
     local v=
-    ! lk_verbose || v=v
+    ! lk_is_v || v=v
     while [ $# -gt 0 ]; do
-        ! lk_maybe_sudo test -s "$1" ||
-            lk_maybe_sudo test -e "$1.orig" ||
-            lk_maybe_sudo cp -aL"$v" "$1" "$1.orig" || return
+        ! lk_sudo test -s "$1" ||
+            lk_sudo test -e "$1.orig" ||
+            lk_sudo cp -aL"$v" "$1" "$1.orig" || return
         shift
     done
 }
@@ -1067,13 +1067,13 @@ function lk_file_backup() {
     local MOVE=${LK_FILE_BACKUP_MOVE-} FILE OWNER OWNER_HOME DEST GROUP \
         MODIFIED TARGET TZ=UTC s vv=
     [ "${1-}" != -m ] || { MOVE=1 && shift; }
-    ! lk_verbose 2 || vv=v
+    ! lk_is_v 2 || vv=v
     export TZ
     while [ $# -gt 0 ]; do
-        if lk_maybe_sudo test -e "$1"; then
-            lk_maybe_sudo test -f "$1" || lk_warn "not a file: $1" || return
-            lk_maybe_sudo test -s "$1" || return 0
-            ! lk_true MOVE || {
+        if lk_sudo test -e "$1"; then
+            lk_sudo test -f "$1" || lk_warn "not a file: $1" || return
+            lk_sudo test -s "$1" || return 0
+            ! lk_is_true MOVE || {
                 FILE=$(lk_realpath "$1") || return
                 {
                     OWNER=$(lk_file_owner "$FILE") &&
@@ -1105,8 +1105,8 @@ function lk_file_backup() {
             }
             MODIFIED=$(lk_file_modified "$1") &&
                 TARGET=${DEST:-$1}$(lk_file_get_backup_suffix "$MODIFIED") &&
-                { lk_maybe_sudo test -e "$TARGET" ||
-                    lk_maybe_sudo cp -aL"$vv" "$1" "$TARGET"; } || return
+                { lk_sudo test -e "$TARGET" ||
+                    lk_sudo cp -aL"$vv" "$1" "$TARGET"; } || return
         fi
         shift
     done
@@ -1118,17 +1118,17 @@ function lk_file_prepare_temp() {
     [ "${1-}" != -n ] || { NO_COPY=1 && shift; }
     DIR=${1%/*}
     [ "$DIR" != "$1" ] || DIR=$PWD
-    ! lk_verbose 2 || vv=v
-    TEMP=$(lk_maybe_sudo mktemp -- "${DIR%/}/.${1##*/}.XXXXXXXXXX") || return
-    ! lk_maybe_sudo test -f "$1" ||
-        if lk_true NO_COPY; then
+    ! lk_is_v 2 || vv=v
+    TEMP=$(lk_sudo mktemp -- "${DIR%/}/.${1##*/}.XXXXXXXXXX") || return
+    ! lk_sudo test -f "$1" ||
+        if lk_is_true NO_COPY; then
             local OPT
-            lk_is_macos || OPT=--
+            lk_system_is_macos || OPT=--
             MODE=$(lk_file_mode "$1") &&
-                lk_maybe_sudo chmod "$(lk_pad_zero 5 "$MODE")" \
+                lk_sudo chmod "$(lk_pad_zero 5 "$MODE")" \
                     ${OPT:+"$OPT"} "$TEMP"
         else
-            lk_maybe_sudo cp -aL"$vv" -- "$1" "$TEMP"
+            lk_sudo cp -aL"$vv" -- "$1" "$TEMP"
         fi >&2 || return
     echo "$TEMP"
 }
@@ -1192,44 +1192,44 @@ Options:
         CONTENT=$(cat && printf .) || return
         CONTENT=${CONTENT%.}
     fi
-    ! lk_verbose 2 || vv=v
+    ! lk_is_v 2 || vv=v
     LK_FILE_REPLACE_NO_CHANGE=${LK_FILE_REPLACE_NO_CHANGE:-1}
     LK_FILE_REPLACE_DECLINED=0
-    if lk_maybe_sudo test -e "$1"; then
-        ! lk_true LINK || {
+    if lk_sudo test -e "$1"; then
+        ! lk_is_true LINK || {
             TEMP=$(lk_realpath "$1") || return
             set -- "$TEMP"
         }
-        lk_maybe_sudo test -f "$1" || lk_warn "not a file: $1" || return
-        ! lk_maybe_sudo test -s "$1" || unset NEW VERB
-        lk_maybe_sudo test -L "$1" || ! diff \
+        lk_sudo test -f "$1" || lk_warn "not a file: $1" || return
+        ! lk_sudo test -s "$1" || unset NEW VERB
+        lk_sudo test -L "$1" || ! diff \
             <(TARGET=$1 _lk_maybe_filter "$IGNORE" "$FILTER" \
-                lk_maybe_sudo cat '"$TARGET"') \
+                lk_sudo cat '"$TARGET"') \
             <([ -z "${CONTENT:+1}" ] || _lk_maybe_filter "$IGNORE" "$FILTER" \
                 echo "\"\${CONTENT%\$'\\n'}\"") >/dev/null || {
-            ! lk_verbose 2 || lk_tty_detail "Not changed:" "$1"
+            ! lk_is_v 2 || lk_tty_detail "Not changed:" "$1"
             return 0
         }
-        ! lk_true ASK || lk_true NEW || {
+        ! lk_is_true ASK || lk_is_true NEW || {
             lk_tty_diff "$1" "" <<<"${CONTENT%$'\n'}" || return
-            lk_confirm "Replace $1 as above?" Y || {
+            lk_tty_yn "Replace $1 as above?" Y || {
                 LK_FILE_REPLACE_DECLINED=1
                 return 1
             }
         }
-        ! lk_verbose || lk_true LK_FILE_NO_DIFF ||
+        ! lk_is_v || lk_is_true LK_FILE_NO_DIFF ||
             lk_file_get_text "$1" PREVIOUS || return
-        ! lk_true BACKUP ||
+        ! lk_is_true BACKUP ||
             lk_file_backup ${MOVE:+-m} "$1" || return
     fi
     TEMP=$(lk_file_prepare_temp "$1") &&
         lk_delete_on_exit "$TEMP" &&
         { [ -z "${CONTENT:+1}" ] || echo "${CONTENT%$'\n'}"; } |
-        lk_maybe_sudo tee "$TEMP" >/dev/null &&
-        lk_maybe_sudo mv -f"$vv" "$TEMP" "$1" &&
+        lk_sudo tee "$TEMP" >/dev/null &&
+        lk_sudo mv -f"$vv" "$TEMP" "$1" &&
         LK_FILE_REPLACE_NO_CHANGE=0 || return
-    ! lk_verbose || {
-        if lk_true LK_FILE_NO_DIFF || lk_true ASK; then
+    ! lk_is_v || {
+        if lk_is_true LK_FILE_NO_DIFF || lk_is_true ASK; then
             lk_tty_detail "${VERB:-Updated}:" "$1"
         elif [ -n "${PREVIOUS+1}" ]; then
             echo -n "$PREVIOUS" | lk_tty_diff_detail "" "$1"
@@ -1263,11 +1263,11 @@ function lk_nohup() { (
     _LK_CAN_FAIL=1
     trap "" SIGHUP SIGINT SIGTERM
     set -m
-    OUT_FILE=$(TMPDIR=$(lk_first_existing "$LK_BASE/var/log" ~ /tmp) &&
-        _LK_MKTEMP_EXT=.nohup.out lk_mktemp_file) &&
+    OUT_FILE=$(TMPDIR=$(lk_readable "$LK_BASE/var/log" ~ /tmp) &&
+        _LK_MKTEMP_EXT=.nohup.out lk_mktemp) &&
         OUT_FD=$(lk_fd_next) &&
         eval "exec $OUT_FD"'>"$OUT_FILE"' || return
-    ! lk_verbose || lk_tty_print "Redirecting output to" "$OUT_FILE"
+    ! lk_is_v || lk_tty_print "Redirecting output to" "$OUT_FILE"
     if lk_log_is_open; then
         TTY_OUT_FD=$_LK_TTY_OUT_FD &&
             TTY_ERR_FD=$_LK_TTY_ERR_FD &&
@@ -1317,7 +1317,7 @@ function _lk_err_trap() {
 
 set -o pipefail
 
-! lk_bash_at_least 5 2 ||
+! lk_bash_is 5 2 ||
     shopt -u patsub_replacement
 
 if [[ $- != *i* ]]; then

@@ -3,11 +3,11 @@
 # lk_date FORMAT [TIMESTAMP]
 function lk_date() {
     # Take advantage of printf support for strftime in Bash 4.2+
-    if lk_bash_at_least 4 2; then
+    if lk_bash_is 4 2; then
         function lk_date() {
             printf "%($1)T\n" "${2:--1}"
         }
-    elif ! lk_is_macos; then
+    elif ! lk_system_is_macos; then
         function lk_date() {
             if (($# < 2)); then
                 date "+$1"

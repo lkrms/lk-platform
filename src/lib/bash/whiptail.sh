@@ -2,9 +2,9 @@
 
 function _lk_whiptail() { (
     [[ $- != *x* ]] ||
-        lk_bash_at_least 4 1 ||
+        lk_bash_is 4 1 ||
         [[ ! /dev/fd/2 -ef /dev/fd/4 ]] ||
-        ! STDERR=$(lk_get_tty) || {
+        ! STDERR=$(lk_writable_tty) || {
         set +x
         exec 2>"$STDERR" || return
     }
@@ -30,7 +30,7 @@ function lk_whiptail() {
 #     /Applications/iTerm.app	iTerm
 function lk_whiptail_build_list() {
     [ $# -ge 2 ] || lk_warn "invalid arguments" || return
-    lk_mapfile "$1" <(lk_echo_args "${@:3}" | sed -E "p;$2")
+    lk_mapfile "$1" <(lk_args "${@:3}" | sed -E "p;$2")
 }
 
 # - lk_whiptail_checklist TITLE TEXT TAG ITEM [TAG ITEM...] [STATUS]
@@ -58,7 +58,7 @@ function lk_whiptail_checklist() {
     while [[ $# -ge $_ARGS ]]; do
         ((++i))
         STATUS=${_STATUS+$STATUS}${_STATUS-$3}
-        ! lk_no_input || {
+        ! lk_input_is_off || {
             [[ $STATUS == off ]] || echo "$1"
             shift "$_ARGS"
             continue
@@ -68,7 +68,7 @@ function lk_whiptail_checklist() {
         [[ ${#ITEM} -le $WIDTH ]] || WIDTH=${#ITEM}
         shift "$_ARGS"
     done
-    ! lk_no_input || return 0
+    ! lk_input_is_off || return 0
     ((LIST_HEIGHT = i >= LIST_HEIGHT ? LIST_HEIGHT : i))
     ((WIDTH += 16, WIDTH += WIDTH % 2))
     TEXT=$(fold -s -w $((WIDTH - 4)) <<<"$TEXT")

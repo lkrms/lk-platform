@@ -42,7 +42,7 @@ lk_log_start
 
 lk_tty_print "Processing udev keyboard event for $DEVICE"
 lk_tty_detail "Action:" "$ACTION"
-! lk_debug ||
+! lk_debug_is_on ||
     lk_tty_detail "Environment:" "$(printenv | sort)"
 
 SESSIONS=$(

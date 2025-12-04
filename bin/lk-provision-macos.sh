@@ -127,7 +127,7 @@ function exit_trap() {
         SUDOERS=$_DIR/share__sudoers.d__default
     fi
 
-    ! lk_is_system_apple_silicon || lk_is_apple_silicon ||
+    ! lk_system_is_apple_silicon -t || lk_system_is_apple_silicon ||
         lk_die "not running on native architecture"
 
     LK_FILE_BACKUP_TAKE=${LK_FILE_BACKUP_TAKE-1}
@@ -144,7 +144,7 @@ function exit_trap() {
 
     sudo systemsetup -getremotelogin | grep -Ei '\<On$' >/dev/null || {
         [ "${PIPESTATUS[0]}${PIPESTATUS[1]}" = 01 ] || lk_die ""
-        ! lk_confirm "Enable remote access to this computer via SSH?" N || {
+        ! lk_tty_yn "Enable remote access to this computer via SSH?" N || {
             lk_tty_print "Enabling Remote Login (SSH)"
             lk_tty_run_detail sudo systemsetup -setremotelogin on
         }
@@ -160,7 +160,7 @@ function exit_trap() {
 
     CURRENT_SHELL=$(lk_dscl_read UserShell)
     [[ $CURRENT_SHELL == "$BASH" ]] ||
-        ! lk_confirm "Use $BASH as the default shell for user '$USER'?" N || {
+        ! lk_tty_yn "Use $BASH as the default shell for user '$USER'?" N || {
         lk_tty_print "Setting default shell"
         lk_tty_run_detail sudo chsh -s "$BASH" "$USER"
     }
@@ -184,7 +184,7 @@ function exit_trap() {
     BREW_PATH=(/usr/local/bin/brew)
     BREW_ARCH=("")
     BREW_NAMES=("Homebrew")
-    ! lk_is_apple_silicon || {
+    ! lk_system_is_apple_silicon || {
         PATH_ADD+=(/opt/homebrew/{sbin,bin})
         BREW_PATH=(/opt/homebrew/bin/brew)
     }
@@ -277,7 +277,7 @@ function exit_trap() {
             # `script` flushes stdin to stdout, breaking the `while read` loop
             # in `lk_brew_tap`, so use /dev/tty or /dev/null as input
             local STDIN
-            STDIN=$(lk_get_tty) || STDIN=/dev/null
+            STDIN=$(lk_writable_tty) || STDIN=/dev/null
             lk_faketty caffeinate -d "${BREW[@]:-brew}" "$@" <"$STDIN"
         else
             command "${BREW[@]:-brew}" "$@"
@@ -325,22 +325,22 @@ function exit_trap() {
     )
 
     ! MACOS_VERSION=$(lk_macos_version) ||
-        ! lk_version_at_least "$MACOS_VERSION" 10.15 ||
+        ! lk_version_is "$MACOS_VERSION" 10.15 ||
         INSTALL+=(mas)
-    HOMEBREW_FORMULAE=($(lk_echo_array HOMEBREW_FORMULAE INSTALL | sort -u))
+    HOMEBREW_FORMULAE=($(lk_arr HOMEBREW_FORMULAE INSTALL | sort -u))
 
     BREW_NEW=()
     brew_loop check_homebrew
     INSTALL=($(comm -13 \
         <(lk_brew_list_formulae | sort -u) \
-        <(lk_echo_array INSTALL | sort -u)))
+        <(lk_arr INSTALL | sort -u)))
     [ ${#INSTALL[@]} -eq 0 ] || {
         lk_tty_print "Installing lk-platform dependencies"
         brew install --formula "${INSTALL[@]}" &&
             lk_brew_flush_cache
     }
 
-    if lk_is_apple_silicon; then
+    if lk_system_is_apple_silicon; then
         FOREIGN=($({ lk_brew_formulae_list_not_native "${HOMEBREW_FORMULAE[@]}" &&
             comm -12 \
                 <(lk_arr HOMEBREW_FORMULAE) \
@@ -420,12 +420,12 @@ function exit_trap() {
     }
     brew_loop check_updates
     lk_mapfile UPGRADE_FORMULAE_TEXT \
-        <(lk_echo_array "${!UPGRADE_FORMULAE_TEXT_@}" | sort -u)
+        <(lk_arr "${!UPGRADE_FORMULAE_TEXT_@}" | sort -u)
     [ ${#UPGRADE_FORMULAE_TEXT[@]} -eq 0 ] || {
         lk_tty_list_detail UPGRADE_FORMULAE_TEXT "$(
             lk_plural ${#UPGRADE_FORMULAE_TEXT[@]} Update Updates
         ) available:" formula formulae
-        lk_confirm "OK to upgrade outdated formulae?" Y ||
+        lk_tty_yn "OK to upgrade outdated formulae?" Y ||
             unset "${!UPGRADE_FORMULAE_@}"
     }
 
@@ -440,7 +440,7 @@ function exit_trap() {
                 lk_tty_list_detail - "$(
                     lk_plural ${#UPGRADE_CASKS[@]} Update Updates
                 ) available:" cask casks
-            lk_confirm "OK to upgrade outdated casks?" Y ||
+            lk_tty_yn "OK to upgrade outdated casks?" Y ||
                 UPGRADE_CASKS=()
         }
     fi
@@ -455,35 +455,35 @@ def is_native:
         if [ -z "${BREW_ARCH[i]}" ]; then
             HOMEBREW_FORMULAE=($(jq -r \
                 "$JQ"'.formulae[]|select(is_native).full_name' \
-                <<<"$HOMEBREW_FORMULAE_JSON" | grep -Ev "^$(lk_regex_implode \
+                <<<"$HOMEBREW_FORMULAE_JSON" | grep -Ev "^$(lk_ere_implode_args -- \
                     ${HOMEBREW_FORCE_INTEL[@]+"${HOMEBREW_FORCE_INTEL[@]}"})\$")) || true
         else
             HOMEBREW_FORMULAE=($({ [ ${#HOMEBREW_FORCE_INTEL[@]} -eq 0 ] || jq -r \
                 "$JQ"'.formulae[]|select(is_native).full_name' \
-                <<<"$HOMEBREW_FORMULAE_JSON" | grep -E "^$(lk_regex_implode \
+                <<<"$HOMEBREW_FORMULAE_JSON" | grep -E "^$(lk_ere_implode_args -- \
                     ${HOMEBREW_FORCE_INTEL[@]+"${HOMEBREW_FORCE_INTEL[@]}"})\$" || true; } &&
                 jq -r \
                     "$JQ"'.formulae[]|select(is_native|not).full_name' \
                     <<<"$HOMEBREW_FORMULAE_JSON"))
         fi
         COUNT=${#HOMEBREW_FORMULAE[@]}
-        ! lk_verbose || [ -z "${FORMULAE_COUNT-}" ] || lk_tty_detail \
+        ! lk_is_v || [ -z "${FORMULAE_COUNT-}" ] || lk_tty_detail \
             "$BREW_NAME formulae ($COUNT of $FORMULAE_COUNT):" \
             $'\n'"${HOMEBREW_FORMULAE[*]}"
     }
     function check_installed() {
-        ! lk_is_apple_silicon || {
+        ! lk_system_is_apple_silicon || {
             local HOMEBREW_FORMULAE
             get_arch_formulae
         }
         lk_mapfile "INSTALL_FORMULAE_$i" <(comm -13 \
             <(lk_brew_list_formulae | sed -En 'p; s/.*\///p' | sort -u) \
-            <(lk_echo_array HOMEBREW_FORMULAE | sort -u))
+            <(lk_arr HOMEBREW_FORMULAE | sort -u))
     }
     function check_selected() {
         lk_mapfile "INSTALL_FORMULAE_$i" <(comm -12 \
-            <(lk_echo_array "INSTALL_FORMULAE_$i" | sort -u) \
-            <(lk_echo_array INSTALL_FORMULAE | sort -u))
+            <(lk_arr "INSTALL_FORMULAE_$i" | sort -u) \
+            <(lk_arr INSTALL_FORMULAE | sort -u))
     }
     # Resolve formulae to their full names, e.g. python -> python@3.8
     HOMEBREW_FORMULAE_JSON=$(lk_brew_info --formula --json=v2 \
@@ -492,7 +492,7 @@ def is_native:
     FORMULAE_COUNT=${#HOMEBREW_FORMULAE[@]}
     brew_loop check_installed
     unset FORMULAE_COUNT
-    INSTALL_FORMULAE=($(lk_echo_array "${!INSTALL_FORMULAE_@}" | sort -u))
+    INSTALL_FORMULAE=($(lk_arr "${!INSTALL_FORMULAE_@}" | sort -u))
     if [ ${#INSTALL_FORMULAE[@]} -gt 0 ]; then
         FORMULAE=()
         for FORMULA in "${INSTALL_FORMULAE[@]}"; do
@@ -519,7 +519,7 @@ def is_native:
 
     INSTALL_CASKS=($(comm -13 \
         <(lk_brew_list_casks | sort -u) \
-        <(lk_echo_array HOMEBREW_CASKS |
+        <(lk_arr HOMEBREW_CASKS |
             sort -u)))
     if [ ${#INSTALL_CASKS[@]} -gt 0 ]; then
         HOMEBREW_CASKS_JSON=$(lk_brew_info --cask --json=v2 "${INSTALL_CASKS[@]}")
@@ -545,18 +545,18 @@ def is_native:
 
     INSTALL_APPS=()
     UPGRADE_APPS=()
-    if [ ${#MAS_APPS[@]} -gt "0" ] && lk_command_exists mas; then
+    if [ ${#MAS_APPS[@]} -gt "0" ] && lk_has mas; then
         lk_tty_print "Checking Mac App Store apps"
-        while ! lk_version_at_least "$MACOS_VERSION" 12.0 &&
+        while ! lk_version_is "$MACOS_VERSION" 12.0 &&
             ! APPLE_ID=$(mas account 2>/dev/null); do
             APPLE_ID=
             lk_tty_detail "\
 Unable to retrieve Apple ID
 Please open the Mac App Store and sign in"
-            lk_confirm "Try again?" Y || break
+            lk_tty_yn "Try again?" Y || break
         done
 
-        if lk_version_at_least "$MACOS_VERSION" 12.0 ||
+        if lk_version_is "$MACOS_VERSION" 12.0 ||
             [ -n "$APPLE_ID" ]; then
             lk_tty_detail "Apple ID:" "${APPLE_ID:-<unknown>}"
 
@@ -566,13 +566,13 @@ Please open the Mac App Store and sign in"
                     lk_tty_list_detail - "$(
                         lk_plural ${#UPGRADE_APPS[@]} Update Updates
                     ) available:" app apps
-                lk_confirm "OK to upgrade outdated apps?" Y ||
+                lk_tty_yn "OK to upgrade outdated apps?" Y ||
                     UPGRADE_APPS=()
             fi
 
             INSTALL_APPS=($(comm -13 \
                 <(mas list | grep -Eo '^[0-9]+' | sort -u) \
-                <(lk_echo_array MAS_APPS | sort -u)))
+                <(lk_arr MAS_APPS | sort -u)))
             PROG='
 NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[[0-9]+\.[0-9]+\])?$/, "\\1", "g")
                 printf "%s=%s\n", "APP_VER" , gensub(/.* ([0-9]+(\.[0-9]+)*)( \[[0-9]+\.[0-9]+\])?$/, "\\1", "g") }
@@ -677,33 +677,33 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
     function check_orphans() {
         local ALL_FORMULAE LAST_FORMULAE NEW_JSON LAST_CASKS \
             NEW_FORMULAE NEW_CASKS PURGE_FORMULAE j=0
-        ! lk_is_apple_silicon || {
+        ! lk_system_is_apple_silicon || {
             local HOMEBREW_FORMULAE
             get_arch_formulae
         }
         lk_mktemp_with ALL_FORMULAE comm -12 \
             <(lk_brew_list_formulae | sort -u) \
-            <(lk_echo_array HOMEBREW_FORMULAE HOMEBREW_KEEP_FORMULAE | sort -u) &&
+            <(lk_arr HOMEBREW_FORMULAE HOMEBREW_KEEP_FORMULAE | sort -u) &&
             lk_mktemp_with LAST_FORMULAE &&
             lk_mktemp_with NEW_JSON
         ((i > 0)) || {
             lk_mktemp_with ALL_CASKS comm -12 \
                 <(lk_brew_list_casks | sort -u) \
-                <(lk_echo_array HOMEBREW_CASKS HOMEBREW_KEEP_CASKS | sort -u) &&
+                <(lk_arr HOMEBREW_CASKS HOMEBREW_KEEP_CASKS | sort -u) &&
                 lk_mktemp_with LAST_CASKS || return
         }
         while :; do
             ((++j))
             lk_mktemp_with -r NEW_FORMULAE \
                 comm -23 "$ALL_FORMULAE" "$LAST_FORMULAE" || return
-            ! lk_verbose || [ ! -s "$NEW_FORMULAE" ] ||
+            ! lk_is_v || [ ! -s "$NEW_FORMULAE" ] ||
                 lk_tty_detail \
                     "$BREW_NAME formulae dependencies (iteration #$j):" \
                     $'\n'"$(tr '\n' ' ' <"$NEW_FORMULAE")"
             ((i > 0)) || {
                 lk_mktemp_with -r NEW_CASKS \
                     comm -23 "$ALL_CASKS" "$LAST_CASKS" || return
-                ! lk_verbose || [ ! -s "$NEW_CASKS" ] ||
+                ! lk_is_v || [ ! -s "$NEW_CASKS" ] ||
                     lk_tty_detail \
                         "$BREW_NAME cask dependencies (iteration #$j):" \
                         $'\n'"$(tr '\n' ' ' <"$NEW_CASKS")"
@@ -742,7 +742,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
             lk_tty_list - \
                 "Installed by $BREW_NAME but no longer required:" \
                 formula formulae <"$PURGE_FORMULAE" || return
-            ! lk_confirm "Remove the above?" N || {
+            ! lk_tty_yn "Remove the above?" N || {
                 brew uninstall --formula \
                     --force --ignore-dependencies $(<"$PURGE_FORMULAE") &&
                     lk_brew_flush_cache
@@ -757,7 +757,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
     [ ! -s "$PURGE_CASKS" ] || {
         lk_tty_list - \
             "Installed but no longer required:" cask casks <"$PURGE_CASKS"
-        ! lk_confirm "Remove the above?" N || {
+        ! lk_tty_yn "Remove the above?" N || {
             brew uninstall --cask $(<"$PURGE_CASKS") &&
                 lk_brew_flush_cache
         }
@@ -780,7 +780,7 @@ NR == 1       { printf "%s=%s\n", "APP_NAME", gensub(/(.*) [0-9]+(\.[0-9]+)*( \[
             CLI_FILE=${DIR}php-cli.ini
             [ -f "$FILE" ] || continue
             [ -f "$CLI_FILE" ] ||
-                cp -a "$(lk_first_file "$FILE.orig" "$FILE")" "$CLI_FILE"
+                cp -a "$(lk_readable "$FILE.orig" "$FILE")" "$CLI_FILE"
             for LK_CONF_OPTION_FILE in "$FILE" "$CLI_FILE"; do
                 [[ $LK_CONF_OPTION_FILE != "$CLI_FILE" ]] ||
                     lk_php_set_option memory_limit -1

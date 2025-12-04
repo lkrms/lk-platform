@@ -107,7 +107,7 @@ function lk_sudo_on_fail() {
 # without asking the user to authenticate.
 function lk_can_sudo() {
     [[ -n ${1-} ]] || lk_err "invalid arguments" || return
-    if lk_no_input; then
+    if lk_input_is_off; then
         sudo -nl "$1" &>/dev/null
     else
         # Return without allowing sudo to prompt for a password if the user has
@@ -135,7 +135,7 @@ function lk_run_as() {
     shift
     if [[ $EUID -eq $_USER ]]; then
         "$@"
-    elif lk_is_linux; then
+    elif lk_system_is_linux; then
         _USER=$(id -un "$_USER")
         lk_elevate runuser -u "$_USER" -- "$@"
     else

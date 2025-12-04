@@ -25,7 +25,7 @@ function lk_tty_read() {
     local IFS=$' \t\n' _NOTE
     [[ ${1-} != -* ]] || { _NOTE=${1#-} && shift; }
     (($# > 1)) && unset -v "$2" || lk_bad_args || return
-    ! lk_no_input || [[ -z ${3:+1} ]] || {
+    ! lk_input_is_off || [[ -z ${3:+1} ]] || {
         eval "$2=\$3"
         return
     }
@@ -68,7 +68,7 @@ function lk_tty_yn() {
     [[ ${1-} != -* ]] || { NOTE=${1#-} && shift; }
     (($#)) || lk_bad_args || return
     local _Y="[yY]([eE][sS])?" _N="[nN][oO]?"
-    ! lk_no_input || [[ ! ${2-} =~ ^($_Y|$_N)$ ]] || {
+    ! lk_input_is_off || [[ ! ${2-} =~ ^($_Y|$_N)$ ]] || {
         [[ $2 =~ ^$_Y$ ]]
         return
     }
@@ -105,7 +105,7 @@ function lk_tty_ynav() {
             'tolower($1)==answer&&$2~regex{print$2;exit}' "$FILE") || ANSWER=
     DEFAULT=${ANSWER:-${3-}}
     [[ -z $ANSWER ]] &&
-        { ! lk_no_input || [[ ! $DEFAULT =~ ^($_Y|$_N|$_A|$_V)$ ]]; } || {
+        { ! lk_input_is_off || [[ ! $DEFAULT =~ ^($_Y|$_N|$_A|$_V)$ ]]; } || {
         [[ $DEFAULT =~ ^($_Y|$_A)$ ]]
         return
     }

@@ -59,9 +59,9 @@ Example:
         lk_tty_detail "CPU count:" "$LINODE_VPCUS"
         lk_tty_detail "Memory:" "$LINODE_MEMORY"
         lk_tty_detail "Storage:" "$((LINODE_DISK / 1024))G"
-        lk_tty_detail "IP addresses:" $'\n'"$(lk_echo_args \
+        lk_tty_detail "IP addresses:" $'\n'"$(lk_args \
             $LINODE_IPV4_PUBLIC $LINODE_IPV6 $LINODE_IPV4_PRIVATE)"
-        lk_confirm "Destroy the existing Linode and start over?" N || return
+        lk_tty_yn "Destroy the existing Linode and start over?" N || return
         ARGS+=(--image "$LINODE_IMAGE")
     }
     STACKSCRIPT_DATA=$(jq -n \
@@ -98,7 +98,7 @@ Example:
     )
     lk_tty_print "Running:" \
         $'\n'"$(lk_fold_quote_options -120 linode-cli "${ARGS[@]##ssh-??? * }")"
-    lk_confirm "Proceed?" Y || return
+    lk_tty_yn "Proceed?" Y || return
     lk_tty_print "${VERBS[0]} Linode"
     FILE=/tmp/$FUNCNAME-$1-$(lk_timestamp).json
     LINODES=$(linode-cli "${ARGS[@]}" | tee "$FILE") ||
@@ -116,7 +116,7 @@ Example:
     lk_tty_detail "Memory:" "$LINODE_MEMORY"
     lk_tty_detail "Storage:" "$((LINODE_DISK / 1024))G"
     lk_tty_detail "Image:" "$LINODE_IMAGE"
-    lk_tty_detail "IP addresses:" $'\n'"$(lk_echo_args \
+    lk_tty_detail "IP addresses:" $'\n'"$(lk_args \
         $LINODE_IPV4_PUBLIC $LINODE_IPV6 $LINODE_IPV4_PRIVATE)"
     lk_linode_ssh_add <<<"$LINODES"
     [ -z "$HOST_ACCOUNT" ] || {

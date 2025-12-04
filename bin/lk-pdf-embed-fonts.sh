@@ -5,14 +5,14 @@ lk_require provision
 
 lk_assert_command_exists gs
 
-lk_test lk_is_pdf "$@" || lk_usage "\
+lk_test_all lk_is_pdf "$@" || lk_usage "\
 Usage: ${0##*/} PDF..."
 
 lk_log_start
 
 lk_tty_print "Embedding fonts in $# $(lk_plural $# file files)"
 
-! lk_is_macos ||
+! lk_system_is_macos ||
     export GS_FONTPATH=${GS_FONTPATH-~/Library/Fonts:/Library/Fonts:/System/Library/Fonts}
 
 DISTILLER_PARAMS=(
@@ -34,7 +34,7 @@ GS_OPTIONS=(
     -dSAFER
     -sDEVICE=pdfwrite
     ${NPROC:+-dNumRenderingThreads="$NPROC"}
-    ${MEM:+-dBufferSpace="$(lk_echo_args \
+    ${MEM:+-dBufferSpace="$(lk_args \
         $((MEM / 2)) \
         $((2 * 1024 ** 3)) | sort -n | head -n1)"}
     -c "33554432 setvmthreshold << ${DISTILLER_PARAMS[*]} >> setdistillerparams"
@@ -63,5 +63,5 @@ done
 [ ${#ERRORS[@]} -eq 0 ] ||
     lk_tty_error -r \
         "Unable to process ${#ERRORS[@]} $(lk_plural \
-            ${#ERRORS[@]} file files):" $'\n'"$(lk_echo_array ERRORS)" ||
+            ${#ERRORS[@]} file files):" $'\n'"$(lk_arr ERRORS)" ||
     lk_die ""

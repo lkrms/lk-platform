@@ -22,7 +22,7 @@ function lk_pass() {
 function lk_err() {
     local status=$?
     ((status)) || status=1
-    printf '%s: %s\n' "$(_LK_STACK_DEPTH=0 lk_caller)" "$1" >&2
+    printf '%s: %s\n' "$(_LK_STACK_DEPTH=0 lk_caller)" "${1-}" >&2
     return $status
 }
 
@@ -42,7 +42,7 @@ function lk_bad_args() {
 # Print the name of the script or function that's currently running.
 function lk_script() {
     local depth=$((${_LK_STACK_DEPTH-0} + ${1-0})) name
-    lk_script_running || {
+    lk_is_script || {
         name=${FUNCNAME[depth + 1]+${FUNCNAME[*]: -1}}
         [[ $name != @(source|main) ]] || name=
     }

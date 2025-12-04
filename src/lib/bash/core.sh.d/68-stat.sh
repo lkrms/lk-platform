@@ -32,7 +32,7 @@ for ((i = 0; i < ${#STAT_FORMATS[@]}; i += 5)); do
     BSD=$(quote "${STAT_FORMATS[i + 3]}")
     SH=${STAT_FORMATS[i + 4]}
     printf 'function lk_file_%s() {
-    if ! lk_is_macos; then
+    if ! lk_system_is_macos; then
         function lk_file_%s() { lk_sudo_on_fail stat -c %s -- "$@"%s; }
     else
         function lk_file_%s() { lk_sudo_on_fail stat %s-f %s -- "$@"%s; }

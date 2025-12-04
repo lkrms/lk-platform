@@ -36,7 +36,7 @@ DIR_MODE=0755
 FILE_MODE=0644
 PRIVILEGED_DIR_MODE=0700
 
-lk_is_arch && IS_ARCH=
+lk_system_is_arch && IS_ARCH=
 [[ ! -d $LK_BASE/.git ]] || {
     IS_GIT_REPO=
     [[ ! -g $LK_BASE ]] || {
@@ -105,7 +105,7 @@ lk_log_start
     lk_tty_print "Checking environment"
     LK_PATH_PREFIX=${LK_PATH_PREFIX:-${PREVIOUS_PREFIX-}}
     [[ -n $LK_PATH_PREFIX ]] ||
-        if ! lk_no_input; then
+        if ! lk_input_is_off; then
             lk_tty_detail "LK_PATH_PREFIX is not set"
             lk_tty_detail \
                 "Value must be 2-3 alphanumeric characters followed by a hyphen"
@@ -128,11 +128,11 @@ lk_log_start
     _BYOBURC=
     if BYOBU_PATH=$(type -P byobu-launch); then
         _BYOBU=$(
-            ! lk_is_macos ||
+            ! lk_system_is_macos ||
                 printf '[ ! "$SSH_CONNECTION" ] || '
             printf '_byobu_sourced=1 . %q 2>/dev/null || true' "$BYOBU_PATH"
         )
-        ! lk_is_macos ||
+        ! lk_system_is_macos ||
             _BYOBURC='[[ $OSTYPE != darwin* ]] || ! type -P gdf >/dev/null || df() { gdf "$@"; }'
     fi
 
@@ -144,7 +144,7 @@ lk_log_start
     lk_tty_print "Checking GNU utilities"
     function install_gnu_commands() {
         local GNU_COMMANDS i STATUS=0
-        if ! lk_is_macos; then
+        if ! lk_system_is_macos; then
             GNU_COMMANDS=(
                 gawk gnu_awk 1
                 chgrp gnu_chgrp 0
@@ -259,7 +259,7 @@ lk_log_start
             if [ $(($(lk_timestamp) - FETCH_TIME)) -gt 300 ]; then
                 lk_tty_detail "Checking for changes"
                 ! update_repo ||
-                    ! lk_true LK_GIT_REPO_UPDATED ||
+                    ! lk_is_true LK_GIT_REPO_UPDATED ||
                     restart_script "$@"
             fi
         fi
@@ -287,9 +287,9 @@ lk_log_start
 
     # Include all standard home directories
     lk_mapfile _LK_HOMES <(comm -12 \
-        <(lk_echo_args /home/* /srv/www/* /Users/* ~root |
+        <(lk_args /home/* /srv/www/* /Users/* ~root |
             lk_filter 'test -d' | sort -u) \
-        <(if ! lk_is_macos; then
+        <(if ! lk_system_is_macos; then
             getent passwd | cut -d: -f6
         else
             dscl . list /Users NFSHomeDirectory | awk '{print $2}'
@@ -307,15 +307,15 @@ lk_log_start
     [ "$LK_BASE_ALT" != "$LK_BASE" ] &&
         LK_BASE_ALT_QUOTED=$(printf '%q' "$LK_BASE_ALT") ||
         LK_BASE_ALT=
-    RC_PATTERNS=("$(lk_escape_ere "$LK_BASE")")
+    RC_PATTERNS=("$(lk_sed_escape "$LK_BASE")")
     [ "$LK_BASE_QUOTED" = "$LK_BASE" ] ||
-        RC_PATTERNS+=("$(lk_escape_ere "$LK_BASE_QUOTED")")
+        RC_PATTERNS+=("$(lk_sed_escape "$LK_BASE_QUOTED")")
     [ -z "$LK_BASE_ALT" ] || {
-        RC_PATTERNS+=("$(lk_escape_ere "$LK_BASE_ALT")")
+        RC_PATTERNS+=("$(lk_sed_escape "$LK_BASE_ALT")")
         [ "$LK_BASE_ALT_QUOTED" = "$LK_BASE_ALT" ] ||
-            RC_PATTERNS+=("$(lk_escape_ere "$LK_BASE_ALT_QUOTED")")
+            RC_PATTERNS+=("$(lk_sed_escape "$LK_BASE_ALT_QUOTED")")
     }
-    RC_PATTERN="$(lk_regex_implode \
+    RC_PATTERN="$(lk_ere_implode_args -- \
         "${RC_PATTERNS[@]}")(\\/.*)?\\/(\\.bashrc|rc\\.sh)"
     RC_PATTERN=${RC_PATTERN//\\/\\\\}
     # Some awk variants fail with "newline in string" when a newline character

@@ -238,7 +238,7 @@ function lk_apt_purge_removed() {
     [ ${#PURGE[@]} -eq 0 ] || {
         lk_tty_list PURGE "Purging previously removed packages:" \
             "APT package" "APT packages"
-        lk_confirm "Proceed?" Y || return
+        lk_tty_yn "Proceed?" Y || return
         _lk_apt_flock apt-get -yq purge "${PURGE[@]}"
     }
 }
@@ -257,8 +257,8 @@ function lk_apt_upgrade_all() {
     lk_tty_print "Upgrading APT packages"
     [ ${#INST[@]} -eq 0 ] || lk_tty_detail "Upgrade:" $'\n'"${INST[*]}"
     CONF=($(comm -23 \
-        <(lk_echo_array CONF | sort -u) \
-        <(lk_echo_array INST | sort -u)))
+        <(lk_arr CONF | sort -u) \
+        <(lk_arr INST | sort -u)))
     [ ${#CONF[@]} -eq 0 ] || lk_tty_detail "Configure:" $'\n'"${CONF[*]}"
     [ ${#REMV[@]} -eq 0 ] || lk_tty_detail "Remove:" $'\n'"${REMV[*]}"
     _lk_apt_flock apt-get -yq --fix-broken dist-upgrade || return
@@ -270,8 +270,8 @@ function lk_apt_upgrade_all() {
 # For packages that are currently installed, output recommended packages that
 # are not installed.
 function lk_apt_list_missing_recommends() { (
-    lk_root || lk_warn "not running as root" || return
-    DIR=$(lk_mktemp_dir) &&
+    lk_user_is_root || lk_warn "not running as root" || return
+    DIR=$(lk_mktemp -d) &&
         lk_delete_on_exit "$DIR" &&
         install -d -m 00755 "$DIR/var/lib" &&
         lk_apt_update >&2 || return
@@ -303,9 +303,9 @@ function lk_apt_list_missing_recommends() { (
 function lk_apt_reinstall_damaged() {
     local _DPKG _REAL _MISSING FILE_COUNT DIRS MISSING_COUNT REINSTALL
     lk_tty_print "Checking APT package files"
-    _DPKG=$(lk_mktemp_file) &&
-        _REAL=$(lk_mktemp_file) &&
-        _MISSING=$(lk_mktemp_file) &&
+    _DPKG=$(lk_mktemp) &&
+        _REAL=$(lk_mktemp) &&
+        _MISSING=$(lk_mktemp) &&
         lk_delete_on_exit "$_DPKG" "$_REAL" "$_MISSING" || return
     find /var/lib/dpkg/info -name "*.md5sums" -print0 |
         xargs -0 sed -E "s/^$LK_H+$LK_h+(.*)/\/\1/" | sort -u >"$_DPKG" &&
@@ -313,12 +313,12 @@ function lk_apt_reinstall_damaged() {
         DIRS=$(sed -E 's/(.*)\/[^/]+$/\1/' "$_DPKG" | sort -u |
             awk -f "$LK_BASE/lib/awk/paths-get-unique-roots.awk" | sort -u) ||
         return
-    ! lk_verbose ||
+    ! lk_is_v ||
         lk_tty_detail "Files managed by dpkg:" "$FILE_COUNT"
     lk_elevate find -H $DIRS -type f -print | sort -u >"$_REAL"
     comm -23 "$_DPKG" "$_REAL" >"$_MISSING" &&
         MISSING_COUNT=$(wc -l <"$_MISSING") || return
-    ! lk_verbose ||
+    ! lk_is_v ||
         lk_tty_detail "Missing files:" "$MISSING_COUNT"
     [ "$MISSING_COUNT" -eq 0 ] || {
         local IFS=$'\n'
@@ -329,7 +329,7 @@ function lk_apt_reinstall_damaged() {
             "Reinstalling to restore $MISSING_COUNT $(lk_plural \
                 "$MISSING_COUNT" file files):" \
             "APT package" "APT packages"
-        lk_confirm "Proceed?" Y || return
+        lk_tty_yn "Proceed?" Y || return
         # apt-get doesn't set reinstalled packages to manually installed
         lk_apt_update &&
             _lk_apt_flock apt-get -yq \
@@ -344,7 +344,7 @@ function lk_apt_sources_get_clean() {
         SUITES=("$LK_H+") COMPONENTS=("$LK_H+")
     [ "${1-}" != -l ] || LIST=$2
     [ "$LIST" != - ] || unset LIST
-    if lk_is_ubuntu; then
+    if lk_system_is_ubuntu; then
         CODENAME=$(. /etc/lsb-release && echo "$DISTRIB_CODENAME") || return
         SUITES=("$CODENAME"{,-{updates,security,backports}})
         COMPONENTS=(main restricted universe multiverse)
@@ -379,7 +379,7 @@ function lk_apt_sources_get_missing() {
     [ "${1-}" != -l ] || { LIST=$2 && shift 2; }
     [ $# -gt 0 ] || lk_warn "invalid arguments" || return
     # If there are no existing sources with a valid URI (unlikely), use these
-    if lk_is_ubuntu; then
+    if lk_system_is_ubuntu; then
         MIRROR=${MIRROR:-http://archive.ubuntu.com/ubuntu}
         SECURITY_MIRROR=${SECURITY_MIRROR:-http://security.ubuntu.com/ubuntu}
     else

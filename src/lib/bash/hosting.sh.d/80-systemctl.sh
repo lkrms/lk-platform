@@ -44,7 +44,7 @@ function lk_hosting_apply_config() {
             lk_mark_dirty "$SERVICE"
         fi
         if lk_is_dirty "$SERVICE"; then
-            if lk_files_exist "/etc/php/$PHPVER/fpm/pool.d"/*.conf; then
+            if lk_test_all_f "/etc/php/$PHPVER/fpm/pool.d"/*.conf; then
                 _lk_hosting_php_test_config "$PHPVER" || return
                 APPLY+=("$SERVICE")
             else

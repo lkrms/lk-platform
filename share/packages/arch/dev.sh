@@ -62,7 +62,7 @@ PAC_OFFER=(
     rasdaemon
 )
 
-lk_is_virtual || {
+lk_system_is_vm || {
     PAC_PACKAGES+=(
         glmark2
         guvcview # Webcam utility
