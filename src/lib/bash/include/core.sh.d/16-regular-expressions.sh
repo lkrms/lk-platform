@@ -17,7 +17,7 @@ set -euo pipefail
 
 _FILE=$BASH_SOURCE
 _DIR=$(dirname "$_FILE")
-DATA_DIR=$(cd "$_DIR/../../../data" && pwd -P)
+DATA_DIR=$(cd "$_DIR/../../../../data" && pwd -P)
 
 ALL=()
 

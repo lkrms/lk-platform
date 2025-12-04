@@ -1,12 +1,12 @@
 {
     "bashIde.enableSourceErrorDiagnostics": true,
-    "bashIde.globPattern": "./{src/lib/bash/!(core.sh.d),src/lib/bash/core.sh.d/!(16-regular-expressions.sh),lib/bash/!(include)}{,/**/}*.sh",
+    "bashIde.globPattern": "{src/lib/bash/!(include),src/lib/bash/include/!(core.sh.d),src/lib/bash/include/core.sh.d/!(16-regular-expressions.sh)}{,/**/}*.sh",
     "bashIde.includeAllWorkspaceSymbols": true,
     "bashIde.shellcheckArguments": "--exclude=1090,1091,2015,2016",
     "files.exclude": {
-        "**/lib/bash/include": true
+        "lib/bash": true
     },
     "xml.catalogs": [
-        "./share/xml/catalog.xml"
+        "share/xml/catalog.xml"
     ]
 }
