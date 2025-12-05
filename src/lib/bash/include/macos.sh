@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+function _lk_macos_env() { true; }
+function lk_x86() { "$@"; }
+function lk_x86_only() { "$@"; }
+function ibrew() { brew "$@"; }
+function ibash() { bash "$@"; }
+
 if lk_system_is_apple_silicon; then
     function _lk_macos_env() {
         local _LK_VAR _LK_VARS=(PATH MANPATH INFOPATH) _LK_VAL
@@ -20,69 +26,50 @@ if lk_system_is_apple_silicon; then
         SH=$(_lk_macos_env '^/opt/homebrew(/|$)') && eval "$SH" &&
             arch -x86_64 "$@"
     }
-    function brew() {
-        local SH
-        SH=$(_lk_macos_env '^/usr/local(/|$)') && eval "$SH" &&
-            /opt/homebrew/bin/brew "$@"
-    }
-    function ibrew() {
-        local SH
-        SH=$(_lk_macos_env '^/opt/homebrew(/|$)') && eval "$SH" &&
-            arch -x86_64 /usr/local/bin/brew "$@"
-    }
+    [[ ! -x /opt/homebrew/bin/brew ]] ||
+        function brew() {
+            local SH
+            SH=$(_lk_macos_env '^/usr/local(/|$)') && eval "$SH" &&
+                /opt/homebrew/bin/brew "$@"
+        }
+    [[ ! -x /usr/local/bin/brew ]] ||
+        function ibrew() {
+            local SH
+            SH=$(_lk_macos_env '^/opt/homebrew(/|$)') && eval "$SH" &&
+                arch -x86_64 /usr/local/bin/brew "$@"
+        }
     function ibash() { lk_x86 bash "$@"; }
-else
-    function _lk_macos_env() { true; }
-    function lk_x86() { "$@"; }
-    function lk_x86_only() { "$@"; }
-    function ibrew() { brew "$@"; }
-    function ibash() { bash "$@"; }
 fi
 
+# lk_macos_version
 function lk_macos_version() {
-    local VERSION
-    VERSION=$(sw_vers -productVersion) &&
-        [[ $VERSION =~ ^([0-9]+\.[0-9]+)(\.[0-9]+)?$ ]] || return
-    echo "${BASH_REMATCH[1]}"
-} #### Reviewed: 2021-06-28
+    local version
+    version=$(sw_vers -productVersion |
+        sed -En 's/^([0-9]+\.[0-9]+).*/\1/p' | grep .) || return
+    printf '%s\n' "$version"
+} #### Reviewed: 2025-12-05
 
+# lk_macos_version_name [<version>]
 function lk_macos_version_name() {
-    local VERSION
-    VERSION=${1-$(lk_macos_version)} || return
-    case "$VERSION" in
-    13.*)
-        echo "ventura"
-        ;;
-    12.*)
-        echo "monterey"
-        ;;
-    11.*)
-        echo "big_sur"
-        ;;
-    10.15)
-        echo "catalina"
-        ;;
-    10.14)
-        echo "mojave"
-        ;;
-    10.13)
-        echo "high_sierra"
-        ;;
-    10.12)
-        echo "sierra"
-        ;;
-    10.11)
-        echo "el_capitan"
-        ;;
-    10.10)
-        echo "yosemite"
-        ;;
-    *)
-        lk_warn "unknown macOS version: $VERSION"
-        return 1
-        ;;
+    local version name
+    version=${1-$(lk_macos_version)} || return
+    case "$version" in
+    26.*) name=tahoe ;;
+    15.*) name=sequoia ;;
+    14.*) name=sonoma ;;
+    13.*) name=ventura ;;
+    12.*) name=monterey ;;
+    11.*) name=big_sur ;;
+    10.15) name=catalina ;;
+    10.14) name=mojave ;;
+    10.13) name=high_sierra ;;
+    10.12) name=sierra ;;
+    10.11) name=el_capitan ;;
+    10.10) name=yosemite ;;
+    *) lk_err "unknown macOS version: $version" || return ;;
     esac
-} #### Reviewed: 2021-06-28
+    printf '%s\n' "$name"
+} #### Reviewed: 2025-12-05
 
 # lk_macos_setenv VARIABLE VALUE
 function lk_macos_setenv() {
