@@ -55,7 +55,8 @@ PATH=$(add_before_path /usr/local/bin /usr/local/sbin /home/linuxbrew/.linuxbrew
 if _brew=$(
     unset -f brew
     command -v brew
-) && _sh=$("$_brew" shellenv); then
+    # `brew shellenv` output is empty if Homebrew directories are first in PATH
+) && _sh=$(PATH=$_path "$_brew" shellenv); then
     eval "$_sh"
     printf '%s\n' "$_sh"
     printf 'export %s=%s\n' \
@@ -78,4 +79,4 @@ printf 'export %s=%s\n' \
     printf 'export %s=%s\n' \
         LANG "$(quote "$_locale.UTF-8")"
 
-#### Reviewed: 2025-12-04
+#### Reviewed: 2025-12-05
