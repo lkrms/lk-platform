@@ -220,28 +220,28 @@ function lk_user_is_root() {
 #
 # Check if every given file exists.
 function lk_test_all_e() {
-    lk_test_all "lk_sudo_on_fail test -e" "$@"
+    IFS=' ' lk_test_all "lk_sudo_on_fail test -e" "$@"
 }
 
 # lk_test_all_f <file>...
 #
 # Check if every given file exists and is a regular file.
 function lk_test_all_f() {
-    lk_test_all "lk_sudo_on_fail test -f" "$@"
+    IFS=' ' lk_test_all "lk_sudo_on_fail test -f" "$@"
 }
 
 # lk_test_all_d <file>...
 #
 # Check if every given file exists and is a directory.
 function lk_test_all_d() {
-    lk_test_all "lk_sudo_on_fail test -d" "$@"
+    IFS=' ' lk_test_all "lk_sudo_on_fail test -d" "$@"
 }
 
 # lk_test_all_s <file>...
 #
 # Check if every given file exists and has a size greater than zero.
 function lk_test_all_s() {
-    lk_test_all "lk_sudo_on_fail test -s" "$@"
+    IFS=' ' lk_test_all "lk_sudo_on_fail test -s" "$@"
 }
 
 #### Reviewed: 2025-12-03
