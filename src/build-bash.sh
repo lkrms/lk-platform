@@ -19,7 +19,8 @@ cd "$_dir/.."
 write=1
 [[ ${1-} != --no-write ]] || write=0
 
-set -- $(printf '%s\n' src/lib/bash/*.{sh,sh.d} | sed -E 's/\.d$//' | sort -u)
+# shellcheck disable=SC2046
+set -- $(printf '%s\n' src/lib/bash{,/include}/*.{sh,sh.d} | sed -E 's/\.d$//' | sort -u)
 
 # Remove trailing structures like:
 #
@@ -58,6 +59,7 @@ for c in trash-put trash; do
 done
 
 [ -n "${trash_cmd-}" ] || {
+    # shellcheck disable=SC2329
     function trash() {
         local dest
         dest=$(mktemp "$1.XXXXXX") &&
@@ -74,7 +76,7 @@ while [ $# -gt 0 ]; do
     name=${1##*/}
     file=$1
     dir=$1.d
-    dest=lib/bash/include/$name
+    dest=${1#src/}
     echo "Building: $dest" >&2
     {
         embed=0
@@ -90,7 +92,12 @@ while [ $# -gt 0 ]; do
                 die "not found in $PWD/$file: #### END $name.d"
             parts=("$head")
         fi
-        echo "#!/usr/bin/env bash"
+        # Preserve `#!/bin/sh`, otherwise use `#!/usr/bin/env bash`
+        shebang=$([ ! -e "$file" ] || head -n1 "$file")
+        case "$shebang" in
+        */sh) echo "#!/bin/sh" ;;
+        *) echo "#!/usr/bin/env bash" ;;
+        esac
         ((minify)) || echo
         parts+=("$dir"/*)
         ((!embed)) || parts+=("$tail")

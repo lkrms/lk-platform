@@ -13,7 +13,7 @@ cd "$_dir/.."
 write=1
 [[ ${1-} != --no-write ]] || write=0
 
-set -- src/lib/bash/core.sh.d/[0-9][0-9]-regular-expressions.sh \
+set -- src/lib/bash/include/core.sh.d/[0-9][0-9]-regular-expressions.sh \
     lib/json/regex.json
 
 unset trash_cmd

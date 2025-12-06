@@ -264,8 +264,9 @@ function lk_grep() {
 # or 'on'. Not case-sensitive.
 function lk_is_true() {
     (($#)) || lk_bad_args || return
-    [[ $1 == @([yY]?([eE][sS])|1|[tT][rR][uU][eE]|[oO][nN]) ]] ||
-        [[ ${!1-} == @([yY]?([eE][sS])|1|[tT][rR][uU][eE]|[oO][nN]) ]] 2>/dev/null
+    # Work around Bash IDE not parsing extglob syntax properly
+    eval '[[ $1 == @([yY]?([eE][sS])|1|[tT][rR][uU][eE]|[oO][nN]) ]]' ||
+        eval '[[ ${!1-} == @([yY]?([eE][sS])|1|[tT][rR][uU][eE]|[oO][nN]) ]]' 2>/dev/null
 }
 
 # lk_is_false <value>
@@ -274,8 +275,9 @@ function lk_is_true() {
 # or 'off'. Not case-sensitive.
 function lk_is_false() {
     (($#)) || lk_bad_args || return
-    [[ $1 == @([nN]?([oO])|0|[fF][aA][lL][sS][eE]|[oO][fF][fF]) ]] ||
-        [[ ${!1-} == @([nN]?([oO])|0|[fF][aA][lL][sS][eE]|[oO][fF][fF]) ]] 2>/dev/null
+    # Work around Bash IDE not parsing extglob syntax properly
+    eval '[[ $1 == @([nN]?([oO])|0|[fF][aA][lL][sS][eE]|[oO][fF][fF]) ]]' ||
+        eval '[[ ${!1-} == @([nN]?([oO])|0|[fF][aA][lL][sS][eE]|[oO][fF][fF]) ]]' 2>/dev/null
 }
 
 # lk_test_all "<command> [<arg>...]" <value>...
@@ -476,28 +478,28 @@ function lk_user_is_root() {
 #
 # Check if every given file exists.
 function lk_test_all_e() {
-    lk_test_all "lk_sudo_on_fail test -e" "$@"
+    IFS=' ' lk_test_all "lk_sudo_on_fail test -e" "$@"
 }
 
 # lk_test_all_f <file>...
 #
 # Check if every given file exists and is a regular file.
 function lk_test_all_f() {
-    lk_test_all "lk_sudo_on_fail test -f" "$@"
+    IFS=' ' lk_test_all "lk_sudo_on_fail test -f" "$@"
 }
 
 # lk_test_all_d <file>...
 #
 # Check if every given file exists and is a directory.
 function lk_test_all_d() {
-    lk_test_all "lk_sudo_on_fail test -d" "$@"
+    IFS=' ' lk_test_all "lk_sudo_on_fail test -d" "$@"
 }
 
 # lk_test_all_s <file>...
 #
 # Check if every given file exists and has a size greater than zero.
 function lk_test_all_s() {
-    lk_test_all "lk_sudo_on_fail test -s" "$@"
+    IFS=' ' lk_test_all "lk_sudo_on_fail test -s" "$@"
 }
 
 function _lk_sudo_check() {

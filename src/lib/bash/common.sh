@@ -41,17 +41,17 @@ lk_require assert
 function _lk_getopt_usage_available() {
     [[ $(type -t __usage) == "function" ]] ||
         [ -n "${LK_USAGE:+1}" ]
-}
+} #### Reviewed: 2021-12-30
 
 function _lk_getopt_version_available() {
     [[ $(type -t __version) == "function" ]] ||
         [ -n "${LK_VERSION:+1}" ]
-}
+} #### Reviewed: 2021-12-30
 
 function _lk_getopt_add_long() {
     [[ ,$LONG, == *,$1,* ]] ||
         LONG=${LONG:+$LONG,}$1
-}
+} #### Reviewed: 2021-12-30
 
 function lk_getopt() {
     local SHIFT=0
@@ -126,7 +126,7 @@ function lk_getopt() {
     ((ARGC)) || shift
     OPTS+=("$@")
     LK_GETOPT=$(lk_quote_arr OPTS)
-}
+} #### Reviewed: 2021-12-30
 
 # Suppress trace output from lk_tty_*
 eval "declare$(

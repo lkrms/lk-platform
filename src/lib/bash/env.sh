@@ -78,3 +78,5 @@ printf 'export %s=%s\n' \
     [ -z "$_locale" ] ||
     printf 'export %s=%s\n' \
         LANG "$(quote "$_locale.UTF-8")"
+
+#### Reviewed: 2025-12-05
