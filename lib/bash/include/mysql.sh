@@ -79,7 +79,7 @@ function lk_mysql_option_bytes() { (
 # Values not given as arguments may be given via variables `DB_USER`,
 # `DB_PASSWORD` and `DB_HOST`.
 function lk_mysql_options_client_print() {
-    local options=(
+    local i options=(
         user "${1-$DB_USER}"
         password "${2-$DB_PASSWORD}"
         host "${3-${DB_HOST-${LK_MYSQL_HOST:-localhost}}}"
