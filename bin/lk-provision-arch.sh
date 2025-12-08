@@ -518,6 +518,8 @@ $LK_NODE_HOSTNAME" &&
             ! lk_feature_enabled desktop ||
                 ! lk_pac_installed libvirt ||
                 printf '%s\n' 192.168.{122,100}.0/24
+            [[ -z ${LK_BRIDGE_INTERFACE-} ]] ||
+                printf '%s\n' "$LK_BRIDGE_INTERFACE"
             lk_system_list_physical_links
         } | lk_implode_input ,) &&
             awk -v server="${LK_NTP_SERVER-}" \
