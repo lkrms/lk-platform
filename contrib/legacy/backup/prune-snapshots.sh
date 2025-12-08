@@ -179,6 +179,7 @@ fi
             # non-standard names
             find_snapshots SNAPSHOTS_FAILED \
                 -exec test ! -e '{}/.finished' \; \
+                ! -exec test -e '{}/.pruning' \; \
                 -regex ".*/$BACKUP_TIMESTAMP_FINDUTILS_REGEX" \
                 -exec sh -c 'test "${1##*/}" \< "$2"' sh \
                 '{}' "$PRUNE_FAILED_BEFORE_DATE" \;
