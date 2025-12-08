@@ -176,6 +176,7 @@ lk_log_start
             # non-standard names
             find_snapshots SNAPSHOTS_FAILED \
                 -execdir test ! -e '{}/.finished' \; \
+                ! -execdir test -e '{}/.pruning' \; \
                 -regex ".*/$BACKUP_TIMESTAMP_FINDUTILS_REGEX" \
                 -execdir sh -c 'test "${1##*/}" \< "$2"' sh \
                 '{}' "$PRUNE_FAILED_BEFORE_DATE" \;

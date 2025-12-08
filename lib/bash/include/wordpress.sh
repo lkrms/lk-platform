@@ -537,7 +537,7 @@ ${LOCAL_DB_USER:+1}${LOCAL_DB_PASSWORD:+1}" = 111 ]; then
 function lk_wp_db_restore_local() {
     [ "${1-}" != -s ] || { eval "$(_lk_wp_set_path "$2")" && shift 2; }
     local LOCAL_DB_NAME LOCAL_DB_USER LOCAL_DB_PASSWORD LOCAL_DB_HOST \
-        SITE_ROOT SH CONST LOCAL ACTIONS=() ACTION i=0 SUDO=1
+        SITE_ROOT SH CONST LOCAL ACTIONS=() ACTION SUDO=1
     [ -f "$1" ] || lk_usage "\
 Usage: $FUNCNAME [-s SITE_ROOT] SQL_PATH [DB_NAME [DB_USER]]" || return
     SITE_ROOT=$(lk_wp_get_site_root) &&
@@ -551,7 +551,7 @@ Usage: $FUNCNAME [-s SITE_ROOT] SQL_PATH [DB_NAME [DB_USER]]" || return
         lk_tty_print "Actions pending:"
     }
     [ "$DB_PASSWORD" = "$LOCAL_DB_PASSWORD" ] || {
-        ACTIONS[i++]=$(lk_quote_args \
+        ACTIONS[${#ACTIONS[@]}]=$(lk_quote_args \
             _lk_wp_tty_run -1=wp:5="${LOCAL_DB_PASSWORD::4}..." lk_wp \
             config set DB_PASSWORD "$LOCAL_DB_PASSWORD" --type=constant --quiet)
         _lk_wp_is_quiet || {
@@ -562,7 +562,7 @@ Usage: $FUNCNAME [-s SITE_ROOT] SQL_PATH [DB_NAME [DB_USER]]" || return
     for CONST in DB_NAME DB_USER DB_HOST; do
         LOCAL=LOCAL_$CONST
         [ "${!CONST}" = "${!LOCAL}" ] || {
-            ACTIONS[i++]=$(lk_quote_args _lk_wp_tty_run -1=wp lk_wp \
+            ACTIONS[${#ACTIONS[@]}]=$(lk_quote_args _lk_wp_tty_run -1=wp lk_wp \
                 config set "$CONST" "${!LOCAL}" --type=constant --quiet)
             _lk_wp_is_quiet ||
                 lk_tty_detail "Change $CONST in wp-config.php to" "${!LOCAL}"
