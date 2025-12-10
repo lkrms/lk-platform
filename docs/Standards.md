@@ -2,15 +2,16 @@
 
 > [!NOTE]
 >
-> This document is subject to ongoing review.
->
-> New and refactored `lk-platform` code should comply with the following coding
-> standards. Code committed before relevant standards were introduced may not be
-> compliant.
+> - This document is subject to ongoing review.
+> - New and refactored `lk-platform` code should comply with the standards
+>   below.
+> - Code committed before relevant standards were introduced may not be
+>   compliant until a subsequent review.
 
 ## Variable names
 
-- Settings, environment variables, and global variables for general use: `LK_*`.
+- [Settings][], environment variables, and global variables for general use:
+  `LK_*`.
 - Variables for internal use only: `_LK_*`.
 - Local variables in contexts where variables to act upon may be passed by name:
   `_<name>`.
@@ -48,8 +49,8 @@ the next available file descriptor.
 - If code is not platform-specific, it must run on Linux, macOS and Windows.
 - Code that can safely fail on outdated versions of Bash is allowed if it fails
   early on those versions (examples below). Otherwise, for compatibility with
-  macOS, code must run on **Bash 3.2 and above**. Recommendations for achieving
-  this are [provided separately][Bash 3.2].
+  macOS, code must run on Bash 3.2 and above. Recommendations for achieving this
+  are [provided separately][Bash 3.2].
   ```shell
   # In a function
   lk_bash_is 4 || lk_err "Bash 4 or higher required" || return
@@ -83,3 +84,4 @@ A further explanation of the command, possibly including example invocations.
 ```
 
 [Bash 3.2]: Bash3.2.md
+[Settings]: Settings.md
