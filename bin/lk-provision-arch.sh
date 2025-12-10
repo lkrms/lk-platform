@@ -886,10 +886,17 @@ $LK_NODE_HOSTNAME" &&
     fi
 
     if lk_pac_installed php-fpm apache; then
+        LK_CONF_OPTION_FILE=/etc/php/php.ini
+        VERSION_ID=$(php -r 'echo PHP_VERSION_ID;')
         lk_install -d -m 00700 -o http -g http /var/cache/php/opcache
         lk_php_set_option opcache.file_cache /var/cache/php/opcache
         lk_php_set_option opcache.validate_permission On
-        lk_php_enable_option zend_extension opcache
+        # As of PHP 8.5, opcache is not external
+        if ((VERSION_ID >= 80500)); then
+            lk_php_disable_option zend_extension opcache
+        else
+            lk_php_enable_option zend_extension opcache
+        fi
         if lk_is_desktop; then
             lk_php_set_option max_execution_time 0
             lk_php_set_option opcache.enable Off
