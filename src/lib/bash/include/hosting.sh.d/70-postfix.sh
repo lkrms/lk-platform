@@ -47,7 +47,7 @@ function _lk_hosting_postfix_provision() {
             unset IFS
         else
             RELAY=${RELAY:-smtp:}
-            printf '%s\t%s\n' "@${LK_NODE_FQDN-}" "$RELAY"
+            printf '%s\t%s\n' "@${LK_FQDN-}" "$RELAY"
         fi
 
         # For each domain and sender configured, add an `smtp:` entry to deliver

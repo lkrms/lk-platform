@@ -86,9 +86,9 @@ lk_assert_is_linux
 lk_assert_is_ubuntu
 
 export -n \
-    LK_NODE_HOSTNAME=${LK_NODE_HOSTNAME-} \
-    LK_NODE_FQDN=${LK_NODE_FQDN-} \
-    LK_NODE_TIMEZONE=${LK_NODE_TIMEZONE-} \
+    LK_HOSTNAME=${LK_HOSTNAME-} \
+    LK_FQDN=${LK_FQDN-} \
+    LK_TIMEZONE=${LK_TIMEZONE-} \
     LK_FEATURES=${LK_FEATURES-} \
     LK_PACKAGES=${LK_PACKAGES-} \
     LK_ADMIN_EMAIL=${LK_ADMIN_EMAIL-} \
@@ -145,9 +145,9 @@ FIELD_ERRORS=$'\n'$(
 
     # Required fields
     _LK_REQUIRED=1
-    lk_validate LK_NODE_HOSTNAME "^$DOMAIN_PART_REGEX\$"
-    lk_validate LK_NODE_FQDN "^$DOMAIN_NAME_REGEX\$"
-    lk_validate_one_of LK_NODE_TIMEZONE < <(timedatectl list-timezones)
+    lk_validate LK_HOSTNAME "^$DOMAIN_PART_REGEX\$"
+    lk_validate LK_FQDN "^$DOMAIN_NAME_REGEX\$"
+    lk_validate_one_of LK_TIMEZONE < <(timedatectl list-timezones)
     lk_validate LK_ADMIN_EMAIL "^$EMAIL_ADDRESS_REGEX\$"
     lk_validate_one_of LK_AUTO_REBOOT Y N
 
@@ -167,8 +167,8 @@ FIELD_ERRORS=$'\n'$(
             # Apache doesn't resolve name-based virtual hosts correctly if
             # ServerName resolves to a loopback address, so don't allow the
             # host's FQDN to be the same as the initial hosting domain
-            LK_NODE_FQDN=${LK_NODE_FQDN#www.}
-            lk_validate_not_equal -i LK_HOST_DOMAIN LK_NODE_FQDN
+            LK_FQDN=${LK_FQDN#www.}
+            lk_validate_not_equal -i LK_HOST_DOMAIN LK_FQDN
             _LK_REQUIRED=1
         }
         lk_validate_one_of LK_HOST_SITE_ENABLE Y N
@@ -236,9 +236,9 @@ if lk_is_bootstrap; then
     LK_SSH_JUMP_KEY=${LK_SSH_JUMP_KEY:+jump} lk_var_sh \
         LK_BASE \
         LK_PATH_PREFIX \
-        LK_NODE_HOSTNAME \
-        LK_NODE_FQDN \
-        LK_NODE_TIMEZONE \
+        LK_HOSTNAME \
+        LK_FQDN \
+        LK_TIMEZONE \
         LK_FEATURES \
         LK_PACKAGES \
         LK_ADMIN_EMAIL \
@@ -382,12 +382,12 @@ fi
 
     lk_tty_print "Checking system timezone"
     TIMEZONE=$(lk_system_timezone)
-    [ "$TIMEZONE" = "$LK_NODE_TIMEZONE" ] ||
-        lk_tty_run_detail timedatectl set-timezone "$LK_NODE_TIMEZONE"
+    [ "$TIMEZONE" = "$LK_TIMEZONE" ] ||
+        lk_tty_run_detail timedatectl set-timezone "$LK_TIMEZONE"
 
     lk_tty_print "Checking system hostname"
-    [ "$(hostname -s)" = "$LK_NODE_HOSTNAME" ] || {
-        lk_tty_run_detail hostnamectl set-hostname "$LK_NODE_HOSTNAME"
+    [ "$(hostname -s)" = "$LK_HOSTNAME" ] || {
+        lk_tty_run_detail hostnamectl set-hostname "$LK_HOSTNAME"
         REBOOT=1
     }
 

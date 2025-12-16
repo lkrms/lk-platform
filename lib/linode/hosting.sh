@@ -4,8 +4,8 @@ set -euo pipefail
 shopt -s nullglob
 lk_die() { s=$? && echo "$0: ${1-error $s}" >&2 && (exit $s) && false || exit; }
 
-# <UDF name="LK_NODE_FQDN" label="Host FQDN" example="web01-dev-syd.linode.linacreative.com" />
-# <UDF name="LK_NODE_TIMEZONE" label="System timezone" default="Australia/Sydney" />
+# <UDF name="LK_FQDN" label="Host FQDN" example="web01-dev-syd.linode.linacreative.com" />
+# <UDF name="LK_TIMEZONE" label="System timezone" default="Australia/Sydney" />
 # <UDF name="LK_FEATURES" label="Features to enable (comma-delimited)" manyof="nginx,apache+php,mysql,memcached" default="" />
 # <UDF name="LK_PACKAGES" label="Additional packages to install (comma-delimited)" example="default-jre" default="" />
 # <UDF name="LK_HOST_DOMAIN" label="Initial hosting domain" example="clientname.com.au" default="" />
@@ -63,8 +63,8 @@ SCRIPT_VARS=$(declare -p $(eval \
 SCRIPT_ENV=$(printenv | grep -Evi '^[^=]*password[^=]*=' || true)
 
 # Apply defaults from the tags above (use `lk_linode_get_udf_vars` to generate)
-LK_NODE_FQDN=${LK_NODE_FQDN-}
-LK_NODE_TIMEZONE=${LK_NODE_TIMEZONE:-Australia/Sydney}
+LK_FQDN=${LK_FQDN-}
+LK_TIMEZONE=${LK_TIMEZONE:-Australia/Sydney}
 LK_FEATURES=${LK_FEATURES-}
 LK_PACKAGES=${LK_PACKAGES-}
 LK_HOST_DOMAIN=${LK_HOST_DOMAIN-}
@@ -119,7 +119,7 @@ LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-main}
 KEYS_FILE=/root/.ssh/authorized_keys
 [ -s "$KEYS_FILE" ] || lk_die "no public keys in $KEYS_FILE"
 
-LK_NODE_HOSTNAME=${LK_NODE_FQDN%%.*}
+LK_HOSTNAME=${LK_FQDN%%.*}
 LK_HOST_DOMAIN=${LK_HOST_DOMAIN#www.}
 LK_HOST_ACCOUNT=${LK_HOST_ACCOUNT:-${LK_HOST_DOMAIN%%.*}}
 

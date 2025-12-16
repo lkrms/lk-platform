@@ -104,19 +104,7 @@ lk_log_start
 
     lk_tty_print "Checking environment"
     LK_PATH_PREFIX=${LK_PATH_PREFIX:-${PREVIOUS_PREFIX-}}
-    [[ -n $LK_PATH_PREFIX ]] ||
-        if ! lk_input_is_off; then
-            lk_tty_detail "LK_PATH_PREFIX is not set"
-            lk_tty_detail \
-                "Value must be 2-3 alphanumeric characters followed by a hyphen"
-            while [[ ! $LK_PATH_PREFIX =~ ^[a-zA-Z0-9]{2,3}-$ ]]; do
-                [[ -z $LK_PATH_PREFIX ]] ||
-                    lk_tty_error "Invalid LK_PATH_PREFIX:" "$LK_PATH_PREFIX"
-                lk_tty_read "Path prefix:" LK_PATH_PREFIX lk-
-            done
-        else
-            lk_warn "LK_PATH_PREFIX not set, using 'lk-'" || LK_PATH_PREFIX=lk-
-        fi
+    LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-}
 
     (LK_VERBOSE=1 &&
         lk_settings_persist "$SETTINGS_SH$(printf '\n%s=%q' \

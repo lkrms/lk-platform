@@ -151,11 +151,11 @@ function exit_trap() {
     }
 
     scutil --get HostName &>/dev/null || {
-        [ -n "${LK_NODE_HOSTNAME-}" ] ||
-            lk_tty_read "System hostname (optional):" LK_NODE_HOSTNAME ||
+        [ -n "${LK_HOSTNAME-}" ] ||
+            lk_tty_read "System hostname (optional):" LK_HOSTNAME ||
             lk_die ""
-        [ -z "$LK_NODE_HOSTNAME" ] ||
-            lk_macos_set_hostname "$LK_NODE_HOSTNAME"
+        [ -z "$LK_HOSTNAME" ] ||
+            lk_macos_set_hostname "$LK_HOSTNAME"
     }
 
     CURRENT_SHELL=$(lk_dscl_read UserShell)
