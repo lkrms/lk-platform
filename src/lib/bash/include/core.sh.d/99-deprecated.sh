@@ -33,6 +33,8 @@ lk_is_ubuntu() { lk_system_is_ubuntu; }
 lk_is_virtual() { lk_system_is_vm; }
 lk_is_wsl() { lk_system_is_wsl; }
 lk_jq_get_array() { lk_json_mapfile "$@"; }
+lk_log_create_file() { lk_log_file_create "$@"; }
+lk_log_start() { lk_log_open "$@"; }
 lk_maybe_sudo() { lk_sudo "$@"; }
 lk_mktemp_dir() { _LK_STACK_DEPTH=$((${_LK_STACK_DEPTH-0} + 1)) lk_mktemp -d; }
 lk_mktemp_file() { _LK_STACK_DEPTH=$((${_LK_STACK_DEPTH-0} + 1)) lk_mktemp; }

@@ -386,7 +386,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
     lk_tty_print "Updating server $i of $((i + $# - 1)):" "$1"
 
     (
-      LK_LOG_CMDLINE=("$0-$1")
+      LK_LOG_BASENAME=${0##*/}-$1
       lk_log_start
 
       [ "${LK_NO_INPUT-}" != Y ] ||

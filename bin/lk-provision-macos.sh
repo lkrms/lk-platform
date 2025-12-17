@@ -231,7 +231,7 @@ function exit_trap() {
         lk_faketty caffeinate -d git clone -b "$LK_PLATFORM_BRANCH" \
             https://github.com/lkrms/lk-platform.git "$LK_BASE"
         sudo install -d -m 02775 -g admin "$LK_BASE"/{etc{,/lk-platform},var}
-        sudo install -d -m 01777 -g admin "$LK_BASE"/var/log
+        sudo install -d -m 01777 -g admin "$LK_BASE"/var/log/lk-platform
         sudo install -d -m 00750 -g admin "$LK_BASE"/var/backup
         FILE=$LK_BASE/etc/lk-platform/lk-platform.conf
         sudo install -m 00664 -g admin /dev/null "$FILE"
@@ -398,7 +398,7 @@ function exit_trap() {
 
     LK_SUDO=1
     lk_tty_print
-    _LK_NO_LOG=1 \
+    LK_NO_LOG=1 \
         lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh"
     unset LK_SUDO
 

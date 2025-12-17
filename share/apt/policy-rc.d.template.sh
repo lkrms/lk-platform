@@ -6,7 +6,7 @@ set -euo pipefail
 export LK_BASE={{"LK_BASE"}}
 . "$LK_BASE/lib/bash/common.sh"
 
-unset _LK_NO_LOG
+unset LK_NO_LOG
 
 lk_log_start "/var/log/${LK_PATH_PREFIX}policy-rc.log"
 lk_log_tty_off -a

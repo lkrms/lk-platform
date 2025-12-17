@@ -2,8 +2,6 @@
 
 set -euo pipefail
 
-shopt -s nullglob
-
 function die() {
     local s=$?
     printf '%s: %s\n' "${0##*/}" "${1-command failed}" >&2
@@ -64,18 +62,23 @@ is_vm=1
 awk -F '[ \t]*:[ \t]*' \
     '$1 == "flags" && $2 ~ /(^| )hypervisor( |$)/ { h = 1; exit } END { exit (1 - h) }' \
     /proc/cpuinfo || is_vm=0
+ram_gb=$(awk -F '[ \t:]+' \
+    '$1 == "MemTotal" { print int($2 / 1024 ^ 2); t = 1; exit } END { exit (1 - t) }' \
+    /proc/meminfo) || ram_gb=0
 
+DEFAULT_SWAP_SIZE=4GiB
+((ram_gb < 10)) || DEFAULT_SWAP_SIZE=$((ram_gb * 2 / 5))GiB
 DEFAULT_CMDLINE="quiet splash audit=0"
-((!is_vm)) ||
-    DEFAULT_CMDLINE+=" console=tty0 console=ttyS0"
+((!is_vm)) || DEFAULT_CMDLINE+=" console=tty0 console=ttyS0"
 
 BOOTSTRAP_PING_HOST=${BOOTSTRAP_PING_HOST:-one.one.one.one}
 BOOTSTRAP_TIME_URL=${BOOTSTRAP_TIME_URL:-https://$BOOTSTRAP_PING_HOST}
 BOOTSTRAP_MOUNT_OPTIONS=${BOOTSTRAP_MOUNT_OPTIONS:-defaults}
-BOOTSTRAP_USERNAME=${BOOTSTRAP_USERNAME:-arch}
+BOOTSTRAP_USERNAME=${BOOTSTRAP_USERNAME:-archuser}
 BOOTSTRAP_PASSWORD=${BOOTSTRAP_PASSWORD-}
 BOOTSTRAP_KEY=${BOOTSTRAP_KEY-}
-BOOTSTRAP_FULL_NAME=${BOOTSTRAP_FULL_NAME:-Arch Linux}
+BOOTSTRAP_FULL_NAME=${BOOTSTRAP_FULL_NAME:-Arch User}
+export -n "${!BOOTSTRAP_@}"
 
 LK_IPV4_ADDRESS=${LK_IPV4_ADDRESS-}
 LK_IPV4_GATEWAY=${LK_IPV4_GATEWAY-}
@@ -99,37 +102,61 @@ LK_ARCH_AUR_CHROOT_DIR=${LK_ARCH_AUR_CHROOT_DIR-}
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-main}
 LK_PACKAGES_FILE=${LK_PACKAGES_FILE-}
 export LK_BASE=${LK_BASE:-/opt/lk-platform}
-export -n BOOTSTRAP_PASSWORD BOOTSTRAP_KEY
 
 function __usage() {
-    cat <<EOF &&
+    local devices
+    devices=$(lsblk --output NAME,RM,SIZE,TYPE,RO,FSTYPE,MOUNTPOINT --paths) ||
+        die "error retrieving block devices"
+    cat <<EOF
+Bootstrap Arch Linux on the given disk or partitions.
+
 Usage:
-  ${0##*/} [OPTIONS] ROOT_PART BOOT_PART HOSTNAME[.DOMAIN]
-  ${0##*/} [OPTIONS] INSTALL_DISK HOSTNAME[.DOMAIN]
+  ${0##*/} [options] <root_part> <boot_part> [<swap_part>] <hostname>[.<domain>]
+  ${0##*/} [options] <disk> <hostname>[.<domain>]
 
 Options:
-  -u USERNAME       set the default user's login name (default: arch)
-  -o PARTITION      add the operating system on PARTITION to the boot menu
-                    (may be given multiple times)
-  -c CMDLINE        set the default kernel command-line
+  -u <username>     Specify a login name for the unprivileged user.
+                    (default: archuser)
+  -n <name>         Specify a full name for the unprivileged user.
+                    (default: Arch User)
+  -o <part>         Add the operating system on a partition to the boot loader.
+  -c "<param> ..."  Specify the boot loader's kernel command-line parameters.
                     (default: \"$DEFAULT_CMDLINE\")
-  -p PARAMETER      add PARAMETER to the default kernel command-line
-  -f FEATURE,...    enable each FEATURE
-  -x                install Xfce (alias for: -s xfce4)
-  -k FILE           set LK_PACKAGES_FILE
-  -y                do not prompt for input
+  -p <param>        Add a parameter to the boot loader's kernel command line.
+  -f <feature>      Enable a feature (see list below).
+  -k <file>         Specify custom packages to install.
+  -y                Do not prompt for input.
 
-Useful kernel parameters:
-  intel_idle.max_cstate=2   silence coil whine from C-states above C2
-  usbcore.autosuspend=5     wait 5 seconds to suspend (default: 2, never: -1)
-  libata.force=3.00:noncq   disable NCQ on ATA device 3.00
-  mce=dont_log_ce           do not log corrected machine check errors
-  loglevel=3                do not log kernel warnings
+Features:
+  apache+php (alias of: apache2 + php-fpm)
+  apache2
+  desktop
+  dev (implies: apache+php, docker, libvirt, mysql)
+  docker
+  libvirt
+  lighttpd
+  mariadb
+  minimal
+  mysql (alias of: mariadb)
+  php-fpm
+  router
+  squid
+  xfce4 (implies: desktop)
 
-Block devices:
+If partitions are given:
+
+- <root_part> is formatted
+- <boot_part> is formatted unless it is already a valid EFI system partition
+
+If <disk> is given, a new GPT partition table is created with:
+
+- 1GiB fat32 EFI system partition
+- $DEFAULT_SWAP_SIZE swap partition
+- root partition for remainder of device
+
+Current block devices:
+  ${devices//$'\n'/$'\n'  }
 EOF
-        lsblk --output NAME,RM,SIZE,RO,TYPE,FSTYPE,MOUNTPOINT --paths |
-        sed 's/^/  /'
 }
 
 ROOT_PART=
@@ -307,7 +334,8 @@ lk_log_start "$log_file"
 lk_trap_add EXIT exit_trap
 
 # Clean up after failed attempts
-if [[ -d /mnt/boot ]]; then
+if [[ -d /mnt/boot ]]; then (
+    shopt -s nullglob
     OTHER_OS_MOUNTS=(/mnt/mnt/*)
     if [[ -n ${OTHER_OS_MOUNTS+1} ]]; then
         umount "${OTHER_OS_MOUNTS[@]}"
@@ -315,7 +343,7 @@ if [[ -d /mnt/boot ]]; then
     fi
     umount /mnt/boot
     umount /mnt
-fi
+); fi
 
 lk_tty_log "Setting up live environment"
 FILES=(/etc/pacman.conf{.orig,})
@@ -489,7 +517,7 @@ in_target install -d -m 02775 -o "$BOOTSTRAP_USERNAME" -g adm "$LK_BASE"
         git clone -b "$LK_PLATFORM_BRANCH" \
         https://github.com/lkrms/lk-platform.git "$LK_BASE")
 in_target install -d -m 02775 -g adm "$LK_BASE"/{etc{,/lk-platform},var}
-in_target install -d -m 01777 -g adm "$LK_BASE"/var/log
+in_target install -d -m 01777 -g adm "$LK_BASE"/var/log/lk-platform
 in_target install -d -m 00750 -g adm "$LK_BASE"/var/backup
 FILE=$LK_BASE/etc/lk-platform/lk-platform.conf
 in_target install -m 00664 -g adm /dev/null "$FILE"
@@ -521,7 +549,7 @@ lk_var_sh \
 
 PROVISIONED=0
 in_target -u "$BOOTSTRAP_USERNAME" \
-    env BASH_XTRACEFD=$BASH_XTRACEFD SHELLOPTS=xtrace _LK_NO_LOG=1 \
+    env BASH_XTRACEFD=$BASH_XTRACEFD SHELLOPTS=xtrace LK_NO_LOG=1 \
     "$LK_BASE/bin/lk-provision-arch.sh" --yes && PROVISIONED=1 ||
     lk_tty_error "Provisioning failed"
 

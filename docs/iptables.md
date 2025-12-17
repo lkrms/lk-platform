@@ -36,7 +36,7 @@ flags" rules one might find in `iptables` tutorials are no longer necessary.
 >
 > Rules like this:
 >
-> ```shell
+> ```bash
 > iptables -t mangle -A PREROUTING -p tcp -m tcp --tcp-flags ALL ALL -j DROP
 > iptables -t mangle -A PREROUTING -p tcp -m tcp --tcp-flags ALL NONE -j DROP
 > iptables -t mangle -A PREROUTING -p tcp -m tcp --tcp-flags ALL FIN,PSH,URG -j DROP
@@ -50,7 +50,7 @@ flags" rules one might find in `iptables` tutorials are no longer necessary.
 >
 > can be replaced with one rule like this:
 >
-> ```shell
+> ```bash
 > iptables -t filter -m conntrack --ctstate INVALID -j DROP
 > ```
 

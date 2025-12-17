@@ -1263,7 +1263,7 @@ function lk_nohup() { (
     _LK_CAN_FAIL=1
     trap "" SIGHUP SIGINT SIGTERM
     set -m
-    OUT_FILE=$(TMPDIR=$(lk_readable "$LK_BASE/var/log" ~ /tmp) &&
+    OUT_FILE=$(TMPDIR=$(lk_readable "$LK_BASE/var/log/lk-platform" ~ /tmp) &&
         _LK_MKTEMP_EXT=.nohup.out lk_mktemp) &&
         OUT_FD=$(lk_fd_next) &&
         eval "exec $OUT_FD"'>"$OUT_FILE"' || return

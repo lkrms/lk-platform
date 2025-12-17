@@ -252,7 +252,7 @@ lk_log_start
             fi
         fi
         unset _LK_GIT_USER
-        install -d -m 01777 "$LK_BASE/var/log"
+        install -d -m 01777 "$LK_BASE/var/log/lk-platform"
         install -d -m 00750 "$LK_BASE/var/backup"
         install -d -m "$PRIVILEGED_DIR_MODE" "$LK_BASE/var/lib/lk-platform/dirty"
         LK_VERBOSE='' \

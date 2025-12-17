@@ -102,7 +102,7 @@ function lk_getopt() {
             continue
             ;;
         --no-log)
-            _LK_NO_LOG=1
+            LK_NO_LOG=1
             shift
             continue
             ;;

@@ -585,7 +585,7 @@ $LK_HOSTNAME" &&
     fi
 
     lk_tty_print
-    _LK_NO_LOG=1 \
+    LK_NO_LOG=1 \
         lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh"
 
     lk_tty_print
@@ -778,7 +778,7 @@ $LK_HOSTNAME" &&
 
     if lk_pac_installed logrotate; then
         FILE=/etc/logrotate.d/lk-platform
-        DIR=$(lk_double_quote "$LK_BASE/var/log")
+        DIR=$(lk_double_quote "$LK_BASE/var/log/lk-platform")
         GROUP=$(lk_file_group "$LK_BASE")
         lk_install -m 00644 "$FILE"
         lk_file_replace "$FILE" < <(LK_PLATFORM_LOGS="$DIR/*.log" \

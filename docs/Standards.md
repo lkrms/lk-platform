@@ -51,7 +51,7 @@ the next available file descriptor.
   early on those versions (examples below). Otherwise, for compatibility with
   macOS, code must run on Bash 3.2 and above. Recommendations for achieving this
   are [provided separately][Bash 3.2].
-  ```shell
+  ```bash
   # In a function
   lk_bash_is 4 || lk_err "Bash 4 or higher required" || return
   # In a script
@@ -59,6 +59,58 @@ the next available file descriptor.
   ```
 
 ## Documentation
+
+- [Rewrap][]-friendly Markdown must be used in comments and text files.
+- Documentation other than synopses should be wrapped to 80 columns, including
+  any delimiters. If a synopsis is significantly wider than 80 columns, options
+  may be collapsed to `[options]` as in the example under [Usage](#usage) below.
+- Complete sentences should be terminated with a full stop ('.').
+
+### Functions
+
+- A blank line is required between text and preformatted blocks, e.g. after
+  `Options:` in the next example.
+
+#### One signature
+
+```bash
+# lk_file [-i <regex>] [-dpbsrvq] [-m <mode>] [-o <user>] [-g <group>] <file>
+#
+# What the function does, in one or two lines.
+#
+# Options:
+#
+#     -i <regex>  Exclude lines that match a regular expression from comparison.
+#     -d          Print a diff before replacing the file.
+#     -p          Prompt to confirm changes (implies -d).
+#     -b          Create a backup of the file before replacing it.
+#     -s          Create the backup in a secure store (implies -b).
+#     -r          Preserve the original file as `<file>.orig`.
+#     -m <mode>   Specify a numeric mode for the file.
+#     -o <user>   Specify an owner for the file.
+#     -g <group>  Specify a group for the file.
+#     -v          Be verbose (repeat for more detail; overrides previous -q).
+#     -q          Only report errors (overrides previous -v).
+#
+# A further explanation of the function, possibly including its options, output,
+# and return values.
+#
+# - If the function has a significant number of options, they may be listed as
+#   above, but this is not a requirement.
+# - Documentation may be written in point form if appropriate.
+```
+
+#### Multiple signatures
+
+```bash
+# - lk_trap_add [-f] <signal> <command> [<arg>...]
+# - lk_trap_add -q [-f] <signal> "<command> [<arg>...]"
+#
+# This function can be called with a quoted or unquoted command.
+#
+# If -q is given, it must be the first argument, and the command should be
+# quoted by passing it with any arguments to `lk_quote_args` or similar.
+```
 
 ### Usage
 
@@ -84,4 +136,5 @@ A further explanation of the command, possibly including example invocations.
 ```
 
 [Bash 3.2]: Bash3.2.md
+[Rewrap]: https://github.com/stkb/Rewrap
 [Settings]: Settings.md

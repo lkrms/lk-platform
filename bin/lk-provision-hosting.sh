@@ -720,7 +720,7 @@ EOF
         FILE=/etc/logrotate.d/lk-platform
         OLD_FILE=/etc/logrotate.d/${LK_PATH_PREFIX}log
         maybe_move_old "$OLD_FILE" "$FILE"
-        DIR=$(lk_double_quote "$LK_BASE/var/log")
+        DIR=$(lk_double_quote "$LK_BASE/var/log/lk-platform")
         GROUP=$(lk_file_group "$LK_BASE")
         lk_install -m 00644 "$FILE"
         lk_file_replace "$FILE" < <(LK_PLATFORM_LOGS="$DIR/*.log" \
@@ -832,7 +832,7 @@ EOF
     lk_install -d -m 00751 -g adm /srv/{www/{,.tmp},backup/{,archive,latest,snapshot}} \
         "${PHP_VERSIONS[@]/#/\/srv\/www\/.tmp\/}"
 
-    _LK_NO_LOG=1 \
+    LK_NO_LOG=1 \
         lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" --rename \
         $(! no_upgrade || printf '%s\n' --no-upgrade)
 

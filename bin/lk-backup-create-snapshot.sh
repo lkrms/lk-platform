@@ -341,7 +341,7 @@ done
 
 SNAPSHOT_DEVICE=$(df "$LK_SNAPSHOT" | awk 'END {print $1}')
 
-LK_LOG_CMDLINE=("$0-$JOB_NAME" "${_LK_ARGV[@]}")
+LK_LOG_BASENAME=${0##*/}-$JOB_NAME
 LK_LOG_SECONDARY_FILE=$SNAPSHOT_LOG_FILE \
     lk_log_start
 

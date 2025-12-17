@@ -211,7 +211,7 @@ lk_keep_trying lk_git_provision_repo -s \
     "$LK_BASE"
 
 install -d -m 02775 -g adm "$LK_BASE"/{etc{,/lk-platform},var}
-install -d -m 01777 -g adm "$LK_BASE"/var/log
+install -d -m 01777 -g adm "$LK_BASE"/var/log/lk-platform
 install -d -m 00750 -g adm "$LK_BASE"/var/backup
 install -m 00664 -g adm /dev/null "$LK_BASE"/etc/packages.conf
 for FILE in IMAGE_BASE_PACKAGES IMAGE_INITIAL_PACKAGE_STATE; do
@@ -242,7 +242,7 @@ fi
 
 _LK_ADMIN_USER_KEYS=$ADMIN_USER_KEYS \
     _LK_HOST_KEYS=$HOST_KEYS \
-    _LK_NO_LOG=1 \
+    LK_NO_LOG=1 \
     lk_maybe_trace "$LK_BASE/bin/lk-provision-hosting.sh" || lk_die ""
 
 lk_tty_print

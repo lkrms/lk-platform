@@ -94,6 +94,15 @@ Written to the bootstrapped system's `lk-platform.conf` file:
 - `LK_ARCH_AUR_CHROOT_DIR` (default: `/var/lib/aurbuild`)
 - `LK_PLATFORM_BRANCH` (default: `main`)
 - `LK_PACKAGES_FILE`
+- `LK_BASE` (default: `/opt/lk-platform`)
+
+##### Useful kernel parameters
+
+- `intel_idle.max_cstate=2`: Silence coil whine from C-states above C2
+- `libata.force=3.00:noncq`: Disable NCQ on ATA device 3.00
+- `loglevel=3`: Do not log kernel warnings
+- `mce=dont_log_ce`: Do not log corrected machine check errors
+- `usbcore.autosuspend=5`: Wait 5 seconds to suspend (default: `2`; never: `-1`)
 
 [1dot1dot1dot1]: https://blog.cloudflare.com/dns-resolver-1-1-1-1/
 [bootable media]: https://wiki.archlinux.org/title/USB_flash_installation_medium

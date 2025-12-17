@@ -2831,71 +2831,88 @@ function lk_fd_next() {
     echo "$FD"
 }
 
-# lk_log_start [TEMP_LOG_FILE]
-function lk_log_start() {
-    [[ -z ${_LK_NO_LOG-} ]] &&
-        ! lk_log_is_open && lk_is_script || return 0
-    local ARG0 HEADER FILE
-    ARG0=$(type -p "${LK_LOG_CMDLINE:-$0}") &&
-        ARG0=${ARG0:-${LK_LOG_CMDLINE+"Bash $(type -t "$LK_LOG_CMDLINE") $LK_LOG_CMDLINE"}} ||
-        ARG0=
-    [[ -n ${LK_LOG_CMDLINE+1} ]] ||
-        local LK_LOG_CMDLINE=("$0" ${_LK_ARGV+"${_LK_ARGV[@]}"})
-    LK_LOG_CMDLINE[0]=${ARG0:-$LK_LOG_CMDLINE}
-    HEADER=$(
-        printf '====> %s invoked' "$0"
-        [[ $0 == "$LK_LOG_CMDLINE" ]] ||
-            printf " as '%s'" "$LK_LOG_CMDLINE"
-        ! ((ARGC = ${#LK_LOG_CMDLINE[@]} - 1)) || {
-            printf ' with %s %s:' "$ARGC" "$(lk_plural "$ARGC" argument)"
-            for ((i = 1; i <= ARGC; i++)); do
-                printf '\n%3d %q' "$i" "${LK_LOG_CMDLINE[i]}"
-            done
-        }
-    )
-    if [[ -n ${LK_LOG_FILE:+1} ]]; then
-        FILE=$LK_LOG_FILE
-        _lk_log_install_file "$FILE" || return
+# lk_log_open [<temp_log_file>]
+#
+# Redirect copies of the standard output and error streams to a timestamped log
+# file, creating it if necessary.
+#
+# No action is taken if:
+# - `LK_NO_LOG` is non-empty
+# - output is already being logged by this or a parent process
+# - a script file is not running
+function lk_log_open() {
+    [[ ! ${LK_NO_LOG-} ]] && ! lk_log_is_open && lk_is_script || return 0
+    local cmd args file \
+        LK_LOG_CMDLINE=(${LK_LOG_CMDLINE+"${LK_LOG_CMDLINE[@]}"})
+    if [[ ${LK_LOG_CMDLINE+1} ]]; then
+        # Unlike `type -P`, `type -p` prints nothing but returns 0 if given a
+        # Bash function, builtin, keyword, or alias
+        cmd=$(type -p "${LK_LOG_CMDLINE[0]}") &&
+            cmd=${cmd:-"Bash $(type -t "${LK_LOG_CMDLINE[0]}") ${LK_LOG_CMDLINE[0]}"} ||
+            cmd=${LK_LOG_CMDLINE[0]}
+    else
+        LK_LOG_CMDLINE=("$0" ${_LK_ARGV+"${_LK_ARGV[@]}"})
+        cmd=$0
+    fi
+    args=$((${#LK_LOG_CMDLINE[@]} - 1))
+
+    if [[ ${LK_LOG_FILE-} ]]; then
+        file=$LK_LOG_FILE
+        _lk_log_file_install "$file" || return
     elif (($#)); then
-        local _FILE=${1%.out}
-        _FILE=${1%.log}.log
-        if FILE=$(lk_log_create_file); then
-            if [[ -e $_FILE ]]; then
-                cat -- "$_FILE" >>"$FILE" &&
-                    rm -f -- "$_FILE" || return
+        local _file=${1%.out}
+        _file=${_file%.log}.log
+        if file=$(lk_log_file_create); then
+            if [[ -f $_file ]]; then
+                local temp
+                _lk_log_file_migrate "$_file" || return
+                temp=$(lk_mktemp) &&
+                    cp -- "$file" "$temp" &&
+                    cat -- "$_file" >>"$file" &&
+                    rm -f -- "$_file" ||
+                    lk_pass cp -- "$temp" "$file" ||
+                    lk_err "log file import failed: $_file -> $file" || return
+                rm -f -- "$temp" || true
             fi
         else
-            FILE=$_FILE
+            file=$_file
         fi
     else
-        FILE=$(lk_log_create_file ~ /tmp) ||
-            lk_warn "unable to create log file" || return
+        file=$(lk_log_file_create ~ /tmp) ||
+            lk_err "error creating log file" || return
     fi
-    lk_log_migrate_legacy "$FILE" ||
-        lk_warn "unable to migrate legacy log file: $FILE" || return
+    _lk_log_file_migrate "$file" || return
     _LK_TTY_OUT_FD=$(lk_fd_next) &&
         eval "exec $_LK_TTY_OUT_FD>&1" &&
         _LK_TTY_ERR_FD=$(lk_fd_next) &&
         eval "exec $_LK_TTY_ERR_FD>&2" &&
         _LK_LOG_FD=$(lk_fd_next) &&
         if [[ -z ${LK_LOG_SECONDARY_FILE:+1} ]]; then
-            eval "exec $_LK_LOG_FD> >(lk_log >>\"\$FILE\")"
+            eval "exec $_LK_LOG_FD> >(lk_log >>\"\$file\")"
         else
-            eval "exec $_LK_LOG_FD> >(lk_log | lk_tee -a \"\$LK_LOG_SECONDARY_FILE\" >>\"\$FILE\")"
+            eval "exec $_LK_LOG_FD> >(lk_log | lk_tee -a \"\$LK_LOG_SECONDARY_FILE\" >>\"\$file\")"
         fi || return
     ((${_LK_FD-2} != 2)) || {
         _LK_FD=3
         _LK_FD_LOGGED=1
     }
     lk_log_tty_on
-    cat <<<"$HEADER" >"/dev/fd/$_LK_LOG_FD"
-    ! lk_is_v 2 || _LK_FD=$_LK_TTY_OUT_FD lk_tty_log "Output log:" "$FILE"
-    _LK_LOG_FILE=$FILE
+
+    {
+        printf '====> %s invoked with %d %s%s\n' \
+            "$cmd" \
+            $args "$(lk_plural $args argument)" "${LK_LOG_CMDLINE[1]+:}"
+        for ((i = 1; i <= args; i++)); do
+            printf '%3d %q\n' $i "${LK_LOG_CMDLINE[i]}"
+        done
+    } >"/dev/fd/$_LK_LOG_FD"
+    ! lk_is_v 2 || _LK_FD=$_LK_TTY_OUT_FD lk_tty_log "Output log:" "$file"
+    _LK_LOG_FILE=$file
 }
 
 # lk_log_close [-r]
 #
-# Close redirections opened by lk_log_start. If -r is set, reopen them for
+# Close redirections opened by lk_log_open. If -r is set, reopen them for
 # further logging (useful when closing a secondary log file).
 function lk_log_close() {
     lk_log_is_open || return 0
@@ -2915,35 +2932,35 @@ function lk_log_close() {
     unset _LK_FD_LOGGED
 }
 
-# lk_log_create_file [DIR...]
+# lk_log_file_create [DIR...]
 #
 # Find the first DIR in which the user can write to a log file, installing the
 # directory (world-writable) and log file (owner-only) if needed, then print the
 # pathname of the log file.
 #
-# $LK_BASE/var/log is always tried first.
-function lk_log_create_file() {
+# $LK_BASE/var/log/lk-platform is always tried first.
+function lk_log_file_create() {
     local CMD LOG_DIRS=() LOG_DIR LOG_PATH
     CMD=${LK_LOG_CMDLINE:-$0}
     [[ ! -d ${LK_BASE-} ]] ||
         lk_file_is_empty_dir "$LK_BASE" ||
-        LOG_DIRS=("$LK_BASE/var/log")
+        LOG_DIRS=("$LK_BASE/var/log/lk-platform")
     LOG_DIRS+=("$@")
     for LOG_DIR in ${LOG_DIRS+"${LOG_DIRS[@]}"}; do
         LOG_PATH=$LOG_DIR/${LK_LOG_BASENAME:-${CMD##*/}}-$EUID.log
-        _lk_log_install_file "$LOG_PATH" 2>/dev/null || continue
+        _lk_log_file_install "$LOG_PATH" 2>/dev/null || continue
         echo "$LOG_PATH"
         return 0
     done
     false
 }
 
-# _lk_log_install_file FILE
+# _lk_log_file_install FILE
 #
 # If the parent directory of FILE doesn't exist, create it with mode 01777,
 # using root privileges if necessary. Then, if FILE doesn't exist or isn't
 # writable, create it or change its permissions and ownership as needed.
-function _lk_log_install_file() {
+function _lk_log_file_install() {
     if [[ -f $1 ]] && [[ -w $1 ]]; then
         return
     fi
@@ -2969,13 +2986,37 @@ function lk_log_is_open() {
     done
 }
 
-# lk_log_migrate_legacy FILE
-function lk_log_migrate_legacy() {
-    local OUT_FILE=${1%.log}.out
-    [[ -f $1 ]] && [[ -f $OUT_FILE ]] || return 0
-    sed -E 's/^(\.\.|!!)//' "$OUT_FILE" >"$1" &&
-        touch -r "$OUT_FILE" "$1" &&
-        rm -f "$OUT_FILE"
+# _lk_log_file_migrate <file>
+#
+# Migrate legacy log files to current equivalents for the given `.log` file.
+#
+# - If <file> is not empty and has a sibling with extension `.out`, replace both
+#   with one `.log` file.
+# - If <file> is in `$LK_BASE/var/log/lk-platform` and is empty, check for files
+#   in `$LK_BASE/var/log` with the same name or a recognised logrotate suffix
+#   and move them to `$LK_BASE/var/log/lk-platform` if found.
+function _lk_log_file_migrate() {
+    [[ -f ${1-} ]] && [[ $1 == *.log ]] || lk_bad_args || return
+    if [[ -s $1 ]]; then
+        local out_file=${1%.log}.out
+        if [[ -f $out_file ]]; then
+            sed -E 's/^(\.\.|!!)//' "$out_file" >"$1" &&
+                touch -r "$out_file" "$1" &&
+                rm -f -- "$out_file" ||
+                lk_err "log file migration failed: $out_file -> $1" || return
+        fi
+    elif [[ ${1%/*} == "$LK_BASE/var/log/lk-platform" ]] &&
+        [[ ! $LK_BASE/var/log -ef /var/log ]]; then
+        (
+            shopt -s nullglob
+            file=${1%.log}
+            # Match !(+(?)) to eliminate files that don't exist
+            files=("$LK_BASE/var/log/${file##*/}"{.log,.out}{,.+([0-9])?(.gz)}!(+(?)))
+            [[ ! ${files+1} ]] ||
+                mv -- "${files[@]}" "$LK_BASE/var/log/lk-platform/" ||
+                lk_err "log file migration failed: $LK_BASE/var/log/${file##*/}* -> $LK_BASE/var/log/lk-platform/"
+        ) || return
+    fi
 }
 
 # lk_log_tty_off -a
@@ -3034,7 +3075,7 @@ function lk_log_bypass_stdout() { lk_log_bypass -o "$@"; }
 function lk_log_bypass_stderr() { lk_log_bypass -e "$@"; }
 
 function lk_start_trace() {
-    [[ -z ${_LK_NO_LOG-} ]] &&
+    [[ -z ${LK_NO_LOG-} ]] &&
         [[ $- != *x* ]] && lk_debug_is_on && lk_is_script || return 0
     local CMD TRACE_FILE
     CMD=${LK_LOG_CMDLINE:-$0}
@@ -3846,6 +3887,8 @@ lk_is_ubuntu() { lk_system_is_ubuntu; }
 lk_is_virtual() { lk_system_is_vm; }
 lk_is_wsl() { lk_system_is_wsl; }
 lk_jq_get_array() { lk_json_mapfile "$@"; }
+lk_log_create_file() { lk_log_file_create "$@"; }
+lk_log_start() { lk_log_open "$@"; }
 lk_maybe_sudo() { lk_sudo "$@"; }
 lk_mktemp_dir() { _LK_STACK_DEPTH=$((${_LK_STACK_DEPTH-0} + 1)) lk_mktemp -d; }
 lk_mktemp_file() { _LK_STACK_DEPTH=$((${_LK_STACK_DEPTH-0} + 1)) lk_mktemp; }
@@ -5127,7 +5170,7 @@ function lk_nohup() { (
     _LK_CAN_FAIL=1
     trap "" SIGHUP SIGINT SIGTERM
     set -m
-    OUT_FILE=$(TMPDIR=$(lk_readable "$LK_BASE/var/log" ~ /tmp) &&
+    OUT_FILE=$(TMPDIR=$(lk_readable "$LK_BASE/var/log/lk-platform" ~ /tmp) &&
         _LK_MKTEMP_EXT=.nohup.out lk_mktemp) &&
         OUT_FD=$(lk_fd_next) &&
         eval "exec $OUT_FD"'>"$OUT_FILE"' || return
