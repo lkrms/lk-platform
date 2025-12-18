@@ -185,8 +185,8 @@ AUR_PACKAGES+=(
     hfsprogs
 
     # Automation
-    devilspie2-git
-    quicktile-git
+    devilspie2
+    quicktile
 )
 
 lk_is_bootstrap ||
