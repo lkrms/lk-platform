@@ -365,7 +365,7 @@ function lk_ssh_configure() {
         SSH_PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX} \
         LK_FILE_BACKUP_TAKE='' LK_VERBOSE=0 \
         KEY PATTERN CONF AWK OWNER GROUP TEMP_HOMES \
-        HOMES=(${_LK_HOMES[@]+"${_LK_HOMES[@]}"}) h
+        HOMES=(${_LK_HOMES[@]+"${_LK_HOMES[@]}"}) HOME=${HOME:-~} h
     unset KEY
     [ $# -eq 0 ] || [ $# -ge 2 ] || lk_warn "invalid arguments" || return
     [ ${#HOMES[@]} -gt 0 ] || HOMES=(~)
