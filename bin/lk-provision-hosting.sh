@@ -362,6 +362,7 @@ fi
 
     install -d -m 02775 -g adm "$LK_BASE"/{etc,var/{cache,lib}}/lk-platform
     install -d -m 02770 -g adm "$LK_BASE/var/lib/lk-platform"/{dirty,sites}
+    install -d -m 01777 -o root -g adm "$LK_BASE"/var/log/lk-platform
 
     if ! lk_is_bootstrap && [[ -d $LK_BASE/var/run/dirty ]]; then
         lk_file_is_empty_dir "$LK_BASE/var/run/dirty" ||

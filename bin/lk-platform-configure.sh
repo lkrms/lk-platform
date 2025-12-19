@@ -252,7 +252,7 @@ lk_log_start
             fi
         fi
         unset _LK_GIT_USER
-        install -d -m 01777 "$LK_BASE/var/log/lk-platform"
+        install -d -m 01777 "$LK_BASE"/var/log{,/lk-platform}
         install -d -m 00750 "$LK_BASE/var/backup"
         install -d -m "$PRIVILEGED_DIR_MODE" "$LK_BASE/var/lib/lk-platform/dirty"
         LK_VERBOSE='' \
@@ -263,7 +263,7 @@ lk_log_start
             "$DIR_MODE" "" \
             '\./(etc(/lk-platform)?/sites|var/(run|lib/lk-platform)/(dirty|sites))/' \
             "$PRIVILEGED_DIR_MODE" "" \
-            '\./var/(log|backup)/' \
+            '\./var/(log(/lk-platform)?|backup)/' \
             "" "" \
             '\./\.git/objects/([0-9a-f]{2}|pack)/.*' \
             0555 0444
