@@ -15,6 +15,8 @@ else
     lk_die "${0##*/} not implemented on this platform"
 fi
 
+HOME=${HOME:-~}
+
 PROFILES=()
 while [ $# -gt 0 ] && [[ $1 != -* ]]; do
     FILE=$UNISON/${1%.prf}

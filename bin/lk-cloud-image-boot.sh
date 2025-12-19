@@ -334,7 +334,7 @@ while :; do
         continue
         ;;
     -u | --session)
-        POOL_ROOT=${LK_CLOUDIMG_SESSION_ROOT:-$HOME/.local/share/libvirt/images}
+        POOL_ROOT=${LK_CLOUDIMG_SESSION_ROOT:-~/.local/share/libvirt/images}
         VM_NETWORK_DEFAULT=bridge=virbr0
         LIBVIRT_URI=qemu:///session${SESSION_SOCKET:+?socket=$SESSION_SOCKET}
         unset LK_SUDO
