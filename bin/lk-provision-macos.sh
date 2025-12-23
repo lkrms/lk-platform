@@ -28,7 +28,7 @@ function die() {
 function exit_trap() {
     local STATUS=$? _LOG_FILE=$_LK_LOG_FILE LK_LOG_BASENAME=lk-provision-macos.sh LOG_FILE
     lk_log_close &&
-        LOG_FILE=$(lk_log_create_file) &&
+        LOG_FILE=$(lk_log_file_create) &&
         [[ $LOG_FILE != "$_LOG_FILE" ]] ||
         return "$STATUS"
     lk_tty_log "Moving:" "$_LOG_FILE -> $LOG_FILE"
@@ -133,8 +133,8 @@ function exit_trap() {
     LK_FILE_BACKUP_TAKE=${LK_FILE_BACKUP_TAKE-1}
     LK_FILE_BACKUP_MOVE=1
 
-    lk_log_start ~/"${LK_PATH_PREFIX}install"
-    lk_start_trace
+    lk_log_open ~/"${LK_PATH_PREFIX}install"
+    lk_log_open_trace
     lk_trap_add EXIT exit_trap
 
     lk_tty_log "Provisioning macOS"

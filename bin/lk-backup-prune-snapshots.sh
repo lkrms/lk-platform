@@ -123,7 +123,7 @@ HN=$(lk_hostname) || HN=localhost
 FQDN=$(lk_fqdn) || FQDN=$HN.localdomain
 eval "$(lk_get_regex BACKUP_TIMESTAMP_FINDUTILS_REGEX)"
 
-lk_log_start
+lk_log_open
 
 {
     USAGE_START=($(get_usage "$BACKUP_ROOT"))

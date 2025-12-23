@@ -12,7 +12,7 @@ function _lk_whiptail() { (
 ); }
 
 function lk_whiptail() {
-    lk_log_bypass_stderr _lk_whiptail "$@"
+    lk_log_run_tty_only --stderr _lk_whiptail "$@"
 }
 
 # lk_whiptail_build_list ARRAY SED_SCRIPT TAG...

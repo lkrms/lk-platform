@@ -68,7 +68,7 @@ SOURCE_IP=("${@:5}")
 [[ $SES_DOMAIN != - ]] ||
   SES_DOMAIN=$DOMAIN
 
-lk_log_start
+lk_log_open
 
 {
   lk_tty_log "Configuring IAM user '$IAM_USER' for SMTP$(

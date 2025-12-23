@@ -38,7 +38,7 @@ rm -f "$OTHER_FILE"
 [ ! -f "$FILE" ] || lk_warn "event already processed for $DEVICE" || exit 0
 touch "$FILE"
 
-lk_log_start
+lk_log_open
 
 lk_tty_print "Processing udev keyboard event for $DEVICE"
 lk_tty_detail "Action:" "$ACTION"

@@ -16,7 +16,7 @@ done
 lk_test_all lk_is_pdf "$@" || lk_usage "\
 Usage: ${0##*/} [GS_OPTION...] PDF..."
 
-lk_log_start
+lk_log_open
 
 lk_tty_print "Compressing $# $(lk_plural $# file files)"
 

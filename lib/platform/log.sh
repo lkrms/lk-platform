@@ -47,6 +47,6 @@ type -t "$1" >/dev/null || lk_warn "command not found: $1" || lk_usage
 export -n LK_LOG_BASENAME
 
 LK_LOG_CMDLINE=("$@")
-lk_log_start
+lk_log_open
 
 "$@"

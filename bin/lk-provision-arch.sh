@@ -169,8 +169,8 @@ if [ -n "$LK_PACKAGES_FILE" ]; then
     )
 fi
 
-lk_log_start
-lk_start_trace
+lk_log_open
+lk_log_open_trace
 
 {
     lk_tty_log "Provisioning Arch Linux"
@@ -703,10 +703,10 @@ $LK_HOSTNAME" &&
         <(lk_arr PAC_EXPLICIT) \
         <(lk_pac_installed_explicit | sort -u)))
     [ ${#PAC_MARK_EXPLICIT[@]} -eq 0 ] ||
-        lk_log_bypass lk_faketty \
+        lk_log_run_tty_only lk_faketty \
             pacman -D --asexplicit "${PAC_MARK_EXPLICIT[@]}"
     [ ${#PAC_UNMARK_EXPLICIT[@]} -eq 0 ] ||
-        lk_log_bypass lk_faketty \
+        lk_log_run_tty_only lk_faketty \
             pacman -D --asdeps "${PAC_UNMARK_EXPLICIT[@]}"
 
     REMOVE_MESSAGE=()
@@ -728,7 +728,7 @@ $LK_HOSTNAME" &&
     [ ${#PAC_REMOVE[@]} -eq 0 ] || {
         lk_tty_print \
             "Removing $(lk_implode_arr " and " REMOVE_MESSAGE) packages"
-        lk_log_bypass lk_faketty pacman -Rdds --noconfirm "${PAC_REMOVE[@]}"
+        lk_log_run_tty_only lk_faketty pacman -Rdds --noconfirm "${PAC_REMOVE[@]}"
     }
 
     [ ${#_PAC_KEEP[@]} -eq 0 ] ||
@@ -762,7 +762,7 @@ $LK_HOSTNAME" &&
     fi
     [ ${#PAC_INSTALL[@]}${#PAC_UPGRADE[@]} = 00 ] || (
         IFS=,
-        lk_log_bypass lk_faketty \
+        lk_log_run_tty_only lk_faketty \
             pacman -Suu --noconfirm --ignore "${PAC_IGNORE[*]-}" "${PAC_INSTALL[@]}"
     )
 

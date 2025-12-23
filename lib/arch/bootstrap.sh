@@ -330,7 +330,7 @@ function system_time() {
     date "$@" +"%a, %d %b %Y %H:%M:%S %Z"
 }
 
-lk_log_start "$log_file"
+lk_log_open "$log_file"
 lk_trap_add EXIT exit_trap
 
 # Clean up after failed attempts
@@ -378,7 +378,7 @@ elif [[ $(lk_timestamp) -lt $MODIFIED ]]; then
 fi
 lk_pac_sync
 if pacman -Sup --print-format "%n" | grep -Fx archlinux-keyring >/dev/null; then
-    lk_log_bypass -o lk_faketty pacman -S --noconfirm archlinux-keyring
+    lk_log_run_tty_only -o lk_faketty pacman -S --noconfirm archlinux-keyring
 fi
 
 . "$dir/packages.sh"
@@ -459,7 +459,7 @@ fi
 
 lk_tty_print
 lk_tty_log "Installing system"
-lk_log_bypass -o lk_faketty pacstrap /mnt "${PAC_PACKAGES[@]}"
+lk_log_run_tty_only -o lk_faketty pacstrap /mnt "${PAC_PACKAGES[@]}"
 
 lk_tty_print
 lk_tty_log "Setting up installed system"

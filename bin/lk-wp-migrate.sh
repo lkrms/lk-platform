@@ -145,8 +145,8 @@ STATUS=0
 
 _LK_WP_QUIET=1
 
-lk_log_start
-lk_start_trace
+lk_log_open
+lk_log_open_trace
 
 lk_tty_print "Preparing WordPress migration"
 lk_tty_detail "[remote] Source:" "$SSH_HOST:$REMOTE_PATH"

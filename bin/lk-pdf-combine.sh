@@ -8,7 +8,7 @@ lk_assert_command_exists mutool
     lk_test_all lk_is_pdf "$@" || lk_usage "\
 Usage: ${0##*/} PDF1 PDF2..."
 
-lk_log_start
+lk_log_open
 
 NEWEST=$(lk_file_sort_modified "$@" | tail -n1)
 FILE=$1

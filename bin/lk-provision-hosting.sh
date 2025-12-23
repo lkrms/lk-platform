@@ -353,8 +353,8 @@ export DEBIAN_FRONTEND=noninteractive \
     PIP_NO_INPUT=1
 
 if ! lk_is_bootstrap; then
-    lk_log_start /var/log/{lk-platform-,"$LK_PATH_PREFIX"}*install.{out,log}
-    lk_start_trace
+    lk_log_open /var/log/{lk-platform-,"$LK_PATH_PREFIX"}*install.{out,log}
+    lk_log_open_trace
 fi
 
 {
