@@ -3310,80 +3310,103 @@ EOF
         eval "$SH"
 ); }
 
-# - lk_install [-m MODE] [-o OWNER] [-g GROUP] [-v] FILE...
-# - lk_install -d [-m MODE] [-o OWNER] [-g GROUP] [-v] DIRECTORY...
+# - lk_install [-vq] [-m <mode>] [-o <user>] [-g <group>] <file>...
+# - lk_install -d [-vq] [-m <mode>] [-o <user>] [-g <group>] <dir>...
 #
-# Create or set permissions and ownership on each FILE or DIRECTORY.
+# Create or apply permissions to the given files or directories.
+#
+# If -v or -q are given, the value of LK_VERBOSE is ignored.
 function lk_install() {
-    local OPTIND OPTARG OPT LK_USAGE _USER LK_SUDO=${LK_SUDO-} \
-        DIR MODE OWNER GROUP VERBOSE DEST STAT REGEX ARGS=()
-    LK_USAGE="\
-Usage: $FUNCNAME [-m MODE] [-o OWNER] [-g GROUP] [-v] FILE...
-   or: $FUNCNAME -d [-m MODE] [-o OWNER] [-g GROUP] [-v] DIRECTORY..."
-    while getopts ":dm:o:g:v" OPT; do
-        case "$OPT" in
-        d)
-            DIR=1
-            ARGS+=(-d)
-            ;;
+    # shellcheck disable=SC1007
+    local OPTIND OPTARG opt BASH_REMATCH \
+        dirs=0 mode owner group verbose= \
+        install_args=() file dir _mode _owner _group _chown chown
+    while getopts ":dm:o:g:vq" opt; do
+        case "$opt" in
+        d) dirs=1 ;;
         m)
-            MODE=$OPTARG
-            ARGS+=(-m "$MODE")
+            [[ $OPTARG =~ ^0*([0-7]{,4})$ ]] ||
+                lk_err "invalid mode: $OPTARG" || return
+            mode=$(printf '%05o\n' "0${BASH_REMATCH[1]}")
             ;;
         o)
-            OWNER=$(id -un "$OPTARG") &&
-                _USER=$(id -un) || return
-            ARGS+=(-o "$OWNER")
-            [ "$OWNER" != "$_USER" ] ||
-                unset OWNER
+            [[ $OPTARG =~ [^0-9] ]] ||
+                lk_err "invalid user: $OPTARG" || return
+            owner=$(id -u "$OPTARG") || return
+            ((owner == EUID)) || lk_will_elevate ||
+                lk_err "not allowed: -o $OPTARG" || return
+            owner=$OPTARG
             ;;
         g)
-            [[ ! $OPTARG =~ ^[0-9]+$ ]] ||
-                lk_warn "invalid group: $OPTARG" || return
-            GROUP=$OPTARG
-            ARGS+=(-g "$GROUP")
+            [[ $OPTARG =~ [^0-9] ]] ||
+                lk_err "invalid group: $OPTARG" || return
+            group=$OPTARG
+            lk_will_elevate ||
+                id -Gn | tr -s '[:blank:]' '\n' | grep -Fx "$group" >/dev/null ||
+                lk_err "not allowed: -g $group" || return
             ;;
-        v)
-            VERBOSE=1
-            ARGS+=(-v)
-            ;;
-        \? | :)
-            lk_usage
-            return 1
-            ;;
+        v) ((++verbose)) ;;
+        q) verbose=0 ;;
+        \? | :) lk_bad_args || return ;;
         esac
     done
     shift $((OPTIND - 1))
-    [ $# -gt 0 ] || lk_usage || return
-    [ -z "${OWNER-}" ] &&
-        { [ -z "${GROUP-}" ] ||
-            id -Gn | tr -s '[:blank:]' '\n' | grep -Fx "$GROUP" >/dev/null; } ||
-        LK_SUDO=1
-    if lk_is_true DIR; then
-        lk_sudo install ${ARGS[@]+"${ARGS[@]}"} "$@"
-    else
-        for DEST in "$@"; do
-            if lk_sudo test ! -e "$DEST" 2>/dev/null; then
-                lk_sudo install ${ARGS[@]+"${ARGS[@]}"} /dev/null "$DEST"
-            else
-                STAT=$(lk_file_owner_mode "$DEST" 2>/dev/null) || return
-                [ -z "${MODE-}" ] ||
-                    { [[ $MODE =~ ^0*([0-7]+)$ ]] &&
-                        REGEX=" 0*${BASH_REMATCH[1]}\$" &&
-                        [[ $STAT =~ $REGEX ]]; } ||
-                    lk_sudo chmod \
-                        ${VERBOSE:+-v} "$MODE" "$DEST" ||
-                    return
-                [ -z "${OWNER-}${GROUP-}" ] ||
-                    { REGEX='[-a-z0-9_]+\$?' &&
-                        REGEX="^${OWNER:-$REGEX}:${GROUP:-$REGEX} " &&
-                        [[ $STAT =~ $REGEX ]]; } ||
-                    lk_elevate chown \
-                        ${VERBOSE:+-v} "${OWNER-}${GROUP:+:$GROUP}" "$DEST" ||
-                    return
-            fi
-        done
+    (($#)) || lk_bad_args || return
+    verbose=${verbose:-${LK_VERBOSE:-0}}
+    ((!dirs)) || install_args+=(-d)
+    [[ ! ${mode-} ]] || install_args+=(-m "$mode")
+    [[ ! ${owner-} ]] || install_args+=(-o "$owner")
+    [[ ! ${group-} ]] || install_args+=(-g "$group")
+    ((!verbose)) || install_args+=(-v)
+
+    if ((dirs)); then
+        lk_sudo_on_fail install "${install_args[@]}" "$@"
+        return
     fi
+
+    for file in "$@"; do
+        dir=${file%"${file##*/}"}
+        [[ $dir ]] || dir=.
+        _chown=
+        chown=
+
+        # If the file doesn't exist, create it
+        if [[ ! -e $file ]] && { [[ -r $dir ]] || ! { lk_will_sudo && sudo test -e "$file"; }; }; then
+            ((!verbose)) || lk_tty_detail "Creating:" "$file"
+            lk_sudo_on_fail install ${install_args[@]+"${install_args[@]}"} /dev/null "$file" ||
+                lk_err "error creating $file" || return
+            continue
+        fi
+
+        # Otherwise, check its permissions and ownership
+        if [[ ${mode-} ]]; then
+            _mode=0$(lk_file_mode "$file") || return
+            ((mode == _mode)) || {
+                ((verbose < 2)) ||
+                    lk_tty_detail "Updating file mode ($_mode -> $mode):" "$file"
+                lk_sudo_on_fail chmod "$mode" "$file" || return
+            }
+        fi
+        if [[ ${owner-} ]]; then
+            _owner=$(lk_file_owner "$file") || return
+            [[ $owner == "$_owner" ]] || {
+                _chown=$_owner
+                chown=$owner
+            }
+        fi
+        if [[ ${group-} ]]; then
+            _group=$(lk_file_group "$file") || return
+            [[ $group == "$_group" ]] || {
+                _chown+=:$_group
+                chown+=:$group
+            }
+        fi
+        [[ ! $chown ]] || {
+            ((verbose < 2)) ||
+                lk_tty_detail "Updating ownership ($_chown -> $chown):" "$file"
+            lk_sudo_on_fail chown "$chown" "$file" || return
+        }
+    done
 }
 
 # lk_file [-i <regex>] [-dpbsrvq] [-m <mode>] [-o <user>] [-g <group>] <file>
@@ -3421,35 +3444,27 @@ Usage: $FUNCNAME [-m MODE] [-o OWNER] [-g GROUP] [-v] FILE...
 # from most to least recent. New entries are always added at index 0.
 function lk_file() {
     # shellcheck disable=SC1007
-    local OPTIND OPTARG opt \
+    local OPTIND OPTARG opt BASH_REMATCH \
         diff=0 prompt=0 backup=0 store= orig=0 mode owner group verbose= \
         sed_args=() changed=0 dir temp _mode _owner _group _chown= chown=
     while getopts ":i:dpbsrm:o:g:vq" opt; do
         case "$opt" in
-        i)
-            sed_args+=(-e "/${OPTARG//\//\\\/}/d")
-            ;;
-        d)
-            diff=1
-            ;;
+        i) sed_args+=(-e "/${OPTARG//\//\\\/}/d") ;;
+        d) diff=1 ;;
         p)
             prompt=1
             diff=1
             ;;
-        b)
-            backup=1
-            ;;
+        b) backup=1 ;;
         s)
             store=1
             backup=1
             ;;
-        r)
-            orig=1
-            ;;
+        r) orig=1 ;;
         m)
-            [[ $OPTARG =~ ^[0-7]{3,4}$ ]] ||
+            [[ $OPTARG =~ ^0*([0-7]{,4})$ ]] ||
                 lk_err "invalid mode: $OPTARG" || return 2
-            mode=$(printf '%4s' "$OPTARG" | tr ' ' 0)
+            mode=$(printf '%05o\n' "0${BASH_REMATCH[1]}")
             ;;
         o)
             [[ $OPTARG =~ [^0-9] ]] ||
@@ -3467,15 +3482,9 @@ function lk_file() {
                 id -Gn | tr -s '[:blank:]' '\n' | grep -Fx "$group" >/dev/null ||
                 lk_err "not allowed: -g $group" || return 2
             ;;
-        v)
-            ((++verbose))
-            ;;
-        q)
-            verbose=0
-            ;;
-        \? | :)
-            lk_bad_args || return 2
-            ;;
+        v) ((++verbose)) ;;
+        q) verbose=0 ;;
+        \? | :) lk_bad_args || return 2 ;;
         esac
     done
     shift $((OPTIND - 1))
@@ -3484,8 +3493,8 @@ function lk_file() {
     lk_mktemp_with temp cat || lk_err "error writing input to file" || return 2
     lk_readable_tty_open || prompt=0
     verbose=${verbose:-${LK_VERBOSE:-0}}
-    dir=${1%/*}
-    [[ $dir != "$1" ]] || dir=.
+    dir=${1%"${1##*/}"}
+    [[ $dir ]] || dir=.
 
     # If the file doesn't exist, use `install` to create it
     if [[ ! -e $1 ]] && { [[ -r $dir ]] || ! { lk_will_sudo && sudo test -e "$1"; }; }; then
@@ -3503,7 +3512,7 @@ function lk_file() {
     fi
 
     # Otherwise, check if the file has changed
-    if [[ -n ${sed_args+1} ]]; then
+    if [[ ${sed_args+1} ]]; then
         local _temp2 temp2
         lk_mktemp_with _temp2 lk_sudo_on_fail sed -E "${sed_args[@]}" "$1" &&
             lk_mktemp_with temp2 sed -E "${sed_args[@]}" "$temp" || return 2
@@ -3531,30 +3540,30 @@ function lk_file() {
     }
 
     # Finally, update permissions and ownership if needed
-    if [[ -n ${mode-} ]]; then
-        _mode=$(lk_file_mode "$1") || return 2
-        [[ $mode == "$_mode" ]] || {
+    if [[ ${mode-} ]]; then
+        _mode=0$(lk_file_mode "$1") || return 2
+        ((mode == _mode)) || {
             ((verbose < 2)) ||
                 lk_tty_detail "Updating file mode ($_mode -> $mode):" "$1"
-            lk_sudo_on_fail chmod "0$mode" "$1" || return 2
+            lk_sudo_on_fail chmod "$mode" "$1" || return 2
             changed=1
         }
     fi
-    if [[ -n ${owner-} ]]; then
+    if [[ ${owner-} ]]; then
         _owner=$(lk_file_owner "$1") || return 2
         [[ $owner == "$_owner" ]] || {
             _chown=$_owner
             chown=$owner
         }
     fi
-    if [[ -n ${group-} ]]; then
+    if [[ ${group-} ]]; then
         _group=$(lk_file_group "$1") || return 2
         [[ $group == "$_group" ]] || {
             _chown+=:$_group
             chown+=:$group
         }
     fi
-    [[ -z $chown ]] || {
+    [[ ! $chown ]] || {
         ((verbose < 2)) ||
             lk_tty_detail "Updating ownership ($_chown -> $chown):" "$1"
         lk_sudo_on_fail chown "$chown" "$1" || return 2
