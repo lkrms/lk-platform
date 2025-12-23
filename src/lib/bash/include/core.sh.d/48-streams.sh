@@ -18,9 +18,3 @@ function lk_pv() {
         exec pv "$@"
     fi
 }
-
-# lk_tee [FILE...]
-function lk_tee() {
-    trap "" SIGINT
-    exec tee "$@"
-}

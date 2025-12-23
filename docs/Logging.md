@@ -25,7 +25,7 @@ standalone carriage returns, are removed from output as it is logged.
   - Output is already being logged (e.g. by a parent process)
   - Bash is not reading commands from a script file
 
-- `lk_start_trace`: Same as `lk_log_open`, but for trace output.
+- `lk_log_open_trace`: Same as `lk_log_open`, but for trace output.
 
   Ignored if:
 
@@ -46,13 +46,14 @@ ${LK_LOG_BASENAME:-$(basename "${LK_LOG_CMDLINE[0]:-$0})"}-$EUID.log
 > [!NOTE]
 >
 > If `$LK_BASE/var/log/lk-platform` isn't writable, `lk-platform` tries to
-> create log files in the current user's home directory, then in `/tmp`.
+> create log files in `~/.local/state/log/lk-platform`, then in
+> `/tmp/lk-platform/log`.
 
 Trace output is written to `/tmp`, using a naming convention that effectively
 creates one file per run:
 
 ```bash
-${LK_LOG_BASENAME:-$(basename "${LK_LOG_CMDLINE[0]:-$0})"}-$EUID.$(TZ=UTC date +%Y%m%d%H%M%S).log
+${LK_LOG_BASENAME:-$(basename "${LK_LOG_CMDLINE[0]:-$0})"}-$EUID.$(uuidgen).log
 ```
 
 ## Overrides
@@ -78,10 +79,23 @@ behaviour of logging functions in `lk-platform`:
 
 ## Internal variables
 
-- \_LK_LOG_FD
-- \_LK_TTY_ERR_FD
-- \_LK_TTY_OUT_FD
-- \_LK_FD
-- \_LK_FD_LOGGED
-- \_LK_LOG_FILE
-- \_LK_LOG_TTY_LAST
+Set by `lk_log_open`, unset by `lk_log_close`:
+
+- `_LK_TTY_OUT_FD`: file descriptor for standard output (copy of file descriptor
+  1).
+- `_LK_TTY_ERR_FD`: file descriptor for error output (copy of file descriptor
+  2).
+- `_LK_LOG_FD`: file descriptor for log file (redirects to `lk_log`, then
+  `$LK_LOG_SECONDARY_FILE` if set, then log file).
+- `_LK_FD`: file descriptor for output from `lk_tty_*` functions.
+- `_LK_LOG_FILE`: the output log's pathname.
+- `_LK_LOG_SECONDARY_FILE`: the secondary output log's pathname, if active.
+
+Set by `lk_log_tty_off`, `lk_log_tty_all_off`, `lk_log_tty_on` functions:
+
+- `_LK_LOG_TTY_LAST`: the name of the last `lk_log_tty_*` function called.
+
+Set by `lk_log_open_trace`:
+
+- `_LK_TRACE_FD`: file descriptor for `set -x` output if running on a version of
+  Bash less than 4.1, which introduced `BASH_XTRACEFD`.

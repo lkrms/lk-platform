@@ -23,7 +23,7 @@ function exit_trap() {
     [ "$BASH_SUBSHELL" -eq 0 ] || return "$STATUS"
     exec 8>&- &&
         rm -Rf "${FIFO_FILE%/*}" || true
-    lk_log_close -r
+    lk_log_close -s
     [ -z "$LK_BACKUP_MAIL" ] ||
         { [ "$STATUS" -eq 0 ] &&
             [ "$RSYNC_STATUS" -eq 0 ] &&

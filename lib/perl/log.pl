@@ -6,9 +6,6 @@
 #   log.pl [--self-delete]
 
 BEGIN {
-  # Ignore Ctrl+C
-  $SIG{INT} = "IGNORE";
-
   # Disable output buffering
   $| = 1;
   use POSIX       qw{strftime};

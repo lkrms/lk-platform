@@ -26,15 +26,15 @@ function die() {
 [[ $- != *s* ]] || die "cannot run from standard input"
 
 function exit_trap() {
-    local STATUS=$? LK_LOG_BASENAME=lk-provision-macos.sh LOG_FILE
+    local STATUS=$? _LOG_FILE=$_LK_LOG_FILE LK_LOG_BASENAME=lk-provision-macos.sh LOG_FILE
     lk_log_close &&
         LOG_FILE=$(lk_log_create_file) &&
-        [[ $LOG_FILE != "$_LK_LOG_FILE" ]] ||
+        [[ $LOG_FILE != "$_LOG_FILE" ]] ||
         return "$STATUS"
-    lk_tty_log "Moving:" "$_LK_LOG_FILE -> $LOG_FILE"
-    cat -- "$_LK_LOG_FILE" >>"$LOG_FILE" &&
-        rm -f -- "$_LK_LOG_FILE" ||
-        lk_tty_warning "Error moving" "$_LK_LOG_FILE"
+    lk_tty_log "Moving:" "$_LOG_FILE -> $LOG_FILE"
+    cat -- "$_LOG_FILE" >>"$LOG_FILE" &&
+        rm -f -- "$_LOG_FILE" ||
+        lk_tty_warning "Error moving" "$_LOG_FILE"
     return "$STATUS"
 }
 

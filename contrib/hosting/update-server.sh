@@ -390,7 +390,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
       lk_log_start
 
       [ "${LK_NO_INPUT-}" != Y ] ||
-        lk_log_tty_off -a
+        lk_log_tty_all_off
 
       STATUS=0
       ssh -o ControlPath=none -o LogLevel=QUIET "$1" \
