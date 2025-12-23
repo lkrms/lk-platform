@@ -3310,6 +3310,82 @@ EOF
         eval "$SH"
 ); }
 
+# - lk_install [-m MODE] [-o OWNER] [-g GROUP] [-v] FILE...
+# - lk_install -d [-m MODE] [-o OWNER] [-g GROUP] [-v] DIRECTORY...
+#
+# Create or set permissions and ownership on each FILE or DIRECTORY.
+function lk_install() {
+    local OPTIND OPTARG OPT LK_USAGE _USER LK_SUDO=${LK_SUDO-} \
+        DIR MODE OWNER GROUP VERBOSE DEST STAT REGEX ARGS=()
+    LK_USAGE="\
+Usage: $FUNCNAME [-m MODE] [-o OWNER] [-g GROUP] [-v] FILE...
+   or: $FUNCNAME -d [-m MODE] [-o OWNER] [-g GROUP] [-v] DIRECTORY..."
+    while getopts ":dm:o:g:v" OPT; do
+        case "$OPT" in
+        d)
+            DIR=1
+            ARGS+=(-d)
+            ;;
+        m)
+            MODE=$OPTARG
+            ARGS+=(-m "$MODE")
+            ;;
+        o)
+            OWNER=$(id -un "$OPTARG") &&
+                _USER=$(id -un) || return
+            ARGS+=(-o "$OWNER")
+            [ "$OWNER" != "$_USER" ] ||
+                unset OWNER
+            ;;
+        g)
+            [[ ! $OPTARG =~ ^[0-9]+$ ]] ||
+                lk_warn "invalid group: $OPTARG" || return
+            GROUP=$OPTARG
+            ARGS+=(-g "$GROUP")
+            ;;
+        v)
+            VERBOSE=1
+            ARGS+=(-v)
+            ;;
+        \? | :)
+            lk_usage
+            return 1
+            ;;
+        esac
+    done
+    shift $((OPTIND - 1))
+    [ $# -gt 0 ] || lk_usage || return
+    [ -z "${OWNER-}" ] &&
+        { [ -z "${GROUP-}" ] ||
+            id -Gn | tr -s '[:blank:]' '\n' | grep -Fx "$GROUP" >/dev/null; } ||
+        LK_SUDO=1
+    if lk_is_true DIR; then
+        lk_sudo install ${ARGS[@]+"${ARGS[@]}"} "$@"
+    else
+        for DEST in "$@"; do
+            if lk_sudo test ! -e "$DEST" 2>/dev/null; then
+                lk_sudo install ${ARGS[@]+"${ARGS[@]}"} /dev/null "$DEST"
+            else
+                STAT=$(lk_file_owner_mode "$DEST" 2>/dev/null) || return
+                [ -z "${MODE-}" ] ||
+                    { [[ $MODE =~ ^0*([0-7]+)$ ]] &&
+                        REGEX=" 0*${BASH_REMATCH[1]}\$" &&
+                        [[ $STAT =~ $REGEX ]]; } ||
+                    lk_sudo chmod \
+                        ${VERBOSE:+-v} "$MODE" "$DEST" ||
+                    return
+                [ -z "${OWNER-}${GROUP-}" ] ||
+                    { REGEX='[-a-z0-9_]+\$?' &&
+                        REGEX="^${OWNER:-$REGEX}:${GROUP:-$REGEX} " &&
+                        [[ $STAT =~ $REGEX ]]; } ||
+                    lk_elevate chown \
+                        ${VERBOSE:+-v} "${OWNER-}${GROUP:+:$GROUP}" "$DEST" ||
+                    return
+            fi
+        done
+    fi
+}
+
 # lk_file [-i <regex>] [-dpbsrvq] [-m <mode>] [-o <user>] [-g <group>] <file>
 #
 # Create or update a file if it differs from the given input or permissions.
@@ -4712,82 +4788,6 @@ function lk_rm() {
         false
     fi || lk_file_backup -m "$@" &&
         lk_sudo rm -Rf"$v" -- "$@"
-}
-
-# - lk_install [-m MODE] [-o OWNER] [-g GROUP] [-v] FILE...
-# - lk_install -d [-m MODE] [-o OWNER] [-g GROUP] [-v] DIRECTORY...
-#
-# Create or set permissions and ownership on each FILE or DIRECTORY.
-function lk_install() {
-    local OPTIND OPTARG OPT LK_USAGE _USER LK_SUDO=${LK_SUDO-} \
-        DIR MODE OWNER GROUP VERBOSE DEST STAT REGEX ARGS=()
-    LK_USAGE="\
-Usage: $FUNCNAME [-m MODE] [-o OWNER] [-g GROUP] [-v] FILE...
-   or: $FUNCNAME -d [-m MODE] [-o OWNER] [-g GROUP] [-v] DIRECTORY..."
-    while getopts ":dm:o:g:v" OPT; do
-        case "$OPT" in
-        d)
-            DIR=1
-            ARGS+=(-d)
-            ;;
-        m)
-            MODE=$OPTARG
-            ARGS+=(-m "$MODE")
-            ;;
-        o)
-            OWNER=$(id -un "$OPTARG") &&
-                _USER=$(id -un) || return
-            ARGS+=(-o "$OWNER")
-            [ "$OWNER" != "$_USER" ] ||
-                unset OWNER
-            ;;
-        g)
-            [[ ! $OPTARG =~ ^[0-9]+$ ]] ||
-                lk_warn "invalid group: $OPTARG" || return
-            GROUP=$OPTARG
-            ARGS+=(-g "$GROUP")
-            ;;
-        v)
-            VERBOSE=1
-            ARGS+=(-v)
-            ;;
-        \? | :)
-            lk_usage
-            return 1
-            ;;
-        esac
-    done
-    shift $((OPTIND - 1))
-    [ $# -gt 0 ] || lk_usage || return
-    [ -z "${OWNER-}" ] &&
-        { [ -z "${GROUP-}" ] ||
-            id -Gn | tr -s '[:blank:]' '\n' | grep -Fx "$GROUP" >/dev/null; } ||
-        LK_SUDO=1
-    if lk_is_true DIR; then
-        lk_sudo install ${ARGS[@]+"${ARGS[@]}"} "$@"
-    else
-        for DEST in "$@"; do
-            if lk_sudo test ! -e "$DEST" 2>/dev/null; then
-                lk_sudo install ${ARGS[@]+"${ARGS[@]}"} /dev/null "$DEST"
-            else
-                STAT=$(lk_file_owner_mode "$DEST" 2>/dev/null) || return
-                [ -z "${MODE-}" ] ||
-                    { [[ $MODE =~ ^0*([0-7]+)$ ]] &&
-                        REGEX=" 0*${BASH_REMATCH[1]}\$" &&
-                        [[ $STAT =~ $REGEX ]]; } ||
-                    lk_sudo chmod \
-                        ${VERBOSE:+-v} "$MODE" "$DEST" ||
-                    return
-                [ -z "${OWNER-}${GROUP-}" ] ||
-                    { REGEX='[-a-z0-9_]+\$?' &&
-                        REGEX="^${OWNER:-$REGEX}:${GROUP:-$REGEX} " &&
-                        [[ $STAT =~ $REGEX ]]; } ||
-                    lk_elevate chown \
-                        ${VERBOSE:+-v} "${OWNER-}${GROUP:+:$GROUP}" "$DEST" ||
-                    return
-            fi
-        done
-    fi
 }
 
 # lk_symlink [-f] TARGET LINK
