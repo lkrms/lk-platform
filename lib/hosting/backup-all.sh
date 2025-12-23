@@ -21,8 +21,8 @@ lk_elevate
 
 export TZ=UTC
 
-lk_log_start
-lk_start_trace
+lk_log_open
+lk_log_open_trace
 
 {
     BACKUP_ROOT=${LK_BACKUP_ROOT:-/srv/backup}
@@ -58,7 +58,7 @@ lk_start_trace
         OWNER=$(lk_file_owner "$SOURCE")
         GROUP=$(id -gn "$OWNER")
         MESSAGE="Backup $((++i)) of ${#SOURCES[@]} "
-        lk_log_bypass \
+        lk_log_run_tty_only \
             lk_maybe_trace "$LK_BASE/bin/lk-backup-create-snapshot.sh" \
             --group "$GROUP" \
             --filter "$LK_BASE/lib/hosting/backup-filter-rsync" \
@@ -84,7 +84,7 @@ lk_start_trace
     done
 
     lk_tty_print "Backing up system files"
-    lk_log_bypass \
+    lk_log_run_tty_only \
         lk_maybe_trace "$LK_BASE/bin/lk-backup-create-snapshot.sh" \
         --filter "$LK_BASE/lib/hosting/backup-filter-system_rsync" \
         --hook post_rsync:"$LK_BASE/lib/hosting/backup-hook-post_rsync.sh" \

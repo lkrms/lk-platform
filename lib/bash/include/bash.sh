@@ -84,9 +84,7 @@ function lk_bash_command_literals() {
         lk_get_outputs_of
         lk_git_with_repos
         lk_keep_trying
-        lk_log_bypass
-        lk_log_bypass_stderr
-        lk_log_bypass_stdout
+        lk_log_run_tty_only
         lk_maybe
         lk_maybe_drop
         lk_sudo

@@ -8,7 +8,7 @@ export LK_BASE={{"LK_BASE"}}
 
 unset LK_NO_LOG
 
-lk_log_start "/var/log/${LK_PATH_PREFIX}policy-rc.log"
+lk_log_open "/var/log/${LK_PATH_PREFIX}policy-rc.log"
 lk_log_tty_all_off
 
 lk_tty_print "Checking environment"

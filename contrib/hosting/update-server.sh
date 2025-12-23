@@ -387,7 +387,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
 
     (
       LK_LOG_BASENAME=${0##*/}-$1
-      lk_log_start
+      lk_log_open
 
       [ "${LK_NO_INPUT-}" != Y ] ||
         lk_log_tty_all_off

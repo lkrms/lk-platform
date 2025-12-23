@@ -131,7 +131,7 @@ function maybe_get_ipv4() {
     grep .
 }
 
-lk_log_start
+lk_log_open
 
 {
   unset IDENTITY

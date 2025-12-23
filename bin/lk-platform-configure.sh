@@ -82,7 +82,7 @@ done
 
 lk_lock
 
-lk_log_start
+lk_log_open
 
 {
     lk_tty_log "Configuring lk-platform"

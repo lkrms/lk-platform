@@ -8,7 +8,7 @@ lk_assert_command_exists gs
 lk_test_all lk_is_pdf "$@" || lk_usage "\
 Usage: ${0##*/} PDF..."
 
-lk_log_start
+lk_log_open
 
 lk_tty_print "Embedding fonts in $# $(lk_plural $# file files)"
 

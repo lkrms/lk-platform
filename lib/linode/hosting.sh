@@ -184,12 +184,12 @@ lk_keep_trying lk_apt_install "${INSTALL[@]}"
 
 LOG_FILE=/var/log/lk-platform-install
 install -m 00640 -g adm /dev/null "$LOG_FILE.log"
-lk_log_start "$LOG_FILE"
+lk_log_open "$LOG_FILE"
 
 if lk_debug_is_on; then
     install -m 00640 -g adm /dev/null "$LOG_FILE.trace"
     LK_LOG_TRACE_FILE=$LOG_FILE.trace \
-        lk_start_trace
+        lk_log_open_trace
 fi
 
 lk_tty_log "Bootstrapping Ubuntu for hosting"

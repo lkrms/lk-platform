@@ -22,9 +22,7 @@ analysis.
 - `lk_tty_run`
 - `lk_tty_run_detail`
 - `lk_cache`
-- `lk_log_bypass`
-- `lk_log_bypass_stdout`
-- `lk_log_bypass_stderr`
+- `lk_log_run_tty_only`
 - `lk_xargs`
 - `lk_get_outputs_of`
 - `lk_maybe_drop`

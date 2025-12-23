@@ -86,8 +86,8 @@ while :; do
     esac
 done
 
-lk_log_start
-lk_start_trace
+lk_log_open
+lk_log_open_trace
 
 SITE_ROOT=$(lk_wp_get_site_root)
 lk_tty_print "Checking WordPress installation at" "$SITE_ROOT"

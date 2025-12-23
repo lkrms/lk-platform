@@ -18,8 +18,8 @@ lk_require iptables provision
 
 lk_elevate
 
-lk_log_start
-lk_start_trace
+lk_log_open
+lk_log_open_trace
 
 [ -r "$LK_BASE/etc/firewall.conf" ] ||
     lk_die "cannot read file: $LK_BASE/etc/firewall.conf"

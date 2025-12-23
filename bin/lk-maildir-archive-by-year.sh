@@ -28,7 +28,7 @@ eval "set -- $LK_GETOPT"
 [ $# -gt 0 ] || set -- "$MAILDIR"
 lk_test_all_d "$@" || lk_usage -e "invalid Maildir"
 
-lk_log_start
+lk_log_open
 
 for MAILDIR in "$@"; do
     MAILDIR=$(lk_realpath "$MAILDIR")
