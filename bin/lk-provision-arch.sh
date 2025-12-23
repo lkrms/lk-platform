@@ -177,9 +177,6 @@ lk_log_open_trace
     lk_sudo_nopasswd_offer || lk_die "unable to run commands as root"
     ! lk_is_bootstrap || lk_tty_detail "Bootstrap environment detected"
 
-    lk_is_bootstrap ||
-        lk_install -d -m 01777 -o root -g adm "$LK_BASE"/var/log/lk-platform
-
     GROUP=$(id -gn)
     MEMORY=$(lk_system_memory 2)
     lk_tty_detail "System memory:" "${MEMORY}M"
@@ -190,6 +187,9 @@ lk_log_open_trace
 
     (LK_VERBOSE=1 &&
         lk_settings_persist "$SETTINGS_SH")
+
+    lk_is_bootstrap ||
+        lk_install -d -m 01777 -o root -g adm "$LK_BASE"/var/log/lk-platform
 
     ERRORS=()
     SERVICE_STARTED=()

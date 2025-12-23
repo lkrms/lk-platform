@@ -337,7 +337,7 @@ s/^#//" "$FILE")
 # Cache the current values of every SITE_* and _SITE_* variable in the caller's
 # scope.
 function _lk_hosting_site_cache_settings() {
-    local STATIC LK_FILE_REPLACE_NO_CHANGE
+    local LK_SUDO=1 STATIC LK_FILE_REPLACE_NO_CHANGE
     [[ ${1-} != -s ]] || { STATIC=1 && shift; }
     local FILE=$LK_BASE/var/lib/lk-platform/sites/$_SITE_DOMAIN.conf${STATIC:+.static}
     [[ -w ${FILE%/*} ]] || return 0
