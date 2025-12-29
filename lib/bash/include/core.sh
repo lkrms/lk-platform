@@ -3315,12 +3315,17 @@ EOF
 #
 # Create or apply permissions to the given files or directories.
 #
+# If a file is created or updated, it is added to LK_FILE_CHANGED.
+#
 # If -v or -q are given, the value of LK_VERBOSE is ignored.
+#
+# Entries in global array LK_FILE_CHANGED are arranged from most to least
+# recent. New entries are always added at index 0.
 function lk_install() {
     # shellcheck disable=SC1007
     local OPTIND OPTARG opt BASH_REMATCH \
         dirs=0 mode owner group verbose= \
-        install_args=() file dir _mode _owner _group _chown chown
+        install_args=() changed file dir
     while getopts ":dm:o:g:vq" opt; do
         case "$opt" in
         d) dirs=1 ;;
@@ -3367,45 +3372,21 @@ function lk_install() {
     for file in "$@"; do
         dir=${file%"${file##*/}"}
         [[ $dir ]] || dir=.
-        _chown=
-        chown=
+        changed=0
 
-        # If the file doesn't exist, create it
+        # If the file doesn't exist, install /dev/null
         if [[ ! -e $file ]] && { [[ -r $dir ]] || ! { lk_will_sudo && sudo test -e "$file"; }; }; then
             ((!verbose)) || lk_tty_detail "Creating:" "$file"
             lk_sudo_on_fail install ${install_args[@]+"${install_args[@]}"} /dev/null "$file" ||
                 lk_err "error creating $file" || return
-            continue
+            changed=1
+        else
+            # Otherwise, check its permissions and ownership
+            _lk_file_check_permissions "$file" || return
         fi
 
-        # Otherwise, check its permissions and ownership
-        if [[ ${mode-} ]]; then
-            _mode=0$(lk_file_mode "$file") || return
-            ((mode == _mode)) || {
-                ((verbose < 2)) ||
-                    lk_tty_detail "Updating file mode ($_mode -> $mode):" "$file"
-                lk_sudo_on_fail chmod "$mode" "$file" || return
-            }
-        fi
-        if [[ ${owner-} ]]; then
-            _owner=$(lk_file_owner "$file") || return
-            [[ $owner == "$_owner" ]] || {
-                _chown=$_owner
-                chown=$owner
-            }
-        fi
-        if [[ ${group-} ]]; then
-            _group=$(lk_file_group "$file") || return
-            [[ $group == "$_group" ]] || {
-                _chown+=:$_group
-                chown+=:$group
-            }
-        fi
-        [[ ! $chown ]] || {
-            ((verbose < 2)) ||
-                lk_tty_detail "Updating ownership ($_chown -> $chown):" "$file"
-            lk_sudo_on_fail chown "$chown" "$file" || return
-        }
+        ((!changed)) ||
+            LK_FILE_CHANGED=("$1" ${LK_FILE_CHANGED+"${LK_FILE_CHANGED[@]}"})
     done
 }
 
@@ -3446,7 +3427,7 @@ function lk_file() {
     # shellcheck disable=SC1007
     local OPTIND OPTARG opt BASH_REMATCH \
         diff=0 prompt=0 backup=0 store= orig=0 mode owner group verbose= \
-        sed_args=() changed=0 dir temp _mode _owner _group _chown= chown=
+        sed_args=() changed=0 dir temp
     while getopts ":i:dpbsrm:o:g:vq" opt; do
         case "$opt" in
         i) sed_args+=(-e "/${OPTARG//\//\\\/}/d") ;;
@@ -3540,24 +3521,33 @@ function lk_file() {
     }
 
     # Finally, update permissions and ownership if needed
+    _lk_file_check_permissions "$1" || return 2
+
+    ((!changed)) ||
+        LK_FILE_CHANGED=("$1" ${LK_FILE_CHANGED+"${LK_FILE_CHANGED[@]}"})
+}
+
+function _lk_file_check_permissions() {
+    # shellcheck disable=SC1007
+    local _mode _owner _group _chown= chown=
     if [[ ${mode-} ]]; then
-        _mode=0$(lk_file_mode "$1") || return 2
+        _mode=0$(lk_file_mode "$1") || return
         ((mode == _mode)) || {
             ((verbose < 2)) ||
                 lk_tty_detail "Updating file mode ($_mode -> $mode):" "$1"
-            lk_sudo_on_fail chmod "$mode" "$1" || return 2
+            lk_sudo_on_fail chmod "$mode" "$1" || return
             changed=1
         }
     fi
     if [[ ${owner-} ]]; then
-        _owner=$(lk_file_owner "$1") || return 2
+        _owner=$(lk_file_owner "$1") || return
         [[ $owner == "$_owner" ]] || {
             _chown=$_owner
             chown=$owner
         }
     fi
     if [[ ${group-} ]]; then
-        _group=$(lk_file_group "$1") || return 2
+        _group=$(lk_file_group "$1") || return
         [[ $group == "$_group" ]] || {
             _chown+=:$_group
             chown+=:$group
@@ -3566,12 +3556,9 @@ function lk_file() {
     [[ ! $chown ]] || {
         ((verbose < 2)) ||
             lk_tty_detail "Updating ownership ($_chown -> $chown):" "$1"
-        lk_sudo_on_fail chown "$chown" "$1" || return 2
+        lk_sudo_on_fail chown "$chown" "$1" || return
         changed=1
     }
-
-    ((!changed)) ||
-        LK_FILE_CHANGED=("$1" ${LK_FILE_CHANGED+"${LK_FILE_CHANGED[@]}"})
 }
 
 # lk_file_complement [-s] <file> <file2>...
