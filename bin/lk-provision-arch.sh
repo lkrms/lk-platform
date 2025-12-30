@@ -908,7 +908,7 @@ $LK_HOSTNAME" &&
         lk_install -d -m 00775 -o root -g http /var/log/php-fpm
         FILE=/etc/logrotate.d/php-fpm
         lk_install -m 00644 "$FILE"
-        lk_file_replace "$FILE" <<"EOF"
+        lk_file_replace "$FILE" <<'EOF'
 /var/log/php-fpm/*.access.log {
     missingok
     sharedscripts

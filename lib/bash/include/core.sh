@@ -238,7 +238,7 @@ function lk_plural() {
 #
 # Example:
 #
-#     lk_assign SQL <<"SQL"
+#     lk_assign SQL <<'SQL'
 #     SELECT id, name FROM table;
 #     SQL
 function lk_assign() {
@@ -3233,32 +3233,28 @@ function lk_file_sort_modified() {
     lk_file_sort_modified "$@"
 }
 
-# lk_file_is_empty_dir FILE
+# lk_dir_is_empty <file>
 #
-# Return true if FILE exists and is an empty directory.
-function lk_file_is_empty_dir() {
-    ! lk_sudo -f ls -A "$1" 2>/dev/null | grep . >/dev/null &&
+# Check if a file exists and is an empty directory.
+function lk_dir_is_empty() {
+    (($# == 1)) || lk_bad_args || return
+    ! lk_sudo_on_fail ls -A "$1" 2>/dev/null | grep . >/dev/null &&
         [[ ${PIPESTATUS[0]}${PIPESTATUS[1]} == 01 ]]
 }
 
-# lk_file_maybe_move OLD_PATH CURRENT_PATH
+# lk_file_move_old <old_file> <new_file>
 #
-# If OLD_PATH exists and CURRENT_PATH doesn't, move OLD_PATH to CURRENT_PATH.
-function lk_file_maybe_move() {
-    lk_sudo -f test ! -e "$1" ||
-        lk_sudo -f test -e "$2" || {
-        lk_sudo mv -nv "$1" "$2" &&
-            LK_FILE_NO_CHANGE=0
-    }
-}
-
-# lk_file_list_duplicates [DIR]
+# If <old_file> exists and <new_file> doesn't, move <old_file> to <new_file>,
+# otherwise fail with return value 1.
 #
-# Print a list of files in DIR or the current directory that would be considered
-# duplicates on a case-insensitive filesystem. Only useful on case-sensitive
-# filesystems.
-function lk_file_list_duplicates() {
-    find "${1:-.}" -print0 | sort -zf | gnu_uniq -zDi | tr '\0' '\n'
+# If an error occurs, the return value is 2.
+function lk_file_move_old() {
+    (($# == 2)) || lk_bad_args || return 2
+    if lk_sudo_on_fail test -e "$1" && lk_sudo_on_fail test ! -e "$2"; then
+        lk_sudo_on_fail mv -nv "$1" "$2" || return 2
+    else
+        return 1
+    fi
 }
 
 # lk_expand_path [PATH...]
@@ -3269,36 +3265,63 @@ function lk_expand_path() { (
     shopt -s nullglob
     lk_awk_load AWK sh-sanitise-quoted-pathname - <<"EOF" || return
 BEGIN {
-unquote_single = no_unquote_single ? 0 : 1
-unquote_double = no_unquote_double ? 0 : 1
-unquote = unquote_single || unquote_double
+unquote_single = get_value(unquote_single, 1)
+unquote_double = get_value(unquote_double, 1)
+quote_tilde = get_value(quote_tilde, 0)
+quote_glob = get_value(quote_glob, 0)
 ORS = RS
 }
-unquote && (/^'([^']+|\\')*'$/ || /^"([^"]+|\\")*"$/) {
-if (unquote_single && (gsub(/^'|'$/, "", $0))) {
+(unquote_single && /^'([^'\\]+|\\.)*'$/) || (unquote_double && /^"([^"\\]+|\\.)*"$/) {
+enclosing = substr($0, 1, 1)
+$0 = substr($0, 2, length($0) - 2)
+if (enclosing == "'") {
 gsub(/\\'/, "'", $0)
-} else if (unquote_double && (gsub(/^"|"$/, "", $0))) {
+} else {
 gsub(/\\"/, "\"", $0)
 }
 }
-/^(~[-a-z0-9\$_]*)(\/.*)?$/ {
-home = $0
-sub(/\/.*/, "/", home)
-printf "%s", home
-sub(/^[^\/]+\/?/, "", $0)
+! quote_tilde && /^~/ {
+printf "%s", "~"
+$0 = substr($0, 2)
+if (match($0, /^([^'"\/]+|'[^']*'|"([^"\\$`]+|\\.)*"|\\.)*\/?/)) {
+printf "%s", substr($0, 1, RLENGTH)
+$0 = substr($0, RLENGTH + 1)
 }
-{
+}
+! quote_glob {
+q = ""
 while (pos = match($0, /\*+|\?+|\[(][^]]*|[^]]+)]/)) {
+len = RLENGTH
 if (pos > 1) {
-printf "%s", quote(substr($0, 1, pos - 1))
+_q = substr($0, 1, pos - 1)
+if (match(_q, /^([^\\]|\\.)*\\$/)) {
+q = q _q substr($0, pos, 1)
+$0 = substr($0, pos + 1)
+continue
+} else {
+printf "%s", quote(q _q)
+q = ""
 }
-printf "%s", substr($0, pos, RLENGTH)
-$0 = substr($0, pos + RLENGTH)
+} else if (q) {
+printf "%s", quote(q)
+q = ""
 }
-if ($0) {
+printf "%s", substr($0, pos, len)
+$0 = substr($0, pos + len)
+}
+if (q) {
+printf "%s", quote(q)
+}
+}
+$0 {
 printf "%s", quote($0)
 }
+{
 print ""
+}
+function get_value(val, default)
+{
+return (val == 0 && val == "" ? default : val)
 }
 function quote(str)
 {
@@ -3999,6 +4022,8 @@ lk_ellipsis() { lk_ellipsise "$@"; }
 lk_escape_ere_replace() { lk_sed_escape_replace "$@"; }
 lk_escape_ere() { lk_sed_escape "$@"; }
 lk_false() { lk_is_false "$@"; }
+lk_file_is_empty_dir() { lk_dir_is_empty "$@"; }
+lk_file_maybe_move() { lk_file_move_old "$@"; }
 lk_file_security() { lk_file_owner_mode "$@"; }
 lk_file_sort_by_date() { lk_file_sort_modified "$@"; }
 lk_files_exist() { lk_test_all_f "$@"; }

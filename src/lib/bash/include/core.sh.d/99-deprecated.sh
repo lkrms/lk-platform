@@ -15,6 +15,8 @@ lk_ellipsis() { lk_ellipsise "$@"; }
 lk_escape_ere_replace() { lk_sed_escape_replace "$@"; }
 lk_escape_ere() { lk_sed_escape "$@"; }
 lk_false() { lk_is_false "$@"; }
+lk_file_is_empty_dir() { lk_dir_is_empty "$@"; }
+lk_file_maybe_move() { lk_file_move_old "$@"; }
 lk_file_security() { lk_file_owner_mode "$@"; }
 lk_file_sort_by_date() { lk_file_sort_modified "$@"; }
 lk_files_exist() { lk_test_all_f "$@"; }

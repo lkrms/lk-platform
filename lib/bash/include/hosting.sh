@@ -318,7 +318,7 @@ function _lk_hosting_site_write_settings() {
             [[ ${!SETTING-} != "${!DEFAULT-}" ]] || echo "$SETTING"
         done | lk_ere_implode_input) || return
     unset LK_FILE_NO_CHANGE LK_FILE_REPLACE_NO_CHANGE
-    lk_file_maybe_move "$OLD_FILE" "$FILE" &&
+    { lk_file_move_old "$OLD_FILE" "$FILE" && LK_FILE_NO_CHANGE=0 || (($? == 1)); } &&
         lk_install -m 00660 -g adm "$FILE" &&
         lk_file_replace -lp "$FILE" \
             "$(lk_var_sh "${!SITE_@}" | sed -E "s/^$REGEX=/#&/")" || return
@@ -380,7 +380,7 @@ function _lk_hosting_site_assign_cached_settings() {
 
 function _lk_hosting_site_json() {
     local JQ
-    lk_assign JQ <<"EOF"
+    lk_assign JQ <<'EOF'
 {
   "enabled":                ($siteEnable                | to_bool),
   "domain":                 ($siteDomain),

@@ -1,32 +1,30 @@
 #!/usr/bin/env bash
 
-# lk_file_is_empty_dir FILE
+# lk_dir_is_empty <file>
 #
-# Return true if FILE exists and is an empty directory.
-function lk_file_is_empty_dir() {
-    ! lk_sudo -f ls -A "$1" 2>/dev/null | grep . >/dev/null &&
+# Check if a file exists and is an empty directory.
+function lk_dir_is_empty() {
+    (($# == 1)) || lk_bad_args || return
+    ! lk_sudo_on_fail ls -A "$1" 2>/dev/null | grep . >/dev/null &&
         [[ ${PIPESTATUS[0]}${PIPESTATUS[1]} == 01 ]]
 }
 
-# lk_file_maybe_move OLD_PATH CURRENT_PATH
+# lk_file_move_old <old_file> <new_file>
 #
-# If OLD_PATH exists and CURRENT_PATH doesn't, move OLD_PATH to CURRENT_PATH.
-function lk_file_maybe_move() {
-    lk_sudo -f test ! -e "$1" ||
-        lk_sudo -f test -e "$2" || {
-        lk_sudo mv -nv "$1" "$2" &&
-            LK_FILE_NO_CHANGE=0
-    }
+# If <old_file> exists and <new_file> doesn't, move <old_file> to <new_file>,
+# otherwise fail with return value 1.
+#
+# If an error occurs, the return value is 2.
+function lk_file_move_old() {
+    (($# == 2)) || lk_bad_args || return 2
+    if lk_sudo_on_fail test -e "$1" && lk_sudo_on_fail test ! -e "$2"; then
+        lk_sudo_on_fail mv -nv "$1" "$2" || return 2
+    else
+        return 1
+    fi
 }
 
-# lk_file_list_duplicates [DIR]
-#
-# Print a list of files in DIR or the current directory that would be considered
-# duplicates on a case-insensitive filesystem. Only useful on case-sensitive
-# filesystems.
-function lk_file_list_duplicates() {
-    find "${1:-.}" -print0 | sort -zf | gnu_uniq -zDi | tr '\0' '\n'
-}
+#### Reviewed: 2026-01-09
 
 # lk_expand_path [PATH...]
 #
