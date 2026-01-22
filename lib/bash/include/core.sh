@@ -957,7 +957,7 @@ function lk_get_regex() {
             printf '%s=%q\n' DOMAIN_NAME_REGEX '[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)+'
             ;;
         EMAIL_ADDRESS_REGEX)
-            printf '%s=%q\n' EMAIL_ADDRESS_REGEX '[-a-zA-Z0-9!#$%&'\''*+/=?^_`{|}~]([-a-zA-Z0-9.!#$%&'\''*+/=?^_`{|}~]{,62}[-a-zA-Z0-9!#$%&'\''*+/=?^_`{|}~])?@[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)+'
+            printf '%s=%q\n' EMAIL_ADDRESS_REGEX '[-a-zA-Z0-9!#$%&'\''*+/=?^_`{|}~]([-a-zA-Z0-9.!#$%&'\''*+/=?^_`{|}~]{0,62}[-a-zA-Z0-9!#$%&'\''*+/=?^_`{|}~])?@[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)+'
             ;;
         DOMAIN_PART_LOWER_REGEX)
             printf '%s=%q\n' DOMAIN_PART_LOWER_REGEX '[a-z0-9]([-a-z0-9]*[a-z0-9])?'
@@ -3353,7 +3353,7 @@ function lk_install() {
         case "$opt" in
         d) dirs=1 ;;
         m)
-            [[ $OPTARG =~ ^0*([0-7]{,4})$ ]] ||
+            [[ $OPTARG =~ ^0*([0-7]{0,4})$ ]] ||
                 lk_err "invalid mode: $OPTARG" || return
             mode=$(printf '%05o\n' "0${BASH_REMATCH[1]}")
             ;;
@@ -3466,7 +3466,7 @@ function lk_file() {
             ;;
         r) orig=1 ;;
         m)
-            [[ $OPTARG =~ ^0*([0-7]{,4})$ ]] ||
+            [[ $OPTARG =~ ^0*([0-7]{0,4})$ ]] ||
                 lk_err "invalid mode: $OPTARG" || return 2
             mode=$(printf '%05o\n' "0${BASH_REMATCH[1]}")
             ;;

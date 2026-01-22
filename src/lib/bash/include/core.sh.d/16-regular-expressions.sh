@@ -23,7 +23,7 @@ ALL=()
 
 add_regex DOMAIN_PART_REGEX "[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
 add_regex DOMAIN_NAME_REGEX "$DOMAIN_PART_REGEX(\\.$DOMAIN_PART_REGEX)+"
-add_regex EMAIL_ADDRESS_REGEX "[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@$DOMAIN_NAME_REGEX"
+add_regex EMAIL_ADDRESS_REGEX "[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~]([-a-zA-Z0-9.!#\$%&'*+/=?^_\`{|}~]{0,62}[-a-zA-Z0-9!#\$%&'*+/=?^_\`{|}~])?@$DOMAIN_NAME_REGEX"
 
 add_regex DOMAIN_PART_LOWER_REGEX "[a-z0-9]([-a-z0-9]*[a-z0-9])?"
 add_regex DOMAIN_NAME_LOWER_REGEX "$DOMAIN_PART_LOWER_REGEX(\\.$DOMAIN_PART_LOWER_REGEX)+"

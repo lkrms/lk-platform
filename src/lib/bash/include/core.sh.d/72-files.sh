@@ -57,7 +57,7 @@ function lk_install() {
         case "$opt" in
         d) dirs=1 ;;
         m)
-            [[ $OPTARG =~ ^0*([0-7]{,4})$ ]] ||
+            [[ $OPTARG =~ ^0*([0-7]{0,4})$ ]] ||
                 lk_err "invalid mode: $OPTARG" || return
             mode=$(printf '%05o\n' "0${BASH_REMATCH[1]}")
             ;;
@@ -170,7 +170,7 @@ function lk_file() {
             ;;
         r) orig=1 ;;
         m)
-            [[ $OPTARG =~ ^0*([0-7]{,4})$ ]] ||
+            [[ $OPTARG =~ ^0*([0-7]{0,4})$ ]] ||
                 lk_err "invalid mode: $OPTARG" || return 2
             mode=$(printf '%05o\n' "0${BASH_REMATCH[1]}")
             ;;

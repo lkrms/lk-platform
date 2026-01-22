@@ -58,6 +58,13 @@ the next available file descriptor.
   lk_bash_is 4 3 || lk_die "Bash 4.3 or higher required"
   ```
 
+### Regular expressions
+
+Because ERE implementations vary:
+
+- Quantifiers must specify a lower bound, e.g. `{0,4}` instead of `{,4}`. Upper
+  bounds are not required, e.g. `{4,}` is acceptable.
+
 ## Documentation
 
 - [Rewrap][]-friendly Markdown must be used in comments and text files.

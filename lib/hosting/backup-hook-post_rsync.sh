@@ -20,7 +20,7 @@ if [ "$SOURCE_NAME" = root ]; then
     shopt -s nullglob
     MYSQL_DUMP_ARGS=(--exclude)
     for FILE in "$BACKUP_ROOT/snapshot"/*/"$LK_BACKUP_TIMESTAMP/db"/*; do
-        [[ ! $FILE =~ .*/([^/]+)-[0-9]{4}(-[0-9]{2}){2}-[0-9]{6}\.sql(\.[[:alnum:]]+){,2}$ ]] ||
+        [[ ! $FILE =~ .*/([^/]+)-[0-9]{4}(-[0-9]{2}){2}-[0-9]{6}\.sql(\.[[:alnum:]]+){0,2}$ ]] ||
             MYSQL_DUMP_ARGS+=("${BASH_REMATCH[1]}")
     done
     [ ${#MYSQL_DUMP_ARGS[@]} -gt 1 ] || MYSQL_DUMP_ARGS=(--all)
