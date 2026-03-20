@@ -329,6 +329,7 @@ if lk_feature_enabled desktop; then
         geany # notepadqq is smaller but depends on Qt
         gimp-
         mpv
+        okular- # Document viewer with better annotation features; depends on Qt
         qalculate-gtk-
         speedcrunch-
         vlc-

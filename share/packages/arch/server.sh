@@ -22,15 +22,16 @@ PAC_OFFER=(
     transmission-cli
 
     # PDF
-    ghostscript        # PDF/PostScript processing
-    mupdf-tools        # PDF manipulation
-    pandoc-cli         # Text conversion (e.g. Markdown to PDF)
-    poppler            # Provides pdfimages
-    pstoedit           # PDF/PostScript conversion to vector formats
-    qpdf               # PDF manipulation (e.g. add underlay)
-    texlive-latexextra # PDF support for pandoc
-    texlive-fontsextra #
-    tesseract          # OCR
+    ghostscript              # PDF/PostScript processing
+    mupdf-tools              # PDF manipulation
+    pandoc-cli               # Text conversion (e.g. Markdown to PDF)
+    poppler                  # Provides pdfimages
+    pstoedit                 # PDF/PostScript conversion to vector formats
+    qpdf                     # PDF manipulation (e.g. add underlay)
+    texlive-latexextra       # PDF support for pandoc
+    texlive-fontsrecommended #
+    texlive-fontsextra       #
+    tesseract                # OCR
     tesseract-data-eng
 
     # Platforms
@@ -56,6 +57,7 @@ PAC_OFFER=(
 
     #
     brother-hl5450dn
+    brother-hll2375dw
     brother-hll3230cdw
 )
 
