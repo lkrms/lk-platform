@@ -1,7 +1,25 @@
 #!/usr/bin/env bash
 
-function lk_mysql_is_quiet() {
-    [[ -n ${_LK_MYSQL_QUIET:+1} ]]
+# _lk_mysql_is_quiet
+#
+# Check if _LK_MYSQL_QUIET is set.
+function _lk_mysql_is_quiet() {
+    [[ ${_LK_MYSQL_QUIET-} ]]
+}
+
+# lk_mysql_native_command <command>
+#
+# Resolve the name of a mysql command to the name of its local implementation,
+# e.g. for `mysqldump` on MariaDB systems, print `mariadb-dump` if running on
+# MariaDB 11.4+, otherwise print `mysqldump`.
+function lk_mysql_native_command() {
+    (($# == 1)) || lk_bad_args || return
+    local cmd
+    if cmd=$(type -P "$1") && [[ -L $cmd ]] && cmd=$(readlink "$cmd"); then
+        printf '%s\n' "${cmd##*/}"
+    else
+        printf '%s\n' "$1"
+    fi
 }
 
 # lk_mysql_escape [<string>]
@@ -87,7 +105,7 @@ function lk_mysql_options_client_print() {
     printf '[client]\n'
     for ((i = 0; i < ${#options[@]}; i += 2)); do
         printf '%s=%s\n' "${options[i]}" \
-            "$(lk_mysql_option_escape "${options[i + 1]}")"
+            "$(lk_mysql_option_escape "${options[i+1]}")"
     done
 }
 
@@ -113,14 +131,20 @@ function lk_mysql_options_client_write() {
 # - If `LK_MYSQL_SUDO` is set, run `mysql` as the root user without reading
 #   default options from any file.
 # - Otherwise, run `mysql` as the current user with default options.
+# - If `mysql` is a deprecated symlink, run `mariadb` instead.
 function lk_mysql() {
+    if [[ ${_LK_MYSQL-} ]]; then
+        _LK_MYSQL=$(lk_mysql_native_command "$_LK_MYSQL")
+    elif [[ -z ${_LK_MYSQL_CMD-} ]]; then
+        _LK_MYSQL_CMD=$(lk_mysql_native_command mysql)
+    fi
     if [[ -n ${LK_MY_CNF-} ]]; then
-        [[ -f $LK_MY_CNF ]] || lk_warn "file not found: $LK_MY_CNF" || return
-        "${_LK_MYSQL:-mysql}" --defaults-file="$LK_MY_CNF" "$@"
+        [[ -f $LK_MY_CNF ]] || lk_err "file not found: $LK_MY_CNF" || return
+        "${_LK_MYSQL:-$_LK_MYSQL_CMD}" --defaults-file="$LK_MY_CNF" "$@"
     elif [[ -n ${LK_MYSQL_SUDO-} ]]; then
-        lk_elevate "${_LK_MYSQL:-mysql}" --no-defaults "$@"
+        lk_elevate "${_LK_MYSQL:-$_LK_MYSQL_CMD}" --no-defaults "$@"
     else
-        "${_LK_MYSQL:-mysql}" "$@"
+        "${_LK_MYSQL:-$_LK_MYSQL_CMD}" "$@"
     fi
 }
 
@@ -150,8 +174,8 @@ function lk_mysql_mapfile() {
 
 function lk_mysql_version() {
     local version
-    version=$(mysql --version | grep -Eo '([0-9]+[.-])+MariaDB') ||
-        lk_warn "unsupported MySQL version" || return
+    version=$(lk_mysql --version | grep -Eo '([0-9]+[.-])+MariaDB') ||
+        lk_err "unsupported MySQL version" || return
     printf '%s\n' "${version%-*}"
 }
 
@@ -189,16 +213,16 @@ WHERE TABLE_TYPE = 'BASE TABLE'
 function lk_mysql_dump() {
     local DB_NAME=$1 DB_USER=${2-${DB_USER-}} DB_PASSWORD=${3-${DB_PASSWORD-}} \
         DB_HOST=${4-${DB_HOST-${LK_MYSQL_HOST:-localhost}}} \
-        LK_MYSQL_ELEVATE LK_MY_CNF OUTPUT_FILE OUTPUT_FD \
+        LK_MYSQL_SUDO LK_MY_CNF OUTPUT_FILE OUTPUT_FD \
         INNODB_ONLY=1 DUMP_ARGS ARG_COLOUR EXIT_STATUS=0
     unset ARG_COLOUR
     [ $# -ge 1 ] || lk_usage "\
 Usage: $FUNCNAME DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
         return
-    [ -n "$DB_NAME" ] || lk_warn "no database name" || return
+    [ -n "$DB_NAME" ] || lk_err "no database name" || return
     if [ "${DB_USER:+1}${DB_PASSWORD:+1}$DB_HOST" = localhost ] &&
-        lk_can_sudo mysqldump; then
-        LK_MYSQL_ELEVATE=1
+        lk_can_sudo "$(lk_mysql_native_command mysqldump)"; then
+        LK_MYSQL_SUDO=1
     else
         LK_MY_CNF=~/.mysqldump.lk.my.cnf
         lk_tty_print "Creating temporary mysqldump configuration file"
@@ -207,7 +231,7 @@ Usage: $FUNCNAME DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
         lk_mysql_options_client_write
     fi
     lk_mysql_connects "$DB_NAME" 2>/dev/null ||
-        lk_warn "database connection failed" || return
+        lk_err "database connection failed" || return
     [ ! -t 1 ] || {
         OUTPUT_FILE=~/.lk-platform/cache/db/$DB_HOST-$DB_NAME-$(lk_date_ymdhms).sql.gz
         install -d -m 00700 "${OUTPUT_FILE%/*}" &&
@@ -230,11 +254,11 @@ Usage: $FUNCNAME DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
         ARG_COLOUR=$LK_BOLD$LK_RED
     fi
     DUMP_ARGS+=(--no-tablespaces)
-    lk_mysql_is_quiet || {
+    _lk_mysql_is_quiet || {
         lk_tty_print "Dumping database:" "$DB_NAME"
         lk_tty_detail "Host:" "$DB_HOST"
     }
-    { lk_mysql_is_quiet && ((INNODB_ONLY)); } || {
+    { _lk_mysql_is_quiet && ((INNODB_ONLY)); } || {
         lk_tty_detail "InnoDB only?" "${ARG_COLOUR+$ARG_COLOUR}$(
             ((INNODB_ONLY)) && echo yes || echo no
         )${ARG_COLOUR+$LK_RESET}"
@@ -256,7 +280,7 @@ Usage: $FUNCNAME DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
             lk_tty_detail "Deleted" "$LK_MY_CNF" ||
             lk_tty_warning "Error deleting" "$LK_MY_CNF"
     }
-    lk_mysql_is_quiet || {
+    _lk_mysql_is_quiet || {
         [ "$EXIT_STATUS" -eq 0 ] &&
             lk_tty_success "Database dump completed successfully" ||
             lk_tty_error "Database dump failed"
@@ -273,8 +297,8 @@ function lk_mysql_dump_remote() {
     [ $# -ge 2 ] || lk_usage "\
 Usage: $FUNCNAME SSH_HOST DB_NAME [DB_USER [DB_PASSWORD [DB_HOST]]]" ||
         return
-    [ -n "$SSH_HOST" ] || lk_warn "no ssh host" || return
-    [ -n "$DB_NAME" ] || lk_warn "no database name" || return
+    [ -n "$SSH_HOST" ] || lk_err "no ssh host" || return
+    [ -n "$DB_NAME" ] || lk_err "no database name" || return
     lk_tty_print "Creating temporary mysqldump configuration file"
     lk_tty_detail "Adding credentials for user" "$DB_USER"
     lk_tty_detail "Writing" "$SSH_HOST:.mysqldump.lk.my.cnf"
@@ -354,11 +378,11 @@ function lk_mysql_restore_filter() {
 
 # lk_mysql_restore_local FILE DB_NAME
 function lk_mysql_restore_local() {
-    local FILE=$1 DB_NAME=$2 SQL _SQL LK_MYSQL_ELEVATE
-    [ -f "$FILE" ] || lk_warn "file not found: $FILE" || return
-    [ -n "$DB_NAME" ] || lk_warn "no database name" || return
-    ! lk_can_sudo mysql ||
-        LK_MYSQL_ELEVATE=1
+    local FILE=$1 DB_NAME=$2 SQL _SQL LK_MYSQL_SUDO
+    [ -f "$FILE" ] || lk_err "file not found: $FILE" || return
+    [ -n "$DB_NAME" ] || lk_err "no database name" || return
+    ! lk_can_sudo "$(lk_mysql_native_command mysql)" ||
+        LK_MYSQL_SUDO=1
     lk_tty_print "Preparing to restore database"
     lk_tty_detail "Backup file:" "$FILE"
     lk_tty_detail "Database:" "$DB_NAME"
