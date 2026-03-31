@@ -21,7 +21,22 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install perltidy shfmt
+          sudo apt-get install perltidy
+
+          case $OSTYPE in
+          linux-gnu) platform=linux ;;
+          darwin*) platform=darwin ;;
+          esac
+          case $MACHTYPE in
+          x86_64-*) arch=amd64 ;;
+          arm64-* | aarch64-*) arch=arm64 ;;
+          esac
+
+          file=/usr/local/bin/shfmt
+          gh release download -R mvdan/sh --pattern "shfmt_v*_${platform}_${arch}" -O "$file"
+          chmod a+x "$file"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check generated files
         run: src/build-all.sh --no-write
