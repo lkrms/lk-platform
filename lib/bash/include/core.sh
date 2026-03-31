@@ -3346,7 +3346,7 @@ EOF
 # recent. New entries are always added at index 0.
 function lk_install() {
     # shellcheck disable=SC1007
-    local OPTIND OPTARG opt BASH_REMATCH \
+    local OPTIND OPTARG opt \
         dirs=0 mode owner group verbose= \
         install_args=() changed file dir
     while getopts ":dm:o:g:vq" opt; do
@@ -3448,7 +3448,7 @@ function lk_install() {
 # from most to least recent. New entries are always added at index 0.
 function lk_file() {
     # shellcheck disable=SC1007
-    local OPTIND OPTARG opt BASH_REMATCH \
+    local OPTIND OPTARG opt \
         diff=0 prompt=0 backup=0 store= orig=0 mode owner group verbose= \
         sed_args=() changed=0 dir temp
     while getopts ":i:dpbsrm:o:g:vq" opt; do

@@ -27,7 +27,7 @@
   always given.
 - If possible, values should be tested with extglob patterns like
   `[[ $var == ?(+|-)+([0-9]) ]]` instead of regex like
-  `[[ $var =~ ^[+-]?[0-9]+$ ]]`. Otherwise, `BASH_REMATCH` must be `local`.
+  `[[ $var =~ ^[+-]?[0-9]+$ ]]`.
 
 ## File descriptors
 
