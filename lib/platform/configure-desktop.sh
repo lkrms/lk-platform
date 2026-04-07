@@ -17,7 +17,7 @@ if lk_system_is_linux; then
         if ! virsh net-list --name --all | grep -Fxq isolated; then
             lk_tty_detail "Adding network:" "isolated"
             virsh net-define <(
-                cat <<"EOF"
+                cat <<'EOF'
 <network>
   <name>isolated</name>
   <ip address='192.168.100.1' netmask='255.255.255.0'>

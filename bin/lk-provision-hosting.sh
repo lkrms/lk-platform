@@ -86,9 +86,9 @@ lk_assert_is_linux
 lk_assert_is_ubuntu
 
 export -n \
-    LK_NODE_HOSTNAME=${LK_NODE_HOSTNAME-} \
-    LK_NODE_FQDN=${LK_NODE_FQDN-} \
-    LK_NODE_TIMEZONE=${LK_NODE_TIMEZONE-} \
+    LK_HOSTNAME=${LK_HOSTNAME-} \
+    LK_FQDN=${LK_FQDN-} \
+    LK_TIMEZONE=${LK_TIMEZONE-} \
     LK_FEATURES=${LK_FEATURES-} \
     LK_PACKAGES=${LK_PACKAGES-} \
     LK_ADMIN_EMAIL=${LK_ADMIN_EMAIL-} \
@@ -145,9 +145,9 @@ FIELD_ERRORS=$'\n'$(
 
     # Required fields
     _LK_REQUIRED=1
-    lk_validate LK_NODE_HOSTNAME "^$DOMAIN_PART_REGEX\$"
-    lk_validate LK_NODE_FQDN "^$DOMAIN_NAME_REGEX\$"
-    lk_validate_one_of LK_NODE_TIMEZONE < <(timedatectl list-timezones)
+    lk_validate LK_HOSTNAME "^$DOMAIN_PART_REGEX\$"
+    lk_validate LK_FQDN "^$DOMAIN_NAME_REGEX\$"
+    lk_validate_one_of LK_TIMEZONE < <(timedatectl list-timezones)
     lk_validate LK_ADMIN_EMAIL "^$EMAIL_ADDRESS_REGEX\$"
     lk_validate_one_of LK_AUTO_REBOOT Y N
 
@@ -167,8 +167,8 @@ FIELD_ERRORS=$'\n'$(
             # Apache doesn't resolve name-based virtual hosts correctly if
             # ServerName resolves to a loopback address, so don't allow the
             # host's FQDN to be the same as the initial hosting domain
-            LK_NODE_FQDN=${LK_NODE_FQDN#www.}
-            lk_validate_not_equal -i LK_HOST_DOMAIN LK_NODE_FQDN
+            LK_FQDN=${LK_FQDN#www.}
+            lk_validate_not_equal -i LK_HOST_DOMAIN LK_FQDN
             _LK_REQUIRED=1
         }
         lk_validate_one_of LK_HOST_SITE_ENABLE Y N
@@ -236,9 +236,9 @@ if lk_is_bootstrap; then
     LK_SSH_JUMP_KEY=${LK_SSH_JUMP_KEY:+jump} lk_var_sh \
         LK_BASE \
         LK_PATH_PREFIX \
-        LK_NODE_HOSTNAME \
-        LK_NODE_FQDN \
-        LK_NODE_TIMEZONE \
+        LK_HOSTNAME \
+        LK_FQDN \
+        LK_TIMEZONE \
         LK_FEATURES \
         LK_PACKAGES \
         LK_ADMIN_EMAIL \
@@ -353,8 +353,8 @@ export DEBIAN_FRONTEND=noninteractive \
     PIP_NO_INPUT=1
 
 if ! lk_is_bootstrap; then
-    lk_log_start /var/log/{lk-platform-,"$LK_PATH_PREFIX"}*install.{out,log}
-    lk_start_trace
+    lk_log_open /var/log/{lk-platform-,"$LK_PATH_PREFIX"}*install.{out,log}
+    lk_log_open_trace
 fi
 
 {
@@ -362,6 +362,7 @@ fi
 
     install -d -m 02775 -g adm "$LK_BASE"/{etc,var/{cache,lib}}/lk-platform
     install -d -m 02770 -g adm "$LK_BASE/var/lib/lk-platform"/{dirty,sites}
+    install -d -m 01777 -o root -g adm "$LK_BASE"/var/log/lk-platform
 
     if ! lk_is_bootstrap && [[ -d $LK_BASE/var/run/dirty ]]; then
         lk_file_is_empty_dir "$LK_BASE/var/run/dirty" ||
@@ -382,12 +383,12 @@ fi
 
     lk_tty_print "Checking system timezone"
     TIMEZONE=$(lk_system_timezone)
-    [ "$TIMEZONE" = "$LK_NODE_TIMEZONE" ] ||
-        lk_tty_run_detail timedatectl set-timezone "$LK_NODE_TIMEZONE"
+    [ "$TIMEZONE" = "$LK_TIMEZONE" ] ||
+        lk_tty_run_detail timedatectl set-timezone "$LK_TIMEZONE"
 
     lk_tty_print "Checking system hostname"
-    [ "$(hostname -s)" = "$LK_NODE_HOSTNAME" ] || {
-        lk_tty_run_detail hostnamectl set-hostname "$LK_NODE_HOSTNAME"
+    [ "$(hostname -s)" = "$LK_HOSTNAME" ] || {
+        lk_tty_run_detail hostnamectl set-hostname "$LK_HOSTNAME"
         REBOOT=1
     }
 
@@ -720,7 +721,7 @@ EOF
         FILE=/etc/logrotate.d/lk-platform
         OLD_FILE=/etc/logrotate.d/${LK_PATH_PREFIX}log
         maybe_move_old "$OLD_FILE" "$FILE"
-        DIR=$(lk_double_quote "$LK_BASE/var/log")
+        DIR=$(lk_double_quote "$LK_BASE/var/log/lk-platform")
         GROUP=$(lk_file_group "$LK_BASE")
         lk_install -m 00644 "$FILE"
         lk_file_replace "$FILE" < <(LK_PLATFORM_LOGS="$DIR/*.log" \
@@ -832,7 +833,7 @@ EOF
     lk_install -d -m 00751 -g adm /srv/{www/{,.tmp},backup/{,archive,latest,snapshot}} \
         "${PHP_VERSIONS[@]/#/\/srv\/www\/.tmp\/}"
 
-    _LK_NO_LOG=1 \
+    LK_NO_LOG=1 \
         lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh" --rename \
         $(! no_upgrade || printf '%s\n' --no-upgrade)
 

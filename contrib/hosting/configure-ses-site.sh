@@ -68,7 +68,7 @@ SOURCE_IP=("${@:5}")
 [[ $SES_DOMAIN != - ]] ||
   SES_DOMAIN=$DOMAIN
 
-lk_log_start
+lk_log_open
 
 {
   lk_tty_log "Configuring IAM user '$IAM_USER' for SMTP$(
@@ -220,7 +220,7 @@ lk_log_start
         "$_DOMAIN" || return
     done < <(lk_hosting_list_sites |
       awk -v re="${REGEX//\\/\\\\}" '$1 ~ re { print $1 }')
-    if [[ $LK_NODE_FQDN =~ $REGEX ]]; then
+    if [[ $LK_FQDN =~ $REGEX ]]; then
       ((++i))
       SH=$(lk_settings_getopt \
         --set LK_SMTP_RELAY "[email-smtp.$AWS_REGION.amazonaws.com]:587" \

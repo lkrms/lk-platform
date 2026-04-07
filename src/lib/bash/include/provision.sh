@@ -47,7 +47,7 @@ function lk_configure_locales() {
     local IFS LK_SUDO=1 LOCALES _LOCALES FILE _FILE
     unset IFS
     lk_system_is_linux || lk_warn "platform not supported" || return
-    LOCALES=(${LK_NODE_LOCALES-} en_US.UTF-8)
+    LOCALES=(${LK_LOCALES-} en_US.UTF-8)
     _LOCALES=$(lk_arr LOCALES |
         lk_sed_escape |
         lk_implode_input "|")
@@ -69,8 +69,8 @@ function lk_configure_locales() {
     FILE=${_LK_PROVISION_ROOT-}/etc/locale.conf
     lk_install -m 00644 "$FILE"
     lk_file_replace -i "^(#|$LK_h*\$)" "$FILE" "\
-LANG=${LOCALES[0]}${LK_NODE_LANGUAGE:+
-LANGUAGE=$LK_NODE_LANGUAGE}"
+LANG=${LOCALES[0]}${LK_LANGUAGE:+
+LANGUAGE=$LK_LANGUAGE}"
 }
 
 # lk_dir_set_modes DIR REGEX DIR_MODE FILE_MODE [REGEX DIR_MODE FILE_MODE]...
@@ -365,7 +365,7 @@ function lk_ssh_configure() {
         SSH_PREFIX=${LK_SSH_PREFIX-$LK_PATH_PREFIX} \
         LK_FILE_BACKUP_TAKE='' LK_VERBOSE=0 \
         KEY PATTERN CONF AWK OWNER GROUP TEMP_HOMES \
-        HOMES=(${_LK_HOMES[@]+"${_LK_HOMES[@]}"}) h
+        HOMES=(${_LK_HOMES[@]+"${_LK_HOMES[@]}"}) HOME=${HOME:-~} h
     unset KEY
     [ $# -eq 0 ] || [ $# -ge 2 ] || lk_warn "invalid arguments" || return
     [ ${#HOMES[@]} -gt 0 ] || HOMES=(~)

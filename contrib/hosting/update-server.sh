@@ -138,7 +138,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
       # If target branch is 'main', reset origin/main to the most recent
       # annotated tag's commit
       if [[ $BRANCH == main ]] &&
-        TAG=$(git describe origin/main 2>/dev/null) &&
+        TAG=$(git describe --abbrev=0 origin/main 2>/dev/null) &&
         REF=$(git rev-parse --verify --short "$TAG^{commit}"); then
         git update-ref refs/remotes/origin/main "$REF" &&
           echo "Updating lk-platform to $TAG ($REF)" >&2
@@ -386,11 +386,11 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
     lk_tty_print "Updating server $i of $((i + $# - 1)):" "$1"
 
     (
-      LK_LOG_CMDLINE=("$0-$1")
-      lk_log_start
+      LK_LOG_BASENAME=${0##*/}-$1
+      lk_log_open
 
       [ "${LK_NO_INPUT-}" != Y ] ||
-        lk_log_tty_off -a
+        lk_log_tty_all_off
 
       STATUS=0
       ssh -o ControlPath=none -o LogLevel=QUIET "$1" \

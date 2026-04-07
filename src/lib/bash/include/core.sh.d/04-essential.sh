@@ -137,7 +137,7 @@ function lk_plural() {
 #
 # Example:
 #
-#     lk_assign SQL <<"SQL"
+#     lk_assign SQL <<'SQL'
 #     SELECT id, name FROM table;
 #     SQL
 function lk_assign() {

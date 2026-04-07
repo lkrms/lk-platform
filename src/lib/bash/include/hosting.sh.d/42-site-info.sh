@@ -2,7 +2,7 @@
 
 function _lk_hosting_site_json() {
     local JQ
-    lk_assign JQ <<"EOF"
+    lk_assign JQ <<'EOF'
 {
   "enabled":                ($siteEnable                | to_bool),
   "domain":                 ($siteDomain),

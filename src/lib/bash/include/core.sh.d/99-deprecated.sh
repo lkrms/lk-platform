@@ -15,6 +15,8 @@ lk_ellipsis() { lk_ellipsise "$@"; }
 lk_escape_ere_replace() { lk_sed_escape_replace "$@"; }
 lk_escape_ere() { lk_sed_escape "$@"; }
 lk_false() { lk_is_false "$@"; }
+lk_file_is_empty_dir() { lk_dir_is_empty "$@"; }
+lk_file_maybe_move() { lk_file_move_old "$@"; }
 lk_file_security() { lk_file_owner_mode "$@"; }
 lk_file_sort_by_date() { lk_file_sort_modified "$@"; }
 lk_files_exist() { lk_test_all_f "$@"; }
@@ -33,6 +35,11 @@ lk_is_ubuntu() { lk_system_is_ubuntu; }
 lk_is_virtual() { lk_system_is_vm; }
 lk_is_wsl() { lk_system_is_wsl; }
 lk_jq_get_array() { lk_json_mapfile "$@"; }
+lk_log_bypass() { lk_log_run_tty_only "$@"; }
+lk_log_bypass_stderr() { lk_log_run_tty_only -e "$@"; }
+lk_log_bypass_stdout() { lk_log_run_tty_only -o "$@"; }
+lk_log_create_file() { lk_log_file_create "$@"; }
+lk_log_start() { lk_log_open "$@"; }
 lk_maybe_sudo() { lk_sudo "$@"; }
 lk_mktemp_dir() { _LK_STACK_DEPTH=$((${_LK_STACK_DEPTH-0} + 1)) lk_mktemp -d; }
 lk_mktemp_file() { _LK_STACK_DEPTH=$((${_LK_STACK_DEPTH-0} + 1)) lk_mktemp; }
@@ -43,6 +50,7 @@ lk_root() { lk_user_is_root; }
 lk_safe_grep() { lk_grep "$@"; }
 lk_script_name() { lk_script $((${1-0} + 1)); }
 lk_script_running() { lk_is_script; }
+lk_start_trace() { lk_log_open_trace; }
 lk_test_many() { lk_test "$@"; }
 lk_test() { lk_test_all "$@"; }
 lk_true() { lk_is_true "$@"; }

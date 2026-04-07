@@ -7,14 +7,20 @@
 # - If `LK_MYSQL_SUDO` is set, run `mysql` as the root user without reading
 #   default options from any file.
 # - Otherwise, run `mysql` as the current user with default options.
+# - If `mysql` is a deprecated symlink, run `mariadb` instead.
 function lk_mysql() {
+    if [[ ${_LK_MYSQL-} ]]; then
+        _LK_MYSQL=$(lk_mysql_native_command "$_LK_MYSQL")
+    elif [[ -z ${_LK_MYSQL_CMD-} ]]; then
+        _LK_MYSQL_CMD=$(lk_mysql_native_command mysql)
+    fi
     if [[ -n ${LK_MY_CNF-} ]]; then
-        [[ -f $LK_MY_CNF ]] || lk_warn "file not found: $LK_MY_CNF" || return
-        "${_LK_MYSQL:-mysql}" --defaults-file="$LK_MY_CNF" "$@"
+        [[ -f $LK_MY_CNF ]] || lk_err "file not found: $LK_MY_CNF" || return
+        "${_LK_MYSQL:-$_LK_MYSQL_CMD}" --defaults-file="$LK_MY_CNF" "$@"
     elif [[ -n ${LK_MYSQL_SUDO-} ]]; then
-        lk_elevate "${_LK_MYSQL:-mysql}" --no-defaults "$@"
+        lk_elevate "${_LK_MYSQL:-$_LK_MYSQL_CMD}" --no-defaults "$@"
     else
-        "${_LK_MYSQL:-mysql}" "$@"
+        "${_LK_MYSQL:-$_LK_MYSQL_CMD}" "$@"
     fi
 }
 
@@ -44,8 +50,8 @@ function lk_mysql_mapfile() {
 
 function lk_mysql_version() {
     local version
-    version=$(mysql --version | grep -Eo '([0-9]+[.-])+MariaDB') ||
-        lk_warn "unsupported MySQL version" || return
+    version=$(lk_mysql --version | grep -Eo '([0-9]+[.-])+MariaDB') ||
+        lk_err "unsupported MySQL version" || return
     printf '%s\n' "${version%-*}"
 }
 

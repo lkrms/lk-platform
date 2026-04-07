@@ -23,7 +23,7 @@ function exit_trap() {
     [ "$BASH_SUBSHELL" -eq 0 ] || return "$STATUS"
     exec 8>&- &&
         rm -Rf "${FIFO_FILE%/*}" || true
-    lk_log_close -r
+    lk_log_close -s
     [ -z "$LK_BACKUP_MAIL" ] ||
         { [ "$STATUS" -eq 0 ] &&
             [ "$RSYNC_STATUS" -eq 0 ] &&
@@ -164,8 +164,8 @@ function run_rsync() {
         DEST=$LK_SNAPSHOT_FS/
     }
     lk_tty_run rsync "${RSYNC_ARGS[@]}" "$SRC" "$DEST" \
-        > >(lk_log_bypass_stdout tee -a "$RSYNC_OUT_FILE") \
-        2> >(lk_log_bypass_stdout tee -a "$RSYNC_ERR_FILE")
+        > >(lk_log_run_tty_only --stdout tee -a "$RSYNC_OUT_FILE") \
+        2> >(lk_log_run_tty_only --stdout tee -a "$RSYNC_ERR_FILE")
 }
 
 SNAPSHOT_STAGES=(
@@ -341,9 +341,9 @@ done
 
 SNAPSHOT_DEVICE=$(df "$LK_SNAPSHOT" | awk 'END {print $1}')
 
-LK_LOG_CMDLINE=("$0-$JOB_NAME" "${_LK_ARGV[@]}")
+LK_LOG_BASENAME=${0##*/}-$JOB_NAME
 LK_LOG_SECONDARY_FILE=$SNAPSHOT_LOG_FILE \
-    lk_log_start
+    lk_log_open
 
 RSYNC_STATUS=0
 RSYNC_RESULT=

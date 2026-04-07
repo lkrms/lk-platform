@@ -238,7 +238,7 @@ function lk_plural() {
 #
 # Example:
 #
-#     lk_assign SQL <<"SQL"
+#     lk_assign SQL <<'SQL'
 #     SELECT id, name FROM table;
 #     SQL
 function lk_assign() {
@@ -532,7 +532,7 @@ function lk_elevate() {
     elif [ $# -eq 0 ]; then
         ${LK_EXEC:+exec} sudo -H "$0" ${_LK_ARGV+"${_LK_ARGV[@]}"}
     elif ! _COMMAND=$(type -P "$1") && [ "$(type -t "$1")" = "function" ]; then
-        LK_SUDO=
+        local LK_SUDO=
         if [ -n "$LK_SUDO_ON_FAIL" ] && "$@" 2>/dev/null; then
             return 0
         fi
@@ -957,7 +957,7 @@ function lk_get_regex() {
             printf '%s=%q\n' DOMAIN_NAME_REGEX '[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)+'
             ;;
         EMAIL_ADDRESS_REGEX)
-            printf '%s=%q\n' EMAIL_ADDRESS_REGEX '[-a-zA-Z0-9!#$%&'\''*+/=?^_`{|}~]([-a-zA-Z0-9.!#$%&'\''*+/=?^_`{|}~]{,62}[-a-zA-Z0-9!#$%&'\''*+/=?^_`{|}~])?@[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)+'
+            printf '%s=%q\n' EMAIL_ADDRESS_REGEX '[-a-zA-Z0-9!#$%&'\''*+/=?^_`{|}~]([-a-zA-Z0-9.!#$%&'\''*+/=?^_`{|}~]{0,62}[-a-zA-Z0-9!#$%&'\''*+/=?^_`{|}~])?@[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)+'
             ;;
         DOMAIN_PART_LOWER_REGEX)
             printf '%s=%q\n' DOMAIN_PART_LOWER_REGEX '[a-z0-9]([-a-z0-9]*[a-z0-9])?'
@@ -2661,12 +2661,6 @@ function lk_pv() {
     fi
 }
 
-# lk_tee [FILE...]
-function lk_tee() {
-    trap "" SIGINT
-    exec tee "$@"
-}
-
 # _lk_cache_dir [<stack_depth>]
 function _lk_cache_dir() {
     local TMPDIR=${TMPDIR:-/tmp} depth=$((${_LK_STACK_DEPTH-0} + ${1-0}))
@@ -2808,260 +2802,365 @@ END { for (i in ps) {
 } }' "$@"
 }
 
-# lk_fd_is_open FD
+# lk_fd_is_open <fd>
+#
+# Check if the given file descriptor is open.
 function lk_fd_is_open() {
-    [ -n "${1-}" ] && { : >&"$1"; } 2>/dev/null
+    [[ ${1-} ]] && { : >&"$1"; } 2>/dev/null
 }
 
 # lk_fd_next
 #
-# In lieu of Bash 4.1's file descriptor variable syntax ({var}>, {var}<, etc.),
-# output the number of the next available file descriptor greater than or equal
+# Print the number of the next unallocated file descriptor greater than or equal
 # to 10.
 function lk_fd_next() {
-    local USED FD=10 i=0
-    [ -d /dev/fd ] &&
-        USED=($(ls -1 /dev/fd/ | sort -n)) && [ ${#USED[@]} -ge 3 ] ||
-        lk_err "not supported: /dev/fd" || return
-    while ((i < ${#USED[@]})); do
-        ((FD >= USED[i])) || break
-        ((FD > USED[i])) || ((FD++))
-        ((++i))
+    local fd file open=()
+    for file in /dev/fd/*; do
+        fd=${file##*/}
+        open[fd]=1
     done
-    echo "$FD"
+    fd=10
+    while [[ ${open[fd]-} ]]; do
+        ((++fd))
+    done
+    printf '%d\n' $fd
 }
 
-# lk_log_start [TEMP_LOG_FILE]
-function lk_log_start() {
-    [[ -z ${_LK_NO_LOG-} ]] &&
-        ! lk_log_is_open && lk_is_script || return 0
-    local ARG0 HEADER FILE
-    ARG0=$(type -p "${LK_LOG_CMDLINE:-$0}") &&
-        ARG0=${ARG0:-${LK_LOG_CMDLINE+"Bash $(type -t "$LK_LOG_CMDLINE") $LK_LOG_CMDLINE"}} ||
-        ARG0=
-    [[ -n ${LK_LOG_CMDLINE+1} ]] ||
-        local LK_LOG_CMDLINE=("$0" ${_LK_ARGV+"${_LK_ARGV[@]}"})
-    LK_LOG_CMDLINE[0]=${ARG0:-$LK_LOG_CMDLINE}
-    HEADER=$(
-        printf '====> %s invoked' "$0"
-        [[ $0 == "$LK_LOG_CMDLINE" ]] ||
-            printf " as '%s'" "$LK_LOG_CMDLINE"
-        ! ((ARGC = ${#LK_LOG_CMDLINE[@]} - 1)) || {
-            printf ' with %s %s:' "$ARGC" "$(lk_plural "$ARGC" argument)"
-            for ((i = 1; i <= ARGC; i++)); do
-                printf '\n%3d %q' "$i" "${LK_LOG_CMDLINE[i]}"
-            done
-        }
-    )
-    if [[ -n ${LK_LOG_FILE:+1} ]]; then
-        FILE=$LK_LOG_FILE
-        _lk_log_install_file "$FILE" || return
+# lk_log_open [-v] [<temp_log_file>]
+#
+# Redirect copies of the standard output and error streams to a timestamped log
+# file, creating it if necessary.
+#
+# If -v is given, write the pathname of the log file to the terminal.
+#
+# No action is taken if:
+# - `LK_NO_LOG` is non-empty
+# - output is already being logged by this or a parent process
+# - a script file is not running
+function lk_log_open() {
+    [[ ! ${LK_NO_LOG-} ]] && ! lk_log_is_open && lk_is_script || return 0
+    local v=0 cmd args file file_q \
+        LK_LOG_CMDLINE=(${LK_LOG_CMDLINE+"${LK_LOG_CMDLINE[@]}"})
+    [[ ${1-} != -v ]] || {
+        v=1
+        shift
+    }
+    _lk_log_cmdline_resolve
+    args=$((${#LK_LOG_CMDLINE[@]} - 1))
+    if [[ ${LK_LOG_FILE-} ]]; then
+        file=$LK_LOG_FILE
+        _lk_log_file_install "$file" || return
     elif (($#)); then
-        local _FILE=${1%.out}
-        _FILE=${1%.log}.log
-        if FILE=$(lk_log_create_file); then
-            if [[ -e $_FILE ]]; then
-                cat -- "$_FILE" >>"$FILE" &&
-                    rm -f -- "$_FILE" || return
+        local _file=${1%.out}
+        _file=${_file%.log}.log
+        if file=$(lk_log_file_create); then
+            if [[ -f $_file ]]; then
+                local temp
+                _lk_log_file_migrate "$_file" || return
+                temp=$(lk_mktemp) &&
+                    cp -- "$file" "$temp" &&
+                    cat -- "$_file" >>"$file" &&
+                    rm -f -- "$_file" ||
+                    lk_pass cp -- "$temp" "$file" ||
+                    lk_err "log file import failed: $_file -> $file" || return
+                rm -f -- "$temp" || true
             fi
         else
-            FILE=$_FILE
+            file=$_file
         fi
     else
-        FILE=$(lk_log_create_file ~ /tmp) ||
-            lk_warn "unable to create log file" || return
+        file=$(
+            lk_log_file_create \
+                ~/.local/state/log/lk-platform \
+                /tmp/lk-platform/log
+        ) || lk_err "error creating log file" || return
     fi
-    lk_log_migrate_legacy "$FILE" ||
-        lk_warn "unable to migrate legacy log file: $FILE" || return
-    _LK_TTY_OUT_FD=$(lk_fd_next) &&
-        eval "exec $_LK_TTY_OUT_FD>&1" &&
-        _LK_TTY_ERR_FD=$(lk_fd_next) &&
-        eval "exec $_LK_TTY_ERR_FD>&2" &&
+    file_q=$(printf '%q\n' "$file")
+    _lk_log_file_migrate "$file" || return
+    _LK_TTY_OUT_FD=$(lk_fd_next) && eval "exec $_LK_TTY_OUT_FD>&1" &&
+        _LK_TTY_ERR_FD=$(lk_fd_next) && eval "exec $_LK_TTY_ERR_FD>&2" &&
         _LK_LOG_FD=$(lk_fd_next) &&
-        if [[ -z ${LK_LOG_SECONDARY_FILE:+1} ]]; then
-            eval "exec $_LK_LOG_FD> >(lk_log >>\"\$FILE\")"
+        if [[ ! ${LK_LOG_SECONDARY_FILE-} ]]; then
+            eval "exec $_LK_LOG_FD> >(lk_log >>$file_q)"
+            unset _LK_LOG_SECONDARY_FILE
         else
-            eval "exec $_LK_LOG_FD> >(lk_log | lk_tee -a \"\$LK_LOG_SECONDARY_FILE\" >>\"\$FILE\")"
-        fi || return
-    ((${_LK_FD-2} != 2)) || {
-        _LK_FD=3
-        _LK_FD_LOGGED=1
-    }
-    lk_log_tty_on
-    cat <<<"$HEADER" >"/dev/fd/$_LK_LOG_FD"
-    ! lk_is_v 2 || _LK_FD=$_LK_TTY_OUT_FD lk_tty_log "Output log:" "$FILE"
-    _LK_LOG_FILE=$FILE
+            local file2_q
+            file2_q=$(printf '%q\n' "$LK_LOG_SECONDARY_FILE")
+            eval "exec $_LK_LOG_FD> >(lk_log | tee -a $file2_q >>$file_q)"
+            _LK_LOG_SECONDARY_FILE=$LK_LOG_SECONDARY_FILE
+        fi &&
+        _LK_FD=3 &&
+        _LK_LOG_FILE=$file &&
+        lk_log_tty_on ||
+        lk_err "error opening file descriptors" || return
+    {
+        printf '====> %s invoked with %d %s%s\n' \
+            "$cmd" \
+            $args "$(lk_plural $args argument)" "${LK_LOG_CMDLINE[1]+:}"
+        for ((i = 1; i <= args; i++)); do
+            printf '%3d %q\n' $i "${LK_LOG_CMDLINE[i]}"
+        done
+    } >"/dev/fd/$_LK_LOG_FD"
+    ((!v)) || printf "Output log: %s\n" "$file" >"/dev/fd/$_LK_TTY_OUT_FD"
 }
 
-# lk_log_close [-r]
+# _lk_log_cmdline_resolve
 #
-# Close redirections opened by lk_log_start. If -r is set, reopen them for
-# further logging (useful when closing a secondary log file).
+# Assign `cmd` from `LK_LOG_CMDLINE` if possible, otherwise set `LK_LOG_CMDLINE`
+# to its default value and assign `$0` to `cmd`.
+function _lk_log_cmdline_resolve() {
+    if [[ ${LK_LOG_CMDLINE+1} ]]; then
+        # `type -p` prints nothing but returns 0 if given a Bash callable
+        cmd=$(type -p "${LK_LOG_CMDLINE[0]}") &&
+            cmd=${cmd:-"Bash $(type -t "${LK_LOG_CMDLINE[0]}") ${LK_LOG_CMDLINE[0]}"} ||
+            cmd=${LK_LOG_CMDLINE[0]}
+    else
+        LK_LOG_CMDLINE=("$0" ${_LK_ARGV+"${_LK_ARGV[@]}"})
+        cmd=$0
+    fi
+}
+
+# - lk_log_close
+# - lk_log_close -s
+#
+# If file descriptors opened by `lk_log_open` are present in the current scope,
+# close them, or if -s is set and a secondary log file is open, close it.
 function lk_log_close() {
     lk_log_is_open || return 0
-    if [[ ${1-} == -r ]]; then
-        [[ -z ${LK_LOG_SECONDARY_FILE:+1} ]] ||
-            eval "exec $_LK_LOG_FD> >(lk_log >>\"\$_LK_LOG_FILE\")"
+    if [[ ${1-} == -s ]]; then
+        [[ ${_LK_LOG_SECONDARY_FILE-} ]] || return 0
+        local file_q
+        file_q=$(printf '%q\n' "$_LK_LOG_FILE")
+        eval "exec $_LK_LOG_FD> >(lk_log >>$file_q)"
+        unset _LK_LOG_SECONDARY_FILE
         return
     fi
-    local FD
+    # shellcheck disable=SC2261
     exec \
         >&"$_LK_TTY_OUT_FD" \
         2>&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}" || return
-    for FD in ${_LK_FD_LOGGED:+_LK_FD} _LK_LOG_FD _LK_TTY_ERR_FD _LK_TTY_OUT_FD; do
-        [[ -n ${!FD-} ]] || continue
-        eval "exec ${!FD}>&-" && unset "$FD" || return
+    local close_lk_fd=1 fd
+    [[ ! ${_LK_TRACE_FD-} ]] || {
+        exec 3>&1 &&
+            unset _LK_TRACE_FD close_lk_fd || return
+    }
+    for fd in ${close_lk_fd:+_LK_FD} _LK_LOG_FD _LK_TTY_ERR_FD _LK_TTY_OUT_FD; do
+        [[ ${!fd-} ]] && eval "exec ${!fd}>&-" && unset "$fd" ||
+            lk_err "error closing file descriptors" || return
     done
-    unset _LK_FD_LOGGED
+    unset _LK_LOG_FILE
 }
 
-# lk_log_create_file [DIR...]
+# lk_log_file_create [<dir>...]
 #
-# Find the first DIR in which the user can write to a log file, installing the
-# directory (world-writable) and log file (owner-only) if needed, then print the
-# pathname of the log file.
+# Get the pathname of a writable log file for the running command.
 #
-# $LK_BASE/var/log is always tried first.
-function lk_log_create_file() {
-    local CMD LOG_DIRS=() LOG_DIR LOG_PATH
-    CMD=${LK_LOG_CMDLINE:-$0}
+# - Tests `$LK_BASE/var/log/lk-platform`, then each of the given directories,
+#   until one that exists and is writable, or does not exist but can be created,
+#   is found. Otherwise it fails silently.
+# - The directory is created with mode 1777 (world-writable) if necessary.
+# - Access to the file is limited to its owner (the current user) via mode 0600.
+function lk_log_file_create() {
+    local cmd file
+    cmd=${LK_LOG_CMDLINE[0]:-$0}
     [[ ! -d ${LK_BASE-} ]] ||
         lk_file_is_empty_dir "$LK_BASE" ||
-        LOG_DIRS=("$LK_BASE/var/log")
-    LOG_DIRS+=("$@")
-    for LOG_DIR in ${LOG_DIRS+"${LOG_DIRS[@]}"}; do
-        LOG_PATH=$LOG_DIR/${LK_LOG_BASENAME:-${CMD##*/}}-$EUID.log
-        _lk_log_install_file "$LOG_PATH" 2>/dev/null || continue
-        echo "$LOG_PATH"
-        return 0
+        set -- "$LK_BASE/var/log/lk-platform" "$@"
+    while (($#)); do
+        file=$1/${LK_LOG_BASENAME:-${cmd##*/}}-$EUID.log
+        ! _lk_log_file_install "$file" 2>/dev/null || {
+            printf '%s\n' "$file"
+            break
+        }
+        shift
     done
-    false
+    (($#))
 }
 
-# _lk_log_install_file FILE
+# _lk_log_file_install <file>
 #
-# If the parent directory of FILE doesn't exist, create it with mode 01777,
-# using root privileges if necessary. Then, if FILE doesn't exist or isn't
-# writable, create it or change its permissions and ownership as needed.
-function _lk_log_install_file() {
-    if [[ -f $1 ]] && [[ -w $1 ]]; then
-        return
-    fi
-    local GID
+# Create the given log file or update its ownership and permissions if needed.
+function _lk_log_file_install() {
+    [[ ! -f $1 ]] || [[ ! -w $1 ]] || return 0
+    local gid
     if [[ ! -e $1 ]]; then
-        local DIR=${1%"${1##*/}"}
-        [[ -d ${DIR:=$PWD} ]] ||
-            lk_elevate -f install -d -m 01777 "$DIR" || return
-        GID=$(id -g) &&
-            lk_elevate -f install -m 00600 -o "$EUID" -g "$GID" /dev/null "$1"
+        local dir=${1%"${1##*/}"}
+        [[ $dir ]] || dir=$PWD
+        gid=$(id -g) &&
+            { [[ -d $dir ]] || lk_elevate -f install -d -m 01777 "$dir"; } &&
+            lk_elevate -f install -m 00600 -o "$EUID" -g "$gid" /dev/null "$1"
     else
-        lk_elevate -f chmod 00600 "$1" || return
-        [[ -w $1 ]] ||
-            { GID=$(id -g) &&
-                lk_elevate chown "$EUID:$GID" "$1"; }
+        local mode
+        mode=0$(lk_file_mode "$1") &&
+            { ((mode == 0600)) || lk_elevate -f chmod 00600 "$1"; } &&
+            { [[ -w $1 ]] || { gid=$(id -g) && lk_elevate chown "$EUID:$gid" "$1"; }; }
     fi
 }
 
+# lk_log_is_open
+#
+# Check if file descriptors opened by `lk_log_open` are present in the current
+# scope.
 function lk_log_is_open() {
-    local FD
-    for FD in _LK_{TTY_{OUT,ERR},LOG}_FD; do
-        lk_fd_is_open "${!FD-}" || return
+    local fd
+    for fd in _LK_TTY_OUT_FD _LK_TTY_ERR_FD _LK_LOG_FD; do
+        [[ ${!fd-} ]] && lk_fd_is_open "${!fd-}" || return
     done
 }
 
-# lk_log_migrate_legacy FILE
-function lk_log_migrate_legacy() {
-    local OUT_FILE=${1%.log}.out
-    [[ -f $1 ]] && [[ -f $OUT_FILE ]] || return 0
-    sed -E 's/^(\.\.|!!)//' "$OUT_FILE" >"$1" &&
-        touch -r "$OUT_FILE" "$1" &&
-        rm -f "$OUT_FILE"
+# _lk_log_file_migrate <file>
+#
+# Migrate legacy log files to current equivalents for the given `.log` file.
+#
+# - If <file> is not empty and has a sibling with extension `.out`, replace both
+#   with one `.log` file.
+# - If <file> is in `$LK_BASE/var/log/lk-platform` and is empty, check for files
+#   in `$LK_BASE/var/log` with the same name or a recognised logrotate suffix
+#   and move them to `$LK_BASE/var/log/lk-platform` if found.
+function _lk_log_file_migrate() {
+    [[ -f ${1-} ]] && [[ $1 == *.log ]] || lk_bad_args || return
+    if [[ -s $1 ]]; then
+        local out_file=${1%.log}.out
+        if [[ -f $out_file ]]; then
+            sed -E 's/^(\.\.|!!)//' "$out_file" >"$1" &&
+                touch -r "$out_file" "$1" &&
+                rm -f -- "$out_file" ||
+                lk_err "log file migration failed: $out_file -> $1" || return
+        fi
+    elif [[ -d ${LK_BASE-} ]] &&
+        ! lk_file_is_empty_dir "$LK_BASE" &&
+        [[ ${1%/*} == "$LK_BASE/var/log/lk-platform" ]] &&
+        [[ ! $LK_BASE/var/log -ef /var/log ]]; then
+        (
+            shopt -s nullglob
+            file=${1%.log}
+            # Match !(+(?)) to eliminate files that don't exist
+            files=("$LK_BASE/var/log/${file##*/}"{.log,.out}{,.+([0-9])?(.gz)}!(+(?)))
+            [[ ! ${files+1} ]] ||
+                mv -- "${files[@]}" "$LK_BASE/var/log/lk-platform/" ||
+                lk_err "log file migration failed: $LK_BASE/var/log/${file##*/}* -> $LK_BASE/var/log/lk-platform/"
+        ) || return
+    fi
 }
 
-# lk_log_tty_off -a
+# lk_log_tty_off
+#
+# Redirect standard output and error streams to the output log only.
+#
+# `lk_tty_*` output is still written to the terminal.
 function lk_log_tty_off() {
     lk_log_is_open || return 0
-    exec &>"/dev/fd/$_LK_LOG_FD" || return
-    [[ ${1-} != -a ]] || [[ -z ${_LK_FD_LOGGED-} ]] ||
-        eval "exec $_LK_FD>/dev/fd/$_LK_LOG_FD" || return
+    exec \
+        &>"/dev/fd/$_LK_LOG_FD" \
+        3> >(tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_TTY_OUT_FD") || return
     _LK_LOG_TTY_LAST=${FUNCNAME[0]}
 }
 
+# lk_log_tty_all_off
+#
+# Same as `lk_log_tty_off`, but `lk_tty_*` output is not written to the
+# terminal.
+function lk_log_tty_all_off() {
+    lk_log_is_open || return 0
+    exec \
+        &>"/dev/fd/$_LK_LOG_FD" \
+        3>&1 || return
+    _LK_LOG_TTY_LAST=${FUNCNAME[0]}
+}
+
+# lk_log_tty_on
+#
+# Redirect standard output and error streams to the terminal and the output log.
 function lk_log_tty_on() {
     lk_log_is_open || return 0
     exec \
-        > >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_TTY_OUT_FD") \
-        2> >(lk_tee "/dev/fd/$_LK_LOG_FD" >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}") || return
-    [[ -z ${_LK_FD_LOGGED-} ]] ||
-        eval "exec $_LK_FD> >(lk_tee \"/dev/fd/\$_LK_LOG_FD\" >&\"\$_LK_TTY_OUT_FD\")" || return
+        > >(tee "/dev/fd/$_LK_LOG_FD" >&"$_LK_TTY_OUT_FD") \
+        2> >(tee "/dev/fd/$_LK_LOG_FD" >&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}") \
+        3>&1 || return
     _LK_LOG_TTY_LAST=${FUNCNAME[0]}
 }
 
-# lk_log_bypass [-o|-e] COMMAND [ARG...]
+# lk_log_run_tty_only [options] [--] <command> [<arg>...]
 #
-# Run COMMAND with stdout and/or stderr redirected exclusively to the console.
-# If -o or -e is set, only redirect stdout or stderr respectively.
-function lk_log_bypass() {
-    local ARG _LK_CAN_FAIL=1
-    [[ $1 != -[oe] ]] || { ARG=$1 && shift; }
-    lk_log_is_open || {
+# Run a command with its standard output and/or error streams redirected to the
+# terminal only.
+#
+# Options:
+#
+#     -o, --stdout  Only redirect standard output.
+#     -e, --stderr  Only redirect standard error.
+#
+# Useful with commands that perform their own logging.
+function lk_log_run_tty_only() {
+    local only
+    while [[ ${1-} == -* ]]; do
+        case "$1" in
+        -o | --stdout) only=stdout ;;
+        -e | --stderr) only=stderr ;;
+        --) shift && break ;;
+        *) lk_bad_args || return ;;
+        esac
+        shift || lk_bad_args || return
+    done
+    (($#)) || lk_bad_args || return
+    if ! lk_log_is_open; then
         "$@"
-        return
-    }
-    case "${ARG-}" in
-    -o)
-        _lk_log_bypass "$@" \
+    elif [[ ${only-} == stdout ]]; then
+        "$@" \
             >&"$_LK_TTY_OUT_FD"
-        ;;
-    -e)
-        _lk_log_bypass "$@" \
+    elif [[ ${only-} == stderr ]]; then
+        "$@" \
             2>&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}"
-        ;;
-    *)
-        _lk_log_bypass "$@" \
+    else
+        # shellcheck disable=SC2261
+        "$@" \
             >&"$_LK_TTY_OUT_FD" \
             2>&"${_LK_TRACE_FD:-$_LK_TTY_ERR_FD}"
-        ;;
-    esac
+    fi
 }
 
-function _lk_log_bypass() { (
-    unset "${!_LK_LOG_@}"
-    "$@"
-); }
-
-function lk_log_bypass_stdout() { lk_log_bypass -o "$@"; }
-function lk_log_bypass_stderr() { lk_log_bypass -e "$@"; }
-
-function lk_start_trace() {
-    [[ -z ${_LK_NO_LOG-} ]] &&
-        [[ $- != *x* ]] && lk_debug_is_on && lk_is_script || return 0
-    local CMD TRACE_FILE
-    CMD=${LK_LOG_CMDLINE:-$0}
-    TRACE_FILE=${LK_LOG_TRACE_FILE:-/tmp/${LK_LOG_BASENAME:-${CMD##*/}}-$EUID.$(lk_date_ymdhms).trace} &&
-        exec 4> >(lk_log >"$TRACE_FILE") || return
-    if lk_bash_is 4 1; then
-        BASH_XTRACEFD=4
-    else
-        # If BASH_XTRACEFD isn't supported, trace all output to stderr and send
-        # lk_tty_* to the terminal
-        exec 2>&4 || return
-        ! lk_log_is_open || _LK_TRACE_FD=4
-        ((${_LK_FD-2} != 2)) ||
-            { exec 3>/dev/tty && _LK_FD=3; } || return
-    fi
+# lk_log_open_trace
+#
+# Enable `set -x` and redirect trace output to a timestamped log file, creating
+# or truncating it if necessary.
+#
+# No action is taken if:
+# - `LK_NO_LOG` is non-empty
+# - `set -x` is already enabled
+# - `LK_DEBUG` is not `Y`
+# - a script file is not running
+function lk_log_open_trace() {
+    [[ ! ${LK_NO_LOG-} ]] && [[ $- != *x* ]] && lk_debug_is_on && lk_is_script || return 0
+    local cmd file LK_LOG_CMDLINE=(${LK_LOG_CMDLINE+"${LK_LOG_CMDLINE[@]}"})
+    _lk_log_cmdline_resolve
+    file=${LK_LOG_TRACE_FILE:-/tmp/${LK_LOG_BASENAME:-${cmd##*/}}-$EUID.$(uuidgen | lk_lower).trace} &&
+        _lk_log_file_install "$file" &&
+        exec 4> >(lk_log >"$file") &&
+        if lk_bash_is 4 1; then
+            BASH_XTRACEFD=4
+        else
+            # If BASH_XTRACEFD isn't supported, redirect standard error to the
+            # trace file and `lk_tty_*` output to standard output
+            if lk_log_is_open; then
+                _LK_TRACE_FD=4
+            else
+                _LK_FD=3
+                exec 3>&1
+            fi &&
+                exec 2>&4
+        fi ||
+        lk_err "error opening file descriptors" || return
     set -x
 }
 
 # lk_log
 #
-# For each line of input, add a microsecond-resolution timestamp and remove
-# characters before any carriage returns that aren't part of the line ending.
+# Add a microsecond-resolution timestamp to each line of input after removing
+# any non-printing characters.
 function lk_log() {
-    local PL DELETE=
-    lk_perl_load PL log - <<"EOF" || return
+    local pl delete
+    lk_perl_load pl log - <<"EOF" || return
 BEGIN{
-$SIG{INT}="IGNORE";
 $|=1;
 use POSIX qw{strftime};
 use Time::HiRes qw{gettimeofday};}while(<STDIN>){($s,$ms)=Time::HiRes::gettimeofday();
@@ -3076,8 +3175,8 @@ s/(?:
     \e [\x{20}-\x{2f}]* [\x{30}-\x{7e}]
   )//xg;}continue{print;}END{if($ARGV[0]eq"--self-delete"){unlink$0;}}
 EOF
-    [[ $PL != "${LK_MKTEMP_WITH_LAST-}" ]] || DELETE=1
-    exec perl "$PL" ${DELETE:+--self-delete}
+    [[ $pl != "${LK_MKTEMP_WITH_LAST-}" ]] || delete=1
+    exec perl "$pl" ${delete:+--self-delete}
 }
 
 function lk_file_owner() {
@@ -3134,32 +3233,28 @@ function lk_file_sort_modified() {
     lk_file_sort_modified "$@"
 }
 
-# lk_file_is_empty_dir FILE
+# lk_dir_is_empty <file>
 #
-# Return true if FILE exists and is an empty directory.
-function lk_file_is_empty_dir() {
-    ! lk_sudo -f ls -A "$1" 2>/dev/null | grep . >/dev/null &&
+# Check if a file exists and is an empty directory.
+function lk_dir_is_empty() {
+    (($# == 1)) || lk_bad_args || return
+    ! lk_sudo_on_fail ls -A "$1" 2>/dev/null | grep . >/dev/null &&
         [[ ${PIPESTATUS[0]}${PIPESTATUS[1]} == 01 ]]
 }
 
-# lk_file_maybe_move OLD_PATH CURRENT_PATH
+# lk_file_move_old <old_file> <new_file>
 #
-# If OLD_PATH exists and CURRENT_PATH doesn't, move OLD_PATH to CURRENT_PATH.
-function lk_file_maybe_move() {
-    lk_sudo -f test ! -e "$1" ||
-        lk_sudo -f test -e "$2" || {
-        lk_sudo mv -nv "$1" "$2" &&
-            LK_FILE_NO_CHANGE=0
-    }
-}
-
-# lk_file_list_duplicates [DIR]
+# If <old_file> exists and <new_file> doesn't, move <old_file> to <new_file>,
+# otherwise fail with return value 1.
 #
-# Print a list of files in DIR or the current directory that would be considered
-# duplicates on a case-insensitive filesystem. Only useful on case-sensitive
-# filesystems.
-function lk_file_list_duplicates() {
-    find "${1:-.}" -print0 | sort -zf | gnu_uniq -zDi | tr '\0' '\n'
+# If an error occurs, the return value is 2.
+function lk_file_move_old() {
+    (($# == 2)) || lk_bad_args || return 2
+    if lk_sudo_on_fail test -e "$1" && lk_sudo_on_fail test ! -e "$2"; then
+        lk_sudo_on_fail mv -nv "$1" "$2" || return 2
+    else
+        return 1
+    fi
 }
 
 # lk_expand_path [PATH...]
@@ -3170,36 +3265,63 @@ function lk_expand_path() { (
     shopt -s nullglob
     lk_awk_load AWK sh-sanitise-quoted-pathname - <<"EOF" || return
 BEGIN {
-unquote_single = no_unquote_single ? 0 : 1
-unquote_double = no_unquote_double ? 0 : 1
-unquote = unquote_single || unquote_double
+unquote_single = get_value(unquote_single, 1)
+unquote_double = get_value(unquote_double, 1)
+quote_tilde = get_value(quote_tilde, 0)
+quote_glob = get_value(quote_glob, 0)
 ORS = RS
 }
-unquote && (/^'([^']+|\\')*'$/ || /^"([^"]+|\\")*"$/) {
-if (unquote_single && (gsub(/^'|'$/, "", $0))) {
+(unquote_single && /^'([^'\\]+|\\.)*'$/) || (unquote_double && /^"([^"\\]+|\\.)*"$/) {
+enclosing = substr($0, 1, 1)
+$0 = substr($0, 2, length($0) - 2)
+if (enclosing == "'") {
 gsub(/\\'/, "'", $0)
-} else if (unquote_double && (gsub(/^"|"$/, "", $0))) {
+} else {
 gsub(/\\"/, "\"", $0)
 }
 }
-/^(~[-a-z0-9\$_]*)(\/.*)?$/ {
-home = $0
-sub(/\/.*/, "/", home)
-printf "%s", home
-sub(/^[^\/]+\/?/, "", $0)
+! quote_tilde && /^~/ {
+printf "%s", "~"
+$0 = substr($0, 2)
+if (match($0, /^([^'"\/]+|'[^']*'|"([^"\\$`]+|\\.)*"|\\.)*\/?/)) {
+printf "%s", substr($0, 1, RLENGTH)
+$0 = substr($0, RLENGTH + 1)
 }
-{
+}
+! quote_glob {
+q = ""
 while (pos = match($0, /\*+|\?+|\[(][^]]*|[^]]+)]/)) {
+len = RLENGTH
 if (pos > 1) {
-printf "%s", quote(substr($0, 1, pos - 1))
+_q = substr($0, 1, pos - 1)
+if (match(_q, /^([^\\]|\\.)*\\$/)) {
+q = q _q substr($0, pos, 1)
+$0 = substr($0, pos + 1)
+continue
+} else {
+printf "%s", quote(q _q)
+q = ""
 }
-printf "%s", substr($0, pos, RLENGTH)
-$0 = substr($0, pos + RLENGTH)
+} else if (q) {
+printf "%s", quote(q)
+q = ""
 }
-if ($0) {
+printf "%s", substr($0, pos, len)
+$0 = substr($0, pos + len)
+}
+if (q) {
+printf "%s", quote(q)
+}
+}
+$0 {
 printf "%s", quote($0)
 }
+{
 print ""
+}
+function get_value(val, default)
+{
+return (val == 0 && val == "" ? default : val)
 }
 function quote(str)
 {
@@ -3210,6 +3332,86 @@ EOF
     SH="printf '%s\\n' $(_lk_stream_args 3 awk -f "$AWK" "$@" | tr '\n' ' ')" &&
         eval "$SH"
 ); }
+
+# - lk_install [-vq] [-m <mode>] [-o <user>] [-g <group>] <file>...
+# - lk_install -d [-vq] [-m <mode>] [-o <user>] [-g <group>] <dir>...
+#
+# Create or apply permissions to the given files or directories.
+#
+# If a file is created or updated, it is added to LK_FILE_CHANGED.
+#
+# If -v or -q are given, the value of LK_VERBOSE is ignored.
+#
+# Entries in global array LK_FILE_CHANGED are arranged from most to least
+# recent. New entries are always added at index 0.
+function lk_install() {
+    # shellcheck disable=SC1007
+    local OPTIND OPTARG opt \
+        dirs=0 mode owner group verbose= \
+        install_args=() changed file dir
+    while getopts ":dm:o:g:vq" opt; do
+        case "$opt" in
+        d) dirs=1 ;;
+        m)
+            [[ $OPTARG =~ ^0*([0-7]{0,4})$ ]] ||
+                lk_err "invalid mode: $OPTARG" || return
+            mode=$(printf '%05o\n' "0${BASH_REMATCH[1]}")
+            ;;
+        o)
+            [[ $OPTARG =~ [^0-9] ]] ||
+                lk_err "invalid user: $OPTARG" || return
+            owner=$(id -u "$OPTARG") || return
+            ((owner == EUID)) || lk_will_elevate ||
+                lk_err "not allowed: -o $OPTARG" || return
+            owner=$OPTARG
+            ;;
+        g)
+            [[ $OPTARG =~ [^0-9] ]] ||
+                lk_err "invalid group: $OPTARG" || return
+            group=$OPTARG
+            lk_will_elevate ||
+                id -Gn | tr -s '[:blank:]' '\n' | grep -Fx "$group" >/dev/null ||
+                lk_err "not allowed: -g $group" || return
+            ;;
+        v) ((++verbose)) ;;
+        q) verbose=0 ;;
+        \? | :) lk_bad_args || return ;;
+        esac
+    done
+    shift $((OPTIND - 1))
+    (($#)) || lk_bad_args || return
+    verbose=${verbose:-${LK_VERBOSE:-0}}
+    ((!dirs)) || install_args+=(-d)
+    [[ ! ${mode-} ]] || install_args+=(-m "$mode")
+    [[ ! ${owner-} ]] || install_args+=(-o "$owner")
+    [[ ! ${group-} ]] || install_args+=(-g "$group")
+    ((!verbose)) || install_args+=(-v)
+
+    if ((dirs)); then
+        lk_sudo_on_fail install "${install_args[@]}" "$@"
+        return
+    fi
+
+    for file in "$@"; do
+        dir=${file%"${file##*/}"}
+        [[ $dir ]] || dir=.
+        changed=0
+
+        # If the file doesn't exist, install /dev/null
+        if [[ ! -e $file ]] && { [[ -r $dir ]] || ! { lk_will_sudo && sudo test -e "$file"; }; }; then
+            ((!verbose)) || lk_tty_detail "Creating:" "$file"
+            lk_sudo_on_fail install ${install_args[@]+"${install_args[@]}"} /dev/null "$file" ||
+                lk_err "error creating $file" || return
+            changed=1
+        else
+            # Otherwise, check its permissions and ownership
+            _lk_file_check_permissions "$file" || return
+        fi
+
+        ((!changed)) ||
+            LK_FILE_CHANGED=("$1" ${LK_FILE_CHANGED+"${LK_FILE_CHANGED[@]}"})
+    done
+}
 
 # lk_file [-i <regex>] [-dpbsrvq] [-m <mode>] [-o <user>] [-g <group>] <file>
 #
@@ -3248,33 +3450,25 @@ function lk_file() {
     # shellcheck disable=SC1007
     local OPTIND OPTARG opt \
         diff=0 prompt=0 backup=0 store= orig=0 mode owner group verbose= \
-        sed_args=() changed=0 dir temp _mode _owner _group _chown= chown=
+        sed_args=() changed=0 dir temp
     while getopts ":i:dpbsrm:o:g:vq" opt; do
         case "$opt" in
-        i)
-            sed_args+=(-e "/${OPTARG//\//\\\/}/d")
-            ;;
-        d)
-            diff=1
-            ;;
+        i) sed_args+=(-e "/${OPTARG//\//\\\/}/d") ;;
+        d) diff=1 ;;
         p)
             prompt=1
             diff=1
             ;;
-        b)
-            backup=1
-            ;;
+        b) backup=1 ;;
         s)
             store=1
             backup=1
             ;;
-        r)
-            orig=1
-            ;;
+        r) orig=1 ;;
         m)
-            [[ $OPTARG =~ ^[0-7]{3,4}$ ]] ||
+            [[ $OPTARG =~ ^0*([0-7]{0,4})$ ]] ||
                 lk_err "invalid mode: $OPTARG" || return 2
-            mode=$(printf '%4s' "$OPTARG" | tr ' ' 0)
+            mode=$(printf '%05o\n' "0${BASH_REMATCH[1]}")
             ;;
         o)
             [[ $OPTARG =~ [^0-9] ]] ||
@@ -3292,15 +3486,9 @@ function lk_file() {
                 id -Gn | tr -s '[:blank:]' '\n' | grep -Fx "$group" >/dev/null ||
                 lk_err "not allowed: -g $group" || return 2
             ;;
-        v)
-            ((++verbose))
-            ;;
-        q)
-            verbose=0
-            ;;
-        \? | :)
-            lk_bad_args || return 2
-            ;;
+        v) ((++verbose)) ;;
+        q) verbose=0 ;;
+        \? | :) lk_bad_args || return 2 ;;
         esac
     done
     shift $((OPTIND - 1))
@@ -3309,8 +3497,8 @@ function lk_file() {
     lk_mktemp_with temp cat || lk_err "error writing input to file" || return 2
     lk_readable_tty_open || prompt=0
     verbose=${verbose:-${LK_VERBOSE:-0}}
-    dir=${1%/*}
-    [[ $dir != "$1" ]] || dir=.
+    dir=${1%"${1##*/}"}
+    [[ $dir ]] || dir=.
 
     # If the file doesn't exist, use `install` to create it
     if [[ ! -e $1 ]] && { [[ -r $dir ]] || ! { lk_will_sudo && sudo test -e "$1"; }; }; then
@@ -3328,7 +3516,7 @@ function lk_file() {
     fi
 
     # Otherwise, check if the file has changed
-    if [[ -n ${sed_args+1} ]]; then
+    if [[ ${sed_args+1} ]]; then
         local _temp2 temp2
         lk_mktemp_with _temp2 lk_sudo_on_fail sed -E "${sed_args[@]}" "$1" &&
             lk_mktemp_with temp2 sed -E "${sed_args[@]}" "$temp" || return 2
@@ -3356,38 +3544,44 @@ function lk_file() {
     }
 
     # Finally, update permissions and ownership if needed
-    if [[ -n ${mode-} ]]; then
-        _mode=$(lk_file_mode "$1") || return 2
-        [[ $mode == "$_mode" ]] || {
+    _lk_file_check_permissions "$1" || return 2
+
+    ((!changed)) ||
+        LK_FILE_CHANGED=("$1" ${LK_FILE_CHANGED+"${LK_FILE_CHANGED[@]}"})
+}
+
+function _lk_file_check_permissions() {
+    # shellcheck disable=SC1007
+    local _mode _owner _group _chown= chown=
+    if [[ ${mode-} ]]; then
+        _mode=0$(lk_file_mode "$1") || return
+        ((mode == _mode)) || {
             ((verbose < 2)) ||
                 lk_tty_detail "Updating file mode ($_mode -> $mode):" "$1"
-            lk_sudo_on_fail chmod "0$mode" "$1" || return 2
+            lk_sudo_on_fail chmod "$mode" "$1" || return
             changed=1
         }
     fi
-    if [[ -n ${owner-} ]]; then
-        _owner=$(lk_file_owner "$1") || return 2
+    if [[ ${owner-} ]]; then
+        _owner=$(lk_file_owner "$1") || return
         [[ $owner == "$_owner" ]] || {
             _chown=$_owner
             chown=$owner
         }
     fi
-    if [[ -n ${group-} ]]; then
-        _group=$(lk_file_group "$1") || return 2
+    if [[ ${group-} ]]; then
+        _group=$(lk_file_group "$1") || return
         [[ $group == "$_group" ]] || {
             _chown+=:$_group
             chown+=:$group
         }
     fi
-    [[ -z $chown ]] || {
+    [[ ! $chown ]] || {
         ((verbose < 2)) ||
             lk_tty_detail "Updating ownership ($_chown -> $chown):" "$1"
-        lk_sudo_on_fail chown "$chown" "$1" || return 2
+        lk_sudo_on_fail chown "$chown" "$1" || return
         changed=1
     }
-
-    ((!changed)) ||
-        LK_FILE_CHANGED=("$1" ${LK_FILE_CHANGED+"${LK_FILE_CHANGED[@]}"})
 }
 
 # lk_file_complement [-s] <file> <file2>...
@@ -3828,6 +4022,8 @@ lk_ellipsis() { lk_ellipsise "$@"; }
 lk_escape_ere_replace() { lk_sed_escape_replace "$@"; }
 lk_escape_ere() { lk_sed_escape "$@"; }
 lk_false() { lk_is_false "$@"; }
+lk_file_is_empty_dir() { lk_dir_is_empty "$@"; }
+lk_file_maybe_move() { lk_file_move_old "$@"; }
 lk_file_security() { lk_file_owner_mode "$@"; }
 lk_file_sort_by_date() { lk_file_sort_modified "$@"; }
 lk_files_exist() { lk_test_all_f "$@"; }
@@ -3846,6 +4042,11 @@ lk_is_ubuntu() { lk_system_is_ubuntu; }
 lk_is_virtual() { lk_system_is_vm; }
 lk_is_wsl() { lk_system_is_wsl; }
 lk_jq_get_array() { lk_json_mapfile "$@"; }
+lk_log_bypass() { lk_log_run_tty_only "$@"; }
+lk_log_bypass_stderr() { lk_log_run_tty_only -e "$@"; }
+lk_log_bypass_stdout() { lk_log_run_tty_only -o "$@"; }
+lk_log_create_file() { lk_log_file_create "$@"; }
+lk_log_start() { lk_log_open "$@"; }
 lk_maybe_sudo() { lk_sudo "$@"; }
 lk_mktemp_dir() { _LK_STACK_DEPTH=$((${_LK_STACK_DEPTH-0} + 1)) lk_mktemp -d; }
 lk_mktemp_file() { _LK_STACK_DEPTH=$((${_LK_STACK_DEPTH-0} + 1)) lk_mktemp; }
@@ -3856,6 +4057,7 @@ lk_root() { lk_user_is_root; }
 lk_safe_grep() { lk_grep "$@"; }
 lk_script_name() { lk_script $((${1-0} + 1)); }
 lk_script_running() { lk_is_script; }
+lk_start_trace() { lk_log_open_trace; }
 lk_test_many() { lk_test "$@"; }
 lk_test() { lk_test_all "$@"; }
 lk_true() { lk_is_true "$@"; }
@@ -4609,82 +4811,6 @@ function lk_rm() {
         lk_sudo rm -Rf"$v" -- "$@"
 }
 
-# - lk_install [-m MODE] [-o OWNER] [-g GROUP] [-v] FILE...
-# - lk_install -d [-m MODE] [-o OWNER] [-g GROUP] [-v] DIRECTORY...
-#
-# Create or set permissions and ownership on each FILE or DIRECTORY.
-function lk_install() {
-    local OPTIND OPTARG OPT LK_USAGE _USER LK_SUDO=${LK_SUDO-} \
-        DIR MODE OWNER GROUP VERBOSE DEST STAT REGEX ARGS=()
-    LK_USAGE="\
-Usage: $FUNCNAME [-m MODE] [-o OWNER] [-g GROUP] [-v] FILE...
-   or: $FUNCNAME -d [-m MODE] [-o OWNER] [-g GROUP] [-v] DIRECTORY..."
-    while getopts ":dm:o:g:v" OPT; do
-        case "$OPT" in
-        d)
-            DIR=1
-            ARGS+=(-d)
-            ;;
-        m)
-            MODE=$OPTARG
-            ARGS+=(-m "$MODE")
-            ;;
-        o)
-            OWNER=$(id -un "$OPTARG") &&
-                _USER=$(id -un) || return
-            ARGS+=(-o "$OWNER")
-            [ "$OWNER" != "$_USER" ] ||
-                unset OWNER
-            ;;
-        g)
-            [[ ! $OPTARG =~ ^[0-9]+$ ]] ||
-                lk_warn "invalid group: $OPTARG" || return
-            GROUP=$OPTARG
-            ARGS+=(-g "$GROUP")
-            ;;
-        v)
-            VERBOSE=1
-            ARGS+=(-v)
-            ;;
-        \? | :)
-            lk_usage
-            return 1
-            ;;
-        esac
-    done
-    shift $((OPTIND - 1))
-    [ $# -gt 0 ] || lk_usage || return
-    [ -z "${OWNER-}" ] &&
-        { [ -z "${GROUP-}" ] ||
-            id -Gn | tr -s '[:blank:]' '\n' | grep -Fx "$GROUP" >/dev/null; } ||
-        LK_SUDO=1
-    if lk_is_true DIR; then
-        lk_sudo install ${ARGS[@]+"${ARGS[@]}"} "$@"
-    else
-        for DEST in "$@"; do
-            if lk_sudo test ! -e "$DEST" 2>/dev/null; then
-                lk_sudo install ${ARGS[@]+"${ARGS[@]}"} /dev/null "$DEST"
-            else
-                STAT=$(lk_file_owner_mode "$DEST" 2>/dev/null) || return
-                [ -z "${MODE-}" ] ||
-                    { [[ $MODE =~ ^0*([0-7]+)$ ]] &&
-                        REGEX=" 0*${BASH_REMATCH[1]}\$" &&
-                        [[ $STAT =~ $REGEX ]]; } ||
-                    lk_sudo chmod \
-                        ${VERBOSE:+-v} "$MODE" "$DEST" ||
-                    return
-                [ -z "${OWNER-}${GROUP-}" ] ||
-                    { REGEX='[-a-z0-9_]+\$?' &&
-                        REGEX="^${OWNER:-$REGEX}:${GROUP:-$REGEX} " &&
-                        [[ $STAT =~ $REGEX ]]; } ||
-                    lk_elevate chown \
-                        ${VERBOSE:+-v} "${OWNER-}${GROUP:+:$GROUP}" "$DEST" ||
-                    return
-            fi
-        done
-    fi
-}
-
 # lk_symlink [-f] TARGET LINK
 #
 # Safely add a symbolic link to TARGET from LINK. If -f is set, delete a file or
@@ -5127,7 +5253,7 @@ function lk_nohup() { (
     _LK_CAN_FAIL=1
     trap "" SIGHUP SIGINT SIGTERM
     set -m
-    OUT_FILE=$(TMPDIR=$(lk_readable "$LK_BASE/var/log" ~ /tmp) &&
+    OUT_FILE=$(TMPDIR=$(lk_readable "$LK_BASE/var/log/lk-platform" ~ /tmp) &&
         _LK_MKTEMP_EXT=.nohup.out lk_mktemp) &&
         OUT_FD=$(lk_fd_next) &&
         eval "exec $OUT_FD"'>"$OUT_FILE"' || return

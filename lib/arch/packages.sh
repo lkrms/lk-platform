@@ -241,6 +241,7 @@ PAC_PACKAGES+=(
     expac
     pacman-contrib
     pacutils
+    rebuild-detector
 
     perl
 
@@ -312,6 +313,12 @@ if lk_feature_enabled desktop; then
         xdg-user-dirs # Manage ~/Desktop, ~/Templates, etc.
         yad
 
+        ipp-usb
+        sane
+        sane-airscan
+        skanlite
+        skanpage
+
         capitaine-cursors-
         papirus-icon-theme-
         vimix-cursors-
@@ -322,6 +329,7 @@ if lk_feature_enabled desktop; then
         geany # notepadqq is smaller but depends on Qt
         gimp-
         mpv
+        okular- # Document viewer with better annotation features; depends on Qt
         qalculate-gtk-
         speedcrunch-
         vlc-
@@ -389,7 +397,6 @@ if lk_feature_enabled desktop; then
         PAC_PACKAGES+=(noto-fonts-emoji)
 
     AUR_PACKAGES+=(
-        networkmanager-dispatcher-ntpd-
         pinta-
         xrandr-invert-colors-
 

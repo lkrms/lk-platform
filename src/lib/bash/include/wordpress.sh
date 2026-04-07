@@ -393,7 +393,7 @@ $LK_h*('([^']+|\\\\')*'|\"([^\"\$]+|\\\\(\"|\\\$))*\")$LK_h*\)$LK_h*(;|\$)" |
             # 3. Add any missing semicolons
             sed -E 's/[^;]$/&;/' || exit
         # 4. Add code to output each value as a shell expression
-        cat <<"EOF"
+        cat <<'EOF'
 foreach (["DB_NAME", "DB_USER", "DB_PASSWORD", "DB_HOST"] as $const)
     printf("%s=%s\n", $const, escapeshellarg(constant($const)));
 EOF

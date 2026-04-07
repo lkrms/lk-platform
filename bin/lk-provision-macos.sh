@@ -26,15 +26,15 @@ function die() {
 [[ $- != *s* ]] || die "cannot run from standard input"
 
 function exit_trap() {
-    local STATUS=$? LK_LOG_BASENAME=lk-provision-macos.sh LOG_FILE
+    local STATUS=$? _LOG_FILE=$_LK_LOG_FILE LK_LOG_BASENAME=lk-provision-macos.sh LOG_FILE
     lk_log_close &&
-        LOG_FILE=$(lk_log_create_file) &&
-        [[ $LOG_FILE != "$_LK_LOG_FILE" ]] ||
+        LOG_FILE=$(lk_log_file_create) &&
+        [[ $LOG_FILE != "$_LOG_FILE" ]] ||
         return "$STATUS"
-    lk_tty_log "Moving:" "$_LK_LOG_FILE -> $LOG_FILE"
-    cat -- "$_LK_LOG_FILE" >>"$LOG_FILE" &&
-        rm -f -- "$_LK_LOG_FILE" ||
-        lk_tty_warning "Error moving" "$_LK_LOG_FILE"
+    lk_tty_log "Moving:" "$_LOG_FILE -> $LOG_FILE"
+    cat -- "$_LOG_FILE" >>"$LOG_FILE" &&
+        rm -f -- "$_LOG_FILE" ||
+        lk_tty_warning "Error moving" "$_LOG_FILE"
     return "$STATUS"
 }
 
@@ -133,8 +133,8 @@ function exit_trap() {
     LK_FILE_BACKUP_TAKE=${LK_FILE_BACKUP_TAKE-1}
     LK_FILE_BACKUP_MOVE=1
 
-    lk_log_start ~/"${LK_PATH_PREFIX}install"
-    lk_start_trace
+    lk_log_open ~/"${LK_PATH_PREFIX}install"
+    lk_log_open_trace
     lk_trap_add EXIT exit_trap
 
     lk_tty_log "Provisioning macOS"
@@ -151,11 +151,11 @@ function exit_trap() {
     }
 
     scutil --get HostName &>/dev/null || {
-        [ -n "${LK_NODE_HOSTNAME-}" ] ||
-            lk_tty_read "System hostname (optional):" LK_NODE_HOSTNAME ||
+        [ -n "${LK_HOSTNAME-}" ] ||
+            lk_tty_read "System hostname (optional):" LK_HOSTNAME ||
             lk_die ""
-        [ -z "$LK_NODE_HOSTNAME" ] ||
-            lk_macos_set_hostname "$LK_NODE_HOSTNAME"
+        [ -z "$LK_HOSTNAME" ] ||
+            lk_macos_set_hostname "$LK_HOSTNAME"
     }
 
     CURRENT_SHELL=$(lk_dscl_read UserShell)
@@ -231,7 +231,7 @@ function exit_trap() {
         lk_faketty caffeinate -d git clone -b "$LK_PLATFORM_BRANCH" \
             https://github.com/lkrms/lk-platform.git "$LK_BASE"
         sudo install -d -m 02775 -g admin "$LK_BASE"/{etc{,/lk-platform},var}
-        sudo install -d -m 01777 -g admin "$LK_BASE"/var/log
+        sudo install -d -m 01777 -g admin "$LK_BASE"/var/log{,/lk-platform}
         sudo install -d -m 00750 -g admin "$LK_BASE"/var/backup
         FILE=$LK_BASE/etc/lk-platform/lk-platform.conf
         sudo install -m 00664 -g admin /dev/null "$FILE"
@@ -398,7 +398,7 @@ function exit_trap() {
 
     LK_SUDO=1
     lk_tty_print
-    _LK_NO_LOG=1 \
+    LK_NO_LOG=1 \
         lk_maybe_trace "$LK_BASE/bin/lk-platform-configure.sh"
     unset LK_SUDO
 

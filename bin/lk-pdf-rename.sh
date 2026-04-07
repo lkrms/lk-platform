@@ -32,7 +32,7 @@ lk_has wmctrl &&
     WINDOW_ID=$(xdotool getactivewindow 2>/dev/null) ||
     WINDOW_ID=
 
-lk_log_start
+lk_log_open
 
 if ((TRIAGE)); then
     # Remove any trailing slashes

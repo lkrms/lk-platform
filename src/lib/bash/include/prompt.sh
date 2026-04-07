@@ -91,6 +91,8 @@ function _lk_prompt_create() {
     fi
     history -a
     shopt -u promptvars
+    # Prevent `$(__systemd_osc_context_ps0)` in output when promptvars is unset
+    unset PS0
     local IFS=
     # " $ " or " # "
     PS1="${parts[*]} \\\$ "

@@ -1,28 +1,5 @@
 #!/usr/bin/env bash
 
-# To install Arch Linux using the script below:
-# 1. Boot from an Arch Linux live CD
-# 2. Run `wpa_supplicant -B -i wlan0 -c <(wpa_passphrase <SSID> <passphrase>)`
-# 3. Run `bash -c "$(curl -fsSL http://lkr.ms/bs)" bootstrap.sh [ARG...]`
-#
-# e.g. to automatically partition `/dev/vda` and provision host 'archlinux' for
-# user 'susan' with Xfce4 and packages defined in `packages/arch/desktop.sh`
-# from local mirror 'arch.mirror':
-#
-#     LK_ARCH_MIRROR='http://arch.mirror/$repo/os/$arch' \
-#         bash -c "$(curl -fsSL http://lkr.ms/bs)" \
-#         bootstrap.sh -u susan -x -k desktop /dev/vda archlinux
-
-LK_PATH_PREFIX=${LK_PATH_PREFIX:-lk-} &&
-    _DIR=/tmp/${LK_PATH_PREFIX}install &&
-    mkdir -p "$_DIR" || exit
-
-[[ $- != *c* ]] ||
-    { _FILE="$_DIR/bootstrap.sh" &&
-        printf '%s\n' "$BASH_EXECUTION_STRING" >"$_FILE" &&
-        { [[ $- != *x* ]] || export SHELLOPTS=xtrace; } &&
-        exec "$BASH" "$_FILE" "$@" || exit; }
-
 set -euo pipefail
 
 function die() {
@@ -31,78 +8,155 @@ function die() {
     exit $((s ? s : 1))
 }
 
-LOG_FILE=$_DIR/install.$(date +%s)
+# This script:
+#
+# - bootstraps Arch Linux on the given disk or partitions
+# - clones the `lk-platform` repository from GitHub to `/opt/lk-platform`
+# - runs `lk-provision-arch.sh` to finalise setup
+#
+# For convenience, you can download it from <https://lkr.ms/bs>.
+#
+# To get started:
+#
+# 1. Download, verify and create bootable media for a recent Arch Linux release
+# 2. In your system's firmware settings, disable Secure Boot and check UEFI boot
+#    is enabled
+# 3. Boot Arch Linux from the install media prepared earlier
+# 4. Connect to the internet if not already connected
+# 5. Download and run the script
+#
+# ```shell
+# # If no passphrase is given, it is read from standard input
+# wpa_supplicant -B -i wlan0 -c <(wpa_passphrase "<ssid>" "<passphrase>")
+# curl -fLo bootstrap.sh https://lkr.ms/bs
+# # Run without arguments to print usage information
+# bash bootstrap.sh
+# ```
 
-shopt -s nullglob
+((!EUID)) ||
+    die "not running as root"
+[[ $OSTYPE == linux-gnu ]] && [[ -f /etc/arch-release ]] ||
+    die "not running on Arch Linux"
+[[ -d /sys/firmware/efi/efivars ]] ||
+    die "not running in UEFI mode"
+[[ $- != *s* ]] ||
+    die "cannot run from standard input"
 
-DEFAULT_CMDLINE="quiet loglevel=3 audit=0"
-! grep -Eq '^flags[[:blank:]]*:.*\<hypervisor\>' /proc/cpuinfo ||
-    DEFAULT_CMDLINE+=" console=tty0 console=ttyS0"
-BOOTSTRAP_PING_HOST=${BOOTSTRAP_PING_HOST:-one.one.one.one}            # https://blog.cloudflare.com/dns-resolver-1-1-1-1/
-BOOTSTRAP_TIME_URL=${BOOTSTRAP_TIME_URL:-https://$BOOTSTRAP_PING_HOST} # System time is taken from the HTTP response header of this URL
-BOOTSTRAP_MOUNT_OPTIONS=${BOOTSTRAP_MOUNT_OPTIONS:-defaults}           # On VMs with TRIM support, "discard" is added automatically
-BOOTSTRAP_USERNAME=${BOOTSTRAP_USERNAME:-arch}                         #
-BOOTSTRAP_PASSWORD=${BOOTSTRAP_PASSWORD-}                              #
-BOOTSTRAP_KEY=${BOOTSTRAP_KEY-}                                        #
-BOOTSTRAP_FULL_NAME=${BOOTSTRAP_FULL_NAME:-Arch Linux}                 #
-LK_IPV4_ADDRESS=${LK_IPV4_ADDRESS-}                                    #
-LK_IPV4_GATEWAY=${LK_IPV4_GATEWAY-}                                    #
-LK_DNS_SERVERS=${LK_DNS_SERVERS-}                                      # Space- or semicolon-delimited (expanded by lk_nm_file_get_ipv4_ipv6)
-LK_DNS_SEARCH=${LK_DNS_SEARCH-}                                        # Space- or semicolon-delimited (expanded by lk_nm_file_get_ipv4_ipv6)
-LK_BRIDGE_INTERFACE=${LK_BRIDGE_INTERFACE-}                            # Ignored on laptops, otherwise configured on the first Ethernet port
-LK_BRIDGE_IPV6_PD=${LK_BRIDGE_IPV6_PD-}                                # If set, the bridge will be used to delegate an IPv6 prefix
-LK_WIFI_REGDOM=${LK_WIFI_REGDOM-}                                      # e.g. "AU" (see /etc/conf.d/wireless-regdom)
-LK_NODE_TIMEZONE=${LK_NODE_TIMEZONE:-UTC}                              # See `timedatectl list-timezones`
-LK_FEATURES=${LK_FEATURES-}                                            #
-LK_NODE_LOCALES=${LK_NODE_LOCALES-en_AU.UTF-8 en_GB.UTF-8}             # "en_US.UTF-8" is always added
-LK_NODE_LANGUAGE=${LK_NODE_LANGUAGE-en_AU:en_GB:en}                    #
-LK_SMB_CONF=${LK_SMB_CONF-}                                            #
-LK_SMB_WORKGROUP=${LK_SMB_WORKGROUP-}                                  #
-LK_GRUB_CMDLINE=${LK_GRUB_CMDLINE-$DEFAULT_CMDLINE}                    #
-LK_NTP_SERVER=${LK_NTP_SERVER-time.apple.com}                          #
-LK_ARCH_MIRROR=${LK_ARCH_MIRROR-}                                      #
-LK_ARCH_REPOS=${LK_ARCH_REPOS-}                                        # NAME|SERVER|KEY_ID|KEY_URL,...
-LK_ARCH_AUR_REPO_NAME=${LK_ARCH_AUR_REPO_NAME-}                        # If set, a local aurutils repo will be provisioned
-LK_ARCH_AUR_CHROOT_DIR=${LK_ARCH_AUR_CHROOT_DIR-}                      # Default: /var/lib/aurbuild
+dir=/tmp/lk-platform
+install -d "$dir" || die "error creating directory: $dir"
+
+# If running via `bash -c "$(curl -fL https://lkr.ms/bs)"` or similar, relaunch
+# as `bash /path/to/bootstrap.sh` to improve debug output
+if [[ $- == *c* ]]; then
+    file=$dir/bootstrap.sh
+    printf '%s\n' "$BASH_EXECUTION_STRING" >"$file" ||
+        die "error writing to file: $file"
+    args=
+    [[ $- != *x* ]] || args=-x
+    exec "$BASH" $args "$file" "$@"
+fi
+
+log_file=$dir/install.$(date +%Y%m%d%H%M%S)
+
+is_vm=1
+awk -F '[ \t]*:[ \t]*' \
+    '$1 == "flags" && $2 ~ /(^| )hypervisor( |$)/ { h = 1; exit } END { exit (1 - h) }' \
+    /proc/cpuinfo || is_vm=0
+ram_gb=$(awk -F '[ \t:]+' \
+    '$1 == "MemTotal" { print int($2 / 1024 ^ 2); t = 1; exit } END { exit (1 - t) }' \
+    /proc/meminfo) || ram_gb=0
+
+DEFAULT_SWAP_SIZE=4GiB
+((ram_gb < 10)) || DEFAULT_SWAP_SIZE=$((ram_gb * 2 / 5))GiB
+DEFAULT_CMDLINE="quiet splash audit=0"
+((!is_vm)) || DEFAULT_CMDLINE+=" console=tty0 console=ttyS0"
+
+BOOTSTRAP_PING_HOST=${BOOTSTRAP_PING_HOST:-one.one.one.one}
+BOOTSTRAP_TIME_URL=${BOOTSTRAP_TIME_URL:-https://$BOOTSTRAP_PING_HOST}
+BOOTSTRAP_MOUNT_OPTIONS=${BOOTSTRAP_MOUNT_OPTIONS:-defaults}
+BOOTSTRAP_USERNAME=${BOOTSTRAP_USERNAME:-archuser}
+BOOTSTRAP_PASSWORD=${BOOTSTRAP_PASSWORD-}
+BOOTSTRAP_KEY=${BOOTSTRAP_KEY-}
+BOOTSTRAP_FULL_NAME=${BOOTSTRAP_FULL_NAME:-Arch User}
+export -n "${!BOOTSTRAP_@}"
+
+LK_IPV4_ADDRESS=${LK_IPV4_ADDRESS-}
+LK_IPV4_GATEWAY=${LK_IPV4_GATEWAY-}
+LK_DNS_SERVERS=${LK_DNS_SERVERS-}
+LK_DNS_SEARCH=${LK_DNS_SEARCH-}
+LK_BRIDGE_INTERFACE=${LK_BRIDGE_INTERFACE-}
+LK_BRIDGE_IPV6_PD=${LK_BRIDGE_IPV6_PD-}
+LK_WIFI_REGDOM=${LK_WIFI_REGDOM-}
+LK_TIMEZONE=${LK_TIMEZONE:-UTC}
+LK_FEATURES=${LK_FEATURES-}
+LK_LOCALES=${LK_LOCALES-en_AU.UTF-8 en_GB.UTF-8}
+LK_LANGUAGE=${LK_LANGUAGE-en_AU:en_GB:en}
+LK_SMB_CONF=${LK_SMB_CONF-}
+LK_SMB_WORKGROUP=${LK_SMB_WORKGROUP-}
+LK_GRUB_CMDLINE=${LK_GRUB_CMDLINE-$DEFAULT_CMDLINE}
+LK_NTP_SERVER=${LK_NTP_SERVER-time.apple.com}
+LK_ARCH_MIRROR=${LK_ARCH_MIRROR-}
+LK_ARCH_REPOS=${LK_ARCH_REPOS-}
+LK_ARCH_AUR_REPO_NAME=${LK_ARCH_AUR_REPO_NAME-}
+LK_ARCH_AUR_CHROOT_DIR=${LK_ARCH_AUR_CHROOT_DIR-}
 LK_PLATFORM_BRANCH=${LK_PLATFORM_BRANCH:-main}
 LK_PACKAGES_FILE=${LK_PACKAGES_FILE-}
 export LK_BASE=${LK_BASE:-/opt/lk-platform}
-export -n BOOTSTRAP_PASSWORD BOOTSTRAP_KEY
-
-((!EUID)) || die "not running as root"
-[[ $OSTYPE == linux-gnu ]] || die "not running on Linux"
-[[ -f /etc/arch-release ]] || die "not running on Arch Linux"
-[[ -d /sys/firmware/efi/efivars ]] || die "not running in UEFI mode"
-[[ $- != *s* ]] || die "cannot run from standard input"
 
 function __usage() {
-    cat <<EOF &&
+    local devices
+    devices=$(lsblk --output NAME,RM,SIZE,TYPE,RO,FSTYPE,MOUNTPOINT --paths) ||
+        die "error retrieving block devices"
+    cat <<EOF
+Bootstrap Arch Linux on the given disk or partitions.
+
 Usage:
-  ${0##*/} [OPTIONS] ROOT_PART BOOT_PART HOSTNAME[.DOMAIN]
-  ${0##*/} [OPTIONS] INSTALL_DISK HOSTNAME[.DOMAIN]
+  ${0##*/} [options] <root_part> <boot_part> [<swap_part>] <hostname>[.<domain>]
+  ${0##*/} [options] <disk> <hostname>[.<domain>]
 
 Options:
-  -u USERNAME       set the default user's login name (default: arch)
-  -o PARTITION      add the operating system on PARTITION to the boot menu
-                    (may be given multiple times)
-  -c CMDLINE        set the default kernel command-line
+  -u <username>     Specify a login name for the unprivileged user.
+                    (default: archuser)
+  -n <name>         Specify a full name for the unprivileged user.
+                    (default: Arch User)
+  -o <part>         Add the operating system on a partition to the boot loader.
+  -c "<param> ..."  Specify the boot loader's kernel command-line parameters.
                     (default: \"$DEFAULT_CMDLINE\")
-  -p PARAMETER      add PARAMETER to the default kernel command-line
-  -f FEATURE,...    enable each FEATURE
-  -x                install Xfce (alias for: -s xfce4)
-  -k FILE           set LK_PACKAGES_FILE
-  -y                do not prompt for input
+  -p <param>        Add a parameter to the boot loader's kernel command line.
+  -f <feature>      Enable a feature (see list below).
+  -k <file>         Specify custom packages to install.
+  -y                Do not prompt for input.
 
-Useful kernel parameters:
-  intel_idle.max_cstate=2   silence coil whine from C-states above C2
-  usbcore.autosuspend=5     wait 5 seconds to suspend (default: 2, never: -1)
-  libata.force=3.00:noncq   disable NCQ on ATA device 3.00
-  mce=dont_log_ce           do not log corrected machine check errors
+Features:
+  apache+php (alias of: apache2 + php-fpm)
+  apache2
+  desktop
+  dev (implies: apache+php, docker, libvirt, mysql)
+  docker
+  libvirt
+  lighttpd
+  mariadb
+  minimal
+  mysql (alias of: mariadb)
+  php-fpm
+  router
+  squid
+  xfce4 (implies: desktop)
 
-Block devices:
+If partitions are given:
+
+- <root_part> is formatted
+- <boot_part> is formatted unless it is already a valid EFI system partition
+
+If <disk> is given, a new GPT partition table is created with:
+
+- 1GiB fat32 EFI system partition
+- $DEFAULT_SWAP_SIZE swap partition
+- root partition for remainder of device
+
+Current block devices:
+  ${devices//$'\n'/$'\n'  }
 EOF
-        lsblk --output NAME,RM,SIZE,RO,TYPE,FSTYPE,MOUNTPOINT --paths |
-        sed 's/^/  /'
 }
 
 ROOT_PART=
@@ -134,7 +188,7 @@ for FILE_PATH in \
     lib/awk/sh-section-get.awk \
     lib/awk/sh-section-replace.awk \
     share/sudoers.d/default; do
-    FILE=$_DIR/${FILE_PATH##*/}
+    FILE=$dir/${FILE_PATH##*/}
     URL=$REPO_URL/$LK_PLATFORM_BRANCH/$FILE_PATH
     MESSAGE=" -> {} $URL"
     if [[ ! -e $FILE ]]; then
@@ -152,7 +206,7 @@ for FILE_PATH in \
     }
 done
 
-exec 4> >(lk_log >"$LOG_FILE.trace")
+exec 4> >(lk_log >"$log_file.trace")
 BASH_XTRACEFD=4
 set -x
 
@@ -208,10 +262,10 @@ case $# in
     lk_usage
     ;;
 esac
-LK_NODE_FQDN=${*: -1:1}
-LK_NODE_HOSTNAME=${LK_NODE_FQDN%%.*}
-[[ $LK_NODE_FQDN != "$LK_NODE_HOSTNAME" ]] ||
-    LK_NODE_FQDN=
+LK_FQDN=${*: -1:1}
+LK_HOSTNAME=${LK_FQDN%%.*}
+[[ $LK_FQDN != "$LK_HOSTNAME" ]] ||
+    LK_FQDN=
 LK_FEATURES=$(IFS=, && lk_args $LK_FEATURES | lk_uniq | lk_implode_input ,)
 
 PASSWORD_GENERATED=0
@@ -250,8 +304,8 @@ function exit_trap() {
         exec 4>-
         lk_log_close || true
         local LOG FILE
-        for LOG in "$LOG_FILE".{log,trace}; do
-            FILE=/var/log/${LK_PATH_PREFIX}${LOG##*/}
+        for LOG in "$log_file".{log,trace}; do
+            FILE=/var/log/lk-${LOG##*/}
             in_target install -m 00640 -g adm /dev/null "$FILE" &&
                 cp -v --preserve=timestamps "$LOG" "/mnt/${FILE#/}" || break
         done
@@ -276,11 +330,12 @@ function system_time() {
     date "$@" +"%a, %d %b %Y %H:%M:%S %Z"
 }
 
-lk_log_start "$LOG_FILE"
+lk_log_open "$log_file"
 lk_trap_add EXIT exit_trap
 
 # Clean up after failed attempts
-if [[ -d /mnt/boot ]]; then
+if [[ -d /mnt/boot ]]; then (
+    shopt -s nullglob
     OTHER_OS_MOUNTS=(/mnt/mnt/*)
     if [[ -n ${OTHER_OS_MOUNTS+1} ]]; then
         umount "${OTHER_OS_MOUNTS[@]}"
@@ -288,7 +343,7 @@ if [[ -d /mnt/boot ]]; then
     fi
     umount /mnt/boot
     umount /mnt
-fi
+); fi
 
 lk_tty_log "Setting up live environment"
 FILES=(/etc/pacman.conf{.orig,})
@@ -323,10 +378,10 @@ elif [[ $(lk_timestamp) -lt $MODIFIED ]]; then
 fi
 lk_pac_sync
 if pacman -Sup --print-format "%n" | grep -Fx archlinux-keyring >/dev/null; then
-    lk_log_bypass -o lk_faketty pacman -S --noconfirm archlinux-keyring
+    lk_log_run_tty_only -o lk_faketty pacman -S --noconfirm archlinux-keyring
 fi
 
-. "$_DIR/packages.sh"
+. "$dir/packages.sh"
 
 lk_tty_print
 lk_tty_log "Checking disk partitions"
@@ -404,7 +459,7 @@ fi
 
 lk_tty_print
 lk_tty_log "Installing system"
-lk_log_bypass -o lk_faketty pacstrap /mnt "${PAC_PACKAGES[@]}"
+lk_log_run_tty_only -o lk_faketty pacstrap /mnt "${PAC_PACKAGES[@]}"
 
 lk_tty_print
 lk_tty_log "Setting up installed system"
@@ -417,7 +472,7 @@ lk_file_keep_original "$FILE"
 genfstab -U /mnt >>"$FILE"
 
 lk_tty_print "Setting system time zone"
-FILE=/usr/share/zoneinfo/$LK_NODE_TIMEZONE
+FILE=/usr/share/zoneinfo/$LK_TIMEZONE
 LK_VERBOSE=1 \
     lk_symlink "$FILE" /mnt/etc/localtime
 
@@ -427,9 +482,9 @@ lk_configure_locales
 lk_tty_run_detail -1 in_target locale-gen
 
 lk_tty_print "Configuring sudo"
-FILE=/mnt/etc/sudoers.d/${LK_PATH_PREFIX}default
+FILE=/mnt/etc/sudoers.d/lk-default
 install -m 00440 /dev/null "$FILE"
-lk_file_replace -f "$_DIR/default" "$FILE"
+lk_file_replace -f "$dir/default" "$FILE"
 
 lk_tty_print "Creating administrator account:" "$BOOTSTRAP_USERNAME"
 FILE=/mnt/etc/skel/.ssh/authorized_keys
@@ -462,15 +517,14 @@ in_target install -d -m 02775 -o "$BOOTSTRAP_USERNAME" -g adm "$LK_BASE"
         git clone -b "$LK_PLATFORM_BRANCH" \
         https://github.com/lkrms/lk-platform.git "$LK_BASE")
 in_target install -d -m 02775 -g adm "$LK_BASE"/{etc{,/lk-platform},var}
-in_target install -d -m 01777 -g adm "$LK_BASE"/var/log
+in_target install -d -m 01777 -g adm "$LK_BASE"/var/log{,/lk-platform}
 in_target install -d -m 00750 -g adm "$LK_BASE"/var/backup
 FILE=$LK_BASE/etc/lk-platform/lk-platform.conf
 in_target install -m 00664 -g adm /dev/null "$FILE"
 lk_var_sh \
     LK_BASE \
-    LK_PATH_PREFIX \
-    LK_NODE_HOSTNAME \
-    LK_NODE_FQDN \
+    LK_HOSTNAME \
+    LK_FQDN \
     LK_IPV4_ADDRESS \
     LK_IPV4_GATEWAY \
     LK_DNS_SERVERS \
@@ -478,10 +532,10 @@ lk_var_sh \
     LK_BRIDGE_INTERFACE \
     LK_BRIDGE_IPV6_PD \
     LK_WIFI_REGDOM \
-    LK_NODE_TIMEZONE \
+    LK_TIMEZONE \
     LK_FEATURES \
-    LK_NODE_LOCALES \
-    LK_NODE_LANGUAGE \
+    LK_LOCALES \
+    LK_LANGUAGE \
     LK_SMB_CONF \
     LK_SMB_WORKGROUP \
     LK_GRUB_CMDLINE \
@@ -495,7 +549,7 @@ lk_var_sh \
 
 PROVISIONED=0
 in_target -u "$BOOTSTRAP_USERNAME" \
-    env BASH_XTRACEFD=$BASH_XTRACEFD SHELLOPTS=xtrace _LK_NO_LOG=1 \
+    env BASH_XTRACEFD=$BASH_XTRACEFD SHELLOPTS=xtrace LK_NO_LOG=1 \
     "$LK_BASE/bin/lk-provision-arch.sh" --yes && PROVISIONED=1 ||
     lk_tty_error "Provisioning failed"
 

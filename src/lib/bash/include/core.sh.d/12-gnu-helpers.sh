@@ -131,7 +131,7 @@ function render() {
 case "${1+${1:-null}}" in
 "")
     MODE=build
-    cat <<"EOF"
+    cat <<'EOF'
 # Define wrapper functions (e.g. `gnu_find`) to invoke the GNU version of
 # certain commands (e.g. `gfind`) when standard utilities are not compatible
 # with their GNU counterparts, e.g. on BSD/macOS
@@ -139,7 +139,7 @@ EOF
     ;;
 -i | --install)
     MODE=install
-    cat <<"EOF"
+    cat <<'EOF'
 function install_gnu_commands() {
     local GNU_COMMANDS i STATUS=0
 EOF
@@ -165,7 +165,7 @@ esac
         sed 's/^/    /'
     fi
 
-[ "$MODE" != install ] || cat <<"EOF"
+[ "$MODE" != install ] || cat <<'EOF'
     for ((i = 0; i < ${#GNU_COMMANDS[@]}; i += 3)); do
         lk_symlink_bin "${GNU_COMMANDS[@]:i:2}" ||
             [ "${GNU_COMMANDS[*]:i+2:1}" -eq 0 ] ||

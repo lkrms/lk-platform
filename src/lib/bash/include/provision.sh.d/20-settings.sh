@@ -4,13 +4,13 @@ function _lk_settings_list_known() {
     printf '%s\n' \
         LK_BASE \
         LK_PATH_PREFIX \
-        LK_NODE_HOSTNAME LK_NODE_FQDN \
+        LK_HOSTNAME LK_FQDN \
         LK_IPV4_ADDRESS LK_IPV4_GATEWAY LK_DNS_SERVERS LK_DNS_SEARCH \
         LK_BRIDGE_INTERFACE LK_BRIDGE_IPV6_PD \
         LK_WIFI_REGDOM \
-        LK_NODE_TIMEZONE \
+        LK_TIMEZONE \
         LK_FEATURES LK_PACKAGES \
-        LK_NODE_LOCALES LK_NODE_LANGUAGE \
+        LK_LOCALES LK_LANGUAGE \
         LK_SMB_CONF LK_SMB_WORKGROUP \
         LK_GRUB_CMDLINE \
         LK_NTP_SERVER \
@@ -55,7 +55,12 @@ function _lk_settings_list_legacy() {
         LK_EMAIL_BLACKHOLE \
         LK_NODE_SERVICES \
         LK_NODE_PACKAGES \
-        LK_SAMBA_WORKGROUP
+        LK_SAMBA_WORKGROUP \
+        LK_NODE_HOSTNAME \
+        LK_NODE_FQDN \
+        LK_NODE_TIMEZONE \
+        LK_NODE_LOCALES \
+        LK_NODE_LANGUAGE
 }
 
 function _lk_settings_writable_files() {
@@ -122,6 +127,11 @@ function lk_settings_getopt() {
     _lk_settings_migrate LK_FEATURES {LK_,}NODE_SERVICES
     _lk_settings_migrate LK_PACKAGES {LK_,}NODE_PACKAGES
     _lk_settings_migrate LK_SMB_WORKGROUP LK_SAMBA_WORKGROUP
+    _lk_settings_migrate LK_HOSTNAME {LK_,}NODE_HOSTNAME
+    _lk_settings_migrate LK_FQDN {LK_,}NODE_FQDN
+    _lk_settings_migrate LK_TIMEZONE {LK_,}NODE_TIMEZONE
+    _lk_settings_migrate LK_LOCALES {LK_,}NODE_LOCALES
+    _lk_settings_migrate LK_LANGUAGE {LK_,}NODE_LANGUAGE
     for s in $(_lk_settings_list_known | grep -Fxv LK_BASE); do
         o=()
         [[ $s == LK_NODE_* ]] || {

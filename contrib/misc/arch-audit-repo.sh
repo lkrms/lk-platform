@@ -71,7 +71,7 @@ function download_all_sources_json() {
     lk_cache curl -fsSL "https://aur.archlinux.org/packages-meta-ext-v1.json.gz" | gunzip
 }
 
-lk_assign AWK <<"EOF"
+lk_assign AWK <<'EOF'
 function quote(str) {
   gsub("\"", "\\\"", str)
   return "\"" str "\""

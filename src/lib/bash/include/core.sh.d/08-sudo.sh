@@ -30,7 +30,7 @@ function lk_elevate() {
     elif [ $# -eq 0 ]; then
         ${LK_EXEC:+exec} sudo -H "$0" ${_LK_ARGV+"${_LK_ARGV[@]}"}
     elif ! _COMMAND=$(type -P "$1") && [ "$(type -t "$1")" = "function" ]; then
-        LK_SUDO=
+        local LK_SUDO=
         if [ -n "$LK_SUDO_ON_FAIL" ] && "$@" 2>/dev/null; then
             return 0
         fi

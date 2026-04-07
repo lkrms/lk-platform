@@ -95,8 +95,8 @@ STATUS=0
 
 _LK_MYSQL_QUIET=1
 
-lk_log_start
-lk_start_trace
+lk_log_open
+lk_log_open_trace
 
 lk_tty_print "Preparing database backup"
 lk_tty_detail "Retrieving list of databases on" "$DB_HOST"

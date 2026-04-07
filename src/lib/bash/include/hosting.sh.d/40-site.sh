@@ -248,7 +248,7 @@ function _lk_hosting_site_write_settings() {
             [[ ${!SETTING-} != "${!DEFAULT-}" ]] || echo "$SETTING"
         done | lk_ere_implode_input) || return
     unset LK_FILE_NO_CHANGE LK_FILE_REPLACE_NO_CHANGE
-    lk_file_maybe_move "$OLD_FILE" "$FILE" &&
+    { lk_file_move_old "$OLD_FILE" "$FILE" && LK_FILE_NO_CHANGE=0 || (($? == 1)); } &&
         lk_install -m 00660 -g adm "$FILE" &&
         lk_file_replace -lp "$FILE" \
             "$(lk_var_sh "${!SITE_@}" | sed -E "s/^$REGEX=/#&/")" || return
@@ -267,7 +267,7 @@ s/^#//" "$FILE")
 # Cache the current values of every SITE_* and _SITE_* variable in the caller's
 # scope.
 function _lk_hosting_site_cache_settings() {
-    local STATIC LK_FILE_REPLACE_NO_CHANGE
+    local LK_SUDO=1 STATIC LK_FILE_REPLACE_NO_CHANGE
     [[ ${1-} != -s ]] || { STATIC=1 && shift; }
     local FILE=$LK_BASE/var/lib/lk-platform/sites/$_SITE_DOMAIN.conf${STATIC:+.static}
     [[ -w ${FILE%/*} ]] || return 0

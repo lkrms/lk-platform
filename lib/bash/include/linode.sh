@@ -524,7 +524,7 @@ Example:
         --arg adminEmail "${LK_ADMIN_EMAIL:-root@$NODE_FQDN}" \
         --arg autoReboot "${LK_AUTO_REBOOT:-Y}" \
         '{
-    "LK_NODE_FQDN": $nodeFqdn,
+    "LK_FQDN": $nodeFqdn,
     "LK_HOST_DOMAIN": $hostDomain,
     "LK_HOST_ACCOUNT": $hostAccount,
     "LK_ADMIN_EMAIL": $adminEmail,
