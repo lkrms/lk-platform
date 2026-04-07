@@ -138,7 +138,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
       # If target branch is 'main', reset origin/main to the most recent
       # annotated tag's commit
       if [[ $BRANCH == main ]] &&
-        TAG=$(git describe origin/main 2>/dev/null) &&
+        TAG=$(git describe --abbrev=0 origin/main 2>/dev/null) &&
         REF=$(git rev-parse --verify --short "$TAG^{commit}"); then
         git update-ref refs/remotes/origin/main "$REF" &&
           echo "Updating lk-platform to $TAG ($REF)" >&2
