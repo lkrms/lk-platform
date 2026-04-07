@@ -105,7 +105,7 @@ function lk_mysql_options_client_print() {
     printf '[client]\n'
     for ((i = 0; i < ${#options[@]}; i += 2)); do
         printf '%s=%s\n' "${options[i]}" \
-            "$(lk_mysql_option_escape "${options[i+1]}")"
+            "$(lk_mysql_option_escape "${options[i + 1]}")"
     done
 }
 

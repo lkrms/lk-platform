@@ -258,7 +258,7 @@ function _lk_hosting_site_load_dynamic_settings() {
         lk_tty_detail "Other sites with the same site root:" \
             $'\n'"$(printf '%s\n' "${SAME_ROOT[@]:0:${#SAME_ROOT[@]}-1}")" \
             "$LK_BOLD$LK_MAGENTA"
-        ((SITE_ORDER > -1)) || SITE_ORDER=${SAME_ROOT[${#SAME_ROOT[@]}-1]}
+        ((SITE_ORDER > -1)) || SITE_ORDER=${SAME_ROOT[${#SAME_ROOT[@]} - 1]}
     else
         ((SITE_ORDER > -1)) || SITE_ORDER=0
     fi

@@ -144,7 +144,7 @@ function lk_bad_args() {
 function lk_script() {
     local depth=$((${_LK_STACK_DEPTH-0} + ${1-0})) name
     lk_is_script || {
-        name=${FUNCNAME[depth+1]+${FUNCNAME[*]: -1}}
+        name=${FUNCNAME[depth + 1]+${FUNCNAME[*]: -1}}
         [[ $name != @(source|main) ]] || name=
     }
     printf '%s\n' "${name:-${0##*/}}"
@@ -155,7 +155,7 @@ function lk_script() {
 # Print the name of the caller's caller.
 function lk_caller() {
     local depth=$((${_LK_STACK_DEPTH-0} + ${1-0})) name
-    name=${FUNCNAME[2+depth]-}
+    name=${FUNCNAME[2 + depth]-}
     [[ $name != @(source|main) ]] || name=
     printf '%s\n' "${name:-${0##*/}}"
 }
@@ -1460,7 +1460,7 @@ function _lk_caller() {
     [[ -z $SOURCE ]] || [[ $SOURCE == main ]] || [[ $SOURCE == "$0" ]] ||
         CALLER+=("$(lk_tty_path "$SOURCE")")
     [[ -z $LINE ]] || [[ $LINE -eq 1 ]] ||
-        CALLER[${#CALLER[@]}-1]+=$LK_DIM:$LINE$LK_UNBOLD_UNDIM
+        CALLER[${#CALLER[@]} - 1]+=$LK_DIM:$LINE$LK_UNBOLD_UNDIM
     lk_implode_arr "$LK_DIM->$LK_UNBOLD_UNDIM" CALLER
 }
 
@@ -1489,7 +1489,7 @@ function lk_die() {
 }
 
 function lk_mktemp() {
-    local TMPDIR=${TMPDIR:-/tmp} FUNC=${FUNCNAME[1+${_LK_STACK_DEPTH:-0}]-}
+    local TMPDIR=${TMPDIR:-/tmp} FUNC=${FUNCNAME[1 + ${_LK_STACK_DEPTH:-0}]-}
     mktemp "$@" ${_LK_MKTEMP_ARGS-} \
         "${TMPDIR%/}/${0##*/}${FUNC:+-$FUNC}${_LK_MKTEMP_EXT-}.XXXXXXXXXX"
 }
@@ -1557,8 +1557,8 @@ function lk_trap_add() {
     i=$((first ? 3 : 0))
     for (( ; i < ${#_LK_TRAPS[@]}; i += 3)); do
         ((_LK_TRAPS[i] == BASH_SUBSHELL)) &&
-            [[ ${_LK_TRAPS[i+1]} == "$1" ]] || continue
-        trap=${_LK_TRAPS[i+2]}
+            [[ ${_LK_TRAPS[i + 1]} == "$1" ]] || continue
+        trap=${_LK_TRAPS[i + 2]}
         # Skip this trap if it is already at the start of the list
         ((!first)) || [[ $trap != "$2" ]] || continue
         traps[${#traps[@]}]=$trap
@@ -2288,7 +2288,7 @@ function lk_usage() {
 function _lk_var() {
     local DEPTH=${1:-0} _LK_STACK_DEPTH=${_LK_STACK_DEPTH:-0}
     ((DEPTH += _LK_STACK_DEPTH, _LK_STACK_DEPTH < 0 || DEPTH < 0)) ||
-        [[ ${FUNCNAME[DEPTH+2]-} =~ ^(^|source|main)$ ]] ||
+        [[ ${FUNCNAME[DEPTH + 2]-} =~ ^(^|source|main)$ ]] ||
         printf 'declare '
 }
 
@@ -2600,7 +2600,7 @@ function lk_stack_trace() {
     while ((ROW++ < ROWS)) && ((DEPTH++ < _D)); do
         FUNC=${FUNCNAME[DEPTH]-"{main}"}
         FILE=${BASH_SOURCE[DEPTH]-"{main}"}
-        LINE=${BASH_LINENO[DEPTH-1]-0}
+        LINE=${BASH_LINENO[DEPTH - 1]-0}
         [[ ! ${FRAME-} =~ $REGEX ]] || {
             FUNC=${BASH_REMATCH[2]:-$FUNC}
             FILE=${BASH_REMATCH[3]:-$FILE}
@@ -2670,7 +2670,7 @@ function _lk_cache_dir() {
         dir=$dir/$LK_CACHE_NAMESPACE
         dirs[${#dirs[@]}]=$dir
     }
-    local file=${BASH_SOURCE[depth+2]-${0##*/}}
+    local file=${BASH_SOURCE[depth + 2]-${0##*/}}
     dir=$dir/${file//"/"/__}
     dirs[${#dirs[@]}]=$dir
     [[ -d $dir ]] || install -d -m 0700 "${dirs[@]}" || return
@@ -2690,7 +2690,7 @@ function _lk_cache_init() {
         shift || lk_bad_args || return
     done
     cmd=("$@")
-    file=$(_lk_cache_dir 1)/${FUNCNAME[depth+2]-${0##*/}}_$(lk_hash "$@") || return
+    file=$(_lk_cache_dir 1)/${FUNCNAME[depth + 2]-${0##*/}}_$(lk_hash "$@") || return
     hit=1
     if ((force)) || [[ ! -f $file ]] || {
         ((ttl)) && age=$(lk_file_age "$file") && ((age > ttl))
@@ -4512,7 +4512,7 @@ function lk_readline_format() {
     eval "$(lk_get_regex CONTROL_SEQUENCE_REGEX OPERATING_SYSTEM_COMMAND_REGEX ESCAPE_SEQUENCE_REGEX)"
     for REGEX in CONTROL_SEQUENCE_REGEX OPERATING_SYSTEM_COMMAND_REGEX ESCAPE_SEQUENCE_REGEX; do
         while [[ $STRING =~ ((.*)(^|[^$'\x01']))(${!REGEX})+(.*) ]]; do
-            STRING=${BASH_REMATCH[1]}$'\x01'${BASH_REMATCH[4]}$'\x02'${BASH_REMATCH[${#BASH_REMATCH[@]}-1]}
+            STRING=${BASH_REMATCH[1]}$'\x01'${BASH_REMATCH[4]}$'\x02'${BASH_REMATCH[${#BASH_REMATCH[@]} - 1]}
         done
     done
     echo "$STRING"
