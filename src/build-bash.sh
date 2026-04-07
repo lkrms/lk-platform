@@ -181,6 +181,7 @@ command {
             cp "$out" "$dest"
             echo "  Target file replaced" >&2
         else
+            diff --unidirectional-new-file "$dest" "$out" || true
             echo "  REBUILD REQUIRED" >&2
             status=1
         fi
