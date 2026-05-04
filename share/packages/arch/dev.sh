@@ -169,6 +169,7 @@ PAC_PACKAGES+=(
     gimp
     gnome-font-viewer
     gucharmap
+    hugin
     inkscape
     keepassxc
     libreoffice-fresh
@@ -228,6 +229,7 @@ PAC_PACKAGES+=(
     strawberry
 
     # Multimedia - video
+    dvdbackup
     ffmpeg
     handbrake
     handbrake-cli
@@ -264,7 +266,7 @@ AUR_PACKAGES+=(
     gtk3-nocsd-git
     highlight-pointer
     key-mon
-    libreoffice-extension-languagetool
+    libreoffice-extension-writingtool
     masterpdfeditor-free
     nomacs
     pencil
@@ -350,7 +352,6 @@ PAC_PACKAGES+=(
     php
     php-gd
     php-imagick
-    php-memcache
     php-memcached
     php-sodium
     php-sqlite
