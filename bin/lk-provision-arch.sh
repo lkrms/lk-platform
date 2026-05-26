@@ -1161,6 +1161,32 @@ done\""
                 $'\n'"sudo smbpasswd -a $USER"
     fi
 
+    if lk_pac_installed ollama; then
+        lk_install -d -m 02775 -o ollama -g ollama /var/lib/ollama/models
+        FILE=/etc/systemd/system/ollama.service.d/override.conf
+        lk_file -m 00644 "$FILE" <<'EOF'
+[Service]
+Environment="OLLAMA_HOST=0.0.0.0"
+Environment="OLLAMA_MODELS=/var/lib/ollama/models"
+UMask=0002
+EOF
+        if [[ ${LK_FILE_CHANGED-} == "$FILE" ]]; then
+            DAEMON_RELOAD=1
+            lk_systemctl_stop ollama.service
+            if [[ -d /var/lib/ollama/blobs ]] &&
+                [[ -d /var/lib/ollama/manifests ]] &&
+                [[ ! -d /var/lib/ollama/models/blobs ]] &&
+                [[ ! -d /var/lib/ollama/models/manifests ]]; then
+                sudo mv -v /var/lib/ollama/{blobs,manifests,models}
+            fi
+        fi
+        sudo chmod -Rc g+w /var/lib/ollama/models
+        sudo find /var/lib/ollama/models -type d -exec chmod -c 02775 '{}' \;
+        SERVICE_ENABLE+=(
+            ollama Ollama
+        )
+    fi
+
     service_apply || true
 
     if [ ${#ERRORS[@]} -eq 0 ]; then
