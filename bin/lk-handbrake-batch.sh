@@ -116,14 +116,16 @@ ERROR_FILES=()
 
 {
     for i in "${!SOURCE_FILES[@]}"; do
-        [ ! -e ~/.lk-handbrake-stop ] || break
+        [[ ! -e ~/.lk-handbrake-stop ]] || break
         TARGET_FILE=${TARGET_FILES[i]}
-        [ -n "${TARGET_FILE:+1}" ] || continue
+        [[ -n ${TARGET_FILE:+1} ]] || continue
         SOURCE_FILE=${SOURCE_FILES[i]}
         TARGET_DIR=${TARGET_FILE%/*}
-        [ -d "$TARGET_DIR" ] || mkdir -pv "$TARGET_DIR" ||
+        [[ -d $TARGET_DIR ]] || mkdir -pv "$TARGET_DIR" ||
             lk_die "could not create directory: $TARGET_DIR"
-        LOG_FILE=${SOURCE_FILE%/*}/.${SOURCE_FILE##*/}-HandBrakeCLI.log
+        LOG_FILE=${SOURCE_FILE%/*}/
+        [[ -d $LOG_FILE ]] || LOG_FILE=
+        LOG_FILE+=.${SOURCE_FILE##*/}-HandBrakeCLI.log
         STATUS=0
         if ! lk_tty_run HandBrakeCLI --preset-import-gui --preset "$PRESET" \
             --input "$SOURCE_FILE" --output "$TARGET_FILE" \
