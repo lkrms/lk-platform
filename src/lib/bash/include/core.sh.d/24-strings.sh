@@ -13,30 +13,49 @@ function _lk_stream_args() {
     fi
 }
 
-# lk_uniq [STRING...]
-function lk_uniq() {
-    _lk_stream_args 2 awk '!seen[$0]++ { print }' "$@"
-}
-
-# lk_ellipsise LENGTH [STRING...]
-function lk_ellipsise() {
-    local LENGTH=$1
-    shift
-    _lk_stream_args 4 awk -v "l=$LENGTH" '
-length($0) > l  { print substr($0, 1, l - 3) "..."; next }
-                { print }' "$@"
-}
-
-# lk_double_quote [-f] [STRING...]
+# lk_uniq
 #
-# If -f is set, add double quotes even if STRING only contains letters, numbers
-# and safe punctuation (i.e. + - . / @ _).
-function lk_double_quote() {
-    local FORCE
-    unset FORCE
-    [ "${1-}" != -f ] || { FORCE= && shift; }
-    _lk_stream_args 3 sed -E \
-        ${FORCE-$'/^[a-zA-Z0-9+./@_-]*$/b\n'}'s/["$\`]/\\&/g; s/.*/"&"/' "$@"
+# Print the first appearance of each line in the input.
+#
+# Similar to `sort -u`, but output is not sorted.
+function lk_uniq() {
+    awk '!seen[$0]++ { print }'
+}
+
+# lk_truncate <length> <string>
+#
+# Truncate <string> to <length> with an ellipsis (...) if necessary.
+function lk_truncate() {
+    (($# > 1)) || lk_bad_args || return
+    if ((${#2} > $1)); then
+        printf '%s...\n' "${2:0:$1-3}"
+    else
+        printf '%s\n' "$2"
+    fi
+}
+
+# lk_dquote [-f] <string>
+#
+# Quote <string> for use in Bash scripts.
+#
+# If -f is given, quote <string> even if it only contains letters, numbers and
+# safe punctuation characters (i.e. + - . / @ _).
+function lk_dquote() {
+    local force=0
+    [[ ${1-} != -f ]] || {
+        force=1
+        shift
+    }
+    (($#)) || lk_bad_args || return
+    if ((force)) || [[ $1 != *([a-zA-Z0-9+./@_-]) ]]; then
+        set -- "${1//'\'/\\\\}"
+        set -- "${1//'"'/\\\"}"
+        set -- "${1//'$'/\\\$}"
+        set -- "${1//'`'/\\\`}"
+        printf '"%s"\n' "$1"
+    else
+        printf '%s\n' "$1"
+    fi
 }
 
 # lk_args_wider_than WIDTH [ARG...]
