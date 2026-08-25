@@ -331,6 +331,7 @@ if lk_feature_enabled desktop; then
         gimp-
         mpv
         okular- # Document viewer with better annotation features; depends on Qt
+        pinta-
         qalculate-gtk-
         speedcrunch-
         vlc-
@@ -399,7 +400,6 @@ if lk_feature_enabled desktop; then
         PAC_PACKAGES+=(noto-fonts-emoji)
 
     AUR_PACKAGES+=(
-        pinta-
         xrandr-invert-colors-
 
         ttf-adobe-source-code-pro-fonts-

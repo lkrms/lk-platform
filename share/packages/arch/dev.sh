@@ -406,12 +406,17 @@ AUR_PACKAGES+=(
     php-memprof
     php-pcov
     php-sqlsrv
-    {php74,php80,php81,php82,php83,php84}{,-bcmath,-cli,-ctype,-curl,-dom,-exif,-fileinfo,-gd,-gettext,-iconv,-imagick,-imap,-intl,-mbstring,-mysql,-pcntl,-phar,-posix,-simplexml,-soap,-sodium,-sqlite,-tokenizer,-xdebug,-xmlreader,-xmlwriter,-zip}
+    {php74,php80,php81,php82,php83,php84}{,-bcmath,-cli,-ctype,-curl,-dom,-exif,-fileinfo,-gd,-gettext,-iconv,-imagick,-intl,-mbstring,-mysql,-pcntl,-phar,-posix,-simplexml,-soap,-sodium,-sqlite,-tokenizer,-xdebug,-xmlreader,-xmlwriter,-zip}
+    php74-imap
     php74-json
     php74-memcached
+    php80-imap
     php80-memcached
+    php81-imap
     #php81-memcached
+    php82-imap
     #php82-memcached
+    php83-imap
     php83-memcached
     php84-memcached
     pretty-php
