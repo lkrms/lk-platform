@@ -474,7 +474,7 @@ function _lk_hosting_list_domains() { (
     shopt -s nullglob
     eval "$(lk_get_regex DOMAIN_NAME_LOWER_REGEX)"
     set -- "$LK_BASE"/etc/{lk-platform/,}sites/*.conf
-    lk_mapfile INVALID <(((!$#)) || printf '%s\n' "$@" |
+    lk_mapfile INVALID <(((! $#)) || printf '%s\n' "$@" |
         grep -Ev "/$DOMAIN_NAME_LOWER_REGEX\\.conf\$")
     [ -z "${INVALID+1}" ] ||
         lk_tty_list INVALID "Ignored (invalid domain in filename):" \
@@ -519,8 +519,8 @@ function _lk_hosting_list_sites() { (
         unset "${!SITE_@}" "${!_SITE_@}"
         _lk_hosting_site_assign_cached_settings -s "$DOMAIN" ||
             lk_warn "unable to load settings: $DOMAIN" || return
-        ((!ENABLED_ONLY)) || [[ $SITE_ENABLE == Y ]] || continue
-        if ((!JSON)); then
+        ((! ENABLED_ONLY)) || [[ $SITE_ENABLE == Y ]] || continue
+        if ((! JSON)); then
             WWW=
             [[ $SITE_DISABLE_WWW == Y ]] || WWW=,www.$DOMAIN
             DOMAINS=$DOMAIN$WWW${SITE_ALIASES:+,$SITE_ALIASES}
@@ -540,7 +540,7 @@ function _lk_hosting_list_sites() { (
         else
             _lk_hosting_site_json
         fi
-    done | if ((!JSON)); then
+    done | if ((! JSON)); then
         sort -t$'\t' -k6 -k9n -k1
     else
         jq -s 'sort_by(.is_child_site, .sort_order, .domain)'
@@ -1077,9 +1077,9 @@ Options:
         _lk_hosting_site_load_settings || return
     [ -z "${SETTINGS+1}" ] ||
         eval "$(printf '%s\n' "${SETTINGS[@]}")"
-    ((!NO_WWW)) || SITE_DISABLE_WWW=Y
-    ((!WWW)) || SITE_DISABLE_WWW=N
-    ((!CLEAR_ALIASES)) || SITE_ALIASES=
+    ((! NO_WWW)) || SITE_DISABLE_WWW=Y
+    ((! WWW)) || SITE_DISABLE_WWW=N
+    ((! CLEAR_ALIASES)) || SITE_ALIASES=
     SITE_ALIASES+=",$(lk_implode_arr , ALIASES)"
     _lk_hosting_site_provision || return
     ((SKIP_APPLY)) || lk_hosting_apply_config

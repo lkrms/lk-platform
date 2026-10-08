@@ -151,7 +151,7 @@ function lk_bash_command_cut() {
     local COMMENTS TYPE=FuncDecl FILE=/dev/stdin
     [[ ${1-} != -c ]] || { COMMENTS=true && shift; }
     [[ ${1-} != -t ]] || { TYPE=${2-} && shift 2 || return; }
-    ((!$#)) || [[ $1 == -- ]] || { FILE=${1:-$FILE} && shift; }
+    ((! $#)) || [[ $1 == -- ]] || { FILE=${1:-$FILE} && shift; }
     [[ $1 != -- ]] || shift
     [[ -f $FILE ]] || { [[ -e $FILE ]] && lk_mktemp_with FILE cat "$FILE"; } ||
         lk_warn "file not found: $FILE" || return

@@ -807,7 +807,7 @@ function lk_system_get_public_ips() { (
     for PID in "${PIDS[@]}"; do
         wait "$PID" || STATUS=$?
     done
-    ((!STATUS)) &&
+    ((! STATUS)) &&
         lk_system_list_public_network_ips
 ) | lk_uniq; }
 
@@ -1320,7 +1320,7 @@ EOF
 # 5. Private key path
 function lk_certbot_list() {
     local ARGS AWK IFS=,
-    ((!$#)) || ARGS=(--domains "$*")
+    ((! $#)) || ARGS=(--domains "$*")
     lk_awk_load AWK sh-certbot-list - <<"EOF" || return
 BEGIN {
 OFS = "\t"
@@ -1406,7 +1406,7 @@ function lk_certbot_install() {
                 lk_tty_error -r "System address not matched:" "$DOMAIN" ||
                 ((++ERRORS))
         done
-        ((!ERRORS)) || lk_tty_yn "Ignore DNS errors?" N || return
+        ((! ERRORS)) || lk_tty_yn "Ignore DNS errors?" N || return
     }
     local IFS=,
     lk_tty_run lk_elevate certbot \
@@ -1447,13 +1447,13 @@ function lk_certbot_install_asap() {
             FAILED+=("$DOMAIN")
         done
         [[ ${RESOLVED[*]-} == "${LAST_RESOLVED[*]-}" ]] || {
-            ((!DOTS)) || echo >&2
+            ((! DOTS)) || echo >&2
             ((DOTS = 0, CHANGED = 1))
-            ((!i)) || lk_tty_log "Change detected at" "$(lk_date_log)"
+            ((! i)) || lk_tty_log "Change detected at" "$(lk_date_log)"
             LAST_RESOLVED=(${RESOLVED+"${RESOLVED[@]}"})
         }
         [[ -n ${FAILED+1} ]] || break
-        ((i && !CHANGED)) ||
+        ((i && ! CHANGED)) ||
             lk_tty_error "System address not matched:" "${FAILED[*]}"
         ((i)) || lk_tty_detail "Checking DNS every 60 seconds"
         [[ ! -t 2 ]] || {
@@ -1624,7 +1624,7 @@ function _lk_cpanel_server_do_check() {
                 return 0
             ;;
         esac
-        ((!i++)) &&
+        ((! i++)) &&
             lk_user_config_set FILE token "$4-current" &&
             [ -f "$FILE" ] &&
             . "$FILE" || break

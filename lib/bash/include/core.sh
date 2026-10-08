@@ -292,7 +292,7 @@ function lk_test_all() {
         "${cmd[@]}" "$1" || break
         shift
     done
-    ((!$#))
+    ((! $#))
 }
 
 # lk_test_any "<command> [<arg>...]" <value>...
@@ -471,7 +471,7 @@ function lk_system_is_apple_silicon() {
 #
 # Check if running as root.
 function lk_user_is_root() {
-    ((!EUID))
+    ((! EUID))
 }
 
 # lk_test_all_e <file>...
@@ -512,7 +512,7 @@ function _lk_sudo_check() {
     [ -z "$LK_SUDO_ON_FAIL" ] || [ $# -gt 0 ] ||
         lk_err "command required if LK_SUDO_ON_FAIL is set" || return
     declare -p LK_EXEC LK_SUDO_ON_FAIL
-    ((!SHIFT)) || printf 'shift %s\n' "$SHIFT"
+    ((! SHIFT)) || printf 'shift %s\n' "$SHIFT"
 }
 
 # lk_elevate [-f] [exec] [COMMAND [ARG...]]
@@ -1110,7 +1110,7 @@ function _lk_duration_unit() {
         (($1 == 1)) || UNIT+=s
         UNIT=" $UNIT"
     fi
-    ((!$1)) && [[ $UNIT != " s"* ]] || {
+    ((! $1)) && [[ $UNIT != " s"* ]] || {
         ((UNITS != 1)) || DUR+=", "
         DUR+=$1$UNIT
         ((++UNITS))
@@ -1209,8 +1209,8 @@ function _lk_fold_check_sh() {
 #
 # Use `printf %q` to print the arguments on a space-delimited line.
 function lk_quote_args() {
-    ((!$#)) || { printf '%q' "$1" && shift; }
-    ((!$#)) || printf ' %q' "$@"
+    ((! $#)) || { printf '%q' "$1" && shift; }
+    ((! $#)) || printf ' %q' "$@"
     printf '\n'
 }
 
@@ -1221,8 +1221,8 @@ function lk_quote_args() {
 # space-delimited line.
 function lk_fold_quote_args() {
     eval "$(_lk_fold_check_sh "$@")"
-    ((!$#)) || { printf '%q' "$1" && shift; }
-    ((!$#)) || printf ' \\\n    %q' "$@"
+    ((! $#)) || { printf '%q' "$1" && shift; }
+    ((! $#)) || printf ' \\\n    %q' "$@"
     printf '\n'
 }
 
@@ -1232,7 +1232,7 @@ function lk_fold_quote_args() {
 # start with "-".
 function lk_fold_quote_options() {
     eval "$(_lk_fold_check_sh "$@")"
-    ((!$#)) || { printf '%q' "$1" && shift; }
+    ((! $#)) || { printf '%q' "$1" && shift; }
     while (($#)); do
         [[ $1 == -* ]] && printf ' \\\n    %q' "$1" || printf ' %q' "$1"
         shift
@@ -1282,7 +1282,7 @@ function lk_ere_implode_args() {
     local ARGS
     [ "${1-}" != -e ] || { ARGS=(-e) && shift; }
     [ "${1-}" != -- ] || shift
-    ((!$#)) ||
+    ((! $#)) ||
         printf '%s\n' "$@" | lk_ere_implode_input ${ARGS+"${ARGS[@]}"}
 }
 
@@ -1354,7 +1354,7 @@ function lk_arr() {
 function lk_args() {
     local _CMD="printf '%s\n'"
     [[ ${1-} != -* ]] || { { [[ $1 == -- ]] || _CMD=${1#-}; } && shift; }
-    ((!$#)) || eval "$_CMD \"\$@\""
+    ((! $#)) || eval "$_CMD \"\$@\""
 }
 
 # lk_in_array VALUE ARRAY...
@@ -1564,7 +1564,7 @@ function lk_trap_add() {
     [[ ${1-} != -f ]] || { first=1 && shift; }
     (($# > 1)) || lk_bad_args || return
     # Replace arguments with: SIGNAL QUOTED_COMMAND
-    ((!quote)) ||
+    ((! quote)) ||
         set -- "$1" "$(shift && lk_quote_args "$@")"
     if ((first)); then
         traps[0]=$2
@@ -1579,7 +1579,7 @@ function lk_trap_add() {
             [[ ${_LK_TRAPS[i + 1]} == "$1" ]] || continue
         trap=${_LK_TRAPS[i + 2]}
         # Skip this trap if it is already at the start of the list
-        ((!first)) || [[ $trap != "$2" ]] || continue
+        ((! first)) || [[ $trap != "$2" ]] || continue
         traps[${#traps[@]}]=$trap
         # Remove QUOTED_COMMAND argument if it is already in the list
         ((first)) || [[ $trap != "${2-}" ]] || set -- "$1"
@@ -1609,7 +1609,7 @@ function _lk_on_exit_run_with_array() {
 }" && lk_trap_add EXIT "$func"
     } || return
     [[ -n ${!array+1} ]] || eval "$array=()"
-    ((!$#)) || eval "$array+=(\"\$@\")"
+    ((! $#)) || eval "$array+=(\"\$@\")"
 }
 
 # _lk_on_exit_run_with_array_undo ARRAY [ARG...]
@@ -1861,7 +1861,7 @@ function lk_tty_print() {
             # or MESSAGE is empty, print both messages on the same line with a
             # space between them and align MESSAGE2 with itself
             SEP=" "
-            ((!NEWLINE2)) || { [ -z "${MESSAGE:+1}" ] &&
+            ((! NEWLINE2)) || { [ -z "${MESSAGE:+1}" ] &&
                 INDENT=${#PREFIX} ||
                 INDENT=$((${#PREFIX} + $(lk_tty_length "$MESSAGE."))); }
             ;;
@@ -2920,7 +2920,7 @@ function lk_log_open() {
             printf '%3d %q\n' $i "${LK_LOG_CMDLINE[i]}"
         done
     } >"/dev/fd/$_LK_LOG_FD"
-    ((!v)) || printf "Output log: %s\n" "$file" >"/dev/fd/$_LK_TTY_OUT_FD"
+    ((! v)) || printf "Output log: %s\n" "$file" >"/dev/fd/$_LK_TTY_OUT_FD"
 }
 
 # _lk_log_cmdline_resolve
@@ -3400,11 +3400,11 @@ function lk_install() {
     shift $((OPTIND - 1))
     (($#)) || lk_bad_args || return
     verbose=${verbose:-${LK_VERBOSE:-0}}
-    ((!dirs)) || install_args+=(-d)
+    ((! dirs)) || install_args+=(-d)
     [[ ! ${mode-} ]] || install_args+=(-m "$mode")
     [[ ! ${owner-} ]] || install_args+=(-o "$owner")
     [[ ! ${group-} ]] || install_args+=(-g "$group")
-    ((!verbose)) || install_args+=(-v)
+    ((! verbose)) || install_args+=(-v)
 
     if ((dirs)); then
         lk_sudo_on_fail install "${install_args[@]}" "$@"
@@ -3418,7 +3418,7 @@ function lk_install() {
 
         # If the file doesn't exist, install /dev/null
         if [[ ! -e $file ]] && { [[ -r $dir ]] || ! { lk_will_sudo && sudo test -e "$file"; }; }; then
-            ((!verbose)) || lk_tty_detail "Creating:" "$file"
+            ((! verbose)) || lk_tty_detail "Creating:" "$file"
             lk_sudo_on_fail install ${install_args[@]+"${install_args[@]}"} /dev/null "$file" ||
                 lk_err "error creating $file" || return
             changed=1
@@ -3427,7 +3427,7 @@ function lk_install() {
             _lk_file_check_permissions "$file" || return
         fi
 
-        ((!changed)) ||
+        ((! changed)) ||
             LK_FILE_CHANGED=("$1" ${LK_FILE_CHANGED+"${LK_FILE_CHANGED[@]}"})
     done
 }
@@ -3521,12 +3521,12 @@ function lk_file() {
 
     # If the file doesn't exist, use `install` to create it
     if [[ ! -e $1 ]] && { [[ -r $dir ]] || ! { lk_will_sudo && sudo test -e "$1"; }; }; then
-        ((!diff)) || lk_tty_diff_detail -L "" -L "$1" /dev/null "$temp"
-        ((!prompt)) || lk_tty_yn "Create $1 as above?" Y || {
+        ((! diff)) || lk_tty_diff_detail -L "" -L "$1" /dev/null "$temp"
+        ((! prompt)) || lk_tty_yn "Create $1 as above?" Y || {
             LK_FILE_UNCHANGED=("$1" ${LK_FILE_UNCHANGED+"${LK_FILE_UNCHANGED[@]}"})
             return 1
         }
-        ((!verbose)) || lk_tty_detail "Creating:" "$1"
+        ((! verbose)) || lk_tty_detail "Creating:" "$1"
         lk_sudo_on_fail install -m "${mode:-0644}" \
             ${owner:+-o="$owner"} ${group:+-g="$group"} \
             "$temp" "$1" || lk_err "error creating $1" || return 2
@@ -3545,18 +3545,18 @@ function lk_file() {
         lk_mktemp_with _temp lk_sudo_on_fail cat "$1" || return 2
         diff -q "$_temp" "$temp" >/dev/null
     fi || {
-        ((!diff)) || lk_tty_diff_detail -L "a/${1#/}" -L "b/${1#/}" "$1" "$temp"
-        ((!prompt)) || lk_tty_yn "Update $1 as above?" Y || {
+        ((! diff)) || lk_tty_diff_detail -L "a/${1#/}" -L "b/${1#/}" "$1" "$temp"
+        ((! prompt)) || lk_tty_yn "Update $1 as above?" Y || {
             LK_FILE_UNCHANGED=("$1" ${LK_FILE_UNCHANGED+"${LK_FILE_UNCHANGED[@]}"})
             return 1
         }
-        ((!verbose)) || lk_tty_detail "Updating:" "$1"
-        ((!orig)) || [[ -e "$1.orig" ]] || { [[ ! -r $dir ]] && lk_will_sudo && sudo test -e "$1.orig"; } || {
+        ((! verbose)) || lk_tty_detail "Updating:" "$1"
+        ((! orig)) || [[ -e "$1.orig" ]] || { [[ ! -r $dir ]] && lk_will_sudo && sudo test -e "$1.orig"; } || {
             lk_sudo_on_fail cp -aL "$1" "$1.orig" || return 2
             # FILE.orig will suffice as a backup
             backup=0
         }
-        ((!backup)) || lk_file_backup ${store:+-m} "$1" || return 2
+        ((! backup)) || lk_file_backup ${store:+-m} "$1" || return 2
         lk_sudo_on_fail cp "$temp" "$1" ||
             lk_err "error replacing $1" || return 2
         changed=1
@@ -3565,7 +3565,7 @@ function lk_file() {
     # Finally, update permissions and ownership if needed
     _lk_file_check_permissions "$1" || return 2
 
-    ((!changed)) ||
+    ((! changed)) ||
         LK_FILE_CHANGED=("$1" ${LK_FILE_CHANGED+"${LK_FILE_CHANGED[@]}"})
 }
 
@@ -3788,7 +3788,7 @@ function lk_keep_trying() {
 function lk_require_output() (
     QUIET=0
     [[ ${1-} != -q ]] || { QUIET=1 && shift; }
-    if ((!QUIET)); then
+    if ((! QUIET)); then
         "$@" | grep --color=never .
     else
         "$@" | grep . >/dev/null
@@ -3825,7 +3825,7 @@ function lk_v() {
     [[ $1 != -r ]] || { RETURN=$STATUS && shift; }
     lk_is_v "$1" || return "$RETURN"
     shift
-    if ((!STATUS)); then
+    if ((! STATUS)); then
         "$@"
     else
         (exit "$STATUS") || "$@"
@@ -3839,7 +3839,7 @@ function lk_v() {
 # The exit status of the previous command is propagated to COMMAND.
 function lk_stack() {
     local STATUS=$? _LK_STACK_DEPTH=$((2 + ${_LK_STACK_DEPTH:-0}))
-    if ((!STATUS)); then
+    if ((! STATUS)); then
         "$@"
     else
         (exit "$STATUS") || "$@"
@@ -3951,7 +3951,7 @@ function lk_jq_var() {
     done
     while IFS=$'\t' read -r _VAR _ARG; do
         _CMD+=(--arg "$_ARG" "${!_VAR-}")
-    done < <(((!$#)) || printf '%s\n' "$@" | awk -F_ '
+    done < <(((! $#)) || printf '%s\n' "$@" | awk -F_ '
 { l = $0; sub("^_+", ""); v = tolower($1)
   for(i = 2; i <= NF; i++)
     { v = v toupper(substr($i,1,1)) tolower(substr($i,2)) }
@@ -3972,7 +3972,7 @@ function lk_json_mapfile() {
 
 # lk_json_sh (<VAR> <JQ_FILTER>)...
 function lk_json_sh() {
-    (($# && !($# % 2))) || lk_err "invalid arguments" || return
+    (($# && ! ($# % 2))) || lk_err "invalid arguments" || return
     local IFS
     unset IFS
     lk_jq -r --arg prefix "$(_lk_var)" 'include "core"; {'"$(
@@ -4568,8 +4568,8 @@ function lk_diff() { (
             lk_require_output lk_sudo icdiff -U2 --no-headers \
                 ${_LK_TTY_INDENT:+--cols="$(($(
                     lk_tty_columns
-                ) - 2 * (_LK_TTY_INDENT + 2)))"} "$@" || ((!($? & 2))) || STATUS=0
-            ((!STATUS))
+                ) - 2 * (_LK_TTY_INDENT + 2)))"} "$@" || ((! ($? & 2))) || STATUS=0
+            ((! STATUS))
         fi
     elif lk_has git; then
         lk_sudo \
