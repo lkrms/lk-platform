@@ -724,11 +724,15 @@ EOF
         DIR=$(lk_double_quote "$LK_BASE/var/log/lk-platform")
         GROUP=$(lk_file_group "$LK_BASE")
         lk_install -m 00644 "$FILE"
-        lk_file_replace "$FILE" < <(LK_PLATFORM_LOGS="$DIR/*.log" \
-            LK_PLATFORM_OWNER="root $GROUP" \
-            LOG_RETENTION_DAYS=$((${LK_SNAPSHOT_WEEKLY_MAX_AGE:-2} * 7)) \
-            lk_expand_template < <(cat \
-                "$LK_BASE/share/logrotate.d"/{hosting,default}.template))
+        lk_file_replace "$FILE" < <(
+            ROTATE=$((${LK_SNAPSHOT_WEEKLY_MAX_AGE:-2} * 7))
+            ((ROTATE > -2)) || ROTATE=14
+            LK_PLATFORM_LOGS="$DIR/*.log" \
+                LK_PLATFORM_OWNER="root $GROUP" \
+                LOG_RETENTION_DAYS=$ROTATE \
+                lk_expand_template < <(cat \
+                    "$LK_BASE/share/logrotate.d"/{hosting,default}.template)
+        )
         # Don't run `invoke-rc.d apache2 reload` twice per logrotate
         FILE=/etc/logrotate.d/apache2
         [ ! -e "$FILE" ] ||

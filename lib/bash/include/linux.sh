@@ -32,7 +32,7 @@ function _lk_systemctl() {
     enabled)
         # Check the unit exists if lk_systemctl_enabled was called directly,
         # otherwise assume it's already been checked
-        { ((!DIRECT)) || lk_systemctl_exists "$1"; } &&
+        { ((! DIRECT)) || lk_systemctl_exists "$1"; } &&
             "${CMD[@]}" is-enabled --quiet "$1"
         ;;
     running)

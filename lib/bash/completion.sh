@@ -111,7 +111,7 @@ function __lk_backup_create_snapshot() {
     local cur prev words cword split cpos pwords
     _init_completion -s -n : || return
     __lk_get_cpos -g --group -f --filter -h --hook
-    ((!cpos)) && [[ $prev == -* ]] &&
+    ((! cpos)) && [[ $prev == -* ]] &&
         case "$prev" in
         -g | --group) _allowed_groups "$cur" ;;&
         -f | --filter) _filedir ;;&

@@ -8,10 +8,12 @@ lk_confirm() { lk_tty_yn "$@"; }
 lk_debug() { lk_debug_is_on; }
 lk_delete_on_exit_withdraw() { lk_on_exit_undo_delete "$@"; }
 lk_dirs_exist() { lk_test_all_d "$@"; }
+lk_double_quote() { lk_dquote "$@"; }
 lk_dry_run() { lk_is_dryrun; }
 lk_echo_args() { lk_args "$@"; }
 lk_echo_array() { lk_arr "$@"; }
-lk_ellipsis() { lk_ellipsise "$@"; }
+lk_ellipsis() { lk_truncate "$@"; }
+lk_ellipsise() { lk_truncate "$@"; }
 lk_escape_ere_replace() { lk_sed_escape_replace "$@"; }
 lk_escape_ere() { lk_sed_escape "$@"; }
 lk_false() { lk_is_false "$@"; }

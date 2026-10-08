@@ -104,7 +104,7 @@ PAC_PACKAGES+=(
 
     conntrack-tools-
     ipset-
-    iptables-nft
+    iptables
 
     fwupd:H
     udisks2:H
@@ -149,6 +149,7 @@ PAC_PACKAGES+=(
     nfs-utils-
     nilfs-utils-
     ntfs-3g
+    ntfsprogs-
     udftools-
     xfsprogs-
 
@@ -176,7 +177,6 @@ PAC_PACKAGES+=(
     bash-completion
     bc
     bind
-    byobu-
     curl
     ddrescue-
     diffutils
@@ -255,6 +255,7 @@ AUR_PACKAGES+=(
     powercap-:H
 
     ## Utilities
+    byobu-
     icdiff-
     ps_mem-
 )
@@ -330,10 +331,11 @@ if lk_feature_enabled desktop; then
         gimp-
         mpv
         okular- # Document viewer with better annotation features; depends on Qt
+        pinta-
         qalculate-gtk-
         speedcrunch-
         vlc-
-        vlc-plugin-ffmpeg-
+        vlc-plugins-all-
 
         pipewire
         pipewire-audio      # Supports Bluetooth audio
@@ -354,6 +356,7 @@ if lk_feature_enabled desktop; then
         # because adobe-source-sans-fonts OTFs have rendering issues below ~12px
         noto-fonts
         noto-fonts-cjk
+        otf-junicode- # "for medievalists"
         ttf-dejavu
         ttf-fantasque-sans-mono- # For programming
         ttf-inconsolata          # For terminals and programming
@@ -397,7 +400,6 @@ if lk_feature_enabled desktop; then
         PAC_PACKAGES+=(noto-fonts-emoji)
 
     AUR_PACKAGES+=(
-        pinta-
         xrandr-invert-colors-
 
         ttf-adobe-source-code-pro-fonts-

@@ -29,7 +29,7 @@ function _lk_git() {
 #
 # Attempt `cd DIR` if DIR is set.
 function _lk_git_cd() {
-    ((!$#)) || cd "$1"
+    ((! $#)) || cd "$1"
 }
 
 function _lk_git_is_quiet() {
@@ -471,7 +471,7 @@ function lk_git_fetch() {
             ((++ERRORS))
         }
     done
-    ((!ERRORS))
+    ((! ERRORS))
 }
 
 # lk_git_update_repo [-s]

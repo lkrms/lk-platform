@@ -169,6 +169,7 @@ PAC_PACKAGES+=(
     gimp
     gnome-font-viewer
     gucharmap
+    hugin
     inkscape
     keepassxc
     libreoffice-fresh
@@ -228,6 +229,7 @@ PAC_PACKAGES+=(
     strawberry
 
     # Multimedia - video
+    dvdbackup
     ffmpeg
     handbrake
     handbrake-cli
@@ -264,7 +266,7 @@ AUR_PACKAGES+=(
     gtk3-nocsd-git
     highlight-pointer
     key-mon
-    libreoffice-extension-languagetool
+    libreoffice-extension-writingtool
     masterpdfeditor-free
     nomacs
     pencil
@@ -350,7 +352,6 @@ PAC_PACKAGES+=(
     php
     php-gd
     php-imagick
-    php-memcache
     php-memcached
     php-sodium
     php-sqlite
@@ -405,12 +406,17 @@ AUR_PACKAGES+=(
     php-memprof
     php-pcov
     php-sqlsrv
-    {php74,php80,php81,php82,php83,php84}{,-bcmath,-cli,-ctype,-curl,-dom,-exif,-fileinfo,-gd,-gettext,-iconv,-imagick,-imap,-intl,-mbstring,-mysql,-pcntl,-phar,-posix,-simplexml,-soap,-sodium,-sqlite,-tokenizer,-xdebug,-xmlreader,-xmlwriter,-zip}
+    {php74,php80,php81,php82,php83,php84}{,-bcmath,-cli,-ctype,-curl,-dom,-exif,-fileinfo,-gd,-gettext,-iconv,-imagick,-intl,-mbstring,-mysql,-pcntl,-phar,-posix,-simplexml,-soap,-sodium,-sqlite,-tokenizer,-xdebug,-xmlreader,-xmlwriter,-zip}
+    php74-imap
     php74-json
     php74-memcached
+    php80-imap
     php80-memcached
+    php81-imap
     #php81-memcached
+    php82-imap
     #php82-memcached
+    php83-imap
     php83-memcached
     php84-memcached
     pretty-php

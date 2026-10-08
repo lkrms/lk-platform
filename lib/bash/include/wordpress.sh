@@ -234,7 +234,7 @@ function _lk_wp_maybe_apply() {
         _lk_wp_maybe_migrate
     else
         lk_wp_apply
-    fi && ((!STATUS))
+    fi && ((! STATUS))
 }
 
 function _lk_wp_maybe_flush() {
@@ -717,7 +717,7 @@ function lk_wp_apply() {
     else
         _lk_wp_maybe_flush || STATUS=$?
         _lk_wp_maybe_migrate
-    fi && ((!STATUS))
+    fi && ((! STATUS))
 }
 
 # lk_wp_migrate [SITE_ROOT]

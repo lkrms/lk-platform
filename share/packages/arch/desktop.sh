@@ -84,6 +84,7 @@ PAC_PACKAGES+=(
     gimp
     gnome-font-viewer
     gucharmap
+    hugin
     inkscape
     keepassxc
     libreoffice-fresh
@@ -140,6 +141,7 @@ PAC_PACKAGES+=(
     strawberry
 
     # Multimedia - video
+    dvdbackup
     ffmpeg
     handbrake
     handbrake-cli
@@ -168,7 +170,7 @@ AUR_PACKAGES+=(
     espanso-x11
     highlight-pointer
     key-mon
-    libreoffice-extension-languagetool
+    libreoffice-extension-writingtool
     masterpdfeditor-free
     nomacs
     qpdfview

@@ -98,7 +98,7 @@ function lk_apt_list_available() {
         shift
     }
     sh=$(apt-config shell dir Dir::State::Lists/d) && eval "$sh" || return
-    ((!update)) || lk_apt_update >&2 || return
+    ((! update)) || lk_apt_update >&2 || return
     awk -F': ' '$1 == "Package" { print $2 }' "${dir%/}"/*_Packages |
         if (($#)); then
             lk_grep -Fxf <(printf '%s\n' "$@") | sort -u

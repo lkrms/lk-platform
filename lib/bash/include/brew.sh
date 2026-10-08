@@ -41,7 +41,7 @@ function lk_brew_install_homebrew() {
     [[ -x $BREW ]] ||
         lk_warn "$BREW: command not found" || return
     LK_BREW_NEW_INSTALL=1
-    ((!REFRESH_ENV)) ||
+    ((! REFRESH_ENV)) ||
         [[ ! -f $LK_BASE/lib/bash/env.sh ]] ||
         { SH=$(. "$LK_BASE/lib/bash/env.sh") && eval "$SH"; }
 }

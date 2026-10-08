@@ -36,7 +36,7 @@ function _lk_prompt_create() {
         shift
         # "Thu May 06 15:02:32 "
         parts[${#parts[@]}]="\n\[$LK_DIM\]\d \t\[$LK_UNBOLD_UNDIM\] "
-        if ((!status)); then
+        if ((! status)); then
             # "✓"
             parts[${#parts[@]}]="\[$LK_GREEN\]✓"
         else
@@ -60,7 +60,7 @@ function _lk_prompt_create() {
             commands=$({
                 printf '%s' "$1"
                 shift
-                ((!$#)) || printf '; %s' "$@"
+                ((! $#)) || printf '; %s' "$@"
             } | _lk_prompt_filter | head -c"$width")
             # " ( sleep 12; false )"
             local IFS=' '
