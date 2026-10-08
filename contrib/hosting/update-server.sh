@@ -421,6 +421,8 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
                   [[ $HTTP =~ ^HTTP/$LK_H+$LK_h+([0-9]+) ]] &&
                   ((rc = BASH_REMATCH[1], rc < 400 || rc == 403)) &&
                   lk_tty_success "OK:" "$DOMAIN$INVALID_TLS" &&
+                  { ! lk_in_array --insecure ARGS ||
+                    echo "$1:$DOMAIN:60:Peer certificate cannot be authenticated with known CA certificates." >>"$UNREACHABLE"; } &&
                   break || {
                   TEST_STATUS=$?
                   case "$TEST_STATUS" in
@@ -437,7 +439,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
                   esac
                   lk_tty_error "Failed:" \
                     "$LK_BOLD$DOMAIN$INVALID_TLS$LK_RESET $LK_DIM${HTTP:-($TEST_STATUS)}$LK_UNBOLD_UNDIM"
-                  echo "$1:$DOMAIN" >>"$UNREACHABLE"
+                  echo "$1:$DOMAIN:$TEST_STATUS:$HTTP" >>"$UNREACHABLE"
                 }
                 break
               done
@@ -479,6 +481,7 @@ lk_bin_depth=2 . lk-bash-load.sh || exit
     lk_tty_print "Batch complete"
   fi
 
+  IFS=$'\n'
   _FAILED=($(<"$FAILED"))
   _UPDATED=($(<"$UPDATED"))
   _UNREACHABLE=($(<"$UNREACHABLE"))
